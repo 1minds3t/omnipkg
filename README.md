@@ -1,12 +1,9 @@
-
----
-
 # omnipkg: The Intelligent Python Package Manager
 > One environment. Infinite versions. Zero conflicts.
 
 <p align="center">
-  <a href="https://github.com/omnipkg/omnipkg/actions/workflows/test.yml">
-    <img src="https://img.shields.io/github/actions/workflow/status/omnipkg/omnipkg/test.yml?branch=main" alt="Build Status">
+  <a href="https://github.com/1minds3t/omnipkg/actions/workflows/test.yml">
+    <img src="https://img.shields.io/github/actions/workflow/status/1minds3t/omnipkg/test.yml?branch=main" alt="Build Status">
   </a>
   <a href="https://pypi.org/project/omnipkg/">
     <img src="https://img.shields.io/pypi/v/omnipkg.svg" alt="PyPI version">
@@ -14,36 +11,45 @@
   <a href="https://www.gnu.org/licenses/agpl-3.0">
     <img src="https://img.shields.io/badge/License-AGPLv3-red.svg" alt="License: AGPLv3">
   </a>
-  <a href="https://github.com/omnipkg/omnipkg/actions/workflows/security_audit.yml">
-    <img src="https://img.shields.io/github/actions/workflow/status/omnipkg/omnipkg/security_audit.yml?branch=main" alt="Security Audit">
+  <a href="https://github.com/1minds3t/omnipkg/actions/workflows/security_audit.yml">
+    <img src="https://img.shields.io/github/actions/workflow/status/1minds3t/omnipkg/security_audit.yml?branch=main" alt="Security Audit">
   </a>
 </p>
-
-[![Security Audit](https://github.com/1minds3t/omnipkg/actions/workflows/security_audit.yml/badge.svg)](https://github.com/1minds3t/omnipkg/actions/workflows/security_audit.yml)
-[![Build Status](https://github.com/1minds3t/omnipkg/actions/workflows/publish.yml/badge.svg)](https://github.com/1minds3t/omnipkg/actions/workflows/publish.yml)
-[![PyPI version](https://img.shields.io/pypi/v/omnipkg.svg)](https://pypi.org/project/omnipkg/)
-
 
 ---
 
 `omnipkg` lets you install *any version* of *any package* without breaking your environment, downgrading dependencies, or needing Conda, Docker, or `pipx`. **Dependency hell? Obliterated.**
 
----
-## See It to Believe It (30 Second Demo)
+## Installation & Quick Start
 
-<!-- A GIF is the best format for this. It shows the tool in action without taking up a ton of space. -->
+```bash
+pip install omnipkg
+```
+
+See the magic for yourself. This command runs a fully automated demo showcasing downgrade protection and version isolation.
+
+```bash
+omnipkg demo
+```
+
+## 🔥 See It to Believe It (Live Demo Recording)
+
+A static README can't do it justice. Here is a live recording of `omnipkg` handling a complex installation that would break other tools.
+
+*<-- This is the perfect spot for a GIF created with a tool like `asciinema` or `termtosvg`! -->*
+
 ![omnipkg Demo GIF](https://user-images.githubusercontent.com/your-image-url-here.gif) 
 *This shows `omnipkg install old-package`, downgrade protection activating, and `omnipkg status` confirming both versions coexist.*
 
 ---
 
-## 🚀 Features
+## 🚀 Core Features
 
--   🛡️ **Downgrade Protection**: Stops `pip` from nuking your environment by isolating conflicting versions into protected "bubbles."
--   💾 **Intelligent Deduplication**: Saves up to 60% disk space on bubbled packages while keeping native C extensions stable.
+-   🛡️ **Downgrade Protection**: Stops `pip` from nuking your environment by isolating conflicting versions into protected **"bubbles."**
+-   💾 **Intelligent Deduplication**: Saves up to 60% disk space on bubbled packages while keeping native C extensions stable and separate.
 -   🧠 **Redis-Backed Knowledge Base**: Lightning-fast lookups for all package versions, dependencies, and security info.
--   🔀 **Runtime Version Switching**: Activate any bubbled package version on the fly, even within the same script.
--   🧪 **Battle-Tested**: Proven to handle massive environments (520+ packages, 95+ bubbles, 15.4GB+) without flinching.
+-   🔀 **Runtime Version Switching**: Activate any bubbled package version on the fly, even within the same script, using the built-in loader.
+-   🧪 **Battle-Tested**: Proven to handle massive environments (**520+ packages, 95+ bubbles, 15.4GB+**) without flinching.
 
 ---
 
@@ -53,12 +59,12 @@ When a downgrade is detected, `omnipkg` performs surgery:
 1.  **Intercepts** the request.
 2.  **Installs** the conflicting version and its entire dependency tree into a temporary, isolated location.
 3.  **Creates** a space-efficient, deduplicated "bubble" in `.omnipkg_versions`.
-4.  **Restores** the original package in your main environment.
+4.  **Restores** the original package in your main environment, leaving it pristine.
 
 The result: a perfectly stable global environment, with every version you've ever needed on standby.
 
 <details>
-<summary><strong>🔬 Click for a Real-World Example: Downgrading PyTorch</strong></summary>
+<summary><strong>🔬 Real-World Example: Downgrading PyTorch</strong></summary>
 
 ```bash
 # User wants to install an older torch version
