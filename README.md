@@ -2,9 +2,6 @@
 > One environment. Infinite versions. Zero conflicts.
 
 <p align="center">
-  <a href="https://github.com/1minds3t/omnipkg">
-    <img src="https://img.shields.io/github/actions/workflow/status/1minds3t/omnipkg" alt="Build Status">
-  </a>
   <a href="https://pypi.org/project/omnipkg/">
     <img src="https://img.shields.io/pypi/v/omnipkg.svg" alt="PyPI version">
   </a>
