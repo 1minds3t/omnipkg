@@ -18,6 +18,76 @@
 
 ---
 
+<details>
+  
+<summary><strong>🔬 Click to see what the demo shows you</strong></summary>
+# The demo first shows you what happens when you use pip...
+💀 You: pip install flask-login==0.4.1
+...
+💥 BOOM! Look what pip did:
+   ❌ Uninstalled flask-login 0.6.3
+   ❌ Downgraded Flask and Werkzeug
+   ❌ Your modern project is now BROKEN
+
+# Then, it shows you the omnipkg way...
+🧠 Smart choice! Using omnipkg instead...
+🫧 Creating a protective bubble for the old version...
+$ omnipkg install flask-login==0.4.1
+✅ omnipkg install successful!
+🎯 BOTH versions now coexist peacefully!
+
+</details>
+
+🔥 The Gauntlet: Surviving the Stress Test
+Talk is cheap. Here’s what happens when omnipkg is pushed to its absolute limit with the built-in omnipkg stress-test command. This isn't a simulation; it's omnipkg seamlessly activating different, often incompatible, versions of C-extension-heavy libraries in the same Python process.
+
+<details>
+
+<summary><strong>🤯 Click to view the full stress test output.</strong></summary>
+Generated bash
+# Creating bubbles for older, conflicting versions...
+--- Creating bubble for numpy==1.24.3 ---
+✅ Bubble created: 1363 files copied, 0 deduplicated.
+--- Creating bubble for scipy==1.12.0 ---
+✅ Bubble created: 3551 files copied, 0 deduplicated.
+
+# Executing the test...
+💥 NUMPY VERSION JUGGLING:
+
+⚡ Switching to numpy==1.24.3
+🌀 omnipkg loader: Activating numpy==1.24.3...
+ ✅ Activated bubble: /path/to/.omnipkg_versions/numpy-1.24.3
+   ✅ Version: 1.24.3
+   🔢 Array sum: 6
+
+⚡ Switching to numpy==1.26.4
+🌀 omnipkg loader: Activating numpy==1.26.4...
+ 🧹 Deactivated bubble: numpy-1.24.3
+ ✅ Activated bubble: /path/to/.omnipkg_versions/numpy-1.26.4
+   ✅ Version: 1.26.4
+   🔢 Array sum: 6
+
+🔥 SCIPY C-EXTENSION TEST:
+
+🌋 Switching to scipy==1.12.0
+🌀 omnipkg loader: Activating scipy==1.12.0...
+ ✅ Activated bubble: /path/to/.omnipkg_versions/scipy-1.12.0
+   ✅ Version: 1.12.0
+   ♻️ Sparse matrix: 3 non-zeros
+
+🌋 Switching to scipy==1.16.1
+🌀 omnipkg loader: Activating scipy==1.16.1...
+ 🧹 Deactivated bubble: scipy-1.12.0
+ ✅ System version already matches requested version (1.16.1). No bubble activation needed.
+   ✅ Version: 1.16.1
+   ♻️ Sparse matrix: 3 non-zeros
+
+ 🚨 OMNIPKG SURVIVED NUCLEAR TESTING! 🎇
+ 
+</details>
+
+---
+
 `omnipkg` lets you install *any version* of *any package* without breaking your environment, downgrading dependencies, or needing Conda, Docker, or `pipx`. **Dependency hell? Obliterated.**
 
 ## Installation & Quick Start
