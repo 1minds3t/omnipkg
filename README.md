@@ -18,7 +18,7 @@
 
 ---
 
-`omnipkg` lets you install *any version* of *any package* without breaking your environment, downgrading dependencies, or needing Conda, Docker, or `pipx`. **Dependency hell? Obliterated.**
+`omnipkg` lets you install *any version* of *any package* without breaking your environment, downgrading dependencies, or needing Conda, Docker, or `pipx`. **Dependency hell? Eliminated.**
 
 ## Installation & Quick Start
 
@@ -26,7 +26,7 @@
 pip install omnipkg
 ```
 
-See the magic for yourself. This command runs a fully automated demo showcasing downgrade protection and version isolation.
+See the magic in action. This command runs a fully automated demo showcasing downgrade protection and version isolation:
 
 ```bash
 omnipkg demo
@@ -34,138 +34,142 @@ omnipkg demo
 
 ---
 
-<details>
-  
-<summary><strong>🔬 Click to see what the demo shows you</strong></summary>
-# The demo first shows you what happens when you use pip...
-💀 You: pip install flask-login==0.4.1
+### 🔬 Demo Output: See omnipkg in Action
+```
+# The demo first shows what happens with standard pip...
+💀 pip install flask-login==0.4.1
 ...
-💥 BOOM! Look what pip did:
+💥 PIP RESULT:
    ❌ Uninstalled flask-login 0.6.3
    ❌ Downgraded Flask and Werkzeug
-   ❌ Your modern project is now BROKEN
+   ❌ Environment compromised
 
-# Then, it shows you the omnipkg way...
-🧠 Smart choice! Using omnipkg instead...
-🫧 Creating a protective bubble for the old version...
-$ omnipkg install flask-login==0.4.1
-✅ omnipkg install successful!
-🎯 BOTH versions now coexist peacefully!
+# Then, omnipkg's solution...
+🧠 omnipkg install flask-login==0.4.1
+🫧 Creating protective bubble for v0.4.1...
+✅ Installation successful!
+🎯 Both versions coexist peacefully!
+```
 
-</details>
+---
 
-🔥 The Gauntlet: Surviving the Stress Test
-Talk is cheap. Here’s what happens when omnipkg is pushed to its absolute limit with the built-in omnipkg stress-test command. This isn't a simulation; it's omnipkg seamlessly activating different, often incompatible, versions of C-extension-heavy libraries in the same Python process.
+### 🔥 Stress Test: Pushing omnipkg to Its Limits
+Witness omnipkg handling complex scenarios with the built-in stress test. This real-world example demonstrates seamless activation of incompatible C-extension libraries:
+
+```bash
+omnipkg stress-test
+```
 
 <details>
+<summary><strong>View full stress test output</strong></summary>
 
-<summary><strong>🤯 Click to view the full stress test output.</strong></summary>
-Generated bash
-# Creating bubbles for older, conflicting versions...
+```
+# Creating bubbles for conflicting versions...
 --- Creating bubble for numpy==1.24.3 ---
-✅ Bubble created: 1363 files copied, 0 deduplicated.
+✅ Bubble created: 1363 files copied
 --- Creating bubble for scipy==1.12.0 ---
-✅ Bubble created: 3551 files copied, 0 deduplicated.
+✅ Bubble created: 3551 files copied
 
-# Executing the test...
-💥 NUMPY VERSION JUGGLING:
+# Executing version juggling...
+💥 NUMPY VERSION SWITCHING:
 
-⚡ Switching to numpy==1.24.3
-🌀 omnipkg loader: Activating numpy==1.24.3...
- ✅ Activated bubble: /path/to/.omnipkg_versions/numpy-1.24.3
+⚡ Activating numpy==1.24.3
    ✅ Version: 1.24.3
    🔢 Array sum: 6
 
-⚡ Switching to numpy==1.26.4
-🌀 omnipkg loader: Activating numpy==1.26.4...
- 🧹 Deactivated bubble: numpy-1.24.3
- ✅ Activated bubble: /path/to/.omnipkg_versions/numpy-1.26.4
+⚡ Activating numpy==1.26.4
    ✅ Version: 1.26.4
    🔢 Array sum: 6
 
 🔥 SCIPY C-EXTENSION TEST:
 
-🌋 Switching to scipy==1.12.0
-🌀 omnipkg loader: Activating scipy==1.12.0...
- ✅ Activated bubble: /path/to/.omnipkg_versions/scipy-1.12.0
+🌋 Activating scipy==1.12.0
    ✅ Version: 1.12.0
    ♻️ Sparse matrix: 3 non-zeros
 
-🌋 Switching to scipy==1.16.1
-🌀 omnipkg loader: Activating scipy==1.16.1...
- 🧹 Deactivated bubble: scipy-1.12.0
- ✅ System version already matches requested version (1.16.1). No bubble activation needed.
+🌋 Activating scipy==1.16.1
    ✅ Version: 1.16.1
    ♻️ Sparse matrix: 3 non-zeros
 
- 🚨 OMNIPKG SURVIVED NUCLEAR TESTING! 🎇
- 
+🚨 OMNIPKG SURVIVED NUCLEAR TESTING! 🎇
+```
 </details>
 
 ---
 
 ## 🚀 Core Features
 
--   🛡️ **Downgrade Protection**: Stops `pip` from nuking your environment by isolating conflicting versions into protected **"bubbles."**
--   💾 **Intelligent Deduplication**: Saves up to 60% disk space on bubbled packages while keeping native C extensions stable and separate.
--   🧠 **Redis-Backed Knowledge Base**: Lightning-fast lookups for all package versions, dependencies, and security info.
--   🔀 **Runtime Version Switching**: Activate any bubbled package version on the fly, even within the same script, using the built-in loader.
--   🧪 **Battle-Tested**: Proven to handle massive environments (**520+ packages, 95+ bubbles, 15.4GB+**) without flinching.
+-   🛡️ **Downgrade Protection**: Isolates conflicting versions into protected "bubbles"
+-   💾 **Intelligent Deduplication**: Saves up to 60% disk space on bubbled packages
+-   ⚡ **Redis-Backed Knowledge Base**: Lightning-fast package version lookups
+-   🔀 **Runtime Version Switching**: Activate any version on-the-fly
+-   🧪 **Battle-Tested**: Handles massive environments (520+ packages, 15GB+) reliably
 
 ---
 
-## How Is This Possible?
+## How It Works
 
-When a downgrade is detected, `omnipkg` performs surgery:
-1.  **Intercepts** the request.
-2.  **Installs** the conflicting version and its entire dependency tree into a temporary, isolated location.
-3.  **Creates** a space-efficient, deduplicated "bubble" in `.omnipkg_versions`.
-4.  **Restores** the original package in your main environment, leaving it pristine.
-
-The result: a perfectly stable global environment, with every version you've ever needed on standby.
+When a conflict is detected:
+1.  **Intercepts** the installation request
+2.  **Isolates** conflicting dependencies in a deduplicated "bubble"
+3.  **Preserves** your main environment integrity
+4.  **Enables** runtime version switching
 
 <details>
-<summary><strong>🔬 Real-World Example: Downgrading PyTorch</strong></summary>
+<summary><strong>Real-World Example: Downgrading PyTorch</strong></summary>
 
 ```bash
-# User wants to install an older torch version
 $ omnipkg install torch==2.7.0
-
-# ... (omnipkg detects the downgrade) ...
 🛡️  DOWNGRADE PROTECTION ACTIVATED!
--> Fixing downgrade: torch from v2.7.1 to v2.7.0
 🫧 Creating isolated bubble for torch v2.7.0
-✅ Success: Dependencies resolved via PyPI API.
-🧹 Creating deduplicated bubble...
-⚠️  Disabling deduplication for native package: torch
-✅ Bubble created: 16241 files copied, 3211 deduplicated.
-📊 Space efficiency: 16.5% saved.
-🔄 Restoring ‘torch’ to safe version v2.7.1 in main environment…
-
-✅ Environment protection complete!
+✅ Dependencies resolved via PyPI API
+📊 Space efficiency: 16.5% saved
+🔄 Restored torch v2.7.1 in main environment
+✅ Environment protected!
 ```
 </details>
 
 ---
 
-## Why Other Tools Fail
+## Why omnipkg Succeeds Where Others Fail
 
-| Tool          | The Task: `install old-conflicting-package` | Result                                |
-|---------------|---------------------------------------------|---------------------------------------|
-| `pip`         | ❌                                          | `ERROR: Cannot uninstall...`          |
-| `conda`       | ⏳                                          | `Solving environment...` (for hours)  |
-| `poetry`      | 💥                                          | `SolverProblemError`                  |
-| `uv`          | 🚫                                          | `No solution found for the request`   |
-| **`omnipkg`** | ✅                                          | **`DOWNGRADE PROTECTION ACTIVATED!`** |
+| Tool          | Result                                |
+|---------------|---------------------------------------|
+| `pip`         | ❌ `Cannot uninstall...`              |
+| `conda`       | ⏳ `Solving environment...` (hours)   |
+| `poetry`      | 💥 `SolverProblemError`               |
+| `uv`          | 🚫 `No solution found`                |
+| **`omnipkg`** | ✅ **`DOWNGRADE PROTECTION ACTIVATED`** |
 
 ---
 
 ## 📜 Licensing
 
-`omnipkg` is available under a dual-license model to suit different needs.
+`omnipkg` uses a dual-license model:
 
--   **Community Edition (AGPLv3):** Perfect for individual developers, open-source projects, and academic use. If you use `omnipkg` in a project that is also open-source under a compatible license, you're good to go. The source code is available in this repository under the [GNU AGPLv3](LICENSE).
+- **AGPLv3**: For open-source and academic use ([View License](https://www.gnu.org/licenses/agpl-3.0))
+- **Commercial License**: For proprietary systems and organizations
 
--   **Commercial License:** Required for use in closed-source commercial software, proprietary systems, or for any organization that cannot comply with the terms of the AGPLv3. This license allows you to integrate `omnipkg` without the obligation to open-source your own code.
+**Commercial inquiries:** [omnipkg@proton.me](mailto:omnipkg@proton.me)
 
-    → **To inquire about a commercial license, please contact:** [**omnipkg@proton.me**](mailto:omnipkg@proton.me)
+---
+
+```bash
+ ___________________________________________
+/                                           \
+|  pip is in omnipkg jail 🔒                |
+|  Status: Reflecting on better ways        |
+|         to manage packages...             |
+|                                           |
+|  💭 'Maybe breaking environments isn't    |
+|     the best approach...'                 |
+\___________________________________________/
+        \   ^__^
+         \  (oo)\_______
+            (__)\       )\/\
+                ||----w |
+                ||     ||
+```
+
+> *Professional enough for enterprises, fun enough for developers*
+```
