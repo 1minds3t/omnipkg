@@ -18,6 +18,22 @@
 
 ---
 
+`omnipkg` lets you install *any version* of *any package* without breaking your environment, downgrading dependencies, or needing Conda, Docker, or `pipx`. **Dependency hell? Obliterated.**
+
+## Installation & Quick Start
+
+```bash
+pip install omnipkg
+```
+
+See the magic for yourself. This command runs a fully automated demo showcasing downgrade protection and version isolation.
+
+```bash
+omnipkg demo
+```
+
+---
+
 <details>
   
 <summary><strong>🔬 Click to see what the demo shows you</strong></summary>
@@ -85,31 +101,6 @@ Generated bash
  🚨 OMNIPKG SURVIVED NUCLEAR TESTING! 🎇
  
 </details>
-
----
-
-`omnipkg` lets you install *any version* of *any package* without breaking your environment, downgrading dependencies, or needing Conda, Docker, or `pipx`. **Dependency hell? Obliterated.**
-
-## Installation & Quick Start
-
-```bash
-pip install omnipkg
-```
-
-See the magic for yourself. This command runs a fully automated demo showcasing downgrade protection and version isolation.
-
-```bash
-omnipkg demo
-```
-
-## 🔥 See It to Believe It (Live Demo Recording)
-
-A static README can't do it justice. Here is a live recording of `omnipkg` handling a complex installation that would break other tools.
-
-*<-- This is the perfect spot for a GIF created with a tool like `asciinema` or `termtosvg`! -->*
-
-![omnipkg Demo GIF](https://user-images.githubusercontent.com/your-image-url-here.gif) 
-*This shows `omnipkg install old-package`, downgrade protection activating, and `omnipkg status` confirming both versions coexist.*
 
 ---
 
