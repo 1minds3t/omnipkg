@@ -1,0 +1,32 @@
+# Python bytecode
+*.pyc
+__pycache__/
+
+# Distribution & build files
+/build/
+/dist/
+*.egg-info/
+.eggs/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+
+# Temporary files & logs
+*.log
+*.tmp
+*.bak
+*.cast
+*.mp4
+*.gif
+*.svg
+
+# PyPI and other secrets
+.env
+.DS_Store

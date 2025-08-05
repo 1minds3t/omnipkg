@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>omnipkg - Revolutionary Package Management</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+    body {
+        font-family: 'Monaco', 'Consolas', monospace;
+        background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 50%, #16213e 100%);
+        color: #00ff88;
+        overflow-x: hidden;
+        min-height: 100vh;
+    }
+
+    .container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 20px;
+    }
+
+    .hero {
+        text-align: center;
+        padding: 40px 0;
+        position: relative;
+    }
+
+    .hero::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 200px;
+        height: 200px;
+        background: radial-gradient(circle, #00ff8844 0%, transparent 70%);
+        border-radius: 50%;
+        animation: pulse 3s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+        0%, 100% { transform: translateX(-50%) scale(1); opacity: 0.5; }
+        50% { transform: translateX(-50%) scale(1.2); opacity: 0.8; }
+    }
+
+    .logo {
+        font-size: 4rem;
+        font-weight: bold;
+        background: linear-gradient(45deg, #00ff88, #00ccff, #ff6b6b);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        margin-bottom: 20px;
+        position: relative;
+        z-index: 1;
+    }
+
+    .tagline {
+        font-size: 1.2rem;
+        color: #888;
+        margin-bottom: 40px;
+        position: relative;
+        z-index: 1;
+    }
+
+    .features-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+        gap: 30px;
+        margin: 40px 0;
+    }
+
+    .feature-card {
+        background: rgba(26, 26, 46, 0.8);
+        border: 1px solid #00ff8844;
+        border-radius: 15px;
+        padding: 30px;
+        position: relative;
+        transition: all 0.3s ease;
+        backdrop-filter: blur(10px);
+    }
+
+    .feature-card:hover {
+        transform: translateY(-10px);
+        box-shadow: 0 20px 40px rgba(0, 255, 136, 0.2);
+        border-color: #00ff88;
+    }
+
+    .feature-icon {
+        font-size: 3rem;
+        margin-bottom: 20px;
+        display: block;
+    }
+
+    .feature-title {
+        font-size: 1.5rem;
+        color: #00ff88;
+        margin-bottom: 15px;
+        font-weight: bold;
+    }
+
+    .feature-description {
+        color: #ccc;
+        line-height: 1.6;
+        margin-bottom: 20px;
+    }
+
+    .demo-section {
+        background: rgba(0, 0, 0, 0.6);
+        border-radius: 15px;
+        padding: 30px;
+        margin: 40px 0;
+        border: 1px solid #333;
+    }
+
+    .demo-title {
+        font-size: 2rem;
+        color: #00ccff;
+        margin-bottom: 20px;
+        text-align: center;
+    }
+
+    .terminal {
+        background: #1a1a1a;
+        border-radius: 10px;
+        padding: 20px;
+        margin: 20px 0;
+        border: 1px solid #333;
+        position: relative;
+        overflow-x: auto;
+    }
+
+    .terminal::before {
+        content: '● ● ●';
+        position: absolute;
+        top: 10px;
+        left: 15px;
+        color: #666;
+        font-size: 12px;
+    }
+
+    .terminal-content {
+        margin-top: 30px;
+        font-family: 'Monaco', monospace;
+        font-size: 14px;
+        line-height: 1.4;
+    }
+
+    .cmd-line {
+        margin: 10px 0;
+    }
+
+    .prompt {
+        color: #00ff88;
+    }
+
+    .success {
+        color: #00ff88;
+    }
+
+    .warning {
+        color: #ffaa00;
+    }
+
+    .info {
+        color: #00ccff;
+    }
+
+    .error {
+        color: #ff6b6b;
+    }
+
+    .highlight {
+        background: rgba(0, 255, 136, 0.2);
+        padding: 2px 5px;
+        border-radius: 3px;
+    }
+
+    .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 20px;
+        margin: 30px 0;
+    }
+
+    .stat-card {
+        background: rgba(0, 255, 136, 0.1);
+        border: 1px solid #00ff8844;
+        border-radius: 10px;
+        padding: 20px;
+        text-align: center;
+    }
+
+    .stat-number {
+        font-size: 2rem;
+        font-weight: bold;
+        color: #00ff88;
+        display: block;
+    }
+
+    .stat-label {
+        color: #888;
+        font-size: 0.9rem;
+        margin-top: 5px;
+    }
+
+    .cta-section {
+        text-align: center;
+        padding: 40px 0;
+        background: linear-gradient(45deg, rgba(0, 255, 136, 0.1), rgba(0, 204, 255, 0.1));
+        border-radius: 15px;
+        margin: 40px 0;
+    }
+
+    .cta-button {
+        display: inline-block;
+        background: linear-gradient(45deg, #00ff88, #00ccff);
+        color: #000;
+        padding: 15px 30px;
+        border-radius: 25px;
+        text-decoration: none;
+        font-weight: bold;
+        font-size: 1.1rem;
+        transition: all 0.3s ease;
+        border: none;
+        cursor: pointer;
+    }
+    
+    /* New styles for the additional CTA buttons */
+    .cta-links a {
+        display: inline-block;
+        margin: 0 10px;
+        color: #00ff88;
+        font-size: 1.1rem;
+        text-decoration: none;
+        transition: color 0.3s ease;
+    }
+
+    .cta-links a:hover {
+        color: #00ccff;
+    }
+
+    .cta-button:hover {
+        transform: scale(1.05);
+        box-shadow: 0 10px 20px rgba(0, 255, 136, 0.3);
+    }
+    
+    .demo-link-section {
+        background: rgba(0, 204, 255, 0.1);
+        border: 1px solid #00ccff44;
+        border-radius: 15px;
+        padding: 30px;
+        margin: 40px 0;
+        text-align: center;
+    }
+
+    .demo-link-section h2 {
+        color: #00ccff;
+        margin-bottom: 20px;
+    }
+
+    .demo-link-button {
+        background: linear-gradient(45deg, #00ccff, #ff6b6b);
+        color: #fff;
+        padding: 15px 30px;
+        border-radius: 25px;
+        text-decoration: none;
+        font-weight: bold;
+        font-size: 1.1rem;
+        transition: all 0.3s ease;
+        border: none;
+        cursor: pointer;
+    }
+    
+    .demo-link-button:hover {
+        transform: scale(1.05);
+        box-shadow: 0 10px 20px rgba(0, 204, 255, 0.3);
+    }
+
+    .floating-particles {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+        z-index: -1;
+    }
+
+    .particle {
+        position: absolute;
+        width: 2px;
+        height: 2px;
+        background: #00ff88;
+        border-radius: 50%;
+        animation: float 6s ease-in-out infinite;
+    }
+
+    @keyframes float {
+        0%, 100% { transform: translateY(0px) rotate(0deg); opacity: 0; }
+        50% { transform: translateY(-100px) rotate(180deg); opacity: 1; }
+    }
+</style>
+</head>
+<body>
+    <div class="floating-particles" id="particles"></div>
+
+<div class="container">
+    <div class="hero">
+        <div class="logo">omnipkg</div>
+        <div class="tagline">Revolutionary Package Version Management That Actually Works</div>
+    </div>
+
+    <div class="features-grid">
+        <div class="feature-card">
+            <div class="feature-icon">🛡️</div>
+            <div class="feature-title">Zero-Downgrade Protection</div>
+            <div class="feature-description">
+                Automatically detects downgrades and creates isolated "bubbles" instead of breaking your environment. 
+                Your main packages stay safe while you test different versions.
+            </div>
+        </div>
+
+        <div class="feature-card">
+            <div class="feature-icon">🫧</div>
+            <div class="feature-title">Instant Version Bubbles</div>
+            <div class="feature-description">
+                Switch between package versions in milliseconds using isolated bubbles. 
+                No reinstallation, no conflicts, no waiting.
+            </div>
+        </div>
+
+        <div class="feature-card">
+            <div class="feature-icon">🧠</div>
+            <div class="feature-title">Smart Deduplication</div>
+            <div class="feature-description">
+                Advanced hash-based deduplication saves massive amounts of disk space by 
+                sharing identical files across different package versions.
+            </div>
+        </div>
+
+        <div class="feature-card">
+            <div class="feature-icon">⚡</div>
+            <div class="feature-title">Runtime Version Switching</div>
+            <div class="feature-description">
+                Change package versions while Python is running. Perfect for testing, 
+                A/B comparisons, and dynamic version requirements.
+            </div>
+        </div>
+
+        <div class="feature-card">
+            <div class="feature-icon">🔬</div>
+            <div class="feature-title">Deep Environment Analysis</div>
+            <div class="feature-description">
+                Live snapshots and comprehensive dependency tracking. 
+                Know exactly what changes when you install anything.
+            </div>
+        </div>
+
+        <div class="feature-card">
+            <div class="feature-icon">🚀</div>
+            <div class="feature-title">C-Extension Compatible</div>
+            <div class="feature-description">
+                Works flawlessly with NumPy, SciPy, TensorFlow and other packages 
+                with complex C extensions and native dependencies.
+            </div>
+        </div>
+    </div>
+
+    <div class="demo-section">
+        <div class="demo-title">🎯 Mind-Blowing Demo: Nuclear Stress Test</div>
+        
+        <div class="terminal">
+            <div class="terminal-content">
+                <div class="cmd-line"><span class="prompt">$</span> omnipkg stress-test</div>
+                <div class="cmd-line"><span class="info">🚀 omnipkg Ultimate Stress Test</span></div>
+                <div class="cmd-line"><span class="warning">⚠️  Installing multiple conflicting scientific packages...</span></div>
+            </div>
+        </div>
+
+        <div class="stats-grid">
+            <div class="stat-card">
+                <span class="stat-number">0ms</span>
+                <div class="stat-label">Version Switch Time</div>
+            </div>
+            <div class="stat-card">
+                <span class="stat-number">100%</span>
+                <div class="stat-label">Environment Safety</div>
+            </div>
+            <div class="stat-card">
+                <span class="stat-number">62K+</span>
+                <div class="stat-label">Files Analyzed</div>
+            </div>
+            <div class="stat-card">
+                <span class="stat-number">0</span>
+                <div class="stat-label">Conflicts Created</div>
+            </div>
+        </div>
+
+        <div class="terminal">
+            <div class="terminal-content">
+                <div class="cmd-line"><span class="success">🛡️  DOWNGRADE PROTECTION ACTIVATED!</span></div>
+                <div class="cmd-line"><span class="info">🫧 Creating isolated bubble for numpy v1.24.3</span></div>
+                <div class="cmd-line"><span class="success">    ✅ Clean dependency tree installed successfully</span></div>
+                <div class="cmd-line"><span class="info">    📈 Indexed 62,638 files from main environment</span></div>
+                <div class="cmd-line"><span class="success">    📊 Statistics: 1,363 files copied, 0 conflicts</span></div>
+                <div class="cmd-line"><span class="success">🔄 Restoring safe version in main environment...</span></div>
+            </div>
+        </div>
+
+        <div class="terminal">
+            <div class="terminal-content">
+                <div class="cmd-line"><span class="info">💥 NUMPY VERSION JUGGLING:</span></div>
+                <div class="cmd-line"><span class="success">⚡ Switching to numpy==1.24.3</span></div>
+                <div class="cmd-line"><span class="highlight">   ✅ Version: 1.24.3 🔢 Array sum: 6</span></div>
+                <div class="cmd-line"><span class="success">⚡ Switching to numpy==1.26.4</span></div>
+                <div class="cmd-line"><span class="highlight">   ✅ Version: 1.26.4 🔢 Array sum: 6</span></div>
+                <div class="cmd-line"></div>
+                <div class="cmd-line"><span class="info">🤯 NUMPY + SCIPY VERSION MIXING:</span></div>
+                <div class="cmd-line"><span class="success">🌀 COMBO: numpy==1.24.3 + scipy==1.12.0</span></div>
+                <div class="cmd-line"><span class="highlight">   🧪 numpy: 1.24.3, scipy: 1.12.0 ✅ Compatible!</span></div>
+            </div>
+        </div>
+
+        <div class="terminal">
+            <div class="terminal-content">
+                <div class="cmd-line"><span class="success">🎇 omnipkg SURVIVED NUCLEAR TESTING! 🎇</span></div>
+                <div class="cmd-line"><span class="info">✅ Environment restored to original state</span></div>
+                <div class="cmd-line"><span class="info">✅ Zero conflicts, zero breaks, zero problems</span></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="demo-link-section">
+        <h2>Watch the Full Live Demo</h2>
+        <a href="https://imgur.com/gallery/omnipkg-demo-v1-0-4-IWBGBTl" class="demo-link-button">Watch Demo Video</a>
+    </div>
+
+    <div class="demo-section">
+        <div class="demo-title">🚀 What Makes This Impossible Possible</div>
+        
+        <div class="feature-card">
+            <div class="feature-title">🧬 Live Environment Snapshots</div>
+            <div class="feature-description">
+                omnipkg takes real-time snapshots of your Python environment before any change, 
+                tracking every single file and dependency relationship.
+            </div>
+        </div>
+
+        <div class="feature-card">
+            <div class="feature-title">🎯 Surgical Version Isolation</div>
+            <div class="feature-description">
+                When a downgrade is detected, omnipkg creates a complete isolated bubble with 
+                the exact dependency tree needed, while keeping your main environment untouched.
+            </div>
+        </div>
+
+        <div class="feature-card">
+            <div class="feature-title">⚡ Instant Context Switching</div>
+            <div class="feature-description">
+                Python's import system is dynamically redirected to load from different 
+                package versions without restarting your session or reinstalling anything.
+            </div>
+        </div>
+    </div>
+
+    <div class="cta-section">
+        <h2 style="color: #00ff88; margin-bottom: 20px;">Ready to Never Break Your Environment Again?</h2>
+        <p style="color: #888; margin-bottom: 30px;">Join the revolution in Python package management</p>
+        <div class="cta-links">
+            <a href="https://github.com/patrickryankenneth/omnipkg" class="cta-button">GitHub</a>
+            <a href="https://pypi.org/project/omnipkg/" class="cta-button">PyPI</a>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Create floating particles
+    function createParticles() {
+        const container = document.getElementById('particles');
+        const particleCount = 20;
+
+        for (let i = 0; i < particleCount; i++) {
+            const particle = document.createElement('div');
+            particle.className = 'particle';
+            particle.style.left = Math.random() * 100 + '%';
+            particle.style.animationDelay = Math.random() * 6 + 's';
+            particle.style.animationDuration = (3 + Math.random() * 6) + 's';
+            container.appendChild(particle);
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', createParticles);
+
+    // Add some interactive hover effects
+    document.querySelectorAll('.feature-card').forEach(card => {
+        card.addEventListener('mouseenter', function() {
+            this.style.transform = 'translateY(-10px) scale(1.02)';
+        });
+        
+        card.addEventListener('mouseleave', function() {
+            this.style.transform = 'translateY(0) scale(1)';
+        });
+    });
+</script>
+
+</body>
+</html>
