@@ -1,0 +1,40 @@
+# .github/workflows/publish-to-pypi.yml
+
+name: Publish Python Package to PyPI
+
+on:
+  release:
+    types: [published] # This workflow runs when a new release is published on GitHub
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        # Use the specific Python version you require, e-g-, 3.11
+        python-version: '3.11'
+
+    - name: Install modern build dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install build twine
+        # build - The modern, PEP 517 compliant build frontend
+        # twine - The standard for securely uploading packages
+
+    - name: Build package
+      # This command automatically finds and uses your pyproject.toml
+      # It builds the source distribution (sdist) and the wheel.
+      run: python -m build
+
+    - name: Publish package to PyPI
+      env:
+        # Use the secret you created in GitHub Settings -> Secrets -> Actions
+        TWINE_USERNAME: __token__
+        TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
+      run: twine upload dist/*

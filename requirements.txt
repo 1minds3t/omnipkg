@@ -1,0 +1,6 @@
+redis
+zstandard
+psycopg2-binary
+python-dotenv
+packaging>=25.0
+requests>=2.32.4

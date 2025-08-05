@@ -1,0 +1,33 @@
+name: Security Audit
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  pip-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install build tools and update setuptools
+        run: |
+          python -m pip install --upgrade pip setuptools wheel
+
+      - name: Install omnipkg with its dependencies
+        run: |
+          pip install ".[demo]"
+
+      - name: Run pip-audit
+        uses: pypa/gh-action-pip-audit@v1.1.0
+        # No 'with:' section needed if you're just doing a default scan

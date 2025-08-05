@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "omnipkg"
+version = "1.1.1"
+authors = [
+  { name="minds3t", email="1minds3t@gmail.com" },
+]
+description = "The Intelligent Python Dependency Resolver"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text="MIT" }
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Topic :: Software Development :: Build Tools",
+]
+dependencies = [
+    "redis",
+    "packaging",
+    "requests",
+]
+
+[project.urls]
+Homepage = "https://github.com/1minds3t/omnipkg"
+
+[project.scripts]
+omnipkg = "omnipkg.cli:main"
+
+[tool.setuptools]
+packages = ["omnipkg"]
+
+# This is the crucial part that fixes your issue
+[tool.setuptools.package-data]
+omnipkg = ["*.py"]
