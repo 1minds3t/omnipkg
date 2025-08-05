@@ -19,6 +19,11 @@
   </a>
 </p>
 
+[![Security Audit](https://github.com/1minds3t/omnipkg/actions/workflows/security_audit.yml/badge.svg)](https://github.com/1minds3t/omnipkg/actions/workflows/security_audit.yml)
+[![Build Status](https://github.com/1minds3t/omnipkg/actions/workflows/publish.yml/badge.svg)](https://github.com/1minds3t/omnipkg/actions/workflows/publish.yml)
+[![PyPI version](https://img.shields.io/pypi/v/omnipkg.svg)](https://pypi.org/project/omnipkg/)
+
+
 ---
 
 `omnipkg` lets you install *any version* of *any package* without breaking your environment, downgrading dependencies, or needing Conda, Docker, or `pipx`. **Dependency hell? Obliterated.**
