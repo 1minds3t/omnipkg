@@ -1,0 +1,5 @@
+# requirements-demo.txt
+# DEMO REQUIREMENTS (only for testing version switching)
+-r requirements.txt  # Includes core
+flask>=2.0.0
+flask-login==0.6.3  # Must be exact version for demo
