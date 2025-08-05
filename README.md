@@ -18,7 +18,7 @@
 
 ---
 
-`omnipkg` lets you install *any version* of *any package* without breaking your environment, downgrading dependencies, or needing Conda, Docker, or `pipx`. **Dependency hell? Eliminated.**
+omnipkg lets you install any version of any package — no breakage, no downgrades, no workarounds, or needing Conda, Docker, or `pipx`. **Dependency hell? Eliminated.**
 
 ## Installation & Quick Start
 
@@ -53,7 +53,7 @@ omnipkg demo
 
 ---
 
-### 🔥 Stress Test: Pushing omnipkg to Its Limits
+### 🔥 Nuclear Stress Test: Can Your Package Manager Survive This
 Witness omnipkg handling complex scenarios with the built-in stress test. This real-world example demonstrates seamless activation of incompatible C-extension libraries:
 
 ```bash
