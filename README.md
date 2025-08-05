@@ -1,4 +1,4 @@
-# omnipkg: The Intelligent Python Package Manager
+# omnipkg - The Intelligent Python Package Manager
 > One environment. Infinite versions. Zero conflicts.
 
 <p align="center">
