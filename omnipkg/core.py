@@ -858,30 +858,18 @@ class omnipkg:
             print(f"   {display_name.ljust(18)}: {value}")
 
         print(f"\n💡 For all raw data, use Redis key: \"{version_key}\"")
-
-    def _sort_packages_newest_first(self, packages: List[str]) -> List[str]:
-        """Sorts packages by version, newest first, to ensure proper bubble creation."""
-        from packaging.version import parse as parse_version, InvalidVersion
-        import re
         
-        def get_version_key(pkg_spec):
-            """Extracts a sortable version key from a package spec."""
-            # Match version strings like ==, >=, <, etc.
-            match = re.search(r'(==|>=|<=|>|<)(.+)', pkg_spec)
-            if match:
-                version_str = match.group(2).strip()
-                try:
-                    # Return a valid version object for sorting
-                    return parse_version(version_str)
-                except InvalidVersion:
-                    # If version is weird (e.g., a URL), treat it as very old
-                    return parse_version('0.0.0')
-            # If no version is specified, treat it as the "newest possible"
-            return parse_version('9999.0.0')
-        
-        # Sort the list of packages. The key function determines the order.
-        # `reverse=True` puts the newest (highest) versions first.
-        return sorted(packages, key=get_version_key, reverse=True)
+    def _save_last_known_good_snapshot(self):
+        """Saves the current environment state to Redis."""
+        print("📸 Saving snapshot of the current environment as 'last known good'...")
+        try:
+            current_state = self.get_installed_packages(live=True)
+            snapshot_key = f"{self.config['redis_key_prefix']}snapshot:last_known_good"
+            # We store the package list as a JSON string
+            self.redis_client.set(snapshot_key, json.dumps(current_state))
+            print("   ✅ Snapshot saved.")
+        except Exception as e:
+            print(f"   ⚠️ Could not save environment snapshot: {e}")
 
     def smart_install(self, packages: List[str], dry_run: bool = False) -> int:
         if not self.connect_redis():
@@ -890,64 +878,58 @@ class omnipkg:
         if dry_run:
             print("🔬 Running in --dry-run mode. No changes will be made.")
             return 0
-        
-        # Sort packages newest to oldest to ensure proper bubble creation
-        sorted_packages = self._sort_packages_newest_first(packages)
-        
-        if sorted_packages != packages:
-            print(f"🔄 Reordered packages for optimal installation: {', '.join(sorted_packages)}")
-        
-        # Process each package individually to handle version conflicts
-        for package_spec in sorted_packages:
-            print("\n" + "─"*60)
-            print(f"📦 Processing: {package_spec}")
-            print("─"*60)
 
-            satisfaction_check = self._check_package_satisfaction([package_spec])
+        print(f"🔍 Checking satisfaction for: {', '.join(packages)}")
 
-            if satisfaction_check['all_satisfied']:
-                print(f"✅ Requirement already satisfied: {package_spec}")
-                continue
+        satisfaction_check = self._check_package_satisfaction(packages)
 
-            packages_to_install = satisfaction_check['needs_install']
-            
-            print("\n📸 Taking LIVE pre-installation snapshot...")
-            packages_before = self.get_installed_packages(live=True)
-            print(f"    - Found {len(packages_before)} packages")
+        if satisfaction_check['all_satisfied']:
+            print("\n✅ All requirements already satisfied. No work needed. 🛡️")
+            return 0
 
-            print(f"\n⚙️  Running pip install for: {', '.join(packages_to_install)}...")
-            return_code = self._run_pip_install(packages_to_install)
+        packages_to_install = satisfaction_check['needs_install']
 
-            if return_code != 0:
-                print(f"❌ Pip installation for {package_spec} failed. Continuing with next package.")
-                continue
+        if satisfaction_check['partial_satisfied']:
+            print("\nℹ️  Some packages already satisfied:")
+            for pkg in satisfaction_check['satisfied']:
+                print(f"   ✅ {pkg}")
+            print("\n📦 Proceeding to install remaining packages:")
+            for pkg in packages_to_install:
+                print(f"   📥 {pkg}")
 
-            print("\n🔬 Analyzing post-installation changes...")
-            packages_after = self.get_installed_packages(live=True)
-            # THIS IS THE NEW LINE: Capture the state containing the new version
-            packages_to_index = packages_after 
-            downgrades_to_fix = self._detect_downgrades(packages_before, packages_after)
+        print("\n📸 Taking LIVE pre-installation snapshot...")
+        packages_before = self.get_installed_packages(live=True)
+        print(f"    - Found {len(packages_before)} packages")
 
-            if downgrades_to_fix:
-                print("\n🛡️  DOWNGRADE PROTECTION ACTIVATED!")
-                for fix in downgrades_to_fix:
-                    print(f"    -> Fixing downgrade: {fix['package']} from v{fix['good_version']} to v{fix['bad_version']}")
-                    self.bubble_manager.create_isolated_bubble(fix['package'], fix['bad_version'])
-                    print(f"    🔄 Restoring '{fix['package']}' to safe version v{fix['good_version']} in main environment...")
-                    subprocess.run([self.config["python_executable"], "-m", "pip", "install", "--quiet", f"{fix['package']}=={fix['good_version']}"], capture_output=True, text=True)
-                print("\n✅ Environment protection complete!")
-            else:
-                print("✅ No downgrades detected. Installation completed safely.")
+        print(f"\n⚙️  Running pip install for: {', '.join(packages_to_install)}...")
+        return_code = self._run_pip_install(packages_to_install)
 
-            print("\n🧠 Updating knowledge base with final environment state...")
-            self._run_metadata_builder_for_delta(packages_before, packages_to_index)
+        if return_code != 0:
+            print("❌ Pip installation failed. Aborting cleanup.")
+            return return_code
 
-            final_packages_state = self.get_installed_packages(live=True)
-            self._update_hash_index_for_delta(packages_before, final_packages_state)          
+        print("\n🔬 Analyzing post-installation changes...")
+        packages_after = self.get_installed_packages(live=True)
+        downgrades_to_fix = self._detect_downgrades(packages_before, packages_after)
 
-        print("\n" + "="*60)
-        print("🎉 All package operations complete.")
-        
+        if downgrades_to_fix:
+            print("\n🛡️  DOWNGRADE PROTECTION ACTIVATED!")
+            for fix in downgrades_to_fix:
+                print(f"    -> Fixing downgrade: {fix['package']} from v{fix['good_version']} to v{fix['bad_version']}")
+                self.bubble_manager.create_isolated_bubble(fix['package'], fix['bad_version'])
+                print(f"    🔄 Restoring '{fix['package']}' to safe version v{fix['good_version']} in main environment...")
+                subprocess.run([self.config["python_executable"], "-m", "pip", "install", f"{fix['package']}=={fix['good_version']}"], capture_output=True, text=True)
+            print("\n✅ Environment protection complete!")
+        else:
+            print("✅ No downgrades detected. Installation completed safely.")
+
+        print("\n🧠 Updating knowledge base with final environment state...")
+        self._run_metadata_builder_for_delta(packages_before, packages_after)
+        self._update_hash_index_for_delta(packages_before, packages_after)
+        self._save_last_known_good_snapshot() 
+
+        return 0
+
     def _find_package_installations(self, package_name: str) -> List[Dict]:
         """Find all installations of a package, both active and bubbled."""
         found = []
@@ -1042,80 +1024,104 @@ class omnipkg:
                     pipe.execute()
 
             print("✅ Uninstallation complete.")
+            
+            self._save_last_known_good_snapshot() 
+            
+        return 0
+        
+    def revert_to_last_known_good(self, force: bool = False):
+        """Compares the current env to the last snapshot and restores it."""
+        if not self.connect_redis(): return 1
+
+        snapshot_key = f"{self.config['redis_key_prefix']}snapshot:last_known_good"
+        snapshot_data = self.redis_client.get(snapshot_key)
+
+        if not snapshot_data:
+            print("❌ No 'last known good' snapshot found. Cannot revert.")
+            print("   Run an `omnipkg install` or `omnipkg uninstall` command to create one.")
+            return 1
+
+        print("⚖️  Comparing current environment to the last known good snapshot...")
+        snapshot_state = json.loads(snapshot_data)
+        current_state = self.get_installed_packages(live=True)
+
+        # Calculate the "diff"
+        snapshot_keys = set(snapshot_state.keys())
+        current_keys = set(current_state.keys())
+
+        to_install = [f"{pkg}=={ver}" for pkg, ver in snapshot_state.items() if pkg not in current_keys]
+        to_uninstall = [pkg for pkg in current_keys if pkg not in snapshot_keys]
+        to_fix = [f"{pkg}=={snapshot_state[pkg]}" for pkg in (snapshot_keys & current_keys) if snapshot_state[pkg] != current_state[pkg]]
+        
+        if not to_install and not to_uninstall and not to_fix:
+            print("✅ Your environment is already in the last known good state. No action needed.")
+            return 0
+        
+        print("\n📝 The following actions will be taken to restore the environment:")
+        if to_uninstall:
+            print(f"  - Uninstall: {', '.join(to_uninstall)}")
+        if to_install:
+            print(f"  - Install: {', '.join(to_install)}")
+        if to_fix:
+            print(f"  - Fix Version: {', '.join(to_fix)}")
+
+        if not force:
+            confirm = input("\n🤔 Are you sure you want to proceed? (y/N): ").lower().strip()
+            if confirm != 'y':
+                print("🚫 Revert cancelled.")
+                return 1
+        
+        print("\n🚀 Starting revert operation...")
+        if to_uninstall:
+            self.smart_uninstall(to_uninstall, force=True)
+        
+        packages_to_install = to_install + to_fix
+        if packages_to_install:
+            self.smart_install(packages_to_install)
+
+        print("\n✅ Environment successfully reverted to the last known good state.")
         return 0
 
     def _check_package_satisfaction(self, packages: List[str]) -> dict:
-        """Check satisfaction with bubble pre-check optimization"""
-        satisfied = set()
-        remaining_packages = []
-        
-        # FAST PATH: Check for pre-existing bubbles BEFORE calling pip
-        for pkg_spec in packages:
-            try:
-                if '==' in pkg_spec:
-                    pkg_name, version = pkg_spec.split('==', 1)  # Handle edge cases like pkg==1.0.0==extra
-                    bubble_path = self.multiversion_base / f"{pkg_name}-{version}"
-                    if bubble_path.exists() and bubble_path.is_dir():
-                        satisfied.add(pkg_spec)
-                        print(f"    ⚡ Found existing bubble: {pkg_spec}")
-                        continue
-                # Not version-pinned or no bubble found - needs pip check
-                remaining_packages.append(pkg_spec)
-            except ValueError:
-                # Malformed spec, let pip handle it
-                remaining_packages.append(pkg_spec)
-        
-        # Early return if all packages have bubbles
-        if not remaining_packages:
-            return {
-                'all_satisfied': True, 
-                'satisfied': sorted(list(satisfied)), 
-                'needs_install': []
-            }
-        
-        # SLOW PATH: Only call pip for packages without bubbles
         req_file_path = None
         try:
             with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f:
-                f.write("\n".join(remaining_packages))
+                f.write("\n".join(packages))
                 req_file_path = f.name
-            
+
             cmd = [self.config["python_executable"], "-m", "pip", "install", "--dry-run", "-r", req_file_path]
             result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
-            
-            # Parse pip output for additional satisfied packages
+
+            satisfied = set()
             output_lines = result.stdout.splitlines()
+
             for line in output_lines:
                 if line.startswith("Requirement already satisfied:"):
                     try:
                         satisfied_spec = line.split("Requirement already satisfied: ")[1].strip()
                         req_name = satisfied_spec.split('==')[0].lower()
-                        for user_req in remaining_packages:
+                        for user_req in packages:
                             if user_req.lower().startswith(req_name):
                                 satisfied.add(user_req)
-                    except (IndexError, AttributeError):
+                    except IndexError:
                         continue
-            
+
             needs_install = [pkg for pkg in packages if pkg not in satisfied]
+
             return {
                 'all_satisfied': len(needs_install) == 0,
                 'partial_satisfied': len(satisfied) > 0 and len(needs_install) > 0,
                 'satisfied': sorted(list(satisfied)),
                 'needs_install': needs_install
             }
-            
+
         except Exception as e:
-            print(f"    ⚠️  Satisfaction check failed ({e}). Assuming remaining packages need installation.")
-            return {
-                'all_satisfied': False, 
-                'partial_satisfied': len(satisfied) > 0,
-                'satisfied': sorted(list(satisfied)), 
-                'needs_install': remaining_packages
-            }
+            print(f"    ⚠️  Satisfaction check failed ({e}). Assuming all packages need installation.")
+            return {'all_satisfied': False, 'partial_satisfied': False, 'satisfied': [], 'needs_install': packages}
         finally:
             if req_file_path and Path(req_file_path).exists():
                 Path(req_file_path).unlink()
-    
+
     def get_package_info(self, package_name: str, version: str) -> Optional[Dict]:
         if not self.redis_client: self.connect_redis()
 
