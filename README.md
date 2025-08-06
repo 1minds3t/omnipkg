@@ -97,10 +97,10 @@ omnipkg stress-test
 ## 🚀 Core Features
 
 -   🛡️ **Downgrade Protection**: Isolates conflicting versions into protected "bubbles"
--   💾 **Intelligent Deduplication**: Saves up to 60% disk space on bubbled packages
+-   💾 **Intelligent Deduplication**: Saves around 60% disk space on bubbled packages
 -   ⚡ **Redis-Backed Knowledge Base**: Lightning-fast package version lookups
 -   🔀 **Runtime Version Switching**: Activate any version on-the-fly
--   🧪 **Battle-Tested**: Handles massive environments (520+ packages, 15GB+) reliably
+-   🧪 **Battle-Tested**: Handles massive environments (500+ packages, 400+ unique, 100+ bubbles, 30GB+) reliably
 
 ---
 
