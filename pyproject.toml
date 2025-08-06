@@ -4,9 +4,9 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "omnipkg"
-version = "1.0.2"
+version = "1.0.3"
 authors = [
-  { name = "minds3t", email = "omnipkg@proton.me" },
+  { name = "1minds3t", email = "omnipkg@proton.me" },
 ]
 description = "The Intelligent Python Dependency Resolver"
 readme = "README.md"

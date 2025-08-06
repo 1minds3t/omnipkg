@@ -37,6 +37,10 @@ def create_parser():
 
     install_parser = subparsers.add_parser('install', help='Install packages (with downgrade protection)')
     install_parser.add_argument('packages', nargs='+', help='Packages to install (e.g., "requests==2.25.1")')
+    
+    uninstall_parser = subparsers.add_parser('uninstall', help='Uninstall packages from main env or bubbles')
+    uninstall_parser.add_argument('packages', nargs='+', help='Packages to uninstall (e.g., "requests" or "requests==2.25.1")')
+    uninstall_parser.add_argument('--yes', '-y', action='store_true', help='Skip confirmation prompts')
 
     info_parser = subparsers.add_parser('info', help='Show detailed package information with interactive version selection')
     info_parser.add_argument('package', help='Package name to inspect')
@@ -91,6 +95,8 @@ def main():
     try:
         if args.command == 'install':
             return pkg_instance.smart_install(args.packages)
+        elif args.command == 'uninstall':
+            return pkg_instance.smart_uninstall(args.packages, force=args.yes)
         elif args.command == 'info':
             return pkg_instance.show_package_info(args.package, args.version)
         elif args.command == 'list':
