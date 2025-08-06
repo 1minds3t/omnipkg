@@ -46,6 +46,9 @@ def create_parser():
     info_parser.add_argument('package', help='Package name to inspect')
     info_parser.add_argument('--version', default='active', help='Specific version to inspect')
 
+    revert_parser = subparsers.add_parser('revert', help="Revert environment to the last known good state")
+    revert_parser.add_argument('--yes', '-y', action='store_true', help='Skip confirmation and revert immediately')
+
     list_parser = subparsers.add_parser('list', help='List installed packages')
     list_parser.add_argument('filter', nargs='?', help='Optional filter pattern for package names')
 
@@ -91,12 +94,14 @@ def main():
     
     # Now, create the main instance, PASSING IN the loaded config
     pkg_instance = omnipkg(cm.config)
-
     try:
         if args.command == 'install':
             return pkg_instance.smart_install(args.packages)
         elif args.command == 'uninstall':
             return pkg_instance.smart_uninstall(args.packages, force=args.yes)
+            
+        elif args.command == 'revert':
+            return pkg_instance.revert_to_last_known_good(force=args.yes)
         elif args.command == 'info':
             return pkg_instance.show_package_info(args.package, args.version)
         elif args.command == 'list':
