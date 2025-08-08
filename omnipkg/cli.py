@@ -5,6 +5,7 @@ omnipkg CLI
 import sys
 import argparse
 from .core import omnipkg, ConfigManager
+from pathlib import Path
 
 def print_header(title):
     """Prints a consistent, pretty header for CLI sections."""
@@ -36,7 +37,14 @@ def create_parser():
     subparsers = parser.add_subparsers(dest='command', help='All available commands:', required=True)
 
     install_parser = subparsers.add_parser('install', help='Install packages (with downgrade protection)')
-    install_parser.add_argument('packages', nargs='+', help='Packages to install (e.g., "requests==2.25.1")')
+    # Make 'packages' optional (nargs='*') to allow using -r instead
+    install_parser.add_argument('packages', nargs='*', help='Packages to install (e.g., "requests==2.25.1")')
+    # Add the new -r/--requirement flag
+    install_parser.add_argument(
+        '-r', '--requirement', 
+        help='Install from the given requirements file.',
+        metavar='FILE'
+    )
     
     uninstall_parser = subparsers.add_parser('uninstall', help='Uninstall packages from main env or bubbles')
     uninstall_parser.add_argument('packages', nargs='+', help='Packages to uninstall (e.g., "requests" or "requests==2.25.1")')
@@ -95,8 +103,43 @@ def main():
     # Now, create the main instance, PASSING IN the loaded config
     pkg_instance = omnipkg(cm.config)
     try:
+        # In omnipkg/cli.py -> main()
+
         if args.command == 'install':
-            return pkg_instance.smart_install(args.packages)
+            packages_to_process = []
+
+            if args.requirement:
+                # User provided a requirements file
+                req_path = Path(args.requirement)
+                if not req_path.is_file():
+                    print(f"❌ Error: Requirements file not found at '{req_path}'")
+                    return 1
+                
+                print(f"📄 Reading packages from {req_path.name}...")
+                # In omnipkg/cli.py -> main()
+
+                with open(req_path, 'r') as f:
+                    # Parse the file, handling inline comments and empty lines
+                    packages_to_process = []
+                    for line in f:
+                        # Get the part before any comment and strip whitespace
+                        clean_line = line.split('#')[0].strip()
+                        # Only add it to our list if it's not an empty string
+                        if clean_line:
+                            packages_to_process.append(clean_line)
+            
+            elif args.packages:
+                # User provided packages directly on the command line
+                packages_to_process = args.packages
+            
+            else:
+                # No packages or file provided
+                print("❌ Error: You must either specify packages to install or use the -r flag.")
+                print("   Example: `omnipkg install requests` or `omnipkg install -r requirements.txt`")
+                return 1
+
+            # The magic happens here: pass the list to your existing core logic
+            return pkg_instance.smart_install(packages_to_process)
         elif args.command == 'uninstall':
             return pkg_instance.smart_uninstall(args.packages, force=args.yes)
             
