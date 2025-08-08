@@ -870,8 +870,34 @@ class omnipkg:
             print("   ✅ Snapshot saved.")
         except Exception as e:
             print(f"   ⚠️ Could not save environment snapshot: {e}")
+            
+        # ADD THIS ENTIRE METHOD
+    def _sort_packages_newest_first(self, packages: List[str]) -> List[str]:
+        """
+        Sorts packages by version, newest first, to ensure proper bubble creation.
+        """
+        from packaging.version import parse as parse_version, InvalidVersion
+        import re
 
+        def get_version_key(pkg_spec):
+            """Extracts a sortable version key from a package spec."""
+            match = re.search(r'(==|>=|<=|>|<)(.+)', pkg_spec)
+            if match:
+                version_str = match.group(2).strip()
+                try:
+                    return parse_version(version_str)
+                except InvalidVersion:
+                    return parse_version('0.0.0')
+            return parse_version('9999.0.0')
+
+        return sorted(packages, key=get_version_key, reverse=True)
+
+        # REPLACE your current smart_install with this one
     def smart_install(self, packages: List[str], dry_run: bool = False) -> int:
+        """
+        Processes multiple package versions by sorting them newest-to-oldest
+        and installing them iteratively to correctly trigger bubble creation.
+        """
         if not self.connect_redis():
             return 1
 
@@ -879,55 +905,61 @@ class omnipkg:
             print("🔬 Running in --dry-run mode. No changes will be made.")
             return 0
 
-        print(f"🔍 Checking satisfaction for: {', '.join(packages)}")
+        # Sort packages newest to oldest
+        sorted_packages = self._sort_packages_newest_first(packages)
+        
+        if sorted_packages != packages:
+            print(f"🔄 Reordered packages for optimal installation: {', '.join(sorted_packages)}")
+        
+        # Process each package individually
+        for package_spec in sorted_packages:
+            print("\n" + "─"*60)
+            print(f"📦 Processing: {package_spec}")
+            print("─"*60)
 
-        satisfaction_check = self._check_package_satisfaction(packages)
+            satisfaction_check = self._check_package_satisfaction([package_spec])
 
-        if satisfaction_check['all_satisfied']:
-            print("\n✅ All requirements already satisfied. No work needed. 🛡️")
-            return 0
+            if satisfaction_check['all_satisfied']:
+                print(f"✅ Requirement already satisfied: {package_spec}")
+                continue
 
-        packages_to_install = satisfaction_check['needs_install']
+            packages_to_install = satisfaction_check['needs_install']
+            
+            print("\n📸 Taking LIVE pre-installation snapshot...")
+            packages_before = self.get_installed_packages(live=True)
+            print(f"    - Found {len(packages_before)} packages")
 
-        if satisfaction_check['partial_satisfied']:
-            print("\nℹ️  Some packages already satisfied:")
-            for pkg in satisfaction_check['satisfied']:
-                print(f"   ✅ {pkg}")
-            print("\n📦 Proceeding to install remaining packages:")
-            for pkg in packages_to_install:
-                print(f"   📥 {pkg}")
+            print(f"\n⚙️  Running pip install for: {', '.join(packages_to_install)}...")
+            return_code = self._run_pip_install(packages_to_install)
 
-        print("\n📸 Taking LIVE pre-installation snapshot...")
-        packages_before = self.get_installed_packages(live=True)
-        print(f"    - Found {len(packages_before)} packages")
+            if return_code != 0:
+                print(f"❌ Pip installation for {package_spec} failed. Continuing with next package.")
+                continue
 
-        print(f"\n⚙️  Running pip install for: {', '.join(packages_to_install)}...")
-        return_code = self._run_pip_install(packages_to_install)
+            print("\n🔬 Analyzing post-installation changes...")
+            packages_after = self.get_installed_packages(live=True)
+            downgrades_to_fix = self._detect_downgrades(packages_before, packages_after)
 
-        if return_code != 0:
-            print("❌ Pip installation failed. Aborting cleanup.")
-            return return_code
+            if downgrades_to_fix:
+                print("\n🛡️  DOWNGRADE PROTECTION ACTIVATED!")
+                for fix in downgrades_to_fix:
+                    print(f"    -> Fixing downgrade: {fix['package']} from v{fix['good_version']} to v{fix['bad_version']}")
+                    self.bubble_manager.create_isolated_bubble(fix['package'], fix['bad_version'])
+                    print(f"    🔄 Restoring '{fix['package']}' to safe version v{fix['good_version']} in main environment...")
+                    subprocess.run([self.config["python_executable"], "-m", "pip", "install", "--quiet", f"{fix['package']}=={fix['good_version']}"], capture_output=True, text=True)
+                print("\n✅ Environment protection complete!")
+            else:
+                print("✅ No downgrades detected. Installation completed safely.")
 
-        print("\n🔬 Analyzing post-installation changes...")
-        packages_after = self.get_installed_packages(live=True)
-        downgrades_to_fix = self._detect_downgrades(packages_before, packages_after)
-
-        if downgrades_to_fix:
-            print("\n🛡️  DOWNGRADE PROTECTION ACTIVATED!")
-            for fix in downgrades_to_fix:
-                print(f"    -> Fixing downgrade: {fix['package']} from v{fix['good_version']} to v{fix['bad_version']}")
-                self.bubble_manager.create_isolated_bubble(fix['package'], fix['bad_version'])
-                print(f"    🔄 Restoring '{fix['package']}' to safe version v{fix['good_version']} in main environment...")
-                subprocess.run([self.config["python_executable"], "-m", "pip", "install", f"{fix['package']}=={fix['good_version']}"], capture_output=True, text=True)
-            print("\n✅ Environment protection complete!")
-        else:
-            print("✅ No downgrades detected. Installation completed safely.")
-
-        print("\n🧠 Updating knowledge base with final environment state...")
-        self._run_metadata_builder_for_delta(packages_before, packages_after)
-        self._update_hash_index_for_delta(packages_before, packages_after)
+            print("\n🧠 Updating knowledge base with final environment state...")
+            self._run_metadata_builder_for_delta(packages_before, packages_after)
+            self._update_hash_index_for_delta(packages_before, packages_after)
+        
+        print("\n" + "="*60)
+        print("🎉 All package operations complete.")
+        
+        # We keep your snapshot feature, running it once at the very end
         self._save_last_known_good_snapshot() 
-
         return 0
 
     def _find_package_installations(self, package_name: str) -> List[Dict]:
@@ -1082,30 +1114,55 @@ class omnipkg:
         print("\n✅ Environment successfully reverted to the last known good state.")
         return 0
 
+        # REPLACE your current _check_package_satisfaction with this one
     def _check_package_satisfaction(self, packages: List[str]) -> dict:
+        """Check satisfaction with bubble pre-check optimization"""
+        satisfied = set()
+        remaining_packages = []
+
+        # FAST PATH: Check for pre-existing bubbles BEFORE calling pip
+        for pkg_spec in packages:
+            try:
+                if '==' in pkg_spec:
+                    pkg_name, version = pkg_spec.split('==', 1)
+                    bubble_path = self.multiversion_base / f"{pkg_name}-{version}"
+                    if bubble_path.exists() and bubble_path.is_dir():
+                        satisfied.add(pkg_spec)
+                        print(f"    ⚡ Found existing bubble: {pkg_spec}")
+                        continue
+                remaining_packages.append(pkg_spec)
+            except ValueError:
+                remaining_packages.append(pkg_spec)
+
+        if not remaining_packages:
+            return {
+                'all_satisfied': True, 
+                'satisfied': sorted(list(satisfied)), 
+                'needs_install': []
+            }
+
+        # SLOW PATH: Only call pip for packages without bubbles
         req_file_path = None
         try:
             with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f:
-                f.write("\n".join(packages))
+                f.write("\n".join(remaining_packages))
                 req_file_path = f.name
 
             cmd = [self.config["python_executable"], "-m", "pip", "install", "--dry-run", "-r", req_file_path]
             result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
-
-            satisfied = set()
+            
             output_lines = result.stdout.splitlines()
-
             for line in output_lines:
                 if line.startswith("Requirement already satisfied:"):
                     try:
                         satisfied_spec = line.split("Requirement already satisfied: ")[1].strip()
                         req_name = satisfied_spec.split('==')[0].lower()
-                        for user_req in packages:
+                        for user_req in remaining_packages:
                             if user_req.lower().startswith(req_name):
                                 satisfied.add(user_req)
-                    except IndexError:
+                    except (IndexError, AttributeError):
                         continue
-
+            
             needs_install = [pkg for pkg in packages if pkg not in satisfied]
 
             return {
@@ -1116,8 +1173,13 @@ class omnipkg:
             }
 
         except Exception as e:
-            print(f"    ⚠️  Satisfaction check failed ({e}). Assuming all packages need installation.")
-            return {'all_satisfied': False, 'partial_satisfied': False, 'satisfied': [], 'needs_install': packages}
+            print(f"    ⚠️  Satisfaction check failed ({e}). Assuming remaining packages need installation.")
+            return {
+                'all_satisfied': False, 
+                'partial_satisfied': len(satisfied) > 0,
+                'satisfied': sorted(list(satisfied)), 
+                'needs_install': remaining_packages
+            }
         finally:
             if req_file_path and Path(req_file_path).exists():
                 Path(req_file_path).unlink()
