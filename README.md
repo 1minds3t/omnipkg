@@ -4,6 +4,18 @@
   <a href="https://www.gnu.org/licenses/agpl-3.0"><img src="https://img.shields.io/badge/License-AGPLv3-red.svg" alt="License: AGPLv3"></a>
 </p>
 
+# 📢 Announcement: macOS Compatibility Confirmed!
+
+🎉 The `omnipkg` stress test has been successfully validated on macOS with Python 3.11.
+
+✅ **Key Successes:**
+- Flawless installation of large scientific packages like NumPy and SciPy.
+- Zero-setup installation on a clean system.
+- Confirmed stability of the `omnipkg` version "bubble" system on macOS.
+
+⚠️ **Important Note:**
+This tool is primarily designed and validated for Python 3.11, especially for the stress test. While `omnipkg` supports other versions, for a guaranteed seamless experience, Python 3.11 is recommended. We are actively working on adding pre-launch checks to automatically help users configure their environments and fix common issues.
+
 # omnipkg - The Dependency Orchestration Engine
 
 One environment. Infinite packages/versions/dependencies. No duplicates/downgrades ever again. You can significantly reduce your reliance on pipx, uv, conda, Docker, etc. today.
