@@ -2,7 +2,7 @@
 <a href="https://github.com/1minds3t/omnipkg/actions/workflows/security_audit.yml"><img src="https://github.com/1minds3t/omnipkg/actions/workflows/security_audit.yml/badge.svg" alt="Security Audit"></a>
 <a href="https://pypi.org/project/omnipkg/"><img src="https://img.shields.io/pypi/v/omnipkg.svg" alt="PyPI version"></a>
 <a href="https://www.gnu.org/licenses/agpl-3.0"><img src="https://img.shields.io/badge/License-AGPLv3-red.svg" alt="License: AGPLv3"></a>
-<a href="https://github.com/1minds3t/omnipkg/actions/workflows/test.yml"><img src="https://github.com/1minds3t/omnipkg/actions/workflows/test.yml/badge.svg" alt="Build Status"></a>
+<a <img src="https://github.com/1minds3t/omnipkg/actions/workflows/test.yml/badge.svg" alt="Build Status"></a>
 </p>
 omnipkg - The Dependency Orchestration Engine
 One environment. Infinite packages/versions/dependencies. No duplicates/downgrades ever again. You can significantly reduce your reliance on pipx, uv, conda, Docker, etc. today.
