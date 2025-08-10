@@ -1,4 +1,3 @@
-```markdown
 <p align="center">
   <a href="https://github.com/1minds3t/omnipkg/actions/workflows/security_audit.yml"><img src="https://github.com/1minds3t/omnipkg/actions/workflows/security_audit.yml/badge.svg" alt="Security Audit"></a>
   <a href="https://pypi.org/project/omnipkg/"><img src="https://img.shields.io/pypi/v/omnipkg.svg" alt="PyPI version"></a>
