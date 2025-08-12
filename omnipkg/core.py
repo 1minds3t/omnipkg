@@ -16,487 +16,103 @@ import hashlib
 import tempfile
 import requests
 import re
-import importlib.metadata
-import platform
-import urllib.request
-import tarfile
-import zipfile
+import importlib.metadata  # <--- THE FIX IS HERE
 from datetime import datetime
 from pathlib import Path
 from packaging.version import parse as parse_version, InvalidVersion
 from typing import Dict, List, Optional, Set, Tuple
 from importlib.metadata import Distribution
 
-# 
-# ### CONFIGURATION MANAGEMENT (PORTABLE & SELF-CONFIGURING)
-# 
+# ##################################################################
+# ### CONFIGURATION MANAGEMENT (PORTABLE & SELF-CONFIGURING) ###
+# ##################################################################
 
 class ConfigManager:
+    """
+    Manages loading and first-time creation of the omnipkg config file.
+    This makes the entire application portable and self-healing.
+    """
     def __init__(self):
-        """
-        Manages loading and first-time creation of the omnipkg config file.
-        This makes the entire application portable and self-healing.
-        """
         self.config_dir = Path.home() / ".config" / "omnipkg"
         self.config_path = self.config_dir / "config.json"
-        
-        self.run_prelaunch_checks()
         self.config = self._load_or_create_config()
 
-    def run_prelaunch_checks(self):
-        """
-        Runs checks to ensure critical dependencies and environment are correct.
-        """
-        if not (sys.version_info.major == 3 and sys.version_info.minor == 11):
-            print("\n" + "="*60)
-            print("  🚀 One-Time Environment Upgrade Required")
-            print("="*60)
-            print("omnipkg works best with Python 3.11 for maximum compatibility.")
-            print(f"Your current environment is running Python {sys.version_info.major}.{sys.version_info.minor}.")
-            print("\nTo ensure everything 'just works', omnipkg will now:")
-            print("  1. Download a self-contained Python 3.11 into your virtual environment.")
-            print("  2. Register omnipkg with the new interpreter.")
-            print("  3. Relaunch seamlessly to continue your command.")
-            print("\nThis is a one-time setup. Future runs will be instant.")
-            
-            try:
-                choice = input("\nDo you want to proceed with the automatic upgrade? (y/n): ")
-                if choice.lower() == 'y':
-                    if not self.config_path.exists():
-                        self._first_time_setup(interactive=False)
-                    self._install_python311_in_venv()
-                else:
-                    print("🛑 Upgrade cancelled. Aborting, as Python 3.11 is required.")
-                    sys.exit(1)
-            except (KeyboardInterrupt, EOFError):
-                print("\n🛑 Operation cancelled. Aborting.")
-                sys.exit(1)
-
-        try:
-            importlib.import_module('packaging')
-        except ImportError:
-            print("🔧 Installing missing packaging module...")
-            subprocess.run([sys.executable, "-m", "pip", "install", "packaging"], check=True)
-
-    def _install_python311_in_venv(self):
-        print("\n🚀 Upgrading environment to Python 3.11...")
-        venv_path = Path(sys.prefix)
-        if venv_path == Path(sys.base_prefix):
-            print("❌ Error: You must be in a virtual environment to use this feature.")
-            sys.exit(1)
-        
-        system = platform.system().lower()
-        arch = platform.machine().lower()
-        
-        try:
-            python311_exe = None
-            if system == "linux": 
-                python311_exe = self._install_python_platform(venv_path, arch, "linux")
-            elif system == "darwin": 
-                python311_exe = self._install_python_platform(venv_path, arch, "macos")
-            elif system == "windows": 
-                python311_exe = self._install_python_platform(venv_path, arch, "windows")
-            else: 
-                raise OSError(f"Unsupported operating system: {system}")
-
-            if python311_exe and python311_exe.exists():
-                self._update_venv_pyvenv_cfg(venv_path, python311_exe)
-                print("✅ Python 3.11 downloaded and configured.")
-                
-                self._finalize_environment_upgrade(venv_path, python311_exe)
-                self._register_all_interpreters(venv_path)  # NEW: Register all available interpreters
-
-                print("\n✅ Success! The environment is now fully upgraded to Python 3.11.")
-                print("   Your current command will now continue on the new version.")
-                print("\n   IMPORTANT: For the change to stick in your terminal for future commands, please run:")
-                activate_script = venv_path / ("Scripts" if system == "windows" else "bin") / "activate"
-                print(f"   source \"{activate_script}\"")
-                print("   ...after this one finishes.")
-
-                # Properly relaunch with the new interpreter
-                entry_point_script = venv_path / ("Scripts" if system == "windows" else "bin") / "omnipkg"
-                args = [str(python311_exe), "-m", "omnipkg.cli"] + sys.argv[1:]
-                os.execv(str(python311_exe), args)
-            else:
-                raise Exception("Python 3.11 executable path was not determined.")
-        except Exception as e:
-            print(f"❌ Failed to auto-upgrade to Python 3.11: {e}")
-            sys.exit(1)
-    
-    def _create_omnipkg_executable(self, new_python_exe: Path, venv_path: Path):
-        """
-        Creates a proper shell script executable that forces the use of the new Python interpreter.
-        FIXED: Uses correct shell script syntax, not Python syntax.
-        """
-        print("🔧 Creating new omnipkg executable...")
-        bin_dir = venv_path / ("Scripts" if platform.system() == "Windows" else "bin")
-        omnipkg_exec_path = bin_dir / "omnipkg"
-        
-        system = platform.system().lower()
-        
-        if system == "windows":
-            # Windows batch script
-            script_content = (
-                f"@echo off\n"
-                f"REM This script was auto-generated by omnipkg to ensure the correct Python is used.\n"
-                f'"{new_python_exe.resolve()}" -m omnipkg.cli %*\n'
-            )
-            omnipkg_exec_path = bin_dir / "omnipkg.bat"
-        else:
-            # Unix shell script - FIXED SYNTAX
-            script_content = (
-                f"#!/bin/bash\n"
-                f"# This script was auto-generated by omnipkg to ensure the correct Python is used.\n\n"
-                f'exec "{new_python_exe.resolve()}" -m omnipkg.cli "$@"\n'
-            )
-
-        with open(omnipkg_exec_path, 'w') as f:
-            f.write(script_content)
-
-        if system != "windows":
-            omnipkg_exec_path.chmod(0o755)
-        
-        print("   ✅ New omnipkg executable created.")
-
-    def _register_all_interpreters(self, venv_path: Path):
-        """
-        NEW: Discovers and registers all Python interpreters available in the environment.
-        This supports your multi-interpreter requirement.
-        """
-        print("🔧 Registering all available Python interpreters...")
-        
-        interpreters_dir = venv_path / ".omnipkg" / "interpreters"
-        interpreters_dir.mkdir(parents=True, exist_ok=True)
-        
-        # Find all Python interpreters
-        interpreters = {}
-        bin_dir = venv_path / ("Scripts" if platform.system() == "Windows" else "bin")
-        
-        # Check for the new Python 3.11 we just installed
-        py311_path = self._get_interpreter_dest_path(venv_path) / ("python.exe" if platform.system() == "Windows" else "bin/python3.11")
-        if py311_path.exists():
-            interpreters["3.11"] = py311_path
-            
-        # Check for any existing interpreters in the venv
-        for py_exe in bin_dir.glob("python*"):
-            if py_exe.is_file() and py_exe.name not in ["python", "python3"]:  # Skip symlinks
-                try:
-                    result = subprocess.run([str(py_exe), "-c", "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')"], 
-                                          capture_output=True, text=True, timeout=5)
-                    if result.returncode == 0:
-                        version = result.stdout.strip()
-                        interpreters[version] = py_exe
-                except:
-                    continue
-        
-        # Store interpreter registry
-        registry_path = interpreters_dir / "registry.json"
-        registry_data = {
-            "primary_version": "3.11",
-            "interpreters": {k: str(v) for k, v in interpreters.items()},
-            "last_updated": datetime.now().isoformat()
-        }
-        
-        with open(registry_path, 'w') as f:
-            json.dump(registry_data, f, indent=2)
-        
-        print(f"   ✅ Registered {len(interpreters)} Python interpreters:")
-        for version, path in interpreters.items():
-            print(f"      - Python {version}: {path}")
-
-    def get_interpreter_for_version(self, version: str) -> Optional[Path]:
-        """
-        NEW: Get the path to a specific Python interpreter version.
-        """
-        registry_path = Path(sys.prefix) / ".omnipkg" / "interpreters" / "registry.json"
-        if not registry_path.exists():
-            return None
-            
-        try:
-            with open(registry_path, 'r') as f:
-                registry = json.load(f)
-            
-            interpreter_path = registry.get("interpreters", {}).get(version)
-            if interpreter_path and Path(interpreter_path).exists():
-                return Path(interpreter_path)
-        except:
-            pass
-        
-        return None
-
-    def _finalize_environment_upgrade(self, venv_path: Path, new_python_exe: Path):
-        """
-        Finalizes the upgrade using the 'belt-and-suspenders' approach:
-        1. `pip install -e .` to create the .pth file for module resolution.
-        2. Manually create the entrypoint script to guarantee it's correct.
-        """
-        print("🔧 Finalizing environment upgrade...")
-        project_root = Path(__file__).resolve().parent.parent
-        
-        # Step 1: Register the project with the new interpreter to create the .pth file.
-        cmd = [
-            str(new_python_exe), "-m", "pip", "install",
-            "--no-cache-dir", "-e", str(project_root)
-        ]
-        
-        try:
-            print(f"   - Registering project with new Python 3.11 interpreter...")
-            subprocess.run(
-                cmd, check=True, capture_output=True, text=True, cwd=project_root
-            )
-            print("   ✅ Project registered with Python 3.11.")
-            
-            # Step 2: Manually create the executable to be 100% certain it's correct.
-            self._create_omnipkg_executable(new_python_exe, venv_path)
-            
-            # Step 3: Update the default Python symlinks to point to 3.11
-            self._update_default_python_links(venv_path, new_python_exe)
-            
-            # --- FUTURE-PROOFING STUBS ---
-            self._register_interpreter_in_redis(new_python_exe, venv_path)
-            self._update_bubble_mappings(new_python_exe)
-            
-        except subprocess.CalledProcessError as e:
-            print("❌ Error finalizing environment for the new Python interpreter.")
-            print("   The error from pip was:")
-            print("-" * 20)
-            print(e.stderr)
-            print("-" * 20)
-            raise RuntimeError("Failed to run 'pip install -e .' with new interpreter.") from e
-
-    def _update_default_python_links(self, venv_path: Path, new_python_exe: Path):
-        """
-        NEW: Updates the default python/python3 symlinks to point to Python 3.11.
-        This ensures Python 3.11 becomes the primary interpreter.
-        """
-        print("🔧 Updating default Python links...")
-        bin_dir = venv_path / ("Scripts" if platform.system() == "Windows" else "bin")
-        
-        if platform.system() == "Windows":
-            # Windows: Copy the executable
-            for name in ["python.exe", "python3.exe"]:
-                target = bin_dir / name
-                if target.exists():
-                    target.unlink()
-                shutil.copy2(new_python_exe, target)
-        else:
-            # Unix: Create symlinks
-            for name in ["python", "python3"]:
-                target = bin_dir / name
-                if target.exists() or target.is_symlink():
-                    target.unlink()
-                target.symlink_to(new_python_exe)
-        
-        print("   ✅ Default Python links updated to use Python 3.11.")
-
-    def _register_interpreter_in_redis(self, python_exe: Path, venv_path: Path):
-        """Placeholder for your Redis registration logic."""
-        print(f"   (Stub) Registering interpreter {python_exe} in Redis...")
-        # TODO: Implement Redis registration
-        pass
-
-    def _update_bubble_mappings(self, python_exe: Path):
-        """Placeholder for updating your bubble isolation mappings."""
-        print(f"   (Stub) Updating bubble mappings for {python_exe}...")
-        # TODO: Implement bubble mapping updates
-        pass
-
-    def _get_interpreter_dest_path(self, venv_path: Path) -> Path:
-        return venv_path / ".omnipkg" / "interpreters" / "cpython-3.11.6"
-
-    def _install_python_platform(self, venv_path, arch, platform_name):
-        py_arch_map = {
-            "x86_64": "x86_64", "amd64": "x86_64", 
-            "aarch64": "aarch64", "arm64": "aarch64", 
-            "x86": "i686", "i386": "i686"
-        }
-        py_arch = py_arch_map.get(arch)
-        if not py_arch: 
-            raise OSError(f"Unsupported architecture: {arch}")
-        
-        urls = {
-            "linux": f"https://github.com/indygreg/python-build-standalone/releases/download/20231002/cpython-3.11.6+20231002-{py_arch}-unknown-linux-gnu-install_only.tar.gz",
-            "macos": f"https://github.com/indygreg/python-build-standalone/releases/download/20231002/cpython-3.11.6+20231002-{py_arch}-apple-darwin-install_only.tar.gz",
-            "windows": f"https://github.com/indygreg/python-build-standalone/releases/download/20231002/cpython-3.11.6+20231002-{py_arch}-pc-windows-msvc-shared-install_only.tar.gz"
-        }
-        url = urls[platform_name]
-
-        with tempfile.TemporaryDirectory() as temp_dir:
-            archive_path = Path(temp_dir) / "python311.tar.gz"
-            print(f"📥 Downloading Python 3.11 for {platform_name.title()} (this may take a moment)...")
-            urllib.request.urlretrieve(url, archive_path)
-            
-            print("📦 Extracting Python 3.11...")
-            with tarfile.open(archive_path, 'r:gz') as tar: 
-                tar.extractall(Path(temp_dir))
-            
-            python_dir = next(Path(temp_dir).glob("python*"))
-            python_dest = self._get_interpreter_dest_path(venv_path)
-            python_dest.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copytree(python_dir, python_dest, dirs_exist_ok=True)
-            
-            if platform_name == "windows":
-                python311_exe = python_dest / "python.exe"
-            else:
-                python311_exe = python_dest / "bin" / "python3.11"
-                python311_exe.chmod(0o755)
-            
-            self._install_essential_packages(python311_exe)
-            return python311_exe
-
-    def _install_essential_packages(self, python_exe):
-        print("📦 Installing essential packages...")
-        subprocess.run([str(python_exe), "-m", "ensurepip", "--upgrade"], 
-                      check=True, capture_output=True)
-        
-        essential_packages = [
-            "pip>=23.0", "setuptools>=65.0", "wheel>=0.38.0", 
-            "packaging>=21.0"  # Add packaging since you need it
-        ]
-        
-        for package in essential_packages:
-            subprocess.run([str(python_exe), "-m", "pip", "install", "--upgrade", package], 
-                          check=True, capture_output=True)
-        
-        print("   ✅ Essential packages installed successfully!")
-
-    def _update_venv_pyvenv_cfg(self, venv_path, python311_exe):
-        pyvenv_cfg = venv_path / "pyvenv.cfg"
-        if pyvenv_cfg.exists():
-            with open(pyvenv_cfg, 'r') as f: 
-                lines = f.readlines()
-                
-            with open(pyvenv_cfg, 'w') as f:
-                for line in lines:
-                    if line.startswith('home = '): 
-                        f.write(f'home = {python311_exe.parent.resolve()}\n')
-                    elif line.startswith('executable = '): 
-                        f.write(f'executable = {python311_exe.resolve()}\n')
-                    else: 
-                        f.write(line)
+    def _get_bin_paths(self) -> List[str]:
+        """Gets a list of standard binary paths to search for executables."""
+        paths = set()
+        paths.add(str(Path(sys.executable).parent))
+        for path in ["/usr/local/bin", "/usr/bin", "/bin", "/usr/sbin", "/sbin"]:
+            if Path(path).exists():
+                paths.add(path)
+        return sorted(list(paths))
 
     def _get_sensible_defaults(self) -> Dict:
-        try: 
+        """Auto-detects paths for the current Python environment."""
+        try:
             site_packages = site.getsitepackages()[0]
-        except (IndexError, AttributeError): 
-            site_packages = str(Path.home()/f".local/lib/python{sys.version_info.major}.{sys.version_info.minor}/site-packages")
-        
+        except (IndexError, AttributeError):
+            print("⚠️  Could not auto-detect site-packages. You may need to enter this manually.")
+            site_packages = str(Path.home() / ".local" / f"python{sys.version_info.major}.{sys.version_info.minor}" / "site-packages")
+
         return {
-            "site_packages_path": site_packages, 
-            "multiversion_base": str(Path(site_packages) / ".omnipkg_versions"), 
-            "python_executable": sys.executable, 
-            "builder_script_path": str(Path(__file__).parent / "package_meta_builder.py"), 
-            "redis_host": "localhost", 
-            "redis_port": 6379, 
-            "redis_key_prefix": "omnipkg:pkg:"
+            "site_packages_path": site_packages,
+            "multiversion_base": str(Path(site_packages) / ".omnipkg_versions"),
+            "python_executable": sys.executable,
+            "builder_script_path": str(Path(__file__).parent / "package_meta_builder.py"),
+            "redis_host": "localhost",
+            "redis_port": 6379,
+            "redis_key_prefix": "omnipkg:pkg:",
+            "paths_to_index": self._get_bin_paths()
         }
 
-    def _first_time_setup(self, interactive=True) -> Dict:
+    def _first_time_setup(self) -> Dict:
+        """Interactive setup for the first time the tool is run."""
+        print("👋 Welcome to omnipkg! Let's get you configured.")
+        print("   Auto-detecting paths for your environment. Press Enter to accept defaults.")
         self.config_dir.mkdir(parents=True, exist_ok=True)
         defaults = self._get_sensible_defaults()
-        final_config = defaults.copy()
-        
-        if interactive:
-            print("👋 Welcome to omnipkg! Let's get you configured.")
-            print("   Auto-detecting paths for your environment. Press Enter to accept defaults.")
-            final_config["redis_host"] = input(f"Redis host [{defaults['redis_host']}]: ") or defaults["redis_host"]
-            final_config["redis_port"] = int(input(f"Redis port [{defaults['redis_port']}]: ") or defaults["redis_port"])
-        
-        with open(self.config_path, 'w') as f: 
+        final_config = {}
+        final_config["multiversion_base"] = input(f"Path for version bubbles [{defaults['multiversion_base']}]: ") or defaults["multiversion_base"]
+        final_config["python_executable"] = input(f"Python executable path [{defaults['python_executable']}]: ") or defaults["python_executable"]
+        final_config["redis_host"] = input(f"Redis host [{defaults['redis_host']}]: ") or defaults["redis_host"]
+        final_config["redis_port"] = int(input(f"Redis port [{defaults['redis_port']}]: ") or defaults["redis_port"])
+        final_config["site_packages_path"] = defaults["site_packages_path"]
+        final_config["builder_script_path"] = defaults["builder_script_path"]
+        final_config["redis_key_prefix"] = defaults["redis_key_prefix"]
+        final_config["paths_to_index"] = defaults["paths_to_index"]
+        with open(self.config_path, 'w') as f:
             json.dump(final_config, f, indent=4)
-        
-        if interactive: 
-            print(f"\n✅ Configuration saved to {self.config_path}.")
-        
+        print(f"\n✅ Configuration saved to {self.config_path}. You can edit this file manually later.")
         return final_config
 
     def _load_or_create_config(self) -> Dict:
+        """
+        Loads the config file, or triggers first-time setup.
+        Also self-heals the config by adding any missing keys from the defaults.
+        """
         if not self.config_path.exists():
-            return self._first_time_setup(interactive=(len(sys.argv) == 1))
+            return self._first_time_setup()
         
+        config_is_updated = False
         with open(self.config_path, 'r') as f:
-            try: 
+            try:
                 user_config = json.load(f)
             except json.JSONDecodeError:
                 print("⚠️  Warning: Config file is corrupted. Starting fresh.")
                 return self._first_time_setup()
-        
+
         defaults = self._get_sensible_defaults()
-        config_is_updated = False
-        
-        if user_config.get("python_executable") != sys.executable:
-            print("🔄 Environment has changed. Updating config to use new Python interpreter...")
-            user_config["python_executable"] = defaults["python_executable"]
-            user_config["site_packages_path"] = defaults["site_packages_path"]
-            user_config["multiversion_base"] = defaults["multiversion_base"]
-            config_is_updated = True
-        
         for key, default_value in defaults.items():
             if key not in user_config:
+                print(f"🔧 Updating config: Adding missing key '{key}'.")
                 user_config[key] = default_value
                 config_is_updated = True
-        
+
         if config_is_updated:
-            with open(self.config_path, 'w') as f: 
+            with open(self.config_path, 'w') as f:
                 json.dump(user_config, f, indent=4)
             print("✅ Config file updated successfully.")
-        
         return user_config
-
-
-# NEW: Utility class for managing multiple interpreters
-class InterpreterManager:
-    """
-    Manages multiple Python interpreters within the same environment.
-    Provides methods to switch between interpreters and run commands with specific versions.
-    """
-    
-    def __init__(self, config_manager: ConfigManager):
-        self.config_manager = config_manager
-        self.venv_path = Path(sys.prefix)
-    
-    def list_available_interpreters(self) -> Dict[str, Path]:
-        """Returns a dict of version -> path for all available interpreters."""
-        registry_path = self.venv_path / ".omnipkg" / "interpreters" / "registry.json"
-        if not registry_path.exists():
-            return {}
-        
-        try:
-            with open(registry_path, 'r') as f:
-                registry = json.load(f)
-            
-            interpreters = {}
-            for version, path_str in registry.get("interpreters", {}).items():
-                path = Path(path_str)
-                if path.exists():
-                    interpreters[version] = path
-            
-            return interpreters
-        except:
-            return {}
-    
-    def run_with_interpreter(self, version: str, cmd: List[str]) -> subprocess.CompletedProcess:
-        """Run a command with a specific Python interpreter version."""
-        interpreter_path = self.config_manager.get_interpreter_for_version(version)
-        if not interpreter_path:
-            raise ValueError(f"Python {version} interpreter not found")
-        
-        full_cmd = [str(interpreter_path)] + cmd
-        return subprocess.run(full_cmd, capture_output=True, text=True)
-    
-    def install_package_with_version(self, package: str, python_version: str):
-        """Install a package using a specific Python version."""
-        interpreter_path = self.config_manager.get_interpreter_for_version(python_version)
-        if not interpreter_path:
-            raise ValueError(f"Python {python_version} interpreter not found")
-        
-        cmd = [str(interpreter_path), "-m", "pip", "install", package]
-        result = subprocess.run(cmd, capture_output=True, text=True)
-        
-        if result.returncode != 0:
-            raise RuntimeError(f"Failed to install {package} with Python {python_version}: {result.stderr}")
-        
-        return result
 
 class BubbleIsolationManager:
     def __init__(self, config: Dict, parent_omnipkg):
