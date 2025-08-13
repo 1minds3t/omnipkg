@@ -1,5 +1,5 @@
 # omnipkg - The Intelligent Python Package Manager
-> One environment. Infinite versions. Zero conflicts.
+> One environment. Infinite packages/versions. Zero conflicts or downgrades ever again.
 
 <p align="center">
   <a href="https://pypi.org/project/omnipkg/">
@@ -15,40 +15,13 @@
 
 ---
 
-omnipkg lets you install any version of any package — no breakage, no downgrades, no workarounds, or needing Conda, Docker, or `pipx`. **Dependency hell? Eliminated.**
+omnipkg lets you install, use, and runtime swap any version of any package in one environment — no forced downgrades, no unresolvables, and no more juggling multiple venvs/containers anymore. **Dependency hell? Solved.**
 
 ## Installation & Quick Start
 
 ```bash
 pip install omnipkg
 ```
-
-See the magic in action. This command runs a fully automated demo showcasing downgrade protection and version isolation:
-
-```bash
-omnipkg demo
-```
-
----
-
-### 🔬 Demo Output: See omnipkg in Action
-```
-# The demo first shows what happens with standard pip...
-💀 pip install flask-login==0.4.1
-...
-💥 PIP RESULT:
-   ❌ Uninstalled flask-login 0.6.3
-   ❌ Downgraded Flask and Werkzeug
-   ❌ Environment compromised
-
-# Then, omnipkg's solution...
-🧠 omnipkg install flask-login==0.4.1
-🫧 Creating protective bubble for v0.4.1...
-✅ Installation successful!
-🎯 Both versions coexist peacefully!
-```
-
----
 
 ### 🔥 Nuclear Stress Test: Can Your Package Manager Survive This
 Witness omnipkg handling complex scenarios with the built-in stress test. This real-world example demonstrates seamless activation of incompatible C-extension libraries:
