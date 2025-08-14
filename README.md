@@ -6,16 +6,6 @@
 
 # macOS + Linux Compatibility Confirmed!
 
-🎉 The `omnipkg` stress test has been successfully validated on macOS with Python 3.11.
-
-✅ **Key Successes:**
-- Flawless installation of large scientific packages like NumPy and SciPy
-- Zero-setup installation on a clean system  
-- Confirmed stability of the `omnipkg` version "bubble" system on macOS
-
-⚠️ **Important Note:**
-This tool is primarily designed and validated for Python 3.11, especially for the stress test. For a guaranteed seamless experience, Python 3.11 is recommended. We are actively working on adding pre-launch checks to automatically help users configure their environments.
-
 ---
 
 # omnipkg - The Intelligent Python Dependency Resolver
@@ -31,6 +21,7 @@ Picture this: It's Friday night. You're deep in a critical project when a single
 This exact scenario sparked a week-long engineering sprint that resulted in `omnipkg` - a complete reimagining of Python dependency management. What emerged wasn't just another package manager, but a system that makes dependency conflicts mathematically impossible.
 
 *One week from problem to PyPI. One tool to end dependency hell forever.*
+
 
 ## 💥 The Proof: Orchestrating an "Impossible" Install
 
