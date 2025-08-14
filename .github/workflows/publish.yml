@@ -34,14 +34,24 @@ jobs:
         python -m pip install --upgrade pip
         pip install build twine toml
         
-    - name: Verify package version
+        - name: Verify package version
       run: |
         PACKAGE_VERSION=$(python -c "import toml; print(toml.load(open('pyproject.toml'))['project']['version'])")
+        RELEASE_TAG_NAME="${{ github.ref_name }}" # e.g., v1.0.12
+        
+        # --- THE CRUCIAL FIX IS HERE ---
+        # Strip 'v' prefix from the release tag name for comparison
+        CLEAN_RELEASE_VERSION=$(echo "$RELEASE_TAG_NAME" | sed 's/^v//')
+        # --- END OF FIX ---
+        
         echo "Detected version from pyproject.toml: $PACKAGE_VERSION"
-        echo "Expected tag version: ${{ github.ref_name }}"
-        if [ "$PACKAGE_VERSION" != "${{ github.ref_name }}" ]; then
-          echo "Error: The version in pyproject.toml does not match the release tag."
+        echo "Expected cleaned tag version: $CLEAN_RELEASE_VERSION (from tag: $RELEASE_TAG_NAME)"
+        
+        if [ "$PACKAGE_VERSION" != "$CLEAN_RELEASE_VERSION" ]; then
+          echo "Error: The version in pyproject.toml ($PACKAGE_VERSION) does not match the cleaned release tag ($CLEAN_RELEASE_VERSION)."
           exit 1
+        else
+          echo "Version match confirmed: $PACKAGE_VERSION == $CLEAN_RELEASE_VERSION"
         fi
         
     - name: Clean old builds and build new package
