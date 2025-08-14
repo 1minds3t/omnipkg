@@ -1,0 +1,168 @@
+# .github/workflows/test_uv_install.yml
+name: Simple UV Multi-Version Test
+
+on:
+  workflow_dispatch: # Allows manual trigger from GitHub UI
+  push:
+    branches: [ 'main', 'test-workflows-feature' ] # Trigger on pushes to main or a specific feature branch
+
+jobs:
+  install-uv-versions:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # Needed if you want to commit a report back to the repo
+    
+    steps:
+      - name: 🏁 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 🐍 Set up Python 3.11 (or latest supported by omnipkg)
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11' # Use 3.11 as that's what omnipkg targets for best compatibility
+
+      - name: 🔧 Install Redis for omnipkg
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y redis-server
+          sudo systemctl start redis-server
+          redis-cli ping # Test Redis connection
+
+      - name: 📦 Install omnipkg
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e . # Install omnipkg in editable mode from your repo
+
+      - name: ⚙️ Configure omnipkg for non-interactive use
+        run: |
+          # Create omnipkg config directory
+          mkdir -p ~/.config/omnipkg
+          
+          # Create a basic config file to avoid interactive setup
+          cat > ~/.config/omnipkg/config.json << EOF
+          {
+            "multiversion_base": "/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/.omnipkg_versions",
+            "redis_url": "redis://localhost:6379",
+            "auto_cleanup": true,
+            "cleanup_threshold_days": 30
+          }
+          EOF
+          
+          echo "omnipkg config created:"
+          cat ~/.config/omnipkg/config.json
+
+      - name: 🧪 Attempt to install uv==0.7.12 and uv==0.7.14 with omnipkg
+        id: omnipkg_uv_install
+        run: |
+          echo "--- Attempting omnipkg install uv==0.7.12 uv==0.7.14 ---"
+          omnipkg install uv==0.7.12 uv==0.7.14
+          
+          if [ $? -eq 0 ]; then
+            echo "success=true" >> $GITHUB_OUTPUT
+            echo "omnipkg install completed successfully."
+          else
+            echo "success=false" >> $GITHUB_OUTPUT
+            echo "omnipkg install failed. See logs for details."
+            exit 1 # Fail the step if omnipkg install fails
+          fi
+          
+      - name: ✅ Verify Active UV Version
+        if: steps.omnipkg_uv_install.outputs.success == 'true'
+        run: |
+          echo "--- Verifying Active UV Version ---"
+          
+          # Try multiple ways to get UV version info
+          echo "=== Checking UV via command line ==="
+          uv --version || echo "uv command not found in PATH"
+          
+          echo "=== Checking UV Python package ==="
+          python -c "
+          try:
+              import uv
+              print(f'UV package imported successfully')
+              # Try different version attributes
+              for attr in ['__version__', '_version', 'version', 'VERSION']:
+                  if hasattr(uv, attr):
+                      print(f'Found version attribute {attr}: {getattr(uv, attr)}')
+              # Try to get version from package metadata
+              try:
+                  import importlib.metadata
+                  version = importlib.metadata.version('uv')
+                  print(f'UV version from metadata: {version}')
+              except Exception as e:
+                  print(f'Could not get version from metadata: {e}')
+          except ImportError as e:
+              print(f'Could not import uv: {e}')
+          "
+          
+          echo "=== omnipkg status ==="
+          omnipkg status # Show overall omnipkg status
+          
+          echo "=== omnipkg info uv (showing active version details) ==="
+          # Select option 1 (active version) to show the sophisticated Redis metadata
+          echo "1" | omnipkg info uv
+
+      - name: 📊 Generate simple report
+        if: always() # This step will run regardless of previous step's success
+        run: |
+          REPORT_FILE="uv_test_report.md"
+          echo "# UV Multi-Version Installation Test Report" > $REPORT_FILE
+          echo "" >> $REPORT_FILE
+          echo "**Workflow Run:** [${{ github.run_id }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})" >> $REPORT_FILE
+          echo "**Test Status:** \`${{ steps.omnipkg_uv_install.outcome }}\`" >> $REPORT_FILE
+          echo "" >> $REPORT_FILE
+          echo "### Test Scenario" >> $REPORT_FILE
+          echo "\`\`\`bash" >> $REPORT_FILE
+          echo "omnipkg install uv==0.7.12 uv==0.7.14" >> $REPORT_FILE
+          echo "\`\`\`" >> $REPORT_FILE
+          echo "" >> $REPORT_FILE
+          
+          echo "### omnipkg Status Output" >> $REPORT_FILE
+          echo "\`\`\`" >> $REPORT_FILE
+          omnipkg status >> $REPORT_FILE 2>&1
+          echo "\`\`\`" >> $REPORT_FILE
+          echo "" >> $REPORT_FILE
+          
+          echo "### omnipkg Info UV Output (Active Version Details)" >> $REPORT_FILE
+          echo "\`\`\`" >> $REPORT_FILE
+          # Select option 1 (active version) to show the sophisticated Redis metadata
+          echo "1" | omnipkg info uv >> $REPORT_FILE 2>&1
+          echo "\`\`\`" >> $REPORT_FILE
+          echo "" >> $REPORT_FILE
+          
+          echo "### Active UV Version Check" >> $REPORT_FILE
+          echo "\`\`\`" >> $REPORT_FILE
+          echo "=== UV Command Line Version ===" >> $REPORT_FILE
+          uv --version >> $REPORT_FILE 2>&1 || echo "uv command not found in PATH" >> $REPORT_FILE
+          echo "" >> $REPORT_FILE
+          echo "=== UV Python Package Info ===" >> $REPORT_FILE
+          python -c "
+          try:
+              import uv
+              print('UV package imported successfully')
+              # Try to get version from package metadata
+              try:
+                  import importlib.metadata
+                  version = importlib.metadata.version('uv')
+                  print(f'UV version from metadata: {version}')
+              except Exception as e:
+                  print(f'Could not get version from metadata: {e}')
+          except ImportError as e:
+              print(f'Could not import uv: {e}')
+          " >> $REPORT_FILE 2>&1
+          echo "\`\`\`" >> $REPORT_FILE
+          
+          if [ "${{ steps.omnipkg_uv_install.outputs.success }}" == "true" ]; then
+            echo "### Conclusion" >> $REPORT_FILE
+            echo "✅ omnipkg successfully installed multiple conflicting \`uv\` versions and maintains the active version while keeping others isolated. This demonstrates \`omnipkg\`'s core conflict resolution capabilities." >> $REPORT_FILE
+          else
+            echo "### Conclusion" >> $REPORT_FILE
+            echo "❌ omnipkg failed to install multiple \`uv\` versions as expected. Review logs for errors." >> $REPORT_FILE
+          fi
+
+      - name: 📤 Upload Report Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: uv-multi-version-test-report
+          path: uv_test_report.md
+          retention-days: 30

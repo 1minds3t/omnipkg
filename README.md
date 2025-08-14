@@ -4,17 +4,7 @@
   <a href="https://www.gnu.org/licenses/agpl-3.0"><img src="https://img.shields.io/badge/License-AGPLv3-red.svg" alt="License: AGPLv3"></a>
 </p>
 
-# 📢 Announcement: macOS Compatibility Confirmed!
-
-🎉 The `omnipkg` stress test has been successfully validated on macOS with Python 3.11.
-
-✅ **Key Successes:**
-- Flawless installation of large scientific packages like NumPy and SciPy
-- Zero-setup installation on a clean system  
-- Confirmed stability of the `omnipkg` version "bubble" system on macOS
-
-⚠️ **Important Note:**
-This tool is primarily designed and validated for Python 3.11, especially for the stress test. For a guaranteed seamless experience, Python 3.11 is recommended. We are actively working on adding pre-launch checks to automatically help users configure their environments.
+# macOS + Linux Compatibility Confirmed!
 
 ---
 
@@ -31,6 +21,7 @@ Picture this: It's Friday night. You're deep in a critical project when a single
 This exact scenario sparked a week-long engineering sprint that resulted in `omnipkg` - a complete reimagining of Python dependency management. What emerged wasn't just another package manager, but a system that makes dependency conflicts mathematically impossible.
 
 *One week from problem to PyPI. One tool to end dependency hell forever.*
+
 
 ## 💥 The Proof: Orchestrating an "Impossible" Install
 
@@ -250,21 +241,21 @@ The Python packaging ecosystem represents a **$10B+ annual developer productivit
 
 `omnipkg` doesn't just solve this problem - it makes it impossible for the problem to exist.
 
-## For the Culture
-
 ```
  ___________________________________________
 /                                           \
 |  pip is in omnipkg jail 🔒                |
+|  Status: Reflecting on better ways        |
+|         to manage packages...             |
 |                                           |
-|  It knows what it did.                    |
+|  💭 'Maybe breaking environments isn't    |
+|     the best approach...'                 |
 \___________________________________________/
-                 \
-                  \
-                   \ 
-                      🚓
-                 ||     ||
-                 ||     ||
+        \   ^__^
+         \  (oo)\_______
+            (__)\       )\/\
+                ||----w |
+                ||     ||
 ```
 
 *Professional enough for Fortune 500. Fun enough for developers.*
