@@ -33,6 +33,24 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e . # Install omnipkg in editable mode from your repo
 
+      - name: ⚙️ Configure omnipkg for non-interactive use
+        run: |
+          # Create omnipkg config directory
+          mkdir -p ~/.config/omnipkg
+          
+          # Create a basic config file to avoid interactive setup
+          cat > ~/.config/omnipkg/config.json << EOF
+          {
+            "multiversion_base": "/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/.omnipkg_versions",
+            "redis_url": "redis://localhost:6379",
+            "auto_cleanup": true,
+            "cleanup_threshold_days": 30
+          }
+          EOF
+          
+          echo "omnipkg config created:"
+          cat ~/.config/omnipkg/config.json
+
       - name: 🧪 Attempt to install uv==0.7.12 and uv==0.7.14 with omnipkg
         id: omnipkg_uv_install
         run: |
