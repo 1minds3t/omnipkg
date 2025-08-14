@@ -38,7 +38,7 @@ jobs:
         find . -type f -name "*.py" | xargs pylint --output-format=text --reports=yes > pylint-report.txt || true
     
     - name: Upload pylint report
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: pylint-report-${{ matrix.python-version }}
         path: pylint-report.txt
