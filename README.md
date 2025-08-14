@@ -4,7 +4,7 @@
   <a href="https://www.gnu.org/licenses/agpl-3.0"><img src="https://img.shields.io/badge/License-AGPLv3-red.svg" alt="License: AGPLv3"></a>
 </p>
 
-# 📢 Announcement: macOS Compatibility Confirmed!
+# macOS + Linux Compatibility Confirmed! Windows in testing phase.
 
 🎉 The `omnipkg` stress test has been successfully validated on macOS with Python 3.11.
 
