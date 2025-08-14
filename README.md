@@ -250,21 +250,21 @@ The Python packaging ecosystem represents a **$10B+ annual developer productivit
 
 `omnipkg` doesn't just solve this problem - it makes it impossible for the problem to exist.
 
-## For the Culture
-
 ```
  ___________________________________________
 /                                           \
 |  pip is in omnipkg jail 🔒                |
+|  Status: Reflecting on better ways        |
+|         to manage packages...             |
 |                                           |
-|  It knows what it did.                    |
+|  💭 'Maybe breaking environments isn't    |
+|     the best approach...'                 |
 \___________________________________________/
-                 \
-                  \
-                   \ 
-                      🚓
-                 ||     ||
-                 ||     ||
+        \   ^__^
+         \  (oo)\_______
+            (__)\       )\/\
+                ||----w |
+                ||     ||
 ```
 
 *Professional enough for Fortune 500. Fun enough for developers.*
