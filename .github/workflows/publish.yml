@@ -34,7 +34,7 @@ jobs:
         python -m pip install --upgrade pip
         pip install build twine toml
         
-        - name: Verify package version
+    - name: Verify package version
       run: |
         PACKAGE_VERSION=$(python -c "import toml; print(toml.load(open('pyproject.toml'))['project']['version'])")
         RELEASE_TAG_NAME="${{ github.ref_name }}" # e.g., v1.0.12
