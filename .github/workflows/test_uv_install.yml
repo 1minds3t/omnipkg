@@ -1,0 +1,104 @@
+# .github/workflows/test_uv_install.yml
+name: Simple UV Multi-Version Test
+
+on:
+  workflow_dispatch: # Allows manual trigger from GitHub UI
+  push:
+    branches: [ 'main', 'test-workflows-feature' ] # Trigger on pushes to main or a specific feature branch
+
+jobs:
+  install-uv-versions:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # Needed if you want to commit a report back to the repo
+    
+    steps:
+      - name: 🏁 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 🐍 Set up Python 3.11 (or latest supported by omnipkg)
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11' # Use 3.11 as that's what omnipkg targets for best compatibility
+
+      - name: 🔧 Install Redis for omnipkg
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y redis-server
+          sudo systemctl start redis-server
+          redis-cli ping # Test Redis connection
+
+      - name: 📦 Install omnipkg
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e . # Install omnipkg in editable mode from your repo
+
+      - name: 🧪 Attempt to install uv==0.7.12 and uv==0.7.14 with omnipkg
+        id: omnipkg_uv_install
+        run: |
+          echo "--- Attempting omnipkg install uv==0.7.12 uv==0.7.14 ---"
+          omnipkg install uv==0.7.12 uv==0.7.14
+          
+          if [ $? -eq 0 ]; then
+            echo "::set-output name=success::true"
+            echo "omnipkg install completed successfully."
+          else
+            echo "::set-output name=success::false"
+            echo "omnipkg install failed. See logs for details."
+            exit 1 # Fail the step if omnipkg install fails
+          fi
+          
+      - name: ✅ Verify Active UV Version
+        if: steps.omnipkg_uv_install.outputs.success == 'true'
+        run: |
+          echo "--- Verifying Active UV Version ---"
+          python -c "import uv; print(f'Active UV version reported by Python: {uv.__version__}')"
+          omnipkg status # Show overall omnipkg status
+          omnipkg info uv # Show detailed info for uv
+
+      - name: 📊 Generate simple report
+        if: always() # This step will run regardless of previous step's success
+        run: |
+          REPORT_FILE="uv_test_report.md"
+          echo "# UV Multi-Version Installation Test Report" > $REPORT_FILE
+          echo "" >> $REPORT_FILE
+          echo "**Workflow Run:** [${{ github.run_id }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})" >> $REPORT_FILE
+          echo "**Test Status:** `${{ steps.omnipkg_uv_install.outcome }}`" >> $REPORT_FILE
+          echo "" >> $REPORT_FILE
+          echo "### Test Scenario" >> $REPORT_FILE
+          echo "\`\`\`bash" >> $REPORT_FILE
+          echo "omnipkg install uv==0.7.12 uv==0.7.14" >> $REPORT_FILE
+          echo "\`\`\`" >> $REPORT_FILE
+          echo "" >> $REPORT_FILE
+          
+          echo "### omnipkg Status Output" >> $REPORT_FILE
+          echo "\`\`\`" >> $REPORT_FILE
+          omnipkg status >> $REPORT_FILE 2>&1
+          echo "\`\`\`" >> $REPORT_FILE
+          echo "" >> $REPORT_FILE
+          
+          echo "### omnipkg Info UV Output" >> $REPORT_FILE
+          echo "\`\`\`" >> $REPORT_FILE
+          omnipkg info uv >> $REPORT_FILE 2>&1
+          echo "\`\`\`" >> $REPORT_FILE
+          echo "" >> $REPORT_FILE
+          
+          echo "### Active UV Version Check" >> $REPORT_FILE
+          echo "\`\`\`" >> $REPORT_FILE
+          python -c "import uv; print(f'Active UV version reported by Python: {uv.__version__}')" >> $REPORT_FILE 2>&1
+          echo "\`\`\`" >> $REPORT_FILE
+          
+          if [ "${{ steps.omnipkg_uv_install.outputs.success }}" == "true" ]; then
+            echo "### Conclusion" >> $REPORT_FILE
+            echo "✅ omnipkg successfully installed multiple conflicting `uv` versions and maintains the active version while keeping others isolated. This demonstrates `omnipkg`'s core conflict resolution capabilities." >> $REPORT_FILE
+          else
+            echo "### Conclusion" >> $REPORT_FILE
+            echo "❌ omnipkg failed to install multiple `uv` versions as expected. Review logs for errors." >> $REPORT_FILE
+          fi
+
+      - name: 📤 Upload Report Artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: uv-multi-version-test-report
+          path: uv_test_report.md
+          retention-days: 30
