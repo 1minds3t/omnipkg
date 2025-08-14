@@ -98,8 +98,9 @@ jobs:
           echo "=== omnipkg status ==="
           omnipkg status # Show overall omnipkg status
           
-          echo "=== omnipkg info uv ==="
-          omnipkg info uv # Show detailed info for uv
+          echo "=== omnipkg info uv (showing active version details) ==="
+          # Select option 1 (active version) to show the sophisticated Redis metadata
+          echo "1" | omnipkg info uv
 
       - name: 📊 Generate simple report
         if: always() # This step will run regardless of previous step's success
@@ -122,9 +123,10 @@ jobs:
           echo "\`\`\`" >> $REPORT_FILE
           echo "" >> $REPORT_FILE
           
-          echo "### omnipkg Info UV Output" >> $REPORT_FILE
+          echo "### omnipkg Info UV Output (Active Version Details)" >> $REPORT_FILE
           echo "\`\`\`" >> $REPORT_FILE
-          omnipkg info uv >> $REPORT_FILE 2>&1
+          # Select option 1 (active version) to show the sophisticated Redis metadata
+          echo "1" | omnipkg info uv >> $REPORT_FILE 2>&1
           echo "\`\`\`" >> $REPORT_FILE
           echo "" >> $REPORT_FILE
           
