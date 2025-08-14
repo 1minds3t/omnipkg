@@ -40,10 +40,10 @@ jobs:
           omnipkg install uv==0.7.12 uv==0.7.14
           
           if [ $? -eq 0 ]; then
-            echo "::set-output name=success::true"
+            echo "success=true" >> $GITHUB_OUTPUT
             echo "omnipkg install completed successfully."
           else
-            echo "::set-output name=success::false"
+            echo "success=false" >> $GITHUB_OUTPUT
             echo "omnipkg install failed. See logs for details."
             exit 1 # Fail the step if omnipkg install fails
           fi
@@ -63,7 +63,7 @@ jobs:
           echo "# UV Multi-Version Installation Test Report" > $REPORT_FILE
           echo "" >> $REPORT_FILE
           echo "**Workflow Run:** [${{ github.run_id }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})" >> $REPORT_FILE
-          echo "**Test Status:** `${{ steps.omnipkg_uv_install.outcome }}`" >> $REPORT_FILE
+          echo "**Test Status:** \`${{ steps.omnipkg_uv_install.outcome }}\`" >> $REPORT_FILE
           echo "" >> $REPORT_FILE
           echo "### Test Scenario" >> $REPORT_FILE
           echo "\`\`\`bash" >> $REPORT_FILE
@@ -90,14 +90,14 @@ jobs:
           
           if [ "${{ steps.omnipkg_uv_install.outputs.success }}" == "true" ]; then
             echo "### Conclusion" >> $REPORT_FILE
-            echo "✅ omnipkg successfully installed multiple conflicting `uv` versions and maintains the active version while keeping others isolated. This demonstrates `omnipkg`'s core conflict resolution capabilities." >> $REPORT_FILE
+            echo "✅ omnipkg successfully installed multiple conflicting \`uv\` versions and maintains the active version while keeping others isolated. This demonstrates \`omnipkg\`'s core conflict resolution capabilities." >> $REPORT_FILE
           else
             echo "### Conclusion" >> $REPORT_FILE
-            echo "❌ omnipkg failed to install multiple `uv` versions as expected. Review logs for errors." >> $REPORT_FILE
+            echo "❌ omnipkg failed to install multiple \`uv\` versions as expected. Review logs for errors." >> $REPORT_FILE
           fi
 
       - name: 📤 Upload Report Artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: uv-multi-version-test-report
           path: uv_test_report.md
