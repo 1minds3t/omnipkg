@@ -70,8 +70,35 @@ jobs:
         if: steps.omnipkg_uv_install.outputs.success == 'true'
         run: |
           echo "--- Verifying Active UV Version ---"
-          python -c "import uv; print(f'Active UV version reported by Python: {uv.__version__}')"
+          
+          # Try multiple ways to get UV version info
+          echo "=== Checking UV via command line ==="
+          uv --version || echo "uv command not found in PATH"
+          
+          echo "=== Checking UV Python package ==="
+          python -c "
+          try:
+              import uv
+              print(f'UV package imported successfully')
+              # Try different version attributes
+              for attr in ['__version__', '_version', 'version', 'VERSION']:
+                  if hasattr(uv, attr):
+                      print(f'Found version attribute {attr}: {getattr(uv, attr)}')
+              # Try to get version from package metadata
+              try:
+                  import importlib.metadata
+                  version = importlib.metadata.version('uv')
+                  print(f'UV version from metadata: {version}')
+              except Exception as e:
+                  print(f'Could not get version from metadata: {e}')
+          except ImportError as e:
+              print(f'Could not import uv: {e}')
+          "
+          
+          echo "=== omnipkg status ==="
           omnipkg status # Show overall omnipkg status
+          
+          echo "=== omnipkg info uv ==="
           omnipkg info uv # Show detailed info for uv
 
       - name: 📊 Generate simple report
@@ -103,7 +130,24 @@ jobs:
           
           echo "### Active UV Version Check" >> $REPORT_FILE
           echo "\`\`\`" >> $REPORT_FILE
-          python -c "import uv; print(f'Active UV version reported by Python: {uv.__version__}')" >> $REPORT_FILE 2>&1
+          echo "=== UV Command Line Version ===" >> $REPORT_FILE
+          uv --version >> $REPORT_FILE 2>&1 || echo "uv command not found in PATH" >> $REPORT_FILE
+          echo "" >> $REPORT_FILE
+          echo "=== UV Python Package Info ===" >> $REPORT_FILE
+          python -c "
+          try:
+              import uv
+              print('UV package imported successfully')
+              # Try to get version from package metadata
+              try:
+                  import importlib.metadata
+                  version = importlib.metadata.version('uv')
+                  print(f'UV version from metadata: {version}')
+              except Exception as e:
+                  print(f'Could not get version from metadata: {e}')
+          except ImportError as e:
+              print(f'Could not import uv: {e}')
+          " >> $REPORT_FILE 2>&1
           echo "\`\`\`" >> $REPORT_FILE
           
           if [ "${{ steps.omnipkg_uv_install.outputs.success }}" == "true" ]; then
