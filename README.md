@@ -9,12 +9,14 @@
 </p>
 
 <p align="center">
-    <a href="#"><img src="https://img.shields.io/badge/Security%20Audit-passing-green" alt="Security Audit"></a>
+    <a href="#"><img src="https://img.shields.io/badge/Security%20Audit-passing-4c1" alt="Security Audit"></a>
     <a href="https://pypi.org/project/omnipkg/"><img src="https://img.shields.io/badge/pypi-v1.0.12-blue" alt="PyPI"></a>
-    <a href="https://www.gnu.org/licenses/agpl-3.0"><img src="https://img.shields.io/badge/License-AGPLv3-orange" alt="License"></a>
+    <a href="https://www.gnu.org/licenses/agpl-3.0"><img src="https://img.shields.io/badge/License-AGPLv3-d94c31" alt="License"></a>
     <br>
     <a href="https://github.com/1minds3t/omnipkg/actions"><img src="https://img.shields.io/badge/🔥%20Ultimate%20Omnipkg%20Stress%20Test-Multi--Version%20Scientific%20Package%20Chaos-passing" alt="Ultimate Omnipkg Stress Test"></a>
 </p>
+
+---
 
 ---
 
