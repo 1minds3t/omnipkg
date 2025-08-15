@@ -1,18 +1,22 @@
 <p align="center">
-    <!-- Using a high-contrast green for the security audit -->
-    <a href="#"><img src="https://img.shields.io/badge/Security%20Audit-passing-4c1" alt="Security Audit"></a>
-    
-    <!-- Using the standard blue for PyPI version -->
+  <img src=".github/logo.svg" alt="omnipkg Logo" width="150">
+</p>
+
+<h1 align="center">omnipkg - The Intelligent Python Dependency Resolver</h1>
+
+<p align="center">
+  <strong>One environment. Infinite packages. Zero conflicts.</strong>
+</p>
+
+<p align="center">
+    <a href="#"><img src="https://img.shields.io/badge/Security%20Audit-passing-green" alt="Security Audit"></a>
     <a href="https://pypi.org/project/omnipkg/"><img src="https://img.shields.io/badge/pypi-v1.0.12-blue" alt="PyPI"></a>
-    
-    <!-- Using a strong, readable red for the AGPLv3 license -->
-    <a href="https://www.gnu.org/licenses/agpl-3.0"><img src="https://img.shields.io/badge/License-AGPLv3-d94c31" alt="License"></a>
-    
+    <a href="https://www.gnu.org/licenses/agpl-3.0"><img src="https://img.shields.io/badge/License-AGPLv3-orange" alt="License"></a>
     <br>
-    
-    <!-- Your exact, multi-part stress test badge, ensuring "passing" is visible -->
     <a href="https://github.com/1minds3t/omnipkg/actions"><img src="https://img.shields.io/badge/🔥%20Ultimate%20Omnipkg%20Stress%20Test-Multi--Version%20Scientific%20Package%20Chaos-passing" alt="Ultimate Omnipkg Stress Test"></a>
 </p>
+
+---
 
 ---
 
