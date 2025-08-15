@@ -18,14 +18,6 @@
 
 ---
 
----
-
----
-
-# omnipkg - The Intelligent Python Dependency Resolver
-
-**One environment. Infinite packages. Zero conflicts.**
-
 `omnipkg` eliminates your reliance on pipx, uv, conda, and Docker for dependency management by solving the fundamental problem that has plagued Python development for decades.
 
 ## 🚀 Born from Real Pain
