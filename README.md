@@ -1,10 +1,4 @@
 <p align="center">
-  <a href="https://github.com/1minds3t/omnipkg/actions/workflows/security_audit.yml"><img src="https://github.com/1minds3t/omnipkg/actions/workflows/security_audit.yml/badge.svg" alt="Security Audit"></a>
-  <a href="https://pypi.org/project/omnipkg/"><img src="https://img.shields.io/pypi/v/omnipkg.svg" alt="PyPI version"></a>
-  <a href="https://www.gnu.org/licenses/agpl-3.0"><img src="https://img.shields.io/badge/License-AGPLv3-red.svg" alt="License: AGPLv3"></a>
-</p>
-
-<p align="center">
     <!-- Using a high-contrast green for the security audit -->
     <a href="#"><img src="https://img.shields.io/badge/Security%20Audit-passing-4c1" alt="Security Audit"></a>
     
