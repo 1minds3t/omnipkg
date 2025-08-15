@@ -1,4 +1,3 @@
-# .github/workflows/ultimate_stress_test.yml
 name: 🔥 Ultimate Omnipkg Stress Test - Multi-Version Scientific Package Chaos
 
 on:
@@ -88,7 +87,7 @@ jobs:
           echo "This will demonstrate heavy scientific packages with conflict resolution..." | tee -a stress_test_phase1.log
           
           # Run the built-in stress test
-          timeout 900 omnipkg stress-test --yes 2>&1 | tee -a stress_test_phase1.log || true
+          timeout 900 omnipkg stress-test 2>&1 | tee -a stress_test_phase1.log || true
           
           echo "📊 Phase 1 Complete - Built-in stress test finished" | tee -a stress_test_phase1.log
           echo "Current environment status:" | tee -a stress_test_phase1.log
@@ -102,21 +101,21 @@ jobs:
           
           # Install conflicting versions of popular packages
           echo "🔥 Installing multiple versions of numpy..." | tee -a stress_test_phase2.log
-          omnipkg install numpy==1.21.0 --yes | tee -a stress_test_phase2.log
-          omnipkg install numpy==1.22.0 --yes | tee -a stress_test_phase2.log  
-          omnipkg install numpy==1.23.0 --yes | tee -a stress_test_phase2.log
+          omnipkg install numpy==1.21.0 | tee -a stress_test_phase2.log
+          omnipkg install numpy==1.22.0 | tee -a stress_test_phase2.log  
+          omnipkg install numpy==1.23.0 | tee -a stress_test_phase2.log
           
           echo "🔥 Installing multiple versions of requests..." | tee -a stress_test_phase2.log
-          omnipkg install requests==2.25.0 --yes | tee -a stress_test_phase2.log
-          omnipkg install requests==2.28.0 --yes | tee -a stress_test_phase2.log
+          omnipkg install requests==2.25.0 | tee -a stress_test_phase2.log
+          omnipkg install requests==2.28.0 | tee -a stress_test_phase2.log
           
           echo "🔥 Installing multiple versions of pandas..." | tee -a stress_test_phase2.log
-          omnipkg install pandas==1.3.0 --yes | tee -a stress_test_phase2.log
-          omnipkg install pandas==2.0.0 --yes | tee -a stress_test_phase2.log
+          omnipkg install pandas==1.3.0 | tee -a stress_test_phase2.log
+          omnipkg install pandas==2.0.0 | tee -a stress_test_phase2.log
           
           echo "🔥 Installing conflicting Django versions..." | tee -a stress_test_phase2.log
-          omnipkg install django==3.2 --yes | tee -a stress_test_phase2.log
-          omnipkg install django==4.2 --yes | tee -a stress_test_phase2.log
+          omnipkg install django==3.2 | tee -a stress_test_phase2.log
+          omnipkg install django==4.2 | tee -a stress_test_phase2.log
           
           echo "📊 Multi-version installation complete!" | tee -a stress_test_phase2.log
           omnipkg list | tee -a stress_test_phase2.log
@@ -129,19 +128,19 @@ jobs:
           
           # Install scientific packages that often conflict
           echo "🧬 Installing scipy with specific numpy requirements..." | tee -a stress_test_phase3.log
-          omnipkg install scipy --yes | tee -a stress_test_phase3.log
+          omnipkg install scipy | tee -a stress_test_phase3.log
           
           echo "📊 Installing matplotlib..." | tee -a stress_test_phase3.log  
-          omnipkg install matplotlib --yes | tee -a stress_test_phase3.log
+          omnipkg install matplotlib | tee -a stress_test_phase3.log
           
           echo "🤖 Installing scikit-learn..." | tee -a stress_test_phase3.log
-          omnipkg install scikit-learn --yes | tee -a stress_test_phase3.log
+          omnipkg install scikit-learn | tee -a stress_test_phase3.log
           
           echo "🔬 Installing jupyter notebook..." | tee -a stress_test_phase3.log
-          omnipkg install jupyter --yes | tee -a stress_test_phase3.log
+          omnipkg install jupyter | tee -a stress_test_phase3.log
           
           echo "⚡ Installing numba..." | tee -a stress_test_phase3.log
-          omnipkg install numba --yes | tee -a stress_test_phase3.log
+          omnipkg install numba | tee -a stress_test_phase3.log
           
           echo "📊 Scientific package mayhem complete!" | tee -a stress_test_phase3.log
           omnipkg status | tee -a stress_test_phase3.log
@@ -154,13 +153,13 @@ jobs:
           
           # Test complex version specifications
           echo "🎯 Installing with complex constraints..." | tee -a stress_test_phase4.log
-          omnipkg install 'flask>=2.0,<3.0' --yes | tee -a stress_test_phase4.log
-          omnipkg install 'click>=7.0,!=7.1.0,<9.0' --yes | tee -a stress_test_phase4.log
-          omnipkg install 'jinja2>=3.0.0,<4.0.0' --yes | tee -a stress_test_phase4.log
+          omnipkg install 'flask>=2.0,<3.0' | tee -a stress_test_phase4.log
+          omnipkg install 'click>=7.0,!=7.1.0,<9.0' | tee -a stress_test_phase4.log
+          omnipkg install 'jinja2>=3.0.0,<4.0.0' | tee -a stress_test_phase4.log
           
           echo "🔄 Installing packages that will force version bubbling..." | tee -a stress_test_phase4.log
-          omnipkg install werkzeug==2.1.0 --yes | tee -a stress_test_phase4.log
-          omnipkg install werkzeug==2.3.0 --yes | tee -a stress_test_phase4.log
+          omnipkg install werkzeug==2.1.0 | tee -a stress_test_phase4.log
+          omnipkg install werkzeug==2.3.0 | tee -a stress_test_phase4.log
           
           echo "📊 Complex version specification stress complete!" | tee -a stress_test_phase4.log
           omnipkg list | tee -a stress_test_phase4.log
@@ -188,7 +187,7 @@ jobs:
           omnipkg status 2>&1 | tee -a stress_test_phase5.log || echo "omnipkg detected environment damage" | tee -a stress_test_phase5.log
           
           echo "🚑 OMNIPKG RESCUE OPERATION - Running revert..." | tee -a stress_test_phase5.log
-          omnipkg revert --yes 2>&1 | tee -a stress_test_phase5.log
+          omnipkg revert 2>&1 | tee -a stress_test_phase5.log
           
           echo "✅ Environment after omnipkg rescue:" | tee -a stress_test_phase5.log
           omnipkg status | tee -a stress_test_phase5.log
@@ -294,24 +293,4 @@ jobs:
             echo "" >> $REPORT_FILE
             echo "This demonstrates omnipkg's superior intelligence and robustness compared to traditional package managers." >> $REPORT_FILE
           else
-            echo "## ❌ Stress Test Issues" >> $REPORT_FILE
-            echo "The stress test encountered issues. Review the phase logs above for details." >> $REPORT_FILE
-          fi
-
-      - name: 📤 Upload All Stress Test Artifacts
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: omnipkg-ultimate-stress-test-results
-          path: |
-            stress_test_phase*.log
-            final_analysis.log
-            omnipkg_ultimate_stress_test_report.md
-            pre_revert_state.txt
-          retention-days: 30
-
-      - name: 🚨 Failure Notification
-        if: failure()
-        run: |
-          echo "🚨 STRESS TEST FAILED - omnipkg encountered issues during the ultimate stress test"
-          echo "Check the uploaded artifacts for detailed logs and analysis"
+            echo "## ❌ Stress Test Issues" >> $RE
