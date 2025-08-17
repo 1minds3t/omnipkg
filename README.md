@@ -42,9 +42,9 @@
 `omnipkg` radically simplifies Python dependency management, providing a robust alternative to tools like `pipx`, `uv`, `conda`, and `Docker` for handling conflicting packages. Born from a real-world nightmare—a forced downgrade that wrecked a `conda-forge` environment on a Friday night—`omnipkg` was built in a weekend to solve what others couldn’t: running multiple versions of the same package in one environment without conflicts.
 
 ---
-
+[![🥊 omnipkg vs The World - Battle & Resilience Test](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml/badge.svg)](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml)
 <!-- BATTLE_STATS_START -->
-## 🥊 omnipkg vs The World: Battle Statistics
+## 🥊 omnipkg vs The World: Battle Statistics 
 *Live-updated results from our continuous integration tests.*
 
 | Package Manager | Conflict Test Wins | Environment Saves | Result |
