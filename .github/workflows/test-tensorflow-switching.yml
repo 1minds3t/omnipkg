@@ -90,7 +90,7 @@ jobs:
           echo "--- Running Omnipkg Demo for TensorFlow (Complex Dependency Testing) ---"
           mkdir -p /tmp/omnipkg-artifacts
           
-          timeout 1200 bash -c 'echo "3" | omnipkg demo 2>&1 | tee /tmp/omnipkg-artifacts/tensorflow_demo_output.txt'
+          timeout 900 bash -c 'echo "4" | omnipkg demo 2>&1 | tee /tmp/omnipkg-artifacts/tensorflow_demo_output.txt'
           DEMO_EXIT_CODE=$?
           
           echo "## TensorFlow Demo Output" >> $GITHUB_STEP_SUMMARY
