@@ -208,8 +208,8 @@ jobs:
           | Package Manager | Conflict Test Wins | Environment Saves | Result |
           |:----------------|:------------------:|:-------------------:|:-------|
           | **omnipkg 🚀**  | **{omnipkg_stats['wins']}** ({omnipkg_wr} Win Rate) | **{omnipkg_stats['saves']}** | ✅ **Solves Conflicts & Heals Environment** |
-          | **pip 💥**      | {pip_stats['wins']} ({pip_wr} Win Rate) | N/A | ❌ Overwrites Packages |
-          | **uv ⚡️**      | {uv_stats['wins']} ({uv_wr} Win Rate) | N/A | ❌ Overwrites Packages |
+          | **pip 💥**      | {pip_stats['wins']} ({pip_wr} Win Rate) | 0 | ❌ Overwrites Packages |
+          | **uv ⚡️**      | {uv_stats['wins']} ({uv_wr} Win Rate) | 0 | ❌ Overwrites Packages |
 
           **Test Scenarios:**
           - **Conflict Test**: Attempting to install conflicting versions of another package manager (e.g., `pip==24.0` and `pip==23.2.1`). A "Win" means both versions are usable.
