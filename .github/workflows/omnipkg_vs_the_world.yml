@@ -1,3 +1,4 @@
+```yaml
 name: 🥊 omnipkg vs The World - Battle & Resilience Test
 
 on:
@@ -226,11 +227,21 @@ jobs:
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "omnipkg Battle Bot"
+          # Ensure clean working directory before pull
+          git reset --hard HEAD
+          git clean -fd
+          # Pull latest changes
           git pull --rebase origin main || true
+          # Stage and commit changes
           git add README.md
           if git diff --staged --quiet; then
             echo "No changes to commit"
           else
             git commit -m "🥊 Thunderdome update: omnipkg vs The World - $(date -u '+%Y-%m-%d %H:%M UTC')"
-            git push
+            git push || {
+              echo "Push failed, retrying after another pull..."
+              git pull --rebase origin main || true
+              git push
+            }
           fi
+```
