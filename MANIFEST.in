@@ -2,6 +2,8 @@ include README.md
 include LICENSE
 include THIRD_PARTY_NOTICES.txt
 include requirements-demo.txt
+
+# Explicit licenses
 include licenses/redis.txt
 include licenses/packaging.txt
 include licenses/requests.txt
@@ -20,6 +22,13 @@ include licenses/propcache.txt
 include licenses/typing-extensions.txt
 include licenses/urllib3.txt
 include licenses/yarl.txt
+
+# Catch-all for any new ones you drop in later
 include licenses/*
+
+# Docs
+graft docs
+
+# Exclusions
 exclude examples/*
 exclude scripts/*

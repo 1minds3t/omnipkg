@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "omnipkg"
-version = "1.0.13"
+version = "1.0.14
 authors = [
   { name = "1minds3t", email = "omnipkg@proton.me" },
 ]
@@ -38,4 +38,15 @@ Homepage = "https://github.com/1minds3t/omnipkg"
 omnipkg = "omnipkg.cli:main"
 
 [tool.setuptools]
+include-package-data = true
 packages = ["omnipkg", "tests"]
+
+[tool.setuptools.package-data]
+"*" = [
+    "README.md",
+    "LICENSE",
+    "THIRD_PARTY_NOTICES.txt",
+    "requirements-demo.txt",
+    "licenses/*.txt",
+    "docs/*"
+]
