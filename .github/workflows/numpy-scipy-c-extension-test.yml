@@ -1,4 +1,4 @@
-name: NumPy + SciPy C Extension Test
+name: "🔥 Live NumPy/SciPy Hot-Swapping"
 
 on:
   push:
