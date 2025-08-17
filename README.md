@@ -44,6 +44,24 @@
 ---
 
 <!-- BATTLE_STATS_START -->
+## 🥊 omnipkg vs pip Battle Statistics
+
+Comparison testing of conflicting package installations.
+
+| Package Manager | Wins | Losses | Win Rate |
+|-----------------|------|--------|----------|
+| omnipkg 🚀      | 1 | 0 | 100% |
+| pip 💥          | 0 | 1 | 0% |
+
+### 📊 Recent Test Results
+| Date | Test Scenario | omnipkg Result | pip Result |
+|------|---------------|----------------|------------|
+| 2025-08-17 20:50:23 UTC | Installing uv==0.7.12 and uv==0.7.14 (conflicting versions) | PASS | FAIL |
+
+**Test Scenario Details:**
+- **Test Case**: Installing uv==0.7.12 and uv==0.7.14 (conflicting versions)
+- ✅ **PASS**: Successfully maintains both versions
+- ❌ **FAIL**: Overwrites or fails to install both versions
 
 <!-- BATTLE_STATS_END -->
 
