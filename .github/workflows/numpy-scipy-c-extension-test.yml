@@ -31,14 +31,12 @@ jobs:
         python -m pip install --upgrade pip
         pip install -e .
         
-    - name: Configure Omnipkg
+    - name: Initialize Omnipkg
       run: |
         python -c "
         import omnipkg
-        config = omnipkg.create_config()
-        print(f'omnipkg config created at {config}')
-        with open(config, 'r') as f:
-            print(f.read())
+        print('Omnipkg imported successfully')
+        # Let omnipkg auto-configure on first use
         "
         
     - name: Create demo script
