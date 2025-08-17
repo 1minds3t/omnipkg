@@ -44,24 +44,16 @@
 ---
 [![🥊 omnipkg vs The World - Battle & Resilience Test](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml/badge.svg)](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml)
 <!-- BATTLE_STATS_START -->
-## 🥊 omnipkg vs The World: Battle Statistics 
-*Live-updated results from our continuous integration tests.*
+## 🥊 Package Manager Thunderdome [![💥 Nuclear Test: TensorFlow Dependency Hot-Swap](https://github.com/1minds3t/omnipkg/actions/workflows/test-tensorflow-switching.yml/badge.svg)](https://github.com/1minds3t/omnipkg/actions/workflows/test-tensorflow-switching.yml)
 
-| Package Manager | Conflict Test Wins | Environment Saves | Result |
-|:----------------|:------------------:|:-------------------:|:-------|
-| **omnipkg 🚀**  | **2** (100% Win Rate) | **2** | ✅ **Solves Conflicts & Heals Environment** |
-| **pip 💥**      | 0 (0% Win Rate) | 0 | ❌ Overwrites Packages |
-| **uv ⚡️**      | 0 (0% Win Rate) | 0 | ❌ Overwrites Packages |
+| Package Manager | Conflict Wins | Environment Saves | Verdict |
+|:----------------|:-------------:|:-----------------:|:--------|
+| **`omnipkg` 🚀** | **1** (100%) | **1** | ✅ Solves conflicts *and* heals environments |
+| **`pip` 💥** | 0 (0%) | N/A | ❌ Mercilessly overwrites itself |
+| **`uv` ⚡️** | 0 (0%) | N/A | ❌ Also overwrites itself (but faster!) |
 
-**Test Scenarios:**
-- **Conflict Test**: Attempting to install conflicting versions of another package manager (e.g., `pip==24.0` and `pip==23.2.1`). A "Win" means both versions are usable.
-- **Environment Save**: After another tool (`uv`) damages the environment by downgrading itself, `omnipkg revert` is run. A "Save" means the environment was successfully restored.
+### 📊 Latest Test: 2025-08-17 22:30 (UTC)
 
-### 📊 Recent Test Log
-| Date (UTC) | omnipkg (Conflict) | pip (Conflict) | uv (Conflict) | omnipkg (Revert) |
-|:-----------|:------------------:|:--------------:|:-------------:|:----------------:|
-| 2025-08-17 22:09 | PASS | FAIL | FAIL | PASS |
-| 2025-08-17 21:55 | PASS | FAIL | FAIL | PASS |
 <!-- BATTLE_STATS_END -->
 
 ---
