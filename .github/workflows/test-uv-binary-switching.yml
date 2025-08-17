@@ -1,4 +1,4 @@
-      - name: ⚙️ Configure omnipkg for non-interactive use
+- name: ⚙️ Configure omnipkg for non-interactive use
         run: |
           python - << 'EOF'
           import sys
@@ -6,12 +6,10 @@
           import json
           from pathlib import Path
           import os
-
           site_packages_path = site.getsitepackages()[0]
           
           # Determine project root (where pyproject.toml is)
           project_root = Path(os.environ['GITHUB_WORKSPACE']) # GITHUB_WORKSPACE is the repo root
-
           config_data = {
               'site_packages_path': site_packages_path,
               'multiversion_base': str(Path(site_packages_path) / '.omnipkg_versions'),
@@ -25,18 +23,14 @@
               'auto_cleanup': True,
               'cleanup_threshold_days': 30
           }
-
           config_dir = Path.home() / '.config' / 'omnipkg'
           config_dir.mkdir(parents=True, exist_ok=True)
           config_path = config_dir / 'config.json'
-
           with open(config_path, 'w') as f:
               json.dump(config_data, f, indent=2)
-
           print(f'omnipkg config created at {config_path}:')
           print(json.dumps(config_data, indent=2))
           EOF
-
       - name: 🧪 Run the Demo: UV Test (Binary Switching)
         id: run_demo
         run: |
