@@ -6,3 +6,4 @@ python-magic
 aiohttp
 tqdm
 tomli
+filelock

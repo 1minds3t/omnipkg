@@ -27,3 +27,7 @@ See licenses/tqdm.txt for full license text
 tomli (v2.2.1)
 License: MIT
 See licenses/tomli.txt for full license text
+
+filelock (v3.19.1)
+License: Apache-2.0
+See licenses/filelock.txt for full license text
