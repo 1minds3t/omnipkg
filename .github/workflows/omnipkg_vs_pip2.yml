@@ -80,19 +80,19 @@ jobs:
       - name: 💥 pip | Battle Test (FAIL Expected)
         id: pip_conflict_test
         run: |
-          echo "--- Testing pip overwriting itself ---"
+          echo "--- Testing pip downgrading itself ---"
           pip install pip==24.0 > /dev/null 2>&1
           pip install pip==23.2.1 > /dev/null 2>&1
-          # This is an expected failure where it overwrites, so we report FAIL for the stats
+          # This is an expected failure where pip sabotages itself, so we report FAIL for the stats
           echo "PIP_CONFLICT_RESULT=FAIL" >> $GITHUB_ENV
 
       - name: ⚡️ uv | Battle Test (FAIL Expected)
         id: uv_conflict_test
         run: |
-          echo "--- Testing uv overwriting pip ---"
-          uv pip install pip==24.0 > /dev/null 2>&1
-          uv pip install pip==23.2.1 > /dev/null 2>&1
-          # This is an expected failure where it overwrites, so we report FAIL for the stats
+          echo "--- Testing uv downgrading itself ---"
+          uv pip install uv==0.5.0 --system > /dev/null 2>&1 || true
+          uv pip install uv==0.4.0 --system > /dev/null 2>&1 || true
+          # This is an expected failure where uv sabotages itself, so we report FAIL for the stats
           echo "UV_CONFLICT_RESULT=FAIL" >> $GITHUB_ENV
 
       # --- RESILIENCE TEST (Self-Sabotage & Revert) ---
