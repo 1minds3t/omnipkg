@@ -1,4 +1,4 @@
-name: NumPy + SciPy C-Extension Switching
+name: NumPy + SciPy C Extension Test
 
 on:
   push:
@@ -30,11 +30,10 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install dependencies
+      - name: 📦 Install omnipkg (editable) and Redis client
         run: |
           python -m pip install --upgrade pip
-          pip install -e . redis numpy==1.26.4 scipy==1.13.0
-
+          pip install -e . redis
       - name: Configure omnipkg for non-interactive use
         run: |
           python - << 'EOF'
@@ -44,19 +43,16 @@ jobs:
           from pathlib import Path
           import os
           import sysconfig
-
           try:
               site_packages_path = site.getsitepackages()[0]
           except (IndexError, AttributeError):
               site_packages_path = sysconfig.get_paths()['purelib']
-
           project_root = Path(os.environ['GITHUB_WORKSPACE'])
           
           builder_script = project_root / 'omnipkg' / 'package_meta_builder.py'
           if not builder_script.exists():
               print(f"Error: {builder_script} does not exist")
               sys.exit(1)
-
           config_data = {
               'site_packages_path': site_packages_path,
               'multiversion_base': str(Path(site_packages_path) / '.omnipkg_versions'),
@@ -69,7 +65,6 @@ jobs:
               'auto_cleanup': True,
               'cleanup_threshold_days': 30
           }
-
           config_dir = Path.home() / '.config' / 'omnipkg'
           config_dir.mkdir(parents=True, exist_ok=True)
           config_path = config_dir / 'config.json'
@@ -83,59 +78,40 @@ jobs:
               print(f"Error writing config: {e}")
               sys.exit(1)
           EOF
-
       - name: Run the Demo - NumPy + SciPy
         id: run_demo
         run: |
-          echo "--- Running Omnipkg Demo for NumPy + SciPy (C-Extension Nuclear Testing) ---"
+          echo "--- Running Omnipkg Demo for NumPy + SciPy (C Extension Nuclear Testing) ---"
           mkdir -p /tmp/omnipkg-artifacts
           
-          # Clear output and run count files
-          rm -f /tmp/omnipkg-artifacts/numpy_scipy_demo_output.txt /tmp/omnipkg-artifacts/run_count.txt
-          echo "Starting demo run" > /tmp/omnipkg-artifacts/run_count.txt
-          
-          # Run demo once
-          timeout 900 bash -c 'echo "6" | omnipkg demo 2>&1 | tee /tmp/omnipkg-artifacts/numpy_scipy_demo_output.txt'
+          timeout 900 bash -c 'echo "3" | omnipkg demo 2>&1 | tee /tmp/omnipkg-artifacts/numpy_scipy_demo_output.txt'
           DEMO_EXIT_CODE=$?
-          
-          # Check run count
-          RUN_COUNT=$(wc -l < /tmp/omnipkg-artifacts/run_count.txt)
-          echo "DEBUG: Demo run count: $RUN_COUNT"
-          if [ "$RUN_COUNT" -ne 1 ]; then
-            echo "Error: Demo ran $RUN_COUNT times instead of once."
-            cat /tmp/omnipkg-artifacts/numpy_scipy_demo_output.txt
-            exit 1
-          fi
           
           echo "## NumPy + SciPy Demo Output" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
           cat /tmp/omnipkg-artifacts/numpy_scipy_demo_output.txt >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
           
-          # Fix PASSED_COUNT to handle empty output
-          PASSED_COUNT=$(grep -c "PASSED" /tmp/omnipkg-artifacts/numpy_scipy_demo_output.txt 2>/dev/null || echo "0")
-          echo "DEBUG: PASSED_COUNT: $PASSED_COUNT"
-          
           if [ $DEMO_EXIT_CODE -eq 0 ] || \
-             (grep -q "ALL TESTS PASSED!" /tmp/omnipkg-artifacts/numpy_scipy_demo_output.txt && \
-              grep -q "OMNIPKG SURVIVED NUCLEAR TESTING" /tmp/omnipkg-artifacts/numpy_scipy_demo_output.txt && \
-              grep -q "Demo completed successfully" /tmp/omnipkg-artifacts/numpy_scipy_demo_output.txt); then
-            echo "Demo completed successfully (exit code $DEMO_EXIT_CODE, logs verified)."
-            echo "demo_outcome=success" >> $GITHUB_OUTPUT
-            if [ "$PASSED_COUNT" -ge 6 ]; then
-              echo "NumPy + SciPy demo verified: Found $PASSED_COUNT PASSED results (expected at least 6)!"
-            else
-              echo "Error: Expected at least 6 PASSED results, but found only $PASSED_COUNT."
-              cat /tmp/omnipkg-artifacts/numpy_scipy_demo_output.txt
-              exit 1
-            fi
+                (grep -q "ALL TESTS PASSED!" /tmp/omnipkg-artifacts/numpy_scipy_demo_output.txt && \
+                 grep -q "OMNIPKG SURVIVED NUCLEAR TESTING" /tmp/omnipkg-artifacts/numpy_scipy_demo_output.txt && \
+                 grep -q "Demo completed successfully" /tmp/omnipkg-artifacts/numpy_scipy_demo_output.txt); then
+               echo "Demo completed successfully (exit code $DEMO_EXIT_CODE, logs verified)."
+               echo "demo_outcome=success" >> $GITHUB_OUTPUT
+               PASSED_COUNT=$(grep -c "PASSED" /tmp/omnipkg-artifacts/numpy_scipy_demo_output.txt || echo "0")
+               if [ "$PASSED_COUNT" -ge 12 ]; then
+                 echo "NumPy + SciPy demo verified: Found $PASSED_COUNT PASSED results (expected at least 12)!"
+               else
+                 echo "Error: Expected at least 12 PASSED results, but found only $PASSED_COUNT."
+                 cat /tmp/omnipkg-artifacts/numpy_scipy_demo_output.txt
+                 exit 1
+               fi
           else
             echo "Demo failed with exit code $DEMO_EXIT_CODE."
             echo "demo_outcome=failure" >> $GITHUB_OUTPUT
             cat /tmp/omnipkg-artifacts/numpy_scipy_demo_output.txt
             exit 1
           fi
-
       - name: Archive Demo Output
         if: always()
         uses: actions/upload-artifact@v4
