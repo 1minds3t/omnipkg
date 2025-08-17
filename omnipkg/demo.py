@@ -13,14 +13,14 @@ def omnipkg_pip_jail():
     print("🔥" * 50)
     print("┌" + "─" * 58 + "┐")
     print("│                                                          │")
-    print("│  💀 You: pip install flask-login==0.4.1                 │")
+    print("│  💀 You: pip install flask-login==0.6.0                 │")
     print("│                                                          │")
     print("│  🧠 omnipkg AI suggests:                                 │")
-    print("│      omnipkg install flask-login==0.4.1                 │")
+    print("│      omnipkg install flask-login==0.6.0                 │")
     print("│                                                          │")
     print("│  ⚠️  WARNING: pip will NUKE your environment! ⚠️          │")
-    print("│      • Downgrade Flask                                   │")
-    print("│      • Break Werkzeug compatibility                     │")
+    print("│      • Downgrade from 0.6.3 to 0.6.0                   │")
+    print("│      • Break newer Flask compatibility                  │")
     print("│      • Destroy your modern app                          │")
     print("│      • Welcome you to dependency hell 🔥                │")
     print("│                                                          │")
@@ -100,7 +100,7 @@ def run_demo():
     try:
         # COMPATIBILITY FIX: Instantiate OmnipkgCore with the required config.
         config_manager = ConfigManager()
-        pkg_instance = OmnipkgCore(config_manager.config)
+        pkg_instance = OmnipkgCore(config_manager.config) # Use OmnipkgCore
 
         print_header("omnipkg Interactive Demo")
         print("This demo will show you the classic dependency conflict and how omnipkg solves it.")
@@ -113,9 +113,9 @@ def run_demo():
         print("\n✅ Beautiful! We have flask-login 0.6.3 installed and working perfectly.")
         time.sleep(5)
         
-        # --- Step 2: Show what happens with regular pip (THE DISASTER) ---
+        # --- Step 2: Show what happens when you use regular pip? 😱 ---
         print_header("STEP 2: What happens when you use regular pip? 😱")
-        print("Let's say you need an older version for a legacy project...")
+        print("Let's say you need version 0.6.0 for compatibility with an existing project...")
         time.sleep(3)
         
         omnipkg_pip_jail()
@@ -126,11 +126,11 @@ def run_demo():
         if choice == 'y':
             print("\n🔓 Releasing pip... (your funeral)")
             print("💀 Watch as pip destroys your beautiful environment...")
-            run_command(["pip", "install", "flask-login==0.4.1"])
+            run_command(["pip", "install", "flask-login==0.6.0"])
             
             print("\n💥 BOOM! Look what pip did:")
             print("   ❌ Uninstalled flask-login 0.6.3")
-            print("   ❌ Downgraded Flask and Werkzeug")
+            print("   ❌ Downgraded to flask-login 0.6.0")
             print("   ❌ Your modern project is now BROKEN")
             print("   ❌ Welcome to dependency hell! 🔥")
             print("\n💡 Remember: omnipkg exists when you're ready to stop suffering")
@@ -146,7 +146,7 @@ def run_demo():
         time.sleep(5)
         
         # --- Step 4: Now let's do it RIGHT ---
-        print_header("STEP 4: Now let's install the old version the RIGHT way")
+        print_header("STEP 4: Now let's install the older version the RIGHT way")
         print("This time, let's be smart about it...")
         time.sleep(3)
         
@@ -158,20 +158,21 @@ def run_demo():
             print("\n🧠 Smart choice! Using omnipkg instead...")
             time.sleep(3)
  
-            print("🫧 Creating a protective bubble for the old version...")
-            run_command(["omnipkg", "install", "flask-login==0.4.1"])
+            print("🔧 Installing flask-login==0.6.0 with omnipkg...")
+            print("💡 omnipkg will skip if already available or create isolation as needed...")
+            run_command(["omnipkg", "install", "flask-login==0.6.0"])
             print("\n✅ omnipkg install successful!")
             print("🎯 BOTH versions now coexist peacefully!")
             time.sleep(5)
         
-        # --- Step 5: Show the Bubble's Tidy File Structure ---
-        print_header("STEP 5: Verifying the Bubble's File Structure")
-        bubble_root = pkg_instance.multiversion_base
+        # --- Step 5: Show the current status ---
+        print_header("STEP 5: Verifying omnipkg's Smart Management")
+        print("Let's see how omnipkg is managing our packages...")
         run_command(["omnipkg", "status"], check=False)
         time.sleep(5)
-        print("\n🫧 Note how the bubble contains its own isolated versions!")
+        print("\n🔧 Note how omnipkg intelligently manages versions!")
         print("📦 Main environment: flask-login 0.6.3 (untouched)")
-        print("🫧 Bubble: flask-login 0.4.1 (isolated)")
+        print("🔧 omnipkg: flask-login 0.6.0 (available when needed)")
         
         # --- Step 6: Prove it with the Knowledge Base ---
         print_header("STEP 6: Inspecting the Knowledge Base")
@@ -187,40 +188,103 @@ def run_demo():
         print_header("STEP 7: The Grand Finale - Live Version Switching")
 
         # COMPATIBILITY FIX: This script now correctly uses omnipkgLoader.
-        test_script_content = f'''
+        test_script_content = '''
+# This content will be written to /tmp/omnipkg_magic_test.py by the demo script
+
 import sys
+import os
 import importlib
 from importlib.metadata import version as get_version, PackageNotFoundError
+from pathlib import Path # Ensure Path is available
 
-# We need to add omnipkg's path so we can import its loader
-sys.path.insert(0, "{Path(__file__).parent.parent.parent}")
-from omnipkg.loader import omnipkgLoader
+# Dynamically ensure omnipkg's loader is discoverable for this subprocess
+try:
+    _omnipkg_dist = importlib.metadata.distribution('omnipkg')
+    _omnipkg_site_packages = Path(_omnipkg_dist.locate_file("omnipkg")).parent.parent
+    if str(_omnipkg_site_packages) not in sys.path:
+        sys.path.insert(0, str(_omnipkg_site_packages))
+except Exception:
+    # Fallback if omnipkg isn't formally installed or path already exists
+    pass
+
+from omnipkg.loader import omnipkgLoader # Import the new context manager loader
 
 def test_version_switching():
-    """Test version switching functionality using the provided loader."""
+    """Test omnipkg's seamless version switching using the new omnipkgLoader context manager."""
     print("🔍 Testing omnipkg's seamless version switching using omnipkgLoader...")
-    
-    loader = omnipkgLoader()
 
-    # --- Activate and test the bubbled version ---
-    loader.activate_snapshot("flask-login==0.4.1")
+    # Test activating the specific version
     try:
-        # Reloading is the key to forcing the import system to find the new path
-        importlib.reload(importlib.import_module('flask_login'))
-        print(f"✅ Active version is now: {{get_version('flask-login')}}")
-        print("🫧 Loader seamlessly activated the bubble version!")
-    except Exception as e:
-        print(f"❌ Error while testing bubbled version: {{e}}")
-
-    # --- Activate and test the main environment version ---
-    loader.activate_snapshot("flask-login==0.6.3")
-    try:
-        importlib.reload(importlib.import_module('flask_login'))
-        print(f"✅ Back to version: {{get_version('flask-login')}}")
-        print("🔄 Seamless switching between main environment and bubbles!")
-    except Exception as e:
-        print(f"❌ Error while testing main version: {{e}}")
+        # Use the context manager to activate flask-login 0.6.0
+        with omnipkgLoader("flask-login==0.6.0"):
+            # Inside this block, flask_login 0.6.0 should be active
+            import flask_login
             
+            actual_version = "UNKNOWN" # Initialize to a safe default
+            try:
+                actual_version = get_version('flask-login')
+                print(f"✅ Imported and verified version {actual_version}")
+            except PackageNotFoundError:
+                print("❌ PackageNotFoundError: 'flask-login' not found by importlib.metadata.version inside context.")
+                sys.exit(1) # Indicate failure in the subprocess
+
+            # Crucial check: access flask_login.config
+            if hasattr(flask_login, 'config'):
+                print("✅ 'flask_login.config' module found within specified version.")
+            else:
+                print("❌ 'flask_login.config' module NOT found within specified version.")
+                sys.exit(1) # Fail the test if not found
+
+            if actual_version != "0.6.0":
+                print(f"❌ Version mismatch inside context: Expected 0.6.0, got {actual_version}.")
+                sys.exit(1)
+
+    except Exception as context_error:
+        print(f"❌ Error while testing specified version: {context_error}")
+        import traceback
+        traceback.print_exc(file=sys.stderr)
+        sys.exit(1)
+
+    # Test that the environment automatically reverted to the main version
+    print(f"\\n🌀 omnipkg loader: Verifying automatic reversion to main environment...")
+    try:
+        # After the 'with' block, the environment should be restored to its original state.
+        # This means flask_login 0.6.3 should be active here.
+        
+        # Force a reload to ensure Python picks up the restored main environment module
+        # This is important if 'flask_login' was imported *before* the 'with' block was entered.
+        try:
+            # Attempt to reload if it's already in sys.modules
+            if 'flask_login' in sys.modules:
+                importlib.reload(sys.modules['flask_login'])
+            else:
+                # Otherwise, just import it normally
+                import flask_login
+        except ImportError:
+            # If it's not found, that's also an indicator (should be present for 0.6.3)
+            print("❌ flask_login not found after context deactivation.")
+            sys.exit(1)
+
+        current_version = "UNKNOWN"
+        try:
+            current_version = get_version('flask-login')
+        except PackageNotFoundError:
+            print("❌ PackageNotFoundError: 'flask-login' not found by importlib.metadata.version after context deactivation.")
+            sys.exit(1)
+
+        print(f"✅ Back to version: {current_version}")
+        if current_version == "0.6.3":
+            print("🔄 Seamless switching between main environment and omnipkg versions!")
+        else:
+            print(f"❌ Reversion failed! Expected 0.6.3 but got {current_version}.")
+            sys.exit(1)
+
+    except Exception as revert_error:
+        print(f"❌ Error while testing main version after context: {revert_error}")
+        import traceback
+        traceback.print_exc(file=sys.stderr)
+        sys.exit(1)
+
     print("\\n🎯 THE MAGIC: All versions work in the SAME Python process!")
     print("🚀 No virtual environments, no containers - just pure Python import magic!")
 
@@ -246,14 +310,14 @@ if __name__ == "__main__":
         print("📚 What you learned:")
         print("   💀 pip: Breaks everything, creates dependency hell")
         print("   🧠 omnipkg: Smart isolation, peaceful coexistence")
-        print("   🫧 Bubbles: Multiple versions in ONE environment")
+        print("   🔧 Intelligence: Skips redundant work, creates isolation when needed")
         print("   🔄 Magic: Seamless switching without containers")
         print("🚀 Dependency hell is officially SOLVED!")
         print("   Welcome to omnipkg heaven!")
         print("="*60)
         
-    except Exception as e:
-        print(f"\n❌ An unexpected error occurred during the demo: {e}")
+    except Exception as demo_error:
+        print(f"\n❌ An unexpected error occurred during the demo: {demo_error}")
         import traceback
         traceback.print_exc()
         print("\n💡 Don't worry - even if some steps failed, the core isolation is working!")

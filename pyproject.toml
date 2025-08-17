@@ -4,13 +4,13 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "omnipkg"
-version = "1.0.12"
+version = "1.0.13"
 authors = [
   { name = "1minds3t", email = "omnipkg@proton.me" },
 ]
 description = "The Intelligent Python Dependency Resolver"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.10"
 license = { text="AGPL-3.0-or-later" }
 classifiers = [
     "Development Status :: 5 - Production/Stable",
@@ -24,6 +24,9 @@ dependencies = [
     "redis",
     "packaging",
     "requests",
+    "python-magic", 
+    "aiohttp",     
+    "tqdm"  
 ]
 
 [project.urls]
@@ -33,4 +36,4 @@ Homepage = "https://github.com/1minds3t/omnipkg"
 omnipkg = "omnipkg.cli:main"
 
 [tool.setuptools]
-packages = ["omnipkg"]
+packages = ["omnipkg", "tests"]
