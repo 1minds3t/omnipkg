@@ -188,9 +188,8 @@ omnipkg reset --yes
 **Arguments**:
 *   `--yes`, `-y`: Skip the confirmation prompt.
 
-**Usage**:```bash
+**Usage**:
+```bash
 omnipkg reset-config
 omnipkg reset-config --yes
-```
----
 ```
