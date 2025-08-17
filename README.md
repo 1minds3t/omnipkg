@@ -55,7 +55,7 @@ Our continuous integration (CI) pipelines run comprehensive, real-world tests af
 *   **What it proves:** The "impossible" feat of real-time, mid-script switching and mixing of C-extension versions (`numpy`, `scipy`) within the same Python process.
 
 ### 4. TensorFlow Complex Dependency Switching Test
-[![TensorFlow Complex Dependency Switching Test](https://github.com/1minds3t/omnipkg/actions/workflows/tensorflow-complex-dependency-test.yml/badge.svg)](https://github.com/1minds3t/omnipkg/actions?query=workflow%3A%22%F0%9F%A7%A0+TensorFlow+Complex+Dependency+Switching+Test%22)
+[![TensorFlow Complex Dependency Test](https://github.com/1minds3t/omnipkg/actions/workflows/test-tensorflow-switching.yml/badge.svg)](https://github.com/1minds3t/omnipkg/actions/workflows/test-tensorflow-switching.yml)
 *   **What it proves:** `omnipkg`'s robust handling of large, complex dependency graphs (like TensorFlow's ecosystem) with dynamic version management and environment integrity.
 
 ### 5. UV Self-Downgrade & omnipkg Revert Test
