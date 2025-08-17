@@ -1,4 +1,3 @@
-# .github/workflows/numpy-scipy-c-extension-test.yml
 name: 🧬 NumPy + SciPy C-Extension Switching Test
 
 on:
@@ -11,7 +10,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-
     services:
       redis:
         image: redis:7
@@ -32,10 +30,10 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: 📦 Install omnipkg (editable) and Redis client
+      - name: 📦 Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e . redis
+          pip install -e . redis numpy==1.26.4 scipy==1.13.0
 
       - name: ⚙️ Configure omnipkg for non-interactive use
         run: |
@@ -85,49 +83,105 @@ jobs:
               sys.exit(1)
           EOF
 
-      - name: 🧪 Run the Demo: NumPy + SciPy Stress Test (C-Extensions)
+      - name: 🧪 Run the Demo - NumPy + SciPy Stress Test (C-Extensions)
         id: run_demo
         run: |
           echo "--- Running Omnipkg Demo for NumPy + SciPy Stress Test (C-Extensions) ---"
           mkdir -p /tmp/omnipkg-artifacts
           
-          # Simulate user input '3' for NumPy + SciPy test, capture output, and limit runtime
-          timeout 600 bash -c 'echo "3" | omnipkg demo 2>&1 | tee /tmp/omnipkg-artifacts/demo_output.txt' # Increased timeout for heavy packages
+          timeout 600 bash -c 'echo "3" | omnipkg demo 2>&1 | tee /tmp/omnipkg-artifacts/numpy_scipy_demo_output.txt'
           DEMO_EXIT_CODE=$?
           
           echo "## NumPy + SciPy Demo Output" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
-          cat /tmp/omnipkg-artifacts/demo_output.txt >> $GITHUB_STEP_SUMMARY
+          cat /tmp/omnipkg-artifacts/numpy_scipy_demo_output.txt >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
           
           if [ $DEMO_EXIT_CODE -eq 0 ]; then
             echo "Demo completed successfully."
             echo "demo_outcome=success" >> $GITHUB_OUTPUT
-            # Verify key NumPy/SciPy demo outputs
-            if grep -q "ALL TESTS PASSED!" /tmp/omnipkg-artifacts/demo_output.txt && \
-               grep -q "NUMPY VERSION JUGGLING:" /tmp/omnipkg-artifacts/demo_output.txt && \
-               grep -q "SCIPY C-EXTENSION TEST:" /tmp/omnipkg-artifacts/demo_output.txt && \
-               grep -q "NUMPY + SCIPY VERSION MIXING:" /tmp/omnipkg-artifacts/demo_output.txt && \
-               grep -q "OMNIPKG SURVIVED NUCLEAR TESTING!" /tmp/omnipkg-artifacts/demo_output.txt; then
-              echo "NumPy + SciPy demo verified: All tests passed, including C-extension handling and version mixing."
+            if grep -q "numpy==1.26.4" /tmp/omnipkg-artifacts/numpy_scipy_demo_output.txt && \
+               grep -q "scipy==1.13.0" /tmp/omnipkg-artifacts/numpy_scipy_demo_output.txt && \
+               grep -q "ALL TESTS PASSED!" /tmp/omnipkg-artifacts/numpy_scipy_demo_output.txt && \
+               grep -q "NUMPY VERSION JUGGLING:" /tmp/omnipkg-artifacts/numpy_scipy_demo_output.txt && \
+               grep -q "SCIPY C-EXTENSION TEST:" /tmp/omnipkg-artifacts/numpy_scipy_demo_output.txt && \
+               grep -q "NUMPY + SCIPY VERSION MIXING:" /tmp/omnipkg-artifacts/numpy_scipy_demo_output.txt && \
+               grep -q "OMNIPKG SURVIVED NUCLEAR TESTING!" /tmp/omnipkg-artifacts/numpy_scipy_demo_output.txt; then
+              echo "NumPy + SciPy demo verified: numpy==1.26.4, scipy==1.13.0, all tests passed, and version mixing succeeded!"
             else
               echo "Error: Expected NumPy + SciPy demo output not found."
-              echo "Missing one of: 'ALL TESTS PASSED!', 'NUMPY VERSION JUGGLING:', 'SCIPY C-EXTENSION TEST:', 'NUMPY + SCIPY VERSION MIXING:', or 'OMNIPKG SURVIVED NUCLEAR TESTING!'"
-              cat /tmp/omnipkg-artifacts/demo_output.txt
+              echo "Missing one of: 'numpy==1.26.4', 'scipy==1.13.0', 'ALL TESTS PASSED!', 'NUMPY VERSION JUGGLING:', 'SCIPY C-EXTENSION TEST:', 'NUMPY + SCIPY VERSION MIXING:', or 'OMNIPKG SURVIVED NUCLEAR TESTING!'"
+              cat /tmp/omnipkg-artifacts/numpy_scipy_demo_output.txt
               exit 1
             fi
           else
             echo "Demo failed with exit code $DEMO_EXIT_CODE."
             echo "demo_outcome=failure" >> $GITHUB_OUTPUT
-            cat /tmp/omnipkg-artifacts/demo_output.txt
+            cat /tmp/omnipkg-artifacts/numpy_scipy_demo_output.txt
             exit 1
           fi
 
-      - name: 📦 Archive Demo Output
+      - name: 📊 Check Omnipkg Status
+        id: check_status
+        run: |
+          echo "--- Checking Omnipkg Status ---"
+          mkdir -p /tmp/omnipkg-artifacts
+          omnipkg status > /tmp/omnipkg-artifacts/status_output.txt
+          echo "## Omnipkg Status Output" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          cat /tmp/omnipkg-artifacts/status_output.txt >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          
+          if grep -q "numpy-1.26.4" /tmp/omnipkg-artifacts/status_output.txt && \
+             grep -q "scipy-1.13.0" /tmp/omnipkg-artifacts/status_output.txt; then
+            echo "Status verified: NumPy and SciPy bubbles found!"
+          else
+            echo "Error: Expected NumPy and SciPy bubbles not found in status output."
+            cat /tmp/omnipkg-artifacts/status_output.txt
+            exit 1
+          fi
+
+      - name: 📊 Generate Report
+        if: always()
+        run: |
+          REPORT_FILE="/tmp/omnipkg-artifacts/numpy_scipy_test_report.md"
+          echo "# 🧬 NumPy + SciPy C-Extension Switching Test Report" > $REPORT_FILE
+          echo "" >> $REPORT_FILE
+          echo "**Workflow Run:** [${{ github.run_id }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})" >> $REPORT_FILE
+          echo "**Test Status:** \`${{ job.status }}\`" >> $REPORT_FILE
+          echo "" >> $REPORT_FILE
+          
+          echo "## Demo Execution Output" >> $REPORT_FILE
+          echo "\`\`\`" >> $REPORT_FILE
+          cat /tmp/omnipkg-artifacts/numpy_scipy_demo_output.txt 2>/dev/null || echo 'N/A: Demo output missing.' >> $REPORT_FILE
+          echo "\`\`\`" >> $REPORT_FILE
+          echo "" >> $REPORT_FILE
+          
+          echo "## Omnipkg Status Output" >> $REPORT_FILE
+          echo "\`\`\`" >> $REPORT_FILE
+          cat /tmp/omnipkg-artifacts/status_output.txt 2>/dev/null || echo 'N/A: Status output missing.' >> $REPORT_FILE
+          echo "\`\`\`" >> $REPORT_FILE
+          echo "" >> $REPORT_FILE
+          
+          echo "## Conclusion" >> $REPORT_FILE
+          if [ "${{ steps.run_demo.outputs.demo_outcome }}" == "success" ]; then
+            echo "✅ **omnipkg successfully demonstrated seamless version switching for C-extension packages (NumPy + SciPy).** This test confirms omnipkg's ability to handle complex C-extension dependencies with high integrity." >> $REPORT_FILE
+          else
+            echo "❌ The NumPy + SciPy C-Extension Switching Test failed. Review workflow logs for detailed output and errors." >> $REPORT_FILE
+          fi
+          echo "" >> $REPORT_FILE
+
+      - name: 🧹 Clean Up Redis
+        if: always()
+        run: |
+          echo "--- Cleaning Up Redis ---"
+          redis-cli -h localhost -p 6379 KEYS "omnipkg:pkg:*" | xargs -r redis-cli -h localhost -p 6379 DEL
+
+      - name: 📦 Upload Artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: omnipkg-numpy-scipy-demo-output
+          name: omnipkg-numpy-scipy-outputs
           path: /tmp/omnipkg-artifacts/
-          retention-days: 7
+          retention-days: 30
           compression-level: 6
