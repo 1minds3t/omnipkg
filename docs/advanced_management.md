@@ -76,4 +76,3 @@ While `omnipkg` solves many long-standing dependency issues, it operates within 
 *   **"Time Machine" for Legacy Packages**: Some extremely old or niche Python packages, especially those with C extensions, rely on very specific build environments or have outdated/incorrect metadata on PyPI. `pip` (and therefore `omnipkg` which leverages `pip` for initial installation) can struggle with these. `omnipkg` is developing a "time machine" script and enhanced build/wheel capabilities to support these truly legacy packages by intelligently finding and building them against historically compatible toolchains, going beyond what current package managers can do.
 
 These aren't fundamental flaws of `omnipkg`'s core isolation strategy, but rather challenges inherent in the vast and evolving Python ecosystem that `omnipkg` is uniquely positioned to solve.
-```
