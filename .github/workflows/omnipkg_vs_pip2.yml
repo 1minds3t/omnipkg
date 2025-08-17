@@ -130,123 +130,123 @@ jobs:
         run: |
           cat > update_battle_report.py << 'EOF'
           import json
-import os
-from pathlib import Path
-from datetime import datetime
+          import os
+          from pathlib import Path
+          from datetime import datetime
 
-RESULTS_FILE = Path("battle_results_history.json")
-README_FILE = Path("README.md")
+          RESULTS_FILE = Path("battle_results_history.json")
+          README_FILE = Path("README.md")
 
-# A lean data structure
-default_data = {
-    "omnipkg": {"wins": 0, "losses": 0, "saves": 0},
-    "pip": {"wins": 0, "losses": 0},
-    "uv": {"wins": 0, "losses": 0},
-    "recent_tests": []
-}
+          # A lean data structure
+          default_data = {
+              "omnipkg": {"wins": 0, "losses": 0, "saves": 0},
+              "pip": {"wins": 0, "losses": 0},
+              "uv": {"wins": 0, "losses": 0},
+              "recent_tests": []
+          }
 
-# Load existing history
-history_data = default_data
-if RESULTS_FILE.exists():
-    try:
-        with open(RESULTS_FILE, 'r') as f:
-            loaded_data = json.load(f)
-            # Basic validation to ensure new keys exist
-            for key, value in default_data.items():
-                if key not in loaded_data:
-                    loaded_data[key] = value
-                if isinstance(value, dict):
-                     for sub_key in value:
-                         if sub_key not in loaded_data.get(key, {}):
-                             loaded_data[key][sub_key] = value[sub_key]
-            history_data = loaded_data
-    except Exception as e:
-        print(f"Warning: Could not load or migrate history, starting fresh: {e}")
-        history_data = default_data
+          # Load existing history
+          history_data = default_data
+          if RESULTS_FILE.exists():
+              try:
+                  with open(RESULTS_FILE, 'r') as f:
+                      loaded_data = json.load(f)
+                      # Basic validation to ensure new keys exist
+                      for key, value in default_data.items():
+                          if key not in loaded_data:
+                              loaded_data[key] = value
+                          if isinstance(value, dict):
+                               for sub_key in value:
+                                   if sub_key not in loaded_data.get(key, {}):
+                                       loaded_data[key][sub_key] = value[sub_key]
+                      history_data = loaded_data
+              except Exception as e:
+                  print(f"Warning: Could not load or migrate history, starting fresh: {e}")
+                  history_data = default_data
 
-# Read results from environment variables
-omnipkg_conflict = os.environ.get('OMNIPKG_CONFLICT_RESULT', 'FAIL')
-pip_conflict = os.environ.get('PIP_CONFLICT_RESULT', 'FAIL')
-uv_conflict = os.environ.get('UV_CONFLICT_RESULT', 'FAIL')
-omnipkg_revert = os.environ.get('OMNIPKG_REVERT_RESULT', 'FAIL')
-test_timestamp = datetime.utcnow().strftime('%Y-%m-%d %H:%M')
+          # Read results from environment variables
+          omnipkg_conflict = os.environ.get('OMNIPKG_CONFLICT_RESULT', 'FAIL')
+          pip_conflict = os.environ.get('PIP_CONFLICT_RESULT', 'FAIL')
+          uv_conflict = os.environ.get('UV_CONFLICT_RESULT', 'FAIL')
+          omnipkg_revert = os.environ.get('OMNIPKG_REVERT_RESULT', 'FAIL')
+          test_timestamp = datetime.utcnow().strftime('%Y-%m-%d %H:%M')
 
-# Update stats
-history_data['omnipkg']['wins' if omnipkg_conflict == 'PASS' else 'losses'] += 1
-history_data['pip']['wins' if pip_conflict == 'PASS' else 'losses'] += 1
-history_data['uv']['wins' if uv_conflict == 'PASS' else 'losses'] += 1
-if omnipkg_revert == 'PASS':
-    history_data['omnipkg']['saves'] += 1
+          # Update stats
+          history_data['omnipkg']['wins' if omnipkg_conflict == 'PASS' else 'losses'] += 1
+          history_data['pip']['wins' if pip_conflict == 'PASS' else 'losses'] += 1
+          history_data['uv']['wins' if uv_conflict == 'PASS' else 'losses'] += 1
+          if omnipkg_revert == 'PASS':
+              history_data['omnipkg']['saves'] += 1
 
-# Update recent tests log
-history_data['recent_tests'].insert(0, {
-    "date": test_timestamp,
-    "conflict_omnipkg": omnipkg_conflict,
-    "conflict_pip": pip_conflict,
-    "conflict_uv": uv_conflict,
-    "revert_omnipkg": omnipkg_revert
-})
-history_data['recent_tests'] = history_data['recent_tests'][:5]
+          # Update recent tests log
+          history_data['recent_tests'].insert(0, {
+              "date": test_timestamp,
+              "conflict_omnipkg": omnipkg_conflict,
+              "conflict_pip": pip_conflict,
+              "conflict_uv": uv_conflict,
+              "revert_omnipkg": omnipkg_revert
+          })
+          history_data['recent_tests'] = history_data['recent_tests'][:5]
 
-# --- GENERATE CONCISE README CONTENT ---
+          # --- GENERATE CONCISE README CONTENT ---
 
-def calculate_win_rate(wins, losses):
-    total = wins + losses
-    return f"{(wins / total * 100):.0f}%" if total > 0 else "0%"
+          def calculate_win_rate(wins, losses):
+              total = wins + losses
+              return f"{(wins / total * 100):.0f}%" if total > 0 else "0%"
 
-omnipkg_stats = history_data['omnipkg']
-pip_stats = history_data['pip']
-uv_stats = history_data['uv']
+          omnipkg_stats = history_data['omnipkg']
+          pip_stats = history_data['pip']
+          uv_stats = history_data['uv']
 
-omnipkg_wr = calculate_win_rate(omnipkg_stats['wins'], omnipkg_stats['losses'])
-pip_wr = calculate_win_rate(pip_stats['wins'], pip_stats['losses'])
-uv_wr = calculate_win_rate(uv_stats['wins'], uv_stats['losses'])
+          omnipkg_wr = calculate_win_rate(omnipkg_stats['wins'], omnipkg_stats['losses'])
+          pip_wr = calculate_win_rate(pip_stats['wins'], pip_stats['losses'])
+          uv_wr = calculate_win_rate(uv_stats['wins'], uv_stats['losses'])
 
-battle_stats_section_content = f"""## 🥊 omnipkg vs The World: Battle Statistics
-*Live-updated results from our continuous integration tests.*
+          battle_stats_section_content = f"""## 🥊 omnipkg vs The World: Battle Statistics
+          *Live-updated results from our continuous integration tests.*
 
-| Package Manager | Conflict Test Wins | Environment Saves | Result |
-|:----------------|:------------------:|:-------------------:|:-------|
-| **omnipkg 🚀**  | **{omnipkg_stats['wins']}** ({omnipkg_wr} Win Rate) | **{omnipkg_stats['saves']}** | ✅ **Solves Conflicts & Heals Environment** |
-| **pip 💥**      | {pip_stats['wins']} ({pip_wr} Win Rate) | N/A | ❌ Overwrites Packages |
-| **uv ⚡️**      | {uv_stats['wins']} ({uv_wr} Win Rate) | N/A | ❌ Overwrites Packages |
+          | Package Manager | Conflict Test Wins | Environment Saves | Result |
+          |:----------------|:------------------:|:-------------------:|:-------|
+          | **omnipkg 🚀**  | **{omnipkg_stats['wins']}** ({omnipkg_wr} Win Rate) | **{omnipkg_stats['saves']}** | ✅ **Solves Conflicts & Heals Environment** |
+          | **pip 💥**      | {pip_stats['wins']} ({pip_wr} Win Rate) | N/A | ❌ Overwrites Packages |
+          | **uv ⚡️**      | {uv_stats['wins']} ({uv_wr} Win Rate) | N/A | ❌ Overwrites Packages |
 
-**Test Scenarios:**
-- **Conflict Test**: Attempting to install conflicting versions of another package manager (e.g., `pip==24.0` and `pip==23.2.1`). A "Win" means both versions are usable.
-- **Environment Save**: After another tool (`uv`) damages the environment by downgrading itself, `omnipkg revert` is run. A "Save" means the environment was successfully restored.
+          **Test Scenarios:**
+          - **Conflict Test**: Attempting to install conflicting versions of another package manager (e.g., `pip==24.0` and `pip==23.2.1`). A "Win" means both versions are usable.
+          - **Environment Save**: After another tool (`uv`) damages the environment by downgrading itself, `omnipkg revert` is run. A "Save" means the environment was successfully restored.
 
-### 📊 Recent Test Log
-| Date (UTC) | omnipkg (Conflict) | pip (Conflict) | uv (Conflict) | omnipkg (Revert) |
-|:-----------|:------------------:|:--------------:|:-------------:|:----------------:|
-"""
-for test in history_data['recent_tests']:
-    battle_stats_section_content += f"| {test['date']} | {test['conflict_omnipkg']} | {test['conflict_pip']} | {test['conflict_uv']} | {test['revert_omnipkg']} |\n"
+          ### 📊 Recent Test Log
+          | Date (UTC) | omnipkg (Conflict) | pip (Conflict) | uv (Conflict) | omnipkg (Revert) |
+          |:-----------|:------------------:|:--------------:|:-------------:|:----------------:|
+          """
+          for test in history_data['recent_tests']:
+              battle_stats_section_content += f"| {test['date']} | {test['conflict_omnipkg']} | {test['conflict_pip']} | {test['conflict_uv']} | {test['revert_omnipkg']} |\n"
 
 
-# --- UPDATE THE README FILE ---
+          # --- UPDATE THE README FILE ---
 
-try:
-    readme_content = README_FILE.read_text(encoding='utf-8') if README_FILE.exists() else "# omnipkg\n\n"
-    start_marker, end_marker = "<!-- BATTLE_STATS_START -->", "<!-- BATTLE_STATS_END -->"
+          try:
+              readme_content = README_FILE.read_text(encoding='utf-8') if README_FILE.exists() else "# omnipkg\n\n"
+              start_marker, end_marker = "<!-- BATTLE_STATS_START -->", "<!-- BATTLE_STATS_END -->"
 
-    if start_marker in readme_content and end_marker in readme_content:
-        before, after = readme_content.split(start_marker)[0], readme_content.split(end_marker)[1]
-        README_FILE.write_text(before + start_marker + "\n" + battle_stats_section_content + "\n" + end_marker + after, encoding='utf-8')
-        print("✅ README.md updated with concise battle stats")
-    else:
-        updated_content = readme_content.rstrip() + "\n\n" + start_marker + "\n" + battle_stats_section_content + "\n" + end_marker + "\n"
-        README_FILE.write_text(updated_content, encoding='utf-8')
-        print("✅ README.md updated (markers added automatically)")
-except Exception as e:
-    print(f"Error updating README: {e}")
+              if start_marker in readme_content and end_marker in readme_content:
+                  before, after = readme_content.split(start_marker)[0], readme_content.split(end_marker)[1]
+                  README_FILE.write_text(before + start_marker + "\n" + battle_stats_section_content + "\n" + end_marker + after, encoding='utf-8')
+                  print("✅ README.md updated with concise battle stats")
+              else:
+                  updated_content = readme_content.rstrip() + "\n\n" + start_marker + "\n" + battle_stats_section_content + "\n" + end_marker + "\n"
+                  README_FILE.write_text(updated_content, encoding='utf-8')
+                  print("✅ README.md updated (markers added automatically)")
+          except Exception as e:
+              print(f"Error updating README: {e}")
 
-# --- SAVE HISTORY FOR NEXT RUN ---
-try:
-    with open(RESULTS_FILE, 'w') as f:
-        json.dump(history_data, f, indent=2)
-    print(f"✅ Saved history to {RESULTS_FILE}")
-except Exception as e:
-    print(f"Error saving history: {e}")
+          # --- SAVE HISTORY FOR NEXT RUN ---
+          try:
+              with open(RESULTS_FILE, 'w') as f:
+                  json.dump(history_data, f, indent=2)
+              print(f"✅ Saved history to {RESULTS_FILE}")
+          except Exception as e:
+              print(f"Error saving history: {e}")
           EOF
           python update_battle_report.py
 
