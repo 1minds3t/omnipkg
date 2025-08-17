@@ -44,6 +44,7 @@
 ---
 
 <!-- BATTLE_STATS_START -->
+
 <!-- BATTLE_STATS_END -->
 
 ---
