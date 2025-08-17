@@ -1,3 +1,4 @@
+```yaml
 name: 🥊 omnipkg vs The World - Battle & Resilience Test
 
 on:
@@ -120,8 +121,7 @@ jobs:
       - name: 📊 Extract Current Stats from README
         run: |
           cat > extract_stats.py << 'EOF'
-          import re
-          import os
+          import re, os
           from pathlib import Path
 
           README_FILE = Path("README.md")
@@ -167,7 +167,7 @@ jobs:
       - name: 📊 Update Battle Report and README
         run: |
           cat > update_battle_report.py << 'EOF'
-          import os, re
+          import os
           from pathlib import Path
           from datetime import datetime
 
@@ -198,17 +198,15 @@ jobs:
           print(f"Updated: omnipkg={omnipkg_wins}W/{omnipkg_losses}L/{omnipkg_saves}S, pip={pip_wins}W/{pip_losses}L, uv={uv_wins}W/{uv_losses}L")
 
           badge = "[![💥 Nuclear Test: TensorFlow Dependency Hot-Swap](https://github.com/1minds3t/omnipkg/actions/workflows/test-tensorflow-switching.yml/badge.svg)](https://github.com/1minds3t/omnipkg/actions/workflows/test-tensorflow-switching.yml)"
-          battle_stats = f"""\
-## 🥊 Package Manager Thunderdome {badge}
-
-| Package Manager | Conflict Wins | Environment Saves | Verdict |
-|:----------------|:-------------:|:-----------------:|:--------|
-| **`omnipkg` 🚀** | **{omnipkg_wins}** ({omnipkg_wr}) | **{omnipkg_saves}** | ✅ Solves conflicts *and* heals environments |
-| **`pip` 💥** | {pip_wins} ({pip_wr}) | N/A | ❌ Mercilessly overwrites itself |
-| **`uv` ⚡️** | {uv_wins} ({uv_wr}) | N/A | ❌ Also overwrites itself (but faster!) |
-
-### 📊 Latest Test: {test_timestamp} (UTC)
-"""
+          battle_stats = (
+              f"## 🥊 Package Manager Thunderdome {badge}\n\n"
+              f"| Package Manager | Conflict Wins | Environment Saves | Verdict |\n"
+              f"|:----------------|:-------------:|:-----------------:|:--------|\n"
+              f"| **`omnipkg` 🚀** | **{omnipkg_wins}** ({omnipkg_wr}) | **{omnipkg_saves}** | ✅ Solves conflicts *and* heals environments |\n"
+              f"| **`pip` 💥** | {pip_wins} ({pip_wr}) | N/A | ❌ Mercilessly overwrites itself |\n"
+              f"| **`uv` ⚡️** | {uv_wins} ({uv_wr}) | N/A | ❌ Also overwrites itself (but faster!) |\n\n"
+              f"### 📊 Latest Test: {test_timestamp} (UTC)\n"
+          )
           
           try:
               content = README_FILE.read_text(encoding='utf-8') if README_FILE.exists() else "# omnipkg\n\n"
