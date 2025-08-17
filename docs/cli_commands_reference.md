@@ -1,5 +1,3 @@
-
-```markdown
 # omnipkg CLI Commands Reference
 
 This document provides a comprehensive overview of all `omnipkg` command-line interface (CLI) commands and their usage.
