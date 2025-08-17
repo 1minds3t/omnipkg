@@ -127,8 +127,9 @@ jobs:
 
       - name: 📊 Update Battle Report and README
         run: |
-          python - << 'EOF'
-          import json, os
+          cat > update_battle_report.py << 'EOF'
+          import json
+          import os
           from pathlib import Path
           from datetime import datetime
 
@@ -166,29 +167,29 @@ jobs:
           omnipkg_win_rate = calculate_win_rate(history_data['omnipkg']['wins'], history_data['omnipkg']['losses'])
           pip_win_rate = calculate_win_rate(history_data['pip']['wins'], history_data['pip']['losses'])
 
-          battle_stats_section_content = f"""\
-## 🥊 omnipkg vs pip Battle Statistics
+          battle_stats_section_content = f"""## 🥊 omnipkg vs pip Battle Statistics
 
-Comparison testing of conflicting package installations.
+          Comparison testing of conflicting package installations.
 
-| Package Manager | Wins | Losses | Win Rate |
-|-----------------|------|--------|----------|
-| omnipkg 🚀      | {history_data['omnipkg']['wins']} | {history_data['omnipkg']['losses']} | {omnipkg_win_rate} |
-| pip 💥          | {history_data['pip']['wins']} | {history_data['pip']['losses']} | {pip_win_rate} |
+          | Package Manager | Wins | Losses | Win Rate |
+          |-----------------|------|--------|----------|
+          | omnipkg 🚀      | {history_data['omnipkg']['wins']} | {history_data['omnipkg']['losses']} | {omnipkg_win_rate} |
+          | pip 💥          | {history_data['pip']['wins']} | {history_data['pip']['losses']} | {pip_win_rate} |
 
-### 📊 Recent Test Results
-| Date | Test Scenario | omnipkg Result | pip Result |
-|------|---------------|----------------|------------|
-"""
+          ### 📊 Recent Test Results
+          | Date | Test Scenario | omnipkg Result | pip Result |
+          |------|---------------|----------------|------------|
+          """
+          
           for test in history_data['recent_tests']:
               battle_stats_section_content += f"| {test['date']} | {test['scenario']} | {test['omnipkg_result']} | {test['pip_result']} |\n"
 
-          battle_stats_section_content += """\
-**Test Scenario Details:**
-- **Test Case**: Installing uv==0.7.12 and uv==0.7.14 (conflicting versions)
-- ✅ **PASS**: Successfully maintains both versions
-- ❌ **FAIL**: Overwrites or fails to install both versions
-"""
+          battle_stats_section_content += """
+          **Test Scenario Details:**
+          - **Test Case**: Installing uv==0.7.12 and uv==0.7.14 (conflicting versions)
+          - ✅ **PASS**: Successfully maintains both versions
+          - ❌ **FAIL**: Overwrites or fails to install both versions
+          """
           
           try:
               readme_content = README_FILE.read_text()
@@ -209,6 +210,7 @@ Comparison testing of conflicting package installations.
           except Exception as e:
               print(f"Error saving history: {e}")
           EOF
+          python update_battle_report.py
 
       - name: 📦 Upload Battle Report History
         uses: actions/upload-artifact@v4
