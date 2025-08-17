@@ -1,3 +1,4 @@
+```yaml
 name: 🥊 omnipkg vs The World - Battle & Resilience Test
 
 on:
@@ -132,21 +133,24 @@ jobs:
               try:
                   content = README_FILE.read_text(encoding='utf-8')
                   
-                  omnipkg_match = re.search(r'\*\*`omnipkg 🚀`.*?\|\s*\*\*(\d+)\*\* \((\d+)%\)\s*\|\s*\*\*(\d+)\*\*', content)
+                  omnipkg_match = re.search(r'\*\*`omnipkg 🚀`.*?\|\s*\*\*(\d+)\*\*\s*\((\d+)%\)\s*\|\s*\*\*(\d+)\*\*', content)
                   if omnipkg_match:
                       omnipkg_wins = int(omnipkg_match.group(1))
-                      omnipkg_losses = int(omnipkg_wins * (100 - int(omnipkg_match.group(2))) / int(omnipkg_match.group(2))) if int(omnipkg_match.group(2)) > 0 else max(1, omnipkg_wins * 100)
+                      win_rate = int(omnipkg_match.group(2))
+                      omnipkg_losses = int(omnipkg_wins * (100 - win_rate) / win_rate) if win_rate > 0 else omnipkg_wins
                       omnipkg_saves = int(omnipkg_match.group(3))
                   
                   pip_match = re.search(r'\*\*`pip 💥`.*?\|\s*(\d+)\s*\((\d+)%\)', content)
                   if pip_match:
                       pip_wins = int(pip_match.group(1))
-                      pip_losses = int(pip_wins * (100 - int(pip_match.group(2))) / int(pip_match.group(2))) if int(pip_match.group(2)) > 0 else max(1, pip_wins * 100)
+                      win_rate = int(pip_match.group(2))
+                      pip_losses = int(pip_wins * (100 - win_rate) / win_rate) if win_rate > 0 else pip_wins + 1
                   
                   uv_match = re.search(r'\*\*`uv ⚡️`.*?\|\s*(\d+)\s*\((\d+)%\)', content)
                   if uv_match:
                       uv_wins = int(uv_match.group(1))
-                      uv_losses = int(uv_wins * (100 - int(uv_match.group(2))) / int(uv_match.group(2))) if int(uv_match.group(2)) > 0 else max(1, uv_wins * 100)
+                      win_rate = int(uv_match.group(2))
+                      uv_losses = int(uv_wins * (100 - win_rate) / win_rate) if win_rate > 0 else uv_wins + 1
                   
                   print(f"Extracted: omnipkg={omnipkg_wins}W/{omnipkg_losses}L/{omnipkg_saves}S, pip={pip_wins}W/{pip_losses}L, uv={uv_wins}W/{uv_losses}L")
               except Exception as e:
@@ -196,7 +200,7 @@ jobs:
 
           print(f"Updated: omnipkg={omnipkg_wins}W/{omnipkg_losses}L/{omnipkg_saves}S, pip={pip_wins}W/{pip_losses}L, uv={uv_wins}W/{uv_losses}L")
 
-          badge = "[![💥 Nuclear Test: TensorFlow Dependency Hot-Swap](https://github.com/1minds3t/omnipkg/actions/workflows/test-tensorflow-switching.yml/badge.svg)](https://github.com/1minds3t/omnipkg/actions/workflows/test-tensorflow-switching.yml)"
+          badge = "[![🥊 omnipkg vs The World - Battle & Resilience Test](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml/badge.svg)](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml)"
           battle_stats = (
               f"## 🥊 Package Manager Thunderdome {badge}\n\n"
               f"| Package Manager | Conflict Wins | Environment Saves | Verdict |\n"
@@ -244,3 +248,4 @@ jobs:
               git push
             }
           fi
+```
