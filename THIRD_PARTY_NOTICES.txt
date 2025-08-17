@@ -23,3 +23,7 @@ See licenses/aiohttp.txt for full license text
 tqdm (v4.67.1)
 License: MIT and MPL-2.0
 See licenses/tqdm.txt for full license text
+
+tomli (v2.2.1)
+License: MIT
+See licenses/tomli.txt for full license text
