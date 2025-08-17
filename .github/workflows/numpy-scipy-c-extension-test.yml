@@ -84,32 +84,32 @@ jobs:
               sys.exit(1)
           EOF
 
-      - name: Debug Environment
-        run: |
-          echo "--- Debugging Environment ---"
-          python --version
-          pip show omnipkg redis numpy scipy
-          redis-cli -h localhost -p 6379 ping
-          omnipkg --version
-
       - name: Run the Demo - NumPy + SciPy Stress Test
         id: run_demo
         run: |
           echo "--- Running Omnipkg Demo for NumPy + SciPy Stress Test (C-Extensions) ---"
           mkdir -p /tmp/omnipkg-artifacts
           
-          # Ensure output file is clean
+          # Clear output file to ensure single run
           rm -f /tmp/omnipkg-artifacts/numpy_scipy_demo_output.txt
           
-          # Run demo once
+          # Run demo once and count runs
+          echo "Starting demo run" > /tmp/omnipkg-artifacts/run_count.txt
           timeout 900 bash -c 'echo "3" | omnipkg demo 2>&1 | tee /tmp/omnipkg-artifacts/numpy_scipy_demo_output.txt'
           DEMO_EXIT_CODE=$?
           
-          echo "DEBUG: omnipkg demo exit code: $DEMO_EXIT_CODE"
+          # Check run count
+          RUN_COUNT=$(grep -c "Starting demo run" /tmp/omnipkg-artifacts/run_count.txt)
+          echo "DEBUG: Demo run count: $RUN_COUNT"
+          if [ "$RUN_COUNT" -ne 1 ]; then
+            echo "Error: Demo ran $RUN_COUNT times instead of once."
+            cat /tmp/omnipkg-artifacts/numpy_scipy_demo_output.txt
+            exit 1
+          fi
+          
+          # Log output file for debugging
           echo "DEBUG: Output file contents:"
           cat /tmp/omnipkg-artifacts/numpy_scipy_demo_output.txt
-          echo "DEBUG: Output file size:"
-          wc -l /tmp/omnipkg-artifacts/numpy_scipy_demo_output.txt
           
           echo "## NumPy + SciPy Demo Output" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
