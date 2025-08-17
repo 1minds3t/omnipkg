@@ -234,4 +234,3 @@ jobs:
             git commit -m "🥊 Thunderdome update: omnipkg vs The World - $(date -u '+%Y-%m-%d %H:%M UTC')"
             git push
           fi
-```
