@@ -44,24 +44,23 @@
 ---
 
 <!-- BATTLE_STATS_START -->
-## 🥊 omnipkg vs pip Battle Statistics
+## 🥊 omnipkg vs The World: Battle Statistics
+*Live-updated results from our continuous integration tests.*
 
-Comparison testing of conflicting package installations.
+| Package Manager | Conflict Test Wins | Environment Saves | Result |
+|:----------------|:------------------:|:-------------------:|:-------|
+| **omnipkg 🚀**  | **1** (100% Win Rate) | **1** | ✅ **Solves Conflicts & Heals Environment** |
+| **pip 💥**      | 0 (0% Win Rate) | N/A | ❌ Overwrites Packages |
+| **uv ⚡️**      | 0 (0% Win Rate) | N/A | ❌ Overwrites Packages |
 
-| Package Manager | Wins | Losses | Win Rate |
-|-----------------|------|--------|----------|
-| omnipkg 🚀      | 1 | 0 | 100% |
-| pip 💥          | 0 | 1 | 0% |
+**Test Scenarios:**
+- **Conflict Test**: Attempting to install conflicting versions of another package manager (e.g., `pip==24.0` and `pip==23.2.1`). A "Win" means both versions are usable.
+- **Environment Save**: After another tool (`uv`) damages the environment by downgrading itself, `omnipkg revert` is run. A "Save" means the environment was successfully restored.
 
-### 📊 Recent Test Results
-| Date | Test Scenario | omnipkg Result | pip Result |
-|------|---------------|----------------|------------|
-| 2025-08-17 20:50:23 UTC | Installing uv==0.7.12 and uv==0.7.14 (conflicting versions) | PASS | FAIL |
-
-**Test Scenario Details:**
-- **Test Case**: Installing uv==0.7.12 and uv==0.7.14 (conflicting versions)
-- ✅ **PASS**: Successfully maintains both versions
-- ❌ **FAIL**: Overwrites or fails to install both versions
+### 📊 Recent Test Log
+| Date (UTC) | omnipkg (Conflict) | pip (Conflict) | uv (Conflict) | omnipkg (Revert) |
+|:-----------|:------------------:|:--------------:|:-------------:|:----------------:|
+| 2025-08-17 21:37 | PASS | FAIL | FAIL | PASS |
 
 <!-- BATTLE_STATS_END -->
 
