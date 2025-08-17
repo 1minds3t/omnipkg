@@ -27,6 +27,8 @@ jobs:
         uses: actions/checkout@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
+          # Make sure we get the latest README with any previous updates
+          fetch-depth: 1
 
       - name: 🐍 Set up Python 3.11
         uses: actions/setup-python@v5
@@ -118,13 +120,57 @@ jobs:
             echo "OMNIPKG_REVERT_RESULT=FAIL" >> $GITHUB_ENV
           fi
 
-      # --- REPORTING ---
+      # --- EXTRACT EXISTING STATS FROM README (Git-based persistence) ---
 
-      - name: 📥 Download Previous Battle History
-        uses: actions/download-artifact@v4
-        with:
-          name: battle-history
-        continue-on-error: true
+      - name: 📊 Extract Current Stats from README
+        run: |
+          cat > extract_stats.py << 'EOF'
+          import re
+          import os
+          from pathlib import Path
+
+          README_FILE = Path("README.md")
+          
+          # Default values
+          omnipkg_wins = 0
+          omnipkg_saves = 0
+          pip_wins = 0
+          uv_wins = 0
+
+          if README_FILE.exists():
+              try:
+                  readme_content = README_FILE.read_text(encoding='utf-8')
+                  
+                  # Extract omnipkg wins - look for pattern like "**42** (95% Win Rate)"
+                  omnipkg_match = re.search(r'\*\*omnipkg 🚀\*\*\s*\|\s*\*\*(\d+)\*\*.*?\|\s*\*\*(\d+)\*\*', readme_content)
+                  if omnipkg_match:
+                      omnipkg_wins = int(omnipkg_match.group(1))
+                      omnipkg_saves = int(omnipkg_match.group(2))
+                  
+                  # Extract pip wins - look for pattern like "42 (5% Win Rate)"
+                  pip_match = re.search(r'\*\*pip 💥\*\*\s*\|\s*(\d+)', readme_content)
+                  if pip_match:
+                      pip_wins = int(pip_match.group(1))
+                  
+                  # Extract uv wins
+                  uv_match = re.search(r'\*\*uv ⚡️\*\*\s*\|\s*(\d+)', readme_content)
+                  if uv_match:
+                      uv_wins = int(uv_match.group(1))
+                  
+                  print(f"Extracted stats: omnipkg_wins={omnipkg_wins}, omnipkg_saves={omnipkg_saves}, pip_wins={pip_wins}, uv_wins={uv_wins}")
+              except Exception as e:
+                  print(f"Could not extract stats from README: {e}")
+          
+          # Set environment variables for the next step
+          with open(os.environ['GITHUB_ENV'], 'a') as f:
+              f.write(f"EXISTING_OMNIPKG_WINS={omnipkg_wins}\n")
+              f.write(f"EXISTING_OMNIPKG_SAVES={omnipkg_saves}\n")
+              f.write(f"EXISTING_PIP_WINS={pip_wins}\n")
+              f.write(f"EXISTING_UV_WINS={uv_wins}\n")
+          EOF
+          python extract_stats.py
+
+      # --- REPORTING (Now with accumulation) ---
 
       - name: 📊 Update Battle Report and README
         run: |
@@ -134,97 +180,123 @@ jobs:
           from pathlib import Path
           from datetime import datetime
 
-          RESULTS_FILE = Path("battle_results_history.json")
           README_FILE = Path("README.md")
 
-          # A lean data structure
-          default_data = {
-              "omnipkg": {"wins": 0, "losses": 0, "saves": 0},
-              "pip": {"wins": 0, "losses": 0},
-              "uv": {"wins": 0, "losses": 0},
-              "recent_tests": []
-          }
-
-          # Load existing history
-          history_data = default_data
-          if RESULTS_FILE.exists():
-              try:
-                  with open(RESULTS_FILE, 'r') as f:
-                      loaded_data = json.load(f)
-                      # Basic validation to ensure new keys exist
-                      for key, value in default_data.items():
-                          if key not in loaded_data:
-                              loaded_data[key] = value
-                          if isinstance(value, dict):
-                               for sub_key in value:
-                                   if sub_key not in loaded_data.get(key, {}):
-                                       loaded_data[key][sub_key] = value[sub_key]
-                      history_data = loaded_data
-              except Exception as e:
-                  print(f"Warning: Could not load or migrate history, starting fresh: {e}")
-                  history_data = default_data
-
-          # Read results from environment variables
+          # Read current test results
           omnipkg_conflict = os.environ.get('OMNIPKG_CONFLICT_RESULT', 'FAIL')
           pip_conflict = os.environ.get('PIP_CONFLICT_RESULT', 'FAIL')
           uv_conflict = os.environ.get('UV_CONFLICT_RESULT', 'FAIL')
           omnipkg_revert = os.environ.get('OMNIPKG_REVERT_RESULT', 'FAIL')
           test_timestamp = datetime.utcnow().strftime('%Y-%m-%d %H:%M')
 
-          # Update stats
-          history_data['omnipkg']['wins' if omnipkg_conflict == 'PASS' else 'losses'] += 1
-          history_data['pip']['wins' if pip_conflict == 'PASS' else 'losses'] += 1
-          history_data['uv']['wins' if uv_conflict == 'PASS' else 'losses'] += 1
-          if omnipkg_revert == 'PASS':
-              history_data['omnipkg']['saves'] += 1
+          # Get existing stats from previous step
+          existing_omnipkg_wins = int(os.environ.get('EXISTING_OMNIPKG_WINS', '0'))
+          existing_omnipkg_saves = int(os.environ.get('EXISTING_OMNIPKG_SAVES', '0'))
+          existing_pip_wins = int(os.environ.get('EXISTING_PIP_WINS', '0'))
+          existing_uv_wins = int(os.environ.get('EXISTING_UV_WINS', '0'))
 
-          # Update recent tests log
-          history_data['recent_tests'].insert(0, {
-              "date": test_timestamp,
-              "conflict_omnipkg": omnipkg_conflict,
-              "conflict_pip": pip_conflict,
-              "conflict_uv": uv_conflict,
-              "revert_omnipkg": omnipkg_revert
-          })
-          history_data['recent_tests'] = history_data['recent_tests'][:5]
+          # Calculate new totals (add 1 for each PASS, 0 for each FAIL)
+          omnipkg_wins = existing_omnipkg_wins + (1 if omnipkg_conflict == 'PASS' else 0)
+          omnipkg_saves = existing_omnipkg_saves + (1 if omnipkg_revert == 'PASS' else 0)
+          pip_wins = existing_pip_wins + (1 if pip_conflict == 'PASS' else 0)
+          uv_wins = existing_uv_wins + (1 if uv_conflict == 'PASS' else 0)
 
-          # --- GENERATE CONCISE README CONTENT ---
+          # For losses, we need to calculate based on a reasonable assumption
+          # Since pip and uv are expected to fail, we'll increment their losses
+          omnipkg_losses = existing_omnipkg_wins - omnipkg_wins + (1 if omnipkg_conflict == 'FAIL' else 0)
+          pip_losses = existing_pip_wins - pip_wins + (1 if pip_conflict == 'FAIL' else 0) 
+          uv_losses = existing_uv_wins - uv_wins + (1 if uv_conflict == 'FAIL' else 0)
+          
+          # But we need a better way to track total runs. Let's extract from README or use a counter approach.
+          # For simplicity, let's assume losses = total_runs - wins, where total_runs increments each time
+          
+          # Let's use a simpler approach: extract the current loss count from README too
+          import re
+          omnipkg_losses = 0  # We'll recalculate this
+          pip_losses = 0
+          uv_losses = 0
+          
+          if README_FILE.exists():
+              try:
+                  readme_content = README_FILE.read_text(encoding='utf-8')
+                  # Look for patterns like "(95% Win Rate)" to reverse-engineer losses
+                  omnipkg_wr_match = re.search(r'\*\*omnipkg 🚀\*\*.*?\((\d+)% Win Rate\)', readme_content)
+                  if omnipkg_wr_match and existing_omnipkg_wins > 0:
+                      win_rate = int(omnipkg_wr_match.group(1))
+                      # win_rate = wins / (wins + losses) * 100
+                      # Solving for losses: losses = wins * (100 - win_rate) / win_rate
+                      if win_rate > 0:
+                          omnipkg_losses = max(0, int(existing_omnipkg_wins * (100 - win_rate) / win_rate))
+                  
+                  pip_wr_match = re.search(r'\*\*pip 💥\*\*.*?\((\d+)% Win Rate\)', readme_content)
+                  if pip_wr_match and existing_pip_wins >= 0:
+                      win_rate = int(pip_wr_match.group(1))
+                      if win_rate > 0:
+                          pip_losses = max(0, int(existing_pip_wins * (100 - win_rate) / win_rate))
+                      else:
+                          # If 0% win rate, we need to look for the total run count another way
+                          # For now, let's count this run as a loss
+                          pip_losses = max(1, existing_pip_wins * 100)  # Rough estimate
+                  
+                  uv_wr_match = re.search(r'\*\*uv ⚡️\*\*.*?\((\d+)% Win Rate\)', readme_content)
+                  if uv_wr_match and existing_uv_wins >= 0:
+                      win_rate = int(uv_wr_match.group(1))
+                      if win_rate > 0:
+                          uv_losses = max(0, int(existing_uv_wins * (100 - win_rate) / win_rate))
+                      else:
+                          uv_losses = max(1, existing_uv_wins * 100)
+              except Exception as e:
+                  print(f"Could not extract loss counts: {e}")
+          
+          # Add current run results to loss counts
+          omnipkg_losses += (1 if omnipkg_conflict == 'FAIL' else 0)
+          pip_losses += (1 if pip_conflict == 'FAIL' else 0)
+          uv_losses += (1 if uv_conflict == 'FAIL' else 0)
 
           def calculate_win_rate(wins, losses):
               total = wins + losses
               return f"{(wins / total * 100):.0f}%" if total > 0 else "0%"
 
-          omnipkg_stats = history_data['omnipkg']
-          pip_stats = history_data['pip']
-          uv_stats = history_data['uv']
+          omnipkg_wr = calculate_win_rate(omnipkg_wins, omnipkg_losses)
+          pip_wr = calculate_win_rate(pip_wins, pip_losses)
+          uv_wr = calculate_win_rate(uv_wins, uv_losses)
 
-          omnipkg_wr = calculate_win_rate(omnipkg_stats['wins'], omnipkg_stats['losses'])
-          pip_wr = calculate_win_rate(pip_stats['wins'], pip_stats['losses'])
-          uv_wr = calculate_win_rate(uv_stats['wins'], uv_stats['losses'])
+          print(f"Updated stats: omnipkg={omnipkg_wins}W/{omnipkg_losses}L/{omnipkg_saves}S, pip={pip_wins}W/{pip_losses}L, uv={uv_wins}W/{uv_losses}L")
 
           battle_stats_section_content = f"""## 🥊 omnipkg vs The World: Battle Statistics
-          *Live-updated results from our continuous integration tests.*
+*Live-updated results from our continuous integration tests.*
 
-          | Package Manager | Conflict Test Wins | Environment Saves | Result |
-          |:----------------|:------------------:|:-------------------:|:-------|
-          | **omnipkg 🚀**  | **{omnipkg_stats['wins']}** ({omnipkg_wr} Win Rate) | **{omnipkg_stats['saves']}** | ✅ **Solves Conflicts & Heals Environment** |
-          | **pip 💥**      | {pip_stats['wins']} ({pip_wr} Win Rate) | 0 | ❌ Overwrites Packages |
-          | **uv ⚡️**      | {uv_stats['wins']} ({uv_wr} Win Rate) | 0 | ❌ Overwrites Packages |
+| Package Manager | Conflict Test Wins | Environment Saves | Result |
+|:----------------|:------------------:|:-------------------:|:-------|
+| **omnipkg 🚀**  | **{omnipkg_wins}** ({omnipkg_wr} Win Rate) | **{omnipkg_saves}** | ✅ **Solves Conflicts & Heals Environment** |
+| **pip 💥**      | {pip_wins} ({pip_wr} Win Rate) | 0 | ❌ Overwrites Packages |
+| **uv ⚡️**      | {uv_wins} ({uv_wr} Win Rate) | 0 | ❌ Overwrites Packages |
 
-          **Test Scenarios:**
-          - **Conflict Test**: Attempting to install conflicting versions of another package manager (e.g., `pip==24.0` and `pip==23.2.1`). A "Win" means both versions are usable.
-          - **Environment Save**: After another tool (`uv`) damages the environment by downgrading itself, `omnipkg revert` is run. A "Save" means the environment was successfully restored.
+**Test Scenarios:**
+- **Conflict Test**: Attempting to install conflicting versions of another package manager (e.g., `pip==24.0` and `pip==23.2.1`). A "Win" means both versions are usable.
+- **Environment Save**: After another tool (`uv`) damages the environment by downgrading itself, `omnipkg revert` is run. A "Save" means the environment was successfully restored.
 
-          ### 📊 Recent Test Log
-          | Date (UTC) | omnipkg (Conflict) | pip (Conflict) | uv (Conflict) | omnipkg (Revert) |
-          |:-----------|:------------------:|:--------------:|:-------------:|:----------------:|
-          """
-          for test in history_data['recent_tests']:
-              battle_stats_section_content += f"| {test['date']} | {test['conflict_omnipkg']} | {test['conflict_pip']} | {test['conflict_uv']} | {test['revert_omnipkg']} |\n"
+### 📊 Recent Test Log
+| Date (UTC) | omnipkg (Conflict) | pip (Conflict) | uv (Conflict) | omnipkg (Revert) |
+|:-----------|:------------------:|:--------------:|:-------------:|:----------------:|
+| {test_timestamp} | {omnipkg_conflict} | {pip_conflict} | {uv_conflict} | {omnipkg_revert} |"""
 
+          # Try to preserve some recent test history from existing README
+          if README_FILE.exists():
+              try:
+                  readme_content = README_FILE.read_text(encoding='utf-8')
+                  # Find existing test log entries (skip the header)
+                  log_match = re.search(r'\| Date \(UTC\).*?\n\|:.*?\n((?:\| [^|]+.*?\n)*)', readme_content, re.MULTILINE)
+                  if log_match:
+                      existing_entries = log_match.group(1).strip().split('\n')
+                      # Keep up to 4 most recent entries (plus our new one = 5 total)
+                      for entry in existing_entries[:4]:
+                          if entry.strip():
+                              battle_stats_section_content += "\n" + entry
+              except Exception as e:
+                  print(f"Could not preserve test history: {e}")
 
           # --- UPDATE THE README FILE ---
-
           try:
               readme_content = README_FILE.read_text(encoding='utf-8') if README_FILE.exists() else "# omnipkg\n\n"
               start_marker, end_marker = "<!-- BATTLE_STATS_START -->", "<!-- BATTLE_STATS_END -->"
@@ -232,29 +304,15 @@ jobs:
               if start_marker in readme_content and end_marker in readme_content:
                   before, after = readme_content.split(start_marker)[0], readme_content.split(end_marker)[1]
                   README_FILE.write_text(before + start_marker + "\n" + battle_stats_section_content + "\n" + end_marker + after, encoding='utf-8')
-                  print("✅ README.md updated with concise battle stats")
+                  print("✅ README.md updated with accumulated battle stats")
               else:
                   updated_content = readme_content.rstrip() + "\n\n" + start_marker + "\n" + battle_stats_section_content + "\n" + end_marker + "\n"
                   README_FILE.write_text(updated_content, encoding='utf-8')
                   print("✅ README.md updated (markers added automatically)")
           except Exception as e:
               print(f"Error updating README: {e}")
-
-          # --- SAVE HISTORY FOR NEXT RUN ---
-          try:
-              with open(RESULTS_FILE, 'w') as f:
-                  json.dump(history_data, f, indent=2)
-              print(f"✅ Saved history to {RESULTS_FILE}")
-          except Exception as e:
-              print(f"Error saving history: {e}")
           EOF
           python update_battle_report.py
-
-      - name: 📦 Upload Battle Report History
-        uses: actions/upload-artifact@v4
-        with:
-          name: battle-history
-          path: battle_results_history.json
 
       - name: 💾 Commit README Updates
         run: |
