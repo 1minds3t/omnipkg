@@ -1,4 +1,4 @@
-name: TensorFlow Complex Dependency Test
+name: "💥 Nuclear Test: TensorFlow Dependency Hot-Swap"
 
 on:
   push:
