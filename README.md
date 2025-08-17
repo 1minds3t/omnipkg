@@ -9,11 +9,9 @@
 </p>
 
 <p align="center">
-    <a href="#"><img src="https://img.shields.io/badge/Security%20Audit-passing-4c1" alt="Security Audit"></a>
-    <a href="https://pypi.org/project/omnipkg/"><img src="https://img.shields.io/badge/pypi-v1.0.12-blue" alt="PyPI"></a>
+    <a href="https://github.com/1minds3t/omnipkg/actions?query=workflow%3ASecurity+Audit"><img src="https://img.shields.io/badge/Security%20Audit-passing-4c1" alt="Security Audit"></a>
+    <a href="https://pypi.org/project/omnipkg/"><img src="https://img.shields.io/badge/pypi-v1.0.13-blue" alt="PyPI"></a>
     <a href="https://www.gnu.org/licenses/agpl-3.0"><img src="https://img.shields.io/badge/License-AGPLv3-d94c31" alt="License"></a>
-    <br>
-    <a href="https://github.com/1minds3t/omnipkg/actions"><img src="https://img.shields.io/badge/🔥%20Ultimate%20Omnipkg%20Stress%20Test-Multi--Version%20Scientific%20Package%20Chaos-passing" alt="Ultimate Omnipkg Stress Test"></a>
 </p>
 
 ---
@@ -27,7 +25,6 @@ Picture this: It's Friday night. You're deep in a critical project when a single
 This exact scenario sparked a week-long engineering sprint that resulted in `omnipkg` - a complete reimagining of Python dependency management. What emerged wasn't just another package manager, but a system that makes dependency conflicts mathematically impossible.
 
 *One week from problem to PyPI. One tool to end dependency hell forever.*
-
 
 ## 💥 The Proof: Orchestrating an "Impossible" Install
 
@@ -74,6 +71,34 @@ For decades, the Python community has accepted a frustrating reality: if you nee
 It's a revolutionary package manager that allows you to run multiple, conflicting packages in a single Python environment. `omnipkg` intelligently isolates only the conflicting package and its historically-correct dependencies, while your entire environment continues to share all other compatible packages.
 
 The result: one clean environment, infinite versions, zero waste.
+
+---
+
+## 🔥 Unparalleled CI Proof: Live Demo Validation
+
+Don't just take our word for it. Our continuous integration (CI) pipelines run comprehensive, real-world tests for every commit, validating `omnipkg`'s claims in various challenging scenarios. Click the badges below to see the **live workflow runs and detailed logs**:
+
+**1. Python Module Switching Test (Rich)**
+[![Rich Module Switching Test](https://github.com/1minds3t/omnipkg/actions/workflows/rich-module-switching-test.yml/badge.svg)](https://github.com/1minds3t/omnipkg/actions?query=workflow%3A%22Rich+Module+Switching+Test%22)
+*   **What it proves:** Seamless runtime version swapping for pure Python modules within a single environment.
+
+**2. UV Binary Switching Test**
+[![UV Binary Switching Test](https://github.com/1minds3t/omnipkg/actions/workflows/test-uv-binary-switching.yml/badge.svg)](https://github.com/1minds3t/omnipkg/actions?query=workflow%3A%22UV+Binary+Switching+Test%22)
+*   **What it proves:** `omnipkg`'s ability to manage and dynamically activate different versions of core binary tools like `uv`, including their associated executables.
+
+**3. NumPy + SciPy C-Extension Switching Test**
+[![NumPy + SciPy C-Extension Switching Test](https://github.com/1minds3t/omnipkg/actions/workflows/numpy-scipy-c-extension-test.yml/badge.svg)](https://github.com/1minds3t/omnipkg/actions?query=workflow%3A%22NumPy+%2B+SciPy+C-Extension+Switching+Test%22)
+*   **What it proves:** The "impossible" feat of real-time, mid-script switching and mixing of C-extension versions (`numpy`, `scipy`) within the same Python process.
+
+**4. TensorFlow Complex Dependency Switching Test**
+[![TensorFlow Complex Dependency Switching Test](https://github.com/1minds3t/omnipkg/actions/workflows/test-tensorflow-switching.yml/badge.svg)](https://github.com/1minds3t/omnipkg/actions?query=workflow%3A%22TensorFlow+Complex+Dependency+Switching+Test%22)
+*   **What it proves:** `omnipkg`'s robust handling of large, complex dependency graphs (like TensorFlow's ecosystem) with dynamic version management and environment integrity.
+
+**5. UV Self-Downgrade & omnipkg Revert Test**
+[![UV Self-Downgrade & omnipkg Revert Test](https://github.com/1minds3t/omnipkg/actions/workflows/test_uv_revert.yml/badge.svg)](https://github.com/1minds3t/omnipkg/actions?query=workflow%3A%22UV+Self-Downgrade+%26+omnipkg+Revert+Test%22)
+*   **What it proves:** `omnipkg`'s unparalleled self-healing capability, demonstrating its ability to detect and automatically revert environmental damage caused by *other* package managers.
+
+---
 
 ## 🛠️ Easy Install & Quick Start
 
@@ -178,8 +203,7 @@ Successfully installed numpy-1.26.4
 ✅ Version: 1.16.1
 ```
 
-**🤯 COMBINATION TESTING:**
-```
+**🤯 COMBINATION TESTING:**```
 🌀 Mix: numpy==1.24.3 + scipy==1.12.0
 ...
 🧪 Compatibility: [1. 2. 3.]
@@ -268,6 +292,18 @@ The Python packaging ecosystem represents a **$10B+ annual developer productivit
 
 ---
 
+## 📚 Documentation
+
+Dive deeper into `omnipkg`'s capabilities:
+
+*   [**Getting Started**](docs/getting_started.md): Installation, Redis setup, and your first `omnipkg` command.
+*   [**CLI Commands Reference**](docs/cli_commands_reference.md): A comprehensive guide to every `omnipkg` command.
+*   [**Runtime Version Switching**](docs/runtime_switching.md): Learn how to use `omnipkgLoader` for dynamic, mid-script version changes.
+*   [**Advanced Management**](docs/advanced_management.md): Explore Redis interaction, manual cleanup, and troubleshooting.
+*   [**Future Roadmap**](docs/future_roadmap.md): Discover `omnipkg`'s ambitious plans for Python interpreter hot-swapping and AI-driven optimization.
+
+---
+
 ## 📄 Licensing
 
 `omnipkg` uses a dual-license model designed for maximum adoption and sustainable growth:
@@ -282,3 +318,4 @@ Commercial inquiries: [omnipkg@proton.me](mailto:omnipkg@proton.me)
 This project thrives on community collaboration. Contributions, bug reports, and feature requests are incredibly welcome. Join us in revolutionizing Python dependency management.
 
 [**→ Start Contributing**](https://github.com/1minds3t/omnipkg/issues)
+```
