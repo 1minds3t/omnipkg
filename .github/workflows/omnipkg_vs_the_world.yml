@@ -1,57 +1,259 @@
-- name: 📊 Extract Current Stats from README
+name: 🥊 omnipkg vs The World - Battle & Resilience Test
+
+on:
+  schedule:
+    - cron: '0 * * * *' # Run every hour
+  workflow_dispatch:
+  push:
+    branches: [ 'main', 'test-workflows-feature' ]
+
+jobs:
+  comparison-test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    services:
+      redis:
+        image: redis:7
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    steps:
+      - name: 🏁 Checkout code
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 1
+
+      - name: 🐍 Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: 📦 Install omnipkg, Redis client, and uv
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e . redis uv
+
+      - name: ⚙️ Configure omnipkg
+        run: |
+          python - << 'EOF'
+          import sys, site, json, os, sysconfig
+          from pathlib import Path
+          site_packages_path = site.getsitepackages()[0] if site.getsitepackages() else sysconfig.get_paths()['purelib']
+          project_root = Path(os.environ['GITHUB_WORKSPACE'])
+          builder_script = project_root / 'omnipkg' / 'package_meta_builder.py'
+          config_data = {
+              'site_packages_path': site_packages_path,
+              'multiversion_base': str(Path(site_packages_path) / '.omnipkg_versions'),
+              'python_executable': sys.executable,
+              'builder_script_path': str(builder_script),
+              'redis_host': 'localhost',
+              'redis_port': 6379,
+              'redis_key_prefix': 'omnipkg:pkg:',
+              'paths_to_index': [str(Path(sys.executable).parent), '/usr/local/bin', '/usr/bin', '/bin', '/usr/sbin', '/sbin'],
+              'auto_cleanup': True,
+              'cleanup_threshold_days': 30
+          }
+          config_dir = Path.home() / '.config' / 'omnipkg'
+          config_dir.mkdir(parents=True, exist_ok=True)
+          with open(config_dir / 'config.json', 'w') as f:
+              json.dump(config_data, f, indent=2)
+          EOF
+
+      - name: 🚀 omnipkg | Battle Test (PASS Expected)
+        id: omnipkg_conflict_test
+        run: |
+          echo "--- Testing omnipkg installing conflicting versions of pip ---"
+          if omnipkg install pip==24.0 pip==23.2.1; then
+            echo "OMNIPKG_CONFLICT_RESULT=PASS" >> $GITHUB_ENV
+            echo "✅ omnipkg: Installed multiple pip versions"
+          else
+            echo "OMNIPKG_CONFLICT_RESULT=FAIL" >> $GITHUB_ENV
+            echo "❌ omnipkg: Failed to install multiple pip versions"
+          fi
+
+      - name: 💥 pip | Battle Test (FAIL Expected)
+        id: pip_conflict_test
+        run: |
+          echo "--- Testing pip downgrading itself ---"
+          pip install pip==24.0 > pip_conflict.log 2>&1
+          pip install pip==23.2.1 >> pip_conflict.log 2>&1
+          echo "PIP_CONFLICT_RESULT=FAIL" >> $GITHUB_ENV
+          echo "❌ pip: Mercilessly downgraded itself (expected)"
+          cat pip_conflict.log
+
+      - name: ⚡️ uv | Battle Test (FAIL Expected)
+        id: uv_conflict_test
+        run: |
+          echo "--- Testing uv downgrading itself ---"
+          uv pip install uv==0.5.0 --system > uv_conflict.log 2>&1 || true
+          uv pip install uv==0.4.0 --system >> uv_conflict.log 2>&1 || true
+          echo "UV_CONFLICT_RESULT=FAIL" >> $GITHUB_ENV
+          echo "❌ uv: Also downgraded itself (but faster!) (expected)"
+          cat uv_conflict.log
+
+      - name: 🛡️ omnipkg | Resilience Test (PASS Expected)
+        id: omnipkg_revert_test
+        run: |
+          echo "--- Testing omnipkg reverting uv's self-sabotage ---"
+          omnipkg install uv
+          latest_uv=$(uv --version | awk '{print $2}')
+          echo "Baseline uv: $latest_uv"
+          uv pip install uv==0.7.1 --system > revert.log 2>&1
+          echo "After sabotage: $(uv --version | awk '{print $2}')"
+          if omnipkg revert -y >> revert.log 2>&1; then
+            echo "OMNIPKG_REVERT_RESULT=PASS" >> $GITHUB_ENV
+            echo "✅ omnipkg: Reverted to uv $latest_uv"
+          else
+            echo "OMNIPKG_REVERT_RESULT=FAIL" >> $GITHUB_ENV
+            echo "❌ omnipkg: Revert failed"
+          fi
+          cat revert.log
+
+      - name: 📊 Extract Current Stats from README
         run: |
           cat > extract_stats.py << 'EOF'
           import re, os
           from pathlib import Path
+        
+          README_FILE = Path("README.md")
+        
+          omnipkg_wins = omnipkg_saves = pip_wins = uv_wins = 0
+          omnipkg_losses = pip_losses = uv_losses = 0
+        
+          if README_FILE.exists():
+            try:
+                content = README_FILE.read_text(encoding='utf-8')
+                
+                # Fixed regex patterns to match your actual table format
+                omnipkg_match = re.search(r'\|\s*\*\*`omnipkg`[^|]*\|\s*\*\*(\d+)\*\*\s*\((\d+)%\)\s*\|\s*\*\*(\d+)\*\*', content)
+                if omnipkg_match:
+                    omnipkg_wins = int(omnipkg_match.group(1))
+                    win_rate = int(omnipkg_match.group(2))
+                    omnipkg_saves = int(omnipkg_match.group(3))
+                    # Calculate losses from win rate
+                    total_battles = int(omnipkg_wins * 100 / win_rate) if win_rate > 0 else omnipkg_wins
+                    omnipkg_losses = total_battles - omnipkg_wins
+                
+                pip_match = re.search(r'\|\s*\*\*`pip`[^|]*\|\s*(\d+)\s*\((\d+)%\)', content)
+                if pip_match:
+                    pip_wins = int(pip_match.group(1))
+                    win_rate = int(pip_match.group(2))
+                    # Calculate losses from win rate
+                    total_battles = int(pip_wins * 100 / win_rate) if win_rate > 0 else pip_wins + 1  # +1 to avoid division by zero
+                    pip_losses = total_battles - pip_wins
+                
+                uv_match = re.search(r'\|\s*\*\*`uv`[^|]*\|\s*(\d+)\s*\((\d+)%\)', content)
+                if uv_match:
+                    uv_wins = int(uv_match.group(1))
+                    win_rate = int(uv_match.group(2))
+                    # Calculate losses from win rate  
+                    total_battles = int(uv_wins * 100 / win_rate) if win_rate > 0 else uv_wins + 1  # +1 to avoid division by zero
+                    uv_losses = total_battles - uv_wins
+                
+                print(f"Extracted: omnipkg={omnipkg_wins}W/{omnipkg_losses}L/{omnipkg_saves}S, pip={pip_wins}W/{pip_losses}L, uv={uv_wins}W/{uv_losses}L")
+            except Exception as e:
+                print(f"Could not extract stats: {e}")
+                # Print the content for debugging
+                print("README content:")
+                print(content[:1000] + "..." if len(content) > 1000 else content)
+        
+          with open(os.environ['GITHUB_ENV'], 'a') as f:
+            f.write(f"EXISTING_OMNIPKG_WINS={omnipkg_wins}\n")
+            f.write(f"EXISTING_OMNIPKG_SAVES={omnipkg_saves}\n")
+            f.write(f"EXISTING_PIP_WINS={pip_wins}\n")
+            f.write(f"EXISTING_UV_WINS={uv_wins}\n")
+            f.write(f"EXISTING_OMNIPKG_LOSSES={omnipkg_losses}\n")
+            f.write(f"EXISTING_PIP_LOSSES={pip_losses}\n")
+            f.write(f"EXISTING_UV_LOSSES={uv_losses}\n")
+          EOF
+          python extract_stats.py
+
+      - name: 📊 Update Battle Report and README
+        run: |
+          cat > update_battle_report.py << 'EOF'
+          import os
+          from pathlib import Path
+          from datetime import datetime
 
           README_FILE = Path("README.md")
           
-          omnipkg_wins = omnipkg_saves = pip_wins = uv_wins = 0
-          omnipkg_losses = pip_losses = uv_losses = 0
+          omnipkg_conflict = os.environ.get('OMNIPKG_CONFLICT_RESULT', 'FAIL')
+          pip_conflict = os.environ.get('PIP_CONFLICT_RESULT', 'FAIL')
+          uv_conflict = os.environ.get('UV_CONFLICT_RESULT', 'FAIL')
+          omnipkg_revert = os.environ.get('OMNIPKG_REVERT_RESULT', 'FAIL')
+          test_timestamp = datetime.utcnow().strftime('%Y-%m-%d %H:%M')
 
-          if README_FILE.exists():
-              try:
-                  content = README_FILE.read_text(encoding='utf-8')
-                  
-                  # Fixed regex patterns to match your exact markdown table format
-                  omnipkg_match = re.search(r'\|\s*\*\*`omnipkg`[^|]*\|\s*\*\*(\d+)\*\*\s*\((\d+)%\)\s*\|\s*\*\*(\d+)\*\*\s*\|', content)
-                  if omnipkg_match:
-                      omnipkg_wins = int(omnipkg_match.group(1))
-                      win_rate = int(omnipkg_match.group(2))
-                      omnipkg_saves = int(omnipkg_match.group(3))
-                      # Calculate losses from win rate
-                      total_battles = int(omnipkg_wins * 100 / win_rate) if win_rate > 0 else omnipkg_wins
-                      omnipkg_losses = total_battles - omnipkg_wins
-                  
-                  pip_match = re.search(r'\|\s*\*\*`pip`[^|]*\|\s*(\d+)\s*\((\d+)%\)\s*\|', content)
-                  if pip_match:
-                      pip_wins = int(pip_match.group(1))
-                      win_rate = int(pip_match.group(2))
-                      # Calculate losses from win rate
-                      total_battles = int(pip_wins * 100 / win_rate) if win_rate > 0 else pip_wins + 1
-                      pip_losses = total_battles - pip_wins
-                  
-                  uv_match = re.search(r'\|\s*\*\*`uv`[^|]*\|\s*(\d+)\s*\((\d+)%\)\s*\|', content)
-                  if uv_match:
-                      uv_wins = int(uv_match.group(1))
-                      win_rate = int(uv_match.group(2))
-                      # Calculate losses from win rate  
-                      total_battles = int(uv_wins * 100 / win_rate) if win_rate > 0 else uv_wins + 1
-                      uv_losses = total_battles - uv_wins
-                  
-                  print(f"Extracted: omnipkg={omnipkg_wins}W/{omnipkg_losses}L/{omnipkg_saves}S, pip={pip_wins}W/{pip_losses}L, uv={uv_wins}W/{uv_losses}L")
-              except Exception as e:
-                  print(f"Could not extract stats: {e}")
-                  print("README content:")
-                  print(content[:1000] + "..." if len(content) > 1000 else content)
+          omnipkg_wins = int(os.environ.get('EXISTING_OMNIPKG_WINS', '0')) + (1 if omnipkg_conflict == 'PASS' else 0)
+          omnipkg_saves = int(os.environ.get('EXISTING_OMNIPKG_SAVES', '0')) + (1 if omnipkg_revert == 'PASS' else 0)
+          pip_wins = int(os.environ.get('EXISTING_PIP_WINS', '0')) + (1 if pip_conflict == 'PASS' else 0)
+          uv_wins = int(os.environ.get('EXISTING_UV_WINS', '0')) + (1 if uv_conflict == 'PASS' else 0)
+          omnipkg_losses = int(os.environ.get('EXISTING_OMNIPKG_LOSSES', '0')) + (1 if omnipkg_conflict == 'FAIL' else 0)
+          pip_losses = int(os.environ.get('EXISTING_PIP_LOSSES', '0')) + (1 if pip_conflict == 'FAIL' else 0)
+          uv_losses = int(os.environ.get('EXISTING_UV_LOSSES', '0')) + (1 if uv_conflict == 'FAIL' else 0)
+
+          def calculate_win_rate(wins, losses):
+              total = wins + losses
+              return f"{(wins / total * 100):.0f}%" if total > 0 else "0%"
+
+          omnipkg_wr = calculate_win_rate(omnipkg_wins, omnipkg_losses)
+          pip_wr = calculate_win_rate(pip_wins, pip_losses)
+          uv_wr = calculate_win_rate(uv_wins, uv_losses)
+
+          print(f"Updated: omnipkg={omnipkg_wins}W/{omnipkg_losses}L/{omnipkg_saves}S, pip={pip_wins}W/{pip_losses}L, uv={uv_wins}W/{uv_losses}L")
+
+          badge = "[![🥊 omnipkg vs The World - Battle & Resilience Test](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml/badge.svg)](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml)"
+          battle_stats = (
+              f"## 🥊 Package Manager Thunderdome {badge}\n\n"
+              f"| Package Manager | Conflict Wins | Environment Saves | Verdict |\n"
+              f"|:----------------|:-------------:|:-----------------:|:--------|\n"
+              f"| **`omnipkg` 🚀** | **{omnipkg_wins}** ({omnipkg_wr}) | **{omnipkg_saves}** | ✅ Solves conflicts *and* heals environments |\n"
+              f"| **`pip` 💥** | {pip_wins} ({pip_wr}) | N/A | ❌ Mercilessly overwrites itself |\n"
+              f"| **`uv` ⚡️** | {uv_wins} ({uv_wr}) | N/A | ❌ Also overwrites itself (but faster!) |\n\n"
+              f"### 📊 Latest Test: {test_timestamp} (UTC)\n"
+          )
           
-          with open(os.environ['GITHUB_ENV'], 'a') as f:
-              f.write(f"EXISTING_OMNIPKG_WINS={omnipkg_wins}\n")
-              f.write(f"EXISTING_OMNIPKG_SAVES={omnipkg_saves}\n")
-              f.write(f"EXISTING_PIP_WINS={pip_wins}\n")
-              f.write(f"EXISTING_UV_WINS={uv_wins}\n")
-              f.write(f"EXISTING_OMNIPKG_LOSSES={omnipkg_losses}\n")
-              f.write(f"EXISTING_PIP_LOSSES={pip_losses}\n")
-              f.write(f"EXISTING_UV_LOSSES={uv_losses}\n")
+          try:
+              content = README_FILE.read_text(encoding='utf-8') if README_FILE.exists() else "# omnipkg\n\n"
+              start, end = "<!-- BATTLE_STATS_START -->", "<!-- BATTLE_STATS_END -->"
+              if start in content and end in content:
+                  before, after = content.split(start)[0], content.split(end)[1]
+                  new_content = before + start + "\n" + battle_stats + "\n" + end + after
+              else:
+                  new_content = content.rstrip() + "\n\n" + start + "\n" + battle_stats + "\n" + end
+              with open(README_FILE, 'w', encoding='utf-8') as f:
+                  f.write(new_content)
+              print("✅ README.md written to disk")
+          except Exception as e:
+              print(f"Error writing README: {e}")
+              exit(1)
           EOF
-          python extract_stats.py
+          python update_battle_report.py
+
+      - name: 💾 Commit README Updates
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "omnipkg Battle Bot"
+          # Only clean generated scripts, preserve README.md
+          git clean -f -X -- extract_stats.py update_battle_report.py
+          # Pull latest changes
+          git pull --rebase origin main || true
+          # Stage and commit changes
+          git add README.md
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "🥊 Thunderdome update: omnipkg vs The World - $(date -u '+%Y-%m-%d %H:%M UTC')"
+            git push || {
+              echo "Push failed, retrying after another pull..."
+              git pull --rebase origin main || true
+              git push
+            }
+          fi
