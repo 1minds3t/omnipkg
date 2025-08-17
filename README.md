@@ -136,8 +136,7 @@ omnipkg install torch==2.0.0 torch==2.7.1
 ```
 ---
 
-### 4. Binary & C-Extension Support [![⚡ UV Binary Test](https://img.shields.io/badge/⚡_UV_Binary_Test-passing-success)](https://github.com/1minds3t/omnipkg/actions/workflows/test-uv-binary-switching.yml) 
-[![💥 TensorFlow Hot-Swap](https://img.shields.io/badge/💥_TensorFlow_Hot_Swap-passing-success)](https://github.com/1minds3t/omnipkg/actions/workflows/test-tensorflow-switching.yml)
+### 4. Binary & C-Extension Support [![⚡ UV Binary Test](https://img.shields.io/badge/⚡_UV_Binary_Test-passing-success)](https://github.com/1minds3t/omnipkg/actions/workflows/test-uv-binary-switching.yml) [![💥 TensorFlow Hot-Swap](https://img.shields.io/badge/💥_TensorFlow_Hot_Swap-passing-success)](https://github.com/1minds3t/omnipkg/actions/workflows/test-tensorflow-switching.yml)
 
 `omnipkg` seamlessly switches binary tools (e.g., `uv`) and complex C-extension version combinations (e.g., `tensorflow`, `numpy`, `scipy`) during runtime, a feat traditional tools struggle with.
 
