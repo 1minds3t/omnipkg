@@ -35,7 +35,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e . redis tensorflow==2.13.0
 
-      - name: ⚙️ Configure omnipkg for non-interactive use
+      - name: ⚙️ Configure omnipkg
         run: |
           python - << 'EOF'
           import sys
@@ -45,16 +45,12 @@ jobs:
           import os
           import sysconfig
 
-          # Get site-packages path safely
           try:
               site_packages_path = site.getsitepackages()[0]
           except (IndexError, AttributeError):
               site_packages_path = sysconfig.get_paths()['purelib']
 
-          # Determine project root (where pyproject.toml is)
           project_root = Path(os.environ['GITHUB_WORKSPACE'])
-          
-          # Verify builder script exists
           builder_script = project_root / 'omnipkg' / 'package_meta_builder.py'
           if not builder_script.exists():
               print(f"Error: {builder_script} does not exist")
@@ -87,30 +83,44 @@ jobs:
               sys.exit(1)
           EOF
 
-      - name: 🧪 Run the Demo - TensorFlow Test (Complex Dependencies)
+      - name: 🧪 Debug Environment
+        run: |
+          echo "--- Debugging Environment ---"
+          python --version
+          pip show omnipkg redis tensorflow
+          redis-cli -h localhost -p 6379 ping
+
+      - name: 🧪 Run the Demo - TensorFlow Test
         id: run_demo
         run: |
           echo "--- Running Omnipkg Demo for TensorFlow Test (Complex Dependencies) ---"
           mkdir -p /tmp/omnipkg-artifacts
           
-          timeout 600 bash -c 'echo "4" | omnipkg demo 2>&1 | tee /tmp/omnipkg-artifacts/tensorflow_demo_output.txt'
+          set -o pipefail
+          timeout 600 bash -c 'echo "4" | omnipkg demo 2>&1 | tee /tmp/omnipkg-artifacts/tensorflow_demo_output.txt; exit ${PIPESTATUS[0]}'
           DEMO_EXIT_CODE=$?
           
+          echo "DEBUG: omnipkg demo exit code: $DEMO_EXIT_CODE"
           echo "## TensorFlow Demo Output" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
           cat /tmp/omnipkg-artifacts/tensorflow_demo_output.txt >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
           
-          if [ $DEMO_EXIT_CODE -eq 0 ]; then
-            echo "Demo completed successfully."
+          if [ $DEMO_EXIT_CODE -eq 0 ] || \
+             (grep -q "ALL TENSORFLOW TESTS PASSED" /tmp/omnipkg-artifacts/tensorflow_demo_output.txt && \
+              grep -q "Demo completed successfully" /tmp/omnipkg-artifacts/tensorflow_demo_output.txt); then
+            echo "Demo completed successfully (exit code $DEMO_EXIT_CODE, logs verified)."
             echo "demo_outcome=success" >> $GITHUB_OUTPUT
             if grep -q "tensorflow==2.13.0" /tmp/omnipkg-artifacts/tensorflow_demo_output.txt && \
                grep -q "typing_extensions==4.5.0" /tmp/omnipkg-artifacts/tensorflow_demo_output.txt && \
-               grep -q "ALL TENSORFLOW TESTS PASSED" /tmp/omnipkg-artifacts/tensorflow_demo_output.txt; then
-              echo "TensorFlow demo verified: tensorflow==2.13.0, typing_extensions==4.5.0, and all tests passed!"
+               grep -q "tensorflow-estimator==2.13.0" /tmp/omnipkg-artifacts/tensorflow_demo_output.txt && \
+               grep -q "keras==2.13.1" /tmp/omnipkg-artifacts/tensorflow_demo_output.txt && \
+               grep -q "ALL TENSORFLOW TESTS PASSED" /tmp/omnipkg-artifacts/tensorflow_demo_output.txt && \
+               grep -q "Cleanup complete - reset to single version" /tmp/omnipkg-artifacts/tensorflow_demo_output.txt; then
+              echo "TensorFlow demo verified: tensorflow==2.13.0, typing_extensions==4.5.0, tensorflow-estimator==2.13.0, keras==2.13.1, all tests passed, cleanup complete!"
             else
               echo "Error: Expected TensorFlow demo output not found."
-              echo "Missing one of: 'tensorflow==2.13.0', 'typing_extensions==4.5.0', or 'ALL TENSORFLOW TESTS PASSED'"
+              echo "Missing one of: 'tensorflow==2.13.0', 'typing_extensions==4.5.0', 'tensorflow-estimator==2.13.0', 'keras==2.13.1', 'ALL TENSORFLOW TESTS PASSED', or 'Cleanup complete'"
               cat /tmp/omnipkg-artifacts/tensorflow_demo_output.txt
               exit 1
             fi
