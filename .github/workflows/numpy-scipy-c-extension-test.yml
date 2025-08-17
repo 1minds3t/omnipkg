@@ -84,13 +84,6 @@ jobs:
               sys.exit(1)
           EOF
 
-      - name: Debug Environment
-        run: |
-          echo "--- Debugging Environment ---"
-          python --version
-          pip show omnipkg redis numpy scipy
-          redis-cli -h localhost -p 6379 ping
-
       - name: Run the Demo - NumPy + SciPy Stress Test
         id: run_demo
         run: |
