@@ -359,3 +359,24 @@ This project thrives on community collaboration. Contributions, bug reports, and
                 ||----w |
                 ||     ||
 ```
+
+## 🥊 omnipkg vs pip Battle Statistics
+
+> **Live comparison testing conflicting package installations every hour**
+
+| Package Manager | Wins | Losses | Win Rate | Last Updated |
+|-----------------|------|--------|----------|--------------|
+| **omnipkg** 🚀  | 1    | 0      | 100%       | 2025-08-17 20:02:18 UTC |
+| **pip** 💥      | 0    | 1      | 0%       | 2025-08-17 20:02:18 UTC |
+
+### 📊 Recent Test Results
+<!-- BATTLE_RESULTS_START -->
+| Date | omnipkg Result | pip Result |
+|------|----------------|-------------|
+| 2025-08-17 20:02:18 UTC | omnipkg: PASS | pip: FAIL |
+<!-- BATTLE_RESULTS_END -->
+
+**Test Scenario:** Installing `uv==0.7.12` and `uv==0.7.14` (conflicting versions)
+- ✅ **PASS** = Successfully maintains both versions simultaneously  
+- ❌ **FAIL** = Cannot install both versions or overwrites one with the other
+
