@@ -90,7 +90,7 @@ jobs:
           echo "--- Running Omnipkg Demo for NumPy + SciPy (C Extension Nuclear Testing) ---"
           mkdir -p /tmp/omnipkg-artifacts
           
-          timeout 900 bash -c 'echo "2" | omnipkg demo 2>&1 | tee /tmp/omnipkg-artifacts/numpy_scipy_demo_output.txt'
+          timeout 900 bash -c 'echo "3" | omnipkg demo 2>&1 | tee /tmp/omnipkg-artifacts/numpy_scipy_demo_output.txt'
           DEMO_EXIT_CODE=$?
           
           echo "## NumPy + SciPy Demo Output" >> $GITHUB_STEP_SUMMARY
