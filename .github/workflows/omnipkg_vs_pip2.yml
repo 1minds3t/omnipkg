@@ -192,14 +192,19 @@ jobs:
           """
           
           try:
-              readme_content = README_FILE.read_text()
+              readme_content = README_FILE.read_text() if README_FILE.exists() else "# omnipkg\n\n"
               start_marker, end_marker = "<!-- BATTLE_STATS_START -->", "<!-- BATTLE_STATS_END -->"
+              
               if start_marker in readme_content and end_marker in readme_content:
+                  # Update existing section
                   before, after = readme_content.split(start_marker)[0], readme_content.split(end_marker)[1]
                   README_FILE.write_text(before + start_marker + "\n" + battle_stats_section_content + "\n" + end_marker + after)
                   print("✅ README.md updated")
               else:
-                  print("❌ Error: Battle stats markers not found in README.md. Add <!-- BATTLE_STATS_START --> and <!-- BATTLE_STATS_END -->")
+                  # Add markers and content to end of file
+                  updated_content = readme_content.rstrip() + "\n\n" + start_marker + "\n" + battle_stats_section_content + "\n" + end_marker + "\n"
+                  README_FILE.write_text(updated_content)
+                  print("✅ README.md updated (markers added automatically)")
           except Exception as e:
               print(f"Error updating README: {e}")
 
