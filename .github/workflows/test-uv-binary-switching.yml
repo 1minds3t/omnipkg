@@ -1,5 +1,5 @@
 - name: ⚙️ Configure omnipkg for non-interactive use
-        run: |
+  run: |
           python - << 'EOF'
           import sys
           import site
