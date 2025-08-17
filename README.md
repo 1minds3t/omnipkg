@@ -308,7 +308,7 @@ Dive deeper into `omnipkg`'s capabilities:
 
 `omnipkg` uses a dual-license model designed for maximum adoption and sustainable growth:
 
-- **AGPLv3**: For open-source and academic use ([View License](https://www.gnu.org/licenses/agpl-3.0))
+- **AGPLv3**: For open-source and academic use ([View License](https://github.com/1minds3t/omnipkg/blob/main/LICENSE))
 - **Commercial License**: For proprietary systems and enterprise deployment
 
 Commercial inquiries: [omnipkg@proton.me](mailto:omnipkg@proton.me)
