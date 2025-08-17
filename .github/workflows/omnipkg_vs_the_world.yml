@@ -260,11 +260,15 @@ jobs:
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "omnipkg Battle Bot"
+          
+          # Pull latest changes first, before staging anything
+          git pull --rebase origin main || true
+          
+          # Now stage and commit our changes
           git add README.md
           if git diff --staged --quiet; then
             echo "No changes to commit"
           else
-            git pull --rebase origin main || true
             git commit -m "🥊 Battle update: omnipkg vs The World results"
             git push
           fi
