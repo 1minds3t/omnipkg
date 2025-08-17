@@ -127,5 +127,3 @@ The `omnipkg demo` command includes tests that show these verifications in actio
 ## Cleanup Necessary?
 
 One of the greatest benefits of `omnipkgLoader` is that **no manual cleanup is necessary after exiting the `with` block**. The environment is automatically restored. You only need to ensure you've installed the necessary package versions as bubbles using `omnipkg install <package_spec>` beforehand.
-
-``````
