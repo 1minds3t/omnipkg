@@ -1,22 +1,37 @@
 # Python bytecode
 *.pyc
+*.pyo
+*.pyd
 __pycache__/
 
 # Distribution & build files
 /build/
 /dist/
+/.eggs/
+/*.egg-info
 *.egg-info/
-.eggs/
+*.manifest
+*.spec  # PyInstaller
 
 # Virtual environments
 .venv/
 venv/
 env/
+ENV/
+*.envrc
+*.python-version  # pyenv
 
-# IDE files
+# IDE / Editor files
 .vscode/
 .idea/
 *.swp
+*.swo
+*.swn
+*.orig
+
+# Jupyter / Notebooks
+.ipynb_checkpoints
+*.ipynb_convert
 
 # Temporary files & logs
 *.log
@@ -26,7 +41,28 @@ env/
 *.mp4
 *.gif
 *.svg
+*.png
+*.jpg
+*.jpeg
 
-# PyPI and other secrets
-.env
+# Coverage / Testing
+.coverage
+coverage.xml
+htmlcov/
+.tox/
+.nox/
+pytest_cache/
+
+# Profiling
+.prof
+*.lprof
+*.dat
+*.out
+
+# System files
 .DS_Store
+Thumbs.db
+
+# PyPI / Packaging
+.env
+*.pypirc

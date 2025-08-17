@@ -13,11 +13,17 @@ import hashlib
 import importlib.metadata
 import zlib
 import sys
+import concurrent.futures  # Added for threading
+import asyncio  # Added for asyncio
+import aiohttp  # Added for ahttp (async HTTP, if needed for future features)
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Set, Tuple, Optional
 from omnipkg.core import ConfigManager
 from packaging.utils import canonicalize_name
+from tqdm import tqdm
+
+HAS_TQDM = True  # Assuming tqdm is installed
 
 # Configuration and imports
 try:
@@ -33,35 +39,25 @@ def get_python_version():
 def get_site_packages_path():
     """Dynamically find the site-packages path"""
     import site
-    # Get the first user or system site-packages directory
     site_packages_dirs = site.getsitepackages()
     if hasattr(site, 'getusersitepackages'):
         site_packages_dirs.append(site.getusersitepackages())
 
-    # Prefer virtual environment site-packages if available
     if hasattr(sys, 'prefix') and sys.prefix != sys.base_prefix:
-        # We're in a virtual environment
         venv_site_packages = Path(sys.prefix) / "lib" / f"python{get_python_version()}" / "site-packages"
         if venv_site_packages.exists():
             return str(venv_site_packages)
 
-    # Fall back to first available site-packages
     for sp in site_packages_dirs:
         if Path(sp).exists():
             return sp
 
-    # Last resort fallback
     return str(Path(sys.executable).parent.parent / "lib" / f"python{get_python_version()}" / "site-packages")
 
 def get_bin_paths():
     """Get binary paths to index"""
-    paths = []
+    paths = [str(Path(sys.executable).parent)]
 
-    # Add current Python's bin directory
-    python_bin_dir = str(Path(sys.executable).parent)
-    paths.append(python_bin_dir)
-
-    # Add virtual environment bin if available
     if hasattr(sys, 'prefix') and sys.prefix != sys.base_prefix:
         venv_bin = str(Path(sys.prefix) / 'bin')
         if venv_bin not in paths and Path(venv_bin).exists():
@@ -69,7 +65,6 @@ def get_bin_paths():
 
     return paths
 
-# Load configuration using ConfigManager
 config_manager = ConfigManager()
 config = config_manager.config
 
@@ -78,8 +73,8 @@ class omnipkgMetadataGatherer:
         self.redis_client = None
         self.force_refresh = force_refresh
         self.security_report = {}
-        config_manager = ConfigManager()
-        self.config = config_manager.config # This creates the attribute that was missing
+        self.config = config_manager.config
+        self.package_path_registry = {}  # Added for file path registry
         if self.force_refresh:
             print("🟢 --force flag detected. Caching will be ignored.")
         if not HAS_TQDM:
@@ -106,13 +101,10 @@ class omnipkgMetadataGatherer:
         isolated_packages_versions = {}
         active_packages = {}
 
-        # 1. Discover packages from the main site-packages (active environment)
         try:
             for dist in importlib.metadata.distributions():
-                # --- FIX: Check for a valid name before processing ---
                 package_name_from_meta = dist.metadata.get("Name")
                 if not package_name_from_meta:
-                    # Silently skip corrupted packages without a name
                     continue
 
                 pkg_name = canonicalize_name(package_name_from_meta)
@@ -123,7 +115,6 @@ class omnipkgMetadataGatherer:
         except Exception as e:
             print(f"⚠️ Error discovering packages from importlib.metadata: {e}")
 
-        # 2. Scan .dist-info/egg-info directly in main site-packages as a fallback
         site_packages = Path(self.config["site_packages_path"])
         if site_packages.is_dir():
             for item in site_packages.iterdir():
@@ -133,7 +124,6 @@ class omnipkgMetadataGatherer:
                     if pkg_name not in packages:
                         pass
 
-        # 3. Discover packages from the .omnipkg_versions isolation area
         multiversion_base_path = Path(self.config["multiversion_base"])
         if multiversion_base_path.is_dir():
             for isolated_pkg_dir in multiversion_base_path.iterdir():
@@ -142,7 +132,6 @@ class omnipkgMetadataGatherer:
                         try:
                             from importlib.metadata import PathDistribution
                             dist = PathDistribution(dist_info)
-                            # --- FIX: Check for a valid name before processing ---
                             package_name_from_meta = dist.metadata.get("Name")
                             if not package_name_from_meta:
                                 continue
@@ -152,6 +141,8 @@ class omnipkgMetadataGatherer:
                             if pkg_name not in isolated_packages_versions:
                                 isolated_packages_versions[pkg_name] = set()
                             isolated_packages_versions[pkg_name].add(pkg_version)
+                            # Register bubble path
+                            self._register_bubble_path(pkg_name, pkg_version, isolated_pkg_dir)
                         except Exception:
                             continue
 
@@ -176,8 +167,14 @@ class omnipkgMetadataGatherer:
         print(f"🔍 Discovered {len(all_unique_package_versions)} unique packages with {len(result_list)} total versions.")
         return sorted(result_list, key=lambda x: x[0])
 
+    def _register_bubble_path(self, pkg_name: str, version: str, bubble_path: Path):
+        """Register bubble paths in Redis for dedup across bubbles and main env."""
+        redis_key = f"{self.config['redis_key_prefix']}bubble:{pkg_name}:{version}:path"
+        self.redis_client.set(redis_key, str(bubble_path))
+        self.package_path_registry[pkg_name] = self.package_path_registry.get(pkg_name, {})
+        self.package_path_registry[pkg_name][version] = str(bubble_path)
+
     def _store_active_versions(self, active_packages: Dict[str, str]):
-        """Store the active versions in Redis to fix the active version detection issue"""
         if not self.redis_client:
             return
 
@@ -208,10 +205,10 @@ class omnipkgMetadataGatherer:
         active_packages = {}
         try:
             for dist in importlib.metadata.distributions():
-                # --- FIX: Check for a valid name before processing ---
                 package_name_from_meta = dist.metadata.get("Name")
                 if not package_name_from_meta:
-                    continue # Skip this corrupted package
+                    continue
+
                 active_packages[canonicalize_name(package_name_from_meta)] = dist.metadata['Version']
         except Exception as e:
             print(f"⚠️ Error preparing packages for security scan: {e}")
@@ -219,108 +216,100 @@ class omnipkgMetadataGatherer:
         self._run_bulk_security_check(active_packages)
         print(f"✅ Bulk security scan complete. Found {len(self.security_report)} potential issues.")
 
-        package_iterator = tqdm(packages_to_process, desc="Processing packages", unit="pkg") if HAS_TQDM else packages_to_process
-        processed_count = 0
-
-        for package_name, version_str in package_iterator:
-            if HAS_TQDM:
-                package_iterator.set_postfix_str(f"Current: {package_name} v{version_str}", refresh=True)
-            try:
-                version_key = f"{self.config['redis_key_prefix']}{package_name}:{version_str}"
-                previous_data = self.redis_client.hgetall(version_key)
-
-                metadata = self._build_comprehensive_metadata(package_name, previous_data, version_str)
-
-                current_checksum = self._generate_checksum(metadata)
-                if not self.force_refresh and previous_data and previous_data.get('checksum') == current_checksum:
-                    continue
-
-                metadata['checksum'] = current_checksum
-                self._store_in_redis(package_name, version_str, metadata)
-                processed_count += 1
-
-            except Exception as e:
-                if HAS_TQDM:
-                    package_iterator.write(f"    ❌ ERROR processing {package_name} v{version_str}: {e}")
+        # Use threading for concurrent processing to speed up
+        with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
+            futures = [executor.submit(self._process_package, package_name, version_str) for package_name, version_str in packages_to_process]
+            processed_count = 0
+            for future in tqdm(concurrent.futures.as_completed(futures), total=len(futures), desc="Processing packages"):
+                if future.result():
+                    processed_count += 1
 
         print(f"\n🎉 Metadata building complete! Updated {processed_count} package(s).")
     
-    # ... (the rest of the file remains unchanged) ...
-    def _build_comprehensive_metadata(self, package_name: str, previous_data: Dict, specific_version: str) -> Dict:
-            metadata = {
-                'name': package_name,
-                'Version': specific_version,
-                'last_indexed': datetime.now().isoformat()
-            }
-            
-            # --- LOGIC FIX START ---
-            # Initialize package_files EARLIER to ensure it always exists.
-            package_files = {'binaries': []}
-            found_specific_version_dist = False
-            
-            version_path = Path(self.config["multiversion_base"]) / f"{package_name}-{specific_version}"
-            
-            # Determine the search path: either the bubble or the main site-packages
-            search_path = version_path if version_path.is_dir() else Path(self.config["site_packages_path"])
-            
-            # Use a helper to robustly find the distribution and its files
-            dist = self._find_distribution_at_path(package_name, specific_version, search_path)
-
-            if dist:
-                found_specific_version_dist = True
-                for k, v in dist.metadata.items():
-                    metadata[k] = v
-                metadata['dependencies'] = [str(req) for req in dist.requires] if dist.requires else []
-                
-                # Populate package_files now that we have a valid 'dist' object
-                if dist.files:
-                    package_files['binaries'] = [
-                        str(search_path / file_path)
-                        for file_path in dist.files
-                        if "bin/" in str(file_path) and (search_path / file_path).exists()
-                    ]
-
-            if not found_specific_version_dist:
-                # Fallback if we couldn't find a dist-info (less reliable)
-                metadata.update(self._enrich_from_site_packages(package_name, specific_version))
-
-            # --- LOGIC FIX END ---
-
-            # Now, the rest of the function can safely use 'package_files'
-            if self.force_refresh or 'help_text' not in previous_data:
-                if package_files.get('binaries'):
-                    metadata.update(self._get_help_output(package_files['binaries'][0]))
-                else:
-                    metadata['help_text'] = "No executable binary found."
-            else:
-                metadata['help_text'] = previous_data.get('help_text', "No help text available.")
-
-            metadata['cli_analysis'] = self._analyze_cli(metadata.get('help_text', ''))
-            metadata['security'] = self._get_security_info(package_name)
-            
-            # For health checks, we still check against the main installed environment
-            # as it's the only one we can reliably execute code in.
-            health_check_dist = self._get_distribution(package_name)
-            health_check_files = self._find_package_files(health_check_dist, package_name)
-            metadata['health'] = self._perform_health_checks(package_name, health_check_files)
-
-            return metadata
-    
-    def _find_distribution_at_path(self, package_name: str, version: str, search_path: Path) -> Optional[importlib.metadata.Distribution]:
-        """Helper to find a specific package version's distribution in a given path."""
+    def _process_package(self, package_name: str, version_str: str) -> bool:
         try:
-            # importlib.metadata.distributions() can be slow, so we glob first
-            # We need to handle variations in naming, e.g., "Flask_Login" vs "flask-login"
-            normalized_name = package_name.replace("-", "_")
-            for dist_info in search_path.glob(f"{normalized_name}-{version}*.dist-info"):
-                if dist_info.is_dir():
-                    from importlib.metadata import PathDistribution
-                    dist = PathDistribution(dist_info)
-                    # Verify the name and version from the metadata itself
-                    if dist.metadata["Name"].lower() == package_name.lower() and dist.metadata["Version"] == version:
-                        return dist
-        except Exception:
-            return None
+            version_key = f"{self.config['redis_key_prefix']}{package_name.lower()}:{version_str}"
+            previous_data = self.redis_client.hgetall(version_key)
+
+            metadata = self._build_comprehensive_metadata(package_name, previous_data, version_str)
+
+            current_checksum = self._generate_checksum(metadata)
+            if not self.force_refresh and previous_data and previous_data.get('checksum') == current_checksum:
+                return False
+
+            metadata['checksum'] = current_checksum
+            self._store_in_redis(package_name, version_str, metadata)
+            return True
+        except Exception as e:
+            print(f"    ❌ ERROR processing {package_name} v{version_str}: {e}")
+            return False
+
+    def _build_comprehensive_metadata(self, package_name: str, previous_data: Dict, specific_version: str) -> Dict:
+        metadata = {
+            'name': package_name,
+            'Version': specific_version,
+            'last_indexed': datetime.now().isoformat()
+        }
+            
+        package_files = {'binaries': []}
+        found_specific_version_dist = False
+        
+        version_path = Path(self.config["multiversion_base"]) / f"{package_name}-{specific_version}"
+        
+        # Determine the search path: either the bubble or the main site-packages
+        search_path = version_path if version_path.is_dir() else Path(self.config["site_packages_path"])
+        
+        # Use a helper to robustly find the distribution and its files
+        dist = self._find_distribution_at_path(package_name, specific_version, search_path)
+
+        if dist:
+            found_specific_version_dist = True
+            for k, v in dist.metadata.items():
+                metadata[k] = v
+            metadata['dependencies'] = [str(req) for req in dist.requires] if dist.requires else []
+            
+            # Populate package_files now that we have a valid 'dist' object
+            if dist.files:
+                package_files['binaries'] = [
+                    str(search_path / file_path)
+                    for file_path in dist.files
+                    if "bin/" in str(file_path) and (search_path / file_path).exists()
+                ]
+
+        if not found_specific_version_dist:
+            # Fallback if we couldn't find a dist-info (less reliable)
+            metadata.update(self._enrich_from_site_packages(package_name, specific_version))
+
+        # --- LOGIC FIX END ---
+
+        # Now, the rest of the function can safely use 'package_files'
+        if self.force_refresh or 'help_text' not in previous_data:
+            if package_files.get('binaries'):
+                metadata.update(self._get_help_output(package_files['binaries'][0]))
+            else:
+                metadata['help_text'] = "No executable binary found."
+        else:
+            metadata['help_text'] = previous_data.get('help_text', "No help text available.")
+
+        metadata['cli_analysis'] = self._analyze_cli(metadata.get('help_text', ''))
+        metadata['security'] = self._get_security_info(package_name)
+        
+        # For health checks, we still check against the main installed environment
+        # as it's the only one we can reliably execute code in.
+        health_check_dist = self._get_distribution(package_name)
+        health_check_files = self._find_package_files(health_check_dist, package_name)
+        metadata['health'] = self._perform_health_checks(package_name, health_check_files)
+
+        return metadata
+
+    def _find_distribution_at_path(self, package_name: str, version: str, search_path: Path) -> Optional[importlib.metadata.Distribution]:
+        normalized_name = package_name.replace("-", "_")
+        for dist_info in search_path.glob(f"{normalized_name}-{version}*.dist-info"):
+            if dist_info.is_dir():
+                from importlib.metadata import PathDistribution
+                dist = PathDistribution(dist_info)
+                if dist.metadata["Name"].lower() == package_name.lower() and dist.metadata["Version"] == version:
+                    return dist
         return None
 
     def _parse_metadata_file(self, metadata_content: str) -> Dict:

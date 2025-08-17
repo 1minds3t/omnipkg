@@ -1,3 +1,7 @@
+# requirements.txt
 redis
 packaging
 requests
+python-magic
+aiohttp
+tqdm

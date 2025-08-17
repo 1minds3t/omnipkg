@@ -1,0 +1,25 @@
+omnipkg includes the following third-party software:
+
+redis (v6.4.0)
+License: MIT
+See licenses/redis.txt for full license text
+
+packaging (v25.0)
+License: Apache-2.0 or BSD-2-Clause
+See licenses/packaging.txt for full license text
+
+requests (v2.32.4)
+License: Apache-2.0
+See licenses/requests.txt for full license text
+
+python-magic (v0.4.27)
+License: MIT
+See licenses/python-magic.txt for full license text
+
+aiohttp (v3.12.15)
+License: Apache-2.0
+See licenses/aiohttp.txt for full license text
+
+tqdm (v4.67.1)
+License: MIT and MPL-2.0
+See licenses/tqdm.txt for full license text

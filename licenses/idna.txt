@@ -1,0 +1,4 @@
+BSD 3-Clause License
+
+Copyright (c) 2013-2023, Kim Davies and contributors...
+[Full BSD-3-Clause text from licenses/idna.txt]
