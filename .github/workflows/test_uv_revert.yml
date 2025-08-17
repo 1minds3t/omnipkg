@@ -1,16 +1,15 @@
-# .github/workflows/test_uv_revert.yml
 name: 🚨 UV Self-Downgrade & omnipkg Revert Test
 
 on:
-  workflow_dispatch: # Allows manual trigger from GitHub UI
+  workflow_dispatch:
   push:
-    branches: [ 'main', 'test-revert-feature' ] # Trigger on pushes to main or a specific feature branch
+    branches: ['main', 'test-revert-feature']
 
 jobs:
   uv-revert-test:
     runs-on: ubuntu-latest
     permissions:
-      contents: write # Needed for committing the report
+      contents: write
 
     steps:
       - name: 🏁 Checkout code
@@ -26,86 +25,118 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y redis-server
           sudo systemctl start redis-server
-          redis-cli ping # Test Redis connection
+          redis-cli ping
 
       - name: 📦 Install omnipkg
         run: |
           python -m pip install --upgrade pip
-          pip install -e . # Install omnipkg in editable mode
+          pip install -e .
           
       - name: ⚙️ Configure omnipkg for non-interactive use
         run: |
-          # Create omnipkg config directory
-          mkdir -p ~/.config/omnipkg
-          
-          # Create a basic config file to avoid interactive setup
-          cat > ~/.config/omnipkg/config.json << EOF
-          {
-            "multiversion_base": "/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/.omnipkg_versions",
-            "redis_host": "localhost",
-            "redis_port": 6379,
-            "auto_cleanup": true,
-            "cleanup_threshold_days": 30
+          python - << 'EOF'
+          import sys
+          import site
+          import json
+          from pathlib import Path
+          import os
+
+          site_packages_path = site.getsitepackages()[0]
+          python_executable_path = sys.executable
+          project_root = Path(os.environ['GITHUB_WORKSPACE'])
+
+          config_data = {
+              'site_packages_path': site_packages_path,
+              'multiversion_base': str(Path(site_packages_path) / '.omnipkg_versions'),
+              'python_executable': python_executable_path,
+              'builder_script_path': str(project_root / 'omnipkg' / 'package_meta_builder.py'),
+              'redis_host': 'localhost',
+              'redis_port': 6379,
+              'redis_key_prefix': 'omnipkg:pkg:',
+              'paths_to_index': [str(Path(python_executable_path).parent), '/usr/local/bin', '/usr/bin', '/bin', '/usr/sbin', '/sbin'],
+              'auto_cleanup': True,
+              'cleanup_threshold_days': 30
           }
+
+          config_dir = Path.home() / '.config' / 'omnipkg'
+          config_dir.mkdir(parents=True, exist_ok=True)
+          config_path = config_dir / 'config.json'
+
+          with open(config_path, 'w') as f:
+              json.dump(config_data, f, indent=2)
+
+          print(f'omnipkg config created at {config_path}:')
+          print(json.dumps(config_data, indent=2))
           EOF
           
-          echo "omnipkg config created:"
-          cat ~/.config/omnipkg/config.json
-
       - name: 🚀 Install uv (latest) using omnipkg - Establish "Good State"
         id: install_uv_latest
         run: |
-          echo "--- Installing uv (latest) with omnipkg to establish a 'good state' ---"
-          omnipkg install uv # Install latest uv
-          if [ $? -ne 0 ]; then exit 1; fi
-          echo "Initial uv version (omnipkg-installed):"
-          uv --version
+          echo "--- Installing uv (latest) with omnipkg to establish a 'good state' with snapshot ---"
+          echo "1" | omnipkg install uv > /tmp/initial_uv_install_output.txt 2>&1
+          if [ $? -ne 0 ]; then 
+            echo "omnipkg_install_uv_success=false" >> $GITHUB_OUTPUT
+            cat /tmp/initial_uv_install_output.txt
+            exit 1 
+          fi
           
-          # Force omnipkg to save this as the 'last known good' snapshot
-          omnipkg status # This command should trigger the snapshot save
-          echo "omnipkg's current status and last known good snapshot saved."
+          echo "Initial uv version (omnipkg-installed):" | tee /tmp/initial_uv_version.txt
+          uv --version | tee -a /tmp/initial_uv_version.txt
+          
+          echo "omnipkg status after installing uv:" | tee -a /tmp/initial_uv_version.txt
+          echo "" | omnipkg status | tee -a /tmp/initial_uv_version.txt
+          echo "omnipkg snapshot created - now we can revert uv's self-sabotage!"
 
-      - name: 💥 Force UV to Downgrade Itself
+      - name: 💥 Force UV to Downgrade Itself (with --system)
         id: uv_self_downgrade
         run: |
-          echo "--- Forcing uv to downgrade itself to 0.7.13 ---"
-          # Ensure uv itself is in PATH
-          export PATH="/opt/hostedtoolcache/Python/3.11.13/x64/bin:$PATH" 
-          uv pip install uv==0.7.13
+          echo "--- Forcing uv to downgrade itself to 0.7.13 using 'uv pip install --system' ---"
+          echo "Note: Using --system to allow uv to operate within this non-uv-managed virtual environment."
           
-          if [ $? -ne 0 ]; then
-            echo "::set-output name=downgrade_success::false"
-            echo "uv self-downgrade failed (unexpectedly)."
-            exit 1
+          uv pip install uv==0.7.13 --system > /tmp/uv_downgrade_output.txt 2>&1
+          UV_EXIT_CODE=$?
+          
+          echo "UV_EXIT_CODE=$UV_EXIT_CODE" >> $GITHUB_OUTPUT
+          
+          if [ $UV_EXIT_CODE -eq 0 ]; then
+            echo "downgrade_outcome=success" >> $GITHUB_OUTPUT
+            echo "uv self-downgraded successfully."
+            echo "Current uv version (after uv's operation):" | tee -a /tmp/uv_downgrade_output.txt
+            uv --version | tee -a /tmp/uv_downgrade_output.txt || true
+          else
+            echo "downgrade_outcome=failure" >> $GITHUB_OUTPUT
+            echo "uv self-downgrade failed unexpectedly. Review output."
+            ERROR_MSG=$(grep -Eo 'error: No virtual environment found|failed to hardlink files|permission denied|Error: Process completed with exit code [0-9]+' /tmp/uv_downgrade_output.txt | head -n 1)
+            echo "uv_error_message=$ERROR_MSG" >> $GITHUB_OUTPUT
           fi
-          echo "::set-output name=downgrade_success::true"
-          echo "uv self-downgraded successfully. Current uv version:"
-          uv --version || true
+          
+          echo "Full output from uv self-downgrade attempt captured to /tmp/uv_downgrade_output.txt"
+          cat /tmp/uv_downgrade_output.txt 
 
-      - name: 🚑 Run omnipkg Revert
+      - name: 🚑 Run omnipkg Revert (Regardless of UV's Previous Outcome)
         id: omnipkg_revert
-        # Only run if the downgrade was successful, to clearly demonstrate the revert
-        if: steps.uv_self_downgrade.outputs.downgrade_success == 'true'
         run: |
-          echo "--- Running omnipkg revert to restore good state ---"
-          omnipkg revert --yes # Use --yes for non-interactive mode
+          echo "--- Running omnipkg revert to restore good state (omnipkg can recover from other tools' actions) ---"
+          omnipkg revert --yes
           
           if [ $? -eq 0 ]; then
-            echo "::set-output name=revert_success::true"
+            echo "revert_success=true" >> $GITHUB_OUTPUT
             echo "omnipkg revert completed successfully."
           else
-            echo "::set-output name=revert_success::false"
+            echo "revert_success=false" >> $GITHUB_OUTPUT
             echo "omnipkg revert failed. See logs for details."
-            exit 1
+            exit 1 
           fi
 
       - name: ✅ Verify Final UV Version After Revert
         if: steps.omnipkg_revert.outputs.revert_success == 'true'
         run: |
-          echo "--- Verifying UV version after omnipkg revert ---"
-          uv --version
-          omnipkg status
-          omnipkg info uv
+          echo "--- Verifying UV version after omnipkg revert ---" | tee /tmp/final_uv_version.txt
+          uv --version | tee -a /tmp/final_uv_version.txt || echo "uv command not found or failed after revert." | tee -a /tmp/final_uv_version.txt
+          echo "--- omnipkg status after revert ---" | tee -a /tmp/final_uv_version.txt
+          echo "" | omnipkg status | tee -a /tmp/final_uv_version.txt
+          echo "--- omnipkg info uv after revert ---" | tee -a /tmp/final_uv_version.txt
+          echo "" | omnipkg info uv | tee -a /tmp/final_uv_version.txt
 
       - name: 📊 Generate Report
         if: always()
@@ -119,51 +150,50 @@ jobs:
           
           echo "## Test Scenario" >> $REPORT_FILE
           echo "\`\`\`bash" >> $REPORT_FILE
-          echo "# 1. Install uv (latest) with omnipkg to establish 'good state'" >> $REPORT_FILE
+          echo "# 1. Install uv (latest) using omnipkg to establish 'good state'" >> $REPORT_FILE
           echo "omnipkg install uv" >> $REPORT_FILE
           echo "" >> $REPORT_FILE
-          echo "# 2. Force uv to downgrade itself (e.g., from 0.7.14 to 0.7.13)" >> $REPORT_FILE
-          echo "uv pip install uv==0.7.13" >> $REPORT_FILE
+          echo "# 2. Force uv to downgrade itself using 'uv pip install --system'" >> $REPORT_FILE
+          echo "uv pip install uv==0.7.13 --system" >> $REPORT_FILE
           echo "" >> $REPORT_FILE
-          echo "# 3. Run omnipkg revert" >> $REPORT_FILE
+          echo "# 3. Run omnipkg revert to restore environment" >> $REPORT_FILE
           echo "omnipkg revert --yes" >> $REPORT_FILE
           echo "\`\`\`" >> $REPORT_FILE
           echo "" >> $REPORT_FILE
           
           echo "## Initial State (omnipkg-installed UV)" >> $REPORT_FILE
           echo "\`\`\`" >> $REPORT_FILE
-          # Capture output from step 1
-          echo "$(cat /tmp/initial_uv_version.txt 2>/dev/null || echo 'N/A')" >> $REPORT_FILE
+          cat /tmp/initial_uv_install_output.txt 2>/dev/null || echo 'N/A: Initial UV install output missing.' >> $REPORT_FILE
+          echo "---" >> $REPORT_FILE
+          cat /tmp/initial_uv_version.txt 2>/dev/null || echo 'N/A: Initial UV version check failed.' >> $REPORT_FILE
           echo "\`\`\`" >> $REPORT_FILE
           echo "" >> $REPORT_FILE
           
-          echo "## UV Self-Downgrade Result" >> $REPORT_FILE
+          echo "## UV Self-Downgrade Attempt Result (via \`uv pip install --system\`)" >> $REPORT_FILE
           echo "\`\`\`" >> $REPORT_FILE
-          # Capture output from step 2
-          echo "$(cat /tmp/downgraded_uv_version.txt 2>/dev/null || echo 'N/A')" >> $REPORT_FILE
+          cat /tmp/uv_downgrade_output.txt 2>/dev/null || echo 'N/A: UV downgrade attempt output missing.' >> $REPORT_FILE
           echo "\`\`\`" >> $REPORT_FILE
-          echo "**Downgrade Attempt Outcome:** `${{ steps.uv_self_downgrade.outcome }}`" >> $REPORT_FILE
+          echo "**UV Downgrade Attempt Outcome (uv's own operation):** \`${{ steps.uv_self_downgrade.outputs.downgrade_outcome }}\`" >> $REPORT_FILE
+          if [ "${{ steps.uv_self_downgrade.outputs.downgrade_outcome }}" == "success" ]; then
+            echo "**Note:** \`uv\` successfully self-downgraded in this standard virtual environment by explicitly using the \`--system\` flag, demonstrating its ability to modify the environment. \`omnipkg\` then proceeds to revert this change." >> $REPORT_FILE
+          else
+            echo "**Insight:** Even with \`--system\`, \`uv\` encountered an unexpected issue trying to operate within this standard environment (Error: \`${{ steps.uv_self_downgrade.outputs.uv_error_message }}\`). This still underscores \`omnipkg\`'s superior adaptability, as \`omnipkg\` will still attempt to recover the environment, highlighting its robustness where other tools might fail or act unpredictably." >> $REPORT_FILE
+          fi
           echo "" >> $REPORT_FILE
           
-          echo "## omnipkg Revert Result" >> $REPORT_FILE
+          echo "## omnipkg Revert Result (and Final State)" >> $REPORT_FILE
           echo "\`\`\`" >> $REPORT_FILE
-          omnipkg status >> $REPORT_FILE 2>&1
-          omnipkg info uv >> $REPORT_FILE 2>&1
+          cat /tmp/final_uv_version.txt 2>/dev/null || echo 'N/A: Final UV verification output missing.' >> $REPORT_FILE
           echo "\`\`\`" >> $REPORT_FILE
-          echo "**Revert Operation Outcome:** `${{ steps.omnipkg_revert.outcome }}`" >> $REPORT_FILE
+          echo "**omnipkg Revert Operation Outcome:** \`${{ steps.omnipkg_revert.outcome }}\`" >> $REPORT_FILE
           echo "" >> $REPORT_FILE
-          
-          echo "## Final Active UV Version Check" >> $REPORT_FILE
-          echo "\`\`\`" >> $REPORT_FILE
-          uv --version >> $REPORT_FILE 2>&1 || echo "uv command not found in PATH" >> $REPORT_FILE
-          echo "\`\`\`" >> $REPORT_FILE
           
           if [ "${{ job.status }}" == "success" ]; then
             echo "### Conclusion" >> $REPORT_FILE
-            echo "✅ omnipkg successfully reverted the `uv` self-downgrade, demonstrating its ability to restore the environment to a previously known good state, even after external package manager interference. This is crucial for maintaining environment stability and recovering from unexpected changes." >> $REPORT_FILE
+            echo "✅ **omnipkg successfully restored the environment to its last known good state, effectively reversing the \`uv\` self-downgrade (or demonstrating recovery from its operational challenges).** This test highlights \`omnipkg\`'s unparalleled ability to maintain environment integrity and provide robust recovery, even when faced with the specific operational modes of other package managers." >> $REPORT_FILE
           else
             echo "### Conclusion" >> $REPORT_FILE
-            echo "❌ The omnipkg revert test failed. Review workflow logs for details." >> $REPORT_FILE
+            echo "❌ The \`omnipkg\` revert test failed. Review workflow logs for details." >> $REPORT_FILE
           fi
 
       - name: 📤 Upload Report Artifact

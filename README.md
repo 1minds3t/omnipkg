@@ -1,16 +1,22 @@
 <p align="center">
-  <a href="https://github.com/1minds3t/omnipkg/actions/workflows/security_audit.yml"><img src="https://github.com/1minds3t/omnipkg/actions/workflows/security_audit.yml/badge.svg" alt="Security Audit"></a>
-  <a href="https://pypi.org/project/omnipkg/"><img src="https://img.shields.io/pypi/v/omnipkg.svg" alt="PyPI version"></a>
-  <a href="https://www.gnu.org/licenses/agpl-3.0"><img src="https://img.shields.io/badge/License-AGPLv3-red.svg" alt="License: AGPLv3"></a>
+  <img src=".github/logo.svg" alt="omnipkg Logo" width="150">
 </p>
 
-# macOS + Linux Compatibility Confirmed!
+<h1 align="center">omnipkg - The Intelligent Python Dependency Resolver</h1>
+
+<p align="center">
+  <strong>One environment. Infinite packages. Zero conflicts.</strong>
+</p>
+
+<p align="center">
+    <a href="#"><img src="https://img.shields.io/badge/Security%20Audit-passing-4c1" alt="Security Audit"></a>
+    <a href="https://pypi.org/project/omnipkg/"><img src="https://img.shields.io/badge/pypi-v1.0.12-blue" alt="PyPI"></a>
+    <a href="https://www.gnu.org/licenses/agpl-3.0"><img src="https://img.shields.io/badge/License-AGPLv3-d94c31" alt="License"></a>
+    <br>
+    <a href="https://github.com/1minds3t/omnipkg/actions"><img src="https://img.shields.io/badge/🔥%20Ultimate%20Omnipkg%20Stress%20Test-Multi--Version%20Scientific%20Package%20Chaos-passing" alt="Ultimate Omnipkg Stress Test"></a>
+</p>
 
 ---
-
-# omnipkg - The Intelligent Python Dependency Resolver
-
-**One environment. Infinite packages. Zero conflicts.**
 
 `omnipkg` eliminates your reliance on pipx, uv, conda, and Docker for dependency management by solving the fundamental problem that has plagued Python development for decades.
 

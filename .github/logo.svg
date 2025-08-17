@@ -1,0 +1,23 @@
+<svg width="200" height="200" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+        <linearGradient id="centralGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" style="stop-color:#ff6b6b;" />
+            <stop offset="100%" style="stop-color:#4ecdc4;" />
+        </linearGradient>
+        <linearGradient id="satelliteGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" style="stop-color:#4ecdc4;" />
+            <stop offset="100%" style="stop-color:#45b7d1;" />
+        </linearGradient>
+    </defs>
+    <!-- Connection Lines -->
+    <line x1="100" y1="70" x2="100" y2="85" stroke="rgba(255,255,255,0.3)" stroke-width="2"/>
+    <line x1="130" y1="100" x2="115" y2="100" stroke="rgba(255,255,255,0.3)" stroke-width="2"/>
+    <line x1="100" y1="130" x2="100" y2="115" stroke="rgba(255,255,255,0.3)" stroke-width="2"/>
+    <line x1="70" y1="100" x2="85" y2="100" stroke="rgba(255,255,255,0.3)" stroke-width="2"/>
+    <!-- Bubbles -->
+    <circle cx="100" cy="100" r="30" fill="url(#centralGrad)" />
+    <circle cx="100" cy="50" r="15" fill="url(#satelliteGrad)" stroke="rgba(255,255,255,0.3)" stroke-width="2"/>
+    <circle cx="150" cy="100" r="15" fill="url(#satelliteGrad)" stroke="rgba(255,255,255,0.3)" stroke-width="2"/>
+    <circle cx="100" cy="150" r="15" fill="url(#satelliteGrad)" stroke="rgba(255,255,255,0.3)" stroke-width="2"/>
+    <circle cx="50" cy="100" r="15" fill="url(#satelliteGrad)" stroke="rgba(255,255,255,0.3)" stroke-width="2"/>
+</svg>
