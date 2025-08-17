@@ -1,5 +1,3 @@
-
-```markdown
 # omnipkg Future Roadmap & Advanced Concepts
 
 `omnipkg` is not just a package manager; it's a foundational platform for highly dynamic and intelligent Python environments. Our roadmap focuses on tackling the hardest problems in the Python ecosystem to enable unprecedented levels of flexibility, efficiency, and automation.
