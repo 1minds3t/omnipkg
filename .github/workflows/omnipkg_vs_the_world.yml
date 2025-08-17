@@ -264,6 +264,7 @@ jobs:
           if git diff --staged --quiet; then
             echo "No changes to commit"
           else
+            git pull --rebase origin main || true
             git commit -m "🥊 Battle update: omnipkg vs The World results"
             git push
           fi
