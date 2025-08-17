@@ -94,23 +94,24 @@ jobs:
           DEMO_OUTPUT=$(timeout 300 bash -c 'echo "2" | omnipkg demo 2>&1')
           DEMO_EXIT_CODE=$?
           
+          # Always save and display output for transparency
           echo "$DEMO_OUTPUT" > /tmp/demo_output.txt
+          echo "## UV Demo Output" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          cat /tmp/demo_output.txt >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
           
           if [ $DEMO_EXIT_CODE -eq 0 ]; then
             echo "Demo completed successfully."
             echo "demo_outcome=success" >> $GITHUB_OUTPUT
-            # Verify UV Easter egg in output
-            if grep -q "UV’s speeding through the matrix like a Python outlaw" /tmp/demo_output.txt; then
-              echo "UV Easter egg found in output!"
+            # Verify key UV demo outputs
+            if grep -q "Main environment version: 0.6.13" /tmp/demo_output.txt && \
+               grep -q "ALL UV BINARY TESTS PASSED" /tmp/demo_output.txt; then
+              echo "UV demo verified: Main environment uv==0.6.13 and all tests passed!"
             else
-              echo "Error: UV Easter egg not found in output."
-              exit 1
-            fi
-            # Verify expected UV version
-            if grep -q "Main environment version: 0.6.13" /tmp/demo_output.txt; then
-              echo "Main environment UV version 0.6.13 confirmed!"
-            else
-              echo "Error: Main environment UV version 0.6.13 not found."
+              echo "Error: Expected UV demo output not found."
+              echo "Missing: 'Main environment version: 0.6.13' or 'ALL UV BINARY TESTS PASSED'"
+              cat /tmp/demo_output.txt
               exit 1
             fi
           else
