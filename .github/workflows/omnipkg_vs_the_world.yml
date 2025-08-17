@@ -212,13 +212,15 @@ jobs:
               start, end = "<!-- BATTLE_STATS_START -->", "<!-- BATTLE_STATS_END -->"
               if start in content and end in content:
                   before, after = content.split(start)[0], content.split(end)[1]
-                  README_FILE.write_text(before + start + "\n" + battle_stats + "\n" + end + after, encoding='utf-8')
-                  print("✅ README.md updated")
+                  new_content = before + start + "\n" + battle_stats + "\n" + end + after
               else:
-                  README_FILE.write_text(content.rstrip() + "\n\n" + start + "\n" + battle_stats + "\n" + end, encoding='utf-8')
-                  print("✅ README.md updated (markers added)")
+                  new_content = content.rstrip() + "\n\n" + start + "\n" + battle_stats + "\n" + end
+              with open(README_FILE, 'w', encoding='utf-8') as f:
+                  f.write(new_content)
+              print("✅ README.md written to disk")
           except Exception as e:
-              print(f"Error updating README: {e}")
+              print(f"Error writing README: {e}")
+              exit(1)
           EOF
           python update_battle_report.py
 
@@ -226,9 +228,8 @@ jobs:
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "omnipkg Battle Bot"
-          # Ensure clean working directory before pull
-          git reset --hard HEAD
-          git clean -fd
+          # Only clean generated scripts, preserve README.md
+          git clean -f -X -- extract_stats.py update_battle_report.py
           # Pull latest changes
           git pull --rebase origin main || true
           # Stage and commit changes
