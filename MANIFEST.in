@@ -20,6 +20,6 @@ include licenses/propcache.txt
 include licenses/typing-extensions.txt
 include licenses/urllib3.txt
 include licenses/yarl.txt
+include licenses/*
 exclude examples/*
 exclude scripts/*
-exclude tests/*
