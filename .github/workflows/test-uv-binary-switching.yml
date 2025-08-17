@@ -1,21 +1,69 @@
-- name: ⚙️ Configure omnipkg for non-interactive use
-  run: |
+name: Omnipkg CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      redis:
+        image: redis:7
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install omnipkg redis
+
+      - name: ⚙️ Configure omnipkg for non-interactive use
+        run: |
           python - << 'EOF'
           import sys
           import site
           import json
           from pathlib import Path
           import os
-          site_packages_path = site.getsitepackages()[0]
-          
+          import sysconfig
+
+          # Get site-packages path safely
+          try:
+              site_packages_path = site.getsitepackages()[0]
+          except (IndexError, AttributeError):
+              site_packages_path = sysconfig.get_paths()['purelib']
+
           # Determine project root (where pyproject.toml is)
-          project_root = Path(os.environ['GITHUB_WORKSPACE']) # GITHUB_WORKSPACE is the repo root
+          project_root = Path(os.environ['GITHUB_WORKSPACE'])
+          
+          # Verify builder script exists
+          builder_script = project_root / 'omnipkg' / 'package_meta_builder.py'
+          if not builder_script.exists():
+              print(f"Error: {builder_script} does not exist")
+              sys.exit(1)
+
           config_data = {
               'site_packages_path': site_packages_path,
               'multiversion_base': str(Path(site_packages_path) / '.omnipkg_versions'),
               'python_executable': sys.executable,
-              # Adjust builder_script_path to be relative from project root to omnipkg/package_meta_builder.py
-              'builder_script_path': str(project_root / 'omnipkg' / 'package_meta_builder.py'),
+              'builder_script_path': str(builder_script),
               'redis_host': 'localhost',
               'redis_port': 6379,
               'redis_key_prefix': 'omnipkg:pkg:',
@@ -23,30 +71,51 @@
               'auto_cleanup': True,
               'cleanup_threshold_days': 30
           }
+
           config_dir = Path.home() / '.config' / 'omnipkg'
           config_dir.mkdir(parents=True, exist_ok=True)
           config_path = config_dir / 'config.json'
-          with open(config_path, 'w') as f:
-              json.dump(config_data, f, indent=2)
-          print(f'omnipkg config created at {config_path}:')
-          print(json.dumps(config_data, indent=2))
+          
+          try:
+              with open(config_path, 'w') as f:
+                  json.dump(config_data, f, indent=2)
+              print(f'omnipkg config created at {config_path}:')
+              print(json.dumps(config_data, indent=2))
+          except Exception as e:
+              print(f"Error writing config: {e}")
+              sys.exit(1)
           EOF
-      - name: 🧪 Run the Demo: UV Test (Binary Switching)
+
+      - name: 🧪 Run the Demo - UV Test (Binary Switching)
         id: run_demo
         run: |
           echo "--- Running Omnipkg Demo for UV Test (Binary Switching) ---"
-          # Simulate user input '2' for UV test
-          DEMO_OUTPUT=$(echo "2" | omnipkg demo 2>&1)
+          # Simulate user input '2' for UV test with timeout
+          DEMO_OUTPUT=$(timeout 300 bash -c 'echo "2" | omnipkg demo 2>&1')
           DEMO_EXIT_CODE=$?
           
           echo "$DEMO_OUTPUT" > /tmp/demo_output.txt
           
           if [ $DEMO_EXIT_CODE -eq 0 ]; then
-            echo "demo_outcome=success" >> $GITHUB_OUTPUT
             echo "Demo completed successfully."
+            echo "demo_outcome=success" >> $GITHUB_OUTPUT
+            # Verify UV Easter egg in output
+            if grep -q "UV’s speeding through the matrix like a Python outlaw" /tmp/demo_output.txt; then
+              echo "UV Easter egg found in output!"
+            else
+              echo "Error: UV Easter egg not found in output."
+              exit 1
+            fi
+            # Verify expected UV version
+            if grep -q "Main environment version: 0.6.13" /tmp/demo_output.txt; then
+              echo "Main environment UV version 0.6.13 confirmed!"
+            else
+              echo "Error: Main environment UV version 0.6.13 not found."
+              exit 1
+            fi
           else
-            echo "demo_outcome=failure" >> $GITHUB_OUTPUT
             echo "Demo failed with exit code $DEMO_EXIT_CODE."
-            echo "$DEMO_OUTPUT" # Output to job log on failure
-            exit 1 
+            echo "demo_outcome=failure" >> $GITHUB_OUTPUT
+            cat /tmp/demo_output.txt
+            exit 1
           fi
