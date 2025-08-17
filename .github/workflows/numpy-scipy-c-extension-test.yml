@@ -41,14 +41,9 @@ jobs:
             print(f.read())
         "
         
-    - name: Run NumPy + SciPy Demo Test
-      id: numpy_scipy_test
+    - name: Create test runner script
       run: |
-        echo "--- Running Omnipkg Demo for NumPy + SciPy Stress Test (C-Extensions) ---"
-        
-        # Run the demo with input "3" for NumPy + SciPy test
-        # Capture all output to a file for validation
-        python -c "
+        cat > test_numpy_scipy.py << 'EOF'
         import subprocess
         import sys
         
@@ -59,9 +54,9 @@ import omnipkg.demo
 import sys
 # Monkey patch input to automatically select option 3
 original_input = input
-def mock_input(prompt=\"\"):
-    print(prompt + \"3\")  # Print the prompt + our choice
-    return \"3\"
+def mock_input(prompt=""):
+    print(prompt + "3")  # Print the prompt + our choice
+    return "3"
 input = mock_input
 omnipkg.demo.main()
 '''],
@@ -112,7 +107,13 @@ omnipkg.demo.main()
             
         # Exit with the same code as the demo
         sys.exit(process.returncode)
-        " 2>&1
+        EOF
+
+    - name: Run NumPy + SciPy Demo Test
+      id: numpy_scipy_test
+      run: |
+        echo "--- Running Omnipkg Demo for NumPy + SciPy Stress Test (C-Extensions) ---"
+        python test_numpy_scipy.py
     
     - name: Upload test artifacts
       uses: actions/upload-artifact@v4
