@@ -1,5 +1,8 @@
+
 <p align="center">
-  <img src=".github/logo.svg" alt="omnipkg Logo" width="150">
+  <a href="https://github.com/1minds3t/omnipkg">
+    <img src="https://raw.githubusercontent.com/1minds3t/omnipkg/main/.github/logo.svg" alt="omnipkg Logo" width="150">
+  </a>
 </p>
 
 <h1 align="center">omnipkg - The Intelligent Python Dependency Resolver</h1>
@@ -9,9 +12,10 @@
 </p>
 
 <p align="center">
-    <a href="https://github.com/1minds3t/omnipkg/actions?query=workflow%3ASecurity+Audit"><img src="https://img.shields.io/badge/Security%20Audit-passing-4c1" alt="Security Audit"></a>
-    <a href="https://pypi.org/project/omnipkg/"><img src="https://img.shields.io/badge/pypi-v1.0.13-blue" alt="PyPI"></a>
-    <a href="https://www.gnu.org/licenses/agpl-3.0"><img src="https://img.shields.io/badge/License-AGPLv3-d94c31" alt="License"></a>
+    <!-- Main Badges -->
+    <a href="https://github.com/1minds3t/omnipkg/actions?query=workflow%3A%22Security+Audit%22"><img src="https://img.shields.io/badge/Security%20Audit-passing-4c1" alt="Security Audit Status"></a>
+    <a href="https://pypi.org/project/omnipkg/"><img src="https://img.shields.io/pypi/v/omnipkg?color=blue" alt="PyPI Version"></a>
+    <a href="https://github.com/1minds3t/omnipkg/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-AGPLv3-d94c31" alt="License: AGPLv3"></a>
 </p>
 
 ---
