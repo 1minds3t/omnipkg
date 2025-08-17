@@ -1,4 +1,4 @@
-name: Omnipkg CI
+name: UV Binary Switching
 
 on:
   push:
