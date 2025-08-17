@@ -5,3 +5,4 @@ requests
 python-magic
 aiohttp
 tqdm
+tomli
