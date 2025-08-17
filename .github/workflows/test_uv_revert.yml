@@ -1,4 +1,4 @@
-name: 🚨 UV Self-Downgrade & omnipkg Revert Test
+name: "🔄 UV Self-Downgrades → Auto-Revert"
 
 on:
   workflow_dispatch:
