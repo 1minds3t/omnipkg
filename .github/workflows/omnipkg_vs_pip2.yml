@@ -4,6 +4,8 @@ on:
   schedule:
     - cron: '0 * * * *' # Run every hour
   workflow_dispatch:
+  push:
+    branches: [ 'main', 'test-workflows-feature' ]
 
 jobs:
   comparison-test:
@@ -40,7 +42,6 @@ jobs:
 
       - name: ⚙️ Configure omnipkg
         run: |
-          # Your configuration script remains the same
           python - << 'EOF'
           import sys, site, json, os, sysconfig
           from pathlib import Path
@@ -65,60 +66,55 @@ jobs:
               json.dump(config_data, f, indent=2)
           EOF
 
-      # --- CONFLICT INSTALLATION TESTS (Managing the Managers) ---
-
       - name: 🚀 omnipkg | Battle Test (PASS Expected)
         id: omnipkg_conflict_test
         run: |
-          echo "--- Testing omnipkg installing conflicting versions of pip ---"
+          echo "--- Testing omnipkg: pip==24.0, pip==23.2.1 ---"
           if omnipkg install pip==24.0 pip==23.2.1 --yes; then
             echo "OMNIPKG_CONFLICT_RESULT=PASS" >> $GITHUB_ENV
+            echo "✅ omnipkg: Installed multiple pip versions"
           else
             echo "OMNIPKG_CONFLICT_RESULT=FAIL" >> $GITHUB_ENV
+            echo "❌ omnipkg: Failed to install multiple pip versions"
           fi
 
       - name: 💥 pip | Battle Test (FAIL Expected)
         id: pip_conflict_test
         run: |
-          echo "--- Testing pip overwriting itself ---"
-          pip install pip==24.0 > /dev/null 2>&1
-          pip install pip==23.2.1 > /dev/null 2>&1
-          # This is an expected failure where it overwrites, so we report FAIL for the stats
+          echo "--- Testing pip: pip==24.0, pip==23.2.1 ---"
+          pip install pip==24.0 > pip_conflict.log 2>&1
+          pip install pip==23.2.1 >> pip_conflict.log 2>&1
           echo "PIP_CONFLICT_RESULT=FAIL" >> $GITHUB_ENV
+          echo "❌ pip: Overwrote pip version (expected)"
+          cat pip_conflict.log
 
       - name: ⚡️ uv | Battle Test (FAIL Expected)
         id: uv_conflict_test
         run: |
-          echo "--- Testing uv overwriting pip ---"
-          uv pip install pip==24.0 > /dev/null 2>&1
-          uv pip install pip==23.2.1 > /dev/null 2>&1
-          # This is an expected failure where it overwrites, so we report FAIL for the stats
+          echo "--- Testing uv: pip==24.0, pip==23.2.1 ---"
+          uv pip install pip==24.0 > uv_conflict.log 2>&1
+          uv pip install pip==23.2.1 >> uv_conflict.log 2>&1
           echo "UV_CONFLICT_RESULT=FAIL" >> $GITHUB_ENV
-
-      # --- RESILIENCE TEST (Self-Sabotage & Revert) ---
+          echo "❌ uv: Overwrote pip version (expected)"
+          cat uv_conflict.log
 
       - name: 🛡️ omnipkg | Resilience Test (PASS Expected)
         id: omnipkg_revert_test
         run: |
-          echo "--- Testing omnipkg reverting uv's self-sabotage ---"
-          # 1. Establish a known good state with the latest uv
+          echo "--- Testing omnipkg: Revert uv self-sabotage ---"
           omnipkg install uv --yes
-          LATEST_UV_VER=$(uv --version | awk '{print $2}')
-          echo "Established good state with uv version: $LATEST_UV_VER"
-
-          # 2. Let uv damage the environment by downgrading itself
-          uv pip install uv==0.7.1 --system
-          echo "uv version after self-sabotage: $(uv --version | awk '{print $2}')"
-
-          # 3. omni revert! The logs will show the "uv in jail" status.
-          if omnipkg revert --yes; then
+          latest_uv=$(uv --version | awk '{print $2}')
+          echo "Baseline uv: $latest_uv"
+          uv pip install uv==0.7.1 --system > revert.log 2>&1
+          echo "After sabotage: $(uv --version | awk '{print $2}')"
+          if omnipkg revert --yes >> revert.log 2>&1; then
             echo "OMNIPKG_REVERT_RESULT=PASS" >> $GITHUB_ENV
-            echo "Revert successful! Final uv version: $(uv --version | awk '{print $2}')"
+            echo "✅ omnipkg: Reverted to uv $latest_uv"
           else
             echo "OMNIPKG_REVERT_RESULT=FAIL" >> $GITHUB_ENV
+            echo "❌ omnipkg: Revert failed"
           fi
-
-      # --- REPORTING ---
+          cat revert.log
 
       - name: 📥 Download Previous Battle History
         uses: actions/download-artifact@v4
@@ -129,124 +125,98 @@ jobs:
       - name: 📊 Update Battle Report and README
         run: |
           cat > update_battle_report.py << 'EOF'
-          import json
-import os
-from pathlib import Path
-from datetime import datetime
+          import json, os
+          from pathlib import Path
+          from datetime import datetime
 
-RESULTS_FILE = Path("battle_results_history.json")
-README_FILE = Path("README.md")
+          RESULTS_FILE = Path("battle_results_history.json")
+          README_FILE = Path("README.md")
+          
+          history_data = {
+              "omnipkg_conflict": {"wins": 0, "losses": 0},
+              "pip_conflict": {"wins": 0, "losses": 0},
+              "uv_conflict": {"wins": 0, "losses": 0},
+              "omnipkg_revert": {"wins": 0, "losses": 0},
+              "recent_tests": []
+          }
+          
+          if RESULTS_FILE.exists():
+              try:
+                  with open(RESULTS_FILE, 'r') as f:
+                      history_data = json.load(f)
+              except Exception as e:
+                  print(f"Warning: Could not load history: {e}")
 
-# A lean data structure
-default_data = {
-    "omnipkg": {"wins": 0, "losses": 0, "saves": 0},
-    "pip": {"wins": 0, "losses": 0},
-    "uv": {"wins": 0, "losses": 0},
-    "recent_tests": []
-}
+          results = {
+              "omnipkg_conflict": os.environ.get('OMNIPKG_CONFLICT_RESULT', 'FAIL'),
+              "pip_conflict": os.environ.get('PIP_CONFLICT_RESULT', 'FAIL'),
+              "uv_conflict": os.environ.get('UV_CONFLICT_RESULT', 'FAIL'),
+              "omnipkg_revert": os.environ.get('OMNIPKG_REVERT_RESULT', 'FAIL')
+          }
+          test_timestamp = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')
+          
+          for test, result in results.items():
+              history_data[test]['wins' if result == 'PASS' else 'losses'] += 1
 
-# Load existing history
-history_data = default_data
-if RESULTS_FILE.exists():
-    try:
-        with open(RESULTS_FILE, 'r') as f:
-            loaded_data = json.load(f)
-            # Basic validation to ensure new keys exist
-            for key, value in default_data.items():
-                if key not in loaded_data:
-                    loaded_data[key] = value
-                if isinstance(value, dict):
-                     for sub_key in value:
-                         if sub_key not in loaded_data.get(key, {}):
-                             loaded_data[key][sub_key] = value[sub_key]
-            history_data = loaded_data
-    except Exception as e:
-        print(f"Warning: Could not load or migrate history, starting fresh: {e}")
-        history_data = default_data
+          history_data['recent_tests'].insert(0, {
+              "date": test_timestamp,
+              "scenario": "pip==24.0, pip==23.2.1 (conflict); uv self-sabotage revert",
+              "omnipkg_conflict": results['omnipkg_conflict'],
+              "pip_conflict": results['pip_conflict'],
+              "uv_conflict": results['uv_conflict'],
+              "omnipkg_revert": results['omnipkg_revert']
+          })
+          history_data['recent_tests'] = history_data['recent_tests'][:5]
 
-# Read results from environment variables
-omnipkg_conflict = os.environ.get('OMNIPKG_CONFLICT_RESULT', 'FAIL')
-pip_conflict = os.environ.get('PIP_CONFLICT_RESULT', 'FAIL')
-uv_conflict = os.environ.get('UV_CONFLICT_RESULT', 'FAIL')
-omnipkg_revert = os.environ.get('OMNIPKG_REVERT_RESULT', 'FAIL')
-test_timestamp = datetime.utcnow().strftime('%Y-%m-%d %H:%M')
+          def win_rate(wins, losses):
+              total = wins + losses
+              return f"{(wins / total * 100):.0f}%" if total > 0 else "0%"
 
-# Update stats
-history_data['omnipkg']['wins' if omnipkg_conflict == 'PASS' else 'losses'] += 1
-history_data['pip']['wins' if pip_conflict == 'PASS' else 'losses'] += 1
-history_data['uv']['wins' if uv_conflict == 'PASS' else 'losses'] += 1
-if omnipkg_revert == 'PASS':
-    history_data['omnipkg']['saves'] += 1
+          battle_stats = f"""\
+## 🥊 omnipkg vs The World
 
-# Update recent tests log
-history_data['recent_tests'].insert(0, {
-    "date": test_timestamp,
-    "conflict_omnipkg": omnipkg_conflict,
-    "conflict_pip": pip_conflict,
-    "conflict_uv": uv_conflict,
-    "revert_omnipkg": omnipkg_revert
-})
-history_data['recent_tests'] = history_data['recent_tests'][:5]
+Package manager conflict and resilience tests.
 
-# --- GENERATE CONCISE README CONTENT ---
+| Package Manager | Test | Wins | Losses | Win Rate |
+|-----------------|------|------|--------|----------|
+| omnipkg 🚀      | Conflict | {history_data['omnipkg_conflict']['wins']} | {history_data['omnipkg_conflict']['losses']} | {win_rate(history_data['omnipkg_conflict']['wins'], history_data['omnipkg_conflict']['losses'])} |
+| pip 💥          | Conflict | {history_data['pip_conflict']['wins']} | {history_data['pip_conflict']['losses']} | {win_rate(history_data['pip_conflict']['wins'], history_data['pip_conflict']['losses'])} |
+| uv ⚡️          | Conflict | {history_data['uv_conflict']['wins']} | {history_data['uv_conflict']['losses']} | {win_rate(history_data['uv_conflict']['wins'], history_data['uv_conflict']['losses'])} |
+| omnipkg 🛡️      | Revert   | {history_data['omnipkg_revert']['wins']} | {history_data['omnipkg_revert']['losses']} | {win_rate(history_data['omnipkg_revert']['wins'], history_data['omnipkg_revert']['losses'])} |
 
-def calculate_win_rate(wins, losses):
-    total = wins + losses
-    return f"{(wins / total * 100):.0f}%" if total > 0 else "0%"
-
-omnipkg_stats = history_data['omnipkg']
-pip_stats = history_data['pip']
-uv_stats = history_data['uv']
-
-omnipkg_wr = calculate_win_rate(omnipkg_stats['wins'], omnipkg_stats['losses'])
-pip_wr = calculate_win_rate(pip_stats['wins'], pip_stats['losses'])
-uv_wr = calculate_win_rate(uv_stats['wins'], uv_stats['losses'])
-
-battle_stats_section_content = f"""## 🥊 omnipkg vs The World: Battle Statistics
-*Live-updated results from our continuous integration tests.*
-
-| Package Manager | Conflict Test Wins | Environment Saves | Result |
-|:----------------|:------------------:|:-------------------:|:-------|
-| **omnipkg 🚀**  | **{omnipkg_stats['wins']}** ({omnipkg_wr} Win Rate) | **{omnipkg_stats['saves']}** | ✅ **Solves Conflicts & Heals Environment** |
-| **pip 💥**      | {pip_stats['wins']} ({pip_wr} Win Rate) | N/A | ❌ Overwrites Packages |
-| **uv ⚡️**      | {uv_stats['wins']} ({uv_wr} Win Rate) | N/A | ❌ Overwrites Packages |
-
-**Test Scenarios:**
-- **Conflict Test**: Attempting to install conflicting versions of another package manager (e.g., `pip==24.0` and `pip==23.2.1`). A "Win" means both versions are usable.
-- **Environment Save**: After another tool (`uv`) damages the environment by downgrading itself, `omnipkg revert` is run. A "Save" means the environment was successfully restored.
-
-### 📊 Recent Test Log
-| Date (UTC) | omnipkg (Conflict) | pip (Conflict) | uv (Conflict) | omnipkg (Revert) |
-|:-----------|:------------------:|:--------------:|:-------------:|:----------------:|
+### 📊 Recent Test Results
+| Date | Scenario | omnipkg Conflict | pip Conflict | uv Conflict | omnipkg Revert |
+|------|----------|------------------|--------------|-------------|----------------|
 """
-for test in history_data['recent_tests']:
-    battle_stats_section_content += f"| {test['date']} | {test['conflict_omnipkg']} | {test['conflict_pip']} | {test['conflict_uv']} | {test['revert_omnipkg']} |\n"
+          for test in history_data['recent_tests']:
+              battle_stats += f"| {test['date']} | {test['scenario']} | {test['omnipkg_conflict']} | {test['pip_conflict']} | {test['uv_conflict']} | {test['omnipkg_revert']} |\n"
 
+          battle_stats += """\
+**Test Scenarios:**
+- **Conflict Test**: Install pip==24.0 and pip==23.2.1 simultaneously
+- **Revert Test**: Revert uv self-sabotage (downgrade to 0.7.1)
+- ✅ **PASS**: Success in conflict or revert
+- ❌ **FAIL**: Overwrites or fails to handle conflict/revert
+"""
+          
+          try:
+              readme_content = README_FILE.read_text()
+              start, end = "<!-- BATTLE_STATS_START -->", "<!-- BATTLE_STATS_END -->"
+              if start in readme_content and end in readme_content:
+                  before, after = readme_content.split(start)[0], readme_content.split(end)[1]
+                  README_FILE.write_text(before + start + "\n" + battle_stats + "\n" + end + after)
+                  print("✅ README.md updated")
+              else:
+                  print("❌ Error: Add <!-- BATTLE_STATS_START --> and <!-- BATTLE_STATS_END --> to README.md")
+          except Exception as e:
+              print(f"Error updating README: {e}")
 
-# --- UPDATE THE README FILE ---
-
-try:
-    readme_content = README_FILE.read_text(encoding='utf-8') if README_FILE.exists() else "# omnipkg\n\n"
-    start_marker, end_marker = "<!-- BATTLE_STATS_START -->", "<!-- BATTLE_STATS_END -->"
-
-    if start_marker in readme_content and end_marker in readme_content:
-        before, after = readme_content.split(start_marker)[0], readme_content.split(end_marker)[1]
-        README_FILE.write_text(before + start_marker + "\n" + battle_stats_section_content + "\n" + end_marker + after, encoding='utf-8')
-        print("✅ README.md updated with concise battle stats")
-    else:
-        updated_content = readme_content.rstrip() + "\n\n" + start_marker + "\n" + battle_stats_section_content + "\n" + end_marker + "\n"
-        README_FILE.write_text(updated_content, encoding='utf-8')
-        print("✅ README.md updated (markers added automatically)")
-except Exception as e:
-    print(f"Error updating README: {e}")
-
-# --- SAVE HISTORY FOR NEXT RUN ---
-try:
-    with open(RESULTS_FILE, 'w') as f:
-        json.dump(history_data, f, indent=2)
-    print(f"✅ Saved history to {RESULTS_FILE}")
-except Exception as e:
-    print(f"Error saving history: {e}")
+          try:
+              with open(RESULTS_FILE, 'w') as f:
+                  json.dump(history_data, f, indent=2)
+              print(f"✅ Saved history to {RESULTS_FILE}")
+          except Exception as e:
+              print(f"Error saving history: {e}")
           EOF
           python update_battle_report.py
 
@@ -255,6 +225,7 @@ except Exception as e:
         with:
           name: battle-history
           path: battle_results_history.json
+          retention-days: 90
 
       - name: 💾 Commit README Updates
         run: |
@@ -264,6 +235,6 @@ except Exception as e:
           if git diff --staged --quiet; then
             echo "No changes to commit"
           else
-            git commit -m "🥊 Battle update: omnipkg vs The World results"
+            git commit -m "🥊 Battle update: omnipkg vs The World - $(date -u '+%Y-%m-%d %H:%M UTC')"
             git push
           fi
