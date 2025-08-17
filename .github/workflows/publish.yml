@@ -37,10 +37,16 @@ jobs:
     - name: Verify package version
       run: |
         PACKAGE_VERSION=$(python -c "import toml; print(toml.load(open('pyproject.toml'))['project']['version'])")
+        TAG_VERSION="${{ github.ref_name }}"
+
+        # Remove 'v' prefix if it exists from the tag name
+        RELEASE_VERSION=${TAG_VERSION#v}
+
         echo "Detected version from pyproject.toml: $PACKAGE_VERSION"
-        echo "Expected tag version: ${{ github.ref_name }}"
-        if [ "$PACKAGE_VERSION" != "${{ github.ref_name }}" ]; then
-          echo "Error: The version in pyproject.toml does not match the release tag."
+        echo "Expected release version from tag: $RELEASE_VERSION (from tag $TAG_VERSION)"
+
+        if [ "$PACKAGE_VERSION" != "$RELEASE_VERSION" ]; then
+          echo "Error: The version in pyproject.toml ($PACKAGE_VERSION) does not match the release tag version ($RELEASE_VERSION)."
           exit 1
         fi
         
