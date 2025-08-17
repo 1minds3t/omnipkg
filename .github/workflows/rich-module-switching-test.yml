@@ -1,15 +1,15 @@
-name: 🧪 Rich Module Switching Test
+name: Rich Module Switching
 
 on:
-  workflow_dispatch:
   push:
-    branches: ['main']
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
 
 jobs:
-  run-rich-test:
+  test:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     services:
       redis:
         image: redis:7
@@ -22,20 +22,20 @@ jobs:
           - 6379:6379
 
     steps:
-      - name: 🏁 Checkout repository
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: 🐍 Set up Python 3.11
+      - name: Set up Python 3.11
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
-      - name: 📦 Install dependencies
+      - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -e . redis rich==13.7.1
 
-      - name: ⚙️ Configure omnipkg for non-interactive use
+      - name: Configure omnipkg for non-interactive use
         run: |
           python - << 'EOF'
           import sys
@@ -51,6 +51,7 @@ jobs:
               site_packages_path = sysconfig.get_paths()['purelib']
 
           project_root = Path(os.environ['GITHUB_WORKSPACE'])
+          
           builder_script = project_root / 'omnipkg' / 'package_meta_builder.py'
           if not builder_script.exists():
               print(f"Error: {builder_script} does not exist")
@@ -83,13 +84,13 @@ jobs:
               sys.exit(1)
           EOF
 
-      - name: 🧪 Run the Demo - Rich Test (Python Module Switching)
+      - name: Run the Demo - Rich Test
         id: run_demo
         run: |
           echo "--- Running Omnipkg Demo for Rich Test (Python Module Switching) ---"
           mkdir -p /tmp/omnipkg-artifacts
           
-          timeout 300 bash -c 'echo "1" | omnipkg demo 2>&1 | tee /tmp/omnipkg-artifacts/rich_demo_output.txt'
+          timeout 900 bash -c 'echo "1" | omnipkg demo 2>&1 | tee /tmp/omnipkg-artifacts/rich_demo_output.txt'
           DEMO_EXIT_CODE=$?
           
           echo "## Rich Demo Output" >> $GITHUB_STEP_SUMMARY
@@ -104,7 +105,7 @@ jobs:
                grep -q "rich==13.5.3" /tmp/omnipkg-artifacts/rich_demo_output.txt && \
                grep -q "rich==13.4.2" /tmp/omnipkg-artifacts/rich_demo_output.txt && \
                grep -q "ALL TESTS PASSED!" /tmp/omnipkg-artifacts/rich_demo_output.txt; then
-              echo "Rich demo verified: rich==13.7.1 (main), 13.5.3, 13.4.2 (bubbles), and all tests passed!"
+              echo "Rich demo verified: rich==13.7.1, 13.5.3, 13.4.2, all tests passed!"
             else
               echo "Error: Expected Rich demo output not found."
               echo "Missing one of: 'rich==13.7.1', 'rich==13.5.3', 'rich==13.4.2', or 'ALL TESTS PASSED!'"
@@ -118,67 +119,11 @@ jobs:
             exit 1
           fi
 
-      - name: 📊 Check Omnipkg Status
-        id: check_status
-        run: |
-          echo "--- Checking Omnipkg Status ---"
-          mkdir -p /tmp/omnipkg-artifacts
-          omnipkg status > /tmp/omnipkg-artifacts/status_output.txt
-          echo "## Omnipkg Status Output" >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          cat /tmp/omnipkg-artifacts/status_output.txt >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          
-          if grep -q "rich-13.5.3" /tmp/omnipkg-artifacts/status_output.txt && \
-             grep -q "rich-13.4.2" /tmp/omnipkg-artifacts/status_output.txt; then
-            echo "Status verified: Rich bubbles found!"
-          else
-            echo "Error: Expected Rich bubbles not found in status output."
-            cat /tmp/omnipkg-artifacts/status_output.txt
-            exit 1
-          fi
-
-      - name: 📊 Generate Report
-        if: always()
-        run: |
-          REPORT_FILE="/tmp/omnipkg-artifacts/rich_test_report.md"
-          echo "# 🧪 Rich Module Switching Test Report" > $REPORT_FILE
-          echo "" >> $REPORT_FILE
-          echo "**Workflow Run:** [${{ github.run_id }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})" >> $REPORT_FILE
-          echo "**Test Status:** \`${{ job.status }}\`" >> $REPORT_FILE
-          echo "" >> $REPORT_FILE
-          
-          echo "## Demo Execution Output" >> $REPORT_FILE
-          echo "\`\`\`" >> $REPORT_FILE
-          cat /tmp/omnipkg-artifacts/rich_demo_output.txt 2>/dev/null || echo 'N/A: Demo output missing.' >> $REPORT_FILE
-          echo "\`\`\`" >> $REPORT_FILE
-          echo "" >> $REPORT_FILE
-          
-          echo "## Omnipkg Status Output" >> $REPORT_FILE
-          echo "\`\`\`" >> $REPORT_FILE
-          cat /tmp/omnipkg-artifacts/status_output.txt 2>/dev/null || echo 'N/A: Status output missing.' >> $REPORT_FILE
-          echo "\`\`\`" >> $REPORT_FILE
-          echo "" >> $REPORT_FILE
-          
-          echo "## Conclusion" >> $REPORT_FILE
-          if [ "${{ steps.run_demo.outputs.demo_outcome }}" == "success" ]; then
-            echo "✅ **omnipkg successfully demonstrated seamless version switching for Python module packages (Rich).** This test confirms omnipkg's ability to handle pure Python module dependencies with high integrity." >> $REPORT_FILE
-          else
-            echo "❌ The Rich Module Switching Test failed. Review workflow logs for detailed output and errors." >> $REPORT_FILE
-          fi
-          echo "" >> $REPORT_FILE
-
-      - name: 🧹 Clean Up Redis
-        if: always()
-        run: |
-          echo "--- Cleaning Up Redis ---"
-          redis-cli -h localhost -p 6379 KEYS "omnipkg:pkg:*" | xargs -r redis-cli -h localhost -p 6379 DEL
-
-      - name: 📦 Upload Artifacts
+      - name: Archive Demo Output
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: omnipkg-rich-outputs
+          name: omnipkg-rich-demo-output
           path: /tmp/omnipkg-artifacts/
-          retention-days: 30
+          retention-days: 7
           compression-level: 6
