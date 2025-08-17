@@ -52,7 +52,7 @@
 | **`pip` 💥** | 0 (0%) | N/A | ❌ Mercilessly overwrites itself |
 | **`uv` ⚡️** | 0 (0%) | N/A | ❌ Also overwrites itself (but faster!) |
 
-### 📊 Latest Test: 2025-08-17 22:47 (UTC)
+### 📊 Latest Test: 2025-08-17 22:49 (UTC)
 
 <!-- BATTLE_STATS_END -->
 
