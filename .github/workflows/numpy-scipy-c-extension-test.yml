@@ -41,25 +41,29 @@ jobs:
             print(f.read())
         "
         
-    - name: Create test runner script
+    - name: Create demo script
+      run: |
+        cat > demo_script.py << 'EOF'
+        import omnipkg.demo
+        import sys
+        # Monkey patch input to automatically select option 3
+        original_input = input
+        def mock_input(prompt=""):
+            print(prompt + "3")  # Print the prompt + our choice
+            return "3"
+        input = mock_input
+        omnipkg.demo.main()
+        EOF
+    
+    - name: Create test runner script  
       run: |
         cat > test_numpy_scipy.py << 'EOF'
         import subprocess
         import sys
         
-        # Run the demo with automated input
+        # Run the demo script
         process = subprocess.Popen(
-            [sys.executable, '-c', '''
-import omnipkg.demo
-import sys
-# Monkey patch input to automatically select option 3
-original_input = input
-def mock_input(prompt=""):
-    print(prompt + "3")  # Print the prompt + our choice
-    return "3"
-input = mock_input
-omnipkg.demo.main()
-'''],
+            [sys.executable, 'demo_script.py'],
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
