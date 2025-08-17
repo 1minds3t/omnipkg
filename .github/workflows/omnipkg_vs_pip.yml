@@ -183,31 +183,37 @@ jobs:
             # Add battle section to README if it doesn't exist
             cat >> README.md << 'EOF'
 
-## 🥊 omnipkg vs pip Battle Statistics
+          ## 🥊 omnipkg vs pip Battle Statistics
 
-> **Live comparison testing conflicting package installations every hour**
+          > **Live comparison testing conflicting package installations every hour**
 
-| Package Manager | Wins | Losses | Win Rate | Last Updated |
-|-----------------|------|--------|----------|--------------|
-| **omnipkg** 🚀  | 0    | 0      | 0%       | Never        |
-| **pip** 💥      | 0    | 0      | 0%       | Never        |
+          | Package Manager | Wins | Losses | Win Rate | Last Updated |
+          |-----------------|------|--------|----------|--------------|
+          | **omnipkg** 🚀  | 0    | 0      | 0%       | Never        |
+          | **pip** 💥      | 0    | 0      | 0%       | Never        |
 
-### 📊 Recent Test Results
-<!-- BATTLE_RESULTS_START -->
-<!-- BATTLE_RESULTS_END -->
+          ### 📊 Recent Test Results
+          <!-- BATTLE_RESULTS_START -->
+          <!-- BATTLE_RESULTS_END -->
 
-**Test Scenario:** Installing `uv==0.7.12` and `uv==0.7.14` (conflicting versions)
-- ✅ **PASS** = Successfully maintains both versions simultaneously  
-- ❌ **FAIL** = Cannot install both versions or overwrites one with the other
+          **Test Scenario:** Installing `uv==0.7.12` and `uv==0.7.14` (conflicting versions)
+          - ✅ **PASS** = Successfully maintains both versions simultaneously  
+          - ❌ **FAIL** = Cannot install both versions or overwrites one with the other
 
-EOF
+          EOF
           fi
           
-          # Read current stats
-          OMNIPKG_WINS=$(grep "omnipkg.*🚀" README.md | sed -n 's/.*| \([0-9]*\) *|.*/\1/p')
-          OMNIPKG_LOSSES=$(grep "omnipkg.*🚀" README.md | sed -n 's/.*| [0-9]* *| \([0-9]*\) *.*/\1/p')
-          PIP_WINS=$(grep "pip.*💥" README.md | sed -n 's/.*| \([0-9]*\) *|.*/\1/p')
-          PIP_LOSSES=$(grep "pip.*💥" README.md | sed -n 's/.*| [0-9]* *| \([0-9]*\) *.*/\1/p')
+          # Read current stats using a more robust approach
+          OMNIPKG_WINS=$(grep "omnipkg.*🚀" README.md | sed -n 's/.*| \([0-9]*\) *|.*/\1/p' | head -1)
+          OMNIPKG_LOSSES=$(grep "omnipkg.*🚀" README.md | sed -n 's/.*| [0-9]* *| \([0-9]*\) *.*/\1/p' | head -1)
+          PIP_WINS=$(grep "pip.*💥" README.md | sed -n 's/.*| \([0-9]*\) *|.*/\1/p' | head -1)
+          PIP_LOSSES=$(grep "pip.*💥" README.md | sed -n 's/.*| [0-9]* *| \([0-9]*\) *.*/\1/p' | head -1)
+          
+          # Default to 0 if empty
+          OMNIPKG_WINS=${OMNIPKG_WINS:-0}
+          OMNIPKG_LOSSES=${OMNIPKG_LOSSES:-0}
+          PIP_WINS=${PIP_WINS:-0}
+          PIP_LOSSES=${PIP_LOSSES:-0}
           
           # Update wins/losses based on results
           if [ "$OMNIPKG_RESULT" == "PASS" ]; then
@@ -238,32 +244,29 @@ EOF
             PIP_RATE=0
           fi
           
-          # Update README with new stats
-          sed -i "/| \*\*omnipkg\*\* 🚀/c\| **omnipkg** 🚀  | $OMNIPKG_WINS    | $OMNIPKG_LOSSES      | ${OMNIPKG_RATE}%       | $TEST_TIMESTAMP |" README.md
-          sed -i "/| \*\*pip\*\* 💥/c\| **pip** 💥      | $PIP_WINS    | $PIP_LOSSES      | ${PIP_RATE}%       | $TEST_TIMESTAMP |" README.md
+          # Create temporary file with updated content
+          # Update omnipkg row
+          sed "s/| \*\*omnipkg\*\* 🚀.*$/| **omnipkg** 🚀  | $OMNIPKG_WINS    | $OMNIPKG_LOSSES      | ${OMNIPKG_RATE}%       | $TEST_TIMESTAMP |/" README.md > README.tmp
           
-          # Add recent test result
+          # Update pip row
+          sed -i "s/| \*\*pip\*\* 💥.*$/| **pip** 💥      | $PIP_WINS    | $PIP_LOSSES      | ${PIP_RATE}%       | $TEST_TIMESTAMP |/" README.tmp
+          
+          # Replace original file
+          mv README.tmp README.md
+          
+          # Add recent test result - create a simple approach
           RECENT_RESULT="| $TEST_TIMESTAMP | omnipkg: $OMNIPKG_RESULT | pip: $PIP_RESULT |"
           
-          # Update recent results (keep last 10)
+          # Add table header if not present
           if ! grep -q "| Date | omnipkg Result | pip Result |" README.md; then
             sed -i '/<!-- BATTLE_RESULTS_START -->/a\
-| Date | omnipkg Result | pip Result |\
-|------|----------------|-------------|' README.md
+          | Date | omnipkg Result | pip Result |\
+          |------|----------------|-------------|' README.md
           fi
           
-          sed -i "/<!-- BATTLE_RESULTS_START -->/,/<!-- BATTLE_RESULTS_END -->/{
-            /| Date | omnipkg Result | pip Result |/a\\
-$RECENT_RESULT
-          }" README.md
-          
-          # Keep only the 10 most recent results
-          sed -i '/<!-- BATTLE_RESULTS_START -->/,/<!-- BATTLE_RESULTS_END -->/{
-            /|.*|.*|.*|/{
-              N;N;N;N;N;N;N;N;N;N;N;
-              s/\(.*\n.*\n.*\n.*\n.*\n.*\n.*\n.*\n.*\n.*\n.*\n.*\n\).*/\1/
-            }
-          }' README.md
+          # Add new result after the header
+          sed -i "/|------|----------------|-------------|/a\\
+          $RECENT_RESULT" README.md
 
       - name: 📤 Upload Battle Report
         uses: actions/upload-artifact@v4
