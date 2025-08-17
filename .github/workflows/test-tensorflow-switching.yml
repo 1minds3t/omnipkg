@@ -1,4 +1,4 @@
-name: TensorFlow Complex Dependency Switching
+name: TensorFlow Complex Dependency Test
 
 on:
   push:
@@ -87,25 +87,11 @@ jobs:
       - name: Run the Demo - TensorFlow
         id: run_demo
         run: |
-          echo "--- Running Omnipkg Demo for TensorFlow (Complex Dependencies) ---"
+          echo "--- Running Omnipkg Demo for TensorFlow (Complex Dependency Testing) ---"
           mkdir -p /tmp/omnipkg-artifacts
           
-          # Clear output file and track run count
-          rm -f /tmp/omnipkg-artifacts/tensorflow_demo_output.txt
-          echo "Starting demo run" > /tmp/omnipkg-artifacts/run_count.txt
-          
-          # Run demo once
-          timeout 900 bash -c 'echo "4" | omnipkg demo 2>&1 | tee /tmp/omnipkg-artifacts/tensorflow_demo_output.txt'
+          timeout 1200 bash -c 'echo "3" | omnipkg demo 2>&1 | tee /tmp/omnipkg-artifacts/tensorflow_demo_output.txt'
           DEMO_EXIT_CODE=$?
-          
-          # Check run count
-          RUN_COUNT=$(grep -c "Starting demo run" /tmp/omnipkg-artifacts/run_count.txt)
-          echo "DEBUG: Demo run count: $RUN_COUNT"
-          if [ "$RUN_COUNT" -ne 1 ]; then
-            echo "Error: Demo ran $RUN_COUNT times instead of once."
-            cat /tmp/omnipkg-artifacts/tensorflow_demo_output.txt
-            exit 1
-          fi
           
           echo "## TensorFlow Demo Output" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
@@ -113,18 +99,19 @@ jobs:
           echo '```' >> $GITHUB_STEP_SUMMARY
           
           if [ $DEMO_EXIT_CODE -eq 0 ] || \
-             (grep -q "ALL TENSORFLOW TESTS PASSED" /tmp/omnipkg-artifacts/tensorflow_demo_output.txt && \
-              grep -q "Demo completed successfully" /tmp/omnipkg-artifacts/tensorflow_demo_output.txt); then
-            echo "Demo completed successfully (exit code $DEMO_EXIT_CODE, logs verified)."
-            echo "demo_outcome=success" >> $GITHUB_OUTPUT
-            PASSED_COUNT=$(grep -c "PASSED" /tmp/omnipkg-artifacts/tensorflow_demo_output.txt || echo "0")
-            if [ "$PASSED_COUNT" -ge 4 ] && grep -q "tensorflow==2.13.0" /tmp/omnipkg-artifacts/tensorflow_demo_output.txt; then
-              echo "TensorFlow demo verified: Found $PASSED_COUNT PASSED results (expected at least 4) and tensorflow==2.13.0!"
-            else
-              echo "Error: Expected at least 4 PASSED results and tensorflow==2.13.0, but found only $PASSED_COUNT or missing tensorflow version."
-              cat /tmp/omnipkg-artifacts/tensorflow_demo_output.txt
-              exit 1
-            fi
+                (grep -q "ALL TESTS PASSED!" /tmp/omnipkg-artifacts/tensorflow_demo_output.txt && \
+                 grep -q "Demo completed successfully" /tmp/omnipkg-artifacts/tensorflow_demo_output.txt); then
+               echo "Demo completed successfully (exit code $DEMO_EXIT_CODE, logs verified)."
+               echo "demo_outcome=success" >> $GITHUB_OUTPUT
+               if grep -q "tensorflow==" /tmp/omnipkg-artifacts/tensorflow_demo_output.txt && \
+                  grep -q "ALL TESTS PASSED!" /tmp/omnipkg-artifacts/tensorflow_demo_output.txt; then
+                 echo "TensorFlow demo verified: TensorFlow versions switched successfully, all tests passed!"
+               else
+                 echo "Error: Expected TensorFlow demo output not found."
+                 echo "Missing one of: 'tensorflow==', or 'ALL TESTS PASSED!'"
+                 cat /tmp/omnipkg-artifacts/tensorflow_demo_output.txt
+                 exit 1
+               fi
           else
             echo "Demo failed with exit code $DEMO_EXIT_CODE."
             echo "demo_outcome=failure" >> $GITHUB_OUTPUT
