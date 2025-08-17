@@ -90,33 +90,46 @@ jobs:
         id: run_demo
         run: |
           echo "--- Running Omnipkg Demo for UV Test (Binary Switching) ---"
-          # Simulate user input '2' for UV test with timeout
-          DEMO_OUTPUT=$(timeout 300 bash -c 'echo "2" | omnipkg demo 2>&1')
+          # Create a temporary directory for artifacts
+          mkdir -p /tmp/omnipkg-artifacts
+          
+          # Run demo with real-time output and timeout
+          timeout 300 bash -c 'echo "2" | omnipkg demo 2>&1 | tee /tmp/omnipkg-artifacts/demo_output.txt'
           DEMO_EXIT_CODE=$?
           
-          # Always save and display output for transparency
-          echo "$DEMO_OUTPUT" > /tmp/demo_output.txt
+          # Save output to GitHub step summary
           echo "## UV Demo Output" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
-          cat /tmp/demo_output.txt >> $GITHUB_STEP_SUMMARY
+          cat /tmp/omnipkg-artifacts/demo_output.txt >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
           
           if [ $DEMO_EXIT_CODE -eq 0 ]; then
             echo "Demo completed successfully."
             echo "demo_outcome=success" >> $GITHUB_OUTPUT
             # Verify key UV demo outputs
-            if grep -q "Main environment version: 0.6.13" /tmp/demo_output.txt && \
-               grep -q "ALL UV BINARY TESTS PASSED" /tmp/demo_output.txt; then
-              echo "UV demo verified: Main environment uv==0.6.13 and all tests passed!"
+            if grep -q "Main environment version: 0.6.13" /tmp/omnipkg-artifacts/demo_output.txt && \
+               grep -q "ALL UV BINARY TESTS PASSED" /tmp/omnipkg-artifacts/demo_output.txt && \
+               grep -q "Testing Bubble (uv==0.4.30)" /tmp/omnipkg-artifacts/demo_output.txt && \
+               grep -q "Testing Bubble (uv==0.5.11)" /tmp/omnipkg-artifacts/demo_output.txt; then
+              echo "UV demo verified: Main environment uv==0.6.13, bubbles for 0.4.30 and 0.5.11, and all tests passed!"
             else
               echo "Error: Expected UV demo output not found."
-              echo "Missing: 'Main environment version: 0.6.13' or 'ALL UV BINARY TESTS PASSED'"
-              cat /tmp/demo_output.txt
+              echo "Missing one of: 'Main environment version: 0.6.13', 'ALL UV BINARY TESTS PASSED', 'Testing Bubble (uv==0.4.30)', or 'Testing Bubble (uv==0.5.11)'"
+              cat /tmp/omnipkg-artifacts/demo_output.txt
               exit 1
             fi
           else
             echo "Demo failed with exit code $DEMO_EXIT_CODE."
             echo "demo_outcome=failure" >> $GITHUB_OUTPUT
-            cat /tmp/demo_output.txt
+            cat /tmp/omnipkg-artifacts/demo_output.txt
             exit 1
           fi
+
+      - name: 📦 Archive Demo Output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: omnipkg-uv-demo-output
+          path: /tmp/omnipkg-artifacts/
+          retention-days: 7
+          compression-level: 6
