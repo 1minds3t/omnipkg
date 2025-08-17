@@ -71,7 +71,7 @@ jobs:
         id: omnipkg_conflict_test
         run: |
           echo "--- Testing omnipkg installing conflicting versions of pip ---"
-          if omnipkg install pip==24.0 pip==23.2.1 --yes; then
+          if omnipkg install pip==24.0 pip==23.2.1; then
             echo "OMNIPKG_CONFLICT_RESULT=PASS" >> $GITHUB_ENV
           else
             echo "OMNIPKG_CONFLICT_RESULT=FAIL" >> $GITHUB_ENV
@@ -102,7 +102,7 @@ jobs:
         run: |
           echo "--- Testing omnipkg reverting uv's self-sabotage ---"
           # 1. Establish a known good state with the latest uv
-          omnipkg install uv --yes
+          omnipkg install uv
           LATEST_UV_VER=$(uv --version | awk '{print $2}')
           echo "Established good state with uv version: $LATEST_UV_VER"
 
@@ -111,7 +111,7 @@ jobs:
           echo "uv version after self-sabotage: $(uv --version | awk '{print $2}')"
 
           # 3. omni revert! The logs will show the "uv in jail" status.
-          if omnipkg revert --yes; then
+          if omnipkg revert -y; then
             echo "OMNIPKG_REVERT_RESULT=PASS" >> $GITHUB_ENV
             echo "Revert successful! Final uv version: $(uv --version | awk '{print $2}')"
           else
