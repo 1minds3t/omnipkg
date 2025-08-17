@@ -1,7 +1,3 @@
-
-### `docs/getting_started.md`
-
-```markdown
 # Getting Started with omnipkg
 
 This guide will walk you through installing `omnipkg` and performing the initial setup.
