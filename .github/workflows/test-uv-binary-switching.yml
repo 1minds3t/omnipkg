@@ -1,4 +1,4 @@
-name: UV Binary Switching
+name: "🔧 UV Binary Version Juggling (0.4.30 ↔ 0.6.13)"
 
 on:
   push:
