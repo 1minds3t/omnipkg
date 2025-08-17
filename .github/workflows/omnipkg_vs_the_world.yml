@@ -1,4 +1,3 @@
-```yaml
 name: 🥊 omnipkg vs The World - Battle & Resilience Test
 
 on:
@@ -248,4 +247,3 @@ jobs:
               git push
             }
           fi
-```
