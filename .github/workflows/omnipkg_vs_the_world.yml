@@ -263,23 +263,21 @@ jobs:
 
           print(f"Updated stats: omnipkg={omnipkg_wins}W/{omnipkg_losses}L/{omnipkg_saves}S, pip={pip_wins}W/{pip_losses}L, uv={uv_wins}W/{uv_losses}L")
 
-          battle_stats_section_content = f"""## 🥊 omnipkg vs The World: Battle Statistics
-*Live-updated results from our continuous integration tests.*
-
-| Package Manager | Conflict Test Wins | Environment Saves | Result |
-|:----------------|:------------------:|:-------------------:|:-------|
-| **omnipkg 🚀**  | **{omnipkg_wins}** ({omnipkg_wr} Win Rate) | **{omnipkg_saves}** | ✅ **Solves Conflicts & Heals Environment** |
-| **pip 💥**      | {pip_wins} ({pip_wr} Win Rate) | 0 | ❌ Overwrites Packages |
-| **uv ⚡️**      | {uv_wins} ({uv_wr} Win Rate) | 0 | ❌ Overwrites Packages |
-
-**Test Scenarios:**
-- **Conflict Test**: Attempting to install conflicting versions of another package manager (e.g., `pip==24.0` and `pip==23.2.1`). A "Win" means both versions are usable.
-- **Environment Save**: After another tool (`uv`) damages the environment by downgrading itself, `omnipkg revert` is run. A "Save" means the environment was successfully restored.
-
-### 📊 Recent Test Log
-| Date (UTC) | omnipkg (Conflict) | pip (Conflict) | uv (Conflict) | omnipkg (Revert) |
-|:-----------|:------------------:|:--------------:|:-------------:|:----------------:|
-| {test_timestamp} | {omnipkg_conflict} | {pip_conflict} | {uv_conflict} | {omnipkg_revert} |"""
+          # Build the content using string concatenation to avoid f-string issues
+          battle_stats_section_content = "## 🥊 omnipkg vs The World: Battle Statistics\n"
+          battle_stats_section_content += "*Live-updated results from our continuous integration tests.*\n\n"
+          battle_stats_section_content += "| Package Manager | Conflict Test Wins | Environment Saves | Result |\n"
+          battle_stats_section_content += "|:----------------|:------------------:|:-------------------:|:-------|\n"
+          battle_stats_section_content += f"| **omnipkg 🚀**  | **{omnipkg_wins}** ({omnipkg_wr} Win Rate) | **{omnipkg_saves}** | ✅ **Solves Conflicts & Heals Environment** |\n"
+          battle_stats_section_content += f"| **pip 💥**      | {pip_wins} ({pip_wr} Win Rate) | 0 | ❌ Overwrites Packages |\n"
+          battle_stats_section_content += f"| **uv ⚡️**      | {uv_wins} ({uv_wr} Win Rate) | 0 | ❌ Overwrites Packages |\n\n"
+          battle_stats_section_content += "**Test Scenarios:**\n"
+          battle_stats_section_content += "- **Conflict Test**: Attempting to install conflicting versions of another package manager (e.g., `pip==24.0` and `pip==23.2.1`). A \"Win\" means both versions are usable.\n"
+          battle_stats_section_content += "- **Environment Save**: After another tool (`uv`) damages the environment by downgrading itself, `omnipkg revert` is run. A \"Save\" means the environment was successfully restored.\n\n"
+          battle_stats_section_content += "### 📊 Recent Test Log\n"
+          battle_stats_section_content += "| Date (UTC) | omnipkg (Conflict) | pip (Conflict) | uv (Conflict) | omnipkg (Revert) |\n"
+          battle_stats_section_content += "|:-----------|:------------------:|:--------------:|:-------------:|:----------------:|\n"
+          battle_stats_section_content += f"| {test_timestamp} | {omnipkg_conflict} | {pip_conflict} | {uv_conflict} | {omnipkg_revert} |"
 
           # Try to preserve some recent test history from existing README
           if README_FILE.exists():
