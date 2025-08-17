@@ -44,7 +44,7 @@
 ---
 [![🥊 omnipkg vs The World - Battle & Resilience Test](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml/badge.svg)](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml)
 <!-- BATTLE_STATS_START -->
-## 🥊 Package Manager Thunderdome [![💥 Nuclear Test: TensorFlow Dependency Hot-Swap](https://github.com/1minds3t/omnipkg/actions/workflows/test-tensorflow-switching.yml/badge.svg)](https://github.com/1minds3t/omnipkg/actions/workflows/test-tensorflow-switching.yml)
+## 🥊 Package Manager Thunderdome [![🥊 omnipkg vs The World - Battle & Resilience Test](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml/badge.svg)](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml)
 
 | Package Manager | Conflict Wins | Environment Saves | Verdict |
 |:----------------|:-------------:|:-----------------:|:--------|
@@ -52,7 +52,7 @@
 | **`pip` 💥** | 0 (0%) | N/A | ❌ Mercilessly overwrites itself |
 | **`uv` ⚡️** | 0 (0%) | N/A | ❌ Also overwrites itself (but faster!) |
 
-### 📊 Latest Test: 2025-08-17 22:49 (UTC)
+### 📊 Latest Test: 2025-08-17 22:55 (UTC)
 
 <!-- BATTLE_STATS_END -->
 
