@@ -1,9 +1,3 @@
-
----
-
-### `docs/advanced_management.md`
-
-```markdown
 # Advanced omnipkg Management
 
 This section covers more advanced topics related to `omnipkg`'s internal workings, manual interventions (use with caution!), and future capabilities.
