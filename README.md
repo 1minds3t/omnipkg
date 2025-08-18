@@ -7,7 +7,7 @@
 <h1 align="center">omnipkg - The Ultimate Python Dependency Resolver</h1>
 
 <p align="center">
-  <strong>One environment. Infinite packages. Zero conflicts. Undeniable Proof. </strong>
+  <strong>One environment. Infinite packages. Zero conflicts. Undeniable proof:  </strong>
   <a href="https://github.com/1minds3t/omnipkg/actions/workflows/numpy-scipy-c-extension-test.yml">
     <img src="https://img.shields.io/badge/🚀_Live_NumPy+SciPy_Hot--Swapping-passing-success?logo=github-actions" alt="NumPy+SciPy Hot-Swapping Test">
   </a>
@@ -61,15 +61,15 @@
 
 **Data Science Reality**: Modern ML projects routinely need multiple TensorFlow versions (legacy models vs. current training), different NumPy versions (compatibility vs. performance), and various PyTorch builds (CPU vs. GPU). Traditional solutions like Docker containers, virtual environments, or complex scripts lead to bloated storage, maintenance headaches, and deployment failures.
 
-**`omnipkg` Solution**: One environment, one script, zero compromise. Run `torch==2.0.0` and `torch==2.7.1` seamlessly, switch `numpy` versions mid-script, and recover from environment damage instantly.
+**`omnipkg` Solution**: One environment, one script, zero compromises. Run `torch==2.0.0` and `torch==2.7.1` seamlessly, switch `numpy` versions mid-script, and recover from environment damage instantly.
 
 ---
 
 ## 🔥 Undeniable CI Proof: Live Demo Validation
 
-`omnipkg` has reached **~3000 PyPI downloads across 35 countries 10 days post-launch with zero marketing.** ([View Live Stats](https://clickpy.clickhouse.com/dashboard/omnipkg)) Our latest `1.0.13` release demonstrates `omnipkg`'s intelligent, self-healing capabilities, allowing unprecedented dynamic version control within a single environment.
+`omnipkg` reached **~3000 PyPI downloads across 35 countries 10 days post-launch with zero marketing.** ([View Live Stats](https://clickpy.clickhouse.com/dashboard/omnipkg)) Our latest `1.0.13` release demonstrates `omnipkg`'s intelligent, self-healing capabilities, allowing unprecedented dynamic version control within a single environment.
 
-Our continuous integration (CI) pipelines run comprehensive, real-world tests after every commit, validating `omnipkg`'s core claims in various challenging scenarios.
+Our continuous integration (CI) pipelines run comprehensive, real-world tests after every commit, validating `omnipkg`'s core claims in various challenging scenarios. You can watch them all here: https://github.com/1minds3t/omnipkg/tree/main/.github/workflows. 
 
 ---
 
@@ -94,7 +94,7 @@ print(numpy.__version__)  # Outputs: Original main env version (e.g., 1.26.4)
 ```
 
 **Key CI Output Excerpts:**
-```plaintext
+```bash
 🤯 NUMPY + SCIPY VERSION MIXING:
 
 🌀 COMBO: numpy==1.24.3 + scipy==1.12.0
@@ -119,7 +119,7 @@ print(numpy.__version__)  # Outputs: Original main env version (e.g., 1.26.4)
 Conflicting versions are isolated in lightweight, self-contained “bubbles” containing only necessary files. Compatible dependencies are shared with the main environment, potentially slashing disk space by **up to 60%**.
 
 **Key CI Output Excerpt:**
-```plaintext
+```bash
 🛡️ DOWNGRADE PROTECTION ACTIVATED!
     -> Fixing downgrade: typing_extensions from v4.14.1 to v4.5.0
 🫧 Creating isolated bubble for typing_extensions v4.5.0
@@ -141,7 +141,7 @@ omnipkg install torch==2.0.0 torch==2.7.1
 
 **What happens?** `omnipkg` reorders installs to trigger the bubble creation, installs `torch==2.7.1` in the main environment, and isolates `torch==2.0.0` in a lightweight “bubble,” sharing compatible dependencies to save space. No virtual environments or containers needed.
 
-```plaintext
+```bash
 🔄 Reordered: torch==2.7.1, torch==2.0.0
 📦 Installing torch==2.7.1... ✅ Done
 🛡️ Downgrade detected for torch==2.0.0
@@ -156,7 +156,7 @@ omnipkg install torch==2.0.0 torch==2.7.1
 
 **Key CI Output Excerpts (TensorFlow):**
 
-```plaintext
+```bash
 🔧 Testing initial state: tensorflow==2.13.0 with typing-extensions==4.14.1 and keras==2.13.1 (main)
 TensorFlow version: 2.13.0
 Typing Extensions version: 4.14.1
@@ -202,7 +202,7 @@ omnipkg info uv
 | • CLI Command Mapping (all subcommands/flags) | • Compressed storage for large data |
 | • Security Audits (vulnerability scans) | • Atomic transaction safety |
 | • Dependency Graphs (conflict detection) | • Intelligent caching of expensive operations |
-| • Import Validation (runtime testing) | • Future-proof C-extension symlinking |
+| • Import Validation (runtime testing) | • Enables future C-extension symlinking |
 
 ---
 
@@ -213,7 +213,7 @@ If an external tool (like `pip` or `uv`) causes damage, `omnipkg revert` restore
 
 **Key CI Output Excerpt:**
 
-```plaintext
+```bash
 Initial uv version (omnipkg-installed):uv 0.8.11
 $ uv pip install uv==0.7.13
  - uv==0.8.11
@@ -234,7 +234,7 @@ Successfully installed uv-0.8.11
 uv 0.8.11
 ```
 
-**UV is saved (along with any deps)!!!**
+**UV is saved, along with any deps!**
 
 ---
 
@@ -276,33 +276,32 @@ pip install omnipkg
 omnipkg demo
 ```
 Choose from:
-*   Python module switching (`rich`)
-*   Binary switching (`uv`)
-*   C-extension switching (`numpy`, `scipy`)
-*   Complex dependency switching (`tensorflow`)
-*   Flask test (under construction)
+1. Python module switching (`rich`)
+2.   Binary switching (`uv`)
+3.  C-extension switching (`numpy`, `scipy`)
+4.  Complex dependency switching (`tensorflow`)
 
 ### Step 4: Try the Stress Test
 ```bash
 omnipkg stress-test
 ```
-Watch `omnipkg` juggle complex `numpy` and `scipy` versions flawlessly.
+Watch `omnipkg` juggle complex `numpy` and `scipy` versions flawlessly!
 
 ---
 
 ## 🔬 How It Works (Simplified Flow)
 
-1.  **Install Packages**: Use `omnipkg install <package>` or `pip install`.
+1.  **Install Packages**: Use `omnipkg install uv==0.7.13 uv==0.7.14` or `omnipkg install -r req.txt`
 2.  **Conflict Detection**: `omnipkg` spots version clashes and isolates them in bubbles.
 3.  **Dynamic Switching**: Use `omnipkgLoader` to switch versions mid-script.
-4.  **Redis-Powered Speed**: A high-performance knowledge base ensures metadata lookups at ~9 packages/second.
+4.  **Redis-Powered Speed**: A high-performance knowledge base is built for all your packages on install at ~9 packages/second.
 5.  **Atomic Snapshots**: Instant rollback with `omnipkg revert`.
 
 **Example: Safe Flask-Login Downgrade:**
 ```bash
 omnipkg install flask-login==0.4.1
 ```
-```plaintext
+```bash
 📸 Taking LIVE pre-installation snapshot...
 🛡️ DOWNGRADE PROTECTION ACTIVATED!
 -> Detected conflict: flask-login v0.6.3 → v0.4.1
@@ -314,7 +313,7 @@ Verify:
 ```bash
 omnipkg info flask-login
 ```
-```plaintext
+```bash
 📋 flask-login STATUS:
 🎯 Active: 0.6.3 (main)
 🫧 Available: 0.4.1 (bubble)
@@ -328,7 +327,7 @@ You now have both versions available in one environment, ready for use anytime!
 
 *   **Python Interpreter Hot-Swapping**: Seamlessly switch between different Python versions (e.g., 3.8 to 3.11) mid-script.
 *   **Time Machine Technology for Legacy Packages**: Install ancient packages with historically accurate build tools and dependencies that are 100% proven to work in any environment.
-*   **Bubble Validation**: Testing functionality of your bubbles until functional dependencies are installed.
+*   **Bubble validation**: Ensuring your bubbled packages are stored with functional dependencies by testing during installs.
 
 ---
 
@@ -340,7 +339,7 @@ Learn more about `omnipkg`'s capabilities:
 *   [**CLI Commands Reference**](docs/cli_commands_reference.md): All `omnipkg` commands.
 *   [**Runtime Version Switching**](docs/runtime_switching.md): Master `omnipkgLoader` for dynamic, mid-script version changes.
 *   [**Advanced Management**](docs/advanced_management.md): Redis interaction and troubleshooting.
-*   [**Future Roadmap**](docs/future_roadmap.md): Features being built today for a future you. 
+*   [**Future Roadmap**](docs/future_roadmap.md): Features being built today - for you!
 
 ---
 
@@ -361,9 +360,13 @@ This project thrives on community collaboration. Contributions, bug reports, and
 
 [**→ Start Contributing**](https://github.com/1minds3t/omnipkg/issues)
 
+## Dev Humor
+
+
 ```
- ___________________________________________
-/ pip in omnipkg jail 🔒                   \
+ __________________________________________
+/ 🔒 Pip is in Jail                        \
+|    😈 Locked up for causing chaos!        |
 | Status: Learning conflict-free ways       |
 | 💭 'One environment might just work...'   |
 \___________________________________________/
@@ -373,6 +376,3 @@ This project thrives on community collaboration. Contributions, bug reports, and
                 ||----w |
                 ||     ||
 ```
-
-
-
