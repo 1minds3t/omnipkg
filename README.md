@@ -51,7 +51,7 @@
 | **`pip` 💥** | 0 (0%) | N/A | ❌ Mercilessly overwrites itself |
 | **`uv` ⚡️** | 0 (0%) | N/A | ❌ Also overwrites itself (but faster!) |
 
-### 📊 Latest Test: 2025-08-18 01:13 (UTC)
+### 📊 Latest Test: 2025-08-18 00:20 (UTC)
 
 <!-- BATTLE_STATS_END -->
 
@@ -69,7 +69,7 @@
 
 `omnipkg` reached **~3000 PyPI downloads across 35 countries 10 days post-launch with zero marketing.** ([View Live Stats](https://clickpy.clickhouse.com/dashboard/omnipkg)) Our latest `1.0.13` release demonstrates `omnipkg`'s intelligent, self-healing capabilities, allowing unprecedented dynamic version control within a single environment.
 
-Our continuous integration (CI) pipelines run comprehensive, real-world tests after every commit, validating `omnipkg`'s core claims in various challenging scenarios. You can watch them all here: https://github.com/1minds3t/omnipkg/tree/main/.github/workflows. 
+Our continuous integration (CI) pipelines run comprehensive, real-world tests after every commit, validating `omnipkg`'s core claims in various challenging scenarios.
 
 ---
 
