@@ -47,11 +47,11 @@
 
 | Package Manager | Conflict Wins | Environment Saves | Verdict |
 |:----------------|:-------------:|:-----------------:|:--------|
-| **`omnipkg` 🚀** | **24** (100%) | **24** | ✅ Solves conflicts *and* heals environments |
+| **`omnipkg` 🚀** | **25** (100%) | **25** | ✅ Solves conflicts *and* heals environments |
 | **`pip` 💥** | 0 (0%) | N/A | ❌ Mercilessly overwrites itself |
 | **`uv` ⚡️** | 0 (0%) | N/A | ❌ Also overwrites itself (but faster!) |
 
-### 📊 Latest Test: 2025-08-18 12:56 (UTC)
+### 📊 Latest Test: 2025-08-18 13:01 (UTC)
 
 <!-- BATTLE_STATS_END -->
 
