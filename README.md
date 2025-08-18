@@ -364,14 +364,15 @@ This project thrives on community collaboration. Contributions, bug reports, and
 
 
 ```
- __________________________________________
-/ 🔒 Pip is in Jail                        \
-|    😈 Locked up for causing chaos!        |
-| Status: Learning conflict-free ways       |
-| 💭 'One environment might just work...'   |
-\___________________________________________/
+_________________________________________
+/  Traditional package managers:          \
+|   "You need 3 virtualenvs for that!"    |
+|                                         |
+|   omnipkg: *runs all 3 in one env*      |
+|   "Oops. Did I break your rules?"       |
+\_________________________________________/
         \   ^__^
-         \  (oo)\_______
+         \  (◣_◢)\_______
             (__)\       )\/\
                 ||----w |
                 ||     ||
