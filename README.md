@@ -364,7 +364,7 @@ This project thrives on community collaboration. Contributions, bug reports, and
 
 
 ```
-_________________________________________
+ _________________________________________
 /  Traditional package managers:          \
 |   "You need 3 virtualenvs for that!"    |
 |                                         |
