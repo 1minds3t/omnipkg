@@ -4,11 +4,11 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "omnipkg"
-version = "1.0.14"
+version = "1.0.15"
 authors = [
   { name = "1minds3t", email = "omnipkg@proton.me" },
 ]
-description = "The Intelligent Python Dependency Resolver"
+description = "The Ultimate Python Dependency Resolver"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text="AGPL-3.0-or-later" }
