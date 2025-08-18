@@ -7,7 +7,7 @@
 <h1 align="center">omnipkg - The Ultimate Python Dependency Resolver</h1>
 
 <p align="center">
-  <strong>One environment. Infinite packages. Zero conflicts. Undeniable Proof: </strong>
+  <strong>One environment. Infinite packages. Zero conflicts. Undeniable Proof. </strong>
   <a href="https://github.com/1minds3t/omnipkg/actions/workflows/numpy-scipy-c-extension-test.yml">
     <img src="https://img.shields.io/badge/🚀_Live_NumPy+SciPy_Hot--Swapping-passing-success?logo=github-actions" alt="NumPy+SciPy Hot-Swapping Test">
   </a>
