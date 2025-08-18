@@ -32,3 +32,5 @@ graft docs
 # Exclusions
 exclude examples/*
 exclude scripts/*
+
+include requirements.txt
