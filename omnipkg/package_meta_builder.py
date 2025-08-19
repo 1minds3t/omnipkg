@@ -95,76 +95,75 @@ class omnipkgMetadataGatherer:
             return False
 
     def discover_all_packages(self) -> List[Tuple[str, str]]:
+        """
+        Authoritatively discovers all active and bubbled packages from the file system,
+        and cleans up any "ghost" entries from the Redis index that no longer exist.
+        """
+        print("🔍 Discovering all packages from file system (ground truth)...")
         from packaging.utils import canonicalize_name
 
-        packages = {}
-        isolated_packages_versions = {}
-        active_packages = {}
+        # --- Step 1: Discover all packages that ACTUALLY exist on disk ---
+        found_on_disk = {} # { "pkg-name": set("1.0", "2.0") }
 
+        # Discover active packages
         try:
             for dist in importlib.metadata.distributions():
-                package_name_from_meta = dist.metadata.get("Name")
-                if not package_name_from_meta:
-                    continue
-
-                pkg_name = canonicalize_name(package_name_from_meta)
-                version = dist.metadata['Version']
-                if pkg_name not in packages:
-                    packages[pkg_name] = version
-                    active_packages[pkg_name] = version
+                pkg_name = canonicalize_name(dist.metadata.get("Name", ""))
+                if not pkg_name: continue
+                if pkg_name not in found_on_disk:
+                    found_on_disk[pkg_name] = set()
+                found_on_disk[pkg_name].add(dist.version)
         except Exception as e:
-            print(f"⚠️ Error discovering packages from importlib.metadata: {e}")
+            print(f"⚠️ Error discovering active packages: {e}")
 
-        site_packages = Path(self.config["site_packages_path"])
-        if site_packages.is_dir():
-            for item in site_packages.iterdir():
-                if item.is_dir() and (item.name.endswith('.dist-info') or item.name.endswith('.egg-info')):
-                    name_part = item.name.split('-')[0]
-                    pkg_name = canonicalize_name(name_part)
-                    if pkg_name not in packages:
-                        pass
-
+        # Discover bubbled packages
         multiversion_base_path = Path(self.config["multiversion_base"])
         if multiversion_base_path.is_dir():
-            for isolated_pkg_dir in multiversion_base_path.iterdir():
-                if isolated_pkg_dir.is_dir() and '-' in isolated_pkg_dir.name:
-                    for dist_info in isolated_pkg_dir.glob("*.dist-info"):
-                        try:
-                            from importlib.metadata import PathDistribution
-                            dist = PathDistribution(dist_info)
-                            package_name_from_meta = dist.metadata.get("Name")
-                            if not package_name_from_meta:
-                                continue
+            for bubble_dir in multiversion_base_path.iterdir():
+                # We can't trust the directory name alone; we must read the metadata.
+                dist_info = next(bubble_dir.glob("*.dist-info"), None)
+                if dist_info:
+                    try:
+                        from importlib.metadata import PathDistribution
+                        dist = PathDistribution(dist_info)
+                        pkg_name = canonicalize_name(dist.metadata.get("Name", ""))
+                        if not pkg_name: continue
+                        if pkg_name not in found_on_disk:
+                            found_on_disk[pkg_name] = set()
+                        found_on_disk[pkg_name].add(dist.version)
+                    except Exception:
+                        continue
+        
+        # --- Step 2: Compare reality (disk) with the cache (Redis) and reconcile ---
+        print("    -> Reconciling file system state with Redis knowledge base...")
+        redis_index_key = f"{self.config['redis_key_prefix']}index"
+        packages_in_redis = self.redis_client.smembers(redis_index_key)
+        packages_on_disk = set(found_on_disk.keys())
 
-                            pkg_name = canonicalize_name(package_name_from_meta)
-                            pkg_version = dist.metadata['Version']
-                            if pkg_name not in isolated_packages_versions:
-                                isolated_packages_versions[pkg_name] = set()
-                            isolated_packages_versions[pkg_name].add(pkg_version)
-                            # Register bubble path
-                            self._register_bubble_path(pkg_name, pkg_version, isolated_pkg_dir)
-                        except Exception:
-                            continue
+        # Find packages that are in Redis but no longer exist anywhere on disk
+        ghost_packages = packages_in_redis - packages_on_disk
+        if ghost_packages:
+            print(f"    👻 Found {len(ghost_packages)} ghost packages in Redis to remove.")
+            with self.redis_client.pipeline() as pipe:
+                for pkg_name in ghost_packages:
+                    main_key = f"{self.config['redis_key_prefix']}{pkg_name}"
+                    versions_set_key = f"{main_key}:installed_versions"
+                    # Delete all associated keys for this ghost package
+                    pipe.delete(main_key, versions_set_key) 
+                    # Use scan to find and delete version-specific keys
+                    for key in self.redis_client.scan_iter(f"{main_key}:*"):
+                        pipe.delete(key)
+                # Remove from the master index
+                pipe.srem(redis_index_key, *ghost_packages)
+                pipe.execute()
 
-        self._store_active_versions(active_packages)
-
-        all_unique_package_versions = {}
-        for pkg_name, version in packages.items():
-            if pkg_name not in all_unique_package_versions:
-                all_unique_package_versions[pkg_name] = set()
-            all_unique_package_versions[pkg_name].add(version)
-
-        for pkg_name, versions_set in isolated_packages_versions.items():
-            if pkg_name not in all_unique_package_versions:
-                all_unique_package_versions[pkg_name] = set()
-            all_unique_package_versions[pkg_name].update(versions_set)
-
+        # --- Step 3: Prepare the final list of packages to process ---
         result_list = []
-        for pkg_name, versions_set in all_unique_package_versions.items():
+        for pkg_name, versions_set in found_on_disk.items():
             for version_str in versions_set:
                 result_list.append((pkg_name, version_str))
 
-        print(f"🔍 Discovered {len(all_unique_package_versions)} unique packages with {len(result_list)} total versions.")
+        print(f"✅ Discovery complete. Found {len(found_on_disk)} unique packages with {len(result_list)} total versions to process.")
         return sorted(result_list, key=lambda x: x[0])
 
     def _register_bubble_path(self, pkg_name: str, version: str, bubble_path: Path):
