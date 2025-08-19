@@ -4,14 +4,13 @@ omnipkg - The "Freedom" Edition v2
 An intelligent installer that lets pip run, then surgically cleans up downgrades
 and isolates conflicting versions in deduplicated bubbles to guarantee a stable environment.
 """
+
+# Standard library imports
 import sys
-import json
-import subprocess
-import redis
-import zlib
-import requests as http_requests
 import os
 import io
+import json
+import subprocess
 import shutil
 import site
 import pickle
@@ -19,18 +18,29 @@ import zipfile
 import hashlib
 import tempfile
 import re
-import filelock
 import importlib.metadata
-import magic
-import tqdm
 import concurrent.futures
-from packaging.utils import canonicalize_name
-from filelock import FileLock
-from datetime import datetime
 from pathlib import Path
-from packaging.version import parse as parse_version, InvalidVersion
+from datetime import datetime
 from typing import Dict, List, Optional, Set, Tuple
 from importlib.metadata import Distribution
+
+# Third-party imports
+import redis
+import zlib
+import requests as http_requests
+import filelock
+import magic
+from filelock import FileLock
+from packaging.utils import canonicalize_name
+from packaging.version import parse as parse_version, InvalidVersion
+
+# Optional imports with fallbacks
+try:
+    import tomli
+except ImportError:
+    # Fallback for older Python versions
+    import toml as tomli
 
 try:
     from tqdm import tqdm
@@ -44,14 +54,71 @@ except ImportError:
 
 # Define omnipkg's core dependencies to prevent accidental uninstallation
 # These should match the 'dependencies' list in your pyproject.toml
-OMNIPKG_CORE_DEPS = {
-    "redis",
-    "packaging",
-    "requests",
-    "python-magic",
-    "aiohttp",
-    "tqdm"
-}
+
+# ===================================================================
+# ### DYNAMICALLY LOAD CORE DEPENDENCIES (SINGLE SOURCE OF TRUTH) ###
+# 
+
+def _get_core_dependencies() -> set:
+    """
+    Dynamically loads the core dependencies for omnipkg itself.
+
+    It first tries to read the metadata of the installed 'omnipkg' package,
+    which is the most reliable method. As a fallback for development environments,
+    it will search for and parse 'pyproject.toml'.
+    """
+    dependencies = set()
+    
+    # --- STRATEGY 1: Read from installed package metadata (Most Robust) ---
+    try:
+        dist = importlib.metadata.distribution('omnipkg')
+        if dist.requires:
+            for req_str in dist.requires:
+                # Use regex to extract just the package name, ignoring versions, extras, etc.
+                match = re.match(r'^[a-zA-Z0-9\-_.]+', req_str)
+                if match:
+                    # Canonicalize the name to handle underscores vs. hyphens
+                    dependencies.add(canonicalize_name(match.group(0)))
+        if dependencies:
+            print("✅ Core dependencies loaded from installed package metadata.")
+            return dependencies
+    except importlib.metadata.PackageNotFoundError:
+        # This is expected if running directly from source without an editable install.
+        pass
+    except Exception as e:
+        print(f"⚠️ Warning: Could not read package metadata: {e}")
+
+    # --- STRATEGY 2: Fallback to reading pyproject.toml (For Dev Environments) ---
+    try:
+        # Search upwards from this file for pyproject.toml
+        current_path = Path(__file__).resolve()
+        for parent in current_path.parents:
+            pyproject_path = parent / "pyproject.toml"
+            if pyproject_path.exists():
+                print("✅ Core dependencies loaded from pyproject.toml.")
+                with open(pyproject_path, "rb") as f:
+                    toml_data = tomli.load(f)
+                    dep_list = toml_data.get("project", {}).get("dependencies", [])
+                    for req_str in dep_list:
+                        match = re.match(r'^[a-zA-Z0-9\-_.]+', req_str)
+                        if match:
+                            dependencies.add(canonicalize_name(match.group(0)))
+                return dependencies
+    except Exception as e:
+        print(f"⚠️ Warning: Could not parse pyproject.toml: {e}")
+
+    # --- STRATEGY 3: Final fallback if all else fails ---
+    print("❌ CRITICAL: Could not dynamically load dependencies. Using hardcoded fallback.")
+    return {
+        "redis", "packaging", "requests", "python-magic", "aiohttp", "tqdm", "filelock", "tomli"
+    }
+    
+OMNIPKG_CORE_DEPS = _get_core_dependencies()
+
+# You can add a check to make sure omnipkg itself is in the list
+OMNIPKG_CORE_DEPS.add("omnipkg")
+
+#===================================================================
 
 class ConfigManager:
     """
@@ -1031,17 +1098,32 @@ class BubbleIsolationManager:
         
         try:
             with self.parent_omnipkg.redis_client.pipeline() as pipe:
-                # Main bubble registry
+                # Main bubble registry (existing code)
                 pipe.hset(registry_key, bubble_id, json.dumps(redis_bubble_data))
                 
-                # Create reverse lookup indices for fast queries
+                # --- START: NEW SELF-HEALING LOGIC ---
+                # Also, update the main package key to mark this version as bubbled.
+                # This is the crucial fix for the "not reflecting as bubbled" issue.
                 for pkg_name, pkg_info in installed_tree.items():
-                    pkg_version_key = f"{pkg_name}=={pkg_info['version']}"
-                    # Index: package version -> bubble location
+                    canonical_pkg_name = canonicalize_name(pkg_name)
+                    main_pkg_key = f"{self.config['redis_key_prefix']}{canonical_pkg_name}"
+                    version_str = pkg_info['version']
+                    
+                    # Mark this specific version as a bubble
+                    pipe.hset(main_pkg_key, f"bubble_version:{version_str}", "true")
+                    # Ensure this version is in the set of all known installed versions
+                    pipe.sadd(f"{main_pkg_key}:installed_versions", version_str)
+                    # Ensure the package itself is in the global index
+                    pipe.sadd(f"{self.config['redis_key_prefix']}index", canonical_pkg_name)
+                # --- END: NEW SELF-HEALING LOGIC ---
+        
+                # Create reverse lookup indices (existing code)
+                for pkg_name, pkg_info in installed_tree.items():
+                    pkg_version_key = f"{canonicalize_name(pkg_name)}=={pkg_info['version']}"
                     pipe.hset(f"{self.config['redis_key_prefix']}pkg_to_bubble", 
                             pkg_version_key, bubble_id)
                 
-                # Size-based index for cleanup operations
+                # Size-based index (existing code)
                 size_category = "small" if size_mb < 10 else "medium" if size_mb < 100 else "large"
                 pipe.sadd(f"{self.config['redis_key_prefix']}bubbles_by_size:{size_category}", bubble_id)
                 
@@ -1309,34 +1391,47 @@ class omnipkg:
             return 1
 
     def reset_knowledge_base(self, force: bool = False) -> int:
-        """Deletes all data from the Redis knowledge base and then triggers a full rebuild."""
+        """
+        Deletes ALL omnipkg data from the Redis knowledge base and then triggers a full rebuild.
+        This is a "hard reset" for omnipkg's brain, not for the Python environment itself.
+        """
         if not self.connect_redis():
             return 1
-
+    
         scan_pattern = f"{self.config['redis_key_prefix']}*"
         
         print(f"\n🧠 omnipkg Knowledge Base Reset")
-        print(f"   This will DELETE all data matching '{scan_pattern}' and then rebuild.")
-
+        print("-" * 50)
+        print(f"   This will DELETE all data matching '{scan_pattern}' from Redis.")
+        print(f"   It will then rebuild the knowledge base from the CURRENT state of your file system.")
+        print(f"   ⚠️  This command does NOT uninstall any Python packages.")
+    
         if not force:
             confirm = input("\n🤔 Are you sure you want to proceed? (y/N): ").lower().strip()
             if confirm != 'y':
                 print("🚫 Reset cancelled.")
                 return 1
-
+    
         print("\n🗑️  Clearing knowledge base...")
         try:
+            # Use scan_iter for memory efficiency on large databases
             keys_found = list(self.redis_client.scan_iter(match=scan_pattern))
             if keys_found:
-                self.redis_client.delete(*keys_found)
-                print(f"   ✅ Cleared {len(keys_found)} cached entries.")
+                # Use unlink for non-blocking deletion if available, otherwise fall back to delete.
+                delete_command = self.redis_client.unlink if hasattr(self.redis_client, 'unlink') else self.redis_client.delete
+                delete_command(*keys_found)
+                print(f"   ✅ Cleared {len(keys_found)} cached entries from Redis.")
             else:
                 print("   ✅ Knowledge base was already clean.")
         except Exception as e:
             print(f"   ❌ Failed to clear knowledge base: {e}")
             return 1
-
-        return self.rebuild_knowledge_base(force=True)  
+    
+        # Clear local caches as well to ensure a completely fresh state
+        self._info_cache.clear()
+        self._installed_packages_cache = None
+    
+        return self.rebuild_knowledge_base(force=True)
         
     def rebuild_knowledge_base(self, force: bool = False):
         """Runs a full metadata build process without deleting first."""
@@ -1393,6 +1488,83 @@ class omnipkg:
         print(f"   • `omnipkg list` - see your package health score")
         print(f"   • `omnipkg ai-suggest` - get AI-powered optimization ideas (coming soon)")
         print(f"   • `omnipkg ram-cache --enable` - keep hot packages in RAM (coming soon)")
+        
+    def _synchronize_knowledge_base_with_reality(self):
+        """
+        Self-healing function. Compares the file system (ground truth) with Redis (cache)
+        and reconciles any differences.
+        """
+        print("🧠 Performing self-healing sync of knowledge base...")
+        if not self.redis_client: self.connect_redis()
+
+        all_known_packages = self.redis_client.smembers(f"{self.config['redis_key_prefix']}index")
+        packages_to_check = set(all_known_packages)
+        
+        # Also check for untracked bubble directories
+        if self.multiversion_base.exists():
+            for bubble_dir in self.multiversion_base.iterdir():
+                if bubble_dir.is_dir() and '-' in bubble_dir.name:
+                    pkg_name = bubble_dir.name.split('-', 1)[0]
+                    packages_to_check.add(canonicalize_name(pkg_name))
+
+        if not packages_to_check:
+            print("   ✅ Knowledge base is empty or no packages found to sync.")
+            return
+
+        fixed_count = 0
+        with self.redis_client.pipeline() as pipe:
+            for pkg_name in packages_to_check:
+                main_key = f"{self.config['redis_key_prefix']}{pkg_name}"
+                
+                # 1. Ground Truth: Check active version in main environment
+                real_active_version = None
+                try:
+                    real_active_version = importlib.metadata.version(pkg_name)
+                except importlib.metadata.PackageNotFoundError:
+                    pass
+
+                # 2. Ground Truth: Check for bubbled versions on disk
+                real_bubbled_versions = set()
+                if self.multiversion_base.exists():
+                    for bubble_dir in self.multiversion_base.glob(f"{pkg_name}-*"):
+                        if bubble_dir.is_dir():
+                            version = bubble_dir.name.split(f"{pkg_name}-", 1)[1]
+                            real_bubbled_versions.add(version)
+
+                # 3. Get Cached State from Redis
+                cached_data = self.redis_client.hgetall(main_key)
+                cached_active_version = cached_data.get("active_version")
+                cached_bubbled_versions = {
+                    k.replace("bubble_version:", "") for k in cached_data if k.startswith("bubble_version:")
+                }
+
+                # 4. Reconcile Active Version
+                if real_active_version and real_active_version != cached_active_version:
+                    pipe.hset(main_key, "active_version", real_active_version)
+                    fixed_count += 1
+                elif not real_active_version and cached_active_version:
+                    pipe.hdel(main_key, "active_version")
+                    fixed_count += 1
+
+                # 5. Reconcile Bubbled Versions
+                # Remove stale bubble flags from Redis that don't exist on disk
+                stale_bubbles = cached_bubbled_versions - real_bubbled_versions
+                for version in stale_bubbles:
+                    pipe.hdel(main_key, f"bubble_version:{version}")
+                    fixed_count += 1
+
+                # Add bubble flags to Redis that exist on disk but are not in cache
+                missing_bubbles = real_bubbled_versions - cached_bubbled_versions
+                for version in missing_bubbles:
+                    pipe.hset(main_key, f"bubble_version:{version}", "true")
+                    fixed_count += 1
+            
+            pipe.execute()
+
+        if fixed_count > 0:
+            print(f"   ✅ Sync complete. Reconciled {fixed_count} discrepancies.")
+        else:
+            print("   ✅ Knowledge base is already in sync with the environment.")
 
     def _update_hash_index_for_delta(self, before: Dict, after: Dict):
         """Surgically updates the cached hash index in Redis after an install."""
@@ -1655,6 +1827,10 @@ class omnipkg:
         
         if not self.connect_redis():
             return 1
+        
+        # --- NEW: RUN SELF-HEALING SYNC ---
+        self._synchronize_knowledge_base_with_reality()
+        # ----------------------------------
 
         if dry_run:
             print("🔬 Running in --dry-run mode. No changes will be made.")
@@ -1952,185 +2128,189 @@ class omnipkg:
         return datetime.datetime.now().isoformat()
 
     def _find_package_installations(self, package_name: str) -> List[Dict]:
-        """Find all installations of a package, both active and bubbled."""
-        from importlib.metadata import PathDistribution
+        """
+        Find all installations of a package by querying the Redis knowledge base.
+        This is the single source of truth for omnipkg's state.
+        """
         found = []
-        seen_versions = set()  # Track unique versions to avoid duplicates
+        c_name = canonicalize_name(package_name)
+        main_key = f"{self.config['redis_key_prefix']}{c_name}"
 
-        # 1. Check for active installation in main environment
-        try:
-            active_version = importlib.metadata.version(package_name)
-            found.append({
-                "name": package_name,
-                "version": active_version,
-                "type": "active",
-                "path": "Main Environment"
-            })
-            seen_versions.add(active_version)
-        except importlib.metadata.PackageNotFoundError:
-            pass
+        # Get all data for this package in a single Redis call
+        package_data = self.redis_client.hgetall(main_key)
 
-        # 2. Check for bubbled installations
-        normalized_name = package_name.lower().replace("-", "_")  # e.g., flask_login
-        hyphenated_name = package_name.lower()  # e.g., flask-login
+        if not package_data:
+            return [] # Package is not known to omnipkg
 
-        for pattern in [f"{normalized_name}-*", f"{hyphenated_name}-*"]:
-            for bubble_dir in self.multiversion_base.glob(pattern):
-                if bubble_dir.is_dir():
-                    try:
-                        dist_info = next(bubble_dir.glob("*.dist-info"), None)
-                        if dist_info:
-                            dist = PathDistribution(dist_info)
-                            dist_pkg_name = dist.metadata.get("Name", "").lower().replace("-", "_")
-                            if dist_pkg_name in (normalized_name, hyphenated_name.replace("-", "_")):
-                                version = dist.version
-                                if version not in seen_versions:  # Skip duplicates
-                                    found.append({
-                                        "name": package_name,
-                                        "version": version,
-                                        "type": "bubble",
-                                        "path": bubble_dir
-                                    })
-                                    seen_versions.add(version)
-                    except (IndexError, StopIteration, Exception) as e:
-                        print(f"⚠️ Error processing bubble {bubble_dir}: {e}")
-                        continue
+        # Iterate through the fields to find active and bubbled versions
+        for key, value in package_data.items():
+            if key == "active_version":
+                # This is the version actively installed in the main environment
+                found.append({
+                    "name": package_data.get("name", c_name), # Use original case if available
+                    "version": value,
+                    "type": "active",
+                    "path": "Main Environment" # This is a logical location
+                })
+            elif key.startswith("bubble_version:") and value == "true":
+                # This is a version that exists inside a bubble
+                version = key.replace("bubble_version:", "")
+                # The path to a bubble follows a predictable pattern
+                bubble_path = self.multiversion_base / f"{package_data.get('name', c_name)}-{version}"
+                found.append({
+                    "name": package_data.get("name", c_name),
+                    "version": version,
+                    "type": "bubble",
+                    "path": str(bubble_path)
+                })
+
         return found
 
     def smart_uninstall(self, packages: List[str], force: bool = False) -> int:
-        """Uninstalls packages from the main environment or from bubbles."""
+        """Uninstalls packages from the main environment or from bubbles with full knowledge base sync."""
         if not self.connect_redis(): return 1
-
+    
+        # Run the self-healing sync first to ensure we have the correct state
+        self._synchronize_knowledge_base_with_reality()
+    
         for pkg_spec in packages:
             print(f"\nProcessing uninstall for: {pkg_spec}")
-
+    
             pkg_name, specific_version = self._parse_package_spec(pkg_spec)
-            exact_pkg_name = pkg_name.lower().replace('_', '-')  # Canonical name for Redis
-
+            exact_pkg_name = canonicalize_name(pkg_name)
+    
             all_installations_found = self._find_package_installations(exact_pkg_name)
-
+    
             if not all_installations_found:
                 print(f"🤷 Package '{pkg_name}' not found.")
                 continue
-
-            to_uninstall = []
-
-            # Filter installations to match exact package name
-            to_uninstall = [
-                inst for inst in all_installations_found
-                if inst['name'].lower().replace('_', '-') == exact_pkg_name
-            ]
-
+    
+            # This logic is now simpler because _find_package_installations is the source of truth
+            to_uninstall = all_installations_found
+    
             if specific_version:
                 to_uninstall = [inst for inst in to_uninstall if inst['version'] == specific_version]
                 if not to_uninstall:
                     print(f"🤷 Version '{specific_version}' of '{pkg_name}' not found.")
                     continue
-                print(f"Targeting specified version: {specific_version}")
-            elif force:
-                print(f"Auto-confirming uninstallation of all non-protected versions for '{pkg_name}'.")
-                to_uninstall = [
-                    inst for inst in to_uninstall
-                    if not (inst['type'] == 'active' and (
-                        inst['name'].lower() == "omnipkg" or
-                        inst['name'].lower() in OMNIPKG_CORE_DEPS
-                    ))
-                ]
-            else:
+                print(f"🎯 Targeting specified version: {specific_version}")
+    
+            # This is where the interactive choice or 'all' logic happens
+            elif not force:
                 print(f"Found multiple installations for '{pkg_name}':")
                 numbered_installations = []
                 for i, inst in enumerate(to_uninstall):
+                    
+                    # --- THIS IS THE CORRECTED PROTECTION LOGIC ---
+                    is_protected = (
+                        inst['type'] == 'active' and 
+                        (canonicalize_name(inst['name']) == 'omnipkg' or canonicalize_name(inst['name']) in OMNIPKG_CORE_DEPS)
+                    )
+                    # --- END OF FIX ---
+                    
                     status_tags = [inst['type']]
-                    if inst['type'] == 'active' and (
-                        inst['name'].lower() == "omnipkg" or
-                        inst['name'].lower() in OMNIPKG_CORE_DEPS
-                    ):
-                        status_tags.append("PROTECTED (cannot uninstall active)")
+                    if is_protected:
+                        status_tags.append("PROTECTED")
+    
                     numbered_installations.append({
                         "index": i + 1,
                         "installation": inst,
-                        "status_tags": status_tags,
-                        "is_active_protected": inst['type'] == 'active' and (
-                            inst['name'].lower() == "omnipkg" or
-                            inst['name'].lower() in OMNIPKG_CORE_DEPS
-                        )
+                        "is_protected": is_protected
                     })
                     print(f"  {i + 1}) v{inst['version']} ({', '.join(status_tags)})")
-
+    
                 if not numbered_installations:
-                    print("🤷 No installations available for selection.")
+                    print("🤷 No versions available for selection.")
                     continue
-
+    
                 try:
-                    choice = input(f"🤔 Enter numbers to uninstall (e.g., '1,2') or 'all' to target all non-protected: ").lower().strip()
-                except EOFError:
-                    choice = 'n'
-
-                if choice == 'n' or not choice:
-                    print("🚫 Uninstall cancelled.")
-                    continue
-                
-                selected_indices = []
-                if choice == 'all':
-                    selected_indices = [item['index'] for item in numbered_installations]
-                else:
-                    try:
-                        selected_indices = [int(idx.strip()) for idx in choice.split(',')]
-                    except ValueError:
-                        print("❌ Invalid input. Please enter numbers separated by commas, or 'all'.")
+                    choice = input(f"🤔 Enter numbers to uninstall (e.g., '1,2'), 'all', or press Enter to cancel: ").lower().strip()
+                    if not choice:
+                        print("🚫 Uninstall cancelled.")
                         continue
-
-                to_uninstall = [
-                    item['installation'] for item in numbered_installations
-                    if item['index'] in selected_indices and not item['is_active_protected']
-                ]
-
-            if not to_uninstall:
-                if not specific_version and not force:
-                    pass
-                elif not specific_version and force:
-                    print(f"🤷 No valid installations of '{pkg_name}' found to remove after protection checks with --yes.")
-                elif specific_version:
-                    pass
-                continue
-
-            print(f"Found {len(to_uninstall)} installation(s) to remove:")
-            for item in to_uninstall:
-                print(f"  - v{item['version']} ({item['type']})")
+                    
+                    selected_indices = []
+                    if choice == 'all':
+                        # Select all non-protected items
+                        selected_indices = [item['index'] for item in numbered_installations if not item['is_protected']]
+                    else:
+                        try:
+                            selected_indices = {int(idx.strip()) for idx in choice.split(',')}
+                        except ValueError:
+                            print("❌ Invalid input.")
+                            continue
+                    
+                    # Filter the list based on user's selection
+                    to_uninstall = [
+                        item['installation'] for item in numbered_installations
+                        if item['index'] in selected_indices
+                    ]
+                    
+                except (KeyboardInterrupt, EOFError):
+                    print("\n🚫 Uninstall cancelled.")
+                    continue
             
+            # Now, filter out any protected packages the user might have selected
+            final_to_uninstall = []
+            for item in to_uninstall:
+                is_protected = (
+                    item['type'] == 'active' and
+                    (canonicalize_name(item['name']) == 'omnipkg' or canonicalize_name(item['name']) in OMNIPKG_CORE_DEPS)
+                )
+                if is_protected:
+                    print(f"⚠️  Skipping protected package: {item['name']} v{item['version']} (active)")
+                else:
+                    final_to_uninstall.append(item)
+    
+            if not final_to_uninstall:
+                print("🤷 No versions selected for uninstallation after protection checks.")
+                continue
+    
+            print(f"\nPreparing to remove {len(final_to_uninstall)} installation(s) for '{exact_pkg_name}':")
+            for item in final_to_uninstall:
+                print(f"  - v{item['version']} ({item['type']})")
+    
             if not force:
                 confirm = input("🤔 Are you sure you want to proceed? (y/N): ").lower().strip()
                 if confirm != 'y':
                     print("🚫 Uninstall cancelled.")
                     continue
-
-            for item in to_uninstall:
+    
+            for item in final_to_uninstall:
                 if item['type'] == 'active':
-                    print(f"🗑️ Uninstalling '{item['name']}' from main environment...")
-                    self._run_pip_uninstall([item['name']])
+                    print(f"🗑️  Uninstalling '{item['name']}=={item['version']}' from main environment via pip...")
+                    self._run_pip_uninstall([f"{item['name']}=={item['version']}"])
                 elif item['type'] == 'bubble':
-                    bubble_dir = item['path']
+                    bubble_dir = Path(item['path'])
                     if bubble_dir.exists():
-                        print(f"🗑️ Deleting bubble: {bubble_dir.name}")
+                        print(f"🗑️  Deleting bubble directory: {bubble_dir.name}")
                         shutil.rmtree(bubble_dir)
                     else:
-                        print(f"⚠️ Bubble not found: {bubble_dir.name}")
-
-                main_key = f"{self.config['redis_key_prefix']}{item['name'].lower().replace('-', '_')}"
+                        print(f"⚠️  Bubble directory not found, cleaning up registry anyway: {bubble_dir.name}")
+    
+                print(f"🧹 Cleaning up knowledge base for {item['name']} v{item['version']}...")
+                main_key = f"{self.config['redis_key_prefix']}{canonicalize_name(item['name'])}"
                 version_key = f"{main_key}:{item['version']}"
+                versions_set_key = f"{main_key}:installed_versions"
+                index_key = f"{self.config['redis_key_prefix']}index"
+    
                 with self.redis_client.pipeline() as pipe:
-                    pipe.srem(f"{main_key}:installed_versions", item['version'])
                     pipe.delete(version_key)
-                    
-                    active_version_in_redis = self.redis_client.hget(main_key, "active_version")
-                    if active_version_in_redis and active_version_in_redis == item['version']:
+                    pipe.srem(versions_set_key, item['version'])
+                    if item['type'] == 'active':
                         pipe.hdel(main_key, "active_version")
-                    
-                    pipe.hdel(main_key, f"bubble_version:{item['version']}")
+                    else: 
+                        pipe.hdel(main_key, f"bubble_version:{item['version']}")
                     pipe.execute()
-
+    
+                if not self.redis_client.exists(versions_set_key) or self.redis_client.scard(versions_set_key) == 0:
+                    print(f"    -> Last version of '{canonicalize_name(item['name'])}' removed. Deleting all traces from knowledge base.")
+                    with self.redis_client.pipeline() as pipe:
+                        pipe.delete(main_key, versions_set_key)
+                        pipe.srem(index_key, canonicalize_name(item['name']))
+                        pipe.execute()
+    
             print("✅ Uninstallation complete.")
-            
             self._save_last_known_good_snapshot() 
         
         return 0
