@@ -42,18 +42,24 @@
 `omnipkg` radically simplifies Python dependency management, providing a robust alternative to tools like `pipx`, `uv`, `conda`, and `Docker` for handling conflicting packages. Born from a real-world nightmare—a forced downgrade that wrecked a `conda-forge` environment on a Friday night—`omnipkg` was built in a weekend to solve what others couldn’t: running multiple versions of the same package in one environment without conflicts.
 
 ---
-<!-- BATTLE_STATS_START -->
-## 🥊 Package Manager Thunderdome [![🥊 omnipkg vs The World - Battle & Resilience Test](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml/badge.svg)](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml)
 
-| Package Manager | Conflict Wins | Environment Saves | Verdict |
-|:----------------|:-------------:|:-----------------:|:--------|
-| **`omnipkg` 🚀** | **85** (100%) | **85** | ✅ Solves conflicts *and* heals environments |
-| **`pip` 💥** | 0 (0%) | N/A | ❌ Mercilessly overwrites itself |
-| **`uv` ⚡️** | 0 (0%) | N/A | ❌ Also overwrites itself (but faster!) |
+<!-- COMPARISON_STATS_START -->
+## Multi-Version Package Management Comparison [![Package Manager Comparison Test](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml/badge.svg)](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml)
 
-### 📊 Latest Test: 2025-08-20 15:40 (UTC)
+*Demonstrates omnipkg's unique ability to maintain multiple versions of the same package in one environment.*  
+*Automated testing runs hourly for pre-release validation. [View live results](https://github.com/1minds3t/omnipkg)*
 
-<!-- BATTLE_STATS_END -->
+| Package Manager | Multi-Version Support | Environment Restoration | Capability |
+|:----------------|:----------------------:|:-----------------------:|:-----------|
+| **omnipkg** | **86** (100%) | **86** | ✅ Multiple versions coexist simultaneously |
+| **pip** | 0 (0%) | N/A | Single version (replacement model) |
+| **uv** | 0 (0%) | N/A | Single version (replacement model) |
+
+*This fundamental difference enables advanced dependency management scenarios detailed below.*
+
+*Last updated: 2025-08-20 16:39 UTC*
+
+<!-- COMPARISON_STATS_END -->
 
 ---
 
@@ -377,21 +383,3 @@ This project thrives on community collaboration. Contributions, bug reports, and
                 ||----w |
                 ||     ||
 ```
-
-<!-- COMPARISON_STATS_START -->
-## Multi-Version Package Management Comparison [![Package Manager Comparison Test](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml/badge.svg)](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml)
-
-*Demonstrates omnipkg's unique ability to maintain multiple versions of the same package in one environment.*  
-*Automated testing runs hourly for pre-release validation. [View live results](https://github.com/1minds3t/omnipkg)*
-
-| Package Manager | Multi-Version Support | Environment Restoration | Capability |
-|:----------------|:----------------------:|:-----------------------:|:-----------|
-| **omnipkg** | **86** (100%) | **86** | ✅ Multiple versions coexist simultaneously |
-| **pip** | 0 (0%) | N/A | Single version (replacement model) |
-| **uv** | 0 (0%) | N/A | Single version (replacement model) |
-
-*This fundamental difference enables advanced dependency management scenarios detailed below.*
-
-*Last updated: 2025-08-20 16:39 UTC*
-
-<!-- COMPARISON_STATS_END -->
