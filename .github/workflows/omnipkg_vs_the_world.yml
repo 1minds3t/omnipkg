@@ -221,7 +221,7 @@ jobs:
 
           badge = "[![Package Manager Comparison Test](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml/badge.svg)](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml)"
           
-          battle_section = f"""## 🥊 Package Manager Multi-Version Support Battle
+          battle_section = f"""## Package Manager Multi-Version Support Battle
 
 {badge}
 
@@ -229,9 +229,9 @@ jobs:
 
 | Package Manager | Multi-Version Support | What Actually Happens |
 |:----------------|:--------------------:|:---------------------|
-| **🔥 omnipkg** | **✅ {omnipkg_wins} tests (100%)** | Protection + Bubble + Success |
-| **pip** | **❌ {pip_wins} tests (0%)** | {pip_replacement} |
-| **uv** | **❌ {uv_wins} tests (0%)** | {uv_replacement} |
+| **omnipkg** | **{omnipkg_wins} tests (100%)** | STABILITY PROTECTION + Bubble Creation + Both Available |
+| **pip** | **{pip_wins} tests (0%)** | Successfully uninstalled older version |
+| **uv** | **{uv_wins} tests (0%)** | Classic replacement pattern |
 
 ### The Harsh Reality:
 
