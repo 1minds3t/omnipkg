@@ -29,7 +29,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          fetch-depth: 1
+          fetch-depth: 0  # Fetch full history to avoid rebase issues
 
       - name: Set up Python 3.11
         uses: actions/setup-python@v5
@@ -232,20 +232,67 @@ jobs:
           EOF
           python update_documentation.py
 
-      - name: Commit documentation updates
+      - name: Commit and push documentation updates
+        continue-on-error: true  # Don't fail the workflow if git operations fail
         run: |
+          # Configure git
           git config --local user.email "action@github.com"
           git config --local user.name "Package Manager Test Bot"
-          git clean -f -X -- extract_stats.py update_documentation.py
-          git pull --rebase origin main || true
-          git add README.md
+          
+          # Clean up temporary files
+          git clean -f -X -- extract_stats.py update_documentation.py *.log || true
+          
+          # Check if we have changes to commit
+          git add README.md || true
+          
           if git diff --staged --quiet; then
             echo "No documentation changes to commit"
+            exit 0
+          fi
+          
+          # Handle potential merge conflicts more robustly
+          echo "Attempting to commit and push changes..."
+          
+          # Try simple push first
+          git commit -m "docs: update package manager comparison results - $(date -u '+%Y-%m-%d %H:%M UTC')" || {
+            echo "Commit failed, likely due to no changes"
+            exit 0
+          }
+          
+          # Try to push, with fallback strategies
+          if git push origin main; then
+            echo "✓ Successfully pushed changes"
           else
-            git commit -m "docs: update package manager comparison results - $(date -u '+%Y-%m-%d %H:%M UTC')"
-            git push || {
-              echo "Push failed, attempting retry after rebase..."
-              git pull --rebase origin main || true
-              git push
-            }
+            echo "Push failed, attempting merge strategy..."
+            
+            # Fetch latest changes
+            git fetch origin main || true
+            
+            # Try merge instead of rebase to avoid conflicts
+            if git merge origin/main --no-edit; then
+              echo "Merged successfully, attempting push again..."
+              git push origin main || echo "⚠️ Final push failed, but tests completed successfully"
+            else
+              echo "⚠️ Merge conflicts detected. Manual resolution required."
+              echo "However, the package manager tests completed successfully."
+              # Reset to a clean state but don't fail the workflow
+              git reset --hard HEAD~1 || true
+            fi
+          fi
+
+      - name: Report test results
+        run: |
+          echo "=== PACKAGE MANAGER COMPARISON TEST RESULTS ==="
+          echo "omnipkg multi-version coexistence: $OMNIPKG_COEXIST_RESULT"
+          echo "omnipkg environment restoration: $OMNIPKG_RESTORE_RESULT"
+          echo "pip multi-version coexistence: $PIP_COEXIST_RESULT"
+          echo "uv multi-version coexistence: $UV_COEXIST_RESULT"
+          echo "================================================"
+          
+          # Set workflow status based on omnipkg test results
+          if [[ "$OMNIPKG_COEXIST_RESULT" == "PASS" ]]; then
+            echo "✅ Primary tests passed - omnipkg demonstrates superior multi-version handling"
+          else
+            echo "❌ Primary tests failed - omnipkg multi-version handling needs investigation"
+            exit 1
           fi
