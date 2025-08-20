@@ -190,10 +190,10 @@ def test_tensorflow():
     print(f"Using omnipkg versions directory: {OMNIPKG_VERSIONS_DIR}")
 
     print("\n📦 Setting up test environment with proper version arrangement")
-    print("🧹 Clearing existing installations...")
+    print("🧹 Clearing existing TensorFlow installations...")
+    # Only uninstall the packages we're testing, not protected dependencies
     run_command_filtered(["omnipkg", "uninstall", "tensorflow", "-y"], check=False)
     run_command_filtered(["omnipkg", "uninstall", "tensorflow-estimator", "-y"], check=False)
-    run_command_filtered(["omnipkg", "uninstall", "typing-extensions", "-y"], check=False)
     run_command_filtered(["omnipkg", "uninstall", "keras", "-y"], check=False)
     
     print("📦 Installing with desired version priority (newer active, older in bubbles)...")
@@ -286,21 +286,23 @@ with omnipkgLoader("typing_extensions==4.5.0", config={{'multiversion_base': '{O
 '''
     run_script_only_relevant_output(code_bubble_test)
 
-    print("\n🚀 STEP 4: Final cleanup")
+    print("\n🚀 Final cleanup and verification")
+    print("🧹 Removing TensorFlow packages (keeping protected dependencies)...")
     run_command_filtered(["omnipkg", "uninstall", "tensorflow", "-y"], check=True)
     run_command_filtered(["omnipkg", "uninstall", "tensorflow-estimator", "-y"], check=True)
-    run_command_filtered(["omnipkg", "uninstall", "typing-extensions", "-y"], check=True)
     run_command_filtered(["omnipkg", "uninstall", "keras", "-y"], check=True)
+    
+    print("📦 Reinstalling TensorFlow with current environment...")
+    # Don't specify typing-extensions version - let it use whatever is currently protected/active
     run_command_filtered([
         "omnipkg", "install", 
         "tensorflow==2.13.0", 
         "tensorflow-estimator==2.13.0",
-        "keras==2.13.1", 
-        "typing-extensions==4.5.0"
+        "keras==2.13.1"
     ], check=True)
-    print("✅ Cleanup complete - reset to single version")
+    print("✅ Cleanup complete - TensorFlow reinstalled with existing dependencies")
 
-    print("\n🔬 Final verification - single version state")
+    print("\n🔬 Final verification - stable environment state")
     code_final_test = f'''
 import tensorflow as tf
 import typing_extensions
@@ -319,6 +321,16 @@ print(f"Keras loaded from: {{keras_source}}")
 try:
     model = tf.keras.Sequential([tf.keras.layers.Dense(1, input_shape=(1,))])
     print("✅ Final test: Model created successfully")
+    
+    # Success criteria: TensorFlow works and we have a stable typing-extensions version
+    if tf.__version__ == "2.13.0" and te_version in ["4.14.1", "4.5.0"]:
+        print("🎉 TEST PASSED: TensorFlow version switching and dependency management working correctly!")
+        print(f"   - TensorFlow: {{tf.__version__}}")
+        print(f"   - Typing Extensions: {{te_version}} ({{te_source}})")
+        print(f"   - Keras: {{keras_version}} ({{keras_source}})")
+    else:
+        print("⚠️ TEST INCOMPLETE: Some versions unexpected but functionality works")
+        
 except Exception as e:
     print(f"❌ Final test: Model creation failed: {{e}}")
 '''

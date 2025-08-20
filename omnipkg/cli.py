@@ -11,12 +11,10 @@ import os
 from .core import omnipkg as OmnipkgCore, ConfigManager
 
 # Path to tests and demo directories
-
 TESTS_DIR = Path(__file__).parent.parent / "tests"
 DEMO_DIR = Path(__file__).parent
 
 # --- Get version from package metadata ---
-
 def get_version():
     """Get version from package metadata"""
     try:
@@ -29,7 +27,7 @@ def get_version():
             if toml_path.exists():
                 with open(toml_path, "rb") as f:
                     data = tomllib.load(f)
-                return data.get("project", {}).get("version", "unknown")
+                    return data.get("project", {}).get("version", "unknown")
         except ImportError:
             try:
                 import tomli
@@ -37,7 +35,7 @@ def get_version():
                 if toml_path.exists():
                     with open(toml_path, "rb") as f:
                         data = tomli.load(f)
-                    return data.get("project", {}).get("version", "unknown")
+                        return data.get("project", {}).get("version", "unknown")
             except ImportError:
                 pass
         except Exception:
@@ -46,32 +44,25 @@ def get_version():
 
 VERSION = get_version()
 
-def check_python_311_requirement(test_name="stress test"):
-    """Check if Python 3.11 is required and show blocking message if not"""
+def stress_test_command():
+    """Handle stress test command - BLOCK if not Python 3.11"""
     if sys.version_info[:2] != (3, 11):
         print("=" * 60)
-        print(f"  ⚠️  {test_name.title()} Requires Python 3.11")
+        print("  ⚠️  Stress Test Requires Python 3.11")
         print("=" * 60)
         print(f"Current Python version: {sys.version_info.major}.{sys.version_info.minor}")
         print()
-        print(f"The omnipkg {test_name} only works in Python 3.11 environments.")
-        print(f"To run the {test_name}:")
+        print("The omnipkg stress test only works in Python 3.11 environments.")
+        print("To run the stress test:")
         print("1. Create a Python 3.11 virtual environment")
         print("2. Install omnipkg in that environment")  
-        print(f"3. Run the {test_name} from there")
+        print("3. Run 'omnipkg stress-test' from there")
         print()
         print("🔮 Coming Soon: Hot Python interpreter swapping mid-script!")
         print("   This will allow seamless switching between Python versions")
         print("   during package operations - stay tuned!")
         print("=" * 60)
         return False
-    return True
-
-def stress_test_command():
-    """Handle stress test command - BLOCK if not Python 3.11"""
-    if not check_python_311_requirement("stress test"):
-        return False
-
     print("=" * 60)
     print("  🚀 omnipkg Nuclear Stress Test - Runtime Version Swapping")
     print("=" * 60)
@@ -103,7 +94,7 @@ def stress_test_command():
 
 def run_actual_stress_test():
     """Run the actual stress test - only called if Python 3.11"""
-    print("🔥 Starting stress test…")
+    print("🔥 Starting stress test...")
     try:
         from . import stress_test
         stress_test.run()
@@ -120,12 +111,12 @@ def run_actual_stress_test():
 
 def run_demo_with_live_streaming(test_file, demo_name):
     """Run a demo with true live streaming output"""
-    print(f"🚀 Running {demo_name.capitalize()} test from {test_file}…")
-    print("📡 Live streaming output (this may take several minutes for heavy packages)…")
-    print("💡 Don’t worry if there are pauses - packages are downloading/installing!")
+    print(f"🚀 Running {demo_name.capitalize()} test from {test_file}...")
+    print("📡 Live streaming output (this may take several minutes for heavy packages)...")
+    print("💡 Don't worry if there are pauses - packages are downloading/installing!")
     print("🛑 Press Ctrl+C to safely cancel if needed")
     print("-" * 60)
-
+    
     try:
         # Method 1: Direct execution without pipes (best for real-time)
         # This allows the subprocess to write directly to our terminal
@@ -174,12 +165,12 @@ def run_demo_with_live_streaming(test_file, demo_name):
 
 def run_demo_with_fallback_streaming(test_file, demo_name):
     """Fallback method with manual streaming if direct doesn't work"""
-    print(f"🚀 Running {demo_name.capitalize()} test from {test_file}…")
-    print("📡 Streaming output in real-time…")
+    print(f"🚀 Running {demo_name.capitalize()} test from {test_file}...")
+    print("📡 Streaming output in real-time...")
     print("💡 Heavy package installations may have natural pauses - this is normal!")
     print("🛑 Press Ctrl+C to safely cancel")
     print("-" * 60)
-
+    
     try:
         # Method 2: Capture with immediate flushing
         process = subprocess.Popen(
@@ -238,70 +229,70 @@ def create_parser():
         description='🚀 The intelligent Python package manager that eliminates dependency hell',
         formatter_class=argparse.RawTextHelpFormatter,
         epilog=textwrap.dedent(f'''\
+            
+        🌟 Key Features:
+          • Runtime Python interpreter switching (no shell restart needed!)
+          • Automatic version bubbling to prevent conflicts
+          • Downgrade protection with smart conflict resolution
+          • Multi-version package coexistence
+          • Intelligent dependency management with Redis-backed knowledge base
 
-    🌟 Key Features:
-      • Runtime Python interpreter switching (no shell restart needed!)
-      • Automatic version bubbling to prevent conflicts
-      • Downgrade protection with smart conflict resolution
-      • Multi-version package coexistence
-      • Intelligent dependency management with Redis-backed knowledge base
+        📖 Essential Commands:
+          omnipkg install <package>   Install with automatic conflict resolution
+          omnipkg install-with-deps <package>  Install with specific dependency versions
+          omnipkg list [filter]       View all packages and their bubble status  
+          omnipkg status              Check multi-version environment health
+          omnipkg info <package>      Interactive package dashboard with version explorer
+          omnipkg demo                Run interactive demos for version switching
+          omnipkg stress-test         See the magic! Heavy-duty package installation demo
 
-    📖 Essential Commands:
-      omnipkg install <package>   Install with automatic conflict resolution
-      omnipkg install-with-deps <package>  Install with specific dependency versions
-      omnipkg list [filter]       View all packages and their bubble status  
-      omnipkg status              Check multi-version environment health
-      omnipkg info <package>      Interactive package dashboard with version explorer
-      omnipkg demo                Run interactive demos for version switching
-      omnipkg stress-test         See the magic! Heavy-duty package installation demo
+        🎯 Advanced Features:
+          omnipkg revert             Roll back to last known good state
+          omnipkg uninstall <pkg>    Smart removal with dependency checking
+          omnipkg rebuild-kb         Refresh the intelligence knowledge base
 
-    🎯 Advanced Features:
-      omnipkg revert             Roll back to last known good state
-      omnipkg uninstall <pkg>    Smart removal with dependency checking
-      omnipkg rebuild-kb         Refresh the intelligence knowledge base
+        💡 Installation Examples:
+          omnipkg install requests numpy>=1.20        # Multiple packages
+          omnipkg install uv==0.7.13 uv==0.7.14      # Multiple versions (auto-bubbled!)
+          omnipkg install-with-deps tensorflow==2.13.0 numpy==1.24.3 typing-extensions==4.5.0
+          omnipkg install -r requirements.txt        # From requirements file
+          omnipkg install 'django>=3.0,<4.0'         # Complex version specs
 
-    💡 Installation Examples:
-      omnipkg install requests numpy>=1.20        # Multiple packages
-      omnipkg install uv==0.7.13 uv==0.7.14      # Multiple versions (auto-bubbled!)
-      omnipkg install-with-deps tensorflow==2.13.0 numpy==1.24.3 typing-extensions==4.5.0
-      omnipkg install -r requirements.txt        # From requirements file
-      omnipkg install 'django>=3.0,<4.0'         # Complex version specs
+        🔍 Understanding Your Environment:
+          omnipkg list                # Shows ✅ active and 🫧 bubbled versions
+          omnipkg info <package>      # Deep dive into any package's status
+          omnipkg status              # Overall environment health
 
-    🔍 Understanding Your Environment:
-      omnipkg list                # Shows ✅ active and 🫧 bubbled versions
-      omnipkg info <package>      # Deep dive into any package's status
-      omnipkg status              # Overall environment health
+        🛠️ Redis Knowledge Base (Advanced):
+          omnipkg stores rich metadata in Redis. Explore with:
+          redis-cli HGETALL omnipkg:pkg:<package>                    # Package info
+          redis-cli SMEMBERS "omnipkg:pkg:<package>:installed_versions"  # All versions
+          redis-cli HGETALL omnipkg:pkg:<package>:<version>          # Version details
 
-    🛠️ Redis Knowledge Base (Advanced):
-      omnipkg stores rich metadata in Redis. Explore with:
-      redis-cli HGETALL omnipkg:pkg:<package>                    # Package info
-      redis-cli SMEMBERS "omnipkg:pkg:<package>:installed_versions"  # All versions
-      redis-cli HGETALL omnipkg:pkg:<package>:<version>          # Version details
+        🔧 Python Version Management:
+          omnipkg automatically manages Python interpreters! When you run commands
+          that need a different Python version, omnipkg will:
+          • Download and install the required Python version seamlessly
+          • Switch interpreters mid-execution without shell restart
+          • Maintain package isolation across Python versions
+          • Keep your environment clean and organized
 
-    🔧 Python Version Management:
-      omnipkg automatically manages Python interpreters! When you run commands
-      that need a different Python version, omnipkg will:
-      • Download and install the required Python version seamlessly
-      • Switch interpreters mid-execution without shell restart
-      • Maintain package isolation across Python versions
-      • Keep your environment clean and organized
+        💡 Pro Tips:
+          • Run 'omnipkg demo' to try version-switching demos
+          • Run 'omnipkg stress-test' to see automated interpreter switching
+          • Use 'omnipkg info <package>' for interactive version selection
+          • The system learns from conflicts and prevents future issues
+          • All changes are logged and reversible with 'omnipkg revert'
 
-    💡 Pro Tips:
-      • Run 'omnipkg demo' to try version-switching demos
-      • Run 'omnipkg stress-test' to see automated interpreter switching
-      • Use 'omnipkg info <package>' for interactive version selection
-      • The system learns from conflicts and prevents future issues
-      • All changes are logged and reversible with 'omnipkg revert'
-
-    Version: {VERSION}
-    ''')
-)
-
+        Version: {VERSION}
+        ''')
+    )
+    
     parser.add_argument(
         '-v', '--version', action='version',
         version=f'%(prog)s {VERSION}'
     )
-
+    
     subparsers = parser.add_subparsers(dest='command', help='Available commands:', required=False)
 
     install_parser = subparsers.add_parser('install', 
@@ -313,7 +304,7 @@ def create_parser():
         help='Install from requirements file with smart dependency resolution',
         metavar='FILE'
     )
-
+    
     install_with_deps_parser = subparsers.add_parser('install-with-deps',
         help='Install a package with specific dependency versions',
         description='Install a package with specific dependency versions in a bubble to avoid conflicts')
@@ -324,7 +315,7 @@ def create_parser():
         help='Intelligently remove packages and their dependencies',
         description='Smart package removal with safety features')
     uninstall_parser.add_argument('packages', nargs='+', help='Packages to uninstall (removes all versions)')
-    uninstall_parser.add_argument('--yes', '-y', action='store_true', help='Skip confirmation prompts')
+    uninstall_parser.add_argument('--yes', '-y', dest='force', action='store_true', help='Skip confirmation prompts')
 
     info_parser = subparsers.add_parser('info', 
         help='Interactive package explorer with version management',
@@ -349,11 +340,11 @@ def create_parser():
     demo_parser = subparsers.add_parser('demo', 
         help='Interactive demo for version switching',
         description='''Run interactive demos showcasing omnipkg's version-switching capabilities:
-    1. Rich test (Python module switching)
-    2. UV test (binary switching)
-    3. NumPy + SciPy stress test (C-extension switching) - Requires Python 3.11
-    4. TensorFlow test (complex dependency switching)
-    Note: The Flask demo is under construction and not currently available.''')
+        1. Rich test (Python module switching)
+        2. UV test (binary switching)
+        3. NumPy + SciPy stress test (C-extension switching)
+        4. TensorFlow test (complex dependency switching)
+        Note: The Flask demo is under construction and not currently available.''')
 
     stress_parser = subparsers.add_parser('stress-test', 
         help='Ultimate demonstration with heavy scientific packages',
@@ -368,7 +359,7 @@ def create_parser():
         help='Refresh the intelligence knowledge base',
         description='Force rebuild of package metadata and dependency intelligence')
     rebuild_parser.add_argument('--force', '-f', action='store_true', help='Ignore cache and force complete rebuild')
-
+    
     reset_config_parser = subparsers.add_parser('reset-config', 
         help='Delete the config file to trigger a fresh setup',
         description='Deletes the omnipkg config.json file')
@@ -383,105 +374,152 @@ def print_header(title):
     print("="*60)
 
 def main():
-    """
-    Main function to parse arguments and execute omnipkg commands.
-    """
-    parser = argparse.ArgumentParser(
-        description='omnipkg - The "Freedom" Edition v2. An intelligent Python package manager.',
-        formatter_class=argparse.RawTextHelpFormatter
-    )
-    parser.add_argument(
-        '-v', '--version',
-        action='version',
-        version='omnipkg 2.0.0' # Replace with dynamic version if you have one
-    )
+    """The main entry point for the CLI."""
+    if len(sys.argv) == 1:
+        cm = ConfigManager()
+        if not cm.config_path.exists():
+            cm._first_time_setup()
+            print("\n" + "🎉"*60)
+            print("🚀 Welcome to omnipkg! Your intelligent package manager is ready!")
+            print("🎉"*60)
+            print("\n✨ omnipkg eliminates dependency hell with:")
+            print("   • Automatic Python interpreter management") 
+            print("   • Intelligent version conflict resolution")
+            print("   • Multi-version package coexistence")
+            print("   • Zero-downtime environment switching")
+            print("\n🎪 Ready to see the magic? Try these commands:")
+            print("   omnipkg demo         # Interactive version-switching demos")
+            print("   omnipkg stress-test  # Heavy-duty package installation demo")
+            print("   omnipkg --help       # Explore all capabilities")
+            print("\n🎉"*60)
+        else:
+            print("👋 Welcome back to omnipkg!")
+            print("   🏥 omnipkg status       # Environment health check")
+            print("   🎪 omnipkg demo         # Interactive version-switching demos")
+            print("   📚 omnipkg --help       # Full command reference")
+        return 0
 
-    subparsers = parser.add_subparsers(dest='command', help='Available commands', required=True)
-
-    # --- Installation Commands ---
-    parser_install = subparsers.add_parser('install', help='Install packages intelligently, protecting the environment.')
-    parser_install.add_argument('packages', nargs='+', help='One or more packages to install (e.g., "flask==2.0.0").')
-    parser_install.add_argument('--dry-run', action='store_true', help='Simulate the installation without making any changes.')
-
-    # --- Uninstallation Command ---
-    parser_uninstall = subparsers.add_parser('uninstall', help='Uninstall packages from the main environment or from bubbles.')
-    parser_uninstall.add_argument('packages', nargs='+', help='One or more packages to uninstall.')
-    parser_uninstall.add_argument('--yes', '-y', dest='force', action='store_true', help='Confirm uninstallation without prompting.')
-
-    # --- Inspection Commands ---
-    parser_info = subparsers.add_parser('info', help='Display detailed, multi-version information about a package.')
-    parser_info.add_argument('package_name', help='The name of the package to inspect.')
-    parser_info.add_argument('version', nargs='?', default='active', help='The specific version to inspect (optional, defaults to active).')
-
-    parser_list = subparsers.add_parser('list', help='List all known packages and their installed (active/bubbled) versions.')
-    parser_list.add_argument('pattern', nargs='?', default=None, help='A pattern to filter package names (optional).')
-
-    parser_status = subparsers.add_parser('status', help='Show the status of the multiversion environment and bubbles.')
-
-    # --- Environment Management Commands ---
-    parser_revert = subparsers.add_parser('revert', help='Revert the environment to the last known good snapshot.')
-    parser_revert.add_argument('--yes', '-y', dest='force', action='store_true', help='Confirm revert operation without prompting.')
-
-    # --- Maintenance Commands ---
-    parser_reset = subparsers.add_parser('reset', help='Clear ALL omnipkg data from Redis and rebuild the knowledge base.')
-    parser_reset.add_argument('--yes', '-y', dest='force', action='store_true', help='Confirm reset without prompting.')
-
-    parser_rebuild = subparsers.add_parser('rebuild-kb', help='Force a rebuild of the knowledge base from the file system.')
-    parser_rebuild.add_argument('--force', '-f', action='store_true', help='Force a full rebuild, ignoring any existing caches.')
-
-    parser_reset_config = subparsers.add_parser('reset-config', help='Delete the configuration file to trigger first-time setup on next run.')
-    parser_reset_config.add_argument('--yes', '-y', dest='force', action='store_true', help='Confirm config deletion without prompting.')
-
-    # Parse the arguments from the command line
+    parser = create_parser()
     args = parser.parse_args()
 
-    # --- Initialization and Command Execution ---
-    try:
-        config_manager = ConfigManager()
-        #
-        # THIS IS THE CORRECTED LINE:
-        #
-        pkg_instance = OmnipkgCore(config_manager.config)
-        #
-        #
-        #
-    except Exception as e:
-        print(f"❌ Fatal Error: Could not initialize omnipkg. {e}", file=sys.stderr)
-        sys.exit(1)
-
-    # --- Dispatch commands to the core engine ---
-    # Each command calls the relevant method and exits with its return code.
-    # This ensures that successful commands return 0 and failed commands return 1.
-    if args.command == 'install':
-        sys.exit(pkg_instance.smart_install(args.packages, dry_run=args.dry_run))
-
-    elif args.command == 'uninstall':
-        sys.exit(pkg_instance.smart_uninstall(args.packages, force=args.force))
-
-    elif args.command == 'info':
-        sys.exit(pkg_instance.show_package_info(args.package_name, args.version))
-
-    elif args.command == 'list':
-        sys.exit(pkg_instance.list_packages(pattern=args.pattern))
-
-    elif args.command == 'status':
-        sys.exit(pkg_instance.show_multiversion_status())
-
-    elif args.command == 'revert':
-        sys.exit(pkg_instance.revert_to_last_known_good(force=args.force))
-
-    elif args.command == 'reset':
-        sys.exit(pkg_instance.reset_knowledge_base(force=args.force))
-
-    elif args.command == 'rebuild-kb':
-        sys.exit(pkg_instance.rebuild_knowledge_base(force=args.force))
-
-    elif args.command == 'reset-config':
-        sys.exit(pkg_instance.reset_configuration(force=args.force))
-
-    else:
+    if args.command is None:
         parser.print_help()
-        sys.exit(1)
+        return 1
+
+    cm = ConfigManager()
+    pkg_instance = OmnipkgCore(cm.config)
+    
+    try:
+        if args.command == 'demo':
+            print_header("Interactive Omnipkg Demo")
+            print("🎪 Omnipkg supports version switching for:")
+            print("   • Python modules (e.g., rich): See tests/test_rich_switching.py")
+            print("   • Binary packages (e.g., uv): See tests/test_uv_switching.py")
+            print("   • C-extension packages (e.g., numpy, scipy): See stress_test.py")
+            print("   • Complex dependency packages (e.g., TensorFlow): See tests/test_tensorflow_switching.py")
+            print("   • Note: The Flask demo is under construction and not currently available.")
+            print("\nSelect a demo to run:")
+            print("1. Rich test (Python module switching)")
+            print("2. UV test (binary switching)")  
+            print("3. NumPy + SciPy stress test (C-extension switching)")
+            print("4. TensorFlow test (complex dependency switching)")
+            print("5. Flask test (under construction)")
+            
+            try:
+                response = input("Enter your choice (1-5): ").strip()
+            except EOFError:
+                response = ''
+                
+            if response == '1':
+                test_file = TESTS_DIR / "test_rich_switching.py"
+                demo_name = "rich"
+            elif response == '2':
+                test_file = TESTS_DIR / "test_uv_switching.py"
+                demo_name = "uv"
+            elif response == '3':
+                if sys.version_info[:2] != (3, 11):
+                    print("=" * 60)
+                    print("  ⚠️  NumPy/SciPy Stress Test Requires Python 3.11")
+                    print("=" * 60)
+                    print(f"Current Python version: {sys.version_info.major}.{sys.version_info.minor}")
+                    print("=" * 60)
+                    return 1
+                test_file = DEMO_DIR / "stress_test.py"
+                demo_name = "numpy_scipy"
+            elif response == '4':
+                test_file = TESTS_DIR / "test_tensorflow_switching.py"
+                demo_name = "tensorflow"
+            elif response == '5':
+                test_file = TESTS_DIR / "test_rich_switching.py"
+                demo_name = "rich"
+                print("⚠️ The Flask demo is under construction and not currently available.")
+                print("Switching to the Rich test (option 1) for now!")
+            else:
+                print("❌ Invalid choice. Please select 1, 2, 3, 4, or 5.")
+                return 1
+
+            if not test_file.exists():
+                print(f"❌ Error: Test file {test_file} not found.")
+                return 1
+            
+            # Use the improved streaming function
+            return run_demo_with_live_streaming(test_file, demo_name)
+
+        if args.command == 'stress-test':
+            if stress_test_command():
+                run_actual_stress_test()
+            return 0
+
+        if args.command == 'install':
+            packages_to_process = []
+            if args.requirement:
+                req_path = Path(args.requirement)
+                if not req_path.is_file():
+                    print(f"❌ Error: Requirements file not found at '{req_path}'")
+                    return 1
+                print(f"📄 Reading packages from {req_path.name}...")
+                with open(req_path, 'r') as f:
+                    packages_to_process = [line.split('#')[0].strip() for line in f if line.split('#')[0].strip()]
+            elif args.packages:
+                packages_to_process = args.packages
+            else:
+                parser.parse_args(['install', '--help'])
+                return 1
+            return pkg_instance.smart_install(packages_to_process)
+
+        if args.command == 'install-with-deps':
+            packages_to_process = [args.package] + args.dependency
+            return pkg_instance.smart_install(packages_to_process)
+
+        if args.command == 'uninstall':
+            return pkg_instance.smart_uninstall(args.packages, force=args.force)
+        elif args.command == 'revert':
+            return pkg_instance.revert_to_last_known_good(force=args.yes)
+        elif args.command == 'info':
+            return pkg_instance.show_package_info(args.package, args.version)
+        elif args.command == 'list':
+            return pkg_instance.list_packages(args.filter)
+        elif args.command == 'status':
+            return pkg_instance.show_multiversion_status()
+        elif args.command == 'reset':
+            return pkg_instance.reset_knowledge_base(force=args.yes)
+        elif args.command == 'rebuild-kb':
+            pkg_instance.rebuild_knowledge_base(force=args.force)
+            return 0 
+        elif args.command == 'reset-config':
+            return pkg_instance.reset_configuration(force=args.yes)
+        else:
+            parser.print_help()
+            return 1
+            
+    except KeyboardInterrupt:
+        print("\n❌ Operation cancelled by user.")
+        return 1
+    except Exception as e:
+        print(f"\n❌ An unexpected error occurred: {e}")
+        import traceback
+        traceback.print_exc()
+        return 1
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
