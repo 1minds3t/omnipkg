@@ -51,21 +51,6 @@
 
 ---
 
----
-
-<!-- COMPARISON_STATS_START -->
-## Multi-Version Support [![Package Manager Comparison Test](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml/badge.svg)](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml)
-
-| Tool | Multi-Version | Restoration |
-|:-----|:-------------:|:-----------:|
-| **omnipkg** | **86** (100%) | **86** |
-| **pip** | 0 (0%) | N/A |
-| **uv** | 0 (0%) | N/A |
-
-*Hourly pre-release validation • [Live results](https://github.com/1minds3t/omnipkg) • Updated: 2025-08-20 22:37 UTC*
-
-<!-- COMPARISON_STATS_END -->
-
 ([View Live Download Stats](https://clickpy.clickhouse.com/dashboard/omnipkg))
 
 ---
@@ -111,7 +96,7 @@ print(numpy.__version__)  # Outputs: Original main env version (e.g., 1.26.4)
 ```
 ---
 
-### 2. Lightweight Isolation [![🧪 Rich Version Juggling](https://img.shields.io/badge/🧪_Rich_Version_Juggling-passing-success)](https://github.com/1minds3t/omnipkg/actions/workflows/rich-module-switching-test.yml)
+### 2. Lightweight Isolation 
 
 Conflicting versions are isolated in lightweight, self-contained “bubbles” containing only necessary files. Compatible dependencies are shared with the main environment, potentially slashing disk space by **up to 60%**.
 
@@ -145,9 +130,22 @@ omnipkg install torch==2.0.0 torch==2.7.1
 🫧 Creating bubble for torch==2.0.0... ✅ Done
 🔄 Restoring torch==2.7.1... ✅ Environment secure
 ```
+<!-- COMPARISON_STATS_START -->
+## Multi-Version Support [![Package Manager Comparison Test](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml/badge.svg)](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml)
+
+| Tool | Multi-Version | Restoration |
+|:-----|:-------------:|:-----------:|
+| **omnipkg** | **86** (100%) | **86** |
+| **pip** | 0 (0%) | N/A |
+| **uv** | 0 (0%) | N/A |
+
+*Hourly pre-release validation • [Live results](https://github.com/1minds3t/omnipkg) • Updated: 2025-08-20 22:37 UTC*
+
+<!-- COMPARISON_STATS_END -->
+
 ---
 
-### 4. Binary & C-Extension Support [![⚡ UV Binary Test](https://img.shields.io/badge/⚡_UV_Binary_Test-passing-success)](https://github.com/1minds3t/omnipkg/actions/workflows/test-uv-binary-switching.yml) [![💥 TensorFlow Hot-Swap](https://img.shields.io/badge/💥_TensorFlow_Hot_Swap-passing-success)](https://github.com/1minds3t/omnipkg/actions/workflows/test-tensorflow-switching.yml)
+### 4. Python Library, Binary, & C-Extension Support [![⚡ UV Binary Test](https://img.shields.io/badge/⚡_UV_Binary_Test-passing-success)](https://github.com/1minds3t/omnipkg/actions/workflows/test-uv-binary-switching.yml) [![💥 TensorFlow Hot-Swap](https://img.shields.io/badge/💥_TensorFlow_Hot_Swap-passing-success)](https://github.com/1minds3t/omnipkg/actions/workflows/test-tensorflow-switching.yml) [![🧪 Rich Version Juggling](https://img.shields.io/badge/🧪_Rich_Version_Juggling-passing-success)](https://github.com/1minds3t/omnipkg/actions/workflows/rich-module-switching-test.yml)
 
 `omnipkg` seamlessly switches binary tools (e.g., `uv`) and complex C-extension version combinations (e.g., `tensorflow`, `numpy`, `scipy`) during runtime, a feat traditional tools struggle with.
 
