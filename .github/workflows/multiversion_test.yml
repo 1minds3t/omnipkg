@@ -207,7 +207,7 @@ jobs:
           | **pip** | ❌ Single version only | Replaces previous version | {pip_replaced} version replacements |
           | **uv** | ❌ Single version only | Replaces previous version | {uv_replaced} version replacements |
           
-          *Live demonstration runs every 6 hours. [View latest results on GitHub Actions](https://github.com/${{{{ github.repository }}}}/actions/workflows/multiversion-demo.yml)*
+          *Live demonstration runs every 6 hours. [View latest results on GitHub Actions](https://github.com/{os.environ.get('GITHUB_REPOSITORY', 'your-repo')}/actions/workflows/multiversion-demo.yml)*
           
           **Last updated:** {timestamp}
           '''
