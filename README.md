@@ -37,8 +37,6 @@
   </a>
 </p>
 
-([View Live Download Stats](https://clickpy.clickhouse.com/dashboard/omnipkg))
-
 ---
 
 `omnipkg` radically simplifies Python dependency management, providing a robust alternative to tools like `pipx`, `uv`, `conda`, and `Docker` for handling conflicting packages. Born from a real-world nightmare—a forced downgrade that wrecked a `conda-forge` environment on a Friday night—`omnipkg` was built in a weekend to solve what others couldn’t: running multiple versions of the same package in one environment without conflicts.
@@ -137,7 +135,7 @@ omnipkg install torch==2.0.0 torch==2.7.1
 | **pip** | 0 (0%) | N/A |
 | **uv** | 0 (0%) | N/A |
 
-*Hourly pre-release validation • [Live results](https://github.com/1minds3t/omnipkg) • Updated: 2025-08-20 23:21 UTC*
+*Hourly pre-release validation • [Live results](https://github.com/1minds3t/omnipkg) • Updated: 2025-08-20 22:37 UTC*
 
 <!-- COMPARISON_STATS_END -->
 
@@ -320,7 +318,7 @@ You now have both versions available in one environment, ready for use anytime!
 
 *   **Python Interpreter Hot-Swapping**: Seamlessly switch between different Python versions (e.g., 3.8 to 3.11) mid-script.
 *   **Time Machine Technology for Legacy Packages**: Install ancient packages with historically accurate build tools and dependencies that are 100% proven to work in any environment.
-*   **Bubble validation**: Ensuring your bubbled packages are stored with functional dependencies by testing during installs.
+*   **UV/Conda Integration for Resolution**: Adding config option to swap out pip under the hood for uv or conda soon!
 
 ---
 
