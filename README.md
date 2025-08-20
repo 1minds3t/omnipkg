@@ -48,11 +48,11 @@
 
 | Tool | Multi-Version | Restoration |
 |:-----|:-------------:|:-----------:|
-| **omnipkg** | **1** (100%) | **1** |
+| **omnipkg** | **86** (100%) | **86** |
 | **pip** | 0 (0%) | N/A |
 | **uv** | 0 (0%) | N/A |
 
-*Hourly pre-release validation • [Live results](https://github.com/1minds3t/omnipkg) • Updated: 2025-08-20 16:56 UTC*
+*Hourly pre-release validation • [Live results](https://github.com/1minds3t/omnipkg) • Updated: 2025-08-20 17:02 UTC*
 
 <!-- COMPARISON_STATS_END -->
 
