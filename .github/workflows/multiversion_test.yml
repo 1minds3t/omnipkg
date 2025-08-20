@@ -19,15 +19,15 @@ jobs:
         with:
           fetch-depth: 1
 
-      - name: 🐍 Set up Python 3.10
+      - name: 🐍 Set up Python 3.11
         uses: actions/setup-python@v5
         with:
-          python-version: '3.10'
+          python-version: '3.11'
 
-      - name: 📦 Install dependencies
+      - name: 📦 Install omnipkg
         run: |
           python -m pip install --upgrade pip
-          pip install -e . tensorflow # Install omnipkg from source and latest tensorflow
+          pip install -e . # Install omnipkg from source
 
       - name: ⚙️ Configure omnipkg
         run: |
@@ -43,13 +43,24 @@ jobs:
               'python_executable': sys.executable,
               'builder_script_path': str(builder_script),
               'auto_cleanup': True,
-              'cleanup_threshold_days': 30
+              'cleanup_threshold_days': 30,
+              'redis_host': 'localhost',
+              'redis_port': 6379,
+              'redis_key_prefix': 'omnipkg:pkg:',
+              'install_strategy': 'stable-main',
+              'paths_to_index': ['/bin', str(Path(sys.executable).parent), '/sbin', '/usr/bin', '/usr/local/bin', '/usr/sbin']
           }
           config_dir = Path.home() / '.config' / 'omnipkg'
           config_dir.mkdir(parents=True, exist_ok=True)
           with open(config_dir / 'config.json', 'w') as f:
               json.dump(config_data, f, indent=2)
           EOF
+
+      - name: 📦 Install TensorFlow versions with omnipkg
+        run: |
+          echo "--- Installing TensorFlow versions with omnipkg ---"
+          omnipkg install tensorflow  # Install latest TensorFlow first
+          omnipkg install tensorflow==2.12.0  # Then install older version to trigger bubble
 
       - name: 🧪 Test TensorFlow Multi-Version Compatibility
         run: |
@@ -60,12 +71,12 @@ jobs:
           import sys
           import subprocess
           
-          print("=== Installing TensorFlow 2.12.0 for testing ===")
+          print("=== Verifying TensorFlow installations ===")
           try:
-              subprocess.run([sys.executable, "-m", "pip", "install", "tensorflow==2.12.0", "--target", "/tmp/tf_2_12_0", "--no-deps", "--force-reinstall"], check=True)
-              print("✅ TensorFlow 2.12.0 installed successfully")
+              result = subprocess.run(["omnipkg", "list"], capture_output=True, text=True, check=True)
+              print(f"✅ Installed packages:\n{result.stdout}")
           except subprocess.CalledProcessError as e:
-              print(f"❌ Failed to install TensorFlow 2.12.0: {e}")
+              print(f"❌ Failed to list installed packages: {e}")
               sys.exit(1)
           
           print("\n=== Testing omnipkg multi-version loading ===")
@@ -111,7 +122,6 @@ jobs:
             echo "OMNIPKG_TENSORFLOW=SUCCESS" >> $GITHUB_ENV
           else
             echo "❌ TensorFlow multi-version test failed"
-            echo "OMNIPKG_TENSORFLOW=FAILED" >> $GITHUB_ENV
             exit 1
           fi
 
