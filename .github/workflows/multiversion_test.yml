@@ -1,37 +1,61 @@
-name: Test Multi-Version TensorFlow Capability
+name: 🧪 TensorFlow Multi-Version Compatibility Test
 
 on:
   push:
-    branches:
-      - main
+    branches: [ 'main', 'test-workflows-feature' ]
   pull_request:
-    branches:
-      - main
+    branches: [ 'main' ]
+  workflow_dispatch:
 
 jobs:
-  test-multi-version:
+  test-tensorflow-multiversion:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
 
     steps:
-      - name: Checkout repository
+      - name: 🏁 Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
 
-      - name: Set up Python
+      - name: 🐍 Set up Python 3.10
         uses: actions/setup-python@v5
         with:
-          python-version: '3.10' # Specify the Python version; adjust as needed
+          python-version: '3.10'
 
-      - name: Install dependencies
+      - name: 📦 Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install omnipkg # Assuming omnipkg is a required dependency; adjust if needed
+          pip install -e . tensorflow # Install omnipkg from source and latest tensorflow
 
-      - name: Test multi-version capability
+      - name: ⚙️ Configure omnipkg
         run: |
-          echo "--- Testing Multi-Version TensorFlow Capability ---"
+          python - << 'EOF'
+          import sys, site, json, os, sysconfig
+          from pathlib import Path
+          site_packages_path = site.getsitepackages()[0] if site.getsitepackages() else sysconfig.get_paths()['purelib']
+          project_root = Path(os.environ['GITHUB_WORKSPACE'])
+          builder_script = project_root / 'omnipkg' / 'package_meta_builder.py'
+          config_data = {
+              'site_packages_path': site_packages_path,
+              'multiversion_base': str(Path(site_packages_path) / '.omnipkg_versions'),
+              'python_executable': sys.executable,
+              'builder_script_path': str(builder_script),
+              'auto_cleanup': True,
+              'cleanup_threshold_days': 30
+          }
+          config_dir = Path.home() / '.config' / 'omnipkg'
+          config_dir.mkdir(parents=True, exist_ok=True)
+          with open(config_dir / 'config.json', 'w') as f:
+              json.dump(config_data, f, indent=2)
+          EOF
+
+      - name: 🧪 Test TensorFlow Multi-Version Compatibility
+        run: |
+          echo "--- Testing TensorFlow Multi-Version Compatibility ---"
           mkdir -p /tmp/omnipkg-artifacts
           
-          # Test the multi-version capability directly
           timeout 600 python - << 'OMNIPKG_TEST_EOF' 2>&1 | tee /tmp/omnipkg-artifacts/tensorflow_test_output.txt
           import sys
           import subprocess
@@ -52,13 +76,11 @@ jobs:
               config = ConfigManager().config
               print(f"✅ omnipkg config loaded: {config}")
               
-              # Test accessing older version
               print("\n--- Testing isolated TensorFlow 2.12.0 ---")
               with omnipkgLoader('tensorflow==2.12.0', config=config):
                   import tensorflow as tf_old
                   print(f'✅ Isolated TensorFlow version: {tf_old.__version__}')
               
-              # Main environment version
               print("\n--- Testing main environment TensorFlow ---")
               import tensorflow as tf_main
               print(f'✅ Main environment TensorFlow version: {tf_main.__version__}')
@@ -79,14 +101,73 @@ jobs:
           
           TEST_EXIT_CODE=${PIPESTATUS[0]}
           
-          echo "## TensorFlow Multi-Version Test Output" >> $GITHUB_STEP_SUMMARY
+          echo "## TensorFlow Multi-Version Test Results" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
           cat /tmp/omnipkg-artifacts/tensorflow_test_output.txt >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
           
           if [ $TEST_EXIT_CODE -eq 0 ] && grep -q "OMNIPKG MULTI-VERSION TEST PASSED!" /tmp/omnipkg-artifacts/tensorflow_test_output.txt; then
-            echo "✅ Multi-version test completed successfully"
+            echo "✅ TensorFlow multi-version test passed"
             echo "OMNIPKG_TENSORFLOW=SUCCESS" >> $GITHUB_ENV
           else
-            echo "❌ Multi-version test failed"
+            echo "❌ TensorFlow multi-version test failed"
             echo "OMNIPKG_TENSORFLOW=FAILED" >> $GITHUB_ENV
+            exit 1
+          fi
+
+      - name: 📊 Update README with Test Results
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+        run: |
+          cat > update_readme.py << 'EOF'
+          import os
+          from pathlib import Path
+          from datetime import datetime
+
+          README_FILE = Path("README.md")
+          test_result = os.environ.get('OMNIPKG_TENSORFLOW', 'FAILED')
+          test_timestamp = datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')
+          
+          badge = "[![🧪 TensorFlow Multi-Version Test](https://github.com/1minds3t/omnipkg/actions/workflows/tensorflow-multiversion.yml/badge.svg)](https://github.com/1minds3t/omnipkg/actions/workflows/tensorflow-multiversion.yml)"
+          test_stats = (
+              f"## 🧪 TensorFlow Multi-Version Compatibility {badge}\n\n"
+              f"omnipkg enables simultaneous use of multiple TensorFlow versions in the same environment.\n"
+              f"- **Latest Test**: {test_timestamp}\n"
+              f"- **Result**: {'✅ Passed' if test_result == 'SUCCESS' else '❌ Failed'}\n"
+              f"Check [1minds3t/omnipkg](https://github.com/1minds3t/omnipkg) for live workflow results and updates.\n"
+          )
+          
+          try:
+              content = README_FILE.read_text(encoding='utf-8') if README_FILE.exists() else "# omnipkg\n\n"
+              start, end = "<!-- TEST_STATS_START -->", "<!-- TEST_STATS_END -->"
+              if start in content and end in content:
+                  before, after = content.split(start)[0], content.split(end)[1]
+                  new_content = before + start + "\n" + test_stats + "\n" + end + after
+              else:
+                  new_content = content.rstrip() + "\n\n" + start + "\n" + test_stats + "\n" + end
+              with open(README_FILE, 'w', encoding='utf-8') as f:
+                  f.write(new_content)
+              print("✅ README.md updated with test results")
+          except Exception as e:
+              print(f"Error writing README: {e}")
+              exit(1)
+          EOF
+          python update_readme.py
+
+      - name: 💾 Commit README Updates
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "omnipkg Test Bot"
+          git clean -f -X -- update_readme.py
+          git pull --rebase origin main || true
+          git add README.md
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "🧪 Update TensorFlow multi-version test results - $(date -u '+%Y-%m-%d %H:%M UTC')"
+            git push || {
+              echo "Push failed, retrying after another pull..."
+              git pull --rebase origin main || true
+              git push
+            }
+          fi
