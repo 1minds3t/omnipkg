@@ -392,6 +392,6 @@ This project thrives on community collaboration. Contributions, bug reports, and
 
 *This fundamental difference enables advanced dependency management scenarios detailed below.*
 
-*Last updated: 2025-08-20 16:32 UTC*
+*Last updated: 2025-08-20 16:39 UTC*
 
 <!-- COMPARISON_STATS_END -->
