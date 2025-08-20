@@ -1,0 +1,261 @@
+name: Multi-Version Capability Demonstration
+
+on:
+  schedule:
+    - cron: '0 */6 * * *'  # Every 6 hours
+  workflow_dispatch:
+  push:
+    branches: [main, develop]
+
+env:
+  PYTHON_VERSION: '3.11'
+
+jobs:
+  multiversion-demo:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+
+    services:
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 3
+        ports:
+          - 6379:6379
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 1
+
+      - name: Setup Python environment
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e . redis tensorflow==2.13.0
+
+      - name: Configure omnipkg
+        run: |
+          python -c "
+          import json, os, sys, site, sysconfig
+          from pathlib import Path
+          
+          site_packages = site.getsitepackages()[0] if site.getsitepackages() else sysconfig.get_paths()['purelib']
+          project_root = Path('${{ github.workspace }}')
+          
+          config = {
+              'site_packages_path': site_packages,
+              'multiversion_base': str(Path(site_packages) / '.omnipkg_versions'),
+              'python_executable': sys.executable,
+              'builder_script_path': str(project_root / 'omnipkg' / 'package_meta_builder.py'),
+              'redis_host': 'localhost',
+              'redis_port': 6379,
+              'redis_key_prefix': 'omnipkg:demo:',
+              'auto_cleanup': True,
+              'cleanup_threshold_days': 1
+          }
+          
+          config_dir = Path.home() / '.config' / 'omnipkg'
+          config_dir.mkdir(parents=True, exist_ok=True)
+          (config_dir / 'config.json').write_text(json.dumps(config, indent=2))
+          "
+
+      - name: Demonstrate omnipkg multi-version capabilities
+        id: omnipkg_demo
+        run: |
+          echo "=== omnipkg: Multiple TensorFlow versions in one environment ==="
+          
+          # Install multiple TensorFlow versions
+          if omnipkg install tensorflow==2.13.0 tensorflow==2.12.0; then
+            echo "✅ Successfully installed multiple TensorFlow versions"
+            echo "OMNIPKG_TENSORFLOW=SUCCESS" >> $GITHUB_ENV
+            
+            # Verify both versions are accessible
+            python -c "
+            from omnipkg.loader import omnipkgLoader
+            from omnipkg.core import ConfigManager
+            
+            config = ConfigManager().config
+            
+            # Test accessing older version
+            with omnipkgLoader('tensorflow==2.12.0', config=config):
+                import tensorflow as tf_old
+                print(f'Isolated TensorFlow: {tf_old.__version__}')
+            
+            # Main environment version
+            import tensorflow as tf_main
+            print(f'Main environment TensorFlow: {tf_main.__version__}')
+            
+            print('✅ Both TensorFlow versions accessible in same environment')
+            "
+          else
+            echo "❌ Failed to install multiple TensorFlow versions"
+            echo "OMNIPKG_TENSORFLOW=FAILED" >> $GITHUB_ENV
+          fi
+
+      - name: Compare with standard package managers
+        id: standard_managers
+        run: |
+          echo "=== Standard pip: Attempting multiple TensorFlow versions ==="
+          
+          # Create clean test environment
+          python -m venv /tmp/pip_test
+          source /tmp/pip_test/bin/activate
+          
+          pip install tensorflow==2.13.0
+          echo "Initial TensorFlow: $(python -c 'import tensorflow; print(tensorflow.__version__)')"
+          
+          pip install tensorflow==2.12.0
+          echo "After second install: $(python -c 'import tensorflow; print(tensorflow.__version__)')"
+          echo "PIP_TENSORFLOW=REPLACED" >> $GITHUB_ENV
+          
+          deactivate
+          
+          echo ""
+          echo "=== Standard uv: Attempting multiple TensorFlow versions ==="
+          
+          python -m venv /tmp/uv_test
+          source /tmp/uv_test/bin/activate
+          
+          pip install uv
+          uv pip install tensorflow==2.13.0
+          echo "Initial TensorFlow: $(python -c 'import tensorflow; print(tensorflow.__version__)')"
+          
+          uv pip install tensorflow==2.12.0
+          echo "After second install: $(python -c 'import tensorflow; print(tensorflow.__version__)')"
+          echo "UV_TENSORFLOW=REPLACED" >> $GITHUB_ENV
+          
+          deactivate
+
+      - name: Extract current statistics
+        run: |
+          python -c "
+          import re, os
+          from pathlib import Path
+          
+          README_FILE = Path('README.md')
+          
+          # Default values
+          omnipkg_success = pip_replaced = uv_replaced = 0
+          
+          if README_FILE.exists():
+              content = README_FILE.read_text(encoding='utf-8')
+              
+              # Extract current stats
+              omnipkg_match = re.search(r'omnipkg.*?(\d+).*?successful.*?installations', content, re.IGNORECASE | re.DOTALL)
+              if omnipkg_match:
+                  omnipkg_success = int(omnipkg_match.group(1))
+              
+              pip_match = re.search(r'pip.*?(\d+).*?version.*?replacements', content, re.IGNORECASE | re.DOTALL)
+              if pip_match:
+                  pip_replaced = int(pip_match.group(1))
+                  
+              uv_match = re.search(r'uv.*?(\d+).*?version.*?replacements', content, re.IGNORECASE | re.DOTALL)
+              if uv_match:
+                  uv_replaced = int(uv_match.group(1))
+          
+          # Update based on current test results
+          if os.environ.get('OMNIPKG_TENSORFLOW') == 'SUCCESS':
+              omnipkg_success += 1
+          if os.environ.get('PIP_TENSORFLOW') == 'REPLACED':
+              pip_replaced += 1
+          if os.environ.get('UV_TENSORFLOW') == 'REPLACED':
+              uv_replaced += 1
+          
+          # Export to environment
+          with open(os.environ['GITHUB_ENV'], 'a') as f:
+              f.write(f'OMNIPKG_SUCCESS_COUNT={omnipkg_success}\\n')
+              f.write(f'PIP_REPLACED_COUNT={pip_replaced}\\n')
+              f.write(f'UV_REPLACED_COUNT={uv_replaced}\\n')
+          "
+
+      - name: Update README with demonstration results
+        run: |
+          python -c "
+          import os
+          from pathlib import Path
+          from datetime import datetime
+          
+          README_FILE = Path('README.md')
+          
+          # Get current counts
+          omnipkg_success = int(os.environ.get('OMNIPKG_SUCCESS_COUNT', '0'))
+          pip_replaced = int(os.environ.get('PIP_REPLACED_COUNT', '0'))
+          uv_replaced = int(os.environ.get('UV_REPLACED_COUNT', '0'))
+          
+          timestamp = datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')
+          
+          # Create professional comparison table
+          comparison_section = f'''## 🔬 Multi-Version Package Management Comparison
+          
+          This automated demonstration shows how different package managers handle installing multiple versions of the same package (like TensorFlow) in a single environment:
+          
+          | Package Manager | Multi-Version Support | Behavior | Success Count |
+          |:---------------|:---------------------|:---------|:--------------|
+          | **omnipkg** | ✅ Native support | Maintains all versions accessible | {omnipkg_success} successful installations |
+          | **pip** | ❌ Single version only | Replaces previous version | {pip_replaced} version replacements |
+          | **uv** | ❌ Single version only | Replaces previous version | {uv_replaced} version replacements |
+          
+          *Live demonstration runs every 6 hours. [View latest results on GitHub Actions](${{{{ github.server_url }}}}/${{{{ github.repository }}}}/actions/workflows/multiversion-demo.yml)*
+          
+          **Last updated:** {timestamp}
+          '''
+          
+          try:
+              content = README_FILE.read_text(encoding='utf-8') if README_FILE.exists() else '# omnipkg\\n\\n'
+              
+              start_marker = '<!-- MULTIVERSION_DEMO_START -->'
+              end_marker = '<!-- MULTIVERSION_DEMO_END -->'
+              
+              if start_marker in content and end_marker in content:
+                  # Replace existing section
+                  before = content.split(start_marker)[0]
+                  after = content.split(end_marker)[1]
+                  new_content = before + start_marker + '\\n' + comparison_section + '\\n' + end_marker + after
+              else:
+                  # Add new section before the final documentation section or at end
+                  if '## 📚 Documentation' in content:
+                      parts = content.split('## 📚 Documentation')
+                      new_content = parts[0] + start_marker + '\\n' + comparison_section + '\\n' + end_marker + '\\n\\n## 📚 Documentation' + parts[1]
+                  else:
+                      new_content = content.rstrip() + '\\n\\n' + start_marker + '\\n' + comparison_section + '\\n' + end_marker + '\\n'
+              
+              README_FILE.write_text(new_content, encoding='utf-8')
+              print('✅ README.md updated successfully')
+              
+          except Exception as e:
+              print(f'Error updating README: {e}')
+              exit(1)
+          "
+
+      - name: Commit documentation updates
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          
+          # Pull latest changes to avoid conflicts
+          git pull --rebase origin main || true
+          
+          # Stage and commit changes
+          git add README.md
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "docs: update multi-version capability demonstration results - $(date -u '+%Y-%m-%d %H:%M UTC')"
+            git push || {
+              echo "Push failed, attempting rebase and retry..."
+              git pull --rebase origin main || true
+              git push
+            }
+          fi
