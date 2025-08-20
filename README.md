@@ -57,7 +57,7 @@
 
 *This fundamental difference enables advanced dependency management scenarios detailed below.*
 
-*Last updated: 2025-08-20 16:42 UTC*
+*Last updated: 2025-08-20 16:47 UTC*
 
 <!-- COMPARISON_STATS_END -->
 
