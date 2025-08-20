@@ -203,16 +203,13 @@ jobs:
           badge = "[![Package Manager Comparison Test](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml/badge.svg)](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml)"
           
           comparison_table = (
-              f"## Multi-Version Package Management Comparison {badge}\n\n"
-              f"*Demonstrates omnipkg's unique ability to maintain multiple versions of the same package in one environment.*  \n"
-              f"*Automated testing runs hourly for pre-release validation. [View live results](https://github.com/1minds3t/omnipkg)*\n\n"
-              f"| Package Manager | Multi-Version Support | Environment Restoration | Capability |\n"
-              f"|:----------------|:----------------------:|:-----------------------:|:-----------|\n"
-              f"| **omnipkg** | **{omnipkg_wins}** ({omnipkg_wr}) | **{omnipkg_saves}** | ✅ Multiple versions coexist simultaneously |\n"
-              f"| **pip** | {pip_wins} ({pip_wr}) | N/A | Single version (replacement model) |\n"
-              f"| **uv** | {uv_wins} ({uv_wr}) | N/A | Single version (replacement model) |\n\n"
-              f"*This fundamental difference enables advanced dependency management scenarios detailed below.*\n\n"
-              f"*Last updated: {test_timestamp}*\n"
+              f"## Multi-Version Support {badge}\n\n"
+              f"| Tool | Multi-Version | Restoration |\n"
+              f"|:-----|:-------------:|:-----------:|\n"
+              f"| **omnipkg** | **{omnipkg_wins}** ({omnipkg_wr}) | **{omnipkg_saves}** |\n"
+              f"| **pip** | {pip_wins} ({pip_wr}) | N/A |\n"
+              f"| **uv** | {uv_wins} ({uv_wr}) | N/A |\n\n"
+              f"*Hourly pre-release validation • [Live results](https://github.com/1minds3t/omnipkg) • Updated: {test_timestamp}*\n"
           )
           
           try:
