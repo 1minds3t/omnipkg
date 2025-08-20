@@ -1,106 +1,10 @@
-name: Multi-Version Capability Demonstration
-
-on:
-  schedule:
-    - cron: '0 */6 * * *'  # Every 6 hours
-  workflow_dispatch:
-  push:
-    branches: [main, develop]
-
-env:
-  PYTHON_VERSION: '3.11'
-
-jobs:
-  multiversion-demo:
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    permissions:
-      contents: write
-
-    services:
-      redis:
-        image: redis:7-alpine
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 3
-        ports:
-          - 6379:6379
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -e . redis tensorflow==2.13.0
-
-      - name: Configure omnipkg for non-interactive use
-        run: |
-          python - << 'EOF'
-          import sys
-          import site
-          import json
-          from pathlib import Path
-          import os
-          import sysconfig
-
-          try:
-              site_packages_path = site.getsitepackages()[0]
-          except (IndexError, AttributeError):
-              site_packages_path = sysconfig.get_paths()['purelib']
-
-          project_root = Path(os.environ['GITHUB_WORKSPACE'])
-          
-          builder_script = project_root / 'omnipkg' / 'package_meta_builder.py'
-          if not builder_script.exists():
-              print(f"Error: {builder_script} does not exist")
-              sys.exit(1)
-
-          config_data = {
-              'site_packages_path': site_packages_path,
-              'multiversion_base': str(Path(site_packages_path) / '.omnipkg_versions'),
-              'python_executable': sys.executable,
-              'builder_script_path': str(builder_script),
-              'redis_host': 'localhost',
-              'redis_port': 6379,
-              'redis_key_prefix': 'omnipkg:pkg:',
-              'paths_to_index': [str(Path(sys.executable).parent), '/usr/local/bin', '/usr/bin', '/bin', '/usr/sbin', '/sbin'],
-              'auto_cleanup': True,
-              'cleanup_threshold_days': 30
-          }
-
-          config_dir = Path.home() / '.config' / 'omnipkg'
-          config_dir.mkdir(parents=True, exist_ok=True)
-          config_path = config_dir / 'config.json'
-          
-          try:
-              with open(config_path, 'w') as f:
-                  json.dump(config_data, f, indent=2)
-              print(f'omnipkg config created at {config_path}:')
-              print(json.dumps(config_data, indent=2))
-          except Exception as e:
-              print(f"Error writing config: {e}")
-              sys.exit(1)
-          EOF
-
       - name: Test multi-version capability
         run: |
           echo "--- Testing Multi-Version TensorFlow Capability ---"
           mkdir -p /tmp/omnipkg-artifacts
           
           # Test the multi-version capability directly
-          timeout 600 python - << 'EOF' 2>&1 | tee /tmp/omnipkg-artifacts/tensorflow_test_output.txt
-          timeout 600 python - << 'EOF' 2>&1 | tee /tmp/omnipkg-artifacts/tensorflow_test_output.txt
+          timeout 600 python - << 'OMNIPKG_TEST_EOF' 2>&1 | tee /tmp/omnipkg-artifacts/tensorflow_test_output.txt
           import sys
           import subprocess
           
@@ -143,9 +47,9 @@ jobs:
               import traceback
               traceback.print_exc()
               sys.exit(1)
-          EOF
+          OMNIPKG_TEST_EOF
           
-          TEST_EXIT_CODE=$?
+          TEST_EXIT_CODE=${PIPESTATUS[0]}
           
           echo "## TensorFlow Multi-Version Test Output" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
@@ -158,55 +62,3 @@ jobs:
           else
             echo "❌ Multi-version test failed"
             echo "OMNIPKG_TENSORFLOW=FAILED" >> $GITHUB_ENV
-
-      - name: Compare with standard pip behavior
-        run: |
-          echo ""
-          echo "=== Standard pip: Attempting multiple TensorFlow versions ==="
-          
-          python -m venv /tmp/pip_test
-          source /tmp/pip_test/bin/activate
-          
-          pip install tensorflow==2.13.0
-          echo "Initial TensorFlow: $(python -c 'import tensorflow; print(tensorflow.__version__)')"
-          
-          pip install tensorflow==2.12.0
-          echo "After second install: $(python -c 'import tensorflow; print(tensorflow.__version__)')"
-          echo "PIP_TENSORFLOW=REPLACED" >> $GITHUB_ENV
-          
-          deactivate
-          
-          echo ""
-          echo "=== Standard uv: Attempting multiple TensorFlow versions ==="
-          
-          python -m venv /tmp/uv_test
-          source /tmp/uv_test/bin/activate
-          
-          pip install uv
-          uv pip install tensorflow==2.13.0
-          echo "Initial TensorFlow: $(python -c 'import tensorflow; print(tensorflow.__version__)')"
-          
-          uv pip install tensorflow==2.12.0
-          echo "After second install: $(python -c 'import tensorflow; print(tensorflow.__version__)')"
-          echo "UV_TENSORFLOW=REPLACED" >> $GITHUB_ENV
-
-      - name: Generate results summary
-        run: |
-          echo "# Multi-Version Package Management Results" > results.md
-          echo "" >> results.md
-          echo "**Test Date:** $(date -u '+%Y-%m-%d %H:%M UTC')" >> results.md
-          echo "" >> results.md
-          echo "| Tool | Multiple Versions | Result |" >> results.md
-          echo "|------|-------------------|--------|" >> results.md
-          echo "| omnipkg | TensorFlow 2.13.0 + 2.12.0 | ${{ env.OMNIPKG_TENSORFLOW }} |" >> results.md
-          echo "| standard pip | TensorFlow 2.13.0 → 2.12.0 | ${{ env.PIP_TENSORFLOW }} |" >> results.md
-          echo "| uv pip | TensorFlow 2.13.0 → 2.12.0 | ${{ env.UV_TENSORFLOW }} |" >> results.md
-
-      - name: Archive Test Output
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: omnipkg-tensorflow-test-output
-          path: /tmp/omnipkg-artifacts/
-          retention-days: 7
-          compression-level: 6
