@@ -44,20 +44,15 @@
 ---
 
 <!-- COMPARISON_STATS_START -->
-## Multi-Version Package Management Comparison [![Package Manager Comparison Test](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml/badge.svg)](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml)
+## Multi-Version Support [![Package Manager Comparison Test](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml/badge.svg)](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml)
 
-*Demonstrates omnipkg's unique ability to maintain multiple versions of the same package in one environment.*  
-*Automated testing runs hourly for pre-release validation. [View live results](https://github.com/1minds3t/omnipkg)*
+| Tool | Multi-Version | Restoration |
+|:-----|:-------------:|:-----------:|
+| **omnipkg** | **1** (100%) | **1** |
+| **pip** | 0 (0%) | N/A |
+| **uv** | 0 (0%) | N/A |
 
-| Package Manager | Multi-Version Support | Environment Restoration | Capability |
-|:----------------|:----------------------:|:-----------------------:|:-----------|
-| **omnipkg** | **1** (100%) | **1** | ✅ Multiple versions coexist simultaneously |
-| **pip** | 0 (0%) | N/A | Single version (replacement model) |
-| **uv** | 0 (0%) | N/A | Single version (replacement model) |
-
-*This fundamental difference enables advanced dependency management scenarios detailed below.*
-
-*Last updated: 2025-08-20 16:47 UTC*
+*Hourly pre-release validation • [Live results](https://github.com/1minds3t/omnipkg) • Updated: 2025-08-20 16:56 UTC*
 
 <!-- COMPARISON_STATS_END -->
 
