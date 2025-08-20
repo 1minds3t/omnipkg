@@ -51,13 +51,13 @@
 
 | Package Manager | Multi-Version Support | Environment Restoration | Capability |
 |:----------------|:----------------------:|:-----------------------:|:-----------|
-| **omnipkg** | **86** (100%) | **86** | ✅ Multiple versions coexist simultaneously |
+| **omnipkg** | **1** (100%) | **1** | ✅ Multiple versions coexist simultaneously |
 | **pip** | 0 (0%) | N/A | Single version (replacement model) |
 | **uv** | 0 (0%) | N/A | Single version (replacement model) |
 
 *This fundamental difference enables advanced dependency management scenarios detailed below.*
 
-*Last updated: 2025-08-20 16:39 UTC*
+*Last updated: 2025-08-20 16:42 UTC*
 
 <!-- COMPARISON_STATS_END -->
 
