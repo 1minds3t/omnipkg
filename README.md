@@ -139,7 +139,7 @@ omnipkg install torch==2.0.0 torch==2.7.1
 | **pip** | 0 (0%) | N/A |
 | **uv** | 0 (0%) | N/A |
 
-*Hourly pre-release validation • [Live results](https://github.com/1minds3t/omnipkg) • Updated: 2025-08-20 22:37 UTC*
+*Hourly pre-release validation • [Live results](https://github.com/1minds3t/omnipkg) • Updated: 2025-08-20 23:21 UTC*
 
 <!-- COMPARISON_STATS_END -->
 
