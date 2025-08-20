@@ -43,6 +43,16 @@
 
 ---
 
+## 💡 Why This Matters
+
+**Data Science Reality**: Modern ML projects routinely need multiple TensorFlow versions (legacy models vs. current training), different NumPy versions (compatibility vs. performance), and various PyTorch builds (CPU vs. GPU). Traditional solutions like Docker containers, virtual environments, or complex scripts lead to bloated storage, maintenance headaches, and deployment failures.
+
+**`omnipkg` Solution**: One environment, one script, zero compromises. Run `torch==2.0.0` and `torch==2.7.1` seamlessly, switch `numpy` versions mid-script, and recover from environment damage instantly.
+
+---
+
+---
+
 <!-- COMPARISON_STATS_START -->
 ## Multi-Version Support [![Package Manager Comparison Test](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml/badge.svg)](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml)
 
@@ -52,17 +62,9 @@
 | **pip** | 0 (0%) | N/A |
 | **uv** | 0 (0%) | N/A |
 
-*Hourly pre-release validation • [Live results](https://github.com/1minds3t/omnipkg) • Updated: 2025-08-20 22:29 UTC*
+*Hourly pre-release validation • [Live results](https://github.com/1minds3t/omnipkg) • Updated: 2025-08-20 20:40 UTC*
 
 <!-- COMPARISON_STATS_END -->
-
----
-
-## 💡 Why This Matters
-
-**Data Science Reality**: Modern ML projects routinely need multiple TensorFlow versions (legacy models vs. current training), different NumPy versions (compatibility vs. performance), and various PyTorch builds (CPU vs. GPU). Traditional solutions like Docker containers, virtual environments, or complex scripts lead to bloated storage, maintenance headaches, and deployment failures.
-
-**`omnipkg` Solution**: One environment, one script, zero compromises. Run `torch==2.0.0` and `torch==2.7.1` seamlessly, switch `numpy` versions mid-script, and recover from environment damage instantly.
 
 ---
 
