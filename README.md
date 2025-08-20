@@ -37,6 +37,8 @@
   </a>
 </p>
 
+([View Live Download Stats](https://clickpy.clickhouse.com/dashboard/omnipkg))
+
 ---
 
 `omnipkg` radically simplifies Python dependency management, providing a robust alternative to tools like `pipx`, `uv`, `conda`, and `Docker` for handling conflicting packages. Born from a real-world nightmare—a forced downgrade that wrecked a `conda-forge` environment on a Friday night—`omnipkg` was built in a weekend to solve what others couldn’t: running multiple versions of the same package in one environment without conflicts.
@@ -48,10 +50,6 @@
 **Data Science Reality**: Modern ML projects routinely need multiple TensorFlow versions (legacy models vs. current training), different NumPy versions (compatibility vs. performance), and various PyTorch builds (CPU vs. GPU). Traditional solutions like Docker containers, virtual environments, or complex scripts lead to bloated storage, maintenance headaches, and deployment failures.
 
 **`omnipkg` Solution**: One environment, one script, zero compromises. Run `torch==2.0.0` and `torch==2.7.1` seamlessly, switch `numpy` versions mid-script, and recover from environment damage instantly.
-
----
-
-([View Live Download Stats](https://clickpy.clickhouse.com/dashboard/omnipkg))
 
 ---
 
