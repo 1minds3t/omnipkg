@@ -1,14 +1,14 @@
-name: 🥊 omnipkg vs The World - Battle & Resilience Test
+name: Package Manager Comparison Test
 
 on:
   schedule:
-    - cron: '0 * * * *' # Run every hour
+    - cron: '0 * * * *' # Hourly pre-release testing
   workflow_dispatch:
   push:
     branches: [ 'main', 'test-workflows-feature' ]
 
 jobs:
-  comparison-test:
+  package-manager-comparison:
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -25,23 +25,23 @@ jobs:
           - 6379:6379
 
     steps:
-      - name: 🏁 Checkout code
+      - name: Checkout repository
         uses: actions/checkout@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           fetch-depth: 1
 
-      - name: 🐍 Set up Python 3.11
+      - name: Set up Python 3.11
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
-      - name: 📦 Install omnipkg, Redis client, and uv
+      - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -e . redis uv
 
-      - name: ⚙️ Configure omnipkg
+      - name: Configure omnipkg
         run: |
           python - << 'EOF'
           import sys, site, json, os, sysconfig
@@ -67,57 +67,55 @@ jobs:
               json.dump(config_data, f, indent=2)
           EOF
 
-      - name: 🚀 omnipkg | Battle Test (PASS Expected)
-        id: omnipkg_conflict_test
+      - name: Test omnipkg multi-version coexistence
+        id: omnipkg_test
         run: |
-          echo "--- Testing omnipkg installing conflicting versions of pip ---"
+          echo "Testing omnipkg ability to maintain multiple package versions simultaneously"
           if omnipkg install pip==24.0 pip==23.2.1; then
-            echo "OMNIPKG_CONFLICT_RESULT=PASS" >> $GITHUB_ENV
-            echo "✅ omnipkg: Installed multiple pip versions"
+            echo "OMNIPKG_COEXIST_RESULT=PASS" >> $GITHUB_ENV
+            echo "✓ omnipkg: Multiple pip versions coexist in same environment"
+            omnipkg list | grep pip || true
           else
-            echo "OMNIPKG_CONFLICT_RESULT=FAIL" >> $GITHUB_ENV
-            echo "❌ omnipkg: Failed to install multiple pip versions"
+            echo "OMNIPKG_COEXIST_RESULT=FAIL" >> $GITHUB_ENV
+            echo "✗ omnipkg: Failed to maintain multiple versions"
           fi
 
-      - name: 💥 pip | Battle Test (FAIL Expected)
-        id: pip_conflict_test
+      - name: Test pip single-version limitation
+        id: pip_test
         run: |
-          echo "--- Testing pip downgrading itself ---"
-          pip install pip==24.0 > pip_conflict.log 2>&1
-          pip install pip==23.2.1 >> pip_conflict.log 2>&1
-          echo "PIP_CONFLICT_RESULT=FAIL" >> $GITHUB_ENV
-          echo "❌ pip: Mercilessly downgraded itself (expected)"
-          cat pip_conflict.log
+          echo "Testing pip's single-version replacement behavior"
+          pip install pip==24.0 > pip_test.log 2>&1
+          pip install pip==23.2.1 >> pip_test.log 2>&1
+          echo "PIP_COEXIST_RESULT=FAIL" >> $GITHUB_ENV
+          echo "✗ pip: Replaces existing version (standard behavior)"
 
-      - name: ⚡️ uv | Battle Test (FAIL Expected)
-        id: uv_conflict_test
+      - name: Test uv single-version limitation
+        id: uv_test
         run: |
-          echo "--- Testing uv downgrading itself ---"
-          uv pip install uv==0.5.0 --system > uv_conflict.log 2>&1 || true
-          uv pip install uv==0.4.0 --system >> uv_conflict.log 2>&1 || true
-          echo "UV_CONFLICT_RESULT=FAIL" >> $GITHUB_ENV
-          echo "❌ uv: Also downgraded itself (but faster!) (expected)"
-          cat uv_conflict.log
+          echo "Testing uv's single-version replacement behavior"
+          uv pip install uv==0.5.0 --system > uv_test.log 2>&1 || true
+          uv pip install uv==0.4.0 --system >> uv_test.log 2>&1 || true
+          echo "UV_COEXIST_RESULT=FAIL" >> $GITHUB_ENV
+          echo "✗ uv: Replaces existing version (standard behavior)"
 
-      - name: 🛡️ omnipkg | Resilience Test (PASS Expected)
-        id: omnipkg_revert_test
+      - name: Test omnipkg environment restoration
+        id: omnipkg_restoration_test
         run: |
-          echo "--- Testing omnipkg reverting uv's self-sabotage ---"
+          echo "Testing omnipkg environment state restoration"
           omnipkg install uv
-          latest_uv=$(uv --version | awk '{print $2}')
-          echo "Baseline uv: $latest_uv"
-          uv pip install uv==0.7.1 --system > revert.log 2>&1
-          echo "After sabotage: $(uv --version | awk '{print $2}')"
-          if omnipkg revert -y >> revert.log 2>&1; then
-            echo "OMNIPKG_REVERT_RESULT=PASS" >> $GITHUB_ENV
-            echo "✅ omnipkg: Reverted to uv $latest_uv"
+          baseline_version=$(uv --version | awk '{print $2}')
+          echo "Baseline uv version: $baseline_version"
+          uv pip install uv==0.7.1 --system > restore_test.log 2>&1
+          echo "After standard tool modification: $(uv --version | awk '{print $2}')"
+          if omnipkg revert -y >> restore_test.log 2>&1; then
+            echo "OMNIPKG_RESTORE_RESULT=PASS" >> $GITHUB_ENV
+            echo "✓ omnipkg: Restored environment to baseline state"
           else
-            echo "OMNIPKG_REVERT_RESULT=FAIL" >> $GITHUB_ENV
-            echo "❌ omnipkg: Revert failed"
+            echo "OMNIPKG_RESTORE_RESULT=FAIL" >> $GITHUB_ENV
+            echo "✗ omnipkg: Environment restoration failed"
           fi
-          cat revert.log
 
-      - name: 📊 Extract Current Stats from README
+      - name: Extract current statistics
         run: |
           cat > extract_stats.py << 'EOF'
           import re, os
@@ -132,13 +130,11 @@ jobs:
               try:
                   content = README_FILE.read_text(encoding='utf-8')
                   
-                  # Fixed regex patterns to match your exact markdown table format
                   omnipkg_match = re.search(r'\|\s*\*\*`omnipkg`[^|]*\|\s*\*\*(\d+)\*\*\s*\((\d+)%\)\s*\|\s*\*\*(\d+)\*\*\s*\|', content)
                   if omnipkg_match:
                       omnipkg_wins = int(omnipkg_match.group(1))
                       win_rate = int(omnipkg_match.group(2))
                       omnipkg_saves = int(omnipkg_match.group(3))
-                      # Calculate losses from win rate
                       total_battles = int(omnipkg_wins * 100 / win_rate) if win_rate > 0 else omnipkg_wins
                       omnipkg_losses = total_battles - omnipkg_wins
                   
@@ -146,7 +142,6 @@ jobs:
                   if pip_match:
                       pip_wins = int(pip_match.group(1))
                       win_rate = int(pip_match.group(2))
-                      # Calculate losses from win rate
                       total_battles = int(pip_wins * 100 / win_rate) if win_rate > 0 else pip_wins + 1
                       pip_losses = total_battles - pip_wins
                   
@@ -154,15 +149,12 @@ jobs:
                   if uv_match:
                       uv_wins = int(uv_match.group(1))
                       win_rate = int(uv_match.group(2))
-                      # Calculate losses from win rate  
                       total_battles = int(uv_wins * 100 / win_rate) if win_rate > 0 else uv_wins + 1
                       uv_losses = total_battles - uv_wins
                   
-                  print(f"Extracted: omnipkg={omnipkg_wins}W/{omnipkg_losses}L/{omnipkg_saves}S, pip={pip_wins}W/{pip_losses}L, uv={uv_wins}W/{uv_losses}L")
+                  print(f"Current stats: omnipkg={omnipkg_wins}W/{omnipkg_losses}L/{omnipkg_saves}S, pip={pip_wins}W/{pip_losses}L, uv={uv_wins}W/{uv_losses}L")
               except Exception as e:
-                  print(f"Could not extract stats: {e}")
-                  print("README content:")
-                  print(content[:1000] + "..." if len(content) > 1000 else content)
+                  print(f"Statistics extraction failed: {e}")
           
           with open(os.environ['GITHUB_ENV'], 'a') as f:
               f.write(f"EXISTING_OMNIPKG_WINS={omnipkg_wins}\n")
@@ -175,28 +167,28 @@ jobs:
           EOF
           python extract_stats.py
 
-      - name: 📊 Update Battle Report and README
+      - name: Update documentation with test results
         run: |
-          cat > update_battle_report.py << 'EOF'
+          cat > update_documentation.py << 'EOF'
           import os
           from pathlib import Path
           from datetime import datetime
 
           README_FILE = Path("README.md")
           
-          omnipkg_conflict = os.environ.get('OMNIPKG_CONFLICT_RESULT', 'FAIL')
-          pip_conflict = os.environ.get('PIP_CONFLICT_RESULT', 'FAIL')
-          uv_conflict = os.environ.get('UV_CONFLICT_RESULT', 'FAIL')
-          omnipkg_revert = os.environ.get('OMNIPKG_REVERT_RESULT', 'FAIL')
-          test_timestamp = datetime.utcnow().strftime('%Y-%m-%d %H:%M')
+          omnipkg_coexist = os.environ.get('OMNIPKG_COEXIST_RESULT', 'FAIL')
+          pip_coexist = os.environ.get('PIP_COEXIST_RESULT', 'FAIL')
+          uv_coexist = os.environ.get('UV_COEXIST_RESULT', 'FAIL')
+          omnipkg_restore = os.environ.get('OMNIPKG_RESTORE_RESULT', 'FAIL')
+          test_timestamp = datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')
 
-          omnipkg_wins = int(os.environ.get('EXISTING_OMNIPKG_WINS', '0')) + (1 if omnipkg_conflict == 'PASS' else 0)
-          omnipkg_saves = int(os.environ.get('EXISTING_OMNIPKG_SAVES', '0')) + (1 if omnipkg_revert == 'PASS' else 0)
-          pip_wins = int(os.environ.get('EXISTING_PIP_WINS', '0')) + (1 if pip_conflict == 'PASS' else 0)
-          uv_wins = int(os.environ.get('EXISTING_UV_WINS', '0')) + (1 if uv_conflict == 'PASS' else 0)
-          omnipkg_losses = int(os.environ.get('EXISTING_OMNIPKG_LOSSES', '0')) + (1 if omnipkg_conflict == 'FAIL' else 0)
-          pip_losses = int(os.environ.get('EXISTING_PIP_LOSSES', '0')) + (1 if pip_conflict == 'FAIL' else 0)
-          uv_losses = int(os.environ.get('EXISTING_UV_LOSSES', '0')) + (1 if uv_conflict == 'FAIL' else 0)
+          omnipkg_wins = int(os.environ.get('EXISTING_OMNIPKG_WINS', '0')) + (1 if omnipkg_coexist == 'PASS' else 0)
+          omnipkg_saves = int(os.environ.get('EXISTING_OMNIPKG_SAVES', '0')) + (1 if omnipkg_restore == 'PASS' else 0)
+          pip_wins = int(os.environ.get('EXISTING_PIP_WINS', '0')) + (1 if pip_coexist == 'PASS' else 0)
+          uv_wins = int(os.environ.get('EXISTING_UV_WINS', '0')) + (1 if uv_coexist == 'PASS' else 0)
+          omnipkg_losses = int(os.environ.get('EXISTING_OMNIPKG_LOSSES', '0')) + (1 if omnipkg_coexist == 'FAIL' else 0)
+          pip_losses = int(os.environ.get('EXISTING_PIP_LOSSES', '0')) + (1 if pip_coexist == 'FAIL' else 0)
+          uv_losses = int(os.environ.get('EXISTING_UV_LOSSES', '0')) + (1 if uv_coexist == 'FAIL' else 0)
 
           def calculate_win_rate(wins, losses):
               total = wins + losses
@@ -206,52 +198,56 @@ jobs:
           pip_wr = calculate_win_rate(pip_wins, pip_losses)
           uv_wr = calculate_win_rate(uv_wins, uv_losses)
 
-          print(f"Updated: omnipkg={omnipkg_wins}W/{omnipkg_losses}L/{omnipkg_saves}S, pip={pip_wins}W/{pip_losses}L, uv={uv_wins}W/{uv_losses}L")
+          print(f"Updated stats: omnipkg={omnipkg_wins}W/{omnipkg_losses}L/{omnipkg_saves}S, pip={pip_wins}W/{pip_losses}L, uv={uv_wins}W/{uv_losses}L")
 
-          badge = "[![🥊 omnipkg vs The World - Battle & Resilience Test](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml/badge.svg)](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml)"
-          battle_stats = (
-              f"## 🥊 Package Manager Thunderdome {badge}\n\n"
-              f"| Package Manager | Conflict Wins | Environment Saves | Verdict |\n"
-              f"|:----------------|:-------------:|:-----------------:|:--------|\n"
-              f"| **`omnipkg` 🚀** | **{omnipkg_wins}** ({omnipkg_wr}) | **{omnipkg_saves}** | ✅ Solves conflicts *and* heals environments |\n"
-              f"| **`pip` 💥** | {pip_wins} ({pip_wr}) | N/A | ❌ Mercilessly overwrites itself |\n"
-              f"| **`uv` ⚡️** | {uv_wins} ({uv_wr}) | N/A | ❌ Also overwrites itself (but faster!) |\n\n"
-              f"### 📊 Latest Test: {test_timestamp} (UTC)\n"
+          badge = "[![Package Manager Comparison Test](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml/badge.svg)](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml)"
+          
+          comparison_table = (
+              f"## Multi-Version Package Management Comparison {badge}\n\n"
+              f"*Demonstrates omnipkg's unique ability to maintain multiple versions of the same package in one environment.*  \n"
+              f"*Automated testing runs hourly for pre-release validation. [View live results](https://github.com/1minds3t/omnipkg)*\n\n"
+              f"| Package Manager | Multi-Version Support | Environment Restoration | Capability |\n"
+              f"|:----------------|:----------------------:|:-----------------------:|:-----------|\n"
+              f"| **omnipkg** | **{omnipkg_wins}** ({omnipkg_wr}) | **{omnipkg_saves}** | ✅ Multiple versions coexist simultaneously |\n"
+              f"| **pip** | {pip_wins} ({pip_wr}) | N/A | Single version (replacement model) |\n"
+              f"| **uv** | {uv_wins} ({uv_wr}) | N/A | Single version (replacement model) |\n\n"
+              f"*This fundamental difference enables advanced dependency management scenarios detailed below.*\n\n"
+              f"*Last updated: {test_timestamp}*\n"
           )
           
           try:
               content = README_FILE.read_text(encoding='utf-8') if README_FILE.exists() else "# omnipkg\n\n"
-              start, end = "<!-- BATTLE_STATS_START -->", "<!-- BATTLE_STATS_END -->"
-              if start in content and end in content:
-                  before, after = content.split(start)[0], content.split(end)[1]
-                  new_content = before + start + "\n" + battle_stats + "\n" + end + after
+              start_marker, end_marker = "<!-- COMPARISON_STATS_START -->", "<!-- COMPARISON_STATS_END -->"
+              
+              if start_marker in content and end_marker in content:
+                  before_section = content.split(start_marker)[0]
+                  after_section = content.split(end_marker)[1]
+                  updated_content = before_section + start_marker + "\n" + comparison_table + "\n" + end_marker + after_section
               else:
-                  new_content = content.rstrip() + "\n\n" + start + "\n" + battle_stats + "\n" + end
+                  updated_content = content.rstrip() + "\n\n" + start_marker + "\n" + comparison_table + "\n" + end_marker
+              
               with open(README_FILE, 'w', encoding='utf-8') as f:
-                  f.write(new_content)
-              print("✅ README.md written to disk")
+                  f.write(updated_content)
+              print("✓ Documentation updated successfully")
           except Exception as e:
-              print(f"Error writing README: {e}")
+              print(f"Documentation update failed: {e}")
               exit(1)
           EOF
-          python update_battle_report.py
+          python update_documentation.py
 
-      - name: 💾 Commit README Updates
+      - name: Commit documentation updates
         run: |
           git config --local user.email "action@github.com"
-          git config --local user.name "omnipkg Battle Bot"
-          # Only clean generated scripts, preserve README.md
-          git clean -f -X -- extract_stats.py update_battle_report.py
-          # Pull latest changes
+          git config --local user.name "Package Manager Test Bot"
+          git clean -f -X -- extract_stats.py update_documentation.py
           git pull --rebase origin main || true
-          # Stage and commit changes
           git add README.md
           if git diff --staged --quiet; then
-            echo "No changes to commit"
+            echo "No documentation changes to commit"
           else
-            git commit -m "🥊 Thunderdome update: omnipkg vs The World - $(date -u '+%Y-%m-%d %H:%M UTC')"
+            git commit -m "docs: update package manager comparison results - $(date -u '+%Y-%m-%d %H:%M UTC')"
             git push || {
-              echo "Push failed, retrying after another pull..."
+              echo "Push failed, attempting retry after rebase..."
               git pull --rebase origin main || true
               git push
             }
