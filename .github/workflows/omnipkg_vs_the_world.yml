@@ -225,13 +225,13 @@ jobs:
 
 {badge}
 
-**The Ultimate Test**: Can your package manager install `pip==25.2` and `pip==23.2.1` in the same environment?
+**The Ultimate Test**: Can your package manager install pip==25.2 and pip==23.2.1 in the same environment?
 
 | Package Manager | Multi-Version Support | What Actually Happens |
 |:----------------|:--------------------:|:---------------------|
-| **🔥 omnipkg** | **✅ {omnipkg_wins} tests (100%)** | `{omnipkg_protection}` `{omnipkg_bubble}` `{omnipkg_complete}` |
-| **pip** | **❌ {pip_wins} tests (0%)** | `{pip_replacement}` |
-| **uv** | **❌ {uv_wins} tests (0%)** | `{uv_replacement}` |
+| **🔥 omnipkg** | **✅ {omnipkg_wins} tests (100%)** | Protection + Bubble + Success |
+| **pip** | **❌ {pip_wins} tests (0%)** | {pip_replacement} |
+| **uv** | **❌ {uv_wins} tests (0%)** | {uv_replacement} |
 
 ### The Harsh Reality:
 
@@ -242,7 +242,7 @@ Successfully installed pip-23.2.1
 # Your pip==25.2 is gone forever. No recovery possible.
 ```
 
-**🔴 uv behavior:**
+**🔴 uv behavior:**  
 ```bash
 - uv==0.5.0
 + uv==0.4.0  
@@ -267,11 +267,11 @@ Successfully installed pip-23.2.1
 **Try the impossible yourself:**
 ```bash
 # Other tools: Choose your victim
-pip install torch==2.0.0 torch==2.7.1    # ❌ Only 2.7.1 survives  
-uv pip install numpy==1.24.3 numpy==1.26.4  # ❌ Only 1.26.4 survives
+pip install torch==2.0.0 torch==2.7.1    # Only 2.7.1 survives  
+uv pip install numpy==1.24.3 numpy==1.26.4  # Only 1.26.4 survives
 
 # omnipkg: Keep both, use either
-omnipkg install torch==2.0.0 torch==2.7.1   # ✅ Both coexist perfectly
+omnipkg install torch==2.0.0 torch==2.7.1   # Both coexist perfectly
 ```
 
 """
