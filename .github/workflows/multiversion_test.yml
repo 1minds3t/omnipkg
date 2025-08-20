@@ -44,58 +44,120 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e . redis tensorflow==2.13.0
 
-      - name: Configure omnipkg
+      - name: Configure omnipkg for non-interactive use
         run: |
-          python -c "
-          import json, os, sys, site, sysconfig
+          python - << 'EOF'
+          import sys
+          import site
+          import json
           from pathlib import Path
+          import os
+          import sysconfig
+
+          try:
+              site_packages_path = site.getsitepackages()[0]
+          except (IndexError, AttributeError):
+              site_packages_path = sysconfig.get_paths()['purelib']
+
+          project_root = Path(os.environ['GITHUB_WORKSPACE'])
           
-          site_packages = site.getsitepackages()[0] if site.getsitepackages() else sysconfig.get_paths()['purelib']
-          project_root = Path('.').resolve()
-          
-          config = {
-              'cache_dir': str(project_root / '.omnipkg_cache'),
-              'metadata_cache_dir': str(project_root / '.omnipkg_metadata'),
-              'site_packages': site_packages,
+          builder_script = project_root / 'omnipkg' / 'package_meta_builder.py'
+          if not builder_script.exists():
+              print(f"Error: {builder_script} does not exist")
+              sys.exit(1)
+
+          config_data = {
+              'site_packages_path': site_packages_path,
+              'multiversion_base': str(Path(site_packages_path) / '.omnipkg_versions'),
               'python_executable': sys.executable,
-              'redis_url': 'redis://localhost:6379',
-              'enable_redis': True
+              'builder_script_path': str(builder_script),
+              'redis_host': 'localhost',
+              'redis_port': 6379,
+              'redis_key_prefix': 'omnipkg:pkg:',
+              'paths_to_index': [str(Path(sys.executable).parent), '/usr/local/bin', '/usr/bin', '/bin', '/usr/sbin', '/sbin'],
+              'auto_cleanup': True,
+              'cleanup_threshold_days': 30
           }
+
+          config_dir = Path.home() / '.config' / 'omnipkg'
+          config_dir.mkdir(parents=True, exist_ok=True)
+          config_path = config_dir / 'config.json'
           
-          config_path = project_root / '.omnipkg' / 'config.json'
-          config_path.parent.mkdir(exist_ok=True)
-          config_path.write_text(json.dumps(config, indent=2))
-          print(f'Config written to: {config_path}')
-          "
+          try:
+              with open(config_path, 'w') as f:
+                  json.dump(config_data, f, indent=2)
+              print(f'omnipkg config created at {config_path}:')
+              print(json.dumps(config_data, indent=2))
+          except Exception as e:
+              print(f"Error writing config: {e}")
+              sys.exit(1)
+          EOF
 
       - name: Test multi-version capability
         run: |
-          if pip install tensorflow==2.12.0 --target .omnipkg_cache/tensorflow-2.12.0 --no-deps --force-reinstall; then
-            echo "✅ Successfully installed multiple TensorFlow versions"
+          echo "--- Testing Multi-Version TensorFlow Capability ---"
+          mkdir -p /tmp/omnipkg-artifacts
+          
+          # Test the multi-version capability directly
+          timeout 600 python - << 'EOF' 2>&1 | tee /tmp/omnipkg-artifacts/tensorflow_test_output.txt
+          timeout 600 python - << 'EOF' 2>&1 | tee /tmp/omnipkg-artifacts/tensorflow_test_output.txt
+          import sys
+          import subprocess
+          
+          print("=== Installing TensorFlow 2.12.0 for testing ===")
+          try:
+              subprocess.run([sys.executable, "-m", "pip", "install", "tensorflow==2.12.0", "--target", "/tmp/tf_2_12_0", "--no-deps", "--force-reinstall"], check=True)
+              print("✅ TensorFlow 2.12.0 installed successfully")
+          except subprocess.CalledProcessError as e:
+              print(f"❌ Failed to install TensorFlow 2.12.0: {e}")
+              sys.exit(1)
+          
+          print("\n=== Testing omnipkg multi-version loading ===")
+          try:
+              from omnipkg.loader import omnipkgLoader
+              from omnipkg.core import ConfigManager
+              
+              config = ConfigManager().config
+              print(f"✅ omnipkg config loaded: {config}")
+              
+              # Test accessing older version
+              print("\n--- Testing isolated TensorFlow 2.12.0 ---")
+              with omnipkgLoader('tensorflow==2.12.0', config=config):
+                  import tensorflow as tf_old
+                  print(f'✅ Isolated TensorFlow version: {tf_old.__version__}')
+              
+              # Main environment version
+              print("\n--- Testing main environment TensorFlow ---")
+              import tensorflow as tf_main
+              print(f'✅ Main environment TensorFlow version: {tf_main.__version__}')
+              
+              if tf_old.__version__ != tf_main.__version__:
+                  print('🎉 SUCCESS: Both TensorFlow versions accessible in same environment!')
+                  print('OMNIPKG MULTI-VERSION TEST PASSED!')
+              else:
+                  print('❌ FAILED: Versions are the same, no isolation occurred')
+                  sys.exit(1)
+                  
+          except Exception as e:
+              print(f"❌ omnipkg test failed: {e}")
+              import traceback
+              traceback.print_exc()
+              sys.exit(1)
+          EOF
+          
+          TEST_EXIT_CODE=$?
+          
+          echo "## TensorFlow Multi-Version Test Output" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          cat /tmp/omnipkg-artifacts/tensorflow_test_output.txt >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          
+          if [ $TEST_EXIT_CODE -eq 0 ] && grep -q "OMNIPKG MULTI-VERSION TEST PASSED!" /tmp/omnipkg-artifacts/tensorflow_test_output.txt; then
+            echo "✅ Multi-version test completed successfully"
             echo "OMNIPKG_TENSORFLOW=SUCCESS" >> $GITHUB_ENV
-            
-            # Verify both versions are accessible
-            python -c "
-          from omnipkg.loader import omnipkgLoader
-          from omnipkg.core import ConfigManager
-          
-          config = ConfigManager().config
-          
-          # Test accessing older version
-          with omnipkgLoader('tensorflow==2.12.0', config=config):
-              import tensorflow as tf_old
-              print(f'Isolated TensorFlow: {tf_old.version}')
-          
-          # Main environment version
-          import tensorflow as tf_main
-          print(f'Main environment TensorFlow: {tf_main.version}')
-          
-          print('✅ Both TensorFlow versions accessible in same environment')
-          "
           else
-            echo "❌ Failed to install multiple TensorFlow versions"
+            echo "❌ Multi-version test failed"
             echo "OMNIPKG_TENSORFLOW=FAILED" >> $GITHUB_ENV
-          fi
 
       - name: Compare with standard pip behavior
         run: |
@@ -140,16 +202,11 @@ jobs:
           echo "| standard pip | TensorFlow 2.13.0 → 2.12.0 | ${{ env.PIP_TENSORFLOW }} |" >> results.md
           echo "| uv pip | TensorFlow 2.13.0 → 2.12.0 | ${{ env.UV_TENSORFLOW }} |" >> results.md
 
-      - name: Update repository with results
-        run: |
-          if [[ "${{ env.OMNIPKG_TENSORFLOW }}" == "SUCCESS" ]]; then
-            git config --local user.email "action@github.com"
-            git config --local user.name "GitHub Action"
-            git add results.md
-            git commit -m "Update multi-version capability results - $(date -u '+%Y-%m-%d %H:%M UTC')"
-            git push || {
-              echo "Push failed, attempting rebase and retry..."
-              git pull --rebase origin main || true
-              git push
-            }
-          fi
+      - name: Archive Test Output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: omnipkg-tensorflow-test-output
+          path: /tmp/omnipkg-artifacts/
+          retention-days: 7
+          compression-level: 6
