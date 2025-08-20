@@ -66,7 +66,7 @@
 
 <!-- COMPARISON_STATS_END -->
 
-`omnipkg` reached **~3000 PyPI downloads across 35 countries 10 days post-launch with zero marketing.** ([View Live Stats](https://clickpy.clickhouse.com/dashboard/omnipkg))
+([View Live Download Stats](https://clickpy.clickhouse.com/dashboard/omnipkg))
 
 ---
 
