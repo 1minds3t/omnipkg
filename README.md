@@ -7,7 +7,7 @@
 <h1 align="center">omnipkg - The Ultimate Python Dependency Resolver</h1>
 
 <p align="center">
-  <strong>One environment. Infinite packages. Zero conflicts. Undeniable proof.
+  <strong>One environment. Infinite packages. Zero conflicts.
     <img src="https://img.shields.io/badge/🚀_Live_NumPy+SciPy_Hot--Swapping-passing-success?logo=github-actions" alt="NumPy+SciPy Hot-Swapping Test">
   </a>
 </p>
