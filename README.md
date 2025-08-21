@@ -7,8 +7,7 @@
 <h1 align="center">omnipkg - The Ultimate Python Dependency Resolver</h1>
 
 <p align="center">
-  <strong>One environment. Infinite packages. Zero conflicts. Undeniable proof:  </strong>
-  <a href="https://github.com/1minds3t/omnipkg/actions/workflows/numpy-scipy-c-extension-test.yml">
+  <strong>One environment. Infinite packages. Zero conflicts.
     <img src="https://img.shields.io/badge/🚀_Live_NumPy+SciPy_Hot--Swapping-passing-success?logo=github-actions" alt="NumPy+SciPy Hot-Swapping Test">
   </a>
 </p>
@@ -56,7 +55,7 @@
 
 **Data Science Reality**: Modern ML projects routinely need multiple TensorFlow versions (legacy models vs. current training), different NumPy versions (compatibility vs. performance), and various PyTorch builds (CPU vs. GPU). Traditional solutions like Docker containers, virtual environments, or complex scripts lead to bloated storage, maintenance headaches, and deployment failures.
 
-**`omnipkg` Solution**: One environment, one script, zero compromises. Run `torch==2.0.0` and `torch==2.7.1` seamlessly, switch `numpy` versions mid-script, and recover from environment damage instantly.
+**`omnipkg` Solution**: One environment, one script, everything **just works**. Run `torch==2.0.0` and `torch==2.7.1` seamlessly, switch `numpy` versions mid-script, and recover from environment damage instantly.
 
 ---
 
