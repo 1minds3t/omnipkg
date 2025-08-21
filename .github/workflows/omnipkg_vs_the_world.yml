@@ -123,30 +123,47 @@ jobs:
           README_FILE = Path("README.md")
           
           # Initialize counters
-          total_versions_juggled = 0
+          omnipkg_wins = 0
+          pip_failures = 0
+          uv_failures = 0
           
           if README_FILE.exists():
               try:
                   content = README_FILE.read_text(encoding='utf-8')
                   
-                  # Look for the existing badge to extract current count
-                  badge_match = re.search(r'omnipkg%20vs%20The%20World-(\d+)%20Versions%20Juggled', content)
-                  if badge_match:
-                      total_versions_juggled = int(badge_match.group(1))
-                      print(f"Found existing count: {total_versions_juggled} versions juggled")
-                  else:
-                      print("No existing badge found, starting fresh")
+                  # Extract omnipkg wins from badge
+                  omnipkg_match = re.search(r'omnipkg-(\d+)%20Wins-brightgreen', content)
+                  if omnipkg_match:
+                      omnipkg_wins = int(omnipkg_match.group(1))
+                      print(f"Found omnipkg wins: {omnipkg_wins}")
+                  
+                  # Extract pip failures from badge
+                  pip_match = re.search(r'pip-(\d+)%20Failures-red', content)
+                  if pip_match:
+                      pip_failures = int(pip_match.group(1))
+                      print(f"Found pip failures: {pip_failures}")
+                  
+                  # Extract uv failures from badge  
+                  uv_match = re.search(r'uv-(\d+)%20Failures-red', content)
+                  if uv_match:
+                      uv_failures = int(uv_match.group(1))
+                      print(f"Found uv failures: {uv_failures}")
+                  
+                  if not (omnipkg_match or pip_match or uv_match):
+                      print("No existing badges found, starting fresh")
                   
               except Exception as e:
                   print(f"Statistics extraction error: {e}")
-                  print("Starting with fresh counter")
+                  print("Starting with fresh counters")
           else:
-              print("README.md not found, starting with fresh counter")
+              print("README.md not found, starting with fresh counters")
           
-          print(f"Current baseline: {total_versions_juggled} versions juggled")
+          print(f"Current stats: omnipkg={omnipkg_wins} wins, pip={pip_failures} failures, uv={uv_failures} failures")
           
           with open(os.environ['GITHUB_ENV'], 'a') as f:
-              f.write(f"EXISTING_VERSIONS_JUGGLED={total_versions_juggled}\n")
+              f.write(f"EXISTING_OMNIPKG_WINS={omnipkg_wins}\n")
+              f.write(f"EXISTING_PIP_FAILURES={pip_failures}\n")
+              f.write(f"EXISTING_UV_FAILURES={uv_failures}\n")
           EOF
           python extract_stats.py
 
@@ -160,33 +177,38 @@ jobs:
           
           # Get test results
           omnipkg_coexist = os.environ.get('OMNIPKG_COEXIST_RESULT', 'FAIL')
-          omnipkg_restore = os.environ.get('OMNIPKG_RESTORE_RESULT', 'FAIL')
-          test_timestamp = datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')
+          pip_coexist = os.environ.get('PIP_COEXIST_RESULT', 'FAIL')
+          uv_coexist = os.environ.get('UV_COEXIST_RESULT', 'FAIL')
           
-          # Get existing count and calculate new total
-          existing_count = int(os.environ.get('EXISTING_VERSIONS_JUGGLED', '0'))
+          # Get existing counts
+          existing_omnipkg_wins = int(os.environ.get('EXISTING_OMNIPKG_WINS', '0'))
+          existing_pip_failures = int(os.environ.get('EXISTING_PIP_FAILURES', '0'))
+          existing_uv_failures = int(os.environ.get('EXISTING_UV_FAILURES', '0'))
           
-          # Count successful operations from this test run
-          versions_juggled_this_run = 0
-          if omnipkg_coexist == 'PASS':
-              versions_juggled_this_run += 2  # We juggled 2 pip versions simultaneously
-          if omnipkg_restore == 'PASS':
-              versions_juggled_this_run += 1  # We juggled uv version restoration
+          # Update counts based on this test run
+          omnipkg_wins = existing_omnipkg_wins + (1 if omnipkg_coexist == 'PASS' else 0)
+          pip_failures = existing_pip_failures + (1 if pip_coexist == 'FAIL' else 0)
+          uv_failures = existing_uv_failures + (1 if uv_coexist == 'FAIL' else 0)
           
-          total_versions_juggled = existing_count + versions_juggled_this_run
+          print(f"Test results: omnipkg={omnipkg_coexist}, pip={pip_coexist}, uv={uv_coexist}")
+          print(f"Updated stats: omnipkg={omnipkg_wins} wins, pip={pip_failures} failures, uv={uv_failures} failures")
           
-          print(f"Test results: coexist={omnipkg_coexist}, restore={omnipkg_restore}")
-          print(f"Versions juggled this run: {versions_juggled_this_run}")
-          print(f"Total versions juggled: {total_versions_juggled}")
-          
-          # Create the new compact section
+          # Create the competitive badge section
           compact_section = (
               f"## ⚖️ Multi-Version Support\n\n"
-              f"[![omnipkg vs The World: {total_versions_juggled} Versions Juggled!]"
-              f"(https://img.shields.io/badge/omnipkg%20vs%20The%20World-{total_versions_juggled}%20Versions%20Juggled!-brightgreen"
-              f"?logo=github-actions)]"
+              f"[![omnipkg]"
+              f"(https://img.shields.io/badge/omnipkg-{omnipkg_wins}%20Wins-brightgreen"
+              f"?logo=python&logoColor=white)]"
+              f"(https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml) "
+              f"[![pip]"
+              f"(https://img.shields.io/badge/pip-{pip_failures}%20Failures-red"
+              f"?logo=pypi&logoColor=white)]"
+              f"(https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml) "
+              f"[![uv]"
+              f"(https://img.shields.io/badge/uv-{uv_failures}%20Failures-red"
+              f"?logo=python&logoColor=white)]"
               f"(https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml)\n\n"
-              f"*Hourly validation. [Live results here.]"
+              f"*Multi-version installation tests run hourly. [Live results here.]"
               f"(https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml)*\n\n"
               f"---\n"
           )
