@@ -52,15 +52,13 @@
 ---
 
 <!-- COMPARISON_STATS_START -->
-## Multi-Version Support [![Package Manager Comparison Test](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml/badge.svg)](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml)
+## ⚖️ Multi-Version Support
 
-| Tool | Multi-Version | Restoration |
-|:-----|:-------------:|:-----------:|
-| **omnipkg** | **88** (100%) | **88** |
-| **pip** | 0 (0%) | N/A |
-| **uv** | 0 (0%) | N/A |
+[![omnipkg vs The World: 3 Versions Juggled!](https://img.shields.io/badge/omnipkg%20vs%20The%20World-3%20Versions%20Juggled!-brightgreen?logo=github-actions)](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml)
 
-*Hourly pre-release validation • [Live results](https://github.com/1minds3t/omnipkg) • Updated: 2025-08-21 01:27 UTC*
+*Hourly validation. [Live results here.](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml)*
+
+---
 
 <!-- COMPARISON_STATS_END -->
 
