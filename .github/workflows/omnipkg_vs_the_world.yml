@@ -122,42 +122,58 @@ jobs:
           from pathlib import Path
           README_FILE = Path("README.md")
           
-          # Start from your known highest numbers to preserve the winning streak!
-          omnipkg_wins = 85  # Your current wins
-          omnipkg_saves = 85  # Your current saves  
+          # Initialize with defaults - these will be overridden if found in README
+          omnipkg_wins = 0
+          omnipkg_saves = 0  
           pip_wins = uv_wins = 0
           omnipkg_losses = pip_losses = uv_losses = 0
+          
           if README_FILE.exists():
               try:
                   content = README_FILE.read_text(encoding='utf-8')
+                  print(f"README content preview: {content[:500]}...")
                   
-                  # Try to extract existing stats, but use our baseline if not found
-                  omnipkg_match = re.search(r'\|\s*\*\*`omnipkg`[^|]*\|\s*\*\*(\d+)\*\*\s*\((\d+)%\)\s*\|\s*\*\*(\d+)\*\*\s*\|', content)
+                  # Extract omnipkg stats - look for the table row with omnipkg
+                  omnipkg_match = re.search(r'\|\s*\*\*`?omnipkg`?\*\*[^|]*\|\s*\*\*(\d+)\*\*\s*\((\d+)%\)\s*\|\s*\*\*(\d+)\*\*\s*\|', content, re.IGNORECASE)
                   if omnipkg_match:
-                      found_wins = int(omnipkg_match.group(1))
-                      found_saves = int(omnipkg_match.group(3))
-                      # Use the higher of found vs baseline to never go backwards
-                      omnipkg_wins = max(omnipkg_wins, found_wins)
-                      omnipkg_saves = max(omnipkg_saves, found_saves)
+                      omnipkg_wins = int(omnipkg_match.group(1))
+                      win_rate = int(omnipkg_match.group(2))
+                      omnipkg_saves = int(omnipkg_match.group(3))
+                      # Calculate losses from win rate
+                      if win_rate > 0 and win_rate < 100:
+                          total_battles = int(omnipkg_wins * 100 / win_rate)
+                          omnipkg_losses = total_battles - omnipkg_wins
+                      print(f"Found omnipkg stats: {omnipkg_wins}W/{omnipkg_losses}L/{omnipkg_saves}S")
+                  else:
+                      print("No existing omnipkg stats found, starting fresh")
                   
-                  pip_match = re.search(r'\|\s*\*\*`pip`[^|]*\|\s*(\d+)\s*\((\d+)%\)\s*\|', content)
+                  # Extract pip stats
+                  pip_match = re.search(r'\|\s*\*\*`?pip`?\*\*[^|]*\|\s*(\d+)\s*\((\d+)%\)\s*\|', content, re.IGNORECASE)
                   if pip_match:
                       pip_wins = int(pip_match.group(1))
                       win_rate = int(pip_match.group(2))
-                      total_battles = int(pip_wins * 100 / win_rate) if win_rate > 0 else pip_wins + 1
-                      pip_losses = total_battles - pip_wins
+                      if win_rate > 0:
+                          total_battles = int(pip_wins * 100 / win_rate) if win_rate < 100 else pip_wins
+                          pip_losses = max(0, total_battles - pip_wins)
+                      print(f"Found pip stats: {pip_wins}W/{pip_losses}L")
                   
-                  uv_match = re.search(r'\|\s*\*\*`uv`[^|]*\|\s*(\d+)\s*\((\d+)%\)\s*\|', content)
+                  # Extract uv stats  
+                  uv_match = re.search(r'\|\s*\*\*`?uv`?\*\*[^|]*\|\s*(\d+)\s*\((\d+)%\)\s*\|', content, re.IGNORECASE)
                   if uv_match:
                       uv_wins = int(uv_match.group(1))
                       win_rate = int(uv_match.group(2))
-                      total_battles = int(uv_wins * 100 / win_rate) if win_rate > 0 else uv_wins + 1
-                      uv_losses = total_battles - uv_wins
+                      if win_rate > 0:
+                          total_battles = int(uv_wins * 100 / win_rate) if win_rate < 100 else uv_wins
+                          uv_losses = max(0, total_battles - uv_wins)
+                      print(f"Found uv stats: {uv_wins}W/{uv_losses}L")
                   
-                  print(f"Current stats: omnipkg={omnipkg_wins}W/{omnipkg_losses}L/{omnipkg_saves}S, pip={pip_wins}W/{pip_losses}L, uv={uv_wins}W/{uv_losses}L")
               except Exception as e:
-                  print(f"Statistics extraction failed: {e}")
-                  print(f"Using baseline: omnipkg={omnipkg_wins}W/{omnipkg_saves}S (preserving your winning streak!)")
+                  print(f"Statistics extraction error: {e}")
+                  print("Starting with fresh counters")
+          else:
+              print("README.md not found, starting with fresh counters")
+          
+          print(f"Current baseline: omnipkg={omnipkg_wins}W/{omnipkg_losses}L/{omnipkg_saves}S, pip={pip_wins}W/{pip_losses}L, uv={uv_wins}W/{uv_losses}L")
           
           with open(os.environ['GITHUB_ENV'], 'a') as f:
               f.write(f"EXISTING_OMNIPKG_WINS={omnipkg_wins}\n")
@@ -178,25 +194,48 @@ jobs:
           from datetime import datetime
           README_FILE = Path("README.md")
           
+          # Get test results
           omnipkg_coexist = os.environ.get('OMNIPKG_COEXIST_RESULT', 'FAIL')
           pip_coexist = os.environ.get('PIP_COEXIST_RESULT', 'FAIL')
           uv_coexist = os.environ.get('UV_COEXIST_RESULT', 'FAIL')
           omnipkg_restore = os.environ.get('OMNIPKG_RESTORE_RESULT', 'FAIL')
           test_timestamp = datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')
-          omnipkg_wins = int(os.environ.get('EXISTING_OMNIPKG_WINS', '0')) + (1 if omnipkg_coexist == 'PASS' else 0)
-          omnipkg_saves = int(os.environ.get('EXISTING_OMNIPKG_SAVES', '0')) + (1 if omnipkg_restore == 'PASS' else 0)
-          pip_wins = int(os.environ.get('EXISTING_PIP_WINS', '0')) + (1 if pip_coexist == 'PASS' else 0)
-          uv_wins = int(os.environ.get('EXISTING_UV_WINS', '0')) + (1 if uv_coexist == 'PASS' else 0)
-          omnipkg_losses = int(os.environ.get('EXISTING_OMNIPKG_LOSSES', '0')) + (1 if omnipkg_coexist == 'FAIL' else 0)
-          pip_losses = int(os.environ.get('EXISTING_PIP_LOSSES', '0')) + (1 if pip_coexist == 'FAIL' else 0)
-          uv_losses = int(os.environ.get('EXISTING_UV_LOSSES', '0')) + (1 if uv_coexist == 'FAIL' else 0)
+          
+          # Get existing stats
+          existing_omnipkg_wins = int(os.environ.get('EXISTING_OMNIPKG_WINS', '0'))
+          existing_omnipkg_saves = int(os.environ.get('EXISTING_OMNIPKG_SAVES', '0'))
+          existing_pip_wins = int(os.environ.get('EXISTING_PIP_WINS', '0'))
+          existing_uv_wins = int(os.environ.get('EXISTING_UV_WINS', '0'))
+          existing_omnipkg_losses = int(os.environ.get('EXISTING_OMNIPKG_LOSSES', '0'))
+          existing_pip_losses = int(os.environ.get('EXISTING_PIP_LOSSES', '0'))
+          existing_uv_losses = int(os.environ.get('EXISTING_UV_LOSSES', '0'))
+          
+          print(f"Test results: omnipkg_coexist={omnipkg_coexist}, omnipkg_restore={omnipkg_restore}")
+          print(f"Existing stats: omnipkg={existing_omnipkg_wins}W/{existing_omnipkg_losses}L/{existing_omnipkg_saves}S")
+          
+          # Calculate new stats by adding this test's results
+          omnipkg_wins = existing_omnipkg_wins + (1 if omnipkg_coexist == 'PASS' else 0)
+          omnipkg_saves = existing_omnipkg_saves + (1 if omnipkg_restore == 'PASS' else 0)
+          omnipkg_losses = existing_omnipkg_losses + (1 if omnipkg_coexist == 'FAIL' else 0)
+          
+          pip_wins = existing_pip_wins + (1 if pip_coexist == 'PASS' else 0)
+          pip_losses = existing_pip_losses + (1 if pip_coexist == 'FAIL' else 0)
+          
+          uv_wins = existing_uv_wins + (1 if uv_coexist == 'PASS' else 0)
+          uv_losses = existing_uv_losses + (1 if uv_coexist == 'FAIL' else 0)
+          
           def calculate_win_rate(wins, losses):
               total = wins + losses
               return f"{(wins / total * 100):.0f}%" if total > 0 else "0%"
+          
           omnipkg_wr = calculate_win_rate(omnipkg_wins, omnipkg_losses)
           pip_wr = calculate_win_rate(pip_wins, pip_losses)
           uv_wr = calculate_win_rate(uv_wins, uv_losses)
-          print(f"Updated stats: omnipkg={omnipkg_wins}W/{omnipkg_losses}L/{omnipkg_saves}S, pip={pip_wins}W/{pip_losses}L, uv={uv_wins}W/{uv_losses}L")
+          
+          print(f"New stats: omnipkg={omnipkg_wins}W/{omnipkg_losses}L/{omnipkg_saves}S ({omnipkg_wr})")
+          print(f"           pip={pip_wins}W/{pip_losses}L ({pip_wr})")
+          print(f"           uv={uv_wins}W/{uv_losses}L ({uv_wr})")
+          
           badge = "[![Package Manager Comparison Test](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml/badge.svg)](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml)"
           
           comparison_table = (
@@ -223,6 +262,11 @@ jobs:
               with open(README_FILE, 'w', encoding='utf-8') as f:
                   f.write(updated_content)
               print("✓ Documentation updated successfully")
+              
+              # Debug: Print what we wrote
+              print("\nGenerated table:")
+              print(comparison_table)
+              
           except Exception as e:
               print(f"Documentation update failed: {e}")
               exit(1)
