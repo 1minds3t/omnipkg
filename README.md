@@ -36,8 +36,15 @@
     <img src="https://img.shields.io/badge/CodeQL-passing-success?logo=github" alt="CodeQL">
   </a>
 </p>
-[![PyPI Downloads](https://static.pepy.tech/badge/omnipkg)](https://pepy.tech/projects/omnipkg)
-([View Live Download Stats](https://clickpy.clickhouse.com/dashboard/omnipkg))
+<p align="center">
+  <a href="https://pepy.tech/projects/omnipkg">
+    <img src="https://static.pepy.tech/badge/omnipkg" alt="PyPI Downloads">
+  </a>
+  <a href="https://clickpy.clickhouse.com/dashboard/omnipkg">
+    <img src="https://img.shields.io/badge/global_reach-40+_countries-green?logo=globe" alt="Global Reach Badge">
+  </a>
+</p>
+
 
 ---
 
