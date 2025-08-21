@@ -139,11 +139,11 @@ omnipkg install torch==2.0.0 torch==2.7.1
 
 | Tool | Multi-Version | Restoration |
 |:-----|:-------------:|:-----------:|
-| **omnipkg** | **86** (100%) | **86** |
+| **omnipkg** | **87** (100%) | **87** |
 | **pip** | 0 (0%) | N/A |
 | **uv** | 0 (0%) | N/A |
 
-*Hourly pre-release validation • [Live results](https://github.com/1minds3t/omnipkg) • Updated: 2025-08-21 01:10 UTC*
+*Hourly pre-release validation • [Live results](https://github.com/1minds3t/omnipkg) • Updated: 2025-08-21 01:21 UTC*
 
 <!-- COMPARISON_STATS_END -->
 
