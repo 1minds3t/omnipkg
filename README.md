@@ -62,8 +62,6 @@
 
 <!-- COMPARISON_STATS_END -->
 
----
-
 ## 💡 Why This Matters
 
 **Data Science Reality**: Modern ML projects routinely need multiple TensorFlow versions (legacy models vs. current training), different NumPy versions (compatibility vs. performance), and various PyTorch builds (CPU vs. GPU). Traditional solutions like Docker containers, virtual environments, or complex scripts lead to bloated storage, maintenance headaches, and deployment failures.
