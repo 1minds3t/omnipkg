@@ -47,7 +47,7 @@
 
 ---
 
-`omnipkg` radically simplifies Python dependency management, providing a robust alternative to tools like `pipx`, `uv`, `conda`, and `Docker` for handling conflicting packages. Born from a real-world nightmare—a forced downgrade that wrecked a `conda-forge` environment on a Friday night—`omnipkg` was built in a weekend to solve what others couldn’t: running multiple versions of the same package in one environment without conflicts.
+`omnipkg` radically simplifies Python dependency management, providing a robust alternative to tools like `pipx`, `uv`, `conda`, and `Docker` for handling conflicting packages. Born from a real-world nightmare—a forced downgrade that wrecked a `conda-forge` environment on a Friday night—`omnipkg` was built in a weekend to solve what others couldn't: running multiple versions of the same package in one environment without conflicts.
 
 ---
 
@@ -66,7 +66,9 @@
 
 **Data Science Reality**: Modern ML projects routinely need multiple TensorFlow versions (legacy models vs. current training), different NumPy versions (compatibility vs. performance), and various PyTorch builds (CPU vs. GPU). Traditional solutions like Docker containers, virtual environments, or complex scripts lead to bloated storage, maintenance headaches, and deployment failures.
 
-**`omnipkg` Solution**: One environment, one script, everything **just works**. Run `torch==2.0.0` and `torch==2.7.1` seamlessly, switch `numpy` versions mid-script, and recover from environment damage instantly.
+**Global Development**: As development teams span continents—from Silicon Valley to São Paulo, Stockholm to Singapore—language barriers shouldn't impede collaboration. Developers working on the same project deserve tools that speak their language, whether debugging in Mandarin, documenting in Spanish, or troubleshooting in Hindi.
+
+**`omnipkg` Solution**: One environment, one script, everything **just works**. Run `torch==2.0.0` and `torch==2.7.1` seamlessly, switch `numpy` versions mid-script, recover from environment damage instantly—all in your native language.
 
 ---
 
@@ -113,63 +115,30 @@ print(numpy.__version__)  # Outputs: Original main env version (e.g., 1.26.4)
 
 ### 2. 🌍 Global Intelligence & AI-Driven Localization
 
-omnipkg eliminates language barriers with advanced AI localization, making package management accessible to developers worldwide in their native language.
+`omnipkg` eliminates language barriers with advanced AI localization supporting 24+ languages, making package management accessible to developers worldwide in their native language.
 
-🎯 Multi-Language Support (24+ Languages)
-
-· Auto-Detection: Automatically detects your system locale for instant native language experience
-· Quick Switching: Change languages with simple commands or interactive selection
-· Universal Coverage: Full support from አማርኛ to Tiếng Việt
-
-🤖 AI Translation Excellence
-
-· Competitive AI Models: Multiple translation engines compete for technical accuracy
-· Quality Assurance: Specialized AI agents validate translations for technical precision
-· Self-Improving: Learns from user feedback to continuously enhance translation quality
-· Context-Aware: Technical terms and error messages translated with development context understanding
-
-🚀 Quick Language Management
-
-Set language directly:
+**Key Features**: Auto-detection from system locale, competitive AI translation models, context-aware technical term handling, and continuous self-improvement from user feedback.
 
 ```bash
+# Set language permanently
 omnipkg config set language zh_CN
 # ✅ Language permanently set to: 中文 (简体)
-```
 
-Temporary language override:
-
-```bash
+# Temporary language override
 omnipkg --lang es install requests
-# Uses Spanish for this command only
-```
 
-Interactive language selection:
-
-```bash
+# Interactive language picker
 omnipkg reset-config
-# Triggers the interactive language picker on next run
-```
 
-View current configuration:
-
-```bash
-# Configuration is managed through the config file
+# View current configuration
 cat ~/.config/omnipkg/config.json
 ```
 
-✨ Seamless Experience
-
-· Zero Setup: Works in your language from first run
-· Graceful Fallbacks: Maintains functionality even with missing translations
-· Beta Transparency: Clear indication of translation status
-· Community Driven: Easy reporting for translation improvements
-
-The system automatically handles language detection and provides a native experience whether you're working in English, 中文, Español, or any of the 24+ supported languages.
+Zero setup required—works in your language from first run with graceful fallbacks and clear beta transparency.
 
 ### 3. Lightweight Isolation 
 
-Conflicting versions are isolated in lightweight, self-contained “bubbles” containing only necessary files. Compatible dependencies are shared with the main environment, potentially slashing disk space by **up to 60%**.
+Conflicting versions are isolated in lightweight, self-contained "bubbles" containing only necessary files. Compatible dependencies are shared with the main environment, potentially slashing disk space by **up to 60%**.
 
 **Key CI Output Excerpt:**
 ```bash
@@ -192,7 +161,7 @@ Conflicting versions are isolated in lightweight, self-contained “bubbles” c
 omnipkg install torch==2.0.0 torch==2.7.1
 ```
 
-**What happens?** `omnipkg` reorders installs to trigger the bubble creation, installs `torch==2.7.1` in the main environment, and isolates `torch==2.0.0` in a lightweight “bubble,” sharing compatible dependencies to save space. No virtual environments or containers needed.
+**What happens?** `omnipkg` reorders installs to trigger the bubble creation, installs `torch==2.7.1` in the main environment, and isolates `torch==2.0.0` in a lightweight "bubble," sharing compatible dependencies to save space. No virtual environments or containers needed.
 
 ```bash
 🔄 Reordered: torch==2.7.1, torch==2.0.0
@@ -263,7 +232,7 @@ omnipkg info uv
 ### 7. Instant Environment Recovery 
 [![🛡️ UV Revert Test](https://img.shields.io/badge/🛡️_UV_Revert_Test-passing-success)](https://github.com/1minds3t/omnipkg/actions/workflows/test_uv_revert.yml)
 
-If an external tool (like `pip` or `uv`) causes damage, `omnipkg revert` restores your environment to a “last known good” state in seconds.
+If an external tool (like `pip` or `uv`) causes damage, `omnipkg revert` restores your environment to a "last known good" state in seconds.
 
 **Key CI Output Excerpt:**
 
@@ -411,6 +380,8 @@ Commercial inquiries: [omnipkg@proton.me](mailto:omnipkg@proton.me)
 ## 🤝 Contributing
 
 This project thrives on community collaboration. Contributions, bug reports, and feature requests are incredibly welcome. Join us in revolutionizing Python dependency management.
+
+**Translation Help**: Found translation bugs or missing languages? Submit pull requests with corrections or new translations—we welcome community contributions to make `omnipkg` accessible worldwide.
 
 [**→ Start Contributing**](https://github.com/1minds3t/omnipkg/issues)
 
