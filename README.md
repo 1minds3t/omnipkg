@@ -111,7 +111,63 @@ print(numpy.__version__)  # Outputs: Original main env version (e.g., 1.26.4)
 ```
 ---
 
-### 2. Lightweight Isolation 
+### 2. 🌍 Global Intelligence & AI-Driven Localization
+
+omnipkg eliminates language barriers with advanced AI localization, making package management accessible to developers worldwide in their native language.
+
+🎯 Multi-Language Support (24+ Languages)
+
+· Auto-Detection: Automatically detects your system locale for instant native language experience
+· Quick Switching: Change languages with simple commands or interactive selection
+· Universal Coverage: Full support from አማርኛ to Tiếng Việt
+
+🤖 AI Translation Excellence
+
+· Competitive AI Models: Multiple translation engines compete for technical accuracy
+· Quality Assurance: Specialized AI agents validate translations for technical precision
+· Self-Improving: Learns from user feedback to continuously enhance translation quality
+· Context-Aware: Technical terms and error messages translated with development context understanding
+
+🚀 Quick Language Management
+
+Set language directly:
+
+```bash
+omnipkg config set language zh_CN
+# ✅ Language permanently set to: 中文 (简体)
+```
+
+Temporary language override:
+
+```bash
+omnipkg --lang es install requests
+# Uses Spanish for this command only
+```
+
+Interactive language selection:
+
+```bash
+omnipkg reset-config
+# Triggers the interactive language picker on next run
+```
+
+View current configuration:
+
+```bash
+# Configuration is managed through the config file
+cat ~/.config/omnipkg/config.json
+```
+
+✨ Seamless Experience
+
+· Zero Setup: Works in your language from first run
+· Graceful Fallbacks: Maintains functionality even with missing translations
+· Beta Transparency: Clear indication of translation status
+· Community Driven: Easy reporting for translation improvements
+
+The system automatically handles language detection and provides a native experience whether you're working in English, 中文, Español, or any of the 24+ supported languages.
+
+### 3. Lightweight Isolation 
 
 Conflicting versions are isolated in lightweight, self-contained “bubbles” containing only necessary files. Compatible dependencies are shared with the main environment, potentially slashing disk space by **up to 60%**.
 
@@ -127,7 +183,7 @@ Conflicting versions are isolated in lightweight, self-contained “bubbles” c
 ```
 ---
 
-### 3. Downgrade Protection & Conflict Resolution [![🔧 Simple UV Multi-Version Test](https://img.shields.io/badge/🔧_Simple_UV_Multi--Version_Test-passing-success)](https://github.com/1minds3t/omnipkg/actions/workflows/test_uv_install.yml)
+### 4. Downgrade Protection & Conflict Resolution [![🔧 Simple UV Multi-Version Test](https://img.shields.io/badge/🔧_Simple_UV_Multi--Version_Test-passing-success)](https://github.com/1minds3t/omnipkg/actions/workflows/test_uv_install.yml)
 
 `omnipkg` automatically reorders installations and isolates conflicts, preventing environment-breaking downgrades.
 
@@ -148,7 +204,7 @@ omnipkg install torch==2.0.0 torch==2.7.1
 
 ---
 
-### 4. Python Library, Binary, & C-Extension Support [![⚡ UV Binary Test](https://img.shields.io/badge/⚡_UV_Binary_Test-passing-success)](https://github.com/1minds3t/omnipkg/actions/workflows/test-uv-binary-switching.yml) [![💥 TensorFlow Hot-Swap](https://img.shields.io/badge/💥_TensorFlow_Hot_Swap-passing-success)](https://github.com/1minds3t/omnipkg/actions/workflows/test-tensorflow-switching.yml) [![🧪 Rich Version Juggling](https://img.shields.io/badge/🧪_Rich_Version_Juggling-passing-success)](https://github.com/1minds3t/omnipkg/actions/workflows/rich-module-switching-test.yml)
+### 5. Python Library, Binary, & C-Extension Support [![⚡ UV Binary Test](https://img.shields.io/badge/⚡_UV_Binary_Test-passing-success)](https://github.com/1minds3t/omnipkg/actions/workflows/test-uv-binary-switching.yml) [![💥 TensorFlow Hot-Swap](https://img.shields.io/badge/💥_TensorFlow_Hot_Swap-passing-success)](https://github.com/1minds3t/omnipkg/actions/workflows/test-tensorflow-switching.yml) [![🧪 Rich Version Juggling](https://img.shields.io/badge/🧪_Rich_Version_Juggling-passing-success)](https://github.com/1minds3t/omnipkg/actions/workflows/rich-module-switching-test.yml)
 
 `omnipkg` seamlessly switches binary tools (e.g., `uv`) and complex C-extension version combinations (e.g., `tensorflow`, `numpy`, `scipy`) during runtime, a feat traditional tools struggle with.
 
@@ -173,7 +229,7 @@ Keras version: 2.13.1
 ```
 
 ---
-### 5. Deep Package Intelligence [![🔍 Package Discovery Demo - Omnipkg Intelligence](https://github.com/1minds3t/omnipkg/actions/workflows/knowledge_base_check.yml/badge.svg)](https://github.com/1minds3t/omnipkg/actions/workflows/knowledge_base_check.yml)
+### 6. Deep Package Intelligence [![🔍 Package Discovery Demo - Omnipkg Intelligence](https://github.com/1minds3t/omnipkg/actions/workflows/knowledge_base_check.yml/badge.svg)](https://github.com/1minds3t/omnipkg/actions/workflows/knowledge_base_check.yml)
 
 Unlike tools that only track "package installed/not installed," `omnipkg` builds a knowledge base with 60+ metadata fields per package version, stored in Redis for instant analysis.
 
@@ -204,7 +260,7 @@ omnipkg info uv
 
 ---
 
-### 6. Instant Environment Recovery 
+### 7. Instant Environment Recovery 
 [![🛡️ UV Revert Test](https://img.shields.io/badge/🛡️_UV_Revert_Test-passing-success)](https://github.com/1minds3t/omnipkg/actions/workflows/test_uv_revert.yml)
 
 If an external tool (like `pip` or `uv`) causes damage, `omnipkg revert` restores your environment to a “last known good” state in seconds.
