@@ -167,66 +167,48 @@ LANGUAGE_CODE_MAP = {
     'zh-Hant': 'Traditional Chinese',
 }
 
-# Enhanced language info with native names where available
-LANG_INFO = {
-    'en': {'name': 'English', 'native': 'English'},
-    'es': {'name': 'Spanish', 'native': 'Español'},
-    'zh_CN': {'name': 'Chinese (Simplified)', 'native': '中文 (简体)'},
-    'zh': {'name': 'Chinese', 'native': '中文'},
-    'hi': {'name': 'Hindi', 'native': 'हिंदी'},
-    'ar': {'name': 'Arabic', 'native': 'العربية'},
-    'fr': {'name': 'French', 'native': 'Français'},
-    'de': {'name': 'German', 'native': 'Deutsch'},
-    'ja': {'name': 'Japanese', 'native': '日本語'},
-    'ko': {'name': 'Korean', 'native': '한국어'},
-    'pt_BR': {'name': 'Portuguese (Brazil)', 'native': 'Português (Brasil)'},
-    'pt': {'name': 'Portuguese', 'native': 'Português'},
-    'ru': {'name': 'Russian', 'native': 'Русский'},
-    'it': {'name': 'Italian', 'native': 'Italiano'},
-    'nl': {'name': 'Dutch', 'native': 'Nederlands'},
-    'da': {'name': 'Danish', 'native': 'Dansk'},
-    'sv': {'name': 'Swedish', 'native': 'Svenska'},
-    'no': {'name': 'Norwegian', 'native': 'Norsk'},
-    'fi': {'name': 'Finnish', 'native': 'Suomi'},
-    'pl': {'name': 'Polish', 'native': 'Polski'},
-    'cs': {'name': 'Czech', 'native': 'Čeština'},
-    'hu': {'name': 'Hungarian', 'native': 'Magyar'},
-    'tr': {'name': 'Turkish', 'native': 'Türkçe'},
-    'he': {'name': 'Hebrew', 'native': 'עברית'},
-    'th': {'name': 'Thai', 'native': 'ไทย'},
-    'vi': {'name': 'Vietnamese', 'native': 'Tiếng Việt'},
-    'uk': {'name': 'Ukrainian', 'native': 'Українська'},
-    'bg': {'name': 'Bulgarian', 'native': 'Български'},
-    'hr': {'name': 'Croatian', 'native': 'Hrvatski'},
-    'sr': {'name': 'Serbian', 'native': 'Српски'},
-    'sl': {'name': 'Slovenian', 'native': 'Slovenščina'},
-    'sk': {'name': 'Slovak', 'native': 'Slovenčina'},
-    'ro': {'name': 'Romanian', 'native': 'Română'},
-    'el': {'name': 'Greek', 'native': 'Ελληνικά'},
-    'bn': {'name': 'Bengali', 'native': 'বাংলা'},
-    'ur': {'name': 'Urdu', 'native': 'اردو'},
-    'fa': {'name': 'Persian', 'native': 'فارسی'},
-    'ta': {'name': 'Tamil', 'native': 'தமிழ்'},
-    'te': {'name': 'Telugu', 'native': 'తెలుగు'},
-    'mr': {'name': 'Marathi', 'native': 'मराठी'},
-    'gu': {'name': 'Gujarati', 'native': 'ગુજરાતી'},
-    'kn': {'name': 'Kannada', 'native': 'ಕನ್ನಡ'},
-    'ml': {'name': 'Malayalam', 'native': 'മലയാളം'},
-    'pa': {'name': 'Punjabi', 'native': 'ਪੰਜਾਬੀ'},
-    'id': {'name': 'Indonesian', 'native': 'Bahasa Indonesia'},
-    'ms': {'name': 'Malay', 'native': 'Bahasa Melayu'},
-    'tl': {'name': 'Tagalog', 'native': 'Tagalog'},
-    'sw': {'name': 'Swahili', 'native': 'Kiswahili'},
-    'am': {'name': 'Amharic', 'native': 'አማርኛ'},
-    'yo': {'name': 'Yoruba', 'native': 'Yorùbá'},
-    'ig': {'name': 'Igbo', 'native': 'Igbo'},
-    'ha': {'name': 'Hausa', 'native': 'Hausa'},
+# Separate available languages from coming soon ones
+AVAILABLE_LANGUAGES = {
+    'en': {'name': 'English', 'native': 'English', 'hello': 'Hello'},
+    'am': {'name': 'Amharic', 'native': 'አማርኛ', 'hello': 'ሰላም'},
+    'ar': {'name': 'Arabic', 'native': 'العربية', 'hello': 'مرحبا'},
+    'ar_eg': {'name': 'Arabic (Egypt)', 'native': 'العربية (مصر)', 'hello': 'مرحبا'},
+    'bn': {'name': 'Bengali', 'native': 'বাংলা', 'hello': 'হ্যালো'},
+    'da': {'name': 'Danish', 'native': 'Dansk', 'hello': 'Hej'},
+    'de': {'name': 'German', 'native': 'Deutsch', 'hello': 'Hallo'},
+    'es': {'name': 'Spanish', 'native': 'Español', 'hello': 'Hola'},
+    'fr': {'name': 'French', 'native': 'Français', 'hello': 'Bonjour'},
+    'hi': {'name': 'Hindi', 'native': 'हिंदी', 'hello': 'नमस्ते'},
+    'hr': {'name': 'Croatian', 'native': 'Hrvatski', 'hello': 'Bok'},
+    'id': {'name': 'Indonesian', 'native': 'Bahasa Indonesia', 'hello': 'Halo'},
+    'it': {'name': 'Italian', 'native': 'Italiano', 'hello': 'Ciao'},
+    'ja': {'name': 'Japanese', 'native': '日本語', 'hello': 'こんにちは'},
+    'ko': {'name': 'Korean', 'native': '한국어', 'hello': '안녕하세요'},
+    'nl': {'name': 'Dutch', 'native': 'Nederlands', 'hello': 'Hallo'},
+    'no': {'name': 'Norwegian', 'native': 'Norsk', 'hello': 'Hei'},
+    'pl': {'name': 'Polish', 'native': 'Polski', 'hello': 'Cześć'},
+    'pt_BR': {'name': 'Portuguese (Brazil)', 'native': 'Português (Brasil)', 'hello': 'Olá'},
+    'ru': {'name': 'Russian', 'native': 'Русский', 'hello': 'Привет'},
+    'sv': {'name': 'Swedish', 'native': 'Svenska', 'hello': 'Hej'},
+    'sw': {'name': 'Swahili', 'native': 'Kiswahili', 'hello': 'Hujambo'},
+    'tr': {'name': 'Turkish', 'native': 'Türkçe', 'hello': 'Merhaba'},
+    'vi': {'name': 'Vietnamese', 'native': 'Tiếng Việt', 'hello': 'Xin chào'},
+    'zh_CN': {'name': 'Chinese (Simplified)', 'native': '中文 (简体)', 'hello': '你好'},
 }
 
-# Merge any additional languages from LANGUAGE_CODE_MAP that aren't in LANG_INFO
+# Coming soon languages - just show names, no selection
+COMING_SOON_LANGUAGES = []
 for code, name in LANGUAGE_CODE_MAP.items():
-    if code not in LANG_INFO:
-        LANG_INFO[code] = {'name': name, 'native': name}
+    if code not in AVAILABLE_LANGUAGES:
+        COMING_SOON_LANGUAGES.append(name)
+
+# Sort coming soon alphabetically
+COMING_SOON_LANGUAGES.sort()
+
+# Use AVAILABLE_LANGUAGES as LANG_INFO for backward compatibility
+LANG_INFO = AVAILABLE_LANGUAGES
+
+# Don't add other languages - only show what's actually available
 
 # This is the variable that your cli.py is trying to import
 SUPPORTED_LANGUAGES = {code: data['native'] for code, data in LANG_INFO.items()}
@@ -299,6 +281,12 @@ class Translator:
             code = self.current_lang
         return LANG_INFO.get(code, {}).get('native', LANGUAGE_CODE_MAP.get(code, code))
     
+    def get_hello(self, code=None):
+        """Get the hello greeting for a language."""
+        if code is None:
+            code = self.current_lang
+        return LANG_INFO.get(code, {}).get('hello', 'Hello')
+    
     def is_supported(self, code):
         """Check if a language code is supported."""
         return code in LANGUAGE_CODE_MAP or code in LANG_INFO
@@ -317,5 +305,5 @@ def get_language_info(code):
     if code in LANG_INFO:
         return LANG_INFO[code]
     elif code in LANGUAGE_CODE_MAP:
-        return {'name': LANGUAGE_CODE_MAP[code], 'native': LANGUAGE_CODE_MAP[code]}
+        return {'name': LANGUAGE_CODE_MAP[code], 'native': LANGUAGE_CODE_MAP[code], 'hello': 'Hello'}
     return None
