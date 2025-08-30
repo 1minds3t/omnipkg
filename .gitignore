@@ -67,3 +67,4 @@ Thumbs.db
 .env
 *.pypirc
 releases/
+omnipkg/quality_audits.db
