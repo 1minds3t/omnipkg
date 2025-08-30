@@ -173,7 +173,7 @@ Keras version: 2.13.1
 ```
 
 ---
-### 5. Deep Package Intelligence
+### 5. Deep Package Intelligence [![🔍 Package Discovery Demo - Omnipkg Intelligence](https://github.com/1minds3t/omnipkg/actions/workflows/knowledge_base_check.yml/badge.svg)](https://github.com/1minds3t/omnipkg/actions/workflows/knowledge_base_check.yml)
 
 Unlike tools that only track "package installed/not installed," `omnipkg` builds a knowledge base with 60+ metadata fields per package version, stored in Redis for instant analysis.
 
