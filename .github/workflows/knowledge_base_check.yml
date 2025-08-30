@@ -30,6 +30,31 @@ jobs:
         with:
           python-version: '3.11'
 
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y redis-tools expect
+          redis-cli --version
+          echo "Redis CLI installed successfully"
+
+      - name: Wait for Redis to be ready
+        run: |
+          echo "⏳ Waiting for Redis service to be ready..."
+          for i in {1..30}; do
+            if redis-cli -h localhost -p 6379 ping > /dev/null 2>&1; then
+              echo "✅ Redis is ready!"
+              break
+            fi
+            echo "🔄 Attempt $i/30: Redis not ready yet, waiting..."
+            sleep 2
+          done
+          
+          # Final check
+          redis-cli -h localhost -p 6379 ping || {
+            echo "❌ Redis failed to start properly"
+            exit 1
+          }
+
       - name: Install omnipkg
         run: |
           python -m pip install --upgrade pip
@@ -100,9 +125,11 @@ jobs:
           echo "📋 Running: omnipkg info tensorboard"
           echo ""
           
-          # Use expect to automatically select option 1 for detailed info
-          sudo apt-get update && sudo apt-get install -y expect
+          # Test Redis connection first
+          echo "🔧 Testing Redis connection..."
+          redis-cli -h localhost -p 6379 ping || echo "Redis ping failed"
           
+          # Use expect to automatically select option 1 for detailed info
           expect << 'EOF'
           spawn omnipkg info tensorboard
           expect "Enter number*" {
@@ -120,19 +147,26 @@ jobs:
           echo "🔑 Checking Redis for tensorboard package data..."
           echo ""
           
+          # Verify Redis connection and CLI availability
+          echo "📡 Testing Redis CLI and connection..."
+          which redis-cli || echo "redis-cli not found in PATH"
+          redis-cli --version || echo "redis-cli version check failed"
+          redis-cli -h localhost -p 6379 ping || echo "Redis connection failed"
+          echo ""
+          
           # Show Redis key structure
           echo "📋 Available tensorboard keys in Redis:"
-          redis-cli KEYS "omnipkg:pkg:tensorboard:*"
+          redis-cli -h localhost -p 6379 KEYS "omnipkg:pkg:tensorboard:*" || echo "No keys found or Redis connection failed"
           echo ""
           
           # Get the version and show detailed data
-          VERSION=$(redis-cli HGET omnipkg:pkg:tensorboard:2.20.0 Version 2>/dev/null || echo "2.20.0")
+          VERSION=$(redis-cli -h localhost -p 6379 HGET omnipkg:pkg:tensorboard:2.20.0 Version 2>/dev/null || echo "2.20.0")
           echo "🏷️ Found version: $VERSION"
           echo ""
           
           echo "📦 Complete metadata for tensorboard v$VERSION:"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          redis-cli HGETALL omnipkg:pkg:tensorboard:$VERSION
+          redis-cli -h localhost -p 6379 HGETALL omnipkg:pkg:tensorboard:$VERSION || echo "Failed to retrieve metadata from Redis"
 
       - name: "🛡️ Demo: Security & Health Analysis"
         run: |
@@ -146,10 +180,10 @@ jobs:
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           
           # Extract security information
-          SECURITY_ISSUES=$(redis-cli HGET omnipkg:pkg:tensorboard:$VERSION security.issues_found)
-          AUDIT_STATUS=$(redis-cli HGET omnipkg:pkg:tensorboard:$VERSION security.audit_status)
-          IMPORTABLE=$(redis-cli HGET omnipkg:pkg:tensorboard:$VERSION health.import_check.importable)
-          IMPORT_VERSION=$(redis-cli HGET omnipkg:pkg:tensorboard:$VERSION health.import_check.version)
+          SECURITY_ISSUES=$(redis-cli -h localhost -p 6379 HGET omnipkg:pkg:tensorboard:$VERSION security.issues_found)
+          AUDIT_STATUS=$(redis-cli -h localhost -p 6379 HGET omnipkg:pkg:tensorboard:$VERSION security.audit_status)
+          IMPORTABLE=$(redis-cli -h localhost -p 6379 HGET omnipkg:pkg:tensorboard:$VERSION health.import_check.importable)
+          IMPORT_VERSION=$(redis-cli -h localhost -p 6379 HGET omnipkg:pkg:tensorboard:$VERSION health.import_check.version)
           
           echo "🛡️ Security Issues Found: $SECURITY_ISSUES"
           echo "✅ Security Audit Status: $AUDIT_STATUS"
@@ -161,9 +195,9 @@ jobs:
           echo "⚙️ Binary Analysis Results:"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           
-          BINARY_EXISTS=$(redis-cli HGET omnipkg:pkg:tensorboard:$VERSION health.binary_checks.tensorboard.exists 2>/dev/null || echo "N/A")
-          BINARY_SIZE=$(redis-cli HGET omnipkg:pkg:tensorboard:$VERSION health.binary_checks.tensorboard.size 2>/dev/null || echo "N/A")
-          VALID_SHEBANG=$(redis-cli HGET omnipkg:pkg:tensorboard:$VERSION health.binary_checks.tensorboard.valid_shebang 2>/dev/null || echo "N/A")
+          BINARY_EXISTS=$(redis-cli -h localhost -p 6379 HGET omnipkg:pkg:tensorboard:$VERSION health.binary_checks.tensorboard.exists 2>/dev/null || echo "N/A")
+          BINARY_SIZE=$(redis-cli -h localhost -p 6379 HGET omnipkg:pkg:tensorboard:$VERSION health.binary_checks.tensorboard.size 2>/dev/null || echo "N/A")
+          VALID_SHEBANG=$(redis-cli -h localhost -p 6379 HGET omnipkg:pkg:tensorboard:$VERSION health.binary_checks.tensorboard.valid_shebang 2>/dev/null || echo "N/A")
           
           echo "📁 Binary Exists: $BINARY_EXISTS"
           echo "📏 Binary Size: $BINARY_SIZE bytes"
@@ -181,7 +215,7 @@ jobs:
           echo ""
           
           # Get and format dependencies
-          DEPENDENCIES=$(redis-cli HGET omnipkg:pkg:tensorboard:$VERSION dependencies)
+          DEPENDENCIES=$(redis-cli -h localhost -p 6379 HGET omnipkg:pkg:tensorboard:$VERSION dependencies)
           echo "🔗 Runtime Dependencies:"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           
@@ -195,11 +229,11 @@ jobs:
           echo ""
           
           # Show Python requirements
-          PYTHON_REQ=$(redis-cli HGET omnipkg:pkg:tensorboard:$VERSION Requires-Python)
+          PYTHON_REQ=$(redis-cli -h localhost -p 6379 HGET omnipkg:pkg:tensorboard:$VERSION Requires-Python)
           echo "🐍 Python Version Requirement: $PYTHON_REQ"
           
           # Show additional package info
-          KEYWORDS=$(redis-cli HGET omnipkg:pkg:tensorboard:$VERSION Keywords)
+          KEYWORDS=$(redis-cli -h localhost -p 6379 HGET omnipkg:pkg:tensorboard:$VERSION Keywords)
           echo "🏷️ Package Keywords: $KEYWORDS"
 
       - name: "📈 Summary: Package Intelligence Report"
@@ -211,15 +245,15 @@ jobs:
           echo "✨ What we discovered about tensorboard:"
           echo ""
           echo "🔍 PACKAGE OVERVIEW:"
-          echo "  • Name: $(redis-cli HGET omnipkg:pkg:tensorboard:2.20.0 Name)"
-          echo "  • Version: $(redis-cli HGET omnipkg:pkg:tensorboard:2.20.0 Version)"
-          echo "  • Author: $(redis-cli HGET omnipkg:pkg:tensorboard:2.20.0 Author)"
-          echo "  • License: $(redis-cli HGET omnipkg:pkg:tensorboard:2.20.0 License)"
+          echo "  • Name: $(redis-cli -h localhost -p 6379 HGET omnipkg:pkg:tensorboard:2.20.0 Name)"
+          echo "  • Version: $(redis-cli -h localhost -p 6379 HGET omnipkg:pkg:tensorboard:2.20.0 Version)"
+          echo "  • Author: $(redis-cli -h localhost -p 6379 HGET omnipkg:pkg:tensorboard:2.20.0 Author)"
+          echo "  • License: $(redis-cli -h localhost -p 6379 HGET omnipkg:pkg:tensorboard:2.20.0 License)"
           echo ""
           echo "🛡️ SECURITY & HEALTH:"
-          echo "  • Security Issues: $(redis-cli HGET omnipkg:pkg:tensorboard:2.20.0 security.issues_found) found"
-          echo "  • Import Status: $(redis-cli HGET omnipkg:pkg:tensorboard:2.20.0 health.import_check.importable)"
-          echo "  • Audit Status: $(redis-cli HGET omnipkg:pkg:tensorboard:2.20.0 security.audit_status)"
+          echo "  • Security Issues: $(redis-cli -h localhost -p 6379 HGET omnipkg:pkg:tensorboard:2.20.0 security.issues_found) found"
+          echo "  • Import Status: $(redis-cli -h localhost -p 6379 HGET omnipkg:pkg:tensorboard:2.20.0 health.import_check.importable)"
+          echo "  • Audit Status: $(redis-cli -h localhost -p 6379 HGET omnipkg:pkg:tensorboard:2.20.0 security.audit_status)"
           echo ""
           echo "💾 DATA PERSISTENCE:"
           echo "  • All metadata stored in Redis"
