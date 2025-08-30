@@ -68,3 +68,4 @@ Thumbs.db
 *.pypirc
 releases/
 omnipkg/quality_audits.db
+quality_audits.db
