@@ -44,7 +44,7 @@
   </a>
 </p>
 
-[![🌍 Omnipkg Multi-Language Intelligence Demo](https://github.com/1minds3t/omnipkg/actions/workflows/language_test.yml/badge.svg)](https://github.com/1minds3t/omnipkg/actions/workflows/language_test.yml)
+[![💥 Breaking Language Barriers: 24 Languages](https://img.shields.io/badge/💥_Breaking_Language_Barriers-24_Languages-success?logo=babel&logoColor=white)](https://github.com/1minds3t/omnipkg/actions/workflows/language_test.yml)
 
 ---
 
