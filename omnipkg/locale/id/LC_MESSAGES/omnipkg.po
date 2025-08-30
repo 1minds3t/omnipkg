@@ -1,0 +1,3492 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) YEAR ORGANIZATION
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: PACKAGE VERSION\n"
+"POT-Creation-Date: 2025-08-21 15:13-0500\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: pygettext.py 1.5\n"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:49
+msgid "  ⚠️  Stress Test Requires Python 3.11"
+msgstr "⚠️ Tes stres membutuhkan Python 3.11"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:53
+msgid "The omnipkg stress test only works in Python 3.11 environments."
+msgstr "Tes stres OMNIPKG hanya berfungsi di lingkungan Python 3.11."
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:54
+msgid "To run the stress test:"
+msgstr "Untuk menjalankan tes stres:"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:55
+msgid "1. Create a Python 3.11 virtual environment"
+msgstr "1. Buat lingkungan virtual Python 3.11"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:56
+msgid "2. Install omnipkg in that environment"
+msgstr "2. Pasang omnipkg di lingkungan itu"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:59
+msgid "🔮 Coming Soon: Hot Python interpreter swapping mid-script!"
+msgstr "🔮 Segera Hadir: Interpreter Python yang panas menukar script tengah!"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:60
+msgid "   This will allow seamless switching between Python versions"
+msgstr "Ini akan memungkinkan pergantian mulus antara versi Python"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:61
+msgid "   during package operations - stay tuned!"
+msgstr "Selama Operasi Paket - Tetap disini!"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:65
+msgid "  🚀 omnipkg Nuclear Stress Test - Runtime Version Swapping"
+msgstr "🚀 Tes Stres Nuklir Omnipkg - Pertukaran Versi Runtime"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:67
+msgid "🎪 This demo showcases IMPOSSIBLE package combinations:"
+msgstr "🎪 Demo ini menampilkan kombinasi paket yang mustahil:"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:68
+msgid "   • Runtime swapping between numpy/scipy versions mid-execution"
+msgstr "• Pertukaran runtime antara Versi Numpy/Scipy Mid-Execution"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:69
+msgid "   • Different numpy+scipy combos (1.24.3+1.12.0 → 1.26.4+1.16.1)"
+msgstr "• Combo Numpy+Scipy yang berbeda (1.24.3+1.12.0 → 1.26.4+1.16.1)"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:71
+msgid "   • Live PYTHONPATH manipulation without process restart"
+msgstr "• Manipulasi Pythonpath hidup tanpa restart proses"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:72
+msgid "   • Space-efficient deduplication (shows deduplication - normally"
+msgstr ""
+"• Deduplikasi yang efisien ruang (menunjukkan deduplikasi - secara normal"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:73
+msgid "     we average ~60% savings, but less for C extensions/binaries)"
+msgstr ""
+"Kami rata -rata ~ 60% penghematan, tetapi lebih sedikit untuk ekstensi/biner"
+" C)"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:75
+msgid "🤯 What makes this impossible with traditional tools:"
+msgstr "🤯 Apa yang membuat ini tidak mungkin dengan alat tradisional:"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:77
+msgid "   • Switching versions requires environment restart"
+msgstr "• Versi beralih membutuhkan restart lingkungan"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:78
+msgid "   • Dependency conflicts prevent coexistence"
+msgstr "• Konflik ketergantungan mencegah koeksistensi"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:81
+msgid "✨ omnipkg does this LIVE, in the same Python process!"
+msgstr ""
+"✨ omnipkg melakukan ini secara langsung, dalam proses ular surut yang sama!"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:82
+msgid "📊 Expected downloads: ~500MB | Duration: 30 seconds - 3 minutes"
+msgstr "📊 Unduhan yang Diharapkan: ~ 500MB |Durasi: 30 detik - 3 menit"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:95
+msgid "🔥 Starting stress test..."
+msgstr "🔥 Mulai Tes Stres ..."
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:100
+msgid "❌ Stress test module not found. Implementation needed."
+msgstr "❌ Modul uji stres tidak ditemukan.Implementasi diperlukan."
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:101
+msgid "💡 This would run the actual stress test with:"
+msgstr "💡 Ini akan menjalankan tes stres yang sebenarnya dengan:"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:102
+msgid "   • Large package installations (TensorFlow, PyTorch, etc.)"
+msgstr "• Instalasi paket besar (TensorFlow, Pytorch, dll.)"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:103
+msgid "   • Version conflict demonstrations"
+msgstr "• Demonstrasi konflik versi"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:104
+msgid "   • Real-time bubbling and deduplication"
+msgstr "• Bubling dan deduplikasi waktu nyata"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:113
+msgid ""
+"📡 Live streaming output (this may take several minutes for heavy "
+"packages)..."
+msgstr ""
+"📡 Output streaming langsung (ini mungkin memakan waktu beberapa menit untuk "
+"paket berat) ..."
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:115
+msgid "🛑 Press Ctrl+C to safely cancel if needed"
+msgstr "🛑 Tekan Ctrl+C untuk membatalkan dengan aman jika diperlukan"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:135
+#: /home/minds3t/omnipkg/omnipkg/cli.py:184
+msgid "😎 TensorFlow escaped the matrix! 🚀"
+msgstr "😎 Tensorflow lolos dari matriks!🚀"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:136
+#: /home/minds3t/omnipkg/omnipkg/cli.py:185
+msgid "🎉 Demo completed successfully!"
+msgstr "🎉 Demo selesai dengan sukses!"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:140
+msgid "💡 Check the output above for error details."
+msgstr "💡 Periksa output di atas untuk detail kesalahan."
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:143
+#: /home/minds3t/omnipkg/omnipkg/cli.py:191
+msgid ""
+"\n"
+"⚠️  Demo cancelled by user (Ctrl+C)"
+msgstr "⚠️ Demo dibatalkan oleh pengguna (Ctrl+C)"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:144
+msgid ""
+"🛡️  Your environment should be safe - omnipkg handles interruptions "
+"gracefully"
+msgstr ""
+"🛡️ Lingkungan Anda harus aman - omnipkg menangani gangguan dengan anggun"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:153
+msgid "📋 Full traceback:"
+msgstr "📋 Traceback Lengkap:"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:161
+msgid "📡 Streaming output in real-time..."
+msgstr "📡 Output streaming secara real-time ..."
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:162
+msgid ""
+"💡 Heavy package installations may have natural pauses - this is normal!"
+msgstr "💡 Instalasi paket berat mungkin memiliki jeda alami - ini normal!"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:163
+msgid "🛑 Press Ctrl+C to safely cancel"
+msgstr "🛑 Tekan Ctrl+C untuk membatalkan dengan aman"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:192
+msgid "🛡️  Cleaning up safely..."
+msgstr "🛡️ membersihkan dengan aman ..."
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:13
+msgid "🚨 PIP DEPENDENCY DESTRUCTION ALERT 🚨"
+msgstr "🚨 Peringatan Penghancuran Ketergantungan Pip 🚨"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:16
+#: /home/minds3t/omnipkg/omnipkg/demo.py:18
+#: /home/minds3t/omnipkg/omnipkg/demo.py:21
+#: /home/minds3t/omnipkg/omnipkg/demo.py:27
+#: /home/minds3t/omnipkg/omnipkg/demo.py:29
+msgid "│                                                          │"
+msgstr "│                                                          │"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:17
+msgid "│  💀 You: pip install flask-login==0.6.0                 │"
+msgstr "│ 💀 Anda: Pip menginstal flask-login == 0.6.0 │"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:19
+msgid "│  🧠 omnipkg AI suggests:                                 │"
+msgstr "│ 🧠 omnipkg ai menyarankan: │"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:20
+msgid "│      omnipkg install flask-login==0.6.0                 │"
+msgstr "│ omnipkg instal flask-login == 0.6.0 │"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:22
+msgid "│  ⚠️  WARNING: pip will NUKE your environment! ⚠️          │"
+msgstr "│ ⚠️ PERINGATAN: PIP Will Nuke Lingkungan Anda!⚠️ │"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:23
+msgid "│      • Downgrade from 0.6.3 to 0.6.0                   │"
+msgstr "│ • Downgrade dari 0,6,3 menjadi 0,6,0 │"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:24
+msgid "│      • Break newer Flask compatibility                  │"
+msgstr "│ • Hancurkan kompatibilitas labu yang lebih baru │"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:25
+msgid "│      • Destroy your modern app                          │"
+msgstr "│ • Hancurkan aplikasi modern Anda │"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:26
+msgid "│      • Welcome you to dependency hell 🔥                │"
+msgstr "│ • menyambut Anda di neraka ketergantungan 🔥 │"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:28
+msgid "│  [Y]es, I want chaos | [N]o, save me omnipkg! 🦸‍♂️        │"
+msgstr "│ [y] es, saya ingin kekacauan |[N] o, simpan aku omnipkg!🦸‍♂️ │"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:31
+msgid "        \\   ^__^"
+msgstr "\\ ^__ ^"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:32
+msgid "         \\  (💀💀)\\______   <- This is your environment"
+msgstr "\\ (💀💀) \\ ______ <- Ini adalah lingkungan Anda"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:33
+msgid "            (__)\\       )\\/\\   after using pip"
+msgstr "(__) \\) \\/\\ Setelah menggunakan PIP"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:34
+msgid "                ||---ww |"
+msgstr "|| --- WW |"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:35
+msgid "                ||     ||"
+msgstr "                ||     ||"
+
+#: /home/minds3t/omnipkg/omnipkg/loader.py:42
+msgid ""
+"⚠️ [omnipkg loader] Config not provided or incomplete. Attempting auto-"
+"detection of paths."
+msgstr ""
+"⚠️ [omnipkg loader] config tidak disediakan atau tidak lengkap.Mencoba "
+"deteksi otomatis jalur."
+
+#: /home/minds3t/omnipkg/omnipkg/loader.py:47
+msgid ""
+"⚠️ [omnipkg loader] Could not auto-detect site-packages path reliably. "
+"Falling back to sys.prefix."
+msgstr ""
+"⚠️ [Omnipkg Loader] tidak dapat secara otomatis mendeteksi jalur paket-situs"
+" secara andal.Kembali ke sys.prefix."
+
+#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:64
+msgid "🟢 --force flag detected. Caching will be ignored."
+msgstr "🟢 -Force Flag terdeteksi.Caching akan diabaikan."
+
+#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:72
+msgid "✅ Connected to Redis successfully."
+msgstr "✅ Berhubungan dengan Redis dengan sukses."
+
+#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:83
+msgid "🔍 Discovering all packages from file system (ground truth)..."
+msgstr "🔍 Menemukan Semua Paket dari Sistem File (Ground Truth) ..."
+
+#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:114
+msgid "    -> Reconciling file system state with Redis knowledge base..."
+msgstr "-> Rekonsiliasi Status Sistem File dengan Basis Pengetahuan Redis ..."
+
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:62
+msgid ""
+"   - Setting main environment to a known good state... (This might trigger "
+"an omnipkg install)"
+msgstr ""
+"- Mengatur lingkungan utama ke keadaan baik yang diketahui ... (ini mungkin "
+"memicu instalasi omnipkg)"
+
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:71
+msgid "✅ Environment is clean and ready for testing."
+msgstr "✅ Lingkungan bersih dan siap untuk diuji."
+
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:79
+msgid ""
+"\n"
+"💥 NUMPY VERSION JUGGLING:"
+msgstr "💥 Juggling Versi Numpy:"
+
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:97
+msgid ""
+"\n"
+"\n"
+"🔥 SCIPY C-EXTENSION TEST:"
+msgstr "🔥 Uji C-Extension SCIPY:"
+
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:119
+msgid ""
+"\n"
+"\n"
+"🤯 NUMPY + SCIPY VERSION MIXING:"
+msgstr "🤯 Pencampuran Versi Scipy Numpy +:"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:284
+msgid "Override the display language for this command (e.g., es, de, ja)"
+msgstr "Mengamati bahasa tampilan untuk perintah ini (mis., ES, DE, JA)"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:285
+msgid "Available commands:"
+msgstr "Perintah yang tersedia:"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:286
+msgid "Install packages with intelligent conflict resolution"
+msgstr "Instal Paket dengan Resolusi Konflik Cerdas"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:286
+msgid ""
+"Install packages with automatic version management and conflict resolution"
+msgstr "Instal Paket dengan Manajemen Versi Otomatis dan Resolusi Konflik"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:287
+msgid "Packages to install (e.g., \"requests==2.25.1\", \"numpy>=1.20\")"
+msgstr "Paket yang akan diinstal (mis., \"Permintaan == 2.25.1\", \"Numpy> = 1.20\")"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:288
+msgid "Install from requirements file with smart dependency resolution"
+msgstr "Instal dari file persyaratan dengan resolusi ketergantungan pintar"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:289
+msgid "Install a package with specific dependency versions"
+msgstr "Instal paket dengan versi ketergantungan spesifik"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:289
+msgid ""
+"Install a package with specific dependency versions in a bubble to avoid "
+"conflicts"
+msgstr ""
+"Instal paket dengan versi ketergantungan spesifik dalam gelembung untuk "
+"menghindari konflik"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:290
+msgid "Package to install (e.g., \"tensorflow==2.13.0\")"
+msgstr "Paket untuk diinstal (mis., \"TensorFlow == 2.13.0\")"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:291
+msgid "Dependency with version (e.g., \"numpy==1.24.3\")"
+msgstr "Ketergantungan dengan versi (mis., \"Numpy == 1.24.3\")"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:292
+msgid "Intelligently remove packages and their dependencies"
+msgstr "Secara cerdas menghapus paket dan ketergantungannya"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:292
+msgid "Smart package removal with safety features"
+msgstr "Penghapusan Paket Cerdas dengan Fitur Keselamatan"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:293
+msgid "Packages to uninstall (removes all versions)"
+msgstr "Paket untuk menghapus instal (menghapus semua versi)"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:294
+#: /home/minds3t/omnipkg/omnipkg/cli.py:322
+msgid "Skip confirmation prompts"
+msgstr "Lewati permintaan konfirmasi"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:295
+msgid "Interactive package explorer with version management"
+msgstr "Penjelajah Paket Interaktif dengan Manajemen Versi"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:295
+msgid ""
+"Explore package details, dependencies, and manage versions interactively"
+msgstr "Jelajahi detail paket, dependensi, dan kelola versi secara interaktif"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:296
+msgid "Package name to explore"
+msgstr "Nama paket untuk dijelajahi"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:297
+msgid "Specific version to inspect (default: active)"
+msgstr "Versi spesifik untuk memeriksa (default: aktif)"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:298
+msgid "Time-travel back to your last known good environment"
+msgstr ""
+"Perjalanan waktu kembali ke lingkungan baik terakhir Anda yang diketahui"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:298
+msgid "Revert all changes to the last stable environment state"
+msgstr "Mengembalikan semua perubahan ke keadaan lingkungan stabil terakhir"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:299
+msgid "Skip confirmation and revert immediately"
+msgstr "Lewati konfirmasi dan segera kembali"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:300
+msgid "View all installed packages and their bubble status"
+msgstr "Lihat semua paket terpasang dan status gelembungnya"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:300
+msgid "List all packages with detailed status indicators"
+msgstr "Cantumkan semua paket dengan indikator status terperinci"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:301
+msgid "Filter packages by name pattern"
+msgstr "Paket Filter berdasarkan Pola Nama"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:302
+msgid "Multi-version environment health dashboard"
+msgstr "Dasbor Kesehatan Lingkungan Multi-Versi"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:302
+msgid "Overview of your Python interpreters, packages, and bubble isolation"
+msgstr ""
+"Tinjauan Umum Penerjemah Python Anda, Paket, dan Isolasi Gelembung Anda"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:303
+msgid "Interactive demo for version switching"
+msgstr "Demo interaktif untuk switching versi"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:303
+msgid ""
+"Run interactive demos showcasing omnipkg's version-switching capabilities:\n"
+"        1. Rich test (Python module switching)\n"
+"        2. UV test (binary switching)\n"
+"        3. NumPy + SciPy stress test (C-extension switching)\n"
+"        4. TensorFlow test (complex dependency switching)\n"
+"        Note: The Flask demo is under construction and not currently available."
+msgstr ""
+"Jalankan demo interaktif yang menampilkan kemampuan pengalihan versi OMNIPKG:\n"
+"1. Tes Kaya (Python Module Switching)\n"
+"2. Tes UV (switching biner)\n"
+"3. Numpy + Scipy Stress Test (C-Extension Switching)\n"
+"4. Tesorflow Test (switching ketergantungan kompleks)\n"
+"Catatan: Demo Flask sedang dibangun dan saat ini tidak tersedia."
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:304
+msgid "Ultimate demonstration with heavy scientific packages"
+msgstr "Demonstrasi akhir dengan paket ilmiah yang berat"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:304
+msgid ""
+"Showcase omnipkg's features with large package installations and version "
+"switching"
+msgstr ""
+"Showcase Fitur Omnipkg dengan instalasi paket besar dan switching versi"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:305
+msgid "Clean slate: rebuild the omnipkg knowledge base"
+msgstr "Clean Slate: Bangun kembali basis pengetahuan omnipkg"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:305
+msgid "Delete and rebuild the Redis knowledge base from scratch"
+msgstr "Hapus dan bangun kembali basis pengetahuan redis dari awal"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:306
+msgid "Skip confirmation"
+msgstr "Lewati konfirmasi"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:307
+msgid "Refresh the intelligence knowledge base"
+msgstr "Segarkan Basis Pengetahuan Kecerdasan"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:307
+msgid "Force rebuild of package metadata and dependency intelligence"
+msgstr "Kekuatan kembali paksa metadata paket dan kecerdasan ketergantungan"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:308
+msgid "Ignore cache and force complete rebuild"
+msgstr "Abaikan cache dan paksa pembangunan kembali lengkap"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:309
+msgid "Delete the config file to trigger a fresh setup"
+msgstr "Hapus file konfigurasi untuk memicu pengaturan baru"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:309
+msgid "Deletes the omnipkg config.json file"
+msgstr "Menghapus file omnipkg config.json"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:310
+msgid "Skip confirmation and delete immediately"
+msgstr "Lewati konfirmasi dan hapus segera"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:311
+msgid "View or edit the omnipkg configuration"
+msgstr "Lihat atau edit konfigurasi omnipkg"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:311
+msgid "Allows setting persistent configuration values"
+msgstr "Memungkinkan pengaturan nilai konfigurasi yang persisten"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:313
+msgid "Set a configuration value"
+msgstr "Tetapkan nilai konfigurasi"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:315
+msgid "The configuration key to set"
+msgstr "Kunci konfigurasi untuk mengatur"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:377
+msgid "✅ Language permanently set to: {lang}"
+msgstr "✅ Bahasa secara permanen diatur ke: {lang}"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:395
+msgid "Interactive Omnipkg Demo"
+msgstr "Demo omnipkg interaktif"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:396
+msgid "🎪 Omnipkg supports version switching for:"
+msgstr "🎪 OMNIPKG mendukung switching versi untuk:"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:397
+msgid "   • Python modules (e.g., rich): See tests/test_rich_switching.py"
+msgstr "• Modul Python (mis., Kaya): Lihat tes/test_rich_switching.py"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:398
+msgid "   • Binary packages (e.g., uv): See tests/test_uv_switching.py"
+msgstr "• Paket biner (mis., UV): Lihat Tes/test_uv_switching.py"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:399
+msgid "   • C-extension packages (e.g., numpy, scipy): See stress_test.py"
+msgstr "• Paket C-Extension (mis., Numpy, SciPy): lihat stress_test.py"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:400
+msgid ""
+"   • Complex dependency packages (e.g., TensorFlow): See "
+"tests/test_tensorflow_switching.py"
+msgstr ""
+"• Paket ketergantungan yang kompleks (mis., TensorFlow): Lihat "
+"tes/test_tensorflow_switching.py"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:401
+msgid ""
+"   • Note: The Flask demo is under construction and not currently available."
+msgstr "• Catatan: Demo Flask sedang dibangun dan saat ini tidak tersedia."
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:402
+msgid ""
+"\n"
+"Select a demo to run:"
+msgstr "Pilih demo untuk dijalankan:"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:403
+msgid "1. Rich test (Python module switching)"
+msgstr "1. Tes Kaya (Python Module Switching)"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:404
+msgid "2. UV test (binary switching)"
+msgstr "2. Tes UV (switching biner)"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:405
+msgid "3. NumPy + SciPy stress test (C-extension switching)"
+msgstr "3. Numpy + Scipy Stress Test (C-Extension Switching)"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:406
+msgid "4. TensorFlow test (complex dependency switching)"
+msgstr "4. Tesorflow Test (switching ketergantungan kompleks)"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:407
+msgid "5. Flask test (under construction)"
+msgstr "5. Tes Flask (sedang dibangun)"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:409
+msgid "Enter your choice (1-5): "
+msgstr "Masukkan pilihan Anda (1-5):"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:421
+msgid "  ⚠️  NumPy/SciPy Stress Test Requires Python 3.11"
+msgstr "⚠️ Tes stres Numpy/Scipy membutuhkan Python 3.11"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:434
+msgid "⚠️ The Flask demo is under construction and not currently available."
+msgstr "⚠️ Demo Flask sedang dibangun dan saat ini tidak tersedia."
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:435
+msgid "Switching to the Rich test (option 1) for now!"
+msgstr "Beralih ke tes kaya (opsi 1) untuk saat ini!"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:437
+msgid "❌ Invalid choice. Please select 1, 2, 3, 4, or 5."
+msgstr "❌ Pilihan tidak valid.Pilih 1, 2, 3, 4, atau 5."
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:500
+msgid ""
+"\n"
+"💡 Did you mean 'omnipkg config set language <code>'?"
+msgstr "💡 Apakah maksud Anda 'omnipkg config set bahasa <code>'?"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:504
+msgid ""
+"\n"
+"❌ Operation cancelled by user."
+msgstr "❌ Operasi dibatalkan oleh pengguna."
+
+#: /home/minds3t/omnipkg/omnipkg/common_utils.py:35
+#: /home/minds3t/omnipkg/omnipkg/demo.py:67
+msgid "💭 Simulating Enter key press..."
+msgstr "💭 Simulasi Masukkan Key Tekan ..."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:183
+msgid ""
+"   1) stable-main:  Prioritize a stable main environment. (Recommended)"
+msgstr ""
+"1) Stabil-Main: Prioritaskan lingkungan utama yang stabil.(Direkomendasikan)"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:184
+msgid "   2) latest-active: Prioritize having the latest versions active."
+msgstr "2) Aktif terbaru: Prioritaskan memiliki versi terbaru aktif."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:185
+msgid "   Enter choice (1 or 2) [1]: "
+msgstr "Masukkan Pilihan (1 atau 2) [1]:"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:198
+msgid "Configuration saved to {path}."
+msgstr "Konfigurasi disimpan ke {path}."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:199
+msgid "   You can edit this file manually later."
+msgstr "Anda dapat mengedit file ini secara manual nanti."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:213
+msgid "Warning: Config file is corrupted. Starting fresh."
+msgstr "Peringatan: File konfigurasi rusak.Mulai segar."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:218
+msgid "Updating config: Adding missing key '{key}'."
+msgstr "Memperbarui Config: Menambahkan tombol yang hilang '{key}'."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:223
+msgid "✅ Config file updated successfully."
+msgstr "✅ File konfigurasi berhasil diperbarui."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:263
+msgid "    ⚠️ Warning: Failed to load path registry, starting fresh."
+msgstr "⚠️ PERINGATAN: Gagal memuat registri jalur, mulai segar."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:324
+msgid "    -> Trying strategy 1: pip dry-run..."
+msgstr "-> Mencoba Strategi 1: Pip Dry-Run ..."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:327
+msgid "    ✅ Success: Dependencies resolved via pip dry-run."
+msgstr "✅ Sukses: Ketergantungan diselesaikan melalui Pip Dry-Run."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:329
+msgid "    -> Trying strategy 2: PyPI API..."
+msgstr "-> mencoba strategi 2: PYPI API ..."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:332
+msgid "    ✅ Success: Dependencies resolved via PyPI API."
+msgstr "✅ Sukses: Ketergantungan diselesaikan melalui PYPI API."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:334
+msgid "    -> Trying strategy 3: pip show fallback..."
+msgstr "-> Mencoba Strategi 3: Pip Show Fallback ..."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:337
+msgid "    ✅ Success: Dependencies resolved from existing installation."
+msgstr "✅ Sukses: Ketergantungan diselesaikan dari instalasi yang ada."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:672
+msgid "    🔍 Verifying package integrity..."
+msgstr "🔍 memverifikasi integritas paket ..."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:749
+msgid "    ⚡️ Loading main environment hash index from cache..."
+msgstr "⚡️ memuat indeks hash lingkungan utama dari cache ..."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:756
+msgid "    📦 Attempting fast indexing via package metadata..."
+msgstr "📦 Mencoba pengindeksan cepat melalui metadata paket ..."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1065
+msgid "❌ Could not connect to Redis. Is the Redis server running?"
+msgstr "❌ Tidak dapat terhubung ke Redis.Apakah server Redis berjalan?"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1077
+msgid "✅ Configuration file does not exist. Nothing to do."
+msgstr "✅ File konfigurasi tidak ada.Tidak ada yang bisa dilakukan."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1084
+#: /home/minds3t/omnipkg/omnipkg/core.py:1114
+msgid "🚫 Reset cancelled."
+msgstr "🚫 Reset dibatalkan."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1088
+msgid "✅ Configuration file deleted successfully."
+msgstr "✅ File konfigurasi berhasil dihapus."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1090
+msgid ""
+"🚀 The next time you run `omnipkg`, you will be guided through the first-time"
+" setup."
+msgstr ""
+"🚀 Lain kali Anda menjalankan `omnipkg`, Anda akan dipandu melalui pengaturan"
+" pertama kali."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1116
+msgid ""
+"\n"
+"🗑️  Clearing knowledge base..."
+msgstr "🗑️ membersihkan basis pengetahuan ..."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1124
+msgid "   ✅ Knowledge base was already clean."
+msgstr "✅ Basis pengetahuan sudah bersih."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1134
+msgid "🧠 Forcing a full rebuild of the knowledge base..."
+msgstr "🧠 Memaksa pembangunan kembali penuh dari basis pengetahuan ..."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1142
+msgid "✅ Knowledge base rebuilt successfully."
+msgstr "✅ Basis pengetahuan berhasil dibangun kembali."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1159
+msgid "   🔄 Rebuilding core package metadata..."
+msgstr "🔄 Membangun kembali metadata paket inti ..."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1163
+msgid "   ✅ Core metadata rebuilt."
+msgstr "✅ Metadata inti dibangun kembali."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1219
+msgid "🧠 Performing self-healing sync of knowledge base..."
+msgstr "🧠 Melakukan Sinkronisasi Basis Pengetahuan Self-Healing ..."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1233
+msgid "   ✅ Knowledge base is empty or no packages found to sync."
+msgstr ""
+"✅ Basis pengetahuan kosong atau tidak ada paket yang ditemukan untuk "
+"disinkronkan."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1276
+msgid "   ✅ Knowledge base is already in sync with the environment."
+msgstr "✅ Basis pengetahuan sudah selaras dengan lingkungan."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1285
+msgid "🔄 Updating cached file hash index..."
+msgstr "🔄 Memperbarui Indeks Hash File Hash ..."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1306
+msgid "✅ Hash index updated."
+msgstr "✅ Indeks hash diperbarui."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1358
+msgid "✅ Knowledge base is already up to date."
+msgstr "✅ Basis pengetahuan sudah up to date."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1360
+msgid "🧠 Updating knowledge base for changes..."
+msgstr "🧠 Memperbarui basis pengetahuan untuk perubahan ..."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1383
+msgid "✅ Knowledge base updated successfully."
+msgstr "✅ Basis pengetahuan berhasil diperbarui."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1454
+msgid "❌ Invalid selection."
+msgstr "❌ Seleksi tidak valid."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1456
+msgid "❌ Please enter a number."
+msgstr "❌ Harap masukkan nomor."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1458
+msgid ""
+"\n"
+"   Skipped."
+msgstr "Dilewati."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1460
+msgid "📦 No installed versions found in Redis."
+msgstr "📦 Tidak ada versi terpasang yang ditemukan di Redis."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1515
+msgid "   ✅ Snapshot saved."
+msgstr "✅ Snapshot disimpan."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1545
+msgid "🔬 Running in --dry-run mode. No changes will be made."
+msgstr ""
+"🔬 Berlari dalam mode-kering-lari.Tidak ada perubahan yang akan dilakukan."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1548
+msgid "🚫 No packages specified for installation."
+msgstr "🚫 Tidak ada paket yang ditentukan untuk instalasi."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1564
+msgid ""
+"  (No version specified for omnipkg; attempting to bubble the latest stable "
+"version)"
+msgstr ""
+"(Tidak ada versi yang ditentukan untuk omnipkg; mencoba menggelembung versi "
+"stabil terbaru)"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1579
+msgid ""
+"\n"
+"🎉 All package operations complete."
+msgstr "🎉 Semua operasi paket selesai."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1602
+msgid ""
+"\n"
+"📸 Taking LIVE pre-installation snapshot..."
+msgstr "📸 mengambil snapshot pra-instalasi langsung ..."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1612
+msgid ""
+"\n"
+"🔬 Analyzing post-installation changes..."
+msgstr "🔬 Menganalisis perubahan pasca-instalasi ..."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1627
+msgid ""
+"\n"
+"🛡️ STABILITY PROTECTION ACTIVATED!"
+msgstr "🛡️ Perlindungan stabilitas diaktifkan!"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1637
+msgid ""
+"\n"
+"✅ Stability protection complete!"
+msgstr "✅ Perlindungan stabilitas lengkap!"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1639
+msgid ""
+"✅ No changes to existing packages detected. Installation completed safely."
+msgstr ""
+"✅ Tidak ada perubahan pada paket yang ada yang terdeteksi.Instalasi selesai "
+"dengan aman."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1699
+msgid "🎉 All package operations complete."
+msgstr "🎉 Semua operasi paket selesai."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1753
+msgid "🔄 Restoring main environment from snapshot..."
+msgstr "🔄 Memulihkan lingkungan utama dari snapshot ..."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1759
+msgid "   ✅ Environment is already in its original state."
+msgstr "✅ Lingkungan sudah dalam keadaan semula."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1767
+msgid "   ✅ Environment restored."
+msgstr "✅ Lingkungan dipulihkan."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1929
+msgid "🤷 No versions available for selection."
+msgstr "🤷 Tidak ada versi yang tersedia untuk dipilih."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1934
+#: /home/minds3t/omnipkg/omnipkg/core.py:1965
+msgid "🚫 Uninstall cancelled."
+msgstr "🚫 Uninstall dibatalkan."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1943
+msgid "❌ Invalid input."
+msgstr "❌ Input tidak valid."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1947
+msgid ""
+"\n"
+"🚫 Uninstall cancelled."
+msgstr "🚫 Uninstall dibatalkan."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1957
+msgid "🤷 No versions selected for uninstallation after protection checks."
+msgstr ""
+"🤷 Tidak ada versi yang dipilih untuk tidak diinstalasi setelah pemeriksaan "
+"perlindungan."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1993
+msgid "✅ Uninstallation complete."
+msgstr "✅ Uninstalasi lengkap."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2005
+msgid ""
+"   Run an `omnipkg install` or `omnipkg uninstall` command to create one."
+msgstr ""
+"Jalankan perintah `omnipkg instalasi` atau` omnipkg uninstall` untuk membuat"
+" satu."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2007
+msgid "⚖️  Comparing current environment to the last known good snapshot..."
+msgstr ""
+"⚖️ Membandingkan lingkungan saat ini dengan snapshot bagus terakhir yang "
+"diketahui ..."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2016
+msgid ""
+"✅ Your environment is already in the last known good state. No action "
+"needed."
+msgstr ""
+"✅ Lingkungan Anda sudah dalam kondisi baik terakhir yang diketahui.Tidak ada"
+" tindakan yang diperlukan."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2018
+msgid ""
+"\n"
+"📝 The following actions will be taken to restore the environment:"
+msgstr "📝 Tindakan berikut akan diambil untuk memulihkan lingkungan:"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2028
+msgid "🚫 Revert cancelled."
+msgstr "🚫 Kembalikan dibatalkan."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2030
+msgid ""
+"\n"
+"🚀 Starting revert operation..."
+msgstr "🚀 Mulai operasi pengembalian ..."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2036
+msgid ""
+"\n"
+"✅ Environment successfully reverted to the last known good state."
+msgstr ""
+"✅ Lingkungan berhasil dikembalikan ke keadaan baik terakhir yang diketahui."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2246
+msgid "  (No versions found in knowledge base)"
+msgstr "(Tidak ada versi yang ditemukan di basis pengetahuan)"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2259
+msgid "🔄 omnipkg System Status"
+msgstr "🔄 status sistem omnipkg"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2264
+#: /home/minds3t/omnipkg/omnipkg/core.py:2267
+msgid ""
+"\n"
+"🔒 Pip in Jail (main environment)"
+msgstr "🔒 Pip di penjara (lingkungan utama)"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2268
+msgid "    🚫 Pip not found in the main env. Escaped or never caught!"
+msgstr ""
+"🚫 Pip tidak ditemukan di env utama.Melarikan diri atau tidak pernah "
+"tertangkap!"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2271
+#: /home/minds3t/omnipkg/omnipkg/core.py:2274
+msgid "🔒 UV in Jail (main environment)"
+msgstr "🔒 UV di penjara (lingkungan utama)"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2275
+msgid "    🚫 UV not found in the main env. Too fast to catch!"
+msgstr "🚫 UV tidak ditemukan di env utama.Terlalu cepat untuk ditangkap!"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2276
+msgid ""
+"\n"
+"🌍 Main Environment:"
+msgstr "🌍 Lingkungan utama:"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2281
+msgid ""
+"\n"
+"📦 izolasyon Alanı (Bubbles):"
+msgstr "📦 Izolasyon Alanı (Bubbles):"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2283
+msgid "  - No isolated package versions found."
+msgstr "- Tidak ada versi paket terisolasi yang ditemukan."
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:90
+msgid ""
+"This demo will show you the classic dependency conflict and how omnipkg "
+"solves it."
+msgstr ""
+"Demo ini akan menunjukkan kepada Anda konflik ketergantungan klasik dan "
+"bagaimana omnipkg menyelesaikannya."
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:95
+msgid ""
+"\n"
+"✅ Beautiful! We have flask-login 0.6.3 installed and working perfectly."
+msgstr ""
+"✅ Cantik!Kami memiliki flask-login 0.6.3 terpasang dan bekerja dengan "
+"sempurna."
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:104
+msgid ""
+"\n"
+"🔓 Releasing pip... (your funeral)"
+msgstr "🔓 Melepaskan Pip ... (Pemakaman Anda)"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:105
+msgid "💀 Watch as pip destroys your beautiful environment..."
+msgstr "💀 Saksikan Pip menghancurkan lingkungan Anda yang indah ..."
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:107
+msgid ""
+"\n"
+"💥 BOOM! Look what pip did:"
+msgstr "💥 Boom!Lihat apa yang dilakukan Pip:"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:108
+msgid "   ❌ Uninstalled flask-login 0.6.3"
+msgstr "❌ Labu-login yang tidak terinstal 0.6.3"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:109
+msgid "   ❌ Downgraded to flask-login 0.6.0"
+msgstr "❌ diturunkan menjadi labu-login 0.6.0"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:110
+msgid "   ❌ Your modern project is now BROKEN"
+msgstr "❌ Proyek modern Anda sekarang rusak"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:111
+msgid "   ❌ Welcome to dependency hell! 🔥"
+msgstr "❌ Selamat datang di Neraka Ketergantungan!🔥"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:116
+msgid "Watch how omnipkg handles this intelligently:"
+msgstr "Perhatikan bagaimana omnipkg menangani ini dengan cerdas:"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:118
+msgid ""
+"\n"
+"✅ omnipkg intelligently restored the modern version!"
+msgstr "✅ Omnipkg dengan cerdas memulihkan versi modern!"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:119
+msgid "💡 Notice: No conflicts, no downgrades, just pure intelligence."
+msgstr ""
+"💡 Perhatikan: Tidak ada konflik, tidak ada penurunan peringkat, hanya "
+"kecerdasan murni."
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:127
+msgid ""
+"\n"
+"🧠 Smart choice! Using omnipkg instead..."
+msgstr "🧠 Pilihan Cerdas!Menggunakan omnipkg sebagai gantinya ..."
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:129
+msgid "🔧 Installing flask-login==0.6.0 with omnipkg..."
+msgstr "🔧 Memasang flask-login == 0.6.0 dengan omnipkg ..."
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:130
+msgid ""
+"💡 omnipkg will skip if already available or create isolation as needed..."
+msgstr ""
+"💡 omnipkg akan lewati jika sudah tersedia atau membuat isolasi sesuai "
+"kebutuhan ..."
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:132
+msgid ""
+"\n"
+"✅ omnipkg install successful!"
+msgstr "✅ omnipkg menginstal sukses!"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:133
+msgid "🎯 BOTH versions now coexist peacefully!"
+msgstr "🎯 Kedua versi sekarang hidup berdampingan dengan damai!"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:139
+msgid ""
+"\n"
+"🔧 Note how omnipkg intelligently manages versions!"
+msgstr "🔧 Perhatikan bagaimana OnePkG dikelola secara cerdas!"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:140
+msgid "📦 Main environment: flask-login 0.6.3 (untouched)"
+msgstr "📦 Lingkungan Utama: Labu-login 0.6.3 (tidak tersentuh)"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:141
+msgid "🔧 omnipkg: flask-login 0.6.0 (available when needed)"
+msgstr "🔧 omnipkg: labu-login 0.6.0 (tersedia saat dibutuhkan)"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:144
+msgid "💡 Want details on a specific version?"
+msgstr "💡 Ingin detail pada versi tertentu?"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:147
+msgid ""
+"\n"
+"🎯 Now you can see that BOTH versions are available to the system."
+msgstr ""
+"🎯 Sekarang Anda dapat melihat bahwa kedua versi tersedia untuk sistem."
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:160
+msgid ""
+"\n"
+"See test above: we not only have multiple versions in the same environment, but can even run them in the same script!"
+msgstr ""
+"Lihat Tes di atas: Kami tidak hanya memiliki beberapa versi di lingkungan "
+"yang sama, tetapi bahkan dapat menjalankannya dalam skrip yang sama!"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:163
+msgid "🎉🎉🎉 DEMO COMPLETE! 🎉🎉🎉"
+msgstr "🎉🎉🎉 Demo Lengkap!🎉🎉🎉"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:164
+msgid "📚 What you learned:"
+msgstr "📚 Apa yang Anda pelajari:"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:165
+msgid "   💀 pip: Breaks everything, creates dependency hell"
+msgstr "💀 Pip: merusak segalanya, menciptakan neraka ketergantungan"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:166
+msgid "   🧠 omnipkg: Smart isolation, peaceful coexistence"
+msgstr "🧠 omnipkg: isolasi pintar, koeksistensi damai"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:167
+msgid "   🔧 Intelligence: Skips redundant work, creates isolation when needed"
+msgstr ""
+"🔧 Kecerdasan: Melewati pekerjaan yang berlebihan, menciptakan isolasi saat "
+"dibutuhkan"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:168
+msgid "   🔄 Magic: Seamless switching without containers"
+msgstr "🔄 Sihir: Pergantian mulus tanpa wadah"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:169
+msgid "🚀 Dependency hell is officially SOLVED!"
+msgstr "🚀 Neraka ketergantungan secara resmi dipecahkan!"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:170
+msgid "   Welcome to omnipkg heaven!"
+msgstr "Selamat datang di Omnipkg Heaven!"
+
+#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:141
+msgid ""
+"🚀 Starting omnipkg Metadata Builder v11 (Multi-Version Complete Edition)..."
+msgstr ""
+"🚀 Memulai Omnipkg Metadata Builder V11 (Edisi Lengkap Multi-Versi) ..."
+
+#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:152
+msgid "🔍 No specific targets provided. Discovering all installed packages..."
+msgstr ""
+"🔍 Tidak ada target khusus yang disediakan.Menemukan semua paket terpasang "
+"..."
+
+#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:154
+msgid "🛡️ Performing bulk security scan for active packages..."
+msgstr "🛡️ melakukan pemindaian keamanan curah untuk paket aktif ..."
+
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:249
+msgid ""
+"\n"
+"✅ Cleanup complete. Your environment is back to normal."
+msgstr "✅ Pembersihan Lengkap.Lingkungan Anda kembali normal."
+
+#: /home/minds3t/omnipkg/omnipkg/activator.py:53
+msgid "_omnipkg_ACTIVE_{}"
+msgstr "_omnipkg_active_ {}"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:51
+#: /home/minds3t/omnipkg/omnipkg/cli.py:423
+msgid "Current Python version: {}.{}"
+msgstr "Versi python saat ini: {}. {}"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:106
+msgid "❌ An error occurred during stress test execution: {}"
+msgstr "❌ Terjadi kesalahan selama eksekusi uji stres: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:112
+#: /home/minds3t/omnipkg/omnipkg/cli.py:160
+msgid "🚀 Running {} test from {}..."
+msgstr "🚀 menjalankan {} tes dari {} ..."
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:139
+#: /home/minds3t/omnipkg/omnipkg/cli.py:188
+msgid "❌ Demo failed with return code {}"
+msgstr "❌ Demo gagal dengan kode pengembalian {}"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:152
+msgid "❌ Demo failed with error: {}"
+msgstr "❌ Demo gagal dengan kesalahan: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:203
+msgid ""
+"\n"
+"❌ Demo failed with error: {}"
+msgstr "❌ Demo gagal dengan kesalahan: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:328
+#: /home/minds3t/omnipkg/omnipkg/common_utils.py:55
+#: /home/minds3t/omnipkg/omnipkg/demo.py:81
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:37
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:29
+msgid "  🚀 {}"
+msgstr "  🚀 {}"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:372
+msgid "❌ Error: Language '{}' not supported. Supported: {}"
+msgstr "❌ Kesalahan: Bahasa '{}' tidak didukung.Didukung: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:440
+msgid "❌ Error: Test file {} not found."
+msgstr "❌ Kesalahan: Test file {} tidak ditemukan."
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:454
+msgid "❌ Error: Requirements file not found at '{}'"
+msgstr "❌ Kesalahan: File persyaratan tidak ditemukan di '{}'"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:456
+msgid "📄 Reading packages from {}..."
+msgstr "📄 Membaca paket dari {} ..."
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:507
+msgid ""
+"\n"
+"❌ An unexpected error occurred: {}"
+msgstr "❌ Terjadi kesalahan yang tidak terduga: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/common_utils.py:24
+#: /home/minds3t/omnipkg/omnipkg/common_utils.py:46
+msgid "Subprocess command '{}' failed with exit code {}."
+msgstr "Perintah Subprocess '{}' gagal dengan kode keluar {}."
+
+#: /home/minds3t/omnipkg/omnipkg/common_utils.py:60
+#: /home/minds3t/omnipkg/omnipkg/demo.py:40
+msgid ""
+"\n"
+"Choice (y/n): "
+msgstr "Pilihan (Y/T):"
+
+#: /home/minds3t/omnipkg/omnipkg/common_utils.py:64
+#: /home/minds3t/omnipkg/omnipkg/demo.py:44
+msgid "💭 {}"
+msgstr "💭 {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:81
+msgid "⚠️ Warning: Could not recursively read package metadata: {}"
+msgstr "⚠️ PERINGATAN: tidak dapat membaca paket metadata secara rekursif: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:131
+msgid "python{}.{}"
+msgstr "Python {}. {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:283
+#: /home/minds3t/omnipkg/omnipkg/core.py:497
+msgid "{}bubble:{}:{}:file_paths"
+msgstr "{} Bubble: {}: {}: file_paths"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:297
+msgid "🫧 Creating isolated bubble for {} v{}"
+msgstr "🫧 Membuat gelembung terisolasi untuk {} v {}"
+
+#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:425
+msgid "{}-{}"
+msgstr "{}-{}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:313
+msgid "    📦 Installing full dependency tree to temporary location..."
+msgstr "📦 Memasang pohon ketergantungan penuh ke lokasi sementara ..."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:316
+msgid "    ❌ Failed to install exact version tree: {}"
+msgstr "❌ Gagal menginstal pohon versi yang tepat: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:320
+msgid "    ❌ Unexpected error during installation: {}"
+msgstr "❌ Kesalahan tak terduga selama instalasi: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:339
+msgid "    ⚠️ All dependency resolution strategies failed for {}=={}."
+msgstr "⚠️ Semua strategi resolusi ketergantungan gagal untuk {} == {}."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:340
+msgid "    ℹ️  Proceeding with full temporary installation to build bubble."
+msgstr ""
+"ℹ️ Melanjutkan dengan instalasi sementara penuh untuk membangun gelembung."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:347
+#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:342
+msgid "{}=={}\n"
+msgstr "{} == {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:425
+msgid "{}{}"
+msgstr "{} {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:504
+msgid "    ⚠️  Could not analyze {}: {}"
+msgstr "⚠️ tidak dapat menganalisis {}: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:506
+msgid ""
+"    ⚠️  Found {} files not in registry. They will be registered during "
+"bubble creation."
+msgstr ""
+"⚠️ Ditemukan {} file yang tidak ada dalam registri.Mereka akan terdaftar "
+"selama pembuatan gelembung."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:552
+msgid "    🧹 Creating deduplicated bubble at {}"
+msgstr "🧹 Membuat gelembung deduplikasi di {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:566
+msgid "    🔬 Found C-extension packages: {}"
+msgstr "🔬 Paket C-Extension Ditemukan: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:568
+msgid "    ⚙️  Found binary packages: {}"
+msgstr "⚙️ Ditemukan paket biner: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:570
+msgid "    📦 Found complex packages with submodules: {}"
+msgstr "📦 Menemukan paket kompleks dengan submodules: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:575
+msgid "    🔬 {}: C-extension - copying all files"
+msgstr "🔬 {}: C -Extension - Menyalin semua file"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:578
+msgid "    ⚙️  {}: Binary package - copying all files"
+msgstr "⚙️ {}: paket biner - Menyalin semua file"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:581
+msgid "    📦 {}: Complex package ({} submodules) - copying all files"
+msgstr "📦 {}: paket kompleks ({} submodules) - Menyalin semua file"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:619
+msgid "    📄 {}: copied {}, deduplicated {}"
+msgstr "📄 {}: disalin {}, deduplikasi {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:623
+msgid "    ⚠️  Found {} file(s) not listed in package metadata."
+msgstr "⚠️ Ditemukan {} file (s) tidak terdaftar dalam metadata paket."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:631
+msgid "    📦 {}: found {} additional files"
+msgstr "📦 {}: Ditemukan {} file tambahan"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:660
+msgid "    ✅ Bubble created: {} files copied, {} deduplicated."
+msgstr "✅ gelembung dibuat: {} file yang disalin, {} deduplikasi."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:661
+msgid "    📊 Space efficiency: {}% saved."
+msgstr "📊 Efisiensi Ruang: {}% disimpan."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:663
+msgid "    📦 Complex packages preserved: {} packages with submodules"
+msgstr "📦 Paket kompleks yang diawetkan: {} paket dengan submodules"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:683
+msgid "    ⚠️  Missing package directory: {}"
+msgstr "⚠️ Direktori paket yang hilang: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:690
+msgid "    🚨 CRITICAL: Missing Python module: {}"
+msgstr "🚨 Critical: Modul Python Hilang: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:692
+msgid "    🔧 Fixed: Copied missing module {}"
+msgstr "🔧 diperbaiki: modul yang hilang disalin {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:725
+msgid "    ⚠️ Warning: Failed to copy {}: {}"
+msgstr "⚠️ Peringatan: Gagal menyalin {}: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:747
+#: /home/minds3t/omnipkg/omnipkg/core.py:1282
+msgid "{}main_env:file_hashes"
+msgstr "{} main_env: file_hashes"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:751
+msgid "    📈 Loaded {} file hashes from Redis."
+msgstr "📈 memuat hash file {} dari redis."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:753
+msgid "    🔍 Building main environment hash index..."
+msgstr "🔍 Membangun Indeks Hash Lingkungan Utama ..."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:781
+msgid "    ✅ Successfully indexed {} packages via metadata"
+msgstr "✅ Paket {} yang berhasil diindeks melalui metadata"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:783
+msgid "    🔄 Fallback scan for {} packages: {}{}"
+msgstr "🔄 fallback scan untuk {} paket: {} {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:796
+msgid "    ⚠️ Metadata approach failed ({}), falling back to full scan..."
+msgstr "⚠️ pendekatan metadata gagal ( {} ), kembali ke pemindaian penuh ..."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:803
+msgid "    💾 Saving {} file hashes to Redis cache..."
+msgstr "💾 menyimpan {} file hash ke redis cache ..."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:809
+msgid "    📈 Indexed {} files from main environment."
+msgstr "📈 File terindeks {} dari lingkungan utama."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:854
+#: /home/minds3t/omnipkg/omnipkg/core.py:882
+#: /home/minds3t/omnipkg/omnipkg/core.py:909
+msgid "{}bubble_locations"
+msgstr "{} bubble_locations"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:850
+#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:29
+msgid "{}.{}"
+msgstr "{}. {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:820
+msgid "    📝 Registered bubble location and stats for {} packages."
+msgstr "📝 Lokasi dan statistik gelembung terdaftar untuk paket {}."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1379
+msgid "bubble_version:{}"
+msgstr "bubble_version: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:865
+#: /home/minds3t/omnipkg/omnipkg/core.py:1980
+#: /home/minds3t/omnipkg/omnipkg/core.py:2221
+msgid "{}:installed_versions"
+msgstr "{}: installed_versions"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:869
+#: /home/minds3t/omnipkg/omnipkg/core.py:894
+#: /home/minds3t/omnipkg/omnipkg/core.py:899
+#: /home/minds3t/omnipkg/omnipkg/core.py:901
+#: /home/minds3t/omnipkg/omnipkg/core.py:939
+msgid "{}pkg_to_bubble"
+msgstr "{} pkg_to_bubble"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:871
+#: /home/minds3t/omnipkg/omnipkg/core.py:942
+msgid "{}bubbles_by_size:{}"
+msgstr "{} bubbles_by_size: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:873
+msgid "    📝 Created manifest and registered bubble for {} packages ({} MB)."
+msgstr "📝 Dibuat gelembung manifes dan terdaftar untuk paket {} ({} MB)."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:875
+msgid "    ⚠️ Warning: Failed to register bubble in Redis: {}"
+msgstr "⚠️ PERINGATAN: Gagal mendaftarkan gelembung di redis: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:876
+msgid "    📝 Local manifest created at {}"
+msgstr "📝 manifes lokal dibuat di {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:933
+msgid "    🧹 Cleaning up {} old bubbles ({} MB)..."
+msgstr "🧹 Membersihkan {} Old Bubbles ({} MB) ..."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:947
+msgid "    ✅ Freed {} MB of storage."
+msgstr "✅ Freed {} MB penyimpanan."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:949
+msgid "    ✅ No bubbles need cleanup."
+msgstr "✅ Tidak ada gelembung yang perlu dibersihkan."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:981
+msgid "    🧠 HookManager now aware of new bubble: {}=={}"
+msgstr "🧠 HookManager sekarang sadar akan gelembung baru: {} == {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:990
+msgid "    ❌ Bubble not found in HookManager's map for {}=={}"
+msgstr "❌ Bubble tidak ditemukan di peta HookManager untuk {} == {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:994
+msgid "    ❌ Bubble directory does not exist at: {}"
+msgstr "❌ Direktori gelembung tidak ada di: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:998
+msgid "    ❌ Bubble is incomplete: Missing manifest file at {}"
+msgstr "❌ Gelembung tidak lengkap: File manifes yang hilang di {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1002
+msgid "    ⚠️  Warning: Bubble for {}=={} does not contain a 'bin' directory."
+msgstr "⚠️ Peringatan: Bubble for {} == {} tidak berisi direktori 'bin'."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1003
+msgid "    ✅ Bubble validated successfully: {}=={}"
+msgstr "✅ Bubble berhasil divalidasi: {} == {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1068
+msgid "❌ An unexpected Redis connection error occurred: {}"
+msgstr "❌ Terjadi kesalahan koneksi Redis yang tidak terduga: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1079
+msgid "🗑️  This will permanently delete your configuration file at:"
+msgstr "🗑️ Ini akan secara permanen menghapus file konfigurasi Anda di:"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1094
+msgid "❌ Error: Could not delete configuration file: {}"
+msgstr "❌ ERROR: Tidak dapat menghapus file konfigurasi: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1095
+msgid "   Please check your file permissions for {}"
+msgstr "Silakan periksa izin file Anda untuk {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1106
+msgid ""
+"\n"
+"🧠 omnipkg Knowledge Base Reset"
+msgstr "🧠 omnipkg basis pengetahuan reset"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1108
+msgid "   This will DELETE all data matching '{}' from Redis."
+msgstr "Ini akan menghapus semua pencocokan data '{}' dari Redis."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1109
+msgid ""
+"   It will then rebuild the knowledge base from the CURRENT state of your "
+"file system."
+msgstr ""
+"Ini kemudian akan membangun kembali basis pengetahuan dari keadaan sistem "
+"file Anda saat ini."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1110
+msgid "   ⚠️  This command does NOT uninstall any Python packages."
+msgstr "⚠️ Perintah ini tidak menghapus instalan paket Python."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1122
+msgid "   ✅ Cleared {} cached entries from Redis."
+msgstr "✅ Entri {} yang dibersihkan dari Redis."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1126
+msgid "   ❌ Failed to clear knowledge base: {}"
+msgstr "❌ Gagal membersihkan basis pengetahuan: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1145
+msgid "    ❌ Knowledge base rebuild failed with exit code {}."
+msgstr "❌ Pembangunan kembali basis pengetahuan gagal dengan kode keluar {}."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1148
+msgid "    ❌ An unexpected error occurred during knowledge base rebuild: {}"
+msgstr ""
+"❌ Terjadi kesalahan yang tidak terduga selama pembangunan kembali basis "
+"pengetahuan: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1165
+msgid "   ❌ Metadata rebuild failed: {}"
+msgstr "❌ Metadata Rebuild Gagal: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1167
+msgid "   (Skipping {} - feature coming soon!)"
+msgstr "(Melewatkan {} - fitur segera hadir!)"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1274
+msgid "   ✅ Sync complete. Reconciled {} discrepancies."
+msgstr "✅ Sinkronisasi Lengkap.Perbedaan {} yang direkonsiliasi."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1317
+msgid "    ⚠️  Could not perform live package scan: {}"
+msgstr "⚠️ tidak dapat melakukan pemindaian paket langsung: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1322
+msgid "{}versions"
+msgstr "{} versi"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1363
+msgid "   -> Processing {} changed/new package(s)..."
+msgstr "-> pemrosesan {} diubah/paket baru ..."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1368
+msgid "   -> Cleaning up {} uninstalled package(s) from Redis..."
+msgstr "-> membersihkan {} paket yang tidak diinstal dari redis ..."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1373
+msgid "{}:{}"
+msgstr "{}: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1385
+msgid "    ⚠️ Failed to update knowledge base for delta: {}"
+msgstr "⚠️ Gagal memperbarui basis pengetahuan untuk delta: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1397
+msgid "❌ An unexpected error occurred while showing package info: {}"
+msgstr ""
+"❌ Terjadi kesalahan yang tidak terduga saat menampilkan info paket: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1410
+msgid "{}, ...and {} more"
+msgstr "{}, ... dan {} lebih"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1420
+msgid ""
+"\n"
+"📋 KEY DATA: No Redis data found for '{}'"
+msgstr "📋 Data Utama: Tidak ada data redis yang ditemukan untuk '{}'"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1422
+msgid ""
+"\n"
+"📋 KEY DATA for '{}':"
+msgstr "📋 Data utama untuk '{}':"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1426
+msgid "🎯 Active Version: {}"
+msgstr "🎯 Versi Aktif: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1429
+msgid "🫧 Bubbled Versions: {}"
+msgstr "🫧 Versi Bubbled: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1432
+msgid ""
+"\n"
+"📦 Available Versions:"
+msgstr "📦 Versi yang tersedia:"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1440
+msgid "  {}) {}{}"
+msgstr "{}) {} {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1441
+msgid ""
+"\n"
+"💡 Want details on a specific version?"
+msgstr "💡 Ingin detail pada versi tertentu?"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1443
+msgid "Enter number (1-{}) or press Enter to skip: "
+msgstr "Masukkan nomor (1- {}) atau tekan enter untuk lewati:"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1450
+msgid "📄 Detailed info for {} v{}"
+msgstr "📄 Info terperinci untuk {} v{}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1478
+msgid "❌ No detailed data found for {} v{}"
+msgstr "❌ Tidak ada data terperinci yang ditemukan untuk {} v{}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1482
+msgid "The data is fetched from Redis key: {}"
+msgstr "Data diambil dari kunci redis: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1489
+#: /home/minds3t/omnipkg/omnipkg/core.py:1491
+#: /home/minds3t/omnipkg/omnipkg/core.py:1493
+msgid "{}: {}"
+msgstr "{}: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1495
+msgid ""
+"\n"
+"---[ Health & Security ]---"
+msgstr "--- [Kesehatan & Keamanan] ---"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1498
+#: /home/minds3t/omnipkg/omnipkg/core.py:1505
+msgid "   {}: {}"
+msgstr "   {}: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1500
+msgid ""
+"\n"
+"---[ Build Info ]---"
+msgstr "--- [Bangun info] ---"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1506
+msgid ""
+"\n"
+"💡 For all raw data, use Redis key: \"{}\""
+msgstr "💡 Untuk semua data mentah, gunakan tombol redis: \"{}\""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1517
+msgid "   ⚠️ Could not save environment snapshot: {}"
+msgstr "⚠️ tidak dapat menyimpan snapshot lingkungan: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1558
+msgid ""
+"⚠️ Warning: Cannot determine active omnipkg version. Proceeding with "
+"caution."
+msgstr ""
+"⚠️ PERINGATAN: Tidak dapat menentukan versi omnipkg aktif.Melanjutkan dengan"
+" hati -hati."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1560
+msgid "✅ omnipkg=={} is already the active omnipkg. No bubble needed."
+msgstr ""
+"✅ omnipkg == '{}' sudah merupakan omnipkg aktif.Tidak diperlukan gelembung."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1562
+msgid ""
+"✨ Special handling: omnipkg '{}' requested. This will be installed into an "
+"isolated bubble, not as the active omnipkg."
+msgstr ""
+"✨ Penanganan Khusus: Omnipkg '{}' diminta.Ini akan dipasang ke dalam "
+"gelembung yang terisolasi, bukan sebagai omnipkg aktif."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1571
+msgid ""
+"❌ Could not find a compatible wheel for omnipkg=={}. Cannot create bubble."
+msgstr ""
+"❌ Tidak dapat menemukan roda yang kompatibel untuk omnipkg == {}. Tidak bisa"
+" membuat gelembung."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1574
+msgid "❌ Failed to create bubble for omnipkg=={}."
+msgstr "❌ Gagal membuat gelembung untuk omnipkg == '{}' ."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1577
+msgid "✅ omnipkg=={} successfully bubbled."
+msgstr "✅ omnipkg == {} berhasil menggelegak."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1581
+msgid "🚀 Starting install with policy: '{}'"
+msgstr "🚀 Mulai Instal dengan Kebijakan: '{}'"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1588
+msgid "🔄 Reordered packages for optimal installation: {}"
+msgstr "🔄 Paket yang Dipesan Dinyatakan untuk Instalasi Optimal: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1593
+msgid "📦 Processing: {}"
+msgstr "📦 pemrosesan: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1597
+msgid "✅ Requirement already satisfied: {}"
+msgstr "✅ Persyaratan sudah puas: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1604
+msgid "    - Found {} packages"
+msgstr "- Menemukan paket {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1605
+msgid ""
+"\n"
+"⚙️ Running pip install for: {}..."
+msgstr "⚙️ Running Pip Instal untuk: {} ..."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1629
+msgid "    -> Protecting stable env. Bubbling {} version: {} v{}"
+msgstr "-> Melindungi Env yang stabil.Bubbling {} version: {} v{}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1635
+msgid "    🔄 Restoring '{}' to stable version v{} in main environment..."
+msgstr "🔄 Memulihkan '{}' ke versi stabil v{} di lingkungan utama ..."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1719
+msgid "Error getting active version of {}: {}"
+msgstr "Kesalahan mendapatkan versi aktif {}: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1738
+msgid "   -> Cleaning up replaced version from knowledge base: {} v{}"
+msgstr "-> membersihkan versi yang diganti dari basis pengetahuan: {} v{}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1762
+msgid "   -> Uninstalling: {}"
+msgstr "-> menghapus instalasi: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1765
+msgid "   -> Installing/Fixing: {}"
+msgstr "-> Menginstal/Memperbaiki: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1774
+msgid "📦 Downloading wheel for {}=={}..."
+msgstr "📦 Mengunduh roda untuk {}=={} ..."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1781
+msgid "{}-{}.data"
+msgstr "{}-{}.Data"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1781
+msgid "{}-{}.dist-info"
+msgstr "{}-{}. Dist-Info"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1786
+msgid "⚠️ Warning: Could not extract {}: {}"
+msgstr "⚠️ Peringatan: tidak dapat mengekstrak {}: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1788
+msgid "✅ Extracted {}=={} to {}"
+msgstr "✅ diekstraksi {}=={} ke {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1791
+msgid "❌ Failed to download wheel from {}: {}"
+msgstr "❌ Gagal mengunduh roda dari {}: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1794
+msgid "❌ Downloaded file is not a valid wheel: {}"
+msgstr "❌ File yang diunduh bukanlah roda yang valid: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1797
+msgid "❌ Error extracting wheel for {}=={}: {}"
+msgstr "❌ kesalahan mengekstraksi roda untuk {}=={} : {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1813
+msgid "🎯 Found compatible wheel: {}"
+msgstr "🎯 Ditemukan roda yang kompatibel: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1817
+msgid "⚠️ Only source distribution available for {}=={}"
+msgstr "⚠️ Hanya distribusi sumber yang tersedia untuk {} == {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1818
+msgid "   This may require compilation and is not recommended for bubbling."
+msgstr ""
+"Ini mungkin memerlukan kompilasi dan tidak disarankan untuk menggelegak."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1820
+msgid "❌ No compatible wheel or source found for {}=={} on PyPI."
+msgstr ""
+"❌ Tidak ada roda atau sumber yang kompatibel yang ditemukan untuk {} == {} "
+"pada pypi."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1823
+msgid "❌ Failed to fetch PyPI data for {}=={}: {}"
+msgstr "❌ Gagal mengambil data PYPI untuk {} == {} : {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1826
+msgid "❌ Unexpected PyPI response structure: missing {}"
+msgstr "❌ Struktur Respons PYPI yang Tidak Terduga: Hilang {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1829
+msgid "❌ Error parsing PyPI data: {}"
+msgstr "❌ Kesalahan Parsing PYPI Data: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1847
+msgid ""
+"⚠️ Version specifier '{}' detected in '{}'. Exact version required for "
+"bubbling."
+msgstr ""
+"⚠️ Specifier Versi '{}' terdeteksi di '{}'.Versi yang tepat diperlukan untuk"
+" menggelegak."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1862
+msgid "📝 Registered {}=={} in knowledge base"
+msgstr "📝 terdaftar {}=={} di basis pengetahuan"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1864
+msgid "⚠️ Could not register {}=={}: No Redis connection"
+msgstr "⚠️ tidak dapat mendaftar {} == {}: Tidak ada koneksi Redis"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1866
+msgid "❌ Failed to register {}=={} in knowledge base: {}"
+msgstr "❌ Gagal mendaftar {} == {} di basis pengetahuan: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1898
+msgid ""
+"\n"
+"Processing uninstall for: {}"
+msgstr "Memproses uninstall untuk: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1905
+msgid "🤷 Package '{}' not found."
+msgstr "🤷 Paket '{}' tidak ditemukan."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1911
+msgid "🤷 Version '{}' of '{}' not found."
+msgstr "🤷 Versi '{}' dari '{}' tidak ditemukan."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1919
+msgid "Found multiple installations for '{}':"
+msgstr "Menemukan beberapa instalasi untuk '{}':"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1927
+msgid "  {}) v{} ({})"
+msgstr "{}) v {} ({})"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1932
+msgid ""
+"🤔 Enter numbers to uninstall (e.g., '1,2'), 'all', or press Enter to cancel:"
+" "
+msgstr ""
+"🤔 Masukkan nomor untuk menghapus instal (mis., '1,2'), 'semua', atau tekan "
+"Enter untuk membatalkan:"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1953
+msgid "⚠️  Skipping protected package: {} v{} (active)"
+msgstr "⚠️ Membebarkan paket yang dilindungi: {} v {} (aktif)"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1959
+msgid ""
+"\n"
+"Preparing to remove {} installation(s) for '{}':"
+msgstr "Mempersiapkan untuk menghapus {} instalasi untuk '{}':"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1961
+msgid "  - v{} ({})"
+msgstr "- v {} ({})"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1974
+msgid "🗑️  Deleting bubble directory: {}"
+msgstr "🗑️ Menghapus direktori gelembung: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1976
+msgid "🧹 Cleaning up knowledge base for {} v{}..."
+msgstr "🧹 membersihkan basis pengetahuan untuk {} v{} ..."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2020
+msgid "  - Uninstall: {}"
+msgstr "- uninstall: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2022
+msgid "  - Install: {}"
+msgstr "- Instal: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2024
+msgid "  - Fix Version: {}"
+msgstr "- Perbaiki Versi: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2076
+msgid "    ⚡ Found existing bubble: {}"
+msgstr "⚡ Menemukan gelembung yang ada: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2127
+msgid "❌ Pip install command failed with exit code {}:"
+msgstr "❌ Perintah instal PIP gagal dengan kode keluar {}:"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2131
+msgid "    ❌ An unexpected error occurred during pip install: {}"
+msgstr "❌ Terjadi kesalahan yang tidak terduga selama penginstalan PIP: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2144
+msgid "❌ Pip uninstall command failed with exit code {}:"
+msgstr "❌ Pip Uninstall perintah gagal dengan kode keluar {}:"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2148
+msgid "    ❌ An unexpected error occurred during pip uninstall: {}"
+msgstr "❌ Terjadi kesalahan yang tidak terduga selama Pip Uninstall: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2164
+msgid "❌ uv install command failed with exit code {}:"
+msgstr "❌ perintah instal uv gagal dengan kode keluar {}:"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2168
+msgid "    ❌ An unexpected error toccurred during uv install: {}"
+msgstr "❌ Kesalahan yang tidak terduga TOCCURRED selama pemasangan UV: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2184
+msgid "❌ uv uninstall command failed with exit code {}:"
+msgstr "❌ perintah uninstall uv gagal dengan kode keluar {}:"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2188
+msgid "    ❌ An unexpected error occurred during uv uninstall: {}"
+msgstr "❌ Terjadi kesalahan yang tidak terduga selama UV Uninstall: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2227
+msgid "⚠️ Could not retrieve versions for {}: {}"
+msgstr "⚠️ tidak dapat mengambil versi untuk {}: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2237
+msgid "📋 Found {} matching package(s):"
+msgstr "📋 Ditemukan {} Paket Pencocokan:"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2244
+msgid ""
+"\n"
+"- {}:"
+msgstr ""
+"\n"
+"- {}:"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2250
+msgid "  ✅ {} (active)"
+msgstr "✅ {} (aktif)"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2252
+msgid "  🫧 {} (bubble)"
+msgstr "🫧 {} (gelembung)"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2265
+msgid "    😈 Locked up for causing chaos in the main env! 🔒 (v{})"
+msgstr "😈 Terkunci karena menyebabkan kekacauan di env utama!🔒 (v {})"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2272
+msgid "    😈 Speedy troublemaker locked up in the main env! 🔒 (v{})"
+msgstr "😈 Pengacau yang cepat terkunci di env utama!🔒 (v {} )"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2279
+msgid "  - Path: {}"
+msgstr "- Jalur: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2280
+msgid "  - Active Packages: {}"
+msgstr "- Paket aktif: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2285
+msgid "  - Bubble Directory: {}"
+msgstr "- Direktori Bubble: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2286
+msgid "  - Import Hook Installed: {}"
+msgstr "- Import hook diinstal: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2289
+msgid ""
+"\n"
+"📦 Isolated Package Versions ({} bubbles):"
+msgstr "📦 Versi paket terisolasi ({} gelembung):"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2299
+msgid ""
+"    😈 Pip is locked up in a bubble, plotting chaos like a Python outlaw! 🔒"
+msgstr ""
+"😈 Pip dikurung dalam gelembung, merencanakan kekacauan seperti penjahat ular"
+" sanak!🔒"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2301
+msgid "    😈 UV is locked up in a bubble, speeding toward trouble! 🔒"
+msgstr "😈 UV dikurung dalam gelembung, melaju menuju masalah!🔒"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:49
+#: /home/minds3t/omnipkg/omnipkg/demo.py:63
+msgid ""
+"\n"
+"$ {}"
+msgstr ""
+"\n"
+"$ {}"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:58
+#: /home/minds3t/omnipkg/omnipkg/demo.py:75
+msgid "Demo command failed with exit code {}"
+msgstr "Perintah demo gagal dengan kode keluar {}"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:154
+msgid ""
+"\n"
+"$ python {}"
+msgstr "$ python{}"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:173
+msgid ""
+"\n"
+"❌ An unexpected error occurred during the demo: {}"
+msgstr "❌ Terjadi kesalahan yang tidak terduga selama demo: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/loader.py:54
+msgid "⚠️ [omnipkg loader] Bubble directory {} did not exist and was created."
+msgstr "⚠️ [omnipkg loader] Direktori Bubble {} tidak ada dan dibuat."
+
+#: /home/minds3t/omnipkg/omnipkg/loader.py:56
+msgid "Failed to create bubble directory at {}: {}"
+msgstr "Gagal membuat direktori gelembung di {}: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/loader.py:70
+msgid ""
+"\n"
+"🌀 omnipkg loader: Activating {}..."
+msgstr "🌀 Omnipkg Loader: Activating '{}' ..."
+
+#: /home/minds3t/omnipkg/omnipkg/loader.py:75
+msgid "Invalid package_spec format. Expected 'name==version', got '{}'."
+msgstr "Format package_spec tidak valid.Diharapkan 'name == versi', got '{}'."
+
+#: /home/minds3t/omnipkg/omnipkg/loader.py:79
+msgid ""
+" ✅ System version already matches requested version ({}). No bubble "
+"activation needed."
+msgstr ""
+"✅ Versi sistem sudah cocok dengan versi yang diminta ({}).Tidak diperlukan "
+"aktivasi gelembung."
+
+#: /home/minds3t/omnipkg/omnipkg/loader.py:86
+msgid ""
+"⚠️ [omnipkg loader] Error checking system version for {}: {}. Proceeding "
+"with bubble search."
+msgstr ""
+"⚠️ [omnipkg loader] Versi sistem pemeriksaan kesalahan untuk {}: "
+"{}.Melanjutkan dengan pencarian gelembung."
+
+#: /home/minds3t/omnipkg/omnipkg/loader.py:91
+msgid ""
+"Bubble not found for {} at {}. Please ensure it's installed via 'omnipkg "
+"install {}'."
+msgstr ""
+"Bubble tidak ditemukan untuk {} di {}.Harap pastikan itu diinstal melalui "
+"'omnipkg instal {}'."
+
+#: /home/minds3t/omnipkg/omnipkg/loader.py:99
+msgid " ⚙️ Added to PATH: {}"
+msgstr "⚙️ ditambahkan ke jalur: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/loader.py:108
+msgid " ✅ Activated bubble: {}"
+msgstr "✅ Gelembung yang diaktifkan: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/loader.py:109
+msgid " 🔧 sys.path[0]: {}"
+msgstr "🔧 sys.path [0]: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/loader.py:115
+msgid " ℹ️ Bubble contains {} packages."
+msgstr "ℹ️ Bubble berisi paket {}."
+
+#: /home/minds3t/omnipkg/omnipkg/loader.py:125
+msgid ""
+"\n"
+"🌀 omnipkg loader: Deactivating {}..."
+msgstr "🌀 omnipkg loader: menonaktifkan '{}' ..."
+
+#: /home/minds3t/omnipkg/omnipkg/loader.py:213
+msgid " 🛡️ Restored {}"
+msgstr "🛡️ dipulihkan {}"
+
+#: /home/minds3t/omnipkg/omnipkg/loader.py:146
+msgid " ✅ Environment restored to system state."
+msgstr "✅ Lingkungan dipulihkan ke status sistem."
+
+#: /home/minds3t/omnipkg/omnipkg/loader.py:190
+msgid " 🛡️ Cloaked main {} to {}"
+msgstr "🛡️ Cloaked Main {} to {}"
+
+#: /home/minds3t/omnipkg/omnipkg/loader.py:192
+msgid " ⚠️ Failed to cloak {}: {}"
+msgstr "⚠️ Gagal Cloak {}: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:38
+#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:44
+msgid "python{}"
+msgstr "Python {}"
+
+#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:75
+msgid "❌ Could not connect to Redis: {}"
+msgstr "❌ tidak dapat terhubung ke redis: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:97
+msgid "⚠️ Error discovering active packages: {}"
+msgstr "⚠️ Kesalahan Menemukan Paket Aktif: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:120
+msgid ""
+"✅ Discovery complete. Found {} unique packages with {} total versions to "
+"process."
+msgstr ""
+"✅ Penemuan Lengkap.Ditemukan {} paket unik dengan {} total versi untuk "
+"diproses."
+
+#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:138
+msgid "⚠️ Failed to store active version for {}: {}"
+msgstr "⚠️ Gagal menyimpan versi aktif untuk {}: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:146
+msgid "🎯 Running in targeted mode for {} package(s)."
+msgstr "🎯 Berjalan dalam mode yang ditargetkan untuk paket {} (s)."
+
+#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:163
+msgid "⚠️ Error preparing packages for security scan: {}"
+msgstr "⚠️ Kesalahan menyiapkan paket untuk pemindaian keamanan: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:165
+msgid "✅ Bulk security scan complete. Found {} potential issues."
+msgstr "✅ Pemindaian keamanan curah lengkap.Menemukan {} masalah potensial."
+
+#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:172
+msgid ""
+"\n"
+"🎉 Metadata building complete! Updated {} package(s)."
+msgstr "🎉 Metadata Building Lengkap!Paket {} yang diperbarui."
+
+#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:188
+msgid "    ❌ ERROR processing {} v{}: {}"
+msgstr "❌ Pemrosesan kesalahan {} v{} : {}"
+
+#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:263
+msgid "{}_compressed"
+msgstr "{} _Kompresi"
+
+#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:296
+msgid "import importlib.metadata; print(importlib.metadata.version('{}'))"
+msgstr "impor importlib.metadata;print (importLib.metadata.version ('{}'))"
+
+#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:347
+msgid "    ⚠️ Bulk security scan failed: {}"
+msgstr "⚠️ Pemindaian Keamanan Massal Gagal: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:37
+msgid ""
+"❌ Failed to import omnipkg modules. Is it installed correctly? Error: {}"
+msgstr ""
+"❌ Gagal mengimpor modul omnipkg.Apakah itu diinstal dengan benar?Kesalahan: "
+"{}"
+
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:51
+msgid "   - Removing old bubble: {}"
+msgstr "- Menghapus gelembung lama: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:59
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:246
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:56
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:240
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:46
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:209
+msgid "   🧹 Removing residual cloaked: {}"
+msgstr "🧹 Menghapus sisa berjubah: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:68
+msgid "   ⚠️ Warning: Failed to run pip uninstall during setup cleanup: {}"
+msgstr ""
+"⚠️ Peringatan: Gagal menjalankan Pip Uninstall selama Pengaturan "
+"Pembersihan: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:81
+msgid ""
+"\n"
+"⚡ Switching to numpy=={}"
+msgstr "⚡ Beralih ke numpy == {}"
+
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:85
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:106
+msgid "   ✅ Version: {}"
+msgstr "✅ Versi: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:86
+msgid "   🔢 Array sum: {}"
+msgstr "🔢 Jumlah Array: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:89
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:111
+msgid "   ⚠️ WARNING: Expected {}, got {}!"
+msgstr "⚠️ PERINGATAN: Diharapkan {}, get {}!"
+
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:91
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:113
+msgid "   🎯 Version verification: PASSED"
+msgstr "🎯 Verifikasi Versi: Lulus"
+
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:93
+msgid "   ❌ Activation/Test failed for numpy=={}: {}!"
+msgstr "❌ Aktivasi/tes gagal untuk numpy == {} : {} !"
+
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:99
+msgid ""
+"\n"
+"🌋 Switching to scipy=={}"
+msgstr "🌋 Beralih ke scipy == '{}'"
+
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:107
+msgid "   ♻️ Sparse matrix: {} non-zeros"
+msgstr "♻️ Matriks jarang: {} non-zat"
+
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:108
+msgid "   📐 Linalg det: {}"
+msgstr "📐 linalg det: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:115
+msgid "   ❌ Activation/Test failed for scipy=={}: {}!"
+msgstr "❌ Aktivasi/Tes Gagal untuk SCIPY == {} : {} !"
+
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:124
+msgid ""
+"\n"
+"🌀 COMBO: numpy=={} + scipy=={}"
+msgstr "🌀 combo: numpy == {} + scipy == {}"
+
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:213
+msgid "   ❌ Subprocess test failed for combo numpy=={} + scipy=={}"
+msgstr "❌ Subprocess Test gagal untuk kombo numpy == {} + scipy == {}"
+
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:214
+msgid "   💥 Error: {}"
+msgstr "💥 kesalahan: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:217
+msgid ""
+"   ❌ An unexpected error occurred during combo test subprocess setup: {}"
+msgstr ""
+"❌ Terjadi kesalahan yang tidak terduga selama Pengaturan Subproses Tes "
+"Kombo: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:238
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:236
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:206
+msgid "   🧹 Removing test bubble: {}"
+msgstr "🧹 Menghapus gelembung uji: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:262
+msgid ""
+"\n"
+"--- Creating bubble for {} ---"
+msgstr "--- membuat gelembung untuk {} ---"
+
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:270
+msgid ""
+"\n"
+"❌ An error occurred during the stress test: {}"
+msgstr "❌ Terjadi kesalahan selama tes stres: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:70
+msgid "   • Previously 'incompatible' versions working together seamlessly"
+msgstr "• Sebelumnya versi 'tidak kompatibel' bekerja bersama dengan mulus"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:76
+msgid "   • numpy 1.24.3 + scipy 1.12.0 → 'incompatible dependencies'"
+msgstr ""
+"• Numpy 1.24.3 + SCIPY 1.12.0 → 'Ketergantungan yang Tidak Kompatibel'"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:79
+msgid "   • Package managers can't handle multiple versions"
+msgstr "• Manajer paket tidak dapat menangani beberapa versi"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:114
+msgid ""
+"💡 Don't worry if there are pauses - packages are downloading/installing!"
+msgstr "💡 Jangan khawatir jika ada jeda - paket sedang mengunduh/menginstal!"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:390
+msgid "    ⚠️  'requests' package not found. Skipping PyPI API strategy."
+msgstr "Paket 'permintaan' yang tidak ditemukan.Melewatkan strategi API PYPI."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1510
+msgid "📸 Saving snapshot of the current environment as 'last known good'..."
+msgstr ""
+"📸 Menyimpan snapshot dari lingkungan saat ini sebagai 'Good Terakhir "
+"Dikenal' ..."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1565
+msgid "  Skipping bubbling of 'omnipkg' without a specific version for now."
+msgstr "Melewatkan gelembung 'omnipkg' tanpa versi tertentu untuk saat ini."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2004
+msgid "❌ No 'last known good' snapshot found. Cannot revert."
+msgstr ""
+"❌ Tidak ada snapshot 'yang diketahui terakhir' yang ditemukan.Tidak bisa "
+"kembali."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2161
+#: /home/minds3t/omnipkg/omnipkg/core.py:2181
+msgid ""
+"❌ Error: 'uv' executable not found. Please ensure uv is installed and in "
+"your PATH."
+msgstr ""
+"❌ Kesalahan: 'UV' yang dapat dieksekusi tidak ditemukan.Harap pastikan UV "
+"diinstal dan di jalur Anda."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:148
+msgid "Welcome to omnipkg! Let's get you configured."
+msgstr "Selamat datang di omnipkg!Mari kita mengonfigurasi Anda."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:152
+msgid "We've auto-detected your system language as: {}"
+msgstr "Kami telah mendeteksi bahasa sistem Anda secara otomatis sebagai: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:153
+msgid "Please select your preferred language by typing the number:"
+msgstr "Pilih bahasa pilihan Anda dengan mengetik nomor:"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:160
+msgid ""
+"\n"
+"Enter choice (1-{}) or press Enter to accept '{}': "
+msgstr "Masukkan pilihan (1- {}) atau tekan enter untuk menerima '{}':"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:170
+msgid "❌ Invalid number. Please try again."
+msgstr "❌ Nomor tidak valid.Tolong coba lagi."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:172
+msgid "❌ That's not a number. Please try again."
+msgstr "❌ Itu bukan angka.Tolong coba lagi."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:174
+msgid "Setup cancelled."
+msgstr "Pengaturan dibatalkan."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:179
+msgid "✅ Language set to: {}"
+msgstr "✅ Set Bahasa ke: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:57
+msgid "3. Run 'omnipkg stress-test' from there"
+msgstr "3. Jalankan 'omnipkg stres-test' dari sana"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:84
+msgid "🚀 Ready to witness the impossible? (y/n): "
+msgstr "🚀 Siap menyaksikan yang mustahil?(y/n):"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:90
+msgid "🎪 Cancelled. Run 'omnipkg stress-test' anytime!"
+msgstr "🎪 dibatalkan.Jalankan 'omnipkg stres-test' kapan saja!"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:137
+#: /home/minds3t/omnipkg/omnipkg/cli.py:186
+msgid "💡 Run 'omnipkg demo' to try another test."
+msgstr "💡 Jalankan 'Omnipkg Demo' untuk mencoba tes lain."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:157
+msgid " {}) {} - {}"
+msgstr "{} - {} - {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1082
+#: /home/minds3t/omnipkg/omnipkg/core.py:1112
+#: /home/minds3t/omnipkg/omnipkg/core.py:1202
+#: /home/minds3t/omnipkg/omnipkg/core.py:2026
+msgid ""
+"\n"
+"🤔 Are you sure you want to proceed? (y/N): "
+msgstr "🤔 Apakah Anda yakin ingin melanjutkan?(y/n):"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1963
+msgid "🤔 Are you sure you want to proceed? (y/N): "
+msgstr "🤔 Apakah Anda yakin ingin melanjutkan?(y/n):"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2261
+msgid ""
+"🛠️ Environment broken by pip or uv? Run 'omnipkg revert' to restore the last"
+" known good state! 🚑"
+msgstr ""
+"🛠️ Lingkungan rusak oleh PIP atau UV?Jalankan 'Omnipkg Revert' untuk "
+"mengembalikan keadaan baik terakhir yang diketahui!🚑"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:36
+msgid "💡 Pro tip: Choose 'N' unless you enjoy suffering"
+msgstr "💡 tip pro: pilih 'n' kecuali Anda menikmati penderitaan"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:98
+msgid ""
+"Let's say you need version 0.6.0 for compatibility with an existing "
+"project..."
+msgstr ""
+"Katakanlah Anda membutuhkan versi 0.6.0 untuk kompatibilitas dengan proyek "
+"yang ada ..."
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:112
+msgid ""
+"\n"
+"💡 Remember: omnipkg exists when you're ready to stop suffering"
+msgstr "💡 Ingat: omnipkg ada saat Anda siap berhenti menderita"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:115
+msgid "Let's fix this mess and install the newer version back with omnipkg..."
+msgstr ""
+"Mari kita perbaiki kekacauan ini dan instal versi yang lebih baru dengan "
+"omnipkg ..."
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:122
+msgid "This time, let's be smart about it..."
+msgstr "Kali ini, mari kita pintar tentang itu ..."
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:136
+msgid "Let's see how omnipkg is managing our packages..."
+msgstr "Mari kita lihat bagaimana omnipkg mengelola paket kami ..."
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:145
+msgid "We'll simulate pressing Enter to skip this part..."
+msgstr ""
+"Kami akan mensimulasikan penekan Enter untuk melewatkan bagian ini ..."
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:176
+msgid ""
+"\n"
+"💡 Don't worry - even if some steps failed, the core isolation is working!"
+msgstr ""
+"💡 Jangan khawatir - bahkan jika beberapa langkah gagal, isolasi inti "
+"berfungsi!"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:177
+msgid "That's the main achievement of omnipkg! 🔥"
+msgstr "Itulah pencapaian utama omnipkg!🔥"
+
+#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:66
+msgid "⚠️ Install 'tqdm' for a better progress bar."
+msgstr "⚠️ Instal 'TQDM' untuk bilah kemajuan yang lebih baik."
+
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:42
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:33
+msgid ""
+"\n"
+"--- {} ---"
+msgstr ""
+"\n"
+"--- {} ---"
+
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:52
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:43
+msgid "   🧹 Removing old bubble: {}"
+msgstr "🧹 Menghapus gelembung lama: {}"
+
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:59
+msgid "   📦 Ensuring main environment has baseline: rich=={}"
+msgstr "📦 Memastikan lingkungan utama memiliki baseline: Rich == '{}'"
+
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:60
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:71
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:248
+msgid "rich=={}"
+msgstr "Rich == {}"
+
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:61
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:53
+msgid "✅ Environment prepared"
+msgstr "✅ Lingkungan disiapkan"
+
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:70
+msgid "   🫧 Creating bubble for rich=={}"
+msgstr "🫧 Membuat gelembung untuk Rich == '{}'"
+
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:77
+msgid "   🔧 Testing import of version {}..."
+msgstr "🔧 Menguji Impor Versi '{}' ..."
+
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:168
+msgid "      └── {}"
+msgstr "      └── {}"
+
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:171
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:176
+msgid "   ❌ Subprocess FAILED for version {}:"
+msgstr "❌ Subproses gagal untuk versi {}:"
+
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:172
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:177
+msgid "      STDERR: {}"
+msgstr "Stderr: {}"
+
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:189
+msgid "   ⚠️  Test harness failed to restore {} from {}: {}"
+msgstr "⚠️ Test harness gagal mengembalikan {} dari {}: {}"
+
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:203
+msgid "Testing Main Environment ({})"
+msgstr "Menguji lingkungan utama ( {} )"
+
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:204
+msgid "main-{}"
+msgstr "utama-{}"
+
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:207
+msgid "Testing Bubble (rich=={})"
+msgstr "Menguji gelembung (Rich == {})"
+
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:208
+msgid "bubble-{}"
+msgstr "gelembung-{}"
+
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:214
+msgid "   - {}: {}"
+msgstr "   - {}: {}"
+
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:217
+msgid ""
+"\n"
+"🎉🎉🎉 ALL TESTS PASSED! 🎉🎉🎉"
+msgstr "🎉🎉🎉 Semua tes lulus!🎉🎉🎉"
+
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:219
+msgid ""
+"\n"
+"💥 SOME TESTS FAILED."
+msgstr "💥 Beberapa tes gagal."
+
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:224
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:194
+msgid ""
+"\n"
+"❌ Critical error during testing: {}"
+msgstr "❌ Kesalahan kritis selama pengujian: {}"
+
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:244
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:49
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:212
+msgid "   🧹 Removing test harness residual cloaked: {}"
+msgstr "🧹 Menghapus Tes Harness Residual Cloaked: {}"
+
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:247
+msgid "   📦 Restoring main environment: rich=={}"
+msgstr "📦 Memulihkan Lingkungan Utama: Rich == rich=={}"
+
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:249
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:214
+msgid "✅ Cleanup complete"
+msgstr "✅ Pembersihan Lengkap"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:39
+msgid "   🧹 Uninstalling all UV versions from main environment and bubbles..."
+msgstr "🧹 Menghapus semua versi UV dari lingkungan utama dan gelembung ..."
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:51
+msgid "   📦 Installing main environment: uv==0.6.13"
+msgstr "📦 Menginstal Lingkungan Utama: UV == 0.6.13"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:61
+msgid "   🫧 Creating bubble for uv=={}"
+msgstr "🫧 Membuat gelembung untuk uv == '{}'"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:63
+msgid "uv=={}"
+msgstr "uv == {}"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:64
+msgid "   ✅ Bubble created: uv-{}"
+msgstr "✅ gelembung dibuat: uv- {}"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:66
+msgid "   ❌ Failed to create bubble for uv=={}: {}"
+msgstr "❌ Gagal membuat gelembung untuk uv == {}: {}"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:70
+msgid "   🔎 Validating bubble: {}"
+msgstr "🔎 memvalidasi gelembung: {}"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:73
+msgid "   ❌ No uv binary found in {}/bin"
+msgstr "❌ Tidak ada biner UV yang ditemukan di {}/bin"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:76
+msgid "   ❌ Binary {} is not executable"
+msgstr "❌ biner {} tidak dapat dieksekusi"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:80
+msgid "   ❌ No dist-info found in {}"
+msgstr "❌ Tidak ada dist-info yang ditemukan di {}"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:82
+msgid "   ✅ Bubble validation passed"
+msgstr "✅ Validasi gelembung berlalu"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:86
+msgid "   🔍 Inspecting bubble structure: {}"
+msgstr "🔍 Memeriksa struktur gelembung: {}"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:88
+msgid "   ❌ Bubble doesn't exist: {}"
+msgstr "❌ Gelembung tidak ada: {}"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:92
+msgid "   ✅ Found uv module directory"
+msgstr "✅ Ditemukan Direktori Modul UV"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:94
+msgid "   ℹ️  No uv module directory (likely binary-only package)"
+msgstr "ℹ️ Tidak ada direktori modul UV (kemungkinan paket biner)"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:97
+msgid "   ✅ Found dist-info: {}"
+msgstr "✅ Ditemukan dist-info: {}"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:99
+msgid "   ⚠️  No dist-info found"
+msgstr "⚠️ tidak ada dist-info yang ditemukan"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:103
+msgid "   ✅ Found bin directory with {} items"
+msgstr "✅ Ditemukan Direktori Bin dengan item {}"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:106
+msgid "   ✅ Found uv binary: {}"
+msgstr "✅ Menemukan Binary UV: {}"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:108
+msgid "   ✅ Binary is executable"
+msgstr "✅ biner dapat dieksekusi"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:110
+msgid "   ⚠️  Binary is not executable"
+msgstr "⚠️ biner tidak dapat dieksekusi"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:112
+msgid "   ⚠️  No uv binary in bin/"
+msgstr "⚠️ tidak ada biner UV di bin/"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:114
+msgid "   ⚠️  No bin directory found"
+msgstr "⚠️ tidak ada direktori nampan yang ditemukan"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:116
+msgid "   📁 Bubble contents ({} items):"
+msgstr "📁 Isi gelembung ({} item):"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:118
+msgid "      - {}{}"
+msgstr "- {} {}"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:122
+msgid "   🔧 Testing direct binary execution..."
+msgstr "🔧 Menguji eksekusi biner langsung ..."
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:125
+msgid "   ❌ No UV binary found in bubble"
+msgstr "❌ Tidak ada biner UV yang ditemukan dalam gelembung"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:128
+msgid "   🎯 Executing: {} --version"
+msgstr "🎯 mengeksekusi: {} --version"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:131
+msgid "   ✅ Direct binary reported: {}"
+msgstr "✅ Binary Langsung Dilaporkan: {}"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:133
+msgid "   🎯 Direct binary test: PASSED"
+msgstr "🎯 Tes Biner Langsung: Lulus"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:136
+msgid "   ❌ Version mismatch: expected {}, got {}"
+msgstr "❌ Versi ketidakcocokan: diharapkan {}, get {}"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:139
+msgid "   ❌ Direct binary execution failed: {}"
+msgstr "❌ Eksekusi biner langsung gagal: {}"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:156
+msgid "   ✅ Main environment version: {}"
+msgstr "✅ Versi Lingkungan Utama: {}"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:158
+msgid "   🎯 Main environment test: PASSED"
+msgstr "🎯 Tes Lingkungan Utama: Lulus"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:160
+msgid "   ❌ Main environment test: FAILED"
+msgstr "❌ Tes Lingkungan Utama: Gagal"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:164
+msgid "   ❌ Main environment test failed: {}"
+msgstr "❌ Tes Lingkungan Utama Gagal: {}"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:168
+msgid "Testing Bubble (uv=={})"
+msgstr "Menguji gelembung (uv == {})"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:178
+msgid "   🎯 Overall result for uv=={}: PASSED"
+msgstr "🎯 Hasil keseluruhan untuk uv == uv=={} : lulus"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:180
+msgid "   ❌ Overall result for uv=={}: FAILED"
+msgstr "❌ Hasil keseluruhan untuk UV == \"{}\" : Gagal"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:182
+msgid "📊 Test Summary:"
+msgstr "📊 Ringkasan Uji:"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:185
+msgid "   uv=={}: {}"
+msgstr "uv == {}: {}"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:187
+msgid ""
+"\n"
+"🎉🎉🎉 ALL UV BINARY TESTS PASSED! 🎉🎉🎉"
+msgstr "🎉🎉🎉 Semua tes biner UV lulus!🎉🎉🎉"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:188
+msgid "🔥 OMNIPKG UV BINARY HANDLING IS FULLY FUNCTIONAL! 🔥"
+msgstr "🔥 OMNIPKG UV Binary Handling berfungsi penuh!🔥"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:190
+msgid ""
+"\n"
+"💥 SOME TESTS FAILED - UV BINARY HANDLING NEEDS WORK 💥"
+msgstr "💥 Beberapa tes gagal - penanganan biner UV membutuhkan pekerjaan 💥"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:191
+msgid "🔧 Check the detailed output above for diagnostics"
+msgstr "🔧 Periksa output terperinci di atas untuk diagnostik"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:216
+msgid "⚠️  Cleanup failed: {}"
+msgstr "⚠️ Cleanup gagal: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2297
+msgid "  - 📁 {} ({} MB){}"
+msgstr "- 📁 {} ({} mb) {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2304
+msgid "  - Total Bubble Size: {} MB"
+msgstr "- Total Ukuran Gelembung: {} MB"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:518
+msgid ""
+"⚠️  Warning: 'python-magic' not installed. Using basic binary detection."
+msgstr ""
+"⚠️ PERINGATAN: 'Python-Magic' tidak terpasang.Menggunakan deteksi biner "
+"dasar."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1057
+msgid "✅ Core dependencies loaded."
+msgstr "✅ Ketergantungan inti dimuat."
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:127
+msgid "🌍 Language environment passed to subprocess: {}"
+msgstr "🌍 Lingkungan bahasa diteruskan ke subproses: {}"
+
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:28
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:24
+msgid ""
+"❌ Failed to import omnipkg modules. Is the project structure correct? Error:"
+" {}"
+msgstr ""
+"❌ Gagal mengimpor modul omnipkg.Apakah struktur proyek benar?Kesalahan: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1990
+msgid "    -> Last version of '{}' removed. Deleting all traces."
+msgstr "-> versi terakhir '{}' dihapus.Menghapus semua jejak."
+
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:43
+msgid "STEP 1: Preparing a Clean Test Environment"
+msgstr "Langkah 1: Mempersiapkan Lingkungan Uji Bersih"
+
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:63
+msgid ""
+"   🗑️ Ensuring clean numpy and scipy installations for baseline test..."
+msgstr ""
+"🗑️ Memastikan instalasi Numpy dan Scipy yang bersih untuk tes dasar ..."
+
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:225
+msgid ""
+"\n"
+"\n"
+"🚨 OMNIPKG SURVIVED NUCLEAR TESTING! 🎇"
+msgstr "🚨 Omnipkg selamat dari pengujian nuklir!🎇"
+
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:230
+msgid "STEP 3: Cleaning Up Test Environment"
+msgstr "Langkah 3: Membersihkan Lingkungan Tes"
+
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:256
+msgid "STEP 2: Creating Test Bubbles with omnipkg"
+msgstr "Langkah 2: Membuat gelembung tes dengan omnipkg"
+
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:266
+msgid "STEP 3: Executing the Nuclear Test"
+msgstr "Langkah 3: Melaksanakan Uji Nuklir"
+
+#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:28
+msgid ""
+"❌ Critical Error: Could not import omnipkg modules. Is the project structure"
+" correct? Error: {}"
+msgstr ""
+"❌ Kesalahan Kritis: Tidak dapat mengimpor modul OMNIPKG.Apakah struktur "
+"proyek benar?Kesalahan: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:278
+msgid ""
+"🚀 The intelligent Python package manager that eliminates dependency hell"
+msgstr ""
+"🚀 Manajer paket Python yang cerdas yang menghilangkan ketergantungan neraka"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:283
+msgid "%(prog)s {}"
+msgstr "%(prog) s {}"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:361
+msgid ""
+"\n"
+"👋 Welcome back to omnipkg! Run a command or see --help for details."
+msgstr ""
+"👋 Selamat datang kembali ke Omnipkg!Jalankan perintah atau lihat --help "
+"untuk detailnya."
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:214
+msgid "🌟 Key Features:"
+msgstr "🌟 Fitur Utama:"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:215
+msgid "  • Runtime Python interpreter switching (no shell restart needed!)"
+msgstr "• Runtime Python Interpreter Switching (tidak perlu restart shell!)"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:216
+msgid "  • Automatic version bubbling to prevent conflicts"
+msgstr "• Versi otomatis menggelegak untuk mencegah konflik"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:217
+msgid "  • Downgrade protection with smart conflict resolution"
+msgstr "• Perlindungan Downgrade dengan Resolusi Konflik Cerdas"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:218
+msgid "  • Multi-version package coexistence"
+msgstr "• Koeksistensi paket multi-versi"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:219
+msgid "  • Intelligent dependency management with Redis-backed knowledge base"
+msgstr ""
+"• Manajemen ketergantungan yang cerdas dengan basis pengetahuan yang "
+"didukung Redis"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:221
+msgid "📖 Essential Commands:"
+msgstr "📖 Perintah penting:"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:222
+msgid ""
+"  omnipkg install <package>   Install with automatic conflict resolution"
+msgstr "omnipkg instal <packer> instal dengan resolusi konflik otomatis"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:223
+msgid ""
+"  omnipkg install-with-deps <package>  Install with specific dependency "
+"versions"
+msgstr ""
+"instalasi omnipkg-dengan-deps <packer> instal dengan versi ketergantungan "
+"spesifik"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:224
+msgid ""
+"  omnipkg list [filter]       View all packages and their bubble status  "
+msgstr "Daftar OMNIPKG [Filter] Lihat semua paket dan status gelembungnya"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:225
+msgid "  omnipkg status              Check multi-version environment health"
+msgstr "status omnipkg memeriksa kesehatan lingkungan multi-versi"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:226
+msgid ""
+"  omnipkg info <package>      Interactive package dashboard with version "
+"explorer"
+msgstr ""
+"Omnipkg Info <packer> Paket Interaktif Dashboard Dengan Versi Explorer"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:227
+msgid ""
+"  omnipkg demo                Run interactive demos for version switching"
+msgstr "Demo Omnipkg menjalankan demo interaktif untuk switching versi"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:228
+msgid ""
+"  omnipkg stress-test         See the magic! Heavy-duty package installation"
+" demo"
+msgstr "omnipkg stres-test lihat keajaiban!Demo instalasi paket tugas berat"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:229
+msgid ""
+"  omnipkg config set language <code>  Set display language (e.g., en, es)"
+msgstr "omnipkg config set bahasa <code> Setel bahasa tampilan (mis., en, es)"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:231
+msgid "🎯 Advanced Features:"
+msgstr "🎯 Fitur Tingkat Lanjut:"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:232
+msgid "  omnipkg revert             Roll back to last known good state"
+msgstr "omnipkg rett roll kembali ke negara bagian yang diketahui terakhir"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:233
+msgid "  omnipkg uninstall <pkg>    Smart removal with dependency checking"
+msgstr ""
+"omnipkg uninstall <pkg> penghapusan pintar dengan pemeriksaan ketergantungan"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:234
+msgid "  omnipkg rebuild-kb         Refresh the intelligence knowledge base"
+msgstr "Omnipkg Rebuild-KB Segarkan Basis Pengetahuan Kecerdasan"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:236
+msgid "💡 Installation Examples:"
+msgstr "💡 Contoh instalasi:"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:237
+msgid "  omnipkg install requests numpy>=1.20        # Multiple packages"
+msgstr "OMNIPKG Instalasi Permintaan Numpy> = 1.20 # Beberapa paket"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:238
+msgid ""
+"  omnipkg install uv==0.7.13 uv==0.7.14      # Multiple versions (auto-"
+"bubbled!)"
+msgstr ""
+"OMNIPKG Instal UV == 0.7.13 UV == 0.7.14 # Versi Ganda (Auto-Bubbled!)"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:239
+msgid ""
+"  omnipkg install-with-deps tensorflow==2.13.0 numpy==1.24.3 typing-"
+"extensions==4.5.0"
+msgstr ""
+"omnipkg instalasi-dengan-deps tensorflow == 2.13.0 numpy == 1.24.3 ekstensi "
+"pengetikan == 4.5.0"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:240
+msgid "  omnipkg install -r requirements.txt        # From requirements file"
+msgstr "OMNIPKG menginstal -r persyaratan.txt # dari file persyaratan"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:241
+msgid "  omnipkg install 'django>=3.0,<4.0'         # Complex version specs"
+msgstr "omnipkg instal 'django> = 3.0, <4.0' # spesifikasi versi kompleks"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:243
+msgid "🔍 Understanding Your Environment:"
+msgstr "🔍 Memahami lingkungan Anda:"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:244
+msgid "  omnipkg list                # Shows ✅ active and 🫧 bubbled versions"
+msgstr "Daftar OMNIPKG # Menampilkan ✅ Versi Aktif dan 🫧 Gelembung"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:245
+msgid "  omnipkg info <package>      # Deep dive into any package's status"
+msgstr "Info OMNIPKG <package> # Deep menyelam ke status paket apa pun"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:246
+msgid "  omnipkg status              # Overall environment health"
+msgstr "Status OMNIPKG # Kesehatan Lingkungan Keseluruhan"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:248
+msgid "🛠️ Redis Knowledge Base (Advanced):"
+msgstr "🛠️ Basis Pengetahuan Redis (Lanjutan):"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:249
+msgid "  omnipkg stores rich metadata in Redis. Explore with:"
+msgstr "Omnipkg menyimpan metadata kaya di Redis.Jelajahi dengan:"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:250
+msgid ""
+"  redis-cli HGETALL omnipkg:pkg:<package>                    # Package info"
+msgstr "Redis-Cli Hgetall Omnipkg: PKG: <package> # Paket Info"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:251
+msgid ""
+"  redis-cli SMEMBERS \"omnipkg:pkg:<package>:installed_versions\"  # All "
+"versions"
+msgstr ""
+"redis-cli smembers \"omnipkg: pkg: <packer>: installed_versions\" # semua "
+"versi"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:252
+msgid ""
+"  redis-cli HGETALL omnipkg:pkg:<package>:<version>          # Version "
+"details"
+msgstr ""
+"Redis-Cli Hgetall Omnipkg: PKG: <pack Package>: <Version> # Rincian Versi"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:254
+msgid "🔧 Python Version Management:"
+msgstr "🔧 Manajemen Versi Python:"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:255
+msgid ""
+"  omnipkg automatically manages Python interpreters! When you run commands"
+msgstr ""
+"Omnipkg secara otomatis mengelola penerjemah Python!Saat Anda menjalankan "
+"perintah"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:256
+msgid "  that need a different Python version, omnipkg will:"
+msgstr "Itu membutuhkan versi python yang berbeda, omnipkg akan:"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:257
+msgid "  • Download and install the required Python version seamlessly"
+msgstr "• Unduh dan instal versi Python yang diperlukan dengan mulus"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:258
+msgid "  • Switch interpreters mid-execution without shell restart"
+msgstr "• Beralih penerjemah interkusi tanpa restart shell"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:259
+msgid "  • Maintain package isolation across Python versions"
+msgstr "• Pertahankan isolasi paket di seluruh versi Python"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:260
+msgid "  • Keep your environment clean and organized"
+msgstr "• Jaga lingkungan Anda tetap bersih dan terorganisir"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:262
+msgid "💡 Pro Tips:"
+msgstr "💡 Tips Pro:"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:263
+msgid "  • Run 'omnipkg demo' to try version-switching demos"
+msgstr "• Jalankan 'demo omnipkg' untuk mencoba demo versi-switching"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:264
+msgid "  • Run 'omnipkg stress-test' to see automated interpreter switching"
+msgstr ""
+"• Jalankan 'omnipkg stress-test' untuk melihat switching interpreter "
+"otomatis"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:265
+msgid "  • Use 'omnipkg info <package>' for interactive version selection"
+msgstr "• Gunakan Info Omnipkg <package> 'untuk pemilihan versi interaktif"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:266
+msgid "  • Use 'omnipkg config set language <code>' to change language"
+msgstr "• Gunakan 'omnipkg config set bahasa <code>' untuk mengubah bahasa"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:267
+msgid "  • The system learns from conflicts and prevents future issues"
+msgstr "• Sistem belajar dari konflik dan mencegah masalah di masa depan"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:268
+msgid "  • All changes are logged and reversible with 'omnipkg revert'"
+msgstr ""
+"• Semua perubahan dicatat dan dapat dibalikkan dengan 'Omnipkg Revert'"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:270
+msgid "Version: {}"
+msgstr "Versi: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:181
+msgid ""
+"Auto-detecting paths for your environment. Press Enter to accept defaults.\n"
+msgstr ""
+"Jalur pendeteksi otomatis untuk lingkungan Anda.Tekan Enter untuk menerima "
+"default."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:182
+msgid "📦 Choose your default installation strategy:"
+msgstr "📦 Pilih strategi instalasi default Anda:"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:319
+msgid "Clean up old, bubbled package versions"
+msgstr "Bersihkan versi paket tua yang menggelembung"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:319
+msgid ""
+"Removes bubbled package versions to save space, keeping the active version "
+"safe."
+msgstr ""
+"Menghapus versi paket yang menggelegak untuk menghemat ruang, menjaga versi "
+"aktif tetap aman."
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:320
+msgid "The package whose bubbles you want to prune."
+msgstr "Paket yang gelembungnya ingin memangkas."
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:321
+msgid "Keep the N most recent bubbled versions and prune the rest."
+msgstr "Simpan versi N yang paling baru dan pangkas sisanya."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1179
+msgid "✅ No bubbles found for '{}'. Nothing to prune."
+msgstr ""
+"✅ Tidak ada gelembung yang ditemukan untuk '{}'. Tidak ada yang harus "
+"dipangkas."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1185
+msgid "❌ 'keep-latest' must be a non-negative number."
+msgstr "❌ 'Keepsest' harus menjadi angka non-negatif."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1189
+msgid "🔎 Found {} bubbles. Keeping the latest {}, pruning {} older versions."
+msgstr ""
+"🔎 Ditemukan {} Bubbles. Menjaga {} terbaru, pemangkasan {} versi yang lebih "
+"tua."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1192
+msgid "🔎 Found {} bubbles to prune for '{}'."
+msgstr "🔎 Ditemukan {} gelembung untuk memangkas '{}'."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1194
+msgid "✅ No bubbles match the pruning criteria."
+msgstr "✅ Tidak ada gelembung yang cocok dengan kriteria pemangkasan."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1196
+msgid ""
+"\n"
+"The following bubbled versions will be permanently deleted:"
+msgstr "Versi gelembung berikut akan dihapus secara permanen:"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1198
+msgid "  - v{} (bubble)"
+msgstr "- v \"{}\" (gelembung)"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1200
+msgid "🛡️  The active version (v{}) will NOT be affected."
+msgstr "🛡️ Versi aktif (v '{}' ) tidak akan terpengaruh."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1204
+msgid "🚫 Prune cancelled."
+msgstr "🚫 Prune dibatalkan."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1210
+msgid ""
+"\n"
+"🎉 Pruning complete for '{}'."
+msgstr "🎉 Pemangkasan lengkap untuk '{}'."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1584
+msgid "❌ Could not resolve any packages to install. Aborting."
+msgstr ""
+"❌ Tidak dapat menyelesaikan paket apa pun untuk diinstal. Membatalkan."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1608
+msgid "❌ Pip installation failed for {}. Continuing..."
+msgstr "❌ Instalasi PIP gagal untuk {}. Melanjutkan ..."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1611
+msgid "✅ Installation completed for: {}"
+msgstr "✅ Instalasi selesai untuk: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1683
+msgid ""
+"\n"
+"🧠 Updating knowledge base for this package..."
+msgstr "🧠 Memperbarui basis pengetahuan untuk paket ini ..."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1688
+msgid ""
+"\n"
+"✅ All requirements were already satisfied."
+msgstr "✅ Semua persyaratan sudah dipenuhi."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1691
+msgid ""
+"\n"
+"🧹 Performing final cleanup of redundant bubbles..."
+msgstr "🧹 Melakukan pembersihan akhir gelembung yang berlebihan ..."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1696
+msgid ""
+"    -> Found redundant bubble for active package '{0}=={1}'. Removing..."
+msgstr ""
+"-> menemukan gelembung redundan untuk paket aktif ' {0} == {1} '. Menghapus "
+"..."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1916
+msgid "🤷 No installations match the specified criteria."
+msgstr "🤷 Tidak ada instalasi yang sesuai dengan kriteria yang ditentukan."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2101
+msgid "🔎 Resolving package versions via PyPI API..."
+msgstr "🔎 Menyelesaikan versi paket melalui PYPI API ..."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2108
+msgid "    -> Finding latest version for '{}'..."
+msgstr "-> menemukan versi terbaru untuk '{}' ..."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2112
+msgid "    ✅ Resolved '{}' to '{}'"
+msgstr "✅ terselesaikan '{}' ke '{}'"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2115
+msgid "    ⚠️  Could not resolve a version for '{}' via PyPI. Skipping."
+msgstr "⚠️ tidak dapat menyelesaikan versi untuk '{}' melalui PYPI. Melewati."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2209
+msgid "    ⚠️  API Error while fetching version for '{}': {}"
+msgstr "⚠️ Kesalahan API saat mengambil versi untuk '{}': {}"
+
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:152
+msgid "rich.{}test_harness_cloaked"
+msgstr "Rich. {} test_harness_cloaked"
+
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:157
+msgid "{}.{}test_harness_cloaked"
+msgstr "{}. {} test_harness_cloaked"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1080
+msgid "   {}"
+msgstr "   {}"
+
+#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:93
+msgid "--- Script STDERR (relevant) ---"
+msgstr "--- skrip stderr (relevan) ---"
+
+#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:98
+msgid "⚠️ Some errors occurred (see above)"
+msgstr "⚠️ Beberapa kesalahan terjadi (lihat di atas)"
+
+#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:109
+msgid "🚀 TensorFlow Version Switching Test"
+msgstr "🚀 Uji switching versi tensorflow"
+
+#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:111
+msgid "Using omnipkg versions directory: {}"
+msgstr "Menggunakan direktori versi omnipkg: {}"
+
+#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:113
+msgid "🧹 Clearing existing TensorFlow installations..."
+msgstr "🧹 Membersihkan instalasi TensorFlow yang ada ..."
+
+#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:120
+msgid ""
+"(Should have 4.14.1 and keras==2.13.1 active in main env, 4.5.0 in bubble)"
+msgstr ""
+"(HARUS memiliki 4.14.1 dan keras == 2.13.1 aktif di Main Env, 4.5.0 dalam "
+"gelembung)"
+
+#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:126
+msgid "Bubble exists: {}"
+msgstr "Bubble ada: {}"
+
+#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:129
+msgid ""
+"\n"
+"🚀 Final cleanup and verification"
+msgstr "🚀 Pembersihan dan verifikasi akhir"
+
+#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:130
+msgid "🧹 Removing TensorFlow packages (keeping protected dependencies)..."
+msgstr "🧹 Menghapus Paket TensorFlow (menjaga dependensi yang dilindungi) ..."
+
+#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:137
+msgid ""
+"\n"
+"🔬 Final verification - stable environment state"
+msgstr "🔬 Verifikasi akhir - keadaan lingkungan yang stabil"
+
+#: /home/minds3t/omnipkg/omnipkg/CondaGuard.py:35
+msgid "🛡️ Restored corrupted metadata for: {}"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/CondaGuard.py:51
+msgid "Failed to back up '{}': {}"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/CondaGuard.py:65
+msgid "Detected corruption (file missing or empty): '{}'"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/CondaGuard.py:72
+msgid "Detected corruption (invalid JSON): '{}'"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/CondaGuard.py:80
+msgid "Failed to restore '{}': {}"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/CondaGuard.py:82
+msgid "Cannot restore '{}', backup file is missing!"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/CondaGuard.py:91
+msgid "Cleaned up backup: '{}'"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/CondaGuard.py:93
+msgid "Failed to clean up backup '{}': {}"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/CondaGuard.py:112
+msgid "--- Running Standalone Conda Corruption Check & Fix ---"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/CondaGuard.py:118
+msgid "🔧 Fix applied. Restored files: {}"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/CondaGuard.py:121
+msgid "✅ No corruption found in protected files."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/CondaGuard.py:129
+msgid "-> Running a risky function that might corrupt Conda..."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/CondaGuard.py:132
+msgid "   ...simulating corruption of '{}'"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/CondaGuard.py:135
+msgid "-> Risky function finished."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/CondaGuard.py:136
+msgid "🧪 Testing decorator..."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/CondaGuard.py:139
+msgid "🧪 Testing context manager..."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/CondaGuard.py:145
+msgid "   ...simulating deletion of '{}'"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/CondaGuard.py:147
+msgid "-> Leaving safe context..."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/CondaGuard.py:148
+msgid ""
+"\n"
+"✅ Demo finished."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:384
+msgid "✅ Install strategy permanently set to: {}"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/common_utils.py:93
+msgid "🛡️ ConfigGuard: Activated temporary test configuration."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/common_utils.py:101
+msgid "🛡️ ConfigGuard: Restored original user configuration."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/loader.py:119
+msgid " ❌ Activation failed: {}"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/loader.py:186
+msgid " ⚠️ Warning: Could not remove existing cloak {}: {}"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/loader.py:210
+msgid " ⚠️ Warning: Could not remove conflicting path {}: {}"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/loader.py:216
+msgid " ❌ Failed to restore {} from {}: {}"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/loader.py:223
+msgid " 🧹 Cleaned up orphaned cloak {}"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/loader.py:227
+msgid " ❌ CRITICAL: Cloaked path {} is missing! Package {} may be lost."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/loader.py:232
+msgid " ℹ️ Package {} still appears to be installed in system."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/loader.py:234
+msgid " ❌ Package {} is no longer available in system. Consider reinstalling."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/loader.py:235
+msgid "   Suggestion: pip install --force-reinstall --no-deps {}"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/loader.py:238
+msgid " ⚠️ Cloak restore summary: {} successful, {} failed"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/loader.py:242
+msgid " 🚨 Emergency cloak restoration in progress..."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/loader.py:250
+msgid "🧹 Scanning for abandoned omnipkg cloaks..."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/loader.py:254
+msgid " ✅ No abandoned cloaks found."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/loader.py:256
+msgid " 🔍 Found {} potential abandoned cloak(s):"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/loader.py:258
+msgid "   - {}"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/loader.py:259
+msgid ""
+" ℹ️ To remove these manually: rm -rf /path/to/site-"
+"packages/*_omnipkg_cloaked*"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/loader.py:260
+msgid ""
+" ⚠️ WARNING: Only remove if you're sure no omnipkg operations are running!"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:316
+msgid ""
+"The value to set for the key (e.g., en, es, de, ja, zh_CN, stable-main, "
+"latest-active, fast-compat)"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:381
+msgid "❌ Error: Invalid install strategy. Must be one of: {}"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1661
+msgid "    ✅ New package installed: {} v{} (active in main environment)"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1664
+msgid ""
+"\n"
+"🛡️ LATEST-ACTIVE STRATEGY: Preserving replaced versions in bubbles"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1667
+msgid "    -> Bubbling replaced {} version: {} v{} (keeping v{} active)"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1676
+msgid "    ✅ Successfully bubbled {} v{}"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1678
+msgid "    ❌ Failed to bubble {} v{}"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1680
+msgid ""
+"\n"
+"✅ Latest-active complete! Requested versions active, previous versions preserved."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1682
+msgid "✅ No version changes detected."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1969
+msgid "🗑️ Uninstalling '{}=={}' from main environment via pip..."
+msgstr ""

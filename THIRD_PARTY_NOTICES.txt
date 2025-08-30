@@ -31,3 +31,7 @@ See licenses/tomli.txt for full license text
 filelock (v3.19.1)
 License: Apache-2.0
 See licenses/filelock.txt for full license text
+
+uv (v0.6.3)
+License: MIT
+See licenses/uv.txt for full license text

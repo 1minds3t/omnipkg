@@ -4,49 +4,62 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "omnipkg"
-version = "1.0.17"
+version = "1.1.0"
 authors = [
   { name = "1minds3t", email = "omnipkg@proton.me" },
 ]
-description = "The Ultimate Python Dependency Resolver"
+description = "The Ultimate Python Dependency Resolver. One environment. Infinite packages. Zero conflicts."
 readme = "README.md"
 requires-python = ">=3.10"
-license = { text="AGPL-3.0-or-later" }
+# Using the standard SPDX identifier is a best practice
+license = { text = "AGPL-3.0-only" }
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: GNU Affero General Public License v3",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: GNU Affero General Public License v3 or later (AGPLv3+)",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Environment :: Console",
     "Topic :: Software Development :: Build Tools",
+    "Topic :: System :: Software Distribution",
 ]
+# The dependency "redis" is the correct name for the Python client on PyPI.
 dependencies = [
-    "redis",
-    "packaging",
-    "requests",
-    "python-magic", 
-    "aiohttp",     
-    "tqdm",
+    "redis >=4.0.0",
+    "packaging >=20.0",
+    "requests >=2.25.0",
+    "python-magic",
+    "aiohttp >=3.8.0",
+    "tqdm >=4.60.0",
     "filelock",
-    "tomli"
+    "uv >=0.6.3",
+    "tomli; python_version < '3.11'" # Makes tomli conditional
 ]
 
 [project.urls]
 Homepage = "https://github.com/1minds3t/omnipkg"
+"Bug Tracker" = "https://github.com/1minds3t/omnipkg/issues"
+PyPi = "https://pypi.org/project/omnipkg/"
 
 [project.scripts]
 omnipkg = "omnipkg.cli:main"
 
-[tool.setuptools]
-include-package-data = true
-packages = ["omnipkg", "tests"]
+
+[tool.setuptools.packages.find]
+# Find packages in the root directory (where your top-level 'omnipkg' folder is)
+where = ["."]
+# Explicitly include only your application package
+include = ["omnipkg*", "tests"]
+# CRITICAL FIX: Exclude directories that cause the recursive build problem
+exclude = [
+    "build*",
+    "dist*",
+    "*.egg-info*"
+]
 
 [tool.setuptools.package-data]
-"*" = [
-    "README.md",
-    "LICENSE",
-    "THIRD_PARTY_NOTICES.txt",
-    "requirements-demo.txt",
-    "licenses/*.txt",
-    "docs/*"
-]
+"omnipkg" = ["locale/**/*.mo"]
+"tests" = ["**/*.py"]

@@ -1,36 +1,17 @@
+# MANIFEST.in (Updated)
+
+# Core documentation and license files
 include README.md
 include LICENSE
+include CHANGELOG.md
 include THIRD_PARTY_NOTICES.txt
-include requirements-demo.txt
 
-# Explicit licenses
-include licenses/redis.txt
-include licenses/packaging.txt
-include licenses/requests.txt
-include licenses/python-magic.txt
-include licenses/aiohttp.txt
-include licenses/tqdm.txt
-include licenses/aiohappyeyeballs.txt
-include licenses/aiosignal.txt
-include licenses/attrs.txt
-include licenses/certifi.txt
-include licenses/charset-normalizer.txt
-include licenses/frozenlist.txt
-include licenses/idna.txt
-include licenses/multidict.txt
-include licenses/propcache.txt
-include licenses/typing-extensions.txt
-include licenses/urllib3.txt
-include licenses/yarl.txt
+# Include the third-party license files
+recursive-include licenses *.txt
 
-# Catch-all for any new ones you drop in later
-include licenses/*
+# Include all language files inside the omnipkg/locale directory
+recursive-include omnipkg/locale *.mo
 
-# Docs
-graft docs
+# Include all files in the tests directory
+recursive-include tests *.py
 
-# Exclusions
-exclude examples/*
-exclude scripts/*
-
-include requirements.txt

@@ -66,3 +66,4 @@ Thumbs.db
 # PyPI / Packaging
 .env
 *.pypirc
+releases/
