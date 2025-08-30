@@ -44,6 +44,7 @@
   </a>
 </p>
 
+[![🌍 Omnipkg Multi-Language Intelligence Demo](https://github.com/1minds3t/omnipkg/actions/workflows/language_test.yml/badge.svg)](https://github.com/1minds3t/omnipkg/actions/workflows/language_test.yml)
 
 ---
 
