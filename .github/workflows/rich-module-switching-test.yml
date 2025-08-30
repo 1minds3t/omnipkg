@@ -101,14 +101,13 @@ jobs:
           if [ $DEMO_EXIT_CODE -eq 0 ]; then
             echo "Demo completed successfully."
             echo "demo_outcome=success" >> $GITHUB_OUTPUT
-            if grep -q "rich==13.7.1" /tmp/omnipkg-artifacts/rich_demo_output.txt && \
-               grep -q "rich==13.5.3" /tmp/omnipkg-artifacts/rich_demo_output.txt && \
-               grep -q "rich==13.4.2" /tmp/omnipkg-artifacts/rich_demo_output.txt && \
+            if grep -q "Testing Main Environment (rich==13.7.1)" /tmp/omnipkg-artifacts/rich_demo_output.txt && \
+               grep -q "Testing Bubble (rich==13.5.3)" /tmp/omnipkg-artifacts/rich_demo_output.txt && \
+               grep -q "Testing Bubble (rich==13.4.2)" /tmp/omnipkg-artifacts/rich_demo_output.txt && \
                grep -q "ALL TESTS PASSED!" /tmp/omnipkg-artifacts/rich_demo_output.txt; then
               echo "Rich demo verified: rich==13.7.1, 13.5.3, 13.4.2, all tests passed!"
             else
               echo "Error: Expected Rich demo output not found."
-              echo "Missing one of: 'rich==13.7.1', 'rich==13.5.3', 'rich==13.4.2', or 'ALL TESTS PASSED!'"
               cat /tmp/omnipkg-artifacts/rich_demo_output.txt
               exit 1
             fi
