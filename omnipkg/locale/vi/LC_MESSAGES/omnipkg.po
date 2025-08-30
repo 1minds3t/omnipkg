@@ -1,0 +1,3832 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) YEAR ORGANIZATION
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: PACKAGE VERSION\n"
+"POT-Creation-Date: 2025-08-21 15:13-0500\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: pygettext.py 1.5\n"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:49
+msgid "  ⚠️  Stress Test Requires Python 3.11"
+msgstr "Kiểm tra căng thẳng yêu cầu Python 3.11"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:53
+msgid "The omnipkg stress test only works in Python 3.11 environments."
+msgstr ""
+"Thử nghiệm căng thẳng OMNIPKG chỉ hoạt động trong môi trường Python 3.11."
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:54
+msgid "To run the stress test:"
+msgstr "Để chạy bài kiểm tra căng thẳng:"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:55
+msgid "1. Create a Python 3.11 virtual environment"
+msgstr "1. Tạo môi trường ảo Python 3.11"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:56
+msgid "2. Install omnipkg in that environment"
+msgstr "2. Cài đặt omnipkg trong môi trường đó"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:59
+msgid "🔮 Coming Soon: Hot Python interpreter swapping mid-script!"
+msgstr "Sắp ra mắt: Trình thông dịch HOT Python hoán đổi bản kịch giữa!"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:60
+msgid "   This will allow seamless switching between Python versions"
+msgstr "Điều này sẽ cho phép chuyển đổi liền mạch giữa các phiên bản Python"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:61
+msgid "   during package operations - stay tuned!"
+msgstr "Trong các hoạt động gói - hãy theo dõi!"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:65
+msgid "  🚀 omnipkg Nuclear Stress Test - Runtime Version Swapping"
+msgstr ""
+"🚀 Thử nghiệm căng thẳng hạt nhân OMNIPKG - Trao đổi phiên bản thời gian chạy"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:67
+msgid "🎪 This demo showcases IMPOSSIBLE package combinations:"
+msgstr "🎪 Bản demo này giới thiệu các kết hợp gói không thể:"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:68
+msgid "   • Runtime swapping between numpy/scipy versions mid-execution"
+msgstr "• Trao đổi thời gian chạy giữa các phiên bản Numpy/Scipy"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:69
+#, fuzzy
+msgid "   • Different numpy+scipy combos (1.24.3+1.12.0 → 1.26.4+1.16.1)"
+msgstr "• Các combo Numpy+Scipy khác nhau (1.24.3+1.12.0 → 1.26.4+1.16.1)"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:71
+msgid "   • Live PYTHONPATH manipulation without process restart"
+msgstr "• Thao tác Pythonpath trực tiếp mà không cần khởi động lại quá trình"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:72
+#, fuzzy
+msgid "   • Space-efficient deduplication (shows deduplication - normally"
+msgstr ""
+"• Sự trùng lặp hiệu quả không gian (hiển thị sự trùng lặp - bình thường"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:73
+#, fuzzy
+msgid "     we average ~60% savings, but less for C extensions/binaries)"
+msgstr ""
+"Chúng tôi trung bình ~ 60% tiết kiệm, nhưng ít hơn cho các phần mở rộng/nhị "
+"phân C)"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:75
+msgid "🤯 What makes this impossible with traditional tools:"
+msgstr "Điều gì làm cho điều này không thể với các công cụ truyền thống:"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:77
+msgid "   • Switching versions requires environment restart"
+msgstr "• Phiên bản chuyển đổi yêu cầu khởi động lại môi trường"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:78
+msgid "   • Dependency conflicts prevent coexistence"
+msgstr "• Xung đột phụ thuộc ngăn chặn sự cùng tồn tại"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:81
+msgid "✨ omnipkg does this LIVE, in the same Python process!"
+msgstr "Omnipkg thực hiện điều này sống, trong cùng một quá trình Python!"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:82
+msgid "📊 Expected downloads: ~500MB | Duration: 30 seconds - 3 minutes"
+msgstr "Tải xuống dự kiến: ~ 500MB |Thời lượng: 30 giây - 3 phút"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:95
+msgid "🔥 Starting stress test..."
+msgstr "🔥 Bắt đầu kiểm tra căng thẳng ..."
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:100
+msgid "❌ Stress test module not found. Implementation needed."
+msgstr "Mô -đun kiểm tra ứng suất không tìm thấy.Thực hiện cần thiết."
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:101
+msgid "💡 This would run the actual stress test with:"
+msgstr "Điều này sẽ chạy bài kiểm tra căng thẳng thực tế với:"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:102
+#, fuzzy
+msgid "   • Large package installations (TensorFlow, PyTorch, etc.)"
+msgstr "• Cài đặt gói lớn (Tensorflow, Pytorch, v.v.)"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:103
+msgid "   • Version conflict demonstrations"
+msgstr "• Cuộc biểu tình xung đột phiên bản"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:104
+msgid "   • Real-time bubbling and deduplication"
+msgstr "• Bong bóng và sao chép thời gian thực"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:113
+#, fuzzy
+msgid ""
+"📡 Live streaming output (this may take several minutes for heavy "
+"packages)..."
+msgstr ""
+"📡 Đầu ra phát trực tiếp (điều này có thể mất vài phút cho các gói nặng) ..."
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:115
+msgid "🛑 Press Ctrl+C to safely cancel if needed"
+msgstr "🛑 Nhấn Ctrl+C để hủy một cách an toàn nếu cần"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:135
+#: /home/minds3t/omnipkg/omnipkg/cli.py:184
+msgid "😎 TensorFlow escaped the matrix! 🚀"
+msgstr "Tensorflow thoát khỏi ma trận!🚀"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:136
+#: /home/minds3t/omnipkg/omnipkg/cli.py:185
+msgid "🎉 Demo completed successfully!"
+msgstr "Bản demo đã hoàn thành thành công!"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:140
+msgid "💡 Check the output above for error details."
+msgstr "Kiểm tra đầu ra ở trên để biết chi tiết lỗi."
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:143
+#: /home/minds3t/omnipkg/omnipkg/cli.py:191
+#, fuzzy
+msgid ""
+"\n"
+"⚠️  Demo cancelled by user (Ctrl+C)"
+msgstr "Demo bị hủy bởi người dùng (Ctrl+C)"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:144
+msgid ""
+"🛡️  Your environment should be safe - omnipkg handles interruptions "
+"gracefully"
+msgstr ""
+"Môi trường của bạn phải an toàn - Omnipkg xử lý gián đoạn một cách duyên "
+"dáng"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:153
+msgid "📋 Full traceback:"
+msgstr "📋 Toàn bộ dấu vết:"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:161
+msgid "📡 Streaming output in real-time..."
+msgstr "📡 Truyền phát đầu ra trong thời gian thực ..."
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:162
+msgid ""
+"💡 Heavy package installations may have natural pauses - this is normal!"
+msgstr ""
+"Cài đặt gói nặng có thể có tạm dừng tự nhiên - điều này là bình thường!"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:163
+msgid "🛑 Press Ctrl+C to safely cancel"
+msgstr "🛑 Nhấn Ctrl+C để hủy một cách an toàn"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:192
+msgid "🛡️  Cleaning up safely..."
+msgstr "🛡 Dọn dẹp an toàn ..."
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:13
+msgid "🚨 PIP DEPENDENCY DESTRUCTION ALERT 🚨"
+msgstr "Cảnh báo phá hủy phụ thuộc PIP 🚨"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:16
+#: /home/minds3t/omnipkg/omnipkg/demo.py:18
+#: /home/minds3t/omnipkg/omnipkg/demo.py:21
+#: /home/minds3t/omnipkg/omnipkg/demo.py:27
+#: /home/minds3t/omnipkg/omnipkg/demo.py:29
+msgid "│                                                          │"
+msgstr "│                                                          │"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:17
+msgid "│  💀 You: pip install flask-login==0.6.0                 │"
+msgstr "│ 💀 Bạn: PIP Cài đặt Flask-Login == 0.6.0 │"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:19
+msgid "│  🧠 omnipkg AI suggests:                                 │"
+msgstr "│ 🧠 Omnipkg AI gợi ý: │"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:20
+msgid "│      omnipkg install flask-login==0.6.0                 │"
+msgstr "│ Omnipkg Cài đặt Flask-Login == 0.6.0 │"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:22
+msgid "│  ⚠️  WARNING: pip will NUKE your environment! ⚠️          │"
+msgstr "CẢNH BÁO ⚠ CẢNH BÁO: Pip sẽ nuke môi trường của bạn!⚠"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:23
+msgid "│      • Downgrade from 0.6.3 to 0.6.0                   │"
+msgstr "│ • hạ cấp từ 0,6,3 xuống 0,6,0"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:24
+msgid "│      • Break newer Flask compatibility                  │"
+msgstr "│ • Phá vỡ khả năng tương thích bình mới │"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:25
+msgid "│      • Destroy your modern app                          │"
+msgstr "│ • Phá hủy ứng dụng hiện đại của bạn │"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:26
+msgid "│      • Welcome you to dependency hell 🔥                │"
+msgstr "│ • Chào mừng bạn đến địa ngục phụ thuộc 🔥 │"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:28
+#, fuzzy
+msgid "│  [Y]es, I want chaos | [N]o, save me omnipkg! 🦸‍♂️        │"
+msgstr "│ [y] es, tôi muốn hỗn loạn |[N] o, cứu tôi OMNIPKG!🦸‍♂"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:31
+msgid "        \\   ^__^"
+msgstr "\\ ^__ ^"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:32
+#, fuzzy
+msgid "         \\  (💀💀)\\______   <- This is your environment"
+msgstr "\\ (💀💀) \\ ______ <- Đây là môi trường của bạn"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:33
+#, fuzzy
+msgid "            (__)\\       )\\/\\   after using pip"
+msgstr "(__) \\) \\/\\ sau khi sử dụng pip"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:34
+msgid "                ||---ww |"
+msgstr "|| --- WW |"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:35
+msgid "                ||     ||"
+msgstr "                ||     ||"
+
+#: /home/minds3t/omnipkg/omnipkg/loader.py:42
+#, fuzzy
+msgid ""
+"⚠️ [omnipkg loader] Config not provided or incomplete. Attempting auto-"
+"detection of paths."
+msgstr ""
+"⚠ [Trình tải Omnipkg] Cấu hình không được cung cấp hoặc không đầy đủ.Cố gắng"
+" tự động phát hiện đường dẫn."
+
+#: /home/minds3t/omnipkg/omnipkg/loader.py:47
+#, fuzzy
+msgid ""
+"⚠️ [omnipkg loader] Could not auto-detect site-packages path reliably. "
+"Falling back to sys.prefix."
+msgstr ""
+"⚠ [OMNIPKG Loader] không thể tự động phát hiện đường dẫn gói trang web đáng "
+"tin cậy.Rơi trở lại sys.prefix."
+
+#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:64
+msgid "🟢 --force flag detected. Caching will be ignored."
+msgstr "-Cờ -Force FLAG được phát hiện.Bộ nhớ đệm sẽ bị bỏ qua."
+
+#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:72
+msgid "✅ Connected to Redis successfully."
+msgstr "Kết nối với redis thành công."
+
+#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:83
+#, fuzzy
+msgid "🔍 Discovering all packages from file system (ground truth)..."
+msgstr "Khám phá tất cả các gói từ hệ thống tệp (sự thật mặt đất) ..."
+
+#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:114
+msgid "    -> Reconciling file system state with Redis knowledge base..."
+msgstr "-> đối chiếu trạng thái hệ thống tệp với cơ sở kiến ​​thức Redis ..."
+
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:62
+#, fuzzy
+msgid ""
+"   - Setting main environment to a known good state... (This might trigger "
+"an omnipkg install)"
+msgstr ""
+"- Đặt môi trường chính thành trạng thái tốt đã biết ... (Điều này có thể "
+"kích hoạt cài đặt omnipkg)"
+
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:71
+msgid "✅ Environment is clean and ready for testing."
+msgstr "Môi trường sạch sẽ và sẵn sàng để thử nghiệm."
+
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:79
+msgid ""
+"\n"
+"💥 NUMPY VERSION JUGGLING:"
+msgstr "💥 Phiên bản Numpy tung hứng:"
+
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:97
+msgid ""
+"\n"
+"\n"
+"🔥 SCIPY C-EXTENSION TEST:"
+msgstr "🔥 Kiểm tra mở rộng C-Scipy:"
+
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:119
+msgid ""
+"\n"
+"\n"
+"🤯 NUMPY + SCIPY VERSION MIXING:"
+msgstr "Numpy + SCIPY Pha trộn:"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:284
+#, fuzzy
+msgid "Override the display language for this command (e.g., es, de, ja)"
+msgstr "Ghi đè ngôn ngữ hiển thị cho lệnh này (ví dụ: es, de, ja)"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:285
+msgid "Available commands:"
+msgstr "Các lệnh có sẵn:"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:286
+msgid "Install packages with intelligent conflict resolution"
+msgstr "Cài đặt các gói với giải quyết xung đột thông minh"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:286
+msgid ""
+"Install packages with automatic version management and conflict resolution"
+msgstr "Cài đặt các gói với quản lý phiên bản tự động và giải quyết xung đột"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:287
+#, fuzzy
+msgid "Packages to install (e.g., \"requests==2.25.1\", \"numpy>=1.20\")"
+msgstr "Các gói để cài đặt (ví dụ: \"Yêu cầu == 2.25.1\", \"Numpy> = 1.20\")"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:288
+msgid "Install from requirements file with smart dependency resolution"
+msgstr "Cài đặt từ tệp yêu cầu với độ phân giải phụ thuộc thông minh"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:289
+msgid "Install a package with specific dependency versions"
+msgstr "Cài đặt gói với các phiên bản phụ thuộc cụ thể"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:289
+msgid ""
+"Install a package with specific dependency versions in a bubble to avoid "
+"conflicts"
+msgstr ""
+"Cài đặt gói với các phiên bản phụ thuộc cụ thể trong bong bóng để tránh xung"
+" đột"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:290
+#, fuzzy
+msgid "Package to install (e.g., \"tensorflow==2.13.0\")"
+msgstr "Gói để cài đặt (ví dụ: \"TensorFlow == 2.13.0\")"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:291
+#, fuzzy
+msgid "Dependency with version (e.g., \"numpy==1.24.3\")"
+msgstr "Sự phụ thuộc với phiên bản (ví dụ: \"Numpy == 1.24.3\")"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:292
+msgid "Intelligently remove packages and their dependencies"
+msgstr "Loại bỏ thông minh các gói và sự phụ thuộc của chúng"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:292
+msgid "Smart package removal with safety features"
+msgstr "Loại bỏ gói thông minh với các tính năng an toàn"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:293
+#, fuzzy
+msgid "Packages to uninstall (removes all versions)"
+msgstr "Các gói để gỡ cài đặt (xóa tất cả các phiên bản)"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:294
+#: /home/minds3t/omnipkg/omnipkg/cli.py:322
+msgid "Skip confirmation prompts"
+msgstr "Bỏ qua lời nhắc xác nhận"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:295
+msgid "Interactive package explorer with version management"
+msgstr "Gói tương tác Explorer với Quản lý phiên bản"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:295
+msgid ""
+"Explore package details, dependencies, and manage versions interactively"
+msgstr "Khám phá chi tiết gói, phụ thuộc và quản lý các phiên bản tương tác"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:296
+msgid "Package name to explore"
+msgstr "Tên gói để khám phá"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:297
+#, fuzzy
+msgid "Specific version to inspect (default: active)"
+msgstr "Phiên bản cụ thể để kiểm tra (mặc định: Active)"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:298
+msgid "Time-travel back to your last known good environment"
+msgstr "Du hành thời gian trở lại môi trường tốt cuối cùng của bạn"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:298
+msgid "Revert all changes to the last stable environment state"
+msgstr ""
+"Hoàn nguyên tất cả các thay đổi đối với trạng thái môi trường ổn định cuối "
+"cùng"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:299
+msgid "Skip confirmation and revert immediately"
+msgstr "Bỏ qua xác nhận và hoàn nguyên ngay lập tức"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:300
+msgid "View all installed packages and their bubble status"
+msgstr "Xem tất cả các gói đã cài đặt và trạng thái bong bóng của chúng"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:300
+msgid "List all packages with detailed status indicators"
+msgstr "Liệt kê tất cả các gói với các chỉ báo trạng thái chi tiết"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:301
+msgid "Filter packages by name pattern"
+msgstr "Bộ lọc gói theo mẫu tên"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:302
+msgid "Multi-version environment health dashboard"
+msgstr "Bảng điều khiển sức khỏe môi trường đa phiên bản"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:302
+msgid "Overview of your Python interpreters, packages, and bubble isolation"
+msgstr "Tổng quan về phiên dịch viên, gói và sự cô lập bong bóng của bạn"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:303
+msgid "Interactive demo for version switching"
+msgstr "Bản demo tương tác để chuyển đổi phiên bản"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:303
+#, fuzzy
+msgid ""
+"Run interactive demos showcasing omnipkg's version-switching capabilities:\n"
+"        1. Rich test (Python module switching)\n"
+"        2. UV test (binary switching)\n"
+"        3. NumPy + SciPy stress test (C-extension switching)\n"
+"        4. TensorFlow test (complex dependency switching)\n"
+"        Note: The Flask demo is under construction and not currently available."
+msgstr ""
+"Chạy các bản demo tương tác giới thiệu các khả năng chuyển đổi phiên bản của Omnipkg:\n"
+"1. Kiểm tra phong phú (chuyển đổi mô -đun Python)\n"
+"2. Kiểm tra UV (chuyển đổi nhị phân)\n"
+"3. Kiểm tra ứng suất Numpy + Scipy (chuyển đổi mở rộng C)\n"
+"4. Kiểm tra tenorflow (chuyển đổi phụ thuộc phức tạp)\n"
+"LƯU Ý: Demo Flask đang được xây dựng và hiện không có sẵn."
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:304
+msgid "Ultimate demonstration with heavy scientific packages"
+msgstr "Trình diễn cuối cùng với các gói khoa học nặng"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:304
+msgid ""
+"Showcase omnipkg's features with large package installations and version "
+"switching"
+msgstr ""
+"Hiển thị các tính năng của Omnipkg với cài đặt gói lớn và chuyển đổi phiên "
+"bản"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:305
+msgid "Clean slate: rebuild the omnipkg knowledge base"
+msgstr "Clean Slate: Xây dựng lại cơ sở kiến ​​thức omnipkg"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:305
+msgid "Delete and rebuild the Redis knowledge base from scratch"
+msgstr "Xóa và xây dựng lại cơ sở kiến ​​thức Redis từ đầu"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:306
+msgid "Skip confirmation"
+msgstr "Bỏ qua xác nhận"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:307
+msgid "Refresh the intelligence knowledge base"
+msgstr "Làm mới cơ sở kiến ​​thức thông minh"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:307
+msgid "Force rebuild of package metadata and dependency intelligence"
+msgstr "Lực lượng xây dựng lại siêu dữ liệu gói và trí thông minh phụ thuộc"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:308
+msgid "Ignore cache and force complete rebuild"
+msgstr "Bỏ qua bộ nhớ cache và buộc xây dựng lại hoàn toàn"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:309
+msgid "Delete the config file to trigger a fresh setup"
+msgstr "Xóa tệp cấu hình để kích hoạt thiết lập mới"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:309
+msgid "Deletes the omnipkg config.json file"
+msgstr "Xóa tệp OMNIPKG config.json"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:310
+msgid "Skip confirmation and delete immediately"
+msgstr "Bỏ qua xác nhận và xóa ngay lập tức"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:311
+msgid "View or edit the omnipkg configuration"
+msgstr "Xem hoặc chỉnh sửa cấu hình OMNIPKG"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:311
+msgid "Allows setting persistent configuration values"
+msgstr "Cho phép thiết lập các giá trị cấu hình liên tục"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:313
+msgid "Set a configuration value"
+msgstr "Đặt giá trị cấu hình"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:315
+msgid "The configuration key to set"
+msgstr "Phím cấu hình để đặt"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:377
+#, fuzzy
+msgid "✅ Language permanently set to: {lang}"
+msgstr "Ngôn ngữ được đặt vĩnh viễn thành: {lang}"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:395
+msgid "Interactive Omnipkg Demo"
+msgstr "Bản demo OMNIPKG tương tác"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:396
+msgid "🎪 Omnipkg supports version switching for:"
+msgstr "OMNIPKG hỗ trợ chuyển đổi phiên bản cho:"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:397
+#, fuzzy
+msgid "   • Python modules (e.g., rich): See tests/test_rich_switching.py"
+msgstr "• Mô -đun Python (ví dụ: Giàu): Xem Test/test_rich_switching.py"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:398
+#, fuzzy
+msgid "   • Binary packages (e.g., uv): See tests/test_uv_switching.py"
+msgstr "• Gói nhị phân (ví dụ: UV): Xem Test/test_uv_switching.py"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:399
+#, fuzzy
+msgid "   • C-extension packages (e.g., numpy, scipy): See stress_test.py"
+msgstr "• Các gói mở rộng C (ví dụ: Numpy, Scipy): xem stress_test.py"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:400
+#, fuzzy
+msgid ""
+"   • Complex dependency packages (e.g., TensorFlow): See "
+"tests/test_tensorflow_switching.py"
+msgstr ""
+"• Các gói phụ thuộc phức tạp (ví dụ: TensorFlow): Xem "
+"Tests/test_tensorflow_switching.py"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:401
+msgid ""
+"   • Note: The Flask demo is under construction and not currently available."
+msgstr "• Lưu ý: Bản demo bình đang được xây dựng và hiện không có sẵn."
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:402
+msgid ""
+"\n"
+"Select a demo to run:"
+msgstr "Chọn bản demo để chạy:"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:403
+#, fuzzy
+msgid "1. Rich test (Python module switching)"
+msgstr "1. Kiểm tra phong phú (chuyển đổi mô -đun Python)"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:404
+#, fuzzy
+msgid "2. UV test (binary switching)"
+msgstr "2. Kiểm tra UV (chuyển đổi nhị phân)"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:405
+#, fuzzy
+msgid "3. NumPy + SciPy stress test (C-extension switching)"
+msgstr "3. Kiểm tra ứng suất Numpy + Scipy (chuyển đổi mở rộng C)"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:406
+#, fuzzy
+msgid "4. TensorFlow test (complex dependency switching)"
+msgstr "4. Kiểm tra tenorflow (chuyển đổi phụ thuộc phức tạp)"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:407
+#, fuzzy
+msgid "5. Flask test (under construction)"
+msgstr "5. Kiểm tra Flask (đang được xây dựng)"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:409
+#, fuzzy
+msgid "Enter your choice (1-5): "
+msgstr "Nhập lựa chọn của bạn (1-5):"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:421
+msgid "  ⚠️  NumPy/SciPy Stress Test Requires Python 3.11"
+msgstr "Kiểm tra căng thẳng Numpy/Scipy yêu cầu Python 3.11"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:434
+msgid "⚠️ The Flask demo is under construction and not currently available."
+msgstr "Bản demo của bình đang được xây dựng và hiện không có sẵn."
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:435
+#, fuzzy
+msgid "Switching to the Rich test (option 1) for now!"
+msgstr "Chuyển sang bài kiểm tra phong phú (tùy chọn 1) ngay bây giờ!"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:437
+msgid "❌ Invalid choice. Please select 1, 2, 3, 4, or 5."
+msgstr "Lựa chọn không hợp lệ.Vui lòng chọn 1, 2, 3, 4 hoặc 5."
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:500
+msgid ""
+"\n"
+"💡 Did you mean 'omnipkg config set language <code>'?"
+msgstr "💡 Ý bạn là 'OMNIPKG Config Set Language <code>'?"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:504
+msgid ""
+"\n"
+"❌ Operation cancelled by user."
+msgstr "Hoạt động bị hủy bởi người dùng."
+
+#: /home/minds3t/omnipkg/omnipkg/common_utils.py:35
+#: /home/minds3t/omnipkg/omnipkg/demo.py:67
+msgid "💭 Simulating Enter key press..."
+msgstr "💭 Mô phỏng Nhấn phím ..."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:183
+#, fuzzy
+msgid ""
+"   1) stable-main:  Prioritize a stable main environment. (Recommended)"
+msgstr "1) ổn định-Main: Ưu tiên môi trường chính ổn định.(Khuyến khích)"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:184
+#, fuzzy
+msgid "   2) latest-active: Prioritize having the latest versions active."
+msgstr "2) Hoạt động mới nhất: Ưu tiên có các phiên bản mới nhất hoạt động."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:185
+#, fuzzy
+msgid "   Enter choice (1 or 2) [1]: "
+msgstr "Nhập lựa chọn (1 hoặc 2) [1]:"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:198
+#, fuzzy
+msgid "Configuration saved to {path}."
+msgstr "Cấu hình được lưu vào {path}."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:199
+msgid "   You can edit this file manually later."
+msgstr "Bạn có thể chỉnh sửa tệp này theo cách thủ công sau."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:213
+msgid "Warning: Config file is corrupted. Starting fresh."
+msgstr "Cảnh báo: Tệp cấu hình bị hỏng.Bắt đầu mới."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:218
+#, fuzzy
+msgid "Updating config: Adding missing key '{key}'."
+msgstr "Cập nhật cấu hình: Thêm khóa bị thiếu '{key}'."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:223
+msgid "✅ Config file updated successfully."
+msgstr "Cấu hình tệp được cập nhật thành công."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:263
+msgid "    ⚠️ Warning: Failed to load path registry, starting fresh."
+msgstr "CẢNH BÁO: Không thể tải đăng ký đường dẫn, bắt đầu mới."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:324
+msgid "    -> Trying strategy 1: pip dry-run..."
+msgstr "-> Cố gắng chiến lược 1: Pip Dry Run ..."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:327
+msgid "    ✅ Success: Dependencies resolved via pip dry-run."
+msgstr "Thành công: Phụ thuộc được giải quyết thông qua PIP Dry Run."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:329
+msgid "    -> Trying strategy 2: PyPI API..."
+msgstr "-> Cố gắng chiến lược 2: API PYPI ..."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:332
+msgid "    ✅ Success: Dependencies resolved via PyPI API."
+msgstr "Thành công: Phụ thuộc được giải quyết thông qua API PYPI."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:334
+msgid "    -> Trying strategy 3: pip show fallback..."
+msgstr "-> Cố gắng chiến lược 3: Fallback Show Pip ..."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:337
+msgid "    ✅ Success: Dependencies resolved from existing installation."
+msgstr "Thành công: Phụ thuộc được giải quyết từ cài đặt hiện có."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:672
+msgid "    🔍 Verifying package integrity..."
+msgstr "🔍 Xác minh tính toàn vẹn của gói ..."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:749
+msgid "    ⚡️ Loading main environment hash index from cache..."
+msgstr "⚡ tải chỉ mục băm môi trường chính từ bộ đệm ..."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:756
+msgid "    📦 Attempting fast indexing via package metadata..."
+msgstr "Cố gắng lập chỉ mục nhanh qua siêu dữ liệu gói ..."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1065
+msgid "❌ Could not connect to Redis. Is the Redis server running?"
+msgstr "Không thể kết nối với redis.Máy chủ Redis có đang chạy không?"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1077
+msgid "✅ Configuration file does not exist. Nothing to do."
+msgstr "Tệp cấu hình không tồn tại.Không có gì để làm."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1084
+#: /home/minds3t/omnipkg/omnipkg/core.py:1114
+msgid "🚫 Reset cancelled."
+msgstr "Đặt lại hủy bỏ."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1088
+msgid "✅ Configuration file deleted successfully."
+msgstr "Tệp cấu hình đã xóa thành công."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1090
+msgid ""
+"🚀 The next time you run `omnipkg`, you will be guided through the first-time"
+" setup."
+msgstr ""
+"Lần sau khi bạn chạy `omnipkg`, bạn sẽ được hướng dẫn thông qua thiết lập "
+"lần đầu tiên."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1116
+msgid ""
+"\n"
+"🗑️  Clearing knowledge base..."
+msgstr "🗑 Xóa nền tảng kiến ​​thức ..."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1124
+msgid "   ✅ Knowledge base was already clean."
+msgstr "Cơ sở kiến ​​thức đã sạch sẽ."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1134
+msgid "🧠 Forcing a full rebuild of the knowledge base..."
+msgstr "🧠 Buộc xây dựng lại toàn bộ cơ sở kiến ​​thức ..."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1142
+msgid "✅ Knowledge base rebuilt successfully."
+msgstr "Cơ sở kiến ​​thức được xây dựng lại thành công."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1159
+msgid "   🔄 Rebuilding core package metadata..."
+msgstr "🔄 Xây dựng lại siêu dữ liệu gói lõi ..."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1163
+msgid "   ✅ Core metadata rebuilt."
+msgstr "Siêu dữ liệu cốt lõi được xây dựng lại."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1219
+msgid "🧠 Performing self-healing sync of knowledge base..."
+msgstr "🧠 Thực hiện đồng bộ hóa bản thân của cơ sở kiến ​​thức ..."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1233
+msgid "   ✅ Knowledge base is empty or no packages found to sync."
+msgstr ""
+"Cơ sở kiến ​​thức trống hoặc không có gói nào được tìm thấy để đồng bộ hóa."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1276
+msgid "   ✅ Knowledge base is already in sync with the environment."
+msgstr "Cơ sở kiến ​​thức đã đồng bộ với môi trường."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1285
+msgid "🔄 Updating cached file hash index..."
+msgstr "🔄 Cập nhật tệp băm tập tin lưu trữ ..."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1306
+msgid "✅ Hash index updated."
+msgstr "Chỉ số băm được cập nhật."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1358
+msgid "✅ Knowledge base is already up to date."
+msgstr "Cơ sở kiến ​​thức đã được cập nhật."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1360
+msgid "🧠 Updating knowledge base for changes..."
+msgstr "🧠 Cập nhật cơ sở kiến ​​thức cho các thay đổi ..."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1383
+msgid "✅ Knowledge base updated successfully."
+msgstr "Cơ sở kiến ​​thức cập nhật thành công."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1454
+msgid "❌ Invalid selection."
+msgstr "Lựa chọn không hợp lệ."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1456
+msgid "❌ Please enter a number."
+msgstr "❌ Vui lòng nhập một số."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1458
+msgid ""
+"\n"
+"   Skipped."
+msgstr "Bỏ qua."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1460
+msgid "📦 No installed versions found in Redis."
+msgstr "Không có phiên bản cài đặt nào được tìm thấy trong redis."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1515
+msgid "   ✅ Snapshot saved."
+msgstr "✅ Snapshot được lưu."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1545
+msgid "🔬 Running in --dry-run mode. No changes will be made."
+msgstr "Chạy trong chế độ-Dry-Run.Không có thay đổi sẽ được thực hiện."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1548
+msgid "🚫 No packages specified for installation."
+msgstr "Không có gói được chỉ định để cài đặt."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1564
+#, fuzzy
+msgid ""
+"  (No version specified for omnipkg; attempting to bubble the latest stable "
+"version)"
+msgstr ""
+"(Không có phiên bản nào được chỉ định cho OMNIPKG; cố gắng bong bóng phiên "
+"bản ổn định mới nhất)"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1579
+msgid ""
+"\n"
+"🎉 All package operations complete."
+msgstr "Tất cả các hoạt động gói hoàn tất."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1602
+msgid ""
+"\n"
+"📸 Taking LIVE pre-installation snapshot..."
+msgstr "📸 Nhận ảnh chụp nhanh trực tiếp ..."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1612
+msgid ""
+"\n"
+"🔬 Analyzing post-installation changes..."
+msgstr "Phân tích các thay đổi sau khi cài đặt ..."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1627
+msgid ""
+"\n"
+"🛡️ STABILITY PROTECTION ACTIVATED!"
+msgstr "Bảo vệ ổn định được kích hoạt!"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1637
+msgid ""
+"\n"
+"✅ Stability protection complete!"
+msgstr "Bảo vệ ổn định hoàn thành!"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1639
+msgid ""
+"✅ No changes to existing packages detected. Installation completed safely."
+msgstr ""
+"Không có thay đổi đối với các gói hiện có được phát hiện.Cài đặt hoàn thành "
+"an toàn."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1699
+msgid "🎉 All package operations complete."
+msgstr "Tất cả các hoạt động gói hoàn tất."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1753
+msgid "🔄 Restoring main environment from snapshot..."
+msgstr "🔄 Khôi phục môi trường chính từ ảnh chụp nhanh ..."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1759
+msgid "   ✅ Environment is already in its original state."
+msgstr "Môi trường đã ở trạng thái ban đầu."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1767
+msgid "   ✅ Environment restored."
+msgstr "Môi trường được khôi phục."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1929
+msgid "🤷 No versions available for selection."
+msgstr "Không có phiên bản có sẵn để lựa chọn."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1934
+#: /home/minds3t/omnipkg/omnipkg/core.py:1965
+msgid "🚫 Uninstall cancelled."
+msgstr "Gỡ cài đặt bị hủy."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1943
+msgid "❌ Invalid input."
+msgstr "Đầu vào không hợp lệ."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1947
+msgid ""
+"\n"
+"🚫 Uninstall cancelled."
+msgstr "Gỡ cài đặt bị hủy."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1957
+msgid "🤷 No versions selected for uninstallation after protection checks."
+msgstr ""
+"Không có phiên bản nào được chọn để gỡ cài đặt sau khi kiểm tra bảo vệ."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1993
+msgid "✅ Uninstallation complete."
+msgstr "Chứng minh hoàn thành."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2005
+msgid ""
+"   Run an `omnipkg install` or `omnipkg uninstall` command to create one."
+msgstr "Chạy một lệnh `OMNIPKG` hoặc `OMNIPKG uninstall` để tạo một lệnh."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2007
+msgid "⚖️  Comparing current environment to the last known good snapshot..."
+msgstr ""
+"So sánh môi trường hiện tại với ảnh chụp nhanh được biết đến cuối cùng ..."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2016
+msgid ""
+"✅ Your environment is already in the last known good state. No action "
+"needed."
+msgstr ""
+"Môi trường của bạn đã ở trạng thái tốt cuối cùng được biết đến.Không cần "
+"hành động."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2018
+msgid ""
+"\n"
+"📝 The following actions will be taken to restore the environment:"
+msgstr "Các hành động sau đây sẽ được thực hiện để khôi phục môi trường:"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2028
+msgid "🚫 Revert cancelled."
+msgstr "Hoàn nguyên bị hủy."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2030
+msgid ""
+"\n"
+"🚀 Starting revert operation..."
+msgstr "🚀 Khởi động hoạt động hoàn nguyên ..."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2036
+msgid ""
+"\n"
+"✅ Environment successfully reverted to the last known good state."
+msgstr ""
+"Môi trường trở lại thành công trở lại trạng thái tốt được biết đến cuối "
+"cùng."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2246
+#, fuzzy
+msgid "  (No versions found in knowledge base)"
+msgstr "(Không có phiên bản nào được tìm thấy trong cơ sở kiến ​​thức)"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2259
+msgid "🔄 omnipkg System Status"
+msgstr "Trạng thái hệ thống OMNIPKG"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2264
+#: /home/minds3t/omnipkg/omnipkg/core.py:2267
+#, fuzzy
+msgid ""
+"\n"
+"🔒 Pip in Jail (main environment)"
+msgstr "🔒 PIP trong tù (môi trường chính)"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2268
+msgid "    🚫 Pip not found in the main env. Escaped or never caught!"
+msgstr ""
+"PIP không được tìm thấy trong env chính.Trốn thoát hoặc không bao giờ bị "
+"bắt!"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2271
+#: /home/minds3t/omnipkg/omnipkg/core.py:2274
+#, fuzzy
+msgid "🔒 UV in Jail (main environment)"
+msgstr "UV trong tù (môi trường chính)"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2275
+msgid "    🚫 UV not found in the main env. Too fast to catch!"
+msgstr "UV không được tìm thấy trong env chính.Quá nhanh để bắt!"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2276
+msgid ""
+"\n"
+"🌍 Main Environment:"
+msgstr "🌍 Môi trường chính:"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2281
+#, fuzzy
+msgid ""
+"\n"
+"📦 izolasyon Alanı (Bubbles):"
+msgstr "📦 Izolasyon Alanı (bong bóng):"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2283
+msgid "  - No isolated package versions found."
+msgstr "- Không tìm thấy phiên bản gói bị cô lập."
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:90
+msgid ""
+"This demo will show you the classic dependency conflict and how omnipkg "
+"solves it."
+msgstr ""
+"Bản demo này sẽ cho bạn thấy xung đột phụ thuộc cổ điển và cách Omnipkg giải"
+" quyết nó."
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:95
+msgid ""
+"\n"
+"✅ Beautiful! We have flask-login 0.6.3 installed and working perfectly."
+msgstr ""
+"✅ Đẹp!Chúng tôi có Flask-Login 0.6.3 được cài đặt và hoạt động hoàn hảo."
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:104
+#, fuzzy
+msgid ""
+"\n"
+"🔓 Releasing pip... (your funeral)"
+msgstr "🔓 Phát hành Pip ... (đám tang của bạn)"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:105
+msgid "💀 Watch as pip destroys your beautiful environment..."
+msgstr "💀 Xem khi Pip phá hủy môi trường đẹp của bạn ..."
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:107
+msgid ""
+"\n"
+"💥 BOOM! Look what pip did:"
+msgstr "💥 Boom!Nhìn những gì Pip đã làm:"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:108
+msgid "   ❌ Uninstalled flask-login 0.6.3"
+msgstr "Flask-flask được cài đặt-login 0.6.3"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:109
+msgid "   ❌ Downgraded to flask-login 0.6.0"
+msgstr "Được hạ cấp xuống Flask-Login 0.6.0"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:110
+msgid "   ❌ Your modern project is now BROKEN"
+msgstr "❌ Dự án hiện đại của bạn hiện đang bị phá vỡ"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:111
+msgid "   ❌ Welcome to dependency hell! 🔥"
+msgstr "Chào mừng bạn đến địa ngục phụ thuộc!🔥"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:116
+msgid "Watch how omnipkg handles this intelligently:"
+msgstr "Xem cách Omnipkg xử lý điều này một cách thông minh:"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:118
+msgid ""
+"\n"
+"✅ omnipkg intelligently restored the modern version!"
+msgstr "Omnipkg đã khôi phục một cách thông minh phiên bản hiện đại!"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:119
+msgid "💡 Notice: No conflicts, no downgrades, just pure intelligence."
+msgstr ""
+"Thông báo: Không có xung đột, không hạ cấp, chỉ là trí thông minh thuần túy."
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:127
+msgid ""
+"\n"
+"🧠 Smart choice! Using omnipkg instead..."
+msgstr "🧠 Sự lựa chọn thông minh!Sử dụng omnipkg thay thế ..."
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:129
+msgid "🔧 Installing flask-login==0.6.0 with omnipkg..."
+msgstr "Cài đặt Flask-Login == 0.6.0 với Omnipkg ..."
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:130
+msgid ""
+"💡 omnipkg will skip if already available or create isolation as needed..."
+msgstr "Omnipkg sẽ bỏ qua nếu đã có hoặc tạo sự cô lập khi cần ..."
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:132
+msgid ""
+"\n"
+"✅ omnipkg install successful!"
+msgstr "Omnipkg Cài đặt thành công!"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:133
+msgid "🎯 BOTH versions now coexist peacefully!"
+msgstr "Cả hai phiên bản bây giờ cùng tồn tại hòa bình!"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:139
+msgid ""
+"\n"
+"🔧 Note how omnipkg intelligently manages versions!"
+msgstr "Lưu ý cách các phiên bản quản lý thông minh của OnePKG!"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:140
+#, fuzzy
+msgid "📦 Main environment: flask-login 0.6.3 (untouched)"
+msgstr "Môi trường chính: Flask-login 0.6.3 (không bị ảnh hưởng)"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:141
+#, fuzzy
+msgid "🔧 omnipkg: flask-login 0.6.0 (available when needed)"
+msgstr "Omnipkg: Flask-login 0.6.0 (có sẵn khi cần thiết)"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:144
+msgid "💡 Want details on a specific version?"
+msgstr "💡 Muốn chi tiết về một phiên bản cụ thể?"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:147
+msgid ""
+"\n"
+"🎯 Now you can see that BOTH versions are available to the system."
+msgstr ""
+"Bây giờ bạn có thể thấy rằng cả hai phiên bản đều có sẵn cho hệ thống."
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:160
+msgid ""
+"\n"
+"See test above: we not only have multiple versions in the same environment, but can even run them in the same script!"
+msgstr ""
+"Xem bài kiểm tra ở trên: Chúng tôi không chỉ có nhiều phiên bản trong cùng "
+"một môi trường, mà thậm chí có thể chạy chúng trong cùng một kịch bản!"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:163
+msgid "🎉🎉🎉 DEMO COMPLETE! 🎉🎉🎉"
+msgstr "Bản demo hoàn thành!🎉🎉🎉"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:164
+msgid "📚 What you learned:"
+msgstr "📚 Những gì bạn đã học:"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:165
+msgid "   💀 pip: Breaks everything, creates dependency hell"
+msgstr "💀 PIP: phá vỡ mọi thứ, tạo ra địa ngục phụ thuộc"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:166
+msgid "   🧠 omnipkg: Smart isolation, peaceful coexistence"
+msgstr "Omnipkg: sự cô lập thông minh, sự cùng tồn tại hòa bình"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:167
+msgid "   🔧 Intelligence: Skips redundant work, creates isolation when needed"
+msgstr ""
+"Trí thông minh: Bỏ qua công việc dư thừa, tạo ra sự cô lập khi cần thiết"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:168
+msgid "   🔄 Magic: Seamless switching without containers"
+msgstr "🔄 Phép thuật: Chuyển đổi liền mạch không có thùng chứa"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:169
+msgid "🚀 Dependency hell is officially SOLVED!"
+msgstr "Hiểu địa ngục phụ thuộc được chính thức giải quyết!"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:170
+msgid "   Welcome to omnipkg heaven!"
+msgstr "Chào mừng đến với thiên đường Omnipkg!"
+
+#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:141
+#, fuzzy
+msgid ""
+"🚀 Starting omnipkg Metadata Builder v11 (Multi-Version Complete Edition)..."
+msgstr ""
+"🚀 Khởi động Omnipkg Metadata Builder v11 (Phiên bản hoàn thành đa phiên bản)"
+" ..."
+
+#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:152
+msgid "🔍 No specific targets provided. Discovering all installed packages..."
+msgstr ""
+"Không có mục tiêu cụ thể được cung cấp.Khám phá tất cả các gói đã cài đặt "
+"..."
+
+#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:154
+msgid "🛡️ Performing bulk security scan for active packages..."
+msgstr "Thực hiện quét bảo mật số lượng lớn cho các gói hoạt động ..."
+
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:249
+msgid ""
+"\n"
+"✅ Cleanup complete. Your environment is back to normal."
+msgstr "Dọn dẹp hoàn chỉnh.Môi trường của bạn đã trở lại bình thường."
+
+#: /home/minds3t/omnipkg/omnipkg/activator.py:53
+#, fuzzy
+msgid "_omnipkg_ACTIVE_{}"
+msgstr "_omnipkg_active_ {}"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:51
+#: /home/minds3t/omnipkg/omnipkg/cli.py:423
+#, fuzzy
+msgid "Current Python version: {}.{}"
+msgstr "Phiên bản Python hiện tại: {}. {}"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:106
+#, fuzzy
+msgid "❌ An error occurred during stress test execution: {}"
+msgstr "Lỗi xảy ra trong quá trình thực thi kiểm tra căng thẳng: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:112
+#: /home/minds3t/omnipkg/omnipkg/cli.py:160
+#, fuzzy
+msgid "🚀 Running {} test from {}..."
+msgstr "🚀 chạy {} kiểm tra từ {} ..."
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:139
+#: /home/minds3t/omnipkg/omnipkg/cli.py:188
+#, fuzzy
+msgid "❌ Demo failed with return code {}"
+msgstr "❌ Demo không thành công với mã trả về {}"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:152
+#, fuzzy
+msgid "❌ Demo failed with error: {}"
+msgstr "❌ Demo không thành công với lỗi: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:203
+#, fuzzy
+msgid ""
+"\n"
+"❌ Demo failed with error: {}"
+msgstr "❌ Demo không thành công với lỗi: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:328
+#: /home/minds3t/omnipkg/omnipkg/common_utils.py:55
+#: /home/minds3t/omnipkg/omnipkg/demo.py:81
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:37
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:29
+#, fuzzy
+msgid "  🚀 {}"
+msgstr "  🚀 {}"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:372
+#, fuzzy
+msgid "❌ Error: Language '{}' not supported. Supported: {}"
+msgstr "Lỗi: Ngôn ngữ '{}' không được hỗ trợ.Được hỗ trợ: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:440
+#, fuzzy
+msgid "❌ Error: Test file {} not found."
+msgstr "❌ Lỗi: Tệp kiểm tra {} không tìm thấy."
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:454
+#, fuzzy
+msgid "❌ Error: Requirements file not found at '{}'"
+msgstr "❌ Lỗi: Tệp yêu cầu không tìm thấy tại '{}'"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:456
+#, fuzzy
+msgid "📄 Reading packages from {}..."
+msgstr "📄 Đọc các gói từ {} ..."
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:507
+#, fuzzy
+msgid ""
+"\n"
+"❌ An unexpected error occurred: {}"
+msgstr "❌ Đã xảy ra lỗi không mong muốn: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/common_utils.py:24
+#: /home/minds3t/omnipkg/omnipkg/common_utils.py:46
+#, fuzzy
+msgid "Subprocess command '{}' failed with exit code {}."
+msgstr "Lệnh SubProcess '{}' không thành công với mã thoát {}."
+
+#: /home/minds3t/omnipkg/omnipkg/common_utils.py:60
+#: /home/minds3t/omnipkg/omnipkg/demo.py:40
+#, fuzzy
+msgid ""
+"\n"
+"Choice (y/n): "
+msgstr "Lựa chọn (Y/N):"
+
+#: /home/minds3t/omnipkg/omnipkg/common_utils.py:64
+#: /home/minds3t/omnipkg/omnipkg/demo.py:44
+#, fuzzy
+msgid "💭 {}"
+msgstr "💭 {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:81
+#, fuzzy
+msgid "⚠️ Warning: Could not recursively read package metadata: {}"
+msgstr "CẢNH BÁO: Không thể đọc siêu dữ liệu siêu dữ liệu: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:131
+#, fuzzy
+msgid "python{}.{}"
+msgstr "Python {}. {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:283
+#: /home/minds3t/omnipkg/omnipkg/core.py:497
+#, fuzzy
+msgid "{}bubble:{}:{}:file_paths"
+msgstr "{} bong bóng: {}: {}: file_paths"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:297
+#, fuzzy
+msgid "🫧 Creating isolated bubble for {} v{}"
+msgstr "🫧 Tạo bong bóng bị cô lập cho {} V {}"
+
+#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:425
+#, fuzzy
+msgid "{}-{}"
+msgstr "{}-{}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:313
+msgid "    📦 Installing full dependency tree to temporary location..."
+msgstr "📦 Cài đặt cây phụ thuộc đầy đủ vào vị trí tạm thời ..."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:316
+#, fuzzy
+msgid "    ❌ Failed to install exact version tree: {}"
+msgstr "❌ Không cài đặt Cây phiên bản chính xác: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:320
+#, fuzzy
+msgid "    ❌ Unexpected error during installation: {}"
+msgstr "❌ Lỗi không mong muốn trong quá trình cài đặt: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:339
+#, fuzzy
+msgid "    ⚠️ All dependency resolution strategies failed for {}=={}."
+msgstr ""
+"Tất cả các chiến lược độ phân giải phụ thuộc không thành công cho {} == {}."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:340
+msgid "    ℹ️  Proceeding with full temporary installation to build bubble."
+msgstr "Kỷ yếu với cài đặt tạm thời đầy đủ để xây dựng bong bóng."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:347
+#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:342
+#, fuzzy
+msgid "{}=={}\n"
+msgstr "{} == {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:425
+#, fuzzy
+msgid "{}{}"
+msgstr "{} {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:504
+#, fuzzy
+msgid "    ⚠️  Could not analyze {}: {}"
+msgstr "Không thể phân tích {}: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:506
+#, fuzzy
+msgid ""
+"    ⚠️  Found {} files not in registry. They will be registered during "
+"bubble creation."
+msgstr ""
+"⚠ Tìm thấy {} Tệp không có trong Đăng ký.Họ sẽ được đăng ký trong quá trình "
+"tạo bong bóng."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:552
+#, fuzzy
+msgid "    🧹 Creating deduplicated bubble at {}"
+msgstr "🧹 Tạo bong bóng trùng lặp tại {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:566
+#, fuzzy
+msgid "    🔬 Found C-extension packages: {}"
+msgstr "🔬 Đã tìm thấy các gói C-Extension: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:568
+#, fuzzy
+msgid "    ⚙️  Found binary packages: {}"
+msgstr "⚙ Tìm thấy các gói nhị phân: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:570
+#, fuzzy
+msgid "    📦 Found complex packages with submodules: {}"
+msgstr "📦 Tìm thấy các gói phức tạp với các mô hình con: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:575
+#, fuzzy
+msgid "    🔬 {}: C-extension - copying all files"
+msgstr "🔬 {}: C -Extension - Sao chép tất cả các tệp"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:578
+#, fuzzy
+msgid "    ⚙️  {}: Binary package - copying all files"
+msgstr "⚙ {}: Gói nhị phân - Sao chép tất cả các tệp"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:581
+#, fuzzy
+msgid "    📦 {}: Complex package ({} submodules) - copying all files"
+msgstr "📦 {}: Gói phức tạp ({} Submodules) - Sao chép tất cả các tệp"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:619
+#, fuzzy
+msgid "    📄 {}: copied {}, deduplicated {}"
+msgstr "📄 {}: đã sao chép {}, sao chép {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:623
+#, fuzzy
+msgid "    ⚠️  Found {} file(s) not listed in package metadata."
+msgstr "⚠ Tìm thấy {} (các) tệp không được liệt kê trong siêu dữ liệu gói."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:631
+#, fuzzy
+msgid "    📦 {}: found {} additional files"
+msgstr "📦 {}: tìm thấy {} các tệp bổ sung"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:660
+#, fuzzy
+msgid "    ✅ Bubble created: {} files copied, {} deduplicated."
+msgstr "✅ bong bóng được tạo: {} Các tệp được sao chép, {} được sao chép."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:661
+#, fuzzy
+msgid "    📊 Space efficiency: {}% saved."
+msgstr "Hiệu suất không gian: {}% được lưu."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:663
+#, fuzzy
+msgid "    📦 Complex packages preserved: {} packages with submodules"
+msgstr "Các gói phức tạp được bảo tồn: {} Gói với các mô hình con"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:683
+#, fuzzy
+msgid "    ⚠️  Missing package directory: {}"
+msgstr "⚠ Thiếu thư mục gói: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:690
+#, fuzzy
+msgid "    🚨 CRITICAL: Missing Python module: {}"
+msgstr "🚨 Quan trọng: Thiếu mô -đun Python: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:692
+#, fuzzy
+msgid "    🔧 Fixed: Copied missing module {}"
+msgstr "🔧 Đã sửa: đã sao chép Module bị thiếu {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:725
+#, fuzzy
+msgid "    ⚠️ Warning: Failed to copy {}: {}"
+msgstr "CẢNH BÁO: Không thể sao chép {}: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:747
+#: /home/minds3t/omnipkg/omnipkg/core.py:1282
+#, fuzzy
+msgid "{}main_env:file_hashes"
+msgstr "{} main_env: file_hashes"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:751
+#, fuzzy
+msgid "    📈 Loaded {} file hashes from Redis."
+msgstr "📈 Đã tải {} băm từ redis."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:753
+msgid "    🔍 Building main environment hash index..."
+msgstr "🔍 Xây dựng chỉ số băm môi trường chính ..."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:781
+#, fuzzy
+msgid "    ✅ Successfully indexed {} packages via metadata"
+msgstr "✅ Các gói được lập chỉ mục thành công {} qua siêu dữ liệu"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:783
+#, fuzzy
+msgid "    🔄 Fallback scan for {} packages: {}{}"
+msgstr "🔄 Fallback Scan cho các gói {}: {} {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:796
+#, fuzzy
+msgid "    ⚠️ Metadata approach failed ({}), falling back to full scan..."
+msgstr ""
+"Cách tiếp cận siêu dữ liệu không thành công ({}), rơi trở lại quét toàn bộ "
+"..."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:803
+#, fuzzy
+msgid "    💾 Saving {} file hashes to Redis cache..."
+msgstr "💾 Lưu {} băm tệp để làm lại bộ nhớ cache ..."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:809
+#, fuzzy
+msgid "    📈 Indexed {} files from main environment."
+msgstr "📈 Các tệp {} được lập chỉ mục từ môi trường chính."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:854
+#: /home/minds3t/omnipkg/omnipkg/core.py:882
+#: /home/minds3t/omnipkg/omnipkg/core.py:909
+#, fuzzy
+msgid "{}bubble_locations"
+msgstr "{} bong bóng_Locations"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:850
+#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:29
+#, fuzzy
+msgid "{}.{}"
+msgstr "{}. {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:820
+#, fuzzy
+msgid "    📝 Registered bubble location and stats for {} packages."
+msgstr "📝 Vị trí và số liệu thống kê bong bóng đã đăng ký cho các gói {}."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1379
+#, fuzzy
+msgid "bubble_version:{}"
+msgstr "Bubble_version: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:865
+#: /home/minds3t/omnipkg/omnipkg/core.py:1980
+#: /home/minds3t/omnipkg/omnipkg/core.py:2221
+#, fuzzy
+msgid "{}:installed_versions"
+msgstr "{}: Cài đặt_versions"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:869
+#: /home/minds3t/omnipkg/omnipkg/core.py:894
+#: /home/minds3t/omnipkg/omnipkg/core.py:899
+#: /home/minds3t/omnipkg/omnipkg/core.py:901
+#: /home/minds3t/omnipkg/omnipkg/core.py:939
+#, fuzzy
+msgid "{}pkg_to_bubble"
+msgstr "{} pkg_to_bubble"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:871
+#: /home/minds3t/omnipkg/omnipkg/core.py:942
+#, fuzzy
+msgid "{}bubbles_by_size:{}"
+msgstr "{} bubbled_by_size: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:873
+#, fuzzy
+msgid "    📝 Created manifest and registered bubble for {} packages ({} MB)."
+msgstr ""
+"📝 Được tạo Bong bóng bảng kê khai và đã đăng ký cho các gói {} ({} MB)."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:875
+#, fuzzy
+msgid "    ⚠️ Warning: Failed to register bubble in Redis: {}"
+msgstr "CẢNH BÁO: Không đăng ký bong bóng trong redis: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:876
+#, fuzzy
+msgid "    📝 Local manifest created at {}"
+msgstr "📝 Bản kê khai cục bộ được tạo tại {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:933
+#, fuzzy
+msgid "    🧹 Cleaning up {} old bubbles ({} MB)..."
+msgstr "🧹 Dọn dẹp {} Bong bóng cũ ({} MB) ..."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:947
+#, fuzzy
+msgid "    ✅ Freed {} MB of storage."
+msgstr "✅ Freed {} MB lưu trữ."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:949
+msgid "    ✅ No bubbles need cleanup."
+msgstr "Không có bong bóng cần dọn dẹp."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:981
+#, fuzzy
+msgid "    🧠 HookManager now aware of new bubble: {}=={}"
+msgstr "🧠 hookmanager bây giờ biết về bong bóng mới: {} == {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:990
+#, fuzzy
+msgid "    ❌ Bubble not found in HookManager's map for {}=={}"
+msgstr "❌ Bubble không tìm thấy trong bản đồ của HookManager cho {} == {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:994
+#, fuzzy
+msgid "    ❌ Bubble directory does not exist at: {}"
+msgstr "Thư mục bong bóng không tồn tại tại: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:998
+#, fuzzy
+msgid "    ❌ Bubble is incomplete: Missing manifest file at {}"
+msgstr "❌ Bubble không đầy đủ: Tệp kê khai bị thiếu tại {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1002
+#, fuzzy
+msgid "    ⚠️  Warning: Bubble for {}=={} does not contain a 'bin' directory."
+msgstr "Cảnh báo: Bubble cho {} == {} không chứa thư mục 'bin'."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1003
+#, fuzzy
+msgid "    ✅ Bubble validated successfully: {}=={}"
+msgstr "✅ bong bóng xác thực thành công: {} == {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1068
+#, fuzzy
+msgid "❌ An unexpected Redis connection error occurred: {}"
+msgstr "❌ Một lỗi kết nối Redis không mong muốn đã xảy ra: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1079
+msgid "🗑️  This will permanently delete your configuration file at:"
+msgstr "Điều này sẽ xóa vĩnh viễn tệp cấu hình của bạn tại:"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1094
+#, fuzzy
+msgid "❌ Error: Could not delete configuration file: {}"
+msgstr "❌ Lỗi: Không thể xóa tệp cấu hình: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1095
+#, fuzzy
+msgid "   Please check your file permissions for {}"
+msgstr "Vui lòng kiểm tra quyền tệp của bạn cho {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1106
+msgid ""
+"\n"
+"🧠 omnipkg Knowledge Base Reset"
+msgstr "🧠 Đặt lại cơ sở kiến ​​thức Omnipkg"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1108
+#, fuzzy
+msgid "   This will DELETE all data matching '{}' from Redis."
+msgstr "Điều này sẽ xóa tất cả các dữ liệu khớp '{}' khỏi redis."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1109
+msgid ""
+"   It will then rebuild the knowledge base from the CURRENT state of your "
+"file system."
+msgstr ""
+"Sau đó, nó sẽ xây dựng lại cơ sở kiến ​​thức từ trạng thái hiện tại của hệ "
+"thống tệp của bạn."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1110
+msgid "   ⚠️  This command does NOT uninstall any Python packages."
+msgstr "Lệnh này không gỡ cài đặt bất kỳ gói Python nào."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1122
+#, fuzzy
+msgid "   ✅ Cleared {} cached entries from Redis."
+msgstr "Đã xóa {} Các mục được lưu trong bộ nhớ cache từ redis."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1126
+#, fuzzy
+msgid "   ❌ Failed to clear knowledge base: {}"
+msgstr "Không thể xóa cơ sở kiến ​​thức: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1145
+#, fuzzy
+msgid "    ❌ Knowledge base rebuild failed with exit code {}."
+msgstr "Rebuild cơ sở kiến ​​thức không thành công với mã thoát {}."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1148
+#, fuzzy
+msgid "    ❌ An unexpected error occurred during knowledge base rebuild: {}"
+msgstr ""
+"❌ Một lỗi bất ngờ xảy ra trong quá trình xây dựng lại cơ sở kiến ​​thức: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1165
+#, fuzzy
+msgid "   ❌ Metadata rebuild failed: {}"
+msgstr "❌ Tái tạo siêu dữ liệu không thành công: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1167
+#, fuzzy
+msgid "   (Skipping {} - feature coming soon!)"
+msgstr "(Bỏ qua {} - Tính năng sắp ra mắt!)"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1274
+#, fuzzy
+msgid "   ✅ Sync complete. Reconciled {} discrepancies."
+msgstr "Đồng bộ hóa hoàn chỉnh.Đối chiếu {} sự khác biệt."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1317
+#, fuzzy
+msgid "    ⚠️  Could not perform live package scan: {}"
+msgstr "Không thể thực hiện quét gói trực tiếp: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1322
+#, fuzzy
+msgid "{}versions"
+msgstr "{} Phiên bản"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1363
+#, fuzzy
+msgid "   -> Processing {} changed/new package(s)..."
+msgstr "-> Xử lý {} Đã thay đổi/Gói mới ..."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1368
+#, fuzzy
+msgid "   -> Cleaning up {} uninstalled package(s) from Redis..."
+msgstr "-> Dọn dẹp {} Gói chưa cài đặt từ Redis ..."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1373
+#, fuzzy
+msgid "{}:{}"
+msgstr "{}: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1385
+#, fuzzy
+msgid "    ⚠️ Failed to update knowledge base for delta: {}"
+msgstr "Không thể cập nhật cơ sở kiến ​​thức cho delta: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1397
+#, fuzzy
+msgid "❌ An unexpected error occurred while showing package info: {}"
+msgstr "❌ Đã xảy ra lỗi không mong muốn trong khi hiển thị thông tin gói: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1410
+#, fuzzy
+msgid "{}, ...and {} more"
+msgstr "{}, ... và {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1420
+#, fuzzy
+msgid ""
+"\n"
+"📋 KEY DATA: No Redis data found for '{}'"
+msgstr "📋 Dữ liệu chính: Không tìm thấy dữ liệu Redis cho '{}'"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1422
+#, fuzzy
+msgid ""
+"\n"
+"📋 KEY DATA for '{}':"
+msgstr "📋 Dữ liệu chính cho '{}':"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1426
+#, fuzzy
+msgid "🎯 Active Version: {}"
+msgstr "🎯 Phiên bản hoạt động: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1429
+#, fuzzy
+msgid "🫧 Bubbled Versions: {}"
+msgstr "🫧 Phiên bản sủi bọt: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1432
+msgid ""
+"\n"
+"📦 Available Versions:"
+msgstr "📦 Phiên bản có sẵn:"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1440
+#, fuzzy
+msgid "  {}) {}{}"
+msgstr "{}) {} {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1441
+msgid ""
+"\n"
+"💡 Want details on a specific version?"
+msgstr "💡 Muốn chi tiết về một phiên bản cụ thể?"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1443
+#, fuzzy
+msgid "Enter number (1-{}) or press Enter to skip: "
+msgstr "Nhập số (1- {}) hoặc nhấn Enter để bỏ qua:"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1450
+#, fuzzy
+msgid "📄 Detailed info for {} v{}"
+msgstr "📄 Thông tin chi tiết cho {} V {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1478
+#, fuzzy
+msgid "❌ No detailed data found for {} v{}"
+msgstr "❌ Không tìm thấy dữ liệu chi tiết cho {} V {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1482
+#, fuzzy
+msgid "The data is fetched from Redis key: {}"
+msgstr "Dữ liệu được tìm nạp từ khóa Redis: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1489
+#: /home/minds3t/omnipkg/omnipkg/core.py:1491
+#: /home/minds3t/omnipkg/omnipkg/core.py:1493
+#, fuzzy
+msgid "{}: {}"
+msgstr "{}: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1495
+#, fuzzy
+msgid ""
+"\n"
+"---[ Health & Security ]---"
+msgstr "--- [Sức khỏe & An ninh] ---"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1498
+#: /home/minds3t/omnipkg/omnipkg/core.py:1505
+#, fuzzy
+msgid "   {}: {}"
+msgstr "   {}: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1500
+#, fuzzy
+msgid ""
+"\n"
+"---[ Build Info ]---"
+msgstr "--- [thông tin xây dựng] ---"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1506
+#, fuzzy
+msgid ""
+"\n"
+"💡 For all raw data, use Redis key: \"{}\""
+msgstr "Đối với tất cả dữ liệu thô, hãy sử dụng khóa Redis: \"{}\""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1517
+#, fuzzy
+msgid "   ⚠️ Could not save environment snapshot: {}"
+msgstr "Không thể lưu ảnh chụp nhanh môi trường: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1558
+msgid ""
+"⚠️ Warning: Cannot determine active omnipkg version. Proceeding with "
+"caution."
+msgstr ""
+"Cảnh báo: Không thể xác định phiên bản OMNIPKG hoạt động.Tiến hành thận "
+"trọng."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1560
+#, fuzzy
+msgid "✅ omnipkg=={} is already the active omnipkg. No bubble needed."
+msgstr "✅ OMNIPKG == {} đã là OMNIPKG hoạt động.Không cần bong bóng."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1562
+#, fuzzy
+msgid ""
+"✨ Special handling: omnipkg '{}' requested. This will be installed into an "
+"isolated bubble, not as the active omnipkg."
+msgstr ""
+"Xử lý đặc biệt: OMNIPKG '{}' được yêu cầu.Điều này sẽ được cài đặt vào một "
+"bong bóng bị cô lập, không phải là OMNIPKG hoạt động."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1571
+#, fuzzy
+msgid ""
+"❌ Could not find a compatible wheel for omnipkg=={}. Cannot create bubble."
+msgstr ""
+"Không thể tìm thấy một bánh xe tương thích cho omnipkg == {}.Không thể tạo "
+"bong bóng."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1574
+#, fuzzy
+msgid "❌ Failed to create bubble for omnipkg=={}."
+msgstr "Không thể tạo bong bóng cho omnipkg == {}."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1577
+#, fuzzy
+msgid "✅ omnipkg=={} successfully bubbled."
+msgstr "✅ OMNIPKG == {} sủi bọt thành công."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1581
+#, fuzzy
+msgid "🚀 Starting install with policy: '{}'"
+msgstr "🚀 Bắt đầu cài đặt với chính sách: '{}'"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1588
+#, fuzzy
+msgid "🔄 Reordered packages for optimal installation: {}"
+msgstr "Các gói được sắp xếp lại để cài đặt tối ưu: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1593
+#, fuzzy
+msgid "📦 Processing: {}"
+msgstr "📦 Xử lý: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1597
+#, fuzzy
+msgid "✅ Requirement already satisfied: {}"
+msgstr "✅ Yêu cầu đã được thỏa mãn: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1604
+#, fuzzy
+msgid "    - Found {} packages"
+msgstr "- Đã tìm thấy {} gói"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1605
+#, fuzzy
+msgid ""
+"\n"
+"⚙️ Running pip install for: {}..."
+msgstr "⚙ Chạy PIP Cài đặt cho: {} ..."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1629
+#, fuzzy
+msgid "    -> Protecting stable env. Bubbling {} version: {} v{}"
+msgstr "-> Bảo vệ env ổn định.SHOMBLED {} phiên bản: {} V {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1635
+#, fuzzy
+msgid "    🔄 Restoring '{}' to stable version v{} in main environment..."
+msgstr ""
+"🔄 Khôi phục '{}' cho phiên bản ổn định v {} trong môi trường chính ..."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1719
+#, fuzzy
+msgid "Error getting active version of {}: {}"
+msgstr "Lỗi khi nhận phiên bản hoạt động của {}: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1738
+#, fuzzy
+msgid "   -> Cleaning up replaced version from knowledge base: {} v{}"
+msgstr "-> Làm sạch phiên bản thay thế từ cơ sở kiến ​​thức: {} V {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1762
+#, fuzzy
+msgid "   -> Uninstalling: {}"
+msgstr "-> Gỡ cài đặt: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1765
+#, fuzzy
+msgid "   -> Installing/Fixing: {}"
+msgstr "-> Cài đặt/sửa lỗi: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1774
+#, fuzzy
+msgid "📦 Downloading wheel for {}=={}..."
+msgstr "📦 Tải xuống bánh xe cho {} == {} ..."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1781
+#, fuzzy
+msgid "{}-{}.data"
+msgstr "{}-{}. Dữ liệu"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1781
+#, fuzzy
+msgid "{}-{}.dist-info"
+msgstr "{}-{}. Dist-info"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1786
+#, fuzzy
+msgid "⚠️ Warning: Could not extract {}: {}"
+msgstr "CẢNH BÁO: Không thể trích xuất {}: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1788
+#, fuzzy
+msgid "✅ Extracted {}=={} to {}"
+msgstr "✅ Trích xuất {} == {} thành {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1791
+#, fuzzy
+msgid "❌ Failed to download wheel from {}: {}"
+msgstr "❌ Không tải xuống bánh xe từ {}: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1794
+#, fuzzy
+msgid "❌ Downloaded file is not a valid wheel: {}"
+msgstr "Tệp tải xuống không phải là một bánh xe hợp lệ: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1797
+#, fuzzy
+msgid "❌ Error extracting wheel for {}=={}: {}"
+msgstr "❌ Bánh xe trích xuất lỗi cho {} == {}: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1813
+#, fuzzy
+msgid "🎯 Found compatible wheel: {}"
+msgstr "🎯 tìm thấy bánh xe tương thích: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1817
+#, fuzzy
+msgid "⚠️ Only source distribution available for {}=={}"
+msgstr "⚠ Chỉ phân phối nguồn có sẵn cho {} == {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1818
+msgid "   This may require compilation and is not recommended for bubbling."
+msgstr ""
+"Điều này có thể yêu cầu biên dịch và không được khuyến nghị cho sủi bọt."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1820
+#, fuzzy
+msgid "❌ No compatible wheel or source found for {}=={} on PyPI."
+msgstr "Không tìm thấy bánh xe hoặc nguồn tương thích cho {} == {} trên pypi."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1823
+#, fuzzy
+msgid "❌ Failed to fetch PyPI data for {}=={}: {}"
+msgstr "Không thể tìm nạp dữ liệu pypi cho {} == {}: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1826
+#, fuzzy
+msgid "❌ Unexpected PyPI response structure: missing {}"
+msgstr "❌ Cấu trúc phản hồi PYPI bất ngờ: Thiếu {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1829
+#, fuzzy
+msgid "❌ Error parsing PyPI data: {}"
+msgstr "❌ Lỗi phân tích dữ liệu pypi: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1847
+#, fuzzy
+msgid ""
+"⚠️ Version specifier '{}' detected in '{}'. Exact version required for "
+"bubbling."
+msgstr ""
+"⚠ Phiên bản xác định '{}' được phát hiện trong '{}'.Phiên bản chính xác cần "
+"thiết cho sủi bọt."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1862
+#, fuzzy
+msgid "📝 Registered {}=={} in knowledge base"
+msgstr "📝 Đã đăng ký {} == {} trong cơ sở kiến ​​thức"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1864
+#, fuzzy
+msgid "⚠️ Could not register {}=={}: No Redis connection"
+msgstr "Không thể đăng ký {} == {}: Không có kết nối Redis"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1866
+#, fuzzy
+msgid "❌ Failed to register {}=={} in knowledge base: {}"
+msgstr "Không thể đăng ký {} == {} trong cơ sở kiến ​​thức: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1898
+#, fuzzy
+msgid ""
+"\n"
+"Processing uninstall for: {}"
+msgstr "Xử lý gỡ cài đặt cho: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1905
+#, fuzzy
+msgid "🤷 Package '{}' not found."
+msgstr "🤷 Gói '{}' không tìm thấy."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1911
+#, fuzzy
+msgid "🤷 Version '{}' of '{}' not found."
+msgstr "🤷 phiên bản '{}' của '{}' không tìm thấy."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1919
+#, fuzzy
+msgid "Found multiple installations for '{}':"
+msgstr "Tìm thấy nhiều cài đặt cho '{}':"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1927
+#, fuzzy
+msgid "  {}) v{} ({})"
+msgstr "{}) V {} ({})"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1932
+#, fuzzy
+msgid ""
+"🤔 Enter numbers to uninstall (e.g., '1,2'), 'all', or press Enter to cancel:"
+" "
+msgstr ""
+"Nhập số để gỡ cài đặt (ví dụ: '1,2'), 'tất cả' hoặc nhấn Enter để hủy:"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1953
+#, fuzzy
+msgid "⚠️  Skipping protected package: {} v{} (active)"
+msgstr "⚠ Bỏ qua gói được bảo vệ: {} V {} (Active)"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1959
+#, fuzzy
+msgid ""
+"\n"
+"Preparing to remove {} installation(s) for '{}':"
+msgstr "Chuẩn bị xóa (các) cài đặt {} cho '{}':"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1961
+#, fuzzy
+msgid "  - v{} ({})"
+msgstr "- V {} ({})"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1974
+#, fuzzy
+msgid "🗑️  Deleting bubble directory: {}"
+msgstr "🗑 Xóa thư mục bong bóng: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1976
+#, fuzzy
+msgid "🧹 Cleaning up knowledge base for {} v{}..."
+msgstr "🧹 Dọn dẹp cơ sở kiến ​​thức cho {} V {} ..."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2020
+#, fuzzy
+msgid "  - Uninstall: {}"
+msgstr "- Gỡ cài đặt: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2022
+#, fuzzy
+msgid "  - Install: {}"
+msgstr "- Cài đặt: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2024
+#, fuzzy
+msgid "  - Fix Version: {}"
+msgstr "- Sửa phiên bản: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2076
+#, fuzzy
+msgid "    ⚡ Found existing bubble: {}"
+msgstr "⚡ Tìm thấy bong bóng hiện có: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2127
+#, fuzzy
+msgid "❌ Pip install command failed with exit code {}:"
+msgstr "❌ Lệnh cài đặt PIP không thành công với mã thoát {}:"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2131
+#, fuzzy
+msgid "    ❌ An unexpected error occurred during pip install: {}"
+msgstr "❌ Một lỗi không mong muốn đã xảy ra trong quá trình cài đặt PIP: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2144
+#, fuzzy
+msgid "❌ Pip uninstall command failed with exit code {}:"
+msgstr "❌ Lệnh gỡ cài đặt Pip không thành công với mã thoát {}:"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2148
+#, fuzzy
+msgid "    ❌ An unexpected error occurred during pip uninstall: {}"
+msgstr "❌ Một lỗi không mong muốn đã xảy ra trong khi gỡ cài đặt pip: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2164
+#, fuzzy
+msgid "❌ uv install command failed with exit code {}:"
+msgstr "Lệnh cài đặt UV không thành công với mã thoát {}:"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2168
+#, fuzzy
+msgid "    ❌ An unexpected error toccurred during uv install: {}"
+msgstr "❌ Một lỗi không mong muốn toccurred trong quá trình cài đặt UV: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2184
+#, fuzzy
+msgid "❌ uv uninstall command failed with exit code {}:"
+msgstr "Lệnh gỡ cài đặt UV không thành công với mã thoát {}:"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2188
+#, fuzzy
+msgid "    ❌ An unexpected error occurred during uv uninstall: {}"
+msgstr "❌ Một lỗi không mong muốn xảy ra trong khi gỡ cài đặt UV: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2227
+#, fuzzy
+msgid "⚠️ Could not retrieve versions for {}: {}"
+msgstr "Không thể truy xuất các phiên bản cho {}: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2237
+#, fuzzy
+msgid "📋 Found {} matching package(s):"
+msgstr "📋 Đã tìm thấy {} Gói đối sánh (s):"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2244
+#, fuzzy
+msgid ""
+"\n"
+"- {}:"
+msgstr ""
+"\n"
+"- {}:"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2250
+#, fuzzy
+msgid "  ✅ {} (active)"
+msgstr "✅ {} (hoạt động)"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2252
+#, fuzzy
+msgid "  🫧 {} (bubble)"
+msgstr "🫧 {} (bong bóng)"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2265
+#, fuzzy
+msgid "    😈 Locked up for causing chaos in the main env! 🔒 (v{})"
+msgstr "Bị khóa vì gây ra sự hỗn loạn trong env chính!🔒 (v {})"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2272
+#, fuzzy
+msgid "    😈 Speedy troublemaker locked up in the main env! 🔒 (v{})"
+msgstr "Người gây rối nhanh chóng bị khóa trong env chính!🔒 (v {})"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2279
+#, fuzzy
+msgid "  - Path: {}"
+msgstr "- Con đường: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2280
+#, fuzzy
+msgid "  - Active Packages: {}"
+msgstr "- Gói hoạt động: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2285
+#, fuzzy
+msgid "  - Bubble Directory: {}"
+msgstr "- Thư mục bong bóng: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2286
+#, fuzzy
+msgid "  - Import Hook Installed: {}"
+msgstr "- Nhập Hook đã cài đặt: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2289
+#, fuzzy
+msgid ""
+"\n"
+"📦 Isolated Package Versions ({} bubbles):"
+msgstr "📦 Phiên bản gói bị cô lập ({} bong bóng):"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2299
+msgid ""
+"    😈 Pip is locked up in a bubble, plotting chaos like a Python outlaw! 🔒"
+msgstr ""
+"😈 Pip bị khóa trong một bong bóng, âm mưu hỗn loạn như một con trăn ngoài "
+"vòng pháp luật!🔒"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2301
+msgid "    😈 UV is locked up in a bubble, speeding toward trouble! 🔒"
+msgstr "UV bị khóa trong một bong bóng, tăng tốc về phía rắc rối!🔒"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:49
+#: /home/minds3t/omnipkg/omnipkg/demo.py:63
+#, fuzzy
+msgid ""
+"\n"
+"$ {}"
+msgstr ""
+"\n"
+"$ {}"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:58
+#: /home/minds3t/omnipkg/omnipkg/demo.py:75
+#, fuzzy
+msgid "Demo command failed with exit code {}"
+msgstr "Lệnh demo không thành công với mã thoát {}"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:154
+#, fuzzy
+msgid ""
+"\n"
+"$ python {}"
+msgstr "$ Python {}"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:173
+#, fuzzy
+msgid ""
+"\n"
+"❌ An unexpected error occurred during the demo: {}"
+msgstr "❌ Một lỗi không mong muốn xảy ra trong bản demo: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/loader.py:54
+#, fuzzy
+msgid "⚠️ [omnipkg loader] Bubble directory {} did not exist and was created."
+msgstr "⚠ [OMNIPKG Loader] Thư mục bong bóng {} không tồn tại và được tạo."
+
+#: /home/minds3t/omnipkg/omnipkg/loader.py:56
+#, fuzzy
+msgid "Failed to create bubble directory at {}: {}"
+msgstr "Không thể tạo thư mục bong bóng tại {}: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/loader.py:70
+#, fuzzy
+msgid ""
+"\n"
+"🌀 omnipkg loader: Activating {}..."
+msgstr "Trình tải OMNIPKG: Kích hoạt {} ..."
+
+#: /home/minds3t/omnipkg/omnipkg/loader.py:75
+#, fuzzy
+msgid "Invalid package_spec format. Expected 'name==version', got '{}'."
+msgstr ""
+"Định dạng gói không hợp lệ_spec.Dự kiến ​​'name == phiên bản', có '{}'."
+
+#: /home/minds3t/omnipkg/omnipkg/loader.py:79
+#, fuzzy
+msgid ""
+" ✅ System version already matches requested version ({}). No bubble "
+"activation needed."
+msgstr ""
+"Phiên bản hệ thống đã khớp với phiên bản được yêu cầu ({}).Không cần kích "
+"hoạt bong bóng."
+
+#: /home/minds3t/omnipkg/omnipkg/loader.py:86
+#, fuzzy
+msgid ""
+"⚠️ [omnipkg loader] Error checking system version for {}: {}. Proceeding "
+"with bubble search."
+msgstr ""
+"⚠ [OMNIPKG Loader] Phiên bản hệ thống kiểm tra lỗi cho {}: {}.Tiến hành tìm "
+"kiếm bong bóng."
+
+#: /home/minds3t/omnipkg/omnipkg/loader.py:91
+#, fuzzy
+msgid ""
+"Bubble not found for {} at {}. Please ensure it's installed via 'omnipkg "
+"install {}'."
+msgstr ""
+"Bubble không tìm thấy cho {} tại {}.Vui lòng đảm bảo nó được cài đặt thông "
+"qua 'OMNIPKG Cài đặt {}'."
+
+#: /home/minds3t/omnipkg/omnipkg/loader.py:99
+#, fuzzy
+msgid " ⚙️ Added to PATH: {}"
+msgstr "Đã thêm vào đường dẫn: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/loader.py:108
+#, fuzzy
+msgid " ✅ Activated bubble: {}"
+msgstr "✅ Bubble đã kích hoạt: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/loader.py:109
+#, fuzzy
+msgid " 🔧 sys.path[0]: {}"
+msgstr "🔧 sys.path [0]: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/loader.py:115
+#, fuzzy
+msgid " ℹ️ Bubble contains {} packages."
+msgstr "Bong bóng chứa các gói {}."
+
+#: /home/minds3t/omnipkg/omnipkg/loader.py:125
+#, fuzzy
+msgid ""
+"\n"
+"🌀 omnipkg loader: Deactivating {}..."
+msgstr "Trình tải omnipkg: vô hiệu hóa {} ..."
+
+#: /home/minds3t/omnipkg/omnipkg/loader.py:213
+#, fuzzy
+msgid " 🛡️ Restored {}"
+msgstr "🛡 Được khôi phục {}"
+
+#: /home/minds3t/omnipkg/omnipkg/loader.py:146
+msgid " ✅ Environment restored to system state."
+msgstr "Môi trường được khôi phục lại trạng thái hệ thống."
+
+#: /home/minds3t/omnipkg/omnipkg/loader.py:190
+#, fuzzy
+msgid " 🛡️ Cloaked main {} to {}"
+msgstr "🛡 Cloaked Main {} to {}"
+
+#: /home/minds3t/omnipkg/omnipkg/loader.py:192
+#, fuzzy
+msgid " ⚠️ Failed to cloak {}: {}"
+msgstr "⚠ Không thể che giấu {}: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:38
+#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:44
+#, fuzzy
+msgid "python{}"
+msgstr "Python {}"
+
+#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:75
+#, fuzzy
+msgid "❌ Could not connect to Redis: {}"
+msgstr "❌ Không thể kết nối với Redis: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:97
+#, fuzzy
+msgid "⚠️ Error discovering active packages: {}"
+msgstr "⚠ Lỗi Khám phá các gói hoạt động: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:120
+#, fuzzy
+msgid ""
+"✅ Discovery complete. Found {} unique packages with {} total versions to "
+"process."
+msgstr ""
+"Khám phá hoàn thành.Tìm thấy {} các gói duy nhất với tổng số phiên bản {} để"
+" xử lý."
+
+#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:138
+#, fuzzy
+msgid "⚠️ Failed to store active version for {}: {}"
+msgstr "Không thể lưu trữ phiên bản hoạt động cho {}: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:146
+#, fuzzy
+msgid "🎯 Running in targeted mode for {} package(s)."
+msgstr "Chạy trong chế độ được nhắm mục tiêu cho (các) gói {}."
+
+#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:163
+#, fuzzy
+msgid "⚠️ Error preparing packages for security scan: {}"
+msgstr "⚠ Lỗi chuẩn bị các gói để quét bảo mật: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:165
+#, fuzzy
+msgid "✅ Bulk security scan complete. Found {} potential issues."
+msgstr ""
+"Quét bảo mật số lượng lớn hoàn thành.Tìm thấy {} Các vấn đề tiềm năng."
+
+#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:172
+#, fuzzy
+msgid ""
+"\n"
+"🎉 Metadata building complete! Updated {} package(s)."
+msgstr "Tòa nhà siêu dữ liệu hoàn chỉnh! Cập nhật {} Gói (s)."
+
+#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:188
+#, fuzzy
+msgid "    ❌ ERROR processing {} v{}: {}"
+msgstr "❌ Xử lý lỗi {} V {}: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:263
+#, fuzzy
+msgid "{}_compressed"
+msgstr "{} _compression"
+
+#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:296
+#, fuzzy
+msgid "import importlib.metadata; print(importlib.metadata.version('{}'))"
+msgstr ""
+"nhập khẩu nhập khẩu.metadata;print (INPINTLIB.METADATA.Version ('{}'))))"
+
+#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:347
+#, fuzzy
+msgid "    ⚠️ Bulk security scan failed: {}"
+msgstr "Quét bảo mật số lượng lớn không thành công: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:37
+#, fuzzy
+msgid ""
+"❌ Failed to import omnipkg modules. Is it installed correctly? Error: {}"
+msgstr ""
+"Không thể nhập các mô -đun OMNIPKG.Nó có được cài đặt chính xác không?Lỗi: "
+"{}"
+
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:51
+#, fuzzy
+msgid "   - Removing old bubble: {}"
+msgstr "- Loại bỏ bong bóng cũ: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:59
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:246
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:56
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:240
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:46
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:209
+#, fuzzy
+msgid "   🧹 Removing residual cloaked: {}"
+msgstr "🧹 Xóa phần còn lại bị che khuất: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:68
+#, fuzzy
+msgid "   ⚠️ Warning: Failed to run pip uninstall during setup cleanup: {}"
+msgstr "⚠️ Cảnh báo: Không thể chạy pip uninstall trong quá trình dọn dẹp: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:81
+#, fuzzy
+msgid ""
+"\n"
+"⚡ Switching to numpy=={}"
+msgstr "⚡ Chuyển sang numpy == {}"
+
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:85
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:106
+#, fuzzy
+msgid "   ✅ Version: {}"
+msgstr "✅ Phiên bản: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:86
+#, fuzzy
+msgid "   🔢 Array sum: {}"
+msgstr "🔢 Mảng tổng: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:89
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:111
+#, fuzzy
+msgid "   ⚠️ WARNING: Expected {}, got {}!"
+msgstr "Cảnh báo: Dự kiến ​​{}, có {}!"
+
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:91
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:113
+msgid "   🎯 Version verification: PASSED"
+msgstr "🎯 Xác minh phiên bản: Đã qua"
+
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:93
+#, fuzzy
+msgid "   ❌ Activation/Test failed for numpy=={}: {}!"
+msgstr "❌ Kích hoạt/Kiểm tra không thành công cho numpy == {}: {}!"
+
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:99
+#, fuzzy
+msgid ""
+"\n"
+"🌋 Switching to scipy=={}"
+msgstr "🌋 Chuyển sang scipy == {}"
+
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:107
+#, fuzzy
+msgid "   ♻️ Sparse matrix: {} non-zeros"
+msgstr "Ma trận thưa thớt: {} khác không"
+
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:108
+#, fuzzy
+msgid "   📐 Linalg det: {}"
+msgstr "📐 linalg det: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:115
+#, fuzzy
+msgid "   ❌ Activation/Test failed for scipy=={}: {}!"
+msgstr "❌ Kích hoạt/Kiểm tra không thành công cho scipy == {}: {}!"
+
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:124
+#, fuzzy
+msgid ""
+"\n"
+"🌀 COMBO: numpy=={} + scipy=={}"
+msgstr "Combo: numpy == {} + scipy == {}"
+
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:213
+#, fuzzy
+msgid "   ❌ Subprocess test failed for combo numpy=={} + scipy=={}"
+msgstr "❌ Kiểm tra phụ thất bại cho combo numpy == {} + scipy == {}"
+
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:214
+#, fuzzy
+msgid "   💥 Error: {}"
+msgstr "💥 Lỗi: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:217
+#, fuzzy
+msgid ""
+"   ❌ An unexpected error occurred during combo test subprocess setup: {}"
+msgstr ""
+"❌ Một lỗi không mong muốn xảy ra trong quá trình thiết lập quy trình kiểm "
+"tra combo: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:238
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:236
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:206
+#, fuzzy
+msgid "   🧹 Removing test bubble: {}"
+msgstr "🧹 Xóa bong bóng kiểm tra: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:262
+#, fuzzy
+msgid ""
+"\n"
+"--- Creating bubble for {} ---"
+msgstr "--- Tạo bong bóng cho {} ---"
+
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:270
+#, fuzzy
+msgid ""
+"\n"
+"❌ An error occurred during the stress test: {}"
+msgstr "❌ Một lỗi đã xảy ra trong quá trình kiểm tra căng thẳng: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:70
+msgid "   • Previously 'incompatible' versions working together seamlessly"
+msgstr "• Các phiên bản 'không tương thích' trước đây hoạt động cùng nhau"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:76
+msgid "   • numpy 1.24.3 + scipy 1.12.0 → 'incompatible dependencies'"
+msgstr "• Numpy 1.24.3 + SCIPY 1.12.0 → 'Các phụ thuộc không tương thích'"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:79
+msgid "   • Package managers can't handle multiple versions"
+msgstr "• Trình quản lý gói không thể xử lý nhiều phiên bản"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:114
+msgid ""
+"💡 Don't worry if there are pauses - packages are downloading/installing!"
+msgstr "💡 Đừng lo lắng nếu có tạm dừng - các gói đang tải xuống/cài đặt!"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:390
+msgid "    ⚠️  'requests' package not found. Skipping PyPI API strategy."
+msgstr "Gói 'yêu cầu' không tìm thấy.Bỏ qua chiến lược API PYPI."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1510
+msgid "📸 Saving snapshot of the current environment as 'last known good'..."
+msgstr ""
+"Tiết kiệm ảnh chụp nhanh của môi trường hiện tại là 'cuối cùng được biết "
+"đến' ..."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1565
+msgid "  Skipping bubbling of 'omnipkg' without a specific version for now."
+msgstr "Bỏ qua bong bóng của 'omnipkg' mà không có phiên bản cụ thể bây giờ."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2004
+msgid "❌ No 'last known good' snapshot found. Cannot revert."
+msgstr ""
+"Không tìm thấy ảnh chụp nhanh 'được biết đến' cuối cùng '.Không thể hoàn "
+"nguyên."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2161
+#: /home/minds3t/omnipkg/omnipkg/core.py:2181
+msgid ""
+"❌ Error: 'uv' executable not found. Please ensure uv is installed and in "
+"your PATH."
+msgstr ""
+"Lỗi: 'UV' không tìm thấy thực thi.Vui lòng đảm bảo UV được cài đặt và trên "
+"đường dẫn của bạn."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:148
+msgid "Welcome to omnipkg! Let's get you configured."
+msgstr "Chào mừng bạn đến với Omnipkg!Hãy để bạn được cấu hình."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:152
+#, fuzzy
+msgid "We've auto-detected your system language as: {}"
+msgstr "Chúng tôi đã tự động phát hiện ngôn ngữ hệ thống của bạn như: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:153
+msgid "Please select your preferred language by typing the number:"
+msgstr "Vui lòng chọn ngôn ngữ ưa thích của bạn bằng cách nhập số:"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:160
+#, fuzzy
+msgid ""
+"\n"
+"Enter choice (1-{}) or press Enter to accept '{}': "
+msgstr "Nhập lựa chọn (1- {}) hoặc nhấn Enter để chấp nhận '{}':"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:170
+msgid "❌ Invalid number. Please try again."
+msgstr "Số không hợp lệ.Hãy thử lại."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:172
+msgid "❌ That's not a number. Please try again."
+msgstr "❌ Đó không phải là một số.Hãy thử lại."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:174
+msgid "Setup cancelled."
+msgstr "Thiết lập bị hủy."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:179
+#, fuzzy
+msgid "✅ Language set to: {}"
+msgstr "✅ Ngôn ngữ được đặt thành: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:57
+msgid "3. Run 'omnipkg stress-test' from there"
+msgstr "3. Chạy 'Omnipkg Stress-Test' từ đó"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:84
+#, fuzzy
+msgid "🚀 Ready to witness the impossible? (y/n): "
+msgstr "🚀 Sẵn sàng để chứng kiến ​​những điều không thể?(y/n):"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:90
+msgid "🎪 Cancelled. Run 'omnipkg stress-test' anytime!"
+msgstr "Bị hủy bỏ.Chạy 'Omnipkg Stress-Test' bất cứ lúc nào!"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:137
+#: /home/minds3t/omnipkg/omnipkg/cli.py:186
+msgid "💡 Run 'omnipkg demo' to try another test."
+msgstr "Chạy 'Demo omnipkg' để thử một bài kiểm tra khác."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:157
+#, fuzzy
+msgid " {}) {} - {}"
+msgstr " {}) {} - {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1082
+#: /home/minds3t/omnipkg/omnipkg/core.py:1112
+#: /home/minds3t/omnipkg/omnipkg/core.py:1202
+#: /home/minds3t/omnipkg/omnipkg/core.py:2026
+#, fuzzy
+msgid ""
+"\n"
+"🤔 Are you sure you want to proceed? (y/N): "
+msgstr "🤔 Bạn có chắc mình muốn tiến hành?(y/n):"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1963
+#, fuzzy
+msgid "🤔 Are you sure you want to proceed? (y/N): "
+msgstr "🤔 Bạn có chắc mình muốn tiến hành?(y/n):"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2261
+msgid ""
+"🛠️ Environment broken by pip or uv? Run 'omnipkg revert' to restore the last"
+" known good state! 🚑"
+msgstr ""
+"Môi trường bị phá vỡ bởi PIP hay UV?Chạy 'OMNIPKG trở lại' để khôi phục "
+"trạng thái tốt được biết đến cuối cùng!🚑"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:36
+msgid "💡 Pro tip: Choose 'N' unless you enjoy suffering"
+msgstr "💡 Mẹo chuyên nghiệp: Chọn 'N' trừ khi bạn thích đau khổ"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:98
+msgid ""
+"Let's say you need version 0.6.0 for compatibility with an existing "
+"project..."
+msgstr ""
+"Giả sử bạn cần phiên bản 0.6.0 để tương thích với một dự án hiện có ..."
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:112
+msgid ""
+"\n"
+"💡 Remember: omnipkg exists when you're ready to stop suffering"
+msgstr "💡 Hãy nhớ: Omnipkg tồn tại khi bạn sẵn sàng ngừng đau khổ"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:115
+msgid "Let's fix this mess and install the newer version back with omnipkg..."
+msgstr "Hãy sửa lỗi này và cài đặt phiên bản mới hơn với Omnipkg ..."
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:122
+msgid "This time, let's be smart about it..."
+msgstr "Lần này, hãy thông minh về nó ..."
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:136
+msgid "Let's see how omnipkg is managing our packages..."
+msgstr "Hãy xem Omnipkg đang quản lý các gói của chúng tôi như thế nào ..."
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:145
+msgid "We'll simulate pressing Enter to skip this part..."
+msgstr "Chúng tôi sẽ mô phỏng việc nhấn enter để bỏ qua phần này ..."
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:176
+msgid ""
+"\n"
+"💡 Don't worry - even if some steps failed, the core isolation is working!"
+msgstr ""
+"Đừng lo lắng - ngay cả khi một số bước thất bại, sự cô lập cốt lõi đang hoạt"
+" động!"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:177
+msgid "That's the main achievement of omnipkg! 🔥"
+msgstr "Đó là thành tựu chính của Omnipkg!🔥"
+
+#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:66
+msgid "⚠️ Install 'tqdm' for a better progress bar."
+msgstr "⚠ Cài đặt 'TQDM' cho một thanh tiến độ tốt hơn."
+
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:42
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:33
+#, fuzzy
+msgid ""
+"\n"
+"--- {} ---"
+msgstr ""
+"\n"
+"--- {} ---"
+
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:52
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:43
+#, fuzzy
+msgid "   🧹 Removing old bubble: {}"
+msgstr "🧹 Xóa bong bóng cũ: {}"
+
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:59
+#, fuzzy
+msgid "   📦 Ensuring main environment has baseline: rich=={}"
+msgstr "Đảm bảo môi trường chính có đường cơ sở: Rich == {}"
+
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:60
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:71
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:248
+#, fuzzy
+msgid "rich=={}"
+msgstr "Rich == {}"
+
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:61
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:53
+msgid "✅ Environment prepared"
+msgstr "✅ Môi trường chuẩn bị"
+
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:70
+#, fuzzy
+msgid "   🫧 Creating bubble for rich=={}"
+msgstr "🫧 Tạo bong bóng cho Rich == {}"
+
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:77
+#, fuzzy
+msgid "   🔧 Testing import of version {}..."
+msgstr "🔧 Kiểm tra nhập phiên bản {} ..."
+
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:168
+#, fuzzy
+msgid "      └── {}"
+msgstr "      └── {}"
+
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:171
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:176
+#, fuzzy
+msgid "   ❌ Subprocess FAILED for version {}:"
+msgstr "❌ SubProcess không thành công cho phiên bản {}:"
+
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:172
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:177
+#, fuzzy
+msgid "      STDERR: {}"
+msgstr "Stderr: {}"
+
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:189
+#, fuzzy
+msgid "   ⚠️  Test harness failed to restore {} from {}: {}"
+msgstr "Thử nghiệm kiểm tra không thể khôi phục {} từ {}: {}"
+
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:203
+#, fuzzy
+msgid "Testing Main Environment ({})"
+msgstr "Kiểm tra môi trường chính ({})"
+
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:204
+#, fuzzy
+msgid "main-{}"
+msgstr "chủ yếu-{}"
+
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:207
+#, fuzzy
+msgid "Testing Bubble (rich=={})"
+msgstr "Bong bóng thử nghiệm (Rich == {})"
+
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:208
+#, fuzzy
+msgid "bubble-{}"
+msgstr "bong bóng- {}"
+
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:214
+#, fuzzy
+msgid "   - {}: {}"
+msgstr "   - {}: {}"
+
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:217
+msgid ""
+"\n"
+"🎉🎉🎉 ALL TESTS PASSED! 🎉🎉🎉"
+msgstr "Tất cả các bài kiểm tra đã qua!🎉🎉🎉"
+
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:219
+msgid ""
+"\n"
+"💥 SOME TESTS FAILED."
+msgstr "Một số bài kiểm tra không thành công."
+
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:224
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:194
+#, fuzzy
+msgid ""
+"\n"
+"❌ Critical error during testing: {}"
+msgstr "❌ Lỗi nghiêm trọng trong khi kiểm tra: {}"
+
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:244
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:49
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:212
+#, fuzzy
+msgid "   🧹 Removing test harness residual cloaked: {}"
+msgstr "🧹 Tháo Thử nghiệm Tháp lại còn lại: {}"
+
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:247
+#, fuzzy
+msgid "   📦 Restoring main environment: rich=={}"
+msgstr "Khôi phục môi trường chính: Rich == {}"
+
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:249
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:214
+msgid "✅ Cleanup complete"
+msgstr "Dọn dẹp hoàn chỉnh"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:39
+msgid "   🧹 Uninstalling all UV versions from main environment and bubbles..."
+msgstr ""
+"🧹 Gỡ cài đặt tất cả các phiên bản UV khỏi môi trường chính và bong bóng ..."
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:51
+msgid "   📦 Installing main environment: uv==0.6.13"
+msgstr "📦 Cài đặt môi trường chính: UV == 0.6.13"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:61
+#, fuzzy
+msgid "   🫧 Creating bubble for uv=={}"
+msgstr "🫧 Tạo bong bóng cho UV == {}"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:63
+#, fuzzy
+msgid "uv=={}"
+msgstr "uv == {}"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:64
+#, fuzzy
+msgid "   ✅ Bubble created: uv-{}"
+msgstr "✅ bong bóng tạo: uv- {}"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:66
+#, fuzzy
+msgid "   ❌ Failed to create bubble for uv=={}: {}"
+msgstr "Không thể tạo bong bóng cho UV == {}: {}"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:70
+#, fuzzy
+msgid "   🔎 Validating bubble: {}"
+msgstr "🔎 Bong bóng xác thực: {}"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:73
+#, fuzzy
+msgid "   ❌ No uv binary found in {}/bin"
+msgstr "❌ Không tìm thấy nhị phân UV trong {}/bin"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:76
+#, fuzzy
+msgid "   ❌ Binary {} is not executable"
+msgstr "❌ nhị phân {} không thể thực thi được"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:80
+#, fuzzy
+msgid "   ❌ No dist-info found in {}"
+msgstr "❌ Không tìm thấy Dist-Info trong {}"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:82
+msgid "   ✅ Bubble validation passed"
+msgstr "✅ Xác nhận bong bóng đã qua"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:86
+#, fuzzy
+msgid "   🔍 Inspecting bubble structure: {}"
+msgstr "🔍 Kiểm tra cấu trúc bong bóng: {}"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:88
+#, fuzzy
+msgid "   ❌ Bubble doesn't exist: {}"
+msgstr "❌ bong bóng không tồn tại: {}"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:92
+msgid "   ✅ Found uv module directory"
+msgstr "✅ Tìm thấy thư mục mô -đun UV"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:94
+#, fuzzy
+msgid "   ℹ️  No uv module directory (likely binary-only package)"
+msgstr "ℹ Không có thư mục mô-đun UV (có thể là gói chỉ nhị phân)"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:97
+#, fuzzy
+msgid "   ✅ Found dist-info: {}"
+msgstr "✅ tìm thấy dist-info: {}"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:99
+msgid "   ⚠️  No dist-info found"
+msgstr "⚠ Không tìm thấy Dist-Info"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:103
+#, fuzzy
+msgid "   ✅ Found bin directory with {} items"
+msgstr "✅ Tìm thấy thư mục bin với {} các mục"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:106
+#, fuzzy
+msgid "   ✅ Found uv binary: {}"
+msgstr "✅ Tìm thấy nhị phân UV: {}"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:108
+msgid "   ✅ Binary is executable"
+msgstr "✅ nhị phân có thể thực thi"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:110
+msgid "   ⚠️  Binary is not executable"
+msgstr "Nhị phân không thể thực thi được"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:112
+msgid "   ⚠️  No uv binary in bin/"
+msgstr "⚠ Không có nhị phân UV trong bin/"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:114
+msgid "   ⚠️  No bin directory found"
+msgstr "⚠ Không tìm thấy thư mục BIN"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:116
+#, fuzzy
+msgid "   📁 Bubble contents ({} items):"
+msgstr "📁 Nội dung bong bóng ({} mục):"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:118
+#, fuzzy
+msgid "      - {}{}"
+msgstr "- {} {}"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:122
+msgid "   🔧 Testing direct binary execution..."
+msgstr "🔧 Thử nghiệm thực thi nhị phân trực tiếp ..."
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:125
+msgid "   ❌ No UV binary found in bubble"
+msgstr "❌ Không tìm thấy nhị phân UV trong bong bóng"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:128
+#, fuzzy
+msgid "   🎯 Executing: {} --version"
+msgstr "🎯 Thực thi: {} --Version"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:131
+#, fuzzy
+msgid "   ✅ Direct binary reported: {}"
+msgstr "✅ Báo cáo nhị phân trực tiếp: {}"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:133
+msgid "   🎯 Direct binary test: PASSED"
+msgstr "🎯 Kiểm tra nhị phân trực tiếp: Đã qua"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:136
+#, fuzzy
+msgid "   ❌ Version mismatch: expected {}, got {}"
+msgstr "❌ phiên bản không phù hợp: mong đợi {}, got {}"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:139
+#, fuzzy
+msgid "   ❌ Direct binary execution failed: {}"
+msgstr "❌ Thực thi nhị phân trực tiếp không thành công: {}"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:156
+#, fuzzy
+msgid "   ✅ Main environment version: {}"
+msgstr "✅ Phiên bản môi trường chính: {}"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:158
+msgid "   🎯 Main environment test: PASSED"
+msgstr "🎯 Kiểm tra môi trường chính: Đã qua"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:160
+msgid "   ❌ Main environment test: FAILED"
+msgstr "❌ Kiểm tra môi trường chính: Không thành công"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:164
+#, fuzzy
+msgid "   ❌ Main environment test failed: {}"
+msgstr "❌ Kiểm tra môi trường chính không thành công: {}"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:168
+#, fuzzy
+msgid "Testing Bubble (uv=={})"
+msgstr "Bong bóng kiểm tra (UV == {})"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:178
+#, fuzzy
+msgid "   🎯 Overall result for uv=={}: PASSED"
+msgstr "Kết quả tổng thể cho UV == {}: Đã qua"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:180
+#, fuzzy
+msgid "   ❌ Overall result for uv=={}: FAILED"
+msgstr "Kết quả tổng thể cho UV == {}: Không thành công"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:182
+msgid "📊 Test Summary:"
+msgstr "Tóm tắt kiểm tra:"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:185
+#, fuzzy
+msgid "   uv=={}: {}"
+msgstr "uv == {}: {}"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:187
+msgid ""
+"\n"
+"🎉🎉🎉 ALL UV BINARY TESTS PASSED! 🎉🎉🎉"
+msgstr "Tất cả các bài kiểm tra nhị phân UV được thông qua!🎉🎉🎉"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:188
+msgid "🔥 OMNIPKG UV BINARY HANDLING IS FULLY FUNCTIONAL! 🔥"
+msgstr "Xử lý nhị phân UV OMNIPKG có đầy đủ chức năng!🔥"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:190
+msgid ""
+"\n"
+"💥 SOME TESTS FAILED - UV BINARY HANDLING NEEDS WORK 💥"
+msgstr "💥 Một số xét nghiệm không thành công - Nhu cầu xử lý nhị phân UV"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:191
+msgid "🔧 Check the detailed output above for diagnostics"
+msgstr "🔧 Kiểm tra đầu ra chi tiết ở trên để chẩn đoán"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:216
+#, fuzzy
+msgid "⚠️  Cleanup failed: {}"
+msgstr "⚠ Dọn dẹp thất bại: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2297
+#, fuzzy
+msgid "  - 📁 {} ({} MB){}"
+msgstr "- 📁 {} ({} mb) {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2304
+#, fuzzy
+msgid "  - Total Bubble Size: {} MB"
+msgstr "- Tổng kích thước bong bóng: {} MB"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:518
+msgid ""
+"⚠️  Warning: 'python-magic' not installed. Using basic binary detection."
+msgstr ""
+"Cảnh báo: 'Python-Magic' chưa được cài đặt.Sử dụng phát hiện nhị phân cơ "
+"bản."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1057
+msgid "✅ Core dependencies loaded."
+msgstr "Phụ thuộc cốt lõi được tải."
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:127
+#, fuzzy
+msgid "🌍 Language environment passed to subprocess: {}"
+msgstr "Môi trường ngôn ngữ được truyền cho quá trình phụ: {}"
+
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:28
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:24
+#, fuzzy
+msgid ""
+"❌ Failed to import omnipkg modules. Is the project structure correct? Error:"
+" {}"
+msgstr ""
+"Không thể nhập các mô -đun OMNIPKG.Cấu trúc dự án có đúng không?Lỗi: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1990
+#, fuzzy
+msgid "    -> Last version of '{}' removed. Deleting all traces."
+msgstr "-> Phiên bản cuối cùng của '{}' bị xóa.Xóa tất cả các dấu vết."
+
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:43
+msgid "STEP 1: Preparing a Clean Test Environment"
+msgstr "Bước 1: Chuẩn bị môi trường kiểm tra sạch sẽ"
+
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:63
+msgid ""
+"   🗑️ Ensuring clean numpy and scipy installations for baseline test..."
+msgstr "Đảm bảo cài đặt Numpy và Scipy sạch để kiểm tra đường cơ sở ..."
+
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:225
+msgid ""
+"\n"
+"\n"
+"🚨 OMNIPKG SURVIVED NUCLEAR TESTING! 🎇"
+msgstr "Omnipkg đã sống sót sau thử nghiệm hạt nhân!🎇"
+
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:230
+msgid "STEP 3: Cleaning Up Test Environment"
+msgstr "Bước 3: Làm sạch môi trường kiểm tra"
+
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:256
+msgid "STEP 2: Creating Test Bubbles with omnipkg"
+msgstr "Bước 2: Tạo bong bóng thử nghiệm với omnipkg"
+
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:266
+msgid "STEP 3: Executing the Nuclear Test"
+msgstr "Bước 3: Thực hiện xét nghiệm hạt nhân"
+
+#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:28
+#, fuzzy
+msgid ""
+"❌ Critical Error: Could not import omnipkg modules. Is the project structure"
+" correct? Error: {}"
+msgstr ""
+"Lỗi nghiêm trọng: Không thể nhập các mô -đun OMNIPKG.Cấu trúc dự án có đúng "
+"không?Lỗi: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:278
+msgid ""
+"🚀 The intelligent Python package manager that eliminates dependency hell"
+msgstr "Trình quản lý gói Python thông minh loại bỏ địa ngục phụ thuộc"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:283
+#, fuzzy
+msgid "%(prog)s {}"
+msgstr "%(prog) s {}"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:361
+msgid ""
+"\n"
+"👋 Welcome back to omnipkg! Run a command or see --help for details."
+msgstr ""
+"Chào mừng bạn trở lại với Omnipkg!Chạy một lệnh hoặc xem -Help để biết chi "
+"tiết."
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:214
+msgid "🌟 Key Features:"
+msgstr "Các tính năng chính:"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:215
+#, fuzzy
+msgid "  • Runtime Python interpreter switching (no shell restart needed!)"
+msgstr ""
+"• Chuyển đổi phiên dịch Python thời gian chạy (không cần khởi động lại "
+"shell!)"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:216
+msgid "  • Automatic version bubbling to prevent conflicts"
+msgstr "• Phiên bản tự động sủi bọt để ngăn chặn xung đột"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:217
+msgid "  • Downgrade protection with smart conflict resolution"
+msgstr "• Bảo vệ hạ cấp với giải quyết xung đột thông minh"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:218
+msgid "  • Multi-version package coexistence"
+msgstr "• Gói đa phiên bản cùng tồn tại"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:219
+msgid "  • Intelligent dependency management with Redis-backed knowledge base"
+msgstr "• Quản lý phụ thuộc thông minh với cơ sở kiến ​​thức được hỗ trợ lại"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:221
+msgid "📖 Essential Commands:"
+msgstr "Các lệnh thiết yếu:"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:222
+msgid ""
+"  omnipkg install <package>   Install with automatic conflict resolution"
+msgstr "Omnipkg Cài đặt <fack> Cài đặt với độ phân giải xung đột tự động"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:223
+msgid ""
+"  omnipkg install-with-deps <package>  Install with specific dependency "
+"versions"
+msgstr ""
+"OMNIPKG Cài đặt với DEPS <fack> Cài đặt với các phiên bản phụ thuộc cụ thể"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:224
+#, fuzzy
+msgid ""
+"  omnipkg list [filter]       View all packages and their bubble status  "
+msgstr ""
+"Danh sách OMNIPKG [Bộ lọc] Xem tất cả các gói và trạng thái bong bóng của "
+"chúng"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:225
+msgid "  omnipkg status              Check multi-version environment health"
+msgstr "OMNIPKG TÌNH DỤC Sức khỏe môi trường đa phiên bản"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:226
+msgid ""
+"  omnipkg info <package>      Interactive package dashboard with version "
+"explorer"
+msgstr ""
+"OMNIPKG Info <Gack> Bảng điều khiển gói tương tác với phiên bản Explorer"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:227
+msgid ""
+"  omnipkg demo                Run interactive demos for version switching"
+msgstr "Omnipkg demo chạy các bản demo tương tác để chuyển đổi phiên bản"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:228
+msgid ""
+"  omnipkg stress-test         See the magic! Heavy-duty package installation"
+" demo"
+msgstr "Omnipkg Stress-Test Xem phép thuật!Bản demo cài đặt gói hạng nặng"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:229
+#, fuzzy
+msgid ""
+"  omnipkg config set language <code>  Set display language (e.g., en, es)"
+msgstr ""
+"OMNIPKG CONFIG SET Ngôn ngữ <code> Đặt ngôn ngữ hiển thị (ví dụ: en, es)"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:231
+msgid "🎯 Advanced Features:"
+msgstr "Các tính năng nâng cao:"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:232
+msgid "  omnipkg revert             Roll back to last known good state"
+msgstr ""
+"Omnipkg hoàn nguyên cuộn trở lại trạng thái tốt được biết đến cuối cùng"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:233
+msgid "  omnipkg uninstall <pkg>    Smart removal with dependency checking"
+msgstr "OMNIPKG gỡ cài đặt <Pkg> Loại bỏ thông minh với kiểm tra phụ thuộc"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:234
+msgid "  omnipkg rebuild-kb         Refresh the intelligence knowledge base"
+msgstr "OMNIPKG REBUILD-KB Làm mới cơ sở kiến ​​thức thông minh"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:236
+msgid "💡 Installation Examples:"
+msgstr "💡 Ví dụ cài đặt:"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:237
+msgid "  omnipkg install requests numpy>=1.20        # Multiple packages"
+msgstr "OMNIPKG Cài đặt Yêu cầu Numpy> = 1.20 # Nhiều gói"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:238
+#, fuzzy
+msgid ""
+"  omnipkg install uv==0.7.13 uv==0.7.14      # Multiple versions (auto-"
+"bubbled!)"
+msgstr ""
+"OMNIPKG Cài đặt UV == 0.7,13 UV == 0.7,14 # nhiều phiên bản (tự động sủi "
+"bọt!)"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:239
+msgid ""
+"  omnipkg install-with-deps tensorflow==2.13.0 numpy==1.24.3 typing-"
+"extensions==4.5.0"
+msgstr ""
+"OMNIPKG Cài đặt-với-DEPS TENSORFLOW == 2.13.0 NUMPY == 1.24.3 extensions gõ "
+"== 4.5.0"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:240
+msgid "  omnipkg install -r requirements.txt        # From requirements file"
+msgstr "OMNIPKG Cài đặt -R Yêu cầu.TXT # TỪ Tệp Yêu cầu"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:241
+msgid "  omnipkg install 'django>=3.0,<4.0'         # Complex version specs"
+msgstr ""
+"OMNIPKG Cài đặt 'Django> = 3.0, <4.0' # Phiên bản phức tạp thông số kỹ thuật"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:243
+msgid "🔍 Understanding Your Environment:"
+msgstr "🔍 Hiểu về môi trường của bạn:"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:244
+msgid "  omnipkg list                # Shows ✅ active and 🫧 bubbled versions"
+msgstr "Danh sách OMNIPKG # hiển thị ✅ hoạt động và 🫧 Phiên bản sủi bọt"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:245
+msgid "  omnipkg info <package>      # Deep dive into any package's status"
+msgstr "OMNIPKG INFO <pack> # sâu vào bất kỳ trạng thái nào của gói"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:246
+msgid "  omnipkg status              # Overall environment health"
+msgstr "Tình trạng Omnipkg # Sức khỏe môi trường tổng thể"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:248
+#, fuzzy
+msgid "🛠️ Redis Knowledge Base (Advanced):"
+msgstr "Cơ sở kiến ​​thức Redis (Nâng cao):"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:249
+msgid "  omnipkg stores rich metadata in Redis. Explore with:"
+msgstr "OMNIPKG Cửa hàng siêu dữ liệu phong phú ở Redis.Khám phá với:"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:250
+msgid ""
+"  redis-cli HGETALL omnipkg:pkg:<package>                    # Package info"
+msgstr "Redis-cli Hetall OMNIPKG: PKG: <pack> # Thông tin gói"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:251
+msgid ""
+"  redis-cli SMEMBERS \"omnipkg:pkg:<package>:installed_versions\"  # All "
+"versions"
+msgstr ""
+"Redis-cli smembers \"OMNIPKG: PKG: <pack>: install_versions\" # Tất cả các "
+"phiên bản"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:252
+msgid ""
+"  redis-cli HGETALL omnipkg:pkg:<package>:<version>          # Version "
+"details"
+msgstr ""
+"Redis-cli Hetall OMNIPKG: PKG: <Gói>: <Phiên bản> # Chi tiết phiên bản"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:254
+msgid "🔧 Python Version Management:"
+msgstr "🔧 Quản lý phiên bản Python:"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:255
+msgid ""
+"  omnipkg automatically manages Python interpreters! When you run commands"
+msgstr ""
+"Omnipkg tự động quản lý các phiên dịch viên Python!Khi bạn chạy các lệnh"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:256
+msgid "  that need a different Python version, omnipkg will:"
+msgstr "Cần một phiên bản Python khác, Omnipkg Will:"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:257
+msgid "  • Download and install the required Python version seamlessly"
+msgstr "• Tải xuống và cài đặt phiên bản Python cần thiết một cách liền mạch"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:258
+msgid "  • Switch interpreters mid-execution without shell restart"
+msgstr ""
+"• Chuyển đổi phiên dịch viên trung cấp mà không cần khởi động lại shell"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:259
+msgid "  • Maintain package isolation across Python versions"
+msgstr "• Duy trì sự cô lập gói trên các phiên bản Python"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:260
+msgid "  • Keep your environment clean and organized"
+msgstr "• Giữ cho môi trường của bạn sạch sẽ và có tổ chức"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:262
+msgid "💡 Pro Tips:"
+msgstr "💡 Mẹo chuyên nghiệp:"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:263
+msgid "  • Run 'omnipkg demo' to try version-switching demos"
+msgstr "• Chạy 'OMNIPKG Demo' để thử các bản demo chuyển đổi phiên bản"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:264
+msgid "  • Run 'omnipkg stress-test' to see automated interpreter switching"
+msgstr "• Chạy 'Omnipkg Stress-Test' để xem chuyển đổi phiên dịch tự động"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:265
+msgid "  • Use 'omnipkg info <package>' for interactive version selection"
+msgstr "• Sử dụng 'Omnipkg Info <fack>' để lựa chọn phiên bản tương tác"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:266
+msgid "  • Use 'omnipkg config set language <code>' to change language"
+msgstr "• Sử dụng 'Omnipkg Config SET Ngôn ngữ <code>' để thay đổi ngôn ngữ"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:267
+msgid "  • The system learns from conflicts and prevents future issues"
+msgstr ""
+"• Hệ thống học hỏi từ xung đột và ngăn chặn các vấn đề trong tương lai"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:268
+msgid "  • All changes are logged and reversible with 'omnipkg revert'"
+msgstr ""
+"• Tất cả các thay đổi được ghi lại và có thể đảo ngược với 'OMNIPKG hoàn "
+"nguyên'"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:270
+#, fuzzy
+msgid "Version: {}"
+msgstr "Phiên bản: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:181
+msgid ""
+"Auto-detecting paths for your environment. Press Enter to accept defaults.\n"
+msgstr ""
+"Đường dẫn tự động phát hiện cho môi trường của bạn.Nhấn Enter để chấp nhận "
+"mặc định."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:182
+msgid "📦 Choose your default installation strategy:"
+msgstr "📦 Chọn Chiến lược cài đặt mặc định của bạn:"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:319
+msgid "Clean up old, bubbled package versions"
+msgstr "Làm sạch các phiên bản gói cũ, sủi bọt"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:319
+msgid ""
+"Removes bubbled package versions to save space, keeping the active version "
+"safe."
+msgstr ""
+"Loại bỏ các phiên bản gói bong bóng để tiết kiệm không gian, giữ cho phiên "
+"bản hoạt động an toàn."
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:320
+msgid "The package whose bubbles you want to prune."
+msgstr "Gói mà bạn muốn cắt tỉa."
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:321
+msgid "Keep the N most recent bubbled versions and prune the rest."
+msgstr "Giữ các phiên bản N gần đây nhất và cắt tỉa phần còn lại."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1179
+#, fuzzy
+msgid "✅ No bubbles found for '{}'. Nothing to prune."
+msgstr "Không tìm thấy bong bóng cho '{}'. Không có gì để cắt tỉa."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1185
+msgid "❌ 'keep-latest' must be a non-negative number."
+msgstr "'Keep-Latest' phải là một số không âm."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1189
+#, fuzzy
+msgid "🔎 Found {} bubbles. Keeping the latest {}, pruning {} older versions."
+msgstr "🔎 tìm thấy {} bong bóng. Giữ các phiên bản cũ nhất {}, cắt tỉa {}."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1192
+#, fuzzy
+msgid "🔎 Found {} bubbles to prune for '{}'."
+msgstr "🔎 Tìm thấy {} bong bóng để cắt tỉa cho '{}'."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1194
+msgid "✅ No bubbles match the pruning criteria."
+msgstr "Không có bong bóng phù hợp với tiêu chí cắt tỉa."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1196
+msgid ""
+"\n"
+"The following bubbled versions will be permanently deleted:"
+msgstr "Các phiên bản sủi bọt sau đây sẽ bị xóa vĩnh viễn:"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1198
+#, fuzzy
+msgid "  - v{} (bubble)"
+msgstr "- V {} (bong bóng)"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1200
+#, fuzzy
+msgid "🛡️  The active version (v{}) will NOT be affected."
+msgstr "Phiên bản hoạt động (v {}) sẽ không bị ảnh hưởng."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1204
+msgid "🚫 Prune cancelled."
+msgstr "🚫 PRUNE bị hủy."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1210
+#, fuzzy
+msgid ""
+"\n"
+"🎉 Pruning complete for '{}'."
+msgstr "Cắt tỉa hoàn thành cho '{}'."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1584
+msgid "❌ Could not resolve any packages to install. Aborting."
+msgstr "Không thể giải quyết bất kỳ gói nào để cài đặt. Hủy bỏ."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1608
+#, fuzzy
+msgid "❌ Pip installation failed for {}. Continuing..."
+msgstr "Cài đặt pip không thành công cho {}. Tiếp tục ..."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1611
+#, fuzzy
+msgid "✅ Installation completed for: {}"
+msgstr "✅ Cài đặt hoàn thành cho: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1683
+msgid ""
+"\n"
+"🧠 Updating knowledge base for this package..."
+msgstr "🧠 Cập nhật cơ sở kiến ​​thức cho gói này ..."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1688
+msgid ""
+"\n"
+"✅ All requirements were already satisfied."
+msgstr "Tất cả các yêu cầu đã được thỏa mãn."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1691
+msgid ""
+"\n"
+"🧹 Performing final cleanup of redundant bubbles..."
+msgstr "Thực hiện việc dọn dẹp cuối cùng của bong bóng dự phòng ..."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1696
+#, fuzzy
+msgid ""
+"    -> Found redundant bubble for active package '{0}=={1}'. Removing..."
+msgstr ""
+"-> Tìm thấy bong bóng dự phòng cho gói hoạt động '{0} == {1}'. Loại bỏ ..."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1916
+msgid "🤷 No installations match the specified criteria."
+msgstr "Không có cài đặt phù hợp với các tiêu chí được chỉ định."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2101
+msgid "🔎 Resolving package versions via PyPI API..."
+msgstr "🔎 Giải quyết các phiên bản gói thông qua API PYPI ..."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2108
+#, fuzzy
+msgid "    -> Finding latest version for '{}'..."
+msgstr "-> Tìm phiên bản mới nhất cho '{}' ..."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2112
+#, fuzzy
+msgid "    ✅ Resolved '{}' to '{}'"
+msgstr "✅ Đã giải quyết '{}' thành '{}'"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2115
+#, fuzzy
+msgid "    ⚠️  Could not resolve a version for '{}' via PyPI. Skipping."
+msgstr "Không thể giải quyết một phiên bản cho '{}' thông qua pypi. Bỏ qua."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2209
+#, fuzzy
+msgid "    ⚠️  API Error while fetching version for '{}': {}"
+msgstr "⚠ Lỗi API trong khi tìm nạp phiên bản cho '{}': {}"
+
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:152
+#, fuzzy
+msgid "rich.{}test_harness_cloaked"
+msgstr "Giàu. {} test_harness_cloaken"
+
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:157
+#, fuzzy
+msgid "{}.{}test_harness_cloaked"
+msgstr "{}. {} test_harness_cloaked"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1080
+#, fuzzy
+msgid "   {}"
+msgstr "   {}"
+
+#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:93
+#, fuzzy
+msgid "--- Script STDERR (relevant) ---"
+msgstr "--- script stderr (có liên quan) ---"
+
+#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:98
+#, fuzzy
+msgid "⚠️ Some errors occurred (see above)"
+msgstr "⚠ Một số lỗi đã xảy ra (xem ở trên)"
+
+#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:109
+msgid "🚀 TensorFlow Version Switching Test"
+msgstr "🚀 Kiểm tra chuyển đổi phiên bản TensorFlow"
+
+#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:111
+#, fuzzy
+msgid "Using omnipkg versions directory: {}"
+msgstr "Sử dụng thư mục phiên bản OMNIPKG: {}"
+
+#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:113
+msgid "🧹 Clearing existing TensorFlow installations..."
+msgstr "Xóa các cài đặt TensorFlow hiện có ..."
+
+#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:120
+msgid ""
+"(Should have 4.14.1 and keras==2.13.1 active in main env, 4.5.0 in bubble)"
+msgstr ""
+
+#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:126
+#, fuzzy
+msgid "Bubble exists: {}"
+msgstr "Bubble tồn tại: {}"
+
+#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:129
+msgid ""
+"\n"
+"🚀 Final cleanup and verification"
+msgstr "🚀 Dọn dẹp và xác minh cuối cùng"
+
+#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:130
+#, fuzzy
+msgid "🧹 Removing TensorFlow packages (keeping protected dependencies)..."
+msgstr "Xóa các gói TensorFlow (giữ các phụ thuộc được bảo vệ) ..."
+
+#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:137
+msgid ""
+"\n"
+"🔬 Final verification - stable environment state"
+msgstr "🔬 Xác minh cuối cùng - Trạng thái môi trường ổn định"
+
+#: /home/minds3t/omnipkg/omnipkg/CondaGuard.py:35
+msgid "🛡️ Restored corrupted metadata for: {}"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/CondaGuard.py:51
+msgid "Failed to back up '{}': {}"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/CondaGuard.py:65
+msgid "Detected corruption (file missing or empty): '{}'"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/CondaGuard.py:72
+msgid "Detected corruption (invalid JSON): '{}'"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/CondaGuard.py:80
+msgid "Failed to restore '{}': {}"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/CondaGuard.py:82
+msgid "Cannot restore '{}', backup file is missing!"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/CondaGuard.py:91
+msgid "Cleaned up backup: '{}'"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/CondaGuard.py:93
+msgid "Failed to clean up backup '{}': {}"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/CondaGuard.py:112
+msgid "--- Running Standalone Conda Corruption Check & Fix ---"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/CondaGuard.py:118
+msgid "🔧 Fix applied. Restored files: {}"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/CondaGuard.py:121
+msgid "✅ No corruption found in protected files."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/CondaGuard.py:129
+msgid "-> Running a risky function that might corrupt Conda..."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/CondaGuard.py:132
+msgid "   ...simulating corruption of '{}'"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/CondaGuard.py:135
+msgid "-> Risky function finished."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/CondaGuard.py:136
+msgid "🧪 Testing decorator..."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/CondaGuard.py:139
+msgid "🧪 Testing context manager..."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/CondaGuard.py:145
+msgid "   ...simulating deletion of '{}'"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/CondaGuard.py:147
+msgid "-> Leaving safe context..."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/CondaGuard.py:148
+msgid ""
+"\n"
+"✅ Demo finished."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:384
+msgid "✅ Install strategy permanently set to: {}"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/common_utils.py:93
+msgid "🛡️ ConfigGuard: Activated temporary test configuration."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/common_utils.py:101
+msgid "🛡️ ConfigGuard: Restored original user configuration."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/loader.py:119
+msgid " ❌ Activation failed: {}"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/loader.py:186
+msgid " ⚠️ Warning: Could not remove existing cloak {}: {}"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/loader.py:210
+msgid " ⚠️ Warning: Could not remove conflicting path {}: {}"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/loader.py:216
+msgid " ❌ Failed to restore {} from {}: {}"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/loader.py:223
+msgid " 🧹 Cleaned up orphaned cloak {}"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/loader.py:227
+msgid " ❌ CRITICAL: Cloaked path {} is missing! Package {} may be lost."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/loader.py:232
+msgid " ℹ️ Package {} still appears to be installed in system."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/loader.py:234
+msgid " ❌ Package {} is no longer available in system. Consider reinstalling."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/loader.py:235
+msgid "   Suggestion: pip install --force-reinstall --no-deps {}"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/loader.py:238
+msgid " ⚠️ Cloak restore summary: {} successful, {} failed"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/loader.py:242
+msgid " 🚨 Emergency cloak restoration in progress..."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/loader.py:250
+msgid "🧹 Scanning for abandoned omnipkg cloaks..."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/loader.py:254
+msgid " ✅ No abandoned cloaks found."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/loader.py:256
+msgid " 🔍 Found {} potential abandoned cloak(s):"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/loader.py:258
+msgid "   - {}"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/loader.py:259
+msgid ""
+" ℹ️ To remove these manually: rm -rf /path/to/site-"
+"packages/*_omnipkg_cloaked*"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/loader.py:260
+msgid ""
+" ⚠️ WARNING: Only remove if you're sure no omnipkg operations are running!"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:316
+msgid ""
+"The value to set for the key (e.g., en, es, de, ja, zh_CN, stable-main, "
+"latest-active, fast-compat)"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:381
+msgid "❌ Error: Invalid install strategy. Must be one of: {}"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1661
+msgid "    ✅ New package installed: {} v{} (active in main environment)"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1664
+msgid ""
+"\n"
+"🛡️ LATEST-ACTIVE STRATEGY: Preserving replaced versions in bubbles"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1667
+msgid "    -> Bubbling replaced {} version: {} v{} (keeping v{} active)"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1676
+msgid "    ✅ Successfully bubbled {} v{}"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1678
+msgid "    ❌ Failed to bubble {} v{}"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1680
+msgid ""
+"\n"
+"✅ Latest-active complete! Requested versions active, previous versions preserved."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1682
+msgid "✅ No version changes detected."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1969
+msgid "🗑️ Uninstalling '{}=={}' from main environment via pip..."
+msgstr ""

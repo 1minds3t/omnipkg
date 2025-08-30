@@ -1,0 +1,1157 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) YEAR ORGANIZATION
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: PACKAGE VERSION\n"
+"POT-Creation-Date: 2025-08-21 23:45-0500\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: pygettext.py 1.5\n"
+
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:57
+msgid "  ⚠️  Stress Test Requires Python 3.11"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:61
+msgid "The omnipkg stress test only works in Python 3.11 environments."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:62
+msgid "To run the stress test:"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:63
+msgid "1. Create a Python 3.11 virtual environment"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:64
+msgid "2. Install omnipkg in that environment"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:67
+msgid "🔮 Coming Soon: Hot Python interpreter swapping mid-script!"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:68
+msgid "   This will allow seamless switching between Python versions"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:69
+msgid "   during package operations - stay tuned!"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:73
+msgid "  🚀 omnipkg Nuclear Stress Test - Runtime Version Swapping"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:75
+msgid "🎪 This demo showcases IMPOSSIBLE package combinations:"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:76
+msgid "   • Runtime swapping between numpy/scipy versions mid-execution"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:77
+msgid "   • Different numpy+scipy combos (1.24.3+1.12.0 → 1.26.4+1.16.1)"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:79
+msgid "   • Live PYTHONPATH manipulation without process restart"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:80
+msgid "   • Space-efficient deduplication (shows deduplication - normally"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:81
+msgid "     we average ~60% savings, but less for C extensions/binaries)"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:83
+msgid "🤯 What makes this impossible with traditional tools:"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:85
+msgid "   • Switching versions requires environment restart"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:86
+msgid "   • Dependency conflicts prevent coexistence"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:89
+msgid "✨ omnipkg does this LIVE, in the same Python process!"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:90
+msgid "📊 Expected downloads: ~500MB | Duration: 30 seconds - 3 minutes"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:103
+msgid "🔥 Starting stress test..."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:108
+msgid "❌ Stress test module not found. Implementation needed."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:109
+msgid "💡 This would run the actual stress test with:"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:110
+msgid "   • Large package installations (TensorFlow, PyTorch, etc.)"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:111
+msgid "   • Version conflict demonstrations"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:112
+msgid "   • Real-time bubbling and deduplication"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:121
+msgid "📡 Live streaming output (this may take several minutes for heavy packages)..."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:123
+msgid "🛑 Press Ctrl+C to safely cancel if needed"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:136
+#: /home/minds3t/omnipkg/omnipkg/cli.py:189
+msgid "😎 TensorFlow escaped the matrix! 🚀"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:137
+#: /home/minds3t/omnipkg/omnipkg/cli.py:190
+msgid "🎉 Demo completed successfully!"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:141
+msgid "💡 Check the output above for error details."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:144
+#: /home/minds3t/omnipkg/omnipkg/cli.py:196
+msgid ""
+"\n"
+"⚠️  Demo cancelled by user (Ctrl+C)"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:145
+msgid "🛡️  Your environment should be safe - omnipkg handles interruptions gracefully"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:157
+msgid "📋 Full traceback:"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:165
+msgid "📡 Streaming output in real-time..."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:166
+msgid "💡 Heavy package installations may have natural pauses - this is normal!"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:167
+msgid "🛑 Press Ctrl+C to safely cancel"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:197
+msgid "🛡️  Cleaning up safely..."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:216
+msgid "🚀 The intelligent Python package manager that eliminates dependency hell"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:280
+msgid "Override the display language for this command (e.g., es, de, ja)"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:282
+msgid "Available commands:"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:285
+msgid "Install packages with intelligent conflict resolution"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:286
+msgid "Install packages with automatic version management and conflict resolution"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:287
+msgid "Packages to install (e.g., \"requests==2.25.1\", \"numpy>=1.20\")"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:288
+msgid "Install from requirements file with smart dependency resolution"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:291
+msgid "Install a package with specific dependency versions"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:292
+msgid "Install a package with specific dependency versions in a bubble to avoid conflicts"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:293
+msgid "Package to install (e.g., \"tensorflow==2.13.0\")"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:294
+msgid "Dependency with version (e.g., \"numpy==1.24.3\")"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:297
+msgid "Intelligently remove packages and their dependencies"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:298
+msgid "Smart package removal with safety features"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:299
+msgid "Packages to uninstall (removes all versions)"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:300
+msgid "Skip confirmation prompts"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:303
+msgid "Interactive package explorer with version management"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:304
+msgid "Explore package details, dependencies, and manage versions interactively"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:305
+msgid "Package name to explore"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:306
+msgid "Specific version to inspect (default: active)"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:309
+msgid "Time-travel back to your last known good environment"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:310
+msgid "Revert all changes to the last stable environment state"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:311
+msgid "Skip confirmation and revert immediately"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:314
+msgid "View all installed packages and their bubble status"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:315
+msgid "List all packages with detailed status indicators"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:316
+msgid "Filter packages by name pattern"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:319
+msgid "Multi-version environment health dashboard"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:320
+msgid "Overview of your Python interpreters, packages, and bubble isolation"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:323
+msgid "Interactive demo for version switching"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:324
+msgid ""
+"Run interactive demos showcasing omnipkg's version-switching capabilities:\n"
+"        1. Rich test (Python module switching)\n"
+"        2. UV test (binary switching)\n"
+"        3. NumPy + SciPy stress test (C-extension switching)\n"
+"        4. TensorFlow test (complex dependency switching)\n"
+"        Note: The Flask demo is under construction and not currently available."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:332
+msgid "Ultimate demonstration with heavy scientific packages"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:333
+msgid "Showcase omnipkg's features with large package installations and version switching"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:336
+msgid "Clean slate: rebuild the omnipkg knowledge base"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:337
+msgid "Delete and rebuild the Redis knowledge base from scratch"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:338
+msgid "Skip confirmation"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:341
+msgid "Refresh the intelligence knowledge base"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:342
+msgid "Force rebuild of package metadata and dependency intelligence"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:343
+msgid "Ignore cache and force complete rebuild"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:346
+msgid "Delete the config file to trigger a fresh setup"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:347
+msgid "Deletes the omnipkg config.json file"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:348
+msgid "Skip confirmation and delete immediately"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:351
+msgid "View or edit the omnipkg configuration"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:352
+msgid "Allows setting persistent configuration values"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:354
+msgid "Set a configuration value"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:355
+msgid "The configuration key to set"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:356
+msgid "The value to set for the key (e.g., en, es, de, ja, zh_CN)"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:384
+msgid "👋 Welcome back to omnipkg!"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:385
+msgid "   Run with --help for a list of commands."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:402
+msgid "✅ Language permanently set to: {lang}"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:406
+msgid "Interactive Omnipkg Demo"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:407
+msgid "🎪 Omnipkg supports version switching for:"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:408
+msgid "   • Python modules (e.g., rich): See tests/test_rich_switching.py"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:409
+msgid "   • Binary packages (e.g., uv): See tests/test_uv_switching.py"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:410
+msgid "   • C-extension packages (e.g., numpy, scipy): See stress_test.py"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:411
+msgid "   • Complex dependency packages (e.g., TensorFlow): See tests/test_tensorflow_switching.py"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:412
+msgid "   • Note: The Flask demo is under construction and not currently available."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:413
+msgid ""
+"\n"
+"Select a demo to run:"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:414
+msgid "1. Rich test (Python module switching)"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:415
+msgid "2. UV test (binary switching)"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:416
+msgid "3. NumPy + SciPy stress test (C-extension switching)"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:417
+msgid "4. TensorFlow test (complex dependency switching)"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:418
+msgid "5. Flask test (under construction)"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:421
+msgid "Enter your choice (1-5): "
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:434
+msgid "  ⚠️  NumPy/SciPy Stress Test Requires Python 3.11"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:447
+msgid "⚠️ The Flask demo is under construction and not currently available."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:448
+msgid "Switching to the Rich test (option 1) for now!"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:450
+msgid "❌ Invalid choice. Please select 1, 2, 3, 4, or 5."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:504
+msgid ""
+"\n"
+"💡 Did you mean 'omnipkg config set language <code>'?"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:508
+msgid ""
+"\n"
+"❌ Operation cancelled by user."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/common_utils.py:60
+#: /home/minds3t/omnipkg/omnipkg/demo.py:81
+msgid "💭 Simulating Enter key press..."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:112
+msgid "✅ Core dependencies loaded from pyproject.toml."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:125
+msgid "❌ CRITICAL: Could not dynamically load all dependencies. Using extended hardcoded fallback."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:201
+msgid "👋 Welcome to omnipkg! Let's get you configured."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:202
+msgid ""
+"   Auto-detecting paths for your environment. Press Enter to accept defaults.\n"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:205
+msgid ""
+"\n"
+"🌍 Choose your default display language:"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:206
+msgid "   Detected language: {lang}"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:207
+msgid "   Available languages:"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:217
+msgid "Language set to: {lang}"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:220
+msgid ""
+"\n"
+"📦 Choose your default installation strategy:"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:221
+msgid "   1) stable-main:  Prioritize a stable main environment. (Recommended)"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:222
+msgid "   2) latest-active: Prioritize having the latest versions active."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:223
+msgid "   Enter choice (1 or 2) [1]: "
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:239
+msgid "Configuration saved to {path}."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:240
+msgid "   You can edit this file manually later."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:256
+msgid "Warning: Config file is corrupted. Starting fresh."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:262
+msgid "Updating config: Adding missing key '{key}'."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:268
+msgid "✅ Config file updated successfully."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:307
+msgid "    ⚠️ Warning: Failed to load path registry, starting fresh."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:388
+msgid "    -> Trying strategy 1: pip dry-run..."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:391
+msgid "    ✅ Success: Dependencies resolved via pip dry-run."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:394
+msgid "    -> Trying strategy 2: PyPI API..."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:398
+msgid "    ✅ Success: Dependencies resolved via PyPI API."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:401
+msgid "    -> Trying strategy 3: pip show fallback..."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:404
+msgid "    ✅ Success: Dependencies resolved from existing installation."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:878
+msgid "    🔍 Verifying package integrity..."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:980
+msgid "    ⚡️ Loading main environment hash index from cache..."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:990
+msgid "    📦 Attempting fast indexing via package metadata..."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1433
+msgid "❌ Could not connect to Redis. Is the Redis server running?"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1446
+msgid "✅ Configuration file does not exist. Nothing to do."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1455
+#: /home/minds3t/omnipkg/omnipkg/core.py:1489
+msgid "🚫 Reset cancelled."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1460
+msgid "✅ Configuration file deleted successfully."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1462
+msgid "🚀 The next time you run `omnipkg`, you will be guided through the first-time setup."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1492
+msgid ""
+"\n"
+"🗑️  Clearing knowledge base..."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1502
+msgid "   ✅ Knowledge base was already clean."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1515
+msgid "🧠 Forcing a full rebuild of the knowledge base..."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1523
+msgid "✅ Knowledge base rebuilt successfully."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1546
+msgid "   🔄 Rebuilding core package metadata..."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1550
+msgid "   ✅ Core metadata rebuilt."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1574
+msgid "🧠 Performing self-healing sync of knowledge base..."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1588
+msgid "   ✅ Knowledge base is empty or no packages found to sync."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1644
+msgid "   ✅ Knowledge base is already in sync with the environment."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1654
+msgid "🔄 Updating cached file hash index..."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1679
+msgid "✅ Hash index updated."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1736
+msgid "✅ Knowledge base is already up to date."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1739
+msgid "🧠 Updating knowledge base for changes..."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1769
+msgid "✅ Knowledge base updated successfully."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1857
+msgid "❌ Invalid selection."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1859
+msgid "❌ Please enter a number."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1861
+msgid ""
+"\n"
+"   Skipped."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1863
+msgid "📦 No installed versions found in Redis."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1925
+msgid "   ✅ Snapshot saved."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1954
+msgid "🔬 Running in --dry-run mode. No changes will be made."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1958
+msgid "🚫 No packages specified for installation."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1989
+msgid "  (No version specified for omnipkg; attempting to bubble the latest stable version)"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2014
+msgid ""
+"\n"
+"🎉 All package operations complete."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2040
+msgid ""
+"\n"
+"📸 Taking LIVE pre-installation snapshot..."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2053
+msgid ""
+"\n"
+"🔬 Analyzing post-installation changes..."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2088
+msgid ""
+"\n"
+"🛡️ STABILITY PROTECTION ACTIVATED!"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2102
+msgid ""
+"\n"
+"✅ Stability protection complete!"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2104
+msgid "✅ No changes to existing packages detected. Installation completed safely."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2111
+msgid ""
+"\n"
+"🛡️ DOWNGRADE PROTECTION ACTIVATED!"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2128
+msgid ""
+"\n"
+"✅ Environment protection complete!"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2130
+msgid "✅ No unintended downgrades detected."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2133
+msgid ""
+"\n"
+"🧠 Updating knowledge base with final environment state..."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2139
+msgid "🎉 All package operations complete."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2203
+msgid "🔄 Restoring main environment from snapshot..."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2213
+msgid "   ✅ Environment is already in its original state."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2223
+msgid "   ✅ Environment restored."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2462
+msgid "🤷 No versions available for selection."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2468
+#: /home/minds3t/omnipkg/omnipkg/core.py:2515
+msgid "🚫 Uninstall cancelled."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2479
+msgid "❌ Invalid input."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2489
+msgid ""
+"\n"
+"🚫 Uninstall cancelled."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2505
+msgid "🤷 No versions selected for uninstallation after protection checks."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2555
+msgid "✅ Uninstallation complete."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2569
+msgid "   Run an `omnipkg install` or `omnipkg uninstall` command to create one."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2572
+msgid "⚖️  Comparing current environment to the last known good snapshot..."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2585
+msgid "✅ Your environment is already in the last known good state. No action needed."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2588
+msgid ""
+"\n"
+"📝 The following actions will be taken to restore the environment:"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2599
+msgid "🚫 Revert cancelled."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2602
+msgid ""
+"\n"
+"🚀 Starting revert operation..."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2610
+msgid ""
+"\n"
+"✅ Environment successfully reverted to the last known good state."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2784
+msgid "  (No versions found in knowledge base)"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2799
+msgid "🔄 omnipkg System Status"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2806
+#: /home/minds3t/omnipkg/omnipkg/core.py:2809
+msgid ""
+"\n"
+"🔒 Pip in Jail (main environment)"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2810
+msgid "    🚫 Pip not found in the main env. Escaped or never caught!"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2814
+#: /home/minds3t/omnipkg/omnipkg/core.py:2817
+msgid "🔒 UV in Jail (main environment)"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2818
+msgid "    🚫 UV not found in the main env. Too fast to catch!"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2820
+msgid ""
+"\n"
+"🌍 Main Environment:"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2826
+msgid ""
+"\n"
+"📦 izolasyon Alanı (Bubbles):"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2828
+msgid "  - No isolated package versions found."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:13
+msgid "🚨 PIP DEPENDENCY DESTRUCTION ALERT 🚨"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:16
+#: /home/minds3t/omnipkg/omnipkg/demo.py:18
+#: /home/minds3t/omnipkg/omnipkg/demo.py:21
+#: /home/minds3t/omnipkg/omnipkg/demo.py:27
+#: /home/minds3t/omnipkg/omnipkg/demo.py:29
+msgid "│                                                          │"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:17
+msgid "│  💀 You: pip install flask-login==0.6.0                 │"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:19
+msgid "│  🧠 omnipkg AI suggests:                                 │"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:20
+msgid "│      omnipkg install flask-login==0.6.0                 │"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:22
+msgid "│  ⚠️  WARNING: pip will NUKE your environment! ⚠️          │"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:23
+msgid "│      • Downgrade from 0.6.3 to 0.6.0                   │"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:24
+msgid "│      • Break newer Flask compatibility                  │"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:25
+msgid "│      • Destroy your modern app                          │"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:26
+msgid "│      • Welcome you to dependency hell 🔥                │"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:28
+msgid "│  [Y]es, I want chaos | [N]o, save me omnipkg! 🦸‍♂️        │"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:31
+msgid "        \\   ^__^"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:32
+msgid "         \\  (💀💀)\\______   <- This is your environment"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:33
+msgid "            (__)\\       )\\/\\   after using pip"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:34
+msgid "                ||---ww |"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:35
+msgid "                ||     ||"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:107
+msgid "This demo will show you the classic dependency conflict and how omnipkg solves it."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:114
+msgid ""
+"\n"
+"✅ Beautiful! We have flask-login 0.6.3 installed and working perfectly."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:128
+msgid ""
+"\n"
+"🔓 Releasing pip... (your funeral)"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:129
+msgid "💀 Watch as pip destroys your beautiful environment..."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:132
+msgid ""
+"\n"
+"💥 BOOM! Look what pip did:"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:133
+msgid "   ❌ Uninstalled flask-login 0.6.3"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:134
+msgid "   ❌ Downgraded to flask-login 0.6.0"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:135
+msgid "   ❌ Your modern project is now BROKEN"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:136
+msgid "   ❌ Welcome to dependency hell! 🔥"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:143
+msgid "Watch how omnipkg handles this intelligently:"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:145
+msgid ""
+"\n"
+"✅ omnipkg intelligently restored the modern version!"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:146
+msgid "💡 Notice: No conflicts, no downgrades, just pure intelligence."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:159
+msgid ""
+"\n"
+"🧠 Smart choice! Using omnipkg instead..."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:162
+msgid "🔧 Installing flask-login==0.6.0 with omnipkg..."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:163
+msgid "💡 omnipkg will skip if already available or create isolation as needed..."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:165
+msgid ""
+"\n"
+"✅ omnipkg install successful!"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:166
+msgid "🎯 BOTH versions now coexist peacefully!"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:174
+msgid ""
+"\n"
+"🔧 Note how omnipkg intelligently manages versions!"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:175
+msgid "📦 Main environment: flask-login 0.6.3 (untouched)"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:176
+msgid "🔧 omnipkg: flask-login 0.6.0 (available when needed)"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:181
+msgid "💡 Want details on a specific version?"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:185
+msgid ""
+"\n"
+"🎯 Now you can see that BOTH versions are available to the system."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:307
+msgid ""
+"\n"
+"See test above: we not only have multiple versions in the same environment, but can even run them in the same script!"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:310
+msgid "🎉🎉🎉 DEMO COMPLETE! 🎉🎉🎉"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:311
+msgid "📚 What you learned:"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:312
+msgid "   💀 pip: Breaks everything, creates dependency hell"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:313
+msgid "   🧠 omnipkg: Smart isolation, peaceful coexistence"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:314
+msgid "   🔧 Intelligence: Skips redundant work, creates isolation when needed"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:315
+msgid "   🔄 Magic: Seamless switching without containers"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:316
+msgid "🚀 Dependency hell is officially SOLVED!"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:317
+msgid "   Welcome to omnipkg heaven!"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/loader.py:44
+msgid "⚠️ [omnipkg loader] Config not provided or incomplete. Attempting auto-detection of paths."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/loader.py:51
+msgid "⚠️ [omnipkg loader] Could not auto-detect site-packages path reliably. Falling back to sys.prefix."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:76
+msgid "🟢 --force flag detected. Caching will be ignored."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:88
+msgid "✅ Connected to Redis successfully."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:99
+msgid "🔍 Discovering all packages from file system (ground truth)..."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:136
+msgid "    -> Reconciling file system state with Redis knowledge base..."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:170
+msgid "🚀 Starting omnipkg Metadata Builder v11 (Multi-Version Complete Edition)..."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:182
+msgid "🔍 No specific targets provided. Discovering all installed packages..."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:185
+msgid "🛡️ Performing bulk security scan for active packages..."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:49
+msgid "   - Setting main environment to a known good state... (This might trigger an omnipkg install)"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:51
+msgid "   🗑️ Ensuring clean `numpy` and `scipy` installations for baseline test..."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:58
+msgid "✅ Environment is clean and ready for testing."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:68
+msgid ""
+"\n"
+"💥 NUMPY VERSION JUGGLING:"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:89
+msgid ""
+"\n"
+"\n"
+"🔥 SCIPY C-EXTENSION TEST:"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:113
+msgid ""
+"\n"
+"\n"
+"🤯 NUMPY + SCIPY VERSION MIXING:"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:226
+msgid ""
+"\n"
+"\n"
+" 🚨 OMNIPKG SURVIVED NUCLEAR TESTING! 🎇"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:250
+msgid ""
+"\n"
+"✅ Cleanup complete. Your environment is back to normal."
+msgstr ""
+

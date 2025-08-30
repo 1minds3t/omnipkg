@@ -1,0 +1,3483 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) YEAR ORGANIZATION
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: PACKAGE VERSION\n"
+"POT-Creation-Date: 2025-08-21 15:13-0500\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: pygettext.py 1.5\n"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:49
+msgid "  ⚠️  Stress Test Requires Python 3.11"
+msgstr "⚠ স্ট্রেস টেস্টের পাইথন 3.11 প্রয়োজন"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:53
+msgid "The omnipkg stress test only works in Python 3.11 environments."
+msgstr "ওমনিপকেজি স্ট্রেস টেস্ট কেবল পাইথন 3.11 পরিবেশে কাজ করে।"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:54
+msgid "To run the stress test:"
+msgstr "স্ট্রেস পরীক্ষা চালাতে:"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:55
+msgid "1. Create a Python 3.11 virtual environment"
+msgstr "1। একটি পাইথন 3.11 ভার্চুয়াল পরিবেশ তৈরি করুন"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:56
+msgid "2. Install omnipkg in that environment"
+msgstr "2। সেই পরিবেশে ওমনিপকিজি ইনস্টল করুন"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:59
+msgid "🔮 Coming Soon: Hot Python interpreter swapping mid-script!"
+msgstr "🔮 শীঘ্রই আসছে: হট পাইথন দোভাষী মিড-স্ক্রিপ্ট অদলবদল!"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:60
+msgid "   This will allow seamless switching between Python versions"
+msgstr "এটি পাইথন সংস্করণগুলির মধ্যে বিরামবিহীন স্যুইচিংয়ের অনুমতি দেবে"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:61
+msgid "   during package operations - stay tuned!"
+msgstr "প্যাকেজ অপারেশন চলাকালীন - থাকুন!"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:65
+msgid "  🚀 omnipkg Nuclear Stress Test - Runtime Version Swapping"
+msgstr "🚀 ওমনিপকিজি পারমাণবিক স্ট্রেস টেস্ট - রানটাইম সংস্করণ অদলবদল"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:67
+msgid "🎪 This demo showcases IMPOSSIBLE package combinations:"
+msgstr "🎪 এই ডেমোটি অসম্ভব প্যাকেজ সংমিশ্রণগুলি প্রদর্শন করে:"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:68
+msgid "   • Runtime swapping between numpy/scipy versions mid-execution"
+msgstr ""
+"Numby numpy/scipy সংস্করণগুলির মধ্যে মিড-এক্সিকিউশনের মধ্যে রানটাইম অদলবদল"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:69
+msgid "   • Different numpy+scipy combos (1.24.3+1.12.0 → 1.26.4+1.16.1)"
+msgstr "• বিভিন্ন নুমপি+স্কিপি কম্বো (1.24.3+1.12.0 → 1.26.4+1.16.1)"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:71
+msgid "   • Live PYTHONPATH manipulation without process restart"
+msgstr "Process প্রক্রিয়া পুনঃসূচনা ছাড়াই পাইথনপ্যাথ ম্যানিপুলেশন লাইভ"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:72
+msgid "   • Space-efficient deduplication (shows deduplication - normally"
+msgstr "• স্পেস -দক্ষ ডেডুপ্লিকেশন (সাধারণত অনুদান দেখায় - সাধারণত"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:73
+msgid "     we average ~60% savings, but less for C extensions/binaries)"
+msgstr "আমরা গড় ~ 60% সঞ্চয়, তবে সি এক্সটেনশন/বাইনারিগুলির জন্য কম)"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:75
+msgid "🤯 What makes this impossible with traditional tools:"
+msgstr "Traditional তিহ্যবাহী সরঞ্জামগুলির সাথে এটি কী অসম্ভব করে তোলে:"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:77
+msgid "   • Switching versions requires environment restart"
+msgstr "Versions সংস্করণগুলি স্যুইচিংয়ের জন্য পরিবেশ পুনঃসূচনা প্রয়োজন"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:78
+msgid "   • Dependency conflicts prevent coexistence"
+msgstr "• নির্ভরতা দ্বন্দ্ব সহাবস্থান প্রতিরোধ"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:81
+msgid "✨ omnipkg does this LIVE, in the same Python process!"
+msgstr "✨ ওমনিপকজি একই পাইথন প্রক্রিয়াতে এটি লাইভ করে!"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:82
+msgid "📊 Expected downloads: ~500MB | Duration: 30 seconds - 3 minutes"
+msgstr "📊 প্রত্যাশিত ডাউনলোডগুলি: ~ 500MB |সময়কাল: 30 সেকেন্ড - 3 মিনিট"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:95
+msgid "🔥 Starting stress test..."
+msgstr "Stress স্ট্রেস পরীক্ষা শুরু করা ..."
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:100
+msgid "❌ Stress test module not found. Implementation needed."
+msgstr "❌ স্ট্রেস টেস্ট মডিউল পাওয়া যায় নি।বাস্তবায়ন প্রয়োজন।"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:101
+msgid "💡 This would run the actual stress test with:"
+msgstr "💡 এটি এর সাথে প্রকৃত স্ট্রেস পরীক্ষা চালাবে:"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:102
+msgid "   • Large package installations (TensorFlow, PyTorch, etc.)"
+msgstr "• বড় প্যাকেজ ইনস্টলেশন (টেনসরফ্লো, পাইটোরচ ইত্যাদি)"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:103
+msgid "   • Version conflict demonstrations"
+msgstr "• সংস্করণ দ্বন্দ্ব বিক্ষোভ"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:104
+msgid "   • Real-time bubbling and deduplication"
+msgstr "• রিয়েল-টাইম বুদবুদ এবং ডুপ্লিকেশন"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:113
+msgid ""
+"📡 Live streaming output (this may take several minutes for heavy "
+"packages)..."
+msgstr ""
+"📡 লাইভ স্ট্রিমিং আউটপুট (এটি ভারী প্যাকেজগুলির জন্য কয়েক মিনিট সময় নিতে "
+"পারে) ..."
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:115
+msgid "🛑 Press Ctrl+C to safely cancel if needed"
+msgstr "Suchly প্রয়োজনে নিরাপদে বাতিল করতে সিটিআরএল+সি টিপুন"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:135
+#: /home/minds3t/omnipkg/omnipkg/cli.py:184
+msgid "😎 TensorFlow escaped the matrix! 🚀"
+msgstr "😎 টেনসরফ্লো ম্যাট্রিক্স থেকে পালিয়ে গেছে!🚀"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:136
+#: /home/minds3t/omnipkg/omnipkg/cli.py:185
+msgid "🎉 Demo completed successfully!"
+msgstr "🎉 ডেমো সফলভাবে শেষ হয়েছে!"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:140
+msgid "💡 Check the output above for error details."
+msgstr "The ত্রুটির বিশদের জন্য উপরের আউটপুটটি পরীক্ষা করুন।"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:143
+#: /home/minds3t/omnipkg/omnipkg/cli.py:191
+msgid ""
+"\n"
+"⚠️  Demo cancelled by user (Ctrl+C)"
+msgstr "⚠ ব্যবহারকারী দ্বারা বাতিল করা ডেমো (সিটিআরএল+সি)"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:144
+msgid ""
+"🛡️  Your environment should be safe - omnipkg handles interruptions "
+"gracefully"
+msgstr "🛡 আপনার পরিবেশ নিরাপদ হওয়া উচিত - ওমনিপকিজি বাধাগুলি পরিচালনা করে"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:153
+msgid "📋 Full traceback:"
+msgstr "📋 সম্পূর্ণ ট্রেসব্যাক:"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:161
+msgid "📡 Streaming output in real-time..."
+msgstr "Real রিয়েল-টাইমে স্ট্রিমিং আউটপুট ..."
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:162
+msgid ""
+"💡 Heavy package installations may have natural pauses - this is normal!"
+msgstr ""
+"💡 ভারী প্যাকেজ ইনস্টলেশনগুলিতে প্রাকৃতিক বিরতি থাকতে পারে - এটি স্বাভাবিক!"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:163
+msgid "🛑 Press Ctrl+C to safely cancel"
+msgstr "Fully নিরাপদে বাতিল করতে সিটিআরএল+সি টিপুন"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:192
+msgid "🛡️  Cleaning up safely..."
+msgstr "🛡 নিরাপদে পরিষ্কার করা ..."
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:13
+msgid "🚨 PIP DEPENDENCY DESTRUCTION ALERT 🚨"
+msgstr "🚨 পাইপ নির্ভরতা ধ্বংস সতর্কতা 🚨"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:16
+#: /home/minds3t/omnipkg/omnipkg/demo.py:18
+#: /home/minds3t/omnipkg/omnipkg/demo.py:21
+#: /home/minds3t/omnipkg/omnipkg/demo.py:27
+#: /home/minds3t/omnipkg/omnipkg/demo.py:29
+msgid "│                                                          │"
+msgstr "│                                                          │"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:17
+msgid "│  💀 You: pip install flask-login==0.6.0                 │"
+msgstr "│ 💀 আপনি: পিপ ইনস্টল ফ্লাস্ক-লগিন == 0.6.0 │"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:19
+msgid "│  🧠 omnipkg AI suggests:                                 │"
+msgstr "│ 🧠 🧠 🧠 🧠 🧠 omnipkg এআই পরামর্শ দেয়: │"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:20
+msgid "│      omnipkg install flask-login==0.6.0                 │"
+msgstr "│ ওমনিপকেজি ইনস্টল ফ্লাস্ক-লোগিন == 0.6.0 │"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:22
+msgid "│  ⚠️  WARNING: pip will NUKE your environment! ⚠️          │"
+msgstr "│ ⚠ সতর্কতা: পিপ আপনার পরিবেশকে বাড়িয়ে তুলবে!⚠ │"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:23
+msgid "│      • Downgrade from 0.6.3 to 0.6.0                   │"
+msgstr "│ ০.০.৩ থেকে 0.6.0 │ ডাউনগ্রেড"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:24
+msgid "│      • Break newer Flask compatibility                  │"
+msgstr "│ new নতুন ফ্লাস্কের সামঞ্জস্যতা ভাঙ্গুন │"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:25
+msgid "│      • Destroy your modern app                          │"
+msgstr "│ your আপনার আধুনিক অ্যাপ্লিকেশনটি ধ্বংস করুন │"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:26
+msgid "│      • Welcome you to dependency hell 🔥                │"
+msgstr "│ │ you আপনাকে নির্ভরশীলতার জন্য আপনাকে স্বাগতম 🔥 │ │ │"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:28
+msgid "│  [Y]es, I want chaos | [N]o, save me omnipkg! 🦸‍♂️        │"
+msgstr "│ [y] এস, আমি বিশৃঙ্খলা চাই |[এন] ও, আমাকে ওমনিপকেজি বাঁচাও!🦸‍️ │"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:31
+msgid "        \\   ^__^"
+msgstr "\\ ^__ ^ ^"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:32
+msgid "         \\  (💀💀)\\______   <- This is your environment"
+msgstr "\\ (💀💀) \\ ______ <- এটি আপনার পরিবেশ"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:33
+msgid "            (__)\\       )\\/\\   after using pip"
+msgstr "(__) \\) \\/\\ পিআইপি ব্যবহারের পরে"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:34
+msgid "                ||---ww |"
+msgstr "|| --- ডাব্লুডাব্লু |"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:35
+msgid "                ||     ||"
+msgstr "                ||     ||"
+
+#: /home/minds3t/omnipkg/omnipkg/loader.py:42
+msgid ""
+"⚠️ [omnipkg loader] Config not provided or incomplete. Attempting auto-"
+"detection of paths."
+msgstr ""
+"⚠ [ওমনিপকিজি লোডার] কনফিগারেশন সরবরাহ করা বা অসম্পূর্ণ নয়।পাথের "
+"অটো-সনাক্তকরণের চেষ্টা করা।"
+
+#: /home/minds3t/omnipkg/omnipkg/loader.py:47
+msgid ""
+"⚠️ [omnipkg loader] Could not auto-detect site-packages path reliably. "
+"Falling back to sys.prefix."
+msgstr ""
+"⚠ [ওমনিপকিজি লোডার] সাইট-প্যাকেজগুলি নির্ভরযোগ্যভাবে স্বয়ংক্রিয়ভাবে সনাক্ত"
+" করতে পারেনি।Sys.prefix এ ফিরে পড়া।"
+
+#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:64
+msgid "🟢 --force flag detected. Caching will be ignored."
+msgstr "🟢 -ফোর্স পতাকা সনাক্ত হয়েছে।ক্যাচিং উপেক্ষা করা হবে।"
+
+#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:72
+msgid "✅ Connected to Redis successfully."
+msgstr "Red সফলভাবে রেডিসের সাথে সংযুক্ত।"
+
+#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:83
+msgid "🔍 Discovering all packages from file system (ground truth)..."
+msgstr ""
+"Fily ফাইল সিস্টেম (গ্রাউন্ড ট্রুথ) থেকে সমস্ত প্যাকেজ আবিষ্কার করা ..."
+
+#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:114
+msgid "    -> Reconciling file system state with Redis knowledge base..."
+msgstr "-> রেডিস নলেজ বেসের সাথে ফাইল সিস্টেমের সাথে পুনর্মিলন করা ..."
+
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:62
+msgid ""
+"   - Setting main environment to a known good state... (This might trigger "
+"an omnipkg install)"
+msgstr ""
+"- একটি পরিচিত ভাল অবস্থায় প্রধান পরিবেশ সেট করা ... (এটি একটি ওমনিপকিজি "
+"ইনস্টল ট্রিগার করতে পারে)"
+
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:71
+msgid "✅ Environment is clean and ready for testing."
+msgstr "✅ পরিবেশ পরিষ্কার এবং পরীক্ষার জন্য প্রস্তুত।"
+
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:79
+msgid ""
+"\n"
+"💥 NUMPY VERSION JUGGLING:"
+msgstr "💥 নুমপি সংস্করণ জাগলিং:"
+
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:97
+msgid ""
+"\n"
+"\n"
+"🔥 SCIPY C-EXTENSION TEST:"
+msgstr "🔥 স্কিপি সি-এক্সটেনশন পরীক্ষা:"
+
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:119
+msgid ""
+"\n"
+"\n"
+"🤯 NUMPY + SCIPY VERSION MIXING:"
+msgstr "🤯 numpy + scipy সংস্করণ মিশ্রণ:"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:284
+msgid "Override the display language for this command (e.g., es, de, ja)"
+msgstr "এই কমান্ডের জন্য ডিসপ্লে ভাষাটি ওভাররাইড করুন (উদাঃ, এস, ডি, জেএ)"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:285
+msgid "Available commands:"
+msgstr "উপলভ্য কমান্ড:"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:286
+msgid "Install packages with intelligent conflict resolution"
+msgstr "বুদ্ধিমান সংঘাতের সমাধানের সাথে প্যাকেজগুলি ইনস্টল করুন"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:286
+msgid ""
+"Install packages with automatic version management and conflict resolution"
+msgstr ""
+"স্বয়ংক্রিয় সংস্করণ পরিচালনা এবং সংঘাতের সমাধান সহ প্যাকেজগুলি ইনস্টল করুন"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:287
+msgid "Packages to install (e.g., \"requests==2.25.1\", \"numpy>=1.20\")"
+msgstr ""
+"ইনস্টল করার জন্য প্যাকেজগুলি (উদাঃ, \"অনুরোধগুলি == 2.25.1\", \"নুমপি> = "
+"1.20\")"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:288
+msgid "Install from requirements file with smart dependency resolution"
+msgstr "স্মার্ট নির্ভরতা রেজোলিউশন সহ প্রয়োজনীয়তা ফাইল থেকে ইনস্টল করুন"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:289
+msgid "Install a package with specific dependency versions"
+msgstr "নির্দিষ্ট নির্ভরতা সংস্করণ সহ একটি প্যাকেজ ইনস্টল করুন"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:289
+msgid ""
+"Install a package with specific dependency versions in a bubble to avoid "
+"conflicts"
+msgstr ""
+"দ্বন্দ্ব এড়াতে বুদ্বুদে নির্দিষ্ট নির্ভরতা সংস্করণ সহ একটি প্যাকেজ ইনস্টল "
+"করুন"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:290
+msgid "Package to install (e.g., \"tensorflow==2.13.0\")"
+msgstr "ইনস্টল করার জন্য প্যাকেজ (উদাঃ, \"টেনসরফ্লো == 2.13.0\")"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:291
+msgid "Dependency with version (e.g., \"numpy==1.24.3\")"
+msgstr "সংস্করণ সহ নির্ভরতা (উদাঃ, \"নুমপি == 1.24.3\")"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:292
+msgid "Intelligently remove packages and their dependencies"
+msgstr "বুদ্ধিমানভাবে প্যাকেজগুলি এবং তাদের নির্ভরতাগুলি সরান"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:292
+msgid "Smart package removal with safety features"
+msgstr "সুরক্ষা বৈশিষ্ট্য সহ স্মার্ট প্যাকেজ অপসারণ"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:293
+msgid "Packages to uninstall (removes all versions)"
+msgstr "আনইনস্টল করার জন্য প্যাকেজগুলি (সমস্ত সংস্করণ সরিয়ে দেয়)"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:294
+#: /home/minds3t/omnipkg/omnipkg/cli.py:322
+msgid "Skip confirmation prompts"
+msgstr "নিশ্চিতকরণ প্রম্পটগুলি এড়িয়ে যান"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:295
+msgid "Interactive package explorer with version management"
+msgstr "সংস্করণ পরিচালনার সাথে ইন্টারেক্টিভ প্যাকেজ এক্সপ্লোরার"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:295
+msgid ""
+"Explore package details, dependencies, and manage versions interactively"
+msgstr ""
+"প্যাকেজের বিশদ, নির্ভরতা এবং সংস্করণগুলি ইন্টারেক্টিভভাবে পরিচালনা করুন"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:296
+msgid "Package name to explore"
+msgstr "প্যাকেজ নাম অন্বেষণ"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:297
+msgid "Specific version to inspect (default: active)"
+msgstr "পরিদর্শন করার জন্য নির্দিষ্ট সংস্করণ (ডিফল্ট: সক্রিয়)"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:298
+msgid "Time-travel back to your last known good environment"
+msgstr "আপনার সর্বশেষ পরিচিত ভাল পরিবেশে ফিরে সময় ভ্রমণ"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:298
+msgid "Revert all changes to the last stable environment state"
+msgstr "শেষ স্থিতিশীল পরিবেশের অবস্থায় সমস্ত পরিবর্তনগুলি ফিরিয়ে দিন"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:299
+msgid "Skip confirmation and revert immediately"
+msgstr "নিশ্চিতকরণ এড়িয়ে যান এবং অবিলম্বে ফিরে যান"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:300
+msgid "View all installed packages and their bubble status"
+msgstr "সমস্ত ইনস্টলড প্যাকেজ এবং তাদের বুদ্বুদ স্থিতি দেখুন"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:300
+msgid "List all packages with detailed status indicators"
+msgstr "বিস্তারিত স্থিতি সূচক সহ সমস্ত প্যাকেজ তালিকাভুক্ত করুন"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:301
+msgid "Filter packages by name pattern"
+msgstr "নাম প্যাটার্ন দ্বারা ফিল্টার প্যাকেজ"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:302
+msgid "Multi-version environment health dashboard"
+msgstr "মাল্টি সংস্করণ পরিবেশ স্বাস্থ্য ড্যাশবোর্ড"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:302
+msgid "Overview of your Python interpreters, packages, and bubble isolation"
+msgstr "আপনার পাইথন দোভাষী, প্যাকেজ এবং বুদ্বুদ বিচ্ছিন্নতার ওভারভিউ"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:303
+msgid "Interactive demo for version switching"
+msgstr "সংস্করণ স্যুইচিংয়ের জন্য ইন্টারেক্টিভ ডেমো"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:303
+msgid ""
+"Run interactive demos showcasing omnipkg's version-switching capabilities:\n"
+"        1. Rich test (Python module switching)\n"
+"        2. UV test (binary switching)\n"
+"        3. NumPy + SciPy stress test (C-extension switching)\n"
+"        4. TensorFlow test (complex dependency switching)\n"
+"        Note: The Flask demo is under construction and not currently available."
+msgstr ""
+"ওমনিপকিজির সংস্করণ-স্যুইচিং ক্ষমতা প্রদর্শন করে ইন্টারেক্টিভ ডেমোগুলি চালান:\n"
+"1। সমৃদ্ধ পরীক্ষা (পাইথন মডিউল স্যুইচিং)\n"
+"2। ইউভি পরীক্ষা (বাইনারি স্যুইচিং)\n"
+"3। নুমপি + স্কিপি স্ট্রেস টেস্ট (সি-এক্সটেনশন স্যুইচিং)\n"
+"4। টেনসরফ্লো পরীক্ষা (জটিল নির্ভরতা স্যুইচিং)\n"
+"দ্রষ্টব্য: ফ্লাস্ক ডেমো নির্মাণাধীন এবং বর্তমানে উপলভ্য নয়।"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:304
+msgid "Ultimate demonstration with heavy scientific packages"
+msgstr "ভারী বৈজ্ঞানিক প্যাকেজ সহ চূড়ান্ত বিক্ষোভ"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:304
+msgid ""
+"Showcase omnipkg's features with large package installations and version "
+"switching"
+msgstr ""
+"বড় প্যাকেজ ইনস্টলেশন এবং সংস্করণ স্যুইচিং সহ ওমনিপকিজির বৈশিষ্ট্যগুলি "
+"প্রদর্শন করুন"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:305
+msgid "Clean slate: rebuild the omnipkg knowledge base"
+msgstr "ক্লিন স্লেট: ওমনিপকিজি জ্ঞান বেসটি পুনর্নির্মাণ করুন"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:305
+msgid "Delete and rebuild the Redis knowledge base from scratch"
+msgstr "স্ক্র্যাচ থেকে রেডিস নলেজ বেসটি মুছুন এবং পুনর্নির্মাণ করুন"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:306
+msgid "Skip confirmation"
+msgstr "নিশ্চিতকরণ এড়িয়ে যান"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:307
+msgid "Refresh the intelligence knowledge base"
+msgstr "গোয়েন্দা জ্ঞান ভিত্তি রিফ্রেশ করুন"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:307
+msgid "Force rebuild of package metadata and dependency intelligence"
+msgstr "প্যাকেজ মেটাডেটা এবং নির্ভরতা বুদ্ধি পুনর্নির্মাণ জোর"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:308
+msgid "Ignore cache and force complete rebuild"
+msgstr "ক্যাশে উপেক্ষা করুন এবং সম্পূর্ণ পুনর্নির্মাণ জোর করুন"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:309
+msgid "Delete the config file to trigger a fresh setup"
+msgstr "একটি নতুন সেটআপ ট্রিগার করতে কনফিগার ফাইলটি মুছুন"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:309
+msgid "Deletes the omnipkg config.json file"
+msgstr "ওমনিপকেজি কনফিগারেশন.জসন ফাইলটি মুছে ফেলেছে"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:310
+msgid "Skip confirmation and delete immediately"
+msgstr "নিশ্চিতকরণ এড়িয়ে যান এবং অবিলম্বে মুছুন"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:311
+msgid "View or edit the omnipkg configuration"
+msgstr "ওমনিপকেজি কনফিগারেশন দেখুন বা সম্পাদনা করুন"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:311
+msgid "Allows setting persistent configuration values"
+msgstr "অবিচ্ছিন্ন কনফিগারেশন মান সেট করার অনুমতি দেয়"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:313
+msgid "Set a configuration value"
+msgstr "একটি কনফিগারেশন মান সেট করুন"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:315
+msgid "The configuration key to set"
+msgstr "সেট করার জন্য কনফিগারেশন কী"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:377
+msgid "✅ Language permanently set to: {lang}"
+msgstr "✅ ভাষা স্থায়ীভাবে সেট: {lang}"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:395
+msgid "Interactive Omnipkg Demo"
+msgstr "ইন্টারেক্টিভ ওমনিপকেজি ডেমো"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:396
+msgid "🎪 Omnipkg supports version switching for:"
+msgstr "🎪 ওমনিপকিজি সংস্করণ স্যুইচিং সমর্থন করে:"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:397
+msgid "   • Python modules (e.g., rich): See tests/test_rich_switching.py"
+msgstr "• পাইথন মডিউলগুলি (উদাঃ, ধনী): পরীক্ষা/পরীক্ষা_রিচ_সুইচিং.পি দেখুন"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:398
+msgid "   • Binary packages (e.g., uv): See tests/test_uv_switching.py"
+msgstr ""
+"• বাইনারি প্যাকেজগুলি (উদাঃ, ইউভি): পরীক্ষা/পরীক্ষা_উইউ_সুইচিং.পি দেখুন"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:399
+msgid "   • C-extension packages (e.g., numpy, scipy): See stress_test.py"
+msgstr ""
+"• সি-এক্সটেনশন প্যাকেজগুলি (উদাঃ, নম্বি, স্কিপি): স্ট্রেস_টেস্ট.পি দেখুন"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:400
+msgid ""
+"   • Complex dependency packages (e.g., TensorFlow): See "
+"tests/test_tensorflow_switching.py"
+msgstr ""
+"• জটিল নির্ভরতা প্যাকেজগুলি (উদাঃ, টেনসরফ্লো): "
+"পরীক্ষা/পরীক্ষা_টেনসোরফ্লো_সুইচিং.পি দেখুন"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:401
+msgid ""
+"   • Note: The Flask demo is under construction and not currently available."
+msgstr "• দ্রষ্টব্য: ফ্লাস্ক ডেমো নির্মাণাধীন এবং বর্তমানে উপলভ্য নয়।"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:402
+msgid ""
+"\n"
+"Select a demo to run:"
+msgstr "চালানোর জন্য একটি ডেমো নির্বাচন করুন:"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:403
+msgid "1. Rich test (Python module switching)"
+msgstr "1। সমৃদ্ধ পরীক্ষা (পাইথন মডিউল স্যুইচিং)"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:404
+msgid "2. UV test (binary switching)"
+msgstr "2। ইউভি পরীক্ষা (বাইনারি স্যুইচিং)"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:405
+msgid "3. NumPy + SciPy stress test (C-extension switching)"
+msgstr "3। নুমপি + স্কিপি স্ট্রেস টেস্ট (সি-এক্সটেনশন স্যুইচিং)"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:406
+msgid "4. TensorFlow test (complex dependency switching)"
+msgstr "4। টেনসরফ্লো পরীক্ষা (জটিল নির্ভরতা স্যুইচিং)"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:407
+msgid "5. Flask test (under construction)"
+msgstr "5। ফ্লাস্ক পরীক্ষা (নির্মাণাধীন)"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:409
+msgid "Enter your choice (1-5): "
+msgstr "আপনার পছন্দ লিখুন (1-5):"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:421
+msgid "  ⚠️  NumPy/SciPy Stress Test Requires Python 3.11"
+msgstr "⚠ নুমপি/স্কিপি স্ট্রেস টেস্টের পাইথন 3.11 প্রয়োজন"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:434
+msgid "⚠️ The Flask demo is under construction and not currently available."
+msgstr "⚠ ফ্লাস্ক ডেমো নির্মাণাধীন এবং বর্তমানে উপলভ্য নয়।"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:435
+msgid "Switching to the Rich test (option 1) for now!"
+msgstr "আপাতত সমৃদ্ধ পরীক্ষায় স্যুইচিং (বিকল্প 1)!"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:437
+msgid "❌ Invalid choice. Please select 1, 2, 3, 4, or 5."
+msgstr "❌ অবৈধ পছন্দ।1, 2, 3, 4, বা 5 নির্বাচন করুন।"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:500
+msgid ""
+"\n"
+"💡 Did you mean 'omnipkg config set language <code>'?"
+msgstr "You আপনি কি 'ওমনিপকিজি কনফিগারেশন ভাষা <কোড>' 'এর অর্থ?"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:504
+msgid ""
+"\n"
+"❌ Operation cancelled by user."
+msgstr "❌ অপারেশন ব্যবহারকারী দ্বারা বাতিল।"
+
+#: /home/minds3t/omnipkg/omnipkg/common_utils.py:35
+#: /home/minds3t/omnipkg/omnipkg/demo.py:67
+msgid "💭 Simulating Enter key press..."
+msgstr "💭 সিমুলেটিং কী প্রেস ..."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:183
+msgid ""
+"   1) stable-main:  Prioritize a stable main environment. (Recommended)"
+msgstr ""
+"1) স্থিতিশীল-মূল: একটি স্থিতিশীল প্রধান পরিবেশকে অগ্রাধিকার দিন।(প্রস্তাবিত)"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:184
+msgid "   2) latest-active: Prioritize having the latest versions active."
+msgstr ""
+"2) সর্বশেষ-সক্রিয়: সর্বশেষতম সংস্করণগুলি সক্রিয় থাকার অগ্রাধিকার দিন।"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:185
+msgid "   Enter choice (1 or 2) [1]: "
+msgstr "পছন্দ লিখুন (1 বা 2) [1]:"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:198
+msgid "Configuration saved to {path}."
+msgstr "কনফিগারেশন {path} এ সংরক্ষণ করা হয়েছে।"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:199
+msgid "   You can edit this file manually later."
+msgstr "আপনি এই ফাইলটি ম্যানুয়ালি পরে সম্পাদনা করতে পারেন।"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:213
+msgid "Warning: Config file is corrupted. Starting fresh."
+msgstr "সতর্কতা: কনফিগার ফাইলটি দূষিত হয়।তাজা শুরু।"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:218
+msgid "Updating config: Adding missing key '{key}'."
+msgstr "আপডেট কনফিগারেশন: অনুপস্থিত কী যুক্ত করা '{key}'।"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:223
+msgid "✅ Config file updated successfully."
+msgstr "✅ কনফিগার ফাইল সফলভাবে আপডেট হয়েছে।"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:263
+msgid "    ⚠️ Warning: Failed to load path registry, starting fresh."
+msgstr "⚠ সতর্কতা: তাজা শুরু করে পাথ রেজিস্ট্রি লোড করতে ব্যর্থ।"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:324
+msgid "    -> Trying strategy 1: pip dry-run..."
+msgstr "-> চেষ্টা কৌশল 1: পিপ শুকনো রান ..."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:327
+msgid "    ✅ Success: Dependencies resolved via pip dry-run."
+msgstr "✅ সাফল্য: পিআইপি শুকনো রান মাধ্যমে নির্ভরতা সমাধান করা হয়েছে।"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:329
+msgid "    -> Trying strategy 2: PyPI API..."
+msgstr "-> চেষ্টা কৌশল 2: পাইপিআই এপিআই ..."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:332
+msgid "    ✅ Success: Dependencies resolved via PyPI API."
+msgstr "✅ সাফল্য: পিআইপিআই এপিআইয়ের মাধ্যমে নির্ভরতাগুলি সমাধান করা হয়েছে।"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:334
+msgid "    -> Trying strategy 3: pip show fallback..."
+msgstr "-> চেষ্টা করার কৌশল 3: পিপ শো ফ্যালব্যাক ..."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:337
+msgid "    ✅ Success: Dependencies resolved from existing installation."
+msgstr "✅ সাফল্য: বিদ্যমান ইনস্টলেশন থেকে নির্ভরতাগুলি সমাধান করা হয়েছে।"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:672
+msgid "    🔍 Verifying package integrity..."
+msgstr "Pack প্যাকেজ অখণ্ডতা যাচাই করা ..."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:749
+msgid "    ⚡️ Loading main environment hash index from cache..."
+msgstr "Cash ক্যাশে থেকে প্রধান পরিবেশ হ্যাশ সূচক লোড করা ..."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:756
+msgid "    📦 Attempting fast indexing via package metadata..."
+msgstr "Aad প্যাকেজ মেটাডেটার মাধ্যমে দ্রুত সূচকের চেষ্টা করা ..."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1065
+msgid "❌ Could not connect to Redis. Is the Redis server running?"
+msgstr "Red রেডিসের সাথে সংযোগ করতে পারেনি।রেডিস সার্ভারটি চলছে?"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1077
+msgid "✅ Configuration file does not exist. Nothing to do."
+msgstr "✅ কনফিগারেশন ফাইল বিদ্যমান নেই।কিছুই করার নেই।"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1084
+#: /home/minds3t/omnipkg/omnipkg/core.py:1114
+msgid "🚫 Reset cancelled."
+msgstr "🚫 রিসেট বাতিল করা হয়েছে।"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1088
+msgid "✅ Configuration file deleted successfully."
+msgstr "✅ কনফিগারেশন ফাইল সফলভাবে মুছে ফেলা হয়েছে।"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1090
+msgid ""
+"🚀 The next time you run `omnipkg`, you will be guided through the first-time"
+" setup."
+msgstr ""
+"Once পরের বার আপনি যখন `omnipkg` চালাচ্ছেন, আপনি প্রথমবারের সেটআপের মাধ্যমে "
+"পরিচালিত হবেন।"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1116
+msgid ""
+"\n"
+"🗑️  Clearing knowledge base..."
+msgstr "Knowledge জ্ঞান বেস সাফ করা ..."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1124
+msgid "   ✅ Knowledge base was already clean."
+msgstr "✅ জ্ঞান বেস ইতিমধ্যে পরিষ্কার ছিল।"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1134
+msgid "🧠 Forcing a full rebuild of the knowledge base..."
+msgstr "The জ্ঞান বেসের একটি সম্পূর্ণ পুনর্নির্মাণ জোর করে ..."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1142
+msgid "✅ Knowledge base rebuilt successfully."
+msgstr "✅ জ্ঞান বেস সফলভাবে পুনর্নির্মাণ।"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1159
+msgid "   🔄 Rebuilding core package metadata..."
+msgstr "🔄 কোর প্যাকেজ মেটাডেটা পুনর্নির্মাণ ..."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1163
+msgid "   ✅ Core metadata rebuilt."
+msgstr "✅ কোর মেটাডেটা পুনর্নির্মাণ।"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1219
+msgid "🧠 Performing self-healing sync of knowledge base..."
+msgstr "One জ্ঞান বেসের স্ব-নিরাময় সিঙ্ক সম্পাদন করা ..."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1233
+msgid "   ✅ Knowledge base is empty or no packages found to sync."
+msgstr "✅ জ্ঞান বেস খালি বা কোনও প্যাকেজ সিঙ্ক করতে পাওয়া যায় নি।"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1276
+msgid "   ✅ Knowledge base is already in sync with the environment."
+msgstr "✅ জ্ঞান বেস ইতিমধ্যে পরিবেশের সাথে সিঙ্কে রয়েছে।"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1285
+msgid "🔄 Updating cached file hash index..."
+msgstr "Ca ক্যাশেড ফাইল হ্যাশ সূচক আপডেট করা ..."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1306
+msgid "✅ Hash index updated."
+msgstr "✅ হ্যাশ সূচক আপডেট হয়েছে।"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1358
+msgid "✅ Knowledge base is already up to date."
+msgstr "✅ জ্ঞান বেস ইতিমধ্যে আপ টু ডেট।"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1360
+msgid "🧠 Updating knowledge base for changes..."
+msgstr "Changes পরিবর্তনের জন্য জ্ঞান বেস আপডেট করা ..."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1383
+msgid "✅ Knowledge base updated successfully."
+msgstr "✅ জ্ঞান বেস সফলভাবে আপডেট হয়েছে।"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1454
+msgid "❌ Invalid selection."
+msgstr "❌ অবৈধ নির্বাচন।"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1456
+msgid "❌ Please enter a number."
+msgstr "❌ দয়া করে একটি নম্বর লিখুন।"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1458
+msgid ""
+"\n"
+"   Skipped."
+msgstr "এড়ানো"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1460
+msgid "📦 No installed versions found in Redis."
+msgstr "Red রেডিসে কোনও ইনস্টলড সংস্করণ পাওয়া যায় নি।"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1515
+msgid "   ✅ Snapshot saved."
+msgstr "✅ স্ন্যাপশট সংরক্ষণ করা হয়েছে।"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1545
+msgid "🔬 Running in --dry-run mode. No changes will be made."
+msgstr "🔬 চলমান-ড্রাই-রান মোডে।কোনও পরিবর্তন করা হবে না।"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1548
+msgid "🚫 No packages specified for installation."
+msgstr "Paction ইনস্টলেশনের জন্য নির্দিষ্ট কোনও প্যাকেজ নির্দিষ্ট করা হয়নি।"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1564
+msgid ""
+"  (No version specified for omnipkg; attempting to bubble the latest stable "
+"version)"
+msgstr ""
+"(ওমনিপকিজির জন্য নির্দিষ্ট করা কোনও সংস্করণ; সর্বশেষতম স্থিতিশীল সংস্করণটিকে"
+" বুদবুদ করার চেষ্টা করা)"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1579
+msgid ""
+"\n"
+"🎉 All package operations complete."
+msgstr "🎉 সমস্ত প্যাকেজ অপারেশন সম্পূর্ণ।"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1602
+msgid ""
+"\n"
+"📸 Taking LIVE pre-installation snapshot..."
+msgstr "Live লাইভ প্রি-ইনস্টলেশন স্ন্যাপশট গ্রহণ করা ..."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1612
+msgid ""
+"\n"
+"🔬 Analyzing post-installation changes..."
+msgstr "Post ইনস্টলেশন পরবর্তী পরিবর্তনগুলি বিশ্লেষণ ..."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1627
+msgid ""
+"\n"
+"🛡️ STABILITY PROTECTION ACTIVATED!"
+msgstr "🛡 স্থিতিশীলতা সুরক্ষা সক্রিয়!"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1637
+msgid ""
+"\n"
+"✅ Stability protection complete!"
+msgstr "✅ স্থিতিশীলতা সুরক্ষা সম্পূর্ণ!"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1639
+msgid ""
+"✅ No changes to existing packages detected. Installation completed safely."
+msgstr ""
+"Fackeages বিদ্যমান প্যাকেজগুলিতে কোনও পরিবর্তন সনাক্ত করা হয়নি।ইনস্টলেশন "
+"নিরাপদে সম্পন্ন হয়েছে।"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1699
+msgid "🎉 All package operations complete."
+msgstr "🎉 সমস্ত প্যাকেজ অপারেশন সম্পূর্ণ।"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1753
+msgid "🔄 Restoring main environment from snapshot..."
+msgstr "Sn স্ন্যাপশট থেকে প্রধান পরিবেশ পুনরুদ্ধার ..."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1759
+msgid "   ✅ Environment is already in its original state."
+msgstr "✅ পরিবেশ ইতিমধ্যে এর মূল অবস্থায় রয়েছে।"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1767
+msgid "   ✅ Environment restored."
+msgstr "✅ পরিবেশ পুনরুদ্ধার।"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1929
+msgid "🤷 No versions available for selection."
+msgstr "Cull নির্বাচনের জন্য কোনও সংস্করণ উপলব্ধ নেই।"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1934
+#: /home/minds3t/omnipkg/omnipkg/core.py:1965
+msgid "🚫 Uninstall cancelled."
+msgstr "🚫 আনইনস্টল বাতিল।"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1943
+msgid "❌ Invalid input."
+msgstr "❌ অবৈধ ইনপুট।"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1947
+msgid ""
+"\n"
+"🚫 Uninstall cancelled."
+msgstr "🚫 আনইনস্টল বাতিল।"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1957
+msgid "🤷 No versions selected for uninstallation after protection checks."
+msgstr ""
+"The সুরক্ষা চেকের পরে আনইনস্টলেশনের জন্য কোনও সংস্করণ নির্বাচিত হয়নি।"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1993
+msgid "✅ Uninstallation complete."
+msgstr "✅ আনইনস্টলেশন সম্পূর্ণ।"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2005
+msgid ""
+"   Run an `omnipkg install` or `omnipkg uninstall` command to create one."
+msgstr ""
+"একটি তৈরি করার জন্য একটি `ওমনিপকিজি ইনস্টল` বা` ওমনিপকজি আনইনস্টল` কমান্ডটি "
+"চালান।"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2007
+msgid "⚖️  Comparing current environment to the last known good snapshot..."
+msgstr ""
+"Current বর্তমান পরিবেশের সাথে সর্বশেষ পরিচিত ভাল স্ন্যাপশটের সাথে তুলনা করা "
+"..."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2016
+msgid ""
+"✅ Your environment is already in the last known good state. No action "
+"needed."
+msgstr ""
+"✅ আপনার পরিবেশ ইতিমধ্যে সর্বশেষ পরিচিত ভাল অবস্থায় রয়েছে।কোনও পদক্ষেপের "
+"প্রয়োজন নেই।"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2018
+msgid ""
+"\n"
+"📝 The following actions will be taken to restore the environment:"
+msgstr "Remother পরিবেশ পুনরুদ্ধার করতে নিম্নলিখিত পদক্ষেপ নেওয়া হবে:"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2028
+msgid "🚫 Revert cancelled."
+msgstr "🚫 প্রত্যাবর্তন বাতিল।"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2030
+msgid ""
+"\n"
+"🚀 Starting revert operation..."
+msgstr "Retrive পুনরায় অভিযান শুরু করা ..."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2036
+msgid ""
+"\n"
+"✅ Environment successfully reverted to the last known good state."
+msgstr "✅ পরিবেশ সফলভাবে সর্বশেষ পরিচিত ভাল অবস্থায় ফিরে আসে।"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2246
+msgid "  (No versions found in knowledge base)"
+msgstr "(জ্ঞানের ভিত্তিতে কোনও সংস্করণ পাওয়া যায় নি)"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2259
+msgid "🔄 omnipkg System Status"
+msgstr "🔄 ওমনিপকিজি সিস্টেমের স্থিতি"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2264
+#: /home/minds3t/omnipkg/omnipkg/core.py:2267
+msgid ""
+"\n"
+"🔒 Pip in Jail (main environment)"
+msgstr "কারাগারে পিআইপি (প্রধান পরিবেশ)"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2268
+msgid "    🚫 Pip not found in the main env. Escaped or never caught!"
+msgstr "🚫 পিপ মূল এনভিতে পাওয়া যায় নি।পালানো বা কখনও ধরা পড়েনি!"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2271
+#: /home/minds3t/omnipkg/omnipkg/core.py:2274
+msgid "🔒 UV in Jail (main environment)"
+msgstr "কারাগারে ইউভি (প্রধান পরিবেশ)"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2275
+msgid "    🚫 UV not found in the main env. Too fast to catch!"
+msgstr "Env ইউভি মূল এনভিতে পাওয়া যায় নি।খুব দ্রুত ধরা!"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2276
+msgid ""
+"\n"
+"🌍 Main Environment:"
+msgstr "🌍 প্রধান পরিবেশ:"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2281
+msgid ""
+"\n"
+"📦 izolasyon Alanı (Bubbles):"
+msgstr "📦 ইজোলাসিয়ন অ্যালান (বুদবুদ):"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2283
+msgid "  - No isolated package versions found."
+msgstr "- কোনও বিচ্ছিন্ন প্যাকেজ সংস্করণ পাওয়া যায় নি।"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:90
+msgid ""
+"This demo will show you the classic dependency conflict and how omnipkg "
+"solves it."
+msgstr ""
+"এই ডেমোটি আপনাকে ক্লাসিক নির্ভরতা দ্বন্দ্ব এবং ওমনিপকেজি কীভাবে সমাধান করে "
+"তা প্রদর্শন করবে।"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:95
+msgid ""
+"\n"
+"✅ Beautiful! We have flask-login 0.6.3 installed and working perfectly."
+msgstr ""
+"✅ সুন্দর!আমাদের কাছে ফ্লাস্ক-লোগিন 0.6.3 ইনস্টল করা হয়েছে এবং নিখুঁতভাবে "
+"কাজ করছে।"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:104
+msgid ""
+"\n"
+"🔓 Releasing pip... (your funeral)"
+msgstr "Pip পিপ মুক্তি ... (আপনার শেষকৃত্য)"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:105
+msgid "💀 Watch as pip destroys your beautiful environment..."
+msgstr "Pip পিপ আপনার সুন্দর পরিবেশকে ধ্বংস করার সাথে সাথে দেখুন ..."
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:107
+msgid ""
+"\n"
+"💥 BOOM! Look what pip did:"
+msgstr "💥 বুম!দেখুন পিপ কি করেছে:"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:108
+msgid "   ❌ Uninstalled flask-login 0.6.3"
+msgstr "❌ আনইনস্টলড ফ্লাস্ক-লগিন 0.6.3"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:109
+msgid "   ❌ Downgraded to flask-login 0.6.0"
+msgstr "❌ ফ্লাস্ক-লোগিন 0.6.0 এ ডাউনগ্রেড করা হয়েছে"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:110
+msgid "   ❌ Your modern project is now BROKEN"
+msgstr "❌ আপনার আধুনিক প্রকল্প এখন ভেঙে গেছে"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:111
+msgid "   ❌ Welcome to dependency hell! 🔥"
+msgstr "Help নির্ভরতা জাহান্নামে আপনাকে স্বাগতম!🔥"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:116
+msgid "Watch how omnipkg handles this intelligently:"
+msgstr "ওমনিপকিজি কীভাবে এটি বুদ্ধিমানভাবে পরিচালনা করে তা দেখুন:"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:118
+msgid ""
+"\n"
+"✅ omnipkg intelligently restored the modern version!"
+msgstr "✅ ওমনিপকেজি বুদ্ধিমানভাবে আধুনিক সংস্করণটি পুনরুদ্ধার করেছে!"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:119
+msgid "💡 Notice: No conflicts, no downgrades, just pure intelligence."
+msgstr "💡 বিজ্ঞপ্তি: কোনও দ্বন্দ্ব, কোনও ডাউনগ্রেড নেই, কেবল খাঁটি বুদ্ধি।"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:127
+msgid ""
+"\n"
+"🧠 Smart choice! Using omnipkg instead..."
+msgstr "🧠 স্মার্ট পছন্দ!পরিবর্তে ওমনিপকেজি ব্যবহার করে ..."
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:129
+msgid "🔧 Installing flask-login==0.6.0 with omnipkg..."
+msgstr "Om ওমনিপকিজি সহ ফ্লাস্ক-লোগিন == 0.6.0 ইনস্টল করা ..."
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:130
+msgid ""
+"💡 omnipkg will skip if already available or create isolation as needed..."
+msgstr ""
+"💡 ওমনিপকিজি যদি ইতিমধ্যে উপলব্ধ বা প্রয়োজন অনুসারে বিচ্ছিন্নতা তৈরি করে তবে"
+" এড়িয়ে যাবে ..."
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:132
+msgid ""
+"\n"
+"✅ omnipkg install successful!"
+msgstr "✅ ওমনিপকেজি ইনস্টল সফল!"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:133
+msgid "🎯 BOTH versions now coexist peacefully!"
+msgstr "🎯 উভয় সংস্করণ এখন শান্তিপূর্ণভাবে সহাবস্থান করে!"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:139
+msgid ""
+"\n"
+"🔧 Note how omnipkg intelligently manages versions!"
+msgstr "🔧 দ্রষ্টব্য কীভাবে ওয়ানপিকেজি বুদ্ধিমানভাবে পরিচালিত সংস্করণগুলি!"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:140
+msgid "📦 Main environment: flask-login 0.6.3 (untouched)"
+msgstr "📦 প্রধান পরিবেশ: ফ্লাস্ক-লোগিন 0.6.3 (ছোঁয়া)"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:141
+msgid "🔧 omnipkg: flask-login 0.6.0 (available when needed)"
+msgstr "🔧 ওমনিপকিজি: ফ্লাস্ক-লোগিন 0.6.0 (যখন প্রয়োজন হয় তখন উপলব্ধ)"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:144
+msgid "💡 Want details on a specific version?"
+msgstr "A একটি নির্দিষ্ট সংস্করণে বিশদ চান?"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:147
+msgid ""
+"\n"
+"🎯 Now you can see that BOTH versions are available to the system."
+msgstr "🎯 এখন আপনি দেখতে পাচ্ছেন যে উভয় সংস্করণ সিস্টেমের জন্য উপলব্ধ।"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:160
+msgid ""
+"\n"
+"See test above: we not only have multiple versions in the same environment, but can even run them in the same script!"
+msgstr ""
+"উপরের পরীক্ষাটি দেখুন: আমাদের কেবল একই পরিবেশে একাধিক সংস্করণ নেই, তবে "
+"সেগুলি একই স্ক্রিপ্টে চালাতেও পারে!"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:163
+msgid "🎉🎉🎉 DEMO COMPLETE! 🎉🎉🎉"
+msgstr "🎉🎉🎉 ডেমো সম্পূর্ণ!🎉🎉🎉"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:164
+msgid "📚 What you learned:"
+msgstr "📚 আপনি যা শিখেছেন:"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:165
+msgid "   💀 pip: Breaks everything, creates dependency hell"
+msgstr "💀 পিপ: সবকিছু ভেঙে দেয়, নির্ভরতা নরক তৈরি করে"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:166
+msgid "   🧠 omnipkg: Smart isolation, peaceful coexistence"
+msgstr "🧠 ওমনিপকেজি: স্মার্ট বিচ্ছিন্নতা, শান্তিপূর্ণ সহাবস্থান"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:167
+msgid "   🔧 Intelligence: Skips redundant work, creates isolation when needed"
+msgstr ""
+"🔧 বুদ্ধি: অপ্রয়োজনীয় কাজ এড়িয়ে যান, প্রয়োজনে বিচ্ছিন্নতা তৈরি করে"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:168
+msgid "   🔄 Magic: Seamless switching without containers"
+msgstr "🔄 যাদু: পাত্রে ছাড়াই বিরামবিহীন স্যুইচিং"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:169
+msgid "🚀 Dependency hell is officially SOLVED!"
+msgstr "🚀 নির্ভরতা নরক আনুষ্ঠানিকভাবে সমাধান করা হয়!"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:170
+msgid "   Welcome to omnipkg heaven!"
+msgstr "ওমনিপকেজি স্বর্গে আপনাকে স্বাগতম!"
+
+#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:141
+msgid ""
+"🚀 Starting omnipkg Metadata Builder v11 (Multi-Version Complete Edition)..."
+msgstr ""
+"Ord ওমনিপকেজি মেটাডেটা বিল্ডার ভি 11 (মাল্টি-সংস্করণ সম্পূর্ণ সংস্করণ) শুরু "
+"করা ..."
+
+#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:152
+msgid "🔍 No specific targets provided. Discovering all installed packages..."
+msgstr ""
+"🔍 কোনও নির্দিষ্ট লক্ষ্য সরবরাহ করা হয়নি।সমস্ত ইনস্টলড প্যাকেজ আবিষ্কার করা "
+"..."
+
+#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:154
+msgid "🛡️ Performing bulk security scan for active packages..."
+msgstr "সক্রিয় প্যাকেজগুলির জন্য বাল্ক সুরক্ষা স্ক্যান সম্পাদন করা ..."
+
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:249
+msgid ""
+"\n"
+"✅ Cleanup complete. Your environment is back to normal."
+msgstr "✅ ক্লিনআপ সম্পূর্ণ।আপনার পরিবেশ স্বাভাবিক অবস্থায় ফিরে এসেছে।"
+
+#: /home/minds3t/omnipkg/omnipkg/activator.py:53
+msgid "_omnipkg_ACTIVE_{}"
+msgstr "_Omnipkg_active_ {}"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:51
+#: /home/minds3t/omnipkg/omnipkg/cli.py:423
+msgid "Current Python version: {}.{}"
+msgstr "বর্তমান পাইথন সংস্করণ: {}.{}"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:106
+msgid "❌ An error occurred during stress test execution: {}"
+msgstr "Stress স্ট্রেস টেস্ট এক্সিকিউশন চলাকালীন একটি ত্রুটি ঘটেছে: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:112
+#: /home/minds3t/omnipkg/omnipkg/cli.py:160
+msgid "🚀 Running {} test from {}..."
+msgstr "🚀 চলমান {} পরীক্ষা {} ..."
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:139
+#: /home/minds3t/omnipkg/omnipkg/cli.py:188
+msgid "❌ Demo failed with return code {}"
+msgstr "❌ ডেমো রিটার্ন কোড দিয়ে ব্যর্থ হয়েছে {}"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:152
+msgid "❌ Demo failed with error: {}"
+msgstr "❌ ডেমো ত্রুটি দিয়ে ব্যর্থ হয়েছে: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:203
+msgid ""
+"\n"
+"❌ Demo failed with error: {}"
+msgstr "❌ ডেমো ত্রুটি দিয়ে ব্যর্থ হয়েছে: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:328
+#: /home/minds3t/omnipkg/omnipkg/common_utils.py:55
+#: /home/minds3t/omnipkg/omnipkg/demo.py:81
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:37
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:29
+msgid "  🚀 {}"
+msgstr "  🚀 {}"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:372
+msgid "❌ Error: Language '{}' not supported. Supported: {}"
+msgstr "❌ ত্রুটি: ভাষা '{}' সমর্থিত নয়।সমর্থিত: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:440
+msgid "❌ Error: Test file {} not found."
+msgstr "❌ ত্রুটি: পরীক্ষা ফাইল {} পাওয়া যায় নি।"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:454
+msgid "❌ Error: Requirements file not found at '{}'"
+msgstr "❌ ত্রুটি: প্রয়োজনীয়তা ফাইল '{}' এ পাওয়া যায় নি"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:456
+msgid "📄 Reading packages from {}..."
+msgstr "থেকে প্যাকেজ পড়া ... {} ..."
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:507
+msgid ""
+"\n"
+"❌ An unexpected error occurred: {}"
+msgstr "❌ একটি অপ্রত্যাশিত ত্রুটি ঘটেছে: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/common_utils.py:24
+#: /home/minds3t/omnipkg/omnipkg/common_utils.py:46
+msgid "Subprocess command '{}' failed with exit code {}."
+msgstr "সাবপ্রসেস কমান্ড '{}' প্রস্থান কোড {} দিয়ে ব্যর্থ}"
+
+#: /home/minds3t/omnipkg/omnipkg/common_utils.py:60
+#: /home/minds3t/omnipkg/omnipkg/demo.py:40
+msgid ""
+"\n"
+"Choice (y/n): "
+msgstr "পছন্দ (ওয়াই/এন):"
+
+#: /home/minds3t/omnipkg/omnipkg/common_utils.py:64
+#: /home/minds3t/omnipkg/omnipkg/demo.py:44
+msgid "💭 {}"
+msgstr "💭 {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:81
+msgid "⚠️ Warning: Could not recursively read package metadata: {}"
+msgstr "⚠ সতর্কতা: পুনরাবৃত্তভাবে প্যাকেজ মেটাডেটা পড়তে পারেনি: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:131
+msgid "python{}.{}"
+msgstr "পাইথন {}। {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:283
+#: /home/minds3t/omnipkg/omnipkg/core.py:497
+msgid "{}bubble:{}:{}:file_paths"
+msgstr "{} বুদ্বুদ: {}: {}: ফাইল_পথ"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:297
+msgid "🫧 Creating isolated bubble for {} v{}"
+msgstr "{} V {} এর জন্য বিচ্ছিন্ন বুদ্বুদ তৈরি করা"
+
+#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:425
+msgid "{}-{}"
+msgstr "{}-{}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:313
+msgid "    📦 Installing full dependency tree to temporary location..."
+msgstr "📦 অস্থায়ী স্থানে পূর্ণ নির্ভরতা গাছ ইনস্টল করা ..."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:316
+msgid "    ❌ Failed to install exact version tree: {}"
+msgstr "Diship সঠিক সংস্করণ গাছ ইনস্টল করতে ব্যর্থ: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:320
+msgid "    ❌ Unexpected error during installation: {}"
+msgstr "Phicelation ইনস্টলেশন চলাকালীন অপ্রত্যাশিত ত্রুটি: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:339
+msgid "    ⚠️ All dependency resolution strategies failed for {}=={}."
+msgstr "⚠ সমস্ত নির্ভরতা রেজোলিউশন কৌশলগুলি {} == {} এর জন্য ব্যর্থ হয়েছে}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:340
+msgid "    ℹ️  Proceeding with full temporary installation to build bubble."
+msgstr ""
+"Bub বুদ্বুদ তৈরির জন্য সম্পূর্ণ অস্থায়ী ইনস্টলেশন নিয়ে এগিয়ে যাওয়া।"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:347
+#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:342
+msgid "{}=={}\n"
+msgstr "{} == {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:425
+msgid "{}{}"
+msgstr "{} {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:504
+msgid "    ⚠️  Could not analyze {}: {}"
+msgstr "⚠ {}: {} বিশ্লেষণ করতে পারেনি"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:506
+msgid ""
+"    ⚠️  Found {} files not in registry. They will be registered during "
+"bubble creation."
+msgstr ""
+"Reg রেজিস্ট্রিতে নয় {} ফাইলগুলি পাওয়া গেছে।তারা বুদ্বুদ তৈরির সময় "
+"নিবন্ধিত হবে।"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:552
+msgid "    🧹 Creating deduplicated bubble at {}"
+msgstr "Det এডুপ্লিকেটেড বুদ্বুদ তৈরি করা{}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:566
+msgid "    🔬 Found C-extension packages: {}"
+msgstr "C সি-এক্সটেনশন প্যাকেজগুলি পাওয়া গেছে: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:568
+msgid "    ⚙️  Found binary packages: {}"
+msgstr "⚙ বাইনারি প্যাকেজগুলি পাওয়া গেছে: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:570
+msgid "    📦 Found complex packages with submodules: {}"
+msgstr "Sub সাবমোডুলস সহ জটিল প্যাকেজগুলি পাওয়া গেছে: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:575
+msgid "    🔬 {}: C-extension - copying all files"
+msgstr "🔬 {}: সি -এক্সটেনশন - সমস্ত ফাইল অনুলিপি করা"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:578
+msgid "    ⚙️  {}: Binary package - copying all files"
+msgstr "⚙ {}: বাইনারি প্যাকেজ - সমস্ত ফাইল অনুলিপি করা"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:581
+msgid "    📦 {}: Complex package ({} submodules) - copying all files"
+msgstr "📦 {}: জটিল প্যাকেজ ({} সাবমোডুলস) - সমস্ত ফাইল অনুলিপি করা"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:619
+msgid "    📄 {}: copied {}, deduplicated {}"
+msgstr "📄 {}: অনুলিপি {}, ডুপ্লিকেটেড {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:623
+msgid "    ⚠️  Found {} file(s) not listed in package metadata."
+msgstr "Pack প্যাকেজ মেটাডেটাতে তালিকাভুক্ত নয় {} ফাইল (গুলি) পাওয়া গেছে।"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:631
+msgid "    📦 {}: found {} additional files"
+msgstr "📦 {}: পাওয়া {} অতিরিক্ত ফাইল"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:660
+msgid "    ✅ Bubble created: {} files copied, {} deduplicated."
+msgstr "✅ বুদবুদ তৈরি: {} ফাইলগুলি অনুলিপি করা হয়েছে, {} ডুপ্লিকেটেড।"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:661
+msgid "    📊 Space efficiency: {}% saved."
+msgstr "📊 স্পেস দক্ষতা: {}% সংরক্ষণ করা হয়েছে।"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:663
+msgid "    📦 Complex packages preserved: {} packages with submodules"
+msgstr "📦 জটিল প্যাকেজগুলি সংরক্ষিত: {} সাবমোডুল সহ প্যাকেজগুলি"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:683
+msgid "    ⚠️  Missing package directory: {}"
+msgstr "⚠ অনুপস্থিত প্যাকেজ ডিরেক্টরি: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:690
+msgid "    🚨 CRITICAL: Missing Python module: {}"
+msgstr "🚨 সমালোচনা: অনুপস্থিত পাইথন মডিউল: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:692
+msgid "    🔧 Fixed: Copied missing module {}"
+msgstr "🔧 স্থির: অনুলিপি অনুপস্থিত মডিউল {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:725
+msgid "    ⚠️ Warning: Failed to copy {}: {}"
+msgstr "⚠ সতর্কতা: অনুলিপি করতে ব্যর্থ {}: ​​{}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:747
+#: /home/minds3t/omnipkg/omnipkg/core.py:1282
+msgid "{}main_env:file_hashes"
+msgstr "{} MAIN_ENV: FILE_HASHES"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:751
+msgid "    📈 Loaded {} file hashes from Redis."
+msgstr "Red লোড {} ফাইল রেডিস থেকে হ্যাশ।"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:753
+msgid "    🔍 Building main environment hash index..."
+msgstr "🔍 বিল্ডিং মেইন এনভায়রনমেন্ট হ্যাশ সূচক ..."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:781
+msgid "    ✅ Successfully indexed {} packages via metadata"
+msgstr "✅ সফলভাবে সূচী{}মেটাডেটা মাধ্যমে প্যাকেজ"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:783
+msgid "    🔄 Fallback scan for {} packages: {}{}"
+msgstr "{} প্যাকেজগুলির জন্য ফ্যালব্যাক স্ক্যান: {} {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:796
+msgid "    ⚠️ Metadata approach failed ({}), falling back to full scan..."
+msgstr "⚠ মেটাডেটা পদ্ধতির ব্যর্থ ( {} ), পুরো স্ক্যানে ফিরে পড়ে ..."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:803
+msgid "    💾 Saving {} file hashes to Redis cache..."
+msgstr "💾 সেভিং {} ফাইল হ্যাশগুলি রেডিস ক্যাশে ..."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:809
+msgid "    📈 Indexed {} files from main environment."
+msgstr "📈 ইনডেক্সড {} ফাইলগুলি প্রধান পরিবেশ থেকে।"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:854
+#: /home/minds3t/omnipkg/omnipkg/core.py:882
+#: /home/minds3t/omnipkg/omnipkg/core.py:909
+msgid "{}bubble_locations"
+msgstr "{} বুদ্বুদ_লোকেশন"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:850
+#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:29
+msgid "{}.{}"
+msgstr "{}। {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:820
+msgid "    📝 Registered bubble location and stats for {} packages."
+msgstr "📝 {} প্যাকেজগুলির জন্য নিবন্ধিত বুদ্বুদ অবস্থান এবং পরিসংখ্যান।"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1379
+msgid "bubble_version:{}"
+msgstr "বুদ্বুদ_ সংস্করণ: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:865
+#: /home/minds3t/omnipkg/omnipkg/core.py:1980
+#: /home/minds3t/omnipkg/omnipkg/core.py:2221
+msgid "{}:installed_versions"
+msgstr "{}: ইনস্টলড_ভারশন"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:869
+#: /home/minds3t/omnipkg/omnipkg/core.py:894
+#: /home/minds3t/omnipkg/omnipkg/core.py:899
+#: /home/minds3t/omnipkg/omnipkg/core.py:901
+#: /home/minds3t/omnipkg/omnipkg/core.py:939
+msgid "{}pkg_to_bubble"
+msgstr "{} pkg_to_buble"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:871
+#: /home/minds3t/omnipkg/omnipkg/core.py:942
+msgid "{}bubbles_by_size:{}"
+msgstr "{} বুদবুদ_বি_সাইজ: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:873
+msgid "    📝 Created manifest and registered bubble for {} packages ({} MB)."
+msgstr ""
+"Place {} প্যাকেজগুলির জন্য ম্যানিফেস্ট এবং নিবন্ধিত বুদ্বুদ তৈরি করা হয়েছে "
+"({} এমবি)।"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:875
+msgid "    ⚠️ Warning: Failed to register bubble in Redis: {}"
+msgstr "⚠ সতর্কতা: রেডিসে বুদ্বুদ নিবন্ধন করতে ব্যর্থ: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:876
+msgid "    📝 Local manifest created at {}"
+msgstr "📝 স্থানীয় ম্যানিফেস্টে তৈরি {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:933
+msgid "    🧹 Cleaning up {} old bubbles ({} MB)..."
+msgstr "🧹 পরিষ্কার করা {} পুরানো বুদবুদ ({} এমবি) ..."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:947
+msgid "    ✅ Freed {} MB of storage."
+msgstr "✅ মুক্ত {} এমবি স্টোরেজ।"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:949
+msgid "    ✅ No bubbles need cleanup."
+msgstr "✅ কোনও বুদবুদ পরিষ্কার করার প্রয়োজন নেই।"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:981
+msgid "    🧠 HookManager now aware of new bubble: {}=={}"
+msgstr "🧠 হুকম্যানেজার এখন নতুন বুদ্বুদ সম্পর্কে সচেতন: {} == {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:990
+msgid "    ❌ Bubble not found in HookManager's map for {}=={}"
+msgstr "❌ বুদ্বুদ {} == {} এর জন্য হুকম্যানেজারের মানচিত্রে পাওয়া যায় নি"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:994
+msgid "    ❌ Bubble directory does not exist at: {}"
+msgstr "❌ বুদ্বুদ ডিরেক্টরিটিতে অস্তিত্ব নেই: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:998
+msgid "    ❌ Bubble is incomplete: Missing manifest file at {}"
+msgstr "❌ বুদ্বুদ অসম্পূর্ণ: {} এ ম্যানিফেস্ট ফাইল অনুপস্থিত"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1002
+msgid "    ⚠️  Warning: Bubble for {}=={} does not contain a 'bin' directory."
+msgstr "⚠ সতর্কতা: বুদ্বুদ{}=={}একটি 'বিন' ডিরেক্টরি নেই।"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1003
+msgid "    ✅ Bubble validated successfully: {}=={}"
+msgstr "✅ বুদ্বুদ সফলভাবে বৈধ: {} == {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1068
+msgid "❌ An unexpected Redis connection error occurred: {}"
+msgstr "❌ একটি অপ্রত্যাশিত রেডিস সংযোগ ত্রুটি ঘটেছে: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1079
+msgid "🗑️  This will permanently delete your configuration file at:"
+msgstr "🗑 এটি স্থায়ীভাবে আপনার কনফিগারেশন ফাইলটি এখানে মুছবে:"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1094
+msgid "❌ Error: Could not delete configuration file: {}"
+msgstr "❌ ত্রুটি: কনফিগারেশন ফাইল মুছতে পারেনি: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1095
+msgid "   Please check your file permissions for {}"
+msgstr "{} এর জন্য আপনার ফাইলের অনুমতিগুলি পরীক্ষা করুন"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1106
+msgid ""
+"\n"
+"🧠 omnipkg Knowledge Base Reset"
+msgstr "🧠 ওমনিপকেজি জ্ঞান বেস রিসেট"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1108
+msgid "   This will DELETE all data matching '{}' from Redis."
+msgstr "এটি রেডিস থেকে '{}' এর সাথে মিলিত সমস্ত ডেটা মুছবে।"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1109
+msgid ""
+"   It will then rebuild the knowledge base from the CURRENT state of your "
+"file system."
+msgstr ""
+"এরপরে এটি আপনার ফাইল সিস্টেমের বর্তমান অবস্থা থেকে জ্ঞান বেসটি পুনর্নির্মাণ "
+"করবে।"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1110
+msgid "   ⚠️  This command does NOT uninstall any Python packages."
+msgstr "⚠ এই কমান্ডটি কোনও পাইথন প্যাকেজ আনইনস্টল করে না।"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1122
+msgid "   ✅ Cleared {} cached entries from Redis."
+msgstr "✅ ক্লিয়ারড {} রেডিস থেকে ক্যাশেড এন্ট্রি।"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1126
+msgid "   ❌ Failed to clear knowledge base: {}"
+msgstr "Noguely জ্ঞান ভিত্তি সাফ করতে ব্যর্থ: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1145
+msgid "    ❌ Knowledge base rebuild failed with exit code {}."
+msgstr "❌ জ্ঞান বেস পুনর্নির্মাণ প্রস্থান কোড দিয়ে ব্যর্থ {}}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1148
+msgid "    ❌ An unexpected error occurred during knowledge base rebuild: {}"
+msgstr ""
+"Oneole জ্ঞান বেস পুনর্নির্মাণের সময় একটি অপ্রত্যাশিত ত্রুটি ঘটেছে: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1165
+msgid "   ❌ Metadata rebuild failed: {}"
+msgstr "❌ মেটাডেটা পুনর্নির্মাণ ব্যর্থ: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1167
+msgid "   (Skipping {} - feature coming soon!)"
+msgstr "(এড়িয়ে যাওয়া {} - বৈশিষ্ট্য শীঘ্রই আসছে!)"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1274
+msgid "   ✅ Sync complete. Reconciled {} discrepancies."
+msgstr "✅ সিঙ্ক সম্পূর্ণ।পুনর্মিলন {} তাত্পর্য।"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1317
+msgid "    ⚠️  Could not perform live package scan: {}"
+msgstr "Live লাইভ প্যাকেজ স্ক্যান করতে পারেনি: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1322
+msgid "{}versions"
+msgstr "{} সংস্করণ"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1363
+msgid "   -> Processing {} changed/new package(s)..."
+msgstr "-> প্রক্রিয়াজাতকরণ {} পরিবর্তিত/নতুন প্যাকেজ (গুলি) ..."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1368
+msgid "   -> Cleaning up {} uninstalled package(s) from Redis..."
+msgstr "-> ক্লিন আপ {} রেডিস থেকে আনইনস্টলড প্যাকেজ (গুলি) ..."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1373
+msgid "{}:{}"
+msgstr "{}: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1385
+msgid "    ⚠️ Failed to update knowledge base for delta: {}"
+msgstr "Del ডেল্টার জন্য জ্ঞান বেস আপডেট করতে ব্যর্থ: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1397
+msgid "❌ An unexpected error occurred while showing package info: {}"
+msgstr "Pack প্যাকেজ তথ্য দেখানোর সময় একটি অপ্রত্যাশিত ত্রুটি ঘটেছে: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1410
+msgid "{}, ...and {} more"
+msgstr "{}, ... এবং {} আরও"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1420
+msgid ""
+"\n"
+"📋 KEY DATA: No Redis data found for '{}'"
+msgstr "📋 কী ডেটা: '{}' এর জন্য কোনও রেডিস ডেটা পাওয়া যায় নি"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1422
+msgid ""
+"\n"
+"📋 KEY DATA for '{}':"
+msgstr "'{}' এর জন্য কী ডেটা:"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1426
+msgid "🎯 Active Version: {}"
+msgstr "🎯 সক্রিয় সংস্করণ: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1429
+msgid "🫧 Bubbled Versions: {}"
+msgstr "🫧 বুদবুদ সংস্করণ: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1432
+msgid ""
+"\n"
+"📦 Available Versions:"
+msgstr "Dary উপলব্ধ সংস্করণ:"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1440
+msgid "  {}) {}{}"
+msgstr "{}) {} {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1441
+msgid ""
+"\n"
+"💡 Want details on a specific version?"
+msgstr "A একটি নির্দিষ্ট সংস্করণে বিশদ চান?"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1443
+msgid "Enter number (1-{}) or press Enter to skip: "
+msgstr "নম্বর লিখুন (1- {}) বা এড়িয়ে যেতে ENTER টিপুন:"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1450
+msgid "📄 Detailed info for {} v{}"
+msgstr "{} V {} এর জন্য বিশদ তথ্য"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1478
+msgid "❌ No detailed data found for {} v{}"
+msgstr "{} V {} এর জন্য কোনও বিশদ ডেটা পাওয়া যায় না"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1482
+msgid "The data is fetched from Redis key: {}"
+msgstr "রেডিস কী থেকে ডেটা আনা হয়েছে: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1489
+#: /home/minds3t/omnipkg/omnipkg/core.py:1491
+#: /home/minds3t/omnipkg/omnipkg/core.py:1493
+msgid "{}: {}"
+msgstr "{}: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1495
+msgid ""
+"\n"
+"---[ Health & Security ]---"
+msgstr "--- [স্বাস্থ্য ও সুরক্ষা] ---"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1498
+#: /home/minds3t/omnipkg/omnipkg/core.py:1505
+msgid "   {}: {}"
+msgstr "   {}: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1500
+msgid ""
+"\n"
+"---[ Build Info ]---"
+msgstr "--- [তথ্য বিল্ড] ---"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1506
+msgid ""
+"\n"
+"💡 For all raw data, use Redis key: \"{}\""
+msgstr "All সমস্ত কাঁচা ডেটার জন্য, রেডিস কী ব্যবহার করুন: \"{}\""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1517
+msgid "   ⚠️ Could not save environment snapshot: {}"
+msgstr "Center পরিবেশ স্ন্যাপশট সংরক্ষণ করতে পারেনি: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1558
+msgid ""
+"⚠️ Warning: Cannot determine active omnipkg version. Proceeding with "
+"caution."
+msgstr ""
+"⚠ সতর্কতা: সক্রিয় ওমনিপকেজি সংস্করণ নির্ধারণ করতে পারে না।সাবধানতার সাথে "
+"এগিয়ে চলছে।"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1560
+msgid "✅ omnipkg=={} is already the active omnipkg. No bubble needed."
+msgstr "✅ ওমনিপকজি == '{}' ইতিমধ্যে সক্রিয় ওমনিপকিজি।কোনও বুদবুদ প্রয়োজন।"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1562
+msgid ""
+"✨ Special handling: omnipkg '{}' requested. This will be installed into an "
+"isolated bubble, not as the active omnipkg."
+msgstr ""
+"✨ বিশেষ হ্যান্ডলিং: ওমনিপকেজি '{}' অনুরোধ করা হয়েছে।এটি সক্রিয় ওমনিপকিজি "
+"হিসাবে নয়, একটি বিচ্ছিন্ন বুদ্বুদে ইনস্টল করা হবে।"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1571
+msgid ""
+"❌ Could not find a compatible wheel for omnipkg=={}. Cannot create bubble."
+msgstr ""
+"Omn ওমনিপকিজি == {} এর জন্য কোনও সামঞ্জস্যপূর্ণ চাকা খুঁজে পেল না}বুদ্বুদ "
+"তৈরি করতে পারে না।"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1574
+msgid "❌ Failed to create bubble for omnipkg=={}."
+msgstr "Omn omnipkg == {} এর জন্য বুদ্বুদ তৈরি করতে ব্যর্থ}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1577
+msgid "✅ omnipkg=={} successfully bubbled."
+msgstr "✅ omnipkg == {} সফলভাবে বুদবুদ।"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1581
+msgid "🚀 Starting install with policy: '{}'"
+msgstr "Policy নীতি দিয়ে ইনস্টল শুরু করা: '{}'"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1588
+msgid "🔄 Reordered packages for optimal installation: {}"
+msgstr "Partical অনুকূল ইনস্টলেশনের জন্য প্যাকেজগুলি পুনরায় অর্ডার করা: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1593
+msgid "📦 Processing: {}"
+msgstr "📦 প্রসেসিং: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1597
+msgid "✅ Requirement already satisfied: {}"
+msgstr "✅ প্রয়োজনীয়তা ইতিমধ্যে সন্তুষ্ট: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1604
+msgid "    - Found {} packages"
+msgstr "- পাওয়া গেছে {} প্যাকেজগুলি"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1605
+msgid ""
+"\n"
+"⚙️ Running pip install for: {}..."
+msgstr "Pip পিপ ইনস্টল চালানো: '{}' ..."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1629
+msgid "    -> Protecting stable env. Bubbling {} version: {} v{}"
+msgstr "-> স্থিতিশীল এনভাকে রক্ষা করা।বুদবুদ {} সংস্করণ: {} v {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1635
+msgid "    🔄 Restoring '{}' to stable version v{} in main environment..."
+msgstr ""
+"Crivity প্রধান পরিবেশে স্থিতিশীল সংস্করণ ভি {} এ ' {} ' পুনরুদ্ধার করা ..."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1719
+msgid "Error getting active version of {}: {}"
+msgstr "{}: {} এর সক্রিয় সংস্করণ পেতে ত্রুটি"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1738
+msgid "   -> Cleaning up replaced version from knowledge base: {} v{}"
+msgstr "-> জ্ঞান বেস থেকে প্রতিস্থাপন সংস্করণ পরিষ্কার করা: {} v {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1762
+msgid "   -> Uninstalling: {}"
+msgstr "-> আনইনস্টলিং: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1765
+msgid "   -> Installing/Fixing: {}"
+msgstr "-> ইনস্টল/ফিক্সিং: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1774
+msgid "📦 Downloading wheel for {}=={}..."
+msgstr "{} == {} এর জন্য চাকা ডাউনলোড করা ..."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1781
+msgid "{}-{}.data"
+msgstr "{}-{}। ডেটা"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1781
+msgid "{}-{}.dist-info"
+msgstr "{}-{}। জেলা-ইনফো"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1786
+msgid "⚠️ Warning: Could not extract {}: {}"
+msgstr "⚠ সতর্কতা: বের করতে পারেনি {}: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1788
+msgid "✅ Extracted {}=={} to {}"
+msgstr "✅ নিষ্কাশন {} == {} থেকে {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1791
+msgid "❌ Failed to download wheel from {}: {}"
+msgstr "{}: {} থেকে চাকা ডাউনলোড করতে ব্যর্থ"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1794
+msgid "❌ Downloaded file is not a valid wheel: {}"
+msgstr "Downled ডাউনলোড ফাইলটি বৈধ চাকা নয়: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1797
+msgid "❌ Error extracting wheel for {}=={}: {}"
+msgstr "{} == {}: {} এর জন্য চাকা বের করার ত্রুটি ত্রুটি"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1813
+msgid "🎯 Found compatible wheel: {}"
+msgstr "Found সুস্পষ্ট চাকা পাওয়া গেছে: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1817
+msgid "⚠️ Only source distribution available for {}=={}"
+msgstr "⚠ কেবলমাত্র উত্স বিতরণ {} == {} এর জন্য উপলব্ধ"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1818
+msgid "   This may require compilation and is not recommended for bubbling."
+msgstr ""
+"এর জন্য সংকলনের প্রয়োজন হতে পারে এবং বুদবুদগুলির জন্য প্রস্তাবিত নয়।"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1820
+msgid "❌ No compatible wheel or source found for {}=={} on PyPI."
+msgstr ""
+"P পিওয়াইপিআই -তে {} == {} এর জন্য কোনও সামঞ্জস্যপূর্ণ চাকা বা উত্স পাওয়া "
+"যায় না।"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1823
+msgid "❌ Failed to fetch PyPI data for {}=={}: {}"
+msgstr "{} == {}: {} এর জন্য পাইপিআই ডেটা আনতে ব্যর্থ"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1826
+msgid "❌ Unexpected PyPI response structure: missing {}"
+msgstr "❌ অপ্রত্যাশিত পিওয়াইপিআই প্রতিক্রিয়া কাঠামো: অনুপস্থিত {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1829
+msgid "❌ Error parsing PyPI data: {}"
+msgstr "P পিওয়াইপিআই ডেটা পার্সিং ত্রুটি: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1847
+msgid ""
+"⚠️ Version specifier '{}' detected in '{}'. Exact version required for "
+"bubbling."
+msgstr ""
+"⚠ সংস্করণ স্পেসিফায়ার '{}' '{}' তে সনাক্ত করা হয়েছে।বুদবুদ জন্য সঠিক "
+"সংস্করণ প্রয়োজন।"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1862
+msgid "📝 Registered {}=={} in knowledge base"
+msgstr "📝 নিবন্ধিত{}=={}জ্ঞান বেসে"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1864
+msgid "⚠️ Could not register {}=={}: No Redis connection"
+msgstr "⚠ নিবন্ধন করতে পারেনি {} == {}: কোনও রেডিস সংযোগ নেই"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1866
+msgid "❌ Failed to register {}=={} in knowledge base: {}"
+msgstr "Naligue জ্ঞান বেসে {} == {} নিবন্ধন করতে ব্যর্থ: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1898
+msgid ""
+"\n"
+"Processing uninstall for: {}"
+msgstr "এর জন্য আনইনস্টল প্রসেসিং: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1905
+msgid "🤷 Package '{}' not found."
+msgstr "🤷 প্যাকেজ '{}' পাওয়া যায় নি।"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1911
+msgid "🤷 Version '{}' of '{}' not found."
+msgstr "'{}' এর 🤷 সংস্করণ '{}' পাওয়া যায় নি।"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1919
+msgid "Found multiple installations for '{}':"
+msgstr "'{}' এর জন্য একাধিক ইনস্টলেশন পাওয়া গেছে:"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1927
+msgid "  {}) v{} ({})"
+msgstr "{}) ভি {} ({})"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1932
+msgid ""
+"🤔 Enter numbers to uninstall (e.g., '1,2'), 'all', or press Enter to cancel:"
+" "
+msgstr ""
+"Un আনইনস্টল করতে নম্বর লিখুন (উদাঃ, '1,2'), 'সমস্ত', বা বাতিল করতে এন্টার "
+"টিপুন:"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1953
+msgid "⚠️  Skipping protected package: {} v{} (active)"
+msgstr "⚠ সুরক্ষিত প্যাকেজটি এড়িয়ে যাওয়া: {} ভি {} (সক্রিয়)"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1959
+msgid ""
+"\n"
+"Preparing to remove {} installation(s) for '{}':"
+msgstr "'{}' এর জন্য {} ইনস্টলেশন (গুলি) অপসারণের প্রস্তুতি নিচ্ছে:"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1961
+msgid "  - v{} ({})"
+msgstr "- v {} ({})"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1974
+msgid "🗑️  Deleting bubble directory: {}"
+msgstr "Bub বুদ্বুদ ডিরেক্টরি মোছা: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1976
+msgid "🧹 Cleaning up knowledge base for {} v{}..."
+msgstr "{} V {} ... এর জন্য জ্ঞানের ভিত্তি পরিষ্কার করা ..."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2020
+msgid "  - Uninstall: {}"
+msgstr "- আনইনস্টল: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2022
+msgid "  - Install: {}"
+msgstr "- ইনস্টল: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2024
+msgid "  - Fix Version: {}"
+msgstr "- সংস্করণ ঠিক করুন: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2076
+msgid "    ⚡ Found existing bubble: {}"
+msgstr "The বিদ্যমান বুদ্বুদ পাওয়া গেছে: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2127
+msgid "❌ Pip install command failed with exit code {}:"
+msgstr "❌ পিপ ইনস্টল কমান্ড প্রস্থান কোড সহ ব্যর্থ হয়েছে {}:"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2131
+msgid "    ❌ An unexpected error occurred during pip install: {}"
+msgstr "Pip পিআইপি ইনস্টল করার সময় একটি অপ্রত্যাশিত ত্রুটি ঘটেছে: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2144
+msgid "❌ Pip uninstall command failed with exit code {}:"
+msgstr "❌ পাইপ আনইনস্টল কমান্ড প্রস্থান কোড সহ ব্যর্থ হয়েছে {}:"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2148
+msgid "    ❌ An unexpected error occurred during pip uninstall: {}"
+msgstr "Pip পিপ আনইনস্টল চলাকালীন একটি অপ্রত্যাশিত ত্রুটি ঘটেছে: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2164
+msgid "❌ uv install command failed with exit code {}:"
+msgstr "❌ ইউভি ইনস্টল কমান্ড প্রস্থান কোড সহ ব্যর্থ হয়েছে {}:"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2168
+msgid "    ❌ An unexpected error toccurred during uv install: {}"
+msgstr "U UV ইনস্টল করার সময় একটি অপ্রত্যাশিত ত্রুটি টোকচার করা: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2184
+msgid "❌ uv uninstall command failed with exit code {}:"
+msgstr "❌ ইউভি আনইনস্টল কমান্ড প্রস্থান কোড সহ ব্যর্থ হয়েছে {}:"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2188
+msgid "    ❌ An unexpected error occurred during uv uninstall: {}"
+msgstr "U ইউভি আনইনস্টল চলাকালীন একটি অপ্রত্যাশিত ত্রুটি ঘটেছে: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2227
+msgid "⚠️ Could not retrieve versions for {}: {}"
+msgstr "Vers এর জন্য সংস্করণগুলি পুনরুদ্ধার করতে পারেনি{}::{}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2237
+msgid "📋 Found {} matching package(s):"
+msgstr "Found পাওয়া যায় {} ম্যাচিং প্যাকেজ (গুলি):"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2244
+msgid ""
+"\n"
+"- {}:"
+msgstr ""
+"\n"
+"- {}:"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2250
+msgid "  ✅ {} (active)"
+msgstr "✅ {} (সক্রিয়)"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2252
+msgid "  🫧 {} (bubble)"
+msgstr "🫧 {} (বুদ্বুদ)"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2265
+msgid "    😈 Locked up for causing chaos in the main env! 🔒 (v{})"
+msgstr "Ne মূল এনভিতে বিশৃঙ্খলา সৃষ্টি করার জন্য লক আপ!🔒 (ভি {} )"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2272
+msgid "    😈 Speedy troublemaker locked up in the main env! 🔒 (v{})"
+msgstr "😈 দ্রুত ঝামেলা প্রস্তুতকারক মূল এনভিতে লক হয়ে গেল!🔒 (ভি {})"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2279
+msgid "  - Path: {}"
+msgstr "- পথ: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2280
+msgid "  - Active Packages: {}"
+msgstr "- সক্রিয় প্যাকেজ: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2285
+msgid "  - Bubble Directory: {}"
+msgstr "- বুদ্বুদ ডিরেক্টরি: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2286
+msgid "  - Import Hook Installed: {}"
+msgstr "- আমদানি হুক ইনস্টল করা: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2289
+msgid ""
+"\n"
+"📦 Isolated Package Versions ({} bubbles):"
+msgstr "📦 বিচ্ছিন্ন প্যাকেজ সংস্করণ ({} বুদবুদ):"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2299
+msgid ""
+"    😈 Pip is locked up in a bubble, plotting chaos like a Python outlaw! 🔒"
+msgstr ""
+"😈 পাইপ একটি বুদ্বুদে লক করা আছে, অজগরকে আউটলোর মতো বিশৃঙ্খলা প্লট করে!🔒"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2301
+msgid "    😈 UV is locked up in a bubble, speeding toward trouble! 🔒"
+msgstr "😈 ইউভি একটি বুদ্বুদে লক হয়ে গেছে, সমস্যার দিকে দ্রুত গতিতে!🔒"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:49
+#: /home/minds3t/omnipkg/omnipkg/demo.py:63
+msgid ""
+"\n"
+"$ {}"
+msgstr ""
+"\n"
+"$ {}"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:58
+#: /home/minds3t/omnipkg/omnipkg/demo.py:75
+msgid "Demo command failed with exit code {}"
+msgstr "ডেমো কমান্ড প্রস্থান কোড {} দিয়ে ব্যর্থ হয়েছে"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:154
+msgid ""
+"\n"
+"$ python {}"
+msgstr "$ পাইথন {}"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:173
+msgid ""
+"\n"
+"❌ An unexpected error occurred during the demo: {}"
+msgstr "Dem ডেমো চলাকালীন একটি অপ্রত্যাশিত ত্রুটি ঘটেছে: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/loader.py:54
+msgid "⚠️ [omnipkg loader] Bubble directory {} did not exist and was created."
+msgstr ""
+"⚠ [ওমনিপকিজি লোডার] বুদ্বুদ ডিরেক্টরি {} বিদ্যমান ছিল না এবং এটি তৈরি করা "
+"হয়েছিল।"
+
+#: /home/minds3t/omnipkg/omnipkg/loader.py:56
+msgid "Failed to create bubble directory at {}: {}"
+msgstr "{}: {} এ বুদ্বুদ ডিরেক্টরি তৈরি করতে ব্যর্থ"
+
+#: /home/minds3t/omnipkg/omnipkg/loader.py:70
+msgid ""
+"\n"
+"🌀 omnipkg loader: Activating {}..."
+msgstr "🌀 ওমনিপকেজি লোডার: সক্রিয়করণ {} ..."
+
+#: /home/minds3t/omnipkg/omnipkg/loader.py:75
+msgid "Invalid package_spec format. Expected 'name==version', got '{}'."
+msgstr ""
+"অবৈধ প্যাকেজ_স্পেক ফর্ম্যাট।প্রত্যাশিত 'নাম == সংস্করণ', '{}' পেয়েছে।"
+
+#: /home/minds3t/omnipkg/omnipkg/loader.py:79
+msgid ""
+" ✅ System version already matches requested version ({}). No bubble "
+"activation needed."
+msgstr ""
+"✅ সিস্টেম সংস্করণ ইতিমধ্যে অনুরোধ করা সংস্করণ ({}) এর সাথে মেলে।কোনও বুদ্বুদ"
+" অ্যাক্টিভেশন প্রয়োজন।"
+
+#: /home/minds3t/omnipkg/omnipkg/loader.py:86
+msgid ""
+"⚠️ [omnipkg loader] Error checking system version for {}: {}. Proceeding "
+"with bubble search."
+msgstr "⚠ {} :: {} । বুদ্বুদ অনুসন্ধান নিয়ে এগিয়ে যাওয়া।"
+
+#: /home/minds3t/omnipkg/omnipkg/loader.py:91
+msgid ""
+"Bubble not found for {} at {}. Please ensure it's installed via 'omnipkg "
+"install {}'."
+msgstr ""
+"বুদ্বুদ {} এ {} এর জন্য পাওয়া যায় নি}দয়া করে নিশ্চিত করুন যে এটি "
+"'ওমনিপকিজি ইনস্টল {} ' এর মাধ্যমে ইনস্টল করা হয়েছে।"
+
+#: /home/minds3t/omnipkg/omnipkg/loader.py:99
+msgid " ⚙️ Added to PATH: {}"
+msgstr "⚙ পথে যুক্ত: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/loader.py:108
+msgid " ✅ Activated bubble: {}"
+msgstr "✅ সক্রিয় বুদ্বুদ: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/loader.py:109
+msgid " 🔧 sys.path[0]: {}"
+msgstr "🔧 sys.path [0]: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/loader.py:115
+msgid " ℹ️ Bubble contains {} packages."
+msgstr "ℹ বুদ্বুদে {} প্যাকেজ রয়েছে।"
+
+#: /home/minds3t/omnipkg/omnipkg/loader.py:125
+msgid ""
+"\n"
+"🌀 omnipkg loader: Deactivating {}..."
+msgstr "🌀 ওমনিপকেজি লোডার: নিষ্ক্রিয় {} ..."
+
+#: /home/minds3t/omnipkg/omnipkg/loader.py:213
+msgid " 🛡️ Restored {}"
+msgstr "Rest পুনরুদ্ধার {}"
+
+#: /home/minds3t/omnipkg/omnipkg/loader.py:146
+msgid " ✅ Environment restored to system state."
+msgstr "✅ পরিবেশ সিস্টেম স্টেটে পুনরুদ্ধার করা।"
+
+#: /home/minds3t/omnipkg/omnipkg/loader.py:190
+msgid " 🛡️ Cloaked main {} to {}"
+msgstr "🛡 ক্লোকড মেইন {} থেকে {}"
+
+#: /home/minds3t/omnipkg/omnipkg/loader.py:192
+msgid " ⚠️ Failed to cloak {}: {}"
+msgstr "Ch ক্লোয়াক করতে ব্যর্থ {}: ​​{}"
+
+#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:38
+#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:44
+msgid "python{}"
+msgstr "পাইথন {}"
+
+#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:75
+msgid "❌ Could not connect to Redis: {}"
+msgstr "Red রেডিসের সাথে সংযোগ করতে পারেনি: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:97
+msgid "⚠️ Error discovering active packages: {}"
+msgstr "Active সক্রিয় প্যাকেজগুলি আবিষ্কার করতে ত্রুটি: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:120
+msgid ""
+"✅ Discovery complete. Found {} unique packages with {} total versions to "
+"process."
+msgstr ""
+"✅ আবিষ্কার সম্পূর্ণ।প্রক্রিয়া করার জন্য {} মোট সংস্করণ সহ {} অনন্য "
+"প্যাকেজগুলি পাওয়া গেছে।"
+
+#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:138
+msgid "⚠️ Failed to store active version for {}: {}"
+msgstr "{}: {} এর জন্য সক্রিয় সংস্করণ সঞ্চয় করতে ব্যর্থ"
+
+#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:146
+msgid "🎯 Running in targeted mode for {} package(s)."
+msgstr "🎯 এর জন্য লক্ষ্যযুক্ত মোডে চলছে{}প্যাকেজ (গুলি)।"
+
+#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:163
+msgid "⚠️ Error preparing packages for security scan: {}"
+msgstr "Security সুরক্ষা স্ক্যানের জন্য প্যাকেজ প্রস্তুত করার ত্রুটি: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:165
+msgid "✅ Bulk security scan complete. Found {} potential issues."
+msgstr "✅ বাল্ক সুরক্ষা স্ক্যান সম্পূর্ণ।পাওয়া গেছে {} সম্ভাব্য সমস্যা।"
+
+#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:172
+msgid ""
+"\n"
+"🎉 Metadata building complete! Updated {} package(s)."
+msgstr "🎉 মেটাডেটা বিল্ডিং সম্পূর্ণ!আপডেট {} প্যাকেজ (গুলি)।"
+
+#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:188
+msgid "    ❌ ERROR processing {} v{}: {}"
+msgstr "❌ ত্রুটি প্রক্রিয়াজাতকরণ {} v {}: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:263
+msgid "{}_compressed"
+msgstr "{} _ কমপ্রেসড"
+
+#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:296
+msgid "import importlib.metadata; print(importlib.metadata.version('{}'))"
+msgstr "আমদানি আমদানিপ্রিন্ট (ইম্পোর্টলিব.মেটাডাটা.ভার্সন ('{}'))"
+
+#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:347
+msgid "    ⚠️ Bulk security scan failed: {}"
+msgstr "⚠ বাল্ক সুরক্ষা স্ক্যান ব্যর্থ: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:37
+msgid ""
+"❌ Failed to import omnipkg modules. Is it installed correctly? Error: {}"
+msgstr ""
+"Omn ওমনিপকিজি মডিউলগুলি আমদানি করতে ব্যর্থ।এটি কি সঠিকভাবে ইনস্টল করা "
+"হয়েছে?ত্রুটি: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:51
+msgid "   - Removing old bubble: {}"
+msgstr "- পুরানো বুদ্বুদ অপসারণ: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:59
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:246
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:56
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:240
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:46
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:209
+msgid "   🧹 Removing residual cloaked: {}"
+msgstr "Resid অবশিষ্টাংশ ক্লোকড অপসারণ: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:68
+msgid "   ⚠️ Warning: Failed to run pip uninstall during setup cleanup: {}"
+msgstr "⚠ সতর্কতা: সেটআপ ক্লিনআপের সময় পিপ আনইনস্টল চালাতে ব্যর্থ: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:81
+msgid ""
+"\n"
+"⚡ Switching to numpy=={}"
+msgstr "Numpy numpy == {} এ স্যুইচিং"
+
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:85
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:106
+msgid "   ✅ Version: {}"
+msgstr "✅ সংস্করণ: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:86
+msgid "   🔢 Array sum: {}"
+msgstr "🔢 অ্যারে যোগ: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:89
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:111
+msgid "   ⚠️ WARNING: Expected {}, got {}!"
+msgstr "⚠ সতর্কতা: প্রত্যাশিত {}, পেয়েছে {}!"
+
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:91
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:113
+msgid "   🎯 Version verification: PASSED"
+msgstr "🎯 সংস্করণ যাচাইকরণ: পাস"
+
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:93
+msgid "   ❌ Activation/Test failed for numpy=={}: {}!"
+msgstr "❌ অ্যাক্টিভেশন/পরীক্ষা Numpy == {}: {} এর জন্য ব্যর্থ হয়েছে!"
+
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:99
+msgid ""
+"\n"
+"🌋 Switching to scipy=={}"
+msgstr "Sc স্কিপিতে স্যুইচ করা == '{}'"
+
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:107
+msgid "   ♻️ Sparse matrix: {} non-zeros"
+msgstr "♻ স্পার্স ম্যাট্রিক্স: {} নন-জারোস"
+
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:108
+msgid "   📐 Linalg det: {}"
+msgstr "📐 লিনালগ ডিট: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:115
+msgid "   ❌ Activation/Test failed for scipy=={}: {}!"
+msgstr "❌ অ্যাক্টিভেশন/পরীক্ষা স্কিপি জন্য ব্যর্থ হয় == {}: {}!"
+
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:124
+msgid ""
+"\n"
+"🌀 COMBO: numpy=={} + scipy=={}"
+msgstr "🌀 কম্বো: numpy == {} + scipy == {}"
+
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:213
+msgid "   ❌ Subprocess test failed for combo numpy=={} + scipy=={}"
+msgstr "❌ সাবপ্রসেস টেস্ট কম্বো Numpy == {} + স্কিপি == {} এর জন্য ব্যর্থ"
+
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:214
+msgid "   💥 Error: {}"
+msgstr "💥 ত্রুটি: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:217
+msgid ""
+"   ❌ An unexpected error occurred during combo test subprocess setup: {}"
+msgstr ""
+"Com কম্বো টেস্ট সাবপ্রসেস সেটআপের সময় একটি অপ্রত্যাশিত ত্রুটি ঘটেছে: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:238
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:236
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:206
+msgid "   🧹 Removing test bubble: {}"
+msgstr "Test পরীক্ষার বুদ্বুদ অপসারণ: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:262
+msgid ""
+"\n"
+"--- Creating bubble for {} ---"
+msgstr "--- {} --- এর জন্য বুদ্বুদ তৈরি করা"
+
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:270
+msgid ""
+"\n"
+"❌ An error occurred during the stress test: {}"
+msgstr "Stress স্ট্রেস পরীক্ষার সময় একটি ত্রুটি ঘটেছে: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:70
+msgid "   • Previously 'incompatible' versions working together seamlessly"
+msgstr "• পূর্বে 'বেমানান' সংস্করণগুলি এক সাথে একসাথে কাজ করছে"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:76
+msgid "   • numpy 1.24.3 + scipy 1.12.0 → 'incompatible dependencies'"
+msgstr "• নুমপি 1.24.3 + স্কিপি 1.12.0 → 'বেমানান নির্ভরতা'"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:79
+msgid "   • Package managers can't handle multiple versions"
+msgstr "• প্যাকেজ পরিচালকরা একাধিক সংস্করণ পরিচালনা করতে পারবেন না"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:114
+msgid ""
+"💡 Don't worry if there are pauses - packages are downloading/installing!"
+msgstr ""
+"Pass বিরতি আছে কিনা তা চিন্তা করবেন না - প্যাকেজগুলি ডাউনলোড/ইনস্টল করা "
+"হচ্ছে!"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:390
+msgid "    ⚠️  'requests' package not found. Skipping PyPI API strategy."
+msgstr ""
+"⚠ 'অনুরোধগুলি' প্যাকেজটি পাওয়া যায় নি।পিআইপিআই এপিআই কৌশলটি এড়িয়ে "
+"যাওয়া।"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1510
+msgid "📸 Saving snapshot of the current environment as 'last known good'..."
+msgstr ""
+"Current বর্তমান পরিবেশের স্ন্যাপশটটি 'সর্বশেষ পরিচিত ভাল' হিসাবে সংরক্ষণ করা"
+" ..."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1565
+msgid "  Skipping bubbling of 'omnipkg' without a specific version for now."
+msgstr "আপাতত নির্দিষ্ট সংস্করণ ছাড়াই 'ওমনিপকিজি' -এর বুদবুদ এড়ানো।"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2004
+msgid "❌ No 'last known good' snapshot found. Cannot revert."
+msgstr "❌ না 'শেষ জানা ভাল' স্ন্যাপশট পাওয়া গেছে।ফিরে যেতে পারে না।"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2161
+#: /home/minds3t/omnipkg/omnipkg/core.py:2181
+msgid ""
+"❌ Error: 'uv' executable not found. Please ensure uv is installed and in "
+"your PATH."
+msgstr ""
+"❌ ত্রুটি: 'ইউভি' এক্সিকিউটেবল পাওয়া যায় নি।দয়া করে নিশ্চিত করুন যে ইউভি "
+"ইনস্টল করা আছে এবং আপনার পথে।"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:148
+msgid "Welcome to omnipkg! Let's get you configured."
+msgstr "ওমনিপকিজে স্বাগতম!আসুন আপনাকে কনফিগার করা যাক।"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:152
+msgid "We've auto-detected your system language as: {}"
+msgstr "আমরা আপনার সিস্টেমের ভাষা হিসাবে স্বতঃ-সনাক্ত করেছি: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:153
+msgid "Please select your preferred language by typing the number:"
+msgstr "নম্বরটি টাইপ করে আপনার পছন্দসই ভাষা নির্বাচন করুন:"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:160
+msgid ""
+"\n"
+"Enter choice (1-{}) or press Enter to accept '{}': "
+msgstr "পছন্দ লিখুন (1- {}) বা '{}' গ্রহণ করতে এন্টার টিপুন:"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:170
+msgid "❌ Invalid number. Please try again."
+msgstr "❌ অবৈধ সংখ্যা।আবার চেষ্টা করুন।"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:172
+msgid "❌ That's not a number. Please try again."
+msgstr "❌ এটি একটি সংখ্যা নয়।আবার চেষ্টা করুন।"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:174
+msgid "Setup cancelled."
+msgstr "সেটআপ বাতিল।"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:179
+msgid "✅ Language set to: {}"
+msgstr "✅ ভাষা সেট: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:57
+msgid "3. Run 'omnipkg stress-test' from there"
+msgstr "3। সেখান থেকে 'ওমনিপকেজি স্ট্রেস-টেস্ট' চালান"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:84
+msgid "🚀 Ready to witness the impossible? (y/n): "
+msgstr "Abulis অসম্ভব সাক্ষ্য দিতে প্রস্তুত?(y/n):"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:90
+msgid "🎪 Cancelled. Run 'omnipkg stress-test' anytime!"
+msgstr "🎪 বাতিল।যে কোনও সময় 'ওমনিপকেজি স্ট্রেস-টেস্ট' চালান!"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:137
+#: /home/minds3t/omnipkg/omnipkg/cli.py:186
+msgid "💡 Run 'omnipkg demo' to try another test."
+msgstr "অন্য পরীক্ষা করার জন্য 'ওমনিপকিজি ডেমো' চালান।"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:157
+msgid " {}) {} - {}"
+msgstr "{} - {} - {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1082
+#: /home/minds3t/omnipkg/omnipkg/core.py:1112
+#: /home/minds3t/omnipkg/omnipkg/core.py:1202
+#: /home/minds3t/omnipkg/omnipkg/core.py:2026
+msgid ""
+"\n"
+"🤔 Are you sure you want to proceed? (y/N): "
+msgstr "🤔 আপনি কি নিশ্চিত যে আপনি এগিয়ে যেতে চান?(y/n):"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1963
+msgid "🤔 Are you sure you want to proceed? (y/N): "
+msgstr "🤔 আপনি কি নিশ্চিত যে আপনি এগিয়ে যেতে চান?(y/n):"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2261
+msgid ""
+"🛠️ Environment broken by pip or uv? Run 'omnipkg revert' to restore the last"
+" known good state! 🚑"
+msgstr ""
+"Pip পিআইপি বা ইউভি দ্বারা ভাঙা পরিবেশ?সর্বশেষ পরিচিত ভাল রাষ্ট্রটি "
+"পুনরুদ্ধার করতে 'ওমনিপকজি রিভার্ট' চালান!🚑"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:36
+msgid "💡 Pro tip: Choose 'N' unless you enjoy suffering"
+msgstr "💡 প্রো টিপ: আপনি যদি কষ্ট উপভোগ করেন তবে 'এন' চয়ন করুন"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:98
+msgid ""
+"Let's say you need version 0.6.0 for compatibility with an existing "
+"project..."
+msgstr ""
+"ধরা যাক একটি বিদ্যমান প্রকল্পের সাথে সামঞ্জস্যের জন্য আপনার সংস্করণ 0.6.0 "
+"দরকার ..."
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:112
+msgid ""
+"\n"
+"💡 Remember: omnipkg exists when you're ready to stop suffering"
+msgstr ""
+"💡 মনে রাখবেন: আপনি যখন দুর্ভোগ বন্ধ করতে প্রস্তুত তখন ওমনিপকেজি বিদ্যমান"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:115
+msgid "Let's fix this mess and install the newer version back with omnipkg..."
+msgstr ""
+"আসুন এই জগাখিচুড়ি ঠিক করুন এবং ওমনিপকিজি সহ নতুন সংস্করণটি ইনস্টল করুন ..."
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:122
+msgid "This time, let's be smart about it..."
+msgstr "এবার, এটি সম্পর্কে স্মার্ট হয়ে উঠুন ..."
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:136
+msgid "Let's see how omnipkg is managing our packages..."
+msgstr "আসুন দেখি কীভাবে ওমনিপকিজি আমাদের প্যাকেজগুলি পরিচালনা করছে ..."
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:145
+msgid "We'll simulate pressing Enter to skip this part..."
+msgstr "আমরা এই অংশটি এড়িয়ে যাওয়ার জন্য টিপুন টিপুন সিমুলেট করব ..."
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:176
+msgid ""
+"\n"
+"💡 Don't worry - even if some steps failed, the core isolation is working!"
+msgstr ""
+"💡 চিন্তা করবেন না - কিছু পদক্ষেপ ব্যর্থ হলেও, মূল বিচ্ছিন্নতা কাজ করছে!"
+
+#: /home/minds3t/omnipkg/omnipkg/demo.py:177
+msgid "That's the main achievement of omnipkg! 🔥"
+msgstr "এটাই ওমনিপকিজির মূল অর্জন!🔥"
+
+#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:66
+msgid "⚠️ Install 'tqdm' for a better progress bar."
+msgstr "আরও ভাল অগ্রগতি বারের জন্য 'টিকিউডিএম' ইনস্টল করুন।"
+
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:42
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:33
+msgid ""
+"\n"
+"--- {} ---"
+msgstr ""
+"\n"
+"--- {} ---"
+
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:52
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:43
+msgid "   🧹 Removing old bubble: {}"
+msgstr "Old পুরানো বুদ্বুদ অপসারণ: {}"
+
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:59
+msgid "   📦 Ensuring main environment has baseline: rich=={}"
+msgstr "Main প্রধান পরিবেশ নিশ্চিত করার বেসলাইন রয়েছে: সমৃদ্ধ == {}"
+
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:60
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:71
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:248
+msgid "rich=={}"
+msgstr "ধনী == {}"
+
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:61
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:53
+msgid "✅ Environment prepared"
+msgstr "✅ পরিবেশ প্রস্তুত"
+
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:70
+msgid "   🫧 Creating bubble for rich=={}"
+msgstr "Rich ধনী == {} এর জন্য বুদ্বুদ তৈরি করা"
+
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:77
+msgid "   🔧 Testing import of version {}..."
+msgstr "Version সংস্করণ আমদানি পরীক্ষা {} ..."
+
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:168
+msgid "      └── {}"
+msgstr "└ {}"
+
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:171
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:176
+msgid "   ❌ Subprocess FAILED for version {}:"
+msgstr "❌ সাবপ্রসেস সংস্করণের জন্য ব্যর্থ হয়েছে {}:"
+
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:172
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:177
+msgid "      STDERR: {}"
+msgstr "Stderr: {}"
+
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:189
+msgid "   ⚠️  Test harness failed to restore {} from {}: {}"
+msgstr "⚠ পরীক্ষার জোতা পুনরুদ্ধার করতে ব্যর্থ{}থেকে{}::{}"
+
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:203
+msgid "Testing Main Environment ({})"
+msgstr "প্রধান পরিবেশ পরীক্ষা করা ({})"
+
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:204
+msgid "main-{}"
+msgstr "প্রধান- {}"
+
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:207
+msgid "Testing Bubble (rich=={})"
+msgstr "টেস্টিং বুদ্বুদ (সমৃদ্ধ == {})"
+
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:208
+msgid "bubble-{}"
+msgstr "বুদ্বুদ- {}"
+
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:214
+msgid "   - {}: {}"
+msgstr "   - {}: {}"
+
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:217
+msgid ""
+"\n"
+"🎉🎉🎉 ALL TESTS PASSED! 🎉🎉🎉"
+msgstr "🎉🎉🎉 সমস্ত পরীক্ষা পাস!🎉🎉🎉"
+
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:219
+msgid ""
+"\n"
+"💥 SOME TESTS FAILED."
+msgstr "💥 কিছু পরীক্ষা ব্যর্থ হয়েছে।"
+
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:224
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:194
+msgid ""
+"\n"
+"❌ Critical error during testing: {}"
+msgstr "Testing পরীক্ষার সময় সমালোচনামূলক ত্রুটি: {}"
+
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:244
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:49
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:212
+msgid "   🧹 Removing test harness residual cloaked: {}"
+msgstr "Test পরীক্ষা জোতা অপসারণ অবশিষ্টাংশ অবশিষ্টাংশ: {}"
+
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:247
+msgid "   📦 Restoring main environment: rich=={}"
+msgstr "📦 প্রধান পরিবেশ পুনরুদ্ধার: সমৃদ্ধ == {}"
+
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:249
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:214
+msgid "✅ Cleanup complete"
+msgstr "✅ ক্লিনআপ সম্পূর্ণ"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:39
+msgid "   🧹 Uninstalling all UV versions from main environment and bubbles..."
+msgstr "The মূল পরিবেশ এবং বুদবুদ থেকে সমস্ত ইউভি সংস্করণ আনইনস্টল করা ..."
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:51
+msgid "   📦 Installing main environment: uv==0.6.13"
+msgstr "📦 প্রধান পরিবেশ ইনস্টল করা: ইউভি == 0.6.13"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:61
+msgid "   🫧 Creating bubble for uv=={}"
+msgstr "U UV == {} এর জন্য বুদ্বুদ তৈরি করা"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:63
+msgid "uv=={}"
+msgstr "uv == {}"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:64
+msgid "   ✅ Bubble created: uv-{}"
+msgstr "✅ বুদ্বুদ তৈরি: uv- {}"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:66
+msgid "   ❌ Failed to create bubble for uv=={}: {}"
+msgstr "U UV == {}: {} এর জন্য বুদ্বুদ তৈরি করতে ব্যর্থ"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:70
+msgid "   🔎 Validating bubble: {}"
+msgstr "🔎 বৈধতা বুদবুদ: {}"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:73
+msgid "   ❌ No uv binary found in {}/bin"
+msgstr "❌ {}/বিনে কোনও ইউভি বাইনারি পাওয়া যায় না"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:76
+msgid "   ❌ Binary {} is not executable"
+msgstr "❌ বাইনারি{}নির্বাহযোগ্য নয়"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:80
+msgid "   ❌ No dist-info found in {}"
+msgstr "❌ {} এ কোনও জেলা-ইনফো পাওয়া যায় নি"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:82
+msgid "   ✅ Bubble validation passed"
+msgstr "✅ বুদ্বুদ বৈধতা পাস"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:86
+msgid "   🔍 Inspecting bubble structure: {}"
+msgstr "🔍 বুদ্বুদ কাঠামো পরিদর্শন: {}"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:88
+msgid "   ❌ Bubble doesn't exist: {}"
+msgstr "❌ বুদবুদ বিদ্যমান নেই: {}"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:92
+msgid "   ✅ Found uv module directory"
+msgstr "U ইউভি মডিউল ডিরেক্টরি পাওয়া গেছে"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:94
+msgid "   ℹ️  No uv module directory (likely binary-only package)"
+msgstr "ℹ কোনও ইউভি মডিউল ডিরেক্টরি (সম্ভবত বাইনারি-কেবল প্যাকেজ)"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:97
+msgid "   ✅ Found dist-info: {}"
+msgstr "Di জেলা-ইনফো পাওয়া গেছে: {}"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:99
+msgid "   ⚠️  No dist-info found"
+msgstr "⚠ কোনও জেলা-ইনফো পাওয়া যায় নি"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:103
+msgid "   ✅ Found bin directory with {} items"
+msgstr "✅ এর সাথে বিন ডিরেক্টরি পাওয়া গেছে{}আইটেম"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:106
+msgid "   ✅ Found uv binary: {}"
+msgstr "U ইউভি বাইনারি পাওয়া গেছে: {}"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:108
+msgid "   ✅ Binary is executable"
+msgstr "✅ বাইনারি কার্যকরযোগ্য"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:110
+msgid "   ⚠️  Binary is not executable"
+msgstr "⚠ বাইনারি কার্যকরযোগ্য নয়"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:112
+msgid "   ⚠️  No uv binary in bin/"
+msgstr "Bin বিন/ কোনও ইউভি বাইনারি/"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:114
+msgid "   ⚠️  No bin directory found"
+msgstr "⚠ কোনও বিন ডিরেক্টরি পাওয়া যায় নি"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:116
+msgid "   📁 Bubble contents ({} items):"
+msgstr "📁 বুদ্বুদ বিষয়বস্তু ({} আইটেম):"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:118
+msgid "      - {}{}"
+msgstr "- {} {}"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:122
+msgid "   🔧 Testing direct binary execution..."
+msgstr "🔧 সরাসরি বাইনারি এক্সিকিউশন পরীক্ষা করা ..."
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:125
+msgid "   ❌ No UV binary found in bubble"
+msgstr "❌ বুদ্বুদে কোনও ইউভি বাইনারি পাওয়া যায় না"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:128
+msgid "   🎯 Executing: {} --version"
+msgstr "🎯 কার্যকর করা: {} -সংস্করণ"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:131
+msgid "   ✅ Direct binary reported: {}"
+msgstr "✅ সরাসরি বাইনারি রিপোর্ট: {}"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:133
+msgid "   🎯 Direct binary test: PASSED"
+msgstr "🎯 সরাসরি বাইনারি পরীক্ষা: পাস"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:136
+msgid "   ❌ Version mismatch: expected {}, got {}"
+msgstr "❌ সংস্করণ অমিল: প্রত্যাশিত {}, পেয়েছে {}"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:139
+msgid "   ❌ Direct binary execution failed: {}"
+msgstr "❌ সরাসরি বাইনারি এক্সিকিউশন ব্যর্থ: {}"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:156
+msgid "   ✅ Main environment version: {}"
+msgstr "✅ প্রধান পরিবেশ সংস্করণ: {}"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:158
+msgid "   🎯 Main environment test: PASSED"
+msgstr "🎯 প্রধান পরিবেশ পরীক্ষা: পাস"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:160
+msgid "   ❌ Main environment test: FAILED"
+msgstr "❌ প্রধান পরিবেশ পরীক্ষা: ব্যর্থ"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:164
+msgid "   ❌ Main environment test failed: {}"
+msgstr "❌ প্রধান পরিবেশ পরীক্ষা ব্যর্থ: {}"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:168
+msgid "Testing Bubble (uv=={})"
+msgstr "টেস্টিং বুদ্বুদ (uv == {})"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:178
+msgid "   🎯 Overall result for uv=={}: PASSED"
+msgstr "U UV == {} এর সামগ্রিক ফলাফল: পাস"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:180
+msgid "   ❌ Overall result for uv=={}: FAILED"
+msgstr "U UV এর সামগ্রিক ফলাফল == {}: ব্যর্থ"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:182
+msgid "📊 Test Summary:"
+msgstr "📊 পরীক্ষার সংক্ষিপ্তসার:"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:185
+msgid "   uv=={}: {}"
+msgstr "uv == {}: {}"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:187
+msgid ""
+"\n"
+"🎉🎉🎉 ALL UV BINARY TESTS PASSED! 🎉🎉🎉"
+msgstr "🎉🎉🎉 সমস্ত ইউভি বাইনারি পরীক্ষা পাস!🎉🎉🎉"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:188
+msgid "🔥 OMNIPKG UV BINARY HANDLING IS FULLY FUNCTIONAL! 🔥"
+msgstr "🔥 ওমনিপকজি ইউভি বাইনারি হ্যান্ডলিং সম্পূর্ণ কার্যকরী!🔥"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:190
+msgid ""
+"\n"
+"💥 SOME TESTS FAILED - UV BINARY HANDLING NEEDS WORK 💥"
+msgstr ""
+"💥 কিছু পরীক্ষা ব্যর্থ হয়েছে - ইউভি বাইনারি হ্যান্ডলিংয়ের কাজের প্রয়োজন 💥"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:191
+msgid "🔧 Check the detailed output above for diagnostics"
+msgstr "Diagistics ডায়াগনস্টিকসের জন্য উপরের বিশদ আউটপুট পরীক্ষা করুন"
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:216
+msgid "⚠️  Cleanup failed: {}"
+msgstr "⚠ ক্লিনআপ ব্যর্থ: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2297
+msgid "  - 📁 {} ({} MB){}"
+msgstr "- 📁 {} ({} এমবি) {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2304
+msgid "  - Total Bubble Size: {} MB"
+msgstr "- মোট বুদ্বুদ আকার: {} এমবি"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:518
+msgid ""
+"⚠️  Warning: 'python-magic' not installed. Using basic binary detection."
+msgstr ""
+"⚠ সতর্কতা: 'পাইথন-ম্যাজিক' ইনস্টল করা হয়নি।বেসিক বাইনারি সনাক্তকরণ ব্যবহার "
+"করে।"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1057
+msgid "✅ Core dependencies loaded."
+msgstr "✅ কোর নির্ভরতা লোড হয়েছে।"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:127
+msgid "🌍 Language environment passed to subprocess: {}"
+msgstr "🌍 ভাষার পরিবেশ উপ -প্রসেসে চলে গেছে: {}"
+
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:28
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:24
+msgid ""
+"❌ Failed to import omnipkg modules. Is the project structure correct? Error:"
+" {}"
+msgstr ""
+"Omn ওমনিপকিজি মডিউলগুলি আমদানি করতে ব্যর্থ।প্রকল্পের কাঠামো কি সঠিক?ত্রুটি: "
+"{}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1990
+msgid "    -> Last version of '{}' removed. Deleting all traces."
+msgstr "-> '{}' এর শেষ সংস্করণ সরানো হয়েছে।সমস্ত চিহ্ন মুছে ফেলা।"
+
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:43
+msgid "STEP 1: Preparing a Clean Test Environment"
+msgstr "পদক্ষেপ 1: একটি পরিষ্কার পরীক্ষার পরিবেশ প্রস্তুত করা"
+
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:63
+msgid ""
+"   🗑️ Ensuring clean numpy and scipy installations for baseline test..."
+msgstr ""
+"Base বেসলাইন পরীক্ষার জন্য পরিষ্কার নম্বি এবং স্কিপি ইনস্টলেশনগুলি নিশ্চিত "
+"করা ..."
+
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:225
+msgid ""
+"\n"
+"\n"
+"🚨 OMNIPKG SURVIVED NUCLEAR TESTING! 🎇"
+msgstr "🚨 ওমনিপকিজি পারমাণবিক পরীক্ষায় বেঁচে গেছে!🎇"
+
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:230
+msgid "STEP 3: Cleaning Up Test Environment"
+msgstr "পদক্ষেপ 3: পরীক্ষার পরিবেশ পরিষ্কার করা"
+
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:256
+msgid "STEP 2: Creating Test Bubbles with omnipkg"
+msgstr "পদক্ষেপ 2: ওমনিপকিজি দিয়ে পরীক্ষার বুদবুদ তৈরি করা"
+
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:266
+msgid "STEP 3: Executing the Nuclear Test"
+msgstr "পদক্ষেপ 3: পারমাণবিক পরীক্ষা কার্যকর করা"
+
+#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:28
+msgid ""
+"❌ Critical Error: Could not import omnipkg modules. Is the project structure"
+" correct? Error: {}"
+msgstr ""
+"❌ সমালোচনামূলক ত্রুটি: ওমনিপকিজি মডিউলগুলি আমদানি করতে পারেনি।প্রকল্পের "
+"কাঠামো কি সঠিক?ত্রুটি: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:278
+msgid ""
+"🚀 The intelligent Python package manager that eliminates dependency hell"
+msgstr "🚀 বুদ্ধিমান পাইথন প্যাকেজ ম্যানেজার যা নির্ভরতা নরককে সরিয়ে দেয়"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:283
+msgid "%(prog)s {}"
+msgstr "%(প্রগ) এস {}"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:361
+msgid ""
+"\n"
+"👋 Welcome back to omnipkg! Run a command or see --help for details."
+msgstr ""
+"Omn ওমনিপকিজিতে ফিরে স্বাগতম!একটি কমান্ড চালান বা দেখুন -বিশদগুলির জন্য "
+"-হেল্প।"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:214
+msgid "🌟 Key Features:"
+msgstr "🌟 মূল বৈশিষ্ট্য:"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:215
+msgid "  • Runtime Python interpreter switching (no shell restart needed!)"
+msgstr ""
+"• রানটাইম পাইথন ইন্টারপ্রেটার স্যুইচিং (কোনও শেল পুনরায় আরম্ভের প্রয়োজন "
+"নেই!)"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:216
+msgid "  • Automatic version bubbling to prevent conflicts"
+msgstr "• দ্বন্দ্ব রোধে স্বয়ংক্রিয় সংস্করণ বুদবুদ"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:217
+msgid "  • Downgrade protection with smart conflict resolution"
+msgstr "• স্মার্ট সংঘাতের সমাধানের সাথে ডাউনগ্রেড সুরক্ষা"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:218
+msgid "  • Multi-version package coexistence"
+msgstr "• মাল্টি সংস্করণ প্যাকেজ সহাবস্থান"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:219
+msgid "  • Intelligent dependency management with Redis-backed knowledge base"
+msgstr "Red রেডিস-ব্যাকড নলেজ বেস সহ বুদ্ধিমান নির্ভরতা পরিচালনা"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:221
+msgid "📖 Essential Commands:"
+msgstr "📖 প্রয়োজনীয় আদেশগুলি:"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:222
+msgid ""
+"  omnipkg install <package>   Install with automatic conflict resolution"
+msgstr ""
+"Omnipkg ইনস্টল <প্যাকেজ> স্বয়ংক্রিয় সংঘাতের সমাধানের সাথে ইনস্টল করুন"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:223
+msgid ""
+"  omnipkg install-with-deps <package>  Install with specific dependency "
+"versions"
+msgstr ""
+"ওমনিপকেজি ইনস্টল-ডিপস <প্যাকেজ> নির্দিষ্ট নির্ভরতা সংস্করণ সহ ইনস্টল করুন"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:224
+msgid ""
+"  omnipkg list [filter]       View all packages and their bubble status  "
+msgstr ""
+"ওমনিপকেজি তালিকা [ফিল্টার] সমস্ত প্যাকেজ এবং তাদের বুদ্বুদ স্থিতি দেখুন"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:225
+msgid "  omnipkg status              Check multi-version environment health"
+msgstr "ওমনিপকেজি স্ট্যাটাস চেক মাল্টি-সংস্করণ পরিবেশ স্বাস্থ্য"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:226
+msgid ""
+"  omnipkg info <package>      Interactive package dashboard with version "
+"explorer"
+msgstr ""
+"ওমনিপকেজি তথ্য <ackart> সংস্করণ এক্সপ্লোরার সহ ইন্টারেক্টিভ প্যাকেজ "
+"ড্যাশবোর্ড"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:227
+msgid ""
+"  omnipkg demo                Run interactive demos for version switching"
+msgstr "সংস্করণ স্যুইচিংয়ের জন্য ওমনিপকেজি ডেমো রান ইন্টারেক্টিভ ডেমো চালান"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:228
+msgid ""
+"  omnipkg stress-test         See the magic! Heavy-duty package installation"
+" demo"
+msgstr ""
+"ওমনিপকেজি স্ট্রেস-টেস্ট ম্যাজিক দেখুন!ভারী শুল্ক প্যাকেজ ইনস্টলেশন ডেমো"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:229
+msgid ""
+"  omnipkg config set language <code>  Set display language (e.g., en, es)"
+msgstr ""
+"ওমনিপকেজি কনফিগারেশন ভাষা <কোড> সেট ডিসপ্লে ভাষা সেট করুন (উদাঃ, এন, এস)"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:231
+msgid "🎯 Advanced Features:"
+msgstr "🎯 উন্নত বৈশিষ্ট্য:"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:232
+msgid "  omnipkg revert             Roll back to last known good state"
+msgstr "ওমনিপকজি রোলটি রোলকে সর্বশেষ পরিচিত ভাল অবস্থায় ফিরে আসে"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:233
+msgid "  omnipkg uninstall <pkg>    Smart removal with dependency checking"
+msgstr "ওমনিপকজি আনইনস্টল <পিকেজি> নির্ভরতা চেকিংয়ের সাথে স্মার্ট অপসারণ"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:234
+msgid "  omnipkg rebuild-kb         Refresh the intelligence knowledge base"
+msgstr "ওমনিপকেজি পুনর্নির্মাণ-কেবি গোয়েন্দা জ্ঞানের ভিত্তি রিফ্রেশ"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:236
+msgid "💡 Installation Examples:"
+msgstr "💡 ইনস্টলেশন উদাহরণ:"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:237
+msgid "  omnipkg install requests numpy>=1.20        # Multiple packages"
+msgstr "ওমনিপকিজি ইনস্টল অনুরোধগুলি numpy> = 1.20 # একাধিক প্যাকেজ"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:238
+msgid ""
+"  omnipkg install uv==0.7.13 uv==0.7.14      # Multiple versions (auto-"
+"bubbled!)"
+msgstr ""
+"ওমনিপকিজি ইনস্টল ইউভি == 0.7.13 ইউভি == 0.7.14 # একাধিক সংস্করণ (অটো বুবলড!)"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:239
+msgid ""
+"  omnipkg install-with-deps tensorflow==2.13.0 numpy==1.24.3 typing-"
+"extensions==4.5.0"
+msgstr ""
+"ওমনিপকজি ইনস্টল-ডিপস-টেনসরফ্লো-এর সাথে ইনস্টল করুন == 2.13.0 নুমপি == 1.24.3"
+" টাইপিং-এক্সটেনশনস == 4.5.0"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:240
+msgid "  omnipkg install -r requirements.txt        # From requirements file"
+msgstr "Omnipkg ইনস্টল -আর প্রয়োজনীয়তা.টেক্সট # প্রয়োজনীয়তা ফাইল থেকে"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:241
+msgid "  omnipkg install 'django>=3.0,<4.0'         # Complex version specs"
+msgstr "ওমনিপকেজি ইনস্টল 'জ্যাঙ্গো> = 3.0, <4.0' # কমপ্লেক্স সংস্করণ স্পেস"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:243
+msgid "🔍 Understanding Your Environment:"
+msgstr "Your আপনার পরিবেশ বোঝা:"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:244
+msgid "  omnipkg list                # Shows ✅ active and 🫧 bubbled versions"
+msgstr "ওমনিপকেজি তালিকা # শো ✅ সক্রিয় এবং 🫧 বুদবুদ সংস্করণ"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:245
+msgid "  omnipkg info <package>      # Deep dive into any package's status"
+msgstr "ওমনিপকেজি তথ্য <ackrach> # যে কোনও প্যাকেজের স্থিতিতে গভীর ডুব দিন"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:246
+msgid "  omnipkg status              # Overall environment health"
+msgstr "ওমনিপকিজি স্ট্যাটাস # সামগ্রিক পরিবেশ স্বাস্থ্য"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:248
+msgid "🛠️ Redis Knowledge Base (Advanced):"
+msgstr "🛠 রেডিস নলেজ বেস (উন্নত):"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:249
+msgid "  omnipkg stores rich metadata in Redis. Explore with:"
+msgstr "ওমনিপকেজি রেডিসে সমৃদ্ধ মেটাডেটা সঞ্চয় করে।সাথে অন্বেষণ:"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:250
+msgid ""
+"  redis-cli HGETALL omnipkg:pkg:<package>                    # Package info"
+msgstr "রেডিস-ক্লি হেজটাল ওমনিপকিজি: পিকেজি: <প্যাকেজ> # প্যাকেজ তথ্য"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:251
+msgid ""
+"  redis-cli SMEMBERS \"omnipkg:pkg:<package>:installed_versions\"  # All "
+"versions"
+msgstr ""
+"রেডিস-ক্লাই স্মেমবার্স \"ওমনিপকিজি: পিকেজি: <প্যাকেজ>: ইনস্টলড_ভারশনস\" # "
+"সমস্ত সংস্করণ"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:252
+msgid ""
+"  redis-cli HGETALL omnipkg:pkg:<package>:<version>          # Version "
+"details"
+msgstr ""
+"রেডিস-ক্লি হেজটাল ওমনিপকিজি: পিকেজি: <প্যাকেজ>: <সংস্করণ> # সংস্করণ বিশদ"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:254
+msgid "🔧 Python Version Management:"
+msgstr "🔧 পাইথন সংস্করণ পরিচালনা:"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:255
+msgid ""
+"  omnipkg automatically manages Python interpreters! When you run commands"
+msgstr ""
+"ওমনিপকেজি স্বয়ংক্রিয়ভাবে পাইথন দোভাষীদের পরিচালনা করে!আপনি যখন কমান্ড "
+"চালান"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:256
+msgid "  that need a different Python version, omnipkg will:"
+msgstr "এর জন্য আলাদা পাইথন সংস্করণ দরকার, ওমনিপকিজ উইল:"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:257
+msgid "  • Download and install the required Python version seamlessly"
+msgstr ""
+"Poy প্রয়োজনীয় পাইথন সংস্করণটি নির্বিঘ্নে ডাউনলোড করুন এবং ইনস্টল করুন"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:258
+msgid "  • Switch interpreters mid-execution without shell restart"
+msgstr "Shel শেল পুনরায় চালু না করে মধ্য-সম্পাদনকারী দোভাষীদের স্যুইচ করুন"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:259
+msgid "  • Maintain package isolation across Python versions"
+msgstr "Poy পাইথন সংস্করণগুলিতে প্যাকেজ বিচ্ছিন্নতা বজায় রাখুন"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:260
+msgid "  • Keep your environment clean and organized"
+msgstr "Your আপনার পরিবেশ পরিষ্কার এবং সংগঠিত রাখুন"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:262
+msgid "💡 Pro Tips:"
+msgstr "💡 প্রো টিপস:"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:263
+msgid "  • Run 'omnipkg demo' to try version-switching demos"
+msgstr "Version সংস্করণ-স্যুইচিং ডেমো চেষ্টা করতে 'ওমনিপকেজি ডেমো' চালান"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:264
+msgid "  • Run 'omnipkg stress-test' to see automated interpreter switching"
+msgstr ""
+"Out স্বয়ংক্রিয় দোভাষী স্যুইচিং দেখতে 'ওমনিপকিজি স্ট্রেস-টেস্ট' চালান"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:265
+msgid "  • Use 'omnipkg info <package>' for interactive version selection"
+msgstr ""
+"ইন্টারেক্টিভ সংস্করণ নির্বাচনের জন্য 'ওমনিপকেজি তথ্য <ackary>' ব্যবহার করুন"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:266
+msgid "  • Use 'omnipkg config set language <code>' to change language"
+msgstr ""
+"Langague ভাষা পরিবর্তন করতে 'ওমনিপকেজি কনফিগার সেট ভাষা <কোড>' ব্যবহার করুন"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:267
+msgid "  • The system learns from conflicts and prevents future issues"
+msgstr "• সিস্টেম দ্বন্দ্ব থেকে শিখেছে এবং ভবিষ্যতের সমস্যাগুলি প্রতিরোধ করে"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:268
+msgid "  • All changes are logged and reversible with 'omnipkg revert'"
+msgstr "• সমস্ত পরিবর্তন লগড এবং 'ওমনিপকিজি রিভিট' দিয়ে বিপরীতমুখী হয়"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:270
+msgid "Version: {}"
+msgstr "সংস্করণ: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:181
+msgid ""
+"Auto-detecting paths for your environment. Press Enter to accept defaults.\n"
+msgstr "আপনার পরিবেশের জন্য অটো-ডিটেক্টিং পাথ।ডিফল্ট গ্রহণ করতে ENTER টিপুন।"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:182
+msgid "📦 Choose your default installation strategy:"
+msgstr "Your আপনার ডিফল্ট ইনস্টলেশন কৌশলটি চয়ন করুন:"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:319
+msgid "Clean up old, bubbled package versions"
+msgstr "পুরানো, বুদবুদ প্যাকেজ সংস্করণ পরিষ্কার করুন"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:319
+msgid ""
+"Removes bubbled package versions to save space, keeping the active version "
+"safe."
+msgstr ""
+"সক্রিয় সংস্করণটি সুরক্ষিত রেখে স্থান বাঁচাতে বুদবুদ প্যাকেজ সংস্করণগুলি "
+"সরিয়ে দেয়।"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:320
+msgid "The package whose bubbles you want to prune."
+msgstr "যে প্যাকেজটি আপনি ছাঁটাই করতে চান তা প্যাকেজ।"
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:321
+msgid "Keep the N most recent bubbled versions and prune the rest."
+msgstr "সর্বাধিক সাম্প্রতিক বুদবুদ সংস্করণগুলি রাখুন এবং বাকী ছাঁটাই করুন।"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1179
+msgid "✅ No bubbles found for '{}'. Nothing to prune."
+msgstr "'' {} 'এর জন্য কোনও বুদবুদ পাওয়া যায় না। ছাঁটাই করার মতো কিছুই নেই।"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1185
+msgid "❌ 'keep-latest' must be a non-negative number."
+msgstr "Keep 'কিপ-লেটেস্ট' অবশ্যই একটি নেতিবাচক সংখ্যা হতে হবে।"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1189
+msgid "🔎 Found {} bubbles. Keeping the latest {}, pruning {} older versions."
+msgstr ""
+"Found পাওয়া গেছে {} বুদবুদ। সর্বশেষ {}, ছাঁটাই {} পুরানো সংস্করণগুলি রাখা।"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1192
+msgid "🔎 Found {} bubbles to prune for '{}'."
+msgstr "'{}' এর জন্য ছাঁটাই করতে {} বুদবুদ পাওয়া গেছে।"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1194
+msgid "✅ No bubbles match the pruning criteria."
+msgstr "✅ কোনও বুদবুদ ছাঁটাইয়ের মানদণ্ডের সাথে মেলে না।"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1196
+msgid ""
+"\n"
+"The following bubbled versions will be permanently deleted:"
+msgstr "নিম্নলিখিত বুদবুদ সংস্করণগুলি স্থায়ীভাবে মুছে ফেলা হবে:"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1198
+msgid "  - v{} (bubble)"
+msgstr "- ভি {} (বুদ্বুদ)"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1200
+msgid "🛡️  The active version (v{}) will NOT be affected."
+msgstr "🛡 সক্রিয় সংস্করণ (v {}) প্রভাবিত হবে না।"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1204
+msgid "🚫 Prune cancelled."
+msgstr "🚫 ছাঁটাই বাতিল।"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1210
+msgid ""
+"\n"
+"🎉 Pruning complete for '{}'."
+msgstr "'{}' এর জন্য সম্পূর্ণ ছাঁটাই।"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1584
+msgid "❌ Could not resolve any packages to install. Aborting."
+msgstr "Any ইনস্টল করার জন্য কোনও প্যাকেজ সমাধান করতে পারেনি। গর্ভপাত।"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1608
+msgid "❌ Pip installation failed for {}. Continuing..."
+msgstr "❌ পিআইপি ইনস্টলেশন {} এর জন্য ব্যর্থ} অবিরত ..."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1611
+msgid "✅ Installation completed for: {}"
+msgstr "✅ ইনস্টলেশন সম্পূর্ণ: {}"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1683
+msgid ""
+"\n"
+"🧠 Updating knowledge base for this package..."
+msgstr "This এই প্যাকেজের জন্য জ্ঞান বেস আপডেট করা ..."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1688
+msgid ""
+"\n"
+"✅ All requirements were already satisfied."
+msgstr "✅ সমস্ত প্রয়োজনীয়তা ইতিমধ্যে সন্তুষ্ট ছিল।"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1691
+msgid ""
+"\n"
+"🧹 Performing final cleanup of redundant bubbles..."
+msgstr "Rud অপ্রয়োজনীয় বুদবুদগুলির চূড়ান্ত ক্লিনআপ সম্পাদন করা ..."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1696
+msgid ""
+"    -> Found redundant bubble for active package '{0}=={1}'. Removing..."
+msgstr ""
+"-> সক্রিয় প্যাকেজ '{0}' == '{1}' এর জন্য অপ্রয়োজনীয় বুদ্বুদ পাওয়া গেছে। "
+"অপসারণ ..."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1916
+msgid "🤷 No installations match the specified criteria."
+msgstr "🤷 কোনও ইনস্টলেশন নির্দিষ্ট মানদণ্ডের সাথে মেলে না।"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2101
+msgid "🔎 Resolving package versions via PyPI API..."
+msgstr "P পিওয়াইপিআই এপিআইয়ের মাধ্যমে প্যাকেজ সংস্করণগুলি সমাধান করা ..."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2108
+msgid "    -> Finding latest version for '{}'..."
+msgstr "-> '{}' এর জন্য সর্বশেষ সংস্করণ সন্ধান করা ..."
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2112
+msgid "    ✅ Resolved '{}' to '{}'"
+msgstr "✅ সমাধান '{}' থেকে '{}'"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2115
+msgid "    ⚠️  Could not resolve a version for '{}' via PyPI. Skipping."
+msgstr ""
+"P পিওয়াইপিআইয়ের মাধ্যমে '{}' এর জন্য কোনও সংস্করণ সমাধান করতে পারেনি। "
+"স্কিপিং"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2209
+msgid "    ⚠️  API Error while fetching version for '{}': {}"
+msgstr "'{}': {} এর জন্য সংস্করণ আনার সময় এপিআই ত্রুটি"
+
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:152
+msgid "rich.{}test_harness_cloaked"
+msgstr "ধনী{}টেস্ট_হরনেস_ক্লোকড"
+
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:157
+msgid "{}.{}test_harness_cloaked"
+msgstr "{}।{}টেস্ট_হরনেস_ক্লোকড"
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1080
+msgid "   {}"
+msgstr "   {}"
+
+#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:93
+msgid "--- Script STDERR (relevant) ---"
+msgstr "--- স্ক্রিপ্ট স্ট্যান্ডার (প্রাসঙ্গিক) ---"
+
+#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:98
+msgid "⚠️ Some errors occurred (see above)"
+msgstr "⚠ কিছু ত্রুটি ঘটেছে (উপরে দেখুন)"
+
+#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:109
+msgid "🚀 TensorFlow Version Switching Test"
+msgstr "🚀 টেনসরফ্লো সংস্করণ স্যুইচিং পরীক্ষা"
+
+#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:111
+msgid "Using omnipkg versions directory: {}"
+msgstr "ওমনিপকিজি সংস্করণ ডিরেক্টরি ব্যবহার করে: {}"
+
+#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:113
+msgid "🧹 Clearing existing TensorFlow installations..."
+msgstr "Tens বিদ্যমান টেনসরফ্লো ইনস্টলেশন সাফ করা ..."
+
+#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:120
+msgid ""
+"(Should have 4.14.1 and keras==2.13.1 active in main env, 4.5.0 in bubble)"
+msgstr ""
+"(4.14.1 এবং কেরাস == 2.13.1 মূল এনভিতে সক্রিয় হওয়া উচিত, বুদ্বুদে 4.5.0)"
+
+#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:126
+msgid "Bubble exists: {}"
+msgstr "বুদ্বুদ বিদ্যমান: {}"
+
+#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:129
+msgid ""
+"\n"
+"🚀 Final cleanup and verification"
+msgstr "🚀 চূড়ান্ত ক্লিনআপ এবং যাচাইকরণ"
+
+#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:130
+msgid "🧹 Removing TensorFlow packages (keeping protected dependencies)..."
+msgstr "Tens টেনসরফ্লো প্যাকেজগুলি অপসারণ করা (সুরক্ষিত নির্ভরতা রাখা) ..."
+
+#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:137
+msgid ""
+"\n"
+"🔬 Final verification - stable environment state"
+msgstr "🔬 চূড়ান্ত যাচাইকরণ - স্থিতিশীল পরিবেশের অবস্থা"
+
+#: /home/minds3t/omnipkg/omnipkg/CondaGuard.py:35
+msgid "🛡️ Restored corrupted metadata for: {}"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/CondaGuard.py:51
+msgid "Failed to back up '{}': {}"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/CondaGuard.py:65
+msgid "Detected corruption (file missing or empty): '{}'"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/CondaGuard.py:72
+msgid "Detected corruption (invalid JSON): '{}'"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/CondaGuard.py:80
+msgid "Failed to restore '{}': {}"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/CondaGuard.py:82
+msgid "Cannot restore '{}', backup file is missing!"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/CondaGuard.py:91
+msgid "Cleaned up backup: '{}'"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/CondaGuard.py:93
+msgid "Failed to clean up backup '{}': {}"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/CondaGuard.py:112
+msgid "--- Running Standalone Conda Corruption Check & Fix ---"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/CondaGuard.py:118
+msgid "🔧 Fix applied. Restored files: {}"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/CondaGuard.py:121
+msgid "✅ No corruption found in protected files."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/CondaGuard.py:129
+msgid "-> Running a risky function that might corrupt Conda..."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/CondaGuard.py:132
+msgid "   ...simulating corruption of '{}'"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/CondaGuard.py:135
+msgid "-> Risky function finished."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/CondaGuard.py:136
+msgid "🧪 Testing decorator..."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/CondaGuard.py:139
+msgid "🧪 Testing context manager..."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/CondaGuard.py:145
+msgid "   ...simulating deletion of '{}'"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/CondaGuard.py:147
+msgid "-> Leaving safe context..."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/CondaGuard.py:148
+msgid ""
+"\n"
+"✅ Demo finished."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:384
+msgid "✅ Install strategy permanently set to: {}"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/common_utils.py:93
+msgid "🛡️ ConfigGuard: Activated temporary test configuration."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/common_utils.py:101
+msgid "🛡️ ConfigGuard: Restored original user configuration."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/loader.py:119
+msgid " ❌ Activation failed: {}"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/loader.py:186
+msgid " ⚠️ Warning: Could not remove existing cloak {}: {}"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/loader.py:210
+msgid " ⚠️ Warning: Could not remove conflicting path {}: {}"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/loader.py:216
+msgid " ❌ Failed to restore {} from {}: {}"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/loader.py:223
+msgid " 🧹 Cleaned up orphaned cloak {}"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/loader.py:227
+msgid " ❌ CRITICAL: Cloaked path {} is missing! Package {} may be lost."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/loader.py:232
+msgid " ℹ️ Package {} still appears to be installed in system."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/loader.py:234
+msgid " ❌ Package {} is no longer available in system. Consider reinstalling."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/loader.py:235
+msgid "   Suggestion: pip install --force-reinstall --no-deps {}"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/loader.py:238
+msgid " ⚠️ Cloak restore summary: {} successful, {} failed"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/loader.py:242
+msgid " 🚨 Emergency cloak restoration in progress..."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/loader.py:250
+msgid "🧹 Scanning for abandoned omnipkg cloaks..."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/loader.py:254
+msgid " ✅ No abandoned cloaks found."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/loader.py:256
+msgid " 🔍 Found {} potential abandoned cloak(s):"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/loader.py:258
+msgid "   - {}"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/loader.py:259
+msgid ""
+" ℹ️ To remove these manually: rm -rf /path/to/site-"
+"packages/*_omnipkg_cloaked*"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/loader.py:260
+msgid ""
+" ⚠️ WARNING: Only remove if you're sure no omnipkg operations are running!"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:316
+msgid ""
+"The value to set for the key (e.g., en, es, de, ja, zh_CN, stable-main, "
+"latest-active, fast-compat)"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:381
+msgid "❌ Error: Invalid install strategy. Must be one of: {}"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1661
+msgid "    ✅ New package installed: {} v{} (active in main environment)"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1664
+msgid ""
+"\n"
+"🛡️ LATEST-ACTIVE STRATEGY: Preserving replaced versions in bubbles"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1667
+msgid "    -> Bubbling replaced {} version: {} v{} (keeping v{} active)"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1676
+msgid "    ✅ Successfully bubbled {} v{}"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1678
+msgid "    ❌ Failed to bubble {} v{}"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1680
+msgid ""
+"\n"
+"✅ Latest-active complete! Requested versions active, previous versions preserved."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1682
+msgid "✅ No version changes detected."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1969
+msgid "🗑️ Uninstalling '{}=={}' from main environment via pip..."
+msgstr ""

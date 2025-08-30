@@ -1,3 +1,6 @@
+# In /home/minds3t/omnipkg/omnipkg/__init__.py
+
+from .i18n import _
 """
 omnipkg: Universal package manager
 
@@ -29,7 +32,16 @@ try:
 except ImportError:  # Python < 3.8 fallback
     from importlib_metadata import version, metadata, PackageNotFoundError
 
-import tomli
+# --- THIS IS THE FIX ---
+# This block makes the code compatible with both modern and older Python.
+# On Python >= 3.11, it will use the built-in `tomllib`.
+# On Python < 3.11, it will use the `tomli` package installed from your pyproject.toml.
+try:
+    import tomllib
+except ModuleNotFoundError:
+    # The `as tomllib` makes the rest of the code work seamlessly.
+    import tomli as tomllib
+# --- END OF FIX ---
 
 __version__ = "0.0.0"   # fallback default
 __dependencies__ = {}
@@ -46,7 +58,8 @@ except PackageNotFoundError:
     pyproject_path = Path(__file__).parent.parent / "pyproject.toml"
     if pyproject_path.exists():
         with pyproject_path.open("rb") as f:
-            pyproject_data = tomli.load(f)
+            # Use the aliased `tomllib` which works on all versions
+            pyproject_data = tomllib.load(f)
         __version__ = pyproject_data["project"]["version"]
         __dependencies__ = {
             dep.split()[0]: dep for dep in pyproject_data["project"].get("dependencies", [])
@@ -62,8 +75,3 @@ __all__ = [
     "stress_test",
     "common_utils",
 ]
-
-# Optional: quick import shortcuts
-from .core import *
-from .cli import *
-from .loader import *

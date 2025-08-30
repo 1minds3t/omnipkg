@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.1.0
+2025-8-21
+Localization support for 24 additional languages.
+
 ## v1.0.13 - 2025-08-17
 ### Features
 - **Pip in Jail Easter Egg**: Added fun status messages like “Pip is in jail, crying silently. 😭🔒” to `omnipkg status` for a delightful user experience.
