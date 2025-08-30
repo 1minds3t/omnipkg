@@ -1,0 +1,246 @@
+name: "🔍 Package Discovery Demo - Omnipkg Intelligence"
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  package-discovery-demo:
+    runs-on: ubuntu-latest
+    services:
+      redis:
+        image: redis:7
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install omnipkg
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e . redis
+
+      - name: Configure omnipkg for CI environment
+        run: |
+          python - << 'EOF'
+          import sys
+          import site
+          import json
+          from pathlib import Path
+          import os
+          import sysconfig
+
+          try:
+              site_packages_path = site.getsitepackages()[0]
+          except (IndexError, AttributeError):
+              site_packages_path = sysconfig.get_paths()['purelib']
+
+          project_root = Path(os.environ['GITHUB_WORKSPACE'])
+          
+          builder_script = project_root / 'omnipkg' / 'package_meta_builder.py'
+          if not builder_script.exists():
+              print(f"Error: {builder_script} does not exist")
+              sys.exit(1)
+
+          config_data = {
+              'site_packages_path': site_packages_path,
+              'multiversion_base': str(Path(site_packages_path) / '.omnipkg_versions'),
+              'python_executable': sys.executable,
+              'builder_script_path': str(builder_script),
+              'redis_host': 'localhost',
+              'redis_port': 6379,
+              'redis_key_prefix': 'omnipkg:pkg:',
+              'paths_to_index': [str(Path(sys.executable).parent), '/usr/local/bin', '/usr/bin', '/bin'],
+              'auto_cleanup': True,
+              'cleanup_threshold_days': 30
+          }
+
+          config_dir = Path.home() / '.config' / 'omnipkg'
+          config_dir.mkdir(parents=True, exist_ok=True)
+          config_path = config_dir / 'config.json'
+          
+          with open(config_path, 'w') as f:
+              json.dump(config_data, f, indent=2)
+          print(f'✅ Omnipkg config created at {config_path}')
+          EOF
+
+      - name: "🎯 Demo: Install TensorBoard with omnipkg"
+        run: |
+          echo "============================================================"
+          echo "🚀 STEP 1: Installing TensorBoard using omnipkg"
+          echo "============================================================"
+          
+          omnipkg install tensorboard
+          
+          echo ""
+          echo "✅ TensorBoard installation complete!"
+
+      - name: "📊 Demo: Get comprehensive package information"
+        run: |
+          echo "============================================================"
+          echo "🔍 STEP 2: Discovering package intelligence with omnipkg info"
+          echo "============================================================"
+          
+          # Run omnipkg info and capture output
+          echo "📋 Running: omnipkg info tensorboard"
+          echo ""
+          
+          # Use expect to automatically select option 1 for detailed info
+          sudo apt-get update && sudo apt-get install -y expect
+          
+          expect << 'EOF'
+          spawn omnipkg info tensorboard
+          expect "Enter number*" {
+            send "1\r"
+          }
+          expect eof
+          EOF
+
+      - name: "🗄️ Demo: Direct Redis data access"
+        run: |
+          echo "============================================================"
+          echo "💾 STEP 3: Raw package metadata from Redis"
+          echo "============================================================"
+          
+          echo "🔑 Checking Redis for tensorboard package data..."
+          echo ""
+          
+          # Show Redis key structure
+          echo "📋 Available tensorboard keys in Redis:"
+          redis-cli KEYS "omnipkg:pkg:tensorboard:*"
+          echo ""
+          
+          # Get the version and show detailed data
+          VERSION=$(redis-cli HGET omnipkg:pkg:tensorboard:2.20.0 Version 2>/dev/null || echo "2.20.0")
+          echo "🏷️ Found version: $VERSION"
+          echo ""
+          
+          echo "📦 Complete metadata for tensorboard v$VERSION:"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          redis-cli HGETALL omnipkg:pkg:tensorboard:$VERSION
+
+      - name: "🛡️ Demo: Security & Health Analysis"
+        run: |
+          echo "============================================================"
+          echo "🔒 STEP 4: Package Security & Health Intelligence"
+          echo "============================================================"
+          
+          VERSION="2.20.0"
+          
+          echo "🔍 Security Analysis Results:"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          
+          # Extract security information
+          SECURITY_ISSUES=$(redis-cli HGET omnipkg:pkg:tensorboard:$VERSION security.issues_found)
+          AUDIT_STATUS=$(redis-cli HGET omnipkg:pkg:tensorboard:$VERSION security.audit_status)
+          IMPORTABLE=$(redis-cli HGET omnipkg:pkg:tensorboard:$VERSION health.import_check.importable)
+          IMPORT_VERSION=$(redis-cli HGET omnipkg:pkg:tensorboard:$VERSION health.import_check.version)
+          
+          echo "🛡️ Security Issues Found: $SECURITY_ISSUES"
+          echo "✅ Security Audit Status: $AUDIT_STATUS"
+          echo "📦 Package Importable: $IMPORTABLE"
+          echo "🏷️ Import Check Version: $IMPORT_VERSION"
+          echo ""
+          
+          # Show binary analysis if available
+          echo "⚙️ Binary Analysis Results:"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          
+          BINARY_EXISTS=$(redis-cli HGET omnipkg:pkg:tensorboard:$VERSION health.binary_checks.tensorboard.exists 2>/dev/null || echo "N/A")
+          BINARY_SIZE=$(redis-cli HGET omnipkg:pkg:tensorboard:$VERSION health.binary_checks.tensorboard.size 2>/dev/null || echo "N/A")
+          VALID_SHEBANG=$(redis-cli HGET omnipkg:pkg:tensorboard:$VERSION health.binary_checks.tensorboard.valid_shebang 2>/dev/null || echo "N/A")
+          
+          echo "📁 Binary Exists: $BINARY_EXISTS"
+          echo "📏 Binary Size: $BINARY_SIZE bytes"
+          echo "📝 Valid Shebang: $VALID_SHEBANG"
+
+      - name: "🎨 Demo: Dependency Analysis"
+        run: |
+          echo "============================================================"
+          echo "🔗 STEP 5: Advanced Dependency Intelligence"
+          echo "============================================================"
+          
+          VERSION="2.20.0"
+          
+          echo "📋 Analyzing tensorboard dependencies..."
+          echo ""
+          
+          # Get and format dependencies
+          DEPENDENCIES=$(redis-cli HGET omnipkg:pkg:tensorboard:$VERSION dependencies)
+          echo "🔗 Runtime Dependencies:"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          
+          # Parse and display dependencies in a readable format
+          echo "$DEPENDENCIES" | sed 's/\[//g' | sed 's/\]//g' | sed 's/", "/\n/g' | sed 's/"//g' | while read -r dep; do
+            if [ ! -z "$dep" ]; then
+              echo "  📦 $dep"
+            fi
+          done
+          
+          echo ""
+          
+          # Show Python requirements
+          PYTHON_REQ=$(redis-cli HGET omnipkg:pkg:tensorboard:$VERSION Requires-Python)
+          echo "🐍 Python Version Requirement: $PYTHON_REQ"
+          
+          # Show additional package info
+          KEYWORDS=$(redis-cli HGET omnipkg:pkg:tensorboard:$VERSION Keywords)
+          echo "🏷️ Package Keywords: $KEYWORDS"
+
+      - name: "📈 Summary: Package Intelligence Report"
+        run: |
+          echo "============================================================"
+          echo "🎉 OMNIPKG PACKAGE DISCOVERY DEMO COMPLETE"
+          echo "============================================================"
+          echo ""
+          echo "✨ What we discovered about tensorboard:"
+          echo ""
+          echo "🔍 PACKAGE OVERVIEW:"
+          echo "  • Name: $(redis-cli HGET omnipkg:pkg:tensorboard:2.20.0 Name)"
+          echo "  • Version: $(redis-cli HGET omnipkg:pkg:tensorboard:2.20.0 Version)"
+          echo "  • Author: $(redis-cli HGET omnipkg:pkg:tensorboard:2.20.0 Author)"
+          echo "  • License: $(redis-cli HGET omnipkg:pkg:tensorboard:2.20.0 License)"
+          echo ""
+          echo "🛡️ SECURITY & HEALTH:"
+          echo "  • Security Issues: $(redis-cli HGET omnipkg:pkg:tensorboard:2.20.0 security.issues_found) found"
+          echo "  • Import Status: $(redis-cli HGET omnipkg:pkg:tensorboard:2.20.0 health.import_check.importable)"
+          echo "  • Audit Status: $(redis-cli HGET omnipkg:pkg:tensorboard:2.20.0 security.audit_status)"
+          echo ""
+          echo "💾 DATA PERSISTENCE:"
+          echo "  • All metadata stored in Redis"
+          echo "  • Queryable via redis-cli commands"
+          echo "  • Accessible through omnipkg API"
+          echo ""
+          echo "🚀 KEY FEATURES DEMONSTRATED:"
+          echo "  ✅ Smart package installation"
+          echo "  ✅ Comprehensive metadata analysis"
+          echo "  ✅ Security vulnerability scanning"
+          echo "  ✅ Dependency tree analysis"
+          echo "  ✅ Binary health checks"
+          echo "  ✅ Redis-backed intelligence storage"
+          echo ""
+          echo "💡 Users can now discover everything about their packages!"
+
+      - name: Archive Demo Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: omnipkg-package-discovery-demo
+          path: |
+            /tmp/omnipkg-artifacts/
+          retention-days: 7
