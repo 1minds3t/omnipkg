@@ -114,7 +114,7 @@ print(numpy.__version__)  # Outputs: Original main env version (e.g., 1.26.4)
 ```
 ---
 
-### 2. 🌍 Global Intelligence & AI-Driven Localization [![🌍 Omnipkg Multi-Language Intelligence Demo](https://github.com/1minds3t/omnipkg/actions/workflows/language_test.yml/badge.svg)](https://github.com/1minds3t/omnipkg/actions/workflows/language_test.yml)
+### 2. 🌍 Global Intelligence & AI-Driven Localization [![🤖 AI-Powered: 24 Languages](https://img.shields.io/badge/🤖_AI--Powered-24_Languages-brightgreen?logo=openai&logoColor=white)](https://github.com/1minds3t/omnipkg/actions/workflows/language_test.yml)
 
 `omnipkg` eliminates language barriers with advanced AI localization supporting 24+ languages, making package management accessible to developers worldwide in their native language.
 
