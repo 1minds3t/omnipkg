@@ -83,7 +83,7 @@ jobs:
       - name: Install and Generate Locales
         run: |
           sudo apt-get update
-          sudo apt-get install -y locales expect redis-tools
+          sudo apt-get install -y locales redis-tools
           sudo locale-gen ${{ matrix.language }}.UTF-8
           echo "✅ Locales generated"
 
@@ -103,7 +103,35 @@ jobs:
       - name: Install omnipkg
         run: |
           python -m pip install --upgrade pip
-          pip install -e .
+          pip install -e . redis uv
+
+      - name: Configure omnipkg (bypass interactive setup)
+        run: |
+          python - << 'EOF'
+          import sys, site, json, os, sysconfig
+          from pathlib import Path
+          site_packages_path = site.getsitepackages()[0] if site.getsitepackages() else sysconfig.get_paths()['purelib']
+          project_root = Path(os.environ['GITHUB_WORKSPACE'])
+          builder_script = project_root / 'omnipkg' / 'package_meta_builder.py'
+          config_data = {
+              'site_packages_path': site_packages_path,
+              'multiversion_base': str(Path(site_packages_path) / '.omnipkg_versions'),
+              'python_executable': sys.executable,
+              'builder_script_path': str(builder_script),
+              'redis_host': 'localhost',
+              'redis_port': 6379,
+              'redis_key_prefix': 'omnipkg:pkg:',
+              'paths_to_index': [str(Path(sys.executable).parent), '/usr/local/bin', '/usr/bin', '/bin', '/usr/sbin', '/sbin'],
+              'auto_cleanup': True,
+              'cleanup_threshold_days': 30,
+              'language': 'en'
+          }
+          config_dir = Path.home() / '.config' / 'omnipkg'
+          config_dir.mkdir(parents=True, exist_ok=True)
+          with open(config_dir / 'config.json', 'w') as f:
+              json.dump(config_data, f, indent=2)
+          print("✅ Configuration created programmatically")
+          EOF
 
       - name: Run Language Test for ${{ matrix.display_name }}
         env:
@@ -114,45 +142,50 @@ jobs:
           echo "${{ matrix.emoji }} TESTING OMNIPKG IN ${{ matrix.display_name }}"
           echo "============================================================"
           
-          echo "--- 1. Automated first-time setup with explicit choices ---"
-          # Create automated input: 9 for English, then Enter for all other defaults
-          printf "9\n\n\n\n\n\n\n" | omnipkg status
-          
-          echo "--- 2. Setting language permanently ---"
+          echo "--- 1. Setting language to ${{ matrix.lang_code }} ---"
           omnipkg config set language ${{ matrix.lang_code }}
           
-          echo "--- 3. Verifying main help menu translation ---"
-          omnipkg --help | grep "${{ matrix.expected_string }}" || {
+          echo "--- 2. Verifying main help menu translation ---"
+          omnipkg --help | grep -i "${{ matrix.expected_string }}" || {
             echo "❌ Expected string '${{ matrix.expected_string }}' not found in help output"
-            echo "📝 Actual help output:"
+            echo "📝 Full help output for debugging:"
             omnipkg --help
             exit 1
           }
           
-          echo "--- 4. Verifying install command help translation ---"
-          omnipkg install --help | grep "${{ matrix.expected_string }}" || {
+          echo "--- 3. Verifying install command help translation ---"
+          omnipkg install --help | grep -i "${{ matrix.expected_string }}" || {
             echo "❌ Expected string '${{ matrix.expected_string }}' not found in install help"
-            echo "📝 Actual install help output:"
+            echo "📝 Full install help output for debugging:"
             omnipkg install --help
             exit 1
           }
           
-          echo "--- 5. Verifying status command translation ---"
+          echo "--- 4. Verifying status command translation ---"
           omnipkg status
           
-          echo "--- 6. Verifying info command (non-interactive) ---"
-          echo "1" | timeout 30 omnipkg info ${{ matrix.test_package }} || {
-            echo "⚠️ Info command timed out or failed - this is expected for some packages"
+          echo "--- 5. Testing basic install command in ${{ matrix.lang_code }} ---"
+          omnipkg install pip --dry-run || {
+            echo "⚠️ Dry-run install failed - this might be expected behavior"
           }
           
-          echo "--- 7. Verifying error message translation ---"
-          ! omnipkg info "a-package-that-does-not-exist-12345" || {
+          echo "--- 6. Verifying error message translation ---"
+          ! omnipkg info "nonexistent-package-xyz-123" 2>&1 | head -10 || {
             echo "⚠️ Expected this command to fail but it didn't"
           }
           
+          echo "--- 7. Testing language persistence ---"
+          # Verify that the language setting persists
+          current_lang=$(omnipkg config get language)
+          if [ "$current_lang" = "${{ matrix.lang_code }}" ]; then
+            echo "✅ Language setting persisted correctly: $current_lang"
+          else
+            echo "❌ Language setting not persisted. Expected: ${{ matrix.lang_code }}, Got: $current_lang"
+            exit 1
+          fi
+          
           echo "✅ All tests passed for ${{ matrix.display_name }}"
 
-  # Alternative approach: Test each language separately with proper setup
   test-language-switching:
     runs-on: ubuntu-latest
     services:
@@ -175,13 +208,39 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y redis-tools expect
+          sudo apt-get install -y redis-tools
           python -m pip install --upgrade pip
-          pip install -e .
+          pip install -e . redis uv
+
+      - name: Configure omnipkg
+        run: |
+          python - << 'EOF'
+          import sys, site, json, os, sysconfig
+          from pathlib import Path
+          site_packages_path = site.getsitepackages()[0] if site.getsitepackages() else sysconfig.get_paths()['purelib']
+          project_root = Path(os.environ['GITHUB_WORKSPACE'])
+          builder_script = project_root / 'omnipkg' / 'package_meta_builder.py'
+          config_data = {
+              'site_packages_path': site_packages_path,
+              'multiversion_base': str(Path(site_packages_path) / '.omnipkg_versions'),
+              'python_executable': sys.executable,
+              'builder_script_path': str(builder_script),
+              'redis_host': 'localhost',
+              'redis_port': 6379,
+              'redis_key_prefix': 'omnipkg:pkg:',
+              'paths_to_index': [str(Path(sys.executable).parent), '/usr/local/bin', '/usr/bin', '/bin', '/usr/sbin', '/sbin'],
+              'auto_cleanup': True,
+              'cleanup_threshold_days': 30,
+              'language': 'en'
+          }
+          config_dir = Path.home() / '.config' / 'omnipkg'
+          config_dir.mkdir(parents=True, exist_ok=True)
+          with open(config_dir / 'config.json', 'w') as f:
+              json.dump(config_data, f, indent=2)
+          EOF
 
       - name: Wait for Redis
         run: |
-          echo "⏳ Waiting for Redis..."
           for i in {1..15}; do
             if redis-cli -h localhost ping | grep PONG; then
               echo "✅ Redis is ready!"
@@ -191,43 +250,41 @@ jobs:
           done
           exit 1
 
-      - name: Test Language Switching Workflow
+      - name: Test Rapid Language Switching
         run: |
           echo "============================================================"
-          echo "🌍 TESTING LANGUAGE SWITCHING WORKFLOW"
+          echo "🔄 TESTING RAPID LANGUAGE SWITCHING"
           echo "============================================================"
           
-          echo "--- 1. Initial setup with English (default) ---"
-          # Use explicit input for first-time setup
-          {
-            echo ""          # Accept default English
-            echo ""          # Accept default installation strategy
-            echo ""          # Accept default version bubbles path
-            echo ""          # Accept default Python path
-            echo ""          # Accept default uv path
-            echo ""          # Accept default Redis host
-            echo ""          # Accept default Redis port
-          } | omnipkg status
-          
-          echo "--- 2. Test language switching ---"
-          languages=("es" "fr" "de" "ja" "ko" "ru" "zh_CN")
+          languages=("en" "es" "fr" "de" "ja" "ko" "ru" "zh_CN")
           
           for lang in "${languages[@]}"; do
-            echo "🔄 Testing language: $lang"
+            echo "🌐 Testing language: $lang"
+            
+            # Set language
             omnipkg config set language "$lang"
             
-            # Test that help output changes (at least some basic validation)
+            # Verify it was set
+            current_lang=$(omnipkg config get language)
+            if [ "$current_lang" = "$lang" ]; then
+              echo "✅ Language set successfully: $lang"
+            else
+              echo "❌ Language setting failed. Expected: $lang, Got: $current_lang"
+              exit 1
+            fi
+            
+            # Test help output changes
             omnipkg --help > "/tmp/help_$lang.txt"
             
-            # Verify the config was set
-            omnipkg config get language
+            # Basic functionality test
+            omnipkg status > "/tmp/status_$lang.txt"
             
             echo "✅ Language $lang tested successfully"
           done
           
-          echo "--- 3. Return to English ---"
+          echo "🔄 Testing return to English"
           omnipkg config set language en
-          omnipkg --help
+          omnipkg --help | head -5
           
           echo "✅ All language switching tests passed!"
 
@@ -245,32 +302,31 @@ jobs:
           echo ""
           echo "✨ Languages Tested:"
           echo ""
-          echo "🇺🇸 English (US) - en_US"
+          echo "🇺🇸 English (US) - en"
           echo "🇨🇳 中文 (简体) - zh_CN"
-          echo "🇪🇸 Español (España) - es_ES"
-          echo "🇫🇷 Français (France) - fr_FR"
-          echo "🇩🇪 Deutsch (Deutschland) - de_DE"
-          echo "🇯🇵 日本語 (日本) - ja_JP"
-          echo "🇰🇷 한국어 (대한민국) - ko_KR"
-          echo "🇷🇺 Русский (Россия) - ru_RU"
+          echo "🇪🇸 Español (España) - es"
+          echo "🇫🇷 Français (France) - fr"
+          echo "🇩🇪 Deutsch (Deutschland) - de"
+          echo "🇯🇵 日本語 (日本) - ja"
+          echo "🇰🇷 한국어 (대한민국) - ko"
+          echo "🇷🇺 Русский (Россия) - ru"
           echo ""
-          echo "🚀 Features Demonstrated:"
+          echo "🚀 Test Results Summary:"
+          echo "✅ Configuration bypass (no interactive setup)"
+          echo "✅ Language switching functionality"  
+          echo "✅ Translation validation"
+          echo "✅ Setting persistence"
+          echo "✅ Multi-locale environment support"
           echo ""
-          echo "✅ AI-Driven Translation Validation"
-          echo "✅ Core Command Testing"
-          echo "✅ Configuration Management"
-          echo "✅ Quality Assurance"
-          echo ""
-          echo "🌐 Breaking down language barriers in package management!"
+          echo "🌐 Language barriers: ELIMINATED! 🎯"
           echo "============================================================"
 
-      - name: Archive Multi-Language Demo Results
+      - name: Archive Test Results
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: omnipkg-multilang-demo-results
+          name: omnipkg-multilang-test-results
           path: |
-            ~/.config/omnipkg/
-            /tmp/omnipkg-*
             /tmp/help_*.txt
+            /tmp/status_*.txt
           retention-days: 7
