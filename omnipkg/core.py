@@ -1386,18 +1386,41 @@ class omnipkg:
             import traceback
             traceback.print_exc()
 
-    def show_package_info(self, package_name: str, version: str='active') -> int:
+        # In omnipkg/core.py, inside the omnipkg class
+    
+    # The signature of this function might need to be adjusted in your CLI handler (e.g., cli.py)
+    # to accept a single 'package_spec' argument.
+    def show_package_info(self, package_spec: str) -> int:
         if not self.connect_redis():
             return 1
         self._synchronize_knowledge_base_with_reality()
+    
         try:
-            self._show_enhanced_package_data(package_name, version)
+            # --- THE FIX ---
+            # Use your existing helper function to parse the input!
+            pkg_name, requested_version = self._parse_package_spec(package_spec)
+    
+            # If a specific version was provided in the command...
+            if requested_version:
+                # ...go straight to showing the details for that version.
+                print(f'\n' + '=' * 60)
+                print(_('📄 Detailed info for {} v{}').format(pkg_name, requested_version))
+                print('=' * 60)
+                self._show_version_details(pkg_name, requested_version)
+            else:
+                # Otherwise, if only a package name was given, show the interactive overview.
+                self._show_enhanced_package_data(pkg_name)
+            
             return 0
         except Exception as e:
             print(_('❌ An unexpected error occurred while showing package info: {}').format(e))
             import traceback
             traceback.print_exc()
             return 1
+    
+    # You might need to adjust your _show_enhanced_package_data function slightly
+    # if it was expecting a 'version' argument that is no longer passed.
+    # Based on your code, it seems it only needs the package_name, so this should work.
 
     def _clean_and_format_dependencies(self, raw_deps_json: str) -> str:
         """Parses the raw dependency JSON, filters out noise, and formats it for humans."""
@@ -1413,7 +1436,8 @@ class omnipkg:
         except (json.JSONDecodeError, TypeError):
             return 'Could not parse.'
 
-    def _show_enhanced_package_data(self, package_name: str, version: str):
+        # The 'version: str' parameter has been removed.
+    def _show_enhanced_package_data(self, package_name: str):
         r = self.redis_client
         overview_key = '{}{}'.format(self.config['redis_key_prefix'], package_name.lower())
         if not r.exists(overview_key):
@@ -1427,7 +1451,13 @@ class omnipkg:
         bubble_versions = [key.replace('bubble_version:', '') for key in overview_data if key.startswith('bubble_version:') and overview_data[key] == 'true']
         if bubble_versions:
             print(_('🫧 Bubbled Versions: {}').format(', '.join(sorted(bubble_versions))))
-        available_versions = [active_ver] + bubble_versions if active_ver else bubble_versions
+        
+        # This logic already correctly gets all versions without needing a 'version' input
+        available_versions = []
+        if active_ver != 'Not Set':
+            available_versions.append(active_ver)
+        available_versions.extend(sorted(bubble_versions))
+        
         if available_versions:
             print(_('\n📦 Available Versions:'))
             for i, ver in enumerate(available_versions, 1):
@@ -1538,105 +1568,185 @@ class omnipkg:
         should_reverse = strategy == 'stable-main'
         return sorted(packages, key=get_version_key, reverse=should_reverse)
 
-    def smart_install(self, packages: List[str], dry_run: bool=False) -> int:
+    def smart_install(self, packages: List[str], dry_run: bool = False) -> int:
         if not self.connect_redis():
             return 1
+    
         if dry_run:
-            print(_('🔬 Running in --dry-run mode. No changes will be made.'))
+            print('🔬 Running in --dry-run mode. No changes will be made.')
             return 0
+    
         if not packages:
-            print(_('🚫 No packages specified for installation.'))
+            print('🚫 No packages specified for installation.')
             return 1
+    
         install_strategy = self.config.get('install_strategy', 'stable-main')
         packages_to_process = list(packages)
+    
+        # Handle omnipkg special case (existing logic preserved)
         for pkg_spec in list(packages_to_process):
             pkg_name, requested_version = self._parse_package_spec(pkg_spec)
             if pkg_name.lower() == 'omnipkg':
                 packages_to_process.remove(pkg_spec)
-                active_omnipkg_version = self._get_active_version_from_environment('omnipkg')
+                active_omnipkg_version = self.get_active_version_from_environment('omnipkg')
                 if not active_omnipkg_version:
-                    print(_('⚠️ Warning: Cannot determine active omnipkg version. Proceeding with caution.'))
+                    print('⚠️ Warning: Cannot determine active omnipkg version. Proceeding with caution.')
                 if requested_version and active_omnipkg_version and (parse_version(requested_version) == parse_version(active_omnipkg_version)):
-                    print(_('✅ omnipkg=={} is already the active omnipkg. No bubble needed.').format(requested_version))
+                    print('✅ omnipkg=={} is already the active omnipkg. No bubble needed.'.format(requested_version))
                     continue
-                print(_("✨ Special handling: omnipkg '{}' requested. This will be installed into an isolated bubble, not as the active omnipkg.").format(pkg_spec))
+                print("✨ Special handling: omnipkg '{}' requested. This will be installed into an isolated bubble, not as the active omnipkg.".format(pkg_spec))
                 if not requested_version:
-                    print(_('  (No version specified for omnipkg; attempting to bubble the latest stable version)'))
-                    print(_("  Skipping bubbling of 'omnipkg' without a specific version for now."))
+                    print('  (No version specified for omnipkg; attempting to bubble the latest stable version)')
+                    print("  Skipping bubbling of 'omnipkg' without a specific version for now.")
                     continue
                 bubble_dir_name = 'omnipkg-{}'.format(requested_version)
                 target_bubble_path = Path(self.config['multiversion_base']) / bubble_dir_name
-                wheel_url = self._get_wheel_url_from_pypi(pkg_name, requested_version)
+                wheel_url = self.get_wheel_url_from_pypi(pkg_name, requested_version)
                 if not wheel_url:
-                    print(_('❌ Could not find a compatible wheel for omnipkg=={}. Cannot create bubble.').format(requested_version))
+                    print('❌ Could not find a compatible wheel for omnipkg=={}. Cannot create bubble.'.format(requested_version))
                     continue
-                if not self._extract_wheel_into_bubble(wheel_url, target_bubble_path, pkg_name, requested_version):
-                    print(_('❌ Failed to create bubble for omnipkg=={}.').format(requested_version))
+                if not self.extract_wheel_into_bubble(wheel_url, target_bubble_path, pkg_name, requested_version):
+                    print('❌ Failed to create bubble for omnipkg=={}.'.format(requested_version))
                     continue
-                self._register_package_in_knowledge_base(pkg_name, requested_version, str(target_bubble_path), 'bubble')
-                print(_('✅ omnipkg=={} successfully bubbled.').format(requested_version))
+                self.register_package_in_knowledge_base(pkg_name, requested_version, str(target_bubble_path), 'bubble')
+                print('✅ omnipkg=={} successfully bubbled.'.format(requested_version))
+    
+                # Update knowledge base for bubbled omnipkg
+                print('🧠 Updating knowledge base for bubbled omnipkg...')
+                fake_before = {}
+                fake_after = {pkg_name: requested_version}
+                self.run_metadata_builder_for_delta(fake_before, fake_after)
+                print('✅ Knowledge base updated for bubbled omnipkg.')
+    
         if not packages_to_process:
-            print(_('\n🎉 All package operations complete.'))
+            print('\n🎉 All package operations complete.')
             return 0
-        print(_("🚀 Starting install with policy: '{}'").format(install_strategy))
+    
+        print("🚀 Starting install with policy: '{}'".format(install_strategy))
         resolved_packages = self._resolve_package_versions(packages_to_process)
         if not resolved_packages:
-            print(_('❌ Could not resolve any packages to install. Aborting.'))
+            print('❌ Could not resolve any packages to install. Aborting.')
             return 1
+    
         sorted_packages = self._sort_packages_for_install(resolved_packages, strategy=install_strategy)
         if sorted_packages != resolved_packages:
-            print(_('🔄 Reordered packages for optimal installation: {}').format(', '.join(sorted_packages)))
+            print('🔄 Reordered packages for optimal installation: {}'.format(', '.join(sorted_packages)))
+    
         user_requested_cnames = {canonicalize_name(self._parse_package_spec(p)[0]) for p in packages}
         any_installations_made = False
+    
         for package_spec in sorted_packages:
             print('\n' + '─' * 60)
-            print(_('📦 Processing: {}').format(package_spec))
+            print('📦 Processing: {}'.format(package_spec))
             print('─' * 60)
+    
+            # ENHANCED SATISFACTION CHECK - check both main and bubble environments
             satisfaction_check = self._check_package_satisfaction([package_spec], strategy=install_strategy)
             if satisfaction_check['all_satisfied']:
-                print(_('✅ Requirement already satisfied: {}').format(package_spec))
+                print('✅ Requirement already satisfied: {}'.format(package_spec))
                 continue
+    
             packages_to_install = satisfaction_check['needs_install']
             if not packages_to_install:
                 continue
-            print(_('\n📸 Taking LIVE pre-installation snapshot...'))
+    
+            print('\n📸 Taking LIVE pre-installation snapshot...')
             packages_before = self.get_installed_packages(live=True)
-            print(_('    - Found {} packages').format(len(packages_before)))
-            print(_('\n⚙️ Running pip install for: {}...').format(', '.join(packages_to_install)))
+            print('    - Found {} packages'.format(len(packages_before)))
+    
+            print('\n⚙️ Running pip install for: {}...'.format(', '.join(packages_to_install)))
             return_code = self._run_pip_install(packages_to_install)
             if return_code != 0:
-                print(_('❌ Pip installation failed for {}. Continuing...').format(package_spec))
+                print('❌ Pip installation failed for {}. Continuing...'.format(package_spec))
                 continue
+    
             any_installations_made = True
-            print(_('✅ Installation completed for: {}').format(package_spec))
-            print(_('\n🔬 Analyzing post-installation changes...'))
+            print('✅ Installation completed for: {}'.format(package_spec))
+    
+            # IMMEDIATE SATISFACTION CHECK after pip install
+            print('\n🔍 Verifying installation success...')
+            post_install_check = self._check_package_satisfaction([package_spec], strategy=install_strategy)
+            if not post_install_check['all_satisfied']:
+                print('⚠️ Warning: Package may not be properly satisfied after installation.')
+    
+            print('\n🔬 Analyzing post-installation changes...')
             packages_after = self.get_installed_packages(live=True)
             replacements = self._detect_version_replacements(packages_before, packages_after)
             if replacements:
                 for rep in replacements:
                     self._cleanup_version_from_kb(rep['package'], rep['old_version'])
+    
+            # CRITICAL: Initialize tracking lists at the start of each package processing
+            bubbled_packages = []
+            main_env_updates = []
+    
             if install_strategy == 'stable-main':
                 downgrades_to_fix = self._detect_downgrades(packages_before, packages_after)
                 upgrades_to_fix = self._detect_upgrades(packages_before, packages_after)
                 all_changes_to_fix = []
+                
                 for fix in downgrades_to_fix:
-                    all_changes_to_fix.append({'package': fix['package'], 'old_version': fix['good_version'], 'new_version': fix['bad_version'], 'change_type': 'downgraded'})
+                    all_changes_to_fix.append({
+                        'package': fix['package'], 
+                        'old_version': fix['good_version'], 
+                        'new_version': fix['bad_version'], 
+                        'change_type': 'downgraded'
+                    })
+                
                 for fix in upgrades_to_fix:
-                    all_changes_to_fix.append({'package': fix['package'], 'old_version': fix['old_version'], 'new_version': fix['new_version'], 'change_type': 'upgraded'})
+                    all_changes_to_fix.append({
+                        'package': fix['package'], 
+                        'old_version': fix['old_version'], 
+                        'new_version': fix['new_version'], 
+                        'change_type': 'upgraded'
+                    })
+    
                 if all_changes_to_fix:
-                    print(_('\n🛡️ STABILITY PROTECTION ACTIVATED!'))
+                    print('\n🛡️ STABILITY PROTECTION ACTIVATED!')
+                    
                     for fix in all_changes_to_fix:
-                        print(_('    -> Protecting stable env. Bubbling {} version: {} v{}').format(fix['change_type'], fix['package'], fix['new_version']))
+                        print('    -> Protecting stable env. Bubbling {} version: {} v{}'.format(
+                            fix['change_type'], fix['package'], fix['new_version']))
+                        
                         bubble_created = self.bubble_manager.create_isolated_bubble(fix['package'], fix['new_version'])
+                        
                         if bubble_created:
+                            # CRITICAL FIX: Ensure EVERY successfully bubbled package is tracked
+                            bubbled_packages.append({'name': fix['package'], 'version': fix['new_version']})
+                            print('    ✅ Tracked {} v{} for KB update'.format(fix['package'], fix['new_version']))
+                            
                             bubble_path_str = str(self.multiversion_base / f"{fix['package']}-{fix['new_version']}")
                             self.hook_manager.refresh_bubble_map(fix['package'], fix['new_version'], bubble_path_str)
                             self.hook_manager.validate_bubble(fix['package'], fix['new_version'])
-                            print(_("    🔄 Restoring '{}' to stable version v{} in main environment...").format(fix['package'], fix['old_version']))
-                            subprocess.run([self.config['python_executable'], '-m', 'pip', 'install', '--quiet', f"{fix['package']}=={fix['old_version']}"], capture_output=True, text=True)
-                    print(_('\n✅ Stability protection complete!'))
+                            
+                            print("    🔄 Restoring '{}' to stable version v{} in main environment...".format(
+                                fix['package'], fix['old_version']))
+                            
+                            restore_result = subprocess.run([
+                                self.config['python_executable'], '-m', 'pip', 'install', '--quiet', 
+                                f"{fix['package']}=={fix['old_version']}"
+                            ], capture_output=True, text=True)
+                            
+                            if restore_result.returncode == 0:
+                                # Track the restored version in main env for KB update
+                                main_env_updates.append({'name': fix['package'], 'version': fix['old_version']})
+                                print("    ✅ Successfully restored {} v{} to main environment".format(
+                                    fix['package'], fix['old_version']))
+                            else:
+                                print("    ❌ Failed to restore {} v{} to main environment".format(
+                                    fix['package'], fix['old_version']))
+                        else:
+                            print("    ❌ Failed to create bubble for {} v{}. Skipping KB update for this package.".format(
+                                fix['package'], fix['new_version']))
+                    
+                    print('\n✅ Stability protection complete!')
                 else:
-                    print(_('✅ No changes to existing packages detected. Installation completed safely.'))
+                    print('✅ No changes to existing packages detected. Installation completed safely.')
+                    # Track any new packages installed in main env
+                    for pkg_name, version in packages_after.items():
+                        if pkg_name not in packages_before:
+                            main_env_updates.append({'name': pkg_name, 'version': version})
+    
             elif install_strategy == 'latest-active':
                 # For latest-active: bubble the OLD/REPLACED versions, keep NEW/REQUESTED versions active
                 versions_to_bubble = []
@@ -1657,46 +1767,91 @@ class omnipkg:
                             'user_requested': canonicalize_name(pkg_name) in user_requested_cnames
                         })
                     elif not old_version and new_version:
-                        # New package installed - nothing to bubble, just note it
-                        print(_('    ✅ New package installed: {} v{} (active in main environment)').format(pkg_name, new_version))
+                        # New package installed - track it for main env KB update
+                        print('    ✅ New package installed: {} v{} (active in main environment)'.format(pkg_name, new_version))
+                        main_env_updates.append({'name': pkg_name, 'version': new_version})
                 
                 if versions_to_bubble:
-                    print(_('\n🛡️ LATEST-ACTIVE STRATEGY: Preserving replaced versions in bubbles'))
+                    print('\n🛡️ LATEST-ACTIVE STRATEGY: Preserving replaced versions in bubbles')
                     for item in versions_to_bubble:
                         request_type = "requested" if item['user_requested'] else "dependency"
-                        print(_('    -> Bubbling replaced {} version: {} v{} (keeping v{} active)').format(
+                        print('    -> Bubbling replaced {} version: {} v{} (keeping v{} active)'.format(
                             request_type, item['package'], item['version_to_bubble'], item['version_staying_active']))
                         
                         # Create bubble for the OLD/REPLACED version
                         bubble_created = self.bubble_manager.create_isolated_bubble(item['package'], item['version_to_bubble'])
                         if bubble_created:
+                            # CRITICAL FIX: Track bubbled package for KB update
+                            bubbled_packages.append({'name': item['package'], 'version': item['version_to_bubble']})
+                            
                             bubble_path_str = str(self.multiversion_base / f"{item['package']}-{item['version_to_bubble']}")
                             self.hook_manager.refresh_bubble_map(item['package'], item['version_to_bubble'], bubble_path_str)
                             self.hook_manager.validate_bubble(item['package'], item['version_to_bubble'])
-                            print(_("    ✅ Successfully bubbled {} v{}").format(item['package'], item['version_to_bubble']))
+                            
+                            # Track the active version in main env
+                            main_env_updates.append({'name': item['package'], 'version': item['version_staying_active']})
+                            print("    ✅ Successfully bubbled {} v{}".format(item['package'], item['version_to_bubble']))
                         else:
-                            print(_("    ❌ Failed to bubble {} v{}").format(item['package'], item['version_to_bubble']))
+                            print("    ❌ Failed to bubble {} v{}".format(item['package'], item['version_to_bubble']))
                     
-                    print(_('\n✅ Latest-active complete! Requested versions active, previous versions preserved.'))
+                    print('\n✅ Latest-active complete! Requested versions active, previous versions preserved.')
                 else:
-                    print(_('✅ No version changes detected.'))
-            print(_('\n🧠 Updating knowledge base for this package...'))
-            final_state = self.get_installed_packages(live=True)
-            self._run_metadata_builder_for_delta(packages_before, final_state)
-            self._update_hash_index_for_delta(packages_before, final_state)
+                    print('✅ No version changes detected.')
+    
+            # UPDATE KNOWLEDGE BASE FOR MAIN ENVIRONMENT FIRST
+            print('\n🧠 Updating knowledge base for main environment...')
+            current_main_state = self.get_installed_packages(live=True)
+            self._run_metadata_builder_for_delta(packages_before, current_main_state)
+            self._update_hash_index_for_delta(packages_before, current_main_state)
+    
+            # ADDITIONAL KB UPDATE FOR RESTORED PACKAGES (if any)
+            if main_env_updates:
+                print('🧠 Updating knowledge base for {} restored/modified package(s) in main environment...'.format(len(main_env_updates)))
+                for restored_pkg in main_env_updates:
+                    # Force KB update for each restored package
+                    fake_before = {}
+                    fake_after = {restored_pkg['name']: restored_pkg['version']}
+                    print('    -> Updating KB for {} v{} in main environment...'.format(restored_pkg['name'], restored_pkg['version']))
+                    self._run_metadata_builder_for_delta(fake_before, fake_after)
+                print('✅ Knowledge base updated for restored packages in main environment.')
+    
+            # CRITICAL FIX: UPDATE KNOWLEDGE BASE FOR BUBBLED PACKAGES
+            if bubbled_packages:
+                print('🧠 Updating knowledge base for {} bubbled package(s)...'.format(len(bubbled_packages)))
+                for bubbled_pkg in bubbled_packages:
+                    print('    -> Updating KB for bubbled package: {} v{}...'.format(bubbled_pkg['name'], bubbled_pkg['version']))
+                    # Create a fake "before" state without this bubbled package to trigger KB update
+                    fake_before = {}
+                    fake_after = {bubbled_pkg['name']: bubbled_pkg['version']}
+                    self._run_metadata_builder_for_delta(fake_before, fake_after)
+                    print('    ✅ KB update completed for {} v{}'.format(bubbled_pkg['name'], bubbled_pkg['version']))
+                print('✅ Knowledge base updated for bubbled packages.')
+            else:
+                print('ℹ️ No packages were bubbled during this installation.')
+    
+            # FINAL SATISFACTION CHECK after all updates
+            print('\n🔍 Final satisfaction check...')
+            final_satisfaction_check = self._check_package_satisfaction([package_spec], strategy=install_strategy)
+            if final_satisfaction_check['all_satisfied']:
+                print('✅ Final verification: {} is properly satisfied'.format(package_spec))
+            else:
+                print('⚠️ Warning: Final verification failed for {}'.format(package_spec))
+    
         if not any_installations_made:
-            print(_('\n✅ All requirements were already satisfied.'))
+            print('\n✅ All requirements were already satisfied.')
             self._synchronize_knowledge_base_with_reality()
             return 0
-        print(_('\n🧹 Performing final cleanup of redundant bubbles...'))
+    
+        print('\n🧹 Performing final cleanup of redundant bubbles...')
         final_active_packages = self.get_installed_packages(live=True)
         for pkg_name, active_version in final_active_packages.items():
             bubble_path = self.multiversion_base / f'{pkg_name}-{active_version}'
             if bubble_path.exists() and bubble_path.is_dir():
-                print(_("    -> Found redundant bubble for active package '{0}=={1}'. Removing...").format(pkg_name, active_version))
+                print("    -> Found redundant bubble for active package '{0}=={1}'. Removing...".format(pkg_name, active_version))
                 self.smart_uninstall([f'{pkg_name}=={active_version}'], force=True, install_type='bubble')
+    
         print('\n' + '=' * 60)
-        print(_('🎉 All package operations complete.'))
+        print('🎉 All package operations complete.')
         self._save_last_known_good_snapshot()
         self._synchronize_knowledge_base_with_reality()
         return 0
@@ -2091,51 +2246,64 @@ class omnipkg:
             elif not strategy_changed:
                 print(_('   ℹ️  Install strategy unchanged: {}').format(original_strategy))
 
+    # In omnipkg/core.py, inside the omnipkg class:
+
     def _check_package_satisfaction(self, packages: List[str], strategy: str) -> dict:
         """
-        Checks if package requirements are satisfied based on the install strategy.
-        - 'latest-active': Only satisfied if the EXACT version is already ACTIVE. Ignores bubbles.
-        - 'stable-main': Satisfied if the version is active OR exists in a bubble.
+        ### THE DEFINITIVE FIX ###
+        Checks if a list of requirements is satisfied by querying the Redis Knowledge Base,
+        which is the single source of truth for omnipkg.
         """
-        satisfied = set()
-        needs_install = list(packages)
-        if strategy == 'latest-active':
-            truly_satisfied = set()
-            for pkg_spec in packages:
-                try:
-                    pkg_name, requested_version = self._parse_package_spec(pkg_spec)
-                    if not requested_version:
-                        continue
-                    active_version = self._get_active_version_from_environment(pkg_name)
-                    if active_version and parse_version(active_version) == parse_version(requested_version):
-                        truly_satisfied.add(pkg_spec)
-                except Exception:
+        satisfied_specs = set()
+        needs_install_specs = []
+    
+        for package_spec in packages:
+            is_satisfied = False
+            try:
+                pkg_name, requested_version = self._parse_package_spec(package_spec)
+                
+                # A requirement without an exact version cannot be satisfied.
+                if not requested_version:
+                    needs_install_specs.append(package_spec)
                     continue
-            satisfied.update(truly_satisfied)
-            needs_install = [pkg for pkg in packages if pkg not in satisfied]
-        elif strategy == 'stable-main':
-            remaining_packages = []
-            for pkg_spec in packages:
-                try:
-                    pkg_name, requested_version = self._parse_package_spec(pkg_spec)
-                    if not requested_version:
-                        remaining_packages.append(pkg_spec)
-                        continue
-                    active_version = self._get_active_version_from_environment(pkg_name)
-                    if active_version and parse_version(active_version) == parse_version(requested_version):
-                        satisfied.add(pkg_spec)
-                        continue
-                    bubble_path = self.multiversion_base / f'{pkg_name}-{requested_version}'
-                    if bubble_path.exists() and bubble_path.is_dir():
-                        satisfied.add(pkg_spec)
-                        print(_('    ⚡ Found existing bubble: {}').format(pkg_spec))
-                        continue
-                    remaining_packages.append(pkg_spec)
-                except Exception:
-                    remaining_packages.append(pkg_spec)
-            if remaining_packages:
-                needs_install = remaining_packages
-        return {'all_satisfied': len(needs_install) == 0, 'satisfied': sorted(list(satisfied)), 'needs_install': needs_install}
+    
+                c_name = canonicalize_name(pkg_name)
+                main_key = f"{self.config['redis_key_prefix']}{c_name}"
+                version_key = f"{main_key}:{requested_version}"
+                
+                # CRITICAL CHECK 1: The detailed metadata for this version MUST exist in the KB.
+                # If it doesn't, omnipkg doesn't fully "know" about it, so it's not satisfied.
+                # This is the check that handles the corruption issue.
+                if not self.redis_client.exists(version_key):
+                    needs_install_specs.append(package_spec)
+                    continue
+    
+                # CRITICAL CHECK 2: If the metadata exists, check its status (active or bubbled).
+                package_data = self.redis_client.hgetall(main_key)
+                
+                # Is it the active version?
+                if package_data.get('active_version') == requested_version:
+                    is_satisfied = True
+                
+                # If not active, for 'stable-main', is it in a bubble?
+                if not is_satisfied and strategy == 'stable-main':
+                    if package_data.get(f"bubble_version:{requested_version}") == 'true':
+                        is_satisfied = True
+    
+                if is_satisfied:
+                    satisfied_specs.add(package_spec)
+                else:
+                    needs_install_specs.append(package_spec)
+            
+            except Exception:
+                # If any error occurs during the check, assume it's not satisfied.
+                needs_install_specs.append(package_spec)
+    
+        return {
+            'all_satisfied': len(needs_install_specs) == 0,
+            'satisfied': sorted(list(satisfied_specs)),
+            'needs_install': needs_install_specs
+        }
 
     def get_package_info(self, package_name: str, version: str) -> Optional[Dict]:
         if not self.redis_client:
