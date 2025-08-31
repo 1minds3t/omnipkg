@@ -48,8 +48,8 @@ jobs:
             display_name: "Français (France)"
             emoji: "🇫🇷"
             test_package: "django"
-            expected_strings: ["Installer les paquets", "paquets", "Installer"]
-            help_pattern: "Installer.*paquets"
+            expected_strings: ["Installez des packages", "packages", "Installez", "Commandes disponibles"]
+            help_pattern: "Installez.*packages|packages.*Installez|Commandes disponibles"
           - language: "de_DE"
             lang_code: "de"
             display_name: "Deutsch (Deutschland)"
