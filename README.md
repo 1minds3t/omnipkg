@@ -264,7 +264,7 @@ uv 0.8.11
 
 ## 🛠️ Get Started in 60 Seconds
 
-### Step 1: Install and Start Redis (Required)
+### Step 1: Start Redis (Required)
 `omnipkg` uses Redis for fast metadata management. It **must be running** before `omnipkg` is used.
 
 *   **Linux (Ubuntu/Debian)**:
@@ -280,19 +280,40 @@ uv 0.8.11
     brew install redis
     brew services start redis
     ```
-    Verify: `redis-cli ping`.
 
-*   **Windows**:
-    Use WSL2 (recommended) or Docker:
+*   **Windows**: Use WSL2 or Docker:
     ```bash
-    docker run -d -p 6379:6379 --name some-redis redis
+    docker run -d -p 6379:6379 --name redis-omnipkg redis
     ```
 
-*   Verify: `redis-cli ping` (should return `PONG`).
+*   Verify Redis: `redis-cli ping` (should return `PONG`)
 
 ### Step 2: Install `omnipkg`
+
+Choose your preferred installation method:
+
+#### 📦 PyPI (Recommended)
 ```bash
 pip install omnipkg
+```
+
+#### 🍺 Homebrew (macOS/Linux)
+```bash
+# Add the tap first
+brew tap 1minds3t/omnipkg
+# Install omnipkg
+brew install omnipkg
+```
+
+#### 🐍 Anaconda/Conda
+```bash
+conda install minds3t::omnipkg
+```
+
+**Alternative channels:**
+```bash
+# Direct from user channel  
+conda install -c minds3t omnipkg
 ```
 
 ### Step 3: Run the Demo
@@ -301,9 +322,9 @@ omnipkg demo
 ```
 Choose from:
 1. Python module switching (`rich`)
-2.   Binary switching (`uv`)
-3.  C-extension switching (`numpy`, `scipy`)
-4.  Complex dependency switching (`tensorflow`)
+2. Binary switching (`uv`)
+3. C-extension switching (`numpy`, `scipy`)
+4. Complex dependency switching (`tensorflow`)
 
 ### Step 4: Try the Stress Test
 ```bash
