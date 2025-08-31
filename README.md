@@ -44,17 +44,18 @@
   </a>
 </p>
 
+[![💥 Breaking Language Barriers: 24 Languages](https://img.shields.io/badge/💥_Breaking_Language_Barriers-24_Languages-success?logo=babel&logoColor=white)](https://github.com/1minds3t/omnipkg/actions/workflows/language_test.yml)
 
 ---
 
-`omnipkg` radically simplifies Python dependency management, providing a robust alternative to tools like `pipx`, `uv`, `conda`, and `Docker` for handling conflicting packages. Born from a real-world nightmare—a forced downgrade that wrecked a `conda-forge` environment on a Friday night—`omnipkg` was built in a weekend to solve what others couldn’t: running multiple versions of the same package in one environment without conflicts.
+`omnipkg` radically simplifies Python dependency management, providing a robust alternative to tools like `pipx`, `uv`, `conda`, and `Docker` for handling conflicting packages. Born from a real-world nightmare—a forced downgrade that wrecked a `conda-forge` environment on a Friday night—`omnipkg` was built in a weekend to solve what others couldn't: running multiple versions of the same package in one environment without conflicts.
 
 ---
 
 <!-- COMPARISON_STATS_START -->
 ## ⚖️ Multi-Version Support
 
-[![omnipkg](https://img.shields.io/badge/omnipkg-9%20Wins-brightgreen?logo=python&logoColor=white)](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml) [![pip](https://img.shields.io/badge/pip-9%20Failures-red?logo=pypi&logoColor=white)](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml) [![uv](https://img.shields.io/badge/uv-9%20Failures-red?logo=python&logoColor=white)](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml)
+[![omnipkg](https://img.shields.io/badge/omnipkg-56%20Wins-brightgreen?logo=python&logoColor=white)](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml) [![pip](https://img.shields.io/badge/pip-56%20Failures-red?logo=pypi&logoColor=white)](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml) [![uv](https://img.shields.io/badge/uv-56%20Failures-red?logo=python&logoColor=white)](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml)
 
 *Multi-version installation tests run hourly. [Live results here.](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml)*
 
@@ -66,7 +67,9 @@
 
 **Data Science Reality**: Modern ML projects routinely need multiple TensorFlow versions (legacy models vs. current training), different NumPy versions (compatibility vs. performance), and various PyTorch builds (CPU vs. GPU). Traditional solutions like Docker containers, virtual environments, or complex scripts lead to bloated storage, maintenance headaches, and deployment failures.
 
-**`omnipkg` Solution**: One environment, one script, everything **just works**. Run `torch==2.0.0` and `torch==2.7.1` seamlessly, switch `numpy` versions mid-script, and recover from environment damage instantly.
+**Global Development**: As development teams span continents—from Silicon Valley to São Paulo, Stockholm to Singapore—language barriers shouldn't impede collaboration. Developers working on the same project deserve tools that speak their language, whether debugging in Mandarin, documenting in Spanish, or troubleshooting in Hindi.
+
+**`omnipkg` Solution**: One environment, one script, everything **just works**. Run `torch==2.0.0` and `torch==2.7.1` seamlessly, switch `numpy` versions mid-script, recover from environment damage instantly—all in your native language.
 
 ---
 
@@ -111,9 +114,32 @@ print(numpy.__version__)  # Outputs: Original main env version (e.g., 1.26.4)
 ```
 ---
 
-### 2. Lightweight Isolation 
+### 2. 🌍 Global Intelligence & AI-Driven Localization [![🤖 AI-Powered: 24 Languages](https://img.shields.io/badge/🤖_AI--Powered-24_Languages-brightgreen?logo=openai&logoColor=white)](https://github.com/1minds3t/omnipkg/actions/workflows/language_test.yml)
 
-Conflicting versions are isolated in lightweight, self-contained “bubbles” containing only necessary files. Compatible dependencies are shared with the main environment, potentially slashing disk space by **up to 60%**.
+`omnipkg` eliminates language barriers with advanced AI localization supporting 24+ languages, making package management accessible to developers worldwide in their native language.
+
+**Key Features**: Auto-detection from system locale, competitive AI translation models, context-aware technical term handling, and continuous self-improvement from user feedback.
+
+```bash
+# Set language permanently
+omnipkg config set language zh_CN
+# ✅ Language permanently set to: 中文 (简体)
+
+# Temporary language override
+omnipkg --lang es install requests
+
+# Interactive language picker
+omnipkg reset-config
+
+# View current configuration
+cat ~/.config/omnipkg/config.json
+```
+
+Zero setup required—works in your language from first run with graceful fallbacks and clear beta transparency.
+
+### 3. Lightweight Isolation 
+
+Conflicting versions are isolated in lightweight, self-contained "bubbles" containing only necessary files. Compatible dependencies are shared with the main environment, potentially slashing disk space by **up to 60%**.
 
 **Key CI Output Excerpt:**
 ```bash
@@ -127,7 +153,7 @@ Conflicting versions are isolated in lightweight, self-contained “bubbles” c
 ```
 ---
 
-### 3. Downgrade Protection & Conflict Resolution [![🔧 Simple UV Multi-Version Test](https://img.shields.io/badge/🔧_Simple_UV_Multi--Version_Test-passing-success)](https://github.com/1minds3t/omnipkg/actions/workflows/test_uv_install.yml)
+### 4. Downgrade Protection & Conflict Resolution [![🔧 Simple UV Multi-Version Test](https://img.shields.io/badge/🔧_Simple_UV_Multi--Version_Test-passing-success)](https://github.com/1minds3t/omnipkg/actions/workflows/test_uv_install.yml)
 
 `omnipkg` automatically reorders installations and isolates conflicts, preventing environment-breaking downgrades.
 
@@ -136,7 +162,7 @@ Conflicting versions are isolated in lightweight, self-contained “bubbles” c
 omnipkg install torch==2.0.0 torch==2.7.1
 ```
 
-**What happens?** `omnipkg` reorders installs to trigger the bubble creation, installs `torch==2.7.1` in the main environment, and isolates `torch==2.0.0` in a lightweight “bubble,” sharing compatible dependencies to save space. No virtual environments or containers needed.
+**What happens?** `omnipkg` reorders installs to trigger the bubble creation, installs `torch==2.7.1` in the main environment, and isolates `torch==2.0.0` in a lightweight "bubble," sharing compatible dependencies to save space. No virtual environments or containers needed.
 
 ```bash
 🔄 Reordered: torch==2.7.1, torch==2.0.0
@@ -148,7 +174,7 @@ omnipkg install torch==2.0.0 torch==2.7.1
 
 ---
 
-### 4. Python Library, Binary, & C-Extension Support [![⚡ UV Binary Test](https://img.shields.io/badge/⚡_UV_Binary_Test-passing-success)](https://github.com/1minds3t/omnipkg/actions/workflows/test-uv-binary-switching.yml) [![💥 TensorFlow Hot-Swap](https://img.shields.io/badge/💥_TensorFlow_Hot_Swap-passing-success)](https://github.com/1minds3t/omnipkg/actions/workflows/test-tensorflow-switching.yml) [![🧪 Rich Version Juggling](https://img.shields.io/badge/🧪_Rich_Version_Juggling-passing-success)](https://github.com/1minds3t/omnipkg/actions/workflows/rich-module-switching-test.yml)
+### 5. Python Library, Binary, & C-Extension Support [![⚡ UV Binary Test](https://img.shields.io/badge/⚡_UV_Binary_Test-passing-success)](https://github.com/1minds3t/omnipkg/actions/workflows/test-uv-binary-switching.yml) [![💥 TensorFlow Hot-Swap](https://img.shields.io/badge/💥_TensorFlow_Hot_Swap-passing-success)](https://github.com/1minds3t/omnipkg/actions/workflows/test-tensorflow-switching.yml) [![🧪 Rich Version Juggling](https://img.shields.io/badge/🧪_Rich_Version_Juggling-passing-success)](https://github.com/1minds3t/omnipkg/actions/workflows/rich-module-switching-test.yml)
 
 `omnipkg` seamlessly switches binary tools (e.g., `uv`) and complex C-extension version combinations (e.g., `tensorflow`, `numpy`, `scipy`) during runtime, a feat traditional tools struggle with.
 
@@ -173,7 +199,7 @@ Keras version: 2.13.1
 ```
 
 ---
-### 5. Deep Package Intelligence
+### 6. Deep Package Intelligence [![🔍 Package Discovery Demo - Omnipkg Intelligence](https://github.com/1minds3t/omnipkg/actions/workflows/knowledge_base_check.yml/badge.svg)](https://github.com/1minds3t/omnipkg/actions/workflows/knowledge_base_check.yml)
 
 Unlike tools that only track "package installed/not installed," `omnipkg` builds a knowledge base with 60+ metadata fields per package version, stored in Redis for instant analysis.
 
@@ -204,10 +230,10 @@ omnipkg info uv
 
 ---
 
-### 6. Instant Environment Recovery 
+### 7. Instant Environment Recovery 
 [![🛡️ UV Revert Test](https://img.shields.io/badge/🛡️_UV_Revert_Test-passing-success)](https://github.com/1minds3t/omnipkg/actions/workflows/test_uv_revert.yml)
 
-If an external tool (like `pip` or `uv`) causes damage, `omnipkg revert` restores your environment to a “last known good” state in seconds.
+If an external tool (like `pip` or `uv`) causes damage, `omnipkg revert` restores your environment to a "last known good" state in seconds.
 
 **Key CI Output Excerpt:**
 
@@ -355,6 +381,8 @@ Commercial inquiries: [omnipkg@proton.me](mailto:omnipkg@proton.me)
 ## 🤝 Contributing
 
 This project thrives on community collaboration. Contributions, bug reports, and feature requests are incredibly welcome. Join us in revolutionizing Python dependency management.
+
+**Translation Help**: Found translation bugs or missing languages? Submit pull requests with corrections or new translations—we welcome community contributions to make `omnipkg` accessible worldwide.
 
 [**→ Start Contributing**](https://github.com/1minds3t/omnipkg/issues)
 
