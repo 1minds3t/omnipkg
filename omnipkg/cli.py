@@ -120,7 +120,10 @@ def run_demo_with_live_streaming(test_file, demo_name):
     process = None
     try:
         cm = ConfigManager()
-        current_lang = cm.get_language_code()
+        # --- THE FIX ---
+        # Get the language code from the config dictionary using the 'get' method.
+        current_lang = cm.config.get('language', 'en') # 'en' is a safe default
+        
         project_root = Path(__file__).resolve().parent.parent
         
         env = os.environ.copy()
@@ -144,6 +147,7 @@ def run_demo_with_live_streaming(test_file, demo_name):
             print(line, end='')
         
         returncode = process.wait()
+
         print('-' * 60)
         
         if returncode == 0:
