@@ -7,19 +7,23 @@
 <p align="center">
   <strong>One environment. Infinite packages. Zero conflicts.</strong>
   <br>
-  <a href="https://github.com/1minds3t/omnipkg/actions/workflows/numpy_scipy_test.yml">
-    <img src="https://img.shields.io/badge/🚀_Live_NumPy+SciPy_Hot--Swapping-passing-success?logo=github-actions" alt="NumPy+SciPy Hot-Swapping Test">
-  </a>
-</p>
 <p align="center">
-  <!-- Core Badges -->
+  <!-- Core Project Info -->
   <a href="https://pypi.org/project/omnipkg/">
     <img src="https://img.shields.io/pypi/v/omnipkg?color=blue&logo=pypi" alt="PyPI">
   </a>
   <a href="https://github.com/1minds3t/omnipkg/blob/main/LICENSE">
     <img src="https://img.shields.io/badge/License-AGPLv3-d94c31?logo=gnu" alt="License">
   </a>
-  <!-- Quality Badges -->
+  <a href="https://pepy.tech/projects/omnipkg">
+    <img src="https://static.pepy.tech/badge/omnipkg" alt="Downloads">
+  </a>
+  <a href="https://clickpy.clickhouse.com/dashboard/omnipkg">
+    <img src="https://img.shields.io/badge/global_reach-40+_countries-green?logo=globe" alt="Global Reach">
+  </a>
+</p>
+<p align="center">
+  <!-- Quality & Security -->
   <a href="https://github.com/1minds3t/omnipkg/actions?query=workflow%3A%22Security+Audit%22">
     <img src="https://img.shields.io/badge/Security-passing-success?logo=security" alt="Security">
   </a>
@@ -34,17 +38,14 @@
   </a>
 </p>
 <p align="center">
-  <a href="https://pepy.tech/projects/omnipkg">
-    <img src="https://static.pepy.tech/badge/omnipkg" alt="PyPI Downloads">
-  </a>
-  <a href="https://clickpy.clickhouse.com/dashboard/omnipkg">
-    <img src="https://img.shields.io/badge/global_reach-40+_countries-green?logo=globe" alt="Global Reach Badge">
-  </a>
+  <!-- Key Features -->
   <a href="https://github.com/1minds3t/omnipkg/actions/workflows/language_test.yml">
-    <img src="https://img.shields.io/badge/💥_Breaking_Language_Barriers-24_Languages-success?logo=babel&logoColor=white" alt="Breaking Language Barriers">
+    <img src="https://img.shields.io/badge/💥_Breaking_Language_Barriers-24_Languages-success?logo=babel&logoColor=white" alt="24 Languages">
+  </a>
+  <a href="https://github.com/1minds3t/omnipkg/actions/workflows/numpy_scipy_test.yml">
+    <img src="https://img.shields.io/badge/🚀_Live_NumPy+SciPy_Hot--Swapping-passing-success?logo=github-actions" alt="Hot-Swapping">
   </a>
 </p>
-
 
 ---
 
@@ -55,7 +56,7 @@
 <!-- COMPARISON_STATS_START -->
 ## ⚖️ Multi-Version Support
 
-[![omnipkg](https://img.shields.io/badge/omnipkg-72%20Wins-brightgreen?logo=python&logoColor=white)](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml) [![pip](https://img.shields.io/badge/pip-72%20Failures-red?logo=pypi&logoColor=white)](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml) [![uv](https://img.shields.io/badge/uv-72%20Failures-red?logo=python&logoColor=white)](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml)
+[![omnipkg](https://img.shields.io/badge/omnipkg-71%20Wins-brightgreen?logo=python&logoColor=white)](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml) [![pip](https://img.shields.io/badge/pip-71%20Failures-red?logo=pypi&logoColor=white)](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml) [![uv](https://img.shields.io/badge/uv-71%20Failures-red?logo=python&logoColor=white)](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml)
 
 *Multi-version installation tests run hourly. [Live results here.](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml)*
 
