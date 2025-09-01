@@ -39,7 +39,7 @@
   <a href="https://github.com/1minds3t/omnipkg/actions?query=workflow%3ACodeQL+Advanced">
     <img src="https://img.shields.io/badge/CodeQL-passing-success?logo=github" alt="CodeQL">
   </a>
-  [![Socket Badge](https://socket.dev/api/badge/pypi/package/omnipkg/1.1.2?artifact_id=tar-gz)](https://socket.dev/pypi/package/omnipkg/overview/1.1.2/tar-gz)
+[![Socket Badge](https://socket.dev/api/badge/pypi/package/omnipkg/1.1.2?artifact_id=tar-gz&style=for-the-badge)](https://socket.dev/pypi/package/omnipkg/overview/1.1.2/tar-gz)
 </p>
 <p align="center">
   <!-- Key Features -->
