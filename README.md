@@ -268,6 +268,8 @@ uv 0.8.11
 ### Step 1: Start Redis (Required)
 `omnipkg` uses Redis for fast metadata management. It **must be running** before `omnipkg` is used.
 
+https://img.shields.io/badge/Redis-Required-%2523DC382D?logo=redis&logoColor=white
+
 *   **Linux (Ubuntu/Debian)**:
     ```bash
     sudo apt-get update
