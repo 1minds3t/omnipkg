@@ -3,15 +3,14 @@
     <img src="https://raw.githubusercontent.com/1minds3t/omnipkg/main/.github/logo.svg" alt="omnipkg Logo" width="150">
   </a>
 </p>
-
 <h1 align="center">omnipkg - The Ultimate Python Dependency Resolver</h1>
-
 <p align="center">
-  <strong>One environment. Infinite packages. Zero conflicts.
+  <strong>One environment. Infinite packages. Zero conflicts.</strong>
+  <br>
+  <a href="https://github.com/1minds3t/omnipkg/actions/workflows/numpy_scipy_test.yml">
     <img src="https://img.shields.io/badge/🚀_Live_NumPy+SciPy_Hot--Swapping-passing-success?logo=github-actions" alt="NumPy+SciPy Hot-Swapping Test">
   </a>
 </p>
-
 <p align="center">
   <!-- Core Badges -->
   <a href="https://pypi.org/project/omnipkg/">
@@ -20,7 +19,6 @@
   <a href="https://github.com/1minds3t/omnipkg/blob/main/LICENSE">
     <img src="https://img.shields.io/badge/License-AGPLv3-d94c31?logo=gnu" alt="License">
   </a>
-  
   <!-- Quality Badges -->
   <a href="https://github.com/1minds3t/omnipkg/actions?query=workflow%3A%22Security+Audit%22">
     <img src="https://img.shields.io/badge/Security-passing-success?logo=security" alt="Security">
@@ -42,9 +40,11 @@
   <a href="https://clickpy.clickhouse.com/dashboard/omnipkg">
     <img src="https://img.shields.io/badge/global_reach-40+_countries-green?logo=globe" alt="Global Reach Badge">
   </a>
+  <a href="https://github.com/1minds3t/omnipkg/actions/workflows/language_test.yml">
+    <img src="https://img.shields.io/badge/💥_Breaking_Language_Barriers-24_Languages-success?logo=babel&logoColor=white" alt="Breaking Language Barriers">
+  </a>
 </p>
 
-[![💥 Breaking Language Barriers: 24 Languages](https://img.shields.io/badge/💥_Breaking_Language_Barriers-24_Languages-success?logo=babel&logoColor=white)](https://github.com/1minds3t/omnipkg/actions/workflows/language_test.yml)
 
 ---
 
