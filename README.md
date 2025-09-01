@@ -15,12 +15,12 @@
   <a href="https://github.com/1minds3t/omnipkg/blob/main/LICENSE">
     <img src="https://img.shields.io/badge/License-AGPLv3-d94c31?logo=gnu" alt="License">
   </a>
+  <img src="https://img.shields.io/badge/Redis-Required-%2523DC382D?logo=redis&logoColor=white" alt="Redis Required">
   <a href="https://pepy.tech/projects/omnipkg">
     <img src="https://static.pepy.tech/badge/omnipkg" alt="Downloads">
   </a>
-  <a href="https://clickpy.clickhouse.com/dashboard/omnipkg">
-    <img src="https://img.shields.io/badge/global_reach-40+_countries-green?logo=globe" alt="Global Reach">
-  </a>
+</p>
+
 </p>
 <p align="center">
   <!-- Quality & Security -->
@@ -47,6 +47,7 @@
   </a>
 </p>
 
+
 ---
 
 `omnipkg` radically simplifies Python dependency management, providing a robust alternative to tools like `pipx`, `uv`, `conda`, and `Docker` for handling conflicting packages. Born from a real-world nightmare—a forced downgrade that wrecked a `conda-forge` environment on a Friday night—`omnipkg` was built in a weekend to solve what others couldn't: running multiple versions of the same package in one environment without conflicts.
@@ -56,7 +57,7 @@
 <!-- COMPARISON_STATS_START -->
 ## ⚖️ Multi-Version Support
 
-[![omnipkg](https://img.shields.io/badge/omnipkg-73%20Wins-brightgreen?logo=python&logoColor=white)](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml) [![pip](https://img.shields.io/badge/pip-73%20Failures-red?logo=pypi&logoColor=white)](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml) [![uv](https://img.shields.io/badge/uv-73%20Failures-red?logo=python&logoColor=white)](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml)
+[![omnipkg](https://img.shields.io/badge/omnipkg-72%20Wins-brightgreen?logo=python&logoColor=white)](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml) [![pip](https://img.shields.io/badge/pip-72%20Failures-red?logo=pypi&logoColor=white)](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml) [![uv](https://img.shields.io/badge/uv-72%20Failures-red?logo=python&logoColor=white)](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml)
 
 *Multi-version installation tests run hourly. [Live results here.](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml)*
 
@@ -265,10 +266,9 @@ uv 0.8.11
 
 ## 🛠️ Get Started in 60 Seconds
 
-### Step 1: Start Redis (Required)
+### Step 1: Start Redis (Required) <img src="https://img.shields.io/badge/Redis-Required-%2523DC382D?logo=redis&logoColor=white" alt="Redis Required">
 `omnipkg` uses Redis for fast metadata management. It **must be running** before `omnipkg` is used.
 
-https://img.shields.io/badge/Redis-Required-%2523DC382D?logo=redis&logoColor=white
 
 *   **Linux (Ubuntu/Debian)**:
     ```bash
