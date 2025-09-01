@@ -39,6 +39,9 @@
   <a href="https://github.com/1minds3t/omnipkg/actions?query=workflow%3ACodeQL+Advanced">
     <img src="https://img.shields.io/badge/CodeQL-passing-success?logo=github" alt="CodeQL">
   </a>
+<a href="https://github.com/1minds3t/omnipkg/actions?query=workflow%3ACodeQL+Advanced">
+    <img src="https://img.shields.io/badge/CodeQL-passing-success?logo=github" alt="CodeQL">
+</a>
 [![Socket Badge](https://socket.dev/api/badge/pypi/package/omnipkg/1.1.2?artifact_id=tar-gz&style=for-the-badge)](https://socket.dev/pypi/package/omnipkg/overview/1.1.2/tar-gz)
 </p>
 <p align="center">
@@ -61,7 +64,7 @@
 <!-- COMPARISON_STATS_START -->
 ## ⚖️ Multi-Version Support
 
-[![omnipkg](https://img.shields.io/badge/omnipkg-92%20Wins-brightgreen?logo=python&logoColor=white)](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml) [![pip](https://img.shields.io/badge/pip-92%20Failures-red?logo=pypi&logoColor=white)](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml) [![uv](https://img.shields.io/badge/uv-92%20Failures-red?logo=python&logoColor=white)](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml)
+[![omnipkg](https://img.shields.io/badge/omnipkg-91%20Wins-brightgreen?logo=python&logoColor=white)](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml) [![pip](https://img.shields.io/badge/pip-91%20Failures-red?logo=pypi&logoColor=white)](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml) [![uv](https://img.shields.io/badge/uv-91%20Failures-red?logo=python&logoColor=white)](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml)
 
 *Multi-version installation tests run hourly. [Live results here.](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml)*
 
