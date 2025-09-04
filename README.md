@@ -3,25 +3,30 @@
     <img src="https://raw.githubusercontent.com/1minds3t/omnipkg/main/.github/logo.svg" alt="omnipkg Logo" width="150">
   </a>
 </p>
-
 <h1 align="center">omnipkg - The Ultimate Python Dependency Resolver</h1>
-
 <p align="center">
-  <strong>One environment. Infinite packages. Zero conflicts.
-    <img src="https://img.shields.io/badge/🚀_Live_NumPy+SciPy_Hot--Swapping-passing-success?logo=github-actions" alt="NumPy+SciPy Hot-Swapping Test">
-  </a>
-</p>
-
+  <strong>One environment. Infinite packages. Zero conflicts.</strong>
+  <br>
 <p align="center">
-  <!-- Core Badges -->
+  <!-- Core Project Info -->
   <a href="https://pypi.org/project/omnipkg/">
     <img src="https://img.shields.io/pypi/v/omnipkg?color=blue&logo=pypi" alt="PyPI">
   </a>
   <a href="https://github.com/1minds3t/omnipkg/blob/main/LICENSE">
     <img src="https://img.shields.io/badge/License-AGPLv3-d94c31?logo=gnu" alt="License">
   </a>
-  
-  <!-- Quality Badges -->
+  <img src="https://img.shields.io/badge/Redis-Required-%2523DC382D?logo=redis&logoColor=white" alt="Redis Required">
+  <a href="https://pepy.tech/projects/omnipkg">
+    <img src="https://static.pepy.tech/badge/omnipkg" alt="Downloads">
+  </a>
+    <a href="https://clickpy.clickhouse.com/dashboard/omnipkg">
+    <img src="https://img.shields.io/badge/global_reach-40+_countries-green?logo=globe" alt="Global Reach Badge">
+  </a>
+</p>
+
+</p>
+<p align="center">
+  <!-- Quality & Security -->
   <a href="https://github.com/1minds3t/omnipkg/actions?query=workflow%3A%22Security+Audit%22">
     <img src="https://img.shields.io/badge/Security-passing-success?logo=security" alt="Security">
   </a>
@@ -34,17 +39,20 @@
   <a href="https://github.com/1minds3t/omnipkg/actions?query=workflow%3ACodeQL+Advanced">
     <img src="https://img.shields.io/badge/CodeQL-passing-success?logo=github" alt="CodeQL">
   </a>
+<a href="https://socket.dev/pypi/package/omnipkg/overview/1.1.2/tar-gz">
+    <img src="https://img.shields.io/badge/Socket-secured-success?logo=socket" alt="Socket">
+</a>
 </p>
 <p align="center">
-  <a href="https://pepy.tech/projects/omnipkg">
-    <img src="https://static.pepy.tech/badge/omnipkg" alt="PyPI Downloads">
+  <!-- Key Features -->
+  <a href="https://github.com/1minds3t/omnipkg/actions/workflows/language_test.yml">
+    <img src="https://img.shields.io/badge/💥_Breaking_Language_Barriers-24_Languages-success?logo=babel&logoColor=white" alt="24 Languages">
   </a>
-  <a href="https://clickpy.clickhouse.com/dashboard/omnipkg">
-    <img src="https://img.shields.io/badge/global_reach-40+_countries-green?logo=globe" alt="Global Reach Badge">
+  <a href="https://github.com/1minds3t/omnipkg/actions/workflows/numpy_scipy_test.yml">
+    <img src="https://img.shields.io/badge/🚀_Live_NumPy+SciPy_Hot--Swapping-passing-success?logo=github-actions" alt="Hot-Swapping">
   </a>
 </p>
 
-[![💥 Breaking Language Barriers: 24 Languages](https://img.shields.io/badge/💥_Breaking_Language_Barriers-24_Languages-success?logo=babel&logoColor=white)](https://github.com/1minds3t/omnipkg/actions/workflows/language_test.yml)
 
 ---
 
@@ -55,7 +63,7 @@
 <!-- COMPARISON_STATS_START -->
 ## ⚖️ Multi-Version Support
 
-[![omnipkg](https://img.shields.io/badge/omnipkg-58%20Wins-brightgreen?logo=python&logoColor=white)](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml) [![pip](https://img.shields.io/badge/pip-58%20Failures-red?logo=pypi&logoColor=white)](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml) [![uv](https://img.shields.io/badge/uv-58%20Failures-red?logo=python&logoColor=white)](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml)
+[![omnipkg](https://img.shields.io/badge/omnipkg-138%20Wins-brightgreen?logo=python&logoColor=white)](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml) [![pip](https://img.shields.io/badge/pip-138%20Failures-red?logo=pypi&logoColor=white)](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml) [![uv](https://img.shields.io/badge/uv-138%20Failures-red?logo=python&logoColor=white)](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml)
 
 *Multi-version installation tests run hourly. [Live results here.](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml)*
 
@@ -63,11 +71,13 @@
 
 <!-- COMPARISON_STATS_END -->
 
+---
+
 ## 💡 Why This Matters
 
 **Data Science Reality**: Modern ML projects routinely need multiple TensorFlow versions (legacy models vs. current training), different NumPy versions (compatibility vs. performance), and various PyTorch builds (CPU vs. GPU). Traditional solutions like Docker containers, virtual environments, or complex scripts lead to bloated storage, maintenance headaches, and deployment failures.
 
-**Global Development**: As development teams span continents—from Silicon Valley to São Paulo, Stockholm to Singapore—language barriers shouldn't impede collaboration. Developers working on the same project deserve tools that speak their language, whether debugging in Mandarin, documenting in Spanish, or troubleshooting in Hindi.
+**Global Development**: Developers working on the same project deserve tools that speak their language, whether debugging in Mandarin, documenting in Spanish, or troubleshooting in Hindi.
 
 **`omnipkg` Solution**: One environment, one script, everything **just works**. Run `torch==2.0.0` and `torch==2.7.1` seamlessly, switch `numpy` versions mid-script, recover from environment damage instantly—all in your native language.
 
@@ -264,8 +274,9 @@ uv 0.8.11
 
 ## 🛠️ Get Started in 60 Seconds
 
-### Step 1: Install and Start Redis (Required)
+### Step 1: Start Redis (Required) <img src="https://img.shields.io/badge/Redis-Required-%2523DC382D?logo=redis&logoColor=white" alt="Redis Required">
 `omnipkg` uses Redis for fast metadata management. It **must be running** before `omnipkg` is used.
+
 
 *   **Linux (Ubuntu/Debian)**:
     ```bash
@@ -280,19 +291,40 @@ uv 0.8.11
     brew install redis
     brew services start redis
     ```
-    Verify: `redis-cli ping`.
 
-*   **Windows**:
-    Use WSL2 (recommended) or Docker:
+*   **Windows**: Use WSL2 or Docker:
     ```bash
-    docker run -d -p 6379:6379 --name some-redis redis
+    docker run -d -p 6379:6379 --name redis-omnipkg redis
     ```
 
-*   Verify: `redis-cli ping` (should return `PONG`).
+*   Verify Redis: `redis-cli ping` (should return `PONG`)
 
 ### Step 2: Install `omnipkg`
+
+Choose your preferred installation method:
+
+#### 📦 PyPI (Recommended)
 ```bash
 pip install omnipkg
+```
+
+#### 🍺 Homebrew (macOS/Linux)
+```bash
+# Add the tap first
+brew tap 1minds3t/omnipkg
+# Install omnipkg
+brew install omnipkg
+```
+
+#### 🐍 Anaconda/Conda
+```bash
+conda install minds3t::omnipkg
+```
+
+**Alternative channels:**
+```bash
+# Direct from user channel  
+conda install -c minds3t omnipkg
 ```
 
 ### Step 3: Run the Demo
@@ -301,9 +333,9 @@ omnipkg demo
 ```
 Choose from:
 1. Python module switching (`rich`)
-2.   Binary switching (`uv`)
-3.  C-extension switching (`numpy`, `scipy`)
-4.  Complex dependency switching (`tensorflow`)
+2. Binary switching (`uv`)
+3. C-extension switching (`numpy`, `scipy`)
+4. Complex dependency switching (`tensorflow`)
 
 ### Step 4: Try the Stress Test
 ```bash
