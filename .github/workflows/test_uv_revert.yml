@@ -73,7 +73,7 @@ jobs:
         id: install_uv_latest
         run: |
           echo "--- Installing uv (latest) with omnipkg to establish a 'good state' with snapshot ---"
-          echo "1" | omnipkg install uv > /tmp/initial_uv_install_output.txt 2>&1
+          echo "1" | omnipkg install uv==0.8.13 > /tmp/initial_uv_install_output.txt 2>&1
           if [ $? -ne 0 ]; then 
             echo "omnipkg_install_uv_success=false" >> $GITHUB_OUTPUT
             cat /tmp/initial_uv_install_output.txt
