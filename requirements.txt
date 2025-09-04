@@ -1,4 +1,4 @@
--e git+ssh://git@github-1minds3t/1minds3t/omnipkg.git@7f3fee8e9515a8b8afdf0d3d6de6f92969e67a07#egg=omnipkg
+-e .
   redis==6.4.0
   packaging==25.0
   requests==2.32.5
