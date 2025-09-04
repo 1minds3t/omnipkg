@@ -1,5 +1,44 @@
 # Changelog
 
+## v.1.2.1
+
+omnipkg v1.2.1: The Phoenix Release — True Multi-Interpreter Freedom
+
+omnipkg v1.2.1: The Phoenix Release 🚀
+This is the release we've been fighting for.
+
+In a previous version (v1.0.8), we introduced a groundbreaking but ultimately unstable feature: Python interpreter hot-swapping. The immense complexity of managing multiple live contexts led to critical bugs, forcing a difficult but necessary rollback. We promised to return to this challenge once the architecture was right.
+
+Today, the architecture is right. Version 1.2.1 delivers on that promise, rising from the ashes of that challenge.
+
+This release introduces a completely re-imagined and bulletproof architecture for multi-interpreter management. It solves the core problems of state, context, and user experience that make this feature so difficult. The impossible is now a stable, intuitive reality.
+
+🔥 Your Environment, Your Rules. Finally.
+omnipkg now provides a seamless and robust experience for managing and switching between multiple Python versions within a single environment, starting from the very first command.
+
+1. Zero-Friction First Run: Native Python is Now a First-Class Citizen
+The single biggest point of friction for new users has been eliminated. On its very first run, omnipkg now automatically adopts the user's native Python interpreter, making it a fully managed and swappable version from the moment you start.
+
+Start in Python 3.12? omnipkg recognizes it, registers it, and you can always omnipkg swap python 3.12 right back to it.
+No more getting "stuck" after a version switch.
+No more being forced to re-download a Python version you already have.
+2. The Python 3.11 "Control Plane": A Guarantee of Stability
+Behind the scenes, omnipkg establishes a managed Python 3.11 environment to act as its "Control Plane." This is our guarantee of stability. All sensitive operations, especially the creation of package bubbles, are now executed within this known-good context.
+
+Solves Real-World Problems: This fixes critical failures where a user on a newer Python (e.g., 3.12) couldn't create bubbles for packages that only supported older versions (e.g., tensorflow==2.13.0).
+Predictable & Reliable: Bubble creation is now 100% reliable, regardless of your shell's active Python version.
+3. Smart, Safe Architecture
+omnipkg runs in your active context, as you'd expect.
+Tools that require a specific context (like our test suite) now explicitly and safely request it, making operations transparent and reliable.
+What This Means
+The journey to this release was a battle against one of the hardest problems in environment management. By solving it, we have created a tool that is not only more powerful but fundamentally more stable and intuitive. You can now step into any Python environment and omnipkg will instantly augment it with the power of multi-version support, without ever getting in your way.
+
+This is the foundation for the future. Thank you for pushing the boundaries with us.
+
+Upgrade now:
+
+pip install -U omnipkg
+
 ## v1.1.0
 2025-8-21
 Localization support for 24 additional languages.
