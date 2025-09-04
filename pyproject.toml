@@ -4,13 +4,13 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "omnipkg"
-version = "1.2.2"
+version = "1.2.3"
 authors = [
   { name = "1minds3t", email = "1minds3t@proton.me" },
 ]
 description = "The Ultimate Python Dependency Resolver. One environment. Infinite packages. Zero conflicts."
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 # Using the standard SPDX identifier is a best practice
 license = { text = "AGPL-3.0-only" }
 classifiers = [
