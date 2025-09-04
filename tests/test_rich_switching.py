@@ -101,7 +101,7 @@ def setup_environment():
 
     # Refresh config after strategy change
     config_manager = ConfigManager()
-    omnipkg_core = OmnipkgCore(config_manager.config)
+    omnipkg_core = OmnipkgCore(config_manager)
 
     # Clean up any existing bubbles and cloaked packages
     print(_('   🧹 Cleaning up existing Rich installations and bubbles...'))
@@ -126,11 +126,13 @@ def setup_environment():
         return None, original_strategy
 
     print(_('✅ Environment prepared'))
-    return config_manager.config, original_strategy
+    # FIX: Return config_manager instead of config_manager.config
+    return config_manager, original_strategy
 
-def create_test_bubbles(config):
+def create_test_bubbles(config_manager):
     print_header('STEP 2: Creating Test Bubbles for Older Versions')
-    omnipkg_core = OmnipkgCore(config)
+    # FIX: Pass config_manager directly to OmnipkgCore
+    omnipkg_core = OmnipkgCore(config_manager)
     
     for version in BUBBLE_VERSIONS_TO_TEST:
         print(_('   🫧 Creating bubble for rich=={}').format(version))
@@ -142,8 +144,10 @@ def create_test_bubbles(config):
 
     return BUBBLE_VERSIONS_TO_TEST
 
-def test_python_import(expected_version: str, config: dict, is_bubble: bool):
+def test_python_import(expected_version: str, config_manager, is_bubble: bool):
     print(_('   🔧 Testing import of version {}...').format(expected_version))
+    # FIX: Extract config dict from config_manager
+    config = config_manager.config
     config_json_str = json.dumps(config)
     
     test_script_content = f'''\
@@ -231,7 +235,9 @@ if __name__ == "__main__":
             f.write(test_script_content)
             temp_script_path = f.name
 
-        result = subprocess.run([sys.executable, temp_script_path], capture_output=True, text=True, timeout=60)
+        python_exe = config.get('python_executable', sys.executable)
+        
+        result = subprocess.run([python_exe, temp_script_path], capture_output=True, text=True, timeout=60)
         
         if result.returncode == 0:
             print(_('      └── {}').format(result.stdout.strip()))
@@ -272,24 +278,28 @@ def run_comprehensive_test():
     original_strategy = None
     
     try:
-        config, original_strategy = setup_environment()
-        if config is None:
+        # FIX: setup_environment now returns config_manager, not config dict
+        config_manager, original_strategy = setup_environment()
+        if config_manager is None:
             return False
         
-        test_versions_to_bubble = create_test_bubbles(config)
+        # FIX: Pass config_manager instead of config dict
+        test_versions_to_bubble = create_test_bubbles(config_manager)
         
         print_header('STEP 3: Comprehensive Version Testing')
         test_results = {}
         all_tests_passed = True
         
         print_subheader(_('Testing Main Environment (rich=={})').format(LATEST_RICH_VERSION))
-        main_passed = test_python_import(LATEST_RICH_VERSION, config, is_bubble=False)
+        # FIX: Pass config_manager instead of config dict
+        main_passed = test_python_import(LATEST_RICH_VERSION, config_manager, is_bubble=False)
         test_results[_('main-{}').format(LATEST_RICH_VERSION)] = main_passed
         all_tests_passed &= main_passed
         
         for version in BUBBLE_VERSIONS_TO_TEST:
             print_subheader(_('Testing Bubble (rich=={})').format(version))
-            bubble_passed = test_python_import(version, config, is_bubble=True)
+            # FIX: Pass config_manager instead of config dict
+            bubble_passed = test_python_import(version, config_manager, is_bubble=True)
             test_results[_('bubble-{}').format(version)] = bubble_passed
             all_tests_passed &= bubble_passed
         
@@ -317,7 +327,7 @@ def run_comprehensive_test():
         print_header('STEP 4: Cleanup & Restoration')
         try:
             config_manager = ConfigManager()
-            omnipkg_core = OmnipkgCore(config_manager.config)
+            omnipkg_core = OmnipkgCore(config_manager)
             site_packages = Path(config_manager.config['site_packages_path'])
             
             # Clean up test bubbles

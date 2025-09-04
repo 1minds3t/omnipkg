@@ -69,3 +69,12 @@ Thumbs.db
 releases/
 omnipkg/quality_audits.db
 quality_audits.db
+
+# Local config and data files
+CONFIG
+INFO
+KEYS
+
+# Lock files
+*.lock
+
