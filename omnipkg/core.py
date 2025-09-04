@@ -132,9 +132,7 @@ class ConfigManager:
                 print(('  ✅ SETUP COMPLETE'))
                 print('=' * 60)
                 print(('Your environment is now fully managed by omnipkg.'))
-                print(_('👉 Please re-run your previous command: omnipkg {}').format(' '.join(sys.argv[1:])))
                 print('=' * 60)
-                sys.exit(0) # Exit cleanly to allow the user to re-run in a stable state.
 
             except Exception as e:
                 print(f"❌ A critical error occurred during one-time setup: {e}")
