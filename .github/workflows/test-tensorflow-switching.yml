@@ -100,7 +100,7 @@ jobs:
           echo '```' >> $GITHUB_STEP_SUMMARY
           
           # The success indicator is the text "TensorFlow escaped the matrix".
-          if grep -q "TensorFlow escaped the matrix" /tmp/omnipkg-artifacts/tensorflow_demo_output.txt; then
+          if grep -q "Demo completed successfully" /tmp/omnipkg-artifacts/tensorflow_demo_output.txt; then
                echo "Demo completed successfully (verified by log content)."
                echo "demo_outcome=success" >> $GITHUB_OUTPUT
           else
