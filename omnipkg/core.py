@@ -1285,10 +1285,13 @@ class ConfigManager:
 
     def _first_time_setup(self, interactive=True) -> Dict:
         """Interactive setup for the first time the tool is run."""
+        import os  # <--- ADD THIS LINE
         self.config_dir.mkdir(parents=True, exist_ok=True)
         defaults = self._get_sensible_defaults()
         final_config = defaults.copy()
-        if interactive:
+        
+        # vvv CHANGE THIS LINE vvv
+        if interactive and not os.environ.get('CI'):
             print(_("🌍 Welcome to omnipkg! Let's get you configured."))
             print('-' * 60)
             available_pythons = defaults['python_interpreters']
@@ -1331,11 +1334,37 @@ class ConfigManager:
         full_config['environments'][self.env_id] = final_config
         with open(self.config_path, 'w') as f:
             json.dump(full_config, f, indent=4)
-        if interactive:
+        if interactive and not os.environ.get('CI'):  # Also add the check here to avoid printing the final message
             print(_('\n✅ Configuration saved to {}.').format(self.config_path))
             print(_('   You can edit this file manually later.'))
-        rebuild_cmd = [str(python_path), "-m", "omnipkg.cli", "reset", "-y"]
-        subprocess.run(rebuild_cmd, check=True, capture_output=True, text=True)
+            print(_('🧠 Initializing omnipkg knowledge base...'))
+            print(_('   This may take a moment with large environments (like yours with {} packages).').format(len(defaults.get('installed_packages', []))))
+            print(_('   💡 Future startups will be instant!'))
+        
+        # Run the rebuild with proper error handling and progress indication
+        rebuild_cmd = [str(final_config['python_executable']), "-m", "omnipkg.cli", "reset", "-y"]
+        try:
+            if interactive and not os.environ.get('CI'):
+                # Show progress for interactive mode
+                process = subprocess.Popen(rebuild_cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+                while True:
+                    output = process.stdout.readline()
+                    if output == '' and process.poll() is not None:
+                        break
+                    if output and ('Processing' in output or 'Building' in output or 'Scanning' in output):
+                        print(f"   {output.strip()}")
+                process.wait()
+                if process.returncode != 0:
+                    print(_('   ⚠️  Knowledge base initialization encountered issues but continuing...'))
+            else:
+                # Silent mode for CI
+                subprocess.run(rebuild_cmd, check=True, capture_output=True, text=True)
+        except subprocess.CalledProcessError as e:
+            if interactive and not os.environ.get('CI'):
+                print(_('   ⚠️  Knowledge base will be built on first command usage instead.'))
+            # Don't fail setup if rebuild fails - it can be done later
+            pass
+        
         return final_config
 
     def _load_or_create_env_config(self) -> Dict:
