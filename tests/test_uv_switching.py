@@ -14,6 +14,9 @@ import importlib.util
 project_root = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(project_root))
 
+MAIN_UV_VERSION = '0.6.13' # The version we want to be stable in the main env
+BUBBLE_VERSIONS_TO_TEST = ['0.4.30', '0.5.11']
+
 from omnipkg.i18n import _
 
 lang_from_env = os.environ.get('OMNIPKG_LANG')
@@ -84,50 +87,37 @@ def pip_install_uv(version):
 
 def setup_environment():
     print_header('STEP 1: Environment Setup & Cleanup')
-    
     config_manager = ConfigManager()
-    
-    # Store original install strategy
-    original_strategy = get_current_install_strategy(config_manager)
-    print(_('   ℹ️  Current install strategy: {}').format(original_strategy))
-    
-    # Set to stable-main for consistent testing
-    print(_('   ⚙️  Setting install strategy to stable-main for testing...'))
-    if not set_install_strategy(config_manager, 'stable-main'):
-        print(_('   ⚠️  Could not change install strategy, continuing anyway...'))
-    
-    # Refresh config after strategy change
-    config_manager = ConfigManager()
-    omnipkg_core = OmnipkgCore(config_manager.config)
-    
-    # Clean up any existing bubbles and cloaked packages
-    print(_('   🧹 Cleaning up existing UV installations and bubbles...'))
-    for bubble in omnipkg_core.multiversion_base.glob('uv-*'):
-        if bubble.is_dir():
-            print(_('   🧹 Removing old bubble: {}').format(bubble.name))
-            shutil.rmtree(bubble, ignore_errors=True)
-    
-    site_packages = Path(config_manager.config['site_packages_path'])
-    for cloaked in site_packages.glob('uv.*_omnipkg_cloaked*'):
-        print(_('   🧹 Removing residual cloaked: {}').format(cloaked.name))
-        shutil.rmtree(cloaked, ignore_errors=True)
-    
-    for cloaked in site_packages.glob('uv.*_test_harness_cloaked*'):
-        print(_('   🧹 Removing test harness residual cloaked: {}').format(cloaked.name))
-        shutil.rmtree(cloaked, ignore_errors=True)
-    
-    # Use pip to ensure clean main environment installation
+    omnipkg_core = OmnipkgCore(config_manager)
+
+    # Clean up any old state completely
+    print(_('   🧹 Cleaning up existing UV installations...'))
     pip_uninstall_uv()
-    if not pip_install_uv('0.6.13'):
-        print(_('   ❌ Failed to install main environment UV version'))
-        return None, original_strategy
+    for bubble in omnipkg_core.multiversion_base.glob('uv-*'):
+        shutil.rmtree(bubble, ignore_errors=True)
+    
+    # --- THE NEW, ROBUST SETUP LOGIC ---
+    # 1. Set the main environment to our desired stable version.
+    print(f"   📦 Establishing stable main environment: uv=={MAIN_UV_VERSION}")
+    if not pip_install_uv(MAIN_UV_VERSION):
+        return None, None
+    
+    # 2. Set the install strategy to 'stable-main' to FORCE bubble creation.
+    set_install_strategy(config_manager, 'stable-main')
+    
+    # 3. Create all bubbles. omnipkg will now correctly protect the main version.
+    print("   🫧 Creating all required test bubbles...")
+    for version in BUBBLE_VERSIONS_TO_TEST:
+        print(f"      -> Installing bubble for uv=={version}")
+        omnipkg_core.smart_install([f'uv=={version}'])
     
     print(_('✅ Environment prepared'))
-    return config_manager.config, original_strategy
+    return ConfigManager(), 'stable-main' # Return the manager and the strategy
 
-def create_test_bubbles(config):
+def create_test_bubbles(config_manager):
     print_header('STEP 2: Creating Test Bubbles')
-    omnipkg_core = OmnipkgCore(config)
+    # FIX: Pass config_manager directly to OmnipkgCore
+    omnipkg_core = OmnipkgCore(config_manager)
     test_versions = ['0.4.30', '0.5.11']
     
     for version in test_versions:
@@ -228,18 +218,24 @@ def test_direct_binary_execution(bubble_path, expected_version):
         print(_('   ❌ Direct binary execution failed: {}').format(e))
         return False
 
-def test_main_environment_uv():
+def test_main_environment_uv(config_manager: ConfigManager):
     """Test the main environment UV installation"""
-    print_subheader('Testing Main Environment (uv==0.6.13)')
+    print_subheader(f'Testing Main Environment (uv=={MAIN_UV_VERSION})')
+    
+    # --- THE FIX: Use the configured python executable ---
+    python_exe = config_manager.config.get('python_executable', sys.executable)
+    uv_binary_path = Path(python_exe).parent / 'uv'
+    
     try:
-        result = subprocess.run(['uv', '--version'], capture_output=True, text=True, timeout=10, check=True)
+        result = subprocess.run([str(uv_binary_path), '--version'], capture_output=True, text=True, timeout=10, check=True)
         actual_version = result.stdout.strip().split()[-1]
-        main_passed = actual_version == '0.6.13'
+        main_passed = actual_version == MAIN_UV_VERSION
+        
         print(_('   ✅ Main environment version: {}').format(actual_version))
         if main_passed:
             print(_('   🎯 Main environment test: PASSED'))
         else:
-            print(_('   ❌ Main environment test: FAILED (expected 0.6.13, got {})').format(actual_version))
+            print(_(f'   ❌ Main environment test: FAILED (expected {MAIN_UV_VERSION}, got {actual_version})'))
         return main_passed
     except Exception as e:
         print(_('   ❌ Main environment test failed: {}').format(e))
@@ -257,19 +253,23 @@ def run_comprehensive_test():
     original_strategy = None
     
     try:
-        config, original_strategy = setup_environment()
-        if config is None:
+        # FIX: setup_environment now returns config_manager, not config dict
+        config_manager, original_strategy = setup_environment()
+        if config_manager is None:
             return False
         
-        test_versions = create_test_bubbles(config)
-        multiversion_base = Path(config['multiversion_base'])
+        # FIX: Pass config_manager instead of config dict
+        test_versions = create_test_bubbles(config_manager)
+        # FIX: Extract config dict from config_manager
+        multiversion_base = Path(config_manager.config['multiversion_base'])
         
         print_header('STEP 3: Comprehensive UV Version Testing')
         all_tests_passed = True
         test_results = {}
         
         # Test main environment
-        main_passed = test_main_environment_uv()
+        # --- FIX: Pass the config_manager to the test function ---
+        main_passed = test_main_environment_uv(config_manager)
         test_results['main'] = main_passed
         all_tests_passed &= main_passed
         
@@ -316,7 +316,7 @@ def run_comprehensive_test():
         print_header('STEP 4: Cleanup & Restoration')
         try:
             config_manager = ConfigManager()
-            omnipkg_core = OmnipkgCore(config_manager.config)
+            omnipkg_core = OmnipkgCore(config_manager)
             site_packages = Path(config_manager.config['site_packages_path'])
             
             # Clean up test bubbles
