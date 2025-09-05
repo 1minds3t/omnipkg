@@ -117,16 +117,3 @@ jobs:
           git push
           echo "Successfully updated Homebrew formula to version ${{ env.VERSION }}"
         fi
-
-    - name: Test formula (optional)
-      run: |
-        # Install Homebrew (if not already installed)
-        if ! command -v brew &> /dev/null; then
-          /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-          echo 'eval "$(/opt/homebrew/bin/brew shellenv)"' >> ~/.bashrc
-          eval "$(/opt/homebrew/bin/brew shellenv)"
-        fi
-        
-        # Add your tap and try to install (dry run)
-        brew tap 1minds3t/homebrew-omnipkg ./homebrew-tap
-        brew install --build-from-source 1minds3t/omnipkg/omnipkg --dry-run || true
