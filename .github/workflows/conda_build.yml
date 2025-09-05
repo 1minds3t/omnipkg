@@ -1,0 +1,108 @@
+name: Build and Upload Conda Package
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Package version to build'
+        required: true
+        type: string
+
+jobs:
+  build-and-upload:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python-version: ['3.10', '3.11', '3.12']
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Setup Miniconda
+      uses: conda-incubator/setup-miniconda@v3
+      with:
+        auto-update-conda: true
+        python-version: ${{ matrix.python-version }}
+        channels: conda-forge,defaults
+        channel-priority: strict
+    
+    - name: Install conda-build and anaconda-client
+      shell: bash -l {0}
+      run: |
+        conda install conda-build anaconda-client -y
+    
+    - name: Update meta.yaml version
+      shell: bash -l {0}
+      run: |
+        if [ "${{ github.event_name }}" == "release" ]; then
+          VERSION="${{ github.event.release.tag_name }}"
+          VERSION="${VERSION#v}"  # Remove 'v' prefix if present
+        else
+          VERSION="${{ github.event.inputs.version }}"
+        fi
+        
+        # Update the version in meta.yaml
+        sed -i "s/{% set version = \".*\" %}/{% set version = \"$VERSION\" %}/" omnipkg/conda-recipe/meta.yaml
+        
+        # Update the SHA256 hash (you'll need to calculate this)
+        # This is a simplified approach - in practice, you might want to download and hash the source
+        echo "Updated version to $VERSION"
+        echo "VERSION=$VERSION" >> $GITHUB_ENV
+    
+    - name: Build conda package
+      shell: bash -l {0}
+      run: |
+        conda build omnipkg/conda-recipe --output-folder ./conda-dist
+    
+    - name: Upload to Anaconda Cloud
+      shell: bash -l {0}
+      run: |
+        anaconda -t ${{ secrets.ANACONDA_TOKEN }} upload ./conda-dist/**/*.tar.bz2 --force
+      env:
+        ANACONDA_TOKEN: ${{ secrets.ANACONDA_TOKEN }}
+
+  # Alternative job for conda-forge feedstock update
+  update-feedstock:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'release'
+    steps:
+    - name: Checkout feedstock
+      uses: actions/checkout@v4
+      with:
+        repository: conda-forge/omnipkg-feedstock
+        token: ${{ secrets.FEEDSTOCK_TOKEN }}
+        path: feedstock
+    
+    - name: Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    
+    - name: Install dependencies
+      run: |
+        pip install pyyaml requests
+    
+    - name: Update feedstock
+      run: |
+        cd feedstock
+        VERSION="${{ github.event.release.tag_name }}"
+        VERSION="${VERSION#v}"
+        
+        # Download source to get SHA256
+        wget "https://pypi.org/packages/source/o/omnipkg/omnipkg-$VERSION.tar.gz"
+        SHA256=$(sha256sum "omnipkg-$VERSION.tar.gz" | cut -d' ' -f1)
+        
+        # Update recipe/meta.yaml
+        sed -i "s/{% set version = \".*\" %}/{% set version = \"$VERSION\" %}/" recipe/meta.yaml
+        sed -i "s/sha256: .*/sha256: $SHA256/" recipe/meta.yaml
+        
+        # Commit and push
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        git add recipe/meta.yaml
+        git commit -m "Update to version $VERSION" || exit 0
+        git push
