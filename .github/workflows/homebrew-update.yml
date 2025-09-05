@@ -1,0 +1,132 @@
+name: Update Homebrew Formula
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Package version to update'
+        required: true
+        type: string
+
+jobs:
+  update-homebrew:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout main repo
+      uses: actions/checkout@v4
+
+    - name: Set version
+      run: |
+        if [ "${{ github.event_name }}" == "release" ]; then
+          VERSION="${{ github.event.release.tag_name }}"
+          VERSION="${VERSION#v}"  # Remove 'v' prefix if present
+        else
+          VERSION="${{ github.event.inputs.version }}"
+        fi
+        echo "VERSION=$VERSION" >> $GITHUB_ENV
+
+    - name: Get PyPI package info and SHA256
+      run: |
+        # Download the source package from PyPI
+        wget "https://pypi.io/packages/source/o/omnipkg/omnipkg-${{ env.VERSION }}.tar.gz"
+        
+        # Calculate SHA256
+        SHA256=$(sha256sum "omnipkg-${{ env.VERSION }}.tar.gz" | cut -d' ' -f1)
+        echo "SHA256=$SHA256" >> $GITHUB_ENV
+        echo "Downloaded omnipkg-${{ env.VERSION }}.tar.gz with SHA256: $SHA256"
+
+    - name: Checkout Homebrew tap
+      uses: actions/checkout@v4
+      with:
+        repository: 1minds3t/homebrew-omnipkg
+        token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        path: homebrew-tap
+
+    - name: Update formula
+      run: |
+        cd homebrew-tap
+        
+        # Update the formula file
+        sed -i 's|url "https://pypi.io/packages/source/o/omnipkg/omnipkg-.*\.tar\.gz"|url "https://pypi.io/packages/source/o/omnipkg/omnipkg-${{ env.VERSION }}.tar.gz"|' omnipkg.rb
+        sed -i 's/sha256 ".*"/sha256 "${{ env.SHA256 }}"/' omnipkg.rb
+        
+        # Verify the changes
+        echo "=== Updated formula ==="
+        head -10 omnipkg.rb
+
+    - name: Get latest dependency versions and hashes
+      run: |
+        cd homebrew-tap
+        python3 << 'EOF'
+        import json
+        import urllib.request
+        import re
+
+        # Dependencies to update (from your current formula)
+        deps = [
+            "aiohappyeyeballs", "aiohttp", "aiosignal", "attrs", "certifi",
+            "charset-normalizer", "filelock", "frozenlist", "idna", "multidict",
+            "packaging", "propcache", "python-magic", "redis", "requests",
+            "tqdm", "typing-extensions", "urllib3", "yarl"
+        ]
+
+        formula_content = open('omnipkg.rb', 'r').read()
+
+        for dep in deps:
+            try:
+                # Get latest version from PyPI API
+                with urllib.request.urlopen(f'https://pypi.org/pypi/{dep}/json') as response:
+                    data = json.loads(response.read())
+                    latest_version = data['info']['version']
+                    
+                    # Find the source distribution
+                    for url_info in data['urls']:
+                        if url_info['packagetype'] == 'sdist':
+                            download_url = url_info['url']
+                            sha256_hash = url_info['digests']['sha256']
+                            break
+                    
+                    print(f"Updating {dep} to {latest_version}")
+                    
+                    # Update the resource block
+                    pattern = f'(resource "{dep}" do.*?url ")(.*?)(".*?sha256 ")(.*?)(")'
+                    replacement = f'\\g<1>{download_url}\\g<3>{sha256_hash}\\g<5>'
+                    formula_content = re.sub(pattern, replacement, formula_content, flags=re.DOTALL)
+                    
+            except Exception as e:
+                print(f"Warning: Could not update {dep}: {e}")
+
+        # Write the updated formula
+        with open('omnipkg.rb', 'w') as f:
+            f.write(formula_content)
+        EOF
+
+    - name: Commit and push changes
+      run: |
+        cd homebrew-tap
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        git add omnipkg.rb
+        
+        if git diff --staged --quiet; then
+          echo "No changes to commit"
+        else
+          git commit -m "Update omnipkg to version ${{ env.VERSION }}"
+          git push
+          echo "Successfully updated Homebrew formula to version ${{ env.VERSION }}"
+        fi
+
+    - name: Test formula (optional)
+      run: |
+        # Install Homebrew (if not already installed)
+        if ! command -v brew &> /dev/null; then
+          /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+          echo 'eval "$(/opt/homebrew/bin/brew shellenv)"' >> ~/.bashrc
+          eval "$(/opt/homebrew/bin/brew shellenv)"
+        fi
+        
+        # Add your tap and try to install (dry run)
+        brew tap 1minds3t/homebrew-omnipkg ./homebrew-tap
+        brew install --build-from-source 1minds3t/omnipkg/omnipkg --dry-run || true
