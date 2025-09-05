@@ -30,53 +30,34 @@ def force_omnipkg_context_to_current_python():
     """
     Forces omnipkg's active context to match the currently running Python version.
     """
-    current_python = f"{sys.version_info.major}.{sys.version_info.minor}"
-    
+    current_python = f'{sys.version_info.major}.{sys.version_info.minor}'
     try:
-        print(f"🔄 Forcing omnipkg context to match script Python version: {current_python}")
-        
-        # Use subprocess to call the omnipkg CLI to switch context
-        omnipkg_cmd_base = [sys.executable, "-m", "omnipkg.cli"]
-        result = subprocess.run(
-            omnipkg_cmd_base + ["swap", "python", current_python],
-            capture_output=True, text=True, check=True
-        )
-        
-        print(f"✅ omnipkg context synchronized to Python {current_python}")
+        print(_('🔄 Forcing omnipkg context to match script Python version: {}').format(current_python))
+        omnipkg_cmd_base = [sys.executable, '-m', 'omnipkg.cli']
+        result = subprocess.run(omnipkg_cmd_base + ['swap', 'python', current_python], capture_output=True, text=True, check=True)
+        print(_('✅ omnipkg context synchronized to Python {}').format(current_python))
         return True
-        
     except subprocess.CalledProcessError as e:
-        print(f"⚠️  Could not synchronize omnipkg context via CLI: {e}")
-        print(f"   CLI output: {e.stdout}")
-        print(f"   CLI error: {e.stderr}")
-        
-        # Fallback: try to modify the config directly
+        print(_('⚠️  Could not synchronize omnipkg context via CLI: {}').format(e))
+        print(_('   CLI output: {}').format(e.stdout))
+        print(_('   CLI error: {}').format(e.stderr))
         try:
-            print("🔄 Attempting direct config modification...")
+            print(_('🔄 Attempting direct config modification...'))
             config_manager = ConfigManager()
-            
-            # Find the Python executable path for the current version
             python_exe = sys.executable
-            
-            # Update the config to use the current Python
             config_manager.config['active_python_version'] = current_python
             config_manager.config['active_python_executable'] = python_exe
             config_manager.save_config()
-            
-            print(f"✅ Direct config update successful for Python {current_python}")
+            print(f'✅ Direct config update successful for Python {current_python}')
             return True
-            
         except Exception as e2:
-            print(f"⚠️  Direct config modification also failed: {e2}")
-            print("   Proceeding anyway - this may cause issues with bubble operations")
+            print(_('⚠️  Direct config modification also failed: {}').format(e2))
+            print('   Proceeding anyway - this may cause issues with bubble operations')
             return False
-            
     except Exception as e:
-        print(f"⚠️  Unexpected error synchronizing omnipkg context: {e}")
-        print("   Proceeding anyway - this may cause issues with bubble operations")
+        print(_('⚠️  Unexpected error synchronizing omnipkg context: {}').format(e))
+        print('   Proceeding anyway - this may cause issues with bubble operations')
         return False
-
-# Call this function immediately after imports
 force_omnipkg_context_to_current_python()
 
 def print_with_flush(message):
