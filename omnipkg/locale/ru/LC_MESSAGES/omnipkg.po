@@ -14,115 +14,78 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Generated-By: pygettext.py 1.5\n"
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:46
+#: /home/minds3t/omnipkg/omnipkg/cli.py:120
 msgid "  ⚠️  Stress Test Requires Python 3.11"
 msgstr "⚠ Стресс -тест требует Python 3.11"
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:50
+#: /home/minds3t/omnipkg/omnipkg/cli.py:124
 msgid "The omnipkg stress test only works in Python 3.11 environments."
 msgstr "Стресс -тест Omnipkg работает только в средах Python 3.11."
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:51
+#: /home/minds3t/omnipkg/omnipkg/cli.py:125
 msgid "To run the stress test:"
 msgstr "Чтобы запустить стресс -тест:"
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:52
-msgid "1. Create a Python 3.11 virtual environment"
-msgstr "1. Создайте виртуальную среду Python 3.11"
-
-#: /home/minds3t/omnipkg/omnipkg/cli.py:53
-msgid "2. Install omnipkg in that environment"
-msgstr "2. Установите Omnipkg в этой среде"
-
-#: /home/minds3t/omnipkg/omnipkg/cli.py:56
-msgid "🔮 Coming Soon: Hot Python interpreter swapping mid-script!"
-msgstr ""
-"🔮 Скоро: горячий интерпретатор Python, обмениваясь в середине сценариев!"
-
-#: /home/minds3t/omnipkg/omnipkg/cli.py:57
-msgid "   This will allow seamless switching between Python versions"
-msgstr "Это позволит бесшовное переключение между версиями Python"
-
-#: /home/minds3t/omnipkg/omnipkg/cli.py:58
-msgid "   during package operations - stay tuned!"
-msgstr "Во время пакетных операций - следите за обновлениями!"
-
-#: /home/minds3t/omnipkg/omnipkg/cli.py:62
+#: /home/minds3t/omnipkg/omnipkg/cli.py:133
 msgid "  🚀 omnipkg Nuclear Stress Test - Runtime Version Swapping"
 msgstr "🚀 Omnipkg ядерный стресс -тест - обмена версией среды выполнения"
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:64
+#: /home/minds3t/omnipkg/omnipkg/cli.py:136
 msgid "🎪 This demo showcases IMPOSSIBLE package combinations:"
 msgstr "🎪 Эта демонстрация демонстрирует невозможные комбинации пакетов:"
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:65
+#: /home/minds3t/omnipkg/omnipkg/cli.py:137
 msgid "   • Runtime swapping between numpy/scipy versions mid-execution"
 msgstr ""
 "• Обмена времени выполнения между версиями Numpy/Scipy в середине выполнения"
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:66
+#: /home/minds3t/omnipkg/omnipkg/cli.py:138
 msgid "   • Different numpy+scipy combos (1.24.3+1.12.0 → 1.26.4+1.16.1)"
 msgstr "• Различные комбинации Numpy+Scipy (1.24.3+1.12.0 → 1,26,4+1.16.1)"
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:68
+#: /home/minds3t/omnipkg/omnipkg/cli.py:140
 msgid "   • Live PYTHONPATH manipulation without process restart"
 msgstr "• Живые манипуляции с питонепатом без перезапуска процесса"
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:69
+#: /home/minds3t/omnipkg/omnipkg/cli.py:141
 msgid "   • Space-efficient deduplication (shows deduplication - normally"
 msgstr "• Пространственная дедупликация (показывает дедупликацию - обычно"
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:70
+#: /home/minds3t/omnipkg/omnipkg/cli.py:142
 msgid "     we average ~60% savings, but less for C extensions/binaries)"
 msgstr ""
 "Мы в среднем ~ 60% сбережений, но меньше для расширений C/двоичных файлов)"
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:72
+#: /home/minds3t/omnipkg/omnipkg/cli.py:144
 msgid "🤯 What makes this impossible with traditional tools:"
 msgstr "🤯 Что делает это невозможным с традиционными инструментами:"
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:74
+#: /home/minds3t/omnipkg/omnipkg/cli.py:146
 msgid "   • Switching versions requires environment restart"
 msgstr "• Переключение версий требует перезапуска среды"
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:75
+#: /home/minds3t/omnipkg/omnipkg/cli.py:147
 msgid "   • Dependency conflicts prevent coexistence"
 msgstr "• Конфликты зависимости предотвращают сосуществование"
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:78
+#: /home/minds3t/omnipkg/omnipkg/cli.py:150
 msgid "✨ omnipkg does this LIVE, in the same Python process!"
 msgstr "✨ Omnipkg делает это вживую, в том же процессе Python!"
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:79
+#: /home/minds3t/omnipkg/omnipkg/cli.py:151
 msgid "📊 Expected downloads: ~500MB | Duration: 30 seconds - 3 minutes"
 msgstr ""
 "📊 Ожидаемые загрузки: ~ 500MB |Продолжительность: 30 секунд - 3 минуты"
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:92
+#: /home/minds3t/omnipkg/omnipkg/cli.py:164
 msgid "🔥 Starting stress test..."
 msgstr "🔥 Начальный стресс -тест ..."
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:97
+#: /home/minds3t/omnipkg/omnipkg/cli.py:169
 msgid "❌ Stress test module not found. Implementation needed."
 msgstr "❌ модуль стресс -тестирования не найден.Реализация необходима."
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:98
-msgid "💡 This would run the actual stress test with:"
-msgstr "💡 Это запустит фактический стресс -тест с:"
-
-#: /home/minds3t/omnipkg/omnipkg/cli.py:99
-msgid "   • Large package installations (TensorFlow, PyTorch, etc.)"
-msgstr "• Большие установки упаковки (TensorFlow, Pytorch и т. Д.)"
-
-#: /home/minds3t/omnipkg/omnipkg/cli.py:100
-msgid "   • Version conflict demonstrations"
-msgstr "• Демонстрации конфликтов версии"
-
-#: /home/minds3t/omnipkg/omnipkg/cli.py:101
-msgid "   • Real-time bubbling and deduplication"
-msgstr "• Пузырьки и дедупликацию в реальном времени"
-
-#: /home/minds3t/omnipkg/omnipkg/cli.py:110
+#: /home/minds3t/omnipkg/omnipkg/cli.py:178
 msgid ""
 "📡 Live streaming output (this may take several minutes for heavy "
 "packages)..."
@@ -130,58 +93,41 @@ msgstr ""
 "📡 Live Streaming Выход (это может занять несколько минут для тяжелых "
 "пакетов) ..."
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:112
+#: /home/minds3t/omnipkg/omnipkg/cli.py:180
 msgid "🛑 Press Ctrl+C to safely cancel if needed"
 msgstr "🛑 Нажмите Ctrl+C, чтобы безопасно отменить при необходимости"
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:133
-#: /home/minds3t/omnipkg/omnipkg/cli.py:182
+#: /home/minds3t/omnipkg/omnipkg/cli.py:248
 msgid "😎 TensorFlow escaped the matrix! 🚀"
 msgstr "😎 Tensorflow сбежал из матрицы!🚀"
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:134
-#: /home/minds3t/omnipkg/omnipkg/cli.py:183
+#: /home/minds3t/omnipkg/omnipkg/cli.py:206
+#: /home/minds3t/omnipkg/omnipkg/cli.py:249
 msgid "🎉 Demo completed successfully!"
 msgstr "🎉 Демо завершено успешно!"
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:138
-msgid "💡 Check the output above for error details."
-msgstr "💡 Проверьте вывод выше, чтобы узнать подробности ошибки."
-
-#: /home/minds3t/omnipkg/omnipkg/cli.py:141
-#: /home/minds3t/omnipkg/omnipkg/cli.py:189
+#: /home/minds3t/omnipkg/omnipkg/cli.py:212
+#: /home/minds3t/omnipkg/omnipkg/cli.py:255
 msgid ""
 "\n"
 "⚠️  Demo cancelled by user (Ctrl+C)"
 msgstr "⚠ Демонстрация отменена пользователем (CTRL+C)"
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:142
-msgid ""
-"🛡️  Your environment should be safe - omnipkg handles interruptions "
-"gracefully"
-msgstr ""
-"🛡 Ваша среда должна быть в безопасности - Omnipkg изящно обрабатывает "
-"перерывы"
-
-#: /home/minds3t/omnipkg/omnipkg/cli.py:151
-msgid "📋 Full traceback:"
-msgstr "📋 Full Traceback:"
-
-#: /home/minds3t/omnipkg/omnipkg/cli.py:159
+#: /home/minds3t/omnipkg/omnipkg/cli.py:225
 msgid "📡 Streaming output in real-time..."
 msgstr "📡 Потоковая вывод в режиме реального времени ..."
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:160
+#: /home/minds3t/omnipkg/omnipkg/cli.py:226
 msgid ""
 "💡 Heavy package installations may have natural pauses - this is normal!"
 msgstr ""
 "💡 Установки тяжелых пакетов могут иметь естественные паузы - это нормально!"
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:161
+#: /home/minds3t/omnipkg/omnipkg/cli.py:227
 msgid "🛑 Press Ctrl+C to safely cancel"
 msgstr "🛑 Нажмите Ctrl+C, чтобы безопасно отменить"
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:190
+#: /home/minds3t/omnipkg/omnipkg/cli.py:256
 msgid "🛡️  Cleaning up safely..."
 msgstr "🛡 Очистка безопасно ..."
 
@@ -269,135 +215,136 @@ msgstr ""
 "⚠ [Omnipkg Loader] не мог надежно автоматически определить путь к сайтам-"
 "пакетам.Возвращаясь к Sys.prefix."
 
-#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:66
+#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:68
 msgid "🟢 --force flag detected. Caching will be ignored."
 msgstr "🟢 -Флаг отключения обнаружено.Кэширование будет игнорировано."
 
-#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:89
+#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:99
+#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:697
 msgid "✅ Connected to Redis successfully."
 msgstr "✅ Успешно подключено к Redis."
 
-#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:100
+#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:169
 msgid "🔍 Discovering all packages from file system (ground truth)..."
 msgstr "🔍 Обнаружение всех пакетов из файловой системы (Ground Prute) ..."
 
-#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:131
+#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:200
 msgid "    -> Reconciling file system state with Redis knowledge base..."
 msgstr "-> Согласование состояния файловой системы с базой знаний Redis ..."
 
-#: /home/minds3t/omnipkg/omnipkg/stress_test.py:228
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:262
 msgid "✅ Environment is clean and ready for testing."
 msgstr "✅ Окружающая среда является чистой и готова к тестированию."
 
-#: /home/minds3t/omnipkg/omnipkg/stress_test.py:235
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:269
 msgid ""
 "\n"
 "💥 NUMPY VERSION JUGGLING:"
 msgstr "💥 numpy версия жонглирование:"
 
-#: /home/minds3t/omnipkg/omnipkg/stress_test.py:252
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:286
 msgid ""
 "\n"
 "\n"
 "🔥 SCIPY C-EXTENSION TEST:"
 msgstr "🔥 Scipy C-Extension Test:"
 
-#: /home/minds3t/omnipkg/omnipkg/stress_test.py:272
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:306
 msgid ""
 "\n"
 "\n"
 "🤯 NUMPY + SCIPY VERSION MIXING:"
 msgstr "🤯 Numpy + Scipy Version Mixing:"
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:220
+#: /home/minds3t/omnipkg/omnipkg/cli.py:286
 msgid "Override the display language for this command (e.g., es, de, ja)"
 msgstr ""
 "Переопределить язык отображения для этой команды (например, ES, DE, JA)"
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:221
+#: /home/minds3t/omnipkg/omnipkg/cli.py:287
 msgid "Available commands:"
 msgstr "Доступные команды:"
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:222
+#: /home/minds3t/omnipkg/omnipkg/cli.py:288
 msgid "Install packages with intelligent conflict resolution"
 msgstr "Установить пакеты с интеллектуальным разрешением конфликтов"
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:223
+#: /home/minds3t/omnipkg/omnipkg/cli.py:289
 msgid "Packages to install (e.g., \"requests==2.25.1\", \"numpy>=1.20\")"
 msgstr "Пакеты для установки (например, \"Запросы == 2.25.1\", \"Numpy> = 1,20\")"
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:225
+#: /home/minds3t/omnipkg/omnipkg/cli.py:291
 msgid "Install a package with specific dependency versions"
 msgstr "Установите пакет с определенными версиями зависимостей"
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:226
+#: /home/minds3t/omnipkg/omnipkg/cli.py:292
 msgid "Package to install (e.g., \"tensorflow==2.13.0\")"
 msgstr "Пакет для установки (например, \"tensorflow == 2.13.0\")"
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:227
+#: /home/minds3t/omnipkg/omnipkg/cli.py:293
 msgid "Dependency with version (e.g., \"numpy==1.24.3\")"
 msgstr "Зависимость с версией (например, \"Numpy == 1.24.3\")"
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:228
+#: /home/minds3t/omnipkg/omnipkg/cli.py:294
 msgid "Intelligently remove packages and their dependencies"
 msgstr "Разумно удалить пакеты и их зависимости"
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:230
+#: /home/minds3t/omnipkg/omnipkg/cli.py:296
 msgid "Skip confirmation prompts"
 msgstr "Пропустить подсказки подтверждения"
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:231
+#: /home/minds3t/omnipkg/omnipkg/cli.py:297
 msgid "Interactive package explorer with version management"
 msgstr "Interactive Package Explorer с управлением версиями"
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:239
+#: /home/minds3t/omnipkg/omnipkg/cli.py:305
 msgid "Filter packages by name pattern"
 msgstr "Фильтрующие пакеты по шаблону имени"
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:247
+#: /home/minds3t/omnipkg/omnipkg/cli.py:313
 msgid "Interactive demo for version switching"
 msgstr "Интерактивная демонстрация для переключения версий"
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:234
-#: /home/minds3t/omnipkg/omnipkg/cli.py:250
-#: /home/minds3t/omnipkg/omnipkg/cli.py:254
-#: /home/minds3t/omnipkg/omnipkg/cli.py:263
+#: /home/minds3t/omnipkg/omnipkg/cli.py:300
+#: /home/minds3t/omnipkg/omnipkg/cli.py:316
+#: /home/minds3t/omnipkg/omnipkg/cli.py:320
+#: /home/minds3t/omnipkg/omnipkg/cli.py:329
 msgid "Skip confirmation"
 msgstr "Пропустить подтверждение"
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:251
+#: /home/minds3t/omnipkg/omnipkg/cli.py:317
 msgid "Refresh the intelligence knowledge base"
 msgstr "Обновить базу знаний интеллекта"
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:257
+#: /home/minds3t/omnipkg/omnipkg/cli.py:323
 msgid "Set a configuration value"
 msgstr "Установите значение конфигурации"
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:305
+#: /home/minds3t/omnipkg/omnipkg/cli.py:371
 msgid "✅ Language permanently set to: {lang}"
 msgstr "✅ Язык навсегда устанавливается на: {lang}"
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:374
+#: /home/minds3t/omnipkg/omnipkg/cli.py:440
 msgid "Interactive Omnipkg Demo"
 msgstr "Интерактивный Omnipkg Demo"
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:375
+#: /home/minds3t/omnipkg/omnipkg/cli.py:443
 msgid "🎪 Omnipkg supports version switching for:"
 msgstr "🎪 Omnipkg поддерживает переключение версий для:"
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:376
+#: /home/minds3t/omnipkg/omnipkg/cli.py:444
 msgid "   • Python modules (e.g., rich): See tests/test_rich_switching.py"
 msgstr "• Модули Python (например, Rich): см. Tests/test_rich_switching.py"
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:377
+#: /home/minds3t/omnipkg/omnipkg/cli.py:445
 msgid "   • Binary packages (e.g., uv): See tests/test_uv_switching.py"
 msgstr "• двоичные пакеты (например, UV): см. Tests/test_uv_switching.py"
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:378
+#: /home/minds3t/omnipkg/omnipkg/cli.py:446
 msgid "   • C-extension packages (e.g., numpy, scipy): See stress_test.py"
 msgstr "• C-Extension Packages (например, Numpy, Scipy): см. Scress_test.py"
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:379
+#: /home/minds3t/omnipkg/omnipkg/cli.py:447
 msgid ""
 "   • Complex dependency packages (e.g., TensorFlow): See "
 "tests/test_tensorflow_switching.py"
@@ -405,68 +352,60 @@ msgstr ""
 "• Сложные пакеты зависимостей (например, Tensorflow): см. "
 "Tests/test_tensorflow_switching.py"
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:380
+#: /home/minds3t/omnipkg/omnipkg/cli.py:448
 msgid ""
 "   • Note: The Flask demo is under construction and not currently available."
 msgstr ""
 "• ПРИМЕЧАНИЕ. Демонстрация колбы находится в стадии строительства и в "
 "настоящее время недоступна."
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:381
+#: /home/minds3t/omnipkg/omnipkg/cli.py:449
 msgid ""
 "\n"
 "Select a demo to run:"
 msgstr "Выберите демонстрацию для запуска:"
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:382
+#: /home/minds3t/omnipkg/omnipkg/cli.py:450
 msgid "1. Rich test (Python module switching)"
 msgstr "1. Богатый тест (переключение модуля Python)"
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:383
+#: /home/minds3t/omnipkg/omnipkg/cli.py:451
 msgid "2. UV test (binary switching)"
 msgstr "2. УФ -тест (бинарное переключение)"
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:384
+#: /home/minds3t/omnipkg/omnipkg/cli.py:452
 msgid "3. NumPy + SciPy stress test (C-extension switching)"
 msgstr "3. Numpy + Scipy стресс-тест (переключение C-расширения)"
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:385
+#: /home/minds3t/omnipkg/omnipkg/cli.py:453
 msgid "4. TensorFlow test (complex dependency switching)"
 msgstr "4. Тест TensorFlow (комплексное переключение зависимостей)"
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:386
+#: /home/minds3t/omnipkg/omnipkg/cli.py:454
 msgid "5. Flask test (under construction)"
 msgstr "5. Испытание колбы (в стадии строительства)"
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:388
-msgid "Enter your choice (1-5): "
-msgstr "Введите свой выбор (1-5):"
-
-#: /home/minds3t/omnipkg/omnipkg/cli.py:400
-msgid "  ⚠️  NumPy/SciPy Stress Test Requires Python 3.11"
-msgstr "⚠ Numpy/Scipy Stresst Test требует Python 3.11"
-
-#: /home/minds3t/omnipkg/omnipkg/cli.py:413
+#: /home/minds3t/omnipkg/omnipkg/cli.py:484
 msgid "⚠️ The Flask demo is under construction and not currently available."
 msgstr ""
 "⚠ Демонстрация колбы находится в стадии строительства и в настоящее время "
 "недоступна."
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:414
+#: /home/minds3t/omnipkg/omnipkg/cli.py:485
 msgid "Switching to the Rich test (option 1) for now!"
 msgstr "Переход на богатый тест (опция 1) на данный момент!"
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:416
+#: /home/minds3t/omnipkg/omnipkg/cli.py:487
 msgid "❌ Invalid choice. Please select 1, 2, 3, 4, or 5."
 msgstr "❌ Неверный выбор.Пожалуйста, выберите 1, 2, 3, 4 или 5."
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:484
+#: /home/minds3t/omnipkg/omnipkg/cli.py:555
 msgid ""
 "\n"
 "💡 Did you mean 'omnipkg config set language <code>'?"
 msgstr "💡 Вы имели в виду «Omnipkg Config Set Language <code>»?"
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:487
+#: /home/minds3t/omnipkg/omnipkg/cli.py:558
 msgid ""
 "\n"
 "❌ Operation cancelled by user."
@@ -477,84 +416,84 @@ msgstr "❌ Операция отменена пользователем."
 msgid "💭 Simulating Enter key press..."
 msgstr "💭 Моделирование клавиши Enter Нажмите ..."
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:933
+#: /home/minds3t/omnipkg/omnipkg/core.py:1081
 msgid ""
 "   1) stable-main:  Prioritize a stable main environment. (Recommended)"
 msgstr ""
 "1) Стабильный флажок: Расстановка приоритетов в стабильной основной "
 "среде.(Рекомендуется)"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:934
+#: /home/minds3t/omnipkg/omnipkg/core.py:1082
 msgid "   2) latest-active: Prioritize having the latest versions active."
 msgstr ""
 "2) Последний активный: расставаться с приоритетом, имея последние версии."
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:935
+#: /home/minds3t/omnipkg/omnipkg/core.py:1083
 msgid "   Enter choice (1 or 2) [1]: "
 msgstr "Введите выбор (1 или 2) [1]:"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:957
+#: /home/minds3t/omnipkg/omnipkg/core.py:1113
 msgid "   You can edit this file manually later."
 msgstr "Вы можете редактировать этот файл вручную позже."
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:1069
+#: /home/minds3t/omnipkg/omnipkg/core.py:1247
 msgid "    ⚠️ Warning: Failed to load path registry, starting fresh."
 msgstr "⚠ Предупреждение: не удалось загрузить реестр пути, начиная с свежо."
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:1135
+#: /home/minds3t/omnipkg/omnipkg/core.py:1304
 msgid "    -> Trying strategy 1: pip dry-run..."
 msgstr "-> Попробуйте стратегию 1: PIP Dry-Run ..."
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:1138
+#: /home/minds3t/omnipkg/omnipkg/core.py:1307
 msgid "    ✅ Success: Dependencies resolved via pip dry-run."
 msgstr "✅ Успех: зависимости, решаемые с помощью PIP Dry-Run."
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:1140
+#: /home/minds3t/omnipkg/omnipkg/core.py:1309
 msgid "    -> Trying strategy 2: PyPI API..."
 msgstr "-> Попробуйте стратегию 2: PYPI API ..."
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:1143
+#: /home/minds3t/omnipkg/omnipkg/core.py:1312
 msgid "    ✅ Success: Dependencies resolved via PyPI API."
 msgstr "✅ Успех: зависимости разрешены через PYPI API."
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:1145
+#: /home/minds3t/omnipkg/omnipkg/core.py:1314
 msgid "    -> Trying strategy 3: pip show fallback..."
 msgstr "-> Попробуйте стратегию 3: PIP Show Sharkback ..."
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:1148
+#: /home/minds3t/omnipkg/omnipkg/core.py:1317
 msgid "    ✅ Success: Dependencies resolved from existing installation."
 msgstr "✅ Успех: зависимости, решаемые из существующей установки."
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:1483
+#: /home/minds3t/omnipkg/omnipkg/core.py:1639
 msgid "    🔍 Verifying package integrity..."
 msgstr "🔍 Проверка целостности пакета ..."
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:1560
+#: /home/minds3t/omnipkg/omnipkg/core.py:1695
 msgid "    ⚡️ Loading main environment hash index from cache..."
 msgstr "⚡ Загрузка основной среды хэш -индекс из кеша ..."
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:1567
+#: /home/minds3t/omnipkg/omnipkg/core.py:1702
 msgid "    📦 Attempting fast indexing via package metadata..."
 msgstr "📦 Попытка быстрого индексации с помощью метаданных пакетов ..."
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:1944
+#: /home/minds3t/omnipkg/omnipkg/core.py:2083
 msgid "❌ Could not connect to Redis. Is the Redis server running?"
 msgstr "❌ Не удалось подключиться к Redis.Работает сервер Redis?"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:1956
+#: /home/minds3t/omnipkg/omnipkg/core.py:2095
 msgid "✅ Configuration file does not exist. Nothing to do."
 msgstr "✅ Файл конфигурации не существует.Ничего не делать."
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:1963
-#: /home/minds3t/omnipkg/omnipkg/core.py:1996
+#: /home/minds3t/omnipkg/omnipkg/core.py:2102
+#: /home/minds3t/omnipkg/omnipkg/core.py:2135
 msgid "🚫 Reset cancelled."
 msgstr "🚫 Сброс отменен."
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:1967
+#: /home/minds3t/omnipkg/omnipkg/core.py:2106
 msgid "✅ Configuration file deleted successfully."
 msgstr "✅ Файл конфигурации успешно удален."
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:1969
+#: /home/minds3t/omnipkg/omnipkg/core.py:2108
 msgid ""
 "🚀 The next time you run `omnipkg`, you will be guided through the first-time"
 " setup."
@@ -562,185 +501,185 @@ msgstr ""
 "🚀 В следующий раз, когда вы запустите `omnipkg`, вы будете руководствоваться"
 " первой настройкой."
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:1998
+#: /home/minds3t/omnipkg/omnipkg/core.py:2137
 msgid ""
 "\n"
 "🗑️  Clearing knowledge base..."
 msgstr "🗑 Очистка базы знаний ..."
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2010
+#: /home/minds3t/omnipkg/omnipkg/core.py:2149
 msgid "   ✅ Knowledge base was already clean."
 msgstr "✅ База знаний уже была чистой."
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2020
+#: /home/minds3t/omnipkg/omnipkg/core.py:2163
 msgid "🧠 Forcing a full rebuild of the knowledge base..."
 msgstr "🧠 Принудительное полное восстановление базы знаний ..."
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2028
+#: /home/minds3t/omnipkg/omnipkg/core.py:2173
 msgid "✅ Knowledge base rebuilt successfully."
 msgstr "✅ База знаний перестроена успешно."
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2045
+#: /home/minds3t/omnipkg/omnipkg/core.py:2189
 msgid "   🔄 Rebuilding core package metadata..."
 msgstr "🔄 Восстановление метаданных основных пакетов ..."
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2049
+#: /home/minds3t/omnipkg/omnipkg/core.py:2193
 msgid "   ✅ Core metadata rebuilt."
 msgstr "✅ Основные метаданные перестроены."
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2105
+#: /home/minds3t/omnipkg/omnipkg/core.py:2249
 msgid "🧠 Performing self-healing sync of knowledge base..."
 msgstr "🧠 Выполнение самовосстановления синхронизации базы знаний ..."
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2119
+#: /home/minds3t/omnipkg/omnipkg/core.py:2263
 msgid "   ✅ Knowledge base is empty or no packages found to sync."
 msgstr "✅ База знаний пуста или нет пакетов, найденных для синхронизации."
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2162
+#: /home/minds3t/omnipkg/omnipkg/core.py:2306
 msgid "   ✅ Knowledge base is already in sync with the environment."
 msgstr "✅ База знаний уже синхронизирована с окружающей средой."
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2171
+#: /home/minds3t/omnipkg/omnipkg/core.py:2315
 msgid "🔄 Updating cached file hash index..."
 msgstr "🔄 Обновление кэшированного хэш -индекс файла ..."
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2192
+#: /home/minds3t/omnipkg/omnipkg/core.py:2336
 msgid "✅ Hash index updated."
 msgstr "✅ Обновлен хэш -индекс."
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2244
-#: /home/minds3t/omnipkg/omnipkg/core.py:2595
+#: /home/minds3t/omnipkg/omnipkg/core.py:2389
+#: /home/minds3t/omnipkg/omnipkg/core.py:2926
 msgid "✅ Knowledge base is already up to date."
 msgstr "✅ База знаний уже обновлена."
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2246
+#: /home/minds3t/omnipkg/omnipkg/core.py:2391
 msgid "🧠 Updating knowledge base for changes..."
 msgstr "🧠 Обновление базы знаний для изменений ..."
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2269
-#: /home/minds3t/omnipkg/omnipkg/core.py:2593
+#: /home/minds3t/omnipkg/omnipkg/core.py:2415
+#: /home/minds3t/omnipkg/omnipkg/core.py:2924
 msgid "✅ Knowledge base updated successfully."
 msgstr "✅ База знаний обновляется успешно."
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:363
-#: /home/minds3t/omnipkg/omnipkg/core.py:2350
+#: /home/minds3t/omnipkg/omnipkg/cli.py:429
+#: /home/minds3t/omnipkg/omnipkg/core.py:2496
 msgid "❌ Invalid selection."
 msgstr "❌ Неверный выбор."
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2352
+#: /home/minds3t/omnipkg/omnipkg/core.py:2498
 msgid "❌ Please enter a number."
 msgstr "❌ Пожалуйста, введите номер."
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2354
+#: /home/minds3t/omnipkg/omnipkg/core.py:2500
 msgid ""
 "\n"
 "   Skipped."
 msgstr "Пропустил."
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2356
+#: /home/minds3t/omnipkg/omnipkg/core.py:2502
 msgid "📦 No installed versions found in Redis."
 msgstr "📦 Установленные версии, найденные в Redis."
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2411
+#: /home/minds3t/omnipkg/omnipkg/core.py:2557
 msgid "   ✅ Snapshot saved."
 msgstr "✅ Снимок сохранил."
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2441
+#: /home/minds3t/omnipkg/omnipkg/core.py:2772
 msgid "🔬 Running in --dry-run mode. No changes will be made."
 msgstr "🔬 Запуск в режиме-Dry-Run.Никаких изменений не будет внесено."
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2481
+#: /home/minds3t/omnipkg/omnipkg/core.py:2812
 msgid ""
 "\n"
 "🎉 All package operations complete."
 msgstr "🎉 Все пакетные операции завершены."
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2504
+#: /home/minds3t/omnipkg/omnipkg/core.py:2835
 msgid ""
 "\n"
 "📸 Taking LIVE pre-installation snapshot..."
 msgstr "📸 Снижение снимка в прямом эфире ..."
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2514
+#: /home/minds3t/omnipkg/omnipkg/core.py:2845
 msgid ""
 "\n"
 "🔬 Analyzing post-installation changes..."
 msgstr "🔬 Анализ изменений после установки ..."
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2531
+#: /home/minds3t/omnipkg/omnipkg/core.py:2862
 msgid ""
 "\n"
 "🛡️ STABILITY PROTECTION ACTIVATED!"
 msgstr "🛡 Активирована защита от стабильности!"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2550
+#: /home/minds3t/omnipkg/omnipkg/core.py:2881
 msgid ""
 "\n"
 "✅ Stability protection complete!"
 msgstr "✅ Защита от стабильности завершена!"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2552
+#: /home/minds3t/omnipkg/omnipkg/core.py:2883
 msgid ""
 "✅ No changes to existing packages detected. Installation completed safely."
 msgstr ""
 "✅ Не обнаружены изменения в существующих пакетах.Установка завершена "
 "безопасно."
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2634
+#: /home/minds3t/omnipkg/omnipkg/core.py:2965
 msgid "🎉 All package operations complete."
 msgstr "🎉 Все пакетные операции завершены."
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2688
+#: /home/minds3t/omnipkg/omnipkg/core.py:3019
 msgid "🔄 Restoring main environment from snapshot..."
 msgstr "🔄 Восстановление основной среды из снижения ..."
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2694
+#: /home/minds3t/omnipkg/omnipkg/core.py:3025
 msgid "   ✅ Environment is already in its original state."
 msgstr "✅ Окружающая среда уже находится в своем первоначальном состоянии."
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2702
+#: /home/minds3t/omnipkg/omnipkg/core.py:3033
 msgid "   ✅ Environment restored."
 msgstr "✅ Окружающая среда восстановлена."
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2864
+#: /home/minds3t/omnipkg/omnipkg/core.py:3195
 msgid "🤷 No versions available for selection."
 msgstr "🤷 Версии не доступны для выбора."
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2869
-#: /home/minds3t/omnipkg/omnipkg/core.py:2900
+#: /home/minds3t/omnipkg/omnipkg/core.py:3200
+#: /home/minds3t/omnipkg/omnipkg/core.py:3231
 msgid "🚫 Uninstall cancelled."
 msgstr "🚫 Удалить отменен."
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2878
+#: /home/minds3t/omnipkg/omnipkg/core.py:3209
 msgid "❌ Invalid input."
 msgstr "❌ Неверный ввод."
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2882
+#: /home/minds3t/omnipkg/omnipkg/core.py:3213
 msgid ""
 "\n"
 "🚫 Uninstall cancelled."
 msgstr "🚫 Удалить отменен."
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2892
+#: /home/minds3t/omnipkg/omnipkg/core.py:3223
 msgid "🤷 No versions selected for uninstallation after protection checks."
 msgstr "🤷 Версии не выбраны для удаления после проверки защиты."
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2928
+#: /home/minds3t/omnipkg/omnipkg/core.py:3259
 msgid "✅ Uninstallation complete."
 msgstr "✅ Снижение завершения."
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2940
+#: /home/minds3t/omnipkg/omnipkg/core.py:3271
 msgid ""
 "   Run an `omnipkg install` or `omnipkg uninstall` command to create one."
 msgstr ""
 "Запустите команду `omnipkg install` или` omnipkg uninstall`, чтобы создать "
 "ее."
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2942
+#: /home/minds3t/omnipkg/omnipkg/core.py:3273
 msgid "⚖️  Comparing current environment to the last known good snapshot..."
 msgstr "⚖ Сравнение текущей среды с последним известным хорошим снимком ..."
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2951
+#: /home/minds3t/omnipkg/omnipkg/core.py:3282
 msgid ""
 "✅ Your environment is already in the last known good state. No action "
 "needed."
@@ -748,24 +687,24 @@ msgstr ""
 "✅ Ваша среда уже находится в последнем известном хорошем состоянии.Нет "
 "никаких действий."
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2953
+#: /home/minds3t/omnipkg/omnipkg/core.py:3284
 msgid ""
 "\n"
 "📝 The following actions will be taken to restore the environment:"
 msgstr ""
 "📝 Следующие действия будут предприняты для восстановления окружающей среды:"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2963
+#: /home/minds3t/omnipkg/omnipkg/core.py:3294
 msgid "🚫 Revert cancelled."
 msgstr "🚫 вернуть отменен."
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2965
+#: /home/minds3t/omnipkg/omnipkg/core.py:3296
 msgid ""
 "\n"
 "🚀 Starting revert operation..."
 msgstr "🚀 Запуск операции по возврату ..."
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2987
+#: /home/minds3t/omnipkg/omnipkg/core.py:3318
 msgid ""
 "\n"
 "✅ Environment successfully reverted to the last known good state."
@@ -773,47 +712,47 @@ msgstr ""
 "✅ Окружающая среда успешно вернулась к последнему известному хорошему "
 "государству."
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:3300
+#: /home/minds3t/omnipkg/omnipkg/core.py:3768
 msgid "  (No versions found in knowledge base)"
 msgstr "(Версии не обнаружены в базе знаний)"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:3313
+#: /home/minds3t/omnipkg/omnipkg/core.py:3781
 msgid "🔄 omnipkg System Status"
 msgstr "🔄 Omnipkg System Статус системы"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:3318
-#: /home/minds3t/omnipkg/omnipkg/core.py:3321
+#: /home/minds3t/omnipkg/omnipkg/core.py:3786
+#: /home/minds3t/omnipkg/omnipkg/core.py:3789
 msgid ""
 "\n"
 "🔒 Pip in Jail (main environment)"
 msgstr "🔒 PIP в тюрьме (Основная среда)"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:3322
+#: /home/minds3t/omnipkg/omnipkg/core.py:3790
 msgid "    🚫 Pip not found in the main env. Escaped or never caught!"
 msgstr "🚫 PIP не найден в главной Env.Сбежал или никогда не поймал!"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:3325
-#: /home/minds3t/omnipkg/omnipkg/core.py:3328
+#: /home/minds3t/omnipkg/omnipkg/core.py:3793
+#: /home/minds3t/omnipkg/omnipkg/core.py:3796
 msgid "🔒 UV in Jail (main environment)"
 msgstr "🔒 UV в тюрьме (Основная среда)"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:3329
+#: /home/minds3t/omnipkg/omnipkg/core.py:3797
 msgid "    🚫 UV not found in the main env. Too fast to catch!"
 msgstr "🚫 UV не найдено в главной Env.Слишком быстро, чтобы поймать!"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:3330
+#: /home/minds3t/omnipkg/omnipkg/core.py:3798
 msgid ""
 "\n"
 "🌍 Main Environment:"
 msgstr "🌍 Основная среда:"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:3335
+#: /home/minds3t/omnipkg/omnipkg/core.py:3803
 msgid ""
 "\n"
 "📦 izolasyon Alanı (Bubbles):"
 msgstr "📦 Изоласион Алани (пузырьки):"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:3337
+#: /home/minds3t/omnipkg/omnipkg/core.py:3805
 msgid "  - No isolated package versions found."
 msgstr "- Не найдено изолированных версий упаковки."
 
@@ -973,82 +912,79 @@ msgstr "🚀 Ад зависимости Ад официально решает�
 msgid "   Welcome to omnipkg heaven!"
 msgstr "Добро пожаловать в Omnipkg Heaven!"
 
-#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:158
+#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:682
 msgid ""
 "🚀 Starting omnipkg Metadata Builder v11 (Multi-Version Complete Edition)..."
 msgstr ""
 "🚀 Запуск Omnipkg Metadata Builder v11 (многоэверное полное издание) ..."
 
-#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:169
+#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:703
 msgid "🔍 No specific targets provided. Discovering all installed packages..."
 msgstr ""
 "🔍 Не предоставлены конкретные цели.Обнаружение всех установленных пакетов "
 "..."
 
-#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:171
-msgid "🛡️ Performing bulk security scan for active packages..."
-msgstr ""
-"🛡 Выполнение объемного сканирования безопасности для активных пакетов ..."
-
 #: /home/minds3t/omnipkg/omnipkg/activator.py:53
 msgid "_omnipkg_ACTIVE_{}"
 msgstr "_omnipkg_active_ {}"
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:48
-#: /home/minds3t/omnipkg/omnipkg/cli.py:402
+#: /home/minds3t/omnipkg/omnipkg/cli.py:53
+#: /home/minds3t/omnipkg/omnipkg/cli.py:122
+#: /home/minds3t/omnipkg/omnipkg/cli.py:134
+#: /home/minds3t/omnipkg/omnipkg/cli.py:442
 msgid "Current Python version: {}.{}"
 msgstr "Текущая версия Python: {}. {}"
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:103
+#: /home/minds3t/omnipkg/omnipkg/cli.py:171
 msgid "❌ An error occurred during stress test execution: {}"
 msgstr "❌ Во время выполнения стресс -теста произошла ошибка: {}"
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:109
-#: /home/minds3t/omnipkg/omnipkg/cli.py:158
+#: /home/minds3t/omnipkg/omnipkg/cli.py:177
+#: /home/minds3t/omnipkg/omnipkg/cli.py:224
 msgid "🚀 Running {} test from {}..."
 msgstr "🚀 Запуск {} тест из {} ..."
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:137
-#: /home/minds3t/omnipkg/omnipkg/cli.py:186
+#: /home/minds3t/omnipkg/omnipkg/cli.py:208
+#: /home/minds3t/omnipkg/omnipkg/cli.py:252
 msgid "❌ Demo failed with return code {}"
 msgstr "❌ Демонстрация не удалась с кодом возврата {}"
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:150
+#: /home/minds3t/omnipkg/omnipkg/cli.py:217
 msgid "❌ Demo failed with error: {}"
 msgstr "❌ Демонстрация не удалась с ошибкой: {}"
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:201
+#: /home/minds3t/omnipkg/omnipkg/cli.py:267
 msgid ""
 "\n"
 "❌ Demo failed with error: {}"
 msgstr "❌ Демонстрация не удалась с ошибкой: {}"
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:269
+#: /home/minds3t/omnipkg/omnipkg/cli.py:335
 #: /home/minds3t/omnipkg/omnipkg/common_utils.py:55
 #: /home/minds3t/omnipkg/omnipkg/demo.py:81
 #: /home/minds3t/omnipkg/tests/test_rich_switching.py:36
-#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:33
-#: /home/minds3t/omnipkg/tests/test_uv_switching.py:33
+#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:137
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:31
 msgid "  🚀 {}"
 msgstr "  🚀 {}"
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:300
+#: /home/minds3t/omnipkg/omnipkg/cli.py:366
 msgid "❌ Error: Language '{}' not supported. Supported: {}"
 msgstr "❌ Ошибка: язык '{}' не поддерживается.Поддерживается: {}"
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:419
+#: /home/minds3t/omnipkg/omnipkg/cli.py:490
 msgid "❌ Error: Test file {} not found."
 msgstr "❌ Ошибка: тестовый файл {} не найден."
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:431
+#: /home/minds3t/omnipkg/omnipkg/cli.py:502
 msgid "❌ Error: Requirements file not found at '{}'"
 msgstr "❌ Ошибка: файл требований не найден в '{}'"
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:433
+#: /home/minds3t/omnipkg/omnipkg/cli.py:504
 msgid "📄 Reading packages from {}..."
 msgstr "📄 Чтение пакетов из {}"
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:490
+#: /home/minds3t/omnipkg/omnipkg/cli.py:561
 msgid ""
 "\n"
 "❌ An unexpected error occurred: {}"
@@ -1071,56 +1007,47 @@ msgstr "Выбор (y/n):"
 msgid "💭 {}"
 msgstr "💭 {}"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:83
-msgid "⚠️ Warning: Could not recursively read package metadata: {}"
-msgstr "⚠ Предупреждение: не удалось прочитать метаданные пакета: {}"
-
-#: /home/minds3t/omnipkg/omnipkg/core.py:1308
+#: /home/minds3t/omnipkg/omnipkg/core.py:1477
 msgid "{}bubble:{}:{}:file_paths"
 msgstr "{} bubble: {}: {}: file_paths"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:1108
+#: /home/minds3t/omnipkg/omnipkg/core.py:1277
 msgid "🫧 Creating isolated bubble for {} v{}"
 msgstr "🫧 Создание изолированного пузыря для {} v {}"
 
-#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:458
-msgid "{}-{}"
-msgstr "{}-{}"
-
-#: /home/minds3t/omnipkg/omnipkg/core.py:1124
+#: /home/minds3t/omnipkg/omnipkg/core.py:1293
 msgid "    📦 Installing full dependency tree to temporary location..."
 msgstr "📦 Установка полного дерева зависимости во временное место ..."
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:1127
+#: /home/minds3t/omnipkg/omnipkg/core.py:1296
 msgid "    ❌ Failed to install exact version tree: {}"
 msgstr "❌ Не удалось установить точное дерево версий: {}"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:1131
+#: /home/minds3t/omnipkg/omnipkg/core.py:1300
 msgid "    ❌ Unexpected error during installation: {}"
 msgstr "❌ Неожиданная ошибка во время установки: {}"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:1150
+#: /home/minds3t/omnipkg/omnipkg/core.py:1319
 msgid "    ⚠️ All dependency resolution strategies failed for {}=={}."
 msgstr "⚠ Все стратегии разрешения зависимости не удались для {} == {}."
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:1151
+#: /home/minds3t/omnipkg/omnipkg/core.py:1320
 msgid "    ℹ️  Proceeding with full temporary installation to build bubble."
 msgstr "ℹ Работа с полной временной установкой для создания пузыря."
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:1158
-#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:375
+#: /home/minds3t/omnipkg/omnipkg/core.py:1327
 msgid "{}=={}\n"
 msgstr "{} == {}"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:1236
+#: /home/minds3t/omnipkg/omnipkg/core.py:1405
 msgid "{}{}"
 msgstr "{} {}"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:1315
+#: /home/minds3t/omnipkg/omnipkg/core.py:1484
 msgid "    ⚠️  Could not analyze {}: {}"
 msgstr "⚠ Не удалось проанализировать {}: {}"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:1317
+#: /home/minds3t/omnipkg/omnipkg/core.py:1486
 msgid ""
 "    ⚠️  Found {} files not in registry. They will be registered during "
 "bubble creation."
@@ -1128,448 +1055,435 @@ msgstr ""
 "⚠ Найдено {} файлы не в реестре.Они будут зарегистрированы во время создания"
 " пузырьков."
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:1363
+#: /home/minds3t/omnipkg/omnipkg/core.py:1519
 msgid "    🧹 Creating deduplicated bubble at {}"
 msgstr "🧹 Создание дедуплицированного пузыря в {}"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:1377
+#: /home/minds3t/omnipkg/omnipkg/core.py:1533
 msgid "    🔬 Found C-extension packages: {}"
 msgstr "🔬 Нашел пакеты C-Extension: {}"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:1379
+#: /home/minds3t/omnipkg/omnipkg/core.py:1535
 msgid "    ⚙️  Found binary packages: {}"
 msgstr "⚙ найдены двоичные пакеты: {}"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:1381
+#: /home/minds3t/omnipkg/omnipkg/core.py:1537
 msgid "    📦 Found complex packages with submodules: {}"
 msgstr "📦 Нашел сложные пакеты с подмодулями: {}"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:1386
+#: /home/minds3t/omnipkg/omnipkg/core.py:1542
 msgid "    🔬 {}: C-extension - copying all files"
 msgstr "🔬 {}: c -extension - копирование всех файлов"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:1389
+#: /home/minds3t/omnipkg/omnipkg/core.py:1545
 msgid "    ⚙️  {}: Binary package - copying all files"
 msgstr "⚙ {}: двоичный пакет - копирование всех файлов"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:1392
+#: /home/minds3t/omnipkg/omnipkg/core.py:1548
 msgid "    📦 {}: Complex package ({} submodules) - copying all files"
 msgstr "📦 {}: комплексный пакет ({} субмодуля) - копирование всех файлов"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:1430
+#: /home/minds3t/omnipkg/omnipkg/core.py:1586
 msgid "    📄 {}: copied {}, deduplicated {}"
 msgstr "📄 {}: скопировано {}, дедупликация {}"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:1434
+#: /home/minds3t/omnipkg/omnipkg/core.py:1590
 msgid "    ⚠️  Found {} file(s) not listed in package metadata."
 msgstr "⚠ Нашел {} файлы (ы), не указанные в метаданных пакетов."
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:1442
+#: /home/minds3t/omnipkg/omnipkg/core.py:1598
 msgid "    📦 {}: found {} additional files"
 msgstr "📦 {}: найдено {} дополнительные файлы"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:1471
+#: /home/minds3t/omnipkg/omnipkg/core.py:1627
 msgid "    ✅ Bubble created: {} files copied, {} deduplicated."
 msgstr "✅ Создано пузырь: {} файлы копируются, {} deduplicated."
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:1472
+#: /home/minds3t/omnipkg/omnipkg/core.py:1628
 msgid "    📊 Space efficiency: {}% saved."
 msgstr "📊 Эффективность пространства: {}% Сохраняется."
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:1474
+#: /home/minds3t/omnipkg/omnipkg/core.py:1630
 msgid "    📦 Complex packages preserved: {} packages with submodules"
 msgstr "📦 Сложные пакеты сохранились: {} пакеты с подмодулями"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:1494
+#: /home/minds3t/omnipkg/omnipkg/core.py:1650
 msgid "    ⚠️  Missing package directory: {}"
 msgstr "⚠ Отсутствующий каталог пакетов: {}"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:1501
+#: /home/minds3t/omnipkg/omnipkg/core.py:1657
 msgid "    🚨 CRITICAL: Missing Python module: {}"
 msgstr "🚨 Критическое: отсутствующий модуль Python: {}"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:1503
+#: /home/minds3t/omnipkg/omnipkg/core.py:1659
 msgid "    🔧 Fixed: Copied missing module {}"
 msgstr "🔧 Исправлено: скопирован отсутствующий модуль {}"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:1536
+#: /home/minds3t/omnipkg/omnipkg/core.py:1684
 msgid "    ⚠️ Warning: Failed to copy {}: {}"
 msgstr "⚠ Предупреждение: не удалось скопировать {}: {}"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:1558
-#: /home/minds3t/omnipkg/omnipkg/core.py:2168
+#: /home/minds3t/omnipkg/omnipkg/core.py:1693
+#: /home/minds3t/omnipkg/omnipkg/core.py:2312
 msgid "{}main_env:file_hashes"
 msgstr "{} main_env: file_hashes"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:1562
+#: /home/minds3t/omnipkg/omnipkg/core.py:1697
 msgid "    📈 Loaded {} file hashes from Redis."
 msgstr "📈 Загружено {} Хэши файла из Redis."
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:1564
+#: /home/minds3t/omnipkg/omnipkg/core.py:1699
 msgid "    🔍 Building main environment hash index..."
 msgstr "🔍 Строительство основного хэш -индекс среды ..."
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:1592
+#: /home/minds3t/omnipkg/omnipkg/core.py:1727
 msgid "    ✅ Successfully indexed {} packages via metadata"
 msgstr "✅ Успешно индексированные {} пакеты с помощью метаданных"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:1594
+#: /home/minds3t/omnipkg/omnipkg/core.py:1729
 msgid "    🔄 Fallback scan for {} packages: {}{}"
 msgstr "🔄 Sparkback Scan для {} пакетов: {} {}"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:1607
+#: /home/minds3t/omnipkg/omnipkg/core.py:1742
 msgid "    ⚠️ Metadata approach failed ({}), falling back to full scan..."
 msgstr ""
 "⚠️ Метод метаданных не сработал ({}), выполняется полное сканирование..."
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:1614
+#: /home/minds3t/omnipkg/omnipkg/core.py:1749
 msgid "    💾 Saving {} file hashes to Redis cache..."
 msgstr "💾 Сохранение {} Хэш файла в кэш Redis ..."
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:1620
+#: /home/minds3t/omnipkg/omnipkg/core.py:1755
 msgid "    📈 Indexed {} files from main environment."
 msgstr "📈 Индексированные {} файлы из основной среды."
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:1665
-#: /home/minds3t/omnipkg/omnipkg/core.py:1693
-#: /home/minds3t/omnipkg/omnipkg/core.py:1720
+#: /home/minds3t/omnipkg/omnipkg/core.py:1800
+#: /home/minds3t/omnipkg/omnipkg/core.py:1828
+#: /home/minds3t/omnipkg/omnipkg/core.py:1855
 msgid "{}bubble_locations"
 msgstr "{} bubble_locations"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:1661
-#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:29
+#: /home/minds3t/omnipkg/omnipkg/core.py:1796
 msgid "{}.{}"
 msgstr "{}. {}"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:1631
+#: /home/minds3t/omnipkg/omnipkg/core.py:1766
 msgid "    📝 Registered bubble location and stats for {} packages."
 msgstr ""
 "📝 Зарегистрированное местоположение пузыря и статистика для {} пакетов."
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2265
-msgid "bubble_version:{}"
-msgstr "bubble_version: {}"
-
-#: /home/minds3t/omnipkg/omnipkg/core.py:1676
-#: /home/minds3t/omnipkg/omnipkg/core.py:2915
-#: /home/minds3t/omnipkg/omnipkg/core.py:3275
+#: /home/minds3t/omnipkg/omnipkg/core.py:1811
+#: /home/minds3t/omnipkg/omnipkg/core.py:3246
+#: /home/minds3t/omnipkg/omnipkg/core.py:3743
 msgid "{}:installed_versions"
 msgstr "{}: stanted_versions"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:1680
-#: /home/minds3t/omnipkg/omnipkg/core.py:1705
-#: /home/minds3t/omnipkg/omnipkg/core.py:1710
-#: /home/minds3t/omnipkg/omnipkg/core.py:1712
-#: /home/minds3t/omnipkg/omnipkg/core.py:1750
+#: /home/minds3t/omnipkg/omnipkg/core.py:1815
+#: /home/minds3t/omnipkg/omnipkg/core.py:1840
+#: /home/minds3t/omnipkg/omnipkg/core.py:1845
+#: /home/minds3t/omnipkg/omnipkg/core.py:1847
+#: /home/minds3t/omnipkg/omnipkg/core.py:1885
 msgid "{}pkg_to_bubble"
 msgstr "{} pkg_to_bubble"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:1682
-#: /home/minds3t/omnipkg/omnipkg/core.py:1753
+#: /home/minds3t/omnipkg/omnipkg/core.py:1817
+#: /home/minds3t/omnipkg/omnipkg/core.py:1888
 msgid "{}bubbles_by_size:{}"
 msgstr "{} bubbles_by_size: {}"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:1684
+#: /home/minds3t/omnipkg/omnipkg/core.py:1819
 msgid "    📝 Created manifest and registered bubble for {} packages ({} MB)."
 msgstr ""
 "📝 Созданный манифест и зарегистрированный пузырь для {} пакетов ({} MB)."
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:1686
+#: /home/minds3t/omnipkg/omnipkg/core.py:1821
 msgid "    ⚠️ Warning: Failed to register bubble in Redis: {}"
 msgstr "⚠ Предупреждение: не удалось зарегистрировать пузырь в Redis: {}"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:1687
+#: /home/minds3t/omnipkg/omnipkg/core.py:1822
 msgid "    📝 Local manifest created at {}"
 msgstr "📝 Локальный манифест, созданный в {}"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:1744
+#: /home/minds3t/omnipkg/omnipkg/core.py:1879
 msgid "    🧹 Cleaning up {} old bubbles ({} MB)..."
 msgstr "🧹 Очистка {} старые пузырьки ({} mb) ..."
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:1758
+#: /home/minds3t/omnipkg/omnipkg/core.py:1893
 msgid "    ✅ Freed {} MB of storage."
 msgstr "✅ Freed {} Mb хранения."
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:1760
+#: /home/minds3t/omnipkg/omnipkg/core.py:1895
 msgid "    ✅ No bubbles need cleanup."
 msgstr "✅ Никакие пузырьки не нуждаются в очистке."
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:1792
+#: /home/minds3t/omnipkg/omnipkg/core.py:1927
 msgid "    🧠 HookManager now aware of new bubble: {}=={}"
 msgstr "🧠 Hookmanager теперь знает о новом пузыре: {} == {}"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:1817
+#: /home/minds3t/omnipkg/omnipkg/core.py:1952
 msgid "    ❌ Bubble not found in HookManager's map for {}=={}"
 msgstr "❌ Пузырь, не найденный на карте Хукманагера для {} == {}"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:1821
+#: /home/minds3t/omnipkg/omnipkg/core.py:1956
 msgid "    ❌ Bubble directory does not exist at: {}"
 msgstr "❌ Bubble Directory не существует на: {}"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:1825
+#: /home/minds3t/omnipkg/omnipkg/core.py:1960
 msgid "    ❌ Bubble is incomplete: Missing manifest file at {}"
 msgstr "❌ пузырь неполный: отсутствует манифестный файл в {}"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:1829
+#: /home/minds3t/omnipkg/omnipkg/core.py:1964
 msgid "    ⚠️  Warning: Bubble for {}=={} does not contain a 'bin' directory."
 msgstr "⚠ Предупреждение: пузырь для {} == {} не содержит каталога 'bin'."
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:1830
+#: /home/minds3t/omnipkg/omnipkg/core.py:1965
 msgid "    ✅ Bubble validated successfully: {}=={}"
 msgstr "✅ Пузырь проверяется успешно: {} == {}"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:1947
+#: /home/minds3t/omnipkg/omnipkg/core.py:2086
 msgid "❌ An unexpected Redis connection error occurred: {}"
 msgstr "❌ Неожиданная ошибка подключения Redis произошла: {}"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:1958
+#: /home/minds3t/omnipkg/omnipkg/core.py:2097
 msgid "🗑️  This will permanently delete your configuration file at:"
 msgstr "🗑 Это навсегда удалит ваш файл конфигурации по адресу:"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:1973
+#: /home/minds3t/omnipkg/omnipkg/core.py:2112
 msgid "❌ Error: Could not delete configuration file: {}"
 msgstr "❌ Ошибка: не удалось удалить файл конфигурации: {}"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:1974
+#: /home/minds3t/omnipkg/omnipkg/core.py:2113
 msgid "   Please check your file permissions for {}"
 msgstr "Пожалуйста, проверьте свои разрешения на файл на {}"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:1988
+#: /home/minds3t/omnipkg/omnipkg/core.py:2127
 msgid ""
 "\n"
 "🧠 omnipkg Knowledge Base Reset"
 msgstr "🧠 Omnipkg Base Base Base Base Reset"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:1992
+#: /home/minds3t/omnipkg/omnipkg/core.py:2131
 msgid "   ⚠️  This command does NOT uninstall any Python packages."
 msgstr "⚠ Эта команда не удаляет какие -либо пакеты Python."
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2008
+#: /home/minds3t/omnipkg/omnipkg/core.py:2147
 msgid "   ✅ Cleared {} cached entries from Redis."
 msgstr "✅ очищенные {} кэшированные записи от Redis."
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2012
+#: /home/minds3t/omnipkg/omnipkg/core.py:2151
 msgid "   ❌ Failed to clear knowledge base: {}"
 msgstr "❌ Не удалось очистить базу знаний: {}"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2031
-msgid "    ❌ Knowledge base rebuild failed with exit code {}."
-msgstr "❌ Резервная реконструкция базы знаний с кодом выхода {}."
-
-#: /home/minds3t/omnipkg/omnipkg/core.py:2034
+#: /home/minds3t/omnipkg/omnipkg/core.py:2176
 msgid "    ❌ An unexpected error occurred during knowledge base rebuild: {}"
 msgstr ""
 "❌ Неожиданная ошибка произошла во время восстановления базы знаний: {}"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2051
+#: /home/minds3t/omnipkg/omnipkg/core.py:2195
 msgid "   ❌ Metadata rebuild failed: {}"
 msgstr "❌ Metadata Rebuild не удалось: {}"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2053
+#: /home/minds3t/omnipkg/omnipkg/core.py:2197
 msgid "   (Skipping {} - feature coming soon!)"
 msgstr "(Skining {} - функция скоро появится!)"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2160
+#: /home/minds3t/omnipkg/omnipkg/core.py:2304
 msgid "   ✅ Sync complete. Reconciled {} discrepancies."
 msgstr "✅ Синхронизированная.Согласованные {} расхождения."
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2203
+#: /home/minds3t/omnipkg/omnipkg/core.py:2347
 msgid "    ⚠️  Could not perform live package scan: {}"
 msgstr "⚠ Не удалось выполнить живое сканирование пакетов: {}"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2208
+#: /home/minds3t/omnipkg/omnipkg/core.py:2352
 msgid "{}versions"
 msgstr "{} версии"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2249
+#: /home/minds3t/omnipkg/omnipkg/core.py:2394
 msgid "   -> Processing {} changed/new package(s)..."
 msgstr "-> Обработка {} изменено/новый пакет (s) ..."
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2254
+#: /home/minds3t/omnipkg/omnipkg/core.py:2400
 msgid "   -> Cleaning up {} uninstalled package(s) from Redis..."
 msgstr "-> Очистка {} Удаленные пакет (ы) из Redis ..."
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2259
-msgid "{}:{}"
-msgstr "{}: {}"
-
-#: /home/minds3t/omnipkg/omnipkg/core.py:2271
+#: /home/minds3t/omnipkg/omnipkg/core.py:2417
 msgid "    ⚠️ Failed to update knowledge base for delta: {}"
 msgstr "⚠ Не удалось обновить базу знаний для Delta: {}"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2290
+#: /home/minds3t/omnipkg/omnipkg/core.py:2436
 msgid "❌ An unexpected error occurred while showing package info: {}"
 msgstr ""
 "❌ Неожиданная ошибка произошла во время показы информации о пакете: {}"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2303
+#: /home/minds3t/omnipkg/omnipkg/core.py:2449
 msgid "{}, ...and {} more"
 msgstr "{}, ... и {} подробнее"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2313
+#: /home/minds3t/omnipkg/omnipkg/core.py:2459
 msgid ""
 "\n"
 "📋 KEY DATA: No Redis data found for '{}'"
 msgstr "📋 Данные ключа: нет данных Redis, найденных для '{}'"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2315
+#: /home/minds3t/omnipkg/omnipkg/core.py:2461
 msgid ""
 "\n"
 "📋 KEY DATA for '{}':"
 msgstr "📋 Данные ключа для '{}':"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2319
+#: /home/minds3t/omnipkg/omnipkg/core.py:2465
 msgid "🎯 Active Version: {}"
 msgstr "🎯 Активная версия: {}"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2322
+#: /home/minds3t/omnipkg/omnipkg/core.py:2468
 msgid "🫧 Bubbled Versions: {}"
 msgstr "🫧 Пузырированные версии: {}"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2328
+#: /home/minds3t/omnipkg/omnipkg/core.py:2474
 msgid ""
 "\n"
 "📦 Available Versions:"
 msgstr "📦 Доступные версии:"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2336
+#: /home/minds3t/omnipkg/omnipkg/core.py:2482
 msgid "  {}) {}{}"
 msgstr "{}) {} {}"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2337
+#: /home/minds3t/omnipkg/omnipkg/core.py:2483
 msgid ""
 "\n"
 "💡 Want details on a specific version?"
 msgstr "💡 Хотите подробности о конкретной версии?"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2339
+#: /home/minds3t/omnipkg/omnipkg/core.py:2485
 msgid "Enter number (1-{}) or press Enter to skip: "
 msgstr "Введите номер (1- {}) или нажмите Enter, чтобы пропустить:"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2283
-#: /home/minds3t/omnipkg/omnipkg/core.py:2346
+#: /home/minds3t/omnipkg/omnipkg/core.py:2429
+#: /home/minds3t/omnipkg/omnipkg/core.py:2492
 msgid "📄 Detailed info for {} v{}"
 msgstr "📄 Подробная информация для {} v {}"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2374
+#: /home/minds3t/omnipkg/omnipkg/core.py:2520
 msgid "❌ No detailed data found for {} v{}"
 msgstr "❌ Нет подробных данных для {} v {}"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2378
+#: /home/minds3t/omnipkg/omnipkg/core.py:2524
 msgid "The data is fetched from Redis key: {}"
 msgstr "Данные извлекаются из redis key: {}"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2385
-#: /home/minds3t/omnipkg/omnipkg/core.py:2387
-#: /home/minds3t/omnipkg/omnipkg/core.py:2389
+#: /home/minds3t/omnipkg/omnipkg/core.py:2531
+#: /home/minds3t/omnipkg/omnipkg/core.py:2533
+#: /home/minds3t/omnipkg/omnipkg/core.py:2535
 msgid "{}: {}"
 msgstr "{}: {}"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2391
+#: /home/minds3t/omnipkg/omnipkg/core.py:2537
 msgid ""
 "\n"
 "---[ Health & Security ]---"
 msgstr "--- [Здоровье и безопасность] ---"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2394
-#: /home/minds3t/omnipkg/omnipkg/core.py:2401
-#: /home/minds3t/omnipkg/tests/test_rich_switching.py:300
+#: /home/minds3t/omnipkg/omnipkg/core.py:2540
+#: /home/minds3t/omnipkg/omnipkg/core.py:2547
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:310
 msgid "   {}: {}"
 msgstr "   {}: {}"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2396
+#: /home/minds3t/omnipkg/omnipkg/core.py:2542
 msgid ""
 "\n"
 "---[ Build Info ]---"
 msgstr "--- [Построить информацию] ---"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2402
+#: /home/minds3t/omnipkg/omnipkg/core.py:2548
 msgid ""
 "\n"
 "💡 For all raw data, use Redis key: \"{}\""
 msgstr "💡 Для всех необработанных данных используйте redis key: \"{}\""
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2413
+#: /home/minds3t/omnipkg/omnipkg/core.py:2559
 msgid "   ⚠️ Could not save environment snapshot: {}"
 msgstr "⚠ Не удалось сохранить снимки среды: {}"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2654
+#: /home/minds3t/omnipkg/omnipkg/core.py:2985
 msgid "Error getting active version of {}: {}"
 msgstr "Ошибка получения активной версии {}: {}"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2673
+#: /home/minds3t/omnipkg/omnipkg/core.py:3004
 msgid "   -> Cleaning up replaced version from knowledge base: {} v{}"
 msgstr "-> Очистка замененная версия из базы знаний: {} v {}"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2697
+#: /home/minds3t/omnipkg/omnipkg/core.py:3028
 msgid "   -> Uninstalling: {}"
 msgstr "-> удалить: {}"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2700
+#: /home/minds3t/omnipkg/omnipkg/core.py:3031
 msgid "   -> Installing/Fixing: {}"
 msgstr "-> Установка/исправление: {}"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2709
+#: /home/minds3t/omnipkg/omnipkg/core.py:3040
 msgid "📦 Downloading wheel for {}=={}..."
 msgstr "📦 Загрузка колеса для {} == {}"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2716
+#: /home/minds3t/omnipkg/omnipkg/core.py:3047
 msgid "{}-{}.data"
 msgstr "{}-{}.данные"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2716
+#: /home/minds3t/omnipkg/omnipkg/core.py:3047
 msgid "{}-{}.dist-info"
 msgstr "{}-{}. Dist-Info"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2721
+#: /home/minds3t/omnipkg/omnipkg/core.py:3052
 msgid "⚠️ Warning: Could not extract {}: {}"
 msgstr "⚠ Предупреждение: не удалось извлечь {}: {}"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2723
+#: /home/minds3t/omnipkg/omnipkg/core.py:3054
 msgid "✅ Extracted {}=={} to {}"
 msgstr "✅ Извлечен {} == {} to {}"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2726
+#: /home/minds3t/omnipkg/omnipkg/core.py:3057
 msgid "❌ Failed to download wheel from {}: {}"
 msgstr "❌ Не удалось загрузить колесо с {}: {}"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2729
+#: /home/minds3t/omnipkg/omnipkg/core.py:3060
 msgid "❌ Downloaded file is not a valid wheel: {}"
 msgstr "❌ Загруженный файл не является действительным колесом: {}"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2732
+#: /home/minds3t/omnipkg/omnipkg/core.py:3063
 msgid "❌ Error extracting wheel for {}=={}: {}"
 msgstr "❌ Ошибка извлечения колеса для {} == {}: {}"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2748
+#: /home/minds3t/omnipkg/omnipkg/core.py:3079
 msgid "🎯 Found compatible wheel: {}"
 msgstr "🎯 Нашел совместимое колесо: {}"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2752
+#: /home/minds3t/omnipkg/omnipkg/core.py:3083
 msgid "⚠️ Only source distribution available for {}=={}"
 msgstr "⚠ Только распределение источника, доступное для {} == {}"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2753
+#: /home/minds3t/omnipkg/omnipkg/core.py:3084
 msgid "   This may require compilation and is not recommended for bubbling."
 msgstr "Это может потребовать компиляции и не рекомендуется для пузырьков."
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2755
+#: /home/minds3t/omnipkg/omnipkg/core.py:3086
 msgid "❌ No compatible wheel or source found for {}=={} on PyPI."
 msgstr "❌ Совместимое колесо или источник, найденный для {} == {} на PYPI."
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2758
+#: /home/minds3t/omnipkg/omnipkg/core.py:3089
 msgid "❌ Failed to fetch PyPI data for {}=={}: {}"
 msgstr "❌ Не удалось получить данные PYPI для {} == {}: {}"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2761
+#: /home/minds3t/omnipkg/omnipkg/core.py:3092
 msgid "❌ Unexpected PyPI response structure: missing {}"
 msgstr "❌ Неожиданная структура ответа PYPI: отсутствует {}"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2764
+#: /home/minds3t/omnipkg/omnipkg/core.py:3095
 msgid "❌ Error parsing PyPI data: {}"
 msgstr "❌ Ошибка анализируя данные PYPI: {}"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2782
+#: /home/minds3t/omnipkg/omnipkg/core.py:3113
 msgid ""
 "⚠️ Version specifier '{}' detected in '{}'. Exact version required for "
 "bubbling."
@@ -1577,41 +1491,41 @@ msgstr ""
 "⚠ версия Specifier '{}' обнаружено в '{}'.Точная версия, необходимая для "
 "пузырьков."
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2797
+#: /home/minds3t/omnipkg/omnipkg/core.py:3128
 msgid "📝 Registered {}=={} in knowledge base"
 msgstr "📝 Зарегистрирован {} == {} в базе знаний"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2799
+#: /home/minds3t/omnipkg/omnipkg/core.py:3130
 msgid "⚠️ Could not register {}=={}: No Redis connection"
 msgstr "⚠ Не удалось зарегистрироваться {} == {} : No Redis Connection"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2801
+#: /home/minds3t/omnipkg/omnipkg/core.py:3132
 msgid "❌ Failed to register {}=={} in knowledge base: {}"
 msgstr "❌ Не удалось зарегистрировать {} == {} в базе знаний: {}"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2833
+#: /home/minds3t/omnipkg/omnipkg/core.py:3164
 msgid ""
 "\n"
 "Processing uninstall for: {}"
 msgstr "Обработка удаляет для: {}"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2840
+#: /home/minds3t/omnipkg/omnipkg/core.py:3171
 msgid "🤷 Package '{}' not found."
 msgstr "🤷 Пакет '{}' не найден."
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2846
+#: /home/minds3t/omnipkg/omnipkg/core.py:3177
 msgid "🤷 Version '{}' of '{}' not found."
 msgstr "🤷 версия '{}' of '{}' не найдена."
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2854
+#: /home/minds3t/omnipkg/omnipkg/core.py:3185
 msgid "Found multiple installations for '{}':"
 msgstr "Нашел несколько установок для '{}':"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2862
+#: /home/minds3t/omnipkg/omnipkg/core.py:3193
 msgid "  {}) v{} ({})"
 msgstr "{}) v {} ({})"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2867
+#: /home/minds3t/omnipkg/omnipkg/core.py:3198
 msgid ""
 "🤔 Enter numbers to uninstall (e.g., '1,2'), 'all', or press Enter to cancel:"
 " "
@@ -1619,82 +1533,82 @@ msgstr ""
 "🤔 Введите номера в удаление (например, «1,2»), «все» или нажмите Enter, "
 "чтобы отменить:"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2888
+#: /home/minds3t/omnipkg/omnipkg/core.py:3219
 msgid "⚠️  Skipping protected package: {} v{} (active)"
 msgstr "⚠ Запасный пакет пропусков: {} V {} (Active)"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2894
+#: /home/minds3t/omnipkg/omnipkg/core.py:3225
 msgid ""
 "\n"
 "Preparing to remove {} installation(s) for '{}':"
 msgstr "Подготовка к удалению {} установки (s) для '{}':"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2896
+#: /home/minds3t/omnipkg/omnipkg/core.py:3227
 msgid "  - v{} ({})"
 msgstr "- v {} ({})"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2909
+#: /home/minds3t/omnipkg/omnipkg/core.py:3240
 msgid "🗑️  Deleting bubble directory: {}"
 msgstr "🗑 Удаление пузырькового каталога: {}"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2911
+#: /home/minds3t/omnipkg/omnipkg/core.py:3242
 msgid "🧹 Cleaning up knowledge base for {} v{}..."
 msgstr "🧹 Очистка базы знаний для {} V {}"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2955
+#: /home/minds3t/omnipkg/omnipkg/core.py:3286
 msgid "  - Uninstall: {}"
 msgstr "- uninstall: {}"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2957
+#: /home/minds3t/omnipkg/omnipkg/core.py:3288
 msgid "  - Install: {}"
 msgstr "- Установить: {}"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2959
+#: /home/minds3t/omnipkg/omnipkg/core.py:3290
 msgid "  - Fix Version: {}"
 msgstr "- Исправить версию: {}"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:3181
+#: /home/minds3t/omnipkg/omnipkg/core.py:3649
 msgid "❌ Pip install command failed with exit code {}:"
 msgstr "❌ Команда установки PIP с помощью кода выхода {}:"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:3185
+#: /home/minds3t/omnipkg/omnipkg/core.py:3653
 msgid "    ❌ An unexpected error occurred during pip install: {}"
 msgstr "❌ Неожиданная ошибка произошла во время установки PIP: {}"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:3198
+#: /home/minds3t/omnipkg/omnipkg/core.py:3666
 msgid "❌ Pip uninstall command failed with exit code {}:"
 msgstr "❌ Команда PIP удалить сбое с кодом выхода {}:"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:3202
+#: /home/minds3t/omnipkg/omnipkg/core.py:3670
 msgid "    ❌ An unexpected error occurred during pip uninstall: {}"
 msgstr "❌ Неожиданная ошибка произошла во время удаления PIP: {}"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:3218
+#: /home/minds3t/omnipkg/omnipkg/core.py:3686
 msgid "❌ uv install command failed with exit code {}:"
 msgstr "❌ Команда установки UV не удалась с кодом выхода {}:"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:3222
+#: /home/minds3t/omnipkg/omnipkg/core.py:3690
 msgid "    ❌ An unexpected error toccurred during uv install: {}"
 msgstr "❌ Неожиданная ошибка Toccurred во время УФ -установки: {}"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:3238
+#: /home/minds3t/omnipkg/omnipkg/core.py:3706
 msgid "❌ uv uninstall command failed with exit code {}:"
 msgstr "❌ Команда UV unintall не удалась с кодом выхода {}:"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:3242
+#: /home/minds3t/omnipkg/omnipkg/core.py:3710
 msgid "    ❌ An unexpected error occurred during uv uninstall: {}"
 msgstr ""
 "❌ Неожиданная ошибка произошла во время ультрафиолетового ультрафиолета: {}"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:3281
+#: /home/minds3t/omnipkg/omnipkg/core.py:3749
 msgid "⚠️ Could not retrieve versions for {}: {}"
 msgstr "⚠ Не удалось получить версии для {}: {}"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:3291
+#: /home/minds3t/omnipkg/omnipkg/core.py:3759
 msgid "📋 Found {} matching package(s):"
 msgstr "📋 Найдено {} Соответствующее пакет (S):"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:3298
+#: /home/minds3t/omnipkg/omnipkg/core.py:3766
 msgid ""
 "\n"
 "- {}:"
@@ -1702,50 +1616,50 @@ msgstr ""
 "\n"
 "- {}:"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:3304
+#: /home/minds3t/omnipkg/omnipkg/core.py:3772
 msgid "  ✅ {} (active)"
 msgstr "✅ {} (Active)"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:3306
+#: /home/minds3t/omnipkg/omnipkg/core.py:3774
 msgid "  🫧 {} (bubble)"
 msgstr "🫧 {} (пузырь)"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:3319
+#: /home/minds3t/omnipkg/omnipkg/core.py:3787
 msgid "    😈 Locked up for causing chaos in the main env! 🔒 (v{})"
 msgstr "😈 Заблокирован за то, что он вызовал хаос в главной эвинге!🔒 (v {})"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:3326
+#: /home/minds3t/omnipkg/omnipkg/core.py:3794
 msgid "    😈 Speedy troublemaker locked up in the main env! 🔒 (v{})"
 msgstr "😈 Скоростной нарушитель нарушителя, запертый в главной Env!🔒 (v {})"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:3333
+#: /home/minds3t/omnipkg/omnipkg/core.py:3801
 msgid "  - Path: {}"
 msgstr "- Путь: {}"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:3334
+#: /home/minds3t/omnipkg/omnipkg/core.py:3802
 msgid "  - Active Packages: {}"
 msgstr "- Активные пакеты:{}"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:3339
+#: /home/minds3t/omnipkg/omnipkg/core.py:3807
 msgid "  - Bubble Directory: {}"
 msgstr "  - Каталог пузырей: {}"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:3340
+#: /home/minds3t/omnipkg/omnipkg/core.py:3808
 msgid "  - Import Hook Installed: {}"
 msgstr "- Установлен импорт крюка: {}"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:3343
+#: /home/minds3t/omnipkg/omnipkg/core.py:3811
 msgid ""
 "\n"
 "📦 Isolated Package Versions ({} bubbles):"
 msgstr "📦 Изолированные версии пакетов ({} пузыри):"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:3353
+#: /home/minds3t/omnipkg/omnipkg/core.py:3821
 msgid ""
 "    😈 Pip is locked up in a bubble, plotting chaos like a Python outlaw! 🔒"
 msgstr "😈 PIP заблокирован в пузыре, замышляя хаос, как Python Outlaw!🔒"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:3355
+#: /home/minds3t/omnipkg/omnipkg/core.py:3823
 msgid "    😈 UV is locked up in a bubble, speeding toward trouble! 🔒"
 msgstr "😈 UV заперт в пузыре, ускоряясь к неприятностям!🔒"
 
@@ -1855,20 +1769,15 @@ msgstr "🛡 Cloaked Main {} to {}"
 msgid " ⚠️ Failed to cloak {}: {}"
 msgstr "⚠ Не удалось замолчать {}: {}"
 
-#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:38
-#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:44
-msgid "python{}"
-msgstr "Python {}"
-
-#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:92
+#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:102
 msgid "❌ Could not connect to Redis: {}"
 msgstr "❌ Не удалось подключиться к Redis: {}"
 
-#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:114
+#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:183
 msgid "⚠️ Error discovering active packages: {}"
 msgstr "⚠ Ошибка Обнаружение активных пакетов: {}"
 
-#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:137
+#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:206
 msgid ""
 "✅ Discovery complete. Found {} unique packages with {} total versions to "
 "process."
@@ -1876,43 +1785,17 @@ msgstr ""
 "✅ Обнаружение завершено.Найдено {} уникальных пакетов с общим версиями {} "
 "для обработки."
 
-#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:155
+#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:225
 msgid "⚠️ Failed to store active version for {}: {}"
 msgstr "⚠ Не удалось сохранить активную версию для {}: {}"
 
-#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:163
-msgid "🎯 Running in targeted mode for {} package(s)."
-msgstr "🎯 Запуск в целевом режиме для {} пакетов (S)."
-
-#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:180
-msgid "⚠️ Error preparing packages for security scan: {}"
-msgstr "⚠ Ошибка подготовки пакетов для сканирования безопасности: {}"
-
-#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:182
-msgid "✅ Bulk security scan complete. Found {} potential issues."
-msgstr ""
-"✅ Сканирование объема безопасности завершено.Нашел {} потенциальные "
-"проблемы."
-
-#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:189
+#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:371
 msgid ""
 "\n"
 "🎉 Metadata building complete! Updated {} package(s)."
 msgstr "🎉 Завершено строительство метаданных!Обновлено {} пакет (s)."
 
-#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:205
-msgid "    ❌ ERROR processing {} v{}: {}"
-msgstr "❌ Обработка ошибок {} v {}: {}"
-
-#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:296
-msgid "{}_compressed"
-msgstr "{} _compressed"
-
-#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:329
-msgid "import importlib.metadata; print(importlib.metadata.version('{}'))"
-msgstr "Импорт ImportLib.Metadata;print (impormlib.metadata.version ('{}'))"
-
-#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:380
+#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:562
 msgid "    ⚠️ Bulk security scan failed: {}"
 msgstr "⚠ Сканирование объема безопасности не удалось: {}"
 
@@ -1923,135 +1806,133 @@ msgstr ""
 "❌ Не удалось импортировать модули Omnipkg.Это установлено правильно?Ошибка: "
 "{}"
 
-#: /home/minds3t/omnipkg/omnipkg/stress_test.py:215
-#: /home/minds3t/omnipkg/omnipkg/stress_test.py:327
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:249
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:361
 #: /home/minds3t/omnipkg/tests/test_rich_switching.py:115
-#: /home/minds3t/omnipkg/tests/test_rich_switching.py:331
-#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:118
-#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:264
-#: /home/minds3t/omnipkg/tests/test_uv_switching.py:112
-#: /home/minds3t/omnipkg/tests/test_uv_switching.py:330
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:341
+#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:213
+#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:312
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:266
 msgid "   🧹 Removing residual cloaked: {}"
 msgstr "🧹 Удаление остаточного покрытия: {}"
 
-#: /home/minds3t/omnipkg/omnipkg/stress_test.py:237
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:271
 msgid ""
 "\n"
 "⚡ Switching to numpy=={}"
 msgstr "⚡ Переключение на numpy == {}"
 
-#: /home/minds3t/omnipkg/omnipkg/stress_test.py:241
-#: /home/minds3t/omnipkg/omnipkg/stress_test.py:260
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:275
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:294
 msgid "   ✅ Version: {}"
 msgstr "✅ Версия: {}"
 
-#: /home/minds3t/omnipkg/omnipkg/stress_test.py:242
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:276
 msgid "   🔢 Array sum: {}"
 msgstr "🔢 Сумма массива: {}"
 
-#: /home/minds3t/omnipkg/omnipkg/stress_test.py:244
-#: /home/minds3t/omnipkg/omnipkg/stress_test.py:264
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:278
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:298
 msgid "   ⚠️ WARNING: Expected {}, got {}!"
 msgstr "⚠ Предупреждение: ожидается {}, Got {}!"
 
-#: /home/minds3t/omnipkg/omnipkg/stress_test.py:246
-#: /home/minds3t/omnipkg/omnipkg/stress_test.py:266
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:280
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:300
 msgid "   🎯 Version verification: PASSED"
 msgstr "🎯 Version Verification: Прошло"
 
-#: /home/minds3t/omnipkg/omnipkg/stress_test.py:248
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:282
 msgid "   ❌ Activation/Test failed for numpy=={}: {}!"
 msgstr "❌ Активация/тест не удалась для numpy == {}: {}!"
 
-#: /home/minds3t/omnipkg/omnipkg/stress_test.py:254
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:288
 msgid ""
 "\n"
 "🌋 Switching to scipy=={}"
 msgstr "🌋 Переключение на scipy == {}"
 
-#: /home/minds3t/omnipkg/omnipkg/stress_test.py:261
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:295
 msgid "   ♻️ Sparse matrix: {} non-zeros"
 msgstr "♻ Sparse Matrix: {} нелелевые"
 
-#: /home/minds3t/omnipkg/omnipkg/stress_test.py:262
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:296
 msgid "   📐 Linalg det: {}"
 msgstr "📐 Линальг Дет:{}"
 
-#: /home/minds3t/omnipkg/omnipkg/stress_test.py:268
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:302
 msgid "   ❌ Activation/Test failed for scipy=={}: {}!"
 msgstr "❌ Активация/тест не удалась для scipy == {}: {}!"
 
-#: /home/minds3t/omnipkg/omnipkg/stress_test.py:276
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:310
 msgid ""
 "\n"
 "🌀 COMBO: numpy=={} + scipy=={}"
 msgstr "🌀 Combo: numpy == {} + scipy == {}"
 
-#: /home/minds3t/omnipkg/omnipkg/stress_test.py:284
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:318
 msgid "   ❌ Subprocess test failed for combo numpy=={} + scipy=={}"
 msgstr "❌ Ошибка испытания подпроцессы для Combo numpy == {} + scipy == {}"
 
-#: /home/minds3t/omnipkg/omnipkg/stress_test.py:286
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:320
 msgid "   💥 Error: {}"
 msgstr "💥 Ошибка: {}"
 
-#: /home/minds3t/omnipkg/omnipkg/stress_test.py:289
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:323
 msgid ""
 "   ❌ An unexpected error occurred during combo test subprocess setup: {}"
 msgstr ""
 "❌ Неожиданная ошибка произошла во время настройки подпроцесса комбо "
 "-тестирования: {}"
 
-#: /home/minds3t/omnipkg/tests/test_rich_switching.py:326
-#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:260
-#: /home/minds3t/omnipkg/tests/test_uv_switching.py:325
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:336
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:263
 msgid "   🧹 Removing test bubble: {}"
 msgstr "🧹 Снятие тестового пузыря: {}"
 
-#: /home/minds3t/omnipkg/omnipkg/stress_test.py:352
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:385
 msgid ""
 "\n"
 "--- Creating bubble for {} ---"
 msgstr "--- Создание пузыря для {} ---"
 
-#: /home/minds3t/omnipkg/omnipkg/stress_test.py:362
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:395
 msgid ""
 "\n"
 "❌ An error occurred during the stress test: {}"
 msgstr "❌ Во время стресс -теста произошла ошибка: {}"
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:67
+#: /home/minds3t/omnipkg/omnipkg/cli.py:139
 msgid "   • Previously 'incompatible' versions working together seamlessly"
 msgstr "• Ранее «несовместимые» версии, работающие вместе, беспрепятственно"
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:73
+#: /home/minds3t/omnipkg/omnipkg/cli.py:145
 msgid "   • numpy 1.24.3 + scipy 1.12.0 → 'incompatible dependencies'"
 msgstr "• Numpy 1.24.3 + Scipy 1.12.0 → 'Несовместимые зависимости'"
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:76
+#: /home/minds3t/omnipkg/omnipkg/cli.py:148
 msgid "   • Package managers can't handle multiple versions"
 msgstr "• Менеджеры пакетов не могут справиться с несколькими версиями"
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:111
+#: /home/minds3t/omnipkg/omnipkg/cli.py:179
 msgid ""
 "💡 Don't worry if there are pauses - packages are downloading/installing!"
 msgstr "💡 Не волнуйтесь, если есть паузы - пакеты загружаются/установку!"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:1201
+#: /home/minds3t/omnipkg/omnipkg/core.py:1370
 msgid "    ⚠️  'requests' package not found. Skipping PyPI API strategy."
 msgstr "⚠ Пакет «Запросы» не найден.Пропустить стратегию PYPI API."
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2406
+#: /home/minds3t/omnipkg/omnipkg/core.py:2552
 msgid "📸 Saving snapshot of the current environment as 'last known good'..."
 msgstr ""
 "📸 Сохранение снимка текущей среды как «последнего известного хорошего» ..."
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2939
+#: /home/minds3t/omnipkg/omnipkg/core.py:3270
 msgid "❌ No 'last known good' snapshot found. Cannot revert."
 msgstr "❌ Нет «Последнего известного хорошего» снимка.Не может вернуться."
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:3215
-#: /home/minds3t/omnipkg/omnipkg/core.py:3235
+#: /home/minds3t/omnipkg/omnipkg/core.py:3683
+#: /home/minds3t/omnipkg/omnipkg/core.py:3703
 msgid ""
 "❌ Error: 'uv' executable not found. Please ensure uv is installed and in "
 "your PATH."
@@ -2059,37 +1940,36 @@ msgstr ""
 "❌ Ошибка: «uv» исполняемый файл не найден.Пожалуйста, убедитесь, что УФ "
 "установлен и на вашем пути."
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:54
+#: /home/minds3t/omnipkg/omnipkg/cli.py:128
 msgid "3. Run 'omnipkg stress-test' from there"
 msgstr "3. Запустите «Omnipkg стресс-тест» оттуда"
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:81
+#: /home/minds3t/omnipkg/omnipkg/cli.py:153
 msgid "🚀 Ready to witness the impossible? (y/n): "
 msgstr "🚀 Готовы засвидетельствовать невозможным?(Y/N):"
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:87
+#: /home/minds3t/omnipkg/omnipkg/cli.py:159
 msgid "🎪 Cancelled. Run 'omnipkg stress-test' anytime!"
 msgstr "🎪 Отмена.Запустите 'Omnipkg Stress Test' в любое время!"
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:135
-#: /home/minds3t/omnipkg/omnipkg/cli.py:184
+#: /home/minds3t/omnipkg/omnipkg/cli.py:250
 msgid "💡 Run 'omnipkg demo' to try another test."
 msgstr "💡 Запустите «Omnipkg Demo», чтобы попробовать еще один тест."
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:1961
-#: /home/minds3t/omnipkg/omnipkg/core.py:1994
-#: /home/minds3t/omnipkg/omnipkg/core.py:2088
-#: /home/minds3t/omnipkg/omnipkg/core.py:2961
+#: /home/minds3t/omnipkg/omnipkg/core.py:2100
+#: /home/minds3t/omnipkg/omnipkg/core.py:2133
+#: /home/minds3t/omnipkg/omnipkg/core.py:2232
+#: /home/minds3t/omnipkg/omnipkg/core.py:3292
 msgid ""
 "\n"
 "🤔 Are you sure you want to proceed? (y/N): "
 msgstr "🤔 Вы уверены, что хотите продолжить?(Y/N):"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2898
+#: /home/minds3t/omnipkg/omnipkg/core.py:3229
 msgid "🤔 Are you sure you want to proceed? (y/N): "
 msgstr "🤔 Вы уверены, что хотите продолжить?(Y/N):"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:3315
+#: /home/minds3t/omnipkg/omnipkg/core.py:3783
 msgid ""
 "🛠️ Environment broken by pip or uv? Run 'omnipkg revert' to restore the last"
 " known good state! 🚑"
@@ -2145,13 +2025,14 @@ msgstr ""
 msgid "That's the main achievement of omnipkg! 🔥"
 msgstr "Это главное достижение Omnipkg!🔥"
 
-#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:68
+#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:70
 msgid "⚠️ Install 'tqdm' for a better progress bar."
 msgstr "⚠ Установите 'TQDM' для лучшей панели прогресса."
 
 #: /home/minds3t/omnipkg/tests/test_rich_switching.py:40
-#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:37
-#: /home/minds3t/omnipkg/tests/test_uv_switching.py:37
+#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:141
+#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:225
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:35
 msgid ""
 "\n"
 "--- {} ---"
@@ -2160,290 +2041,277 @@ msgstr ""
 "--- {} ---"
 
 #: /home/minds3t/omnipkg/tests/test_rich_switching.py:110
-#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:109
-#: /home/minds3t/omnipkg/tests/test_uv_switching.py:107
 msgid "   🧹 Removing old bubble: {}"
 msgstr "🧹 Удаление старого пузыря: {}"
 
 #: /home/minds3t/omnipkg/tests/test_rich_switching.py:128
-#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:130
-#: /home/minds3t/omnipkg/tests/test_uv_switching.py:125
+#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:219
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:95
 msgid "✅ Environment prepared"
 msgstr "✅ Среда подготовлена"
 
-#: /home/minds3t/omnipkg/tests/test_rich_switching.py:136
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:138
 msgid "   🫧 Creating bubble for rich=={}"
 msgstr "🫧 Создание пузыря для rich == {}"
 
-#: /home/minds3t/omnipkg/tests/test_rich_switching.py:146
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:148
 msgid "   🔧 Testing import of version {}..."
 msgstr "🔧 Тестирование импорта версии {} ..."
 
-#: /home/minds3t/omnipkg/tests/test_rich_switching.py:237
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:243
 msgid "      └── {}"
 msgstr "└ack {}"
 
-#: /home/minds3t/omnipkg/tests/test_rich_switching.py:240
-#: /home/minds3t/omnipkg/tests/test_rich_switching.py:245
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:246
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:251
 msgid "   ❌ Subprocess FAILED for version {}:"
 msgstr "❌ подпроцесс не удался для версии {}:"
 
-#: /home/minds3t/omnipkg/tests/test_rich_switching.py:241
-#: /home/minds3t/omnipkg/tests/test_rich_switching.py:246
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:247
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:252
 msgid "      STDERR: {}"
 msgstr "Stderr: {}"
 
-#: /home/minds3t/omnipkg/tests/test_rich_switching.py:258
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:264
 msgid "   ⚠️  Test harness failed to restore {} from {}: {}"
 msgstr "⚠ Тестовая жгут не удалось восстановить {} из {}: {}"
 
-#: /home/minds3t/omnipkg/tests/test_rich_switching.py:287
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:296
 msgid "main-{}"
 msgstr "основной-{}"
 
-#: /home/minds3t/omnipkg/tests/test_rich_switching.py:291
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:300
 msgid "Testing Bubble (rich=={})"
 msgstr "Тестирование пузырь (rich == {})"
 
-#: /home/minds3t/omnipkg/tests/test_rich_switching.py:293
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:303
 msgid "bubble-{}"
 msgstr "Bubble- {}"
 
-#: /home/minds3t/omnipkg/tests/test_rich_switching.py:312
-#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:249
-#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:283
-#: /home/minds3t/omnipkg/tests/test_uv_switching.py:311
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:322
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:252
 msgid ""
 "\n"
 "❌ Critical error during testing: {}"
 msgstr "❌ Критическая ошибка во время тестирования: {}"
 
-#: /home/minds3t/omnipkg/omnipkg/stress_test.py:218
-#: /home/minds3t/omnipkg/omnipkg/stress_test.py:330
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:252
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:364
 #: /home/minds3t/omnipkg/tests/test_rich_switching.py:119
-#: /home/minds3t/omnipkg/tests/test_rich_switching.py:335
-#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:121
-#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:267
-#: /home/minds3t/omnipkg/tests/test_uv_switching.py:116
-#: /home/minds3t/omnipkg/tests/test_uv_switching.py:334
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:345
+#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:216
+#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:315
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:269
 msgid "   🧹 Removing test harness residual cloaked: {}"
 msgstr "🧹 Снятие тестового жгута остаточная загрязнение: {}"
 
-#: /home/minds3t/omnipkg/tests/test_rich_switching.py:339
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:349
 msgid "   📦 Restoring main environment: rich=={}"
 msgstr "📦 Восстановление основной среды: rich == {}"
 
-#: /home/minds3t/omnipkg/tests/test_rich_switching.py:353
-#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:280
-#: /home/minds3t/omnipkg/tests/test_uv_switching.py:347
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:363
+#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:317
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:279
 msgid "✅ Cleanup complete"
 msgstr "✅ Очистка завершена"
 
-#: /home/minds3t/omnipkg/tests/test_uv_switching.py:134
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:103
 msgid "   🫧 Creating bubble for uv=={}"
 msgstr "🫧 Создание пузыря для uv == {}"
 
-#: /home/minds3t/omnipkg/tests/test_uv_switching.py:137
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:106
 msgid "   ✅ Bubble created: uv-{}"
 msgstr "✅ создан пузырь: uv- {}"
 
-#: /home/minds3t/omnipkg/tests/test_uv_switching.py:139
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:108
 msgid "   ❌ Failed to create bubble for uv=={}: {}"
 msgstr "❌ Не удалось создать пузырь для uv == {}: {}"
 
-#: /home/minds3t/omnipkg/tests/test_uv_switching.py:144
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:112
 msgid "   🔎 Validating bubble: {}"
 msgstr "🔎 Подтверждение пузыря: {}"
 
-#: /home/minds3t/omnipkg/tests/test_uv_switching.py:148
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:115
 msgid "   ❌ No uv binary found in {}/bin"
 msgstr "   ❌ Двоичный файл uv не найден в {}/bin"
 
-#: /home/minds3t/omnipkg/tests/test_uv_switching.py:152
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:118
 msgid "   ❌ Binary {} is not executable"
 msgstr "❌ двоичный {} не исполняется"
 
-#: /home/minds3t/omnipkg/tests/test_uv_switching.py:157
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:122
 msgid "   ❌ No dist-info found in {}"
 msgstr "❌ Не найдено в {}"
 
-#: /home/minds3t/omnipkg/tests/test_uv_switching.py:160
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:124
 msgid "   ✅ Bubble validation passed"
 msgstr "✅ Проверка пузырька прошла"
 
-#: /home/minds3t/omnipkg/tests/test_uv_switching.py:164
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:128
 msgid "   🔍 Inspecting bubble structure: {}"
 msgstr "🔍 Осмотр пузырьковой структуры: {}"
 
-#: /home/minds3t/omnipkg/tests/test_uv_switching.py:167
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:130
 msgid "   ❌ Bubble doesn't exist: {}"
 msgstr "❌ Пузырь не существует: {}"
 
-#: /home/minds3t/omnipkg/tests/test_uv_switching.py:172
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:134
 msgid "   ✅ Found uv module directory"
 msgstr "✅ Нашел каталог ультрафиолетовых модулей"
 
-#: /home/minds3t/omnipkg/tests/test_uv_switching.py:174
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:136
 msgid "   ℹ️  No uv module directory (likely binary-only package)"
 msgstr ""
 "ℹ Нет каталога ультрафиолетового модуля (вероятно, пакет только для бинарных"
 " материалов)"
 
-#: /home/minds3t/omnipkg/tests/test_uv_switching.py:178
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:139
 msgid "   ✅ Found dist-info: {}"
 msgstr "✅ Нашел Dist-Info: {}"
 
-#: /home/minds3t/omnipkg/tests/test_uv_switching.py:180
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:141
 msgid "   ⚠️  No dist-info found"
 msgstr "⚠ не найдено дистий"
 
-#: /home/minds3t/omnipkg/tests/test_uv_switching.py:185
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:145
 msgid "   ✅ Found bin directory with {} items"
 msgstr "✅ Нашел каталог бин с {} элементами"
 
-#: /home/minds3t/omnipkg/tests/test_uv_switching.py:189
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:148
 msgid "   ✅ Found uv binary: {}"
 msgstr "✅ Нашел UV Binary: {}"
 
-#: /home/minds3t/omnipkg/tests/test_uv_switching.py:191
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:150
 msgid "   ✅ Binary is executable"
 msgstr "✅ Бинарный файл исполняется"
 
-#: /home/minds3t/omnipkg/tests/test_uv_switching.py:193
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:152
 msgid "   ⚠️  Binary is not executable"
 msgstr "⚠ Двоичный не исполняется"
 
-#: /home/minds3t/omnipkg/tests/test_uv_switching.py:195
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:154
 msgid "   ⚠️  No uv binary in bin/"
 msgstr "⚠ нет бинарного UV в корзине/"
 
-#: /home/minds3t/omnipkg/tests/test_uv_switching.py:197
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:156
 msgid "   ⚠️  No bin directory found"
 msgstr "⚠ Справочник бин не найден"
 
-#: /home/minds3t/omnipkg/tests/test_uv_switching.py:200
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:158
 msgid "   📁 Bubble contents ({} items):"
 msgstr "📁 Содержание пузырьков ({} элементы):"
 
-#: /home/minds3t/omnipkg/tests/test_uv_switching.py:202
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:160
 msgid "      - {}{}"
 msgstr "- {} {}"
 
-#: /home/minds3t/omnipkg/tests/test_uv_switching.py:207
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:164
 msgid "   🔧 Testing direct binary execution..."
 msgstr "🔧 Тестирование прямого бинарного исполнения ..."
 
-#: /home/minds3t/omnipkg/tests/test_uv_switching.py:211
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:167
 msgid "   ❌ No UV binary found in bubble"
 msgstr "❌ Бинарного из UV не найдено в пузыре"
 
-#: /home/minds3t/omnipkg/tests/test_uv_switching.py:215
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:170
 msgid "   🎯 Executing: {} --version"
 msgstr "🎯 Выполнение: {} –Версия"
 
-#: /home/minds3t/omnipkg/tests/test_uv_switching.py:219
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:173
 msgid "   ✅ Direct binary reported: {}"
 msgstr "✅ Direct Binary сообщил: {}"
 
-#: /home/minds3t/omnipkg/tests/test_uv_switching.py:222
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:175
 msgid "   🎯 Direct binary test: PASSED"
 msgstr "🎯 Прямой бинарный тест: прошел"
 
-#: /home/minds3t/omnipkg/tests/test_uv_switching.py:225
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:178
 msgid "   ❌ Version mismatch: expected {}, got {}"
 msgstr "❌ Mancamate: ожидается {}, Got {}"
 
-#: /home/minds3t/omnipkg/tests/test_uv_switching.py:228
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:181
 msgid "   ❌ Direct binary execution failed: {}"
 msgstr "❌ Прямое бинарное выполнение не удалось: {}"
 
-#: /home/minds3t/omnipkg/tests/test_uv_switching.py:238
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:193
 msgid "   ✅ Main environment version: {}"
 msgstr "✅ Основная версия среды: {}"
 
-#: /home/minds3t/omnipkg/tests/test_uv_switching.py:240
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:195
 msgid "   🎯 Main environment test: PASSED"
 msgstr "🎯 Основной тест окружающей среды: прошел"
 
-#: /home/minds3t/omnipkg/tests/test_uv_switching.py:245
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:200
 msgid "   ❌ Main environment test failed: {}"
 msgstr "❌ Основной тест на среду не удалось: {}"
 
-#: /home/minds3t/omnipkg/tests/test_uv_switching.py:278
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:226
 msgid "Testing Bubble (uv=={})"
 msgstr "Тестирование пузырь (uv == {})"
 
-#: /home/minds3t/omnipkg/tests/test_uv_switching.py:291
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:236
 msgid "   🎯 Overall result for uv=={}: PASSED"
 msgstr "🎯 Общий результат для uv == {}: прошло"
 
-#: /home/minds3t/omnipkg/tests/test_uv_switching.py:293
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:238
 msgid "   ❌ Overall result for uv=={}: FAILED"
 msgstr "❌ Общий результат для uv == {}: неудачный"
 
-#: /home/minds3t/omnipkg/tests/test_rich_switching.py:297
-#: /home/minds3t/omnipkg/tests/test_uv_switching.py:296
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:307
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:240
 msgid "📊 Test Summary:"
 msgstr "📊 Сводка теста:"
 
-#: /home/minds3t/omnipkg/tests/test_uv_switching.py:299
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:243
 msgid "   uv=={}: {}"
 msgstr "uv == {}: {}"
 
-#: /home/minds3t/omnipkg/tests/test_uv_switching.py:302
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:245
 msgid ""
 "\n"
 "🎉🎉🎉 ALL UV BINARY TESTS PASSED! 🎉🎉🎉"
 msgstr "🎉🎉🎉 Все бинарные тесты UV прошли!🎉🎉🎉"
 
-#: /home/minds3t/omnipkg/tests/test_uv_switching.py:303
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:246
 msgid "🔥 OMNIPKG UV BINARY HANDLING IS FULLY FUNCTIONAL! 🔥"
 msgstr "🔥 Omnipkg UV Бинарная обработка полностью функциональна!🔥"
 
-#: /home/minds3t/omnipkg/tests/test_uv_switching.py:305
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:248
 msgid ""
 "\n"
 "💥 SOME TESTS FAILED - UV BINARY HANDLING NEEDS WORK 💥"
 msgstr ""
 "💥 Некоторые тесты не удались - УФ -бинарные потребности в обработке работы 💥"
 
-#: /home/minds3t/omnipkg/tests/test_rich_switching.py:307
-#: /home/minds3t/omnipkg/tests/test_uv_switching.py:306
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:317
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:249
 msgid "🔧 Check the detailed output above for diagnostics"
 msgstr "🔧 Проверьте подробный вывод выше для диагностики"
 
-#: /home/minds3t/omnipkg/omnipkg/stress_test.py:382
-#: /home/minds3t/omnipkg/tests/test_rich_switching.py:356
-#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:287
-#: /home/minds3t/omnipkg/tests/test_uv_switching.py:350
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:415
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:366
+#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:319
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:281
 msgid "⚠️  Cleanup failed: {}"
 msgstr "⚠ Очистка не удалась: {}"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:3351
+#: /home/minds3t/omnipkg/omnipkg/core.py:3819
 msgid "  - 📁 {} ({} MB){}"
 msgstr "- 📁 {} ({} mb) {}"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:3358
+#: /home/minds3t/omnipkg/omnipkg/core.py:3826
 msgid "  - Total Bubble Size: {} MB"
 msgstr "- Общий размер пузыря: {} MB"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:1329
+#: /home/minds3t/omnipkg/omnipkg/core.py:1498
 msgid ""
 "⚠️  Warning: 'python-magic' not installed. Using basic binary detection."
 msgstr ""
 "⚠ Предупреждение: «Python-Magic» не установлен.Используя базовое бинарное "
 "обнаружение."
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:1895
-msgid "✅ Core dependencies loaded."
-msgstr "✅ Загруженные ядра зависимости."
-
-#: /home/minds3t/omnipkg/omnipkg/cli.py:125
-msgid "🌍 Language environment passed to subprocess: {}"
-msgstr "🌍 Языковая среда, передаваемая в подпроцесс: {}"
-
 #: /home/minds3t/omnipkg/tests/test_rich_switching.py:28
-#: /home/minds3t/omnipkg/tests/test_uv_switching.py:28
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:26
 msgid ""
 "❌ Failed to import omnipkg modules. Is the project structure correct? Error:"
 " {}"
@@ -2451,194 +2319,169 @@ msgstr ""
 "❌ Не удалось импортировать модули Omnipkg.Правильная структура "
 "проекта?Ошибка: {}"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2925
+#: /home/minds3t/omnipkg/omnipkg/core.py:3256
 msgid "    -> Last version of '{}' removed. Deleting all traces."
 msgstr "-> Последняя версия '{}' удален.Удаление всех следов."
 
-#: /home/minds3t/omnipkg/omnipkg/stress_test.py:180
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:214
 msgid "STEP 1: Preparing a Clean Test Environment"
 msgstr "Шаг 1: Подготовка чистой тестовой среды"
 
-#: /home/minds3t/omnipkg/omnipkg/stress_test.py:221
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:255
 msgid ""
 "   🗑️ Ensuring clean numpy and scipy installations for baseline test..."
 msgstr "🗑 Обеспечение чистых установок Numpy и Scipy для базового теста ..."
 
-#: /home/minds3t/omnipkg/omnipkg/stress_test.py:297
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:331
 msgid ""
 "\n"
 "\n"
 "🚨 OMNIPKG SURVIVED NUCLEAR TESTING! 🎇"
 msgstr "🚨 Omnipkg пережила ядерные испытания!🎇"
 
-#: /home/minds3t/omnipkg/omnipkg/stress_test.py:301
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:335
 msgid "STEP 3: Cleaning Up Test Environment"
 msgstr "Шаг 3: Очистка испытательной среды"
 
-#: /home/minds3t/omnipkg/omnipkg/stress_test.py:346
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:380
 msgid "STEP 2: Creating Test Bubbles with omnipkg"
 msgstr "Шаг 2: Создание тестовых пузырьков с Omnipkg"
 
-#: /home/minds3t/omnipkg/omnipkg/stress_test.py:357
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:390
 msgid "STEP 3: Executing the Nuclear Test"
 msgstr "Шаг 3: Выполнение ядерного испытания"
 
-#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:28
-msgid ""
-"❌ Critical Error: Could not import omnipkg modules. Is the project structure"
-" correct? Error: {}"
-msgstr ""
-"❌ Критическая ошибка: не может импортировать модули Omnipkg.Правильная "
-"структура проекта?Ошибка: {}"
-
-#: /home/minds3t/omnipkg/omnipkg/cli.py:218
+#: /home/minds3t/omnipkg/omnipkg/cli.py:284
 msgid ""
 "🚀 The intelligent Python package manager that eliminates dependency hell"
 msgstr ""
 "🚀 Интеллектуальный менеджер пакетов Python, который устраняет администрацию "
 "ада"
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:219
+#: /home/minds3t/omnipkg/omnipkg/cli.py:285
 msgid "%(prog)s {}"
 msgstr "%(prog) s {}"
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:294
+#: /home/minds3t/omnipkg/omnipkg/cli.py:360
 msgid ""
 "\n"
 "👋 Welcome back to omnipkg! Run a command or see --help for details."
 msgstr ""
 "👋 Добро пожаловать в Omnipkg!Запустите команду или см. -HELP для деталей."
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:216
+#: /home/minds3t/omnipkg/omnipkg/cli.py:282
 msgid "  • Multi-version package coexistence"
 msgstr "• Сосуществование мульти-версий"
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:216
+#: /home/minds3t/omnipkg/omnipkg/cli.py:282
 msgid "Version: {}"
 msgstr "Версия: {}"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:932
+#: /home/minds3t/omnipkg/omnipkg/core.py:1080
 msgid "📦 Choose your default installation strategy:"
 msgstr "📦 Выберите стратегию установки по умолчанию:"
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:260
+#: /home/minds3t/omnipkg/omnipkg/cli.py:326
 msgid "Clean up old, bubbled package versions"
 msgstr "Очистите старые, пузырящие версии"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2065
+#: /home/minds3t/omnipkg/omnipkg/core.py:2209
 msgid "✅ No bubbles found for '{}'. Nothing to prune."
 msgstr "✅ Пузыри не найдено для '{}'. Нечего обрезать."
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2071
+#: /home/minds3t/omnipkg/omnipkg/core.py:2215
 msgid "❌ 'keep-latest' must be a non-negative number."
 msgstr "❌ 'Keep-Latest' должен быть неотрицательным числом."
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2075
+#: /home/minds3t/omnipkg/omnipkg/core.py:2219
 msgid "🔎 Found {} bubbles. Keeping the latest {}, pruning {} older versions."
 msgstr ""
 "🔎 Нашел {} пузырьки. Сохранение последних {}, обрезка {} старые версии."
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2078
+#: /home/minds3t/omnipkg/omnipkg/core.py:2222
 msgid "🔎 Found {} bubbles to prune for '{}'."
 msgstr "🔎 найдено {} пузырьков для обрезки для '{}'."
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2080
+#: /home/minds3t/omnipkg/omnipkg/core.py:2224
 msgid "✅ No bubbles match the pruning criteria."
 msgstr "✅ Никакие пузырьки не соответствуют критериям обрезки."
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2082
+#: /home/minds3t/omnipkg/omnipkg/core.py:2226
 msgid ""
 "\n"
 "The following bubbled versions will be permanently deleted:"
 msgstr "Следующие пузырящие версии будут навсегда удалены:"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2084
+#: /home/minds3t/omnipkg/omnipkg/core.py:2228
 msgid "  - v{} (bubble)"
 msgstr "- v {} (пузырь)"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2086
+#: /home/minds3t/omnipkg/omnipkg/core.py:2230
 msgid "🛡️  The active version (v{}) will NOT be affected."
 msgstr "🛡 Активная версия (v {}) не будет затронута."
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2090
+#: /home/minds3t/omnipkg/omnipkg/core.py:2234
 msgid "🚫 Prune cancelled."
 msgstr "🚫 Черносли отменена."
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2096
+#: /home/minds3t/omnipkg/omnipkg/core.py:2240
 msgid ""
 "\n"
 "🎉 Pruning complete for '{}'."
 msgstr "🎉 Обрезка завершена для '{}'."
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2486
+#: /home/minds3t/omnipkg/omnipkg/core.py:2817
 msgid "❌ Could not resolve any packages to install. Aborting."
 msgstr "❌ Не мог разрешить какие -либо пакеты для установки. Прерывание."
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2616
+#: /home/minds3t/omnipkg/omnipkg/core.py:2947
 msgid ""
 "\n"
 "✅ All requirements were already satisfied."
 msgstr "✅ Все требования уже были удовлетворены."
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2619
+#: /home/minds3t/omnipkg/omnipkg/core.py:2950
 msgid ""
 "\n"
 "🧹 Performing final cleanup of redundant bubbles..."
 msgstr "🧹 Выполнение окончательной очистки избыточных пузырьков ..."
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2851
+#: /home/minds3t/omnipkg/omnipkg/core.py:3182
 msgid "🤷 No installations match the specified criteria."
 msgstr "🤷 Никакие установки не соответствуют указанным критериям."
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:3155
+#: /home/minds3t/omnipkg/omnipkg/core.py:3623
 msgid "🔎 Resolving package versions via PyPI API..."
 msgstr "🔎 Разрешение версий пакетов через PYPI API ..."
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:3162
+#: /home/minds3t/omnipkg/omnipkg/core.py:3630
 msgid "    -> Finding latest version for '{}'..."
 msgstr "-> Поиск последней версии для '{}' ..."
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:3166
+#: /home/minds3t/omnipkg/omnipkg/core.py:3634
 msgid "    ✅ Resolved '{}' to '{}'"
 msgstr "✅ Решение '{}' to '{}'"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:3169
+#: /home/minds3t/omnipkg/omnipkg/core.py:3637
 msgid "    ⚠️  Could not resolve a version for '{}' via PyPI. Skipping."
 msgstr "⚠ Не удалось разрешить версию для '{}' через PYPI. Пропуск."
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:3263
+#: /home/minds3t/omnipkg/omnipkg/core.py:3731
 msgid "    ⚠️  API Error while fetching version for '{}': {}"
 msgstr "⚠ Ошибка API при получении версии для '{}': {}"
 
-#: /home/minds3t/omnipkg/tests/test_rich_switching.py:221
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:225
 msgid "rich.{}test_harness_cloaked"
 msgstr "Rich. {} test_harness_cloaked"
 
-#: /home/minds3t/omnipkg/tests/test_rich_switching.py:226
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:230
 msgid "{}.{}test_harness_cloaked"
 msgstr "{}. {} test_harness_cloaked"
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:1959
+#: /home/minds3t/omnipkg/omnipkg/core.py:1126
+#: /home/minds3t/omnipkg/omnipkg/core.py:2098
 msgid "   {}"
 msgstr "   {}"
-
-#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:200
-msgid "--- Script STDERR (relevant) ---"
-msgstr "--- Скрипт STDERR (релевантный) ---."
-
-#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:205
-msgid "⚠️ Some errors occurred (see above)"
-msgstr "⚠️ Возникли некоторые ошибки (см. выше)"
-
-#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:236
-msgid ""
-"(Should have 4.14.1 and keras==2.13.1 active in main env, 4.5.0 in bubble)"
-msgstr ""
-"(Должен иметь 4.14.1 и керас == 2.13.1 Активен в Main Env, 4.5.0 в пузыре)"
-
-#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:242
-msgid "Bubble exists: {}"
-msgstr "Пузырь существует: {}"
 
 #: /home/minds3t/omnipkg/omnipkg/CondaGuard.py:35
 msgid "🛡️ Restored corrupted metadata for: {}"
@@ -2718,7 +2561,7 @@ msgid ""
 "✅ Demo finished."
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:312
+#: /home/minds3t/omnipkg/omnipkg/cli.py:378
 msgid "✅ Install strategy permanently set to: {}"
 msgstr ""
 
@@ -2801,420 +2644,398 @@ msgid ""
 " ⚠️ WARNING: Only remove if you're sure no omnipkg operations are running!"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:309
+#: /home/minds3t/omnipkg/omnipkg/cli.py:375
 msgid "❌ Error: Invalid install strategy. Must be one of: {}"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2568
+#: /home/minds3t/omnipkg/omnipkg/core.py:2899
 msgid ""
 "\n"
 "🛡️ LATEST-ACTIVE STRATEGY: Preserving replaced versions in bubbles"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2582
+#: /home/minds3t/omnipkg/omnipkg/core.py:2913
 msgid ""
 "\n"
 "✅ Latest-active complete! Requested versions active, previous versions preserved."
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2584
+#: /home/minds3t/omnipkg/omnipkg/core.py:2915
 msgid "✅ No version changes detected."
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2904
+#: /home/minds3t/omnipkg/omnipkg/core.py:3235
 msgid "🗑️ Uninstalling '{}=={}' from main environment via pip..."
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:216
+#: /home/minds3t/omnipkg/omnipkg/cli.py:282
 msgid "🔥 Key Features:"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:216
+#: /home/minds3t/omnipkg/omnipkg/cli.py:282
 msgid "  • Runtime version switching without environment restart"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:216
+#: /home/minds3t/omnipkg/omnipkg/cli.py:282
 msgid "  • Automatic conflict resolution with intelligent bubbling"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:216
+#: /home/minds3t/omnipkg/omnipkg/cli.py:282
 msgid "💡 Quick Start:"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:216
+#: /home/minds3t/omnipkg/omnipkg/cli.py:282
 msgid ""
 "  omnipkg install <package>      # Smart install with conflict resolution"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:216
+#: /home/minds3t/omnipkg/omnipkg/cli.py:282
 msgid "  omnipkg list                   # View installed packages and status"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:216
+#: /home/minds3t/omnipkg/omnipkg/cli.py:282
 msgid "  omnipkg info <package>         # Interactive package explorer"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:216
+#: /home/minds3t/omnipkg/omnipkg/cli.py:282
 msgid "  omnipkg demo                   # Try version-switching demos"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:216
+#: /home/minds3t/omnipkg/omnipkg/cli.py:282
 msgid "  omnipkg stress-test            # See the magic in action"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:216
+#: /home/minds3t/omnipkg/omnipkg/cli.py:282
 msgid "🛠️ Examples:"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:216
+#: /home/minds3t/omnipkg/omnipkg/cli.py:282
 msgid "  omnipkg install requests numpy>=1.20"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:216
+#: /home/minds3t/omnipkg/omnipkg/cli.py:282
 msgid "  omnipkg install uv==0.7.13 uv==0.7.14  # Multiple versions!"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:216
+#: /home/minds3t/omnipkg/omnipkg/cli.py:282
 msgid "  omnipkg info tensorflow==2.13.0"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:216
+#: /home/minds3t/omnipkg/omnipkg/cli.py:282
 msgid "  omnipkg config set language es"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:224
+#: /home/minds3t/omnipkg/omnipkg/cli.py:290
 msgid "Install from requirements file"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:229
+#: /home/minds3t/omnipkg/omnipkg/cli.py:295
 msgid "Packages to uninstall"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:232
+#: /home/minds3t/omnipkg/omnipkg/cli.py:298
 msgid "Package to inspect (e.g., \"requests\" or \"requests==2.28.1\")"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:233
+#: /home/minds3t/omnipkg/omnipkg/cli.py:299
 msgid "Revert to last known good environment"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:238
+#: /home/minds3t/omnipkg/omnipkg/cli.py:304
 msgid "View all installed packages and their status"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:246
+#: /home/minds3t/omnipkg/omnipkg/cli.py:312
 msgid "Environment health dashboard"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:248
+#: /home/minds3t/omnipkg/omnipkg/cli.py:314
 msgid "Ultimate demonstration with heavy packages"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:249
+#: /home/minds3t/omnipkg/omnipkg/cli.py:315
 msgid "Rebuild the omnipkg knowledge base"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:252
+#: /home/minds3t/omnipkg/omnipkg/cli.py:318
 msgid "Force complete rebuild"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:253
+#: /home/minds3t/omnipkg/omnipkg/cli.py:319
 msgid "Delete config file for fresh setup"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:255
+#: /home/minds3t/omnipkg/omnipkg/cli.py:321
 msgid "View or edit omnipkg configuration"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:258
+#: /home/minds3t/omnipkg/omnipkg/cli.py:324
 msgid "Configuration key to set"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:259
+#: /home/minds3t/omnipkg/omnipkg/cli.py:325
 msgid "Value to set (e.g., en, es, de, ja, zh_CN)"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:261
+#: /home/minds3t/omnipkg/omnipkg/cli.py:327
 msgid "Package whose bubbles to prune"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:262
+#: /home/minds3t/omnipkg/omnipkg/cli.py:328
 msgid "Keep N most recent bubbled versions"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2614
+#: /home/minds3t/omnipkg/omnipkg/core.py:2945
 msgid "ℹ️ No packages were bubbled during this installation."
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2970
+#: /home/minds3t/omnipkg/omnipkg/core.py:3301
 msgid ""
 "   ⚙️  Temporarily setting install strategy to latest-active for revert..."
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2974
+#: /home/minds3t/omnipkg/omnipkg/core.py:3305
 msgid "   ✅ Install strategy temporarily set to latest-active"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2978
+#: /home/minds3t/omnipkg/omnipkg/core.py:3309
 msgid "   ⚠️  Failed to set install strategy to latest-active: {}"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2979
+#: /home/minds3t/omnipkg/omnipkg/core.py:3310
 msgid "   ℹ️  Continuing with current strategy: {}"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2981
+#: /home/minds3t/omnipkg/omnipkg/core.py:3312
 msgid "   ℹ️  Install strategy already set to latest-active"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2991
-#: /home/minds3t/omnipkg/omnipkg/stress_test.py:87
-#: /home/minds3t/omnipkg/tests/test_rich_switching.py:266
-#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:136
-#: /home/minds3t/omnipkg/tests/test_uv_switching.py:251
+#: /home/minds3t/omnipkg/omnipkg/core.py:3322
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:121
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:272
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:206
 msgid "   🔄 Restoring original install strategy: {}"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2994
+#: /home/minds3t/omnipkg/omnipkg/core.py:3325
 msgid "   ✅ Install strategy restored to: {}"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2998
+#: /home/minds3t/omnipkg/omnipkg/core.py:3329
 msgid "   ⚠️  Failed to restore install strategy to {}: {}"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2999
+#: /home/minds3t/omnipkg/omnipkg/core.py:3330
 msgid ""
 "   💡 You may need to manually restore it with: omnipkg config set "
 "install_strategy {}"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:3001
+#: /home/minds3t/omnipkg/omnipkg/core.py:3332
 msgid "   ℹ️  Install strategy unchanged: {}"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/stress_test.py:53
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:87
 msgid "   ⚠️  stderr: {}"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/stress_test.py:60
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:94
 msgid "   ❌ Subprocess failed: {}"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/stress_test.py:73
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:107
 msgid "Setting install strategy to {}"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/stress_test.py:75
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:109
 #: /home/minds3t/omnipkg/tests/test_rich_switching.py:55
-#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:50
-#: /home/minds3t/omnipkg/tests/test_uv_switching.py:52
+#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:158
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:48
 msgid "   ⚙️  Install strategy set to: {}"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/stress_test.py:78
-#: /home/minds3t/omnipkg/omnipkg/stress_test.py:81
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:112
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:115
 #: /home/minds3t/omnipkg/tests/test_rich_switching.py:58
-#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:53
-#: /home/minds3t/omnipkg/tests/test_uv_switching.py:55
+#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:161
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:51
 msgid "   ⚠️  Failed to set install strategy: {}"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/stress_test.py:103
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:137
 msgid "   📋 Found installed: {}=={}"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/stress_test.py:106
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:140
 msgid "   ⚠️  Could not get installed versions: {}"
 msgstr ""
 
-#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:64
-msgid "   ✅ pip uninstall {} completed successfully"
-msgstr ""
-
-#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:66
-msgid "   ℹ️  pip uninstall completed ({} may not have been installed)"
-msgstr ""
-
 #: /home/minds3t/omnipkg/tests/test_rich_switching.py:73
-#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:69
-#: /home/minds3t/omnipkg/tests/test_uv_switching.py:70
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:65
 msgid "   ⚠️  pip uninstall failed: {}"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/stress_test.py:137
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:171
 msgid ""
 "   📦 Using omnipkg to install baseline numpy==1.26.4 and scipy==1.16.1..."
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/stress_test.py:142
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:176
 msgid "   ✅ omnipkg install baseline packages completed successfully"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/stress_test.py:146
-#: /home/minds3t/omnipkg/omnipkg/stress_test.py:149
-#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:93
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:180
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:183
 msgid "   ❌ omnipkg install failed: {}"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/stress_test.py:155
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:189
 msgid "   ℹ️  No original versions to restore - leaving packages uninstalled"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/stress_test.py:157
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:191
 msgid "   🔄 Restoring original package versions..."
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/stress_test.py:161
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:195
 msgid "   📦 Will restore: {}=={}"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/stress_test.py:166
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:200
 msgid "   ✅ Original versions restored successfully"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/stress_test.py:169
-#: /home/minds3t/omnipkg/omnipkg/stress_test.py:173
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:203
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:207
 msgid "   ⚠️  Failed to restore original versions: {}"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/stress_test.py:170
-#: /home/minds3t/omnipkg/omnipkg/stress_test.py:174
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:204
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:208
 msgid "   💡 You may need to manually reinstall: {}"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/stress_test.py:184
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:218
 #: /home/minds3t/omnipkg/tests/test_rich_switching.py:95
-#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:100
-#: /home/minds3t/omnipkg/tests/test_uv_switching.py:92
+#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:205
 msgid "   ℹ️  Current install strategy: {}"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/stress_test.py:185
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:219
 msgid "   📋 Capturing original package versions..."
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/stress_test.py:187
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:221
 #: /home/minds3t/omnipkg/tests/test_rich_switching.py:98
-#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:101
-#: /home/minds3t/omnipkg/tests/test_uv_switching.py:95
 msgid "   ⚙️  Setting install strategy to stable-main for testing..."
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/stress_test.py:189
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:223
 #: /home/minds3t/omnipkg/tests/test_rich_switching.py:100
-#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:103
-#: /home/minds3t/omnipkg/tests/test_uv_switching.py:97
 msgid "   ⚠️  Could not change install strategy, continuing anyway..."
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/stress_test.py:193
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:227
 msgid "   🫧 Removing existing test bubbles with omnipkg..."
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/stress_test.py:199
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:233
 msgid "   🧹 Removing bubble: {} with omnipkg uninstall"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/stress_test.py:203
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:237
 msgid "Uninstalling bubble {}"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/stress_test.py:206
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:240
 msgid "   🧹 Manually removed {}"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/stress_test.py:208
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:242
 msgid "   ⚠️  Using manual removal for {}: {}"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/stress_test.py:223
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:257
 msgid "   ❌ Failed to clean packages with pip"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/stress_test.py:226
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:260
 msgid "   ❌ Failed to install baseline packages"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/stress_test.py:306
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:340
 msgid "   🫧 Removing test bubbles with omnipkg..."
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/stress_test.py:310
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:344
 msgid "Uninstalling test bubble {}"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/stress_test.py:312
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:346
 msgid "   ✅ omnipkg uninstall {} completed"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/stress_test.py:314
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:348
 msgid "   ℹ️  omnipkg uninstall {} completed (may not have existed)"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/stress_test.py:316
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:350
 msgid "   ⚠️  omnipkg uninstall failed for {}: {}"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/stress_test.py:320
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:354
 msgid "   🧹 Removing remaining test bubble: {}"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/stress_test.py:332
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:366
 msgid "   🧹 Cleaning main environment packages..."
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/stress_test.py:335
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:369
 msgid ""
 "\n"
 "✅ Cleanup complete. Your environment is restored."
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/stress_test.py:368
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:401
 msgid "STEP 4: Cleanup & Restoration"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/stress_test.py:375
-#: /home/minds3t/omnipkg/tests/test_rich_switching.py:346
-#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:274
-#: /home/minds3t/omnipkg/tests/test_uv_switching.py:340
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:408
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:356
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:273
 msgid "   💡 Note: Install strategy has been restored to: {}"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/stress_test.py:377
-#: /home/minds3t/omnipkg/tests/test_rich_switching.py:348
-#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:276
-#: /home/minds3t/omnipkg/tests/test_uv_switching.py:342
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:410
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:358
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:275
 msgid "   ℹ️  Install strategy remains at: stable-main"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/stress_test.py:379
-#: /home/minds3t/omnipkg/tests/test_rich_switching.py:350
-#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:278
-#: /home/minds3t/omnipkg/tests/test_uv_switching.py:344
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:412
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:360
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:277
 msgid ""
 "   💡 Note: You may need to manually restore your preferred install strategy"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/stress_test.py:380
-#: /home/minds3t/omnipkg/tests/test_rich_switching.py:351
-#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:279
-#: /home/minds3t/omnipkg/tests/test_uv_switching.py:345
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:413
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:361
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:278
 msgid ""
 "   💡 Run: omnipkg config set install_strategy <your_preferred_strategy>"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/stress_test.py:384
-#: /home/minds3t/omnipkg/tests/test_rich_switching.py:358
-#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:289
-#: /home/minds3t/omnipkg/tests/test_uv_switching.py:352
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:417
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:368
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:283
 msgid "   💡 You may need to manually restore install strategy: {}"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/stress_test.py:385
-#: /home/minds3t/omnipkg/tests/test_rich_switching.py:359
-#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:290
-#: /home/minds3t/omnipkg/tests/test_uv_switching.py:353
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:418
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:369
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:284
 msgid "   💡 Run: omnipkg config set install_strategy {}"
 msgstr ""
 
@@ -3239,8 +3060,7 @@ msgid "   ✅ pip install rich=={} completed successfully"
 msgstr ""
 
 #: /home/minds3t/omnipkg/tests/test_rich_switching.py:85
-#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:81
-#: /home/minds3t/omnipkg/tests/test_uv_switching.py:82
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:76
 msgid "   ❌ pip install failed: {}"
 msgstr ""
 
@@ -3252,713 +3072,1303 @@ msgstr ""
 msgid "   ❌ Failed to install main environment Rich version"
 msgstr ""
 
-#: /home/minds3t/omnipkg/tests/test_rich_switching.py:139
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:141
 msgid "   ✅ Bubble created: rich-{}"
 msgstr ""
 
-#: /home/minds3t/omnipkg/tests/test_rich_switching.py:141
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:143
 msgid "   ❌ Failed to create bubble for rich=={}: {}"
 msgstr ""
 
-#: /home/minds3t/omnipkg/tests/test_rich_switching.py:285
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:293
 msgid "Testing Main Environment (rich=={})"
 msgstr ""
 
-#: /home/minds3t/omnipkg/tests/test_rich_switching.py:303
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:313
 msgid ""
 "\n"
 "🎉🎉🎉 ALL RICH LIBRARY TESTS PASSED! 🎉🎉🎉"
 msgstr ""
 
-#: /home/minds3t/omnipkg/tests/test_rich_switching.py:304
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:314
 msgid "🔥 OMNIPKG RICH HANDLING IS FULLY FUNCTIONAL! 🔥"
 msgstr ""
 
-#: /home/minds3t/omnipkg/tests/test_rich_switching.py:306
+#: /home/minds3t/omnipkg/tests/test_rich_switching.py:316
 msgid ""
 "\n"
 "💥 SOME TESTS FAILED - RICH HANDLING NEEDS WORK 💥"
 msgstr ""
 
-#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:58
-msgid ""
-"   🧹 Using pip to uninstall tensorflow packages from main environment..."
-msgstr ""
-
-#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:74
-msgid "   📦 Using pip to install typing extensions package..."
-msgstr ""
-
-#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:78
-msgid "   ✅ pip install typing extensions package completed successfully"
-msgstr ""
-
-#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:86
-msgid "   📦 Using omnipkg to install TensorFlow 2.13.0 packages..."
-msgstr ""
-
-#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:90
-msgid "   ✅ omnipkg install TensorFlow packages completed successfully"
-msgstr ""
-
-#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:106
-msgid "   🧹 Cleaning up existing TensorFlow installations and bubbles..."
-msgstr ""
-
-#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:113
-msgid "   🧹 Removing old typing-extensions bubble: {}"
-msgstr ""
-
-#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:125
-msgid "   ❌ Failed to install main environment TensorFlow packages"
-msgstr ""
-
-#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:128
-msgid "   ❌ Failed to install TensorFlow packages using omnipkg"
-msgstr ""
-
-#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:218
-msgid "   🫧 Creating bubble for typing-extensions=={}"
-msgstr ""
-
-#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:221
-msgid "   ✅ Bubble created: typing-extensions-{}"
-msgstr ""
-
-#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:223
-msgid "   ❌ Failed to create bubble for typing-extensions=={}: {}"
-msgstr ""
-
-#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:269
-msgid "   📦 Restoring main environment: TensorFlow packages"
-msgstr ""
-
-#: /home/minds3t/omnipkg/tests/test_uv_switching.py:60
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:56
 msgid "   🧹 Using pip to uninstall uv from main environment..."
 msgstr ""
 
-#: /home/minds3t/omnipkg/tests/test_uv_switching.py:65
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:60
 msgid "   ✅ pip uninstall uv completed successfully"
 msgstr ""
 
-#: /home/minds3t/omnipkg/tests/test_uv_switching.py:67
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:62
 msgid "   ℹ️  pip uninstall completed (uv may not have been installed)"
 msgstr ""
 
-#: /home/minds3t/omnipkg/tests/test_uv_switching.py:75
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:70
 msgid "   📦 Using pip to install uv=={}..."
 msgstr ""
 
-#: /home/minds3t/omnipkg/tests/test_uv_switching.py:79
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:73
 msgid "   ✅ pip install uv=={} completed successfully"
 msgstr ""
 
-#: /home/minds3t/omnipkg/tests/test_uv_switching.py:104
-msgid "   🧹 Cleaning up existing UV installations and bubbles..."
-msgstr ""
-
-#: /home/minds3t/omnipkg/tests/test_uv_switching.py:122
-msgid "   ❌ Failed to install main environment UV version"
-msgstr ""
-
-#: /home/minds3t/omnipkg/tests/test_uv_switching.py:242
-msgid "   ❌ Main environment test: FAILED (expected 0.6.13, got {})"
-msgstr ""
-
-#: /home/minds3t/omnipkg/omnipkg/cli.py:208
+#: /home/minds3t/omnipkg/omnipkg/cli.py:274
 msgid ""
 "🚀 The intelligent Python package manager that eliminates dependency hell "
 "(8pkg = ∞pkg)"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:235
+#: /home/minds3t/omnipkg/omnipkg/cli.py:301
 msgid "Swap Python versions or package environments"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:236
+#: /home/minds3t/omnipkg/omnipkg/cli.py:302
 msgid "What to swap (e.g., \"python\", \"python 3.11\")"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:237
+#: /home/minds3t/omnipkg/omnipkg/cli.py:303
 msgid "Specific version to swap to"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:240
+#: /home/minds3t/omnipkg/omnipkg/cli.py:306
 msgid "Manage Python interpreters for the environment"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:241
+#: /home/minds3t/omnipkg/omnipkg/cli.py:307
 msgid "Available subcommands:"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:242
+#: /home/minds3t/omnipkg/omnipkg/cli.py:308
 msgid "Copy a system Python into this environment"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:243
+#: /home/minds3t/omnipkg/omnipkg/cli.py:309
 msgid "The discovered version to adopt (e.g., \"3.10\")"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:244
+#: /home/minds3t/omnipkg/omnipkg/cli.py:310
 msgid "Switch the active Python interpreter for this environment"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:245
+#: /home/minds3t/omnipkg/omnipkg/cli.py:311
 msgid "The version to switch to (e.g., \"3.10\", \"3.11\")"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:326
-#: /home/minds3t/omnipkg/omnipkg/cli.py:331
+#: /home/minds3t/omnipkg/omnipkg/cli.py:392
+#: /home/minds3t/omnipkg/omnipkg/cli.py:397
 msgid "   • Python {}: {}"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:340
+#: /home/minds3t/omnipkg/omnipkg/cli.py:406
 msgid "❌ Error: You must specify what to swap."
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:341
+#: /home/minds3t/omnipkg/omnipkg/cli.py:407
 msgid "Examples:"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:342
+#: /home/minds3t/omnipkg/omnipkg/cli.py:408
 msgid "  {} swap python           # Interactive Python version picker"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:343
+#: /home/minds3t/omnipkg/omnipkg/cli.py:409
 msgid "  {} swap python 3.11      # Switch to Python 3.11"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:351
+#: /home/minds3t/omnipkg/omnipkg/cli.py:417
 msgid "❌ No Python interpreters found."
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:353
+#: /home/minds3t/omnipkg/omnipkg/cli.py:419
 msgid "🐍 Available Python versions:"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:356
+#: /home/minds3t/omnipkg/omnipkg/cli.py:422
 msgid "  {}. Python {}"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:358
+#: /home/minds3t/omnipkg/omnipkg/cli.py:424
 msgid "Select version (1-{}): "
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:366
+#: /home/minds3t/omnipkg/omnipkg/cli.py:432
 msgid ""
 "\n"
 "❌ Operation cancelled."
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:369
+#: /home/minds3t/omnipkg/omnipkg/cli.py:435
 msgid "❌ Error: Unknown swap target '{}'. Currently supported: python"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:454
+#: /home/minds3t/omnipkg/omnipkg/cli.py:525
 msgid "Python Interpreter Information"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:456
+#: /home/minds3t/omnipkg/omnipkg/cli.py:527
 msgid "🐍 Managed Python Versions (available for swapping):"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:459
+#: /home/minds3t/omnipkg/omnipkg/cli.py:530
 msgid "   • Python {}: {}{}"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:461
+#: /home/minds3t/omnipkg/omnipkg/cli.py:532
 msgid ""
 "\n"
 "🎯 Active Context: Python {}"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:462
+#: /home/minds3t/omnipkg/omnipkg/cli.py:533
 msgid "📍 Configured Path: {}"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/cli.py:465
+#: /home/minds3t/omnipkg/omnipkg/cli.py:536
 msgid ""
 "\n"
 "💡 To switch context, use: {} swap python <version>"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:124
-msgid ""
-"⚠️  Inconsistency detected: Managed Python 3.11 is missing. Re-initializing "
-"environment..."
-msgstr ""
-
-#: /home/minds3t/omnipkg/omnipkg/core.py:132
-msgid ""
-"✓ Hotswap successful. Aligning runtime configuration to the new Python "
-"3.11..."
-msgstr ""
-
-#: /home/minds3t/omnipkg/omnipkg/core.py:140
-msgid "⚠️ Warning: Config not loaded, using minimal initialization"
-msgstr ""
-
-#: /home/minds3t/omnipkg/omnipkg/core.py:168
+#: /home/minds3t/omnipkg/omnipkg/core.py:172
 msgid "   ⚠️  Could not reset setup flag in config file: {}"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:176
+#: /home/minds3t/omnipkg/omnipkg/core.py:180
 msgid "  🚀 Environment Hotswap to a Managed Python 3.11"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:179
+#: /home/minds3t/omnipkg/omnipkg/core.py:183
 msgid ""
 "\n"
 "To ensure everything 'just works', omnipkg will now perform a one-time setup:"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:180
+#: /home/minds3t/omnipkg/omnipkg/core.py:184
 msgid ""
 "  1. Download a self-contained Python 3.11 into your virtual environment."
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:190
+#: /home/minds3t/omnipkg/omnipkg/core.py:194
 msgid ""
 "\n"
 "🛑 Operation cancelled. Aborting."
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:259
+#: /home/minds3t/omnipkg/omnipkg/core.py:263
 msgid "🔧 Aligning configuration to use Python interpreter: {}"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:264
+#: /home/minds3t/omnipkg/omnipkg/core.py:268
 msgid "   - New site-packages path: {}"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:265
+#: /home/minds3t/omnipkg/omnipkg/core.py:269
 msgid "   - New Python executable: {}"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:271
+#: /home/minds3t/omnipkg/omnipkg/core.py:275
 msgid "   ✅ Configuration updated and saved successfully."
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:282
+#: /home/minds3t/omnipkg/omnipkg/core.py:302
 msgid "✅ Detected a suitable Python 3.11 within your virtual environment."
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:289
+#: /home/minds3t/omnipkg/omnipkg/core.py:309
 msgid ""
 "⚠️ Warning: Could not find registered Python 3.11 path after setup. Config "
 "may be incorrect."
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:291
+#: /home/minds3t/omnipkg/omnipkg/core.py:311
 msgid ""
 "\n"
 "✅ Environment setup is complete!"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:315
+#: /home/minds3t/omnipkg/omnipkg/core.py:335
 msgid "   - Registering current Python 3.11..."
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:324
+#: /home/minds3t/omnipkg/omnipkg/core.py:344
 msgid "   - Centralizing native Python {} via symlink..."
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:332
+#: /home/minds3t/omnipkg/omnipkg/core.py:352
 msgid "   - ✅ Created symlink: {} -> {}"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:334
+#: /home/minds3t/omnipkg/omnipkg/core.py:354
 msgid "   - ⚠️  Correcting invalid symlink at {}..."
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:341
+#: /home/minds3t/omnipkg/omnipkg/core.py:361
 msgid "   - ✅ Symlink already exists and is correct."
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:350
-#: /home/minds3t/omnipkg/omnipkg/core.py:424
+#: /home/minds3t/omnipkg/omnipkg/core.py:410
+#: /home/minds3t/omnipkg/omnipkg/core.py:698
 msgid "🔧 Registering all managed Python interpreters..."
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:374
-#: /home/minds3t/omnipkg/omnipkg/core.py:452
+#: /home/minds3t/omnipkg/omnipkg/core.py:447
+#: /home/minds3t/omnipkg/omnipkg/core.py:752
 msgid "   ✅ Registered {} managed Python interpreters."
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:376
-#: /home/minds3t/omnipkg/omnipkg/core.py:454
+#: /home/minds3t/omnipkg/omnipkg/core.py:449
 msgid "      - Python {}: {}"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:379
+#: /home/minds3t/omnipkg/omnipkg/core.py:365
 msgid ""
 "\n"
 "🚀 Upgrading environment to Python 3.11..."
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:382
+#: /home/minds3t/omnipkg/omnipkg/core.py:368
 msgid "❌ Error: You must be in a virtual environment to use this feature."
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:391
+#: /home/minds3t/omnipkg/omnipkg/core.py:377
 msgid "Note: Falling back to platform-specific installation ({})"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:399
-#: /home/minds3t/omnipkg/omnipkg/core.py:635
+#: /home/minds3t/omnipkg/omnipkg/core.py:385
+#: /home/minds3t/omnipkg/omnipkg/core.py:780
 msgid "Unsupported operating system: {}"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:402
+#: /home/minds3t/omnipkg/omnipkg/core.py:388
 msgid "✅ Python 3.11 downloaded and configured."
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:404
+#: /home/minds3t/omnipkg/omnipkg/core.py:390
 msgid ""
 "\n"
 "✅ Success! The environment is now fully upgraded to Python 3.11."
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:408
+#: /home/minds3t/omnipkg/omnipkg/core.py:394
 msgid " source \"{}\""
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:409
+#: /home/minds3t/omnipkg/omnipkg/core.py:395
 msgid " ...after this one finishes."
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:415
+#: /home/minds3t/omnipkg/omnipkg/core.py:401
 msgid "❌ Failed to auto-upgrade to Python 3.11: {}"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:461
+#: /home/minds3t/omnipkg/omnipkg/core.py:458
 msgid "✅ Found existing Python 3.11 interpreter."
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:489
-msgid "   - Found project root at: {}"
-msgstr ""
-
-#: /home/minds3t/omnipkg/omnipkg/core.py:499
-msgid "🔧 Finalizing environment upgrade..."
-msgstr ""
-
-#: /home/minds3t/omnipkg/omnipkg/core.py:507
-msgid "   - Found pyproject.toml via fallback search at: {}"
-msgstr ""
-
-#: /home/minds3t/omnipkg/omnipkg/core.py:512
-msgid "   - Developer mode detected at: {}"
-msgstr ""
-
-#: /home/minds3t/omnipkg/omnipkg/core.py:520
-msgid "   - Found running omnipkg version: {}"
-msgstr ""
-
-#: /home/minds3t/omnipkg/omnipkg/core.py:526
-msgid "   - Error: Could not determine omnipkg version. Cannot proceed."
-msgstr ""
-
-#: /home/minds3t/omnipkg/omnipkg/core.py:547
-msgid "❌ Fallback installation also failed."
-msgstr ""
-
-#: /home/minds3t/omnipkg/omnipkg/core.py:548
-msgid "   Fallback error:"
-msgstr ""
-
-#: /home/minds3t/omnipkg/omnipkg/core.py:571
-msgid "   ✅ Configuration updated."
-msgstr ""
-
-#: /home/minds3t/omnipkg/omnipkg/core.py:573
-msgid ""
-"   ⚠️  Warning: Could not save hotswap completion flag to config file: {}"
-msgstr ""
-
-#: /home/minds3t/omnipkg/omnipkg/core.py:579
+#: /home/minds3t/omnipkg/omnipkg/core.py:567
 msgid "🔧 Creating new omnipkg executable..."
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:592
+#: /home/minds3t/omnipkg/omnipkg/core.py:580
 msgid "   ✅ New omnipkg executable created."
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:596
+#: /home/minds3t/omnipkg/omnipkg/core.py:584
 msgid "🔧 Updating default Python links..."
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:612
+#: /home/minds3t/omnipkg/omnipkg/core.py:600
 msgid "   ✅ Default Python links updated to use Python {}."
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:619
+#: /home/minds3t/omnipkg/omnipkg/core.py:764
 msgid ""
 "\n"
 "🚀 Installing managed Python {}..."
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:625
+#: /home/minds3t/omnipkg/omnipkg/core.py:770
 msgid "Unsupported architecture: {}"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:640
+#: /home/minds3t/omnipkg/omnipkg/core.py:785
 msgid "   - URL: {}"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:644
+#: /home/minds3t/omnipkg/omnipkg/core.py:789
 msgid "Failed to download or file is too small: {}"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:645
+#: /home/minds3t/omnipkg/omnipkg/core.py:790
 msgid "✅ Downloaded {} bytes"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:652
+#: /home/minds3t/omnipkg/omnipkg/core.py:797
 msgid "No 'python' directory found in extracted archive"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:655
+#: /home/minds3t/omnipkg/omnipkg/core.py:800
 msgid "   - Installing to: {}"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:661
+#: /home/minds3t/omnipkg/omnipkg/core.py:806
 msgid "Python executable not found in expected location: {}"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:670
+#: /home/minds3t/omnipkg/omnipkg/core.py:815
 msgid "Python executable test failed: {}"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:671
+#: /home/minds3t/omnipkg/omnipkg/core.py:816
 msgid "✅ Python installation verified: {}"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:675
-msgid "Failed to download Python {}: Network error - {}"
-msgstr ""
-
-#: /home/minds3t/omnipkg/omnipkg/core.py:677
-msgid "Failed to extract Python archive: {}"
-msgstr ""
-
-#: /home/minds3t/omnipkg/omnipkg/core.py:679
-msgid "An unexpected error occurred during Python installation: {}"
-msgstr ""
-
-#: /home/minds3t/omnipkg/omnipkg/core.py:696
-msgid "   - Installing packaging module..."
-msgstr ""
-
-#: /home/minds3t/omnipkg/omnipkg/core.py:698
-msgid "   ✅ Essential packages bootstrapped successfully!"
-msgstr ""
-
-#: /home/minds3t/omnipkg/omnipkg/core.py:700
-msgid "❌ A critical error occurred during the bootstrap process."
-msgstr ""
-
-#: /home/minds3t/omnipkg/omnipkg/core.py:701
-msgid "   Command failed: {}"
-msgstr ""
-
-#: /home/minds3t/omnipkg/omnipkg/core.py:848
-msgid "   ✅ Selected: {}"
-msgstr ""
-
-#: /home/minds3t/omnipkg/omnipkg/core.py:851
-msgid "   ⚠️  Falling back to basic path detection."
-msgstr ""
-
-#: /home/minds3t/omnipkg/omnipkg/core.py:922
+#: /home/minds3t/omnipkg/omnipkg/core.py:1070
 msgid "🌍 Welcome to omnipkg! Let's get you configured."
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:926
+#: /home/minds3t/omnipkg/omnipkg/core.py:1074
 msgid "🐍 Discovered Python interpreters:"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:929
+#: /home/minds3t/omnipkg/omnipkg/core.py:1077
 msgid "   Python {}: {}{}"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:939
+#: /home/minds3t/omnipkg/omnipkg/core.py:1087
 msgid "Python executable path [{}]: "
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:941
+#: /home/minds3t/omnipkg/omnipkg/core.py:1090
 msgid "Redis host [{}]: "
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:942
+#: /home/minds3t/omnipkg/omnipkg/core.py:1098
 msgid "Redis port [{}]: "
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:943
+#: /home/minds3t/omnipkg/omnipkg/core.py:1099
 msgid "Enable Python interpreter hotswapping? (y/n) [y]: "
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:956
+#: /home/minds3t/omnipkg/omnipkg/core.py:1112
 msgid ""
 "\n"
 "✅ Configuration saved to {}."
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:974
+#: /home/minds3t/omnipkg/omnipkg/core.py:1152
 msgid "⚠️ Warning: Global config file is corrupted. Starting fresh."
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:978
+#: /home/minds3t/omnipkg/omnipkg/core.py:1156
 msgid "👋 New environment detected (ID: {}). Starting first-time setup."
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:1030
-#: /home/minds3t/omnipkg/omnipkg/core.py:1038
+#: /home/minds3t/omnipkg/omnipkg/core.py:1208
+#: /home/minds3t/omnipkg/omnipkg/core.py:1216
 msgid "Python {} interpreter not found"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:1990
+#: /home/minds3t/omnipkg/omnipkg/core.py:2129
 msgid ""
 "   This will DELETE all data for the current environment (matching '{}')"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:1991
+#: /home/minds3t/omnipkg/omnipkg/core.py:2130
 msgid ""
 "   It will ALSO delete any legacy global data from older omnipkg versions."
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2628
+#: /home/minds3t/omnipkg/omnipkg/core.py:2959
 msgid "    ✅ Removed redundant bubble directory: {}"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:2632
+#: /home/minds3t/omnipkg/omnipkg/core.py:2963
 msgid "    ❌ Failed to remove bubble directory: {}"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:3054
+#: /home/minds3t/omnipkg/omnipkg/core.py:3385
 msgid "🐍 Switching active Python context to version {}..."
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:3058
+#: /home/minds3t/omnipkg/omnipkg/core.py:3389
 msgid "❌ Error: Python version {} is not managed by this environment."
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:3059
+#: /home/minds3t/omnipkg/omnipkg/core.py:3390
 msgid "   Run 'omnipkg list python' to see managed interpreters."
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:3063
+#: /home/minds3t/omnipkg/omnipkg/core.py:3394
 msgid "   - Found managed interpreter at: {}"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:3068
+#: /home/minds3t/omnipkg/omnipkg/core.py:3399
 msgid "   - Updating configuration to new context..."
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:3072
+#: /home/minds3t/omnipkg/omnipkg/core.py:3403
 msgid "   - ✅ Configuration saved."
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:3073
+#: /home/minds3t/omnipkg/omnipkg/core.py:3404
 msgid "   - Updating default `python` symlinks..."
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:3078
+#: /home/minds3t/omnipkg/omnipkg/core.py:3409
 msgid "   - ❌ Failed to update symlinks: {}"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:3079
+#: /home/minds3t/omnipkg/omnipkg/core.py:3410
 msgid ""
 "\n"
 "🎉 Successfully switched omnipkg context to Python {}!"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:3081
+#: /home/minds3t/omnipkg/omnipkg/core.py:3412
 msgid "   in your shell, you MUST re-source your activate script:"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:3082
+#: /home/minds3t/omnipkg/omnipkg/core.py:3413
 msgid ""
 "\n"
 "      source {}\n"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:3094
+#: /home/minds3t/omnipkg/omnipkg/core.py:680
+#: /home/minds3t/omnipkg/omnipkg/core.py:2587
+#: /home/minds3t/omnipkg/omnipkg/core.py:3421
 msgid "🐍 Attempting to adopt Python {} into the environment..."
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:3095
-msgid ""
-"\n"
-"--- Strategy 1: Attempting to copy local interpreter ---"
-msgstr ""
-
-#: /home/minds3t/omnipkg/omnipkg/core.py:3100
+#: /home/minds3t/omnipkg/omnipkg/core.py:3434
 msgid "   - Found potential source at: {}"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:3106
-msgid ""
-"   ⚠️  Safety check failed: Source '{}' is a critical system directory. "
-"Skipping copy."
-msgstr ""
-
-#: /home/minds3t/omnipkg/omnipkg/core.py:3110
-msgid "   ⚠️  Could not verify source interpreter: {}. Skipping copy."
-msgstr ""
-
-#: /home/minds3t/omnipkg/omnipkg/core.py:3118
-msgid "   - Starting safe copy from: {}"
-msgstr ""
-
-#: /home/minds3t/omnipkg/omnipkg/core.py:3121
-msgid "   - ✅ Copy successful!"
-msgstr ""
-
-#: /home/minds3t/omnipkg/omnipkg/core.py:3124
-#: /home/minds3t/omnipkg/omnipkg/core.py:3144
+#: /home/minds3t/omnipkg/omnipkg/core.py:687
+#: /home/minds3t/omnipkg/omnipkg/core.py:2727
+#: /home/minds3t/omnipkg/omnipkg/core.py:2762
+#: /home/minds3t/omnipkg/omnipkg/core.py:3577
+#: /home/minds3t/omnipkg/omnipkg/core.py:3612
 msgid "   You can now use 'omnipkg swap python {}'"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/core.py:3127
-msgid "   ❌ Copy failed: {}"
-msgstr ""
-
-#: /home/minds3t/omnipkg/omnipkg/core.py:3130
-msgid ""
-"\n"
-"--- Strategy 2: Falling back to downloading a clean build ---"
-msgstr ""
-
-#: /home/minds3t/omnipkg/omnipkg/core.py:3139
-msgid "✅ A downloaded version of Python {} is already managed."
-msgstr ""
-
-#: /home/minds3t/omnipkg/omnipkg/core.py:3143
-msgid "🎉 Successfully adopted and registered Python {} via download!"
-msgstr ""
-
-#: /home/minds3t/omnipkg/omnipkg/core.py:3147
-msgid "❌ Download strategy also failed: {}"
-msgstr ""
-
-#: /home/minds3t/omnipkg/omnipkg/stress_test.py:114
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:148
 msgid "   🧹 Aggressively cleaning numpy and scipy from main environment..."
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/stress_test.py:120
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:154
 msgid "   ❌ Could not determine site-packages path: {}"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/stress_test.py:126
-#: /home/minds3t/omnipkg/omnipkg/stress_test.py:129
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:160
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:163
 msgid "      - Removed {}"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/stress_test.py:143
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:177
 msgid "   📚 Knowledge base automatically synced during install"
 msgstr ""
 
-#: /home/minds3t/omnipkg/omnipkg/stress_test.py:220
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:254
 msgid "   - Setting main environment to a known good state..."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:51
+msgid "  ⚠️  This Demo Requires Python {}"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:54
+msgid ""
+"omnipkg will now attempt to automatically configure the correct interpreter."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:63
+msgid "🐍 Python {} found on your system. Adopting it..."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:65
+msgid "❌ Failed to adopt Python {}. Please try manually."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:66
+msgid "   Run: {} python adopt {}"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:68
+msgid "✅ Successfully adopted Python {}."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:71
+msgid "❌ Required Python version {} not found on your system."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:72
+msgid "   Please install Python {} and ensure it is in your PATH."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:76
+msgid "🔄 Swapping active interpreter to Python {} for the demo..."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:78
+msgid "❌ Failed to swap to Python {}. Please try manually."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:79
+msgid "   Run: {} swap python {}"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:82
+msgid "✅ Environment successfully configured for Python {}."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:83
+msgid "🚀 Proceeding to run the demo..."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:126
+msgid "1. Switch to Python 3.11: omnipkg swap python 3.11"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:127
+msgid "2. If not available, adopt it first: omnipkg python adopt 3.11"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/cli.py:456
+msgid "Enter your choice (1-4): "
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:70
+msgid "⚠️ Could not parse pyproject.toml, falling back to empty list: {}"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:73
+msgid ""
+"⚠️ Could not determine core dependencies, falling back to empty list: {}"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:96
+msgid "  🚀 OMNIPKG ONE-TIME ENVIRONMENT SETUP"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:100
+msgid "   - Step 1: Registering the native Python interpreter..."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:104
+msgid ""
+"\n"
+"   - Step 2: Setting up the required Python 3.11 control plane..."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:112
+msgid "  ✅ SETUP COMPLETE"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:114
+msgid "Your environment is now fully managed by omnipkg."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:117
+msgid "❌ A critical error occurred during one-time setup: {}"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:127
+msgid "⚠️ CRITICAL Warning: Config failed to load, omnipkg may not function."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:416
+msgid "   ⚠️  Managed interpreters directory not found."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:421
+#: /home/minds3t/omnipkg/omnipkg/core.py:715
+msgid "   -> Scanning directory: {}"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:433
+msgid "      ✅ Found valid executable: {}"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:451
+msgid ""
+"   ⚠️  No managed Python interpreters were found or could be registered."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:491
+msgid "     (Found project root: {})"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:493
+msgid "     (No project root found)"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:505
+msgid "   🔩 Running: {}"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:509
+msgid "   ❌ {}"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:515
+msgid "   - Installing pip, setuptools, wheel..."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:523
+msgid "   ✅ Pip bootstrap complete."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:524
+msgid "   - Installing Redis client..."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:526
+msgid "   ✅ Redis client installed."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:527
+msgid "   - Installing security audit toolkit (safety)..."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:529
+msgid "   ✅ Security toolkit installed."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:530
+msgid "   - Installing omnipkg..."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:533
+msgid "     (Developer mode detected: performing editable install)"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:539
+msgid "   ✅ omnipkg installed."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:540
+msgid "   - Pre-configuring new environment in config file..."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:555
+msgid "   - Tracking {} remaining core dependencies..."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:558
+msgid "   ✅ All core dependencies installed and tracked."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:560
+msgid "❌ A critical error occurred during the bootstrap process: {}"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:607
+msgid "🔍 Auto-detecting original Python interpreter..."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:611
+msgid "   - Detected: Python {} at {}"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:623
+msgid "   ✅ Python {} already registered at: {}"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:631
+msgid "   📝 Registering Python {} (original) without copying..."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:638
+msgid "      ✅ Created symlink: {} -> {}"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:640
+msgid "      ⚠️  Could not create symlink {}: {}"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:648
+msgid "      ✅ Created pip symlink: {}"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:651
+msgid "      ⚠️  Could not create pip symlink: {}"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:657
+msgid "   ✅ Registered Python {} in registry"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:682
+msgid "   🎯 Requested version matches current Python {}.{}"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:683
+msgid "   📋 Auto-registering current interpreter instead of downloading..."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:686
+msgid "🎉 Successfully registered Python {} (original interpreter)!"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:690
+msgid "   ❌ Auto-registration failed: {}"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:691
+msgid "   🔄 Falling back to download strategy..."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:701
+msgid "   ℹ️  No interpreters directory found."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:718
+msgid "      ⚠️  No bin/ directory found in {}"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:726
+msgid "      ⚠️  No valid Python executable found in {}"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:738
+msgid "      ✅ Found valid executable: {} ({})"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:740
+msgid "      ⚠️  Could not parse version from: {}"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:742
+msgid "      ⚠️  Failed to get version: {}"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:744
+msgid "      ⚠️  Error testing executable: {}"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:755
+msgid "      - Python {}: {} ({})"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:757
+msgid "   ℹ️  No managed interpreters found."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:818
+msgid ""
+"\n"
+"✨ New interpreter bootstrapped. Building its Knowledge Base..."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:830
+msgid "   ⚠️  KB rebuild failed, attempting recovery..."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:831
+msgid "      Error: {}"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:835
+msgid "   🧹 Cleaned potentially corrupted KB state."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:837
+msgid "   ✅ Knowledge Base recovered and rebuilt successfully."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:839
+msgid "   ❌ KB rebuild recovery also failed."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:840
+msgid "      Recovery error: {}"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:841
+msgid ""
+"   ⚠️  Proceeding without KB - you may need to run 'omnipkg rebuild-kb' "
+"later"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:844
+msgid "   🔄 Restoring original Python context..."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:847
+msgid "   ℹ️  No previous Python context to restore."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:850
+msgid "Failed to download or extract Python: {}"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:993
+msgid "💡 Grounding configuration in the current active environment..."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:995
+msgid "   ✅ Using: {} (Your active interpreter)"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:998
+msgid ""
+"   ⚠️  Falling back to basic path detection within the current environment."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1097
+msgid "   ❌ Error: Invalid hostname '{}'. Please try again."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1114
+msgid "🧠 Initializing omnipkg knowledge base..."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1115
+msgid ""
+"   This may take a moment with large environments (like yours with {} "
+"packages)."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1116
+msgid "   💡 Future startups will be instant!"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1129
+msgid ""
+"   ⚠️  Knowledge base initialization encountered issues but continuing..."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:1134
+msgid "   ⚠️  Knowledge base will be built on first command usage instead."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2032
+msgid "✅ Omnipkg core initialized successfully."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2591
+#: /home/minds3t/omnipkg/omnipkg/core.py:3425
+msgid "   - No local Python {} found. Falling back to download strategy."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2600
+#: /home/minds3t/omnipkg/omnipkg/core.py:3441
+msgid "   - Source root: {}"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2601
+#: /home/minds3t/omnipkg/omnipkg/core.py:3442
+msgid "   - Current venv: {}"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2603
+#: /home/minds3t/omnipkg/omnipkg/core.py:3444
+msgid "   - ⚠️  SAFETY: Source is within current environment. Skipping copy."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2606
+#: /home/minds3t/omnipkg/omnipkg/core.py:3447
+msgid "   - ⚠️  SAFETY: Source doesn't look like a valid Python installation."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2610
+#: /home/minds3t/omnipkg/omnipkg/core.py:3451
+msgid "   - ⚠️  SAFETY: Source directory too large ({}GB). Skipping."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2613
+#: /home/minds3t/omnipkg/omnipkg/core.py:3454
+msgid "   - ⚠️  SAFETY: Source is a system-critical directory. Skipping."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2617
+#: /home/minds3t/omnipkg/omnipkg/core.py:3458
+msgid "   - ✅ Adopted copy of Python {} already exists."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2620
+#: /home/minds3t/omnipkg/omnipkg/core.py:3461
+msgid "   - Starting safe copy operation..."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2623
+#: /home/minds3t/omnipkg/omnipkg/core.py:2730
+#: /home/minds3t/omnipkg/omnipkg/core.py:3464
+#: /home/minds3t/omnipkg/omnipkg/core.py:3580
+msgid "   - ❌ Copy operation failed: {}"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2711
+#: /home/minds3t/omnipkg/omnipkg/core.py:3561
+msgid "   - Copying {} -> {}"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2715
+#: /home/minds3t/omnipkg/omnipkg/core.py:3565
+msgid "   - ❌ Copy completed but Python executable not found in destination"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2721
+#: /home/minds3t/omnipkg/omnipkg/core.py:3571
+msgid "   - ❌ Copied Python executable failed basic test"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2724
+#: /home/minds3t/omnipkg/omnipkg/core.py:3574
+msgid "   - ✅ Copy successful and verified!"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2748
+#: /home/minds3t/omnipkg/omnipkg/core.py:3598
+msgid ""
+"\n"
+"--- Falling back to download strategy ---"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2757
+#: /home/minds3t/omnipkg/omnipkg/core.py:3607
+msgid "✅ Downloaded version of Python {} already exists."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2761
+#: /home/minds3t/omnipkg/omnipkg/core.py:3611
+msgid ""
+"\n"
+"🎉 Successfully adopted Python {} via download!"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:2765
+#: /home/minds3t/omnipkg/omnipkg/core.py:3615
+msgid "❌ Download strategy failed: {}"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:3414
+msgid "Just kidding, omnipkg handled it for you automatically!"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:3431
+msgid "   - No local Python {} found. Falling back to download."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/core.py:3543
+msgid "   - ⚠️  Skipping large file: {}"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:144
+msgid ""
+"   ⚠️ Could not find any distribution matching spec '{}'. This may be an "
+"installation issue."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:146
+msgid "   ⚠️ Could not parse spec '{}'. Skipping."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:157
+msgid "✅ Discovery complete. Found {} total package versions to process."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:238
+msgid " - No active packages found to scan."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:246
+msgid " 💡 To enable this feature, run: '{} -m pip install safety'"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:316
+msgid " ⚠️ Safety command produced warnings. Stderr: {}"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:320
+msgid " ⚠️ Safety command failed. Stderr: {}"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:325
+msgid " ⚠️ An unexpected error occurred during the security scan: {}"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:330
+msgid "✅ Security scan complete. Found {} potential issues."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:357
+#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:382
+msgid ""
+"\n"
+"⚠️  WARNING: Skipping corrupted package found at '{}'."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:358
+msgid ""
+"    This package's metadata is missing a name. This is often caused by an"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:359
+msgid "    interrupted 'pip install'. Please manually delete this directory."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:362
+msgid "✅ No packages found or specified to process."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:383
+msgid ""
+"    This package's metadata is missing a name. This often happens when an"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:384
+msgid ""
+"    install is interrupted. To fix, please manually delete this directory "
+"and"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:385
+msgid "    re-run your command."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:397
+msgid ""
+"\n"
+"❌ Error processing {} (v{}): {}"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:705
+msgid ""
+"\n"
+"🎉 Metadata building complete!"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:707
+msgid "❌ Failed to connect to Redis. Aborting."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/package_meta_builder.py:710
+msgid ""
+"\n"
+"❌ An unexpected error occurred during metadata build: {}"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:35
+#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:22
+msgid "🔄 Forcing omnipkg context to match script Python version: {}"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:38
+#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:25
+msgid "✅ omnipkg context synchronized to Python {}"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:41
+#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:28
+msgid "⚠️  Could not synchronize omnipkg context via CLI: {}"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:42
+#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:29
+msgid "   CLI output: {}"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:43
+#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:30
+msgid "   CLI error: {}"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:45
+#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:32
+msgid "🔄 Attempting direct config modification..."
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:54
+#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:41
+msgid "⚠️  Direct config modification also failed: {}"
+msgstr ""
+
+#: /home/minds3t/omnipkg/omnipkg/stress_test.py:58
+#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:45
+msgid "⚠️  Unexpected error synchronizing omnipkg context: {}"
+msgstr ""
+
+#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:58
+msgid "  🚀 AUTOMATIC ENVIRONMENT CORRECTION"
+msgstr ""
+
+#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:61
+msgid "   Currently running on: Python {}.{}"
+msgstr ""
+
+#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:62
+msgid "   Attempting to automatically switch using omnipkg..."
+msgstr ""
+
+#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:65
+msgid ""
+"\n"
+"   STEP 1: Ensuring Python 3.11 is managed by omnipkg..."
+msgstr ""
+
+#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:68
+msgid ""
+"   ❌ Failed to adopt Python 3.11. Please ensure Python 3.11 is installed on "
+"your system."
+msgstr ""
+
+#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:69
+msgid "   Output:"
+msgstr ""
+
+#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:70
+msgid "   Error:"
+msgstr ""
+
+#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:72
+msgid "   ✅ Python 3.11 is available to omnipkg."
+msgstr ""
+
+#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:73
+msgid ""
+"\n"
+"   STEP 2: Switching the active Python context to 3.11..."
+msgstr ""
+
+#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:75
+msgid "   ✅ omnipkg context switched to Python 3.11."
+msgstr ""
+
+#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:76
+msgid ""
+"\n"
+"   STEP 3: Locating the Python 3.11 interpreter..."
+msgstr ""
+
+#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:86
+msgid "   ❌ Could not determine the path to the new Python 3.11 executable."
+msgstr ""
+
+#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:87
+msgid "   Debug - info output:"
+msgstr ""
+
+#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:90
+msgid "   ✅ Found Python 3.11 at: {}"
+msgstr ""
+
+#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:91
+msgid ""
+"\n"
+"   STEP 4: Creating environment wrapper and relaunching..."
+msgstr ""
+
+#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:110
+msgid "   Error: {}"
+msgstr ""
+
+#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:112
+msgid "   Stderr:"
+msgstr ""
+
+#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:113
+msgid "   Please ensure 'omnipkg' is correctly installed."
+msgstr ""
+
+#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:114
+msgid ""
+"   You may need to manually run 'omnipkg swap python 3.11' and then re-run "
+"the demo."
+msgstr ""
+
+#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:169
+msgid "   ✅ omnipkg environment reset successfully"
+msgstr ""
+
+#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:172
+msgid "   ⚠️  Failed to reset omnipkg environment: {}"
+msgstr ""
+
+#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:179
+msgid "   📦 Ensuring TensorFlow bubbles exist..."
+msgstr ""
+
+#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:191
+msgid "   ✅ Created {}=={} bubble"
+msgstr ""
+
+#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:199
+msgid "   ✅ {}=={} bubble already exists"
+msgstr ""
+
+#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:207
+msgid "   ⚠️  Reset failed, continuing anyway..."
+msgstr ""
+
+#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:210
+msgid "   🧹 Cleaning up any test artifacts..."
+msgstr ""
+
+#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:244
+msgid "--- Relevant Errors ---"
+msgstr ""
+
+#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:250
+msgid "❌ Test timed out after 60 seconds"
+msgstr ""
+
+#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:253
+msgid "❌ Test execution failed: {}"
+msgstr ""
+
+#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:270
+#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:274
+msgid "   ✅ Script running on Python {}.{}"
+msgstr ""
+
+#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:271
+msgid "   ✅ omnipkg active context: Python {}"
+msgstr ""
+
+#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:273
+msgid "   ⚠️  Could not determine omnipkg context: {}"
+msgstr ""
+
+#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:290
+msgid "Test 1 (TensorFlow 2.13.0 Bubble): {}"
+msgstr ""
+
+#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:291
+msgid "Test 2 (Dependency Switching): {}"
+msgstr ""
+
+#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:292
+msgid "Test 3 (Nested Loaders): {}"
+msgstr ""
+
+#: /home/minds3t/omnipkg/tests/test_tensorflow_switching.py:302
+msgid "\\n❌ Critical error during testing: {}"
+msgstr ""
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:83
+msgid "   🧹 Cleaning up existing UV installations..."
+msgstr ""
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:87
+msgid "   📦 Establishing stable main environment: uv=={}"
+msgstr ""
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:91
+msgid "   🫧 Creating all required test bubbles..."
+msgstr ""
+
+#: /home/minds3t/omnipkg/tests/test_uv_switching.py:186
+msgid "Testing Main Environment (uv=={})"
 msgstr ""

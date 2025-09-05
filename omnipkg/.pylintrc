@@ -1,0 +1,102 @@
+# ===================================================================
+# A fair and meaningful Pylint configuration for the omnipkg project
+# ===================================================================
+
+[MAIN]
+# Automatically load plugins that may be needed for your project.
+# e.g., load-plugins=pylint_django, pylint_flask
+load-plugins=
+
+[MESSAGES CONTROL]
+# --- Disable Checks That Are Too Strict or "Unfair" for This Project ---
+
+disable=
+    # [FAIRNESS] Docstrings are good practice but enforcing them everywhere can be noisy.
+    # This removes over 100 messages from your report.
+    missing-module-docstring,
+    missing-class-docstring,
+    missing-function-docstring,
+
+    # [FAIRNESS] A class with one public method is often a valid design pattern.
+    too-few-public-methods,
+
+    # [CODE STYLE] Trailing whitespace is better handled by an auto-formatter like Black.
+    trailing-whitespace,
+
+    # [FAIRNESS] Module naming conventions can be ignored for special cases like `8pkg.py`.
+    invalid-name,
+
+    # [FAIRNESS] Useful for scripts and tests, but can be noisy.
+    # Consider fixing these imports, but it's safe to disable if they are intentional.
+    import-outside-toplevel
+
+
+[FORMAT]
+# --- Adjusting Style and Formatting Rules ---
+
+# [FAIRNESS] The default of 100 is often too short for modern code.
+# 120 is a widely accepted standard. This will fix the 478 line-too-long messages.
+max-line-length=120
+
+
+[BASIC]
+# --- Naming Convention Adjustments ---
+
+# [FAIRNESS] Allow common short variable names for loops, exceptions, etc.
+good-names=_,i,j,k,e,ex,p,f
+
+
+[VARIABLES]
+# --- Handling Special Variables ---
+
+# [TRANSLATION] This is the most important fix for you.
+# It tells Pylint that `_` is a known function (for gettext/i18n),
+# which will solve the numerous `undefined-variable` errors in `CondaGuard.py`.
+additional-builtins=_
+
+
+[REFACTORING]
+# --- Adjusting Complexity Warnings ---
+# The goal here is to reduce noise while still flagging overly complex code.
+# The best long-term solution is to refactor the code to meet the defaults.
+
+# Increase the maximum number of local variables allowed in a function.
+max-locals=25
+
+# Increase the maximum number of branches (if/elif/else, try/except) in a function.
+max-branches=20
+
+# Increase the maximum number of statements in a function.
+max-statements=70
+
+
+[DESIGN]
+# --- Adjusting Design-Related Checks ---
+
+# Increase the maximum number of instance attributes a class can have.
+max-attributes=12
+
+# Allow more arguments in function definitions before flagging.
+max-args=7
+
+# Allow more return statements in a function.
+max-returns=10
+
+
+# =================================================================
+# IMPORTANT: What NOT to Disable (And Why)
+# The following common messages in your report are left enabled
+# because fixing them significantly improves code quality.
+#
+# - broad-exception-caught (W0718):
+#   Catching a generic 'Exception' can hide bugs. It's better to
+#   catch specific errors like `ValueError` or `FileNotFoundError`.
+#
+# - unused-import (W0611) & unused-variable (W0612):
+#   These indicate dead code that should be removed to keep the
+#   codebase clean and understandable.
+#
+# - protected-access (W0212):
+#   Accessing members with a leading underscore (e.g., `_my_var`)
+#   breaks encapsulation and can lead to fragile code.
+# =================================================================
