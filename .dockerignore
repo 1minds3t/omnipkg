@@ -51,5 +51,3 @@ docs/_build/
 # Other
 *.md
 LICENSE
-.dockerignore
-Dockerfile
