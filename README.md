@@ -67,8 +67,6 @@
 
 The impossible is now routine. Switch Python versions on the fly without containers, virtual environments, or process restarts. Watch `omnipkg` automatically switch from Python 3.12 to 3.11 when a script requires it, proving true multi-interpreter freedom.
 
-**[See the live proof →](#2-python-interpreter-hot-swapping)**
-
 ---
 
 <!-- COMPARISON_STATS_START -->
