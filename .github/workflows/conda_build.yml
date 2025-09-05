@@ -35,7 +35,7 @@ jobs:
       run: |
         conda install conda-build anaconda-client -y
     
-    - name: Update meta.yaml version
+    - name: Update meta.yaml version and hash
       shell: bash -l {0}
       run: |
         if [ "${{ github.event_name }}" == "release" ]; then
@@ -45,13 +45,30 @@ jobs:
           VERSION="${{ github.event.inputs.version }}"
         fi
         
-        # Update the version in meta.yaml
-        sed -i "s/{% set version = \".*\" %}/{% set version = \"$VERSION\" %}/" omnipkg/conda-recipe/meta.yaml
+        # Download and get correct SHA256
+        if [[ "$RUNNER_OS" == "macOS" ]]; then
+          curl -L -o "omnipkg-$VERSION.tar.gz" "https://pypi.org/packages/source/o/omnipkg/omnipkg-$VERSION.tar.gz"
+          SHA256=$(shasum -a 256 "omnipkg-$VERSION.tar.gz" | cut -d' ' -f1)
+        else
+          wget "https://pypi.org/packages/source/o/omnipkg/omnipkg-$VERSION.tar.gz"
+          SHA256=$(sha256sum "omnipkg-$VERSION.tar.gz" | cut -d' ' -f1)
+        fi
         
-        # Update the SHA256 hash (you'll need to calculate this)
-        # This is a simplified approach - in practice, you might want to download and hash the source
-        echo "Updated version to $VERSION"
+        # Update the version in meta.yaml (cross-platform sed)
+        if [[ "$RUNNER_OS" == "macOS" ]]; then
+          sed -i '' "s/{% set version = \".*\" %}/{% set version = \"$VERSION\" %}/" omnipkg/conda-recipe/meta.yaml
+          sed -i '' "s/sha256: .*/sha256: $SHA256/" omnipkg/conda-recipe/meta.yaml
+        else
+          sed -i "s/{% set version = \".*\" %}/{% set version = \"$VERSION\" %}/" omnipkg/conda-recipe/meta.yaml
+          sed -i "s/sha256: .*/sha256: $SHA256/" omnipkg/conda-recipe/meta.yaml
+        fi
+        
+        echo "Updated version to $VERSION with SHA256: $SHA256"
         echo "VERSION=$VERSION" >> $GITHUB_ENV
+        
+        # Show the updated meta.yaml for debugging
+        echo "=== Updated meta.yaml ==="
+        head -15 omnipkg/conda-recipe/meta.yaml
     
     - name: Build conda package
       shell: bash -l {0}
