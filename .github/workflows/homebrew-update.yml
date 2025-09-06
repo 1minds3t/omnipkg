@@ -29,10 +29,9 @@ jobs:
 
     - name: Get PyPI package info and SHA256
       run: |
-        # Download the source package from PyPI
-        wget "https://pypi.io/packages/source/o/omnipkg/omnipkg-${{ env.VERSION }}.tar.gz"
+        # Corrected URL to download the source package from PyPI
+        wget "https://pypi.org/packages/source/o/omnipkg/omnipkg-${{ env.VERSION }}.tar.gz"
         
-        # Calculate SHA256
         SHA256=$(sha256sum "omnipkg-${{ env.VERSION }}.tar.gz" | cut -d' ' -f1)
         echo "SHA256=$SHA256" >> $GITHUB_ENV
         echo "Downloaded omnipkg-${{ env.VERSION }}.tar.gz with SHA256: $SHA256"
@@ -49,10 +48,9 @@ jobs:
         cd homebrew-tap
         
         # Update the formula file
-        sed -i 's|url "https://pypi.io/packages/source/o/omnipkg/omnipkg-.*\.tar\.gz"|url "https://pypi.io/packages/source/o/omnipkg/omnipkg-${{ env.VERSION }}.tar.gz"|' omnipkg.rb
+        sed -i 's|url "https://pypi.io/packages/source/o/omnipkg/omnipkg-.*\.tar\.gz"|url "https://pypi.org/packages/source/o/omnipkg/omnipkg-${{ env.VERSION }}.tar.gz"|' omnipkg.rb
         sed -i 's/sha256 ".*"/sha256 "${{ env.SHA256 }}"/' omnipkg.rb
         
-        # Verify the changes
         echo "=== Updated formula ==="
         head -10 omnipkg.rb
 
@@ -63,7 +61,6 @@ jobs:
         import json
         import urllib.request
         import re
-
         # Dependencies to update (from your current formula)
         deps = [
             "aiohappyeyeballs", "aiohttp", "aiosignal", "attrs", "certifi",
@@ -71,9 +68,7 @@ jobs:
             "packaging", "propcache", "python-magic", "redis", "requests",
             "tqdm", "typing-extensions", "urllib3", "yarl"
         ]
-
         formula_content = open('omnipkg.rb', 'r').read()
-
         for dep in deps:
             try:
                 # Get latest version from PyPI API
@@ -82,22 +77,24 @@ jobs:
                     latest_version = data['info']['version']
                     
                     # Find the source distribution
+                    sdist_url = None
+                    sha256_hash = None
                     for url_info in data['urls']:
                         if url_info['packagetype'] == 'sdist':
-                            download_url = url_info['url']
+                            sdist_url = url_info['url']
                             sha256_hash = url_info['digests']['sha256']
                             break
                     
-                    print(f"Updating {dep} to {latest_version}")
-                    
-                    # Update the resource block
-                    pattern = f'(resource "{dep}" do.*?url ")(.*?)(".*?sha256 ")(.*?)(")'
-                    replacement = f'\\g<1>{download_url}\\g<3>{sha256_hash}\\g<5>'
-                    formula_content = re.sub(pattern, replacement, formula_content, flags=re.DOTALL)
+                    if sdist_url and sha256_hash:
+                        print(f"Updating {dep} to {latest_version}")
+                        
+                        # Update the resource block
+                        pattern = f'(resource "{dep}" do.*?url ")(.*?)(".*?sha256 ")(.*?)(")'
+                        replacement = f'\\g<1>{sdist_url}\\g<3>{sha256_hash}\\g<5>'
+                        formula_content = re.sub(pattern, replacement, formula_content, flags=re.DOTALL)
                     
             except Exception as e:
                 print(f"Warning: Could not update {dep}: {e}")
-
         # Write the updated formula
         with open('omnipkg.rb', 'w') as f:
             f.write(formula_content)
