@@ -5,7 +5,7 @@
 </p>
 <h1 align="center">omnipkg - The Ultimate Python Dependency Resolver</h1>
 <p align="center">
-  <strong>One environment. Any Python. Infinite packages. Zero conflicts.</strong>
+  <strong>One environment. Infinite packages. Zero conflicts.</strong>
   <br>
 <p align="center">
   <!-- Core Project Info -->
