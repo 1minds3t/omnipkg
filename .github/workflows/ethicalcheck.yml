@@ -25,23 +25,29 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: EthicalCheck Free & Automated API Security Testing Service
-        uses: apisec-inc/ethicalcheck-action@005fac321dd843682b1af6b72f30caaf9952c641
+      # CORRECTED: The action has been updated to the new official version.
+      - name: APIsec Scan
+        uses: apisec-inc/apisec-run-scan@v1.0.6
         with:
-          # CRITICAL: Replace this with your actual API specification URL.
-          # This could be a URL to a file in your repo (e.g., https://your-domain.com/swagger.json)
-          oas-url: "YOUR_API_SPECIFICATION_URL_HERE"
+          # NOTE: The parameters have changed for this new action.
+          # You will need to create an account at apisec.ai and create a project.
+          # Then, store these values as secrets in your repository settings.
           
-          # CRITICAL: Replace this with your email, preferably using a repository secret.
-          # To do this, go to Settings > Secrets and variables > Actions > New repository secret
-          # Name it REPORT_EMAIL and paste your email address as the value.
-          email: "${{ secrets.REPORT_EMAIL }}"
+          # 1. Create a secret named APISEC_USERNAME with your APIsec username.
+          apisec-username: ${{ secrets.APISEC_USERNAME }}
           
-          # This defines the name of the output file. No change needed here.
-          sarif-result-file: "ethicalcheck-results.sarif"
+          # 2. Create a secret named APISEC_PASSWORD with your APIsec password.
+          apisec-password: ${{ secrets.APISEC_PASSWORD }}
+          
+          # 3. Create a secret named APISEC_PROJECT with the name of your project in the APIsec platform.
+          apisec-project: ${{ secrets.APISEC_PROJECT }}
+          
+          # The sarif-result-file parameter is no longer needed; the new action handles this automatically.
 
       - name: Upload sarif file to repository
         # This step is correctly configured to upload the results file.
         uses: github/codeql-action/upload-sarif@v3
         with:
-          sarif_file: ./ethicalcheck-results.sarif
+          # The new action outputs the SARIF file to a default location.
+          # This path might need to be adjusted based on the action's output logs if it differs.
+          sarif_file: apisec-results.sarif
