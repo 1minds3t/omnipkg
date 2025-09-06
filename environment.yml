@@ -1,0 +1,8 @@
+name: base
+channels:
+  - defaults
+dependencies:
+  # - python=3.10  (already set up in a previous step)
+  - flake8
+  - pytest
+  # - Add other dependencies here
