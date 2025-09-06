@@ -45,16 +45,16 @@ jobs:
           VERSION="${{ github.event.inputs.version }}"
         fi
         
-        # Download and get correct SHA256
-        if [[ "$RUNNER_OS" == "macOS" ]]; then
-          curl -L -o "omnipkg-$VERSION.tar.gz" "https://pypi.org/packages/source/o/omnipkg/omnipkg-$VERSION.tar.gz"
-          SHA256=$(shasum -a 256 "omnipkg-$VERSION.tar.gz" | cut -d' ' -f1)
-        else
-          wget "https://pypi.org/packages/source/o/omnipkg/omnipkg-$VERSION.tar.gz"
-          SHA256=$(sha256sum "omnipkg-$VERSION.tar.gz" | cut -d' ' -f1)
-        fi
+        # CORRECTED: Use curl for all platforms for consistency.
+        echo "Downloading omnipkg version $VERSION..."
+        curl -L -o "omnipkg-$VERSION.tar.gz" "https://pypi.org/packages/source/o/omnipkg/omnipkg-$VERSION.tar.gz"
         
-        # Update the version in meta.yaml (cross-platform sed)
+        # CORRECTED: Use Python for a truly cross-platform SHA256 calculation.
+        echo "Calculating SHA256 hash..."
+        SHA256=$(python -c "import hashlib; print(hashlib.sha256(open('omnipkg-$VERSION.tar.gz', 'rb').read()).hexdigest())")
+        
+        # Update the version and sha256 in meta.yaml (cross-platform sed)
+        # Note: The macOS sed requires an empty string '' after -i
         if [[ "$RUNNER_OS" == "macOS" ]]; then
           sed -i '' "s/{% set version = \".*\" %}/{% set version = \"$VERSION\" %}/" omnipkg/conda-recipe/meta.yaml
           sed -i '' "s/sha256: .*/sha256: $SHA256/" omnipkg/conda-recipe/meta.yaml
@@ -109,9 +109,10 @@ jobs:
         VERSION="${{ github.event.release.tag_name }}"
         VERSION="${VERSION#v}"
         
-        # Download source to get SHA256
-        wget "https://pypi.org/packages/source/o/omnipkg/omnipkg-$VERSION.tar.gz"
-        SHA256=$(sha256sum "omnipkg-$VERSION.tar.gz" | cut -d' ' -f1)
+        # CORRECTED: Use curl and Python for consistency and reliability.
+        echo "Downloading source to get SHA256..."
+        curl -L -o "omnipkg-$VERSION.tar.gz" "https://pypi.org/packages/source/o/omnipkg/omnipkg-$VERSION.tar.gz"
+        SHA256=$(python -c "import hashlib; print(hashlib.sha256(open('omnipkg-$VERSION.tar.gz', 'rb').read()).hexdigest())")
         
         # Update recipe/meta.yaml
         sed -i "s/{% set version = \".*\" %}/{% set version = \"$VERSION\" %}/" recipe/meta.yaml
