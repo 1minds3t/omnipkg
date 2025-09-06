@@ -1,5 +1,27 @@
 import sys
 import os
+from pathlib import Path
+
+
+# --- PROJECT PATH SETUP ---
+# This must come first so Python can find your modules.
+project_root = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(project_root))
+
+# --- BOOTSTRAP SECTION ---
+# Import ONLY the necessary utilities for the bootstrap process.
+from omnipkg.common_utils import ensure_python_or_relaunch, sync_context_to_runtime
+
+# 1. Declarative script guard: Ensures this script runs on Python 3.11.
+#    If not, it will relaunch the script with the correct interpreter and exit.
+if os.environ.get('OMNIPKG_RELAUNCHED') != '1':
+    ensure_python_or_relaunch("3.11")
+
+# 2. Sync guard: Now that we are GUARANTEED to be running on the correct
+#    interpreter, we sync omnipkg's config to match this runtime.
+sync_context_to_runtime()
+# --- END BOOTSTRAP ---
+
 import json
 import subprocess
 import shutil
@@ -9,128 +31,10 @@ import re
 import importlib
 import traceback
 import importlib.util
-from datetime import datetime
-from pathlib import Path
 from importlib.metadata import version as get_pkg_version, PathDistribution
-
-def force_omnipkg_context_to_current_python():
-    """
-    Forces omnipkg's active context to match the currently running Python version.
-    """
-    current_python = f'{sys.version_info.major}.{sys.version_info.minor}'
-    try:
-        print(_('🔄 Forcing omnipkg context to match script Python version: {}').format(current_python))
-        omnipkg_cmd_base = [sys.executable, '-m', 'omnipkg.cli']
-        result = subprocess.run(omnipkg_cmd_base + ['swap', 'python', current_python], capture_output=True, text=True, check=True)
-        print(_('✅ omnipkg context synchronized to Python {}').format(current_python))
-        return True
-    except subprocess.CalledProcessError as e:
-        print(_('⚠️  Could not synchronize omnipkg context via CLI: {}').format(e))
-        print(_('   CLI output: {}').format(e.stdout))
-        print(_('   CLI error: {}').format(e.stderr))
-        try:
-            print(_('🔄 Attempting direct config modification...'))
-            config_manager = ConfigManager()
-            python_exe = sys.executable
-            config_manager.config['active_python_version'] = current_python
-            config_manager.config['active_python_executable'] = python_exe
-            config_manager.save_config()
-            print(f'✅ Direct config update successful for Python {current_python}')
-            return True
-        except Exception as e2:
-            print(_('⚠️  Direct config modification also failed: {}').format(e2))
-            print('   Proceeding anyway - this may cause issues with bubble operations')
-            return False
-    except Exception as e:
-        print(_('⚠️  Unexpected error synchronizing omnipkg context: {}').format(e))
-        print('   Proceeding anyway - this may cause issues with bubble operations')
-        return False
-force_omnipkg_context_to_current_python()
-
-def ensure_correct_python_version():
-    """
-    Checks if the script is running on Python 3.11. If not, it attempts to use
-    omnipkg to switch to 3.11 and re-launches itself.
-    """
-    if sys.version_info[:2] == (3, 11):
-        return
-    print('\n' + '=' * 80)
-    print(_('  🚀 AUTOMATIC ENVIRONMENT CORRECTION'))
-    print('=' * 80)
-    print('   This test requires Python 3.11 for TensorFlow compatibility.')
-    print(_('   Currently running on: Python {}.{}').format(sys.version_info.major, sys.version_info.minor))
-    print(_('   Attempting to automatically switch using omnipkg...'))
-    try:
-        omnipkg_cmd_base = [sys.executable, '-m', 'omnipkg.cli']
-        print(_('\n   STEP 1: Ensuring Python 3.11 is managed by omnipkg...'))
-        adopt_result = subprocess.run(omnipkg_cmd_base + ['python', 'adopt', '3.11'], capture_output=True, text=True)
-        if adopt_result.returncode != 0 and 'already adopted' not in adopt_result.stdout:
-            print(_('   ❌ Failed to adopt Python 3.11. Please ensure Python 3.11 is installed on your system.'))
-            print(_('   Output:'), adopt_result.stdout)
-            print(_('   Error:'), adopt_result.stderr)
-            sys.exit(1)
-        print(_('   ✅ Python 3.11 is available to omnipkg.'))
-        print(_('\n   STEP 2: Switching the active Python context to 3.11...'))
-        swap_result = subprocess.run(omnipkg_cmd_base + ['swap', 'python', '3.11'], capture_output=True, text=True, check=True)
-        print(_('   ✅ omnipkg context switched to Python 3.11.'))
-        print(_('\n   STEP 3: Locating the Python 3.11 interpreter...'))
-        info_result = subprocess.run(omnipkg_cmd_base + ['info', 'python'], capture_output=True, text=True, check=True)
-        python_311_exe = None
-        for line in info_result.stdout.splitlines():
-            if '⭐ (currently active)' in line:
-                match = re.search(':\\s*(/\\S+)', line)
-                if match:
-                    python_311_exe = match.group(1).strip()
-                    break
-        if not python_311_exe:
-            print(_('   ❌ Could not determine the path to the new Python 3.11 executable.'))
-            print(_('   Debug - info output:'))
-            print(info_result.stdout)
-            sys.exit(1)
-        print(_('   ✅ Found Python 3.11 at: {}').format(python_311_exe))
-        print(_('\n   STEP 4: Creating environment wrapper and relaunching...'))
-        wrapper_script = tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False)
-        current_script = os.path.abspath(__file__)
-        script_args = sys.argv[1:]
-        wrapper_content = f"#!/usr/bin/env python3\nimport os\nimport sys\nimport subprocess\n\n# Add a marker so we know we're in the relaunch\nos.environ['OMNIPKG_RELAUNCHED'] = '1'\n\n# Execute the original script with the correct Python interpreter\ncmd = ['{python_311_exe}', '{current_script}'] + {script_args!r}\nresult = subprocess.run(cmd, env=os.environ.copy())\nsys.exit(result.returncode)\n"
-        wrapper_script.write(wrapper_content)
-        wrapper_script.close()
-        os.chmod(wrapper_script.name, 493)
-        try:
-            result = subprocess.run([python_311_exe, wrapper_script.name], env=os.environ.copy())
-            sys.exit(result.returncode)
-        finally:
-            try:
-                os.unlink(wrapper_script.name)
-            except:
-                pass
-    except (subprocess.CalledProcessError, FileNotFoundError) as e:
-        print('\n' + '-' * 80)
-        print('   ❌ An error occurred while trying to switch Python versions.')
-        print(_('   Error: {}').format(e))
-        if hasattr(e, 'stderr'):
-            print(_('   Stderr:'), e.stderr)
-        print(_("   Please ensure 'omnipkg' is correctly installed."))
-        print(_("   You may need to manually run 'omnipkg swap python 3.11' and then re-run the demo."))
-        print('-' * 80)
-        sys.exit(1)
-if os.environ.get('OMNIPKG_RELAUNCHED') != '1':
-    ensure_correct_python_version()
-try:
-    project_root = Path(__file__).resolve().parent.parent
-    if project_root.name == 'omnipkg':
-        project_root = project_root.parent
-    sys.path.insert(0, str(project_root))
-    from omnipkg.i18n import _
-    lang_from_env = os.environ.get('OMNIPKG_LANG')
-    if lang_from_env:
-        _.set_language(lang_from_env)
-    from omnipkg.core import ConfigManager, omnipkg as OmnipkgCore
-    from omnipkg.loader import omnipkgLoader
-    from omnipkg.common_utils import run_command, print_header
-except ImportError as e:
-    print(f'❌ Critical Error: Could not import omnipkg modules. Is the project structure correct? Error: {e}')
-    sys.exit(1)
+from datetime import datetime
+from omnipkg.i18n import _
+from omnipkg.core import ConfigManager, omnipkg as OmnipkgCore
 
 def print_header(title):
     print('\n' + '=' * 80)

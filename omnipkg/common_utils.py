@@ -1,9 +1,13 @@
 import sys
 import subprocess
 import json
+import re
+import tempfile
+import traceback
 from pathlib import Path
 import time
 from omnipkg.i18n import _
+from omnipkg.core import ConfigManager
 
 def run_command(command_list, check=True):
     """
@@ -26,6 +30,118 @@ def run_command(command_list, check=True):
             error_message += '\nSubprocess Output:\n' + '\n'.join(output_lines)
         raise RuntimeError(error_message)
     return retcode
+
+def sync_context_to_runtime():
+    """
+    Ensures omnipkg's active context matches the currently running Python interpreter.
+
+    This is a critical pre-flight check to prevent state mismatches between the
+    runtime environment and the omnipkg configuration. It uses the CLI for robust
+    switching logic.
+
+    Returns:
+        bool: True if the context is synchronized, False otherwise.
+    """
+    current_python_version = f'{sys.version_info.major}.{sys.version_info.minor}'
+    
+    try:
+        config_manager = ConfigManager()
+        active_config_version = config_manager.config.get('active_python_version')
+
+        # If the config already matches the runtime, we don't need to do anything.
+        if active_config_version == current_python_version:
+            # This is a minor optimization to avoid a subprocess call if not needed.
+            return True
+
+        # If a change is needed, use the robust CLI which contains all the necessary logic.
+        print(_('🔄 Forcing omnipkg context to match script Python version: {}...').format(current_python_version))
+        omnipkg_cmd_base = [sys.executable, '-m', 'omnipkg.cli']
+        
+        # The 'swap' command is the source of truth for this operation.
+        result = subprocess.run(
+            omnipkg_cmd_base + ['swap', 'python', current_python_version],
+            capture_output=True, text=True, check=True
+        )
+        
+        print(_('✅ omnipkg context synchronized to Python {}').format(current_python_version))
+        return True
+    
+    except subprocess.CalledProcessError as e:
+        # This block catches errors if the 'swap' command fails.
+        print(_('⚠️  Could not synchronize omnipkg context via CLI: {}').format(e))
+        print(_('   CLI output: {}').format(e.stdout))
+        print(_('   CLI error: {}').format(e.stderr))
+        return False
+        
+    except Exception as e:
+        # This is a general catch-all for other unexpected errors.
+        print(_('⚠️  Unexpected error synchronizing omnipkg context: {}').format(e))
+        import traceback
+        traceback.print_exc()
+        return False
+
+def ensure_python_or_relaunch(required_version: str):
+    """
+    A generic utility to ensure the script is running on a specific Python version.
+
+    If the current interpreter does not match, it uses omnipkg to switch
+    to the required version and then re-launches the original script in a new
+    process. The original process is then terminated.
+
+    Args:
+        required_version (str): The required version string (e.g., "3.11").
+    """
+    major, minor = map(int, required_version.split('.'))
+    if sys.version_info[:2] == (major, minor):
+        return # Correct version, do nothing
+
+    # If we get here, we need to switch and relaunch.
+    print('\n' + '=' * 80)
+    print(_('  🚀 AUTOMATIC ENVIRONMENT CORRECTION'))
+    print('=' * 80)
+    print(_('   This script requires Python {}').format(required_version))
+    print(_('   Currently running on: Python {}.{}').format(sys.version_info.major, sys.version_info.minor))
+    print(_('   Attempting to automatically switch using omnipkg...'))
+    
+    try:
+        omnipkg_cmd_base = [sys.executable, '-m', 'omnipkg.cli']
+        
+        # Step 1: Adopt the required version
+        subprocess.run(omnipkg_cmd_base + ['python', 'adopt', required_version], check=True, capture_output=True)
+        
+        # Step 2: Swap to the required version
+        subprocess.run(omnipkg_cmd_base + ['swap', 'python', required_version], check=True, capture_output=True)
+        
+        # Step 3: Find the new executable path
+        info_result = subprocess.run(omnipkg_cmd_base + ['info', 'python'], check=True, capture_output=True, text=True)
+        new_python_exe = None
+        for line in info_result.stdout.splitlines():
+            if '⭐ (currently active)' in line:
+                match = re.search(r':\s*(/\S+)', line)
+                if match:
+                    new_python_exe = match.group(1).strip()
+                    break
+        
+        if not new_python_exe:
+            raise RuntimeError(_("Could not find the new Python {} executable after swapping.").format(required_version))
+
+        print(_('   ✅ Found Python {} at: {}').format(required_version, new_python_exe))
+        print(_('\n   STEP 4: Relaunching script with the correct interpreter...'))
+        
+        # Relaunch the original script
+        original_script = os.path.abspath(sys.argv[0])
+        script_args = sys.argv[1:]
+        
+        # Use os.execv to replace the current process. This is cleaner than a wrapper.
+        new_env = os.environ.copy()
+        new_env['OMNIPKG_RELAUNCHED'] = '1'
+        os.execve(new_python_exe, [new_python_exe, original_script] + script_args, new_env)
+
+    except Exception as e:
+        print('\n' + '-' * 80)
+        print('   ❌ An error occurred while trying to switch Python versions.')
+        # ... (your existing error handling) ...
+        sys.exit(1)
 
 def run_interactive_command(command_list, input_data, check=True):
     """Helper to run a command that requires stdin input."""
@@ -63,10 +179,6 @@ def simulate_user_choice(choice, message):
     time.sleep(0.5)
     print(_('💭 {}').format(message))
     return choice.lower()
-
-# FILE: /home/minds3t/omnipkg/omnipkg/common_utils.py
-
-# ... (keep your existing imports and run_command function)
 
 class ConfigGuard:
     """

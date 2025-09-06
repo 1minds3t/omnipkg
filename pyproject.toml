@@ -4,14 +4,14 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "omnipkg"
-version = "1.2.6"
+version = "1.2.7"
 authors = [
   { name = "1minds3t", email = "1minds3t@proton.me" },
 ]
 description = "The Ultimate Python Dependency Resolver. One environment. Infinite packages. Zero conflicts."
 readme = "README.md"
 requires-python = ">=3.9"
-license = { text = "AGPL-3.0-only" }
+license = { text = "AGPL-3.0-only OR LicenseRef-Proprietary" }
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
@@ -50,7 +50,6 @@ PyPi = "https://pypi.org/project/omnipkg/"
 omnipkg = "omnipkg.cli:main"
 8pkg = "omnipkg.cli:main"
 
-
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["omnipkg*", "tests"]
@@ -63,3 +62,6 @@ exclude = [
 [tool.setuptools.package-data]
 "omnipkg" = ["locale/**/*.mo"]
 "tests" = ["**/*.py"]
+
+[tool.setuptools]
+license-files = ["LICENSE", "COMMERCIAL_LICENSE.md"]
