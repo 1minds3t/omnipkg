@@ -3255,13 +3255,13 @@ print(json.dumps(versions))
                     replaced_packages_count = len({fix['package'] for fix in all_changes_to_fix})
                     print(f"   -> Found {replaced_packages_count} package(s) downgraded by pip. Bubbling them to preserve stability...")
 
-                    # Build the hash index only once for efficiency
-                    main_env_hashes = self.bubble_manager._get_or_build_main_env_hash_index(quiet=True)
+                    # Build the hash index only once for efficiency - REMOVED quiet=True
+                    main_env_hashes = self.bubble_manager._get_or_build_main_env_hash_index()
 
                     for fix in all_changes_to_fix:
-                        # Call bubble creation in QUIET mode
+                        # Call bubble creation - REMOVED quiet=True
                         bubble_created = self.bubble_manager.create_isolated_bubble(
-                            fix['package'], fix['new_version'], quiet=True
+                            fix['package'], fix['new_version']
                         )
                         
                         if bubble_created:
