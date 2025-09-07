@@ -155,7 +155,7 @@ def test_swapped_binary_execution(expected_version):
     try:
         # This context manager activates the bubble, modifies the PATH,
         # times the operation, and handles cleanup.
-        with omnipkgLoader.context(f'uv=={expected_version}'):
+        with omnipkgLoader(f'uv=={expected_version}'):
             print(_('   🎯 Executing: uv --version (within context)'))
             
             # Inside the context, 'uv' should resolve to the bubbled version's binary
