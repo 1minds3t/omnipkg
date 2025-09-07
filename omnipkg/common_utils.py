@@ -75,53 +75,50 @@ class UVFailureDetector:
 
 def sync_context_to_runtime():
     """
-    Ensures omnipkg's active context matches the currently running Python interpreter.
-
-    This is a critical pre-flight check to prevent state mismatches between the
-    runtime environment and the omnipkg configuration. It uses the CLI for robust
-    switching logic.
-
-    Returns:
-        bool: True if the context is synchronized, False otherwise.
+    Ensures omnipkg's active context matches the currently running Python interpreter
+    by using the omnipkg API directly. This is the robust method for post-relaunch
+    synchronization, avoiding the state conflicts of CLI subprocesses.
     """
-    current_python_version = f'{sys.version_info.major}.{sys.version_info.minor}'
-    
+    print(_('🔄 Forcing omnipkg context to match script Python version: {}...').format(
+        f'{sys.version_info.major}.{sys.version_info.minor}'
+    ))
     try:
-        config_manager = ConfigManager()
-        active_config_version = config_manager.config.get('active_python_version')
+        from omnipkg.core import ConfigManager
+        
+        # Suppress messages here to avoid the "new environment" prompt if it occurs
+        config_manager = ConfigManager(suppress_init_messages=True)
+        
+        current_executable = str(Path(sys.executable).resolve())
 
-        # If the config already matches the runtime, we don't need to do anything.
-        if active_config_version == current_python_version:
-            # This is a minor optimization to avoid a subprocess call if not needed.
-            return True
+        # Optimization: If the config is already correct, do nothing.
+        if config_manager.config.get('python_executable') == current_executable:
+            print(_('✅ Context is already synchronized.'))
+            return
 
-        # If a change is needed, use the robust CLI which contains all the necessary logic.
-        print(_('🔄 Forcing omnipkg context to match script Python version: {}...').format(current_python_version))
-        omnipkg_cmd_base = [sys.executable, '-m', 'omnipkg.cli']
-        
-        # The 'swap' command is the source of truth for this operation.
-        result = subprocess.run(
-            omnipkg_cmd_base + ['swap', 'python', current_python_version],
-            capture_output=True, text=True, check=True
-        )
-        
-        print(_('✅ omnipkg context synchronized to Python {}').format(current_python_version))
-        return True
-    
-    except subprocess.CalledProcessError as e:
-        # This block catches errors if the 'swap' command fails.
-        print(_('⚠️  Could not synchronize omnipkg context via CLI: {}').format(e))
-        print(_('   CLI output: {}').format(e.stdout))
-        print(_('   CLI error: {}').format(e.stderr))
-        return False
-        
+        # Use the ConfigManager's internal method to get the correct paths for the CURRENT interpreter.
+        new_paths = config_manager._get_paths_for_interpreter(current_executable)
+        if not new_paths:
+            raise RuntimeError(f"Could not determine paths for the current interpreter: {current_executable}")
+
+        # Directly update and save the configuration. This is what 'swap' does internally.
+        print(_('   - Aligning configuration to the new runtime...'))
+        config_manager.set('python_executable', new_paths['python_executable'])
+        config_manager.set('site_packages_path', new_paths['site_packages_path'])
+        config_manager.set('multiversion_base', new_paths['multiversion_base'])
+
+        # Also update the default python symlinks to reflect the change.
+        config_manager._update_default_python_links(config_manager.venv_path, Path(current_executable))
+
+        print(_('✅ omnipkg context synchronized successfully via API.'))
+        return
+
     except Exception as e:
-        # This is a general catch-all for other unexpected errors.
-        print(_('⚠️  Unexpected error synchronizing omnipkg context: {}').format(e))
+        print(_('❌ A critical error occurred during context synchronization: {}').format(e))
         import traceback
         traceback.print_exc()
-        return False
-
+        # Exit because a failed sync is a fatal error for the script's logic.
+        sys.exit(1)
+        
 def run_script_in_omnipkg_env(command_list, streaming_title):
     """
     A centralized utility to run a command in a fully configured omnipkg environment.
@@ -194,64 +191,98 @@ def print_header(title):
 def ensure_python_or_relaunch(required_version: str):
     """
     A generic utility to ensure the script is running on a specific Python version.
-
-    If the current interpreter does not match, it uses omnipkg to switch
-    to the required version and then re-launches the original script in a new
-    process. The original process is then terminated.
-
-    Args:
-        required_version (str): The required version string (e.g., "3.11").
+    This version uses a direct, non-mutating approach to find the target
+    interpreter and relaunch, avoiding hangs from interactive subprocesses.
     """
     major, minor = map(int, required_version.split('.'))
     if sys.version_info[:2] == (major, minor):
         return # Correct version, do nothing
 
-    # If we get here, we need to switch and relaunch.
     print('\n' + '=' * 80)
     print(_('  🚀 AUTOMATIC ENVIRONMENT CORRECTION'))
     print('=' * 80)
     print(_('   This script requires Python {}').format(required_version))
     print(_('   Currently running on: Python {}.{}').format(sys.version_info.major, sys.version_info.minor))
-    print(_('   Attempting to automatically switch using omnipkg...'))
-    
+    print(_('   Attempting to find and relaunch with the correct interpreter...'))
+
     try:
+        # Step 1: Capture the parent environment's identity. This is critical.
+        from omnipkg.core import ConfigManager
+        print(_('   -> Capturing parent environment identity...'))
+        parent_cm = ConfigManager(suppress_init_messages=True)
+        parent_env_id = parent_cm.env_id
+        parent_venv_root = str(parent_cm.venv_path.resolve())
+        print(_('   -> Parent env_id: {}').format(parent_env_id))
+
         omnipkg_cmd_base = [sys.executable, '-m', 'omnipkg.cli']
-        
-        # Step 1: Adopt the required version
-        subprocess.run(omnipkg_cmd_base + ['python', 'adopt', required_version], check=True, capture_output=True)
-        
-        # Step 2: Swap to the required version
-        subprocess.run(omnipkg_cmd_base + ['swap', 'python', required_version], check=True, capture_output=True)
-        
-        # Step 3: Find the new executable path
-        info_result = subprocess.run(omnipkg_cmd_base + ['info', 'python'], check=True, capture_output=True, text=True)
-        new_python_exe = None
-        for line in info_result.stdout.splitlines():
-            if '⭐ (currently active)' in line:
-                match = re.search(r':\s*(/\S+)', line)
-                if match:
-                    new_python_exe = match.group(1).strip()
-                    break
-        
+
+        def find_interpreter_path(version_str):
+            """
+            Helper to find the executable path for a given version using a more
+            robust parsing method.
+            """
+            try:
+                # Use 'info python' as it's a reliable source of this data.
+                info_result = subprocess.run(
+                    omnipkg_cmd_base + ['info', 'python'],
+                    check=True, capture_output=True, text=True, timeout=30
+                )
+                # This regex looks for an absolute path starting with '/' or a drive letter 'C:\'
+                # on a line that contains the required version string.
+                path_regex = re.compile(r"(/[^\s]+|[\w]:\\[^\s]+)")
+
+                for line in info_result.stdout.splitlines():
+                    if f'Python {version_str}' in line:
+                        match = path_regex.search(line)
+                        if match:
+                            # Return the first absolute path found on the correct line.
+                            return match.group(0).strip()
+                return None
+            except Exception:
+                return None
+
+        # Step 2: Find the path to the required Python executable.
+        print(_('   -> Querying omnipkg for Python {} executable path...').format(required_version))
+        new_python_exe = find_interpreter_path(required_version)
+
+        # Step 2b: If not found, adopt it first, then find it again.
         if not new_python_exe:
-            raise RuntimeError(_("Could not find the new Python {} executable after swapping.").format(required_version))
+            print(_('   -> Python {} is not yet managed. Adopting it now...').format(required_version))
+            subprocess.run(
+                omnipkg_cmd_base + ['python', 'adopt', required_version],
+                check=True, capture_output=True, timeout=300
+            )
+            # After adopting, we MUST try to find the path again.
+            new_python_exe = find_interpreter_path(required_version)
+
+        if not new_python_exe or not Path(new_python_exe).exists():
+            raise RuntimeError(_("Could not find a valid Python {} executable path after checking and adopting.").format(required_version))
 
         print(_('   ✅ Found Python {} at: {}').format(required_version, new_python_exe))
-        print(_('\n   STEP 4: Relaunching script with the correct interpreter...'))
-        
-        # Relaunch the original script
+        print(_('\n   -> Relaunching script with the correct interpreter...'))
+
+        # Step 3: Relaunch the original script, passing the parent's identity.
         original_script = os.path.abspath(sys.argv[0])
         script_args = sys.argv[1:]
-        
-        # Use os.execv to replace the current process. This is cleaner than a wrapper.
+
         new_env = os.environ.copy()
         new_env['OMNIPKG_RELAUNCHED'] = '1'
+        new_env['OMNIPKG_ENV_ID_OVERRIDE'] = parent_env_id
+        new_env['OMNIPKG_VENV_ROOT'] = parent_venv_root
+
         os.execve(new_python_exe, [new_python_exe, original_script] + script_args, new_env)
 
     except Exception as e:
         print('\n' + '-' * 80)
         print('   ❌ An error occurred while trying to switch Python versions.')
-        # ... (your existing error handling) ...
+        if isinstance(e, subprocess.CalledProcessError):
+            print('   -> Subprocess Error Output:')
+            print(e.stderr.decode('utf-8') if e.stderr else e.stdout.decode('utf-8'))
+        else:
+            print(f'   -> Error: {e}')
+            import traceback
+            traceback.print_exc()
+        print('-' * 80)
         sys.exit(1)
 
 def run_interactive_command(command_list, input_data, check=True):

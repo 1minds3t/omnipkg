@@ -43,10 +43,22 @@ def print_subheader(title):
     """Prints a formatted subheader to the console."""
     print(f'\n--- {title} ---')
 
+def get_current_install_strategy():
+    """Gets the current install strategy from omnipkg config."""
+    try:
+        result = subprocess.run(['omnipkg', 'config', 'get', 'install_strategy'], 
+                              capture_output=True, text=True, check=True)
+        return result.stdout.strip()
+    except Exception as e:
+        print(f'   ⚠️  Failed to get current install strategy: {e}')
+        # Fallback to default if command fails
+        return config_manager.config.get('install_strategy', 'multiversion')
+
 def set_install_strategy(strategy):
     """Sets the omnipkg install strategy via the CLI."""
     try:
-        subprocess.run(['omnipkg', 'config', 'set', 'install_strategy', strategy], capture_output=True, text=True, check=True)
+        subprocess.run(['omnipkg', 'config', 'set', 'install_strategy', strategy], 
+                      capture_output=True, text=True, check=True)
         print(f'   ⚙️  Install strategy set to: {strategy}')
         return True
     except Exception as e:
@@ -80,6 +92,11 @@ def pip_install_uv(version):
 def setup_environment():
     """Prepares the testing environment by cleaning up and setting up a baseline."""
     print_header('STEP 1: Environment Setup & Cleanup')
+    
+    # Save the original install strategy BEFORE making any changes
+    original_strategy = get_current_install_strategy()
+    print(f'   📋 Current install strategy: {original_strategy}')
+    
     omnipkg_core = OmnipkgCore(config_manager)
     print('   🧹 Cleaning up existing UV installations...')
     pip_uninstall_uv()
@@ -90,8 +107,10 @@ def setup_environment():
     if not pip_install_uv(MAIN_UV_VERSION):
         return None, None
     
-    original_strategy = config_manager.config.get('install_strategy', 'multiversion')
-    set_install_strategy('stable-main')
+    # Set the strategy needed for this test
+    print('   🔧 Setting install strategy to stable-main for test compatibility...')
+    if not set_install_strategy('stable-main'):
+        return None, None
     
     print('   🫧 Creating all required test bubbles...')
     for version in BUBBLE_VERSIONS_TO_TEST:
@@ -104,7 +123,6 @@ def setup_environment():
 def inspect_bubble_structure(bubble_path):
     """Prints a summary of the bubble's directory structure for verification."""
     print(f'   🔍 Inspecting bubble structure: {bubble_path.name}')
-    # ... (rest of the function is unchanged)
     if not bubble_path.exists():
         print(f"   ❌ Bubble doesn't exist: {bubble_path}")
         return False
@@ -131,14 +149,12 @@ def inspect_bubble_structure(bubble_path):
         print(f"      - {item.name}{'/' if item.is_dir() else ''}")
     return True
 
-# ***** FIX IS HERE: Function signature reverted to original *****
 def test_swapped_binary_execution(expected_version):
     """
     Tests version swapping using omnipkgLoader.
     """
     print('   🔧 Testing swapped binary execution via omnipkgLoader...')
     try:
-        # It correctly uses the global config_manager instance now
         with omnipkgLoader(f'uv=={expected_version}', config=config_manager.config):
             print('   🎯 Executing: uv --version (within context)')
             
@@ -177,7 +193,8 @@ def test_main_environment_uv():
 def run_comprehensive_test():
     """Main function to orchestrate the entire test suite."""
     print_header('🚨 OMNIPKG UV BINARY STRESS TEST 🚨')
-    original_strategy = 'multiversion'
+    original_strategy = None
+    
     try:
         local_config_manager, original_strategy = setup_environment()
         if not local_config_manager:
@@ -199,7 +216,6 @@ def run_comprehensive_test():
                 test_results[f'bubble-{version}'] = False
                 continue
 
-            # ***** FIX IS HERE: The call now matches the corrected function signature *****
             version_passed = test_swapped_binary_execution(version)
             test_results[f'bubble-{version}'] = version_passed
 
@@ -232,11 +248,20 @@ def run_comprehensive_test():
                     print(f'   🧹 Removing test bubble: {bubble.name}')
                     shutil.rmtree(bubble, ignore_errors=True)
 
-            if original_strategy and original_strategy != 'stable-main':
-                print(f'   🔄 Restoring original install strategy: {original_strategy}')
-                set_install_strategy(original_strategy)
+            # Restore the original install strategy
+            if original_strategy:
+                current_strategy = get_current_install_strategy()
+                if current_strategy != original_strategy:
+                    print(f'   🔄 Restoring original install strategy: {original_strategy}')
+                    if set_install_strategy(original_strategy):
+                        print(f'   ✅ Successfully restored install strategy to: {original_strategy}')
+                    else:
+                        print(f'   ⚠️  Failed to restore install strategy, currently: {current_strategy}')
+                else:
+                    print(f'   ℹ️  Install strategy already at original value: {original_strategy}')
             else:
-                print('   ℹ️  Install strategy remains at: stable-main')
+                print('   ⚠️  No original strategy to restore (setup failed)')
+                
             print('✅ Cleanup complete')
         except Exception as e:
             print(f'⚠️  Cleanup failed: {e}')

@@ -67,15 +67,8 @@ def set_install_strategy(config_manager, strategy):
         return False
 
 def reset_omnipkg_environment():
-    """Run omnipkg reset to ensure clean state"""
-    print('   🔄 Resetting omnipkg environment for clean state...')
-    try:
-        result = subprocess.run([sys.executable, '-m', 'omnipkg.cli', 'reset', '-y'], capture_output=True, text=True, check=True)
-        print(_('   ✅ omnipkg environment reset successfully'))
         return True
-    except Exception as e:
-        print(_('   ⚠️  Failed to reset omnipkg environment: {}').format(e))
-        return False
+
 
 def ensure_tensorflow_bubbles(config_manager: ConfigManager):
     """

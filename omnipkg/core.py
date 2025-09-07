@@ -12,8 +12,10 @@ import locale as sys_locale
 import os
 import packaging.version
 import pickle
+import threading
 import textwrap
 import platform
+import time
 import re
 import shutil
 import site
@@ -82,66 +84,91 @@ class ConfigManager:
     Now includes Python interpreter hotswapping capabilities and is environment-aware.
     """
 
-    def __init__(self):
+    def __init__(self, suppress_init_messages=False):
         """
-        Initializes the ConfigManager with a robust, fail-safe sequence
-        that now AUTOMATICALLY ADOPTS the native interpreter on first run.
+        Initializes the ConfigManager with a robust, fail-safe sequence.
+        This new logic correctly establishes environment identity first, then loads
+        or creates the configuration, and finally handles the one-time environment
+        setup for interpreters.
         """
-        self._python_cache = {}
-        self._preferred_version = (3, 11)
-        self.venv_path = self._get_venv_root()
-
-        # --- CORE FIX: Prioritize the override ENV VAR to inherit the correct ID ---
-        # This is the key to ensuring the subprocess uses the parent's environment identity.
+        # STEP 1: Establish the environment's unique identity. This MUST be first.
+        # It prioritizes environment variables passed from a parent process to prevent
+        # the "new environment" bug during relaunches.
         env_id_override = os.environ.get('OMNIPKG_ENV_ID_OVERRIDE')
+        self.venv_path = self._get_venv_root() # _get_venv_root also checks for its own override var
+
         if env_id_override:
             self.env_id = env_id_override
         else:
+            # Fallback to calculating the ID if not inherited from a parent process.
             self.env_id = hashlib.md5(str(self.venv_path.resolve()).encode()).hexdigest()[:8]
-        # --- END CORE FIX ---
 
+        # STEP 2: Initialize basic paths and state variables.
+        self._python_cache = {}
+        self._preferred_version = (3, 11)
         self.config_dir = Path.home() / '.config' / 'omnipkg'
         self.config_path = self.config_dir / 'config.json'
 
+        # STEP 3: Load the configuration from the file for our environment ID.
+        # If no config exists for this ID, it will trigger the interactive first-time
+        # setup. This is now the SINGLE point of entry for all config loading.
+        self.config = self._load_or_create_env_config(interactive=not suppress_init_messages)
+
+        # After this point, self.config is guaranteed to be loaded.
+        if self.config:
+            self.multiversion_base = Path(self.config.get('multiversion_base', ''))
+        else:
+            # This is a critical failure state.
+            if not suppress_init_messages:
+                print(_('⚠️ CRITICAL Warning: Config failed to load, omnipkg may not function.'))
+            self.multiversion_base = Path('')
+            # Stop initialization if config loading failed.
+            return
+
+        # STEP 4: Perform the one-time ENVIRONMENT setup (e.g., installing Python 3.11).
+        # This is separate from the config file setup and only runs once per venv.
         is_nested_interpreter = '.omnipkg/interpreters' in str(Path(sys.executable).resolve())
         setup_complete_flag = self.venv_path / '.omnipkg' / '.setup_complete'
 
         if not setup_complete_flag.exists() and not is_nested_interpreter:
-            print('\n' + '=' * 60)
-            print(_('  🚀 OMNIPKG ONE-TIME ENVIRONMENT SETUP'))
-            print('=' * 60)
-            self.config = self._get_sensible_defaults()
+            if not suppress_init_messages:
+                print('\n' + '=' * 60)
+                print(_('  🚀 OMNIPKG ONE-TIME ENVIRONMENT SETUP'))
+                print('=' * 60)
+            
             try:
-                print(_('   - Step 1: Registering the native Python interpreter...'))
+                # We can now safely call other omnipkg components because our own config is loaded.
+                if not suppress_init_messages:
+                    print(_('   - Step 1: Registering the native Python interpreter...'))
                 native_version_str = f'{sys.version_info.major}.{sys.version_info.minor}'
                 self._register_and_link_existing_interpreter(Path(sys.executable), native_version_str)
+
                 if sys.version_info[:2] != self._preferred_version:
-                    print(_('\n   - Step 2: Setting up the required Python 3.11 control plane...'))
+                    if not suppress_init_messages:
+                        print(_('\n   - Step 2: Setting up the required Python 3.11 control plane...'))
+                    
+                    # Temporarily create an omnipkg core instance to access its methods.
                     temp_omnipkg = omnipkg(config_manager=self)
                     result_code = temp_omnipkg._fallback_to_download('3.11')
                     if result_code != 0:
                         raise RuntimeError('Failed to set up the Python 3.11 control plane.')
+
                 setup_complete_flag.parent.mkdir(parents=True, exist_ok=True)
                 setup_complete_flag.touch()
-                print('\n' + '=' * 60)
-                print(_('  ✅ SETUP COMPLETE'))
-                print('=' * 60)
-                print(_('Your environment is now fully managed by omnipkg.'))
-                print('=' * 60)
+                if not suppress_init_messages:
+                    print('\n' + '=' * 60)
+                    print(_('  ✅ SETUP COMPLETE'))
+                    print('=' * 60)
+                    print(_('Your environment is now fully managed by omnipkg.'))
+                    print('=' * 60)
             except Exception as e:
-                print(_('❌ A critical error occurred during one-time setup: {}').format(e))
-                import traceback
-                traceback.print_exc()
+                if not suppress_init_messages:
+                    print(_('❌ A critical error occurred during one-time setup: {}').format(e))
+                    import traceback
+                    traceback.print_exc()
                 if setup_complete_flag.exists():
                     setup_complete_flag.unlink(missing_ok=True)
                 sys.exit(1)
-                
-        self.config = self._load_or_create_env_config()
-        if self.config:
-            self.multiversion_base = Path(self.config.get('multiversion_base', ''))
-        else:
-            print(_('⚠️ CRITICAL Warning: Config failed to load, omnipkg may not function.'))
-            self.multiversion_base = Path('')
 
     def _set_rebuild_flag_for_version(self, version_str: str):
         """
@@ -502,8 +529,15 @@ class ConfigManager:
         return None
 
     def get_interpreter_for_version(self, version: str) -> Optional[Path]:
-        """Get the path to a specific Python interpreter version."""
-        registry_path = Path(sys.prefix) / '.omnipkg' / 'interpreters' / 'registry.json'
+        """
+        Get the path to a specific Python interpreter version from the registry.
+        """
+        # --- THIS IS THE FIX ---
+        # Use self.venv_path, which correctly points to the root of the virtual environment,
+        # instead of sys.prefix, which points to the prefix of the currently running interpreter.
+        registry_path = self.venv_path / '.omnipkg' / 'interpreters' / 'registry.json'
+        # --- END FIX ---
+
         if not registry_path.exists():
             return None
         try:
@@ -512,7 +546,8 @@ class ConfigManager:
             interpreter_path = registry.get('interpreters', {}).get(version)
             if interpreter_path and Path(interpreter_path).exists():
                 return Path(interpreter_path)
-        except:
+        except (IOError, json.JSONDecodeError):
+            # Gracefully handle corrupted or unreadable registry file
             pass
         return None
 
@@ -1143,10 +1178,10 @@ class ConfigManager:
             pass
         return final_config
 
-    def _load_or_create_env_config(self) -> Dict:
+    def _load_or_create_env_config(self, interactive: bool = True) -> Dict:
         """
         Loads the config for the current environment from the global config file.
-        If the environment is not registered, triggers the interactive first-time setup for it.
+        If the environment is not registered, triggers the first-time setup for it.
         """
         self.config_dir.mkdir(parents=True, exist_ok=True)
         full_config = {'environments': {}}
@@ -1158,11 +1193,14 @@ class ConfigManager:
                     full_config['environments'] = {}
             except json.JSONDecodeError:
                 print(_('⚠️ Warning: Global config file is corrupted. Starting fresh.'))
-        if self.env_id in full_config['environments']:
+        
+        if self.env_id in full_config.get('environments', {}):
             return full_config['environments'][self.env_id]
         else:
-            print(_('👋 New environment detected (ID: {}). Starting first-time setup.').format(self.env_id))
-            return self._first_time_setup(interactive=True)
+            if interactive:
+                print(_('👋 New environment detected (ID: {}). Starting first-time setup.').format(self.env_id))
+            # This now correctly passes the 'interactive' flag through
+            return self._first_time_setup(interactive=interactive)
 
     def get(self, key, default=None):
         """Get a configuration value, with an optional default."""
@@ -3671,7 +3709,7 @@ print(json.dumps(versions))
                 c_name = canonicalize_name(item['name'])
                 main_key = f'{self.redis_key_prefix}{c_name}'
                 version_key = f"{main_key}:{item['version']}"
-                versions_set_key = _('{}:installed_versions').format(main_key)
+                versions_set_key = f'{main_key}:installed_versions'
                 with self.redis_client.pipeline() as pipe:
                     pipe.delete(version_key)
                     pipe.srem(versions_set_key, item['version'])
@@ -4205,13 +4243,449 @@ print(json.dumps(versions))
         except Exception as e:
             print(_('    ❌ An unexpected error occurred during uv uninstall: {}').format(e))
             return 1
+    
+    def _test_install_to_get_compatible_version(self, package_name: str) -> Optional[str]:
+        """
+        Test-installs a package to a temporary directory to get pip's actual compatibility
+        error messages, then parses them to find the latest truly compatible version.
+        
+        OPTIMIZED: If installation starts succeeding, we IMMEDIATELY detect it and cancel
+        to avoid wasting time, then return the version info for the main smart installer.
+        """      
+        print(f" -> Test-installing '{package_name}' to discover latest compatible version...")
+        
+        # Create a temporary directory for the test installation
+        temp_dir = None
+        process = None
+        
+        try:
+            temp_dir = tempfile.mkdtemp(prefix=f"omnipkg_test_{package_name}_")
+            temp_path = Path(temp_dir)
+            
+            print(f"    Using temporary directory: {temp_path}")
+            
+            # First, try to install the latest version (no version specified)
+            cmd = [
+                self.config['python_executable'], '-m', 'pip', 'install',
+                '--target', str(temp_path),  # Install to temp directory
+                '--no-deps',  # Don't install dependencies to keep it fast
+                '--no-cache-dir',  # Don't use cache to get fresh info
+                package_name  # No version specified - pip will try latest
+            ]
+            
+            print(f"    Running: {' '.join(cmd)}")
+            
+            # Start the process
+            process = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                env=dict(os.environ, PYTHONIOENCODING='utf-8')
+            )
+            
+            # Monitor the process with early success detection
+            stdout_lines = []
+            stderr_lines = []
+            success_detected = False
+            detected_version = None
+            
+            # Set up non-blocking readers
+            def read_stdout():
+                nonlocal stdout_lines, success_detected, detected_version
+                for line in iter(process.stdout.readline, ''):
+                    if line:
+                        stdout_lines.append(line)
+                        print(f"    [STDOUT] {line.strip()}")
+                        
+                        # EARLY SUCCESS DETECTION PATTERNS
+                        early_success_patterns = [
+                            rf'Collecting\s+{re.escape(package_name)}==([0-9]+(?:\.[0-9]+)*(?:[a-zA-Z0-9\.-_]*)?)',
+                            rf'Downloading\s+{re.escape(package_name)}-([0-9]+(?:\.[0-9]+)*(?:[a-zA-Z0-9\.-_]*)?)-',
+                            rf'Successfully downloaded\s+{re.escape(package_name)}-([0-9]+(?:\.[0-9]+)*(?:[a-zA-Z0-9\.-_]*)?)',
+                        ]
+                        
+                        for pattern in early_success_patterns:
+                            match = re.search(pattern, line, re.IGNORECASE)
+                            if match and not success_detected:
+                                detected_version = match.group(1)
+                                print(f"    🚀 EARLY SUCCESS DETECTED! Version {detected_version} is compatible!")
+                                print(f"    ⚡ Canceling temp install to save time - will use smart installer")
+                                success_detected = True
+                                break
+                        
+                        if success_detected:
+                            break
+                process.stdout.close()
+            
+            def read_stderr():
+                nonlocal stderr_lines
+                for line in iter(process.stderr.readline, ''):
+                    if line:
+                        stderr_lines.append(line)
+                        print(f"    [STDERR] {line.strip()}")
+                process.stderr.close()
+            
+            # Start reader threads
+            stdout_thread = threading.Thread(target=read_stdout)
+            stderr_thread = threading.Thread(target=read_stderr)
+            stdout_thread.daemon = True
+            stderr_thread.daemon = True
+            stdout_thread.start()
+            stderr_thread.start()
+            
+            # Monitor for early success with timeout
+            start_time = time.time()
+            timeout = 180  # 3 minutes max
+            
+            while process.poll() is None and time.time() - start_time < timeout:
+                if success_detected:
+                    # IMMEDIATELY terminate the process to save time
+                    print(f"    ⚡ Terminating test install process (PID: {process.pid})")
+                    try:
+                        process.terminate()
+                        # Give it a moment to terminate gracefully
+                        process.wait(timeout=5)
+                    except subprocess.TimeoutExpired:
+                        # Force kill if it doesn't terminate
+                        process.kill()
+                        process.wait()
+                    break
+                time.sleep(0.1)  # Small delay to avoid busy waiting
+            
+            # Wait for threads to finish
+            stdout_thread.join(timeout=2)
+            stderr_thread.join(timeout=2)
+            
+            # If we detected early success, return immediately
+            if success_detected and detected_version:
+                print(f"    ✅ Early success! Latest compatible version: {detected_version}")
+                print(f"    🎯 This version will be passed to smart installer for main installation")
+                return detected_version
+            
+            # If process is still running, we hit timeout
+            if process.poll() is None:
+                print(f"    ⏰ Test installation timed out, terminating...")
+                process.terminate()
+                try:
+                    process.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    process.wait()
+                return None
+            
+            # Get the final result
+            return_code = process.returncode
+            full_stdout = ''.join(stdout_lines)
+            full_stderr = ''.join(stderr_lines)
+            full_output = full_stdout + full_stderr
+            
+            if return_code == 0:
+                # Installation completed successfully
+                print("    ✅ Test installation completed successfully")
+                
+                # Try to extract what version was actually installed
+                install_patterns = [
+                    rf'Installing collected packages:\s+{re.escape(package_name)}-([0-9]+(?:\.[0-9]+)*(?:[a-zA-Z0-9\.-_]*)?)',
+                    rf'Successfully installed\s+{re.escape(package_name)}-([0-9]+(?:\.[0-9]+)*(?:[a-zA-Z0-9\.-_]*)?)',
+                    rf'Collecting\s+{re.escape(package_name)}==([0-9]+(?:\.[0-9]+)*(?:[a-zA-Z0-9\.-_]*)?)',
+                ]
+                
+                for pattern in install_patterns:
+                    match = re.search(pattern, full_output, re.IGNORECASE | re.MULTILINE)
+                    if match:
+                        version = match.group(1)
+                        print(f"    ✅ Successfully installed latest compatible version: {version}")
+                        return version
+                
+                # Fallback: check what was actually installed in the temp directory
+                try:
+                    for item in temp_path.glob(f"{package_name.replace('-', '_')}-*.dist-info"):
+                        try:
+                            dist_info_name = item.name
+                            version_match = re.search(
+                                rf'^{re.escape(package_name.replace("-", "_"))}-([0-9a-zA-Z.+-]+)\.dist-info',
+                                dist_info_name
+                            )
+                            if version_match:
+                                version = version_match.group(1)
+                                print(f"    ✅ Found installed version from dist-info: {version}")
+                                return version
+                        except Exception as e:
+                            print(f"    Warning: Could not check dist-info: {e}")
+                except Exception as e:
+                    print(f"    Warning: Could not check dist-info: {e}")
+
+                print("    ⚠️ Installation succeeded but couldn't determine version")
+                return None
+                
+            else:
+                # Installation failed - parse the error to find compatible versions
+                print(f"    ❌ Test installation failed (exit code {return_code})")
+                print("    📋 Parsing error output for available versions...")
+                
+                # Look for the key error patterns that list available versions
+                version_list_patterns = [
+                    # Pattern 1: "from versions: 1.0.0, 1.1.0, 1.2.0)"
+                    rf'from versions:\s*([^)]+)\)',
+                    
+                    # Pattern 2: "available versions: 1.0.0, 1.1.0, 1.2.0"
+                    rf'available versions:\s*([^\n\r]+)',
+                    
+                    # Pattern 3: "Could not find a version... (from versions: ...)"
+                    rf'\(from versions:\s*([^)]+)\)',
+                ]
+                
+                compatible_versions = []
+                for pattern in version_list_patterns:
+                    match = re.search(pattern, full_output, re.IGNORECASE | re.DOTALL)
+                    if match:
+                        versions_text = match.group(1).strip()
+                        print(f"    Found versions string: {versions_text}")
+                        
+                        # Split by comma and clean up each version
+                        raw_versions = [v.strip() for v in versions_text.split(',')]
+                        for raw_version in raw_versions:
+                            # Clean up the version string
+                            clean_version = raw_version.strip(' \'"')
+                            # Validate it looks like a version
+                            if re.match(r'^[0-9]+(?:\.[0-9]+)*(?:[a-zA-Z0-9\.-_]*)?$', clean_version):
+                                compatible_versions.append(clean_version)
+                        break
+                
+                if compatible_versions:
+                    # Sort versions to find the latest compatible one
+                    try:
+                        from packaging.version import parse as parse_version
+                        # Filter out pre-release versions unless no stable versions exist
+                        stable_versions = [v for v in compatible_versions if not re.search(r'[a-zA-Z]', v)]
+                        versions_to_sort = stable_versions if stable_versions else compatible_versions
+                        
+                        # Sort by version
+                        sorted_versions = sorted(versions_to_sort, key=parse_version, reverse=True)
+                        latest_compatible = sorted_versions[0]
+                        
+                        print(f"    ✅ Found {len(compatible_versions)} compatible versions")
+                        print(f"    ✅ Latest compatible version: {latest_compatible}")
+                        return latest_compatible
+                        
+                    except Exception as e:
+                        print(f"    ❌ Error sorting versions: {e}")
+                        # Fallback: just return the last one in the list (often the newest)
+                        if compatible_versions:
+                            fallback_version = compatible_versions[-1]
+                            print(f"    ⚠️ Using fallback version: {fallback_version}")
+                            return fallback_version
+                
+                # Additional parsing for Python version compatibility errors
+                python_req_pattern = rf'Requires-Python\s*>=([0-9]+\.[0-9]+)'
+                python_req_matches = re.findall(python_req_pattern, full_output)
+                if python_req_matches:
+                    print(f"    📋 Found Python version requirements: {', '.join(set(python_req_matches))}")
+                    
+                print("    ❌ Could not extract compatible versions from error output")
+                return None
+                
+        except Exception as e:
+            print(f"    ❌ Unexpected error during test installation: {e}")
+            return None
+        finally:
+            # Clean up the process if it's still running
+            if process and process.poll() is None:
+                try:
+                    process.terminate()
+                    process.wait(timeout=5)
+                except:
+                    try:
+                        process.kill()
+                        process.wait()
+                    except:
+                        pass
+            
+            # Always clean up the temporary directory
+            if temp_dir and Path(temp_dir).exists():
+                try:
+                    shutil.rmtree(temp_dir)
+                    print(f"    🧹 Cleaned up temporary directory")
+                except Exception as e:
+                    print(f"    ⚠️ Warning: Could not clean up temp directory {temp_dir}: {e}")
+
+    def _quick_compatibility_check(self, package_name: str, version_to_test: str = None) -> Optional[str]:
+        """
+        Quickly test if a specific version (or latest) is compatible by attempting
+        a pip install and parsing any compatibility errors for available versions.
+        
+        Returns the latest compatible version found, or None if can't determine.
+        """
+        print(f"    💫 Quick compatibility check for {package_name}" + (f"=={version_to_test}" if version_to_test else ""))
+        
+        try:
+            # Build the package specification
+            package_spec = f"{package_name}=={version_to_test}" if version_to_test else package_name
+            
+            cmd = [
+                self.config['python_executable'], '-m', 'pip', 'install',
+                '--dry-run', '--no-deps', package_spec
+            ]
+            
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=60,
+                env=dict(os.environ, PYTHONIOENCODING='utf-8')
+            )
+            
+            full_output = result.stdout + result.stderr
+            
+            if result.returncode == 0:
+                # Success! Extract the version that would be installed
+                install_patterns = [
+                    rf'Would install\s+{re.escape(package_name)}-([0-9]+(?:\.[0-9]+)*(?:[a-zA-Z0-9\.-_]*)?)',
+                    rf'Collecting\s+{re.escape(package_name)}==([0-9]+(?:\.[0-9]+)*(?:[a-zA-Z0-9\.-_]*)?)',
+                ]
+                
+                for pattern in install_patterns:
+                    match = re.search(pattern, full_output, re.IGNORECASE)
+                    if match:
+                        compatible_version = match.group(1)
+                        print(f"    ✅ Latest version {compatible_version} is compatible!")
+                        return compatible_version
+                        
+                return version_to_test if version_to_test else None
+                
+            else:
+                # Failed - parse error for compatible versions
+                print(f"    📋 Parsing compatibility error for available versions...")
+                
+                # Look for version list in error output  
+                version_list_patterns = [
+                    rf'from versions:\s*([^)]+)\)',
+                    rf'available versions:\s*([^\n\r]+)',
+                    rf'\(from versions:\s*([^)]+)\)',
+                ]
+                
+                for pattern in version_list_patterns:
+                    match = re.search(pattern, full_output, re.IGNORECASE | re.DOTALL)
+                    if match:
+                        versions_text = match.group(1).strip()
+                        print(f"    📋 Found versions: {versions_text}")
+                        
+                        # Parse and find latest compatible version
+                        compatible_versions = []
+                        raw_versions = [v.strip(' \'"') for v in versions_text.split(',')]
+                        
+                        for raw_version in raw_versions:
+                            if re.match(r'^[0-9]+(?:\.[0-9]+)*(?:[a-zA-Z0-9\.-_]*)?$', raw_version):
+                                compatible_versions.append(raw_version)
+                        
+                        if compatible_versions:
+                            try:
+                                from packaging.version import parse as parse_version
+                                # Prefer stable versions
+                                stable_versions = [v for v in compatible_versions if not re.search(r'[a-zA-Z]', v)]
+                                versions_to_sort = stable_versions if stable_versions else compatible_versions
+                                
+                                latest_compatible = sorted(versions_to_sort, key=parse_version, reverse=True)[0]
+                                print(f"    🎯 Latest compatible version: {latest_compatible}")
+                                return latest_compatible
+                                
+                            except Exception as e:
+                                print(f"    ⚠️ Error sorting versions: {e}")
+                                return compatible_versions[-1] if compatible_versions else None
+                
+                print(f"    ❌ Could not parse compatible versions from error")
+                return None
+                
+        except Exception as e:
+            print(f"    ❌ Quick compatibility check failed: {e}")
+            return None
 
     def _get_latest_version_from_pypi(self, package_name: str) -> Optional[str]:
         """
         Gets the latest *compatible* version of a package by leveraging pip's own
-        dependency resolver with a dry-run. This is the most reliable method.
-        """
-        print(f" -> Finding latest COMPATIBLE version for '{package_name}' using pip's resolver...")
+        dependency resolver with optimized test installation that cancels early on success.
+        
+        OPTIMIZED FLOW:
+        1. Get latest version from PyPI
+        2. Check if that exact version is already installed in main environment
+        3. If yes: return it immediately (fastest path!)
+        4. If no: Test install in temp directory with early success detection
+        5. If compatible: immediately cancel temp install, return version for smart installer
+        6. If incompatible: parse error output for latest compatible version
+        7. Fallback to dry-run method if needed
+        """        
+        print(f" -> Finding latest COMPATIBLE version for '{package_name}' using super-optimized approach...")
+        
+        # STEP 0: Get the absolute latest version from PyPI and check if it's already installed
+        try:
+            print(f"    🌐 Fetching latest version from PyPI for '{package_name}'...")
+            response = http_requests.get(f"https://pypi.org/pypi/{package_name}/json", timeout=10)
+            if response.status_code == 200:
+                pypi_data = response.json()
+                latest_pypi_version = pypi_data['info']['version']
+                print(f"    📦 Latest PyPI version: {latest_pypi_version}")
+                
+                # Check if this exact version is already installed in the main environment
+                print(f"    🔍 Checking if version {latest_pypi_version} is already installed...")
+                
+                # Use pip show to check if the package is installed with the exact version
+                cmd_check = [
+                    self.config['python_executable'], '-m', 'pip', 'show', package_name
+                ]
+                
+                result_check = subprocess.run(
+                    cmd_check,
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                    timeout=30
+                )
+                
+                if result_check.returncode == 0:
+                    # Parse the version from pip show output
+                    version_match = re.search(r'^Version:\s*([^\s\n\r]+)', result_check.stdout, re.MULTILINE | re.IGNORECASE)
+                    if version_match:
+                        installed_version = version_match.group(1).strip()
+                        print(f"    📋 Currently installed version: {installed_version}")
+                        
+                        if installed_version == latest_pypi_version:
+                            print(f"    🚀 JACKPOT! Latest PyPI version {latest_pypi_version} is already installed!")
+                            print(f"    ⚡ Skipping all test installations - using installed version")
+                            return latest_pypi_version
+                        else:
+                            print(f"    📋 Installed version ({installed_version}) differs from latest PyPI ({latest_pypi_version})")
+                            print(f"    🧪 Will test if latest PyPI version is compatible...")
+                    else:
+                        print(f"    ⚠️ Could not parse installed version from pip show output")
+                else:
+                    print(f"    📋 Package '{package_name}' is not currently installed")
+                    print(f"    🧪 Will test if latest PyPI version is compatible...")
+            else:
+                print(f"    ❌ Could not fetch PyPI data (status: {response.status_code})")
+                print(f"    🧪 Falling back to test installation approach...")
+        except Exception as e:
+            print(f"    ❌ Error checking PyPI: {e}")
+            print(f"    🧪 Falling back to test installation approach...")
+        
+        # STEP 1: Try the optimized test installation approach with early detection
+        print(f"    🧪 Testing latest PyPI version compatibility with quick install attempt...")
+        compatible_version = self._quick_compatibility_check(package_name, latest_pypi_version)
+
+        if compatible_version:
+            print(f"    🎯 Found compatible version {compatible_version} - passing directly to smart installer!")
+            return compatible_version
+        print(f"    🧪 Starting optimized test installation with early success detection...")
+        test_result = self._test_install_to_get_compatible_version(package_name)
+        
+        if test_result:
+            print(f"    🎯 Test approach successful! Version {test_result} ready for smart installer")
+            return test_result
+        
+        print(" -> Optimized test installation didn't work, falling back to dry-run method...")
+        
+        # STEP 2: EXISTING CODE - Keep the original dry-run approach as final fallback
         try:          
             # First try: Use pip install --dry-run with verbose output
             cmd = [
@@ -4332,10 +4806,6 @@ print(json.dumps(versions))
             # Final fallback: try to get version from pip list if the package seems to be installed
             if "Requirement already satisfied" in output_to_search:
                 print(" -> Package appears to be installed, checking with pip list...")
-                cmd_list = [
-                    self.config['python_executable'], '-m', 'pip', 'list', 
-                    '--format=freeze', f'| grep -i "^{package_name}=="'
-                ]
                 
                 try:
                     # Use shell=True for the grep to work
