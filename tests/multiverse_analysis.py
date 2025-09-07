@@ -82,21 +82,29 @@ def get_interpreter_path(version: str) -> str:
                 return path
     raise RuntimeError(f"Could not find managed Python {version} via 'omnipkg info python'.")
 
-def prepare_dimension_in_context(packages: list):
-    """Installs packages into the CURRENTLY ACTIVE dimension (must be called after swap)."""
-    print(f"   PREPARING CURRENT DIMENSION: Installing {', '.join(packages)}...")
+def prepare_dimension_with_packages(version: str, packages: list):
+    """Swaps to a dimension and installs packages in that context."""
+    print(f"   PREPARING DIMENSION {version}: Installing {', '.join(packages)}...")
+    
+    # First, swap to the target dimension
+    swap_dimension(version)
     
     start_time = time.perf_counter()
     
     original_strategy = get_config_value("install_strategy")
     try:
+        # Ensure we're using latest-active strategy for current dimension installs
         if original_strategy != 'latest-active':
+            print(f"   SETTING STRATEGY: Temporarily setting install_strategy to 'latest-active'...")
             subprocess.run(["omnipkg", "config", "set", "install_strategy", "latest-active"], check=True, capture_output=True)
         
+        # Install packages in the current (swapped) dimension
         cmd = ["omnipkg", "install"] + packages
-        subprocess.run(cmd, check=True) 
+        print(f"   INSTALLING: Running {' '.join(cmd)} in Python {version} context...")
+        subprocess.run(cmd, check=True, capture_output=True, text=True) 
         
     finally:
+        # Always restore the original install strategy
         current_strategy = get_config_value("install_strategy")
         if current_strategy != original_strategy:
             print(f"   RESTORING STRATEGY: Setting install_strategy back to '{original_strategy}'...")
@@ -105,7 +113,7 @@ def prepare_dimension_in_context(packages: list):
     end_time = time.perf_counter()
     duration_ms = (end_time - start_time) * 1000
     
-    print(f"   PREPARATION COMPLETE: {', '.join(packages)} are now available in current context.")
+    print(f"   ✅ PREPARATION COMPLETE: {', '.join(packages)} are now available in Python {version} context.")
     print(f"   ⏱️  Package installation took: {duration_ms:.2f} ms")
 
 def multiverse_analysis():
@@ -124,10 +132,10 @@ def multiverse_analysis():
         print("✅ All required dimensions are available.")
 
         # ===============================================================
-        #  MISSION STEP 1: JUMP TO PYTHON 3.9 DIMENSION & PREPARE IT
+        #  MISSION STEP 1: PREPARE PYTHON 3.9 DIMENSION WITH PACKAGES
         # ===============================================================
-        swap_dimension("3.9")  # CRITICAL: Swap BEFORE preparing
-        prepare_dimension_in_context(["numpy", "scipy"])  # Now installs in 3.9 context
+        print("\n📦 MISSION STEP 1: Setting up Python 3.9 dimension...")
+        prepare_dimension_with_packages("3.9", ["numpy", "scipy"])
         python_3_9_exe = get_interpreter_path("3.9")
 
         print("   EXECUTING PAYLOAD in 3.9 dimension...")
@@ -141,10 +149,10 @@ def multiverse_analysis():
         print(f"   ⏱️  3.9 payload execution took: {(end_time - start_time) * 1000:.2f} ms")
         
         # ===============================================================
-        #  MISSION STEP 2: JUMP TO PYTHON 3.11 DIMENSION & PREPARE IT
+        #  MISSION STEP 2: PREPARE PYTHON 3.11 DIMENSION WITH PACKAGES
         # ===============================================================
-        swap_dimension("3.11")  # CRITICAL: Swap BEFORE preparing
-        prepare_dimension_in_context(["tensorflow"])  # Now installs in 3.11 context
+        print("\n📦 MISSION STEP 2: Setting up Python 3.11 dimension...")
+        prepare_dimension_with_packages("3.11", ["tensorflow"])
         python_3_11_exe = get_interpreter_path("3.11")
 
         print("   EXECUTING PAYLOAD in 3.11 dimension...")

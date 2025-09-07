@@ -97,13 +97,34 @@ def execute_run_command(cmd_args: list, config_manager: ConfigManager):
     initial_cmd = ['uv', 'run', '--no-project', '--python', python_exe, '--'] + cmd_args
     
     start_time_ns = time.perf_counter_ns()
-    process = subprocess.Popen(initial_cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding='utf-8', cwd=Path.cwd())
     
-    # FIXED: Stream output live instead of collecting it all first
+    # CRITICAL FIX: Use stderr=subprocess.STDOUT and set bufsize=1 for line buffering
+    # Also add universal_newlines=True for better text handling
+    process = subprocess.Popen(
+        initial_cmd, 
+        stdout=subprocess.PIPE, 
+        stderr=subprocess.STDOUT,  # Merge stderr into stdout
+        text=True, 
+        encoding='utf-8', 
+        cwd=Path.cwd(),
+        bufsize=1,  # Line buffered
+        universal_newlines=True  # Ensures proper line ending handling
+    )
+    
+    # FIXED: Stream output live with immediate flushing
     output_lines = []
-    for line in iter(process.stdout.readline, ''):
-        print(line, end='')  # Print each line immediately as it comes
-        output_lines.append(line)  # Still collect for error analysis
+    try:
+        while True:
+            line = process.stdout.readline()
+            if not line:  # EOF reached
+                break
+            print(line, end='', flush=True)  # CRITICAL: Add flush=True for immediate output
+            output_lines.append(line)
+    except KeyboardInterrupt:
+        print("\n🛑 Process interrupted by user")
+        process.terminate()
+        process.wait()
+        return 130  # Standard exit code for SIGINT
     
     return_code = process.wait()
     end_time_ns = time.perf_counter_ns()

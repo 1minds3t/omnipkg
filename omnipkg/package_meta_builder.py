@@ -231,19 +231,23 @@ class omnipkgMetadataGatherer:
 
     def _perform_security_scan(self, packages: Dict[str, str]):
         """
-        FIXED: Runs a security check using `safety`. The log output is now
-        context-aware and gracefully handles cases where `safety` is not
-        installed in the target Python interpreter. It is resilient to non-JSON output.
+        FIXED: Runs a security check using `safety`. Now properly handles the JSON
+        output wrapped with deprecation warnings and correctly counts vulnerabilities.
         """
         scan_type = 'bulk' if len(packages) > 1 else 'targeted'
         if len(packages) == 0:
             scan_type = 'targeted'
+        
         print(f'🛡️ Performing {scan_type} security scan for {len(packages)} active package(s)...')
+        
         if not packages:
             print(_(' - No active packages found to scan.'))
             self.security_report = {}
             return
+        
         python_exe = self.config.get('python_executable', sys.executable)
+        
+        # Check if safety is available
         try:
             subprocess.run([python_exe, '-m', 'safety', '--version'], check=True, capture_output=True, timeout=10)
         except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired):
@@ -251,87 +255,125 @@ class omnipkgMetadataGatherer:
             print(_(" 💡 To enable this feature, run: '{} -m pip install safety'").format(python_exe))
             self.security_report = {}
             return
+        
+        # Create requirements file
         with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.txt', encoding='utf-8') as reqs_file:
             reqs_file_path = reqs_file.name
             for name, version in packages.items():
                 reqs_file.write(f'{name}=={version}\n')
+        
         try:
             cmd = [python_exe, '-m', 'safety', 'check', '-r', reqs_file_path, '--json']
             result = subprocess.run(cmd, capture_output=True, text=True, timeout=120, encoding='utf-8')
+            
             if result.stdout:
                 raw_output = result.stdout.strip()
-                json_start_index = raw_output.find('[')
-                if json_start_index == -1:
-                    json_start_index = raw_output.find('{')
-                if json_start_index != -1:
-                    json_string = raw_output[json_start_index:]
-                    bracket_count = 0
-                    brace_count = 0
-                    json_end_index = 0
+                
+                # Find JSON boundaries - safety wraps JSON with deprecation warnings
+                json_start = -1
+                json_end = -1
+                
+                # Look for the opening brace/bracket
+                brace_pos = raw_output.find('{')
+                bracket_pos = raw_output.find('[')
+                
+                if brace_pos != -1 and bracket_pos != -1:
+                    json_start = min(brace_pos, bracket_pos)
+                elif brace_pos != -1:
+                    json_start = brace_pos
+                elif bracket_pos != -1:
+                    json_start = bracket_pos
+                
+                if json_start != -1:
+                    # Find the matching closing brace/bracket
+                    opening_char = raw_output[json_start]
+                    closing_char = '}' if opening_char == '{' else ']'
+                    
+                    # Count nesting to find the proper end
+                    count = 0
                     in_string = False
                     escape_next = False
-                    for i, char in enumerate(json_string):
+                    
+                    for i in range(json_start, len(raw_output)):
+                        char = raw_output[i]
+                        
                         if escape_next:
                             escape_next = False
                             continue
+                        
                         if char == '\\':
                             escape_next = True
                             continue
-                        if char == '"' and (not escape_next):
+                        
+                        if char == '"' and not escape_next:
                             in_string = not in_string
                             continue
+                        
                         if not in_string:
-                            if char == '[':
-                                bracket_count += 1
-                            elif char == ']':
-                                bracket_count -= 1
-                            elif char == '{':
-                                brace_count += 1
-                            elif char == '}':
-                                brace_count -= 1
-                            if bracket_count == 0 and brace_count == 0 and (i > 0):
-                                json_end_index = i + 1
-                                break
-                    if json_end_index > 0:
-                        clean_json = json_string[:json_end_index]
-                    else:
-                        clean_json = json_string
-                    try:
-                        self.security_report = json.loads(clean_json)
-                    except json.JSONDecodeError:
-                        lines = raw_output.split('\n')
-                        json_lines = []
-                        collecting = False
-                        for line in lines:
-                            if line.strip().startswith('[') or line.strip().startswith('{'):
-                                collecting = True
-                            if collecting:
-                                json_lines.append(line)
-                                try:
-                                    potential_json = '\n'.join(json_lines)
-                                    self.security_report = json.loads(potential_json)
+                            if char == opening_char:
+                                count += 1
+                            elif char == closing_char:
+                                count -= 1
+                                if count == 0:
+                                    json_end = i + 1
                                     break
-                                except json.JSONDecodeError:
-                                    continue
-                        if not hasattr(self, 'security_report') or not self.security_report:
+                    
+                    if json_end > json_start:
+                        json_content = raw_output[json_start:json_end]
+                        try:
+                            self.security_report = json.loads(json_content)
+                        except json.JSONDecodeError as e:
+                            print(f' ⚠️ Could not parse safety JSON output: {e}')
+                            self.security_report = {}
+                    else:
+                        # Fallback: try parsing from json_start to end and let json.loads find the boundary
+                        try:
+                            # This will likely fail due to extra content, but worth trying
+                            self.security_report = json.loads(raw_output[json_start:])
+                        except json.JSONDecodeError:
+                            print(' ⚠️ Could not determine JSON boundaries')
                             self.security_report = {}
                 else:
+                    print(' ⚠️ No JSON found in safety output')
                     self.security_report = {}
+                
                 if result.stderr:
                     print(_(' ⚠️ Safety command produced warnings. Stderr: {}').format(result.stderr.strip()))
             else:
                 self.security_report = {}
                 if result.stderr:
                     print(_(' ⚠️ Safety command failed. Stderr: {}').format(result.stderr.strip()))
-        except json.JSONDecodeError as e:
-            print(f' ⚠️ Could not parse safety JSON output. This can happen with very old versions of `safety`. Error: {e}')
-            self.security_report = {}
+                    
         except Exception as e:
             print(_(' ⚠️ An unexpected error occurred during the security scan: {}').format(e))
             self.security_report = {}
         finally:
-            os.unlink(reqs_file_path)
-        issue_count = len(self.security_report) if isinstance(self.security_report, (list, dict)) else 0
+            if os.path.exists(reqs_file_path):
+                os.unlink(reqs_file_path)
+        
+        # Count actual vulnerabilities from the parsed safety report
+        issue_count = 0
+        
+        if isinstance(self.security_report, dict):
+            # Modern safety format has a 'vulnerabilities' key with the actual vulnerabilities
+            if 'vulnerabilities' in self.security_report:
+                vulnerabilities = self.security_report['vulnerabilities']
+                if isinstance(vulnerabilities, list):
+                    issue_count = len(vulnerabilities)
+            # Also check report_meta for vulnerabilities_found (more reliable)
+            elif 'report_meta' in self.security_report:
+                meta = self.security_report['report_meta']
+                if isinstance(meta, dict) and 'vulnerabilities_found' in meta:
+                    issue_count = int(meta['vulnerabilities_found'])
+            # Legacy format fallback
+            else:
+                for key, value in self.security_report.items():
+                    if isinstance(value, list) and key not in [
+                        'scanned_packages', 'scanned', 'scanned_full_path', 
+                        'target_languages', 'announcements', 'ignored_vulnerabilities'
+                    ]:
+                        issue_count += len(value)
+        
         print(_('✅ Security scan complete. Found {} potential issues.').format(issue_count))
 
     def run(self, targeted_packages: Optional[List[str]]=None, newly_active_packages: Optional[Dict[str, str]]=None):
