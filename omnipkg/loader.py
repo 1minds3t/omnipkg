@@ -62,9 +62,19 @@ class omnipkgLoader:
         self._activated_bubble_path = None
         self._cloaked_main_modules = []
         self._activation_successful = False
+        
+        # Performance timing attributes
+        self._activation_start_time = None
+        self._activation_end_time = None
+        self._deactivation_start_time = None
+        self._deactivation_end_time = None
+        self._total_activation_time_ns = None
+        self._total_deactivation_time_ns = None
 
     def __enter__(self):
         """Activates the specified package snapshot for the 'with' block."""
+        self._activation_start_time = time.perf_counter_ns()
+        
         if not self._current_package_spec:
             raise ValueError("omnipkgLoader must be instantiated with a package_spec (e.g., 'pkg==ver') when used as a context manager.")
         print(_('\n🌀 omnipkg loader: Activating {}...').format(self._current_package_spec))
@@ -76,7 +86,10 @@ class omnipkgLoader:
         try:
             current_system_version = get_version(pkg_name)
             if current_system_version == requested_version:
+                self._activation_end_time = time.perf_counter_ns()
+                self._total_activation_time_ns = self._activation_end_time - self._activation_start_time
                 print(_(' ✅ System version already matches requested version ({}). No bubble activation needed.').format(current_system_version))
+                print(_(' ⏱️  Activation time: {:.3f} μs ({:,} ns)').format(self._total_activation_time_ns / 1000, self._total_activation_time_ns))
                 self._activated_bubble_path = None
                 self._activation_successful = True
                 return self
@@ -105,8 +118,14 @@ class omnipkgLoader:
                 if p not in sys.path:
                     sys.path.append(p)
             self._activated_bubble_path = bubble_path_str
+            
+            self._activation_end_time = time.perf_counter_ns()
+            self._total_activation_time_ns = self._activation_end_time - self._activation_start_time
+            
             print(_(' ✅ Activated bubble: {}').format(bubble_path_str))
             print(_(' 🔧 sys.path[0]: {}').format(sys.path[0]))
+            print(_(' ⏱️  Activation time: {:.3f} μs ({:,} ns)').format(self._total_activation_time_ns / 1000, self._total_activation_time_ns))
+            
             manifest_path = bubble_path / '.omnipkg_manifest.json'
             if manifest_path.exists():
                 with open(manifest_path, 'r') as f:
@@ -122,6 +141,8 @@ class omnipkgLoader:
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         """Deactivates the snapshot and restores the environment to its original state."""
+        self._deactivation_start_time = time.perf_counter_ns()
+        
         print(_('\n🌀 omnipkg loader: Deactivating {}...').format(self._current_package_spec))
         if not self._activation_successful and (not self._cloaked_main_modules):
             return
@@ -143,7 +164,64 @@ class omnipkgLoader:
         if hasattr(importlib, 'invalidate_caches'):
             importlib.invalidate_caches()
         gc.collect()
+        
+        self._deactivation_end_time = time.perf_counter_ns()
+        self._total_deactivation_time_ns = self._deactivation_end_time - self._deactivation_start_time
+        total_swap_time_ns = self._total_activation_time_ns + self._total_deactivation_time_ns
+        
         print(_(' ✅ Environment restored to system state.'))
+        print(_(' ⏱️  Deactivation time: {:.3f} μs ({:,} ns)').format(self._total_deactivation_time_ns / 1000, self._total_deactivation_time_ns))
+        print(_(' 🎯 TOTAL SWAP TIME: {:.3f} μs ({:,} ns)').format(total_swap_time_ns / 1000, total_swap_time_ns))
+
+    def get_performance_stats(self):
+        """Returns detailed performance statistics for CI/logging purposes."""
+        if self._total_activation_time_ns is None or self._total_deactivation_time_ns is None:
+            return None
+        
+        total_time_ns = self._total_activation_time_ns + self._total_deactivation_time_ns
+        return {
+            'package_spec': self._current_package_spec,
+            'activation_time_ns': self._total_activation_time_ns,
+            'activation_time_us': self._total_activation_time_ns / 1000,
+            'activation_time_ms': self._total_activation_time_ns / 1_000_000,
+            'deactivation_time_ns': self._total_deactivation_time_ns,
+            'deactivation_time_us': self._total_deactivation_time_ns / 1000,
+            'deactivation_time_ms': self._total_deactivation_time_ns / 1_000_000,
+            'total_swap_time_ns': total_time_ns,
+            'total_swap_time_us': total_time_ns / 1000,
+            'total_swap_time_ms': total_time_ns / 1_000_000,
+            'swap_speed_description': self._get_speed_description(total_time_ns)
+        }
+
+    def _get_speed_description(self, time_ns):
+        """Returns a human-readable description of swap speed."""
+        if time_ns < 1_000:
+            return f"Ultra-fast ({time_ns} nanoseconds)"
+        elif time_ns < 1_000_000:
+            return f"Lightning-fast ({time_ns/1000:.1f} microseconds)"
+        elif time_ns < 1_000_000_000:
+            return f"Very fast ({time_ns/1_000_000:.1f} milliseconds)"
+        else:
+            return f"Standard ({time_ns/1_000_000_000:.2f} seconds)"
+
+    def print_ci_performance_summary(self):
+        """Prints a CI-friendly performance summary."""
+        stats = self.get_performance_stats()
+        if not stats:
+            print("⚠️  No performance data available")
+            return
+            
+        print("\n" + "="*60)
+        print("🚀 OMNIPKG PERFORMANCE REPORT")
+        print("="*60)
+        print(f"Package: {stats['package_spec']}")
+        print(f"Activation:   {stats['activation_time_us']:>8.3f} μs ({stats['activation_time_ns']:>10,} ns)")
+        print(f"Deactivation: {stats['deactivation_time_us']:>8.3f} μs ({stats['deactivation_time_ns']:>10,} ns)")
+        print(f"TOTAL SWAP:   {stats['total_swap_time_us']:>8.3f} μs ({stats['total_swap_time_ns']:>10,} ns)")
+        print(f"Speed Class:  {stats['swap_speed_description']}")
+        print("="*60)
+        print("🎯 Same environment, same script runtime - ZERO downtime swapping!")
+        print("="*60 + "\n")
 
     def _get_package_modules(self, pkg_name: str):
         """Helper to find all modules related to a package in sys.modules."""

@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.3.0] - 2025-09-06
+
+### Added
+- **`omnipkg run` Command:** A powerful new way to execute scripts. Features automatic detection of runtime `AssertionError`s for package versions and "auto-heals" the script by re-running it inside a temporary bubble.
+- **Automatic Python Provisioning:** Scripts can now ensure required Python interpreters are available, with `omnipkg` automatically running `python adopt` if a version is missing.
+- **Performance Timers:** The `multiverse_analysis` test script now instruments and reports on the speed of dimension swaps and package preparation.
+
+### Changed
+- **Major Performance Boost:** The knowledge base sync and package satisfaction checks are now dramatically faster, using single subprocess calls to validate the entire environment, reducing checks from many seconds to milliseconds.
+- **Quieter Logging:** The bubble creation process is now significantly less verbose during large, multi-dependency installations, providing clean, high-level summaries instead.
+- **CLI Refactoring:** Command logic for `run` has been moved to the new `omnipkg/commands/` directory for better structure.
+
+### Fixed
+- **Critical Context Bug:** The knowledge base is now always updated by the correct Python interpreter context, especially after a `swap` or during scripted installs, ensuring data for different Python versions is stored correctly.
+
 ## v.1.2.1
 
 omnipkg v1.2.1: The Phoenix Release — True Multi-Interpreter Freedom

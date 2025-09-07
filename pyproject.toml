@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "omnipkg"
-version = "1.2.7"
+version = "1.3.0"
 authors = [
   { name = "1minds3t", email = "1minds3t@proton.me" },
 ]
@@ -59,8 +59,15 @@ exclude = [
     "*.egg-info*"
 ]
 
+# --- THIS IS THE KEY ADDITION ---
+# This section ensures all necessary non-library scripts and data are included
+# when you install the package.
 [tool.setuptools.package-data]
-"omnipkg" = ["locale/**/*.mo"]
+"omnipkg" = [
+    "locale/**/*.mo",          # Your existing rule for translations
+    "multiverse_analysis.py",   # Explicitly include your analysis script
+    "stress_test.py"            # Include the stress test script as well
+]
 "tests" = ["**/*.py"]
 
 [tool.setuptools]

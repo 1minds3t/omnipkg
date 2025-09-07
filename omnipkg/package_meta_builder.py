@@ -62,7 +62,12 @@ class omnipkgMetadataGatherer:
         self.force_refresh = force_refresh
         self.security_report = {}
         self.config = config
-        self.env_id = env_id
+
+        # --- CORE FIX: Prioritize the override ENV VAR to get the correct ID ---
+        # This ensures this class instance uses the env_id passed from the parent.
+        self.env_id = os.environ.get('OMNIPKG_ENV_ID_OVERRIDE', env_id)
+        # --- END CORE FIX ---
+
         self.package_path_registry = {}
         if self.force_refresh:
             print(_('🟢 --force flag detected. Caching will be ignored.'))
@@ -390,9 +395,13 @@ class omnipkgMetadataGatherer:
             version_key = f'{self.redis_key_prefix}{name}:{version}'
             if not self.force_refresh and self.redis_client.exists(version_key):
                 return False
+                        # --- START MODIFIED CODE ---
             metadata = self._build_comprehensive_metadata(dist)
-            self._store_in_redis(name, version, metadata)
+            is_active = not self._is_bubbled(dist) # Determine status from path
+            self._store_in_redis(name, version, metadata, is_active=is_active)
+            # --- END MODIFIED CODE ---
             return True
+            
         except Exception as e:
             print(_('\n❌ Error processing {} (v{}): {}').format(pkg_name_for_error, dist.version, e))
             import traceback
@@ -401,11 +410,22 @@ class omnipkgMetadataGatherer:
 
     def _build_comprehensive_metadata(self, dist: importlib.metadata.Distribution) -> Dict:
         """
-        FIXED: Builds metadata exclusively from the provided Distribution object.
-        This prevents incorrect re-discovery of the wrong package version.
+        FIXED: Builds metadata exclusively from the provided Distribution object
+        and now includes the physical path of the package.
         """
         package_name = canonicalize_name(dist.metadata['Name'])
         metadata = {k: v for k, v in dist.metadata.items()}
+        
+        # --- START NEW CODE ---
+        try:
+            # dist.locate_file('') gives the path to the top-level package directory
+            package_path = dist.locate_file('')
+            metadata['path'] = str(package_path)
+        except Exception:
+            # Fallback to the .dist-info path if the above fails
+            metadata['path'] = str(dist._path)
+        # --- END NEW CODE ---
+
         metadata['last_indexed'] = datetime.now().isoformat()
         metadata['indexed_by_python'] = get_python_version()
         metadata['dependencies'] = [str(req) for req in dist.requires] if dist.requires else []
@@ -452,7 +472,7 @@ class omnipkgMetadataGatherer:
             metadata[current_key] = '\n'.join(current_value).strip() if current_value else ''
         return metadata
 
-    def _store_in_redis(self, package_name: str, version_str: str, metadata: Dict):
+    def _store_in_redis(self, package_name: str, version_str: str, metadata: Dict, is_active: bool):
         pkg_name_lower = canonicalize_name(package_name)
         prefix = self.redis_key_prefix
         version_key = f'{prefix}{pkg_name_lower}:{version_str}'
@@ -469,13 +489,9 @@ class omnipkgMetadataGatherer:
             pipe.hset(version_key, mapping=flattened_data)
             pipe.hset(main_key, 'name', package_name)
             pipe.sadd(f'{main_key}:installed_versions', version_str)
-            try:
-                active_version = importlib.metadata.version(package_name)
-                if active_version == version_str:
-                    pipe.hset(main_key, 'active_version', version_str)
-                else:
-                    pipe.hset(main_key, f'bubble_version:{version_str}', 'true')
-            except importlib.metadata.PackageNotFoundError:
+            if is_active:
+                pipe.hset(main_key, 'active_version', version_str)
+            else:
                 pipe.hset(main_key, f'bubble_version:{version_str}', 'true')
             index_key = f"{prefix.rsplit(':', 2)[0]}:index"
             pipe.sadd(index_key, pkg_name_lower)
@@ -676,31 +692,49 @@ class omnipkgMetadataGatherer:
             else:
                 items.append((new_key, str(v)))
         return dict(items)
+
 if __name__ == '__main__':
     import json
     from pathlib import Path
+    import hashlib # Ensure hashlib is imported here
     print(_('🚀 Starting omnipkg Metadata Builder v11 (Multi-Version Complete Edition)...'))
     try:
         config_path = Path.home() / '.config' / 'omnipkg' / 'config.json'
         with open(config_path, 'r') as f:
             full_config = json.load(f)
-        venv_path = Path(sys.prefix)
-        env_id = hashlib.md5(str(venv_path.resolve()).encode()).hexdigest()[:8]
+        
+        # --- CORE FIX: Determine the one true env_id, prioritizing the override ---
+        env_id_from_os = os.environ.get('OMNIPKG_ENV_ID_OVERRIDE')
+        if env_id_from_os:
+            env_id = env_id_from_os
+            print(f"   (Inherited environment ID: {env_id})")
+        else:
+            # This is the fallback for when the script is run directly
+            # We must find the venv root the same way ConfigManager does.
+            current_dir = Path(sys.executable).resolve().parent
+            venv_path = Path(sys.prefix) # fallback
+            while current_dir != current_dir.parent:
+                if (current_dir / 'pyvenv.cfg').exists():
+                    venv_path = current_dir
+                    break
+                current_dir = current_dir.parent
+            env_id = hashlib.md5(str(venv_path.resolve()).encode()).hexdigest()[:8]
+            print(f"   (Calculated environment ID: {env_id})")
+        # --- END CORE FIX ---
+
         config = full_config['environments'][env_id]
     except (FileNotFoundError, KeyError) as e:
-        print(f'❌ CRITICAL: Could not load omnipkg configuration for this environment: {e}. Aborting.')
+        print(f'❌ CRITICAL: Could not load omnipkg configuration for this environment (ID: {env_id}). Error: {e}. Aborting.')
         sys.exit(1)
+        
     gatherer = omnipkgMetadataGatherer(config=config, env_id=env_id, force_refresh='--force' in sys.argv)
+    
     try:
-        gatherer.connect_redis()
-        if gatherer.redis_client:
-            print(_('✅ Connected to Redis successfully.'))
+        if gatherer.connect_redis():
             targeted_packages = [arg for arg in sys.argv[1:] if not arg.startswith('--')]
             if targeted_packages:
-                print(f'🎯 Running in targeted mode for {len(targeted_packages)} package(s).')
                 gatherer.run(targeted_packages=targeted_packages)
             else:
-                print(_('🔍 No specific targets provided. Discovering all installed packages...'))
                 gatherer.run()
             print(_('\n🎉 Metadata building complete!'))
         else:

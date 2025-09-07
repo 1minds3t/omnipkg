@@ -1,13 +1,19 @@
 """omnipkg CLI - Enhanced with runtime interpreter switching and language support"""
 import sys
 import argparse
-import subprocess
 from pathlib import Path
-import textwrap
 import os
+import subprocess  # <-- FIX: Added this import
+import tempfile    # <-- FIX: Added this import
+import json        # <-- FIX: Added this import
+
+# [REFACTORED] Import utilities from the common module
 from .i18n import _, SUPPORTED_LANGUAGES
 from .core import omnipkg as OmnipkgCore
 from .core import ConfigManager
+from .common_utils import print_header, run_script_in_omnipkg_env, UVFailureDetector
+from .commands.run import execute_run_command # <-- NEW IMPORT
+
 TESTS_DIR = Path(__file__).parent.parent / 'tests'
 DEMO_DIR = Path(__file__).parent
 
@@ -20,44 +26,35 @@ except NameError:
 def get_actual_python_version():
     """Get the actual Python version being used by omnipkg, not just sys.version_info."""
     try:
-        # Try to get it from omnipkg's config first
         cm = ConfigManager()
         configured_exe = cm.config.get('python_executable')
         if configured_exe:
             version_tuple = cm._verify_python_version(configured_exe)
             if version_tuple:
-                return version_tuple[:2]  # Return (major, minor)
-        
-        # Fallback to sys.version_info if omnipkg config fails
+                return version_tuple[:2]
         return sys.version_info[:2]
     except Exception:
-        # Last resort fallback
         return sys.version_info[:2]
 
 def handle_python_requirement(required_version_str: str, pkg_instance: OmnipkgCore, parser_prog: str) -> bool:
     """
     Checks if the current Python version matches the requirement.
     If not, it attempts to automatically adopt and/or swap.
-    Returns True if the environment is now correctly configured for the demo, False otherwise.
     """
     actual_version_tuple = get_actual_python_version()
     required_version_tuple = tuple(map(int, required_version_str.split('.')))
 
     if actual_version_tuple == required_version_tuple:
-        return True  # Correct version is already active
+        return True
 
-    # Display initial message
-    print('=' * 60)
+    print_header(_('Python Version Requirement'))
     print(_('  ⚠️  This Demo Requires Python {}').format(required_version_str))
-    print('=' * 60)
-    print(_('Current Python version: {}.{}').format(actual_version_tuple[0], actual_version_tuple[1]))
-    print(_('omnipkg will now attempt to automatically configure the correct interpreter.'))
+    print(_('  - Current Python version: {}.{}').format(actual_version_tuple[0], actual_version_tuple[1]))
+    print(_('  - omnipkg will now attempt to automatically configure the correct interpreter.'))
     print('-' * 60)
 
-    # Check if the required version is already managed (adopted)
     managed_interpreters = pkg_instance.interpreter_manager.list_available_interpreters()
     if required_version_str not in managed_interpreters:
-        # If not managed, check if it's discoverable on the system
         discovered_interpreters = pkg_instance.config_manager.list_available_pythons()
         if required_version_str in discovered_interpreters:
             print(_('🐍 Python {} found on your system. Adopting it...').format(required_version_str))
@@ -67,13 +64,11 @@ def handle_python_requirement(required_version_str: str, pkg_instance: OmnipkgCo
                 return False
             print(_('✅ Successfully adopted Python {}.').format(required_version_str))
         else:
-            # If not discoverable, fail
             print(_('❌ Required Python version {} not found on your system.').format(required_version_str))
             print(_('   Please install Python {} and ensure it is in your PATH.').format(required_version_str))
             return False
 
-    # At this point, the version is guaranteed to be managed. Now, swap to it.
-    print(_('🔄 Swapping active interpreter to Python {} for the demo...').format(required_version_str))
+    print(_('🔄 Swapping active interpreter to Python {}...').format(required_version_str))
     if pkg_instance.switch_active_python(required_version_str) != 0:
         print(_('❌ Failed to swap to Python {}. Please try manually.').format(required_version_str))
         print(_("   Run: {} swap python {}").format(parser_prog, required_version_str))
@@ -90,6 +85,7 @@ def get_version():
         from importlib.metadata import version
         return version('omnipkg')
     except Exception:
+        # Fallback for development environments
         try:
             import tomllib
             toml_path = Path(__file__).parent.parent / 'pyproject.toml'
@@ -97,18 +93,8 @@ def get_version():
                 with open(toml_path, 'rb') as f:
                     data = tomllib.load(f)
                     return data.get('project', {}).get('version', 'unknown')
-        except ImportError:
-            try:
-                import tomli
-                toml_path = Path(__file__).parent.parent / 'pyproject.toml'
-                if toml_path.exists():
-                    with open(toml_path, 'rb') as f:
-                        data = tomli.load(f)
-                        return data.get('project', {}).get('version', 'unknown')
-            except ImportError:
-                pass
-        except Exception:
-            pass
+        except (ImportError, Exception):
+            pass # Ignore errors if tomllib/tomli is not available or file is malformed
     return 'unknown'
 VERSION = get_version()
 
@@ -219,54 +205,6 @@ def run_demo_with_live_streaming(test_file, demo_name):
         traceback.print_exc()
         return 1
 
-def run_demo_with_fallback_streaming(test_file, demo_name):
-    """Fallback method with manual streaming if direct doesn't work."""
-    print(_('🚀 Running {} test from {}...').format(demo_name.capitalize(), test_file))
-    print(_('📡 Streaming output in real-time...'))
-    print(_('💡 Heavy package installations may have natural pauses - this is normal!'))
-    print(_('🛑 Press Ctrl+C to safely cancel'))
-    print('-' * 60)
-    try:
-        cm = ConfigManager()
-        current_lang = cm.config.get('language', 'en')
-        env = os.environ.copy()
-        env['OMNIPKG_LANG'] = current_lang
-        env['LANG'] = f'{current_lang}.UTF-8'
-        env['LANGUAGE'] = current_lang
-        env['PYTHONUNBUFFERED'] = '1'
-        process = subprocess.Popen([sys.executable, str(test_file)], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, bufsize=0, text=True, env=env)
-        while True:
-            char = process.stdout.read(1)
-            if char == '' and process.poll() is not None:
-                break
-            if char:
-                print(char, end='', flush=True)
-        returncode = process.wait()
-        print('\n' + '-' * 60)
-        if returncode == 0:
-            if demo_name == 'tensorflow':
-                print(_('😎 TensorFlow escaped the matrix! 🚀'))
-            print(_('🎉 Demo completed successfully!'))
-            print(_("💡 Run 'omnipkg demo' to try another test."))
-        else:
-            print(_('❌ Demo failed with return code {}').format(returncode))
-        return returncode
-    except KeyboardInterrupt:
-        print(_('\n⚠️  Demo cancelled by user (Ctrl+C)'))
-        print(_('🛡️  Cleaning up safely...'))
-        try:
-            process.terminate()
-            process.wait(timeout=5)
-        except:
-            try:
-                process.kill()
-            except:
-                pass
-        return 130
-    except Exception as e:
-        print(_('\n❌ Demo failed with error: {}').format(e))
-        return 1
-
 def create_8pkg_parser():
     """Creates parser for the 8pkg alias (same as omnipkg but with different prog name)."""
     parser = create_parser()
@@ -305,10 +243,14 @@ def create_parser():
     list_parser.add_argument('filter', nargs='?', help=_('Filter packages by name pattern'))
     python_parser = subparsers.add_parser('python', help=_('Manage Python interpreters for the environment'))
     python_subparsers = python_parser.add_subparsers(dest='python_command', help=_('Available subcommands:'), required=True)
-    python_adopt_parser = python_subparsers.add_parser('adopt', help=_('Copy a system Python into this environment'))
-    python_adopt_parser.add_argument('version', help=_('The discovered version to adopt (e.g., "3.10")'))
+    python_adopt_parser = python_subparsers.add_parser('adopt', help=_('Copy or download a Python version into the environment'))
+    python_adopt_parser.add_argument('version', help=_('The version to adopt (e.g., "3.9")'))
     python_switch_parser = python_subparsers.add_parser('switch', help=_('Switch the active Python interpreter for this environment'))
-    python_switch_parser.add_argument('version', help=_('The version to switch to (e.g., "3.10", "3.11")'))
+    python_switch_parser.add_argument('version', help=_('The version to switch to (e.g., "3.10")'))
+    python_rescan_parser = python_subparsers.add_parser('rescan', help=_('Force a re-scan and repair of the interpreter registry'))
+    remove_parser = python_subparsers.add_parser('remove', help='Forcefully remove a managed Python interpreter.')
+    remove_parser.add_argument('version', help='The version of the managed Python interpreter to remove (e.g., "3.9").')
+    remove_parser.add_argument('-y', '--yes', action='store_true', help='Do not ask for confirmation.')
     status_parser = subparsers.add_parser('status', help=_('Environment health dashboard'))
     demo_parser = subparsers.add_parser('demo', help=_('Interactive demo for version switching'))
     stress_parser = subparsers.add_parser('stress-test', help=_('Ultimate demonstration with heavy packages'))
@@ -320,9 +262,14 @@ def create_parser():
     reset_config_parser.add_argument('--yes', '-y', dest='force', action='store_true', help=_('Skip confirmation'))
     config_parser = subparsers.add_parser('config', help=_('View or edit omnipkg configuration'))
     config_subparsers = config_parser.add_subparsers(dest='config_command', required=True)
+    config_view_parser = config_subparsers.add_parser('view', help=_('Display the current configuration for this environment'))
     config_set_parser = config_subparsers.add_parser('set', help=_('Set a configuration value'))
     config_set_parser.add_argument('key', choices=['language', 'install_strategy'], help=_('Configuration key to set'))
-    config_set_parser.add_argument('value', help=_('Value to set (e.g., en, es, de, ja, zh_CN)'))
+    config_set_parser.add_argument('value', help=_('Value to set for the key'))
+    config_reset_parser = config_subparsers.add_parser('reset', help=_('Reset a specific configuration key to its default'))
+    config_reset_parser.add_argument('key', choices=['interpreters'], help=_('Configuration key to reset (e.g., interpreters)'))
+    run_parser = subparsers.add_parser('run', help=_('Run a script with auto-healing for version conflicts'))
+    run_parser.add_argument('script_and_args', nargs=argparse.REMAINDER, help=_('The script to run, followed by its arguments'))
     prune_parser = subparsers.add_parser('prune', help=_('Clean up old, bubbled package versions'))
     prune_parser.add_argument('package', help=_('Package whose bubbles to prune'))
     prune_parser.add_argument('--keep-latest', type=int, metavar='N', help=_('Keep N most recent bubbled versions'))
@@ -359,8 +306,14 @@ def main():
             parser.print_help()
             print(_('\n👋 Welcome back to omnipkg! Run a command or see --help for details.'))
             return 0
+        # [FIXED] Corrected logic for the 'config' command
         if args.command == 'config':
-            if args.config_command == 'set':
+            if args.config_command == 'view':
+                print_header("omnipkg Configuration")
+                for key, value in sorted(cm.config.items()):
+                    print(f"  - {key}: {value}")
+                return 0
+            elif args.config_command == 'set':
                 if args.key == 'language':
                     if args.value not in SUPPORTED_LANGUAGES:
                         print(_("❌ Error: Language '{}' not supported. Supported: {}").format(args.value, ', '.join(SUPPORTED_LANGUAGES.keys())))
@@ -370,16 +323,26 @@ def main():
                     lang_name = SUPPORTED_LANGUAGES.get(args.value, args.value)
                     print(_('✅ Language permanently set to: {lang}').format(lang=lang_name))
                 elif args.key == 'install_strategy':
-                    valid_strategies = ['stable-main', 'latest-active', 'fast-compat']
+                    valid_strategies = ['stable-main', 'latest-active']
                     if args.value not in valid_strategies:
                         print(_('❌ Error: Invalid install strategy. Must be one of: {}').format(', '.join(valid_strategies)))
                         return 1
                     cm.set('install_strategy', args.value)
                     print(_('✅ Install strategy permanently set to: {}').format(args.value))
                 else:
+                    # This handles any key that isn't 'language' or 'install_strategy'
                     parser.print_help()
                     return 1
-            return 0
+                return 0 # Success for the 'set' command
+            elif args.config_command == 'reset':
+                if args.key == 'interpreters':
+                    print(_("Resetting managed interpreters registry..."))
+                    return pkg_instance.rescan_interpreters()
+                return 0 # Success for the 'reset' command
+            
+            # Fallback for any other config subcommand
+            parser.print_help()
+            return 1
         elif args.command == 'list':
             if args.filter and args.filter.lower() == 'python':
                 interpreters = pkg_instance.interpreter_manager.list_available_interpreters()
@@ -401,6 +364,16 @@ def main():
         elif args.command == 'python':
             if args.python_command == 'adopt':
                 return pkg_instance.adopt_interpreter(args.version)
+            elif args.python_command == 'rescan':
+                return pkg_instance.rescan_interpreters()
+            # [NOTE] You may also need a 'switch' handler here if it's not already present
+            elif args.python_command == 'remove': # <--- CORRECTED LINE
+                return pkg_instance.remove_interpreter(args.version, force=args.yes)
+            elif args.python_command == 'switch':
+                return pkg_instance.switch_active_python(args.version)
+            else:
+                parser.print_help()
+                return 1
         elif args.command == 'swap':
             if not args.target:
                 print(_('❌ Error: You must specify what to swap.'))
@@ -437,7 +410,6 @@ def main():
         elif args.command == 'status':
             return pkg_instance.show_multiversion_status()
         elif args.command == 'demo':
-            print_header(_('Interactive Omnipkg Demo'))
             actual_version = get_actual_python_version()
             print(_('Current Python version: {}.{}').format(actual_version[0], actual_version[1]))
             print(_('🎪 Omnipkg supports version switching for:'))
@@ -550,6 +522,8 @@ def main():
             return 0
         elif args.command == 'reset-config':
             return pkg_instance.reset_configuration(force=args.force)
+        elif args.command == 'run':
+            return execute_run_command(args.script_and_args, cm)
         else:
             parser.print_help()
             print(_("\n💡 Did you mean 'omnipkg config set language <code>'?"))
