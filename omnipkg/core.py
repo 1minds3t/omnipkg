@@ -402,31 +402,6 @@ class ConfigManager:
         self.multiversion_base = Path(self.config['multiversion_base'])
         print(_('   ✅ Configuration updated and saved successfully.'))
 
-    def _get_venv_root(self) -> Path:
-        """
-        Reliably finds the root of the virtual environment with a strict priority order.
-        """
-        # PRIORITY 1: An override from a relaunch is the absolute source of truth.
-        venv_root_override = os.environ.get('OMNIPKG_VENV_ROOT')
-        if venv_root_override:
-            return Path(venv_root_override)
-
-        # PRIORITY 2: VIRTUAL_ENV is the standard for venv/virtualenv.
-        # This is the critical fix for your Conda vs. venv conflict.
-        virtual_env_path = os.environ.get('VIRTUAL_ENV')
-        if virtual_env_path and Path(virtual_env_path).exists():
-            return Path(virtual_env_path)
-
-        # PRIORITY 3: Upward search for pyvenv.cfg is the next best for standard venvs.
-        current_dir = Path(sys.executable).resolve().parent
-        while current_dir != current_dir.parent:
-            if (current_dir / 'pyvenv.cfg').exists():
-                return current_dir
-            current_dir = current_dir.parent
-
-        # PRIORITY 4: Fallback for Conda and other non-standard environments.
-        return Path(sys.prefix)
-
     def _setup_native_311_environment(self):
         """
         Performs the one-time setup for an environment that already has Python 3.11.
@@ -3952,272 +3927,6 @@ print(json.dumps(versions))
         print(_('Just kidding, omnipkg handled it for you automatically!'))
         return 0
 
-    def adopt_interpreter(self, version: str) -> int:
-        """
-        Safely adopts a Python version by checking the registry, then trying to copy
-        from the local system, and finally falling back to download.
-        A rescan is forced after any successful filesystem change to ensure registration.
-        """
-        print(_('🐍 Attempting to adopt Python {} into the environment...').format(version))
-        
-        # First, check if it's already perfectly managed.
-        managed_interpreters = self.interpreter_manager.list_available_interpreters()
-        if version in managed_interpreters:
-            print(_('   - ✅ Python {} is already adopted and managed.').format(version))
-            return 0
-
-        # Attempt to find it locally to copy.
-        discovered_pythons = self.config_manager.list_available_pythons()
-        source_path_str = discovered_pythons.get(version)
-        
-        if not source_path_str:
-            print(_('   - No local Python {} found. Falling back to download strategy.').format(version))
-            result = self._fallback_to_download(version)
-            if result == 0:
-                print(_('🔧 Forcing rescan to register the new interpreter...'))
-                self.rescan_interpreters()
-            return result
-        
-        source_exe_path = Path(source_path_str)
-        try:
-            cmd = [str(source_exe_path), '-c', 'import sys; print(sys.prefix)']
-            cmd_result = subprocess.run(cmd, capture_output=True, text=True, check=True, timeout=10)
-            source_root = Path(os.path.realpath(cmd_result.stdout.strip()))
-            current_venv_root = self.config_manager.venv_path.resolve()
-            
-            # Perform safety checks before attempting a copy
-            if self._is_same_or_child_path(source_root, current_venv_root) or \
-            not self._is_valid_python_installation(source_root, source_exe_path) or \
-            self._estimate_directory_size(source_root) > 2 * 1024 * 1024 * 1024 or \
-            self._is_system_critical_path(source_root):
-                print(_('   - ⚠️  Safety checks failed for local copy. Falling back to download.'))
-                result = self._fallback_to_download(version)
-                if result == 0:
-                    print(_('🔧 Forcing rescan to register the downloaded interpreter...'))
-                    self.rescan_interpreters()
-                return result
-            
-            dest_root = self.config_manager.venv_path / '.omnipkg' / 'interpreters' / f'cpython-{version}'
-            if dest_root.exists():
-                print(_('   - ✅ Adopted copy of Python {} already exists. Ensuring it is registered.').format(version))
-                self.rescan_interpreters()
-                return 0
-            
-            print(_('   - Starting safe copy operation...'))
-            result = self._perform_safe_copy(source_root, dest_root, version)
-            
-            if result == 0:
-                print(_('🔧 Forcing rescan to register the copied interpreter...'))
-                self.rescan_interpreters()
-            return result
-            
-        except Exception as e:
-            print(_('   - ❌ An error occurred during the copy attempt: {}. Falling back to download.').format(e))
-            result = self._fallback_to_download(version)
-            if result == 0:
-                print(_('🔧 Forcing rescan to register the downloaded interpreter...'))
-                self.rescan_interpreters()
-            return result
-
-    def _fallback_to_download(self, version: str) -> int:
-        """
-        Fallback to downloading Python. This function now surgically detects an incomplete
-        installation by checking for a valid executable, cleans it up if broken,
-        and includes a safety stop to prevent deleting the active interpreter.
-        """
-        print(_('\n--- Running robust download strategy ---'))
-        try:
-            full_versions = {'3.12': '3.12.3', '3.10': '3.10.13', '3.9': '3.9.18', '3.11': '3.11.6'}
-            full_version = full_versions.get(version)
-            if not full_version:
-                print(f'❌ Error: No known standalone build for Python {version}.')
-                return 1
-
-            dest_path = self.config_manager.venv_path / '.omnipkg' / 'interpreters' / f'cpython-{full_version}'
-
-            if dest_path.exists():
-                print(_('   - Found existing directory for Python {}. Verifying integrity...').format(full_version))
-                if self._is_interpreter_directory_valid(dest_path):
-                    print(_('   - ✅ Integrity check passed. Installation is valid and complete.'))
-                    # Even if valid, we ensure it's registered by forcing a rescan later.
-                    return 0 # Success, no download needed.
-                else:
-                    print(_('   - ⚠️  Integrity check failed: Incomplete installation detected (missing or broken executable).'))
-
-                    # --- CRITICAL SAFETY CHECK ---
-                    # Never delete the interpreter that is currently running this script.
-                    try:
-                        active_interpreter_root = Path(sys.executable).resolve().parents[1]
-                        if dest_path.resolve() == active_interpreter_root:
-                            print(_('   - ❌ CRITICAL ERROR: The broken interpreter is the currently active one!'))
-                            print(_('   - Aborting to prevent self-destruction. Please fix the environment manually.'))
-                            return 1
-                    except (IndexError, OSError):
-                        pass # Path structure is unexpected, proceed with caution but don't block.
-                    # --- END SAFETY CHECK ---
-
-                    print(_('   - Preparing to clean up broken directory...'))
-                    try:
-                        shutil.rmtree(dest_path)
-                        print(_('   - ✅ Removed broken directory successfully.'))
-                    except Exception as e:
-                        print(_("   - ❌ FATAL: Failed to remove existing broken directory: {}").format(e))
-                        return 1
-
-            # Proceed with a fresh installation into a guaranteed-to-be-clean directory.
-            print(_('   - Starting fresh download and installation...'))
-            
-            # Call the correct method name - check your config_manager for the actual method
-            if hasattr(self.config_manager, '_install_managed_python'):
-                self.config_manager._install_managed_python(self.config_manager.venv_path, full_version)
-            elif hasattr(self.config_manager, 'install_managed_python'):
-                self.config_manager.install_managed_python(self.config_manager.venv_path, full_version)
-            elif hasattr(self.config_manager, 'download_python'):
-                self.config_manager.download_python(full_version)
-            else:
-                print(_('❌ Error: No download method found on config_manager'))
-                return 1
-                
-            # Verify the installation worked
-            if dest_path.exists() and self._is_interpreter_directory_valid(dest_path):
-                print(_('   - ✅ Download and installation completed successfully.'))
-                return 0
-            else:
-                print(_('   - ❌ Installation completed but integrity check still fails.'))
-                return 1
-        except Exception as e:
-            print(_('❌ Download and installation process failed: {}').format(e))
-            return 1 # Return 1 for failure
-           
-    def _is_same_or_child_path(self, source: Path, target: Path) -> bool:
-        """Check if source is the same as target or a child of target."""
-        try:
-            source = source.resolve()
-            target = target.resolve()
-            if source == target:
-                return True
-            try:
-                source.relative_to(target)
-                return True
-            except ValueError:
-                return False
-        except (OSError, RuntimeError):
-            return True
-        
-    def _is_valid_python_installation(self, root: Path, exe_path: Path) -> bool:
-        """Validate that the source looks like a proper Python installation."""
-        try:
-            if not exe_path.exists():
-                return False
-            try:
-                exe_path.resolve().relative_to(root.resolve())
-            except ValueError:
-                return False
-            expected_dirs = ['lib', 'bin']
-            if sys.platform == 'win32':
-                expected_dirs = ['Lib', 'Scripts']
-            has_expected_structure = any(((root / d).exists() for d in expected_dirs))
-            test_cmd = [str(exe_path), '-c', 'import sys, os']
-            test_result = subprocess.run(test_cmd, capture_output=True, timeout=5)
-            return has_expected_structure and test_result.returncode == 0
-        except Exception:
-            return False
-
-    def _estimate_directory_size(self, path: Path, max_files_to_check: int=1000) -> int:
-        """Estimate directory size with early termination for safety."""
-        total_size = 0
-        file_count = 0
-        try:
-            for root, dirs, files in os.walk(path):
-                dirs[:] = [d for d in dirs if not d.startswith(('.git', '__pycache__', '.mypy_cache', 'node_modules'))]
-                for file in files:
-                    if file_count >= max_files_to_check:
-                        return total_size * 10
-                    try:
-                        file_path = os.path.join(root, file)
-                        total_size += os.path.getsize(file_path)
-                        file_count += 1
-                    except (OSError, IOError):
-                        continue
-        except Exception:
-            return float('inf')
-        return total_size
-
-    def _is_system_critical_path(self, path: Path) -> bool:
-        """Check if path is a system-critical directory that shouldn't be copied."""
-        critical_paths = [Path('/'), Path('/usr'), Path('/usr/local'), Path('/System'), Path('/Library'), Path('/opt'), Path('/bin'), Path('/sbin'), Path('/etc'), Path('/var'), Path('/tmp'), Path('/proc'), Path('/dev'), Path('/sys')]
-        if sys.platform == 'win32':
-            critical_paths.extend([Path('C:\\Windows'), Path('C:\\Program Files'), Path('C:\\Program Files (x86)'), Path('C:\\System32')])
-        try:
-            resolved_path = path.resolve()
-            for critical in critical_paths:
-                if resolved_path == critical.resolve():
-                    return True
-            return False
-        except Exception:
-            return True
-
-    def _perform_safe_copy(self, source: Path, dest: Path, version: str) -> int:
-        """Perform the actual copy operation with additional safety measures."""
-        try:
-            dest.parent.mkdir(parents=True, exist_ok=True)
-
-            def copy_function(src, dst, *, follow_symlinks=True):
-                try:
-                    if os.path.getsize(src) > 100 * 1024 * 1024:
-                        print(_('   - ⚠️  Skipping large file: {}').format(src))
-                        return dst
-                except OSError:
-                    pass
-                return shutil.copy2(src, dst, follow_symlinks=follow_symlinks)
-
-            def ignore_patterns(dir, files):
-                ignored = []
-                for file in files:
-                    if file in {'.git', '__pycache__', '.mypy_cache', '.pytest_cache', '.tox', '.coverage', 'node_modules', '.DS_Store'}:
-                        ignored.append(file)
-                    try:
-                        filepath = os.path.join(dir, file)
-                        if os.path.isfile(filepath) and os.path.getsize(filepath) > 50 * 1024 * 1024:
-                            ignored.append(file)
-                    except OSError:
-                        pass
-                return ignored
-            print(_('   - Copying {} -> {}').format(source, dest))
-            shutil.copytree(source, dest, symlinks=True, ignore=ignore_patterns, dirs_exist_ok=False)
-            copied_python = self._find_python_executable_in_dir(dest)
-            if not copied_python or not copied_python.exists():
-                print(_('   - ❌ Copy completed but Python executable not found in destination'))
-                shutil.rmtree(dest, ignore_errors=True)
-                return self._fallback_to_download(version)
-            test_cmd = [str(copied_python), '-c', 'import sys; print(sys.version)']
-            test_result = subprocess.run(test_cmd, capture_output=True, timeout=10)
-            if test_result.returncode != 0:
-                print(_('   - ❌ Copied Python executable failed basic test'))
-                shutil.rmtree(dest, ignore_errors=True)
-                return self._fallback_to_download(version)
-            print(_('   - ✅ Copy successful and verified!'))
-            self.config_manager._register_all_interpreters(self.config_manager.venv_path)
-            print(f'\n🎉 Successfully adopted Python {version} from local source!')
-            print(_("   You can now use 'omnipkg swap python {}'").format(version))
-            return 0
-        except Exception as e:
-            print(_('   - ❌ Copy operation failed: {}').format(e))
-            if dest.exists():
-                shutil.rmtree(dest, ignore_errors=True)
-            return self._fallback_to_download(version)
-
-    def _find_python_executable_in_dir(self, directory: Path) -> Path:
-        """Find the Python executable in a copied directory."""
-        possible_names = ['python', 'python3', 'python.exe']
-        possible_dirs = ['bin', 'Scripts', '.']
-        for subdir in possible_dirs:
-            for name in possible_names:
-                candidate = directory / subdir / name
-                if candidate.exists() and candidate.is_file():
-                    return candidate
-        return None
-
     def _resolve_package_versions(self, packages: List[str]) -> List[str]:
         """
         Takes a list of packages and ensures every entry has an explicit version.
@@ -4242,34 +3951,64 @@ print(json.dumps(versions))
 
 
     def _run_pip_install(self, packages: List[str]) -> int:
+        """Runs `pip install` with LIVE, STREAMING output."""
         if not packages:
             return 0
         try:
-            cmd = [self.config['python_executable'], '-m', 'pip', 'install'] + packages
-            result = subprocess.run(cmd, capture_output=True, text=True, check=True)
-            print(result.stdout)
-            return result.returncode
-        except subprocess.CalledProcessError as e:
-            print(_('❌ Pip install command failed with exit code {}:').format(e.returncode))
-            print(e.stderr)
-            return e.returncode
+            # Add '-u' for unbuffered output to force pip to talk in real-time.
+            cmd = [self.config['python_executable'], '-u', '-m', 'pip', 'install'] + packages
+            
+            # Use Popen for live, line-by-line streaming.
+            process = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT, # Redirect stderr to stdout
+                text=True,
+                encoding='utf-8',
+                errors='replace',
+                bufsize=1, # Line-buffered
+                universal_newlines=True
+            )
+            
+            # Print each line of pip's output as it happens
+            print() # Add a newline for better formatting
+            for line in iter(process.stdout.readline, ''):
+                # Print the raw line to preserve pip's own formatting (like progress bars)
+                print(line, end='') 
+            
+            process.stdout.close()
+            return_code = process.wait()
+            return return_code
         except Exception as e:
             print(_('    ❌ An unexpected error occurred during pip install: {}').format(e))
             return 1
 
     def _run_pip_uninstall(self, packages: List[str]) -> int:
-        """Runs `pip uninstall` for a list of packages."""
+        """Runs `pip uninstall` with LIVE, STREAMING output."""
         if not packages:
             return 0
         try:
-            cmd = [self.config['python_executable'], '-m', 'pip', 'uninstall', '-y'] + packages
-            result = subprocess.run(cmd, check=True, text=True, capture_output=True)
-            print(result.stdout)
-            return result.returncode
-        except subprocess.CalledProcessError as e:
-            print(_('❌ Pip uninstall command failed with exit code {}:').format(e.returncode))
-            print(e.stderr)
-            return e.returncode
+            # Add '-u' and streaming here as well for consistency.
+            cmd = [self.config['python_executable'], '-u', '-m', 'pip', 'uninstall', '-y'] + packages
+            
+            process = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                encoding='utf-8',
+                errors='replace',
+                bufsize=1,
+                universal_newlines=True
+            )
+            
+            print() # Add a newline for better formatting
+            for line in iter(process.stdout.readline, ''):
+                print(line, end='')
+
+            process.stdout.close()
+            return_code = process.wait()
+            return return_code
         except Exception as e:
             print(_('    ❌ An unexpected error occurred during pip uninstall: {}').format(e))
             return 1
