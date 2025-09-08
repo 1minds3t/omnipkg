@@ -1,3 +1,5 @@
+# Final, clean version of tests/multiverse_analysis.py
+
 import sys
 import os
 import subprocess
@@ -16,25 +18,21 @@ except ImportError as e:
     print(f"FATAL: Could not import omnipkg modules. Make sure this script is placed correctly. Error: {e}")
     sys.exit(1)
 
-# --- PAYLOAD FUNCTIONS ---
+# --- PAYLOAD FUNCTIONS (Unchanged) ---
 def run_legacy_payload():
-    """This function's code will be executed by the Python 3.9 interpreter."""
     import scipy.signal
     import numpy
     import json
     import sys
-
     print(f"--- Executing in Python {sys.version[:3]} with SciPy {scipy.__version__} ---", file=sys.stderr)
     data = numpy.array([1, 2, 3, 4, 5])
     analysis_result = {"result": int(scipy.signal.convolve(data, data).sum())}
     print(json.dumps(analysis_result))
 
 def run_modern_payload(legacy_data_json: str):
-    """This function's code will be executed by the Python 3.11 interpreter."""
     import tensorflow as tf
     import json
     import sys
-
     print(f"--- Executing in Python {sys.version[:3]} with TensorFlow {tf.__version__} ---", file=sys.stderr)
     input_data = json.loads(legacy_data_json)
     legacy_value = input_data['result']
@@ -42,267 +40,125 @@ def run_modern_payload(legacy_data_json: str):
     final_result = {"prediction": prediction}
     print(json.dumps(final_result))
 
-# --- ORCHESTRATOR FUNCTIONS ---
+# --- ORCHESTRATOR HELPER FUNCTIONS ---
 
-def check_redis_key(env_id, python_version, package_name, expected_version):
-    """Check if a specific package version is in the Redis key for the given context."""
-    redis_key = f"omnipkg:env_{env_id}:py{python_version}:pkg:{package_name}:installed_versions"
-    print(f"\n🔎 Verifying Redis Key for Python {python_version}...")
-    print(f"   Environment ID: {env_id}")
-    print(f"   Query: SMEMBERS {redis_key}")
-    print(f"   Looking for version: '{expected_version}'")
-    
-    try:
-        result = subprocess.run(['redis-cli', 'SMEMBERS', redis_key], capture_output=True, text=True, check=True)
-        versions_in_redis = result.stdout.strip()
-        print(f"   Redis returned: {versions_in_redis or '(empty set)'}")
-        
-        redis_versions = [v.strip() for v in versions_in_redis.splitlines() if v.strip()]
-        print(f"   Parsed versions: {redis_versions}")
-        
-        cleaned_expected = expected_version.strip().strip("'\"")
-        print(f"   Cleaned expected version: '{cleaned_expected}'")
-        
-        if cleaned_expected in redis_versions:
-            print(f"   ✅ Found expected version {cleaned_expected} in Redis!")
-            return True
-        else:
-            print(f"   ❌ Expected version {cleaned_expected} NOT found in Redis!")
-            print(f"   Available versions: {redis_versions}")
-            return False
-            
-    except (FileNotFoundError, subprocess.CalledProcessError) as e:
-        print(f"   ⚠️  Could not query Redis: {e}")
-        return False
-
-def parse_resolved_version(output: str, package_name: str) -> Optional[str]:
+def run_command(command, description, check=True):
     """
-    Parses the full output of an omnipkg command to find the resolved version.
-    It checks for the "Resolved" line first, then falls back to "Requirement already satisfied".
+    Runs a command, provides live streaming output, AND returns the full output.
     """
-    # Pattern 1: The most reliable source of truth
-    resolved_pattern = rf"Resolved '{re.escape(package_name)}' to '{re.escape(package_name)}==([0-9\.]+)'"
-    match = re.search(resolved_pattern, output)
-    if match:
-        return match.group(1)
-
-    # Pattern 2: Fallback for when the package was already installed
-    satisfied_pattern = rf"Requirement already satisfied: {re.escape(package_name)}==(\S+)"
-    match = re.search(satisfied_pattern, output, re.IGNORECASE)
-    if match:
-        return match.group(1)
-        
-    # Pattern 3: Fallback for the "Jackpot" case
-    jackpot_pattern = rf"JACKPOT! Latest PyPI version (\S+) is already installed!"
-    match = re.search(jackpot_pattern, output, re.IGNORECASE)
-    if match:
-        return match.group(1)
-
-    print(f"   ⚠️  COULD NOT PARSE resolved version for '{package_name}' from output.")
-    return None
-
-def run_command_with_streaming(cmd_args, description, python_exe=None):
-    """Runs a command with live streaming output - copied from working script."""
     print(f"\n▶️  Executing: {description}")
-    # Use the specified python executable, or the current one if None
-    executable = python_exe or sys.executable
-    cmd = [executable, '-m', 'omnipkg.cli'] + cmd_args
-    print(f"   Command: {' '.join(cmd)}")
+    print(f"   Command: {' '.join(command)}")
+    print("   --- Live Output ---")
     
-    # Use a single capture_output call to get all output at the end
-    result = subprocess.run(cmd, capture_output=True, text=True, encoding='utf-8', errors='replace')
-    
-    # Print the captured output with a prefix
-    full_output = (result.stdout + result.stderr).strip()
-    for line in full_output.splitlines():
-        print(f"   | {line}")
-        
-    if result.returncode != 0:
-        print(f"   ⚠️  WARNING: Command finished with non-zero exit code: {result.returncode}")
-        
-    return full_output, result.returncode
+    process = subprocess.Popen(
+        command,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,  # Merge stderr into stdout
+        text=True,
+        encoding='utf-8',
+        errors='replace',
+        bufsize=1,
+        universal_newlines=True,
+        env=os.environ
+    )
 
-def get_current_env_id():
-    """Gets the current environment ID from omnipkg config."""
+    # Create a list to capture all output lines
+    output_lines = []
+
+    # Read, print, and capture output line by line
     try:
-        cm = ConfigManager(suppress_init_messages=True)
-        return cm.env_id
+        for line in iter(process.stdout.readline, ''):
+            if line:  # Only process non-empty lines
+                stripped_line = line.rstrip('\n\r')
+                if stripped_line:  # Only print non-empty stripped lines
+                    print(f"   | {stripped_line}")
+                output_lines.append(line)
     except Exception as e:
-        print(f"⚠️  Could not get environment ID: {e}")
-        return None
+        print(f"   | Error reading output: {e}")
+    
+    process.stdout.close()
+    return_code = process.wait()
 
-def get_config_value(key: str) -> str:
-    """Gets a specific value from the omnipkg config."""
-    result = subprocess.run(["omnipkg", "config", "view"], capture_output=True, text=True, check=True)
-    for line in result.stdout.splitlines():
-        if line.strip().startswith(key):
-            return line.split(":", 1)[1].strip()
-    return "stable-main" if key == "install_strategy" else ""
+    print("   -------------------")
+    print(f"   ✅ Command finished with exit code: {return_code}")
 
-def ensure_dimension_exists(version: str):
-    """Ensures a specific Python version is adopted by omnipkg before use."""
-    print(f"   VALIDATING DIMENSION: Ensuring Python {version} is adopted...")
-    try:
-        cmd = ["omnipkg", "python", "adopt", version]
-        subprocess.run(cmd, check=True, capture_output=True, text=True)
-        print(f"   ✅ VALIDATION COMPLETE: Python {version} is available.")
-    except subprocess.CalledProcessError as e:
-        print(f"❌ FAILED TO ADOPT DIMENSION {version}!", file=sys.stderr)
-        print("--- Subprocess STDERR ---", file=sys.stderr); print(e.stderr, file=sys.stderr)
-        raise
+    # Join the captured lines into a single string for parsing
+    full_output = "".join(output_lines)
+
+    if check and return_code != 0:
+        # The output has already been printed, so we just raise the error
+        raise subprocess.CalledProcessError(return_code, command, output=full_output)
+    
+    # Return the full captured output for functions that need it
+    return full_output
 
 def get_interpreter_path(version: str) -> str:
-    """Asks omnipkg for the location of a specific Python dimension."""
-    print(f"   LOCKING ON to Python {version} dimension...")
-    result = subprocess.run(["omnipkg", "info", "python"], capture_output=True, text=True, check=True)
-    for line in result.stdout.splitlines():
-        if line.strip().startswith(f"• Python {version}"):
+    """Asks omnipkg for the location of a specific Python interpreter."""
+    print(f"\n   Finding interpreter path for Python {version}...")
+    output = run_command(["omnipkg", "info", "python"], "Querying interpreters")
+    for line in output.splitlines():
+        if f"Python {version}" in line:
             match = re.search(r":\s*(/\S+)", line)
             if match:
                 path = match.group(1).strip()
-                print(f"   LOCK CONFIRMED: Target is at {path}")
+                print(f"   ✅ Found at: {path}")
                 return path
-    raise RuntimeError(f"Could not find managed Python {version} via 'omnipkg info python'.")
+    raise RuntimeError(f"Could not find managed Python {version}.")
 
-def prepare_dimension_with_packages(version: str, packages: list):
-    """Swaps to a dimension and installs packages using proper context switching."""
-    print(f"   PREPARING DIMENSION {version}: Installing {', '.join(packages)}...")
+def install_packages_with_omnipkg(packages: list, description: str):
+    """Install packages using omnipkg install with specific versions."""
+    print(f"\n   🔧 Installing packages via OMNIPKG: {', '.join(packages)}")
     
-    python_exe = get_interpreter_path(version)
+    # Build the omnipkg install command - THIS IS THE ACTUAL OMNIPKG COMMAND!
+    omnipkg_command = ["omnipkg", "install"] + packages
     
-    print(f"🌀 TELEPORTING to Python {version} dimension...")
-    start_swap_time = time.perf_counter()
-    
-    run_command_with_streaming(['swap', 'python', version], f"Switching context to {version}", python_exe=python_exe)
-    
-    end_swap_time = time.perf_counter()
-    swap_duration_ms = (end_swap_time - start_swap_time) * 1000
-    print(f"   ✅ TELEPORT COMPLETE. Active context is now Python {version}.")
-    print(f"   ⏱️  Dimension swap took: {swap_duration_ms:.2f} ms")
-    
-    env_id = get_current_env_id()
-    if env_id:
-        print(f"   📍 Operating in Environment ID: {env_id}")
-    
-    start_install_time = time.perf_counter()
-    
-    original_strategy = get_config_value("install_strategy")
-    try:
-        if original_strategy != 'latest-active':
-            print(f"   SETTING STRATEGY: Temporarily setting install_strategy to 'latest-active'...")
-            run_command_with_streaming(['config', 'set', 'install_strategy', 'latest-active'], 
-                                     "Setting install strategy", python_exe=python_exe)
-        
-        # --- OPTIMIZATION START ---
-        # Instead of looping, we install all packages in a single command.
-        if packages:
-            print(f"\n   🔍 Installing {', '.join(packages)} in Python {version}...")
-            
-            output, _ = run_command_with_streaming(['install'] + packages, 
-                                                 f"Installing {', '.join(packages)} in Python {version} context", 
-                                                 python_exe=python_exe)
-            
-            # Loop through the specs to verify each one
-            for spec in packages:
-                # This correctly parses "numpy" from "numpy==2.0.2"
-                package_name = re.split(r'[=<>~]', spec)[0].strip()
-                
-                resolved_version = parse_resolved_version(output, package_name)
-                
-                if env_id and resolved_version:
-                    check_redis_key(env_id, version, package_name, resolved_version)
-                elif env_id:
-                    print(f"   ❌ Verification failed: Could not determine the installed version for {package_name}.")
+    run_command(omnipkg_command, description)
 
-    finally:
-        current_strategy = get_config_value("install_strategy")
-        if current_strategy != original_strategy:
-            print(f"   RESTORING STRATEGY: Setting install_strategy back to '{original_strategy}'...")
-            run_command_with_streaming(['config', 'set', 'install_strategy', original_strategy],
-                                     "Restoring install strategy", python_exe=python_exe)
-    
-    end_install_time = time.perf_counter()
-    install_duration_ms = (end_install_time - start_install_time) * 1000
-    
-    print(f"   ✅ PREPARATION COMPLETE: {', '.join(packages)} are now available in Python {version} context.")
-    print(f"   ⏱️  Package installation took: {install_duration_ms:.2f} ms")
+# --- MAIN ORCHESTRATOR ---
 
 def multiverse_analysis():
-    """The main orchestrator function that controls the entire workflow."""
-    original_dimension = get_config_value("python_executable")
-    original_version_match = re.search(r'(\d+\.\d+)', original_dimension)
-    original_version = original_version_match.group(1) if original_version_match else "3.11"
-    
-    print(f"🚀 Starting multiverse analysis from dimension: Python {original_version}")
-    
-    initial_env_id = get_current_env_id()
-    if initial_env_id:
-        print(f"📍 Initial Environment ID: {initial_env_id}")
-
+    original_version = "3.11" 
     try:
-        # Check prerequisites first
-        print("\n🔍 Checking dimension prerequisites...")
-        ensure_dimension_exists("3.9")
-        ensure_dimension_exists("3.11")
-        print("✅ All required dimensions are available.")
+        print(f"🚀 Starting multiverse analysis from dimension: Python {original_version}")
 
-        # ===============================================================
-        #  MISSION STEP 1: PREPARE PYTHON 3.9 (FAST PATH)
-        # ===============================================================
+        # === STEP 1: PYTHON 3.9 ===
         print("\n📦 MISSION STEP 1: Setting up Python 3.9 dimension...")
-        # --- OPTIMIZATION: PROVIDE EXACT, KNOWN-COMPATIBLE VERSIONS ---
-        prepare_dimension_with_packages("3.9", ["numpy==2.0.2", "scipy==1.13.1"])
+        run_command(["omnipkg", "swap", "python", "3.9"], "Swapping to Python 3.9")
         python_3_9_exe = get_interpreter_path("3.9")
+        
+        # Use omnipkg install with specific versions - MULTIPLE PACKAGES IN ONE COMMAND!
+        install_packages_with_omnipkg(
+            ["numpy==1.26.4", "scipy==1.13.1"], 
+            "Installing numpy==1.26.4 and scipy==1.13.1 via omnipkg for Python 3.9"
+        )
 
-        print("   EXECUTING PAYLOAD in 3.9 dimension...")
-        start_time = time.perf_counter()
-        cmd = [python_3_9_exe, __file__, '--run-legacy']
-        result_3_9 = subprocess.run(cmd, capture_output=True, text=True, check=True)
-        end_time = time.perf_counter()
+        print("\n   🧪 Executing legacy payload in Python 3.9...")
+        result_3_9 = subprocess.run([python_3_9_exe, __file__, '--run-legacy'], capture_output=True, text=True, check=True)
         legacy_data = json.loads(result_3_9.stdout)
-        print("✅ Artifact retrieved from 3.9: Scipy analysis complete.")
-        print(f"   - Result: {legacy_data['result']}")
-        print(f"   ⏱️  3.9 payload execution took: {(end_time - start_time) * 1000:.2f} ms")
-        
-        # ===============================================================
-        #  MISSION STEP 2: PREPARE PYTHON 3.11 (FAST PATH)
-        # ===============================================================
+        print(f"✅ Artifact retrieved from 3.9: Scipy analysis complete. Result: {legacy_data['result']}")
+
+        # === STEP 2: PYTHON 3.11 ===
         print("\n📦 MISSION STEP 2: Setting up Python 3.11 dimension...")
-        # --- OPTIMIZATION: PROVIDE EXACT, KNOWN-COMPATIBLE VERSION ---
-        prepare_dimension_with_packages("3.11", ["tensorflow==2.20.0"])
+        run_command(["omnipkg", "swap", "python", "3.11"], "Swapping to Python 3.11")
         python_3_11_exe = get_interpreter_path("3.11")
-
-        print("   EXECUTING PAYLOAD in 3.11 dimension...")
-        start_time = time.perf_counter()
-        cmd = [python_3_11_exe, __file__, '--run-modern', json.dumps(legacy_data)]
-        result_3_11 = subprocess.run(cmd, capture_output=True, text=True, check=True)
-        end_time = time.perf_counter()
-        final_prediction = json.loads(result_3_11.stdout)
-        print("✅ Artifact processed by 3.11: TensorFlow prediction complete.")
-        print(f"   ⏱️  3.11 payload execution took: {(end_time - start_time) * 1000:.2f} ms")
-
-        # ===================================================================
-        #  MISSION COMPLETE - CHECK SUCCESS CONDITION
-        # ===================================================================
-        print("\n🏆 MISSION SUCCESSFUL!")
-        print(f"   - Final Prediction from Multiverse Workflow: '{final_prediction['prediction']}'")
         
+        # Use omnipkg install with specific version
+        install_packages_with_omnipkg(
+            ["tensorflow==2.20.0"], 
+            "Installing tensorflow==2.20.0 via omnipkg for Python 3.11"
+        )
+        
+        print("\n   🧪 Executing modern payload in Python 3.11...")
+        result_3_11 = subprocess.run([python_3_11_exe, __file__, '--run-modern', json.dumps(legacy_data)], capture_output=True, text=True, check=True)
+        final_prediction = json.loads(result_3_11.stdout)
+        print(f"✅ Artifact processed by 3.11: TensorFlow prediction complete. Prediction: '{final_prediction['prediction']}'")
+
         return final_prediction['prediction'] == 'SUCCESS'
 
-    except subprocess.CalledProcessError as e:
-        print("\n❌ A CRITICAL ERROR OCCURRED IN A SUBPROCESS.", file=sys.stderr)
-        # ... (rest of the function is the same)
-        return False
     finally:
-        # --- SAFETY PROTOCOL: Always return to the original dimension ---
-        cleanup_start = time.perf_counter()
-        original_python_exe = get_interpreter_path(original_version)
+        # --- SAFETY PROTOCOL ---
         print(f"\n🌀 SAFETY PROTOCOL: Returning to original dimension (Python {original_version})...")
-        run_command_with_streaming(['swap', 'python', original_version], 
-                                 f"Returning to original context", 
-                                 python_exe=original_python_exe)
-        cleanup_end = time.perf_counter()
-        print(f"⏱️  TIMING: Cleanup/safety protocol took {(cleanup_end - cleanup_start) * 1000:.2f} ms")
+        run_command(["omnipkg", "swap", "python", original_version], "Returning to original context", check=False)
 
 if __name__ == "__main__":
     if '--run-legacy' in sys.argv:
@@ -311,20 +167,15 @@ if __name__ == "__main__":
         legacy_json_arg = sys.argv[sys.argv.index('--run-modern') + 1]
         run_modern_payload(legacy_json_arg)
     else:
-        print("=" * 80)
-        print("  🚀 OMNIPKG MULTIVERSE ANALYSIS TEST")
-        print("=" * 80)
-        overall_start = time.perf_counter()
+        print("=" * 80, "\n  🚀 OMNIPKG MULTIVERSE ANALYSIS TEST\n" + "=" * 80)
+        start_time = time.perf_counter()
         success = multiverse_analysis()
-        overall_end = time.perf_counter()
+        end_time = time.perf_counter()
         
-        print("\n" + "=" * 80)
-        print("  📊 TEST SUMMARY")
-        print("=" * 80)
+        print("\n" + "=" * 80, "\n  📊 TEST SUMMARY\n" + "=" * 80)
         if success:
             print("🎉🎉🎉 MULTIVERSE ANALYSIS COMPLETE! Context switching and package management working perfectly! 🎉🎉🎉")
         else:
             print("🔥🔥🔥 MULTIVERSE ANALYSIS FAILED! Check the output above for issues. 🔥🔥🔥")
         
-        total_time_ms = (overall_end - overall_start) * 1000
-        print(f"\n⚡ PERFORMANCE: Total test runtime: {total_time_ms:.2f} ms")
+        print(f"\n⚡ PERFORMANCE: Total test runtime: {(end_time - start_time) * 1000:.2f} ms")

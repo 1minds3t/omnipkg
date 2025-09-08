@@ -210,20 +210,45 @@ class ConfigManager:
         except (json.JSONDecodeError, IOError):
             return False
 
+    # In omnipkg/core.py
+
     def _get_venv_root(self) -> Path:
         """
-        Reliably finds the root of the virtual environment.
-        PRIORITY 1: Check for an override environment variable set during relaunch.
-        PRIORITY 2: Search upwards for the pyvenv.cfg file.
+        Finds the virtual environment root with enhanced validation to prevent
+        environment cross-contamination from stale shell variables.
         """
-        venv_root_override = os.environ.get('OMNIPKG_VENV_ROOT')
-        if venv_root_override:
-            return Path(venv_root_override)
-        current_dir = Path(sys.executable).resolve().parent
-        while current_dir != current_dir.parent:
-            if (current_dir / 'pyvenv.cfg').exists():
-                return current_dir
-            current_dir = current_dir.parent
+        # PRIORITY 1: An override from a relaunch is the absolute source of truth.
+        override = os.environ.get('OMNIPKG_VENV_ROOT')
+        if override:
+            return Path(override)
+
+        current_executable = Path(sys.executable).resolve()
+
+        # PRIORITY 2: VIRTUAL_ENV, but ONLY if we are currently running inside it.
+        # This prevents a stale VIRTUAL_ENV from a different terminal from hijacking the context.
+        venv_path_str = os.environ.get('VIRTUAL_ENV')
+        if venv_path_str:
+            venv_path = Path(venv_path_str).resolve()
+            # The crucial validation step:
+            if str(current_executable).startswith(str(venv_path)):
+                return venv_path
+
+        # PRIORITY 3: Conda environment. CONDA_PREFIX is the source of truth for Conda.
+        # We also validate that we are running inside it.
+        conda_prefix_str = os.environ.get('CONDA_PREFIX')
+        if conda_prefix_str:
+            conda_path = Path(conda_prefix_str).resolve()
+            if str(current_executable).startswith(str(conda_path)):
+                return conda_path
+
+        # PRIORITY 4: Standard pyvenv.cfg search, a reliable fallback.
+        search_dir = current_executable.parent
+        while search_dir != search_dir.parent:
+            if (search_dir / 'pyvenv.cfg').exists():
+                return search_dir
+            search_dir = search_dir.parent
+
+        # FINAL FALLBACK: If all else fails, use sys.prefix.
         return Path(sys.prefix)
 
     def _reset_setup_flag_on_disk(self):
@@ -308,20 +333,54 @@ class ConfigManager:
 
     def _get_paths_for_interpreter(self, python_exe_path: str) -> Optional[Dict[str, str]]:
         """
-            Runs an interpreter in a subprocess to ask for its version and calculates
-            its site-packages path. This is the only reliable way to get paths for an
-            interpreter that isn't the currently running one.
-            """
+        Runs an interpreter in a subprocess to ask for its version and calculates
+        its site-packages path. This is the only reliable way to get paths for an
+        interpreter that isn't the currently running one.
+        """
         try:
-            cmd = [python_exe_path, '-c', "import sys; import json; print(json.dumps({'version': f'{sys.version_info.major}.{sys.version_info.minor}', 'prefix': sys.prefix}))"]
-            result = subprocess.run(cmd, capture_output=True, text=True, check=True, timeout=5)
+            # --- START THE FIX ---
+            # Use the '-I' flag to run the interpreter in ISOLATED MODE.
+            # This prevents the parent process's environment (e.g., PYTHONPATH from Python 3.11)
+            # from contaminating and crashing the subprocess (e.g., Python 3.9).
+            cmd = [
+                python_exe_path,
+                '-I',  # <--- THIS IS THE CRITICAL FIX
+                '-c',
+                "import sys; import json; print(json.dumps({'version': f'{sys.version_info.major}.{sys.version_info.minor}', 'prefix': sys.prefix}))"
+            ]
+            # --- END THE FIX ---
+            
+            result = subprocess.run(cmd, capture_output=True, text=True, check=True, timeout=10)
             interp_info = json.loads(result.stdout)
             version = interp_info['version']
             prefix = Path(interp_info['prefix'])
-            site_packages = prefix / 'lib' / f'python{version}' / 'site-packages'
-            return {'site_packages_path': str(site_packages), 'multiversion_base': str(site_packages / '.omnipkg_versions'), 'python_executable': python_exe_path}
-        except (subprocess.CalledProcessError, FileNotFoundError, json.JSONDecodeError, KeyError) as e:
-            print(f'⚠️  Could not determine paths for interpreter {python_exe_path}: {e}')
+            
+            # Use a more robust way to find site-packages that works on different OSes
+            site_packages_cmd = [
+                python_exe_path,
+                '-I',
+                '-c',
+                'import site; import json; print(json.dumps(site.getsitepackages()))'
+            ]
+            sp_result = subprocess.run(site_packages_cmd, capture_output=True, text=True, check=True, timeout=10)
+            sp_list = json.loads(sp_result.stdout)
+
+            if not sp_list:
+                 raise RuntimeError("Could not determine site-packages location.")
+
+            site_packages = Path(sp_list[0]) # Use the first entry
+
+            return {
+                'site_packages_path': str(site_packages),
+                'multiversion_base': str(site_packages / '.omnipkg_versions'),
+                'python_executable': python_exe_path
+            }
+        except (subprocess.CalledProcessError, FileNotFoundError, json.JSONDecodeError, KeyError, RuntimeError) as e:
+            # Add more debug info to the error message
+            error_details = f"Error: {e}"
+            if isinstance(e, subprocess.CalledProcessError):
+                error_details += f"\nSTDERR:\n{e.stderr}"
+            print(f'⚠️  Could not determine paths for interpreter {python_exe_path}: {error_details}')
             return None
 
     def _align_config_to_interpreter(self, python_exe_path_str: str):
@@ -345,18 +404,27 @@ class ConfigManager:
 
     def _get_venv_root(self) -> Path:
         """
-        Reliably finds the root of the virtual environment.
-        PRIORITY 1: Check for an override environment variable set during relaunch.
-        PRIORITY 2: Search upwards for the pyvenv.cfg file.
+        Reliably finds the root of the virtual environment with a strict priority order.
         """
+        # PRIORITY 1: An override from a relaunch is the absolute source of truth.
         venv_root_override = os.environ.get('OMNIPKG_VENV_ROOT')
         if venv_root_override:
             return Path(venv_root_override)
+
+        # PRIORITY 2: VIRTUAL_ENV is the standard for venv/virtualenv.
+        # This is the critical fix for your Conda vs. venv conflict.
+        virtual_env_path = os.environ.get('VIRTUAL_ENV')
+        if virtual_env_path and Path(virtual_env_path).exists():
+            return Path(virtual_env_path)
+
+        # PRIORITY 3: Upward search for pyvenv.cfg is the next best for standard venvs.
         current_dir = Path(sys.executable).resolve().parent
         while current_dir != current_dir.parent:
             if (current_dir / 'pyvenv.cfg').exists():
                 return current_dir
             current_dir = current_dir.parent
+
+        # PRIORITY 4: Fallback for Conda and other non-standard environments.
         return Path(sys.prefix)
 
     def _setup_native_311_environment(self):
@@ -539,6 +607,8 @@ class ConfigManager:
         # --- END FIX ---
 
         if not registry_path.exists():
+            # Added for debugging: Show exactly where it's looking.
+            print(f"   [DEBUG] Interpreter registry not found at: {registry_path}")
             return None
         try:
             with open(registry_path, 'r') as f:

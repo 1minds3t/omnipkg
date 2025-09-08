@@ -13,6 +13,7 @@ from .core import omnipkg as OmnipkgCore
 from .core import ConfigManager
 from .common_utils import print_header, run_script_in_omnipkg_env, UVFailureDetector
 from .commands.run import execute_run_command # <-- NEW IMPORT
+from .common_utils import sync_context_to_runtime
 
 TESTS_DIR = Path(__file__).parent.parent / 'tests'
 DEMO_DIR = Path(__file__).parent
@@ -286,22 +287,36 @@ def main():
     """Main application entry point."""
     try:
         cm = ConfigManager()
-        pkg_instance = OmnipkgCore(config_manager=cm)
         temp_parser = argparse.ArgumentParser(add_help=False)
         temp_parser.add_argument('--lang', default=None)
+
+        # --- START THE FIX ---
+        # THE CULPRIT was: temp_args, _ = temp_parser.parse_known_args()
+        # This overwrote the i18n function `_` with a list.
+        # THE FIX is to use a different name for the remaining arguments.
         temp_args, remaining_args = temp_parser.parse_known_args()
+        # --- END THE FIX ---
+
         if temp_args.lang:
             user_lang = temp_args.lang
         else:
             user_lang = cm.config.get('language')
+
         if user_lang:
+            # This line will now work because `_` is still the i18n function.
             _.set_language(user_lang)
+
+        pkg_instance = OmnipkgCore(config_manager=cm)
+
         prog_name = Path(sys.argv[0]).name
         if prog_name == '8pkg' or (len(sys.argv) > 0 and '8pkg' in sys.argv[0]):
             parser = create_8pkg_parser()
         else:
             parser = create_parser()
+
+        # The main parser now correctly parses the original full argument list.
         args = parser.parse_args()
+
         if args.command is None:
             parser.print_help()
             print(_('\n👋 Welcome back to omnipkg! Run a command or see --help for details.'))
