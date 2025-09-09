@@ -17,11 +17,11 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
         python-version: ['3.10', '3.11', '3.12']
-    
+
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
-    
+
     - name: Setup Miniconda
       uses: conda-incubator/setup-miniconda@v3
       with:
@@ -29,12 +29,12 @@ jobs:
         python-version: ${{ matrix.python-version }}
         channels: conda-forge,defaults
         channel-priority: strict
-    
+
     - name: Install conda-build and anaconda-client
       shell: bash -l {0}
       run: |
         conda install conda-build anaconda-client -y
-    
+
     - name: Update meta.yaml version and hash
       shell: bash -l {0}
       run: |
@@ -45,16 +45,15 @@ jobs:
           VERSION="${{ github.event.inputs.version }}"
         fi
         
-        # CORRECTED: Use curl for all platforms for consistency.
+        # Use curl for all platforms for consistency.
         echo "Downloading omnipkg version $VERSION..."
         curl -L -o "omnipkg-$VERSION.tar.gz" "https://pypi.org/packages/source/o/omnipkg/omnipkg-$VERSION.tar.gz"
         
-        # CORRECTED: Use Python for a truly cross-platform SHA256 calculation.
+        # Use Python for a truly cross-platform SHA256 calculation.
         echo "Calculating SHA256 hash..."
         SHA256=$(python -c "import hashlib; print(hashlib.sha256(open('omnipkg-$VERSION.tar.gz', 'rb').read()).hexdigest())")
         
         # Update the version and sha256 in meta.yaml (cross-platform sed)
-        # Note: The macOS sed requires an empty string '' after -i
         if [[ "$RUNNER_OS" == "macOS" ]]; then
           sed -i '' "s/{% set version = \".*\" %}/{% set version = \"$VERSION\" %}/" omnipkg/conda-recipe/meta.yaml
           sed -i '' "s/sha256: .*/sha256: $SHA256/" omnipkg/conda-recipe/meta.yaml
@@ -69,17 +68,22 @@ jobs:
         # Show the updated meta.yaml for debugging
         echo "=== Updated meta.yaml ==="
         head -15 omnipkg/conda-recipe/meta.yaml
-    
+
     - name: Build conda package
       shell: bash -l {0}
       run: |
         export PYTHONIOENCODING=UTF-8
         conda build omnipkg/conda-recipe --output-folder ./conda-dist
-    
+
     - name: Upload to Anaconda Cloud
       shell: bash -l {0}
       run: |
-        anaconda -t ${{ secrets.ANACONDA_TOKEN }} upload ./conda-dist/**/*.tar.bz2 --force
+        # Upload both .conda and .tar.bz2 files (conda-build may produce either format)
+        # Use find to locate the actual files and upload them
+        find ./conda-dist -name "*.conda" -o -name "*.tar.bz2" | while read file; do
+          echo "Uploading $file"
+          anaconda -t ${{ secrets.ANACONDA_TOKEN }} upload "$file" --force
+        done
       env:
         ANACONDA_TOKEN: ${{ secrets.ANACONDA_TOKEN }}
 
@@ -94,23 +98,23 @@ jobs:
         repository: conda-forge/omnipkg-feedstock
         token: ${{ secrets.FEEDSTOCK_TOKEN }}
         path: feedstock
-    
+
     - name: Setup Python
       uses: actions/setup-python@v4
       with:
         python-version: '3.11'
-    
+
     - name: Install dependencies
       run: |
         pip install pyyaml requests
-    
+
     - name: Update feedstock
       run: |
         cd feedstock
         VERSION="${{ github.event.release.tag_name }}"
         VERSION="${VERSION#v}"
         
-        # CORRECTED: Use curl and Python for consistency and reliability.
+        # Use curl and Python for consistency and reliability.
         echo "Downloading source to get SHA256..."
         curl -L -o "omnipkg-$VERSION.tar.gz" "https://pypi.org/packages/source/o/omnipkg/omnipkg-$VERSION.tar.gz"
         SHA256=$(python -c "import hashlib; print(hashlib.sha256(open('omnipkg-$VERSION.tar.gz', 'rb').read()).hexdigest())")
