@@ -31,6 +31,19 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Setup Redis (macOS/Windows fallback)
+        shell: bash
+        run: |
+          if [[ "${{ matrix.os }}" == "macos-latest" ]]; then
+            brew install redis
+            brew services start redis
+          elif [[ "${{ matrix.os }}" == "windows-latest" ]]; then
+            # Download and install Redis for Windows
+            curl -L -o redis.zip https://github.com/tporadowski/redis/releases/download/v5.0.14.1/Redis-x64-5.0.14.1.zip
+            unzip redis.zip -d redis
+            cd redis && ./redis-server.exe --service-install --service-start
+          fi
+
       - name: Setup Miniconda
         uses: conda-incubator/setup-miniconda@v3
         with:
