@@ -31,19 +31,6 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Redis (macOS/Windows fallback)
-        shell: bash
-        run: |
-          if [[ "${{ matrix.os }}" == "macos-latest" ]]; then
-            brew install redis
-            brew services start redis
-          elif [[ "${{ matrix.os }}" == "windows-latest" ]]; then
-            # Download and install Redis for Windows
-            curl -L -o redis.zip https://github.com/tporadowski/redis/releases/download/v5.0.14.1/Redis-x64-5.0.14.1.zip
-            unzip redis.zip -d redis
-            cd redis && ./redis-server.exe --service-install --service-start
-          fi
-
       - name: Setup Miniconda
         uses: conda-incubator/setup-miniconda@v3
         with:
@@ -109,12 +96,6 @@ jobs:
         # Point to the correct Redis host for the test phase
         run: |
           export REDIS_HOST=localhost
-          export REDIS_PORT=6379
-          # Verify Redis is accessible before building
-          echo "Testing Redis connection..."
-          if [[ "${{ matrix.os }}" != "windows-latest" ]]; then
-            redis-cli ping || echo "Redis ping failed, but continuing..."
-          fi
           conda build omnipkg/conda-recipe --output-folder ./conda-dist
 
       - name: Upload to Anaconda Cloud
