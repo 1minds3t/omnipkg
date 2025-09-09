@@ -284,8 +284,21 @@ def print_header(title):
     print('=' * 60)
 
 def main():
-    """Main application entry point."""
+    """Main application entry point with pre-flight version check."""
     try:
+        # --- START THE FINAL, CRITICAL FIX ---
+        # Perform a "pre-flight check" for the version flag.
+        # This is the ONLY way to prevent the full application from initializing
+        # in environments where it's not needed (like a simple test).
+        if '-v' in sys.argv or '--version' in sys.argv:
+            # We call get_version() directly. No ConfigManager, no OmnipkgCore, no Redis.
+            prog_name = Path(sys.argv[0]).name
+            if prog_name == '8pkg' or (len(sys.argv) > 0 and '8pkg' in sys.argv[0]):
+                print(f"8pkg {get_version()}")
+            else:
+                print(f"omnipkg {get_version()}")
+            return 0 # Exit successfully immediately.
+        # --- END THE FINAL, CRITICAL FIX ---
         cm = ConfigManager()
         temp_parser = argparse.ArgumentParser(add_help=False)
         temp_parser.add_argument('--lang', default=None)
