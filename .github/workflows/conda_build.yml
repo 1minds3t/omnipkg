@@ -73,6 +73,7 @@ jobs:
     - name: Build conda package
       shell: bash -l {0}
       run: |
+        export PYTHONIOENCODING=UTF-8
         conda build omnipkg/conda-recipe --output-folder ./conda-dist
     
     - name: Upload to Anaconda Cloud
