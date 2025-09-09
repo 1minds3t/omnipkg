@@ -1,61 +1,87 @@
-{% set name = "omnipkg" %}
-{% set version = "1.3.8" %} # This will be updated by your CI script
+name: Build and Upload Conda Package
 
-package:
-  name: {{ name|lower }}
-  version: {{ version }}
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Package version to build'
+        required: true
+        type: string
 
-source:
-  url: https://pypi.org/packages/source/{{ name[0] }}/{{ name }}/omnipkg-{{ version }}.tar.gz
-  sha256: 4d24378dbe7845cd60e704383bc9a707ac1c250cea1302a68bcccd8a81dce028 # This will be updated by your CI script
+jobs:
+  build-and-upload:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python-version: ['3.10', '3.11', '3.12']
 
-build:
-  number: 0
-  script: "{{ PYTHON }} -m pip install . --no-deps --ignore-installed -vv"
-  entry_points:
-    - omnipkg = omnipkg.cli:main
-    - 8pkg = omnipkg.cli:main # Added your 8pkg alias for completeness
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-requirements:
-  host:
-    - python
-    - pip
-    - setuptools
-  run:
-    - python
-    - redis-py >=5.0
-    - packaging >=23.0
-    - requests >=2.20
-    - filelock >=3.9
-    - tomli # No version needed, it's only for python < 3.11
-    - tqdm
-    - python-magic # [not win]
-    - libmagic     # [not win]
-    - safety
-    - aiohttp
-    - uv
+      - name: Setup Miniconda
+        uses: conda-incubator/setup-miniconda@v3
+        with:
+          auto-update-conda: true
+          python-version: ${{ matrix.python-version }}
+          channels: conda-forge,defaults
+          channel-priority: strict
 
-# --- THIS IS THE FINAL, PERFECT TEST SECTION ---
-test:
-  imports:
-    - omnipkg
-  commands:
-    # This command is guaranteed to work without Redis.
-    # It proves the package is installed and the entry point works.
-    - omnipkg --version
+      - name: Install conda-build and anaconda-client
+        shell: bash -l {0}
+        run: conda install conda-build anaconda-client -y
 
-about:
-  home: https://github.com/1minds3t/omnipkg
-  license: AGPL-3.0-only OR LicenseRef-Proprietary
-  license_family: AGPL
-  license_file:
-    - LICENSE
-    - COMMERCIAL_LICENSE.md
-  summary: 'The Ultimate Python Dependency Resolver. One environment. Infinite packages. Zero conflicts.'
-  description: |
-    omnipkg simplifies Python dependency management by enabling mid-script version switching and conflict isolation.
-    Requires a running Redis server (v4.0.0+), which must be installed and started separately by the user.
+      - name: Wait for PyPI, Download Source, and Update meta.yaml
+        shell: bash -l {0}
+        run: |
+          if [ "${{ github.event_name }}" == "release" ]; then
+            VERSION="${{ github.event.release.tag_name }}"
+            VERSION="${VERSION#v}"
+          else
+            VERSION="${{ github.event.inputs.version }}"
+          fi
 
-extra:
-  recipe-maintainers:
-    - 1minds3t
+          # --- RESILIENT RETRY LOOP ---
+          max_attempts=15
+          attempt=1
+          url="https://pypi.org/packages/source/o/omnipkg/omnipkg-$VERSION.tar.gz"
+          
+          echo "🔍 Waiting for PyPI package to be available at: $url"
+          sleep 45 # Initial wait for PyPI to process the new release
+
+          while [ $attempt -le $max_attempts ]; do
+            echo "🚀 Attempt $attempt of $max_attempts..."
+            if curl -L --fail --connect-timeout 20 -o "omnipkg-$VERSION.tar.gz" "$url"; then
+              echo "✅ Successfully downloaded package!"
+              break
+            fi
+            if [ $attempt -eq $max_attempts ]; then echo "💥 FAILED to download!"; exit 1; fi
+            echo "⚠️ PyPI not ready. Retrying in 30s..."
+            sleep 30; attempt=$((attempt + 1));
+          done
+          
+          SHA256=$(python -c "import hashlib; print(hashlib.sha256(open('omnipkg-$VERSION.tar.gz', 'rb').read()).hexdigest())")
+          
+          echo "🔧 Updating meta.yaml..."
+          # Use a temp file for sed to ensure cross-platform compatibility
+          sed "s/{% set version = \".*\" %}/{% set version = \"$VERSION\" %}/" omnipkg/conda-recipe/meta.yaml > meta.tmp && mv meta.tmp omnipkg/conda-recipe/meta.yaml
+          sed "s/sha256: .*/sha256: $SHA256/" omnipkg/conda-recipe/meta.yaml > meta.tmp && mv meta.tmp omnipkg/conda-recipe/meta.yaml
+          
+          echo "✅ meta.yaml updated for v$VERSION"
+          echo "=== Updated meta.yaml snippet ==="
+          head -n 5 omnipkg/conda-recipe/meta.yaml
+
+      - name: Build conda package
+        shell: bash -l {0}
+        run: conda build omnipkg/conda-recipe --output-folder ./conda-dist
+
+      - name: Upload to Anaconda Cloud
+        shell: bash -l {0}
+        if: github.event_name == 'release'
+        run: |
+          anaconda -t ${{ secrets.ANACONDA_TOKEN }} upload conda-dist/**/*.tar.bz2 --force
+        env:
+          ANACONDA_TOKEN: ${{ secrets.ANACONDA_TOKEN }}
