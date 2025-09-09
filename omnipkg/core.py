@@ -1672,22 +1672,50 @@ class BubbleIsolationManager:
     def _is_binary(self, file_path: Path) -> bool:
         """
         Robustly checks if a file is a binary executable, excluding C extensions.
-        Gracefully falls back to a basic check if 'python-magic' is not installed.
+        Uses multiple detection strategies with intelligent fallbacks.
         """
-        if file_path.suffix in {'.so', '.pyd'}:
+        # Skip C extensions - they're not the binaries we're looking for
+        if file_path.suffix in {'.so', '.pyd', '.dylib'}:
             return False
-        if not HAS_MAGIC:
-            if not getattr(self, '_magic_warning_shown', False):
-                print(_("⚠️  Warning: 'python-magic' not installed. Using basic binary detection."))
-                self._magic_warning_shown = True
-            return file_path.suffix in {'.dll', '.exe'}
+        
+        # First, try python-magic if available (most accurate)
+        if HAS_MAGIC:
+            try:
+                mime = magic.Magic(mime=True)
+                file_type = mime.from_file(str(file_path))
+                executable_types = {
+                    'application/x-executable', 
+                    'application/x-sharedlib', 
+                    'application/x-pie-executable',
+                    'application/x-mach-binary',  # macOS binaries
+                    'application/x-ms-dos-executable'  # Windows PE
+                }
+                return any(t in file_type for t in executable_types) or file_path.suffix in {'.dll', '.exe'}
+            except Exception:
+                pass  # Fall through to manual detection
+        
+        # Fallback: Multi-strategy binary detection without magic
+        if not getattr(self, '_magic_warning_shown', False):
+            print("⚠️  Warning: 'python-magic' not installed. Using enhanced binary detection.")
+            self._magic_warning_shown = True
+        
+        # Strategy 1: Check file permissions (Unix-like systems)
         try:
-            mime = magic.Magic(mime=True)
-            file_type = mime.from_file(str(file_path))
-            executable_types = {'application/x-executable', 'application/x-sharedlib', 'application/x-pie-executable'}
-            return any((t in file_type for t in executable_types)) or file_path.suffix in {'.dll', '.exe'}
-        except Exception:
-            return file_path.suffix in {'.dll', '.exe'}
+            if file_path.stat().st_mode & 0o111:  # Has execute permission
+                # Strategy 2: Read file header to identify binary formats
+                if file_path.is_file() and file_path.stat().st_size > 0:
+                    result = self._detect_binary_by_header(file_path)
+                    if result:
+                        return True
+        except (OSError, PermissionError):
+            pass
+        
+        # Strategy 3: Windows executables by extension
+        if file_path.suffix.lower() in {'.exe', '.dll', '.bat', '.cmd', '.ps1'}:
+            return True
+        
+        # Strategy 4: Heuristic based on common executable names
+        return self._is_likely_executable_name(file_path)
 
     def _create_deduplicated_bubble(self, installed_tree: Dict, bubble_path: Path, temp_install_path: Path) -> bool:
         """
