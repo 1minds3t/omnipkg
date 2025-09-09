@@ -17,136 +17,142 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
         python-version: ['3.10', '3.11', '3.12']
-    
+
+    # --- THIS IS A CRITICAL FIX ---
+    # This block tells GitHub to start a Redis container alongside your job.
+    # The Conda build's TEST phase can now connect to this service.
     services:
       redis:
         image: redis
         ports:
           - 6379:6379
-    
+
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-    
-    - name: Setup Miniconda
-      uses: conda-incubator/setup-miniconda@v3
-      with:
-        auto-update-conda: true
-        python-version: ${{ matrix.python-version }}
-        channels: conda-forge,defaults
-        channel-priority: strict
-    
-    - name: Install conda-build and anaconda-client
-      shell: bash -l {0}
-      run: |
-        conda install conda-build anaconda-client -y
-        
-        if [ "${{ github.event_name }}" == "release" ]; then
-          VERSION="${{ github.event.release.tag_name }}"
-          VERSION="${VERSION#v}"
-        else
-          VERSION="${{ github.event.inputs.version }}"
-        fi
-        
-        # --- WAIT FOR PYPI THEN DOWNLOAD ---
-        max_attempts=10
-        attempt=1
-        url="https://pypi.org/packages/source/o/omnipkg/omnipkg-$VERSION.tar.gz"
-        
-        echo "Waiting for PyPI package to be available..."
-        sleep 60  # Initial wait
-        
-        while [ $attempt -le $max_attempts ]; do
-          curl -L --fail -o "omnipkg-$VERSION.tar.gz" "$url"
-          
-          if [ $? -eq 0 ]; then
-            echo "✅ Download successful on attempt $attempt."
-            break
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Miniconda
+        uses: conda-incubator/setup-miniconda@v3
+        with:
+          auto-update-conda: true
+          python-version: ${{ matrix.python-version }}
+          channels: conda-forge,defaults
+          channel-priority: strict
+
+      - name: Install conda-build and anaconda-client
+        shell: bash -l {0}
+        run: conda install conda-build anaconda-client -y
+
+      - name: Wait for PyPI, Download Source, and Update meta.yaml
+        shell: bash -l {0}
+        run: |
+          if [ "${{ github.event_name }}" == "release" ]; then
+            VERSION="${{ github.event.release.tag_name }}"
+            VERSION="${VERSION#v}"
           else
-            echo "⚠️ Attempt $attempt failed. Retrying in 30 seconds..."
+            VERSION="${{ github.event.inputs.version }}"
+          fi
+
+          # --- RESILIENT RETRY LOOP ---
+          max_attempts=15
+          attempt=1
+          url="https://pypi.org/packages/source/o/omnipkg/omnipkg-$VERSION.tar.gz"
+          
+          echo "🔍 Waiting for PyPI package to be available at: $url"
+          sleep 45 # Initial wait for PyPI to process the new release
+
+          while [ $attempt -le $max_attempts ]; do
+            echo "🚀 Attempt $attempt of $max_attempts..."
+            # Use curl with --fail to get a non-zero exit on 404
+            if curl -L --fail --connect-timeout 20 -o "omnipkg-$VERSION.tar.gz" "$url"; then
+              echo "✅ Successfully downloaded package!"
+              break
+            fi
+            
+            if [ $attempt -eq $max_attempts ]; then
+              echo "💥 FAILED: Package not available on PyPI after $max_attempts attempts."
+              exit 1
+            fi
+
+            echo "⚠️ PyPI not ready yet. Retrying in 30 seconds..."
             sleep 30
             attempt=$((attempt + 1))
-          fi
-        done
-        
-        if [ $attempt -gt $max_attempts ]; then
-          echo "❌ Failed to download source after $max_attempts attempts. Aborting."
-          exit 1
-        fi
-        
-        # Calculate SHA256
-        SHA256=$(python -c "import hashlib; print(hashlib.sha256(open('omnipkg-$VERSION.tar.gz', 'rb').read()).hexdigest())")
-        
-        # Update meta.yaml
-        if [[ "$RUNNER_OS" == "macOS" ]]; then
-          sed -i '' "s/{% set version = \".*\" %}/{% set version = \"$VERSION\" %}/" omnipkg/conda-recipe/meta.yaml
-          sed -i '' "s/sha256: .*/sha256: $SHA256/" omnipkg/conda-recipe/meta.yaml
-        else
-          sed -i "s/{% set version = \".*\" %}/{% set version = \"$VERSION\" %}/" omnipkg/conda-recipe/meta.yaml
-          sed -i "s/sha256: .*/sha256: $SHA256/" omnipkg/conda-recipe/meta.yaml
-        fi
-        
-        echo "Updated version to $VERSION with SHA256: $SHA256"
-        echo "VERSION=$VERSION" >> $GITHUB_ENV
-        
-        # Clean up
-        rm "omnipkg-$VERSION.tar.gz"
-        
-        # Show updated meta.yaml
-        echo "=== Updated meta.yaml ==="
-        head -15 omnipkg/conda-recipe/meta.yaml
-    
-    - name: Build conda package
-      shell: bash -l {0}
-      run: |
-        conda build omnipkg/conda-recipe --output-folder ./conda-dist
-    
-    - name: Upload to Anaconda Cloud
-      shell: bash -l {0}
-      run: |
-        anaconda -t ${{ secrets.ANACONDA_TOKEN }} upload ./conda-dist/**/*.tar.bz2 --force
-      env:
-        ANACONDA_TOKEN: ${{ secrets.ANACONDA_TOKEN }}
+          done
+          
+          echo "🔐 Calculating SHA256 hash..."
+          SHA256=$(python -c "import hashlib; print(hashlib.sha256(open('omnipkg-$VERSION.tar.gz', 'rb').read()).hexdigest())")
+          
+          echo "🔧 Updating meta.yaml..."
+          # Use more robust sed patterns
+          sed -i.bak "s/{% set version = \".*\" %}/{% set version = \"$VERSION\" %}/" omnipkg/conda-recipe/meta.yaml
+          sed -i.bak "s/sha256: .*/sha256: $SHA256/" omnipkg/conda-recipe/meta.yaml
+          
+          echo "✅ Updated version to $VERSION with SHA256: $SHA256"
+          echo "=== Updated meta.yaml snippet ==="
+          head -n 5 omnipkg/conda-recipe/meta.yaml
 
+      - name: Build conda package
+        shell: bash -l {0}
+        # Point to the correct Redis host for the test phase
+        run: |
+          export REDIS_HOST=localhost
+          conda build omnipkg/conda-recipe --output-folder ./conda-dist
+
+      - name: Upload to Anaconda Cloud
+        shell: bash -l {0}
+        run: |
+          # Use a robust glob pattern that works on all OSes
+          anaconda -t ${{ secrets.ANACONDA_TOKEN }} upload conda-dist/**/*.tar.bz2 --force
+        env:
+          ANACONDA_TOKEN: ${{ secrets.ANACONDA_TOKEN }}
+
+  # --- THIS IS THE SECOND JOB, CORRECTLY PLACED ---
   update-feedstock:
     runs-on: ubuntu-latest
     if: github.event_name == 'release'
+    needs: build-and-upload # Optional: wait for the main build to succeed
     steps:
-    - name: Checkout feedstock
-      uses: actions/checkout@v4
-      with:
-        repository: conda-forge/omnipkg-feedstock
-        token: ${{ secrets.FEEDSTOCK_TOKEN }}
-        path: feedstock
-    
-    - name: Setup Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.11'
-    
-    - name: Install dependencies
-      run: |
-        pip install pyyaml requests
-    
-    - name: Update feedstock
-      run: |
-        cd feedstock
-        VERSION="${{ github.event.release.tag_name }}"
-        VERSION="${VERSION#v}"
-        
-        # Wait and download
-        echo "Waiting for PyPI..."
-        sleep 60
-        curl -L -o "omnipkg-$VERSION.tar.gz" "https://pypi.org/packages/source/o/omnipkg/omnipkg-$VERSION.tar.gz"
-        SHA256=$(python -c "import hashlib; print(hashlib.sha256(open('omnipkg-$VERSION.tar.gz', 'rb').read()).hexdigest())")
-        
-        # Update recipe/meta.yaml
-        sed -i "s/{% set version = \".*\" %}/{% set version = \"$VERSION\" %}/" recipe/meta.yaml
-        sed -i "s/sha256: .*/sha256: $SHA256/" recipe/meta.yaml
-        
-        # Commit and push
-        git config --local user.email "action@github.com"
-        git config --local user.name "GitHub Action"
-        git add recipe/meta.yaml
-        git commit -m "Update to version $VERSION" || exit 0
-        git push
+      - name: Checkout feedstock
+        uses: actions/checkout@v4
+        with:
+          repository: conda-forge/omnipkg-feedstock
+          token: ${{ secrets.FEEDSTOCK_TOKEN }}
+          path: feedstock
+
+      - name: Update feedstock recipe
+        shell: bash -l {0}
+        run: |
+          cd feedstock
+          VERSION="${{ github.event.release.tag_name }}"
+          VERSION="${VERSION#v}"
+
+          # --- USE THE SAME RESILIENT RETRY LOOP ---
+          max_attempts=10
+          attempt=1
+          url="https://pypi.org/packages/source/o/omnipkg/omnipkg-$VERSION.tar.gz"
+          echo "🔍 Waiting for PyPI package for feedstock: $url"
+          sleep 60
+          while [ $attempt -le $max_attempts ]; do
+            if curl -L --fail -o "omnipkg-$VERSION.tar.gz" "$url"; then break; fi
+            if [ $attempt -eq $max_attempts ]; then exit 1; fi
+            echo "Feedstock: PyPI not ready. Retrying in 30 seconds..."
+            sleep 30; attempt=$((attempt + 1));
+          done
+          
+          SHA256=$(python -c "import hashlib; print(hashlib.sha256(open('omnipkg-$VERSION.tar.gz', 'rb').read()).hexdigest())")
+
+          # Update recipe/meta.yaml
+          sed -i "s/{% set version = \".*\" %}/{% set version = \"$VERSION\" %}/" recipe/meta.yaml
+          sed -i "s/sha256: .*/sha256: $SHA256/" recipe/meta.yaml
+
+          # Commit and push
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add recipe/meta.yaml
+          # Only commit if there are actual changes
+          if ! git diff --staged --quiet; then
+            git commit -m "Update to version $VERSION"
+            git push
+          else
+            echo "No changes to feedstock recipe."
+          fi
