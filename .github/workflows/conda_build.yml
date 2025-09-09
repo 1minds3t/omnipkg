@@ -11,8 +11,7 @@ on:
         type: string
 
 jobs:
-  # JOB 1: BUILD THE PACKAGES ON ALL PLATFORMS
-  build:
+  build-and-upload:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -31,11 +30,11 @@ jobs:
           channels: conda-forge,defaults
           channel-priority: strict
 
-      - name: Install conda-build
+      - name: Install conda-build and anaconda-client
         shell: bash -l {0}
-        run: conda install conda-build -y
+        run: conda install conda-build anaconda-client -y
 
-      - name: Update meta.yaml with Resilient Retry
+      - name: Wait for PyPI, Download Source, and Update meta.yaml
         shell: bash -l {0}
         run: |
           if [ "${{ github.event_name }}" == "release" ]; then
@@ -44,18 +43,19 @@ jobs:
           else
             VERSION="${{ github.event.inputs.version }}"
           fi
-          
-          # RESILIENT RETRY LOOP
+
+          # --- RESILIENT RETRY LOOP ---
           max_attempts=15
           attempt=1
           url="https://pypi.org/packages/source/o/omnipkg/omnipkg-$VERSION.tar.gz"
-          echo "🔍 Waiting for PyPI package at: $url"
-          sleep 45
+          
+          echo "🔍 Waiting for PyPI package to be available at: $url"
+          sleep 45 # Initial wait for PyPI to process the new release
 
           while [ $attempt -le $max_attempts ]; do
-            echo "🚀 Attempt $attempt..."
-            if curl -L --fail -o "omnipkg-$VERSION.tar.gz" "$url"; then
-              echo "✅ Download successful!"
+            echo "🚀 Attempt $attempt of $max_attempts..."
+            if curl -L --fail --connect-timeout 20 -o "omnipkg-$VERSION.tar.gz" "$url"; then
+              echo "✅ Successfully downloaded package!"
               break
             fi
             if [ $attempt -eq $max_attempts ]; then echo "💥 FAILED to download!"; exit 1; fi
@@ -65,69 +65,23 @@ jobs:
           
           SHA256=$(python -c "import hashlib; print(hashlib.sha256(open('omnipkg-$VERSION.tar.gz', 'rb').read()).hexdigest())")
           
+          echo "🔧 Updating meta.yaml..."
           # Use a temp file for sed to ensure cross-platform compatibility
           sed "s/{% set version = \".*\" %}/{% set version = \"$VERSION\" %}/" omnipkg/conda-recipe/meta.yaml > meta.tmp && mv meta.tmp omnipkg/conda-recipe/meta.yaml
           sed "s/sha256: .*/sha256: $SHA256/" omnipkg/conda-recipe/meta.yaml > meta.tmp && mv meta.tmp omnipkg/conda-recipe/meta.yaml
+          
           echo "✅ meta.yaml updated for v$VERSION"
+          echo "=== Updated meta.yaml snippet ==="
+          head -n 5 omnipkg/conda-recipe/meta.yaml
 
-      - name: Build conda package (NO TESTS)
+      - name: Build conda package
         shell: bash -l {0}
-        run: |
-          # The --no-test flag is the key. We build only.
-          conda build --no-test omnipkg/conda-recipe --output-folder ./conda-dist
-
-      - name: Upload Build Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: conda-packages-${{ matrix.os }}-${{ matrix.python-version }}
-          path: ./conda-dist
-
-  # JOB 2: TEST (ON LINUX ONLY) AND UPLOAD ALL PACKAGES
-  test-and-upload:
-    runs-on: ubuntu-latest
-    needs: build # This job will only start after all 'build' jobs are successful
-    
-    # We can now safely use the Redis service because this job only runs on Linux
-    services:
-      redis:
-        image: redis
-        ports:
-          - 6379:6379
-
-    steps:
-      - name: Download all built packages
-        uses: actions/download-artifact@v4
-        with:
-          path: ./conda-dist
-          pattern: conda-packages-*
-          merge-multiple: true
-
-      - name: Setup Miniconda for Testing
-        uses: conda-incubator/setup-miniconda@v3
-        with:
-          auto-update-conda: true
-          python-version: '3.11' # Use a consistent Python for the test runner
-          channels: conda-forge,defaults
-          channel-priority: strict
-
-      - name: Install anaconda-client
-        shell: bash -l {0}
-        run: conda install anaconda-client -y
-      
-      - name: Run Conda Package Tests
-        shell: bash -l {0}
-        run: |
-          echo "Testing all downloaded packages..."
-          # Tell conda to use the Redis service for the tests
-          export REDIS_HOST=localhost
-          conda install --use-local ./conda-dist/**/*.tar.bz2
-          conda test --local ./conda-dist/**/*.tar.bz2
+        run: conda build omnipkg/conda-recipe --output-folder ./conda-dist
 
       - name: Upload to Anaconda Cloud
         shell: bash -l {0}
-        if: github.event_name == 'release' # Only upload on official releases
+        if: github.event_name == 'release'
         run: |
-          echo "Uploading all packages to Anaconda..."
-          anaconda -t ${{ secrets.ANACONDA_TOKEN }} upload ./conda-dist/**/*.tar.bz2 --force
+          anaconda -t ${{ secrets.ANACONDA_TOKEN }} upload conda-dist/**/*.tar.bz2 --force
         env:
           ANACONDA_TOKEN: ${{ secrets.ANACONDA_TOKEN }}
