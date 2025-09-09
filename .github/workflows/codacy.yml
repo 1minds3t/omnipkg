@@ -1,4 +1,4 @@
-name: Codacy Security Scan
+name: Codacy Security & Style Scan
 
 on:
   push:
@@ -12,31 +12,51 @@ permissions:
   contents: read
 
 jobs:
-  codacy-security-scan:
+  codacy-scan: # Renamed the job for clarity
     permissions:
       contents: read
-      security-events: write
+      security-events: write # This is required for uploading results
       actions: read
-    name: Codacy Security Scan
+    name: Codacy Scan
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Run Codacy Analysis CLI
+      # --- STEP 1: RUN ONLY THE SECURITY TOOLS (e.g., Bandit) ---
+      - name: Run Codacy Security Analysis
         uses: codacy/codacy-analysis-cli-action@v4
-        env:
-          # This environment variable forces Java to use UTF-8 file encoding
-          JAVA_TOOL_OPTIONS: "-Dfile.encoding=UTF-8"
         with:
+          # This is the magic: Tell Codacy to ONLY run tools in the "Security" category
+          tool: bandit # You can specify multiple security tools here if needed
           project-token: ${{ secrets.CODACY_PROJECT_TOKEN }}
           verbose: true
-          output: results.sarif
+          # Give the output file a unique name
+          output: results-security.sarif
           format: sarif
           gh-code-scanning-compat: true
           max-allowed-issues: 2147483647
 
-      - name: Upload SARIF results file
+      # --- STEP 2: RUN ONLY THE CODE STYLE TOOLS (e.g., Pylint) ---
+      - name: Run Codacy Code Style Analysis
+        uses: codacy/codacy-analysis-cli-action@v4
+        with:
+          # Now, ONLY run tools in the "Code Style" category
+          tool: pylint # You can specify multiple style tools here if needed
+          project-token: ${{ secrets.CODACY_PROJECT_TOKEN }}
+          verbose: true
+          # Give this output file its own unique name
+          output: results-style.sarif
+          format: sarif
+          gh-code-scanning-compat: true
+          max-allowed-issues: 2147483647
+
+      # --- STEP 3: UPLOAD ALL THE SEPARATE SARIF FILES AT ONCE ---
+      - name: Upload SARIF results to GitHub
         uses: github/codeql-action/upload-sarif@v3
         with:
-          sarif_file: results.sarif
+          # The uploader is smart enough to handle multiple files.
+          # It will create separate entries in the "Security" tab for each one.
+          sarif_file: |
+            results-security.sarif
+            results-style.sarif
