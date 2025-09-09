@@ -32,58 +32,95 @@ jobs:
     
     - name: Install conda-build and anaconda-client
       shell: bash -l {0}
-      run: conda install conda-build anaconda-client -y
+      run: |
+        conda install conda-build anaconda-client -y
     
-    - name: Wait for PyPI, Download Source, and Update meta.yaml
+    - name: Update meta.yaml version and hash
       shell: bash -l {0}
       run: |
         if [ "${{ github.event_name }}" == "release" ]; then
           VERSION="${{ github.event.release.tag_name }}"
-          VERSION="${VERSION#v}"
+          VERSION="${VERSION#v}"  # Remove 'v' prefix if present
         else
           VERSION="${{ github.event.inputs.version }}"
         fi
         
-        # --- RESILIENT RETRY LOOP ---
-        max_attempts=15
-        attempt=1
-        url="https://pypi.org/packages/source/o/omnipkg/omnipkg-$VERSION.tar.gz"
-        echo "🔍 Waiting for PyPI package to be available at: $url"
-        sleep 45 # Initial wait for PyPI to process the new release
+        # CORRECTED: Use curl for all platforms for consistency.
+        echo "Downloading omnipkg version $VERSION..."
+        curl -L -o "omnipkg-$VERSION.tar.gz" "https://pypi.org/packages/source/o/omnipkg/omnipkg-$VERSION.tar.gz"
         
-        while [ $attempt -le $max_attempts ]; do
-          echo "🚀 Attempt $attempt of $max_attempts..."
-          if curl -L --fail --connect-timeout 20 -o "omnipkg-$VERSION.tar.gz" "$url"; then
-            echo "✅ Successfully downloaded package!"
-            break
-          fi
-          if [ $attempt -eq $max_attempts ]; then echo "💥 FAILED to download!"; exit 1; fi
-          echo "⚠️ PyPI not ready. Retrying in 30s..."
-          sleep 30; attempt=$((attempt + 1));
-        done
-        
+        # CORRECTED: Use Python for a truly cross-platform SHA256 calculation.
+        echo "Calculating SHA256 hash..."
         SHA256=$(python -c "import hashlib; print(hashlib.sha256(open('omnipkg-$VERSION.tar.gz', 'rb').read()).hexdigest())")
         
-        echo "🔧 Updating meta.yaml..."
-        # Use a temp file for sed to ensure cross-platform compatibility
-        sed "s/{% set version = \".*\" %}/{% set version = \"$VERSION\" %}/" omnipkg/conda-recipe/meta.yaml > meta.tmp && mv meta.tmp omnipkg/conda-recipe/meta.yaml
-        sed "s/sha256: .*/sha256: $SHA256/" omnipkg/conda-recipe/meta.yaml > meta.tmp && mv meta.tmp omnipkg/conda-recipe/meta.yaml
+        # Update the version and sha256 in meta.yaml (cross-platform sed)
+        # Note: The macOS sed requires an empty string '' after -i
+        if [[ "$RUNNER_OS" == "macOS" ]]; then
+          sed -i '' "s/{% set version = \".*\" %}/{% set version = \"$VERSION\" %}/" omnipkg/conda-recipe/meta.yaml
+          sed -i '' "s/sha256: .*/sha256: $SHA256/" omnipkg/conda-recipe/meta.yaml
+        else
+          sed -i "s/{% set version = \".*\" %}/{% set version = \"$VERSION\" %}/" omnipkg/conda-recipe/meta.yaml
+          sed -i "s/sha256: .*/sha256: $SHA256/" omnipkg/conda-recipe/meta.yaml
+        fi
         
-        # Fix the test command to avoid Redis dependency
-        sed "s/omnipkg --help/omnipkg --version/" omnipkg/conda-recipe/meta.yaml > meta.tmp && mv meta.tmp omnipkg/conda-recipe/meta.yaml
+        echo "Updated version to $VERSION with SHA256: $SHA256"
+        echo "VERSION=$VERSION" >> $GITHUB_ENV
         
-        echo "✅ meta.yaml updated for v$VERSION"
-        echo "=== Updated meta.yaml snippet ==="
-        head -n 5 omnipkg/conda-recipe/meta.yaml
+        # Show the updated meta.yaml for debugging
+        echo "=== Updated meta.yaml ==="
+        head -15 omnipkg/conda-recipe/meta.yaml
     
     - name: Build conda package
       shell: bash -l {0}
-      run: conda build omnipkg/conda-recipe --output-folder ./conda-dist
+      run: |
+        conda build omnipkg/conda-recipe --output-folder ./conda-dist
     
     - name: Upload to Anaconda Cloud
       shell: bash -l {0}
-      if: github.event_name == 'release'
       run: |
-        anaconda -t ${{ secrets.ANACONDA_TOKEN }} upload conda-dist/**/*.tar.bz2 --force
+        anaconda -t ${{ secrets.ANACONDA_TOKEN }} upload ./conda-dist/**/*.tar.bz2 --force
       env:
         ANACONDA_TOKEN: ${{ secrets.ANACONDA_TOKEN }}
+
+  # Alternative job for conda-forge feedstock update
+  update-feedstock:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'release'
+    steps:
+    - name: Checkout feedstock
+      uses: actions/checkout@v4
+      with:
+        repository: conda-forge/omnipkg-feedstock
+        token: ${{ secrets.FEEDSTOCK_TOKEN }}
+        path: feedstock
+    
+    - name: Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    
+    - name: Install dependencies
+      run: |
+        pip install pyyaml requests
+    
+    - name: Update feedstock
+      run: |
+        cd feedstock
+        VERSION="${{ github.event.release.tag_name }}"
+        VERSION="${VERSION#v}"
+        
+        # CORRECTED: Use curl and Python for consistency and reliability.
+        echo "Downloading source to get SHA256..."
+        curl -L -o "omnipkg-$VERSION.tar.gz" "https://pypi.org/packages/source/o/omnipkg/omnipkg-$VERSION.tar.gz"
+        SHA256=$(python -c "import hashlib; print(hashlib.sha256(open('omnipkg-$VERSION.tar.gz', 'rb').read()).hexdigest())")
+        
+        # Update recipe/meta.yaml
+        sed -i "s/{% set version = \".*\" %}/{% set version = \"$VERSION\" %}/" recipe/meta.yaml
+        sed -i "s/sha256: .*/sha256: $SHA256/" recipe/meta.yaml
+        
+        # Commit and push
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        git add recipe/meta.yaml
+        git commit -m "Update to version $VERSION" || exit 0
+        git push
