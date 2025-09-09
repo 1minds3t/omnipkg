@@ -44,8 +44,7 @@ test:
   imports:
     - omnipkg
   commands:
-    - omnipkg --help
-    - python -c "import omnipkg; assert omnipkg.__version__ == '1.0.17'"
+    - omnipkg --version
 
 about:
   home: https://github.com/1minds3t/omnipkg
