@@ -34,7 +34,6 @@ jobs:
       shell: bash -l {0}
       run: |
         conda install conda-build anaconda-client -y
-
     - name: Update meta.yaml version and hash
       shell: bash -l {0}
       run: |
@@ -68,32 +67,20 @@ jobs:
         # Show the updated meta.yaml for debugging
         echo "=== Updated meta.yaml ==="
         head -15 omnipkg/conda-recipe/meta.yaml
-
     - name: Build conda package
       shell: bash -l {0}
       run: |
         export PYTHONIOENCODING=UTF-8
         conda build omnipkg/conda-recipe --output-folder ./conda-dist
-
     - name: Upload to Anaconda Cloud
       shell: bash -l {0}
-      # Only run this step on an official release event
-      if: github.event_name == 'release'
       run: |
-        # --- START THE FIX ---
-        # This is a more robust way to find the built package that
-        # works reliably across all platforms (Linux, macOS, Windows).
-        # It finds the file and passes its exact path to the upload command.
-        PACKAGE_FILE=$(find ./conda-dist -name "*.tar.bz2" | head -n 1)
-        
-        if [ -z "$PACKAGE_FILE" ]; then
-          echo "❌ CRITICAL: Could not find built Conda package to upload!"
-          exit 1
-        fi
-        
-        echo "🚀 Uploading package: $PACKAGE_FILE"
-        anaconda -t ${{ secrets.ANACONDA_TOKEN }} upload "$PACKAGE_FILE" --force
-        # --- END THE FIX ---
+        # Upload both .conda and .tar.bz2 files (conda-build may produce either format)
+        # Use find to locate the actual files and upload them
+        find ./conda-dist -name "*.conda" -o -name "*.tar.bz2" | while read file; do
+          echo "Uploading $file"
+          anaconda -t ${{ secrets.ANACONDA_TOKEN }} upload "$file" --force
+        done
       env:
         ANACONDA_TOKEN: ${{ secrets.ANACONDA_TOKEN }}
 
@@ -117,7 +104,6 @@ jobs:
     - name: Install dependencies
       run: |
         pip install pyyaml requests
-
     - name: Update feedstock
       run: |
         cd feedstock
