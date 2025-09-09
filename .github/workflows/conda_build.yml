@@ -33,21 +33,38 @@ jobs:
     - name: Install conda-build and anaconda-client
       shell: bash -l {0}
       run: |
-        conda install conda-build anaconda-client -y
-    
-    - name: Update meta.yaml version and hash
-      shell: bash -l {0}
-      run: |
         if [ "${{ github.event_name }}" == "release" ]; then
           VERSION="${{ github.event.release.tag_name }}"
-          VERSION="${VERSION#v}"  # Remove 'v' prefix if present
+          VERSION="${VERSION#v}"
         else
           VERSION="${{ github.event.inputs.version }}"
         fi
         
-        # CORRECTED: Use curl for all platforms for consistency.
-        echo "Downloading omnipkg version $VERSION..."
-        curl -L -o "omnipkg-$VERSION.tar.gz" "https://pypi.org/packages/source/o/omnipkg/omnipkg-$VERSION.tar.gz"
+        # --- START THE FIX: THE RESILIENT RETRY LOOP ---
+        max_attempts=10
+        attempt=1
+        url="https://pypi.org/packages/source/o/omnipkg/omnipkg-$VERSION.tar.gz"
+        
+        echo "Attempting to download source from $url..."
+        
+        while [ $attempt -le $max_attempts ]; do
+          # Use --fail to make curl return a non-zero exit code on 404
+          curl -L --fail -o "omnipkg-$VERSION.tar.gz" "$url"
+          
+          if [ $? -eq 0 ]; then
+            echo "✅ Download successful on attempt $attempt."
+            break
+          else
+            echo "⚠️ Attempt $attempt failed. PyPI might not be ready yet. Retrying in 15 seconds..."
+            sleep 15
+            attempt=$((attempt + 1))
+          fi
+        done
+        
+        if [ $attempt -gt $max_attempts ]; then
+          echo "❌ Failed to download source after $max_attempts attempts. Aborting."
+          exit 1
+        fi
         
         # CORRECTED: Use Python for a truly cross-platform SHA256 calculation.
         echo "Calculating SHA256 hash..."
