@@ -15,6 +15,13 @@ import importlib.util
 project_root = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(project_root))
 
+# Initialize i18n first
+from omnipkg.i18n import _
+
+lang_from_env = os.environ.get('OMNIPKG_LANG')
+if lang_from_env:
+    _.set_language(lang_from_env)
+
 # --- Test Configuration ---
 MAIN_UV_VERSION = '0.6.13'
 BUBBLE_VERSIONS_TO_TEST = ['0.4.30', '0.5.11']
@@ -23,12 +30,9 @@ BUBBLE_VERSIONS_TO_TEST = ['0.4.30', '0.5.11']
 try:
     from omnipkg.core import ConfigManager, omnipkg as OmnipkgCore
     from omnipkg.loader import omnipkgLoader
-    from omnipkg.common_utils import print_header
-    from omnipkg.i18n import _
-    # Create a single, global config manager instance to be used throughout the script
-    config_manager = ConfigManager()
+    from omnipkg.common_utils import run_command, print_header
 except ImportError as e:
-    print(f'❌ Failed to import omnipkg modules. Is the project structure correct? Error: {e}')
+    print(_('❌ Failed to import omnipkg modules. Is the project structure correct? Error: {}').format(e))
     sys.exit(1)
 
 # --- Helper Functions ---
@@ -36,235 +40,285 @@ except ImportError as e:
 def print_header(title):
     """Prints a formatted header to the console."""
     print('\n' + '=' * 80)
-    print(f'  🚀 {title}')
+    print(_('  🚀 {}').format(title))
     print('=' * 80)
 
 def print_subheader(title):
     """Prints a formatted subheader to the console."""
-    print(f'\n--- {title} ---')
+    print(_('\n--- {} ---').format(title))
 
-def get_current_install_strategy():
-    """Gets the current install strategy from omnipkg config."""
+def get_current_install_strategy(config_manager):
+    """Get the current install strategy"""
     try:
-        result = subprocess.run(['omnipkg', 'config', 'get', 'install_strategy'], 
-                              capture_output=True, text=True, check=True)
-        return result.stdout.strip()
-    except Exception as e:
-        print(f'   ⚠️  Failed to get current install strategy: {e}')
-        # Fallback to default if command fails
         return config_manager.config.get('install_strategy', 'multiversion')
+    except:
+        return 'multiversion'
 
-def set_install_strategy(strategy):
-    """Sets the omnipkg install strategy via the CLI."""
+def set_install_strategy(config_manager, strategy):
+    """Set the install strategy"""
     try:
-        subprocess.run(['omnipkg', 'config', 'set', 'install_strategy', strategy], 
-                      capture_output=True, text=True, check=True)
-        print(f'   ⚙️  Install strategy set to: {strategy}')
+        # Use omnipkg config set command
+        result = subprocess.run(['omnipkg', 'config', 'set', 'install_strategy', strategy],
+                              capture_output=True, text=True, check=True)
+        print(_('   ⚙️  Install strategy set to: {}').format(strategy))
         return True
     except Exception as e:
-        print(f'   ⚠️  Failed to set install strategy: {e}')
+        print(_('   ⚠️  Failed to set install strategy: {}').format(e))
         return False
 
 def pip_uninstall_uv():
     """Uses pip to uninstall uv from the main environment."""
-    print('   🧹 Using pip to uninstall uv from main environment...')
+    print(_('   🧹 Using pip to uninstall uv from main environment...'))
     try:
         result = subprocess.run(['pip', 'uninstall', 'uv', '-y'], capture_output=True, text=True, check=False)
-        print('   ✅ pip uninstall uv completed successfully' if result.returncode == 0 else '   ℹ️  pip uninstall completed (uv may not have been installed)')
+        if result.returncode == 0:
+            print(_('   ✅ pip uninstall uv completed successfully'))
+        else:
+            print(_('   ℹ️  pip uninstall completed (uv may not have been installed)'))
         return True
     except Exception as e:
-        print(f'   ⚠️  pip uninstall failed: {e}')
+        print(_('   ⚠️  pip uninstall failed: {}').format(e))
         return False
 
 def pip_install_uv(version):
     """Uses pip to install a specific version of uv."""
-    print(f'   📦 Using pip to install uv=={version}...')
+    print(_('   📦 Using pip to install uv=={}...').format(version))
     try:
         subprocess.run(['pip', 'install', f'uv=={version}'], capture_output=True, text=True, check=True)
-        print(f'   ✅ pip install uv=={version} completed successfully')
+        print(_('   ✅ pip install uv=={} completed successfully').format(version))
         return True
     except Exception as e:
-        print(f'   ❌ pip install failed: {e}')
+        print(_('   ❌ pip install failed: {}').format(e))
         return False
+
+def restore_install_strategy(config_manager, original_strategy):
+    """Restore the original install strategy"""
+    if original_strategy != 'stable-main':
+        print(_('   🔄 Restoring original install strategy: {}').format(original_strategy))
+        return set_install_strategy(config_manager, original_strategy)
+    return True
 
 # --- Test Workflow Steps ---
 
 def setup_environment():
     """Prepares the testing environment by cleaning up and setting up a baseline."""
-    print_header('STEP 1: Environment Setup & Cleanup')
+    print_header(_('STEP 1: Environment Setup & Cleanup'))
     
-    # Save the original install strategy BEFORE making any changes
-    original_strategy = get_current_install_strategy()
-    print(f'   📋 Current install strategy: {original_strategy}')
-    
+    config_manager = ConfigManager()
+
+    # Store original install strategy
+    original_strategy = get_current_install_strategy(config_manager)
+    print(_('   ℹ️  Current install strategy: {}').format(original_strategy))
+
+    # Set to stable-main for consistent testing
+    print(_('   ⚙️  Setting install strategy to stable-main for testing...'))
+    if not set_install_strategy(config_manager, 'stable-main'):
+        print(_('   ⚠️  Could not change install strategy, continuing anyway...'))
+
+    # Refresh config after strategy change
+    config_manager = ConfigManager()
     omnipkg_core = OmnipkgCore(config_manager)
-    print('   🧹 Cleaning up existing UV installations...')
-    pip_uninstall_uv()
+
+    # Clean up any existing bubbles
+    print(_('   🧹 Cleaning up existing UV installations and bubbles...'))
     for bubble in omnipkg_core.multiversion_base.glob('uv-*'):
-        shutil.rmtree(bubble, ignore_errors=True)
-    
-    print(f'   📦 Establishing stable main environment: uv=={MAIN_UV_VERSION}')
+        if bubble.is_dir():
+            print(_('   🧹 Removing old bubble: {}').format(bubble.name))
+            shutil.rmtree(bubble, ignore_errors=True)
+
+    # Use pip to ensure clean main environment installation
+    pip_uninstall_uv()
     if not pip_install_uv(MAIN_UV_VERSION):
-        return None, None
+        print(_('   ❌ Failed to install main environment UV version'))
+        return None, original_strategy
     
-    # Set the strategy needed for this test
-    print('   🔧 Setting install strategy to stable-main for test compatibility...')
-    if not set_install_strategy('stable-main'):
-        return None, None
-    
-    print('   🫧 Creating all required test bubbles...')
-    for version in BUBBLE_VERSIONS_TO_TEST:
-        print(f'      -> Installing bubble for uv=={version}')
-        omnipkg_core.smart_install([f'uv=={version}'])
-    
-    print('✅ Environment prepared')
+    print(_('✅ Environment prepared'))
     return config_manager, original_strategy
+
+def create_test_bubbles(config_manager):
+    """Create test bubbles for older UV versions"""
+    print_header(_('STEP 2: Creating Test Bubbles for Older Versions'))
+    omnipkg_core = OmnipkgCore(config_manager)
+    
+    for version in BUBBLE_VERSIONS_TO_TEST:
+        print(_('   🫧 Creating bubble for uv=={}').format(version))
+        try:
+            omnipkg_core.smart_install([f'uv=={version}'])
+            print(_('   ✅ Bubble created: uv-{}').format(version))
+        except Exception as e:
+            print(_('   ❌ Failed to create bubble for uv=={}: {}').format(version, e))
+
+    return BUBBLE_VERSIONS_TO_TEST
 
 def inspect_bubble_structure(bubble_path):
     """Prints a summary of the bubble's directory structure for verification."""
-    print(f'   🔍 Inspecting bubble structure: {bubble_path.name}')
+    print(_('   🔍 Inspecting bubble structure: {}').format(bubble_path.name))
     if not bubble_path.exists():
-        print(f"   ❌ Bubble doesn't exist: {bubble_path}")
+        print(_("   ❌ Bubble doesn't exist: {}").format(bubble_path))
         return False
     
     dist_info = list(bubble_path.glob('uv-*.dist-info'))
-    print(f'   ✅ Found dist-info: {dist_info[0].name}' if dist_info else '   ⚠️  No dist-info found')
+    if dist_info:
+        print(_('   ✅ Found dist-info: {}').format(dist_info[0].name))
+    else:
+        print(_('   ⚠️  No dist-info found'))
         
     scripts_dir = bubble_path / 'bin'
     if scripts_dir.exists():
         items = list(scripts_dir.iterdir())
-        print(f'   ✅ Found bin directory with {len(items)} items')
+        print(_('   ✅ Found bin directory with {} items').format(len(items)))
         uv_bin = scripts_dir / 'uv'
         if uv_bin.exists():
-            print(f'   ✅ Found uv binary: {uv_bin}')
-            print('   ✅ Binary is executable' if os.access(uv_bin, os.X_OK) else '   ⚠️  Binary is not executable')
+            print(_('   ✅ Found uv binary: {}').format(uv_bin))
+            if os.access(uv_bin, os.X_OK):
+                print(_('   ✅ Binary is executable'))
+            else:
+                print(_('   ⚠️  Binary is not executable'))
         else:
-            print('   ⚠️  No uv binary in bin/')
+            print(_('   ⚠️  No uv binary in bin/'))
     else:
-        print('   ⚠️  No bin directory found')
+        print(_('   ⚠️  No bin directory found'))
         
     contents = list(bubble_path.iterdir())
-    print(f'   📁 Bubble contents ({len(contents)} items):')
+    print(_('   📁 Bubble contents ({} items):').format(len(contents)))
     for item in sorted(contents)[:5]:
-        print(f"      - {item.name}{'/' if item.is_dir() else ''}")
+        suffix = '/' if item.is_dir() else ''
+        print(_("      - {}{}").format(item.name, suffix))
     return True
 
-def test_swapped_binary_execution(expected_version):
+def test_swapped_binary_execution(expected_version, config_manager):
     """
     Tests version swapping using omnipkgLoader.
     """
-    print('   🔧 Testing swapped binary execution via omnipkgLoader...')
+    print(_('   🔧 Testing swapped binary execution via omnipkgLoader...'))
     try:
         with omnipkgLoader(f'uv=={expected_version}', config=config_manager.config):
-            print('   🎯 Executing: uv --version (within context)')
+            print(_('   🎯 Executing: uv --version (within context)'))
             
             result = subprocess.run(['uv', '--version'], capture_output=True, text=True, timeout=10, check=True)
             actual_version = result.stdout.strip().split()[-1]
             
-            print(f'   ✅ Swapped binary reported: {actual_version}')
+            print(_('   ✅ Swapped binary reported: {}').format(actual_version))
             
             if actual_version == expected_version:
-                print('   🎯 Swapped binary test: PASSED')
+                print(_('   🎯 Swapped binary test: PASSED'))
                 return True
             else:
-                print(f'   ❌ Version mismatch: expected {expected_version}, got {actual_version}')
+                print(_('   ❌ Version mismatch: expected {}, got {}').format(expected_version, actual_version))
                 return False
     except Exception as e:
-        print(f'   ❌ Swapped binary execution failed: {e}')
+        print(_('   ❌ Swapped binary execution failed: {}').format(e))
         traceback.print_exc()
         return False
 
-def test_main_environment_uv():
+def test_main_environment_uv(config_manager):
     """Tests the main environment's uv installation as a baseline."""
-    print_subheader(f'Testing Main Environment (uv=={MAIN_UV_VERSION})')
+    print_subheader(_('Testing Main Environment (uv=={})').format(MAIN_UV_VERSION))
     python_exe = config_manager.config.get('python_executable', sys.executable)
     uv_binary_path = Path(python_exe).parent / 'uv'
     try:
         result = subprocess.run([str(uv_binary_path), '--version'], capture_output=True, text=True, timeout=10, check=True)
         actual_version = result.stdout.strip().split()[-1]
         main_passed = actual_version == MAIN_UV_VERSION
-        print(f'   ✅ Main environment version: {actual_version}')
-        print('   🎯 Main environment test: PASSED' if main_passed else f'   ❌ Main environment test: FAILED (expected {MAIN_UV_VERSION}, got {actual_version})')
+        print(_('   ✅ Main environment version: {}').format(actual_version))
+        if main_passed:
+            print(_('   🎯 Main environment test: PASSED'))
+        else:
+            print(_('   ❌ Main environment test: FAILED (expected {}, got {})').format(MAIN_UV_VERSION, actual_version))
         return main_passed
     except Exception as e:
-        print(f'   ❌ Main environment test failed: {e}')
+        print(_('   ❌ Main environment test failed: {}').format(e))
         return False
 
 def run_comprehensive_test():
     """Main function to orchestrate the entire test suite."""
-    print_header('🚨 OMNIPKG UV BINARY STRESS TEST 🚨')
+    print_header(_('🚨 OMNIPKG UV BINARY STRESS TEST 🚨'))
     original_strategy = None
     
     try:
-        local_config_manager, original_strategy = setup_environment()
-        if not local_config_manager:
+        config_manager, original_strategy = setup_environment()
+        if config_manager is None:
             return False
             
-        multiversion_base = Path(local_config_manager.config['multiversion_base'])
-        print_header('STEP 3: Comprehensive UV Version Testing')
+        create_test_bubbles(config_manager)
+        
+        print_header(_('STEP 3: Comprehensive UV Version Testing'))
         
         test_results = {}
+        all_tests_passed = True
         
-        main_passed = test_main_environment_uv()
-        test_results[f'main-{MAIN_UV_VERSION}'] = main_passed
+        main_passed = test_main_environment_uv(config_manager)
+        test_results[_('main-{}').format(MAIN_UV_VERSION)] = main_passed
+        all_tests_passed &= main_passed
+        
+        multiversion_base = Path(config_manager.config['multiversion_base'])
         
         for version in BUBBLE_VERSIONS_TO_TEST:
-            print_subheader(f'Testing Bubble (uv=={version})')
+            print_subheader(_('Testing Bubble (uv=={})').format(version))
             bubble_path = multiversion_base / f'uv-{version}'
             
             if not inspect_bubble_structure(bubble_path):
-                test_results[f'bubble-{version}'] = False
+                test_results[_('bubble-{}').format(version)] = False
+                all_tests_passed = False
                 continue
 
-            version_passed = test_swapped_binary_execution(version)
-            test_results[f'bubble-{version}'] = version_passed
+            version_passed = test_swapped_binary_execution(version, config_manager)
+            test_results[_('bubble-{}').format(version)] = version_passed
+            all_tests_passed &= version_passed
 
-        print_header('FINAL TEST RESULTS')
-        print('📊 Test Summary:')
-        all_tests_passed = all(test_results.values())
+        print_header(_('FINAL TEST RESULTS'))
+        print(_('📊 Test Summary:'))
 
         for version_key, passed in test_results.items():
-            status = '✅ PASSED' if passed else '❌ FAILED'
-            print(f'   {version_key:<25}: {status}')
+            status = _('✅ PASSED') if passed else _('❌ FAILED')
+            print(_('   {}: {}').format(version_key.ljust(25), status))
 
         if all_tests_passed:
-            print('\n🎉🎉🎉 ALL UV BINARY TESTS PASSED! 🎉🎉🎉')
-            print('🔥 OMNIPKG UV BINARY HANDLING IS FULLY FUNCTIONAL! 🔥')
+            print(_('\n🎉🎉🎉 ALL UV BINARY TESTS PASSED! 🎉🎉🎉'))
+            print(_('🔥 OMNIPKG UV BINARY HANDLING IS FULLY FUNCTIONAL! 🔥'))
         else:
-            print('\n💥 SOME TESTS FAILED - UV BINARY HANDLING NEEDS WORK 💥')
+            print(_('\n💥 SOME TESTS FAILED - UV BINARY HANDLING NEEDS WORK 💥'))
+            print(_('🔧 Check the detailed output above for diagnostics'))
         
         return all_tests_passed
         
     except Exception as e:
-        print(f'\n❌ Critical error during testing: {e}')
+        print(_('\n❌ Critical error during testing: {}').format(e))
         traceback.print_exc()
         return False
     finally:
-        print_header('STEP 4: Cleanup & Restoration')
+        print_header(_('STEP 4: Cleanup & Restoration'))
         try:
+            config_manager = ConfigManager()
             omnipkg_core = OmnipkgCore(config_manager)
+            
+            # Clean up test bubbles
             for bubble in omnipkg_core.multiversion_base.glob('uv-*'):
                 if bubble.is_dir():
-                    print(f'   🧹 Removing test bubble: {bubble.name}')
+                    print(_('   🧹 Removing test bubble: {}').format(bubble.name))
                     shutil.rmtree(bubble, ignore_errors=True)
 
-            # Restore the original install strategy
-            if original_strategy:
-                current_strategy = get_current_install_strategy()
-                if current_strategy != original_strategy:
-                    print(f'   🔄 Restoring original install strategy: {original_strategy}')
-                    if set_install_strategy(original_strategy):
-                        print(f'   ✅ Successfully restored install strategy to: {original_strategy}')
-                    else:
-                        print(f'   ⚠️  Failed to restore install strategy, currently: {current_strategy}')
-                else:
-                    print(f'   ℹ️  Install strategy already at original value: {original_strategy}')
+            # Restore main environment to latest version using pip
+            print(_('   📦 Restoring main environment: uv=={}').format(MAIN_UV_VERSION))
+            pip_uninstall_uv()
+            pip_install_uv(MAIN_UV_VERSION)
+            
+            # Restore original install strategy if it was changed
+            if original_strategy and original_strategy != 'stable-main':
+                restore_install_strategy(config_manager, original_strategy)
+                print(_('   💡 Note: Install strategy has been restored to: {}').format(original_strategy))
+            elif original_strategy == 'stable-main':
+                print(_('   ℹ️  Install strategy remains at: stable-main'))
             else:
-                print('   ⚠️  No original strategy to restore (setup failed)')
+                print(_('   💡 Note: You may need to manually restore your preferred install strategy'))
+                print(_('   💡 Run: omnipkg config set install_strategy <your_preferred_strategy>'))
                 
-            print('✅ Cleanup complete')
+            print(_('✅ Cleanup complete'))
         except Exception as e:
-            print(f'⚠️  Cleanup failed: {e}')
+            print(_('⚠️  Cleanup failed: {}').format(e))
+            if original_strategy and original_strategy != 'stable-main':
+                print(_('   💡 You may need to manually restore install strategy: {}').format(original_strategy))
+                print(_('   💡 Run: omnipkg config set install_strategy {}').format(original_strategy))
 
 if __name__ == '__main__':
     success = run_comprehensive_test()

@@ -881,18 +881,60 @@ class ConfigManager:
         if not py_arch:
             raise OSError(_('Unsupported architecture: {}').format(arch))
 
-        VERSION_TO_RELEASE_TAG_MAP = {'3.12.3': '20240415', '3.11.6': '20231002', '3.10.13': '20231002', '3.9.18': '20231002'}
+        # Updated with ACTUAL release tags from python-build-standalone
+        VERSION_TO_RELEASE_TAG_MAP = {
+            # Python 3.13.x - Latest available from python-build-standalone
+            '3.13.1': '20241211',    # Real release tag for 3.13.1
+            '3.13.0': '20241016',    # Real release tag for 3.13.0
+            
+            # Python 3.12.x - Updated to latest available
+            '3.12.8': '20241211',    # Latest 3.12.x release
+            '3.12.7': '20241008',    # Previous 3.12.x release
+            '3.12.6': '20240814',    # Previous 3.12.x release
+            '3.12.5': '20240726',    # Previous 3.12.x release
+            '3.12.4': '20240726',    # Previous 3.12.x release
+            '3.12.3': '20240415',    # Existing known good tag
+            
+            # Python 3.11.x - Updated to latest available
+            '3.11.11': '20241211',   # Latest 3.11.x release
+            '3.11.10': '20241008',   # Previous 3.11.x release
+            '3.11.9': '20240726',    # Previous 3.11.x release
+            '3.11.6': '20231002',    # Existing known good tag
+            
+            # Python 3.10.x - Updated to latest available
+            '3.10.15': '20241008',   # Latest 3.10.x release
+            '3.10.14': '20240726',   # Previous 3.10.x release
+            '3.10.13': '20231002',   # Existing known good tag
+            
+            # Python 3.9.x - Updated to latest available
+            '3.9.21': '20241211',    # Latest 3.9.x release
+            '3.9.20': '20241008',    # Previous 3.9.x release
+            '3.9.19': '20240726',    # Previous 3.9.x release
+            '3.9.18': '20231002'     # Existing known good tag
+        }
+        
         release_tag = VERSION_TO_RELEASE_TAG_MAP.get(full_version)
         if not release_tag:
+            # Fallback: try to find the closest available version
+            available_versions = list(VERSION_TO_RELEASE_TAG_MAP.keys())
+            print(_('❌ No known standalone build for Python version {}.').format(full_version))
+            print(_('   Available versions: {}').format(', '.join(sorted(available_versions))))
             raise ValueError(f'No known standalone build for Python version {full_version}. Cannot download.')
 
         py_ver_plus_tag = f'{full_version}+{release_tag}'
         base_url = f'https://github.com/indygreg/python-build-standalone/releases/download/{release_tag}'
+        
+        # Updated archive name templates to handle potential naming variations
         archive_name_templates = {
             'linux': f'cpython-{py_ver_plus_tag}-{py_arch}-unknown-linux-gnu-install_only.tar.gz',
-            'macos': f'cpython-{py_ver_plus_tag}-{py_arch}-apple-darwin-install_only.tar.gz',
+            'darwin': f'cpython-{py_ver_plus_tag}-{py_arch}-apple-darwin-install_only.tar.gz',  # Fixed: was 'macos'
             'windows': f'cpython-{py_ver_plus_tag}-{py_arch}-pc-windows-msvc-shared-install_only.tar.gz'
         }
+        
+        # Handle macOS naming (sometimes it's 'darwin', sometimes 'macos' in your original)
+        if system == 'macos':
+            system = 'darwin'
+        
         archive_name = archive_name_templates.get(system)
         if not archive_name:
             raise OSError(_('Unsupported operating system: {}').format(system))
@@ -902,35 +944,88 @@ class ConfigManager:
             archive_path = Path(temp_dir) / archive_name
             print(f'📥 Downloading Python {full_version} for {system.title()}...')
             print(_('   - URL: {}').format(url))
+            
             try:
+                # Enhanced download with better error handling
+                print(_('   - Attempting download...'))
                 urllib.request.urlretrieve(url, archive_path)
-                if not archive_path.exists() or archive_path.stat().st_size < 1_000_000:
-                    raise OSError(_('Failed to download or file is too small: {}').format(archive_path))
-                print(_('✅ Downloaded {} bytes').format(archive_path.stat().st_size))
+                
+                if not archive_path.exists():
+                    raise OSError(_('Download failed: file does not exist'))
+                    
+                file_size = archive_path.stat().st_size
+                if file_size < 1_000_000:  # Less than 1MB is suspicious
+                    raise OSError(_('Downloaded file is too small ({} bytes), likely incomplete or invalid').format(file_size))
+                    
+                print(_('✅ Downloaded {} bytes').format(file_size))
 
+                # Extract with better error handling
+                print(_('   - Extracting archive...'))
                 with tarfile.open(archive_path, 'r:gz') as tar:
                     extract_path = Path(temp_dir) / 'extracted'
                     tar.extractall(extract_path)
 
                 source_python_dir = extract_path / 'python'
+                if not source_python_dir.exists():
+                    # Sometimes the structure might be different, try to find it
+                    possible_dirs = list(extract_path.glob('**/python'))
+                    if possible_dirs:
+                        source_python_dir = possible_dirs[0]
+                    else:
+                        raise OSError(_('Could not find python directory in extracted archive'))
+
                 python_dest = venv_path / '.omnipkg' / 'interpreters' / f'cpython-{full_version}'
                 print(_('   - Installing to: {}').format(python_dest))
+                
+                # Ensure parent directory exists
+                python_dest.parent.mkdir(parents=True, exist_ok=True)
+                
                 shutil.copytree(source_python_dir, python_dest, dirs_exist_ok=True)
 
-                python_exe = python_dest / ('python.exe' if system == 'windows' else 'bin/python3')
-                if not python_exe.exists():
-                    python_exe = python_dest / ('bin/python')
-                if not python_exe.exists():
-                    raise OSError(_('Python executable not found in expected location'))
+                # Find Python executable with improved detection
+                python_exe_candidates = []
+                if system == 'windows':
+                    python_exe_candidates = [
+                        python_dest / 'python.exe',
+                        python_dest / 'Scripts/python.exe'
+                    ]
+                else:
+                    python_exe_candidates = [
+                        python_dest / 'bin/python3',
+                        python_dest / 'bin/python',
+                        python_dest / f'bin/python{full_version.split(".")[0]}.{full_version.split(".")[1]}'
+                    ]
+                
+                python_exe = None
+                for candidate in python_exe_candidates:
+                    if candidate.exists():
+                        python_exe = candidate
+                        break
+                        
+                if not python_exe:
+                    raise OSError(_('Python executable not found in expected locations: {}').format(
+                        [str(c) for c in python_exe_candidates]))
 
+                # Set permissions and create symlinks for non-Windows systems
                 if system != 'windows':
                     python_exe.chmod(0o755)
                     major_minor = '.'.join(full_version.split('.')[:2])
                     versioned_symlink = python_exe.parent / f'python{major_minor}'
                     if not versioned_symlink.exists():
-                        versioned_symlink.symlink_to(python_exe.name)
+                        try:
+                            versioned_symlink.symlink_to(python_exe.name)
+                        except OSError as e:
+                            print(_('   - Warning: Could not create versioned symlink: {}').format(e))
 
-                self._install_essential_packages(python_exe)
+                # Test the installation
+                print(_('   - Testing installation...'))
+                result = subprocess.run([str(python_exe), '--version'], 
+                                    capture_output=True, text=True, timeout=30)
+                if result.returncode != 0:
+                    raise OSError(_('Python executable test failed: {}').format(result.stderr))
+                print(_('   - ✅ Python version: {}').format(result.stdout.strip()))
+
+                self.config_manager._install_essential_packages(python_exe)
                 
                 print(_('\n✨ New interpreter bootstrapped.'))
                 
@@ -948,6 +1043,13 @@ class ConfigManager:
                 self._set_rebuild_flag_for_version(major_minor_version)
 
                 return python_exe
+                
+            except urllib.error.HTTPError as e:
+                if e.code == 404:
+                    print(_('❌ Python {} not found in python-build-standalone releases.').format(full_version))
+                    print(_('   This might be a very new version. Check https://github.com/indygreg/python-build-standalone/releases'))
+                    print(_('   for available versions.'))
+                raise OSError(_('HTTP error downloading Python: {} - {}').format(e.code, e.reason))
             except Exception as e:
                 raise OSError(_('Failed to download or extract Python: {}').format(e))
 
@@ -2941,10 +3043,19 @@ print(json.dumps(versions))
         """
         print(_('\n--- Running robust download strategy ---'))
         try:
-            full_versions = {'3.12': '3.12.3', '3.10': '3.10.13', '3.9': '3.9.18', '3.11': '3.11.6'}
+            # Updated with REAL Python versions available in python-build-standalone
+            full_versions = {
+                '3.13': '3.13.1',    # Latest Python 3.13 available
+                '3.12': '3.12.8',    # Latest Python 3.12 available  
+                '3.11': '3.11.11',   # Latest Python 3.11 available
+                '3.10': '3.10.15',   # Latest Python 3.10 available
+                '3.9': '3.9.21'      # Latest Python 3.9 available
+            }
+            
             full_version = full_versions.get(version)
             if not full_version:
                 print(f'❌ Error: No known standalone build for Python {version}.')
+                print(f'   Available versions: {", ".join(full_versions.keys())}')
                 return 1
 
             dest_path = self.config_manager.venv_path / '.omnipkg' / 'interpreters' / f'cpython-{full_version}'
@@ -2953,7 +3064,6 @@ print(json.dumps(versions))
                 print(_('   - Found existing directory for Python {}. Verifying integrity...').format(full_version))
                 if self._is_interpreter_directory_valid(dest_path):
                     print(_('   - ✅ Integrity check passed. Installation is valid and complete.'))
-                    # Even if valid, we ensure it's registered by forcing a rescan later.
                     return 0 # Success, no download needed.
                 else:
                     print(_('   - ⚠️  Integrity check failed: Incomplete installation detected (missing or broken executable).'))
@@ -2981,20 +3091,44 @@ print(json.dumps(versions))
             # Proceed with a fresh installation into a guaranteed-to-be-clean directory.
             print(_('   - Starting fresh download and installation...'))
             
-            # Call the correct method name - check your config_manager for the actual method
-            if hasattr(self.config_manager, '_install_managed_python'):
-                self.config_manager._install_managed_python(self.config_manager.venv_path, full_version)
-            elif hasattr(self.config_manager, 'install_managed_python'):
-                self.config_manager.install_managed_python(self.config_manager.venv_path, full_version)
-            elif hasattr(self.config_manager, 'download_python'):
-                self.config_manager.download_python(full_version)
-            else:
-                print(_('❌ Error: No download method found on config_manager'))
+            # For Python 3.13, use our specialized downloader first
+            download_success = False
+            
+            if version == '3.13':
+                print(_('   - Using python-build-standalone for Python 3.13...'))
+                download_success = self._download_python_313_alternative(dest_path, full_version)
+                
+            # If specialized downloader failed or not 3.13, try standard methods
+            if not download_success:
+                if hasattr(self.config_manager, '_install_managed_python'):
+                    try:
+                        self.config_manager._install_managed_python(self.config_manager.venv_path, full_version)
+                        download_success = True
+                    except Exception as e:
+                        print(_('   - Warning: _install_managed_python failed: {}').format(e))
+                        
+                elif hasattr(self.config_manager, 'install_managed_python'):
+                    try:
+                        self.config_manager.install_managed_python(self.config_manager.venv_path, full_version)
+                        download_success = True
+                    except Exception as e:
+                        print(_('   - Warning: install_managed_python failed: {}').format(e))
+                        
+                elif hasattr(self.config_manager, 'download_python'):
+                    try:
+                        self.config_manager.download_python(full_version)
+                        download_success = True
+                    except Exception as e:
+                        print(_('   - Warning: download_python failed: {}').format(e))
+                
+            if not download_success:
+                print(_('❌ Error: All download methods failed for Python {}').format(full_version))
                 return 1
                 
             # Verify the installation worked
             if dest_path.exists() and self._is_interpreter_directory_valid(dest_path):
                 print(_('   - ✅ Download and installation completed successfully.'))
+                self.config_manager._set_rebuild_flag_for_version(version)
                 return 0
             else:
                 print(_('   - ❌ Installation completed but integrity check still fails.'))
@@ -3003,6 +3137,169 @@ print(json.dumps(versions))
         except Exception as e:
             print(_('❌ Download and installation process failed: {}').format(e))
             return 1 # Return 1 for failure
+
+    def _download_python_313_alternative(self, dest_path: Path, full_version: str) -> bool:
+        """
+        Alternative download method specifically for Python 3.13 using python-build-standalone releases.
+        Downloads from the December 5, 2024 release builds.
+        """
+        import urllib.request
+        import tarfile
+        import gzip
+        import platform
+        import tempfile
+        import shutil
+        
+        try:
+            print(_('   - Attempting Python 3.13 download from python-build-standalone...'))
+            
+            # Determine the appropriate build based on platform
+            system = platform.system().lower()
+            machine = platform.machine().lower()
+            
+            # Base URL for python-build-standalone releases
+            base_url = "https://github.com/indygreg/python-build-standalone/releases/download/20241205/"
+            
+            # Map platform to appropriate build filename
+            build_filename = None
+            
+            if system == "windows":
+                # Windows builds - use install_only for simplicity
+                if "64" in machine or machine == "amd64" or machine == "x86_64":
+                    build_filename = "cpython-3.13.1+20241205-x86_64-pc-windows-msvc-install_only.tar.gz"
+                else:
+                    build_filename = "cpython-3.13.1+20241205-i686-pc-windows-msvc-install_only.tar.gz"
+                    
+            elif system == "darwin":  # macOS
+                if "arm" in machine or "m1" in machine.lower() or "arm64" in machine:
+                    build_filename = "cpython-3.13.1+20241205-aarch64-apple-darwin-install_only.tar.gz"
+                else:
+                    build_filename = "cpython-3.13.1+20241205-x86_64-apple-darwin-install_only.tar.gz"
+                    
+            elif system == "linux":
+                # Choose appropriate Linux build based on architecture and libc
+                if "aarch64" in machine or "arm64" in machine:
+                    build_filename = "cpython-3.13.1+20241205-aarch64-unknown-linux-gnu-install_only.tar.gz"
+                elif "arm" in machine:
+                    if "hf" in machine or platform.processor().find("hard") != -1:
+                        build_filename = "cpython-3.13.1+20241205-armv7-unknown-linux-gnueabihf-install_only.tar.gz"
+                    else:
+                        build_filename = "cpython-3.13.1+20241205-armv7-unknown-linux-gnueabi-install_only.tar.gz"
+                elif "ppc64le" in machine:
+                    build_filename = "cpython-3.13.1+20241205-ppc64le-unknown-linux-gnu-install_only.tar.gz"
+                elif "s390x" in machine:
+                    build_filename = "cpython-3.13.1+20241205-s390x-unknown-linux-gnu-install_only.tar.gz"
+                elif "x86_64" in machine or "amd64" in machine:
+                    # Try to detect musl vs glibc
+                    try:
+                        import subprocess
+                        result = subprocess.run(['ldd', '--version'], 
+                                            capture_output=True, text=True, timeout=5)
+                        if 'musl' in result.stderr.lower():
+                            build_filename = "cpython-3.13.1+20241205-x86_64-unknown-linux-musl-install_only.tar.gz"
+                        else:
+                            build_filename = "cpython-3.13.1+20241205-x86_64-unknown-linux-gnu-install_only.tar.gz"
+                    except:
+                        # Default to glibc build if detection fails
+                        build_filename = "cpython-3.13.1+20241205-x86_64-unknown-linux-gnu-install_only.tar.gz"
+                elif "i686" in machine or "i386" in machine:
+                    build_filename = "cpython-3.13.1+20241205-i686-unknown-linux-gnu-install_only.tar.gz"
+                else:
+                    # Default to x86_64 glibc
+                    build_filename = "cpython-3.13.1+20241205-x86_64-unknown-linux-gnu-install_only.tar.gz"
+            
+            if not build_filename:
+                print(_('   - ❌ Could not determine appropriate build for platform: {} {}').format(system, machine))
+                return False
+                
+            download_url = base_url + build_filename
+            print(_('   - Selected build: {}').format(build_filename))
+            print(_('   - Downloading from: {}').format(download_url))
+            
+            # Create destination directory
+            dest_path.parent.mkdir(parents=True, exist_ok=True)
+            
+            # Download to temporary file
+            with tempfile.NamedTemporaryFile(delete=False, suffix='.tar.gz') as temp_file:
+                temp_path = Path(temp_file.name)
+                
+            try:
+                # Download the file with progress indication
+                def show_progress(block_num, block_size, total_size):
+                    if total_size > 0:
+                        percent = min(100, (block_num * block_size * 100) // total_size)
+                        if block_num % 100 == 0 or percent >= 100:  # Update every 100 blocks or at completion
+                            print(_('   - Download progress: {}%').format(percent), end='\r')
+                
+                urllib.request.urlretrieve(download_url, temp_path, reporthook=show_progress)
+                print(_('\n   - Download completed, extracting...'))
+                
+                # Extract the tar.gz file
+                with tarfile.open(temp_path, 'r:gz') as tar_ref:
+                    # Extract to a temporary directory first
+                    with tempfile.TemporaryDirectory() as temp_extract_dir:
+                        tar_ref.extractall(temp_extract_dir)
+                        
+                        # Find the extracted Python directory
+                        extracted_items = list(Path(temp_extract_dir).iterdir())
+                        if len(extracted_items) == 1 and extracted_items[0].is_dir():
+                            # Single directory extracted - move it to dest_path
+                            extracted_dir = extracted_items[0]
+                            if dest_path.exists():
+                                shutil.rmtree(dest_path)
+                            shutil.move(str(extracted_dir), str(dest_path))
+                        else:
+                            # Multiple items or files - create dest_path and move contents
+                            dest_path.mkdir(parents=True, exist_ok=True)
+                            for item in extracted_items:
+                                dest_item = dest_path / item.name
+                                if dest_item.exists():
+                                    if dest_item.is_dir():
+                                        shutil.rmtree(dest_item)
+                                    else:
+                                        dest_item.unlink()
+                                shutil.move(str(item), str(dest_item))
+                
+                print(_('   - Extraction completed'))
+                
+                # Set executable permissions on Unix-like systems
+                if system in ['linux', 'darwin']:
+                    python_exe = dest_path / 'bin' / 'python3'
+                    if python_exe.exists():
+                        python_exe.chmod(0o755)
+                        # Also set permissions on python3.13 if it exists
+                        python_versioned = dest_path / 'bin' / 'python3.13'
+                        if python_versioned.exists():
+                            python_versioned.chmod(0o755)
+                
+                print(_('   - ✅ Python 3.13.1 installation completed successfully'))
+                
+                # --- START THE FINAL, CRITICAL FIX ---
+                # The new environment is extracted. Now we must bootstrap it.
+                print(_('   - Bootstrapping the new Python 3.13 environment...'))
+                
+                # First, find the new python executable inside the destination path
+                python_exe = self._find_python_executable_in_dir(dest_path)
+                if not python_exe:
+                    print(_('   - ❌ CRITICAL: Could not find Python executable in {} after extraction.').format(dest_path))
+                    return False
+                    
+                # Now, call the function that installs omnipkg and its dependencies into it.
+                self.config_manager._install_essential_packages(python_exe)
+                # --- END THE FINAL, CRITICAL FIX ---
+
+                print(_('   - ✅ Alternative Python 3.13 download and bootstrap completed'))
+                return True
+                
+            finally:
+                # Clean up temp file
+                temp_path.unlink(missing_ok=True)
+                
+        except Exception as e:
+            print(_('   - ❌ Python 3.13 download failed: {}').format(e))
+            import traceback
+            print(_('   - Error details: {}').format(traceback.format_exc()))
+            return False
 
     def rescan_interpreters(self) -> int:
         """

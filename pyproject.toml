@@ -4,13 +4,13 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "omnipkg"
-version = "1.3.7"
+version = "1.3.8"
 authors = [
   { name = "1minds3t", email = "1minds3t@proton.me" },
 ]
 description = "The Ultimate Python Dependency Resolver. One environment. Infinite packages. Zero conflicts."
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.9, <3.14"
 license = { text = "AGPL-3.0-only OR LicenseRef-Proprietary" }
 classifiers = [
     "Development Status :: 5 - Production/Stable",
@@ -23,6 +23,7 @@ classifiers = [
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Environment :: Console",
     "Topic :: Software Development :: Build Tools",
     "Topic :: System :: Software Distribution",
