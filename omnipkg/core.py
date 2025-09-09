@@ -3,17 +3,13 @@ omnipkg
 An intelligent installer that lets pip run, then surgically cleans up downgrades
 and isolates conflicting versions in deduplicated bubbles to guarantee a stable environment.
 """
-import concurrent.futures
 import hashlib
 import importlib.metadata
 import io
 import json
 import locale as sys_locale
 import os
-import packaging.version
-import pickle
 import threading
-import textwrap
 import platform
 import time
 import re
@@ -27,18 +23,14 @@ import urllib.request
 import zipfile
 from datetime import datetime
 from pathlib import Path
-from threading import Lock
-from typing import Dict, List, Optional, Set, Tuple, Any
-import filelock
+from typing import Dict, List, Optional, Set, Tuple
 import redis
 import requests as http_requests
-import zlib
 from filelock import FileLock
-from importlib.metadata import Distribution, version, metadata, PackageNotFoundError
+from importlib.metadata import version, metadata, PackageNotFoundError
 from packaging.utils import canonicalize_name
 from packaging.version import parse as parse_version, InvalidVersion
-from packaging.specifiers import SpecifierSet
-from .i18n import _, LANG_INFO, SUPPORTED_LANGUAGES
+from .i18n import _
 from .package_meta_builder import omnipkgMetadataGatherer
 try:
     import tomllib
@@ -600,7 +592,6 @@ class ConfigManager:
         """
         Find the project root directory by looking for setup.py, pyproject.toml, or .git
         """
-        import os
         from pathlib import Path
         current_dir = Path.cwd()
         module_dir = Path(__file__).parent.parent
@@ -1195,7 +1186,6 @@ class ConfigManager:
         Gets the ACTUAL site-packages directory for the currently running Python interpreter.
         This is more reliable than calculating it from sys.prefix when hotswapping is involved.
         """
-        import site
         try:
             site_packages_list = site.getsitepackages()
             if site_packages_list:
@@ -1319,7 +1309,7 @@ class ConfigManager:
                     print(_('   ⚠️  Knowledge base initialization encountered issues but continuing...'))
             else:
                 subprocess.run(rebuild_cmd, check=True, capture_output=True, text=True)
-        except subprocess.CalledProcessError as e:
+        except subprocess.CalledProcessError:
             if interactive and (not os.environ.get('CI')):
                 print(_('   ⚠️  Knowledge base will be built on first command usage instead.'))
             pass
@@ -1896,7 +1886,8 @@ class BubbleIsolationManager:
             installed_packages = self.parent_omnipkg.get_installed_packages(live=True)
             successful_packages = 0
             failed_packages = []
-            for pkg_name in tqdm(installed_packages.keys(), desc='    📦 Indexing via metadata', unit='pkg'):
+            package_iterator = tqdm(installed_packages.keys(), desc='    📦 Indexing via metadata', unit='pkg') if HAS_TQDM else installed_packages.keys()
+            for pkg_name in package_iterator:
                 try:
                     dist = importlib.metadata.distribution(pkg_name)
                     if dist.files:
@@ -1926,7 +1917,8 @@ class BubbleIsolationManager:
                         file_str = str(file_path).lower()
                         if any((pkg.lower().replace('-', '_') in file_str or pkg.lower().replace('_', '-') in file_str for pkg in failed_packages)):
                             potential_files.append(file_path)
-                for file_path in tqdm(potential_files, desc='    📦 Fallback scan', unit='file'):
+                files_iterator = tqdm(potential_files, desc='    📦 Fallback scan', unit='file') if HAS_TQDM else potential_files
+                for file_path in files_iterator:
                     try:
                         hash_set.add(self._get_file_hash(file_path))
                     except (IOError, OSError):
@@ -1934,7 +1926,8 @@ class BubbleIsolationManager:
         except Exception as e:
             print(_('    ⚠️ Metadata approach failed ({}), falling back to full scan...').format(e))
             files_to_process = [p for p in self.site_packages.rglob('*') if p.is_file() and p.suffix not in {'.pyc', '.pyo'} and ('__pycache__' not in p.parts)]
-            for file_path in tqdm(files_to_process, desc='    📦 Full scan', unit='file'):
+            files_to_process_iterator = tqdm(files_to_process, desc='    📦 Full scan', unit='file') if HAS_TQDM else files_to_process
+            for file_path in files_to_process_iterator:
                 try:
                     hash_set.add(self._get_file_hash(file_path))
                 except (IOError, OSError):
@@ -2504,7 +2497,7 @@ class omnipkg:
                     print(f"   ✅ Knowledge base for Python {current_version_str} is ready.")
                     return True
                 else:
-                    print(f"   ❌ Failed to build knowledge base. It will be re-attempted on the next run.")
+                    print("   ❌ Failed to build knowledge base. It will be re-attempted on the next run.")
                     return False # Rebuild failed, don't clear flag
         return False
 
@@ -2749,7 +2742,7 @@ print(json.dumps(versions))
         try:
             pkg_name, requested_version = self._parse_package_spec(package_spec)
             if requested_version:
-                print(f'\n' + '=' * 60)
+                print('\n' + '=' * 60)
                 print(_('📄 Detailed info for {} v{}').format(pkg_name, requested_version))
                 print('=' * 60)
                 self._show_version_details(pkg_name, requested_version)
@@ -2812,7 +2805,7 @@ print(json.dumps(versions))
                         idx = int(choice) - 1
                         if 0 <= idx < len(available_versions):
                             selected_version = available_versions[idx]
-                            print(f'\n' + '=' * 60)
+                            print('\n' + '=' * 60)
                             print(_('📄 Detailed info for {} v{}').format(package_name, selected_version))
                             print('=' * 60)
                             self._show_version_details(package_name, selected_version)
@@ -3145,7 +3138,6 @@ print(json.dumps(versions))
         """
         import urllib.request
         import tarfile
-        import gzip
         import platform
         import tempfile
         import shutil
@@ -3478,7 +3470,7 @@ print(json.dumps(versions))
             return 0
 
         if not force:
-            confirm = input(f"🤔 Are you sure you want to permanently delete this directory? (y/N): ").lower().strip()
+            confirm = input("🤔 Are you sure you want to permanently delete this directory? (y/N): ").lower().strip()
             if confirm != 'y':
                 print("🚫 Removal cancelled.")
                 return 1
@@ -4416,7 +4408,7 @@ print(json.dumps(versions))
                             if match and not success_detected:
                                 detected_version = match.group(1)
                                 print(f"    🚀 EARLY SUCCESS DETECTED! Version {detected_version} is compatible!")
-                                print(f"    ⚡ Canceling temp install to save time - will use smart installer")
+                                print("    ⚡ Canceling temp install to save time - will use smart installer")
                                 success_detected = True
                                 break
                         
@@ -4466,12 +4458,12 @@ print(json.dumps(versions))
             # If we detected early success, return immediately
             if success_detected and detected_version:
                 print(f"    ✅ Early success! Latest compatible version: {detected_version}")
-                print(f"    🎯 This version will be passed to smart installer for main installation")
+                print("    🎯 This version will be passed to smart installer for main installation")
                 return detected_version
             
             # If process is still running, we hit timeout
             if process.poll() is None:
-                print(f"    ⏰ Test installation timed out, terminating...")
+                print("    ⏰ Test installation timed out, terminating...")
                 process.terminate()
                 try:
                     process.wait(timeout=5)
@@ -4533,13 +4525,13 @@ print(json.dumps(versions))
                 # Look for the key error patterns that list available versions
                 version_list_patterns = [
                     # Pattern 1: "from versions: 1.0.0, 1.1.0, 1.2.0)"
-                    rf'from versions:\s*([^)]+)\)',
+                    r'from versions:\s*([^)]+)\)',
                     
                     # Pattern 2: "available versions: 1.0.0, 1.1.0, 1.2.0"
-                    rf'available versions:\s*([^\n\r]+)',
+                    r'available versions:\s*([^\n\r]+)',
                     
                     # Pattern 3: "Could not find a version... (from versions: ...)"
-                    rf'\(from versions:\s*([^)]+)\)',
+                    r'\(from versions:\s*([^)]+)\)',
                 ]
                 
                 compatible_versions = []
@@ -4584,7 +4576,7 @@ print(json.dumps(versions))
                             return fallback_version
                 
                 # Additional parsing for Python version compatibility errors
-                python_req_pattern = rf'Requires-Python\s*>=([0-9]+\.[0-9]+)'
+                python_req_pattern = r'Requires-Python\s*>=([0-9]+\.[0-9]+)'
                 python_req_matches = re.findall(python_req_pattern, full_output)
                 if python_req_matches:
                     print(f"    📋 Found Python version requirements: {', '.join(set(python_req_matches))}")
@@ -4612,7 +4604,7 @@ print(json.dumps(versions))
             if temp_dir and Path(temp_dir).exists():
                 try:
                     shutil.rmtree(temp_dir)
-                    print(f"    🧹 Cleaned up temporary directory")
+                    print("    🧹 Cleaned up temporary directory")
                 except Exception as e:
                     print(f"    ⚠️ Warning: Could not clean up temp directory {temp_dir}: {e}")
 
@@ -4663,13 +4655,13 @@ print(json.dumps(versions))
                 
             else:
                 # Failed - parse error for compatible versions
-                print(f"    📋 Parsing compatibility error for available versions...")
+                print("    📋 Parsing compatibility error for available versions...")
                 
                 # Look for version list in error output  
                 version_list_patterns = [
-                    rf'from versions:\s*([^)]+)\)',
-                    rf'available versions:\s*([^\n\r]+)',
-                    rf'\(from versions:\s*([^)]+)\)',
+                    r'from versions:\s*([^)]+)\)',
+                    r'available versions:\s*([^\n\r]+)',
+                    r'\(from versions:\s*([^)]+)\)',
                 ]
                 
                 for pattern in version_list_patterns:
@@ -4701,7 +4693,7 @@ print(json.dumps(versions))
                                 print(f"    ⚠️ Error sorting versions: {e}")
                                 return compatible_versions[-1] if compatible_versions else None
                 
-                print(f"    ❌ Could not parse compatible versions from error")
+                print("    ❌ Could not parse compatible versions from error")
                 return None
                 
         except Exception as e:
@@ -4758,31 +4750,31 @@ print(json.dumps(versions))
                         
                         if installed_version == latest_pypi_version:
                             print(f"    🚀 JACKPOT! Latest PyPI version {latest_pypi_version} is already installed!")
-                            print(f"    ⚡ Skipping all test installations - using installed version")
+                            print("    ⚡ Skipping all test installations - using installed version")
                             return latest_pypi_version
                         else:
                             print(f"    📋 Installed version ({installed_version}) differs from latest PyPI ({latest_pypi_version})")
-                            print(f"    🧪 Will test if latest PyPI version is compatible...")
+                            print("    🧪 Will test if latest PyPI version is compatible...")
                     else:
-                        print(f"    ⚠️ Could not parse installed version from pip show output")
+                        print("    ⚠️ Could not parse installed version from pip show output")
                 else:
                     print(f"    📋 Package '{package_name}' is not currently installed")
-                    print(f"    🧪 Will test if latest PyPI version is compatible...")
+                    print("    🧪 Will test if latest PyPI version is compatible...")
             else:
                 print(f"    ❌ Could not fetch PyPI data (status: {response.status_code})")
-                print(f"    🧪 Falling back to test installation approach...")
+                print("    🧪 Falling back to test installation approach...")
         except Exception as e:
             print(f"    ❌ Error checking PyPI: {e}")
-            print(f"    🧪 Falling back to test installation approach...")
+            print("    🧪 Falling back to test installation approach...")
         
         # STEP 1: Try the optimized test installation approach with early detection
-        print(f"    🧪 Testing latest PyPI version compatibility with quick install attempt...")
+        print("    🧪 Testing latest PyPI version compatibility with quick install attempt...")
         compatible_version = self._quick_compatibility_check(package_name, latest_pypi_version)
 
         if compatible_version:
             print(f"    🎯 Found compatible version {compatible_version} - passing directly to smart installer!")
             return compatible_version
-        print(f"    🧪 Starting optimized test installation with early success detection...")
+        print("    🧪 Starting optimized test installation with early success detection...")
         test_result = self._test_install_to_get_compatible_version(package_name)
         
         if test_result:
@@ -4934,7 +4926,7 @@ print(json.dumps(versions))
                     print(f" -> pip list approach failed: {e}")
             
             print(f" ❌ CRITICAL: Could not parse the resolved version from pip's output for '{package_name}'.")
-            print(f" ❌ This might indicate: 1) Package doesn't exist, 2) No compatible version, 3) Network issues, 4) Unexpected pip output format")
+            print(" ❌ This might indicate: 1) Package doesn't exist, 2) No compatible version, 3) Network issues, 4) Unexpected pip output format")
             return None
             
         except subprocess.TimeoutExpired:
