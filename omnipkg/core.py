@@ -1718,6 +1718,44 @@ class BubbleIsolationManager:
         return self._is_likely_executable_name(file_path)
 
 
+    def _detect_binary_by_header(self, file_path: Path) -> bool:
+        """
+        Detect binary executables by reading file headers/magic numbers.
+        """
+        try:
+            with open(file_path, 'rb') as f:
+                header = f.read(16)  # Read first 16 bytes
+            
+            if len(header) < 4:
+                return False
+            
+            # ELF (Linux/Unix executables)
+            if header.startswith(b'\x7fELF'):
+                return True
+            
+            # PE (Windows executables)
+            if header.startswith(b'MZ'):
+                return True
+            
+            # Mach-O (macOS executables)
+            magic_numbers = [
+                b'\xfe\xed\xfa\xce',  # Mach-O 32-bit big endian
+                b'\xce\xfa\xed\xfe',  # Mach-O 32-bit little endian  
+                b'\xfe\xed\xfa\xcf',  # Mach-O 64-bit big endian
+                b'\xcf\xfa\xed\xfe',  # Mach-O 64-bit little endian
+                b'\xca\xfe\xba\xbe',  # Mach-O universal binary
+            ]
+            
+            for magic in magic_numbers:
+                if header.startswith(magic):
+                    return True
+            
+            return False
+            
+        except (OSError, IOError, PermissionError):
+            return False
+
+
     def _is_likely_executable_name(self, file_path: Path) -> bool:
         """
         Additional heuristic: check if filename suggests it's an executable.
