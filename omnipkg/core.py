@@ -1717,6 +1717,35 @@ class BubbleIsolationManager:
         # Strategy 4: Heuristic based on common executable names
         return self._is_likely_executable_name(file_path)
 
+
+    def _is_likely_executable_name(self, file_path: Path) -> bool:
+        """
+        Additional heuristic: check if filename suggests it's an executable.
+        Used as a final fallback for edge cases.
+        """
+        name = file_path.name.lower()
+        
+        # Common executable names without extensions (Unix/Linux)
+        common_executables = {
+            'python', 'python3', 'pip', 'pip3', 'node', 'npm', 'yarn',
+            'git', 'docker', 'kubectl', 'terraform', 'ansible',
+            'uv', 'poetry', 'pipenv', 'black', 'flake8', 'mypy',
+            'gcc', 'clang', 'make', 'cmake', 'ninja',
+            'curl', 'wget', 'ssh', 'scp', 'rsync'
+        }
+        
+        # Check exact name match
+        if name in common_executables:
+            return True
+        
+        # Check if name ends with version number (e.g., python3.11, node18)
+        import re
+        if re.match(r'^[a-z][a-z0-9]*[0-9]+(?:\.[0-9]+)*$', name):
+            base_name = re.sub(r'[0-9]+(?:\.[0-9]+)*$', '', name)
+            return base_name in common_executables
+        
+        return False
+
     def _create_deduplicated_bubble(self, installed_tree: Dict, bubble_path: Path, temp_install_path: Path) -> bool:
         """
         Enhanced Version: Fixes flask-login and similar packages with missing submodules.

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "omnipkg"
-version = "1.3.11"  # <-- THE NEW LEGENDARY VERSION
+version = "1.3.12"  # <-- THE NEW LEGENDARY VERSION
 authors = [
   { name = "1minds3t", email = "1minds3t@proton.me" },
 ]
