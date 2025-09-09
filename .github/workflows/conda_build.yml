@@ -77,13 +77,23 @@ jobs:
 
     - name: Upload to Anaconda Cloud
       shell: bash -l {0}
+      # Only run this step on an official release event
+      if: github.event_name == 'release'
       run: |
-        # Upload both .conda and .tar.bz2 files (conda-build may produce either format)
-        # Use find to locate the actual files and upload them
-        find ./conda-dist -name "*.conda" -o -name "*.tar.bz2" | while read file; do
-          echo "Uploading $file"
-          anaconda -t ${{ secrets.ANACONDA_TOKEN }} upload "$file" --force
-        done
+        # --- START THE FIX ---
+        # This is a more robust way to find the built package that
+        # works reliably across all platforms (Linux, macOS, Windows).
+        # It finds the file and passes its exact path to the upload command.
+        PACKAGE_FILE=$(find ./conda-dist -name "*.tar.bz2" | head -n 1)
+        
+        if [ -z "$PACKAGE_FILE" ]; then
+          echo "❌ CRITICAL: Could not find built Conda package to upload!"
+          exit 1
+        fi
+        
+        echo "🚀 Uploading package: $PACKAGE_FILE"
+        anaconda -t ${{ secrets.ANACONDA_TOKEN }} upload "$PACKAGE_FILE" --force
+        # --- END THE FIX ---
       env:
         ANACONDA_TOKEN: ${{ secrets.ANACONDA_TOKEN }}
 
