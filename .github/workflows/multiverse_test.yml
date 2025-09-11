@@ -107,7 +107,28 @@ jobs:
           echo "--- Running 700ms Python Interpreter HotSwapping Test ---"
           mkdir -p /tmp/omnipkg-artifacts
           
-          # Set pipefail to catch any failures in the pipeline
+          echo "Starting multiverse analysis test..."
+          echo "OS: ${{ matrix.os }}, Python: ${{ matrix.python-version }}"
+          
+          # Find and run the multiverse analysis test
+          OMNIPKG_PATH=$(python -c "import omnipkg; print(omnipkg.__file__.replace('__init__.py', ''))")
+          TEST_PATH="$OMNIPKG_PATH/../tests/multiverse_analysis.py"
+          
+          if [ ! -f "$TEST_PATH" ]; then
+            TEST_PATH="$OMNIPKG_PATH/tests/multiverse_analysis.py"
+          fi
+          if [ ! -f "$TEST_PATH" ]; then
+            TEST_PATH=$(find $CONDA_PREFIX -name "multiverse_analysis.py" 2>/dev/null | head -1)
+          fi
+          
+          if [ ! -f "$TEST_PATH" ]; then
+            echo "❌ Could not find multiverse_analysis.py"
+            exit 1
+          fi
+          
+          echo "Found test at: $TEST_PATH"
+          
+          if timeout 1200 python "$TEST_PATH" 2>&1 | tee /tmp/omnipkg-artifacts/multiverse_output.txt; thenfailures in the pipeline
           set -o pipefail
           
           echo "Starting multiverse analysis test..."
