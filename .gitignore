@@ -78,3 +78,4 @@ KEYS
 # Lock files
 *.lock
 
+multiverse_log.jsonl
