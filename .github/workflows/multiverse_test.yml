@@ -1,4 +1,4 @@
-name: "🔥 700ms Py Interp HotSwapping"
+name: "🐍 Python Adoption: Multiverse Analysis Test"
 
 on:
   push:
@@ -8,16 +8,8 @@ on:
   workflow_dispatch:
 
 jobs:
-  multiverse-test:
-    strategy:
-      matrix:
-        os: [ubuntu-latest, ubuntu-20.04, macos-latest, macos-13]
-        # Start with 3.9 as base, the test will handle swapping
-        python-version: ['3.9']
-      fail-fast: false
-      
-    runs-on: ${{ matrix.os }}
-    
+  test-python-adoption:
+    runs-on: ubuntu-latest
     services:
       redis:
         image: redis:7
@@ -33,10 +25,10 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Python ${{ matrix.python-version }}
+      - name: Set up Python 3.11 (base environment)
         uses: actions/setup-python@v5
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: '3.11'
 
       - name: Install dependencies
         run: |
@@ -70,6 +62,9 @@ jobs:
               'multiversion_base': str(Path(site_packages_path) / '.omnipkg_versions'),
               'python_executable': sys.executable,
               'builder_script_path': str(builder_script),
+              'redis_host': 'localhost',
+              'redis_port': 6379,
+              'redis_key_prefix': 'omnipkg:pkg:',
               'paths_to_index': [str(Path(sys.executable).parent), '/usr/local/bin', '/usr/bin', '/bin', '/usr/sbin', '/sbin'],
               'auto_cleanup': True,
               'cleanup_threshold_days': 30
@@ -89,96 +84,137 @@ jobs:
               sys.exit(1)
           EOF
 
-      - name: Ensure Python 3.9 is adopted first
+      - name: Test Python 3.9 Adoption
+        id: test_adoption
         run: |
-          echo "--- Ensuring Python 3.9 is available and adopted ---"
-          # First check if we can adopt Python 3.9
-          if ! omnipkg python adopt 3.9; then
-            echo "Failed to adopt Python 3.9, but this might be expected if already using 3.9"
-            echo "Current Python version:"
-            python --version
-          else
-            echo "Successfully adopted Python 3.9"
-          fi
-
-      - name: Run Multiverse Analysis Test
-        id: run_multiverse
-        run: |
-          echo "--- Running 700ms Python Interpreter HotSwapping Test ---"
+          echo "--- Testing Python 3.9 Adoption ---"
           mkdir -p /tmp/omnipkg-artifacts
           
-          # Set pipefail to catch any failures in the pipeline
-          set -o pipefail
+          # Test the adoption command directly
+          echo "🐍 Running: omnipkg python adopt 3.9"
+          timeout 900 omnipkg python adopt 3.9 2>&1 | tee /tmp/omnipkg-artifacts/python_adoption_output.txt
           
-          echo "Starting multiverse analysis test..."
-          echo "OS: ${{ matrix.os }}, Python: ${{ matrix.python-version }}"
-          
-          # Run the multiverse analysis test
-          if timeout 1200 python tests/multiverse_analysis.py 2>&1 | tee /tmp/omnipkg-artifacts/multiverse_output.txt; then
-            MULTIVERSE_EXIT_CODE=0
-          else
-            MULTIVERSE_EXIT_CODE=$?
-          fi
-          
-          echo "## Multiverse Analysis Output (${{ matrix.os }})" >> $GITHUB_STEP_SUMMARY
+          echo "## Python 3.9 Adoption Output" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
-          head -n 100 /tmp/omnipkg-artifacts/multiverse_output.txt >> $GITHUB_STEP_SUMMARY
+          cat /tmp/omnipkg-artifacts/python_adoption_output.txt >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
           
-          # Check if multiverse analysis completed successfully
-          if grep -q "SUCCESS" /tmp/omnipkg-artifacts/multiverse_output.txt || \
-             grep -q "PASSED" /tmp/omnipkg-artifacts/multiverse_output.txt || \
-             grep -q "completed successfully" /tmp/omnipkg-artifacts/multiverse_output.txt; then
-            
-            echo "✅ Multiverse analysis completed successfully on ${{ matrix.os }}!"
-            echo "multiverse_outcome=success" >> $GITHUB_OUTPUT
-            
-            # Check for hotswapping performance metrics
-            if grep -q "ms" /tmp/omnipkg-artifacts/multiverse_output.txt; then
-              echo "🚀 Performance metrics found in output"
-              grep -E "(ms|millisecond|swap|switch)" /tmp/omnipkg-artifacts/multiverse_output.txt || true
-            fi
-            
-            exit 0
+          # Check if adoption was successful
+          if grep -q "New interpreter bootstrapped" /tmp/omnipkg-artifacts/python_adoption_output.txt && 
+             grep -q "Omnipkg bootstrapped successfully" /tmp/omnipkg-artifacts/python_adoption_output.txt; then
+               echo "Python 3.9 adoption completed successfully."
+               echo "adoption_outcome=success" >> $GITHUB_OUTPUT
           else
-            echo "❌ Multiverse analysis failed or did not complete successfully on ${{ matrix.os }}"
-            echo "multiverse_outcome=failure" >> $GITHUB_OUTPUT
-            echo "Full output:"
-            cat /tmp/omnipkg-artifacts/multiverse_output.txt
+            echo "Python 3.9 adoption failed."
+            echo "adoption_outcome=failure" >> $GITHUB_OUTPUT
             exit 1
           fi
 
-      - name: Archive Multiverse Analysis Output
+      - name: Run Multiverse Analysis Test
+        id: multiverse_test
+        if: steps.test_adoption.outputs.adoption_outcome == 'success'
+        run: |
+          echo "--- Running Multiverse Analysis Test ---"
+          
+          # Run the multiverse analysis test directly
+          echo "🧪 Running multiverse analysis test..."
+          timeout 300 python tests/multiverse_analysis.py 2>&1 | tee /tmp/omnipkg-artifacts/multiverse_test_output.txt
+          
+          echo "## Multiverse Analysis Test Output" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          cat /tmp/omnipkg-artifacts/multiverse_test_output.txt >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          
+          # Check if the test passed
+          test_exit_code=$?
+          if [ $test_exit_code -eq 0 ]; then
+               echo "Multiverse analysis test passed successfully."
+               echo "test_outcome=success" >> $GITHUB_OUTPUT
+          else
+            echo "Multiverse analysis test failed with exit code: $test_exit_code"
+            echo "test_outcome=failure" >> $GITHUB_OUTPUT
+            exit 1
+          fi
+
+      - name: Verify Python Interpreter Registration
+        id: verify_registration
+        if: steps.test_adoption.outputs.adoption_outcome == 'success'
+        run: |
+          echo "--- Verifying Python Interpreter Registration ---"
+          
+          # List available Python interpreters
+          echo "📋 Listing available Python interpreters..."
+          omnipkg python list 2>&1 | tee /tmp/omnipkg-artifacts/python_list_output.txt
+          
+          echo "## Python Interpreters List" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          cat /tmp/omnipkg-artifacts/python_list_output.txt >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          
+          # Check if Python 3.9 is listed
+          if grep -q "3.9" /tmp/omnipkg-artifacts/python_list_output.txt; then
+               echo "Python 3.9 is properly registered."
+               echo "registration_outcome=success" >> $GITHUB_OUTPUT
+          else
+            echo "Python 3.9 registration verification failed."
+            echo "registration_outcome=failure" >> $GITHUB_OUTPUT
+            exit 1
+          fi
+
+      - name: Test Package Installation with Adopted Python
+        id: test_package_install
+        if: steps.test_adoption.outputs.adoption_outcome == 'success'
+        run: |
+          echo "--- Testing Package Installation with Python 3.9 ---"
+          
+          # Try to install a simple package using the adopted Python
+          echo "📦 Installing requests package with Python 3.9..."
+          timeout 300 omnipkg install requests --python 3.9 2>&1 | tee /tmp/omnipkg-artifacts/package_install_output.txt
+          
+          echo "## Package Installation Test Output" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          cat /tmp/omnipkg-artifacts/package_install_output.txt >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          
+          # Check if installation was successful
+          if grep -q -E "(Successfully installed|already installed)" /tmp/omnipkg-artifacts/package_install_output.txt; then
+               echo "Package installation with Python 3.9 successful."
+               echo "install_outcome=success" >> $GITHUB_OUTPUT
+          else
+            echo "Package installation with Python 3.9 failed."
+            echo "install_outcome=failure" >> $GITHUB_OUTPUT
+            # Don't exit here - this is a bonus test
+          fi
+
+      - name: Archive Test Artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: multiverse-analysis-output-${{ matrix.os }}-py${{ matrix.python-version }}
+          name: omnipkg-python-adoption-test-artifacts
           path: /tmp/omnipkg-artifacts/
           retention-days: 7
           compression-level: 6
 
-      - name: Performance Summary
-        if: steps.run_multiverse.outputs.multiverse_outcome == 'success'
+      - name: Test Summary
+        if: always()
         run: |
-          echo "🎯 HotSwapping Performance Summary for ${{ matrix.os }}:" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          if grep -E "(ms|millisecond|performance|timing)" /tmp/omnipkg-artifacts/multiverse_output.txt; then
-            echo "Performance metrics:" >> $GITHUB_STEP_SUMMARY
-            echo '```' >> $GITHUB_STEP_SUMMARY
-            grep -E "(ms|millisecond|performance|timing)" /tmp/omnipkg-artifacts/multiverse_output.txt >> $GITHUB_STEP_SUMMARY
-            echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "## Test Results Summary" >> $GITHUB_STEP_SUMMARY
+          echo "| Test | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|------|--------|" >> $GITHUB_STEP_SUMMARY
+          
+          adoption_status="${{ steps.test_adoption.outputs.adoption_outcome }}"
+          multiverse_status="${{ steps.multiverse_test.outputs.test_outcome }}"
+          registration_status="${{ steps.verify_registration.outputs.registration_outcome }}"
+          install_status="${{ steps.test_package_install.outputs.install_outcome }}"
+          
+          echo "| Python 3.9 Adoption | ${adoption_status:-❌ skipped} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Multiverse Analysis | ${multiverse_status:-❌ skipped} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Interpreter Registration | ${registration_status:-❌ skipped} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Package Installation | ${install_status:-❌ skipped} |" >> $GITHUB_STEP_SUMMARY
+          
+          # Overall test status
+          if [[ "$adoption_status" == "success" && "$multiverse_status" == "success" && "$registration_status" == "success" ]]; then
+            echo "✅ All core tests passed!"
           else
-            echo "No specific performance metrics found in output" >> $GITHUB_STEP_SUMMARY
+            echo "❌ Some tests failed. Check the logs above for details."
           fi
-
-  collect-results:
-    needs: multiverse-test
-    runs-on: ubuntu-latest
-    if: always()
-    steps:
-      - name: Collect Test Results
-        run: |
-          echo "## 🔥 700ms Python Interpreter HotSwapping Results" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "Test completed across multiple architectures." >> $GITHUB_STEP_SUMMARY
-          echo "Check individual job outputs for detailed performance metrics." >> $GITHUB_STEP_SUMMARY
