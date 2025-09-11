@@ -25,7 +25,7 @@
   <img src="https://anaconda.org/conda-forge/omnipkg/badges/platforms.svg" alt="Platforms / Noarch">
 </a>
     <a href="https://clickpy.clickhouse.com/dashboard/omnipkg">
-    <img src="https://img.shields.io/badge/global_reach-40+_countries-green?logo=globe" alt="Global Reach Badge">
+    <img src="https://img.shields.io/badge/global_reach-50+_countries-green?logo=globe" alt="Global Reach Badge">
   </a>
 </p>
 
