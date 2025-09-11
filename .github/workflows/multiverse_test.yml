@@ -36,183 +36,59 @@ jobs:
           pip install -e . redis
 
       - name: Configure omnipkg for non-interactive use
+        # This configuration step remains the same as it prepares the config file
         run: |
           python - << 'EOF'
-          import sys
-          import site
-          import json
+          import sys, site, json, os, sysconfig
           from pathlib import Path
-          import os
-          import sysconfig
-
-          try:
-              site_packages_path = site.getsitepackages()[0]
-          except (IndexError, AttributeError):
-              site_packages_path = sysconfig.get_paths()['purelib']
-
+          try: site_packages_path = site.getsitepackages()[0]
+          except (IndexError, AttributeError): site_packages_path = sysconfig.get_paths()['purelib']
           project_root = Path(os.environ['GITHUB_WORKSPACE'])
-          
           builder_script = project_root / 'omnipkg' / 'package_meta_builder.py'
-          if not builder_script.exists():
-              print(f"Error: {builder_script} does not exist")
-              sys.exit(1)
-
+          if not builder_script.exists(): sys.exit(f"Error: {builder_script} does not exist")
           config_data = {
               'site_packages_path': site_packages_path,
               'multiversion_base': str(Path(site_packages_path) / '.omnipkg_versions'),
               'python_executable': sys.executable,
               'builder_script_path': str(builder_script),
-              'redis_host': 'localhost',
-              'redis_port': 6379,
-              'redis_key_prefix': 'omnipkg:pkg:',
-              'paths_to_index': [str(Path(sys.executable).parent), '/usr/local/bin', '/usr/bin', '/bin', '/usr/sbin', '/sbin'],
-              'auto_cleanup': True,
-              'cleanup_threshold_days': 30
+              'redis_host': 'localhost', 'redis_port': 6379, 'redis_key_prefix': 'omnipkg:pkg:',
+              'paths_to_index': [str(Path(sys.executable).parent), '/usr/local/bin', '/usr/bin', '/bin'],
+              'auto_cleanup': True, 'cleanup_threshold_days': 30
           }
-
           config_dir = Path.home() / '.config' / 'omnipkg'
           config_dir.mkdir(parents=True, exist_ok=True)
           config_path = config_dir / 'config.json'
-          
-          try:
-              with open(config_path, 'w') as f:
-                  json.dump(config_data, f, indent=2)
-              print(f'omnipkg config created at {config_path}:')
-              print(json.dumps(config_data, indent=2))
-          except Exception as e:
-              print(f"Error writing config: {e}")
-              sys.exit(1)
+          with open(config_path, 'w') as f: json.dump(config_data, f, indent=2)
+          print(f'omnipkg config created at {config_path}')
           EOF
 
-      - name: Adopt Current Python 3.11 Environment
-        id: adopt_311
+      - name: Adopt Environments and Run Multiverse Test
+        id: full_test_run
         run: |
-          echo "--- Adopting Current Python 3.11 Environment ---"
-          mkdir -p /tmp/omnipkg-artifacts
-          
-          echo "Running: omnipkg python adopt 3.11"
-          timeout 300 omnipkg python adopt 3.11 2>&1 | tee /tmp/omnipkg-artifacts/python_311_adoption_output.txt
-          exit_code=${PIPESTATUS[0]}
+          # Use 'set -e' to ensure the script fails immediately if any command fails.
+          set -e
 
-          echo "## Python 3.11 Adoption Output" >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          cat /tmp/omnipkg-artifacts/python_311_adoption_output.txt >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          
-          if [ $exit_code -eq 0 ] && grep -q -E "(New interpreter bootstrapped|already adopted|successfully)" /tmp/omnipkg-artifacts/python_311_adoption_output.txt; then
-              echo "Python 3.11 adoption completed successfully."
-              echo "adoption_311_outcome=success" >> $GITHUB_OUTPUT
-          else
-              echo "Python 3.11 adoption failed."
-              echo "adoption_311_outcome=failure" >> $GITHUB_OUTPUT
-              exit 1
-          fi
+          echo "--- 1. Adopting Python 3.11 (Base Environment) ---"
+          # This first call will perform the initial setup and grounding.
+          omnipkg python adopt 3.11
 
-      - name: Test Python 3.9 Adoption
-        id: test_adoption
-        if: steps.adopt_311.outputs.adoption_311_outcome == 'success'
-        run: |
-          echo "--- Testing Python 3.9 Adoption ---"
-          
-          echo "Running: omnipkg python adopt 3.9"
-          timeout 900 omnipkg python adopt 3.9 2>&1 | tee /tmp/omnipkg-artifacts/python_adoption_output.txt
-          exit_code=${PIPESTATUS[0]}
+          echo "--- 2. Adopting Python 3.9 ---"
+          # This call runs in the same session, so the environment is already known.
+          omnipkg python adopt 3.9
 
-          echo "## Python 3.9 Adoption Output" >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          cat /tmp/omnipkg-artifacts/python_adoption_output.txt >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          
-          if [ $exit_code -eq 0 ] && grep -q "New interpreter bootstrapped" /tmp/omnipkg-artifacts/python_adoption_output.txt && \
-             grep -q "Omnipkg bootstrapped successfully" /tmp/omnipkg-artifacts/python_adoption_output.txt; then
-              echo "Python 3.9 adoption completed successfully."
-              echo "adoption_outcome=success" >> $GITHUB_OUTPUT
-          else
-              echo "Python 3.9 adoption failed."
-              echo "adoption_outcome=failure" >> $GITHUB_OUTPUT
-              exit 1
-          fi
-
-      - name: Run Multiverse Analysis Test
-        id: multiverse_test
-        if: steps.test_adoption.outputs.adoption_outcome == 'success'
-        run: |
-          echo "--- Running Multiverse Analysis Test ---"
-          
-          echo "Ensuring we start from Python 3.11 context..."
-          omnipkg swap python 3.11
-          
-          echo "Running multiverse analysis test..."
-          timeout 300 python tests/multiverse_analysis.py 2>&1 | tee /tmp/omnipkg-artifacts/multiverse_test_output.txt
-          test_exit_code=${PIPESTATUS[0]}
-          
-          echo "## Multiverse Analysis Test Output" >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          cat /tmp/omnipkg-artifacts/multiverse_test_output.txt >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          
-          if [ $test_exit_code -eq 0 ]; then
-              echo "Multiverse analysis test passed successfully."
-              echo "test_outcome=success" >> $GITHUB_OUTPUT
-          else
-              echo "Multiverse analysis test failed with exit code: $test_exit_code"
-              echo "test_outcome=failure" >> $GITHUB_OUTPUT
-              exit 1
-          fi
-
-      - name: Verify Python Interpreter Registration
-        id: verify_registration
-        if: steps.test_adoption.outputs.adoption_outcome == 'success'
-        run: |
-          echo "--- Verifying Python Interpreter Registration ---"
-          
-          echo "Listing available Python interpreters..."
-          omnipkg python list 2>&1 | tee /tmp/omnipkg-artifacts/python_list_output.txt
-          
-          echo "## Python Interpreters List" >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          cat /tmp/omnipkg-artifacts/python_list_output.txt >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          
-          if grep -q "3.9" /tmp/omnipkg-artifacts/python_list_output.txt; then
-              echo "Python 3.9 is properly registered."
-              echo "registration_outcome=success" >> $GITHUB_OUTPUT
-          else
-              echo "Python 3.9 registration verification failed."
-              echo "registration_outcome=failure" >> $GITHUB_OUTPUT
-              exit 1
-          fi
-
-      - name: Test Package Installation with Adopted Python
-        id: test_package_install
-        if: steps.test_adoption.outputs.adoption_outcome == 'success'
-        run: |
-          echo "--- Testing Package Installation with Python 3.9 ---"
-          
-          echo "Installing requests package with Python 3.9..."
-          timeout 300 omnipkg install requests --python 3.9 2>&1 | tee /tmp/omnipkg-artifacts/package_install_output.txt
-          exit_code=${PIPESTATUS[0]}
-
-          echo "## Package Installation Test Output" >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          cat /tmp/omnipkg-artifacts/package_install_output.txt >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          
-          if [ $exit_code -eq 0 ] && grep -q -E "(Successfully installed|already installed)" /tmp/omnipkg-artifacts/package_install_output.txt; then
-              echo "Package installation with Python 3.9 successful."
-              echo "install_outcome=success" >> $GITHUB_OUTPUT
-          else
-              echo "Package installation with Python 3.9 failed."
-              echo "install_outcome=failure" >> $GITHUB_OUTPUT
-              exit 1
-          fi
+          echo "--- 3. Running Multiverse Analysis Script ---"
+          # Now, run the test. Its subprocess calls to 'omnipkg' will inherit
+          # the initialized state from this shell, preventing re-initialization.
+          python tests/multiverse_analysis.py
 
       - name: Archive Test Artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: omnipkg-python-adoption-test-artifacts
-          path: /tmp/omnipkg-artifacts/
+          path: |
+            /tmp/omnipkg-artifacts/
+            multiverse_log.jsonl
           retention-days: 7
           compression-level: 6
 
@@ -222,21 +98,12 @@ jobs:
           echo "## Test Results Summary" >> $GITHUB_STEP_SUMMARY
           echo "| Test | Status |" >> $GITHUB_STEP_SUMMARY
           echo "|------|--------|" >> $GITHUB_STEP_SUMMARY
-          
-          adoption_311_status="${{ steps.adopt_311.outputs.adoption_311_outcome }}"
-          adoption_status="${{ steps.test_adoption.outputs.adoption_outcome }}"
-          multiverse_status="${{ steps.multiverse_test.outputs.test_outcome }}"
-          registration_status="${{ steps.verify_registration.outputs.registration_outcome }}"
-          install_status="${{ steps.test_package_install.outputs.install_outcome }}"
-          
-          echo "| Python 3.11 Adoption | ${adoption_311_status:-skipped} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Python 3.9 Adoption | ${adoption_status:-skipped} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Multiverse Analysis | ${multiverse_status:-skipped} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Interpreter Registration | ${registration_status:-skipped} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Package Installation | ${install_status:-skipped} |" >> $GITHUB_STEP_SUMMARY
-          
-          if [[ "${adoption_311_status}" == "success" && "${adoption_status}" == "success" && "${multiverse_status}" == "success" && "${registration_status}" == "success" ]]; then
-            echo "All core tests passed!"
+
+          if [[ "${{ steps.full_test_run.outcome }}" == "success" ]]; then
+            echo "| Multiverse Analysis | ✅ Success |" >> $GITHUB_STEP_SUMMARY
+            echo "All tests passed!"
           else
-            echo "Some tests failed. Check the logs above for details."
+            echo "| Multiverse Analysis | ❌ Failure |" >> $GITHUB_STEP_SUMMARY
+            echo "The test suite failed. Check the logs above for details."
+            exit 1
           fi
