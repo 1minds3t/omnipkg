@@ -14,8 +14,8 @@
   </a>
   <a href="https://github.com/1minds3t/omnipkg/blob/main/LICENSE">
     <img src="https://img.shields.io/badge/License-AGPLv3-d94c31?logo=gnu" alt="License">
-    <img src="https://static.pepy.tech/badge/omnipkg" alt="Downloads">
-  </a>
+      
+  <a href="https://pepy.tech/projects/omnipkg"><img src="https://static.pepy.tech/personalized-badge/omnipkg?period=total&units=INTERNATIONAL_SYSTEM&left_color=BLACK&right_color=GREEN&left_text=downloads" alt="PyPI Downloads"></a>
   <a href="https://anaconda.org/conda-forge/omnipkg">
   <img src="https://img.shields.io/badge/conda--forge-omnipkg-brightgreen?logo=anaconda&logoColor=white" alt="Conda-forge">
 </a>
