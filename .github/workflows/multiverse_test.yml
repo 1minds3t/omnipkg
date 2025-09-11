@@ -159,7 +159,6 @@ jobs:
 
       - name: Performance Summary
         if: steps.run_multiverse.outputs.multiverse_outcome == 'success'
-        shell: bash -l {0}
         run: |
           echo "🎯 HotSwapping Performance Summary for ${{ matrix.os }}:" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
