@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-🚀 OMNIPKG MULTIVERSE ANALYSIS TEST - FIXED VERSION
+OMNIPKG MULTIVERSE ANALYSIS TEST - FIXED VERSION
 ================================================================================
 This test validates that omnipkg can successfully manage multiple Python versions
 and perform cross-dimensional package operations.
