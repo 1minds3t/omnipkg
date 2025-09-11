@@ -35,17 +35,41 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e . redis
 
-      - name: Configure omnipkg for non-interactive use
-        # This configuration step remains the same as it prepares the config file
+      - name: Adopt Environments and Run Multiverse Test
+        id: full_test_run
         run: |
+          set -e # Exit immediately if a command fails
+
+          # 1. Define and EXPORT the explicit path for the config file.
+          #    This is the KEY to the entire solution. Every process will now look here.
+          export OMNIPKG_CONFIG_PATH="${{ github.workspace }}/.omnipkg_config/config.json"
+          
+          echo "--- OMNIPKG_CONFIG_PATH is set to: $OMNIPKG_CONFIG_PATH ---"
+
+          # 2. Configure omnipkg using a script. It will automatically use the env var
+          #    because of the code change from Part 1.
+          echo "--- Configuring omnipkg ---"
           python - << 'EOF'
           import sys, site, json, os, sysconfig
           from pathlib import Path
+
+          # This script now implicitly uses the config path from the environment variable
+          # (assuming you made the change in Part 1)
+          # We just need to write the content.
+          config_path_str = os.environ.get('OMNIPKG_CONFIG_PATH')
+          if not config_path_str:
+              sys.exit("Error: OMNIPKG_CONFIG_PATH is not set.")
+          
+          config_path = Path(config_path_str)
+          config_path.parent.mkdir(parents=True, exist_ok=True)
+
           try: site_packages_path = site.getsitepackages()[0]
           except (IndexError, AttributeError): site_packages_path = sysconfig.get_paths()['purelib']
+          
           project_root = Path(os.environ['GITHUB_WORKSPACE'])
           builder_script = project_root / 'omnipkg' / 'package_meta_builder.py'
           if not builder_script.exists(): sys.exit(f"Error: {builder_script} does not exist")
+
           config_data = {
               'site_packages_path': site_packages_path,
               'multiversion_base': str(Path(site_packages_path) / '.omnipkg_versions'),
@@ -55,55 +79,33 @@ jobs:
               'paths_to_index': [str(Path(sys.executable).parent), '/usr/local/bin', '/usr/bin', '/bin'],
               'auto_cleanup': True, 'cleanup_threshold_days': 30
           }
-          config_dir = Path.home() / '.config' / 'omnipkg'
-          config_dir.mkdir(parents=True, exist_ok=True)
-          config_path = config_dir / 'config.json'
           with open(config_path, 'w') as f: json.dump(config_data, f, indent=2)
           print(f'omnipkg config created at {config_path}')
           EOF
 
-      - name: Adopt Environments and Run Multiverse Test
-        id: full_test_run
-        run: |
-          # Use 'set -e' to ensure the script fails immediately if any command fails.
-          set -e
-
-          echo "--- 1. Adopting Python 3.11 (Base Environment) ---"
-          # This first call will perform the initial setup and grounding.
+          # 3. Adopt the environments. These commands will respect the exported env var.
+          echo "--- Adopting Python 3.11 (Base Environment) ---"
           omnipkg python adopt 3.11
 
-          echo "--- 2. Adopting Python 3.9 ---"
-          # This call runs in the same session, so the environment is already known.
+          echo "--- Adopting Python 3.9 ---"
           omnipkg python adopt 3.9
 
-          echo "--- 3. Running Multiverse Analysis Script ---"
-          # Now, run the test. Its subprocess calls to 'omnipkg' will inherit
-          # the initialized state from this shell, preventing re-initialization.
+          # 4. Run the test script. It, and all subprocesses it creates,
+          #    will inherit the OMNIPKG_CONFIG_PATH variable and find the correct state.
+          echo "--- Running Multiverse Analysis Script ---"
           python tests/multiverse_analysis.py
-
-      - name: Archive Test Artifacts
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: omnipkg-python-adoption-test-artifacts
-          path: |
-            /tmp/omnipkg-artifacts/
-            multiverse_log.jsonl
-          retention-days: 7
-          compression-level: 6
 
       - name: Test Summary
         if: always()
         run: |
           echo "## Test Results Summary" >> $GITHUB_STEP_SUMMARY
-          echo "| Test | Status |" >> $GITHUB_STEP_SUMMARY
-          echo "|------|--------|" >> $GITHUB_STEP_SUMMARY
-
           if [[ "${{ steps.full_test_run.outcome }}" == "success" ]]; then
+            echo "| Test | Status |" >> $GITHUB_STEP_SUMMARY
+            echo "|------|--------|" >> $GITHUB_STEP_SUMMARY
             echo "| Multiverse Analysis | ✅ Success |" >> $GITHUB_STEP_SUMMARY
-            echo "All tests passed!"
           else
+            echo "| Test | Status |" >> $GITHUB_STEP_SUMMARY
+            echo "|------|--------|" >> $GITHUB_STEP_SUMMARY
             echo "| Multiverse Analysis | ❌ Failure |" >> $GITHUB_STEP_SUMMARY
-            echo "The test suite failed. Check the logs above for details."
             exit 1
           fi
