@@ -51,7 +51,7 @@ def get_current_install_strategy(config_manager):
     """Get the current install strategy"""
     try:
         return config_manager.config.get('install_strategy', 'multiversion')
-    except:
+    except Exception: # Catches standard errors, but not SystemExit etc.
         return 'multiversion'
 
 def set_install_strategy(config_manager, strategy):

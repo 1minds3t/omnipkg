@@ -7,7 +7,12 @@ import os
 import re
 import json
 import subprocess
-import redis
+try:
+    import redis
+    REDIS_AVAILABLE = True
+except ImportError:
+    redis = None
+    REDIS_AVAILABLE = False
 import hashlib
 import importlib.metadata
 import zlib
@@ -56,9 +61,22 @@ def get_bin_paths():
     return paths
 
 class omnipkgMetadataGatherer:
-
     def __init__(self, config: Dict, env_id: str, force_refresh: bool=False):
-        self.redis_client = None
+        # --- THE FIX ---
+        # Rename cache_client to the generic cache_client. It will be set by the parent.
+        self.cache_client = None
+        # --- END FIX ---
+        
+        self.force_refresh = force_refresh
+        self.security_report = {}
+        self.config = config
+        self.env_id = os.environ.get('OMNIPKG_ENV_ID_OVERRIDE', env_id)
+        self.package_path_registry = {}
+        if self.force_refresh:
+            print(_('🟢 --force flag detected. Caching will be ignored.'))
+        if not HAS_TQDM:
+            print(_("⚠️ Install 'tqdm' for a better progress bar."))
+        self.cache_client = None
         self.force_refresh = force_refresh
         self.security_report = {}
         self.config = config
@@ -97,33 +115,23 @@ class omnipkgMetadataGatherer:
         suffix = base_prefix.split(':', 1)[1] if ':' in base_prefix else 'pkg:'
         return f'{base}:env_{self.env_id}:{py_ver_str}:{suffix}'
 
-    def connect_redis(self) -> bool:
-        try:
-            self.redis_client = redis.Redis(host=self.config['redis_host'], port=self.config['redis_port'], decode_responses=True)
-            self.redis_client.ping()
-            print(_('✅ Connected to Redis successfully.'))
-            return True
-        except Exception as e:
-            print(_('❌ Could not connect to Redis: {}').format(e))
-            return False
-
     def _discover_distributions(self, targeted_packages: Optional[List[str]]) -> List[importlib.metadata.Distribution]:
         """
-        FIXED: Authoritatively discovers distributions. In targeted mode, it now
-        uses a robust fallback to manually scan site-packages for .dist-info
-        directories if the standard importlib lookup fails, which is crucial for
-        binary-heavy packages like 'uv'.
+        IMPROVED: Authoritatively discovers distributions with robust fallback mechanisms.
+        Handles package name variations (dashes vs underscores) and case sensitivity issues.
         """
         if targeted_packages:
             print(f'🎯 Running in targeted mode for {len(targeted_packages)} package(s).')
             discovered_dists = []
             site_packages = Path(self.config.get('site_packages_path', '/dev/null'))
             multiversion_base = Path(self.config.get('multiversion_base', '/dev/null'))
+            
             for spec in targeted_packages:
                 try:
                     name, version = spec.split('==')
-                    c_name = canonicalize_name(name)
                     found_dist = None
+                    
+                    # Method 1: Try standard importlib lookup with original name
                     try:
                         dist = importlib.metadata.distribution(name)
                         if dist.version == version:
@@ -131,36 +139,168 @@ class omnipkgMetadataGatherer:
                             print(f'   -> Found active distribution for {spec} via standard lookup.')
                     except importlib.metadata.PackageNotFoundError:
                         pass
+                    
+                    # Method 2: Try with canonicalized name if standard lookup failed
                     if not found_dist:
+                        try:
+                            canonical_name = canonicalize_name(name)
+                            dist = importlib.metadata.distribution(canonical_name)
+                            if dist.version == version:
+                                found_dist = dist
+                                print(f'   -> Found active distribution for {spec} via canonical name lookup.')
+                        except importlib.metadata.PackageNotFoundError:
+                            pass
+                    
+                    # Method 3: Manual filesystem scan in site-packages with multiple name variants
+                    if not found_dist and site_packages.is_dir():
+                        name_variants = self._get_package_name_variants(name)
+                        
+                        for variant in name_variants:
+                            # Try different dist-info patterns
+                            patterns = [
+                                f'{variant}-{version}.dist-info',
+                                f'{variant}-{version}*.dist-info',
+                            ]
+                            
+                            for pattern in patterns:
+                                dist_info_paths = list(site_packages.glob(pattern))
+                                if dist_info_paths:
+                                    # Take the first match
+                                    dist_info_path = dist_info_paths[0]
+                                    try:
+                                        found_dist = importlib.metadata.Distribution.at(dist_info_path)
+                                        print(f'   -> Found active distribution for {spec} via manual scan: {dist_info_path.name}')
+                                        break
+                                    except Exception as e:
+                                        print(f'   -> Warning: Could not load distribution from {dist_info_path}: {e}')
+                            
+                            if found_dist:
+                                break
+                    
+                    # Method 4: Check bubble directories
+                    if not found_dist and multiversion_base.is_dir():
                         bubble_path = multiversion_base / f'{name}-{version}'
                         if bubble_path.is_dir():
-                            dist_info_path = next(bubble_path.glob(f'{c_name}-{version}*.dist-info'), None)
-                            if dist_info_path:
-                                found_dist = importlib.metadata.Distribution.at(dist_info_path)
-                                print(f'   -> Found bubbled distribution for {spec} at {dist_info_path.parent.name}')
+                            name_variants = self._get_package_name_variants(name)
+                            
+                            for variant in name_variants:
+                                patterns = [
+                                    f'{variant}-{version}.dist-info',
+                                    f'{variant}-{version}*.dist-info',
+                                ]
+                                
+                                for pattern in patterns:
+                                    dist_info_paths = list(bubble_path.glob(pattern))
+                                    if dist_info_paths:
+                                        dist_info_path = dist_info_paths[0]
+                                        try:
+                                            found_dist = importlib.metadata.Distribution.at(dist_info_path)
+                                            print(f'   -> Found bubbled distribution for {spec} at {bubble_path.name}/{dist_info_path.name}')
+                                            break
+                                        except Exception as e:
+                                            print(f'   -> Warning: Could not load bubbled distribution from {dist_info_path}: {e}')
+                                
+                                if found_dist:
+                                    break
+                    
+                    # Method 5: Last resort - broad search in site-packages
                     if not found_dist and site_packages.is_dir():
-                        dist_info_path = next(site_packages.glob(f'{c_name}-{version}*.dist-info'), None)
-                        if dist_info_path:
-                            found_dist = importlib.metadata.Distribution.at(dist_info_path)
-                            print(f'   -> Found active distribution for {spec} via manual filesystem scan.')
+                        print(f'   -> Performing broad search for {name} (any version)...')
+                        all_dist_infos = list(site_packages.glob('*.dist-info'))
+                        
+                        for dist_info_path in all_dist_infos:
+                            try:
+                                dist = importlib.metadata.Distribution.at(dist_info_path)
+                                # Check if this distribution matches our target (by name and version)
+                                if (canonicalize_name(dist.metadata['Name']) == canonicalize_name(name) and 
+                                    dist.version == version):
+                                    found_dist = dist
+                                    print(f'   -> Found distribution via broad search: {dist_info_path.name}')
+                                    break
+                            except Exception:
+                                # Skip malformed dist-info directories
+                                continue
+                    
                     if found_dist:
                         discovered_dists.append(found_dist)
                     else:
                         print(_("   ⚠️ Could not find any distribution matching spec '{}'. This may be an installation issue.").format(spec))
+                        
                 except ValueError:
-                    print(_("   ⚠️ Could not parse spec '{}'. Skipping.").format(spec))
+                    print(_("   ⚠️ Could not parse spec '{}'. Expected format 'package==version'.").format(spec))
+            
             return discovered_dists
+        
+        # Non-targeted mode - discover all packages
         print('🔍 Discovering all packages from file system (ground truth)...')
         search_paths = []
+        
         site_packages = self.config.get('site_packages_path')
         if site_packages and Path(site_packages).is_dir():
             search_paths.append(site_packages)
+        
         multiversion_base = self.config.get('multiversion_base')
         if multiversion_base and Path(multiversion_base).is_dir():
             search_paths.extend([str(p) for p in Path(multiversion_base).iterdir() if p.is_dir()])
-        dists = list(importlib.metadata.distributions(path=search_paths))
-        print(_('✅ Discovery complete. Found {} total package versions to process.').format(len(dists)))
-        return dists
+        
+        try:
+            dists = list(importlib.metadata.distributions(path=search_paths))
+            print(_('✅ Discovery complete. Found {} total package versions to process.').format(len(dists)))
+            return dists
+        except Exception as e:
+            print(f'⚠️ Error during package discovery: {e}')
+            print('🔧 Falling back to manual discovery...')
+            return self._manual_discovery_fallback(search_paths)
+    
+    def _get_package_name_variants(self, name: str) -> List[str]:
+        """
+        Generate common package name variants to handle naming inconsistencies.
+        """
+        variants = set()
+        
+        # Original name
+        variants.add(name)
+        
+        # Canonicalized name
+        canonical = canonicalize_name(name)
+        variants.add(canonical)
+        
+        # Common transformations
+        variants.add(name.replace('-', '_'))
+        variants.add(name.replace('_', '-'))
+        
+        # Capitalize variations (for packages like Flask-Login)
+        variants.add(name.title())
+        variants.add(name.title().replace('-', '_'))
+        variants.add(name.title().replace('_', '-'))
+        
+        # All lowercase and uppercase
+        variants.add(name.lower())
+        variants.add(name.upper())
+        
+        return list(variants)
+    
+    def _manual_discovery_fallback(self, search_paths: List[str]) -> List[importlib.metadata.Distribution]:
+        """
+        Fallback method for manual package discovery when importlib fails.
+        """
+        discovered_dists = []
+        
+        for search_path in search_paths:
+            path = Path(search_path)
+            if not path.is_dir():
+                continue
+                
+            # Find all .dist-info directories
+            for dist_info_path in path.glob('*.dist-info'):
+                try:
+                    dist = importlib.metadata.Distribution.at(dist_info_path)
+                    discovered_dists.append(dist)
+                except Exception as e:
+                    print(f'   -> Warning: Could not load distribution from {dist_info_path}: {e}')
+        
+        print(f'✅ Manual discovery complete. Found {len(discovered_dists)} distributions.')
+        return discovered_dists
 
     def _is_bubbled(self, dist: importlib.metadata.Distribution) -> bool:
         multiversion_base = self.config.get('multiversion_base', '/dev/null')
@@ -214,18 +354,18 @@ class omnipkgMetadataGatherer:
     def _register_bubble_path(self, pkg_name: str, version: str, bubble_path: Path):
         """Register bubble paths in Redis for dedup across bubbles and main env."""
         redis_key = f'{self.redis_key_prefix}bubble:{pkg_name}:{version}:path'
-        self.redis_client.set(redis_key, str(bubble_path))
+        self.cache_client.set(redis_key, str(bubble_path))
         self.package_path_registry[pkg_name] = self.package_path_registry.get(pkg_name, {})
         self.package_path_registry[pkg_name][version] = str(bubble_path)
 
     def _store_active_versions(self, active_packages: Dict[str, str]):
-        if not self.redis_client:
+        if not self.cache_client:
             return
         prefix = self.redis_key_prefix
         for pkg_name, version in active_packages.items():
             main_key = f'{prefix}{pkg_name}'
             try:
-                self.redis_client.hset(main_key, 'active_version', version)
+                self.cache_client.hset(main_key, 'active_version', version)
             except Exception as e:
                 print(_('⚠️ Failed to store active version for {}: {}').format(pkg_name, e))
 
@@ -381,8 +521,7 @@ class omnipkgMetadataGatherer:
         FIXED (v2): The main execution loop. It now safely handles corrupted
         package metadata during the pre-scan phase, preventing crashes.
         """
-        if not self.connect_redis():
-            return
+            
         distributions_to_process = self._discover_distributions(targeted_packages)
         if targeted_packages:
             newly_active_packages_to_scan = {}
@@ -435,7 +574,7 @@ class omnipkgMetadataGatherer:
             name = canonicalize_name(raw_name)
             version = dist.version
             version_key = f'{self.redis_key_prefix}{name}:{version}'
-            if not self.force_refresh and self.redis_client.exists(version_key):
+            if not self.force_refresh and self.cache_client.exists(version_key):
                 return False
                         # --- START MODIFIED CODE ---
             metadata = self._build_comprehensive_metadata(dist)
@@ -526,7 +665,7 @@ class omnipkgMetadataGatherer:
                 data_to_store[field] = compressed.hex()
                 data_to_store[f'{field}_compressed'] = 'true'
         flattened_data = self._flatten_dict(data_to_store)
-        with self.redis_client.pipeline() as pipe:
+        with self.cache_client.pipeline() as pipe:
             pipe.delete(version_key)
             pipe.hset(version_key, mapping=flattened_data)
             pipe.hset(main_key, 'name', package_name)
@@ -772,7 +911,7 @@ if __name__ == '__main__':
     gatherer = omnipkgMetadataGatherer(config=config, env_id=env_id, force_refresh='--force' in sys.argv)
     
     try:
-        if gatherer.connect_redis():
+        if gatherer.connect_cache():
             targeted_packages = [arg for arg in sys.argv[1:] if not arg.startswith('--')]
             if targeted_packages:
                 gatherer.run(targeted_packages=targeted_packages)
