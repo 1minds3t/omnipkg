@@ -75,8 +75,11 @@
 
 **Fresh on conda-forge TODAY!** Official conda-forge distribution now available alongside Docker and PyPI. 
 Link: https://anaconda.org/conda-forge/omnipkg
-Run: conda install -c conda-forge omnipkg
 
+Run: 
+```
+conda install -c conda-forge omnipkg
+```
 ---
 
 ## 🔥 **BREAKTHROUGH: Multiverse Analysis - Single Script, Single Environment**
