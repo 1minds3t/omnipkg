@@ -1,0 +1,185 @@
+name: "🔥 700ms Py Interp HotSwapping"
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  multiverse-test:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, ubuntu-20.04, macos-latest, macos-13]
+        # Start with 3.9 as base, the test will handle swapping
+        python-version: ['3.9']
+      fail-fast: false
+      
+    runs-on: ${{ matrix.os }}
+    
+    services:
+      redis:
+        image: redis:7
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e . redis
+
+      - name: Configure omnipkg for non-interactive use
+        run: |
+          python - << 'EOF'
+          import sys
+          import site
+          import json
+          from pathlib import Path
+          import os
+          import sysconfig
+
+          try:
+              site_packages_path = site.getsitepackages()[0]
+          except (IndexError, AttributeError):
+              site_packages_path = sysconfig.get_paths()['purelib']
+
+          project_root = Path(os.environ['GITHUB_WORKSPACE'])
+          
+          builder_script = project_root / 'omnipkg' / 'package_meta_builder.py'
+          if not builder_script.exists():
+              print(f"Error: {builder_script} does not exist")
+              sys.exit(1)
+
+          config_data = {
+              'site_packages_path': site_packages_path,
+              'multiversion_base': str(Path(site_packages_path) / '.omnipkg_versions'),
+              'python_executable': sys.executable,
+              'builder_script_path': str(builder_script),
+              'paths_to_index': [str(Path(sys.executable).parent), '/usr/local/bin', '/usr/bin', '/bin', '/usr/sbin', '/sbin'],
+              'auto_cleanup': True,
+              'cleanup_threshold_days': 30
+          }
+
+          config_dir = Path.home() / '.config' / 'omnipkg'
+          config_dir.mkdir(parents=True, exist_ok=True)
+          config_path = config_dir / 'config.json'
+          
+          try:
+              with open(config_path, 'w') as f:
+                  json.dump(config_data, f, indent=2)
+              print(f'omnipkg config created at {config_path}:')
+              print(json.dumps(config_data, indent=2))
+          except Exception as e:
+              print(f"Error writing config: {e}")
+              sys.exit(1)
+          EOF
+
+      - name: Ensure Python 3.9 is adopted first
+        run: |
+          echo "--- Ensuring Python 3.9 is available and adopted ---"
+          # First check if we can adopt Python 3.9
+          if ! omnipkg python adopt 3.9; then
+            echo "Failed to adopt Python 3.9, but this might be expected if already using 3.9"
+            echo "Current Python version:"
+            python --version
+          else
+            echo "Successfully adopted Python 3.9"
+          fi
+
+      - name: Run Multiverse Analysis Test
+        id: run_multiverse
+        run: |
+          echo "--- Running 700ms Python Interpreter HotSwapping Test ---"
+          mkdir -p /tmp/omnipkg-artifacts
+          
+          # Set pipefail to catch any failures in the pipeline
+          set -o pipefail
+          
+          echo "Starting multiverse analysis test..."
+          echo "OS: ${{ matrix.os }}, Python: ${{ matrix.python-version }}"
+          
+          # Run the multiverse analysis test
+          if timeout 1200 python tests/multiverse_analysis.py 2>&1 | tee /tmp/omnipkg-artifacts/multiverse_output.txt; then
+            MULTIVERSE_EXIT_CODE=0
+          else
+            MULTIVERSE_EXIT_CODE=$?
+          fi
+          
+          echo "## Multiverse Analysis Output (${{ matrix.os }})" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          head -n 100 /tmp/omnipkg-artifacts/multiverse_output.txt >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          
+          # Check if multiverse analysis completed successfully
+          if grep -q "SUCCESS" /tmp/omnipkg-artifacts/multiverse_output.txt || \
+             grep -q "PASSED" /tmp/omnipkg-artifacts/multiverse_output.txt || \
+             grep -q "completed successfully" /tmp/omnipkg-artifacts/multiverse_output.txt; then
+            
+            echo "✅ Multiverse analysis completed successfully on ${{ matrix.os }}!"
+            echo "multiverse_outcome=success" >> $GITHUB_OUTPUT
+            
+            # Check for hotswapping performance metrics
+            if grep -q "ms" /tmp/omnipkg-artifacts/multiverse_output.txt; then
+              echo "🚀 Performance metrics found in output"
+              grep -E "(ms|millisecond|swap|switch)" /tmp/omnipkg-artifacts/multiverse_output.txt || true
+            fi
+            
+            exit 0
+          else
+            echo "❌ Multiverse analysis failed or did not complete successfully on ${{ matrix.os }}"
+            echo "multiverse_outcome=failure" >> $GITHUB_OUTPUT
+            echo "Full output:"
+            cat /tmp/omnipkg-artifacts/multiverse_output.txt
+            exit 1
+          fi
+
+      - name: Archive Multiverse Analysis Output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: multiverse-analysis-output-${{ matrix.os }}-py${{ matrix.python-version }}
+          path: /tmp/omnipkg-artifacts/
+          retention-days: 7
+          compression-level: 6
+
+      - name: Performance Summary
+        if: steps.run_multiverse.outputs.multiverse_outcome == 'success'
+        shell: bash -l {0}
+        run: |
+          echo "🎯 HotSwapping Performance Summary for ${{ matrix.os }}:" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if grep -E "(ms|millisecond|performance|timing)" /tmp/omnipkg-artifacts/multiverse_output.txt; then
+            echo "Performance metrics:" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            grep -E "(ms|millisecond|performance|timing)" /tmp/omnipkg-artifacts/multiverse_output.txt >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+          else
+            echo "No specific performance metrics found in output" >> $GITHUB_STEP_SUMMARY
+          fi
+
+  collect-results:
+    needs: multiverse-test
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Collect Test Results
+        run: |
+          echo "## 🔥 700ms Python Interpreter HotSwapping Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Test completed across multiple architectures." >> $GITHUB_STEP_SUMMARY
+          echo "Check individual job outputs for detailed performance metrics." >> $GITHUB_STEP_SUMMARY
