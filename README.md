@@ -12,16 +12,16 @@
   <a href="https://pypi.org/project/omnipkg/">
     <img src="https://img.shields.io/pypi/v/omnipkg?color=blue&logo=pypi" alt="PyPI">
   </a>
-  <a href="https://anaconda.org/conda-forge/omnipkg">
-    <img src="https://img.shields.io/badge/conda--forge-NEW!-brightgreen?logo=conda-forge&logoColor=white" alt="Conda-forge NEW">
-  </a>
   <a href="https://github.com/1minds3t/omnipkg/blob/main/LICENSE">
     <img src="https://img.shields.io/badge/License-AGPLv3-d94c31?logo=gnu" alt="License">
-  </a>
-  <img src="https://img.shields.io/badge/Redis-Optional-green?logo=redis&logoColor=white" alt="Redis Optional">
-  <a href="https://pepy.tech/projects/omnipkg">
     <img src="https://static.pepy.tech/badge/omnipkg" alt="Downloads">
   </a>
+  <a href="https://anaconda.org/conda-forge/omnipkg">
+  <img src="https://img.shields.io/badge/conda--forge-omnipkg-brightgreen?logo=anaconda&logoColor=white" alt="Conda-forge">
+</a>
+  <a href="https://anaconda.org/conda-forge/omnipkg">
+  <img src="https://anaconda.org/conda-forge/omnipkg/badges/platforms.svg" alt="Platforms / Noarch">
+</a>
     <a href="https://clickpy.clickhouse.com/dashboard/omnipkg">
     <img src="https://img.shields.io/badge/global_reach-40+_countries-green?logo=globe" alt="Global Reach Badge">
   </a>
