@@ -21,15 +21,15 @@
   <a href="https://anaconda.org/conda-forge/omnipkg">
   <img src="https://img.shields.io/badge/conda--forge-omnipkg-brightgreen?logo=anaconda&logoColor=white" alt="Conda-forge">
 </a>
+    <a href="https://clickpy.clickhouse.com/dashboard/omnipkg">
+    <img src="https://img.shields.io/badge/global_reach-50+_countries-green?logo=globe" alt="Global Reach Badge">
+  </a>
   <a href="https://anaconda.org/conda-forge/omnipkg">
   <img src="https://anaconda.org/conda-forge/omnipkg/badges/platforms.svg" alt="Platforms / Noarch">
 </a>
 <a href="https://hub.docker.com/r/1minds3t/omnipkg">
   <img src="https://img.shields.io/docker/pulls/1minds3t/omnipkg?logo=docker" alt="Docker Pulls">
 </a>
-    <a href="https://clickpy.clickhouse.com/dashboard/omnipkg">
-    <img src="https://img.shields.io/badge/global_reach-50+_countries-green?logo=globe" alt="Global Reach Badge">
-  </a>
 </p>
 
 </p>
@@ -156,7 +156,7 @@ omnipkg Healing:     693.212 ms  ( 693,211,844 ns)
 <!-- COMPARISON_STATS_START -->
 ## ⚖️ Multi-Version Support
 
-[![omnipkg](https://img.shields.io/badge/omnipkg-386%20Wins-brightgreen?logo=python&logoColor=white)](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml) [![pip](https://img.shields.io/badge/pip-389%20Failures-red?logo=pypi&logoColor=white)](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml) [![uv](https://img.shields.io/badge/uv-389%20Failures-red?logo=python&logoColor=white)](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml)
+[![omnipkg](https://img.shields.io/badge/omnipkg-385%20Wins-brightgreen?logo=python&logoColor=white)](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml) [![pip](https://img.shields.io/badge/pip-388%20Failures-red?logo=pypi&logoColor=white)](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml) [![uv](https://img.shields.io/badge/uv-388%20Failures-red?logo=python&logoColor=white)](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml)
 
 *Multi-version installation tests run hourly. [Live results here.](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml)*
 
@@ -391,18 +391,32 @@ Solving interpreter hot-swapping required a complete architectural reimagining. 
 
 ### Installation Options
 
-#### 📦 PyPI (Recommended)
+#### 📦 PyPI (Recommended)    
+
+</a>
+  <a href="https://pypi.org/project/omnipkg/">
+    <img src="https://img.shields.io/pypi/v/omnipkg?color=blue&logo=pypi" alt="PyPI">
+  </a>
+  
 ```bash
 pip install omnipkg
 ```
 
 #### 🏠 Official Conda-Forge (BRAND NEW!!!)
+
+  <a href="https://anaconda.org/conda-forge/omnipkg">
+  <img src="https://anaconda.org/conda-forge/omnipkg/badges/platforms.svg" alt="Platforms / Noarch">
+</a>
+  <a href="https://anaconda.org/conda-forge/omnipkg">
+  <img src="https://img.shields.io/badge/conda--forge-omnipkg-brightgreen?logo=anaconda&logoColor=white" alt="Conda-forge">
+</a>
+
 ```bash
 # Easiest guaranteed way
 conda install -c conda-forge omnipkg
 
 # Or with mamba if you prefer speed
-mamba install omnipkg
+mamba install -c conda-forge omnipkg
 ```
 
 #### 🍺 Homebrew (macOS/Linux)
@@ -413,7 +427,11 @@ brew tap 1minds3t/omnipkg
 brew install omnipkg
 ```
 
-#### 🐋 Docker
+#### 🐋 Docker 
+<a href="https://hub.docker.com/r/1minds3t/omnipkg">
+  <img src="https://img.shields.io/docker/pulls/1minds3t/omnipkg?logo=docker" alt="Docker Pulls">
+</a>
+
 ```bash
 
 # Always pull the latest release
