@@ -59,6 +59,9 @@
 <a href="https://github.com/1minds3t/omnipkg/actions/workflows/multiverse_test.yml">
   <img src="https://img.shields.io/badge/🔥_Python_Interpreter_Hot--Swapping-Live-orange?logo=python&logoColor=white" alt="Python Hot-Swapping">
 </a>
+  <a href="https://github.com/1minds3t/omnipkg/actions/workflows/old_rich_test.yml">
+  <img src="https://img.shields.io/badge/⚡_Auto--Healing-5.15x_Faster_than_UV-gold?logo=lightning&logoColor=white" alt="Auto-Healing Performance">
+</a>
     <a href="https://github.com/1minds3t/omnipkg/actions/workflows/language_test.yml">
     <img src="https://img.shields.io/badge/💥_Breaking_Language_Barriers-24_Languages-success?logo=babel&logoColor=white" alt="24 Languages">
   </a>
@@ -116,6 +119,10 @@ The impossible is now routine. Watch `omnipkg` seamlessly run the same script ac
 
 ## 🛡️ **BREAKTHROUGH: Auto-Healing with `omnipkg run`**
 
+<a href="https://github.com/1minds3t/omnipkg/actions/workflows/old_rich_test.yml">
+  <img src="https://img.shields.io/badge/⚡_Auto--Healing-5.15x_Faster_than_UV-gold?logo=lightning&logoColor=white" alt="Auto-Healing Performance">
+</a>
+
 When external tools cause compatibility crashes, `omnipkg run` automatically detects and fixes issues in real-time:
 
 ```bash
@@ -149,7 +156,7 @@ omnipkg Healing:     693.212 ms  ( 693,211,844 ns)
 <!-- COMPARISON_STATS_START -->
 ## ⚖️ Multi-Version Support
 
-[![omnipkg](https://img.shields.io/badge/omnipkg-386%20Wins-brightgreen?logo=python&logoColor=white)](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml) [![pip](https://img.shields.io/badge/pip-389%20Failures-red?logo=pypi&logoColor=white)](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml) [![uv](https://img.shields.io/badge/uv-389%20Failures-red?logo=python&logoColor=white)](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml)
+[![omnipkg](https://img.shields.io/badge/omnipkg-385%20Wins-brightgreen?logo=python&logoColor=white)](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml) [![pip](https://img.shields.io/badge/pip-388%20Failures-red?logo=pypi&logoColor=white)](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml) [![uv](https://img.shields.io/badge/uv-388%20Failures-red?logo=python&logoColor=white)](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml)
 
 *Multi-version installation tests run hourly. [Live results here.](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml)*
 
@@ -335,6 +342,7 @@ omnipkg info uv
 ---
 
 ### 7. Instant Environment Recovery
+
 [![🛡️ UV Revert Test](https://img.shields.io/badge/🛡️_UV_Revert_Test-passing-success)](https://github.com/1minds3t/omnipkg/actions/workflows/test_uv_revert.yml)
 
 If an external tool (like `pip` or `uv`) causes damage, `omnipkg revert` restores your environment to a "last known good" state in seconds.
