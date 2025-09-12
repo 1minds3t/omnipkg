@@ -88,6 +88,10 @@ conda install -c conda-forge omnipkg
 
 The impossible is now routine. Watch `omnipkg` seamlessly run the same script across multiple Python versions **in a single environment** with automatic dependency management, auto-healing, and zero process restarts:
 
+<a href="https://github.com/1minds3t/omnipkg/actions/workflows/multiverse_test.yml">
+  <img src="https://img.shields.io/badge/🔥_Python_Interpreter_Hot--Swapping-Live-orange?logo=python&logoColor=white" alt="Python Hot-Swapping">
+</a>
+
 ```bash
 🚀 Launching multiverse analysis from Python 3.11…
 
