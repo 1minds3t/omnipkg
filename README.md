@@ -9,20 +9,23 @@
   <br>
 <p align="center">
   <!-- Core Project Info -->
+      <a href="https://github.com/1minds3t/omnipkg/blob/main/LICENSE">
+    <img src="https://img.shields.io/badge/License-AGPLv3-d94c31?logo=gnu" alt="License">
+      </a>
   <a href="https://pypi.org/project/omnipkg/">
     <img src="https://img.shields.io/pypi/v/omnipkg?color=blue&logo=pypi" alt="PyPI">
   </a>
-  <a href="https://github.com/1minds3t/omnipkg/blob/main/LICENSE">
-    <img src="https://img.shields.io/badge/License-AGPLv3-d94c31?logo=gnu" alt="License">
-      
-  <a href="https://pepy.tech/projects/omnipkg">
-<img src="https://static.pepy.tech/personalized-badge/omnipkg?period=total&units=INTERNATIONAL_SYSTEM&left_color=BLACK&right_color=GREEN&left_text=downloads" alt="PyPI Downloads">
+<a href="https://pepy.tech/projects/omnipkg">
+  <img src="https://static.pepy.tech/personalized-badge/omnipkg?period=total&units=INTERNATIONAL_SYSTEM&left_color=BLACK&right_color=blue&left_text=downloads" alt="PyPI Downloads">
 </a>
   <a href="https://anaconda.org/conda-forge/omnipkg">
   <img src="https://img.shields.io/badge/conda--forge-omnipkg-brightgreen?logo=anaconda&logoColor=white" alt="Conda-forge">
 </a>
   <a href="https://anaconda.org/conda-forge/omnipkg">
   <img src="https://anaconda.org/conda-forge/omnipkg/badges/platforms.svg" alt="Platforms / Noarch">
+</a>
+<a href="https://hub.docker.com/r/1minds3t/omnipkg">
+  <img src="https://img.shields.io/docker/pulls/1minds3t/omnipkg?logo=docker" alt="Docker Pulls">
 </a>
     <a href="https://clickpy.clickhouse.com/dashboard/omnipkg">
     <img src="https://img.shields.io/badge/global_reach-50+_countries-green?logo=globe" alt="Global Reach Badge">
@@ -142,7 +145,7 @@ omnipkg Healing:     693.212 ms  ( 693,211,844 ns)
 <!-- COMPARISON_STATS_START -->
 ## ⚖️ Multi-Version Support
 
-[![omnipkg](https://img.shields.io/badge/omnipkg-385%20Wins-brightgreen?logo=python&logoColor=white)](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml) [![pip](https://img.shields.io/badge/pip-388%20Failures-red?logo=pypi&logoColor=white)](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml) [![uv](https://img.shields.io/badge/uv-388%20Failures-red?logo=python&logoColor=white)](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml)
+[![omnipkg](https://img.shields.io/badge/omnipkg-384%20Wins-brightgreen?logo=python&logoColor=white)](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml) [![pip](https://img.shields.io/badge/pip-387%20Failures-red?logo=pypi&logoColor=white)](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml) [![uv](https://img.shields.io/badge/uv-387%20Failures-red?logo=python&logoColor=white)](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml)
 
 *Multi-version installation tests run hourly. [Live results here.](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml)*
 
