@@ -67,6 +67,8 @@ jobs:
           
           # STEP 2: Python 3.11 - TensorFlow prediction
           echo "📦 STEP 2: Setting up Python 3.11 dimension..."
+          # Re-adopt Python 3.11 to ensure it's in current context before swapping
+          omnipkg python adopt 3.11
           omnipkg swap python 3.11
           
           echo "🔧 Installing TensorFlow for Python 3.11..."
