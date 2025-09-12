@@ -1,0 +1,78 @@
+name: "Multiverse Analysis Test"
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  test-multiverse-analysis:
+    runs-on: ubuntu-latest
+    services:
+      redis:
+        image: redis:7
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        
+      - name: Set up Python 3.11 (base environment)
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e . redis
+          # Add any additional dependencies your test needs
+          # pip install pytest numpy pandas matplotlib seaborn etc.
+          
+      - name: Initialize omnipkg environment
+        run: |
+          # Set consistent config path
+          export OMNIPKG_CONFIG_PATH="${{ github.workspace }}/.omnipkg_config/config.json"
+          echo "Config path: $OMNIPKG_CONFIG_PATH"
+          
+          # Initialize omnipkg (will auto-initialize on first command)
+          echo "--- Initializing omnipkg ---"
+          omnipkg python adopt 3.11
+          omnipkg info python
+          
+      - name: Run Multiverse Analysis Test
+        id: multiverse_test
+        run: |
+          set -e
+          echo "=== Running Multiverse Analysis Test ==="
+          
+          # Set config path for consistency
+          export OMNIPKG_CONFIG_PATH="${{ github.workspace }}/.omnipkg_config/config.json"
+          
+          # Navigate to test directory and run the test
+          echo "--- Running multiverse_analysis.py ---"
+          cd tests
+          python multiverse_analysis.py
+          
+          echo "✅ Multiverse analysis test completed successfully!"
+          
+      - name: Test Summary
+        if: always()
+        run: |
+          echo "## Test Results Summary" >> $GITHUB_STEP_SUMMARY
+          if [[ "${{ steps.multiverse_test.outcome }}" == "success" ]]; then
+            echo "✅ **Multiverse Analysis Test: PASSED**" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Successfully executed multiverse_analysis.py test" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ **Multiverse Analysis Test: FAILED**" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Check the workflow logs for details." >> $GITHUB_STEP_SUMMARY
+          fi
