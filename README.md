@@ -21,9 +21,9 @@
 <a href="https://anaconda.org/conda-forge/omnipkg">
   <img src="https://img.shields.io/conda/vn/conda-forge/omnipkg?logo=conda-forge" alt="Conda Version">
 </a>
-    <a href="https://clickpy.clickhouse.com/dashboard/omnipkg">
-    <img src="https://img.shields.io/badge/global_reach-50+_countries-green?logo=globe" alt="Global Reach Badge">
-  </a>
+<a href="https://clickpy.clickhouse.com/dashboard/omnipkg">
+  <img src="https://img.shields.io/badge/global_reach-50+_countries-228B22?logo=globe" alt="Global Reach Badge">
+</a>
   <a href="https://anaconda.org/conda-forge/omnipkg">
   <img src="https://anaconda.org/conda-forge/omnipkg/badges/platforms.svg" alt="Platforms / Noarch">
 </a>
