@@ -32,10 +32,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          # Install omnipkg and redis, but exclude safety to avoid packaging conflict
-          pip install -e . redis --force-reinstall --no-deps
-          # Install the actual dependencies omnipkg needs
-          pip install packaging requests click redis psutil
+          pip install -e . redis
           
       - name: Initialize omnipkg environment
         run: |
