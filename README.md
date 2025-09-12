@@ -18,7 +18,7 @@
   <a href="https://anaconda.org/conda-forge/omnipkg">
   <img src="https://img.shields.io/conda/vn/conda-forge/omnipkg?logo=conda-forge" alt="Conda Version">
 </a>
-  <a href="https://pepy.tech/projects/omnipkg">
+ <a href="https://pepy.tech/projects/omnipkg">
     <img src="https://static.pepy.tech/personalized-badge/omnipkg?period=total&units=INTERNATIONAL_SYSTEM&left_color=black&right_color=blue&left_text=downloads" alt="PyPI Downloads">
   </a>
 <a href="https://hub.docker.com/r/1minds3t/omnipkg">
