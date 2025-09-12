@@ -56,6 +56,8 @@ jobs:
           
       - name: Run Multiverse Analysis Test
         id: multiverse_test
+        env:
+          PYTHONUNBUFFERED: 1
         run: |
           set -e
           echo "=== Running Multiverse Analysis Test ==="
