@@ -29,29 +29,25 @@ jobs:
         with:
           python-version: '3.11'
           
-      - name: Set up Python 3.9 (for multiverse test)
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.9'
-          
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e . redis
-          # Add any additional dependencies your test needs
-          # pip install pytest numpy pandas matplotlib seaborn etc.
+          # Install without safety to avoid packaging conflict
+          pip install -e . redis --no-deps
+          pip install packaging redis click
           
-      - name: Initialize omnipkg environment with multiple Python versions
+      - name: Initialize omnipkg environment
         run: |
           # Set consistent config path
           export OMNIPKG_CONFIG_PATH="${{ github.workspace }}/.omnipkg_config/config.json"
           echo "Config path: $OMNIPKG_CONFIG_PATH"
           
-          # Initialize omnipkg (will auto-initialize on first command)
+          # Initialize omnipkg with Python 3.11
           echo "--- Initializing omnipkg with Python 3.11 ---"
           omnipkg python adopt 3.11
           
-          echo "--- Adopting Python 3.9 for multiverse test ---"
+          # Let omnipkg adopt Python 3.9 (it will find it from the system)
+          echo "--- Adopting Python 3.9 ---"
           omnipkg python adopt 3.9
           
           echo "--- Listing all managed Python versions ---"
