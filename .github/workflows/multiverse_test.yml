@@ -45,13 +45,9 @@ jobs:
           export OMNIPKG_CONFIG_PATH="${{ github.workspace }}/.omnipkg_config/config.json"
           echo "Config path: $OMNIPKG_CONFIG_PATH"
           
-          # Initialize omnipkg config
+          # Initialize omnipkg config (let the CLI handle it)
           echo "--- Initializing omnipkg ---"
-          python -c "
-          import omnipkg.core
-          core = omnipkg.core.OmnipkgCore()
-          print('✅ Omnipkg initialized successfully')
-          "
+          echo "Omnipkg will auto-initialize on first command"
           
           # Adopt Python 3.11 (current)
           echo "--- Adopting Python 3.11 ---"
