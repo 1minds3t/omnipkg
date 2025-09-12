@@ -9,23 +9,30 @@
   <br>
 <p align="center">
   <!-- Core Project Info -->
+      <a href="https://github.com/1minds3t/omnipkg/blob/main/LICENSE">
+    <img src="https://img.shields.io/badge/License-AGPLv3-d94c31?logo=gnu" alt="License">
+      </a>
   <a href="https://pypi.org/project/omnipkg/">
     <img src="https://img.shields.io/pypi/v/omnipkg?color=blue&logo=pypi" alt="PyPI">
-  </a>
-  <a href="https://github.com/1minds3t/omnipkg/blob/main/LICENSE">
-    <img src="https://img.shields.io/badge/License-AGPLv3-d94c31?logo=gnu" alt="License">
-    <img src="https://static.pepy.tech/badge/omnipkg" alt="Downloads">
-  </a>
+   </a>
   <a href="https://anaconda.org/conda-forge/omnipkg">
-  <img src="https://img.shields.io/badge/conda--forge-omnipkg-brightgreen?logo=anaconda&logoColor=white" alt="Conda-forge">
+  <img src="https://img.shields.io/conda/vn/conda-forge/omnipkg?logo=conda-forge" alt="Conda Version">
+</a>
+<a href="https://pepy.tech/projects/omnipkg">
+  <img src="https://static.pepy.tech/personalized-badge/omnipkg?period=total&units=INTERNATIONAL_SYSTEM&left_color=gray&right_color=blue&left_text=downloads" alt="PyPI Downloads">
+</a>
+<a href="https://hub.docker.com/r/1minds3t/omnipkg">
+  <img src="https://img.shields.io/docker/pulls/1minds3t/omnipkg?logo=docker" alt="Docker Pulls">
 </a>
   <a href="https://anaconda.org/conda-forge/omnipkg">
   <img src="https://anaconda.org/conda-forge/omnipkg/badges/platforms.svg" alt="Platforms / Noarch">
 </a>
-    <a href="https://clickpy.clickhouse.com/dashboard/omnipkg">
-    <img src="https://img.shields.io/badge/global_reach-40+_countries-green?logo=globe" alt="Global Reach Badge">
-  </a>
+<a href="https://clickpy.clickhouse.com/dashboard/omnipkg">
+  <img src="https://img.shields.io/badge/global_reach-50+_countries-228B22?logo=globe" alt="Global Reach Badge">
+</a>
 </p>
+
+
 
 </p>
 <p align="center">
@@ -48,15 +55,15 @@
 </p>
 <p align="center">
   <!-- Key Features -->
-    <a href="https://github.com/1minds3t/omnipkg/actions/workflows/multiverse_analysis.yml">
-    <img src="https://img.shields.io/badge/🌀_Multiverse_Analysis-Single_Script_Single_Env-purple?logo=python&logoColor=white" alt="Multiverse Analysis">
-  </a>
   <a href="https://github.com/1minds3t/omnipkg/actions/workflows/numpy_scipy_test.yml">
     <img src="https://img.shields.io/badge/🚀_Live_NumPy+SciPy_Hot--Swapping-passing-success?logo=github-actions" alt="Hot-Swapping">
   </a>
-  <a href="https://github.com/1minds3t/omnipkg/releases">
-    <img src="https://img.shields.io/badge/🔥_Python_Interpreter_Hot--Swapping-Live-orange?logo=python&logoColor=white" alt="Python Hot-Swapping">
-  </a>
+<a href="https://github.com/1minds3t/omnipkg/actions/workflows/multiverse_test.yml">
+  <img src="https://img.shields.io/badge/🔥_Python_Interpreter_Hot--Swapping-Live-orange?logo=python&logoColor=white" alt="Python Hot-Swapping">
+</a>
+  <a href="https://github.com/1minds3t/omnipkg/actions/workflows/old_rich_test.yml">
+  <img src="https://img.shields.io/badge/⚡_Auto--Healing-5.15x_Faster_than_UV-gold?logo=lightning&logoColor=white" alt="Auto-Healing Performance">
+</a>
     <a href="https://github.com/1minds3t/omnipkg/actions/workflows/language_test.yml">
     <img src="https://img.shields.io/badge/💥_Breaking_Language_Barriers-24_Languages-success?logo=babel&logoColor=white" alt="24 Languages">
   </a>
@@ -75,13 +82,20 @@
 
 **Fresh on conda-forge TODAY!** Official conda-forge distribution now available alongside Docker and PyPI. 
 Link: https://anaconda.org/conda-forge/omnipkg
-Run: conda install -c conda-forge omnipkg
 
+Run: 
+```
+conda install -c conda-forge omnipkg
+```
 ---
 
 ## 🔥 **BREAKTHROUGH: Multiverse Analysis - Single Script, Single Environment**
 
 The impossible is now routine. Watch `omnipkg` seamlessly run the same script across multiple Python versions **in a single environment** with automatic dependency management, auto-healing, and zero process restarts:
+
+<a href="https://github.com/1minds3t/omnipkg/actions/workflows/multiverse_test.yml">
+  <img src="https://img.shields.io/badge/🔥_Python_Interpreter_Hot--Swapping-Live-orange?logo=python&logoColor=white" alt="Python Hot-Swapping">
+</a>
 
 ```bash
 🚀 Launching multiverse analysis from Python 3.11…
@@ -106,6 +120,10 @@ The impossible is now routine. Watch `omnipkg` seamlessly run the same script ac
 ---
 
 ## 🛡️ **BREAKTHROUGH: Auto-Healing with `omnipkg run`**
+
+<a href="https://github.com/1minds3t/omnipkg/actions/workflows/old_rich_test.yml">
+  <img src="https://img.shields.io/badge/⚡_Auto--Healing-5.15x_Faster_than_UV-gold?logo=lightning&logoColor=white" alt="Auto-Healing Performance">
+</a>
 
 When external tools cause compatibility crashes, `omnipkg run` automatically detects and fixes issues in real-time:
 
@@ -140,7 +158,7 @@ omnipkg Healing:     693.212 ms  ( 693,211,844 ns)
 <!-- COMPARISON_STATS_START -->
 ## ⚖️ Multi-Version Support
 
-[![omnipkg](https://img.shields.io/badge/omnipkg-345%20Wins-brightgreen?logo=python&logoColor=white)](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml) [![pip](https://img.shields.io/badge/pip-348%20Failures-red?logo=pypi&logoColor=white)](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml) [![uv](https://img.shields.io/badge/uv-348%20Failures-red?logo=python&logoColor=white)](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml)
+[![omnipkg](https://img.shields.io/badge/omnipkg-403%20Wins-brightgreen?logo=python&logoColor=white)](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml) [![pip](https://img.shields.io/badge/pip-406%20Failures-red?logo=pypi&logoColor=white)](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml) [![uv](https://img.shields.io/badge/uv-406%20Failures-red?logo=python&logoColor=white)](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml)
 
 *Multi-version installation tests run hourly. [Live results here.](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml)*
 
@@ -326,6 +344,7 @@ omnipkg info uv
 ---
 
 ### 7. Instant Environment Recovery
+
 [![🛡️ UV Revert Test](https://img.shields.io/badge/🛡️_UV_Revert_Test-passing-success)](https://github.com/1minds3t/omnipkg/actions/workflows/test_uv_revert.yml)
 
 If an external tool (like `pip` or `uv`) causes damage, `omnipkg revert` restores your environment to a "last known good" state in seconds.
@@ -374,18 +393,32 @@ Solving interpreter hot-swapping required a complete architectural reimagining. 
 
 ### Installation Options
 
-#### 📦 PyPI (Recommended)
+#### 📦 PyPI (Recommended)    
+
+</a>
+  <a href="https://pypi.org/project/omnipkg/">
+    <img src="https://img.shields.io/pypi/v/omnipkg?color=blue&logo=pypi" alt="PyPI">
+  </a>
+  
 ```bash
 pip install omnipkg
 ```
 
 #### 🏠 Official Conda-Forge (BRAND NEW!!!)
+
+  <a href="https://anaconda.org/conda-forge/omnipkg">
+  <img src="https://anaconda.org/conda-forge/omnipkg/badges/platforms.svg" alt="Platforms / Noarch">
+</a>
+  <a href="https://anaconda.org/conda-forge/omnipkg">
+  <img src="https://img.shields.io/badge/conda--forge-omnipkg-brightgreen?logo=anaconda&logoColor=white" alt="Conda-forge">
+</a>
+
 ```bash
 # Easiest guaranteed way
 conda install -c conda-forge omnipkg
 
 # Or with mamba if you prefer speed
-mamba install omnipkg
+mamba install -c conda-forge omnipkg
 ```
 
 #### 🍺 Homebrew (macOS/Linux)
@@ -396,7 +429,11 @@ brew tap 1minds3t/omnipkg
 brew install omnipkg
 ```
 
-#### 🐋 Docker
+#### 🐋 Docker 
+<a href="https://hub.docker.com/r/1minds3t/omnipkg">
+  <img src="https://img.shields.io/docker/pulls/1minds3t/omnipkg?logo=docker" alt="Docker Pulls">
+</a>
+
 ```bash
 
 # Always pull the latest release
