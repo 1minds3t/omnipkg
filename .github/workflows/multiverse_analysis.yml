@@ -27,7 +27,9 @@ jobs:
       - name: Initialize omnipkg
         run: |
           echo "=== Initializing Omnipkg ==="
-          export OMNIPKG_CONFIG_PATH="${{ github.workspace }}/.omnipkg_config/config.json"
+          # Use fresh config path to avoid any recursive issues
+          export OMNIPKG_CONFIG_PATH="/tmp/omnipkg_fresh/config.json"
+          mkdir -p /tmp/omnipkg_fresh
           omnipkg python adopt 3.11
           omnipkg python adopt 3.9
           omnipkg info python
