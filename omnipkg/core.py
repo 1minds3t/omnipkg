@@ -82,6 +82,26 @@ class ConfigManager:
     Now includes Python interpreter hotswapping capabilities and is environment-aware.
     """
 
+    # Add this new helper method to centralize the logic
+    def _get_config_path(self) -> Path:
+        """
+        Determines the path to the config file.
+        Prioritizes the OMNIPKG_CONFIG_PATH environment variable for CI/automation.
+        """
+        # PRIORITY 1: Use the explicit environment variable if it exists. This is for CI.
+        env_path = os.environ.get('OMNIPKG_CONFIG_PATH')
+        if env_path:
+            path = Path(env_path)
+            # Ensure the directory exists for the first run, as it might not be in a standard location.
+            path.parent.mkdir(parents=True, exist_ok=True)
+            return path
+
+        # PRIORITY 2: Fall back to the default location for local/interactive use.
+        config_dir = Path.home() / '.config' / 'omnipkg'
+        config_dir.mkdir(parents=True, exist_ok=True) # Ensure this directory exists too
+        return config_dir / 'config.json'
+
+
     def __init__(self, suppress_init_messages=False):
         """
         Initializes the ConfigManager with a robust, fail-safe sequence.
@@ -90,27 +110,29 @@ class ConfigManager:
         setup for interpreters.
         """
         # STEP 1: Establish the environment's unique identity. This MUST be first.
-        # It prioritizes environment variables passed from a parent process to prevent
-        # the "new environment" bug during relaunches.
+        # ... (rest of your existing code for env_id is fine) ...
         env_id_override = os.environ.get('OMNIPKG_ENV_ID_OVERRIDE')
-        self.venv_path = self._get_venv_root() # _get_venv_root also checks for its own override var
+        self.venv_path = self._get_venv_root()
 
         if env_id_override:
             self.env_id = env_id_override
         else:
-            # Fallback to calculating the ID if not inherited from a parent process.
             self.env_id = hashlib.md5(str(self.venv_path.resolve()).encode()).hexdigest()[:8]
 
-        # STEP 2: Initialize basic paths and state variables.
+        # STEP 2: Initialize basic paths using the new robust method.
         self._python_cache = {}
         self._preferred_version = (3, 11)
-        self.config_dir = Path.home() / '.config' / 'omnipkg'
-        self.config_path = self.config_dir / 'config.json'
+        
+        # --- THIS IS THE CRITICAL CHANGE ---
+        # Instead of hardcoding the path, call your new helper method.
+        self.config_path = self._get_config_path()
+        self.config_dir = self.config_path.parent
+        # --- END OF CRITICAL CHANGE ---
 
         # STEP 3: Load the configuration from the file for our environment ID.
-        # If no config exists for this ID, it will trigger the interactive first-time
-        # setup. This is now the SINGLE point of entry for all config loading.
+        # ... (the rest of your __init__ method can remain as is) ...
         self.config = self._load_or_create_env_config(interactive=not suppress_init_messages)
+
 
         # After this point, self.config is guaranteed to be loaded.
         if self.config:
