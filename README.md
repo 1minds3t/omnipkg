@@ -50,15 +50,12 @@
 </p>
 <p align="center">
   <!-- Key Features -->
-    <a href="https://github.com/1minds3t/omnipkg/actions/workflows/multiverse_analysis.yml">
-    <img src="https://img.shields.io/badge/🌀_Multiverse_Analysis-Single_Script_Single_Env-purple?logo=python&logoColor=white" alt="Multiverse Analysis">
-  </a>
   <a href="https://github.com/1minds3t/omnipkg/actions/workflows/numpy_scipy_test.yml">
     <img src="https://img.shields.io/badge/🚀_Live_NumPy+SciPy_Hot--Swapping-passing-success?logo=github-actions" alt="Hot-Swapping">
   </a>
-  <a href="https://github.com/1minds3t/omnipkg/releases">
-    <img src="https://img.shields.io/badge/🔥_Python_Interpreter_Hot--Swapping-Live-orange?logo=python&logoColor=white" alt="Python Hot-Swapping">
-  </a>
+<a href="https://github.com/1minds3t/omnipkg/actions/workflows/multiverse_test.yml">
+  <img src="https://img.shields.io/badge/🔥_Python_Interpreter_Hot--Swapping-Live-orange?logo=python&logoColor=white" alt="Python Hot-Swapping">
+</a>
     <a href="https://github.com/1minds3t/omnipkg/actions/workflows/language_test.yml">
     <img src="https://img.shields.io/badge/💥_Breaking_Language_Barriers-24_Languages-success?logo=babel&logoColor=white" alt="24 Languages">
   </a>
