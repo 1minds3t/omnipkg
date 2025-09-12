@@ -18,8 +18,8 @@
 <a href="https://pepy.tech/projects/omnipkg">
   <img src="https://static.pepy.tech/personalized-badge/omnipkg?period=total&units=INTERNATIONAL_SYSTEM&left_color=BLACK&right_color=blue&left_text=downloads" alt="PyPI Downloads">
 </a>
-  <a href="https://anaconda.org/conda-forge/omnipkg">
-  <img src="https://img.shields.io/badge/conda--forge-omnipkg-brightgreen?logo=anaconda&logoColor=white" alt="Conda-forge">
+<a href="https://anaconda.org/conda-forge/omnipkg">
+  <img src="https://img.shields.io/conda/vn/conda-forge/omnipkg?logo=conda-forge" alt="Conda Version">
 </a>
     <a href="https://clickpy.clickhouse.com/dashboard/omnipkg">
     <img src="https://img.shields.io/badge/global_reach-50+_countries-green?logo=globe" alt="Global Reach Badge">
@@ -30,7 +30,10 @@
 <a href="https://hub.docker.com/r/1minds3t/omnipkg">
   <img src="https://img.shields.io/docker/pulls/1minds3t/omnipkg?logo=docker" alt="Docker Pulls">
 </a>
+
 </p>
+
+
 
 </p>
 <p align="center">
