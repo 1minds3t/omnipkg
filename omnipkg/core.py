@@ -82,30 +82,25 @@ class ConfigManager:
     Now includes Python interpreter hotswapping capabilities and is environment-aware.
     """
     def __init__(self, suppress_init_messages=False):
-        """
-        Initializes the ConfigManager with a robust, fail-safe sequence.
-        """
+        # --- START OF MODIFICATIONS ---
         # STEP 1: Establish the environment's unique identity using the robust new method.
+        self.venv_path = self._get_venv_root() # <-- USE THE NEW, STABLE METHOD
         env_id_override = os.environ.get('OMNIPKG_ENV_ID_OVERRIDE')
-        self.venv_path = self._get_venv_root() # <-- USE THE NEW METHOD HERE
 
         if env_id_override:
             self.env_id = env_id_override
         else:
-            # The env_id is now correctly derived from the TRUE venv root path.
             self.env_id = hashlib.md5(str(self.venv_path.resolve()).encode()).hexdigest()[:8]
 
         # STEP 2: Initialize basic paths using the new CI-aware method.
         self._python_cache = {}
         self._preferred_version = (3, 11)
-        
-        # Use the new helper for the config path
-        self.config_path = self._get_config_path() # <-- USE THE NEW METHOD HERE
+        self.config_path = self._get_config_path() # <-- USE THE NEW, STABLE METHOD
         self.config_dir = self.config_path.parent
-        
-        # ... the rest of your __init__ method can now continue as it was ...
-        self.config = self._load_or_create_env_config(interactive=not suppress_init_messages)
+        # --- END OF MODIFICATIONS ---
 
+        # The rest of your __init__ method remains unchanged.
+        self.config = self._load_or_create_env_config(interactive=not suppress_init_messages)
         # After this point, self.config is guaranteed to be loaded.
         if self.config:
             self.multiversion_base = Path(self.config.get('multiversion_base', ''))
@@ -199,17 +194,15 @@ class ConfigManager:
         Determines the path to the config file.
         Prioritizes the OMNIPKG_CONFIG_PATH environment variable for CI/automation.
         """
-        # PRIORITY 1: Use the explicit environment variable if it exists. This is for CI.
         env_path = os.environ.get('OMNIPKG_CONFIG_PATH')
         if env_path:
             path = Path(env_path)
-            # Ensure the directory exists for the first run, as it might not be in a standard location.
             path.parent.mkdir(parents=True, exist_ok=True)
             return path
 
-        # PRIORITY 2: Fall back to the default location for local/interactive use.
+        # Fallback for local use
         config_dir = Path.home() / '.config' / 'omnipkg'
-        config_dir.mkdir(parents=True, exist_ok=True) # Ensure this directory exists too
+        config_dir.mkdir(parents=True, exist_ok=True)
         return config_dir / 'config.json'
 
     def _peek_config_for_flag(self, flag_name: str) -> bool:
@@ -228,10 +221,9 @@ class ConfigManager:
 
     def _get_venv_root(self) -> Path:
         """
-        Finds the virtual environment root with enhanced validation to prevent
-        environment cross-contamination from stale shell variables.
+        Finds the virtual environment root with enhanced validation.
         THIS IS THE UNIFICATION FIX: It prioritizes finding the true venv root
-        so that all interpreters within it share the same env_id and knowledge base.
+        so that all interpreters within it share the same env_id.
         """
         # PRIORITY 1: An override from a relaunch is the absolute source of truth.
         override = os.environ.get('OMNIPKG_VENV_ROOT')
@@ -249,21 +241,11 @@ class ConfigManager:
             search_dir = search_dir.parent
 
         # PRIORITY 3: VIRTUAL_ENV, but ONLY if we are currently running inside it.
-        # This prevents a stale VIRTUAL_ENV from a different terminal from hijacking the context.
         venv_path_str = os.environ.get('VIRTUAL_ENV')
         if venv_path_str:
             venv_path = Path(venv_path_str).resolve()
-            # The crucial validation step:
             if str(current_executable).startswith(str(venv_path)):
                 return venv_path
-
-        # PRIORITY 4: Conda environment. CONDA_PREFIX is the source of truth for Conda.
-        # We also validate that we are running inside it.
-        conda_prefix_str = os.environ.get('CONDA_PREFIX')
-        if conda_prefix_str:
-            conda_path = Path(conda_prefix_str).resolve()
-            if str(current_executable).startswith(str(conda_path)):
-                return conda_path
 
         # FINAL FALLBACK: If all else fails, use sys.prefix. This is now the last resort.
         return Path(sys.prefix)
