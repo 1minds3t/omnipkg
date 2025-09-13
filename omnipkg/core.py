@@ -81,58 +81,30 @@ class ConfigManager:
     Manages loading and first-time creation of the omnipkg config file.
     Now includes Python interpreter hotswapping capabilities and is environment-aware.
     """
-
-    # Add this new helper method to centralize the logic
-    def _get_config_path(self) -> Path:
-        """
-        Determines the path to the config file.
-        Prioritizes the OMNIPKG_CONFIG_PATH environment variable for CI/automation.
-        """
-        # PRIORITY 1: Use the explicit environment variable if it exists. This is for CI.
-        env_path = os.environ.get('OMNIPKG_CONFIG_PATH')
-        if env_path:
-            path = Path(env_path)
-            # Ensure the directory exists for the first run, as it might not be in a standard location.
-            path.parent.mkdir(parents=True, exist_ok=True)
-            return path
-
-        # PRIORITY 2: Fall back to the default location for local/interactive use.
-        config_dir = Path.home() / '.config' / 'omnipkg'
-        config_dir.mkdir(parents=True, exist_ok=True) # Ensure this directory exists too
-        return config_dir / 'config.json'
-
-
     def __init__(self, suppress_init_messages=False):
         """
         Initializes the ConfigManager with a robust, fail-safe sequence.
-        This new logic correctly establishes environment identity first, then loads
-        or creates the configuration, and finally handles the one-time environment
-        setup for interpreters.
         """
-        # STEP 1: Establish the environment's unique identity. This MUST be first.
-        # ... (rest of your existing code for env_id is fine) ...
+        # STEP 1: Establish the environment's unique identity using the robust new method.
         env_id_override = os.environ.get('OMNIPKG_ENV_ID_OVERRIDE')
-        self.venv_path = self._get_venv_root()
+        self.venv_path = self._get_venv_root() # <-- USE THE NEW METHOD HERE
 
         if env_id_override:
             self.env_id = env_id_override
         else:
+            # The env_id is now correctly derived from the TRUE venv root path.
             self.env_id = hashlib.md5(str(self.venv_path.resolve()).encode()).hexdigest()[:8]
 
-        # STEP 2: Initialize basic paths using the new robust method.
+        # STEP 2: Initialize basic paths using the new CI-aware method.
         self._python_cache = {}
         self._preferred_version = (3, 11)
         
-        # --- THIS IS THE CRITICAL CHANGE ---
-        # Instead of hardcoding the path, call your new helper method.
-        self.config_path = self._get_config_path()
+        # Use the new helper for the config path
+        self.config_path = self._get_config_path() # <-- USE THE NEW METHOD HERE
         self.config_dir = self.config_path.parent
-        # --- END OF CRITICAL CHANGE ---
-
-        # STEP 3: Load the configuration from the file for our environment ID.
-        # ... (the rest of your __init__ method can remain as is) ...
+        
+        # ... the rest of your __init__ method can now continue as it was ...
         self.config = self._load_or_create_env_config(interactive=not suppress_init_messages)
-
 
         # After this point, self.config is guaranteed to be loaded.
         if self.config:
@@ -221,6 +193,24 @@ class ConfigManager:
             with open(flag_file, 'w') as f:
                 json.dump(versions_to_rebuild, f)
         print(f"   🚩 Flag set: Python {version_str} will build its knowledge base on first use.")
+
+    def _get_config_path(self) -> Path:
+        """
+        Determines the path to the config file.
+        Prioritizes the OMNIPKG_CONFIG_PATH environment variable for CI/automation.
+        """
+        # PRIORITY 1: Use the explicit environment variable if it exists. This is for CI.
+        env_path = os.environ.get('OMNIPKG_CONFIG_PATH')
+        if env_path:
+            path = Path(env_path)
+            # Ensure the directory exists for the first run, as it might not be in a standard location.
+            path.parent.mkdir(parents=True, exist_ok=True)
+            return path
+
+        # PRIORITY 2: Fall back to the default location for local/interactive use.
+        config_dir = Path.home() / '.config' / 'omnipkg'
+        config_dir.mkdir(parents=True, exist_ok=True) # Ensure this directory exists too
+        return config_dir / 'config.json'
 
     def _peek_config_for_flag(self, flag_name: str) -> bool:
         """
@@ -360,22 +350,15 @@ class ConfigManager:
 
     def _get_paths_for_interpreter(self, python_exe_path: str) -> Optional[Dict[str, str]]:
         """
-        Runs an interpreter in a subprocess to ask for its version and calculates
-        its site-packages path. This is the only reliable way to get paths for an
-        interpreter that isn't the currently running one.
+        Runs an interpreter in a subprocess...
         """
         try:
-            # --- START THE FIX ---
-            # Use the '-I' flag to run the interpreter in ISOLATED MODE.
-            # This prevents the parent process's environment (e.g., PYTHONPATH from Python 3.11)
-            # from contaminating and crashing the subprocess (e.g., Python 3.9).
+            # The only change is adding '-I' to the command list.
             cmd = [
                 python_exe_path,
                 '-I',  # <--- THIS IS THE CRITICAL FIX
                 '-c',
-                "import sys; import json; print(json.dumps({'version': f'{sys.version_info.major}.{sys.version_info.minor}', 'prefix': sys.prefix}))"
-            ]
-            # --- END THE FIX ---
+                "import sys; import json; print(json.dumps({'version': f'{sys.version_info.major}.{sys.version_info.minor}', 'prefix': sys.prefix}))"]
             
             result = subprocess.run(cmd, capture_output=True, text=True, check=True, timeout=10)
             interp_info = json.loads(result.stdout)
@@ -603,8 +586,7 @@ class ConfigManager:
         Get the path to a specific Python interpreter version from the registry.
         """
         # --- THIS IS THE FIX ---
-        # Use self.venv_path, which correctly points to the root of the virtual environment,
-        # instead of sys.prefix, which points to the prefix of the currently running interpreter.
+        # Use self.venv_path, which correctly points to the root of the virtual environment.
         registry_path = self.venv_path / '.omnipkg' / 'interpreters' / 'registry.json'
         # --- END FIX ---
 
