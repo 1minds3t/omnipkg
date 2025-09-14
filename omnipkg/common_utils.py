@@ -119,6 +119,68 @@ def sync_context_to_runtime():
         # Exit because a failed sync is a fatal error for the script's logic.
         sys.exit(1)
 
+def ensure_script_is_running_on_version(required_version: str):
+    """
+    A declarative guard placed at the start of a script. It ensures the script is
+    running on a specific Python version. If not, it uses the omnipkg API to
+    find the target interpreter and relaunches the script using os.execve.
+    """
+    major, minor = map(int, required_version.split('.'))
+
+    # If we are already running on the correct version, we're done.
+    if sys.version_info[:2] == (major, minor):
+        return
+
+    # This guard prevents infinite relaunch loops if something goes horribly wrong.
+    if os.environ.get('OMNIPKG_RELAUNCHED') == '1':
+        print(f"❌ FATAL ERROR: Relaunch attempted, but still not on Python {required_version}. Aborting.")
+        sys.exit(1)
+
+    print('\n' + '=' * 80)
+    print(_('  🚀 AUTOMATIC CONTEXT RELAUNCH REQUIRED'))
+    print('=' * 80)
+    print(_('   - Script requires:   Python {}').format(required_version))
+    print(_('   - Currently running: Python {}.{}').format(sys.version_info.major, sys.version_info.minor))
+    print(_('   - Relaunching into the correct context...'))
+
+    try:
+        # We must import the core late to avoid bootstrap circular dependencies
+        from omnipkg.core import ConfigManager, omnipkg as OmnipkgCore
+        
+        cm = ConfigManager(suppress_init_messages=True)
+        pkg_instance = OmnipkgCore(config_manager=cm)
+
+        # Use omnipkg's brain to find the interpreter path
+        target_exe_path = pkg_instance.interpreter_manager.config_manager.get_interpreter_for_version(required_version)
+
+        # If it's not managed, try to adopt it automatically
+        if not target_exe_path or not target_exe_path.exists():
+            print(_('   -> Target interpreter not yet managed. Attempting to adopt...'))
+            if pkg_instance.adopt_interpreter(required_version) != 0:
+                 raise RuntimeError(f"Failed to adopt required Python version {required_version}")
+            target_exe_path = pkg_instance.interpreter_manager.config_manager.get_interpreter_for_version(required_version)
+            if not target_exe_path or not target_exe_path.exists():
+                raise RuntimeError(f"Could not find Python {required_version} even after adoption.")
+
+        print(_('   ✅ Target interpreter found at: {}').format(target_exe_path))
+
+        # Set the guard variable for the new process to prevent loops
+        new_env = os.environ.copy()
+        new_env['OMNIPKG_RELAUNCHED'] = '1'
+        
+        # This is the key: os.execve REPLACES the current process with a new one.
+        # It does not return. The script starts over from the top, but inside the correct Python.
+        os.execve(str(target_exe_path), [str(target_exe_path)] + sys.argv, new_env)
+
+    except Exception as e:
+        print('\n' + '-' * 80)
+        print('   ❌ FATAL ERROR during context relaunch.')
+        print(f'   -> Error: {e}')
+        import traceback
+        traceback.print_exc()
+        print('-' * 80)
+        sys.exit(1)
+
 def run_script_in_omnipkg_env(command_list, streaming_title):
     """
     A centralized utility to run a command in a fully configured omnipkg environment.
