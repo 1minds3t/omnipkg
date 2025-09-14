@@ -65,7 +65,7 @@ def get_bin_paths():
     return paths
 
 class omnipkgMetadataGatherer:
-        def __init__(self, config: Dict, env_id: str, force_refresh: bool = False, omnipkg_instance=None):
+    def __init__(self, config: Dict, env_id: str, force_refresh: bool = False, omnipkg_instance=None):
         self.cache_client = None
         self.omnipkg_instance = omnipkg_instance
         self.force_refresh = force_refresh
