@@ -1,16 +1,6 @@
 import sys
 import os
 from pathlib import Path
-
-project_root = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(project_root))
-
-from omnipkg.common_utils import sync_context_to_runtime
-sync_context_to_runtime()
-
-import sys
-import os
-from pathlib import Path
 import json
 import subprocess
 import shutil
@@ -61,7 +51,7 @@ def get_current_install_strategy(config_manager):
     """Get the current install strategy"""
     try:
         return config_manager.config.get('install_strategy', 'multiversion')
-    except:
+    except Exception: # Catches standard errors, but not SystemExit etc.
         return 'multiversion'
 
 def set_install_strategy(config_manager, strategy):

@@ -30,22 +30,33 @@ class omnipkgLoader:
         # to its original state (e.g., system's my_package version)
     """
 
-    def __init__(self, package_spec: str=None, config: dict=None):
+    def __init__(self, package_spec: str=None, config: dict=None, quiet: bool=False, force_activation: bool=False):
         """
-        Initializes the loader. If used as a context manager, package_spec is required.
-        Config is highly recommended for robust path discovery.
+        Initializes the loader. Config is highly recommended for robust path discovery.
         """
         self.config = config
-        if self.config and 'multiversion_base' in self.config and ('site_packages_path' in self.config):
+        self.quiet = quiet
+        self.force_activation = force_activation
+
+        # --- THIS IS THE FIX ---
+        # Prioritize the provided config. If not available, use a more reliable
+        # method to find the true site-packages of the RUNNING interpreter,
+        # which is better than a simple sys.prefix fallback.
+        if self.config and 'multiversion_base' in self.config and 'site_packages_path' in self.config:
             self.multiversion_base = Path(self.config['multiversion_base'])
             self.site_packages_root = Path(self.config['site_packages_path'])
         else:
-            print(_('⚠️ [omnipkg loader] Config not provided or incomplete. Attempting auto-detection of paths.'))
+            if not self.quiet:
+                print(_('ℹ️ [omnipkg loader] Config not provided. Auto-detecting paths for current interpreter.'))
             try:
+                # This is a more robust way to find the actual site-packages
+                import site
                 self.site_packages_root = Path(site.getsitepackages()[0])
                 self.multiversion_base = self.site_packages_root / '.omnipkg_versions'
             except (IndexError, AttributeError):
-                print(_('⚠️ [omnipkg loader] Could not auto-detect site-packages path reliably. Falling back to sys.prefix.'))
+                # This fallback is now more of an edge case
+                if not self.quiet:
+                    print(_('⚠️ [omnipkg loader] Could not auto-detect site-packages path reliably. Using sys.prefix.'))
                 python_version = f'python{sys.version_info.major}.{sys.version_info.minor}'
                 self.site_packages_root = Path(sys.prefix) / 'lib' / python_version / 'site-packages'
                 self.multiversion_base = self.site_packages_root / '.omnipkg_versions'
@@ -93,161 +104,185 @@ class omnipkgLoader:
         found_deps = {}
         for dep in critical_deps:
             try:
-                # Try to find the dependency in the current environment
                 dep_module = importlib.import_module(dep)
                 if hasattr(dep_module, '__file__') and dep_module.__file__:
                     dep_path = Path(dep_module.__file__).parent
                     # Make sure it's in our site-packages
                     if self.site_packages_root in dep_path.parents or dep_path == self.site_packages_root / dep:
                         found_deps[dep] = dep_path
-                        print(_('🔧 [omnipkg loader] Found critical dependency: {} at {}').format(dep, dep_path))
-            except ImportError:
+            except (ImportError, Exception):
                 continue
-            except Exception as e:
-                print(_('⚠️ [omnipkg loader] Error detecting dependency {}: {}').format(dep, e))
-                continue
+        
+        # Summarized logging
+        # Summarized logging
+        if found_deps and not self.quiet:
+            print(_('🔧 [omnipkg loader] Detected {} critical dependencies for subprocess support').format(len(found_deps)))
         
         return found_deps
 
     def _ensure_omnipkg_access_in_bubble(self, bubble_path_str: str):
         """
         Ensure omnipkg's dependencies remain accessible when bubble is active.
-        This creates symlinks from the bubble to the original dependencies.
+        Creates symlinks ONLY if the dependency doesn't already exist in the bubble,
+        preventing corruption of the bubble's own package versions.
         """
         bubble_path = Path(bubble_path_str)
+        linked_count = 0
+        preserved_count = 0
         
         for dep_name, dep_path in self._omnipkg_dependencies.items():
-            bubble_dep_path = bubble_path / dep_name
+            # Check if dependency already exists in bubble (directory or file)
+            bubble_dep_dir = bubble_path / dep_name
+            bubble_dep_file = bubble_path / f"{dep_name}.py"
             
-            # Skip if dependency already exists in bubble
-            if bubble_dep_path.exists():
+            # If the dependency ALREADY exists in the bubble, preserve it
+            if bubble_dep_dir.exists() or bubble_dep_file.exists():
+                preserved_count += 1
                 continue
             
+            # Safe to create symlink - dependency doesn't exist in bubble
+            # THIS BLOCK IS NOW CORRECTLY INDENTED
             try:
-                # Create symlink to original dependency
                 if dep_path.is_dir():
-                    bubble_dep_path.symlink_to(dep_path, target_is_directory=True)
+                    bubble_dep_dir.symlink_to(dep_path, target_is_directory=True)
                 else:
-                    bubble_dep_path.symlink_to(dep_path)
-                print(_('🔗 [omnipkg loader] Linked {} to bubble for subprocess support').format(dep_name))
+                    bubble_dep_file.symlink_to(dep_path)
+                linked_count += 1
             except Exception as e:
-                print(_('⚠️ [omnipkg loader] Failed to link {} to bubble: {}').format(dep_name, e))
-                # Fallback: add the original site-packages to sys.path in a strategic position
+                # On failure, we just proceed to the fallback.
+                # Do not print an error here as it is not a fatal condition.
+                # The fallback is adding the original site-packages to sys.path.
                 if str(self.site_packages_root) not in sys.path:
-                    # Insert after bubble but before other paths
                     insertion_point = 1 if len(sys.path) > 1 else len(sys.path)
                     sys.path.insert(insertion_point, str(self.site_packages_root))
-                    print(_('🔧 [omnipkg loader] Added site-packages fallback at position {} for {}').format(insertion_point, dep_name))
-
+        
+        # Summarized logging
+        if (linked_count > 0 or preserved_count > 0) and not self.quiet:
+            print(_(' 🔗 Dependency management: {} linked, {} preserved for subprocess support').format(linked_count, preserved_count))
+    
     def _cleanup_omnipkg_links_in_bubble(self, bubble_path_str: str):
         """
         Clean up symlinks created for omnipkg dependencies in the bubble.
+        Only removes symlinks, never touches actual package directories.
         """
         bubble_path = Path(bubble_path_str)
+        cleaned_count = 0
         
         for dep_name in self._omnipkg_dependencies.keys():
             bubble_dep_path = bubble_path / dep_name
             
+            # Only clean up if it's actually a symlink we created
             if bubble_dep_path.is_symlink():
                 try:
                     bubble_dep_path.unlink()
-                    print(_('🧹 [omnipkg loader] Cleaned up symlink for {}').format(dep_name))
-                except Exception as e:
-                    print(_('⚠️ [omnipkg loader] Failed to cleanup symlink for {}: {}').format(dep_name, e))
+                    cleaned_count += 1
+                except Exception:
+                    pass  # Silent cleanup - don't spam logs
+        
+        # Summarized logging
+        if cleaned_count > 0 and not self.quiet:
+            print(_(' 🧹 Cleaned up {} dependency symlinks').format(cleaned_count))
+            
+       
+
+    # In omnipkg/loader.py
 
     def __enter__(self):
         """Activates the specified package snapshot for the 'with' block."""
         self._activation_start_time = time.perf_counter_ns()
         
         if not self._current_package_spec:
-            raise ValueError("omnipkgLoader must be instantiated with a package_spec (e.g., 'pkg==ver') when used as a context manager.")
+            raise ValueError("omnipkgLoader must be instantiated with a package_spec when used as a context manager.")
         
-        print(_('\n🌀 omnipkg loader: Activating {}...').format(self._current_package_spec))
+        if not self.quiet:
+            print(_('\n🌀 omnipkg loader: Activating {}...').format(self._current_package_spec))
         
         try:
             pkg_name, requested_version = self._current_package_spec.split('==')
-            pkg_name_normalized = pkg_name.lower().replace('-', '_')
         except ValueError:
             raise ValueError(_("Invalid package_spec format. Expected 'name==version', got '{}'.").format(self._current_package_spec))
         
-        # Check if system version already matches
-        try:
-            current_system_version = get_version(pkg_name)
-            if current_system_version == requested_version:
-                self._activation_end_time = time.perf_counter_ns()
-                self._total_activation_time_ns = self._activation_end_time - self._activation_start_time
-                print(_(' ✅ System version already matches requested version ({}). No bubble activation needed.').format(current_system_version))
-                print(_(' ⏱️  Activation time: {:.3f} μs ({:,} ns)').format(self._total_activation_time_ns / 1000, self._total_activation_time_ns))
-                self._activated_bubble_path = None
-                self._activation_successful = True
-                return self
-        except PackageNotFoundError:
-            pass
-        except Exception as e:
-            print(_('⚠️ [omnipkg loader] Error checking system version for {}: {}. Proceeding with bubble search.').format(pkg_name, e))
-            pass
-        
-        # Find and activate bubble
-        bubble_dir_name = f'{pkg_name_normalized}-{requested_version}'
+        if not self.force_activation:
+            try:
+                current_system_version = get_version(pkg_name)
+                if current_system_version == requested_version:
+                    self._activation_end_time = time.perf_counter_ns()
+                    self._total_activation_time_ns = self._activation_end_time - self._activation_start_time
+                    if not self.quiet:
+                        print(_(' ✅ System version already matches requested version ({}). No bubble activation needed.').format(current_system_version))
+                    self._activation_successful = True # Mark as "successful" to allow clean exit
+                    return self
+            except PackageNotFoundError:
+                pass
+
+        bubble_dir_name = f'{pkg_name}-{requested_version}' # Use original name for dir
         bubble_path = self.multiversion_base / bubble_dir_name
         
         if not bubble_path.is_dir():
-            raise RuntimeError(_("Bubble not found for {} at {}. Please ensure it's installed via 'omnipkg install {}'.").format(self._current_package_spec, bubble_path, self._current_package_spec))
+            raise RuntimeError(_("Bubble not found for {} at {}.").format(self._current_package_spec, bubble_path))
         
         try:
-            # Clean up target package modules and cloak main installation
             self._aggressive_module_cleanup(pkg_name)
             self._cloak_main_package(pkg_name)
             
             bubble_path_str = str(bubble_path)
             
-            # Update PATH if bubble has bin directory
             bubble_bin_path = bubble_path / 'bin'
             if bubble_bin_path.is_dir():
                 os.environ['PATH'] = f'{str(bubble_bin_path)}{os.pathsep}{self.original_path_env}'
-                print(_(' ⚙️ Added to PATH: {}').format(bubble_bin_path))
+                if not self.quiet: print(_(' ⚙️ Added to PATH: {}').format(bubble_bin_path))
             
-            # Rebuild sys.path with bubble taking precedence
-            sys.path.clear()
-            sys.path.insert(0, bubble_path_str)
+            # --- THIS IS THE DEFINITIVE FIX ---
+            # Rebuild sys.path cleanly, filtering out contaminated paths.
+            new_sys_path = []
             
-            # Add back original paths, skipping the original site-packages
+            # 1. Add the bubble path. Highest priority.
+            new_sys_path.append(bubble_path_str)
+
+            # Get the version string of the CURRENTLY EXECUTING interpreter (e.g., 'python3.9')
+            current_interpreter_version_str = f'python{sys.version_info.major}.{sys.version_info.minor}'
+
+            # 2. Add back original paths, but ONLY if they are not from a different Python's stdlib.
             for p in self.original_sys_path:
+                path_str = str(p)
+                # The contamination check: is '/lib/pythonX.Y' in the path, and is it the WRONG X.Y?
+                if '/lib/python' in path_str and current_interpreter_version_str not in path_str:
+                    # This is a contaminated path from a different Python stdlib. SKIP IT.
+                    continue
+                
+                # Also skip the original site-packages, which is handled later.
                 if Path(p).resolve() == self.site_packages_root.resolve():
                     continue
-                if p not in sys.path:
-                    sys.path.append(p)
+                    
+                if p not in new_sys_path:
+                    new_sys_path.append(p)
             
-            # Ensure omnipkg dependencies are accessible for subprocess operations
+            sys.path.clear()
+            sys.path.extend(new_sys_path)
+            # --- END OF THE DEFINITIVE FIX ---
+
             self._ensure_omnipkg_access_in_bubble(bubble_path_str)
             
-            # Add the original site-packages as a fallback (but lower priority)
-            if str(self.site_packages_root) not in sys.path:
-                sys.path.append(str(self.site_packages_root))
-            
             self._activated_bubble_path = bubble_path_str
-            
             self._activation_end_time = time.perf_counter_ns()
             self._total_activation_time_ns = self._activation_end_time - self._activation_start_time
-            
-            print(_(' ✅ Activated bubble: {}').format(bubble_path_str))
-            print(_(' 🔧 sys.path[0]: {}').format(sys.path[0]))
-            print(_(' 🔗 Ensured omnipkg dependency access for subprocess support'))
-            print(_(' ⏱️  Activation time: {:.3f} μs ({:,} ns)').format(self._total_activation_time_ns / 1000, self._total_activation_time_ns))
-            
-            # Show bubble info
-            manifest_path = bubble_path / '.omnipkg_manifest.json'
-            if manifest_path.exists():
-                with open(manifest_path, 'r') as f:
-                    manifest = json.load(f)
+            self._activation_successful = True
+
+            if not self.quiet:
+                print(_(' ✅ Activated bubble: {}').format(bubble_path_str))
+                print(_(' 🔧 sys.path[0]: {}').format(sys.path[0]))
+                print(_(' 🔗 Ensured omnipkg dependency access for subprocess support'))
+                print(_(' ⏱️  Activation time: {:.3f} μs ({:,} ns)').format(self._total_activation_time_ns / 1000, self._total_activation_time_ns))
+                manifest_path = bubble_path / '.omnipkg_manifest.json'
+                if manifest_path.exists():
+                    with open(manifest_path, 'r') as f: manifest = json.load(f)
                     pkg_count = len(manifest.get('packages', {}))
                     print(_(' ℹ️ Bubble contains {} packages.').format(pkg_count))
-            
-            self._activation_successful = True
+
             return self
             
         except Exception as e:
-            print(_(' ❌ Activation failed: {}').format(str(e)))
+            if not self.quiet: print(_(' ❌ Activation failed: {}').format(str(e)))
             self._panic_restore_cloaks()
             raise
 
