@@ -1,6 +1,16 @@
 import sys
 import os
 from pathlib import Path
+
+project_root = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(project_root))
+
+from omnipkg.common_utils import sync_context_to_runtime
+sync_context_to_runtime()
+
+import sys
+import os
+from pathlib import Path
 import json
 import subprocess
 import shutil
