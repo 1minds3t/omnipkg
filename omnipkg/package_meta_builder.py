@@ -7,7 +7,6 @@ import os
 import re
 import json
 import subprocess
-import redis
 import hashlib
 import importlib.metadata
 import zlib
@@ -20,12 +19,22 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Set, Tuple, Optional
 from packaging.utils import canonicalize_name
+from omnipkg.loader import omnipkgLoader
 from omnipkg.i18n import _
 try:
     from tqdm import tqdm
     HAS_TQDM = True
 except ImportError:
     HAS_TQDM = False
+        
+try:
+    import redis
+    REDIS_AVAILABLE = True
+except ImportError:
+    redis = None
+    REDIS_AVAILABLE = False
+
+  
 
 def get_python_version():
     """Get current Python version in X.Y format"""
@@ -56,9 +65,9 @@ def get_bin_paths():
     return paths
 
 class omnipkgMetadataGatherer:
-
-    def __init__(self, config: Dict, env_id: str, force_refresh: bool=False):
-        self.redis_client = None
+        def __init__(self, config: Dict, env_id: str, force_refresh: bool = False, omnipkg_instance=None):
+        self.cache_client = None
+        self.omnipkg_instance = omnipkg_instance
         self.force_refresh = force_refresh
         self.security_report = {}
         self.config = config
@@ -96,16 +105,6 @@ class omnipkgMetadataGatherer:
         base = base_prefix.split(':')[0]
         suffix = base_prefix.split(':', 1)[1] if ':' in base_prefix else 'pkg:'
         return f'{base}:env_{self.env_id}:{py_ver_str}:{suffix}'
-
-    def connect_redis(self) -> bool:
-        try:
-            self.redis_client = redis.Redis(host=self.config['redis_host'], port=self.config['redis_port'], decode_responses=True)
-            self.redis_client.ping()
-            print(_('✅ Connected to Redis successfully.'))
-            return True
-        except Exception as e:
-            print(_('❌ Could not connect to Redis: {}').format(e))
-            return False
 
     def _discover_distributions(self, targeted_packages: Optional[List[str]]) -> List[importlib.metadata.Distribution]:
         """
@@ -214,18 +213,18 @@ class omnipkgMetadataGatherer:
     def _register_bubble_path(self, pkg_name: str, version: str, bubble_path: Path):
         """Register bubble paths in Redis for dedup across bubbles and main env."""
         redis_key = f'{self.redis_key_prefix}bubble:{pkg_name}:{version}:path'
-        self.redis_client.set(redis_key, str(bubble_path))
+        self.cache_client.set(redis_key, str(bubble_path))
         self.package_path_registry[pkg_name] = self.package_path_registry.get(pkg_name, {})
         self.package_path_registry[pkg_name][version] = str(bubble_path)
 
     def _store_active_versions(self, active_packages: Dict[str, str]):
-        if not self.redis_client:
+        if not self.cache_client:
             return
         prefix = self.redis_key_prefix
         for pkg_name, version in active_packages.items():
             main_key = f'{prefix}{pkg_name}'
             try:
-                self.redis_client.hset(main_key, 'active_version', version)
+                self.cache_client.hset(main_key, 'active_version', version)
             except Exception as e:
                 print(_('⚠️ Failed to store active version for {}: {}').format(pkg_name, e))
 
@@ -435,7 +434,7 @@ class omnipkgMetadataGatherer:
             name = canonicalize_name(raw_name)
             version = dist.version
             version_key = f'{self.redis_key_prefix}{name}:{version}'
-            if not self.force_refresh and self.redis_client.exists(version_key):
+            if not self.force_refresh and self.cache_client.exists(version_key):
                 return False
                         # --- START MODIFIED CODE ---
             metadata = self._build_comprehensive_metadata(dist)
@@ -526,7 +525,7 @@ class omnipkgMetadataGatherer:
                 data_to_store[field] = compressed.hex()
                 data_to_store[f'{field}_compressed'] = 'true'
         flattened_data = self._flatten_dict(data_to_store)
-        with self.redis_client.pipeline() as pipe:
+        with self.cache_client.pipeline() as pipe:
             pipe.delete(version_key)
             pipe.hset(version_key, mapping=flattened_data)
             pipe.hset(main_key, 'name', package_name)
