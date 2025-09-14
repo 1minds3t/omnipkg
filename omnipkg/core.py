@@ -24,6 +24,7 @@ import zipfile
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Set, Tuple
+import redis
 import requests as http_requests
 from filelock import FileLock
 from importlib.metadata import version, metadata, PackageNotFoundError
@@ -31,7 +32,6 @@ from packaging.utils import canonicalize_name
 from packaging.version import parse as parse_version, InvalidVersion
 from .i18n import _
 from .package_meta_builder import omnipkgMetadataGatherer
-from .cache import SQLiteCacheClient
 try:
     import tomllib
 except ModuleNotFoundError:
@@ -47,12 +47,6 @@ try:
 except ImportError:
     magic = None
     HAS_MAGIC = False
-try:
-    import redis
-    REDIS_AVAILABLE = True
-except ImportError:
-    redis = None
-    REDIS_AVAILABLE = False
 
 def _get_core_dependencies() -> set:
     """
@@ -81,26 +75,37 @@ class ConfigManager:
     Manages loading and first-time creation of the omnipkg config file.
     Now includes Python interpreter hotswapping capabilities and is environment-aware.
     """
+
     def __init__(self, suppress_init_messages=False):
-        # --- START OF MODIFICATIONS ---
-        # STEP 1: Establish the environment's unique identity using the robust new method.
-        self.venv_path = self._get_venv_root() # <-- USE THE NEW, STABLE METHOD
+        """
+        Initializes the ConfigManager with a robust, fail-safe sequence.
+        This new logic correctly establishes environment identity first, then loads
+        or creates the configuration, and finally handles the one-time environment
+        setup for interpreters.
+        """
+        # STEP 1: Establish the environment's unique identity. This MUST be first.
+        # It prioritizes environment variables passed from a parent process to prevent
+        # the "new environment" bug during relaunches.
         env_id_override = os.environ.get('OMNIPKG_ENV_ID_OVERRIDE')
+        self.venv_path = self._get_venv_root() # _get_venv_root also checks for its own override var
 
         if env_id_override:
             self.env_id = env_id_override
         else:
+            # Fallback to calculating the ID if not inherited from a parent process.
             self.env_id = hashlib.md5(str(self.venv_path.resolve()).encode()).hexdigest()[:8]
 
-        # STEP 2: Initialize basic paths using the new CI-aware method.
+        # STEP 2: Initialize basic paths and state variables.
         self._python_cache = {}
         self._preferred_version = (3, 11)
-        self.config_path = self._get_config_path() # <-- USE THE NEW, STABLE METHOD
-        self.config_dir = self.config_path.parent
-        # --- END OF MODIFICATIONS ---
+        self.config_dir = Path.home() / '.config' / 'omnipkg'
+        self.config_path = self.config_dir / 'config.json'
 
-        # The rest of your __init__ method remains unchanged.
+        # STEP 3: Load the configuration from the file for our environment ID.
+        # If no config exists for this ID, it will trigger the interactive first-time
+        # setup. This is now the SINGLE point of entry for all config loading.
         self.config = self._load_or_create_env_config(interactive=not suppress_init_messages)
+
         # After this point, self.config is guaranteed to be loaded.
         if self.config:
             self.multiversion_base = Path(self.config.get('multiversion_base', ''))
@@ -159,17 +164,10 @@ class ConfigManager:
 
     def _set_rebuild_flag_for_version(self, version_str: str):
         """
-        Sets an environment-specific flag indicating that a new interpreter
-        needs its knowledge base built.
+        Sets a flag indicating that a new interpreter needs its knowledge base built.
+        This is a stateful, safe way to trigger a one-time setup.
         """
-        # --- THE FIX ---
-        # The flag is now named with the environment ID to make it unique.
-        flag_file = self.venv_path / '.omnipkg' / f'.needs_kb_rebuild_{self.env_id}'
-        # --- END FIX ---
-
-        lock_file = flag_file.with_suffix('.lock')
-        flag_file.parent.mkdir(parents=True, exist_ok=True)
-
+        flag_file = self.venv_path / '.omnipkg' / '.needs_kb_rebuild'
         lock_file = self.venv_path / '.omnipkg' / '.needs_kb_rebuild.lock'
         flag_file.parent.mkdir(parents=True, exist_ok=True)
         
@@ -189,21 +187,6 @@ class ConfigManager:
                 json.dump(versions_to_rebuild, f)
         print(f"   🚩 Flag set: Python {version_str} will build its knowledge base on first use.")
 
-    def _get_config_path(self) -> Path:
-        """
-        Determines the path to the config file.
-        Prioritizes the OMNIPKG_CONFIG_PATH environment variable for CI/automation.
-        """
-        env_path = os.environ.get('OMNIPKG_CONFIG_PATH')
-        if env_path:
-            path = Path(env_path)
-            path.parent.mkdir(parents=True, exist_ok=True)
-            return path
-
-        # Fallback for local use
-        config_dir = Path.home() / '.config' / 'omnipkg'
-        config_dir.mkdir(parents=True, exist_ok=True)
-        return config_dir / 'config.json'
 
     def _peek_config_for_flag(self, flag_name: str) -> bool:
         """
@@ -219,11 +202,12 @@ class ConfigManager:
         except (json.JSONDecodeError, IOError):
             return False
 
+    # In omnipkg/core.py
+
     def _get_venv_root(self) -> Path:
         """
-        Finds the virtual environment root with enhanced validation.
-        THIS IS THE UNIFICATION FIX: It prioritizes finding the true venv root
-        so that all interpreters within it share the same env_id.
+        Finds the virtual environment root with enhanced validation to prevent
+        environment cross-contamination from stale shell variables.
         """
         # PRIORITY 1: An override from a relaunch is the absolute source of truth.
         override = os.environ.get('OMNIPKG_VENV_ROOT')
@@ -232,22 +216,31 @@ class ConfigManager:
 
         current_executable = Path(sys.executable).resolve()
 
-        # PRIORITY 2: The definitive pyvenv.cfg search. This is the most reliable method.
-        # It correctly finds the root even when running from a nested managed interpreter.
+        # PRIORITY 2: VIRTUAL_ENV, but ONLY if we are currently running inside it.
+        # This prevents a stale VIRTUAL_ENV from a different terminal from hijacking the context.
+        venv_path_str = os.environ.get('VIRTUAL_ENV')
+        if venv_path_str:
+            venv_path = Path(venv_path_str).resolve()
+            # The crucial validation step:
+            if str(current_executable).startswith(str(venv_path)):
+                return venv_path
+
+        # PRIORITY 3: Conda environment. CONDA_PREFIX is the source of truth for Conda.
+        # We also validate that we are running inside it.
+        conda_prefix_str = os.environ.get('CONDA_PREFIX')
+        if conda_prefix_str:
+            conda_path = Path(conda_prefix_str).resolve()
+            if str(current_executable).startswith(str(conda_path)):
+                return conda_path
+
+        # PRIORITY 4: Standard pyvenv.cfg search, a reliable fallback.
         search_dir = current_executable.parent
-        while search_dir != search_dir.parent:  # Stop at the filesystem root
+        while search_dir != search_dir.parent:
             if (search_dir / 'pyvenv.cfg').exists():
                 return search_dir
             search_dir = search_dir.parent
 
-        # PRIORITY 3: VIRTUAL_ENV, but ONLY if we are currently running inside it.
-        venv_path_str = os.environ.get('VIRTUAL_ENV')
-        if venv_path_str:
-            venv_path = Path(venv_path_str).resolve()
-            if str(current_executable).startswith(str(venv_path)):
-                return venv_path
-
-        # FINAL FALLBACK: If all else fails, use sys.prefix. This is now the last resort.
+        # FINAL FALLBACK: If all else fails, use sys.prefix.
         return Path(sys.prefix)
 
     def _reset_setup_flag_on_disk(self):
@@ -332,15 +325,22 @@ class ConfigManager:
 
     def _get_paths_for_interpreter(self, python_exe_path: str) -> Optional[Dict[str, str]]:
         """
-        Runs an interpreter in a subprocess...
+        Runs an interpreter in a subprocess to ask for its version and calculates
+        its site-packages path. This is the only reliable way to get paths for an
+        interpreter that isn't the currently running one.
         """
         try:
-            # The only change is adding '-I' to the command list.
+            # --- START THE FIX ---
+            # Use the '-I' flag to run the interpreter in ISOLATED MODE.
+            # This prevents the parent process's environment (e.g., PYTHONPATH from Python 3.11)
+            # from contaminating and crashing the subprocess (e.g., Python 3.9).
             cmd = [
                 python_exe_path,
                 '-I',  # <--- THIS IS THE CRITICAL FIX
                 '-c',
-                "import sys; import json; print(json.dumps({'version': f'{sys.version_info.major}.{sys.version_info.minor}', 'prefix': sys.prefix}))"]
+                "import sys; import json; print(json.dumps({'version': f'{sys.version_info.major}.{sys.version_info.minor}', 'prefix': sys.prefix}))"
+            ]
+            # --- END THE FIX ---
             
             result = subprocess.run(cmd, capture_output=True, text=True, check=True, timeout=10)
             interp_info = json.loads(result.stdout)
@@ -568,7 +568,8 @@ class ConfigManager:
         Get the path to a specific Python interpreter version from the registry.
         """
         # --- THIS IS THE FIX ---
-        # Use self.venv_path, which correctly points to the root of the virtual environment.
+        # Use self.venv_path, which correctly points to the root of the virtual environment,
+        # instead of sys.prefix, which points to the prefix of the currently running interpreter.
         registry_path = self.venv_path / '.omnipkg' / 'interpreters' / 'registry.json'
         # --- END FIX ---
 
@@ -871,40 +872,33 @@ class ConfigManager:
         if not py_arch:
             raise OSError(_('Unsupported architecture: {}').format(arch))
 
-        # FIXED: Updated with ACTUAL release tags from astral-sh/python-build-standalone
-        # Based on latest releases from: https://github.com/astral-sh/python-build-standalone/releases
+        # Updated with ACTUAL release tags from python-build-standalone
         VERSION_TO_RELEASE_TAG_MAP = {
-            # Python 3.13.x - Latest available
-            '3.13.7': '20250818',    # Latest 3.13.x release
-            '3.13.6': '20250807',    # Previous 3.13.x release  
-            '3.13.1': '20241211',    # Older 3.13.x release
-            '3.13.0': '20241016',    # Original 3.13.0 release
+            # Python 3.13.x - Latest available from python-build-standalone
+            '3.13.1': '20241211',    # Real release tag for 3.13.1
+            '3.13.0': '20241016',    # Real release tag for 3.13.0
             
-            # Python 3.12.x - Security fixes only stage
-            '3.12.11': '20250818',   # Latest 3.12.x release (security)
-            '3.12.8': '20241211',    # Previous 3.12.x release
+            # Python 3.12.x - Updated to latest available
+            '3.12.8': '20241211',    # Latest 3.12.x release
             '3.12.7': '20241008',    # Previous 3.12.x release
             '3.12.6': '20240814',    # Previous 3.12.x release
             '3.12.5': '20240726',    # Previous 3.12.x release
             '3.12.4': '20240726',    # Previous 3.12.x release
             '3.12.3': '20240415',    # Existing known good tag
             
-            # Python 3.11.x - Latest stable versions
-            '3.11.13': '20250818',   # Latest 3.11.x release (correct version!)
-            '3.11.12': '20241211',   # Previous 3.11.x release
+            # Python 3.11.x - Updated to latest available
+            '3.11.11': '20241211',   # Latest 3.11.x release
             '3.11.10': '20241008',   # Previous 3.11.x release
             '3.11.9': '20240726',    # Previous 3.11.x release
             '3.11.6': '20231002',    # Existing known good tag
             
-            # Python 3.10.x - Latest stable versions  
-            '3.10.18': '20250818',   # Latest 3.10.x release
-            '3.10.15': '20241008',   # Previous 3.10.x release
+            # Python 3.10.x - Updated to latest available
+            '3.10.15': '20241008',   # Latest 3.10.x release
             '3.10.14': '20240726',   # Previous 3.10.x release
             '3.10.13': '20231002',   # Existing known good tag
             
-            # Python 3.9.x - Latest stable versions
-            '3.9.23': '20250818',    # Latest 3.9.x release
-            '3.9.21': '20241211',    # Previous 3.9.x release
+            # Python 3.9.x - Updated to latest available
+            '3.9.21': '20241211',    # Latest 3.9.x release
             '3.9.20': '20241008',    # Previous 3.9.x release
             '3.9.19': '20240726',    # Previous 3.9.x release
             '3.9.18': '20231002'     # Existing known good tag
@@ -919,10 +913,8 @@ class ConfigManager:
             raise ValueError(f'No known standalone build for Python version {full_version}. Cannot download.')
 
         py_ver_plus_tag = f'{full_version}+{release_tag}'
-        # FIXED: Updated to use astral-sh repository
-        base_url = f'https://github.com/astral-sh/python-build-standalone/releases/download/{release_tag}'
+        base_url = f'https://github.com/indygreg/python-build-standalone/releases/download/{release_tag}'
         
-            
         # Updated archive name templates to handle potential naming variations
         archive_name_templates = {
             'linux': f'cpython-{py_ver_plus_tag}-{py_arch}-unknown-linux-gnu-install_only.tar.gz',
@@ -1024,7 +1016,7 @@ class ConfigManager:
                     raise OSError(_('Python executable test failed: {}').format(result.stderr))
                 print(_('   - ✅ Python version: {}').format(result.stdout.strip()))
 
-                self._install_essential_packages(python_exe)
+                self.config_manager._install_essential_packages(python_exe)
                 
                 print(_('\n✨ New interpreter bootstrapped.'))
                 
@@ -1666,7 +1658,7 @@ class BubbleIsolationManager:
                 version = dist.metadata['Version']
                 installed[dist.metadata['Name']] = {'version': version, 'files': [p for p in pkg_files if p.exists()], 'executables': executables, 'type': self._classify_package_type(pkg_files)}
                 redis_key = _('{}bubble:{}:{}:file_paths').format(self.parent_omnipkg.redis_key_prefix, pkg_name, version)
-                existing_paths = set(self.parent_omnipkg.cache_client.smembers(redis_key)) if self.parent_omnipkg.cache_client.exists(redis_key) else set()
+                existing_paths = set(self.parent_omnipkg.redis_client.smembers(redis_key)) if self.parent_omnipkg.redis_client.exists(redis_key) else set()
                 all_package_files_for_check = pkg_files + executables
                 for file_path in all_package_files_for_check:
                     if str(file_path) not in existing_paths:
@@ -1973,32 +1965,15 @@ class BubbleIsolationManager:
         """
         Builds or loads a FAST hash index using package metadata when possible,
         falling back to filesystem scan only when needed.
-        
-        FIXED: Now correctly uses smembers() for the SQLite client instead of the
-        Redis-specific sscan_iter(), making the cache access layer fully compatible.
         """
-        if not self.parent_omnipkg.cache_client:
-            self.parent_omnipkg.connect_cache()
-            
+        if not self.parent_omnipkg.redis_client:
+            self.parent_omnipkg.connect_redis()
         redis_key = _('{}main_env:file_hashes').format(self.parent_omnipkg.redis_key_prefix)
-        
-        if self.parent_omnipkg.cache_client.exists(redis_key):
+        if self.parent_omnipkg.redis_client.exists(redis_key):
             print(_('    ⚡️ Loading main environment hash index from cache...'))
-
-            # --- START OF THE FIX ---
-            # Check if we are using Redis (which has sscan_iter) or our SQLite fallback.
-            if hasattr(self.parent_omnipkg.cache_client, 'sscan_iter'):
-                # This is a Redis client, use the efficient iterator.
-                cached_hashes = set(self.parent_omnipkg.cache_client.sscan_iter(redis_key))
-            else:
-                # This is our SQLiteCacheClient, use the compatible smembers() method.
-                cached_hashes = self.parent_omnipkg.cache_client.smembers(redis_key)
-            # --- END OF THE FIX ---
-            
-            print(_('    📈 Loaded {} file hashes from cache.').format(len(cached_hashes)))
+            cached_hashes = set(self.parent_omnipkg.redis_client.sscan_iter(redis_key))
+            print(_('    📈 Loaded {} file hashes from Redis.').format(len(cached_hashes)))
             return cached_hashes
-
-        # ... The rest of the function (the part that builds the index) is unchanged ...
         print(_('    🔍 Building main environment hash index...'))
         hash_set = set()
         try:
@@ -2052,9 +2027,9 @@ class BubbleIsolationManager:
                     hash_set.add(self._get_file_hash(file_path))
                 except (IOError, OSError):
                     continue
-        print(_('    💾 Saving {} file hashes to cache...').format(len(hash_set)))
+        print(_('    💾 Saving {} file hashes to Redis cache...').format(len(hash_set)))
         if hash_set:
-            with self.parent_omnipkg.cache_client.pipeline() as pipe:
+            with self.parent_omnipkg.redis_client.pipeline() as pipe:
                 for h in hash_set:
                     pipe.sadd(redis_key, h)
                 pipe.execute()
@@ -2068,7 +2043,7 @@ class BubbleIsolationManager:
         registry_key = '{}bubble_locations'.format(self.parent_omnipkg.redis_key_prefix)
         bubble_data = {'path': str(bubble_path), 'python_version': '{}.{}'.format(sys.version_info.major, sys.version_info.minor), 'created_at': datetime.now().isoformat(), 'packages': {pkg: info['version'] for pkg, info in installed_tree.items()}, 'stats': {'total_files': stats['total_files'], 'copied_files': stats['copied_files'], 'deduplicated_files': stats['deduplicated_files'], 'c_extensions_count': len(stats['c_extensions']), 'binaries_count': len(stats['binaries']), 'python_files': stats['python_files']}}
         bubble_id = bubble_path.name
-        self.parent_omnipkg.cache_client.hset(registry_key, bubble_id, json.dumps(bubble_data))
+        self.parent_omnipkg.redis_client.hset(registry_key, bubble_id, json.dumps(bubble_data))
         print(_('    📝 Registered bubble location and stats for {} packages.').format(len(installed_tree)))
 
     def _get_file_hash(self, file_path: Path) -> str:
@@ -2107,7 +2082,7 @@ class BubbleIsolationManager:
         bubble_id = bubble_path.name
         redis_bubble_data = {**manifest_data, 'path': str(bubble_path), 'manifest_path': str(manifest_path), 'bubble_id': bubble_id}
         try:
-            with self.parent_omnipkg.cache_client.pipeline() as pipe:
+            with self.parent_omnipkg.redis_client.pipeline() as pipe:
                 pipe.hset(registry_key, bubble_id, json.dumps(redis_bubble_data))
                 for pkg_name, pkg_info in installed_tree.items():
                     canonical_pkg_name = canonicalize_name(pkg_name)
@@ -2147,7 +2122,7 @@ class BubbleIsolationManager:
         Retrieves comprehensive bubble information from Redis registry.
         """
         registry_key = _('{}bubble_locations').format(self.parent_omnipkg.redis_key_prefix)
-        bubble_data = self.parent_omnipkg.cache_client.hget(registry_key, bubble_id)
+        bubble_data = self.parent_omnipkg.redis_client.hget(registry_key, bubble_id)
         if bubble_data:
             return json.loads(bubble_data)
         return {}
@@ -2158,14 +2133,14 @@ class BubbleIsolationManager:
         """
         if version:
             pkg_key = '{}=={}'.format(pkg_name, version)
-            bubble_id = self.parent_omnipkg.cache_client.hget(_('{}pkg_to_bubble').format(self.parent_omnipkg.redis_key_prefix), pkg_key)
+            bubble_id = self.parent_omnipkg.redis_client.hget(_('{}pkg_to_bubble').format(self.parent_omnipkg.redis_key_prefix), pkg_key)
             return [bubble_id] if bubble_id else []
         else:
             pattern = f'{pkg_name}==*'
             matching_keys = []
-            for key in self.parent_omnipkg.cache_client.hkeys(_('{}pkg_to_bubble').format(self.parent_omnipkg.redis_key_prefix)):
+            for key in self.parent_omnipkg.redis_client.hkeys(_('{}pkg_to_bubble').format(self.parent_omnipkg.redis_key_prefix)):
                 if key.startswith(f'{pkg_name}=='):
-                    bubble_id = self.parent_omnipkg.cache_client.hget(_('{}pkg_to_bubble').format(self.parent_omnipkg.redis_key_prefix), key)
+                    bubble_id = self.parent_omnipkg.redis_client.hget(_('{}pkg_to_bubble').format(self.parent_omnipkg.redis_key_prefix), key)
                     matching_keys.append(bubble_id)
             return matching_keys
 
@@ -2175,7 +2150,7 @@ class BubbleIsolationManager:
         """
         registry_key = _('{}bubble_locations').format(self.parent_omnipkg.redis_key_prefix)
         all_bubbles = {}
-        for bubble_id, bubble_data_str in self.parent_omnipkg.cache_client.hgetall(registry_key).items():
+        for bubble_id, bubble_data_str in self.parent_omnipkg.redis_client.hgetall(registry_key).items():
             bubble_data = json.loads(bubble_data_str)
             all_bubbles[bubble_id] = bubble_data
         by_package = {}
@@ -2198,7 +2173,7 @@ class BubbleIsolationManager:
                     total_size_freed += data['stats']['bubble_size_mb']
         if bubbles_to_remove:
             print(_('    🧹 Cleaning up {} old bubbles ({} MB)...').format(len(bubbles_to_remove), total_size_freed))
-            with self.parent_omnipkg.cache_client.pipeline() as pipe:
+            with self.parent_omnipkg.redis_client.pipeline() as pipe:
                 for bubble_id, data in bubbles_to_remove:
                     pipe.hdel(registry_key, bubble_id)
                     for pkg_name, pkg_info in data.get('packages', {}).items():
@@ -2217,12 +2192,12 @@ class BubbleIsolationManager:
 
 class ImportHookManager:
 
-    def __init__(self, multiversion_base: str, config: Dict, cache_client=None):
+    def __init__(self, multiversion_base: str, config: Dict, redis_client=None):
         self.multiversion_base = Path(multiversion_base)
         self.version_map = {}
         self.active_versions = {}
         self.hook_installed = False
-        self.cache_client = cache_client
+        self.redis_client = redis_client
         self.config = config
         self.http_session = http_requests.Session()
 
@@ -2329,92 +2304,28 @@ class omnipkg:
         self.config = config_manager.config
         if not self.config:
             raise RuntimeError('OmnipkgCore cannot initialize: Configuration is missing or invalid.')
-        
         self.env_id = self._get_env_id()
         self.multiversion_base = Path(self.config['multiversion_base'])
-        
-        # This is the new part: cache_client instead of cache_client
-        self.cache_client = None 
-        
+        self.redis_client = None
         self._info_cache = {}
         self._installed_packages_cache = None
         self.http_session = http_requests.Session()
         self.multiversion_base.mkdir(parents=True, exist_ok=True)
-
-        # Call the new connection method
-        if not self._connect_cache():
+        if not self.connect_redis():
             sys.exit(1)
-
         self.interpreter_manager = InterpreterManager(self.config_manager)
-        
-        # Pass the generic cache_client to the HookManager
-        self.hook_manager = ImportHookManager(str(self.multiversion_base), config=self.config, cache_client=self.cache_client)
-        
+        self.hook_manager = ImportHookManager(str(self.multiversion_base), config=self.config, redis_client=self.redis_client)
         self.bubble_manager = BubbleIsolationManager(self.config, self)
-        
-        # ... (the rest of the __init__ method is unchanged)
         migration_flag_key = f'omnipkg:env_{self.env_id}:migration_v2_env_aware_keys_complete'
-        if not self.cache_client.get(migration_flag_key):
-            old_keys_iterator = self.cache_client.keys('omnipkg:pkg:*')
-            if old_keys_iterator:
+        if not self.redis_client.get(migration_flag_key):
+            old_keys_iterator = self.redis_client.scan_iter('omnipkg:pkg:*', count=1)
+            if next(old_keys_iterator, None):
                 self._perform_redis_key_migration(migration_flag_key)
             else:
-                self.cache_client.set(migration_flag_key, 'true')
+                self.redis_client.set(migration_flag_key, 'true')
         self.hook_manager.load_version_map()
         self.hook_manager.install_import_hook()
         print(_('✅ Omnipkg core initialized successfully.'))
-
-    def _connect_cache(self) -> bool:
-        """
-        Attempts to connect to Redis if the library is installed. If it fails or
-        is not installed, falls back to a local SQLite database.
-        """
-        # --- THE FINAL FIX ---
-        # First, check if the redis library was successfully imported.
-        if REDIS_AVAILABLE:
-            try:
-                # The host and port should now be optional in the config
-                redis_host = self.config.get('redis_host', 'localhost')
-                redis_port = self.config.get('redis_port', 6379)
-
-                # Don't even try to connect if the host is explicitly set to None or empty
-                if not redis_host:
-                    raise redis.ConnectionError("Redis is not configured.")
-
-                cache_client = redis.Redis(
-                    host=redis_host,
-                    port=redis_port,
-                    decode_responses=True,
-                    socket_connect_timeout=1 # Use a very short timeout
-                )
-                cache_client.ping()
-                self.cache_client = cache_client
-                print("⚡️ Connected to Redis successfully (High-performance mode).")
-                return True
-            except redis.ConnectionError:
-                # This is now the expected path when Redis isn't running
-                print("⚠️ Could not connect to Redis. Falling back to local SQLite cache.")
-            except Exception as e:
-                # Catch other potential Redis errors
-                print(f"⚠️ Redis connection attempt failed: {e}. Falling back to SQLite.")
-        else:
-            # This will now print if redis was never installed in the first place.
-            print("⚠️ Redis library not installed. Falling back to local SQLite cache.")
-
-        # Fallback to SQLite (this part is already correct)
-        try:
-            sqlite_db_path = self.config_manager.config_dir / f"cache_{self.env_id}.sqlite"
-            self.cache_client = SQLiteCacheClient(sqlite_db_path)
-            if not self.cache_client.ping():
-                 raise RuntimeError("SQLite connection failed ping test.")
-            print(f"✅ Using local SQLite cache at: {sqlite_db_path}")
-            return True
-        except Exception as e:
-            print(f"❌ FATAL: Could not initialize SQLite fallback cache: {e}")
-            import traceback
-            traceback.print_exc()
-            return False
-
 
     def _perform_redis_key_migration(self, migration_flag_key: str):
         """
@@ -2423,14 +2334,14 @@ class omnipkg:
         """
         print('🔧 Performing one-time Knowledge Base upgrade for multi-environment support...')
         old_prefix = 'omnipkg:pkg:'
-        all_old_keys = self.cache_client.keys(f'{old_prefix}*')
+        all_old_keys = self.redis_client.keys(f'{old_prefix}*')
         if not all_old_keys:
             print('   ✅ No old-format data found to migrate. Marking as complete.')
-            self.cache_client.set(migration_flag_key, 'true')
+            self.redis_client.set(migration_flag_key, 'true')
             return
         new_prefix_for_current_env = self.redis_key_prefix
         migrated_count = 0
-        with self.cache_client.pipeline() as pipe:
+        with self.redis_client.pipeline() as pipe:
             for old_key in all_old_keys:
                 new_key = old_key.replace(old_prefix, new_prefix_for_current_env, 1)
                 pipe.rename(old_key, new_key)
@@ -2470,6 +2381,18 @@ class omnipkg:
                 py_ver_str = f'py{sys.version_info.major}.{sys.version_info.minor}'
         return f'omnipkg:env_{self.config_manager.env_id}:{py_ver_str}:pkg:'
 
+    def connect_redis(self) -> bool:
+        try:
+            self.redis_client = redis.Redis(host=self.config['redis_host'], port=self.config['redis_port'], decode_responses=True, socket_connect_timeout=5)
+            self.redis_client.ping()
+            return True
+        except redis.ConnectionError:
+            print(_('❌ Could not connect to Redis. Is the Redis server running?'))
+            return False
+        except Exception as e:
+            print(_('❌ An unexpected Redis connection error occurred: {}').format(e))
+            return False
+
     def reset_configuration(self, force: bool=False) -> int:
         """
         Deletes the config.json file to allow for a fresh setup.
@@ -2502,7 +2425,7 @@ class omnipkg:
         Deletes ALL omnipkg data for the CURRENT environment from Redis,
         as well as any legacy global data. It then triggers a full rebuild.
         """
-        if not self.cache_client:
+        if not self.connect_redis():
             return 1
         new_env_pattern = f'{self.redis_key_prefix}*'
         old_global_pattern = 'omnipkg:pkg:*'
@@ -2520,13 +2443,13 @@ class omnipkg:
                 return 1
         print(_('\n🗑️  Clearing knowledge base...'))
         try:
-            keys_new_env = self.cache_client.keys(new_env_pattern)
-            keys_old_global = self.cache_client.keys(old_global_pattern)
-            keys_migration = self.cache_client.keys(migration_flag_pattern)
-            keys_snapshot = self.cache_client.keys(snapshot_pattern)
+            keys_new_env = self.redis_client.keys(new_env_pattern)
+            keys_old_global = self.redis_client.keys(old_global_pattern)
+            keys_migration = self.redis_client.keys(migration_flag_pattern)
+            keys_snapshot = self.redis_client.keys(snapshot_pattern)
             all_keys_to_delete = set(keys_new_env + keys_old_global + keys_migration + keys_snapshot)
             if all_keys_to_delete:
-                delete_command = self.cache_client.unlink if hasattr(self.cache_client, 'unlink') else self.cache_client.delete
+                delete_command = self.redis_client.unlink if hasattr(self.redis_client, 'unlink') else self.redis_client.delete
                 delete_command(*all_keys_to_delete)
                 print(_('   ✅ Cleared {} cached entries from Redis.').format(len(all_keys_to_delete)))
             else:
@@ -2545,12 +2468,12 @@ class omnipkg:
         packages are processed correctly.
         """
         print(_('🧠 Forcing a full rebuild of the knowledge base...'))
-        if not self.cache_client:
+        if not self.connect_redis():
             return 1
         try:
             from .package_meta_builder import omnipkgMetadataGatherer
             gatherer = omnipkgMetadataGatherer(config=self.config, env_id=self.env_id, force_refresh=force)
-            gatherer.cache_client = self.cache_client
+            gatherer.redis_client = self.redis_client
             gatherer.run()
             self._info_cache.clear()
             self._installed_packages_cache = None
@@ -2706,90 +2629,59 @@ print(json.dumps(versions))
 
     def _synchronize_knowledge_base_with_reality(self):
         """
-        Self-healing function with targeted and efficient approach.
-        Uses a pending rebuild flag and optimized bulk operations for maximum speed and reliability.
+        Self-healing function. Uses a pending rebuild flag and a highly optimized
+        bulk check for maximum speed and reliability.
         """
         rebuild_was_run = self._check_and_run_pending_rebuild()
         if rebuild_was_run:
             return
-    
+
         print(_('🧠 Performing self-healing sync of knowledge base...'))
         
-        if not self.cache_client:
-            self.cache_client
-    
+        if not self.redis_client:
+            self.connect_redis()
+
         index_key = f'{self.redis_env_prefix}index'
-        
-        # Early exit if site-packages is empty
-        if not self.cache_client.exists(index_key):
+        if not self.redis_client.exists(index_key):
+             # This handles cases where the KB is genuinely empty and no flag was set
             if not any(Path(self.config['site_packages_path']).iterdir()):
-                print(_('   ✅ Knowledge base is empty or no packages found to sync.'))
-                return
-    
+                 print(_('   ✅ Knowledge base is empty or no packages found to sync.'))
+                 return
+
         # --- PERFORMANCE OPTIMIZATION ---
         # Get all live versions in one fast command instead of in a loop.
         live_active_versions = self._get_all_active_versions_live()
         
-        # Get cached active packages from Redis index
-        cached_active_packages = self.cache_client.smembers(index_key)
+        all_known_packages_in_redis = self.redis_client.smembers(index_key)
         
-        # --- TARGETED LOGIC ---
-        # Calculate differences for more efficient processing
-        to_add = set(live_active_versions.keys()) - cached_active_packages
-        to_remove = cached_active_packages - set(live_active_versions.keys())
-        to_check = cached_active_packages.intersection(set(live_active_versions.keys()))
+        # Combine keys from Redis and the live scan to check everything.
+        packages_to_check = set(all_known_packages_in_redis) | set(live_active_versions.keys())
         
-        # Also include bubble versions in the comprehensive check
-        packages_with_bubbles = set()
         if self.multiversion_base.exists():
             for bubble_dir in self.multiversion_base.iterdir():
                 if bubble_dir.is_dir():
                     try:
                         dir_pkg_name, _version = bubble_dir.name.rsplit('-', 1)
-                        packages_with_bubbles.add(canonicalize_name(dir_pkg_name))
+                        packages_to_check.add(canonicalize_name(dir_pkg_name))
                     except ValueError:
                         continue
         
-        # Expand packages to check to include those with bubbles
-        to_check.update(packages_with_bubbles)
-        
-        if not to_add and not to_remove and not to_check:
+        if not packages_to_check:
             print(_('   ✅ Knowledge base is empty or no packages found to sync.'))
             return
-    
+
         fixed_count = 0
-        
-        # Handle new packages that need to be added to KB
-        if to_add:
-            print(_('   -> Found {} new packages to add to KB.').format(len(to_add)))
-            # Run targeted metadata builder for new packages
-            self._run_metadata_builder_for_delta({}, {name: live_active_versions[name] for name in to_add})
-            fixed_count += len(to_add)
-        
-        # Use pipeline for bulk Redis operations
-        with self.cache_client.pipeline() as pipe:
-            # Remove stale packages from KB
-            if to_remove:
-                print(_('   -> Found {} stale packages to remove from KB.').format(len(to_remove)))
-                for pkg_name in to_remove:
-                    main_key = f'{self.redis_key_prefix}{pkg_name}'
-                    pipe.delete(main_key)
-                    pipe.srem(index_key, pkg_name)
-                fixed_count += len(to_remove)
-            
-            # Check and update existing packages (including bubble versions)
-            for pkg_name in to_check:
+        with self.redis_client.pipeline() as pipe:
+            for pkg_name in packages_to_check:
                 main_key = f'{self.redis_key_prefix}{pkg_name}'
                 
-                # Get real active version from pre-fetched dictionary
+                # Use the pre-fetched dictionary for an instant lookup
                 real_active_version = live_active_versions.get(pkg_name)
                 
-                # Get real bubbled versions
                 real_bubbled_versions = set()
                 if self.multiversion_base.exists():
                     for bubble_dir in self.multiversion_base.iterdir():
-                        if not bubble_dir.is_dir(): 
-                            continue
+                        if not bubble_dir.is_dir(): continue
                         try:
                             dir_pkg_name, version = bubble_dir.name.rsplit('-', 1)
                             if canonicalize_name(dir_pkg_name) == pkg_name:
@@ -2797,12 +2689,10 @@ print(json.dumps(versions))
                         except ValueError:
                             continue
                 
-                # Get cached data for this package
-                cached_data = self.cache_client.hgetall(main_key)
+                cached_data = self.redis_client.hgetall(main_key)
                 cached_active_version = cached_data.get('active_version')
                 cached_bubbled_versions = {k.replace('bubble_version:', '') for k in cached_data if k.startswith('bubble_version:')}
                 
-                # Fix active version discrepancies
                 if real_active_version and real_active_version != cached_active_version:
                     pipe.hset(main_key, 'active_version', real_active_version)
                     fixed_count += 1
@@ -2810,7 +2700,6 @@ print(json.dumps(versions))
                     pipe.hdel(main_key, 'active_version')
                     fixed_count += 1
                 
-                # Fix bubble version discrepancies
                 stale_bubbles = cached_bubbled_versions - real_bubbled_versions
                 for version in stale_bubbles:
                     pipe.hdel(main_key, f'bubble_version:{version}')
@@ -2827,18 +2716,18 @@ print(json.dumps(versions))
             print(_('   ✅ Sync complete. Reconciled {} discrepancies.').format(fixed_count))
         else:
             print(_('   ✅ Knowledge base is already in sync with the environment.'))
-        
+
     def _update_hash_index_for_delta(self, before: Dict, after: Dict):
         """Surgically updates the cached hash index in Redis after an install."""
-        if not self.cache_client:
-            self.cache_client
+        if not self.redis_client:
+            self.connect_redis()
         redis_key = _('{}main_env:file_hashes').format(self.redis_key_prefix)
-        if not self.cache_client.exists(redis_key):
+        if not self.redis_client.exists(redis_key):
             return
         print(_('🔄 Updating cached file hash index...'))
         uninstalled_or_changed = {name: ver for name, ver in before.items() if name not in after or after[name] != ver}
         installed_or_changed = {name: ver for name, ver in after.items() if name not in before or before[name] != ver}
-        with self.cache_client.pipeline() as pipe:
+        with self.redis_client.pipeline() as pipe:
             for name, ver in uninstalled_or_changed.items():
                 try:
                     dist = importlib.metadata.distribution(name)
@@ -2870,9 +2759,9 @@ print(json.dumps(versions))
                 print(_('    ⚠️  Could not perform live package scan: {}').format(e))
                 return self._installed_packages_cache or {}
         if self._installed_packages_cache is None:
-            if not self.cache_client:
-                self.cache_client
-            self._installed_packages_cache = self.cache_client.hgetall(_('{}versions').format(self.redis_key_prefix))
+            if not self.redis_client:
+                self.connect_redis()
+            self._installed_packages_cache = self.redis_client.hgetall(_('{}versions').format(self.redis_key_prefix))
         return self._installed_packages_cache
 
     def _detect_downgrades(self, before: Dict[str, str], after: Dict[str, str]) -> List[Dict]:
@@ -2916,12 +2805,12 @@ print(json.dumps(versions))
             if changed_specs:
                 print(_('   -> Processing {} changed/new package(s)...').format(len(changed_specs)))
                 gatherer = omnipkgMetadataGatherer(config=self.config, env_id=self.env_id, force_refresh=True)
-                gatherer.cache_client = self.cache_client
+                gatherer.redis_client = self.redis_client
                 newly_active_packages = {canonicalize_name(spec.split('==')[0]): spec.split('==')[1] for spec in changed_specs if canonicalize_name(spec.split('==')[0]) in after}
                 gatherer.run(targeted_packages=changed_specs, newly_active_packages=newly_active_packages)
             if uninstalled:
                 print(_('   -> Cleaning up {} uninstalled package(s) from Redis...').format(len(uninstalled)))
-                with self.cache_client.pipeline() as pipe:
+                with self.redis_client.pipeline() as pipe:
                     for pkg_name, uninstalled_version in uninstalled.items():
                         c_name = canonicalize_name(pkg_name)
                         main_key = f'{self.redis_key_prefix}{c_name}'
@@ -2929,7 +2818,7 @@ print(json.dumps(versions))
                         versions_set_key = f'{main_key}:installed_versions'
                         pipe.delete(version_key)
                         pipe.srem(versions_set_key, uninstalled_version)
-                        if self.cache_client.hget(main_key, 'active_version') == uninstalled_version:
+                        if self.redis_client.hget(main_key, 'active_version') == uninstalled_version:
                             pipe.hdel(main_key, 'active_version')
                         pipe.hdel(main_key, f'bubble_version:{uninstalled_version}')
                     pipe.execute()
@@ -2942,7 +2831,7 @@ print(json.dumps(versions))
             traceback.print_exc()
 
     def show_package_info(self, package_spec: str) -> int:
-        if not self.cache_client:
+        if not self.connect_redis():
             return 1
         self._synchronize_knowledge_base_with_reality()
         try:
@@ -2976,7 +2865,7 @@ print(json.dumps(versions))
             return 'Could not parse.'
 
     def _show_enhanced_package_data(self, package_name: str):
-        r = self.cache_client
+        r = self.redis_client
         overview_key = '{}{}'.format(self.redis_key_prefix, package_name.lower())
         if not r.exists(overview_key):
             print(_("\n📋 KEY DATA: No Redis data found for '{}'").format(package_name))
@@ -3027,7 +2916,7 @@ print(json.dumps(versions))
     def get_all_versions(self, package_name: str) -> List[str]:
         """Get all versions (active + bubbled) for a package"""
         overview_key = f'{self.redis_key_prefix}{package_name.lower()}'
-        overview_data = self.cache_client.hgetall(overview_key)
+        overview_data = self.redis_client.hgetall(overview_key)
         active_ver = overview_data.get('active_version')
         bubble_versions = [key.replace('bubble_version:', '') for key in overview_data if key.startswith('bubble_version:') and overview_data[key] == 'true']
         versions = []
@@ -3037,7 +2926,7 @@ print(json.dumps(versions))
         return sorted(versions, key=lambda v: v)
 
     def _show_version_details(self, package_name: str, version: str):
-        r = self.cache_client
+        r = self.redis_client
         version_key = f'{self.redis_key_prefix}{package_name.lower()}:{version}'
         if not r.exists(version_key):
             print(_('❌ No detailed data found for {} v{}').format(package_name, version))
@@ -3089,7 +2978,7 @@ print(json.dumps(versions))
         try:
             current_state = self.get_installed_packages(live=True)
             snapshot_key = f'{self.redis_key_prefix}snapshot:last_known_good'
-            self.cache_client.set(snapshot_key, json.dumps(current_state))
+            self.redis_client.set(snapshot_key, json.dumps(current_state))
             print(_('   ✅ Snapshot saved.'))
         except Exception as e:
             print(_('   ⚠️ Could not save environment snapshot: {}').format(e))
@@ -3242,13 +3131,13 @@ print(json.dumps(versions))
         """
         print(_('\n--- Running robust download strategy ---'))
         try:
-            # FIXED: Updated with REAL Python versions available in astral-sh/python-build-standalone
+            # Updated with REAL Python versions available in python-build-standalone
             full_versions = {
-                '3.13': '3.13.7',    # Latest Python 3.13 available  
-                '3.12': '3.12.11',   # Latest Python 3.12 available (security fixes)
-                '3.11': '3.11.13',   # Latest Python 3.11 available (FIXED: was 3.11.11)
-                '3.10': '3.10.18',   # Latest Python 3.10 available (FIXED: was 3.10.15)
-                '3.9': '3.9.23'      # Latest Python 3.9 available (FIXED: was 3.9.21)
+                '3.13': '3.13.1',    # Latest Python 3.13 available
+                '3.12': '3.12.8',    # Latest Python 3.12 available  
+                '3.11': '3.11.11',   # Latest Python 3.11 available
+                '3.10': '3.10.15',   # Latest Python 3.10 available
+                '3.9': '3.9.21'      # Latest Python 3.9 available
             }
             
             full_version = full_versions.get(version)
@@ -3696,11 +3585,11 @@ print(json.dumps(versions))
             # Get the specific key pattern for the version we just removed
             keys_to_delete_pattern = self._get_redis_key_prefix_for_version(version) + '*'
             
-            keys = self.cache_client.keys(keys_to_delete_pattern)
+            keys = self.redis_client.keys(keys_to_delete_pattern)
             
             if keys:
                 print(f"   -> Found {len(keys)} stale entries in Redis. Purging...")
-                delete_command = self.cache_client.unlink if hasattr(self.cache_client, 'unlink') else self.cache_client.delete
+                delete_command = self.redis_client.unlink if hasattr(self.redis_client, 'unlink') else self.redis_client.delete
                 delete_command(*keys)
                 print(f"   ✅ Knowledge Base for Python {version} has been purged.")
             else:
@@ -3716,7 +3605,7 @@ print(json.dumps(versions))
         return 0
 
     def smart_install(self, packages: List[str], dry_run: bool=False) -> int:
-        if not self.cache_client:
+        if not self.connect_redis():
             return 1
         if dry_run:
             print(_('🔬 Running in --dry-run mode. No changes will be made.'))
@@ -3808,8 +3697,6 @@ print(json.dumps(versions))
                 continue
             
             any_installations_made = True
-            if hasattr(importlib, 'invalidate_caches'):
-                importlib.invalidate_caches()
             packages_after = self.get_installed_packages(live=True)
             
             # Handle version replacements - mark for KB deletion
@@ -3928,7 +3815,7 @@ print(json.dumps(versions))
             try:
                 from .package_meta_builder import omnipkgMetadataGatherer
                 gatherer = omnipkgMetadataGatherer(config=self.config, env_id=self.env_id, force_refresh=True)
-                gatherer.cache_client = self.cache_client
+                gatherer.redis_client = self.redis_client
                 
                 # Run the builder on our consolidated list of specific package==version specs
                 gatherer.run(targeted_packages=list(all_changed_specs))
@@ -4008,11 +3895,11 @@ print(json.dumps(versions))
         main_key = f'{self.redis_key_prefix}{c_name}'
         version_key = f'{main_key}:{version}'
         versions_set_key = f'{main_key}:installed_versions'
-        with self.cache_client.pipeline() as pipe:
+        with self.redis_client.pipeline() as pipe:
             pipe.delete(version_key)
             pipe.srem(versions_set_key, version)
             pipe.hdel(main_key, f'bubble_version:{version}')
-            if self.cache_client.hget(main_key, 'active_version') == version:
+            if self.redis_client.hget(main_key, 'active_version') == version:
                 pipe.hdel(main_key, 'active_version')
             pipe.execute()
 
@@ -4124,9 +4011,9 @@ print(json.dumps(versions))
         try:
             package_info = {'name': pkg_name, 'version': version, 'install_type': install_type, 'path': bubble_path, 'created_at': self._get_current_timestamp()}
             key = 'package:{}:{}'.format(pkg_name, version)
-            if hasattr(self, 'cache_client') and self.cache_client:
+            if hasattr(self, 'redis_client') and self.redis_client:
                 import json
-                self.cache_client.set(key, json.dumps(package_info))
+                self.redis_client.set(key, json.dumps(package_info))
                 print(_('📝 Registered {}=={} in knowledge base').format(pkg_name, version))
             else:
                 print(_('⚠️ Could not register {}=={}: No Redis connection').format(pkg_name, version))
@@ -4146,7 +4033,7 @@ print(json.dumps(versions))
         found = []
         c_name = canonicalize_name(package_name)
         main_key = f'{self.redis_key_prefix}{c_name}'
-        package_data = self.cache_client.hgetall(main_key)
+        package_data = self.redis_client.hgetall(main_key)
         if not package_data:
             return []
         for key, value in package_data.items():
@@ -4159,7 +4046,7 @@ print(json.dumps(versions))
         return found
 
     def smart_uninstall(self, packages: List[str], force: bool=False, install_type: Optional[str]=None) -> int:
-        if not self.cache_client:
+        if not self.connect_redis():
             return 1
         self._synchronize_knowledge_base_with_reality()
         
@@ -4252,7 +4139,7 @@ print(json.dumps(versions))
                 main_key = f'{self.redis_key_prefix}{c_name}'
                 version_key = f"{main_key}:{item['version']}"
                 versions_set_key = f'{main_key}:installed_versions'
-                with self.cache_client.pipeline() as pipe:
+                with self.redis_client.pipeline() as pipe:
                     pipe.delete(version_key)
                     pipe.srem(versions_set_key, item['version'])
                     if item['type'] == 'active':
@@ -4260,10 +4147,10 @@ print(json.dumps(versions))
                     else:
                         pipe.hdel(main_key, f"bubble_version:{item['version']}")
                     pipe.execute()
-                if self.cache_client.scard(versions_set_key) == 0:
+                if self.redis_client.scard(versions_set_key) == 0:
                     print(_("    -> Last version of '{}' removed. Deleting all traces.").format(c_name))
-                    self.cache_client.delete(main_key, versions_set_key)
-                    self.cache_client.srem(f'{self.redis_key_prefix}index', c_name)
+                    self.redis_client.delete(main_key, versions_set_key)
+                    self.redis_client.srem(f'{self.redis_key_prefix}index', c_name)
             print(_('✅ Uninstallation complete.'))
             self._save_last_known_good_snapshot()
         return 0
@@ -4272,10 +4159,10 @@ print(json.dumps(versions))
 
     def revert_to_last_known_good(self, force: bool=False):
         """Compares the current env to the last snapshot and restores it."""
-        if not self.cache_client:
+        if not self.connect_redis():
             return 1
         snapshot_key = f'{self.redis_key_prefix}snapshot:last_known_good'
-        snapshot_data = self.cache_client.get(snapshot_key)
+        snapshot_data = self.redis_client.get(snapshot_key)
         if not snapshot_data:
             print(_("❌ No 'last known good' snapshot found. Cannot revert."))
             print(_('   Run an `omnipkg install` or `omnipkg uninstall` command to create one.'))
@@ -4359,10 +4246,10 @@ print(json.dumps(versions))
                 c_name = canonicalize_name(pkg_name)
                 main_key = f'{self.redis_key_prefix}{c_name}'
                 version_key = f'{main_key}:{requested_version}'
-                if not self.cache_client.exists(version_key):
+                if not self.redis_client.exists(version_key):
                     needs_install_specs.append(package_spec)
                     continue
-                package_data = self.cache_client.hgetall(main_key)
+                package_data = self.redis_client.hgetall(main_key)
                 if package_data.get('active_version') == requested_version:
                     is_satisfied = True
                 if not is_satisfied and strategy == 'stable-main':
@@ -4377,15 +4264,15 @@ print(json.dumps(versions))
         return {'all_satisfied': len(needs_install_specs) == 0, 'satisfied': sorted(list(satisfied_specs)), 'needs_install': needs_install_specs}
 
     def get_package_info(self, package_name: str, version: str) -> Optional[Dict]:
-        if not self.cache_client:
-            self.cache_client
+        if not self.redis_client:
+            self.connect_redis()
         main_key = f'{self.redis_key_prefix}{package_name.lower()}'
         if version == 'active':
-            version = self.cache_client.hget(main_key, 'active_version')
+            version = self.redis_client.hget(main_key, 'active_version')
             if not version:
                 return None
         version_key = f'{main_key}:{version}'
-        return self.cache_client.hgetall(version_key)
+        return self.redis_client.hgetall(version_key)
 
     def switch_active_python(self, version: str) -> int:
         """
@@ -5153,8 +5040,8 @@ print(json.dumps(versions))
         main_key = f'{self.redis_key_prefix}{c_name}'
         versions = set()
         try:
-            versions.update(self.cache_client.smembers(_('{}:installed_versions').format(main_key)))
-            active_version = self.cache_client.hget(main_key, 'active_version')
+            versions.update(self.redis_client.smembers(_('{}:installed_versions').format(main_key)))
+            active_version = self.redis_client.hget(main_key, 'active_version')
             if active_version:
                 versions.add(active_version)
             return sorted(list(versions), key=parse_version, reverse=True)
@@ -5163,16 +5050,16 @@ print(json.dumps(versions))
             return []
 
     def list_packages(self, pattern: str=None) -> int:
-        if not self.cache_client:
+        if not self.connect_redis():
             return 1
         self._synchronize_knowledge_base_with_reality()
-        all_pkg_names = self.cache_client.smembers(f'{self.redis_key_prefix}index')
+        all_pkg_names = self.redis_client.smembers(f'{self.redis_key_prefix}index')
         if pattern:
             all_pkg_names = {name for name in all_pkg_names if pattern.lower() in name.lower()}
         print(_('📋 Found {} matching package(s):').format(len(all_pkg_names)))
         for pkg_name in sorted(list(all_pkg_names)):
             main_key = f'{self.redis_key_prefix}{pkg_name}'
-            package_data = self.cache_client.hgetall(main_key)
+            package_data = self.redis_client.hgetall(main_key)
             display_name = package_data.get('name', pkg_name)
             active_version = package_data.get('active_version')
             all_versions = self.get_available_versions(pkg_name)
@@ -5188,7 +5075,7 @@ print(json.dumps(versions))
         return 0
 
     def show_multiversion_status(self) -> int:
-        if not self.cache_client:
+        if not self.connect_redis():
             return 1
         self._synchronize_knowledge_base_with_reality()
         print(_('🔄 omnipkg System Status'))

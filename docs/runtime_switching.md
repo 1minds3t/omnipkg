@@ -1,70 +1,129 @@
-# Runtime Package Version Switching with omnipkgLoader
+# Runtime Version Switching with omnipkgLoader
 
-One of omnipkg's most revolutionary features is the ability to dynamically switch between different **package versions** within the same Python script, without requiring separate virtual environments or process restarts. This is achieved using the `omnipkgLoader` context manager.
+One of `omnipkg`'s most revolutionary features is the ability to dynamically switch between different package versions *within the same Python script or process*, without requiring separate virtual environments, Docker containers, or process restarts. This is achieved using the `omnipkgLoader` context manager.
 
-> **Looking for Python Interpreter Switching?**
-> This guide covers switching *packages* (like `numpy` or `requests`) inside a script. To learn how to switch the entire *Python interpreter* (e.g., from Python 3.9 to 3.11) for your shell or project, see the [**Python Hot-Swapping Guide**](./python_hot_swapping.md).
+## How omnipkgLoader Works
 
-### How omnipkgLoader Works
+The `omnipkgLoader` context manager allows you to temporarily activate a specific package version from its isolated "bubble." When your code enters the `with` block, `omnipkg` performs a series of meticulous operations to ensure the requested version is loaded. When your code exits the `with` block, `omnipkg` seamlessly restores your environment to its original state.
 
-The `omnipkgLoader` context manager temporarily activates a specific package version from its isolated "bubble." When your code enters the `with` block, omnipkg performs a series of operations (module cleaning, path manipulation) to ensure the requested version is loaded. When the block is exited, your environment is seamlessly restored to its original state.
+### Key Operations:
 
-### Using omnipkgLoader in Your Code
+*   **Aggressive Module Cleaning**: `omnipkg` removes any existing loaded modules related to the target package from `sys.modules` (Python's module cache). This ensures Python will attempt a fresh import of the desired version.
+*   **Main Environment Cloaking**: To prevent interference, `omnipkg` temporarily "cloaks" (renames) the main environment's installation directories of the package (e.g., `flask_login/` becomes `flask_login.timestamp_omnipkg_cloaked/`).
+*   **`sys.path` Manipulation**: The bubble's path is dynamically inserted at the very front of `sys.path`, giving it import priority.
+*   **Environment Variable Adjustment**: If the bubble contains binaries, `omnipkg` temporarily adds the bubble's `bin` directory to your `PATH` environment variable.
+*   **Automatic Restoration**: Upon exiting the `with` block, `omnipkg` reverses all these changes, restoring `sys.path`, uncloaking the main package, clearing module caches, and restoring environment variables, leaving your environment exactly as it was.
 
-Using the loader is simple and powerful.
+This intricate dance ensures that your code truly operates with the specific version you request within the `with` block, and cleanly reverts afterwards.
 
-1.  **Install Multiple Versions**: First, ensure you have the desired versions installed. omnipkg will automatically bubble the conflicting one.
-    ```bash
-    # This will install 13.7.1 in main and bubble 13.5.3
-    omnipkg install rich==13.7.1 rich==13.5.3
+## Using `omnipkgLoader` in Your Code
+
+The `omnipkgLoader` is designed for simplicity.
+
+1.  **Import `omnipkgLoader`**:
+    ```python
+    from omnipkg.loader import omnipkgLoader
+    from omnipkg.core import ConfigManager # Highly recommended for robust path discovery
     ```
-
-2.  **Use the Context Manager**: In your Python script, import and use `omnipkgLoader`.
+2.  **Initialize `ConfigManager` (Optional but Recommended)**:
+    It's best practice to initialize `ConfigManager` once at the start of your application and pass its `config` object to `omnipkgLoader`. This ensures `omnipkgLoader` accurately finds your bubble base path and Redis connection details. If not provided, it will attempt auto-detection.
+    ```python
+    config_manager = ConfigManager()
+    omnipkg_config = config_manager.config
+    ```
+3.  **Use the `with` Statement**:
+    Pass the package specification (e.g., `"my-package==1.2.3"`) and your `omnipkg_config` to the `omnipkgLoader`.
 
 ```python
 # example_version_switching.py
 
 import sys
 import importlib
-from importlib.metadata import version as get_version
+from importlib.metadata import version as get_version, PackageNotFoundError
 from omnipkg.loader import omnipkgLoader
 from omnipkg.core import ConfigManager
 
-# It's best practice to initialize ConfigManager once
+# --- Initialize omnipkg's configuration (do this once in your application) ---
 config_manager = ConfigManager()
 omnipkg_config = config_manager.config
 
-# --- Verify initial state ---
-initial_rich_version = get_version('rich')
-print(f"Initial 'rich' version in main environment: {initial_rich_version}")
+# --- Verify initial state (e.g., rich installed in main environment) ---
+try:
+    initial_rich_version = get_version('rich')
+    print(f"Initial 'rich' version in main environment: {initial_rich_version}")
+except PackageNotFoundError:
+    print("Warning: 'rich' not found in main environment. Please install it with `omnipkg install rich`.")
+    initial_rich_version = None
 
-# --- Activate an older version from a bubble ---
+# --- Scenario 1: Activate an older version from a bubble ---
+# Make sure 'rich==13.5.3' is installed as a bubble: `omnipkg install rich==13.5.3`
 print("\n--- Entering context: Activating 'rich==13.5.3' bubble ---")
-with omnipkgLoader("rich==13.5.3", config=omnipkg_config):
-    # Inside this 'with' block, 'rich' 13.5.3 is active
+try:
+    with omnipkgLoader("rich==13.5.3", config=omnipkg_config):
+        # Inside this 'with' block, 'rich' 13.5.3 is active
+        import rich
+        from rich.console import Console
+        
+        active_version_in_bubble = rich.__version__
+        print(f"  Active 'rich' version INSIDE bubble: {active_version_in_bubble}")
+        Console().print(f"[red]This text is from Rich {active_version_in_bubble}[/red]")
+
+    # Outside the 'with' block, the environment is automatically restored
+    print("\n--- Exiting context: Environment restored ---")
+    # To see the change reflected immediately in the current Python scope,
+    # you might need to force a reload if 'rich' was imported before the 'with' block.
+    if 'rich' in sys.modules:
+        importlib.reload(sys.modules['rich'])
+    # Re-import to confirm the restored version
     import rich
-    from rich.console import Console
+    print(f"Active 'rich' version AFTER bubble: {rich.__version__}") # Should be the initial version again
 
-    active_version_in_bubble = rich.__version__
-    print(f"  Active 'rich' version INSIDE bubble: {active_version_in_bubble}")
-    Console().print(f"[red]This text is from Rich {active_version_in_bubble}[/red]")
+except RuntimeError as e:
+    print(f"\nError activating 'rich==13.5.3' bubble: {e}")
+    print("Please ensure 'rich==13.5.3' is installed as a bubble via `omnipkg install rich==13.5.3`.")
+except Exception as e:
+    print(f"\nAn unexpected error occurred: {e}")
+    import traceback
+    traceback.print_exc()
 
-# --- Environment is restored automatically ---
-print("\n--- Exiting context: Environment restored ---")
+# --- Scenario 2: Switch to another bubbled version or even back to main ---
+# Make sure 'rich==13.4.2' is installed as a bubble: `omnipkg install rich==13.4.2`
+print("\n--- Entering context: Activating 'rich==13.4.2' bubble ---")
+try:
+    with omnipkgLoader("rich==13.4.2", config=omnipkg_config):
+        import rich
+        from rich.console import Console
+        active_version_in_second_bubble = rich.__version__
+        print(f"  Active 'rich' version INSIDE second bubble: {active_version_in_second_bubble}")
+        Console().print(f"[blue]This text is from Rich {active_version_in_second_bubble}[/blue]")
 
-# You must reload the module to see the change reflected
-if 'rich' in sys.modules:
-    importlib.reload(sys.modules['rich'])
+    print("\n--- Exiting context: Environment restored again ---")
+    if 'rich' in sys.modules:
+        importlib.reload(sys.modules['rich'])
+    import rich
+    print(f"Active 'rich' version FINALLY: {rich.__version__}") # Should be the initial version again
 
-import rich
-print(f"Active 'rich' version AFTER bubble: {rich.__version__}")
+except RuntimeError as e:
+    print(f"\nError activating 'rich==13.4.2' bubble: {e}")
+    print("Please ensure 'rich==13.4.2' is installed as a bubble via `omnipkg install rich==13.4.2`.")
+except Exception as e:
+    print(f"\nAn unexpected error occurred during second demo: {e}")
+    import traceback
+    traceback.print_exc()
+
+print("\n--- End of script ---")
+print("omnipkg enables seamless multi-version usage in a single Python process!")
 ```
 
-### Key Considerations
+## Verification Methods
 
-*   **Automatic Cleanup**: No manual cleanup is necessary. The environment is automatically restored upon exiting the `with` block.
-*   **Module Reloading**: If a module was imported *before* the `with` block, you **must** use `importlib.reload()` after the block to force Python to recognize the restored main version.
-*   **Nested Contexts**: `omnipkgLoader` supports nesting, allowing you to create complex, temporary environments with multiple specific bubbled packages active at once.
-```
+To confirm that `omnipkg` is doing its magic and the correct versions are active:
 
----
+*   **Inside `with` block**: Use `package.__version__` or `importlib.metadata.version('package_name')` immediately after importing the package.
+*   **Outside `with` block**: After the `with omnipkgLoader` block, always call `importlib.reload(sys.modules['your_package'])` if `your_package` was already imported *before* the `with` block. This forces Python to re-evaluate where to find the module, reflecting the restored `sys.path`. Then, check its version again.
+
+The `omnipkg demo` command includes tests that show these verifications in action.
+
+## Cleanup Necessary?
+
+One of the greatest benefits of `omnipkgLoader` is that **no manual cleanup is necessary after exiting the `with` block**. The environment is automatically restored. You only need to ensure you've installed the necessary package versions as bubbles using `omnipkg install <package_spec>` beforehand.

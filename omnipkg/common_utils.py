@@ -206,11 +206,7 @@ def ensure_python_or_relaunch(required_version: str):
     print(_('   - Re-calibrating multiverse coordinates and relaunching...'))
 
     try:
-        # --- THIS IS THE FIX ---
-        # We import the lowercase 'omnipkg' class and give it a PascalCase alias
-        # to match the intent of the original code.
-        from .core import omnipkg as OmnipkgCore
-        # --- END OF FIX ---
+        from .core import OmnipkgCore # Local import to avoid circular dependency issues
         
         cm = ConfigManager(suppress_init_messages=True)
         pkg_instance = OmnipkgCore(config_manager=cm)
