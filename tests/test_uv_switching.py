@@ -5,7 +5,11 @@ from pathlib import Path
 project_root = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(project_root))
 
-from omnipkg.common_utils import sync_context_to_runtime
+from omnipkg.common_utils import ensure_script_is_running_on_version, sync_context_to_runtime
+
+# 1. Declarative script guard: Ensures this script runs on Python 3.9.
+#    If not, it will relaunch this script with the correct interpreter and exit.
+ensure_script_is_running_on_version("3.9")
 sync_context_to_runtime()
 
 import sys

@@ -2678,7 +2678,7 @@ print(json.dumps(versions))
         Self-healing function that is now fully robust. It not only checks for
         missing/stale versions but also verifies the integrity of existing
         knowledge base entries with comprehensive field validation.
-        (Enhanced Version 3 - Smart Field Detection)
+        (Enhanced Version 4 - Smart Field Detection & Bubble-Aware)
         """
         if self._check_and_run_pending_rebuild():
             return
@@ -2710,33 +2710,32 @@ print(json.dumps(versions))
         index_key = f'{self.redis_env_prefix}index'
         packages_in_kb_index = self.cache_client.smembers(index_key)
         
-        # --- STEP 3: Define Critical Fields for Health Check ---
-        # These are essential fields that must be present for full functionality
-        CRITICAL_FIELDS = {
-            # Core metadata fields
-            'Name', 'Version', 'Summary', 'path', 'checksum', 'last_indexed',
-            'Metadata-Version',
-            
-            # Security and health fields
-            'security.audit_status', 'security.issues_found', 'security.report',
-            'health.import_check.importable', 'health.import_check.version',
-            
-            # Dependency and CLI analysis
-            'dependencies', 'cli_analysis.common_flags', 'cli_analysis.subcommands',
-            'help_text', 'indexed_by_python'
+        # --- STEP 3: Define Essential Fields for Health Check (Relaxed) ---
+        # Only require truly essential fields that should exist for ANY package
+        ESSENTIAL_FIELDS = {
+            'Name',      # Package name - always should exist
+            'Version',   # Version - always should exist
+            'path'       # Installation path - always should exist
         }
         
-        # Optional but expected fields (warnings only)
-        EXPECTED_FIELDS = {
-            'Author-email', 'Description', 'Description-Content-Type', 
-            'Requires-Python', 'Keywords', 'Classifier', 'Project-URL'
+        # Fields that are important but may not exist for all packages
+        IMPORTANT_FIELDS = {
+            'checksum', 'last_indexed', 'Summary', 'Metadata-Version'
+        }
+        
+        # Security and health fields - only check if they exist, don't require them
+        OPTIONAL_AUDIT_FIELDS = {
+            'security.audit_status', 'security.issues_found', 'security.report',
+            'health.import_check.importable', 'health.import_check.version',
+            'dependencies', 'cli_analysis.common_flags', 'cli_analysis.subcommands',
+            'help_text', 'indexed_by_python'
         }
 
         # --- STEP 4: Reconcile discrepancies with surgical precision ---
         discrepancies = 0
         packages_to_rebuild = set()
 
-        # --- Part A: Enhanced KB entry health check ---
+        # --- Part A: Enhanced KB entry health check (More Lenient) ---
         for pkg_name in packages_in_kb_index:
             main_key = f'{self.redis_key_prefix}{pkg_name}'
             real_active_version = live_active_versions.get(pkg_name)
@@ -2746,7 +2745,7 @@ print(json.dumps(versions))
             # Get all versions the KB *thinks* it has for this package
             cached_versions = self.cache_client.smembers(f'{main_key}:installed_versions')
             
-            # --- ENHANCED HEALTH CHECK ---
+            # --- ENHANCED BUT LENIENT HEALTH CHECK ---
             # Health-check every version that should exist on disk
             for version in all_real_versions:
                 version_key = f'{main_key}:{version}'
@@ -2754,19 +2753,26 @@ print(json.dumps(versions))
                 # Get all fields currently stored for this version
                 stored_fields = set(self.cache_client.hkeys(version_key))
                 
-                # Check for missing critical fields
-                missing_critical = CRITICAL_FIELDS - stored_fields
+                # Only check for absolutely essential fields
+                missing_essential = ESSENTIAL_FIELDS - stored_fields
                 
-                if missing_critical:
-                    print(f"   -> Found incomplete KB entry for {pkg_name}=={version}. Missing critical fields: {', '.join(sorted(missing_critical))}")
+                if missing_essential:
+                    print(f"   -> Found incomplete KB entry for {pkg_name}=={version}. Missing essential fields: {', '.join(sorted(missing_essential))}")
                     packages_to_rebuild.add(f"{pkg_name}=={version}")
                     discrepancies += 1
                     continue
                 
-                # Additional integrity checks for existing critical fields
+                # Check if the entry is completely empty (no fields at all)
+                if not stored_fields:
+                    print(f"   -> Found empty KB entry for {pkg_name}=={version}")
+                    packages_to_rebuild.add(f"{pkg_name}=={version}")
+                    discrepancies += 1
+                    continue
+                    
+                # Additional integrity checks ONLY for existing essential fields
                 integrity_issues = []
                 
-                # Check if core fields have meaningful values
+                # Check if essential fields have meaningful values
                 name_field = self.cache_client.hget(version_key, 'Name')
                 if not name_field or name_field.strip() == '':
                     integrity_issues.append('Name is empty')
@@ -2775,25 +2781,28 @@ print(json.dumps(versions))
                 if not version_field or version_field != version:
                     integrity_issues.append(f'Version mismatch: stored={version_field}, expected={version}')
                 
-                checksum_field = self.cache_client.hget(version_key, 'checksum')
-                if not checksum_field or len(checksum_field) < 32:  # Basic checksum length validation
-                    integrity_issues.append('Invalid or missing checksum')
-                
                 path_field = self.cache_client.hget(version_key, 'path')
-                if not path_field or not Path(path_field).exists():
-                    integrity_issues.append('Invalid or missing path')
+                if not path_field:
+                    integrity_issues.append('Missing path')
+                elif not Path(path_field).exists():
+                    integrity_issues.append('Path does not exist on filesystem')
                 
-                # Check security audit status
+                # Only validate optional fields if they exist - don't require them
+                checksum_field = self.cache_client.hget(version_key, 'checksum')
+                if checksum_field and len(checksum_field) < 32:  # Only validate if present
+                    integrity_issues.append('Invalid checksum format')
+                
+                # Only validate security audit if it exists
                 audit_status = self.cache_client.hget(version_key, 'security.audit_status')
-                if audit_status not in ['checked_in_bulk', 'checked_individually', 'pending', 'skipped']:
+                if audit_status and audit_status not in ['checked_in_bulk', 'checked_individually', 'pending', 'skipped']:
                     integrity_issues.append(f'Invalid audit status: {audit_status}')
                 
-                # Check import check results
+                # Only validate import check if it exists
                 importable = self.cache_client.hget(version_key, 'health.import_check.importable')
-                if importable not in ['True', 'False']:
+                if importable and importable not in ['True', 'False']:
                     integrity_issues.append('Invalid import check result')
                 
-                # Check dependencies format
+                # Only validate dependencies format if it exists
                 dependencies = self.cache_client.hget(version_key, 'dependencies')
                 if dependencies and not (dependencies.startswith('[') and dependencies.endswith(']')):
                     integrity_issues.append('Invalid dependencies format')
@@ -2804,11 +2813,11 @@ print(json.dumps(versions))
                     discrepancies += 1
                     continue
                 
-                # Optional: Warn about missing expected fields (but don't rebuild)
-                missing_expected = EXPECTED_FIELDS - stored_fields
-                if missing_expected and len(missing_expected) > 3:  # Only warn if many are missing
-                    print(f"   -> Note: {pkg_name}=={version} is missing some optional metadata: {', '.join(sorted(list(missing_expected)[:3]))}{'...' if len(missing_expected) > 3 else ''}")
-            # --- END OF ENHANCED HEALTH CHECK ---
+                # Report on data completeness without requiring rebuild
+                missing_important = IMPORTANT_FIELDS - stored_fields
+                if missing_important:
+                    print(f"   -> Note: {pkg_name}=={version} is missing some important fields but is functional: {', '.join(sorted(missing_important))}")
+            # --- END OF ENHANCED BUT LENIENT HEALTH CHECK ---
 
             # Find stale versions (in KB but not on disk) and remove them
             stale_versions = cached_versions - all_real_versions
