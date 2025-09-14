@@ -142,6 +142,11 @@ def setup_environment():
         print(_('   ❌ Failed to install main environment UV version'))
         return None, original_strategy
     
+    # --- THIS IS THE FIX ---
+    # Tell omnipkg to update its knowledge about the package we just installed.
+    force_omnipkg_rescan(omnipkg_core, 'uv')
+    # --- END OF THE FIX ---
+    
     print(_('✅ Environment prepared'))
     return config_manager, original_strategy
 
@@ -159,6 +164,18 @@ def create_test_bubbles(config_manager):
             print(_('   ❌ Failed to create bubble for uv=={}: {}').format(version, e))
 
     return BUBBLE_VERSIONS_TO_TEST
+
+def force_omnipkg_rescan(omnipkg_core, package_name):
+    """Tells omnipkg to forcibly rescan a specific package's metadata."""
+    print(f'   🧠 Forcing omnipkg KB rebuild for {package_name}...')
+    try:
+        # We'll use our new internal method directly for the test
+        omnipkg_core.rebuild_package_kb([package_name])
+        print(f'   ✅ KB rebuild for {package_name} complete.')
+        return True
+    except Exception as e:
+        print(f'   ❌ KB rebuild for {package_name} failed: {e}')
+        return False
 
 def inspect_bubble_structure(bubble_path):
     """Prints a summary of the bubble's directory structure for verification."""
@@ -312,6 +329,8 @@ def run_comprehensive_test():
             print(_('   📦 Restoring main environment: uv=={}').format(MAIN_UV_VERSION))
             pip_uninstall_uv()
             pip_install_uv(MAIN_UV_VERSION)
+
+            force_omnipkg_rescan(omnipkg_core, 'uv')
             
             # Restore original install strategy if it was changed
             if original_strategy and original_strategy != 'stable-main':
