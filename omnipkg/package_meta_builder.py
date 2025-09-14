@@ -68,6 +68,7 @@ class omnipkgMetadataGatherer:
     def __init__(self, config: Dict, env_id: str, force_refresh: bool = False, omnipkg_instance=None):
         self.cache_client = None
         self.omnipkg_instance = omnipkg_instance
+        self.cache_client = self.omnipkg_instance.cache_client if self.omnipkg_instance else None
         self.force_refresh = force_refresh
         self.security_report = {}
         self.config = config
@@ -380,7 +381,8 @@ class omnipkgMetadataGatherer:
         FIXED (v2): The main execution loop. It now safely handles corrupted
         package metadata during the pre-scan phase, preventing crashes.
         """
-        if not self.connect_redis():
+        if not self.cache_client:
+            print(_('❌ Cache client not available to the builder. Aborting.'))
             return
         distributions_to_process = self._discover_distributions(targeted_packages)
         if targeted_packages:
@@ -737,8 +739,13 @@ class omnipkgMetadataGatherer:
 if __name__ == '__main__':
     import json
     from pathlib import Path
-    import hashlib # Ensure hashlib is imported here
-    print(_('🚀 Starting omnipkg Metadata Builder v11 (Multi-Version Complete Edition)...'))
+    import hashlib
+    # --- START OF CHANGE ---
+    # Import the SQLite client needed for standalone execution
+    from omnipkg.cache import SQLiteCacheClient
+    # --- END OF CHANGE ---
+
+    print(_('🚀 Starting omnipkg Metadata Builder v12 (SQLite/Redis Edition)...'))
     try:
         config_path = Path.home() / '.config' / 'omnipkg' / 'config.json'
         with open(config_path, 'r') as f:
@@ -768,10 +775,23 @@ if __name__ == '__main__':
         print(f'❌ CRITICAL: Could not load omnipkg configuration for this environment (ID: {env_id}). Error: {e}. Aborting.')
         sys.exit(1)
         
+    # The gatherer is created without the omnipkg_instance, so its cache_client is initially None.
     gatherer = omnipkgMetadataGatherer(config=config, env_id=env_id, force_refresh='--force' in sys.argv)
     
+    # --- START OF REPLACEMENT for connect_redis() ---
     try:
-        if gatherer.connect_redis():
+        # 1. Manually create the SQLiteCacheClient instance for standalone mode.
+        #    It's best practice to get the cache path from the config.
+        cache_dir = Path(config.get('cache_dir', Path.home() / '.cache' / 'omnipkg'))
+        db_path = cache_dir / f'omnipkg_cache_{env_id}.db'
+        
+        print(f"   (Using SQLite cache at: {db_path})")
+        
+        # 2. Assign the created client directly to the gatherer instance.
+        gatherer.cache_client = SQLiteCacheClient(db_path=db_path)
+
+        # 3. Check if the connection is valid, similar to the old ping() check.
+        if gatherer.cache_client and gatherer.cache_client.ping():
             targeted_packages = [arg for arg in sys.argv[1:] if not arg.startswith('--')]
             if targeted_packages:
                 gatherer.run(targeted_packages=targeted_packages)
@@ -779,8 +799,9 @@ if __name__ == '__main__':
                 gatherer.run()
             print(_('\n🎉 Metadata building complete!'))
         else:
-            print(_('❌ Failed to connect to Redis. Aborting.'))
+            print(_('❌ Failed to connect to SQLite cache. Aborting.'))
             sys.exit(1)
+    # --- END OF REPLACEMENT for connect_redis() ---
     except Exception as e:
         print(_('\n❌ An unexpected error occurred during metadata build: {}').format(e))
         import traceback

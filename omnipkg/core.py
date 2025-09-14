@@ -2675,91 +2675,177 @@ print(json.dumps(versions))
 
     def _synchronize_knowledge_base_with_reality(self):
         """
-        Self-healing function. Uses a pending rebuild flag and a highly optimized
-        bulk check for maximum speed and reliability.
+        Self-healing function that is now fully robust. It not only checks for
+        missing/stale versions but also verifies the integrity of existing
+        knowledge base entries with comprehensive field validation.
+        (Enhanced Version 3 - Smart Field Detection)
         """
-        rebuild_was_run = self._check_and_run_pending_rebuild()
-        if rebuild_was_run:
+        if self._check_and_run_pending_rebuild():
             return
 
         print(_('🧠 Performing self-healing sync of knowledge base...'))
-        
+
         if not self.cache_client:
             self._connect_cache()
+            if not self.cache_client:
+                print("   ❌ Cannot perform sync: Cache connection failed.")
+                return
 
-        index_key = f'{self.redis_env_prefix}index'
-        if not self.cache_client.exists(index_key):
-             # This handles cases where the KB is genuinely empty and no flag was set
-            if not any(Path(self.config['site_packages_path']).iterdir()):
-                 print(_('   ✅ Knowledge base is empty or no packages found to sync.'))
-                 return
-
-        # --- PERFORMANCE OPTIMIZATION ---
-        # Get all live versions in one fast command instead of in a loop.
+        # --- STEP 1: Establish the "Ground Truth" from the filesystem ---
         live_active_versions = self._get_all_active_versions_live()
-        
-        all_known_packages_in_redis = self.cache_client.smembers(index_key)
-        
-        # Combine keys from Redis and the live scan to check everything.
-        packages_to_check = set(all_known_packages_in_redis) | set(live_active_versions.keys())
-        
+        packages_in_bubbles = {}
         if self.multiversion_base.exists():
-            for bubble_dir in self.multiversion_base.iterdir():
-                if bubble_dir.is_dir():
+            for dist_info_path in self.multiversion_base.rglob('*.dist-info'):
+                if dist_info_path.is_dir():
                     try:
-                        dir_pkg_name, _version = bubble_dir.name.rsplit('-', 1)
-                        packages_to_check.add(canonicalize_name(dir_pkg_name))
-                    except ValueError:
+                        dist = importlib.metadata.Distribution.at(dist_info_path)
+                        pkg_name = canonicalize_name(dist.metadata['Name'])
+                        if pkg_name not in packages_in_bubbles:
+                            packages_in_bubbles[pkg_name] = set()
+                        packages_in_bubbles[pkg_name].add(dist.version)
+                    except Exception:
                         continue
-        
-        if not packages_to_check:
-            print(_('   ✅ Knowledge base is empty or no packages found to sync.'))
-            return
 
-        fixed_count = 0
-        with self.cache_client.pipeline() as pipe:
-            for pkg_name in packages_to_check:
-                main_key = f'{self.redis_key_prefix}{pkg_name}'
-                
-                # Use the pre-fetched dictionary for an instant lookup
-                real_active_version = live_active_versions.get(pkg_name)
-                
-                real_bubbled_versions = set()
-                if self.multiversion_base.exists():
-                    for bubble_dir in self.multiversion_base.iterdir():
-                        if not bubble_dir.is_dir(): continue
-                        try:
-                            dir_pkg_name, version = bubble_dir.name.rsplit('-', 1)
-                            if canonicalize_name(dir_pkg_name) == pkg_name:
-                                real_bubbled_versions.add(version)
-                        except ValueError:
-                            continue
-                
-                cached_data = self.cache_client.hgetall(main_key)
-                cached_active_version = cached_data.get('active_version')
-                cached_bubbled_versions = {k.replace('bubble_version:', '') for k in cached_data if k.startswith('bubble_version:')}
-                
-                if real_active_version and real_active_version != cached_active_version:
-                    pipe.hset(main_key, 'active_version', real_active_version)
-                    fixed_count += 1
-                elif not real_active_version and cached_active_version:
-                    pipe.hdel(main_key, 'active_version')
-                    fixed_count += 1
-                
-                stale_bubbles = cached_bubbled_versions - real_bubbled_versions
-                for version in stale_bubbles:
-                    pipe.hdel(main_key, f'bubble_version:{version}')
-                    fixed_count += 1
-                
-                missing_bubbles = real_bubbled_versions - cached_bubbled_versions
-                for version in missing_bubbles:
-                    pipe.hset(main_key, f'bubble_version:{version}', 'true')
-                    fixed_count += 1
-            
-            pipe.execute()
+        # --- STEP 2: Get the state of the Knowledge Base ---
+        index_key = f'{self.redis_env_prefix}index'
+        packages_in_kb_index = self.cache_client.smembers(index_key)
         
-        if fixed_count > 0:
-            print(_('   ✅ Sync complete. Reconciled {} discrepancies.').format(fixed_count))
+        # --- STEP 3: Define Critical Fields for Health Check ---
+        # These are essential fields that must be present for full functionality
+        CRITICAL_FIELDS = {
+            # Core metadata fields
+            'Name', 'Version', 'Summary', 'path', 'checksum', 'last_indexed',
+            'Metadata-Version',
+            
+            # Security and health fields
+            'security.audit_status', 'security.issues_found', 'security.report',
+            'health.import_check.importable', 'health.import_check.version',
+            
+            # Dependency and CLI analysis
+            'dependencies', 'cli_analysis.common_flags', 'cli_analysis.subcommands',
+            'help_text', 'indexed_by_python'
+        }
+        
+        # Optional but expected fields (warnings only)
+        EXPECTED_FIELDS = {
+            'Author-email', 'Description', 'Description-Content-Type', 
+            'Requires-Python', 'Keywords', 'Classifier', 'Project-URL'
+        }
+
+        # --- STEP 4: Reconcile discrepancies with surgical precision ---
+        discrepancies = 0
+        packages_to_rebuild = set()
+
+        # --- Part A: Enhanced KB entry health check ---
+        for pkg_name in packages_in_kb_index:
+            main_key = f'{self.redis_key_prefix}{pkg_name}'
+            real_active_version = live_active_versions.get(pkg_name)
+            real_bubbled_versions = packages_in_bubbles.get(pkg_name, set())
+            all_real_versions = real_bubbled_versions | ({real_active_version} if real_active_version else set())
+
+            # Get all versions the KB *thinks* it has for this package
+            cached_versions = self.cache_client.smembers(f'{main_key}:installed_versions')
+            
+            # --- ENHANCED HEALTH CHECK ---
+            # Health-check every version that should exist on disk
+            for version in all_real_versions:
+                version_key = f'{main_key}:{version}'
+                
+                # Get all fields currently stored for this version
+                stored_fields = set(self.cache_client.hkeys(version_key))
+                
+                # Check for missing critical fields
+                missing_critical = CRITICAL_FIELDS - stored_fields
+                
+                if missing_critical:
+                    print(f"   -> Found incomplete KB entry for {pkg_name}=={version}. Missing critical fields: {', '.join(sorted(missing_critical))}")
+                    packages_to_rebuild.add(f"{pkg_name}=={version}")
+                    discrepancies += 1
+                    continue
+                
+                # Additional integrity checks for existing critical fields
+                integrity_issues = []
+                
+                # Check if core fields have meaningful values
+                name_field = self.cache_client.hget(version_key, 'Name')
+                if not name_field or name_field.strip() == '':
+                    integrity_issues.append('Name is empty')
+                
+                version_field = self.cache_client.hget(version_key, 'Version')
+                if not version_field or version_field != version:
+                    integrity_issues.append(f'Version mismatch: stored={version_field}, expected={version}')
+                
+                checksum_field = self.cache_client.hget(version_key, 'checksum')
+                if not checksum_field or len(checksum_field) < 32:  # Basic checksum length validation
+                    integrity_issues.append('Invalid or missing checksum')
+                
+                path_field = self.cache_client.hget(version_key, 'path')
+                if not path_field or not Path(path_field).exists():
+                    integrity_issues.append('Invalid or missing path')
+                
+                # Check security audit status
+                audit_status = self.cache_client.hget(version_key, 'security.audit_status')
+                if audit_status not in ['checked_in_bulk', 'checked_individually', 'pending', 'skipped']:
+                    integrity_issues.append(f'Invalid audit status: {audit_status}')
+                
+                # Check import check results
+                importable = self.cache_client.hget(version_key, 'health.import_check.importable')
+                if importable not in ['True', 'False']:
+                    integrity_issues.append('Invalid import check result')
+                
+                # Check dependencies format
+                dependencies = self.cache_client.hget(version_key, 'dependencies')
+                if dependencies and not (dependencies.startswith('[') and dependencies.endswith(']')):
+                    integrity_issues.append('Invalid dependencies format')
+                
+                if integrity_issues:
+                    print(f"   -> Found integrity issues for {pkg_name}=={version}: {'; '.join(integrity_issues)}")
+                    packages_to_rebuild.add(f"{pkg_name}=={version}")
+                    discrepancies += 1
+                    continue
+                
+                # Optional: Warn about missing expected fields (but don't rebuild)
+                missing_expected = EXPECTED_FIELDS - stored_fields
+                if missing_expected and len(missing_expected) > 3:  # Only warn if many are missing
+                    print(f"   -> Note: {pkg_name}=={version} is missing some optional metadata: {', '.join(sorted(list(missing_expected)[:3]))}{'...' if len(missing_expected) > 3 else ''}")
+            # --- END OF ENHANCED HEALTH CHECK ---
+
+            # Find stale versions (in KB but not on disk) and remove them
+            stale_versions = cached_versions - all_real_versions
+            if stale_versions:
+                discrepancies += len(stale_versions)
+                print(f"   -> Removing stale KB entries for {pkg_name}: {', '.join(sorted(stale_versions))}")
+                with self.cache_client.pipeline() as pipe:
+                    for version in stale_versions:
+                        pipe.delete(f'{main_key}:{version}')  # Delete detailed data
+                        pipe.srem(f'{main_key}:installed_versions', version)  # Remove from set
+                        pipe.hdel(main_key, f'bubble_version:{version}')  # Remove bubble flag
+                        if self.cache_client.hget(main_key, 'active_version') == version:
+                            pipe.hdel(main_key, 'active_version')  # Remove active flag
+                    pipe.execute()
+
+        # --- Part B: Find packages on disk that are completely missing from the KB ---
+        all_disk_packages = set(live_active_versions.keys()) | set(packages_in_bubbles.keys())
+        missing_from_index = all_disk_packages - packages_in_kb_index
+        if missing_from_index:
+            discrepancies += len(missing_from_index)
+            print(f"   -> Found packages missing from KB index: {', '.join(sorted(missing_from_index))}")
+            for pkg_name in missing_from_index:
+                # Add to index and mark all its versions for rebuild
+                self.cache_client.sadd(index_key, pkg_name)
+                if pkg_name in live_active_versions:
+                    packages_to_rebuild.add(f"{pkg_name}=={live_active_versions[pkg_name]}")
+                if pkg_name in packages_in_bubbles:
+                    for version in packages_in_bubbles[pkg_name]:
+                        packages_to_rebuild.add(f"{pkg_name}=={version}")
+        
+        # --- Part C: Run the consolidated rebuild if necessary ---
+        if packages_to_rebuild:
+            print(f"   -> Found {len(packages_to_rebuild)} missing or incomplete entries. Rebuilding...")
+            self.rebuild_package_kb(list(packages_to_rebuild))
+
+        if discrepancies > 0:
+            print(_('   ✅ Sync complete. Reconciled {} discrepancies.').format(discrepancies))
         else:
             print(_('   ✅ Knowledge base is already in sync with the environment.'))
 
@@ -3854,13 +3940,22 @@ print(json.dumps(versions))
         # Add all the newly bubbled packages to the list
         for pkg_name, version in bubbled_kb_updates.items():
             all_changed_specs.add(f"{pkg_name}=={version}")
+
+        for pkg_name, version in main_env_kb_updates.items():
+            all_changed_specs.add(f"{pkg_name}=={version}")
         
         # 2. Run a single, consolidated metadata build for ALL changes
         if all_changed_specs:
             print('    Targeting {} package(s) for KB update...'.format(len(all_changed_specs)))
             try:
                 from .package_meta_builder import omnipkgMetadataGatherer
-                gatherer = omnipkgMetadataGatherer(config=self.config, env_id=self.env_id, force_refresh=True)
+                from .package_meta_builder import omnipkgMetadataGatherer
+                gatherer = omnipkgMetadataGatherer(
+                    config=self.config, 
+                    env_id=self.env_id, 
+                    force_refresh=True,
+                    omnipkg_instance=self # This is the correct way to pass context
+                )
                 gatherer.cache_client = self.cache_client
                 
                 # Run the builder on our consolidated list of specific package==version specs
@@ -4048,6 +4143,46 @@ print(json.dumps(versions))
                         print(_("⚠️ Version specifier '{}' detected in '{}'. Exact version required for bubbling.").format(separator, pkg_spec))
                         return (pkg_name, None)
         return (pkg_spec.strip(), None)
+    
+    def rebuild_package_kb(self, packages: List[str], force: bool = True) -> int:
+        """
+        Forces a targeted rebuild of the KB by passing the requested package specs
+        directly to the omnipkgMetadataGatherer, which contains the robust logic
+        to find any package on disk.
+        """
+        # No more pre-filtering! We trust the gatherer to find the packages.
+        if not packages:
+            print("   ✅ No packages to rebuild.")
+            return 0
+
+        print(f"🧠 Forcing targeted KB rebuild for: {', '.join(packages)}...")
+        if not self.cache_client:
+            print("   ❌ Cannot rebuild KB: Cache connection failed.")
+            return 1
+
+        try:
+            # Create the expert instance
+            gatherer = omnipkgMetadataGatherer(
+                config=self.config,
+                env_id=self.env_id,
+                force_refresh=force,
+                omnipkg_instance=self
+            )
+            
+            # Simply tell the expert to run on the exact list we were given.
+            # Its internal _discover_distributions method will find everything.
+            gatherer.run(targeted_packages=packages)
+
+            self._info_cache.clear()
+            self._installed_packages_cache = None
+            print(f"   ✅ Knowledge base for {len(packages)} package(s) successfully rebuilt.")
+            return 0
+            
+        except Exception as e:
+            print(f'    ❌ An unexpected error occurred during targeted KB rebuild: {e}')
+            import traceback
+            traceback.print_exc()
+            return 1
 
     def _register_package_in_knowledge_base(self, pkg_name: str, version: str, bubble_path: str, install_type: str):
         """
