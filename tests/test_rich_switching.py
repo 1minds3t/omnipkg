@@ -1,12 +1,5 @@
 import sys
 import os
-
-if sys.version_info[:2] == (3, 9):
-    print("SKIPPED: The rich switching test is currently unstable on Python 3.9.")
-    sys.exit(0)
-
-import sys
-import os
 from pathlib import Path
 import json
 import subprocess
@@ -244,11 +237,22 @@ if __name__ == "__main__":
 
         python_exe = config.get('python_executable', sys.executable)
         
-        result = subprocess.run([python_exe, temp_script_path], capture_output=True, text=True, timeout=60)
+        # --- THIS IS THE FIX for the TEST HARNESS ---
+        # Add the '-I' flag to run the subprocess in isolated mode. This is the
+        # correct way to write a test that involves multiple Python versions.
+        # It ensures the test is valid and not suffering from environment leaks.
+        result = subprocess.run(
+            [python_exe, '-I', temp_script_path],
+            capture_output=True,
+            text=True,
+            timeout=60
+        )
+        # --- END OF THE FIX ---
         
         if result.returncode == 0:
             print(_('      └── {}').format(result.stdout.strip()))
             return True
+
         else:
             print(_('   ❌ Subprocess FAILED for version {}:').format(expected_version))
             print(_('      STDERR: {}').format(result.stderr.strip()))

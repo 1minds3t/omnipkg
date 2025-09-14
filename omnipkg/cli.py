@@ -284,7 +284,7 @@ def print_header(title):
     print('=' * 60)
 
 def main():
-    """Main application entry point with pre-flight version check."""
+    """Main application entry point."""
     try:
         # --- START THE FINAL, CRITICAL FIX ---
         # Perform a "pre-flight check" for the version flag.
