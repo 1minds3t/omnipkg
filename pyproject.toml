@@ -47,14 +47,16 @@ dependencies = [
 [project.optional-dependencies]
 full = [
     "tqdm",
-    "python-magic"
-    "redis>=5.0",
+    "python-magic",
+    "redis>=5.0"
 ]
 
 [project.urls]
 Homepage = "https://github.com/1minds3t/omnipkg"
-"Bug Tracker" = "https://github.com/1minds3t/omnipkg/issues"
+Bug Tracker = "https://github.com/1minds3t/omnipkg/issues"
 PyPi = "https://pypi.org/project/omnipkg/"
+Conda-Forge = "https://anaconda.org/conda-forge/omnipkg"
+Docs = "https://github.com/1minds3t/omnipkg/tree/main/docs"
 
 [project.scripts]
 omnipkg = "omnipkg.cli:main"
