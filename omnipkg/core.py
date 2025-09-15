@@ -3597,10 +3597,10 @@ class omnipkg:
         try:
             # Updated with REAL Python versions available in python-build-standalone
             full_versions = {
-                '3.13': '3.13.1',    # Latest Python 3.13 available
-                '3.12': '3.12.8',    # Latest Python 3.12 available  
-                '3.11': '3.11.11',   # Latest Python 3.11 available
-                '3.10': '3.10.15',   # Latest Python 3.10 available
+                '3.13': '3.13.7',    # Latest Python 3.13 available
+                '3.12': '3.12.11',   # Latest Python 3.12 available  
+                '3.11': '3.11.13',   # Latest Python 3.11 available
+                '3.10': '3.10.18',   # Latest Python 3.10 available
                 '3.9': '3.9.23'      # Latest Python 3.9 available
             }
             
