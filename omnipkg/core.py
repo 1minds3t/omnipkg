@@ -1970,76 +1970,144 @@ class BubbleIsolationManager:
 
     def _get_or_build_main_env_hash_index(self) -> Set[str]:
         """
-        Builds or loads a FAST hash index using package metadata when possible,
-        falling back to filesystem scan only when needed.
+        Builds or loads a FAST hash index using multiple strategies:
+        1. Isolated subprocess for authoritative file lists (preferred)
+        2. Package metadata approach (fallback)
+        3. Full filesystem scan (last resort)
+        
+        This method prevents cross-version contamination and provides the most
+        accurate representation of the main environment state.
         """
         if not self.parent_omnipkg.cache_client:
             self.parent_omnipkg._connect_cache()
-        redis_key = _('{}main_env:file_hashes').format(self.parent_omnipkg.redis_key_prefix)
+            if not self.parent_omnipkg.cache_client:
+                # Fallback to a temporary, in-memory set if cache fails
+                return set()
+                
+        redis_key = f'{self.parent_omnipkg.redis_key_prefix}main_env:file_hashes'
+        
         if self.parent_omnipkg.cache_client.exists(redis_key):
             print(_('    ⚡️ Loading main environment hash index from cache...'))
             cached_hashes = set(self.parent_omnipkg.cache_client.sscan_iter(redis_key))
             print(_('    📈 Loaded {} file hashes from Redis.').format(len(cached_hashes)))
             return cached_hashes
+
         print(_('    🔍 Building main environment hash index...'))
         hash_set = set()
+        
         try:
-            print(_('    📦 Attempting fast indexing via package metadata...'))
+            print(_('    📦 Attempting fast indexing via isolated subprocess...'))
+            
+            # Step 1: Get the correct list of package names for the current context.
+            # This function is already fixed to be context-aware.
             installed_packages = self.parent_omnipkg.get_installed_packages(live=True)
-            successful_packages = 0
-            failed_packages = []
-            package_iterator = tqdm(installed_packages.keys(), desc='    📦 Indexing via metadata', unit='pkg') if HAS_TQDM else installed_packages.keys()
-            for pkg_name in package_iterator:
+            package_names = list(installed_packages.keys())
+
+            if not package_names:
+                print("    ✅ No packages found in the main environment to index.")
+                return hash_set
+
+            # Step 2: Call the safe helper on the parent omnipkg instance to get the
+            # authoritative file list from the correct Python context.
+            print(f"    -> Querying {self.parent_omnipkg.config.get('python_executable')} for file lists of {len(package_names)} packages...")
+            package_files_map = self.parent_omnipkg._get_file_list_for_packages_live(package_names)
+
+            # Step 3: Create a single flat list of all correct file paths to be hashed.
+            files_to_hash = [
+                Path(p) for file_list in package_files_map.values() for p in file_list
+            ]
+            
+            # Step 4: Iterate over the CORRECT file list and build the hash set.
+            files_iterator = tqdm(files_to_hash, desc='    📦 Hashing files', unit='file') if HAS_TQDM else files_to_hash
+            for abs_path in files_iterator:
                 try:
-                    dist = importlib.metadata.distribution(pkg_name)
-                    if dist.files:
-                        pkg_hashes = 0
-                        for file_path in dist.files:
-                            try:
-                                abs_path = dist.locate_file(file_path)
-                                if abs_path and abs_path.is_file() and (abs_path.suffix not in {'.pyc', '.pyo'}) and ('__pycache__' not in abs_path.parts):
-                                    hash_set.add(self._get_file_hash(abs_path))
-                                    pkg_hashes += 1
-                            except (IOError, OSError, AttributeError):
-                                continue
-                        if pkg_hashes > 0:
-                            successful_packages += 1
+                    # The hashing logic remains the same, but now operates on correct data.
+                    if abs_path.is_file() and (abs_path.suffix not in {'.pyc', '.pyo'}) and ('__pycache__' not in abs_path.parts):
+                        hash_set.add(self._get_file_hash(abs_path))
+                except (IOError, OSError):
+                    continue
+            
+            # This will now report the correct number of files for the context.
+            print(_('    ✅ Successfully indexed {} files from {} packages via subprocess.').format(len(files_to_hash), len(package_names)))
+
+        except Exception as e:
+            print(_('    ⚠️ Isolated subprocess indexing failed ({}), trying metadata approach...').format(e))
+            
+            # Fallback to metadata approach
+            try:
+                print(_('    📦 Attempting indexing via package metadata...'))
+                successful_packages = 0
+                failed_packages = []
+                
+                package_iterator = tqdm(installed_packages.keys(), desc='    📦 Indexing via metadata', unit='pkg') if HAS_TQDM else installed_packages.keys()
+                for pkg_name in package_iterator:
+                    try:
+                        dist = importlib.metadata.distribution(pkg_name)
+                        if dist.files:
+                            pkg_hashes = 0
+                            for file_path in dist.files:
+                                try:
+                                    abs_path = dist.locate_file(file_path)
+                                    if abs_path and abs_path.is_file() and (abs_path.suffix not in {'.pyc', '.pyo'}) and ('__pycache__' not in abs_path.parts):
+                                        hash_set.add(self._get_file_hash(abs_path))
+                                        pkg_hashes += 1
+                                except (IOError, OSError, AttributeError):
+                                    continue
+                            if pkg_hashes > 0:
+                                successful_packages += 1
+                            else:
+                                failed_packages.append(pkg_name)
                         else:
                             failed_packages.append(pkg_name)
-                    else:
+                    except Exception:
                         failed_packages.append(pkg_name)
-                except Exception:
-                    failed_packages.append(pkg_name)
-            print(_('    ✅ Successfully indexed {} packages via metadata').format(successful_packages))
-            if failed_packages:
-                print(_('    🔄 Fallback scan for {} packages: {}{}').format(len(failed_packages), ', '.join(failed_packages[:3]), '...' if len(failed_packages) > 3 else ''))
-                potential_files = []
-                for file_path in self.site_packages.rglob('*'):
-                    if file_path.is_file() and file_path.suffix not in {'.pyc', '.pyo'} and ('__pycache__' not in file_path.parts):
-                        file_str = str(file_path).lower()
-                        if any((pkg.lower().replace('-', '_') in file_str or pkg.lower().replace('_', '-') in file_str for pkg in failed_packages)):
-                            potential_files.append(file_path)
-                files_iterator = tqdm(potential_files, desc='    📦 Fallback scan', unit='file') if HAS_TQDM else potential_files
-                for file_path in files_iterator:
+                
+                print(_('    ✅ Successfully indexed {} packages via metadata').format(successful_packages))
+                
+                # Handle packages that failed metadata indexing
+                if failed_packages:
+                    print(_('    🔄 Fallback scan for {} packages: {}{}').format(
+                        len(failed_packages), 
+                        ', '.join(failed_packages[:3]), 
+                        '...' if len(failed_packages) > 3 else ''
+                    ))
+                    potential_files = []
+                    for file_path in self.site_packages.rglob('*'):
+                        if file_path.is_file() and file_path.suffix not in {'.pyc', '.pyo'} and ('__pycache__' not in file_path.parts):
+                            file_str = str(file_path).lower()
+                            if any((pkg.lower().replace('-', '_') in file_str or pkg.lower().replace('_', '-') in file_str for pkg in failed_packages)):
+                                potential_files.append(file_path)
+                    
+                    files_iterator = tqdm(potential_files, desc='    📦 Fallback scan', unit='file') if HAS_TQDM else potential_files
+                    for file_path in files_iterator:
+                        try:
+                            hash_set.add(self._get_file_hash(file_path))
+                        except (IOError, OSError):
+                            continue
+                            
+            except Exception as e2:
+                # Final fallback to full filesystem scan
+                print(_('    ⚠️ Metadata approach also failed ({}), falling back to full filesystem scan...').format(e2))
+                files_to_process = [p for p in self.site_packages.rglob('*') if p.is_file() and p.suffix not in {'.pyc', '.pyo'} and ('__pycache__' not in p.parts)]
+                files_to_process_iterator = tqdm(files_to_process, desc='    📦 Full scan', unit='file') if HAS_TQDM else files_to_process
+                for file_path in files_to_process_iterator:
                     try:
                         hash_set.add(self._get_file_hash(file_path))
                     except (IOError, OSError):
                         continue
-        except Exception as e:
-            print(_('    ⚠️ Metadata approach failed ({}), falling back to full scan...').format(e))
-            files_to_process = [p for p in self.site_packages.rglob('*') if p.is_file() and p.suffix not in {'.pyc', '.pyo'} and ('__pycache__' not in p.parts)]
-            files_to_process_iterator = tqdm(files_to_process, desc='    📦 Full scan', unit='file') if HAS_TQDM else files_to_process
-            for file_path in files_to_process_iterator:
-                try:
-                    hash_set.add(self._get_file_hash(file_path))
-                except (IOError, OSError):
-                    continue
+        
+        # Save to Redis cache with chunked approach for large environments
         print(_('    💾 Saving {} file hashes to Redis cache...').format(len(hash_set)))
         if hash_set:
             with self.parent_omnipkg.cache_client.pipeline() as pipe:
-                for h in hash_set:
-                    pipe.sadd(redis_key, h)
+                # Use a chunked approach for very large environments to avoid Redis errors
+                chunk_size = 5000
+                hash_list = list(hash_set)
+                for i in range(0, len(hash_list), chunk_size):
+                    chunk = hash_list[i:i + chunk_size]
+                    pipe.sadd(redis_key, *chunk)
                 pipe.execute()
+
         print(_('    📈 Indexed {} files from main environment.').format(len(hash_set)))
         return hash_set
 
