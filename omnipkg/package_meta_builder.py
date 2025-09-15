@@ -65,12 +65,13 @@ def get_bin_paths():
     return paths
 
 class omnipkgMetadataGatherer:
-    def __init__(self, config: Dict, env_id: str, force_refresh: bool = False, omnipkg_instance=None):
+    def __init__(self, config: Dict, env_id: str, force_refresh: bool = False, omnipkg_instance=None, target_context_version: Optional[str] = None):
         self.cache_client = None
         self.omnipkg_instance = omnipkg_instance
         self.cache_client = self.omnipkg_instance.cache_client if self.omnipkg_instance else None
         self.force_refresh = force_refresh
         self.security_report = {}
+        self.target_context_version = target_context_version
         self.config = config
 
         # --- CORE FIX: Prioritize the override ENV VAR to get the correct ID ---
@@ -725,7 +726,9 @@ class omnipkgMetadataGatherer:
         # --- END NEW CODE ---
 
         metadata['last_indexed'] = datetime.now().isoformat()
-        metadata['indexed_by_python'] = get_python_version()
+
+        context_version = self.target_context_version if self.target_context_version else get_python_version()
+        metadata['indexed_by_python'] = context_version
         metadata['dependencies'] = [str(req) for req in dist.requires] if dist.requires else []
         package_files = self._find_package_files(dist)
         if package_files.get('binaries'):
@@ -847,7 +850,7 @@ class omnipkgMetadataGatherer:
         ])
         
         script = '\n'.join(script_lines)
-        
+        import json
         try:
             python_exe = self.config.get('python_executable', sys.executable)
             result = subprocess.run(

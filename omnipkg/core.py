@@ -2642,88 +2642,90 @@ class omnipkg:
                     return False # Rebuild failed, don't clear flag
         return False
 
-    def _get_all_active_versions_live(self) -> Dict[str, str]:
-        """
-        Gets all active package versions in a single, fast subprocess call.
-        This is much more efficient than checking one by one.
-        """
-        script = """
-import json
-import sys
-import importlib.metadata
-from packaging.utils import canonicalize_name
-
-versions = {}
-for dist in importlib.metadata.distributions():
-    try:
-        # Use the canonicalized name for consistency with omnipkg's keys
-        name = canonicalize_name(dist.metadata['Name'])
-        versions[name] = dist.version
-    except (KeyError, TypeError):
-        continue
-print(json.dumps(versions))
-"""
-        try:
-            result = subprocess.run(
-                [self.config['python_executable'], '-c', script],
-                capture_output=True, text=True, check=True, timeout=10
-            )
-            return json.loads(result.stdout)
-        except (subprocess.CalledProcessError, json.JSONDecodeError, subprocess.TimeoutExpired) as e:
-            print(f"   ⚠️  Could not perform live bulk package scan: {e}")
-            return {} # Return empty dict on failure
-
     def _synchronize_knowledge_base_with_reality(self):
         """
-        Self-healing function that is now fully robust. It not only checks for
-        missing/stale versions but also verifies the integrity of existing
-        knowledge base entries with comprehensive field validation.
-        (Enhanced Version 4 - Smart Field Detection & Bubble-Aware)
+        Self-healing function that is now fully robust AND context-aware. 
+        It only scans packages that belong to the currently active Python interpreter,
+        preventing cross-interpreter contamination and scan failures.
+        (Enhanced Version 5 - Context-Aware Python Interpreter Scoping)
         """
         if self._check_and_run_pending_rebuild():
             return
 
-        print(_('🧠 Performing self-healing sync of knowledge base...'))
+        print(_('🧠 Performing context-aware sync of knowledge base...'))
+        
+        # --- START OF THE FIX ---
+        # The sync logic MUST derive its context from the omnipkg configuration,
+        # NOT from the sys module of the currently running script.
 
+        # 1. Get the configured Python executable and site-packages path.
+        configured_python_exe = self.config.get('python_executable', sys.executable)
+        configured_site_packages = self.config.get('site_packages_path')
+
+        if not configured_site_packages or not Path(configured_site_packages).exists():
+            print(f"   ⚠️  Configured site-packages path is invalid or missing: {configured_site_packages}")
+            print("   🛑 Aborting sync. Please check your omnipkg configuration.")
+            return
+
+        # 2. Determine the version of the CONFIGURED interpreter.
+        #    We use the ConfigManager's robust function for this.
+        version_tuple = self.config_manager._verify_python_version(configured_python_exe)
+        if not version_tuple:
+            print(f"   ⚠️  Could not determine version for configured interpreter: {configured_python_exe}")
+            print("   🛑 Aborting sync.")
+            return
+
+        current_python_version = f"{version_tuple[0]}.{version_tuple[1]}"
+        current_site_packages = Path(configured_site_packages)
+
+        # 3. Use the configured values for all subsequent operations.
+        print(f"   🐍 Configured Python context: {current_python_version} ({configured_python_exe})")
+        print(f"   📦 Scanning configured site-packages: {current_site_packages}")
+        # --- END OF THE FIX ---
+        
         if not self.cache_client:
             self._connect_cache()
             if not self.cache_client:
                 print("   ❌ Cannot perform sync: Cache connection failed.")
                 return
 
-        # --- STEP 1: Establish the "Ground Truth" from the filesystem ---
-        live_active_versions = self._get_all_active_versions_live()
-        packages_in_bubbles = {}
-        if self.multiversion_base.exists():
-            for dist_info_path in self.multiversion_base.rglob('*.dist-info'):
-                if dist_info_path.is_dir():
-                    try:
-                        dist = importlib.metadata.Distribution.at(dist_info_path)
-                        pkg_name = canonicalize_name(dist.metadata['Name'])
-                        if pkg_name not in packages_in_bubbles:
-                            packages_in_bubbles[pkg_name] = set()
-                        packages_in_bubbles[pkg_name].add(dist.version)
-                    except Exception:
-                        continue
+        # --- STEP 1: Establish the "Ground Truth" from the CONFIGURED CONTEXT filesystem ---
+        live_active_versions = self._get_all_active_versions_live_for_context(current_site_packages)
+        packages_in_bubbles = self._get_packages_in_bubbles_for_context(current_python_version)
 
-        # --- STEP 2: Get the state of the Knowledge Base ---
+        # --- STEP 2: Get the state of the Knowledge Base (filtered by context) ---
         index_key = f'{self.redis_env_prefix}index'
         packages_in_kb_index = self.cache_client.smembers(index_key)
         
-        # --- STEP 3: Define Essential Fields for Health Check (Relaxed) ---
-        # Only require truly essential fields that should exist for ANY package
+        # Filter KB packages to only those that should exist in current context
+        context_filtered_kb_packages = set()
+        for pkg_name in packages_in_kb_index:
+            main_key = f'{self.redis_key_prefix}{pkg_name}'
+            
+            # Check if this package has entries for the current Python version
+            cached_versions = self.cache_client.smembers(f'{main_key}:installed_versions')
+            for version in cached_versions:
+                version_key = f'{main_key}:{version}'
+                indexed_by_python = self.cache_client.hget(version_key, 'indexed_by_python')
+                
+                # If this package was indexed by the current Python version, include it
+                if indexed_by_python == current_python_version:
+                    context_filtered_kb_packages.add(pkg_name)
+                    break
+        
+        print(f"   🎯 Found {len(context_filtered_kb_packages)} packages in KB for Python {current_python_version}")
+        
+        # --- STEP 3: Define Essential Fields for Health Check (same as before) ---
         ESSENTIAL_FIELDS = {
             'Name',      # Package name - always should exist
             'Version',   # Version - always should exist
             'path'       # Installation path - always should exist
         }
         
-        # Fields that are important but may not exist for all packages
         IMPORTANT_FIELDS = {
             'checksum', 'last_indexed', 'Summary', 'Metadata-Version'
         }
         
-        # Security and health fields - only check if they exist, don't require them
         OPTIONAL_AUDIT_FIELDS = {
             'security.audit_status', 'security.issues_found', 'security.report',
             'health.import_check.importable', 'health.import_check.version',
@@ -2731,24 +2733,38 @@ print(json.dumps(versions))
             'help_text', 'indexed_by_python'
         }
 
-        # --- STEP 4: Reconcile discrepancies with surgical precision ---
+        # --- STEP 4: Reconcile discrepancies with surgical precision (CONTEXT-AWARE) ---
         discrepancies = 0
         packages_to_rebuild = set()
 
-        # --- Part A: Enhanced KB entry health check (More Lenient) ---
-        for pkg_name in packages_in_kb_index:
+        # --- Part A: Context-aware KB entry health check ---
+        for pkg_name in context_filtered_kb_packages:
             main_key = f'{self.redis_key_prefix}{pkg_name}'
             real_active_version = live_active_versions.get(pkg_name)
             real_bubbled_versions = packages_in_bubbles.get(pkg_name, set())
             all_real_versions = real_bubbled_versions | ({real_active_version} if real_active_version else set())
 
-            # Get all versions the KB *thinks* it has for this package
+            # Get all versions the KB *thinks* it has for this package in current context
             cached_versions = self.cache_client.smembers(f'{main_key}:installed_versions')
+            context_cached_versions = set()
             
-            # --- ENHANCED BUT LENIENT HEALTH CHECK ---
-            # Health-check every version that should exist on disk
+            for version in cached_versions:
+                version_key = f'{main_key}:{version}'
+                indexed_by_python = self.cache_client.hget(version_key, 'indexed_by_python')
+                if indexed_by_python == current_python_version:
+                    context_cached_versions.add(version)
+            
+            # --- ENHANCED HEALTH CHECK (only for current context) ---
             for version in all_real_versions:
                 version_key = f'{main_key}:{version}'
+                
+                # Check if this version is actually indexed for current Python version
+                indexed_by_python = self.cache_client.hget(version_key, 'indexed_by_python')
+                if indexed_by_python != current_python_version:
+                    print(f"   -> Found {pkg_name}=={version} indexed for wrong Python version: {indexed_by_python}, expected: {current_python_version}")
+                    packages_to_rebuild.add(f"{pkg_name}=={version}")
+                    discrepancies += 1
+                    continue
                 
                 # Get all fields currently stored for this version
                 stored_fields = set(self.cache_client.hkeys(version_key))
@@ -2786,23 +2802,23 @@ print(json.dumps(versions))
                     integrity_issues.append('Missing path')
                 elif not Path(path_field).exists():
                     integrity_issues.append('Path does not exist on filesystem')
+                # Additional check: ensure path is within current context
+                elif current_site_packages and not Path(path_field).is_relative_to(current_site_packages.parent):
+                    integrity_issues.append(f'Path outside current Python context: {path_field}')
                 
-                # Only validate optional fields if they exist - don't require them
+                # Validate other fields as before...
                 checksum_field = self.cache_client.hget(version_key, 'checksum')
-                if checksum_field and len(checksum_field) < 32:  # Only validate if present
+                if checksum_field and len(checksum_field) < 32:
                     integrity_issues.append('Invalid checksum format')
                 
-                # Only validate security audit if it exists
                 audit_status = self.cache_client.hget(version_key, 'security.audit_status')
                 if audit_status and audit_status not in ['checked_in_bulk', 'checked_individually', 'pending', 'skipped']:
                     integrity_issues.append(f'Invalid audit status: {audit_status}')
                 
-                # Only validate import check if it exists
                 importable = self.cache_client.hget(version_key, 'health.import_check.importable')
                 if importable and importable not in ['True', 'False']:
                     integrity_issues.append('Invalid import check result')
                 
-                # Only validate dependencies format if it exists
                 dependencies = self.cache_client.hget(version_key, 'dependencies')
                 if dependencies and not (dependencies.startswith('[') and dependencies.endswith(']')):
                     integrity_issues.append('Invalid dependencies format')
@@ -2817,28 +2833,31 @@ print(json.dumps(versions))
                 missing_important = IMPORTANT_FIELDS - stored_fields
                 if missing_important:
                     print(f"   -> Note: {pkg_name}=={version} is missing some important fields but is functional: {', '.join(sorted(missing_important))}")
-            # --- END OF ENHANCED BUT LENIENT HEALTH CHECK ---
 
-            # Find stale versions (in KB but not on disk) and remove them
-            stale_versions = cached_versions - all_real_versions
+            # Find stale versions (in KB for current context but not on disk) and clean them
+            stale_versions = context_cached_versions - all_real_versions
             if stale_versions:
                 discrepancies += len(stale_versions)
-                print(f"   -> Removing stale KB entries for {pkg_name}: {', '.join(sorted(stale_versions))}")
+                print(f"   -> Removing stale KB entries for {pkg_name} (Python {current_python_version}): {', '.join(sorted(stale_versions))}")
                 with self.cache_client.pipeline() as pipe:
                     for version in stale_versions:
-                        pipe.delete(f'{main_key}:{version}')  # Delete detailed data
-                        pipe.srem(f'{main_key}:installed_versions', version)  # Remove from set
-                        pipe.hdel(main_key, f'bubble_version:{version}')  # Remove bubble flag
-                        if self.cache_client.hget(main_key, 'active_version') == version:
-                            pipe.hdel(main_key, 'active_version')  # Remove active flag
+                        version_key = f'{main_key}:{version}'
+                        # Only delete if it was indexed for current Python version
+                        indexed_by_python = self.cache_client.hget(version_key, 'indexed_by_python')
+                        if indexed_by_python == current_python_version:
+                            pipe.delete(version_key)  # Delete detailed data
+                            pipe.srem(f'{main_key}:installed_versions', version)  # Remove from set
+                            pipe.hdel(main_key, f'bubble_version:{version}')  # Remove bubble flag
+                            if self.cache_client.hget(main_key, 'active_version') == version:
+                                pipe.hdel(main_key, 'active_version')  # Remove active flag
                     pipe.execute()
 
-        # --- Part B: Find packages on disk that are completely missing from the KB ---
+        # --- Part B: Find packages on disk (current context) missing from KB ---
         all_disk_packages = set(live_active_versions.keys()) | set(packages_in_bubbles.keys())
-        missing_from_index = all_disk_packages - packages_in_kb_index
+        missing_from_index = all_disk_packages - context_filtered_kb_packages
         if missing_from_index:
             discrepancies += len(missing_from_index)
-            print(f"   -> Found packages missing from KB index: {', '.join(sorted(missing_from_index))}")
+            print(f"   -> Found packages missing from KB index (Python {current_python_version}): {', '.join(sorted(missing_from_index))}")
             for pkg_name in missing_from_index:
                 # Add to index and mark all its versions for rebuild
                 self.cache_client.sadd(index_key, pkg_name)
@@ -2850,13 +2869,88 @@ print(json.dumps(versions))
         
         # --- Part C: Run the consolidated rebuild if necessary ---
         if packages_to_rebuild:
-            print(f"   -> Found {len(packages_to_rebuild)} missing or incomplete entries. Rebuilding...")
-            self.rebuild_package_kb(list(packages_to_rebuild))
+            print(f"   -> Found {len(packages_to_rebuild)} missing or incomplete entries for Python {current_python_version}. Rebuilding...")
+            self.rebuild_package_kb(list(packages_to_rebuild), target_python_version=current_python_version)
 
         if discrepancies > 0:
-            print(_('   ✅ Sync complete. Reconciled {} discrepancies.').format(discrepancies))
+            print(_('   ✅ Context-aware sync complete. Reconciled {} discrepancies for Python {}.').format(discrepancies, current_python_version))
         else:
-            print(_('   ✅ Knowledge base is already in sync with the environment.'))
+            print(_('   ✅ Knowledge base is already in sync with Python {} environment.').format(current_python_version))
+
+    def _get_all_active_versions_live_for_context(self, site_packages_path):
+        """
+        Get active versions only from the specified site-packages directory.
+        This prevents cross-interpreter contamination.
+        """
+        active_versions = {}
+        
+        if not site_packages_path or not site_packages_path.exists():
+            print(f"   ⚠️  Site-packages path does not exist: {site_packages_path}")
+            return active_versions
+        
+        print(f"   🔍 Scanning for packages in: {site_packages_path}")
+        
+        try:
+            # Look for .dist-info directories in the current context only
+            for dist_info_path in site_packages_path.glob('*.dist-info'):
+                if dist_info_path.is_dir():
+                    try:
+                        dist = importlib.metadata.Distribution.at(dist_info_path)
+                        pkg_name = canonicalize_name(dist.metadata['Name'])
+                        active_versions[pkg_name] = dist.version
+                        print(f"   ✅ Found {pkg_name} v{dist.version} at {dist_info_path}")
+                    except Exception as e:
+                        print(f"   ⚠️  Failed to process {dist_info_path}: {e}")
+                        continue
+        except Exception as e:
+            print(f"   ❌ Error scanning site-packages: {e}")
+        
+        print(f"   📊 Found {len(active_versions)} active packages in current context")
+        return active_versions
+
+    def _get_packages_in_bubbles_for_context(self, python_version):
+        """
+        Get packages in bubbles, but only those created for the current Python version.
+        """
+        packages_in_bubbles = {}
+        
+        if not self.multiversion_base.exists():
+            return packages_in_bubbles
+        
+        # Look for bubbles that were created for the current Python version
+        python_version_key = f"python_{python_version.replace('.', '_')}"
+        
+        for dist_info_path in self.multiversion_base.rglob('*.dist-info'):
+            if dist_info_path.is_dir():
+                try:
+                    # Check if this bubble belongs to current Python version
+                    bubble_root = dist_info_path.parent
+                    bubble_info_file = bubble_root / '.omnipkg_bubble_info'
+                    
+                    bubble_python_version = None
+                    if bubble_info_file.exists():
+                        try:
+                            with open(bubble_info_file, 'r') as f:
+                                bubble_info = json.load(f)
+                                bubble_python_version = bubble_info.get('python_version')
+                        except:
+                            pass
+                    
+                    # Skip bubbles that don't match current Python version
+                    if bubble_python_version and bubble_python_version != python_version:
+                        continue
+                    
+                    dist = importlib.metadata.Distribution.at(dist_info_path)
+                    pkg_name = canonicalize_name(dist.metadata['Name'])
+                    if pkg_name not in packages_in_bubbles:
+                        packages_in_bubbles[pkg_name] = set()
+                    packages_in_bubbles[pkg_name].add(dist.version)
+                    print(f"   🫧 Found bubble package {pkg_name} v{dist.version} (Python {python_version})")
+                except Exception as e:
+                    print(f"   ⚠️  Failed to process bubble {dist_info_path}: {e}")
+                    continue
+        
+        return packages_in_bubbles
 
     def _update_hash_index_for_delta(self, before: Dict, after: Dict):
         """Surgically updates the cached hash index in Redis after an install."""
@@ -4153,7 +4247,7 @@ print(json.dumps(versions))
                         return (pkg_name, None)
         return (pkg_spec.strip(), None)
     
-    def rebuild_package_kb(self, packages: List[str], force: bool = True) -> int:
+    def rebuild_package_kb(self, packages: List[str], force: bool = True, target_python_version: Optional[str] = None) -> int:
         """
         Forces a targeted rebuild of the KB by passing the requested package specs
         directly to the omnipkgMetadataGatherer, which contains the robust logic
@@ -4175,7 +4269,8 @@ print(json.dumps(versions))
                 config=self.config,
                 env_id=self.env_id,
                 force_refresh=force,
-                omnipkg_instance=self
+                omnipkg_instance=self,
+                target_context_version=target_python_version
             )
             
             # Simply tell the expert to run on the exact list we were given.
