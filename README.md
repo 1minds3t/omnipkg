@@ -5,8 +5,9 @@
 </p>
 <h1 align="center">omnipkg - The Ultimate Python Dependency Resolver</h1>
 <p align="center">
-  <strong>One environment. Infinite packages. Zero conflicts.</strong>
-  <br>
+  <p align="center">
+    <p align="center">
+  <strong>One environment. Infinite packages and Pythons. Zero conflicts.</strong>
 <p align="center">
   <!-- Core Project Info -->
       <a href="https://github.com/1minds3t/omnipkg/blob/main/LICENSE">
