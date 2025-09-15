@@ -179,3 +179,29 @@ class SQLiteCacheClient(CacheClient):
         cur = self.conn.cursor()
         cur.execute("SELECT COUNT(member) FROM set_store WHERE key = ?", (key,))
         return cur.fetchone()[0]
+    
+    # In omnipkg/cache.py, inside the SQLiteCacheClient class...
+
+    def scan_iter(self, match='*', count=None):
+        """
+        A generator that emulates Redis's SCAN_ITER command for SQLite.
+        This is crucial for making the SQLite cache a true drop-in replacement.
+        """
+        # The `match` pattern in Redis uses '*' as a wildcard.
+        # The SQL `LIKE` operator uses '%' as a wildcard.
+        sql_pattern = match.replace('*', '%')
+        
+        cursor = self.conn.cursor()
+        try:
+            # We are selecting the 'key' column from the 'kv_store' table
+            # where the key matches the pattern.
+            cursor.execute("SELECT key FROM kv_store WHERE key LIKE ?", (sql_pattern,))
+            
+            # Fetch all matching keys at once. For this use case, it's efficient enough.
+            keys = cursor.fetchall()
+            
+            # The generator yields one key at a time, just like scan_iter.
+            for row in keys:
+                yield row[0]
+        finally:
+            cursor.close()

@@ -881,33 +881,40 @@ class ConfigManager:
         if not py_arch:
             raise OSError(_('Unsupported architecture: {}').format(arch))
 
-        # Updated with ACTUAL release tags from python-build-standalone
+        # FIXED: Updated with ACTUAL release tags from astral-sh/python-build-standalone
+        # Based on latest releases from: https://github.com/astral-sh/python-build-standalone/releases
         VERSION_TO_RELEASE_TAG_MAP = {
-            # Python 3.13.x - Latest available from python-build-standalone
-            '3.13.1': '20241211',    # Real release tag for 3.13.1
-            '3.13.0': '20241016',    # Real release tag for 3.13.0
+            # Python 3.13.x - Latest available
+            '3.13.7': '20250818',    # Latest 3.13.x release
+            '3.13.6': '20250807',    # Previous 3.13.x release  
+            '3.13.1': '20241211',    # Older 3.13.x release
+            '3.13.0': '20241016',    # Original 3.13.0 release
             
-            # Python 3.12.x - Updated to latest available
-            '3.12.8': '20241211',    # Latest 3.12.x release
+            # Python 3.12.x - Security fixes only stage
+            '3.12.11': '20250818',   # Latest 3.12.x release (security)
+            '3.12.8': '20241211',    # Previous 3.12.x release
             '3.12.7': '20241008',    # Previous 3.12.x release
             '3.12.6': '20240814',    # Previous 3.12.x release
             '3.12.5': '20240726',    # Previous 3.12.x release
             '3.12.4': '20240726',    # Previous 3.12.x release
             '3.12.3': '20240415',    # Existing known good tag
             
-            # Python 3.11.x - Updated to latest available
-            '3.11.11': '20241211',   # Latest 3.11.x release
+            # Python 3.11.x - Latest stable versions
+            '3.11.13': '20250818',   # Latest 3.11.x release (correct version!)
+            '3.11.12': '20241211',   # Previous 3.11.x release
             '3.11.10': '20241008',   # Previous 3.11.x release
             '3.11.9': '20240726',    # Previous 3.11.x release
             '3.11.6': '20231002',    # Existing known good tag
             
-            # Python 3.10.x - Updated to latest available
-            '3.10.15': '20241008',   # Latest 3.10.x release
+            # Python 3.10.x - Latest stable versions  
+            '3.10.18': '20250818',   # Latest 3.10.x release
+            '3.10.15': '20241008',   # Previous 3.10.x release
             '3.10.14': '20240726',   # Previous 3.10.x release
             '3.10.13': '20231002',   # Existing known good tag
             
-            # Python 3.9.x - Updated to latest available
-            '3.9.21': '20241211',    # Latest 3.9.x release
+            # Python 3.9.x - Latest stable versions
+            '3.9.23': '20250818',    # Latest 3.9.x release
+            '3.9.21': '20241211',    # Previous 3.9.x release
             '3.9.20': '20241008',    # Previous 3.9.x release
             '3.9.19': '20240726',    # Previous 3.9.x release
             '3.9.18': '20231002'     # Existing known good tag
@@ -922,8 +929,10 @@ class ConfigManager:
             raise ValueError(f'No known standalone build for Python version {full_version}. Cannot download.')
 
         py_ver_plus_tag = f'{full_version}+{release_tag}'
-        base_url = f'https://github.com/indygreg/python-build-standalone/releases/download/{release_tag}'
+        # FIXED: Updated to use astral-sh repository
+        base_url = f'https://github.com/astral-sh/python-build-standalone/releases/download/{release_tag}'
         
+            
         # Updated archive name templates to handle potential naming variations
         archive_name_templates = {
             'linux': f'cpython-{py_ver_plus_tag}-{py_arch}-unknown-linux-gnu-install_only.tar.gz',
@@ -1025,7 +1034,7 @@ class ConfigManager:
                     raise OSError(_('Python executable test failed: {}').format(result.stderr))
                 print(_('   - ✅ Python version: {}').format(result.stdout.strip()))
 
-                self.config_manager._install_essential_packages(python_exe)
+                self._install_essential_packages(python_exe)
                 
                 print(_('\n✨ New interpreter bootstrapped.'))
                 
@@ -3592,7 +3601,7 @@ class omnipkg:
                 '3.12': '3.12.8',    # Latest Python 3.12 available  
                 '3.11': '3.11.11',   # Latest Python 3.11 available
                 '3.10': '3.10.15',   # Latest Python 3.10 available
-                '3.9': '3.9.21'      # Latest Python 3.9 available
+                '3.9': '3.9.23'      # Latest Python 3.9 available
             }
             
             full_version = full_versions.get(version)
