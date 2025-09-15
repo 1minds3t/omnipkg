@@ -9,20 +9,33 @@
   <br>
 <p align="center">
   <!-- Core Project Info -->
+      <a href="https://github.com/1minds3t/omnipkg/blob/main/LICENSE">
+    <img src="https://img.shields.io/badge/License-AGPLv3-d94c31?logo=gnu" alt="License">
+      </a>
   <a href="https://pypi.org/project/omnipkg/">
     <img src="https://img.shields.io/pypi/v/omnipkg?color=blue&logo=pypi" alt="PyPI">
-  </a>
-  <a href="https://github.com/1minds3t/omnipkg/blob/main/LICENSE">
-    <img src="https://img.shields.io/badge/License-AGPLv3-d94c31?logo=gnu" alt="License">
-  </a>
-  <img src="https://img.shields.io/badge/Redis-Required-%2523DC382D?logo=redis&logoColor=white" alt="Redis Required">
-  <a href="https://pepy.tech/projects/omnipkg">
-    <img src="https://static.pepy.tech/badge/omnipkg" alt="Downloads">
-  </a>
-    <a href="https://clickpy.clickhouse.com/dashboard/omnipkg">
-    <img src="https://img.shields.io/badge/global_reach-55+_countries-green?logo=globe" alt="Global Reach Badge">
-  </a>
+   </a>
+  <a href="https://anaconda.org/conda-forge/omnipkg">
+  <img src="https://img.shields.io/conda/vn/conda-forge/omnipkg?logo=conda-forge" alt="Conda Version">
+</a>
+<a href="https://pepy.tech/projects/omnipkg">
+  <img src="https://static.pepy.tech/personalized-badge/omnipkg?period=total&units=INTERNATIONAL_SYSTEM&left_color=gray&right_color=blue&left_text=downloads" alt="PyPI Downloads">
+</a>
+<a href="https://hub.docker.com/r/1minds3t/omnipkg">
+  <img src="https://img.shields.io/docker/pulls/1minds3t/omnipkg?logo=docker" alt="Docker Pulls">
+</a>
+  <a href="https://anaconda.org/conda-forge/omnipkg">
+  <img src="https://anaconda.org/conda-forge/omnipkg/badges/platforms.svg" alt="Platforms / Noarch">
+</a>
+<a href="https://clickpy.clickhouse.com/dashboard/omnipkg">
+  <img src="https://img.shields.io/badge/global_reach-50+_countries-228B22?logo=globe" alt="Global Reach Badge">
+</a>
+  <a href="https://pypi.org/project/omnipkg/">
+  <img src="https://img.shields.io/pypi/pyversions/omnipkg?logo=python&logoColor=white" alt="Python Versions">
+</a>
 </p>
+
+
 
 </p>
 <p align="center">
@@ -45,14 +58,17 @@
 </p>
 <p align="center">
   <!-- Key Features -->
-  <a href="https://github.com/1minds3t/omnipkg/actions/workflows/language_test.yml">
-    <img src="https://img.shields.io/badge/💥_Breaking_Language_Barriers-24_Languages-success?logo=babel&logoColor=white" alt="24 Languages">
-  </a>
   <a href="https://github.com/1minds3t/omnipkg/actions/workflows/numpy_scipy_test.yml">
     <img src="https://img.shields.io/badge/🚀_Live_NumPy+SciPy_Hot--Swapping-passing-success?logo=github-actions" alt="Hot-Swapping">
   </a>
-  <a href="https://github.com/1minds3t/omnipkg/releases">
-    <img src="https://img.shields.io/badge/🔥_Python_Interpreter_Hot--Swapping-Live-orange?logo=python&logoColor=white" alt="Python Hot-Swapping">
+<a href="https://github.com/1minds3t/omnipkg/actions/workflows/multiverse_test.yml">
+  <img src="https://img.shields.io/badge/🔥_Python_Interpreter_Hot--Swapping-Live-orange?logo=python&logoColor=white" alt="Python Hot-Swapping">
+</a>
+  <a href="https://github.com/1minds3t/omnipkg/actions/workflows/old_rich_test.yml">
+  <img src="https://img.shields.io/badge/⚡_Auto--Healing-5.15x_Faster_than_UV-gold?logo=lightning&logoColor=white" alt="Auto-Healing Performance">
+</a>
+    <a href="https://github.com/1minds3t/omnipkg/actions/workflows/language_test.yml">
+    <img src="https://img.shields.io/badge/💥_Breaking_Language_Barriers-24_Languages-success?logo=babel&logoColor=white" alt="24 Languages">
   </a>
 </p>
 
@@ -63,16 +79,89 @@
 
 ---
 
-## 🔥 **BREAKTHROUGH: Python Interpreter Hot-Swapping is Here**
+## 🎉 **NEW: Zero-Dependency Setup & Conda-forge Official**
 
-The impossible is now routine. Switch Python versions on the fly without containers, virtual environments, or process restarts. Watch `omnipkg` automatically switch from Python 3.12 to 3.11 when a script requires it, proving true multi-interpreter freedom.
+**Redis is now OPTIONAL!** `omnipkg` automatically falls back to local SQLite cache when Redis isn't available, eliminating setup friction while maintaining full functionality.
+
+**Fresh on conda-forge TODAY!** Official conda-forge distribution now available alongside Docker and PyPI. 
+Link: https://anaconda.org/conda-forge/omnipkg
+
+Run: 
+```
+conda install -c conda-forge omnipkg
+```
+---
+
+## 🔥 **BREAKTHROUGH: Multiverse Analysis - Single Script, Single Environment**
+
+The impossible is now routine. Watch `omnipkg` seamlessly run the same script across multiple Python versions **in a single environment** with automatic dependency management, auto-healing, and zero process restarts:
+
+<a href="https://github.com/1minds3t/omnipkg/actions/workflows/multiverse_test.yml">
+  <img src="https://img.shields.io/badge/🔥_Python_Interpreter_Hot--Swapping-Live-orange?logo=python&logoColor=white" alt="Python Hot-Swapping">
+</a>
+
+```bash
+🚀 Launching multiverse analysis from Python 3.11…
+
+📦 Step 1: Swapping to Python 3.9…
+🐍 Active interpreter switched in <1 second!
+✅ All dependencies auto-healed
+   - NumPy 1.26.4
+   - SciPy 1.13.1
+🧪 SciPy result: 225
+
+📦 Step 2: Swapping back to Python 3.11…
+🐍 Hot-swapped Python interpreter instantly
+✅ TensorFlow 2.20.0 ready to go
+🧪 TensorFlow prediction: SUCCESS
+
+🌀 SAFETY PROTOCOL: Returned to original Python 3.11 environment
+```
+
+**Key Achievement:** Total test runtime 22 seconds for complete multiverse analysis with automatic healing when NumPy compatibility issues arise.
+
+---
+
+## 🛡️ **BREAKTHROUGH: Auto-Healing with `omnipkg run`**
+
+<a href="https://github.com/1minds3t/omnipkg/actions/workflows/old_rich_test.yml">
+  <img src="https://img.shields.io/badge/⚡_Auto--Healing-5.15x_Faster_than_UV-gold?logo=lightning&logoColor=white" alt="Auto-Healing Performance">
+</a>
+
+When external tools cause compatibility crashes, `omnipkg run` automatically detects and fixes issues in real-time:
+
+```bash
+⏱️  UV run failed in: 5379.237 ms (5,379,236,666 ns)
+🔍 NumPy 2.0 compatibility issue detected. Auto-healing with numpy downgrade...
+   - Downgrading to numpy<2.0 for compatibility
+✅ Using bubble: numpy-1.26.4
+
+🚀 Re-running with omnipkg auto-heal...
+✅ Script completed successfully inside omnipkg bubble.
+
+======================================================================
+🚀 PERFORMANCE COMPARISON: UV vs OMNIPKG
+======================================================================
+UV Failed Run:      5379.237 ms  (5,379,236,666 ns)
+omnipkg Healing:     693.212 ms  ( 693,211,844 ns)
+----------------------------------------------------------------------
+🎯 omnipkg is   7.76x FASTER than UV!
+💥 That's   675.99% improvement!
+======================================================================
+```
+
+**Auto-healing detects and fixes:**
+- NumPy 2.0 compatibility issues
+- Binary incompatibility errors
+- Dependency version conflicts
+- C-extension loading failures
 
 ---
 
 <!-- COMPARISON_STATS_START -->
 ## ⚖️ Multi-Version Support
 
-[![omnipkg](https://img.shields.io/badge/omnipkg-322%20Wins-brightgreen?logo=python&logoColor=white)](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml) [![pip](https://img.shields.io/badge/pip-325%20Failures-red?logo=pypi&logoColor=white)](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml) [![uv](https://img.shields.io/badge/uv-325%20Failures-red?logo=python&logoColor=white)](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml)
+[![omnipkg](https://img.shields.io/badge/omnipkg-429%20Wins-brightgreen?logo=python&logoColor=white)](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml) [![pip](https://img.shields.io/badge/pip-432%20Failures-red?logo=pypi&logoColor=white)](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml) [![uv](https://img.shields.io/badge/uv-432%20Failures-red?logo=python&logoColor=white)](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml)
 
 *Multi-version installation tests run hourly. [Live results here.](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml)*
 
@@ -128,35 +217,31 @@ print(numpy.__version__)  # Outputs: Original main env version (e.g., 1.26.4)
 
 Switch between Python versions **on the fly**, without restarting your shell or script. `omnipkg` provides true multi-interpreter freedom with zero-friction adoption of your system's native Python. This is ideal for running legacy code and modern packages in the same terminal session.
 
+**Live CI Output from Multiverse Analysis:**
+```bash
+📦 MISSION STEP 1: Setting up Python 3.9 dimension...
+🐍 Switching active Python context to version 3.9...
+   - Found managed interpreter at: /opt/conda/envs/.omnipkg/interpreters/cpython-3.9.18/bin/python3.9
+   - Updating configuration to new context...
+   - ✅ Configuration saved.
+🔧 Updating default Python links...
+   ✅ Default Python links updated to use Python 3.9.
+🎉 Successfully switched omnipkg context to Python 3.9!
+
+🧪 Executing legacy payload in Python 3.9...
+✅ Artifact retrieved from 3.9: Scipy analysis complete. Result: 225
+
+📦 MISSION STEP 2: Setting up Python 3.11 dimension...
+🐍 Switching active Python context to version 3.11...
+✅ Artifact processed by 3.11: TensorFlow prediction complete. Prediction: 'SUCCESS'
+```
+
 **Key Architecture:**
 - **Zero-Friction Adoption**: Your native Python is automatically managed on first run.
 - **Control Plane Stability**: A dedicated Python 3.11 control plane ensures bulletproof operations.
 - **Automatic Context Switching**: Demos and scripts can trigger an interpreter swap automatically.
+- **Multiverse Analysis**: Single script runs across multiple Python versions in one environment.
 
-**Key Terminal Output (Automatic Swapping):**
-```bash
-(evocoder_env) [minds3t@aiminingrig:~/omnipkg]$ omnipkg demo
-Current Python version: 3.12
-Select a demo to run:
-4. TensorFlow test (complex dependency switching)
-
-============================================================
-  ⚠️  This Demo Requires Python 3.11
-============================================================
-Current Python version: 3.12
-omnipkg will now attempt to automatically configure the correct interpreter.
-------------------------------------------------------------
-🔄 Swapping active interpreter to Python 3.11 for the demo...
-🐍 Switching active Python context to version 3.11...
-   - Found managed interpreter at: /opt/conda/envs/evocoder_env/bin/python3.11
-   - ✅ Configuration saved.
-   - ✅ Default Python links updated to use Python 3.11.
-
-🎉 Successfully switched omnipkg context to Python 3.11!
-   Just kidding, omnipkg handled it for you automatically!
-✅ Environment successfully configured for Python 3.11.
-🚀 Proceeding to run the demo...
-```
 ---
 
 ### 3. 🌍 Global Intelligence & AI-Driven Localization [![🤖 AI-Powered: 24 Languages](https://img.shields.io/badge/🤖_AI--Powered-24_Languages-brightgreen?logo=openai&logoColor=white)](https://github.com/1minds3t/omnipkg/actions/workflows/language_test.yml)
@@ -182,23 +267,9 @@ cat ~/.config/omnipkg/config.json
 
 Zero setup required—works in your language from first run with graceful fallbacks and clear beta transparency.
 
-### 4. Lightweight Isolation 
-
-Conflicting versions are isolated in lightweight, self-contained "bubbles" containing only necessary files. Compatible dependencies are shared with the main environment, potentially slashing disk space by **up to 60%**.
-
-**Key CI Output Excerpt:**
-```bash
-🛡️ DOWNGRADE PROTECTION ACTIVATED!
-    -> Fixing downgrade: typing_extensions from v4.14.1 to v4.5.0
-🫧 Creating isolated bubble for typing_extensions v4.5.0
-    📊 Space efficiency: 75.0% saved.
-    📝 Created manifest and registered bubble for 1 packages (0.18 MB).
-    🔄 Restoring 'typing_extensions' to safe version v4.14.1
-✅ Environment protection complete!
-```
 ---
 
-### 5. Downgrade Protection & Conflict Resolution [![🔧 Simple UV Multi-Version Test](https://img.shields.io/badge/🔧_Simple_UV_Multi--Version_Test-passing-success)](https://github.com/1minds3t/omnipkg/actions/workflows/test_uv_install.yml)
+### 4. Downgrade Protection & Conflict Resolution [![🔧 Simple UV Multi-Version Test](https://img.shields.io/badge/🔧_Simple_UV_Multi--Version_Test-passing-success)](https://github.com/1minds3t/omnipkg/actions/workflows/test_uv_install.yml)
 
 `omnipkg` automatically reorders installations and isolates conflicts, preventing environment-breaking downgrades.
 
@@ -219,7 +290,7 @@ omnipkg install torch==2.0.0 torch==2.7.1
 
 ---
 
-### 6. Python Library, Binary, & C-Extension Support [![⚡ UV Binary Test](https://img.shields.io/badge/⚡_UV_Binary_Test-passing-success)](https://github.com/1minds3t/omnipkg/actions/workflows/test-uv-binary-switching.yml) [![💥 TensorFlow Hot-Swap](https://img.shields.io/badge/💥_TensorFlow_Hot_Swap-passing-success)](https://github.com/1minds3t/omnipkg/actions/workflows/test-tensorflow-switching.yml) [![🧪 Rich Version Juggling](https://img.shields.io/badge/🧪_Rich_Version_Juggling-passing-success)](https://github.com/1minds3t/omnipkg/actions/workflows/rich-module-switching-test.yml)
+### 5. Python Library, Binary, & C-Extension Support [![⚡ UV Binary Test](https://img.shields.io/badge/⚡_UV_Binary_Test-passing-success)](https://github.com/1minds3t/omnipkg/actions/workflows/test-uv-binary-switching.yml) [![💥 TensorFlow Hot-Swap](https://img.shields.io/badge/💥_TensorFlow_Hot_Swap-passing-success)](https://github.com/1minds3t/omnipkg/actions/workflows/test-tensorflow-switching.yml) [![🧪 Rich Version Juggling](https://img.shields.io/badge/🧪_Rich_Version_Juggling-passing-success)](https://github.com/1minds3t/omnipkg/actions/workflows/rich-module-switching-test.yml)
 
 `omnipkg` seamlessly switches binary tools (e.g., `uv`) and complex C-extension version combinations (e.g., `tensorflow`, `numpy`, `scipy`) during runtime, a feat traditional tools struggle with.
 
@@ -244,9 +315,9 @@ Keras version: 2.13.1
 ```
 
 ---
-### 7. Deep Package Intelligence [![🔍 Package Discovery Demo - Omnipkg Intelligence](https://github.com/1minds3t/omnipkg/actions/workflows/knowledge_base_check.yml/badge.svg)](https://github.com/1minds3t/omnipkg/actions/workflows/knowledge_base_check.yml)
+### 6. Deep Package Intelligence [![🔍 Package Discovery Demo - Omnipkg Intelligence](https://github.com/1minds3t/omnipkg/actions/workflows/knowledge_base_check.yml/badge.svg)](https://github.com/1minds3t/omnipkg/actions/workflows/knowledge_base_check.yml)
 
-Unlike tools that only track "package installed/not installed," `omnipkg` builds a knowledge base with 60+ metadata fields per package version, stored in Redis for instant analysis.
+Unlike tools that only track "package installed/not installed," `omnipkg` builds a knowledge base with 60+ metadata fields per package version, stored in Redis for instant analysis (or SQLite as fallback).
 
 **Example Insight:**
 ```bash
@@ -265,7 +336,7 @@ omnipkg info uv
 🔐 Checksum: b7b75f1e...cdd22
 ```
 
-| **Intelligence Includes** | **Redis Superpowers** |
+| **Intelligence Includes** | **Redis/SQLite Superpowers** |
 |--------------------------|-----------------------|
 | • Binary Analysis (ELF validation, file sizes) | • 0.2ms metadata lookups |
 | • CLI Command Mapping (all subcommands/flags) | • Compressed storage for large data |
@@ -275,7 +346,8 @@ omnipkg info uv
 
 ---
 
-### 8. Instant Environment Recovery
+### 7. Instant Environment Recovery
+
 [![🛡️ UV Revert Test](https://img.shields.io/badge/🛡️_UV_Revert_Test-passing-success)](https://github.com/1minds3t/omnipkg/actions/workflows/test_uv_revert.yml)
 
 If an external tool (like `pip` or `uv`) causes damage, `omnipkg revert` restores your environment to a "last known good" state in seconds.
@@ -317,40 +389,39 @@ Solving interpreter hot-swapping required a complete architectural reimagining. 
 
 ---
 
-## 🛠️ Get Started in 60 Seconds
+## 🛠️ Get Started in 30 Seconds
 
-### Step 1: Start Redis (Required) <img src="https://img.shields.io/badge/Redis-Required-%2523DC382D?logo=redis&logoColor=white" alt="Redis Required">
-`omnipkg` uses Redis for fast metadata management. It **must be running** before `omnipkg` is used.
+### No Prerequisites Required!
+`omnipkg` now works out of the box with **automatic SQLite fallback** when Redis isn't available. Redis is optional for enhanced performance.
 
+### Installation Options
 
-*   **Linux (Ubuntu/Debian)**:
-    ```bash
-    sudo apt-get update
-    sudo apt-get install redis-server
-    sudo systemctl enable redis
-    sudo systemctl start redis
-    ```
+#### 📦 PyPI (Recommended)    
 
-*   **macOS (Homebrew)**:
-    ```bash
-    brew install redis
-    brew services start redis
-    ```
-
-*   **Windows**: Use WSL2 or Docker:
-    ```bash
-    docker run -d -p 6379:6379 --name redis-omnipkg redis
-    ```
-
-*   Verify Redis: `redis-cli ping` (should return `PONG`)
-
-### Step 2: Install `omnipkg`
-
-Choose your preferred installation method:
-
-#### 📦 PyPI (Recommended)
+</a>
+  <a href="https://pypi.org/project/omnipkg/">
+    <img src="https://img.shields.io/pypi/v/omnipkg?color=blue&logo=pypi" alt="PyPI">
+  </a>
+  
 ```bash
 pip install omnipkg
+```
+
+#### 🏠 Official Conda-Forge (BRAND NEW!!!)
+
+  <a href="https://anaconda.org/conda-forge/omnipkg">
+  <img src="https://anaconda.org/conda-forge/omnipkg/badges/platforms.svg" alt="Platforms / Noarch">
+</a>
+  <a href="https://anaconda.org/conda-forge/omnipkg">
+  <img src="https://img.shields.io/badge/conda--forge-omnipkg-brightgreen?logo=anaconda&logoColor=white" alt="Conda-forge">
+</a>
+
+```bash
+# Easiest guaranteed way
+conda install -c conda-forge omnipkg
+
+# Or with mamba if you prefer speed
+mamba install -c conda-forge omnipkg
 ```
 
 #### 🍺 Homebrew (macOS/Linux)
@@ -361,28 +432,39 @@ brew tap 1minds3t/omnipkg
 brew install omnipkg
 ```
 
-#### 🐍 Anaconda/Conda
+#### 🐋 Docker 
+<a href="https://hub.docker.com/r/1minds3t/omnipkg">
+  <img src="https://img.shields.io/docker/pulls/1minds3t/omnipkg?logo=docker" alt="Docker Pulls">
+</a>
+
 ```bash
-conda install minds3t::omnipkg
+
+# Always pull the latest release
+docker pull 1minds3t/omnipkg:latest
 ```
 
-**Alternative channels:**
+### 🌱 From GitHub (Developer / Latest)
 ```bash
-# Direct from user channel  
-conda install -c minds3t omnipkg
+# Clone the repo
+git clone https://github.com/1minds3t/omnipkg.git
+cd omnipkg
+
+# Install in editable mode (optional for dev)
+pip install -e .
 ```
 
-### Step 3: Run the Demo
+### Instant Demo
 ```bash
 omnipkg demo
 ```
+
 Choose from:
 1. Python module switching (`rich`)
 2. Binary switching (`uv`)
 3. C-extension switching (`numpy`, `scipy`)
 4. Complex dependency switching (`tensorflow`)
 
-### Step 4: Experience Python Hot-Swapping
+### Experience Python Hot-Swapping
 ```bash
 # Let omnipkg manage your native Python automatically
 omnipkg status
@@ -399,11 +481,32 @@ omnipkg swap python 3.10
 python --version  # Now Python 3.10.x
 ```
 
-### Step 5: Try the Stress Test
+### Try the Multiverse Analysis
 ```bash
 omnipkg stress-test
 ```
-Watch `omnipkg` juggle complex `numpy` and `scipy` versions flawlessly!
+Watch `omnipkg` run the same script across multiple Python versions in a single environment!
+
+### Optional: Enhanced Performance with Redis
+For maximum performance, install Redis:
+
+*   **Linux (Ubuntu/Debian)**:
+    ```bash
+    sudo apt-get update && sudo apt-get install redis-server
+    sudo systemctl enable redis && sudo systemctl start redis
+    ```
+
+*   **macOS (Homebrew)**:
+    ```bash
+    brew install redis && brew services start redis
+    ```
+
+*   **Windows**: Use WSL2 or Docker:
+    ```bash
+    docker run -d -p 6379:6379 --name redis-omnipkg redis
+    ```
+
+*   Verify Redis: `redis-cli ping` (should return `PONG`)
 
 ---
 
@@ -414,13 +517,15 @@ Watch `omnipkg` juggle complex `numpy` and `scipy` versions flawlessly!
 3.  **Conflict Detection**: `omnipkg` spots version clashes and isolates them in bubbles.
 4.  **Dynamic Package Switching**: Use `omnipkgLoader` to switch package versions mid-script.
 5.  **Interpreter Hot-Swapping**: Switch your shell's active Python instantly with `omnipkg swap python <version>`.
-6.  **Redis-Powered Speed**: A high-performance knowledge base is built for all your packages on install at ~9 packages/second.
-7.  **Atomic Snapshots**: Instant rollback with `omnipkg revert`.
+6.  **Intelligence Database**: High-performance knowledge base built for all packages (Redis preferred, SQLite fallback).
+7.  **Auto-healing**: `omnipkg run` automatically fixes compatibility issues in real-time.
+8.  **Atomic Snapshots**: Instant rollback with `omnipkg revert`.
 
 **Example: Safe Flask-Login Downgrade:**
 ```bash
 omnipkg install flask-login==0.4.1
-``````bash
+```
+```bash
 📸 Taking LIVE pre-installation snapshot...
 🛡️ DOWNGRADE PROTECTION ACTIVATED!
 -> Detected conflict: flask-login v0.6.3 → v0.4.1
@@ -431,7 +536,8 @@ omnipkg install flask-login==0.4.1
 Verify:
 ```bash
 omnipkg info flask-login
-``````bash
+```
+```bash
 📋 flask-login STATUS:
 🎯 Active: 0.6.3 (main)
 🫧 Available: 0.4.1 (bubble)
@@ -457,7 +563,7 @@ Learn more about `omnipkg`'s capabilities:
 *   [**CLI Commands Reference**](docs/cli_commands_reference.md): All `omnipkg` commands.
 *   [**Python Hot-Swapping Guide**](docs/python_hot_swapping.md): Master multi-interpreter switching.
 *   [**Runtime Version Switching**](docs/runtime_switching.md): Master `omnipkgLoader` for dynamic, mid-script version changes.
-*   [**Advanced Management**](docs/advanced_management.md): Redis interaction and troubleshooting.
+*   [**Advanced Management**](docs/advanced_management.md): Redis/SQLite interaction and troubleshooting.
 *   [**Future Roadmap**](docs/future_roadmap.md): Features being built today - for you!
 
 ---
@@ -483,14 +589,14 @@ This project thrives on community collaboration. Contributions, bug reports, and
 
 ## Dev Humor
 
-
 ```
  _________________________________________
 / Other tools: "You need Docker for       \
 | different Python versions!"             |
 |                                         |
-| omnipkg: *swaps Python 3.8→3.11→3.12    |
-| automatically for a demo*               |
+| omnipkg: *runs multiverse analysis      |
+| across 3 Python versions in 22 seconds  |
+| in one environment with auto-healing*   |
 | "Wait, that's illegal!"                 |
 \_________________________________________/
         \   ^__^
