@@ -7,7 +7,7 @@
 <p align="center">
   <p align="center">
     <p align="center">
-  <strong>One environment. Infinite packages and Pythons. Zero conflicts.</strong>
+  <strong>One environment. Infinite package and Python versions. Zero conflicts.</strong>
 <p align="center">
   <!-- Core Project Info -->
       <a href="https://github.com/1minds3t/omnipkg/blob/main/LICENSE">
