@@ -17,10 +17,12 @@ import shutil
 import site
 import subprocess
 import sys
+import collections
 import tarfile
 import tempfile
 import urllib.request
 import zipfile
+from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Set, Tuple
@@ -2729,7 +2731,7 @@ class omnipkg:
                     return False # Rebuild failed, don't clear flag
         return False
 
-    def _synchronize_knowledge_base_with_reality(self):
+    def _synchronize_knowledge_base_with_reality(self, verbose: bool = False):
         """
         Self-healing function that is now fully robust AND context-aware. 
         It only scans packages that belong to the currently active Python interpreter,
@@ -2777,8 +2779,8 @@ class omnipkg:
                 return
 
         # --- STEP 1: Establish the "Ground Truth" from the CONFIGURED CONTEXT filesystem ---
-        live_active_versions = self._get_all_active_versions_live_for_context(current_site_packages)
-        packages_in_bubbles = self._get_packages_in_bubbles_for_context(current_python_version)
+        live_active_versions = self._get_all_active_versions_live_for_context(Path(self.config['site_packages_path']), verbose=verbose)
+        packages_in_bubbles = self._get_packages_in_bubbles_for_context(current_python_version, verbose=verbose)
 
         # --- STEP 2: Get the state of the Knowledge Base (filtered by context) ---
         index_key = f'{self.redis_env_prefix}index'
@@ -2810,7 +2812,7 @@ class omnipkg:
         }
         
         IMPORTANT_FIELDS = {
-            'checksum', 'last_indexed', 'Summary', 'Metadata-Version'
+            'checksum', 'last_indexed', 'Metadata-Version'
         }
         
         OPTIONAL_AUDIT_FIELDS = {
@@ -2829,29 +2831,34 @@ class omnipkg:
             main_key = f'{self.redis_key_prefix}{pkg_name}'
             real_active_version = live_active_versions.get(pkg_name)
             real_bubbled_versions = packages_in_bubbles.get(pkg_name, set())
-            all_real_versions = real_bubbled_versions | ({real_active_version} if real_active_version else set())
+            all_real_versions_on_disk = real_bubbled_versions | ({real_active_version} if real_active_version else set())
 
-            # Get all versions the KB *thinks* it has for this package in current context
-            cached_versions = self.cache_client.smembers(f'{main_key}:installed_versions')
-            context_cached_versions = set()
+            # Get ALL cached versions for this package from KB
+            cached_versions_in_kb = self.cache_client.smembers(f'{main_key}:installed_versions')
             
-            for version in cached_versions:
+            # Filter to only versions that belong to current Python context
+            context_cached_versions = set()
+            for version in cached_versions_in_kb:
                 version_key = f'{main_key}:{version}'
                 indexed_by_python = self.cache_client.hget(version_key, 'indexed_by_python')
                 if indexed_by_python == current_python_version:
                     context_cached_versions.add(version)
             
-            # --- ENHANCED HEALTH CHECK (only for current context) ---
-            for version in all_real_versions:
+            # --- GHOST DETECTION AND EXORCISM (SINGLE CONSOLIDATED BLOCK) ---
+            # A ghost is a version the KB knows about but that doesn't exist on disk.
+            ghost_versions = context_cached_versions - all_real_versions_on_disk
+            
+            if ghost_versions:
+                discrepancies += len(ghost_versions)
+                for version in ghost_versions:
+                    print(f"   -> 👻 Exorcising ghost entry: {pkg_name}=={version}")
+                    self._exorcise_ghost_entry(f"{pkg_name}=={version}")
+                # Update context_cached_versions to exclude the ghosts we just exorcised
+                context_cached_versions = context_cached_versions - ghost_versions
+            
+            # --- ENHANCED HEALTH CHECK (only for current context, non-ghost versions) ---
+            for version in context_cached_versions:
                 version_key = f'{main_key}:{version}'
-                
-                # Check if this version is actually indexed for current Python version
-                indexed_by_python = self.cache_client.hget(version_key, 'indexed_by_python')
-                if indexed_by_python != current_python_version:
-                    print(f"   -> Found {pkg_name}=={version} indexed for wrong Python version: {indexed_by_python}, expected: {current_python_version}")
-                    packages_to_rebuild.add(f"{pkg_name}=={version}")
-                    discrepancies += 1
-                    continue
                 
                 # Get all fields currently stored for this version
                 stored_fields = set(self.cache_client.hkeys(version_key))
@@ -2921,23 +2928,13 @@ class omnipkg:
                 if missing_important:
                     print(f"   -> Note: {pkg_name}=={version} is missing some important fields but is functional: {', '.join(sorted(missing_important))}")
 
-            # Find stale versions (in KB for current context but not on disk) and clean them
-            stale_versions = context_cached_versions - all_real_versions
-            if stale_versions:
-                discrepancies += len(stale_versions)
-                print(f"   -> Removing stale KB entries for {pkg_name} (Python {current_python_version}): {', '.join(sorted(stale_versions))}")
-                with self.cache_client.pipeline() as pipe:
-                    for version in stale_versions:
-                        version_key = f'{main_key}:{version}'
-                        # Only delete if it was indexed for current Python version
-                        indexed_by_python = self.cache_client.hget(version_key, 'indexed_by_python')
-                        if indexed_by_python == current_python_version:
-                            pipe.delete(version_key)  # Delete detailed data
-                            pipe.srem(f'{main_key}:installed_versions', version)  # Remove from set
-                            pipe.hdel(main_key, f'bubble_version:{version}')  # Remove bubble flag
-                            if self.cache_client.hget(main_key, 'active_version') == version:
-                                pipe.hdel(main_key, 'active_version')  # Remove active flag
-                    pipe.execute()
+            # Check for packages that exist on disk but are missing from KB for this context
+            missing_versions = all_real_versions_on_disk - context_cached_versions
+            if missing_versions:
+                discrepancies += len(missing_versions)
+                print(f"   -> Found versions missing from KB for {pkg_name} (Python {current_python_version}): {', '.join(sorted(missing_versions))}")
+                for version in missing_versions:
+                    packages_to_rebuild.add(f"{pkg_name}=={version}")
 
         # --- Part B: Find packages on disk (current context) missing from KB ---
         all_disk_packages = set(live_active_versions.keys()) | set(packages_in_bubbles.keys())
@@ -2964,18 +2961,25 @@ class omnipkg:
         else:
             print(_('   ✅ Knowledge base is already in sync with Python {} environment.').format(current_python_version))
 
-    def _get_all_active_versions_live_for_context(self, site_packages_path):
+    def _get_all_active_versions_live_for_context(self, site_packages_path, verbose: bool = False):
         """
         Get active versions only from the specified site-packages directory.
         This prevents cross-interpreter contamination.
         """
+        start_time = time.time()
         active_versions = {}
         
         if not site_packages_path or not site_packages_path.exists():
-            print(f"   ⚠️  Site-packages path does not exist: {site_packages_path}")
+            if verbose:
+                print(f" ⚠️ Site-packages path does not exist: {site_packages_path}")
             return active_versions
         
-        print(f"   🔍 Scanning for packages in: {site_packages_path}")
+        if verbose:
+            print(f" 🔍 Scanning for packages in: {site_packages_path}")
+        
+        # Track packages by category for summary
+        package_categories = defaultdict(list)
+        failed_packages = []
         
         try:
             # Look for .dist-info directories in the current context only
@@ -2985,36 +2989,93 @@ class omnipkg:
                         dist = importlib.metadata.Distribution.at(dist_info_path)
                         pkg_name = canonicalize_name(dist.metadata['Name'])
                         active_versions[pkg_name] = dist.version
-                        print(f"   ✅ Found {pkg_name} v{dist.version} at {dist_info_path}")
+                        
+                        # Categorize packages for summary (you can customize these categories)
+                        if pkg_name in ['flask', 'django', 'fastapi', 'tornado']:
+                            package_categories['web_frameworks'].append(pkg_name)
+                        elif pkg_name in ['requests', 'urllib3', 'httpx', 'aiohttp']:
+                            package_categories['http_clients'].append(pkg_name)
+                        elif pkg_name in ['numpy', 'pandas', 'scipy', 'matplotlib', 'seaborn']:
+                            package_categories['data_science'].append(pkg_name)
+                        elif pkg_name in ['pytest', 'unittest2', 'nose', 'tox']:
+                            package_categories['testing'].append(pkg_name)
+                        elif pkg_name in ['click', 'argparse', 'fire', 'typer']:
+                            package_categories['cli_tools'].append(pkg_name)
+                        else:
+                            package_categories['other'].append(pkg_name)
+                            
                     except Exception as e:
-                        print(f"   ⚠️  Failed to process {dist_info_path}: {e}")
+                        failed_packages.append((dist_info_path.name, str(e)))
                         continue
+                        
         except Exception as e:
-            print(f"   ❌ Error scanning site-packages: {e}")
+            if verbose:
+                print(f" ❌ Error scanning site-packages: {e}")
         
-        print(f"   📊 Found {len(active_versions)} active packages in current context")
+        # Calculate timing
+        scan_time = time.time() - start_time
+        
+        # Always show basic timing and count
+        print(f"    ⏱️  Scan completed in {scan_time:.2f}s")
+        print(f"    ✅ Found {len(active_versions)} packages total")
+        
+        # Only show detailed breakdown if verbose is True
+        if verbose:
+            print(f" 📊 Package Scan Summary:")
+            
+            # Show category breakdown (only non-empty categories)
+            for category, packages in package_categories.items():
+                if packages and category != 'other':
+                    count = len(packages)
+                    sample = packages[:3]  # Show first 3 as examples
+                    sample_str = ", ".join(sample)
+                    if count > 3:
+                        sample_str += f" (+{count-3} more)"
+                    print(f"    📦 {category.replace('_', ' ').title()}: {count} ({sample_str})")
+            
+            # Show 'other' category last with just count
+            if package_categories['other']:
+                other_count = len(package_categories['other'])
+                print(f"    📦 Other packages: {other_count}")
+                
+            if failed_packages:
+                print(f"    ⚠️  Failed to process {len(failed_packages)} packages")
+        
         return active_versions
 
-    def _get_packages_in_bubbles_for_context(self, python_version):
+    def _get_packages_in_bubbles_for_context(self, python_version, verbose: bool = False):
         """
         Get packages in bubbles, but only those created for the current Python version.
         """
+        start_time = time.time()
         packages_in_bubbles = {}
         
         if not self.multiversion_base.exists():
+            if verbose:
+                print(f" ⚠️ Multiversion base does not exist: {self.multiversion_base}")
             return packages_in_bubbles
+        
+        print(f" 🫧 Scanning bubble packages for Python {python_version}...")
+        
+        # Track packages by category and statistics
+        package_categories = defaultdict(list)
+        failed_bubbles = []
+        skipped_version_count = 0
+        total_bubbles_found = 0
+        version_mismatches = defaultdict(int)
         
         # Look for bubbles that were created for the current Python version
         python_version_key = f"python_{python_version.replace('.', '_')}"
         
         for dist_info_path in self.multiversion_base.rglob('*.dist-info'):
             if dist_info_path.is_dir():
+                total_bubbles_found += 1
                 try:
                     # Check if this bubble belongs to current Python version
                     bubble_root = dist_info_path.parent
                     bubble_info_file = bubble_root / '.omnipkg_bubble_info'
-                    
                     bubble_python_version = None
+                    
                     if bubble_info_file.exists():
                         try:
                             with open(bubble_info_file, 'r') as f:
@@ -3025,17 +3086,89 @@ class omnipkg:
                     
                     # Skip bubbles that don't match current Python version
                     if bubble_python_version and bubble_python_version != python_version:
+                        skipped_version_count += 1
+                        version_mismatches[bubble_python_version] += 1
                         continue
                     
                     dist = importlib.metadata.Distribution.at(dist_info_path)
                     pkg_name = canonicalize_name(dist.metadata['Name'])
+                    
                     if pkg_name not in packages_in_bubbles:
                         packages_in_bubbles[pkg_name] = set()
                     packages_in_bubbles[pkg_name].add(dist.version)
-                    print(f"   🫧 Found bubble package {pkg_name} v{dist.version} (Python {python_version})")
+                    
+                    # Categorize packages for summary
+                    if pkg_name in ['flask', 'django', 'fastapi', 'tornado', 'bottle']:
+                        package_categories['web_frameworks'].append(pkg_name)
+                    elif pkg_name in ['requests', 'urllib3', 'httpx', 'aiohttp']:
+                        package_categories['http_clients'].append(pkg_name)
+                    elif pkg_name in ['numpy', 'pandas', 'scipy', 'matplotlib', 'seaborn', 'plotly']:
+                        package_categories['data_science'].append(pkg_name)
+                    elif pkg_name in ['pytest', 'unittest2', 'nose', 'tox', 'coverage']:
+                        package_categories['testing'].append(pkg_name)
+                    elif pkg_name in ['click', 'argparse', 'fire', 'typer']:
+                        package_categories['cli_tools'].append(pkg_name)
+                    elif pkg_name in ['sqlalchemy', 'psycopg2', 'pymongo', 'redis']:
+                        package_categories['databases'].append(pkg_name)
+                    elif pkg_name in ['jinja2', 'markupsafe', 'pyyaml', 'toml', 'configparser']:
+                        package_categories['templating_config'].append(pkg_name)
+                    elif pkg_name in ['cryptography', 'pycryptodome', 'bcrypt', 'passlib']:
+                        package_categories['security'].append(pkg_name)
+                    else:
+                        package_categories['other'].append(pkg_name)
+                        
                 except Exception as e:
-                    print(f"   ⚠️  Failed to process bubble {dist_info_path}: {e}")
+                    failed_bubbles.append((dist_info_path.name, str(e)))
                     continue
+        
+        # Calculate timing
+        scan_time = time.time() - start_time
+        
+        # Always show basic timing and counts
+        print(f"    ⏱️  Scan completed in {scan_time:.2f}s")
+        print(f"    📊 Total .dist-info directories found: {total_bubbles_found}")
+        print(f"    ✅ Matching Python {python_version} packages: {len(packages_in_bubbles)}")
+        
+        # Only show detailed breakdown if verbose is True
+        if verbose:
+            print(f" 🫧 Bubble Package Scan Summary:")
+            
+            if skipped_version_count > 0:
+                print(f"    ⏭️  Skipped {skipped_version_count} packages from other Python versions:")
+                for version, count in sorted(version_mismatches.items()):
+                    print(f"        • Python {version}: {count} packages")
+            
+            # Show category breakdown (only non-empty categories)
+            for category, packages in package_categories.items():
+                if packages and category != 'other':
+                    count = len(packages)
+                    # Remove duplicates and show samples
+                    unique_packages = list(set(packages))
+                    sample = unique_packages[:3]
+                    sample_str = ", ".join(sample)
+                    if len(unique_packages) > 3:
+                        sample_str += f" (+{len(unique_packages)-3} more)"
+                    print(f"    📦 {category.replace('_', ' ').title()}: {count} instances ({sample_str})")
+            
+            # Show 'other' category last with just count
+            if package_categories['other']:
+                other_count = len(set(package_categories['other']))  # Unique count
+                print(f"    📦 Other packages: {other_count} unique types")
+            
+            if failed_bubbles:
+                print(f"    ⚠️  Failed to process {len(failed_bubbles)} bubbles")
+                if len(failed_bubbles) <= 3:  # Show details for few failures
+                    for name, error in failed_bubbles:
+                        print(f"        • {name}: {error}")
+            
+            # Show packages with multiple versions
+            multi_version_packages = {k: v for k, v in packages_in_bubbles.items() if len(v) > 1}
+            if multi_version_packages:
+                print(f"    🔄 Packages with multiple bubble versions: {len(multi_version_packages)}")
+                for pkg, versions in sorted(multi_version_packages.items()):
+                    if len(multi_version_packages) <= 5:  # Show details for few packages
+                        version_list = ", ".join(sorted(versions))
+                        print(f"        • {pkg}: {version_list}")
         
         return packages_in_bubbles
 
@@ -3926,7 +4059,7 @@ class omnipkg:
         self.rescan_interpreters()
         return 0
 
-    def smart_install(self, packages: List[str], dry_run: bool=False) -> int:
+    def smart_install(self, packages: List[str], dry_run: bool=False, force_reinstall: bool=False, target_directory: Optional[Path] = None) -> int:
         if not self._connect_cache():
             return 1
         if dry_run:
@@ -4000,20 +4133,27 @@ class omnipkg:
         for package_spec in sorted_packages:
             print('\n' + '─' * 60)
             print('📦 Processing: {}'.format(package_spec))
+            if force_reinstall:
+                print("   - 🛡️  Force reinstall triggered by auto-repair.")
             print('─' * 60)
-            satisfaction_check = self._check_package_satisfaction([package_spec], strategy=install_strategy)
-            if satisfaction_check['all_satisfied']:
-                print('✅ Requirement already satisfied: {}'.format(package_spec))
-                continue
-            
-            packages_to_install = satisfaction_check['needs_install']
-            if not packages_to_install:
-                continue
+
+            # If force_reinstall is True, we skip the satisfaction check entirely.
+            if not force_reinstall:
+                satisfaction_check = self._check_package_satisfaction([package_spec], strategy=install_strategy)
+                if satisfaction_check['all_satisfied']:
+                    print('✅ Requirement already satisfied: {}'.format(package_spec))
+                    continue
+           
+            packages_to_install = [package_spec]
             
             packages_before = self.get_installed_packages(live=True)
             
             print('⚙️ Running pip install for: {}...'.format(', '.join(packages_to_install)))
-            return_code = self._run_pip_install(packages_to_install)
+            return_code = self._run_pip_install(
+                packages_to_install, 
+                target_directory=target_directory, 
+                force_reinstall=force_reinstall
+            )
             if return_code != 0:
                 print('❌ Pip installation failed for {}. Continuing...'.format(package_spec))
                 continue
@@ -4164,28 +4304,58 @@ class omnipkg:
             print('    ✅ Knowledge base is already up to date.')
         
         # Final cleanup of redundant bubbles
-        print('\n🧹 Cleaning redundant bubbles...')
-        final_active_packages = self.get_installed_packages(live=True)
-        cleaned_count = 0
-        for pkg_name, active_version in final_active_packages.items():
-            bubble_path = self.multiversion_base / f'{pkg_name}-{active_version}'
-            if bubble_path.exists() and bubble_path.is_dir():
-                try:
-                    import shutil
-                    shutil.rmtree(bubble_path)
-                    cleaned_count += 1
-                    if hasattr(self, 'hook_manager'):
-                        self.hook_manager.remove_bubble_from_tracking(pkg_name, active_version)
-                except Exception as e:
-                    print(_('    ❌ Failed to remove bubble directory: {}').format(e))
-        
-        if cleaned_count > 0:
-            print('    ✅ Removed {} redundant bubbles'.format(cleaned_count))
+        if not force_reinstall:
+            print('\n🧹 Cleaning redundant bubbles...')
+            final_active_packages = self.get_installed_packages(live=True)
+            cleaned_count = 0
+            for pkg_name, active_version in final_active_packages.items():
+                bubble_path = self.multiversion_base / f'{pkg_name}-{active_version}'
+                if bubble_path.exists() and bubble_path.is_dir():
+                    try:
+                        shutil.rmtree(bubble_path)
+                        cleaned_count += 1
+                        if hasattr(self, 'hook_manager'):
+                            self.hook_manager.remove_bubble_from_tracking(pkg_name, active_version)
+                    except Exception as e:
+                        print(_('    ❌ Failed to remove bubble directory: {}').format(e))
+            
+            if cleaned_count > 0:
+                print('    ✅ Removed {} redundant bubbles'.format(cleaned_count))
         
         print('\n🎉 All package operations complete.')
         self._save_last_known_good_snapshot()
         self._synchronize_knowledge_base_with_reality()
         return 0
+
+    def _brute_force_package_cleanup(self, pkg_name: str, site_packages: Path):
+        """
+        Performs a manual, brute-force deletion of a corrupted package's files
+        in a specific site-packages directory.
+        """
+        print(f"🧹 Performing brute-force cleanup of corrupted package '{pkg_name}' in {site_packages}...")
+        try:
+            c_name_dash = canonicalize_name(pkg_name)
+            # Handle libraries that use underscores instead of dashes (e.g., flask_login)
+            c_name_under = c_name_dash.replace('-', '_')
+            
+            # Delete library directories, checking for both dash and underscore variants
+            for name_variant in {c_name_dash, c_name_under}:
+                for path in site_packages.glob(f"{name_variant}"):
+                    if path.is_dir():
+                        print(f"   - Deleting library directory: {path}")
+                        shutil.rmtree(path, ignore_errors=True)
+            
+            # Delete metadata directories
+            for path in site_packages.glob(f"{c_name_dash}-*.dist-info"):
+                 if path.is_dir():
+                    print(f"   - Deleting metadata: {path}")
+                    shutil.rmtree(path, ignore_errors=True)
+
+            print("   - ✅ Brute-force cleanup complete.")
+            return True
+        except Exception as e:
+            print(f"   - ❌ Brute-force cleanup FAILED: {e}")
+            return False
 
     def _get_active_version_from_environment(self, pkg_name: str) -> Optional[str]:
         """
@@ -4334,44 +4504,111 @@ class omnipkg:
                         return (pkg_name, None)
         return (pkg_spec.strip(), None)
     
+    def _exorcise_ghost_entry(self, package_spec: str):
+        """
+        Surgically removes a non-existent package entry from the KB.
+        If it's the last version of the package, it removes all traces,
+        including the main package key and the index entry.
+        """
+        try:
+            pkg_name, version = self._parse_package_spec(package_spec)
+            if not pkg_name or not version: return
+
+            c_name = canonicalize_name(pkg_name)
+            print(f"   -> 👻 Exorcising ghost entry: {c_name}=={version}")
+            
+            main_key = f'{self.redis_key_prefix}{c_name}'
+            version_key = f'{main_key}:{version}'
+            versions_set_key = f'{main_key}:installed_versions'
+            index_key = f'{self.redis_env_prefix}index'
+
+            with self.cache_client.pipeline() as pipe:
+                pipe.delete(version_key)
+                pipe.srem(versions_set_key, version)
+                if self.cache_client.hget(main_key, 'active_version') == version:
+                    pipe.hdel(main_key, 'active_version')
+                pipe.hdel(main_key, f'bubble_version:{version}')
+                pipe.execute()
+
+            if self.cache_client.scard(versions_set_key) == 0:
+                print(f"    -> Last version of '{c_name}' removed. Deleting all traces from KB.")
+                with self.cache_client.pipeline() as pipe:
+                    pipe.delete(main_key)
+                    pipe.delete(versions_set_key)
+                    pipe.srem(index_key, c_name)
+                    pipe.execute()
+
+        except Exception as e:
+            print(f"   ⚠️  Warning: Could not exorcise ghost {package_spec}: {e}")
+    
     def rebuild_package_kb(self, packages: List[str], force: bool = True, target_python_version: Optional[str] = None) -> int:
         """
-        Forces a targeted rebuild of the KB by passing the requested package specs
-        directly to the omnipkgMetadataGatherer, which contains the robust logic
-        to find any package on disk.
+        Forces a targeted KB rebuild and now intelligently detects and
+        deletes "ghost" entries by comparing CANONICAL package names.
         """
-        # No more pre-filtering! We trust the gatherer to find the packages.
         if not packages:
-            print("   ✅ No packages to rebuild.")
             return 0
 
         print(f"🧠 Forcing targeted KB rebuild for: {', '.join(packages)}...")
         if not self.cache_client:
-            print("   ❌ Cannot rebuild KB: Cache connection failed.")
             return 1
 
         try:
-            # Create the expert instance
             gatherer = omnipkgMetadataGatherer(
-                config=self.config,
-                env_id=self.env_id,
-                force_refresh=force,
-                omnipkg_instance=self,
-                target_context_version=target_python_version
+                config=self.config, env_id=self.env_id, force_refresh=force,
+                omnipkg_instance=self, target_context_version=target_python_version
             )
             
-            # Simply tell the expert to run on the exact list we were given.
-            # Its internal _discover_distributions method will find everything.
-            gatherer.run(targeted_packages=packages)
+            found_distributions = gatherer.run(targeted_packages=packages)
+            
+            if found_distributions is None:
+                found_distributions = []
+
+            # --- START OF THE DEFINITIVE FIX ---
+            # The comparison MUST be done on canonical names to handle
+            # inconsistencies like 'jaraco.functools' vs 'jaraco-functools'.
+
+            # Create a set of CANONICAL specs that were requested.
+            requested_specs_canonical = set()
+            for spec in packages:
+                try:
+                    name, version = self._parse_package_spec(spec)
+                    if name and version:
+                        requested_specs_canonical.add(f"{canonicalize_name(name)}=={version}")
+                except Exception:
+                    continue # Ignore malformed specs
+
+            # Create a set of CANONICAL specs that were actually found.
+            found_specs_canonical = {
+                f"{canonicalize_name(dist.metadata['Name'])}=={dist.version}" 
+                for dist in found_distributions
+            }
+            
+            # The subtraction will now work correctly, comparing apples to apples.
+            ghost_specs_canonical = requested_specs_canonical - found_specs_canonical
+            
+            if ghost_specs_canonical:
+                # We need the original spec strings to pass to the exorcise function,
+                # as they are used to build the Redis keys correctly.
+                original_spec_map = {
+                    f"{canonicalize_name(self._parse_package_spec(s)[0])}=={self._parse_package_spec(s)[1]}": s
+                    for s in packages if '==' in s
+                }
+                for canonical_spec in ghost_specs_canonical:
+                    original_spec = original_spec_map.get(canonical_spec, canonical_spec)
+                    self._exorcise_ghost_entry(original_spec)
+            
+            # --- END OF THE DEFINITIVE FIX ---
 
             self._info_cache.clear()
             self._installed_packages_cache = None
-            print(f"   ✅ Knowledge base for {len(packages)} package(s) successfully rebuilt.")
+            print(f"   ✅ Knowledge base for {len(found_specs_canonical)} package(s) successfully rebuilt.")
+            if ghost_specs_canonical:
+                print(f"   ✅ Exorcised {len(ghost_specs_canonical)} ghost entries.")
             return 0
             
         except Exception as e:
-            print(f'    ❌ An unexpected error occurred during targeted KB rebuild: {e}')
-            import traceback
+            print(f"    ❌ An unexpected error occurred during targeted KB rebuild: {e}")
             traceback.print_exc()
             return 1
 
@@ -4736,35 +4973,80 @@ print(json.dumps(results))
             print(f"   ⚠️  Could not get file list from live environment: {e}")
             return {name: [] for name in package_names}
 
-    def _run_pip_install(self, packages: List[str]) -> int:
-        """Runs `pip install` with LIVE, STREAMING output."""
+    def _run_pip_install(self, packages: List[str], force_reinstall: bool=False, target_directory: Optional[Path] = None) -> int:
+        """
+        Runs `pip install` with LIVE, STREAMING output and automatic recovery
+        from corrupted 'no RECORD file' errors. Can now target a specific directory.
+        """
         if not packages:
             return 0
-        try:
-            # Add '-u' for unbuffered output to force pip to talk in real-time.
-            cmd = [self.config['python_executable'], '-u', '-m', 'pip', 'install'] + packages
+        
+        cmd = [self.config['python_executable'], '-u', '-m', 'pip', 'install']
+
+        if force_reinstall:
+            cmd.append('--upgrade')
             
-            # Use Popen for live, line-by-line streaming.
+        if target_directory:
+            print(f"   - Targeting installation to: {target_directory}")
+            cmd.extend(['--target', str(target_directory)])
+        
+        cmd.extend(packages)
+        
+        try:
+            # Use Popen for live streaming
             process = subprocess.Popen(
-                cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT, # Redirect stderr to stdout
-                text=True,
-                encoding='utf-8',
-                errors='replace',
-                bufsize=1, # Line-buffered
-                universal_newlines=True
+                cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+                encoding='utf-8', errors='replace', bufsize=1, universal_newlines=True
             )
             
-            # Print each line of pip's output as it happens
-            print() # Add a newline for better formatting
-            for line in iter(process.stdout.readline, ''):
-                # Print the raw line to preserve pip's own formatting (like progress bars)
-                print(line, end='') 
+            stdout_lines, stderr_lines = [], []
             
-            process.stdout.close()
+            # Read stdout and stderr in a non-blocking way
+            for line in process.stdout:
+                print(line, end='')
+                stdout_lines.append(line)
+            for line in process.stderr:
+                print(line, end='', file=sys.stderr)
+                stderr_lines.append(line)
+
             return_code = process.wait()
+            
+            if return_code == 0:
+                return 0 # Success!
+
+            # --- HEALING LOGIC STARTS HERE ---
+            full_stderr = "".join(stderr_lines)
+            record_file_pattern = r"no RECORD file was found for ([\w\-]+)"
+            match = re.search(record_file_pattern, full_stderr)
+
+            if match:
+                package_name = match.group(1)
+                print("\n" + "="*60)
+                print(f"🛡️  AUTO-RECOVERY: Detected corrupted package '{package_name}'.")
+                
+                # --- THIS IS THE FIX ---
+                # Determine the correct location to clean up.
+                cleanup_path = target_directory if target_directory else Path(self.config.get('site_packages_path'))
+                
+                if self._brute_force_package_cleanup(package_name, cleanup_path):
+                # --- END OF THE FIX ---
+                    print("   - Retrying installation on clean environment...")
+                    # We can use the simpler subprocess.run here since it's a retry
+                    retry_process = subprocess.run(cmd, capture_output=True, text=True)
+                    if retry_process.returncode == 0:
+                        print(retry_process.stdout)
+                        print("   - ✅ Recovery successful!")
+                        return 0
+                    else:
+                        print("   - ❌ Recovery failed. Pip error after cleanup:")
+                        print(retry_process.stderr)
+                        return 1
+                else:
+                    return 1 # Brute force cleanup failed
+
+            # If it was a different error, just return the original failure code
             return return_code
+
         except Exception as e:
             print(_('    ❌ An unexpected error occurred during pip install: {}').format(e))
             return 1
@@ -5212,6 +5494,8 @@ print(json.dumps(results))
         7. Fallback to dry-run method if needed
         """        
         print(f" -> Finding latest COMPATIBLE version for '{package_name}' using super-optimized approach...")
+        latest_pypi_version = None
+        compatible_version = None  # Initialize the variable
         
         # STEP 0: Get the absolute latest version from PyPI and check if it's already installed
         try:
@@ -5257,26 +5541,45 @@ print(json.dumps(results))
                 else:
                     print(f"    📋 Package '{package_name}' is not currently installed")
                     print("    🧪 Will test if latest PyPI version is compatible...")
+            elif response.status_code == 404:
+                print(f"    ❌ Package '{package_name}' not found on PyPI (404 error)")
+                print(f"    💡 This usually means the package name doesn't exist or contains invalid characters")
+                print(f"    📝 Please check the package name spelling and format")
+                return None
             else:
                 print(f"    ❌ Could not fetch PyPI data (status: {response.status_code})")
                 print("    🧪 Falling back to test installation approach...")
+        except http_requests.exceptions.RequestException as e:
+            print(f"    ❌ Network error checking PyPI: {e}")
+            print("    🧪 Falling back to test installation approach...")
         except Exception as e:
             print(f"    ❌ Error checking PyPI: {e}")
             print("    🧪 Falling back to test installation approach...")
         
-        # STEP 1: Try the optimized test installation approach with early detection
-        print("    🧪 Testing latest PyPI version compatibility with quick install attempt...")
-        compatible_version = self._quick_compatibility_check(package_name, latest_pypi_version)
+        # STEP 1: Try the optimized test installation approach
+        # Only run the quick check if we successfully got a version from PyPI.
+        if latest_pypi_version:
+            print("    🧪 Testing latest PyPI version compatibility with quick install attempt...")
+            try:
+                compatible_version = self._quick_compatibility_check(package_name, latest_pypi_version)
+                if compatible_version:
+                    print(f"    🎯 Found compatible version {compatible_version} - passing directly to smart installer!")
+                    return compatible_version
+            except Exception as e:
+                print(f"    ⚠️ Quick compatibility check failed: {e}")
+                compatible_version = None
 
-        if compatible_version:
-            print(f"    🎯 Found compatible version {compatible_version} - passing directly to smart installer!")
-            return compatible_version
-        print("    🧪 Starting optimized test installation with early success detection...")
-        test_result = self._test_install_to_get_compatible_version(package_name)
-        
-        if test_result:
-            print(f"    🎯 Test approach successful! Version {test_result} ready for smart installer")
-            return test_result
+        # If we don't have a compatible version yet, try the test installation approach
+        if not compatible_version:
+            print("    🧪 Starting optimized test installation with early success detection...")
+            try:
+                test_result = self._test_install_to_get_compatible_version(package_name)
+                
+                if test_result:
+                    print(f"    🎯 Test approach successful! Version {test_result} ready for smart installer")
+                    return test_result
+            except Exception as e:
+                print(f"    ⚠️ Test installation approach failed: {e}")
         
         print(" -> Optimized test installation didn't work, falling back to dry-run method...")
         
@@ -5299,6 +5602,22 @@ print(json.dumps(results))
             
             # Combine stdout and stderr to ensure we catch the output regardless of pip version
             output_to_search = result.stdout + result.stderr
+            
+            # Check for common error patterns that indicate package doesn't exist
+            if result.returncode != 0:
+                error_patterns = [
+                    r'No matching distribution found',
+                    r'Could not find a version',
+                    r'ERROR: No matching distribution found',
+                    r'Package .* not found',
+                    r'Invalid requirement'
+                ]
+                
+                for pattern in error_patterns:
+                    if re.search(pattern, output_to_search, re.IGNORECASE):
+                        print(f"    ❌ Package '{package_name}' appears to not exist or be accessible")
+                        print(f"    💡 Pip error suggests no compatible version was found")
+                        return None
             
             # --- SIMPLIFIED DIAGNOSTIC ---
             if result.returncode != 0 or not output_to_search.strip():
@@ -5347,6 +5666,12 @@ print(json.dumps(results))
                         version = version_match.group(1).strip()
                         print(f" ✅ Found latest version via pip index: {version}")
                         return version
+                else:
+                    # Check if the error indicates package doesn't exist
+                    alt_output = result_alt.stdout + result_alt.stderr
+                    if re.search(r'No matching distribution found|Package .* not found', alt_output, re.IGNORECASE):
+                        print(f"    ❌ Package '{package_name}' not found via pip index versions")
+                        return None
                 
                 # If that fails, try pip download approach
                 print(" -> Trying pip download approach...")
@@ -5366,6 +5691,10 @@ print(json.dumps(results))
                 output_to_search = result_download.stdout + result_download.stderr
                 if result_download.returncode != 0:
                     print(f"    [pip download debug] Exit code: {result_download.returncode}")
+                    # Check for package not found errors
+                    if re.search(r'No matching distribution found|Could not find a version', output_to_search, re.IGNORECASE):
+                        print(f"    ❌ Package '{package_name}' not found via pip download")
+                        return None
             
             # Improved regex patterns to catch various pip output formats
             patterns = [
@@ -5422,12 +5751,18 @@ print(json.dumps(results))
                 except Exception as e:
                     print(f" -> pip list approach failed: {e}")
             
-            print(f" ❌ CRITICAL: Could not parse the resolved version from pip's output for '{package_name}'.")
-            print(" ❌ This might indicate: 1) Package doesn't exist, 2) No compatible version, 3) Network issues, 4) Unexpected pip output format")
+            print(f" ❌ Could not find or resolve a compatible version for package '{package_name}'.")
+            print(" ❌ This might indicate:")
+            print("   1) Package doesn't exist on PyPI")
+            print("   2) Package name is misspelled or contains invalid characters") 
+            print("   3) No compatible version exists for your Python environment")
+            print("   4) Network connectivity issues")
+            print("   5) Package requires different installation method")
             return None
             
         except subprocess.TimeoutExpired:
             print(f" ❌ Pip resolver timed out while resolving '{package_name}'.")
+            print(" 💡 This might indicate network issues or a very complex dependency tree.")
             return None
         except Exception as e:
             print(f" ❌ An unexpected error occurred while running the pip resolver for '{package_name}': {e}")
@@ -5479,7 +5814,7 @@ print(json.dumps(results))
     def show_multiversion_status(self) -> int:
         if not self._connect_cache():
             return 1
-        self._synchronize_knowledge_base_with_reality()
+        self._synchronize_knowledge_base_with_reality(verbose=True)
         print(_('🔄 omnipkg System Status'))
         print('=' * 50)
         print(_("🛠️ Environment broken by pip or uv? Run 'omnipkg revert' to restore the last known good state! 🚑"))
