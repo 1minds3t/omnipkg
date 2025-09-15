@@ -2,15 +2,30 @@ import sys
 import os
 from pathlib import Path
 
+# --- PROJECT PATH SETUP ---
+# This must come first so Python can find your modules.
 project_root = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(project_root))
 
-from omnipkg.common_utils import ensure_script_is_running_on_version, sync_context_to_runtime
+# --- DETECT CURRENT PYTHON VERSION ---
+CURRENT_PYTHON_VERSION = f"{sys.version_info.major}.{sys.version_info.minor}"
+print(f"🐍 Detected current Python version: {CURRENT_PYTHON_VERSION}")
+
+# --- BOOTSTRAP SECTION ---
+# Import ONLY the necessary utilities for the bootstrap process.
+from omnipkg.common_utils import ensure_python_or_relaunch, sync_context_to_runtime
 
 # 1. Declarative script guard: Ensures this script runs on Python 3.9.
 #    If not, it will relaunch this script with the correct interpreter and exit.
-ensure_script_is_running_on_version("3.9")
+# 1. Declarative script guard: Ensures this script runs on the detected Python version.
+#    If not, it will relaunch the script with the correct interpreter and exit.
+if os.environ.get('OMNIPKG_RELAUNCHED') != '1':
+    ensure_python_or_relaunch(CURRENT_PYTHON_VERSION)
+
+# 2. Sync guard: Now that we are GUARANTEED to be running on the correct
+#    interpreter, we sync omnipkg's config to match this runtime.
 sync_context_to_runtime()
+
 
 import sys
 import os
