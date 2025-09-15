@@ -1,12 +1,5 @@
 import sys
 import os
-
-if sys.version_info[:2] == (3, 9):
-    print("SKIPPED: The rich switching test is currently unstable on Python 3.9.")
-    sys.exit(0)
-
-import sys
-import os
 from pathlib import Path
 import json
 import subprocess
@@ -153,126 +146,86 @@ def create_test_bubbles(config_manager):
 
 def test_python_import(expected_version: str, config_manager, is_bubble: bool):
     print(_('   🔧 Testing import of version {}...').format(expected_version))
-    # FIX: Extract config dict from config_manager
     config = config_manager.config
-    config_json_str = json.dumps(config)
-    
-    test_script_content = f'''\
+    # We must pass the project root to the subprocess so it can find the `omnipkg` source
+    project_root_str = str(Path(__file__).resolve().parent.parent)
+
+    # --- THIS IS THE NEW, ISOLATED TEST RUNNER ---
+    # We create a self-contained script to run in a pristine, isolated subprocess.
+    test_script_content = f"""
 import sys
-import importlib
-from importlib.metadata import version, PackageNotFoundError
-from pathlib import Path
 import json
+import traceback
+from pathlib import Path
 
-# Ensure omnipkg's root is in sys.path for importing its modules (e.g., omnipkg.loader)
-sys.path.insert(0, r"{Path(__file__).resolve().parents[1].parent}")
+# Add the project root to the path to find the omnipkg library
+sys.path.insert(0, r'{project_root_str}')
 
-from omnipkg.loader import omnipkgLoader
+try:
+    from omnipkg.loader import omnipkgLoader
+    from importlib.metadata import version
 
-# omnipkg.core.ConfigManager is also imported in subprocess for omnipkgLoader if config is passed
-def test_import_and_version():
-    target_package_spec = "rich=={expected_version}"
-    
-    # Load config in the subprocess
-    subprocess_config = json.loads('{config_json_str}')
+    # Load the config passed from the main test script
+    config = json.loads('{json.dumps(config)}')
+    is_bubble = {is_bubble}
+    expected_version = "{expected_version}"
+    target_spec = f"rich=={{expected_version}}"
 
-    # If it's the main environment test, we don't use the loader context for explicit switching,
-    # just import directly from the system state.
-    if not {is_bubble}: # Use the boolean value directly
-        try:
-            actual_version = version('rich')
-            expected_version = "{expected_version}"
-            assert actual_version == expected_version, f"Version mismatch! Expected {{expected_version}}, got {{actual_version}}"
-            print(f"✅ Imported and verified version {{actual_version}}")
-        except PackageNotFoundError:
-            print(f"❌ Test failed: Package 'rich' not found in main environment.", file=sys.stderr)
-            sys.exit(1)
-        except AssertionError as e:
-            print(f"❌ Test failed: {{e}}", file=sys.stderr)
-            sys.exit(1)
-        except Exception as e:
-            print(f"❌ An unexpected error occurred in main env test: {{e}}", file=sys.stderr)
-            sys.exit(1)
-        return
-
-    # For bubble tests, use the omnipkgLoader context manager
-    try:
-        with omnipkgLoader(target_package_spec, config=subprocess_config):
-            # Inside this block, the specific 'rich' version should be active
+    if is_bubble:
+        # For bubble tests, activate the loader
+        with omnipkgLoader(target_spec, config=config):
             import rich
             actual_version = version('rich')
-            expected_version = "{expected_version}"
             assert actual_version == expected_version, f"Version mismatch! Expected {{expected_version}}, got {{actual_version}}"
             print(f"✅ Imported and verified version {{actual_version}}")
-    except PackageNotFoundError:
-        print(f"❌ Test failed: Package 'rich' not found in bubble context '{{target_package_spec}}'.", file=sys.stderr)
-        sys.exit(1)
-    except AssertionError as e:
-        print(f"❌ Test failed: {{e}}", file=sys.stderr)
-        sys.exit(1)
-    except Exception as e:
-        print(f"❌ An unexpected error occurred activating/testing bubble '{{target_package_spec}}': {{e}}", file=sys.stderr)
-        import traceback
-        traceback.print_exc(file=sys.stderr)
-        sys.exit(1)
+    else:
+        # For the main environment, just import directly
+        import rich
+        actual_version = version('rich')
+        assert actual_version == expected_version, f"Version mismatch! Expected {{expected_version}}, got {{actual_version}}"
+        print(f"✅ Imported and verified version {{actual_version}}")
 
-if __name__ == "__main__":
-    test_import_and_version()
-'''
+except Exception as e:
+    print(f"❌ TEST FAILED: {{e}}", file=sys.stderr)
+    traceback.print_exc(file=sys.stderr)
+    sys.exit(1)
+"""
     
-    site_packages = Path(config['site_packages_path'])
-    main_rich_dir = site_packages / 'rich'
-    main_rich_dist = next(site_packages.glob('rich-*.dist-info'), None)
-    cloaked_paths_by_test_harness = []
     temp_script_path = None
-
     try:
-        if is_bubble:
-            if main_rich_dir.exists():
-                cloak_path = main_rich_dir.with_name(_('rich.{}test_harness_cloaked').format(int(time.time() * 1000)))
-                shutil.move(main_rich_dir, cloak_path)
-                cloaked_paths_by_test_harness.append((main_rich_dir, cloak_path))
-            
-            if main_rich_dist and main_rich_dist.exists():
-                cloak_path = main_rich_dist.with_name(_('{}.{}test_harness_cloaked').format(main_rich_dist.name, int(time.time() * 1000)))
-                shutil.move(main_rich_dist, cloak_path)
-                cloaked_paths_by_test_harness.append((main_rich_dist, cloak_path))
-
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as f:
+        # Write the mini-script to a temporary file
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False, encoding='utf-8') as f:
             f.write(test_script_content)
             temp_script_path = f.name
 
+        # Get the correct python executable from the config
         python_exe = config.get('python_executable', sys.executable)
         
-        result = subprocess.run([python_exe, temp_script_path], capture_output=True, text=True, timeout=60)
+        # Execute the mini-script in ISOLATED MODE
+        cmd = [python_exe, '-I', temp_script_path]
+        
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=90)
         
         if result.returncode == 0:
-            print(_('      └── {}').format(result.stdout.strip()))
+            print(f"      └── {result.stdout.strip()}")
             return True
         else:
-            print(_('   ❌ Subprocess FAILED for version {}:').format(expected_version))
-            print(_('      STDERR: {}').format(result.stderr.strip()))
+            print(f"   ❌ Subprocess FAILED for version {expected_version}:")
+            # Print stderr first as it contains the real traceback from the subprocess
+            print(f"      STDERR: {result.stderr.strip()}")
+            if result.stdout.strip():
+                 print(f"      STDOUT: {result.stdout.strip()}")
             return False
             
-    except subprocess.CalledProcessError as e:
-        print(_('   ❌ Subprocess FAILED for version {}:').format(expected_version))
-        print(_('      STDERR: {}').format(e.stderr.strip()))
+    except Exception as e:
+        print(f'   ❌ An unexpected error occurred while running the test subprocess: {e}')
         return False
         
     finally:
-        # Restore cloaked paths in reverse order
-        for original, cloaked in reversed(cloaked_paths_by_test_harness):
-            if cloaked.exists():
-                if original.exists():
-                    shutil.rmtree(original, ignore_errors=True)
-                try:
-                    shutil.move(cloaked, original)
-                except Exception as e:
-                    print(_('   ⚠️  Test harness failed to restore {} from {}: {}').format(original.name, cloaked.name, e))
-        
+        # Ensure the temporary script is always cleaned up
         if temp_script_path and os.path.exists(temp_script_path):
             os.unlink(temp_script_path)
-
+            
 def restore_install_strategy(config_manager, original_strategy):
     """Restore the original install strategy"""
     if original_strategy != 'stable-main':
@@ -337,13 +290,20 @@ def run_comprehensive_test():
             omnipkg_core = OmnipkgCore(config_manager)
             site_packages = Path(config_manager.config['site_packages_path'])
             
-            # Clean up test bubbles
-            for bubble in omnipkg_core.multiversion_base.glob('rich-*'):
-                if bubble.is_dir():
-                    print(_('   🧹 Removing test bubble: {}').format(bubble.name))
-                    shutil.rmtree(bubble, ignore_errors=True)
-            
-            # Clean up cloaked packages
+            # --- START OF THE FIX ---
+            # Instead of manually deleting directories, use the omnipkg API
+            # to perform a clean uninstall that also updates the knowledge base.
+
+            print(_('   🧹 Cleaning up test bubbles via omnipkg API...'))
+            specs_to_uninstall = [f'rich=={v}' for v in BUBBLE_VERSIONS_TO_TEST]
+            if specs_to_uninstall:
+                # Uninstall all bubbles in one go. The `install_type='bubble'`
+                # ensures we only target bubbles and don't touch the active version.
+                omnipkg_core.smart_uninstall(specs_to_uninstall, force=True, install_type='bubble')
+
+            # --- END OF THE FIX ---
+
+            # Clean up any residual cloaked packages (this is still good practice)
             for cloaked in site_packages.glob('rich.*_omnipkg_cloaked*'):
                 print(_('   🧹 Removing residual cloaked: {}').format(cloaked.name))
                 shutil.rmtree(cloaked, ignore_errors=True)
