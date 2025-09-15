@@ -109,9 +109,36 @@ class SQLiteCacheClient(CacheClient):
         cur.execute("SELECT member FROM set_store WHERE key = ?", (key,))
         return {row[0] for row in cur.fetchall()}
 
-    def sadd(self, key, value):
-        with self.conn:
-            self.conn.execute("INSERT OR IGNORE INTO set_store (key, member) VALUES (?, ?)", (key, value))
+    def sadd(self, name: str, *values):
+        """
+        Emulates Redis's SADD command for SQLite, now correctly handling
+        multiple values at once. This is critical for compatibility with
+        the application's bulk-add operations.
+        """
+        if not values:
+            return 0  # No values to add
+        
+        cursor = self.conn.cursor()
+        added_count = 0
+        try:
+            # Prepare the data for a bulk insert.
+            # We use INSERT OR IGNORE to automatically handle duplicates,
+            # which is the core behavior of a set.
+            data_to_insert = [(name, value) for value in values]
+            
+            # Use executemany for a fast, bulk insert operation.
+            cursor.executemany("INSERT OR IGNORE INTO set_store (key, value) VALUES (?, ?)", data_to_insert)
+            
+            # The number of rows changed is the number of new items added.
+            added_count = cursor.rowcount
+            self.conn.commit()
+        except self.conn.Error as e:
+            print(f"   ⚠️  [SQLiteCache] Error in sadd: {e}")
+            self.conn.rollback()
+        finally:
+            cursor.close()
+        
+        return added_count
 
     def srem(self, key, value):
         with self.conn:
