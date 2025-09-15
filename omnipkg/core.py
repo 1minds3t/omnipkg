@@ -1916,8 +1916,6 @@ class BubbleIsolationManager:
         if stats['package_modules']:
             print(_('    📦 Complex packages preserved: {} packages with submodules').format(len(stats['package_modules'])))
         self._create_bubble_manifest(bubble_path, installed_tree, stats)
-        print(f"   -> 🧬 Performing post-creation preparation for bubble: {bubble_path.name}")
-        self.parent_omnipkg.hook_manager._ensure_omnipkg_access_in_bubble(str(bubble_path))
         return True
 
     def _verify_package_integrity(self, bubble_path: Path, installed_tree: Dict, temp_install_path: Path) -> None:
