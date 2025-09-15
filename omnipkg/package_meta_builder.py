@@ -149,14 +149,35 @@ class omnipkgMetadataGatherer:
             })
         
         return list(variants)
+    
+    def _is_known_subcomponent(self, dist_info_path: Path) -> bool:
+        """Check if this dist-info belongs to a sub-component that shouldn't be treated independently."""
+        name = dist_info_path.name
+        
+        # Known sub-components that are part of larger packages
+        subcomponent_patterns = [
+            'tensorboard_data_server-',
+            'tensorboard_plugin_',
+        ]
+        
+        for pattern in subcomponent_patterns:
+            if name.startswith(pattern):
+                return True
+        
+        return False
 
-    def _discover_distributions(self, targeted_packages: Optional[List[str]]) -> List[importlib.metadata.Distribution]:
+    def _discover_distributions(self, targeted_packages: Optional[List[str]], verbose: bool = False) -> List[importlib.metadata.Distribution]:
         """
         FIXED DISCOVERY V7: Now properly handles nested directory structures 
         where dist-info is inside package version directories.
+        
+        Args:
+            targeted_packages: Optional list of specific packages to find
+            verbose: If True, shows detailed search progress. If False, only shows results.
         """
         if targeted_packages:
-            print(f'🎯 Running in targeted mode for {len(targeted_packages)} package(s).')
+            if verbose:
+                print(f'🎯 Running in targeted mode for {len(targeted_packages)} package(s).')
             discovered_dists = []
             site_packages = Path(self.config.get('site_packages_path', '/dev/null'))
             multiversion_base = Path(self.config.get('multiversion_base', '/dev/null'))
@@ -172,12 +193,58 @@ class omnipkgMetadataGatherer:
                     found_dist = None
                     name_variants = self._get_package_name_variants(name)
                     
-                    print(f"   🔍 Searching for '{spec}' with variants: {name_variants}")
+                    if verbose:
+                        print(f"   🔍 Searching for '{spec}' with variants: {name_variants}")
                     
                     # Search all relevant paths
                     for base_path in [p for p in [site_packages, multiversion_base] if p and p.is_dir()]:
-                        print(f"      -> Searching in: {base_path}")
+                        if verbose:
+                            print(f"      -> Searching in: {base_path}")
+
+                        # Strategy 0: VENDORED PACKAGE SEARCH
+                        if verbose:
+                            print(f"      -> Strategy 0: Checking for vendored packages...")
+                        vendored_dist_infos = list(base_path.rglob('*/_vendor/*.dist-info'))
+                        if verbose:
+                            print(f"         Found {len(vendored_dist_infos)} vendored dist-info directories")
                         
+                        for vendor_dist_info in vendored_dist_infos:
+                            if not vendor_dist_info.is_dir():
+                                continue
+                            
+                            try:
+                                dist = importlib.metadata.Distribution.at(vendor_dist_info)
+                                dist_name = dist.metadata.get('Name', '')
+                                
+                                # Check if this vendored package matches what we're looking for
+                                name_matches = any(
+                                    canonicalize_name(dist_name) == canonicalize_name(variant) or
+                                    dist_name.lower() == variant.lower() or
+                                    dist_name.replace('.', '-').lower() == variant.replace('.', '-').lower() or
+                                    dist_name.replace('-', '.').lower() == variant.replace('-', '.').lower()
+                                    for variant in name_variants
+                                )
+                                
+                                if name_matches:
+                                    if version is None or dist.version == version:
+                                        # Extract the parent package name for reporting
+                                        vendor_parent = str(vendor_dist_info).split('/_vendor/')[0].split('/')[-1]
+                                        found_dist = dist
+                                        print(f'✅ Found VENDORED {dist_name} v{dist.version} (inside {vendor_parent}) at {vendor_dist_info}')
+                                        break
+                                    elif verbose:
+                                        vendor_parent = str(vendor_dist_info).split('/_vendor/')[0].split('/')[-1]
+                                        print(f'         ⚠️  Found VENDORED {dist_name} v{dist.version} (inside {vendor_parent}) but need v{version}')
+                                        
+                            except Exception as e:
+                                if verbose:
+                                    print(f'         ❌ Error reading vendored {vendor_dist_info}: {e}')
+                                continue
+                        
+                        # If we found it in vendored packages, we're done with this base_path
+                        if found_dist:
+                            break
+
                         # Strategy 1: Direct dist-info pattern matching (flat structure)
                         for variant in name_variants:
                             if version:
@@ -197,7 +264,8 @@ class omnipkgMetadataGatherer:
                             
                             for pattern in patterns:
                                 matching_paths = list(base_path.glob(pattern))
-                                print(f"         Pattern '{pattern}' found: {len(matching_paths)} matches")
+                                if verbose:
+                                    print(f"         Pattern '{pattern}' found: {len(matching_paths)} matches")
                                 
                                 for dist_info_path in matching_paths:
                                     if not dist_info_path.is_dir():
@@ -215,15 +283,16 @@ class omnipkgMetadataGatherer:
                                             
                                             if version is None or dist.version == version:
                                                 found_dist = dist
-                                                print(f'         ✅ Found {dist_name} v{dist.version} at {dist_info_path}')
+                                                print(f'✅ Found {dist_name} v{dist.version} at {dist_info_path}')
                                                 break
-                                            else:
+                                            elif verbose:
                                                 print(f'         ⚠️  Found {dist_name} v{dist.version} but need v{version}')
-                                        else:
+                                        elif verbose:
                                             print(f'         ❌ Name mismatch: found "{dist_name}", looking for "{name}"')
                                             
                                     except Exception as e:
-                                        print(f'         ❌ Error reading {dist_info_path}: {e}')
+                                        if verbose:
+                                            print(f'         ❌ Error reading {dist_info_path}: {e}')
                                         continue
                                 
                                 if found_dist:
@@ -233,9 +302,9 @@ class omnipkgMetadataGatherer:
                                 break
                         
                         # Strategy 2: NESTED SEARCH - look inside subdirectories for dist-info
-                        # This handles the case where structure is: multiversion_base/package-version/package-version.dist-info
                         if not found_dist:
-                            print(f"      -> Searching nested directories for dist-info...")
+                            if verbose:
+                                print(f"      -> Searching nested directories for dist-info...")
                             
                             # Look for directories that might contain our package
                             for variant in name_variants:
@@ -254,7 +323,8 @@ class omnipkgMetadataGatherer:
                                 
                                 for pattern in nested_dir_patterns:
                                     matching_dirs = list(base_path.glob(pattern))
-                                    print(f"         Nested dir pattern '{pattern}' found: {len(matching_dirs)} directories")
+                                    if verbose:
+                                        print(f"         Nested dir pattern '{pattern}' found: {len(matching_dirs)} directories")
                                     
                                     for nested_dir in matching_dirs:
                                         if not nested_dir.is_dir():
@@ -281,13 +351,14 @@ class omnipkgMetadataGatherer:
                                                 if name_matches:
                                                     if version is None or dist.version == version:
                                                         found_dist = dist
-                                                        print(f'         ✅ Found nested {dist_name} v{dist.version} at {dist_info_path}')
+                                                        print(f'✅ Found nested {dist_name} v{dist.version} at {dist_info_path}')
                                                         break
-                                                    else:
+                                                    elif verbose:
                                                         print(f'         ⚠️  Found nested {dist_name} v{dist.version} but need v{version}')
                                                         
                                             except Exception as e:
-                                                print(f'         ❌ Error reading nested {dist_info_path}: {e}')
+                                                if verbose:
+                                                    print(f'         ❌ Error reading nested {dist_info_path}: {e}')
                                                 continue
                                         
                                         if found_dist:
@@ -301,7 +372,8 @@ class omnipkgMetadataGatherer:
                         
                         # Strategy 3: Fallback - scan ALL dist-info directories in path AND subdirectories
                         if not found_dist:
-                            print(f"      -> Fallback: scanning all .dist-info directories...")
+                            if verbose:
+                                print(f"      -> Fallback: scanning all .dist-info directories...")
                             
                             # First try direct children
                             all_dist_infos = list(base_path.glob('*.dist-info'))
@@ -309,7 +381,8 @@ class omnipkgMetadataGatherer:
                             # Then try nested (one level deep)
                             all_dist_infos.extend(list(base_path.glob('*/*.dist-info')))
                             
-                            print(f"         Found {len(all_dist_infos)} dist-info directories to check")
+                            if verbose:
+                                print(f"         Found {len(all_dist_infos)} dist-info directories to check")
                             
                             for dist_info_path in all_dist_infos:
                                 if not dist_info_path.is_dir():
@@ -328,9 +401,9 @@ class omnipkgMetadataGatherer:
                                     if name_matches:
                                         if version is None or dist.version == version:
                                             found_dist = dist
-                                            print(f'         ✅ Fallback found {dist_name} v{dist.version}')
+                                            print(f'✅ Fallback found {dist_name} v{dist.version} at {dist_info_path}')
                                             break
-                                        else:
+                                        elif verbose:
                                             print(f'         ⚠️  Fallback found {dist_name} v{dist.version} but need v{version}')
                                             
                                 except Exception as e:
@@ -341,24 +414,28 @@ class omnipkgMetadataGatherer:
                     
                     if found_dist:
                         discovered_dists.append(found_dist)
-                        if version:
-                            print(f'   -> Found distribution for {name}=={version}')
-                        else:
-                            print(f'   -> Found distribution for {name} v{found_dist.version}')
+                        if verbose:
+                            if version:
+                                print(f'   -> Found distribution for {name}=={version}')
+                            else:
+                                print(f'   -> Found distribution for {name} v{found_dist.version}')
                     else:
+                        # Only show failure message - this is important info
                         if version:
-                            print(f"   ⚠️  Could not find any distribution matching '{name}=={version}'.")
-                            print(f"      💡 Available variants tried: {name_variants}")
+                            print(f"❌ Could not find distribution matching '{name}=={version}'")
+                            if verbose:
+                                print(f"   💡 Available variants tried: {name_variants}")
                         else:
-                            print(f"   ⚠️  Could not find any distribution matching '{name}'.")
+                            print(f"❌ Could not find distribution matching '{name}'")
                             
                 except ValueError as e:
-                    print(f"   ⚠️  Could not parse spec '{spec}': {e}")
+                    print(f"❌ Could not parse spec '{spec}': {e}")
                     
             return discovered_dists
         
         # Full scan logic - also needs to handle nested structure
-        print('🔍 Discovering all packages from file system (ground truth)...')
+        if verbose:
+            print('🔍 Discovering all packages from file system (ground truth)...')
         search_paths = []
         site_packages_path = self.config.get('site_packages_path')
         if site_packages_path and Path(site_packages_path).is_dir():
@@ -380,7 +457,8 @@ class omnipkgMetadataGatherer:
                         search_paths.append(str(subdir))
         
         dists = list(importlib.metadata.distributions(path=search_paths))
-        print(_('✅ Discovery complete. Found {} total package versions to process.').format(len(dists)))
+        if verbose:
+            print(_('✅ Discovery complete. Found {} total package versions to process.').format(len(dists)))
         return dists
 
     def _is_bubbled(self, dist: importlib.metadata.Distribution) -> bool:
@@ -452,148 +530,74 @@ class omnipkgMetadataGatherer:
 
     def _perform_security_scan(self, packages: Dict[str, str]):
         """
-        FIXED: Runs a security check using `safety`. Now properly handles the JSON
-        output wrapped with deprecation warnings and correctly counts vulnerabilities.
+        Runs a security check using a dedicated, isolated 'safety' tool bubble,
+        created on-demand by the bubble_manager to guarantee isolation.
         """
-        scan_type = 'bulk' if len(packages) > 1 else 'targeted'
-        if len(packages) == 0:
-            scan_type = 'targeted'
+        print(f'🛡️ Performing security scan for {len(packages)} active package(s) using isolated tool...')
         
-        print(f'🛡️ Performing {scan_type} security scan for {len(packages)} active package(s)...')
-        
-        if not packages:
-            print(_(' - No active packages found to scan.'))
-            self.security_report = {}
-            return
-        
-        python_exe = self.config.get('python_executable', sys.executable)
-        
-        # Check if safety is available
-        try:
-            subprocess.run([python_exe, '-m', 'safety', '--version'], check=True, capture_output=True, timeout=10)
-        except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired):
-            print(f" ⚠️ Warning: The 'safety' package is not installed for the active Python interpreter ({Path(python_exe).name}).")
-            print(_(" 💡 To enable this feature, run: '{} -m pip install safety'").format(python_exe))
-            self.security_report = {}
-            return
-        
-        # Create requirements file
-        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.txt', encoding='utf-8') as reqs_file:
-            reqs_file_path = reqs_file.name
-            for name, version in packages.items():
-                reqs_file.write(f'{name}=={version}\n')
-        
-        try:
-            cmd = [python_exe, '-m', 'safety', 'check', '-r', reqs_file_path, '--json']
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=120, encoding='utf-8')
-            
-            if result.stdout:
-                raw_output = result.stdout.strip()
-                
-                # Find JSON boundaries - safety wraps JSON with deprecation warnings
-                json_start = -1
-                json_end = -1
-                
-                # Look for the opening brace/bracket
-                brace_pos = raw_output.find('{')
-                bracket_pos = raw_output.find('[')
-                
-                if brace_pos != -1 and bracket_pos != -1:
-                    json_start = min(brace_pos, bracket_pos)
-                elif brace_pos != -1:
-                    json_start = brace_pos
-                elif bracket_pos != -1:
-                    json_start = bracket_pos
-                
-                if json_start != -1:
-                    # Find the matching closing brace/bracket
-                    opening_char = raw_output[json_start]
-                    closing_char = '}' if opening_char == '{' else ']'
-                    
-                    # Count nesting to find the proper end
-                    count = 0
-                    in_string = False
-                    escape_next = False
-                    
-                    for i in range(json_start, len(raw_output)):
-                        char = raw_output[i]
-                        
-                        if escape_next:
-                            escape_next = False
-                            continue
-                        
-                        if char == '\\':
-                            escape_next = True
-                            continue
-                        
-                        if char == '"' and not escape_next:
-                            in_string = not in_string
-                            continue
-                        
-                        if not in_string:
-                            if char == opening_char:
-                                count += 1
-                            elif char == closing_char:
-                                count -= 1
-                                if count == 0:
-                                    json_end = i + 1
-                                    break
-                    
-                    if json_end > json_start:
-                        json_content = raw_output[json_start:json_end]
-                        try:
-                            self.security_report = json.loads(json_content)
-                        except json.JSONDecodeError as e:
-                            print(f' ⚠️ Could not parse safety JSON output: {e}')
-                            self.security_report = {}
-                    else:
-                        # Fallback: try parsing from json_start to end and let json.loads find the boundary
-                        try:
-                            # This will likely fail due to extra content, but worth trying
-                            self.security_report = json.loads(raw_output[json_start:])
-                        except json.JSONDecodeError:
-                            print(' ⚠️ Could not determine JSON boundaries')
-                            self.security_report = {}
-                else:
-                    print(' ⚠️ No JSON found in safety output')
-                    self.security_report = {}
-                
-                if result.stderr:
-                    print(_(' ⚠️ Safety command produced warnings. Stderr: {}').format(result.stderr.strip()))
+        if not packages or not self.omnipkg_instance:
+            if not packages:
+                print(_(' - No active packages found to scan.'))
             else:
-                self.security_report = {}
-                if result.stderr:
-                    print(_(' ⚠️ Safety command failed. Stderr: {}').format(result.stderr.strip()))
-                    
+                print(" ⚠️ Cannot run security scan: omnipkg_instance not available to builder.")
+            self.security_report = {}
+            return
+
+        TOOL_SPEC = "safety==3.6.0"
+        TOOL_NAME, TOOL_VERSION = TOOL_SPEC.split('==')
+
+        try:
+            bubble_path = self.omnipkg_instance.multiversion_base / f"{TOOL_NAME}-{TOOL_VERSION}"
+            
+            # --- THIS IS THE CORRECT LOGIC ---
+            # We check for the physical directory. If it's not there, we build it.
+            if not bubble_path.is_dir():
+                print(f" 💡 First-time setup: Creating isolated bubble for '{TOOL_SPEC}' tool...")
+                # Use the dedicated bubble creation method, NOT smart_install
+                success = self.omnipkg_instance.bubble_manager.create_isolated_bubble(TOOL_NAME, TOOL_VERSION)
+                if not success:
+                    print(f" ❌ Failed to create the tool bubble for {TOOL_SPEC}. Skipping scan.")
+                    self.security_report = {}
+                    return
+                print(f" ✅ Successfully created tool bubble.")
+            
+            with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.txt') as reqs_file:
+                reqs_file_path = reqs_file.name
+                for name, version in packages.items():
+                    reqs_file.write(f'{name}=={version}\n')
+
+            print(f" 🌀 Force-activating '{TOOL_SPEC}' context to run scan...")
+            # The loader will now find the bubble that was just created.
+            with omnipkgLoader(TOOL_SPEC, config=self.omnipkg_instance.config, force_activation=True, quiet=True):
+                python_exe = self.config.get('python_executable', sys.executable)
+                cmd = [python_exe, '-m', 'safety', 'check', '-r', reqs_file_path, '--json']
+                result = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
+
+            self.security_report = {}
+            if result.stdout:
+                try:
+                    json_match = re.search(r'(\[.*\]|\{.*\})', result.stdout, re.DOTALL)
+                    if json_match:
+                        self.security_report = json.loads(json_match.group(1))
+                except json.JSONDecodeError:
+                    print(f' ⚠️ Could not parse safety JSON output.')
+            
+            if result.stderr and "error" in result.stderr.lower():
+                 print(_(' ⚠️ Safety tool produced errors: {}').format(result.stderr.strip()))
+
         except Exception as e:
-            print(_(' ⚠️ An unexpected error occurred during the security scan: {}').format(e))
+            print(_(' ⚠️ An unexpected error occurred during the isolated security scan: {}').format(e))
             self.security_report = {}
         finally:
-            if os.path.exists(reqs_file_path):
+            if 'reqs_file_path' in locals() and os.path.exists(reqs_file_path):
                 os.unlink(reqs_file_path)
-        
-        # Count actual vulnerabilities from the parsed safety report
+
+        # Report the findings
         issue_count = 0
-        
-        if isinstance(self.security_report, dict):
-            # Modern safety format has a 'vulnerabilities' key with the actual vulnerabilities
-            if 'vulnerabilities' in self.security_report:
-                vulnerabilities = self.security_report['vulnerabilities']
-                if isinstance(vulnerabilities, list):
-                    issue_count = len(vulnerabilities)
-            # Also check report_meta for vulnerabilities_found (more reliable)
-            elif 'report_meta' in self.security_report:
-                meta = self.security_report['report_meta']
-                if isinstance(meta, dict) and 'vulnerabilities_found' in meta:
-                    issue_count = int(meta['vulnerabilities_found'])
-            # Legacy format fallback
-            else:
-                for key, value in self.security_report.items():
-                    if isinstance(value, list) and key not in [
-                        'scanned_packages', 'scanned', 'scanned_full_path', 
-                        'target_languages', 'announcements', 'ignored_vulnerabilities'
-                    ]:
-                        issue_count += len(value)
+        if isinstance(self.security_report, list):
+            issue_count = len(self.security_report)
+        elif isinstance(self.security_report, dict) and 'vulnerabilities' in self.security_report:
+            issue_count = len(self.security_report['vulnerabilities'])
         
         print(_('✅ Security scan complete. Found {} potential issues.').format(issue_count))
 
@@ -638,8 +642,9 @@ class omnipkgMetadataGatherer:
             if self._process_package(dist):
                 updated_count += 1
         print(_('\n🎉 Metadata building complete! Updated {} package(s).').format(updated_count))
+        return distributions_to_process
 
-    def _process_package(self, dist) -> bool:
+    def _process_package(self, dist: importlib.metadata.Distribution) -> bool:
         """
         FIXED: Processes a single, definitive Distribution object and now gracefully
         handles corrupted packages by initializing error-reporting variables early.
@@ -653,6 +658,9 @@ class omnipkgMetadataGatherer:
         try:
             raw_name = dist.metadata.get('Name')
             if not raw_name:
+                if self._is_known_subcomponent(dist._path):
+                    print(f"   -> Skipping {dist._path.name} - known sub-component of a larger package.")
+                    return False
                 print(_("\n⚠️ CORRUPTION DETECTED: Package at '{}' is missing a name.").format(dist._path))
                 # --- AUTO-REPAIR LOGIC ---
                 if self.omnipkg_instance:

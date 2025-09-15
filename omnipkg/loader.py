@@ -6,6 +6,7 @@ import gc
 from pathlib import Path
 import os
 import subprocess
+import re
 import json
 import site
 from importlib.metadata import version as get_version, PackageNotFoundError
@@ -23,13 +24,15 @@ class omnipkgLoader:
     - Enhanced path validation and cleanup
     """
 
-    def __init__(self, package_spec: str=None, config: dict=None):
+    def __init__(self, package_spec: str=None, config: dict=None, quiet: bool=False, force_activation: bool=False):
         """
         Initializes the loader with enhanced Python version awareness.
         """
         self.config = config
+        self.quiet = quiet # The flag that controls verbosity
         self.python_version = f"{sys.version_info.major}.{sys.version_info.minor}"
         self.python_version_nodot = f"{sys.version_info.major}{sys.version_info.minor}"
+        self.force_activation = force_activation
         
         print(_('🐍 [omnipkg loader] Running in Python {} context').format(self.python_version))
         
@@ -87,47 +90,34 @@ class omnipkgLoader:
 
     def _is_version_compatible_path(self, path: Path) -> bool:
         """
-        Check if a path is compatible with the current Python version.
-        Returns True if the path contains the current Python version or is version-neutral.
+        Performs a robust check to see if a given path belongs to the
+        currently running Python interpreter's version, preventing
+        cross-version contamination.
         """
         path_str = str(path).lower()
-        
-        # Check for explicit version compatibility
-        current_version_patterns = [
-            f'python{self.python_version}',
-            f'python{self.python_version_nodot}',
-            f'cp{self.python_version_nodot}',
-            f'py{self.python_version_nodot}',
-        ]
-        
-        # Check for incompatible versions (other Python versions)
-        incompatible_patterns = []
-        for major in [2, 3]:
-            for minor in range(0, 20):  # Cover reasonable range of minor versions
-                if f"{major}.{minor}" == self.python_version:
-                    continue
-                incompatible_patterns.extend([
-                    f'python{major}.{minor}',
-                    f'python{major}{minor}',
-                    f'cp{major}{minor}',
-                    f'py{major}{minor}',
-                ])
-        
-        # If path contains incompatible version markers, reject it
-        for pattern in incompatible_patterns:
-            if pattern in path_str:
-                print(_('🚫 [omnipkg loader] Rejecting incompatible path (contains {}): {}').format(pattern, path))
-                return False
-        
-        # If path contains compatible version markers, accept it
-        for pattern in current_version_patterns:
-            if pattern in path_str:
-                print(_('✅ [omnipkg loader] Accepting compatible path (contains {}): {}').format(pattern, path))
-                return True
-        
-        # If no version markers found, it might be version-neutral, so we accept it cautiously
-        print(_('⚪ [omnipkg loader] Version-neutral path accepted: {}').format(path))
-        return True
+
+        # The key is to find a python version string (e.g., 'python3.11') in the path.
+        # This regex looks for 'python' followed by digits, a dot, and more digits.
+        # It captures the version number itself (e.g., '3.11').
+        match = re.search(r'python(\d+\.\d+)', path_str)
+
+        if not match:
+            # If no version string is found, the path is version-neutral (like /usr/bin).
+            # It's safe to include.
+            return True
+
+        # We found a version in the path (e.g., '3.11').
+        path_version = match.group(1)
+
+        # Now, we compare it to the version of the interpreter running this code.
+        if path_version == self.python_version:
+            # The path's version matches our version. It's compatible.
+            return True
+        else:
+            # The path's version (e.g., '3.11') does NOT match our version (e.g., '3.9').
+            # This is a contaminated path. REJECT IT.
+            print(_('🚫 [omnipkg loader] Rejecting incompatible path (contains python{}) for context python{}: {}').format(path_version, self.python_version, path))
+            return False
 
     def _auto_detect_compatible_site_packages(self) -> Path:
         """
@@ -226,9 +216,11 @@ class omnipkgLoader:
                     if (self._is_version_compatible_path(dep_path) and 
                         (self.site_packages_root in dep_path.parents or dep_path == self.site_packages_root / dep)):
                         found_deps[dep] = dep_path
-                        print(_('✅ [omnipkg loader] Found compatible dependency: {} at {}').format(dep, dep_path))
+                        if not self.quiet:
+                            print(_('✅ [omnipkg loader] Found compatible dependency: {} at {}').format(dep, dep_path))
                     else:
-                        print(_('🚫 [omnipkg loader] Skipped incompatible dependency: {} at {}').format(dep, dep_path))
+                        if not self.quiet:
+                            print(_('🚫 [omnipkg loader] Skipped incompatible dependency: {} at {}').format(dep, dep_path))
             except ImportError:
                 continue
             except Exception as e:
@@ -285,22 +277,24 @@ class omnipkgLoader:
         except ValueError:
             raise ValueError(_("Invalid package_spec format. Expected 'name==version', got '{}'.").format(self._current_package_spec))
         
-        # Check if system version already matches (using compatible paths only)
-        try:
-            current_system_version = get_version(pkg_name)
-            if current_system_version == requested_version:
-                self._activation_end_time = time.perf_counter_ns()
-                self._total_activation_time_ns = self._activation_end_time - self._activation_start_time
-                print(_(' ✅ System version already matches requested version ({}). No bubble activation needed.').format(current_system_version))
-                print(_(' ⏱️  Activation time: {:.3f} μs ({:,} ns)').format(self._total_activation_time_ns / 1000, self._total_activation_time_ns))
-                self._activated_bubble_path = None
-                self._activation_successful = True
-                return self
-        except PackageNotFoundError:
-            pass
-        except Exception as e:
-            print(_('⚠️ [omnipkg loader] Error checking system version for {}: {}. Proceeding with bubble search.').format(pkg_name, e))
-            pass
+        # ONLY check system version if force_activation is False
+        if not self.force_activation:
+            try:
+                current_system_version = get_version(pkg_name)
+                if current_system_version == requested_version:
+                    self._activation_end_time = time.perf_counter_ns()
+                    self._total_activation_time_ns = self._activation_end_time - self._activation_start_time
+                    if not hasattr(self, 'quiet') or not self.quiet:
+                        print(_(' ✅ System version already matches requested version ({}). No bubble activation needed.').format(current_system_version))
+                        print(_(' ⏱️  Activation time: {:.3f} μs ({:,} ns)').format(self._total_activation_time_ns / 1000, self._total_activation_time_ns))
+                    self._activation_successful = True # Mark as "successful" to allow clean exit
+                    return self
+            except PackageNotFoundError:
+                pass
+            except Exception as e:
+                print(_('⚠️ [omnipkg loader] Error checking system version for {}: {}. Proceeding with bubble search.').format(pkg_name, e))
+        else:
+            print(_(' 🚀 Force activation enabled - bypassing system version check'))
         
         # Find and activate bubble
         bubble_dir_name = f'{pkg_name_normalized}-{requested_version}'
@@ -362,7 +356,8 @@ class omnipkgLoader:
             self._activation_end_time = time.perf_counter_ns()
             self._total_activation_time_ns = self._activation_end_time - self._activation_start_time
             
-            print(_(' ✅ Activated bubble with Python {} isolation: {}').format(self.python_version, bubble_path_str))
+            activation_mode = "FORCED" if self.force_activation else "NORMAL"
+            print(_(' ✅ Activated bubble with Python {} isolation ({}): {}').format(self.python_version, activation_mode, bubble_path_str))
             print(_(' 🔧 sys.path[0]: {}').format(sys.path[0]))
             print(_(' 🛡️ Version isolation: Only Python {}-compatible paths active').format(self.python_version))
             print(_(' 🔗 Ensured version-compatible omnipkg dependencies for subprocess support'))
