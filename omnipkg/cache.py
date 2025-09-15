@@ -53,10 +53,20 @@ class SQLiteCacheClient(CacheClient):
                 )
             """)
 
-    def hgetall(self, key):
-        cur = self.conn.cursor()
-        cur.execute("SELECT field, value FROM hash_store WHERE key = ?", (key,))
-        return dict(cur.fetchall())
+    def hgetall(self, name: str):
+        """
+        Emulates Redis's HGETALL command for SQLite.
+        Returns a dictionary of the hash stored at 'name'.
+        """
+        cursor = self.conn.cursor()
+        data = {}
+        try:
+            cursor.execute("SELECT field, value FROM hash_store WHERE key = ?", (name,))
+            rows = cursor.fetchall()
+            data = {row[0]: row[1] for row in rows}
+        finally:
+            cursor.close()
+        return data
 
     # In omnipkg/cache.py
 
@@ -205,3 +215,22 @@ class SQLiteCacheClient(CacheClient):
                 yield row[0]
         finally:
             cursor.close()
+
+    def hkeys(self, name: str):
+        """
+        Emulates Redis's HKEYS command for SQLite.
+        Returns all the field names in the hash stored at 'name'.
+        """
+        cursor = self.conn.cursor()
+        keys = []
+        try:
+            # The key for a hash in our schema is the 'name' parameter.
+            # The 'field' column holds the keys of the hash.
+            cursor.execute("SELECT field FROM hash_store WHERE key = ?", (name,))
+            rows = cursor.fetchall()
+            # fetchall() returns a list of tuples, e.g., [('key1',), ('key2',)]
+            # We need to flatten this into a simple list of strings.
+            keys = [row[0] for row in rows]
+        finally:
+            cursor.close()
+        return keys
