@@ -68,11 +68,6 @@ class SQLiteCacheClient(CacheClient):
             cursor.close()
         return data
 
-    # In omnipkg/cache.py
-
-    # ------------------ START OF REPLACEMENT ------------------
-    # DELETE your old hset method and REPLACE it with this one.
-
     def hset(self, key, field=None, value=None, mapping=None):
         """
         Emulates Redis HSET.
@@ -102,14 +97,10 @@ class SQLiteCacheClient(CacheClient):
             # Raise an error if called improperly
             raise ValueError("hset requires either a field/value pair or a mapping")
 
-    # ------------------- END OF REPLACEMENT -------------------
-
     def smembers(self, key):
         cur = self.conn.cursor()
         cur.execute("SELECT member FROM set_store WHERE key = ?", (key,))
         return {row[0] for row in cur.fetchall()}
-
-    # In omnipkg/cache.py, inside the SQLiteCacheClient class...
 
     def sadd(self, name: str, *values):
         """
@@ -126,10 +117,8 @@ class SQLiteCacheClient(CacheClient):
             # We use INSERT OR IGNORE to automatically handle duplicates.
             data_to_insert = [(name, value) for value in values]
             
-            # --- THIS IS THE CRITICAL FIX ---
             # Use the correct column name 'member' that matches your table schema.
             cursor.executemany("INSERT OR IGNORE INTO set_store (key, member) VALUES (?, ?)", data_to_insert)
-            # --- END OF THE CRITICAL FIX ---
             
             # The number of rows changed is the number of new items added.
             added_count = cursor.rowcount
@@ -177,11 +166,8 @@ class SQLiteCacheClient(CacheClient):
 
     def pipeline(self):
         """Returns itself to be used in a 'with' statement."""
-        # This is the key insight: the pipeline object is just the client itself.
         return self
 
-    # --- THE CRITICAL FIX START ---
-    # These two methods make the object a valid context manager.
     def __enter__(self):
         """Called when entering a 'with' block. Returns the pipeline object."""
         return self
@@ -189,12 +175,9 @@ class SQLiteCacheClient(CacheClient):
     def __exit__(self, exc_type, exc_value, traceback):
         """Called when exiting a 'with' block. We don't need to do anything special here."""
         pass
-    # --- THE CRITICAL FIX END ---
 
     def execute(self):
         """A no-op to maintain compatibility with the redis-py pipeline API."""
-        # In a real transaction, this would commit the changes.
-        # Since we commit on every statement, this does nothing.
         pass
 
     def ping(self):
@@ -219,8 +202,6 @@ class SQLiteCacheClient(CacheClient):
         cur.execute("SELECT COUNT(member) FROM set_store WHERE key = ?", (key,))
         return cur.fetchone()[0]
     
-    # In omnipkg/cache.py, inside the SQLiteCacheClient class...
-
     def scan_iter(self, match='*', count=None):
         """
         A generator that emulates Redis's SCAN_ITER command for SQLite.
@@ -232,15 +213,38 @@ class SQLiteCacheClient(CacheClient):
         
         cursor = self.conn.cursor()
         try:
-            # We are selecting the 'key' column from the 'kv_store' table
-            # where the key matches the pattern.
-            cursor.execute("SELECT key FROM kv_store WHERE key LIKE ?", (sql_pattern,))
+            # Get keys from all three tables
+            cursor.execute("""
+                SELECT DISTINCT key FROM kv_store WHERE key LIKE ?
+                UNION
+                SELECT DISTINCT key FROM hash_store WHERE key LIKE ?
+                UNION
+                SELECT DISTINCT key FROM set_store WHERE key LIKE ?
+            """, (sql_pattern, sql_pattern, sql_pattern))
             
-            # Fetch all matching keys at once. For this use case, it's efficient enough.
             keys = cursor.fetchall()
             
-            # The generator yields one key at a time, just like scan_iter.
             for row in keys:
+                yield row[0]
+        finally:
+            cursor.close()
+
+    def sscan_iter(self, name, match='*', count=None):
+        """
+        A generator that emulates Redis's SSCAN_ITER command for SQLite.
+        This iterates over members of a set stored at 'name'.
+        """
+        # The `match` pattern in Redis uses '*' as a wildcard.
+        # The SQL `LIKE` operator uses '%' as a wildcard.
+        sql_pattern = match.replace('*', '%')
+        
+        cursor = self.conn.cursor()
+        try:
+            cursor.execute("SELECT member FROM set_store WHERE key = ? AND member LIKE ?", (name, sql_pattern))
+            
+            members = cursor.fetchall()
+            
+            for row in members:
                 yield row[0]
         finally:
             cursor.close()
@@ -253,12 +257,8 @@ class SQLiteCacheClient(CacheClient):
         cursor = self.conn.cursor()
         keys = []
         try:
-            # The key for a hash in our schema is the 'name' parameter.
-            # The 'field' column holds the keys of the hash.
             cursor.execute("SELECT field FROM hash_store WHERE key = ?", (name,))
             rows = cursor.fetchall()
-            # fetchall() returns a list of tuples, e.g., [('key1',), ('key2',)]
-            # We need to flatten this into a simple list of strings.
             keys = [row[0] for row in rows]
         finally:
             cursor.close()
