@@ -20,7 +20,7 @@
     <img src="https://static.pepy.tech/badge/omnipkg" alt="Downloads">
   </a>
     <a href="https://clickpy.clickhouse.com/dashboard/omnipkg">
-    <img src="https://img.shields.io/badge/global_reach-40+_countries-green?logo=globe" alt="Global Reach Badge">
+    <img src="https://img.shields.io/badge/global_reach-55+_countries-green?logo=globe" alt="Global Reach Badge">
   </a>
 </p>
 
