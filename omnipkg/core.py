@@ -2473,7 +2473,8 @@ class omnipkg:
         """
         if not self._connect_cache():
             return 1
-        new_env_pattern = f'{self.redis_key_prefix}*'
+        env_context_prefix = self.redis_key_prefix.rsplit('pkg:', 1)[0]
+        new_env_pattern = f'{env_context_prefix}*'       
         old_global_pattern = 'omnipkg:pkg:*'
         migration_flag_pattern = 'omnipkg:migration:*'
         snapshot_pattern = 'omnipkg:snapshot:*'
@@ -2510,15 +2511,33 @@ class omnipkg:
     def rebuild_knowledge_base(self, force: bool=False):
         """
         FIXED: Rebuilds the knowledge base by directly invoking the metadata gatherer
-        in-process, avoiding subprocess argument limits and ensuring all discovered
-        packages are processed correctly.
+        in-process, now passing the correct target Python context to ensure
+        metadata is stamped with the correct version.
         """
         print(_('🧠 Forcing a full rebuild of the knowledge base...'))
         if not self._connect_cache():
             return 1
         try:
-            from .package_meta_builder import omnipkgMetadataGatherer
-            gatherer = omnipkgMetadataGatherer(config=self.config, env_id=self.env_id, force_refresh=force)
+            # --- START OF THE FIX ---
+            # Determine the currently configured Python version to pass to the builder.
+            # This is the single source of truth for the active context.
+            configured_exe = self.config.get('python_executable')
+            version_tuple = self.config_manager._verify_python_version(configured_exe)
+            current_python_version = f"{version_tuple[0]}.{version_tuple[1]}" if version_tuple else None
+
+            if not current_python_version:
+                print("   ❌ CRITICAL: Could not determine configured Python version. Aborting rebuild.")
+                return 1
+
+            print(f"   🐍 Rebuilding knowledge base for Python {current_python_version} context...")
+
+            gatherer = omnipkgMetadataGatherer(
+                config=self.config,
+                env_id=self.env_id,
+                force_refresh=force,
+                omnipkg_instance=self,
+                target_context_version=current_python_version  # Pass the correct context!
+            )
             gatherer.cache_client = self.cache_client
             gatherer.run()
             self._info_cache.clear()
@@ -2985,7 +3004,7 @@ class omnipkg:
     def get_installed_packages(self, live: bool=False) -> Dict[str, str]:
         if live:
             try:
-                cmd = [self.config['python_executable'], '-m', 'pip', 'list', '--format=json']
+                cmd = [self.config['python_executable'], '-I', '-m', 'pip', 'list', '--format=json']
                 result = subprocess.run(cmd, capture_output=True, text=True, check=True)
                 live_packages = {pkg['name'].lower(): pkg['version'] for pkg in json.loads(result.stdout)}
                 self._installed_packages_cache = live_packages
@@ -4618,6 +4637,36 @@ class omnipkg:
                 print(_("    ⚠️  Could not resolve a version for '{}' via PyPI. Skipping.").format(pkg_name))
         return resolved_packages
 
+    def _get_file_list_for_packages_live(self, package_names: List[str]) -> Dict[str, List[str]]:
+        """
+        Runs a subprocess in the configured Python context to get the
+        authoritative file list for a batch of packages. This is the ONLY
+        safe way to inspect a different Python environment.
+        """
+        if not package_names:
+            return {}
+
+        python_exe = self.config.get('python_executable', sys.executable)
+        
+        script = f"""
+import sys, json, importlib.metadata
+results = {{}}
+for pkg_name in {package_names!r}:
+    try:
+        dist = importlib.metadata.distribution(pkg_name)
+        if dist.files:
+            results[pkg_name] = [str(dist.locate_file(f)) for f in dist.files if dist.locate_file(f).is_file()]
+    except Exception:
+        results[pkg_name] = []
+print(json.dumps(results))
+"""
+        try:
+            cmd = [python_exe, '-I', '-c', script]
+            result = subprocess.run(cmd, capture_output=True, text=True, check=True, timeout=120)
+            return json.loads(result.stdout)
+        except (subprocess.CalledProcessError, json.JSONDecodeError, Exception) as e:
+            print(f"   ⚠️  Could not get file list from live environment: {e}")
+            return {name: [] for name in package_names}
 
     def _run_pip_install(self, packages: List[str]) -> int:
         """Runs `pip install` with LIVE, STREAMING output."""
