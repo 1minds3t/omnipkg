@@ -198,11 +198,15 @@ class omnipkgLoader:
 
     def _detect_omnipkg_dependencies(self):
         """
-        Detect critical omnipkg dependencies that are compatible with current Python version.
+        Detects the filesystem paths of omnipkg's own critical dependencies
+        so they can be made available inside a bubble.
         """
+        # --- THIS IS THE CRITICAL FIX ---
+        # We must include ALL dependencies that the toolchain (like safety) might need.
         critical_deps = [
             'omnipkg', 'filelock', 'toml', 'packaging', 'requests', 'redis', 
-            'colorama', 'click', 'rich', 'tabulate', 'psutil', 'distro'
+            'colorama', 'click', 'rich', 'tabulate', 'psutil', 'distro',
+            'pydantic', 'pydantic_core', 'ruamel.yaml', 'safety_schemas' # Add safety's key dependencies
         ]
         
         found_deps = {}
@@ -228,6 +232,8 @@ class omnipkgLoader:
                 continue
         
         return found_deps
+    
+    
 
     def _ensure_omnipkg_access_in_bubble(self, bubble_path_str: str):
         """

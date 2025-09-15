@@ -535,11 +535,13 @@ class omnipkgMetadataGatherer:
         """
         print(f'🛡️ Performing security scan for {len(packages)} active package(s) using isolated tool...')
         
-        if not packages or not self.omnipkg_instance:
-            if not packages:
-                print(_(' - No active packages found to scan.'))
-            else:
-                print(" ⚠️ Cannot run security scan: omnipkg_instance not available to builder.")
+        if not packages:
+            print(_(' - No active packages found to scan.'))
+            self.security_report = {}
+            return
+
+        if not self.omnipkg_instance:
+            print(" ⚠️ Cannot run security scan: omnipkg_instance not available to builder.")
             self.security_report = {}
             return
 
@@ -549,8 +551,7 @@ class omnipkgMetadataGatherer:
         try:
             bubble_path = self.omnipkg_instance.multiversion_base / f"{TOOL_NAME}-{TOOL_VERSION}"
             
-            # --- THIS IS THE CORRECT LOGIC ---
-            # We check for the physical directory. If it's not there, we build it.
+            # Check for the physical directory. If it's not there, we build it.
             if not bubble_path.is_dir():
                 print(f" 💡 First-time setup: Creating isolated bubble for '{TOOL_SPEC}' tool...")
                 # Use the dedicated bubble creation method, NOT smart_install
@@ -561,6 +562,7 @@ class omnipkgMetadataGatherer:
                     return
                 print(f" ✅ Successfully created tool bubble.")
             
+            # Create requirements file
             with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.txt') as reqs_file:
                 reqs_file_path = reqs_file.name
                 for name, version in packages.items():
@@ -573,6 +575,7 @@ class omnipkgMetadataGatherer:
                 cmd = [python_exe, '-m', 'safety', 'check', '-r', reqs_file_path, '--json']
                 result = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
 
+            # Parse results
             self.security_report = {}
             if result.stdout:
                 try:
@@ -589,6 +592,7 @@ class omnipkgMetadataGatherer:
             print(_(' ⚠️ An unexpected error occurred during the isolated security scan: {}').format(e))
             self.security_report = {}
         finally:
+            # Clean up requirements file
             if 'reqs_file_path' in locals() and os.path.exists(reqs_file_path):
                 os.unlink(reqs_file_path)
 
