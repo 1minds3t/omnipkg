@@ -109,11 +109,12 @@ class SQLiteCacheClient(CacheClient):
         cur.execute("SELECT member FROM set_store WHERE key = ?", (key,))
         return {row[0] for row in cur.fetchall()}
 
+    # In omnipkg/cache.py, inside the SQLiteCacheClient class...
+
     def sadd(self, name: str, *values):
         """
         Emulates Redis's SADD command for SQLite, now correctly handling
-        multiple values at once. This is critical for compatibility with
-        the application's bulk-add operations.
+        multiple values at once and using the CORRECT SCHEMA.
         """
         if not values:
             return 0  # No values to add
@@ -122,12 +123,13 @@ class SQLiteCacheClient(CacheClient):
         added_count = 0
         try:
             # Prepare the data for a bulk insert.
-            # We use INSERT OR IGNORE to automatically handle duplicates,
-            # which is the core behavior of a set.
+            # We use INSERT OR IGNORE to automatically handle duplicates.
             data_to_insert = [(name, value) for value in values]
             
-            # Use executemany for a fast, bulk insert operation.
-            cursor.executemany("INSERT OR IGNORE INTO set_store (key, value) VALUES (?, ?)", data_to_insert)
+            # --- THIS IS THE CRITICAL FIX ---
+            # Use the correct column name 'member' that matches your table schema.
+            cursor.executemany("INSERT OR IGNORE INTO set_store (key, member) VALUES (?, ?)", data_to_insert)
+            # --- END OF THE CRITICAL FIX ---
             
             # The number of rows changed is the number of new items added.
             added_count = cursor.rowcount
