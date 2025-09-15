@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "omnipkg"
-version = "1.4.4" 
+version = "1.4.5" 
 authors = [
   { name = "1minds3t", email = "1minds3t@proton.me" },
 ]
@@ -32,7 +32,6 @@ classifiers = [
 # --- THIS IS THE CRITICAL CHANGE ---
 # The core dependencies are now leaner and faster.
 dependencies = [
-    "redis>=5.0",
     "packaging>=23.0",
     "requests>=2.20",
     "filelock>=3.9",
@@ -49,6 +48,7 @@ dependencies = [
 full = [
     "tqdm",
     "python-magic"
+    "redis>=5.0",
 ]
 
 [project.urls]
