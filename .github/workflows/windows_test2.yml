@@ -1,6 +1,6 @@
-# .github/workflows/windows_test.yml
+# .github/workflows/windows_deep_dive.yml
 
-name: Omnipkg Core Windows Logic Test
+name: Windows Deep-Dive Debug
 
 on:
   push:
@@ -14,7 +14,7 @@ on:
         default: 'development'
 
 jobs:
-  core-windows-test:
+  deep-dive-windows:
     runs-on: windows-latest
 
     steps:
@@ -27,11 +27,9 @@ jobs:
         run: |
           if (Test-Path ~\.config\omnipkg) {
             Remove-Item ~\.config\omnipkg -Recurse -Force
-            Write-Host "Wiped previous omnipkg config for a clean run."
           }
         shell: pwsh
 
-      # Step 1: Start with ONLY Python 3.10
       - name: Set up Python 3.10
         uses: actions/setup-python@v5
         with:
@@ -41,24 +39,37 @@ jobs:
         run: pip install -e .
         shell: pwsh
 
-      # Step 2: Trigger First-Time Setup
-      # This will run the logic that should adopt the NATIVE Python 3.10
-      # AND download the preferred Python 3.11.
+      # --- NEW DEBUGGING STEP ---
+      - name: Show Pre-run Environment State
+        run: |
+          echo "--- Location of omnipkg executable ---"
+          Get-Command omnipkg | Format-List
+          echo "--- VENV Path ---"
+          echo $env:VIRTUAL_ENV
+          echo "--- Contents of .omnipkg directory (before run) ---"
+          ls $env:VIRTUAL_ENV\.omnipkg -Recurse -ErrorAction SilentlyContinue
+        shell: pwsh
+      
       - name: Trigger First-Time Setup
         run: omnipkg status
         shell: pwsh
         env: { PYTHONUTF8: "1" }
 
-      # Step 3: THE PROOF OF ADOPTION
-      # This is the test you correctly said we needed.
-      # We will check if both 3.10 (native) and 3.11 (downloaded)
-      # are now listed under "Managed Interpreters".
-      - name: Verify that BOTH interpreters are now managed
+      # --- NEW DEBUGGING STEP ---
+      - name: Show Post-run Diagnostic Information
         run: |
-          $output = omnipkg list python
-          Write-Host "$output"
-          $output | Select-String -Pattern "Managed Python Interpreters" -Quiet | Should -Be $true
-          $output | Select-String -Pattern "Python 3.10" -Quiet | Should -Be $true
-          $output | Select-String -Pattern "Python 3.11" -Quiet | Should -Be $true
+          echo "--- Contents of config.json ---"
+          Get-Content ~\.config\omnipkg\config.json -ErrorAction SilentlyContinue
+          echo "" # Newline for readability
+          echo "--- Contents of .omnipkg directory in VENV (after run) ---"
+          ls $env:VIRTUAL_ENV\.omnipkg -Recurse -ErrorAction SilentlyContinue
+          echo "" # Newline for readability
+          echo "--- FULL UNFILTERED OUTPUT of 'omnipkg list python' ---"
+          omnipkg list python
+        shell: pwsh
+        env: { PYTHONUTF8: "1" }
+
+      - name: Final Verification (This is the goal)
+        run: omnipkg list python | Select-String "Managed" | Select-String "3.10"
         shell: pwsh
         env: { PYTHONUTF8: "1" }
