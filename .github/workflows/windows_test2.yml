@@ -1,7 +1,4 @@
-# .github/workflows/windows_pathing_truth.yml
-
-name: Windows Ground Truth Pathing Test
-
+name: Windows Path Detection Deep Debug
 on:
   push:
     branches:
@@ -14,19 +11,21 @@ on:
         default: 'development'
 
 jobs:
-  find-windows-path-truth:
+  windows-path-forensics:
     runs-on: windows-latest
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event.inputs.branch || 'development' }}
 
-      - name: Wipe previous omnipkg config for a true clean run
+      - name: Clean slate - remove any previous omnipkg config
         run: |
           if (Test-Path ~\.config\omnipkg) {
             Remove-Item ~\.config\omnipkg -Recurse -Force
+            Write-Host "Removed previous omnipkg config"
+          } else {
+            Write-Host "No previous omnipkg config found"
           }
         shell: pwsh
 
@@ -35,44 +34,433 @@ jobs:
         with:
           python-version: '3.10'
 
-      - name: Install omnipkg (and its dependencies)
+      # =============================================================================
+      # PHASE 1: PRE-INSTALLATION ENVIRONMENT FORENSICS
+      # =============================================================================
+      
+      - name: "PHASE 1: Python Environment Forensics (Pre-Installation)"
+        run: |
+          Write-Host "=" * 80
+          Write-Host "PHASE 1: PYTHON ENVIRONMENT FORENSICS (PRE-INSTALLATION)"
+          Write-Host "=" * 80
+          
+          Write-Host "`n--- Python Executable Locations ---"
+          Write-Host "which python: $(Get-Command python -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source)"
+          Write-Host "which python3: $(Get-Command python3 -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source)"
+          Write-Host "sys.executable via python -c: $((python -c 'import sys; print(sys.executable)') 2>$null)"
+          
+          Write-Host "`n--- Python Path Information ---"
+          python -c "
+          import sys, os, site
+          print('sys.executable:', repr(sys.executable))
+          print('sys.prefix:', repr(sys.prefix))
+          print('sys.base_prefix:', repr(sys.base_prefix))
+          print('sys.path[0]:', repr(sys.path[0] if sys.path else 'EMPTY'))
+          print('site.getsitepackages():', site.getsitepackages() if hasattr(site, 'getsitepackages') else 'NOT_AVAILABLE')
+          print('site.getusersitepackages():', site.getusersitepackages() if hasattr(site, 'getusersitepackages') else 'NOT_AVAILABLE')
+          print('os.getcwd():', repr(os.getcwd()))
+          print('__file__ paths in sys.path:')
+          for i, p in enumerate(sys.path):
+              print(f'  [{i}]: {repr(p)}')
+          "
+          
+          Write-Host "`n--- Windows Environment Variables ---"
+          Write-Host "PYTHONPATH: $($env:PYTHONPATH)"
+          Write-Host "PYTHONHOME: $($env:PYTHONHOME)"
+          Write-Host "PATH (python related): $($env:PATH.Split(';') | Where-Object { $_ -like '*python*' -or $_ -like '*Python*' })"
+          
+        shell: pwsh
+
+      # =============================================================================
+      # PHASE 2: INSTALLATION AND DEPENDENCY ANALYSIS
+      # =============================================================================
+
+      - name: Install omnipkg and dependencies
         run: pip install -e .
         shell: pwsh
 
-      # --- STEP 1: FIND THE GROUND TRUTH ---
-      # As you said, we find a dependency and ask pip where it is.
-      - name: Find Ground Truth - Location of 'packaging' dependency
-        id: ground_truth # Give this step an ID to reference its output
+      - name: "PHASE 2: Post-Installation Package Analysis"
         run: |
-          echo "--- Finding location of a core dependency (packaging)... ---"
-          $location = (pip show packaging | Select-String -Pattern "Location:").Line.Split(' ')[1]
-          echo "GROUND_TRUTH_PATH=$location" >> $env:GITHUB_OUTPUT
-          echo "Pip says the real site-packages path is: $location"
+          Write-Host "=" * 80
+          Write-Host "PHASE 2: POST-INSTALLATION PACKAGE ANALYSIS"
+          Write-Host "=" * 80
+          
+          Write-Host "`n--- Pip List (All Installed Packages) ---"
+          pip list
+          
+          Write-Host "`n--- Critical Package Locations (pip show) ---"
+          $critical_packages = @('packaging', 'omnipkg', 'setuptools', 'pip')
+          foreach ($pkg in $critical_packages) {
+            Write-Host "`n--- Package: $pkg ---"
+            $show_output = pip show $pkg 2>$null
+            if ($show_output) {
+              $show_output
+            } else {
+              Write-Host "Package $pkg not found or error occurred"
+            }
+          }
+          
+          Write-Host "`n--- Site-packages Directory Analysis ---"
+          python -c "
+          import site, os, glob
+          print('=== SITE-PACKAGES ANALYSIS ===')
+          
+          # Get all possible site-packages locations
+          locations = []
+          if hasattr(site, 'getsitepackages'):
+              locations.extend(site.getsitepackages())
+          if hasattr(site, 'getusersitepackages'):
+              locations.append(site.getusersitepackages())
+          
+          print('All detected site-packages locations:')
+          for i, loc in enumerate(locations):
+              print(f'  [{i}]: {repr(loc)}')
+              exists = os.path.exists(loc)
+              print(f'       Exists: {exists}')
+              if exists:
+                  try:
+                      contents = os.listdir(loc)
+                      print(f'       Contents count: {len(contents)}')
+                      # Look for omnipkg specifically
+                      omnipkg_items = [c for c in contents if 'omnipkg' in c.lower()]
+                      if omnipkg_items:
+                          print(f'       omnipkg related: {omnipkg_items}')
+                  except Exception as e:
+                      print(f'       Error listing contents: {e}')
+          
+          # Also check sys.path for site-packages
+          print('\nsys.path entries containing site-packages:')
+          import sys
+          for i, path in enumerate(sys.path):
+              if 'site-packages' in path:
+                  print(f'  [{i}]: {repr(path)}')
+                  print(f'       Exists: {os.path.exists(path)}')
+          "
         shell: pwsh
 
-      # --- STEP 2: RUN OMNIPKG TO GENERATE ITS CONFIG ---
-      - name: Run omnipkg to trigger config creation
-        run: omnipkg status
-        shell: pwsh
-        env: { PYTHONUTF8: "1" }
+      # =============================================================================
+      # PHASE 3: OMNIPKG CONFIGURATION FORENSICS
+      # =============================================================================
 
-      # --- STEP 3: COMPARE TRUTH VS. OMNIPKG'S GUESS ---
-      # This is the moment of truth. We compare the real path to the one in the config.
-      - name: Compare Ground Truth Path with omnipkg Config Path
+      - name: "PHASE 3: Run omnipkg with detailed tracing"
         run: |
-          echo "--- The Moment of Truth ---"
-          $groundTruth = "${{ steps.ground_truth.outputs.GROUND_TRUTH_PATH }}"
-          $config = Get-Content ~\.config\omnipkg\config.json | ConvertFrom-Json
-          # This next line robustly gets the site_packages_path regardless of the random environment ID
-          $omnipkgPath = $config.environments.psobject.properties[0].Value.site_packages_path
+          Write-Host "=" * 80
+          Write-Host "PHASE 3: OMNIPKG CONFIGURATION FORENSICS"
+          Write-Host "=" * 80
           
-          echo "Ground Truth Path (from pip): $groundTruth"
-          echo "omnipkg Config Path (from json): $omnipkgPath"
+          Write-Host "`n--- Python Module Import Test ---"
+          python -c "
+          try:
+              import omnipkg
+              print('omnipkg import: SUCCESS')
+              print('omnipkg.__file__:', repr(omnipkg.__file__))
+              print('omnipkg.__version__:', getattr(omnipkg, '__version__', 'NO_VERSION'))
+          except Exception as e:
+              print('omnipkg import: FAILED -', e)
+          "
           
-          if ($groundTruth -ne $omnipkgPath) {
-            echo "BUG CONFIRMED: The paths do NOT match."
+          Write-Host "`n--- Pre-config Directory State ---"
+          if (Test-Path ~\.config) {
+            Write-Host "~\.config exists"
+            if (Test-Path ~\.config\omnipkg) {
+              Write-Host "~\.config\omnipkg exists"
+              Get-ChildItem ~\.config\omnipkg -Recurse | ForEach-Object { Write-Host "  $($_.FullName)" }
+            } else {
+              Write-Host "~\.config\omnipkg does not exist"
+            }
+          } else {
+            Write-Host "~\.config does not exist"
+          }
+          
+          Write-Host "`n--- Running omnipkg status (FIRST RUN) ---"
+        shell: pwsh
+
+      - name: Run omnipkg status with output capture
+        id: omnipkg_run
+        run: |
+          $output = omnipkg status 2>&1
+          $exitCode = $LASTEXITCODE
+          Write-Host "Exit Code: $exitCode"
+          Write-Host "Output:"
+          Write-Host $output
+          
+          # Store for later analysis
+          $output | Out-File -FilePath omnipkg_output.txt -Encoding UTF8
+          echo "OMNIPKG_EXIT_CODE=$exitCode" >> $env:GITHUB_OUTPUT
+        shell: pwsh
+        continue-on-error: true
+
+      - name: "PHASE 4: Configuration File Analysis"
+        run: |
+          Write-Host "=" * 80
+          Write-Host "PHASE 4: CONFIGURATION FILE ANALYSIS"
+          Write-Host "=" * 80
+          
+          Write-Host "`n--- Post-run Directory State ---"
+          if (Test-Path ~\.config\omnipkg) {
+            Write-Host "~\.config\omnipkg contents:"
+            Get-ChildItem ~\.config\omnipkg -Recurse | ForEach-Object { 
+              Write-Host "  $($_.FullName) ($(if($_.PSIsContainer){'DIR'}else{'FILE'}) - $($_.Length) bytes)"
+            }
+          } else {
+            Write-Host "~\.config\omnipkg still does not exist!"
+          }
+          
+          Write-Host "`n--- Configuration File Contents ---"
+          if (Test-Path ~\.config\omnipkg\config.json) {
+            Write-Host "config.json contents:"
+            $config_content = Get-Content ~\.config\omnipkg\config.json -Raw
+            Write-Host $config_content
+            
+            # Parse and analyze
+            try {
+              $config = $config_content | ConvertFrom-Json
+              Write-Host "`n--- Parsed Configuration Analysis ---"
+              Write-Host "Root level properties: $($config.PSObject.Properties.Name -join ', ')"
+              
+              if ($config.environments) {
+                Write-Host "Environments found: $($config.environments.PSObject.Properties.Name.Count)"
+                foreach ($env_id in $config.environments.PSObject.Properties.Name) {
+                  $env_config = $config.environments.$env_id
+                  Write-Host "`nEnvironment ID: $env_id"
+                  Write-Host "  python_executable: '$($env_config.python_executable)'"
+                  Write-Host "  site_packages_path: '$($env_config.site_packages_path)'"
+                  Write-Host "  version: '$($env_config.version)'"
+                  Write-Host "  created_at: '$($env_config.created_at)'"
+                  
+                  # Check if paths exist
+                  if ($env_config.python_executable) {
+                    Write-Host "  python_executable exists: $(Test-Path $env_config.python_executable)"
+                  }
+                  if ($env_config.site_packages_path) {
+                    Write-Host "  site_packages_path exists: $(Test-Path $env_config.site_packages_path)"
+                  } else {
+                    Write-Host "  site_packages_path is EMPTY!"
+                  }
+                }
+              } else {
+                Write-Host "No environments found in config!"
+              }
+            } catch {
+              Write-Host "Failed to parse config.json: $($_.Exception.Message)"
+            }
+          } else {
+            Write-Host "config.json does not exist!"
+          }
+        shell: pwsh
+
+      # =============================================================================
+      # PHASE 5: GROUND TRUTH vs OMNIPKG COMPARISON
+      # =============================================================================
+
+      - name: "PHASE 5: Ground Truth Discovery and Comparison"
+        run: |
+          Write-Host "=" * 80
+          Write-Host "PHASE 5: GROUND TRUTH vs OMNIPKG COMPARISON"
+          Write-Host "=" * 80
+          
+          Write-Host "`n--- Multiple Ground Truth Methods ---"
+          
+          # Method 1: pip show
+          $pip_location = ""
+          try {
+            $pip_output = pip show packaging 2>$null
+            $location_line = $pip_output | Select-String -Pattern "Location:"
+            if ($location_line) {
+              $pip_location = $location_line.Line.Split(' ', 2)[1].Trim()
+              Write-Host "Method 1 (pip show packaging): '$pip_location'"
+            } else {
+              Write-Host "Method 1 (pip show packaging): FAILED - No Location line found"
+            }
+          } catch {
+            Write-Host "Method 1 (pip show packaging): FAILED - $($_.Exception.Message)"
+          }
+          
+          # Method 2: Python site module
+          Write-Host "`nMethod 2 (Python site module):"
+          python -c "
+          import site
+          try:
+              locations = site.getsitepackages()
+              print('site.getsitepackages():', locations)
+              for i, loc in enumerate(locations):
+                  print(f'  [{i}]: {repr(loc)}')
+          except Exception as e:
+              print('site.getsitepackages() failed:', e)
+          "
+          
+          # Method 3: Find actual package file
+          Write-Host "`nMethod 3 (Find actual packaging module):"
+          python -c "
+          import packaging
+          import os
+          print('packaging.__file__:', repr(packaging.__file__))
+          pkg_dir = os.path.dirname(packaging.__file__)
+          print('packaging directory:', repr(pkg_dir))
+          # Go up to site-packages
+          possible_site_packages = os.path.dirname(pkg_dir)
+          print('possible site-packages:', repr(possible_site_packages))
+          print('possible site-packages exists:', os.path.exists(possible_site_packages))
+          "
+          
+          # Method 4: sys.path analysis
+          Write-Host "`nMethod 4 (sys.path site-packages detection):"
+          python -c "
+          import sys, os
+          for path in sys.path:
+              if 'site-packages' in path and os.path.exists(path):
+                  print('Found site-packages in sys.path:', repr(path))
+                  # Check if it contains packaging
+                  packaging_exists = os.path.exists(os.path.join(path, 'packaging'))
+                  packaging_dist = any('packaging' in f for f in os.listdir(path) if f.endswith('.dist-info'))
+                  print('  Contains packaging module:', packaging_exists)
+                  print('  Contains packaging .dist-info:', packaging_dist)
+          "
+          
+          Write-Host "`n--- omnipkg Configuration Comparison ---"
+          if (Test-Path ~\.config\omnipkg\config.json) {
+            $config = Get-Content ~\.config\omnipkg\config.json | ConvertFrom-Json
+            $omnipkg_path = $config.environments.psobject.properties[0].Value.site_packages_path
+            
+            Write-Host "Ground Truth (pip show): '$pip_location'"
+            Write-Host "omnipkg Config: '$omnipkg_path'"
+            Write-Host "Paths match: $(if ($pip_location -eq $omnipkg_path) { 'YES' } else { 'NO' })"
+            Write-Host "omnipkg path empty: $(if ([string]::IsNullOrEmpty($omnipkg_path)) { 'YES' } else { 'NO' })"
+            
+            # Case sensitivity check
+            if (![string]::IsNullOrEmpty($pip_location) -and ![string]::IsNullOrEmpty($omnipkg_path)) {
+              Write-Host "Case-insensitive match: $(if ($pip_location.ToLower() -eq $omnipkg_path.ToLower()) { 'YES' } else { 'NO' })"
+            }
+          } else {
+            Write-Host "Cannot compare - omnipkg config.json not found"
+          }
+        shell: pwsh
+
+      # =============================================================================
+      # PHASE 6: PATH CONSTRUCTION DEBUGGING
+      # =============================================================================
+
+      - name: "PHASE 6: Path Construction Logic Debugging"
+        run: |
+          Write-Host "=" * 80
+          Write-Host "PHASE 6: PATH CONSTRUCTION LOGIC DEBUGGING"
+          Write-Host "=" * 80
+          
+          Write-Host "`n--- Manual Path Construction Test ---"
+          python -c "
+          import sys, os, pathlib
+          
+          executable = sys.executable
+          print('sys.executable:', repr(executable))
+          print('os.path.normpath(executable):', repr(os.path.normpath(executable)))
+          print('pathlib.Path(executable):', repr(str(pathlib.Path(executable))))
+          
+          # Method 1: Simple dirname approach
+          exe_dir = os.path.dirname(executable)
+          method1 = os.path.join(exe_dir, 'Lib', 'site-packages')
+          print('Method 1 (exe_dir/Lib/site-packages):', repr(method1))
+          print('Method 1 exists:', os.path.exists(method1))
+          
+          # Method 2: lib (lowercase)
+          method2 = os.path.join(exe_dir, 'lib', 'site-packages')  
+          print('Method 2 (exe_dir/lib/site-packages):', repr(method2))
+          print('Method 2 exists:', os.path.exists(method2))
+          
+          # Method 3: Python version specific
+          version = f'python{sys.version_info.major}.{sys.version_info.minor}'
+          method3 = os.path.join(exe_dir, 'lib', version, 'site-packages')
+          print('Method 3 (version specific):', repr(method3))
+          print('Method 3 exists:', os.path.exists(method3))
+          
+          # Method 4: Use sys.prefix
+          prefix_method = os.path.join(sys.prefix, 'Lib', 'site-packages')
+          print('Method 4 (sys.prefix/Lib):', repr(prefix_method))
+          print('Method 4 exists:', os.path.exists(prefix_method))
+          
+          # Method 5: Use sys.prefix lowercase
+          prefix_method_lower = os.path.join(sys.prefix, 'lib', 'site-packages')
+          print('Method 5 (sys.prefix/lib):', repr(prefix_method_lower))
+          print('Method 5 exists:', os.path.exists(prefix_method_lower))
+          
+          # List actual directory structure around executable
+          print('\\nActual directory structure around executable:')
+          try:
+              for root, dirs, files in os.walk(exe_dir):
+                  level = root.replace(exe_dir, '').count(os.sep)
+                  if level < 3:  # Limit depth
+                      indent = ' ' * 2 * level
+                      print(f'{indent}{os.path.basename(root)}/')
+                      sub_indent = ' ' * 2 * (level + 1)
+                      for file in files[:5]:  # Limit files shown
+                          print(f'{sub_indent}{file}')
+                      if len(files) > 5:
+                          print(f'{sub_indent}... and {len(files)-5} more files')
+                      if level > 2:
+                          break
+          except Exception as e:
+              print(f'Error walking directory: {e}')
+          "
+        shell: pwsh
+
+      - name: "PHASE 7: Final Diagnosis and Summary"
+        run: |
+          Write-Host "=" * 80
+          Write-Host "PHASE 7: FINAL DIAGNOSIS AND SUMMARY"
+          Write-Host "=" * 80
+          
+          Write-Host "`n--- Summary of Findings ---"
+          Write-Host "1. omnipkg exit code: ${{ steps.omnipkg_run.outputs.OMNIPKG_EXIT_CODE }}"
+          
+          if (Test-Path ~\.config\omnipkg\config.json) {
+            $config = Get-Content ~\.config\omnipkg\config.json | ConvertFrom-Json
+            $omnipkg_path = $config.environments.psobject.properties[0].Value.site_packages_path
+            Write-Host "2. omnipkg detected site-packages: '$omnipkg_path'"
+            Write-Host "3. Config path is empty: $(if ([string]::IsNullOrEmpty($omnipkg_path)) { 'YES - THIS IS THE PROBLEM' } else { 'NO' })"
+          } else {
+            Write-Host "2. omnipkg config.json: NOT CREATED"
+            Write-Host "3. This indicates omnipkg failed during initialization"
+          }
+          
+          # Get pip's answer one more time for final comparison
+          $pip_location = ""
+          try {
+            $pip_output = pip show packaging 2>$null
+            $location_line = $pip_output | Select-String -Pattern "Location:"
+            if ($location_line) {
+              $pip_location = $location_line.Line.Split(' ', 2)[1].Trim()
+            }
+          } catch {}
+          
+          Write-Host "4. Ground truth (pip): '$pip_location'"
+          
+          Write-Host "`n--- Recommended Investigation Areas ---"
+          Write-Host "- Check omnipkg's site-packages path detection logic for Windows"
+          Write-Host "- Verify Windows path case handling (Lib vs lib)"
+          Write-Host "- Check if omnipkg is using sys.prefix vs sys.executable for path construction"
+          Write-Host "- Investigate any Windows-specific path normalization issues"
+          Write-Host "- Review error handling in the configuration initialization code"
+          
+        shell: pwsh
+
+      # =============================================================================
+      # ARTIFACTS AND CLEANUP
+      # =============================================================================
+
+      - name: Upload omnipkg output as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: omnipkg-debug-output
+          path: |
+            omnipkg_output.txt
+            ~/.config/omnipkg/**
+        if: always()
+
+      - name: Final Status
+        run: |
+          if ("${{ steps.omnipkg_run.outputs.OMNIPKG_EXIT_CODE }}" -ne "0") {
+            Write-Host "INVESTIGATION COMPLETE: omnipkg failed with exit code ${{ steps.omnipkg_run.outputs.OMNIPKG_EXIT_CODE }}"
             exit 1
           } else {
-            echo "SUCCESS: The paths match. The bug is elsewhere."
+            Write-Host "INVESTIGATION COMPLETE: omnipkg ran but may have path detection issues"
           }
         shell: pwsh
