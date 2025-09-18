@@ -3,26 +3,21 @@ import sys
 import argparse
 from pathlib import Path
 import os
-import subprocess  # <-- FIX: Added this import
-import tempfile    # <-- FIX: Added this import
-import json        # <-- FIX: Added this import
-
-# [REFACTORED] Import utilities from the common module
+import subprocess
+import tempfile
+import json
 from .i18n import _, SUPPORTED_LANGUAGES
 from .core import omnipkg as OmnipkgCore
 from .core import ConfigManager
 from .common_utils import print_header, run_script_in_omnipkg_env, UVFailureDetector
-from .commands.run import execute_run_command # <-- NEW IMPORT
+from .commands.run import execute_run_command
 from .common_utils import sync_context_to_runtime
-
 TESTS_DIR = Path(__file__).parent.parent / 'tests'
 DEMO_DIR = Path(__file__).parent
-
 try:
     FILE_PATH = Path(__file__).resolve()
 except NameError:
     FILE_PATH = Path.cwd()
-
 
 def get_actual_python_version():
     """Get the actual Python version being used by omnipkg, not just sys.version_info."""
@@ -44,16 +39,13 @@ def handle_python_requirement(required_version_str: str, pkg_instance: OmnipkgCo
     """
     actual_version_tuple = get_actual_python_version()
     required_version_tuple = tuple(map(int, required_version_str.split('.')))
-
     if actual_version_tuple == required_version_tuple:
         return True
-
     print_header(_('Python Version Requirement'))
     print(_('  ⚠️  This Demo Requires Python {}').format(required_version_str))
     print(_('  - Current Python version: {}.{}').format(actual_version_tuple[0], actual_version_tuple[1]))
     print(_('  - omnipkg will now attempt to automatically configure the correct interpreter.'))
     print('-' * 60)
-
     managed_interpreters = pkg_instance.interpreter_manager.list_available_interpreters()
     if required_version_str not in managed_interpreters:
         discovered_interpreters = pkg_instance.config_manager.list_available_pythons()
@@ -61,20 +53,18 @@ def handle_python_requirement(required_version_str: str, pkg_instance: OmnipkgCo
             print(_('🐍 Python {} found on your system. Adopting it...').format(required_version_str))
             if pkg_instance.adopt_interpreter(required_version_str) != 0:
                 print(_('❌ Failed to adopt Python {}. Please try manually.').format(required_version_str))
-                print(_("   Run: {} python adopt {}").format(parser_prog, required_version_str))
+                print(_('   Run: {} python adopt {}').format(parser_prog, required_version_str))
                 return False
             print(_('✅ Successfully adopted Python {}.').format(required_version_str))
         else:
             print(_('❌ Required Python version {} not found on your system.').format(required_version_str))
             print(_('   Please install Python {} and ensure it is in your PATH.').format(required_version_str))
             return False
-
     print(_('🔄 Swapping active interpreter to Python {}...').format(required_version_str))
     if pkg_instance.switch_active_python(required_version_str) != 0:
         print(_('❌ Failed to swap to Python {}. Please try manually.').format(required_version_str))
-        print(_("   Run: {} swap python {}").format(parser_prog, required_version_str))
+        print(_('   Run: {} swap python {}').format(parser_prog, required_version_str))
         return False
-
     print(_('✅ Environment successfully configured for Python {}.').format(required_version_str))
     print(_('🚀 Proceeding to run the demo...'))
     print('=' * 60)
@@ -86,7 +76,6 @@ def get_version():
         from importlib.metadata import version
         return version('omnipkg')
     except Exception:
-        # Fallback for development environments
         try:
             import tomllib
             toml_path = Path(__file__).parent.parent / 'pyproject.toml'
@@ -95,7 +84,7 @@ def get_version():
                     data = tomllib.load(f)
                     return data.get('project', {}).get('version', 'unknown')
         except (ImportError, Exception):
-            pass # Ignore errors if tomllib/tomli is not available or file is malformed
+            pass
     return 'unknown'
 VERSION = get_version()
 
@@ -115,7 +104,6 @@ def stress_test_command():
         print(_("3. Run 'omnipkg stress-test' from there"))
         print('=' * 60)
         return False
-
     print('=' * 60)
     print(_('  🚀 omnipkg Nuclear Stress Test - Runtime Version Swapping'))
     print(_('Current Python version: {}.{}').format(actual_version[0], actual_version[1]))
@@ -177,24 +165,17 @@ def run_demo_with_live_streaming(test_file, demo_name):
         env['LANGUAGE'] = current_lang
         env['PYTHONUNBUFFERED'] = '1'
         env['PYTHONPATH'] = str(project_root) + os.pathsep + env.get('PYTHONPATH', '')
-        
-        # Use the currently configured python executable for the subprocess
         python_exe = cm.config.get('python_executable', sys.executable)
-        
         process = subprocess.Popen([python_exe, str(test_file)], text=True, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, encoding='utf-8', errors='replace')
-        
         for line in process.stdout:
             print(line, end='')
-            
         returncode = process.wait()
         print('-' * 60)
-        
         if returncode == 0:
             print(_('🎉 Demo completed successfully!'))
         else:
             print(_('❌ Demo failed with return code {}').format(returncode))
         return returncode
-
     except KeyboardInterrupt:
         print(_('\n⚠️  Demo cancelled by user (Ctrl+C)'))
         if process:
@@ -286,60 +267,39 @@ def print_header(title):
 def main():
     """Main application entry point with pre-flight version check."""
     try:
-        # --- START THE FINAL, CRITICAL FIX ---
-        # Perform a "pre-flight check" for the version flag.
-        # This is the ONLY way to prevent the full application from initializing
-        # in environments where it's not needed (like a simple test).
         if '-v' in sys.argv or '--version' in sys.argv:
-            # We call get_version() directly. No ConfigManager, no OmnipkgCore, no Redis.
             prog_name = Path(sys.argv[0]).name
             if prog_name == '8pkg' or (len(sys.argv) > 0 and '8pkg' in sys.argv[0]):
-                print(f"8pkg {get_version()}")
+                print(_('8pkg {}').format(get_version()))
             else:
-                print(f"omnipkg {get_version()}")
-            return 0 # Exit successfully immediately.
-        # --- END THE FINAL, CRITICAL FIX ---
+                print(_('omnipkg {}').format(get_version()))
+            return 0
         cm = ConfigManager()
         temp_parser = argparse.ArgumentParser(add_help=False)
         temp_parser.add_argument('--lang', default=None)
-
-        # --- START THE FIX ---
-        # THE CULPRIT was: temp_args, _ = temp_parser.parse_known_args()
-        # This overwrote the i18n function `_` with a list.
-        # THE FIX is to use a different name for the remaining arguments.
         temp_args, remaining_args = temp_parser.parse_known_args()
-        # --- END THE FIX ---
-
         if temp_args.lang:
             user_lang = temp_args.lang
         else:
             user_lang = cm.config.get('language')
-
         if user_lang:
-            # This line will now work because `_` is still the i18n function.
             _.set_language(user_lang)
-
         pkg_instance = OmnipkgCore(config_manager=cm)
-
         prog_name = Path(sys.argv[0]).name
         if prog_name == '8pkg' or (len(sys.argv) > 0 and '8pkg' in sys.argv[0]):
             parser = create_8pkg_parser()
         else:
             parser = create_parser()
-
-        # The main parser now correctly parses the original full argument list.
         args = parser.parse_args()
-
         if args.command is None:
             parser.print_help()
             print(_('\n👋 Welcome back to omnipkg! Run a command or see --help for details.'))
             return 0
-        # [FIXED] Corrected logic for the 'config' command
         if args.command == 'config':
             if args.config_command == 'view':
-                print_header("omnipkg Configuration")
+                print_header('omnipkg Configuration')
                 for key, value in sorted(cm.config.items()):
-                    print(f"  - {key}: {value}")
+                    print(_('  - {}: {}').format(key, value))
                 return 0
             elif args.config_command == 'set':
                 if args.key == 'language':
@@ -358,17 +318,14 @@ def main():
                     cm.set('install_strategy', args.value)
                     print(_('✅ Install strategy permanently set to: {}').format(args.value))
                 else:
-                    # This handles any key that isn't 'language' or 'install_strategy'
                     parser.print_help()
                     return 1
-                return 0 # Success for the 'set' command
+                return 0
             elif args.config_command == 'reset':
                 if args.key == 'interpreters':
-                    print(_("Resetting managed interpreters registry..."))
+                    print(_('Resetting managed interpreters registry...'))
                     return pkg_instance.rescan_interpreters()
-                return 0 # Success for the 'reset' command
-            
-            # Fallback for any other config subcommand
+                return 0
             parser.print_help()
             return 1
         elif args.command == 'list':
@@ -394,8 +351,7 @@ def main():
                 return pkg_instance.adopt_interpreter(args.version)
             elif args.python_command == 'rescan':
                 return pkg_instance.rescan_interpreters()
-            # [NOTE] You may also need a 'switch' handler here if it's not already present
-            elif args.python_command == 'remove': # <--- CORRECTED LINE
+            elif args.python_command == 'remove':
                 return pkg_instance.remove_interpreter(args.version, force=args.yes)
             elif args.python_command == 'switch':
                 return pkg_instance.switch_active_python(args.version)
@@ -456,26 +412,22 @@ def main():
                 response = input(_('Enter your choice (1-4): ')).strip()
             except EOFError:
                 response = ''
-            
             test_file = None
             demo_name = ''
-            
             if response == '1':
                 test_file = TESTS_DIR / 'test_rich_switching.py'
                 demo_name = 'rich'
             elif response == '2':
                 test_file = TESTS_DIR / 'test_uv_switching.py'
                 demo_name = 'uv'
-            # [MODIFIED] Logic for demo option 3
             elif response == '3':
                 if not handle_python_requirement('3.11', pkg_instance, parser.prog):
-                    return 1  # Exit with error if setup fails
+                    return 1
                 test_file = DEMO_DIR / 'stress_test.py'
                 demo_name = 'numpy_scipy'
-            # [MODIFIED] Logic for demo option 4
             elif response == '4':
                 if not handle_python_requirement('3.11', pkg_instance, parser.prog):
-                    return 1  # Exit with error if setup fails
+                    return 1
                 test_file = TESTS_DIR / 'test_tensorflow_switching.py'
                 demo_name = 'tensorflow'
             elif response == '5':

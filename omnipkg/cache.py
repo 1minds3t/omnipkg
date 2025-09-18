@@ -1,57 +1,63 @@
-# omnipkg/cache.py
-
 import sqlite3
 import json
 from pathlib import Path
 
 class CacheClient:
     """An abstract base class for cache clients."""
-    def hgetall(self, key): raise NotImplementedError
-    def hset(self, key, field, value): raise NotImplementedError
-    def smembers(self, key): raise NotImplementedError
-    def sadd(self, key, value): raise NotImplementedError
-    def srem(self, key, value): raise NotImplementedError
-    def get(self, key): raise NotImplementedError
-    def set(self, key, value): raise NotImplementedError
-    def exists(self, key): raise NotImplementedError
-    def delete(self, *keys): raise NotImplementedError
-    def unlink(self, *keys): self.delete(*keys) # Alias for delete
-    def keys(self, pattern): raise NotImplementedError
-    def pipeline(self): raise NotImplementedError
-    def ping(self): raise NotImplementedError
+
+    def hgetall(self, key):
+        raise NotImplementedError
+
+    def hset(self, key, field, value):
+        raise NotImplementedError
+
+    def smembers(self, key):
+        raise NotImplementedError
+
+    def sadd(self, key, value):
+        raise NotImplementedError
+
+    def srem(self, key, value):
+        raise NotImplementedError
+
+    def get(self, key):
+        raise NotImplementedError
+
+    def set(self, key, value):
+        raise NotImplementedError
+
+    def exists(self, key):
+        raise NotImplementedError
+
+    def delete(self, *keys):
+        raise NotImplementedError
+
+    def unlink(self, *keys):
+        self.delete(*keys)
+
+    def keys(self, pattern):
+        raise NotImplementedError
+
+    def pipeline(self):
+        raise NotImplementedError
+
+    def ping(self):
+        raise NotImplementedError
 
 class SQLiteCacheClient(CacheClient):
     """A SQLite-based cache client that emulates Redis commands."""
+
     def __init__(self, db_path: Path):
         self.db_path = db_path
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        # Use a higher timeout to prevent database locked errors during concurrent access
         self.conn = sqlite3.connect(self.db_path, timeout=10, check_same_thread=False)
         self._initialize_schema()
 
     def _initialize_schema(self):
         with self.conn:
-            self.conn.execute("""
-                CREATE TABLE IF NOT EXISTS kv_store (
-                    key TEXT PRIMARY KEY,
-                    value TEXT
-                )
-            """)
-            self.conn.execute("""
-                CREATE TABLE IF NOT EXISTS hash_store (
-                    key TEXT,
-                    field TEXT,
-                    value TEXT,
-                    PRIMARY KEY (key, field)
-                )
-            """)
-            self.conn.execute("""
-                CREATE TABLE IF NOT EXISTS set_store (
-                    key TEXT,
-                    member TEXT,
-                    PRIMARY KEY (key, member)
-                )
-            """)
+            self.conn.execute('\n                CREATE TABLE IF NOT EXISTS kv_store (\n                    key TEXT PRIMARY KEY,\n                    value TEXT\n                )\n            ')
+            self.conn.execute('\n                CREATE TABLE IF NOT EXISTS hash_store (\n                    key TEXT,\n                    field TEXT,\n                    value TEXT,\n                    PRIMARY KEY (key, field)\n                )\n            ')
+            self.conn.execute('\n                CREATE TABLE IF NOT EXISTS set_store (\n                    key TEXT,\n                    member TEXT,\n                    PRIMARY KEY (key, member)\n                )\n            ')
 
     def hgetall(self, name: str):
         """
@@ -61,7 +67,7 @@ class SQLiteCacheClient(CacheClient):
         cursor = self.conn.cursor()
         data = {}
         try:
-            cursor.execute("SELECT field, value FROM hash_store WHERE key = ?", (name,))
+            cursor.execute('SELECT field, value FROM hash_store WHERE key = ?', (name,))
             rows = cursor.fetchall()
             data = {row[0]: row[1] for row in rows}
         finally:
@@ -75,31 +81,20 @@ class SQLiteCacheClient(CacheClient):
         making it compatible with the redis-py client's API.
         """
         if mapping is not None:
-            # This handles the batch update case: hset(key, mapping={...})
             if not isinstance(mapping, dict):
                 raise TypeError("The 'mapping' argument must be a dictionary.")
-            
-            # Use fast executemany for bulk inserts
             data_to_insert = [(key, str(k), str(v)) for k, v in mapping.items()]
             with self.conn:
-                self.conn.executemany(
-                    "INSERT OR REPLACE INTO hash_store (key, field, value) VALUES (?, ?, ?)",
-                    data_to_insert
-                )
+                self.conn.executemany('INSERT OR REPLACE INTO hash_store (key, field, value) VALUES (?, ?, ?)', data_to_insert)
         elif field is not None:
-            # This handles the original single update case: hset(key, field, value)
             with self.conn:
-                self.conn.execute(
-                    "INSERT OR REPLACE INTO hash_store (key, field, value) VALUES (?, ?, ?)",
-                    (key, str(field), str(value))
-                )
+                self.conn.execute('INSERT OR REPLACE INTO hash_store (key, field, value) VALUES (?, ?, ?)', (key, str(field), str(value)))
         else:
-            # Raise an error if called improperly
-            raise ValueError("hset requires either a field/value pair or a mapping")
+            raise ValueError('hset requires either a field/value pair or a mapping')
 
     def smembers(self, key):
         cur = self.conn.cursor()
-        cur.execute("SELECT member FROM set_store WHERE key = ?", (key,))
+        cur.execute('SELECT member FROM set_store WHERE key = ?', (key,))
         return {row[0] for row in cur.fetchall()}
 
     def sadd(self, name: str, *values):
@@ -108,60 +103,51 @@ class SQLiteCacheClient(CacheClient):
         multiple values at once and using the CORRECT SCHEMA.
         """
         if not values:
-            return 0  # No values to add
-        
+            return 0
         cursor = self.conn.cursor()
         added_count = 0
         try:
-            # Prepare the data for a bulk insert.
-            # We use INSERT OR IGNORE to automatically handle duplicates.
             data_to_insert = [(name, value) for value in values]
-            
-            # Use the correct column name 'member' that matches your table schema.
-            cursor.executemany("INSERT OR IGNORE INTO set_store (key, member) VALUES (?, ?)", data_to_insert)
-            
-            # The number of rows changed is the number of new items added.
+            cursor.executemany('INSERT OR IGNORE INTO set_store (key, member) VALUES (?, ?)', data_to_insert)
             added_count = cursor.rowcount
             self.conn.commit()
         except self.conn.Error as e:
-            print(f"   ⚠️  [SQLiteCache] Error in sadd: {e}")
+            print(_('   ⚠️  [SQLiteCache] Error in sadd: {}').format(e))
             self.conn.rollback()
         finally:
             cursor.close()
-        
         return added_count
 
     def srem(self, key, value):
         with self.conn:
-            self.conn.execute("DELETE FROM set_store WHERE key = ? AND member = ?", (key, value))
-    
+            self.conn.execute('DELETE FROM set_store WHERE key = ? AND member = ?', (key, value))
+
     def get(self, key):
         cur = self.conn.cursor()
-        cur.execute("SELECT value FROM kv_store WHERE key = ?", (key,))
+        cur.execute('SELECT value FROM kv_store WHERE key = ?', (key,))
         row = cur.fetchone()
         return row[0] if row else None
 
     def set(self, key, value):
-         with self.conn:
-            self.conn.execute("INSERT OR REPLACE INTO kv_store (key, value) VALUES (?, ?)", (key, value))
+        with self.conn:
+            self.conn.execute('INSERT OR REPLACE INTO kv_store (key, value) VALUES (?, ?)', (key, value))
 
     def exists(self, key):
         cur = self.conn.cursor()
-        cur.execute("SELECT 1 FROM kv_store WHERE key = ? UNION ALL SELECT 1 FROM hash_store WHERE key = ? UNION ALL SELECT 1 FROM set_store WHERE key = ? LIMIT 1", (key, key, key))
+        cur.execute('SELECT 1 FROM kv_store WHERE key = ? UNION ALL SELECT 1 FROM hash_store WHERE key = ? UNION ALL SELECT 1 FROM set_store WHERE key = ? LIMIT 1', (key, key, key))
         return cur.fetchone() is not None
 
     def delete(self, *keys):
         with self.conn:
             for key in keys:
-                self.conn.execute("DELETE FROM kv_store WHERE key = ?", (key,))
-                self.conn.execute("DELETE FROM hash_store WHERE key = ?", (key,))
-                self.conn.execute("DELETE FROM set_store WHERE key = ?", (key,))
+                self.conn.execute('DELETE FROM kv_store WHERE key = ?', (key,))
+                self.conn.execute('DELETE FROM hash_store WHERE key = ?', (key,))
+                self.conn.execute('DELETE FROM set_store WHERE key = ?', (key,))
 
     def keys(self, pattern):
-        # Basic wildcard matching for SQLite
         sql_pattern = pattern.replace('*', '%')
         cur = self.conn.cursor()
-        cur.execute("SELECT DISTINCT key FROM kv_store WHERE key LIKE ? UNION SELECT DISTINCT key FROM hash_store WHERE key LIKE ? UNION SELECT DISTINCT key FROM set_store WHERE key LIKE ?", (sql_pattern, sql_pattern, sql_pattern))
+        cur.execute('SELECT DISTINCT key FROM kv_store WHERE key LIKE ? UNION SELECT DISTINCT key FROM hash_store WHERE key LIKE ? UNION SELECT DISTINCT key FROM set_store WHERE key LIKE ?', (sql_pattern, sql_pattern, sql_pattern))
         return [row[0] for row in cur.fetchall()]
 
     def pipeline(self):
@@ -189,41 +175,29 @@ class SQLiteCacheClient(CacheClient):
 
     def hget(self, key, field):
         cur = self.conn.cursor()
-        cur.execute("SELECT value FROM hash_store WHERE key = ? AND field = ?", (key, field))
+        cur.execute('SELECT value FROM hash_store WHERE key = ? AND field = ?', (key, field))
         row = cur.fetchone()
         return row[0] if row else None
 
     def hdel(self, key, field):
         with self.conn:
-            self.conn.execute("DELETE FROM hash_store WHERE key = ? AND field = ?", (key, field))
+            self.conn.execute('DELETE FROM hash_store WHERE key = ? AND field = ?', (key, field))
 
     def scard(self, key):
         cur = self.conn.cursor()
-        cur.execute("SELECT COUNT(member) FROM set_store WHERE key = ?", (key,))
+        cur.execute('SELECT COUNT(member) FROM set_store WHERE key = ?', (key,))
         return cur.fetchone()[0]
-    
+
     def scan_iter(self, match='*', count=None):
         """
         A generator that emulates Redis's SCAN_ITER command for SQLite.
         This is crucial for making the SQLite cache a true drop-in replacement.
         """
-        # The `match` pattern in Redis uses '*' as a wildcard.
-        # The SQL `LIKE` operator uses '%' as a wildcard.
         sql_pattern = match.replace('*', '%')
-        
         cursor = self.conn.cursor()
         try:
-            # Get keys from all three tables
-            cursor.execute("""
-                SELECT DISTINCT key FROM kv_store WHERE key LIKE ?
-                UNION
-                SELECT DISTINCT key FROM hash_store WHERE key LIKE ?
-                UNION
-                SELECT DISTINCT key FROM set_store WHERE key LIKE ?
-            """, (sql_pattern, sql_pattern, sql_pattern))
-            
+            cursor.execute('\n                SELECT DISTINCT key FROM kv_store WHERE key LIKE ?\n                UNION\n                SELECT DISTINCT key FROM hash_store WHERE key LIKE ?\n                UNION\n                SELECT DISTINCT key FROM set_store WHERE key LIKE ?\n            ', (sql_pattern, sql_pattern, sql_pattern))
             keys = cursor.fetchall()
-            
             for row in keys:
                 yield row[0]
         finally:
@@ -234,16 +208,11 @@ class SQLiteCacheClient(CacheClient):
         A generator that emulates Redis's SSCAN_ITER command for SQLite.
         This iterates over members of a set stored at 'name'.
         """
-        # The `match` pattern in Redis uses '*' as a wildcard.
-        # The SQL `LIKE` operator uses '%' as a wildcard.
         sql_pattern = match.replace('*', '%')
-        
         cursor = self.conn.cursor()
         try:
-            cursor.execute("SELECT member FROM set_store WHERE key = ? AND member LIKE ?", (name, sql_pattern))
-            
+            cursor.execute('SELECT member FROM set_store WHERE key = ? AND member LIKE ?', (name, sql_pattern))
             members = cursor.fetchall()
-            
             for row in members:
                 yield row[0]
         finally:
@@ -257,7 +226,7 @@ class SQLiteCacheClient(CacheClient):
         cursor = self.conn.cursor()
         keys = []
         try:
-            cursor.execute("SELECT field FROM hash_store WHERE key = ?", (name,))
+            cursor.execute('SELECT field FROM hash_store WHERE key = ?', (name,))
             rows = cursor.fetchall()
             keys = [row[0] for row in rows]
         finally:

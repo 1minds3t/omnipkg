@@ -79,3 +79,5 @@ KEYS
 *.lock
 
 branch_diffs/
+multiverse_log.jsonl
+omnipkg-*.tar.gz
