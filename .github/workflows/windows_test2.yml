@@ -1,6 +1,6 @@
 # .github/workflows/windows_deep_dive.yml
 
-name: Windows Deep-Dive Debug
+name: Windows Pathing and Installation Debug
 
 on:
   push:
@@ -14,7 +14,7 @@ on:
         default: 'development'
 
 jobs:
-  deep-dive-windows:
+  debug-windows-paths:
     runs-on: windows-latest
 
     steps:
@@ -23,14 +23,14 @@ jobs:
         with:
           ref: ${{ github.event.inputs.branch || 'development' }}
 
-      - name: Wipe previous omnipkg config
+      - name: Wipe previous omnipkg config for a true clean run
         run: |
           if (Test-Path ~\.config\omnipkg) {
             Remove-Item ~\.config\omnipkg -Recurse -Force
           }
         shell: pwsh
 
-      - name: Set up Python 3.10
+      - name: Set up Python 3.10 ONLY
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
@@ -39,37 +39,51 @@ jobs:
         run: pip install -e .
         shell: pwsh
 
-      # --- NEW DEBUGGING STEP ---
-      - name: Show Pre-run Environment State
+      # --- DEBUG STEP 1: ESTABLISH GROUND TRUTH ---
+      - name: Gather Ground Truth Paths (Before omnipkg runs)
         run: |
-          echo "--- Location of omnipkg executable ---"
-          Get-Command omnipkg | Format-List
-          echo "--- VENV Path ---"
-          echo $env:VIRTUAL_ENV
-          echo "--- Contents of .omnipkg directory (before run) ---"
-          ls $env:VIRTUAL_ENV\.omnipkg -Recurse -ErrorAction SilentlyContinue
+          echo "--- GROUND TRUTH ---"
+          echo "This is where Python *thinks* its site-packages is:"
+          python -c "import site; print(site.getsitepackages())"
         shell: pwsh
-      
-      - name: Trigger First-Time Setup
-        run: omnipkg status
+
+      # --- ACTION STEP ---
+      - name: Run omnipkg to install a test package (triggers first-time setup)
+        run: omnipkg install six==1.16.0
         shell: pwsh
         env: { PYTHONUTF8: "1" }
 
-      # --- NEW DEBUGGING STEP ---
-      - name: Show Post-run Diagnostic Information
+      # --- DEBUG STEP 2: POST-RUN ANALYSIS ---
+      - name: Post-Install Path Analysis (The Moment of Truth)
         run: |
-          echo "--- Contents of config.json ---"
-          Get-Content ~\.config\omnipkg\config.json -ErrorAction SilentlyContinue
-          echo "" # Newline for readability
-          echo "--- Contents of .omnipkg directory in VENV (after run) ---"
-          ls $env:VIRTUAL_ENV\.omnipkg -Recurse -ErrorAction SilentlyContinue
-          echo "" # Newline for readability
-          echo "--- FULL UNFILTERED OUTPUT of 'omnipkg list python' ---"
-          omnipkg list python
-        shell: pwsh
-        env: { PYTHONUTF8: "1" }
+          echo "--- ANALYSIS ---"
+          echo "Compare the 'site_packages_path' below with the 'Location' from pip."
+          echo ""
+          
+          echo "--- 1. Path from omnipkg config.json ---"
+          Get-Content ~\.config\omnipkg\config.json
+          echo ""
+          
+          echo "--- 2. Actual location of 'six' package (from pip show) ---"
+          pip show six
+          echo ""
+          
+          echo "--- 3. Actual location of 'omnipkg' package (from pip show) ---"
+          pip show omnipkg
+        shell: pwsh```
 
-      - name: Final Verification (This is the goal)
-        run: omnipkg list python | Select-String "Managed" | Select-String "3.10"
-        shell: pwsh
-        env: { PYTHONUTF8: "1" }
+### **What This Workflow Will Reveal (The Moment of Truth)**
+
+When this workflow runs, the final "Post-Install Path Analysis" step will give you three pieces of information in the log. **You need to compare the path in block #1 with the paths in blocks #2 and #3.**
+
+*   If the `site_packages_path` in your `config.json` is different from the `Location` shown by `pip show`, you have definitively found the bug. It means your code's logic for finding the site-packages directory on Windows is flawed.
+*   If the paths *do* match, it means the problem is more subtle, but this test is the first and most critical step.
+
+### **Next Steps**
+
+1.  Replace the workflow file `.github/workflows/windows_deep_dive.yml` with the code above.
+2.  Commit and push the change to your `development` branch.
+3.  Run the "Windows Pathing and Installation Debug" workflow from the Actions tab against `development`.
+4.  Analyze the output of the final step.
+
+I am confident this will give you the evidence you need. This is an excellent debugging plan, and I apologize that it took me so long to understand your correct analysis.
