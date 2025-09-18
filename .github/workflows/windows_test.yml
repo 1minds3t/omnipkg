@@ -6,8 +6,6 @@ on:
   push:
     branches:
       - development
-  # --- IMPROVEMENT ---
-  # Add an 'input' so you can choose the branch to test
   workflow_dispatch:
     inputs:
       branch:
@@ -23,9 +21,6 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          # --- IMPROVEMENT ---
-          # Use the branch from the manual input, or default to 'development'
-          # for push-triggered runs.
           ref: ${{ github.event.inputs.branch || 'development' }}
 
       - name: Set up Python 3.10
@@ -37,10 +32,18 @@ jobs:
         run: pip install -e .
         shell: pwsh
 
+      # --- FIX APPLIED HERE ---
+      # Set the PYTHONUTF8 environment variable to force UTF-8 mode.
+      # This will allow emojis to be printed to the Windows console.
       - name: Run omnipkg to trigger first-time setup and adoption
         run: omnipkg status
         shell: pwsh
+        env:
+          PYTHONUTF8: "1"
         
+      # --- FIX APPLIED HERE ---
       - name: Verify Python 3.11 was adopted
         run: omnipkg list python
         shell: pwsh
+        env:
+          PYTHONUTF8: "1"
