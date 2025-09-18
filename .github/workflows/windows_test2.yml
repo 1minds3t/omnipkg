@@ -1,0 +1,64 @@
+# .github/workflows/windows_test.yml
+
+name: Omnipkg Core Windows Logic Test
+
+on:
+  push:
+    branches:
+      - development
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: 'The branch to test'
+        required: true
+        default: 'development'
+
+jobs:
+  core-windows-test:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.branch || 'development' }}
+
+      - name: Wipe previous omnipkg config
+        run: |
+          if (Test-Path ~\.config\omnipkg) {
+            Remove-Item ~\.config\omnipkg -Recurse -Force
+            Write-Host "Wiped previous omnipkg config for a clean run."
+          }
+        shell: pwsh
+
+      # Step 1: Start with ONLY Python 3.10
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install omnipkg
+        run: pip install -e .
+        shell: pwsh
+
+      # Step 2: Trigger First-Time Setup
+      # This will run the logic that should adopt the NATIVE Python 3.10
+      # AND download the preferred Python 3.11.
+      - name: Trigger First-Time Setup
+        run: omnipkg status
+        shell: pwsh
+        env: { PYTHONUTF8: "1" }
+
+      # Step 3: THE PROOF OF ADOPTION
+      # This is the test you correctly said we needed.
+      # We will check if both 3.10 (native) and 3.11 (downloaded)
+      # are now listed under "Managed Interpreters".
+      - name: Verify that BOTH interpreters are now managed
+        run: |
+          $output = omnipkg list python
+          Write-Host "$output"
+          $output | Select-String -Pattern "Managed Python Interpreters" -Quiet | Should -Be $true
+          $output | Select-String -Pattern "Python 3.10" -Quiet | Should -Be $true
+          $output | Select-String -Pattern "Python 3.11" -Quiet | Should -Be $true
+        shell: pwsh
+        env: { PYTHONUTF8: "1" }
