@@ -1,6 +1,6 @@
-# .github/workflows/windows_deep_dive.yml
+# .github/workflows/windows_pathing_truth.yml
 
-name: Windows Pathing and Installation Debug
+name: Windows Ground Truth Pathing Test
 
 on:
   push:
@@ -14,7 +14,7 @@ on:
         default: 'development'
 
 jobs:
-  debug-windows-paths:
+  find-windows-path-truth:
     runs-on: windows-latest
 
     steps:
@@ -30,60 +30,49 @@ jobs:
           }
         shell: pwsh
 
-      - name: Set up Python 3.10 ONLY
+      - name: Set up Python 3.10
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
 
-      - name: Install omnipkg
+      - name: Install omnipkg (and its dependencies)
         run: pip install -e .
         shell: pwsh
 
-      # --- DEBUG STEP 1: ESTABLISH GROUND TRUTH ---
-      - name: Gather Ground Truth Paths (Before omnipkg runs)
+      # --- STEP 1: FIND THE GROUND TRUTH ---
+      # As you said, we find a dependency and ask pip where it is.
+      - name: Find Ground Truth - Location of 'packaging' dependency
+        id: ground_truth # Give this step an ID to reference its output
         run: |
-          echo "--- GROUND TRUTH ---"
-          echo "This is where Python *thinks* its site-packages is:"
-          python -c "import site; print(site.getsitepackages())"
+          echo "--- Finding location of a core dependency (packaging)... ---"
+          $location = (pip show packaging | Select-String -Pattern "Location:").Line.Split(' ')[1]
+          echo "GROUND_TRUTH_PATH=$location" >> $env:GITHUB_OUTPUT
+          echo "Pip says the real site-packages path is: $location"
         shell: pwsh
 
-      # --- ACTION STEP ---
-      - name: Run omnipkg to install a test package (triggers first-time setup)
-        run: omnipkg install six==1.16.0
+      # --- STEP 2: RUN OMNIPKG TO GENERATE ITS CONFIG ---
+      - name: Run omnipkg to trigger config creation
+        run: omnipkg status
         shell: pwsh
         env: { PYTHONUTF8: "1" }
 
-      # --- DEBUG STEP 2: POST-RUN ANALYSIS ---
-      - name: Post-Install Path Analysis (The Moment of Truth)
+      # --- STEP 3: COMPARE TRUTH VS. OMNIPKG'S GUESS ---
+      # This is the moment of truth. We compare the real path to the one in the config.
+      - name: Compare Ground Truth Path with omnipkg Config Path
         run: |
-          echo "--- ANALYSIS ---"
-          echo "Compare the 'site_packages_path' below with the 'Location' from pip."
-          echo ""
+          echo "--- The Moment of Truth ---"
+          $groundTruth = "${{ steps.ground_truth.outputs.GROUND_TRUTH_PATH }}"
+          $config = Get-Content ~\.config\omnipkg\config.json | ConvertFrom-Json
+          # This next line robustly gets the site_packages_path regardless of the random environment ID
+          $omnipkgPath = $config.environments.psobject.properties[0].Value.site_packages_path
           
-          echo "--- 1. Path from omnipkg config.json ---"
-          Get-Content ~\.config\omnipkg\config.json
-          echo ""
+          echo "Ground Truth Path (from pip): $groundTruth"
+          echo "omnipkg Config Path (from json): $omnipkgPath"
           
-          echo "--- 2. Actual location of 'six' package (from pip show) ---"
-          pip show six
-          echo ""
-          
-          echo "--- 3. Actual location of 'omnipkg' package (from pip show) ---"
-          pip show omnipkg
-        shell: pwsh```
-
-### **What This Workflow Will Reveal (The Moment of Truth)**
-
-When this workflow runs, the final "Post-Install Path Analysis" step will give you three pieces of information in the log. **You need to compare the path in block #1 with the paths in blocks #2 and #3.**
-
-*   If the `site_packages_path` in your `config.json` is different from the `Location` shown by `pip show`, you have definitively found the bug. It means your code's logic for finding the site-packages directory on Windows is flawed.
-*   If the paths *do* match, it means the problem is more subtle, but this test is the first and most critical step.
-
-### **Next Steps**
-
-1.  Replace the workflow file `.github/workflows/windows_deep_dive.yml` with the code above.
-2.  Commit and push the change to your `development` branch.
-3.  Run the "Windows Pathing and Installation Debug" workflow from the Actions tab against `development`.
-4.  Analyze the output of the final step.
-
-I am confident this will give you the evidence you need. This is an excellent debugging plan, and I apologize that it took me so long to understand your correct analysis.
+          if ($groundTruth -ne $omnipkgPath) {
+            echo "BUG CONFIRMED: The paths do NOT match."
+            exit 1
+          } else {
+            echo "SUCCESS: The paths match. The bug is elsewhere."
+          }
+        shell: pwsh
