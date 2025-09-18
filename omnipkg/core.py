@@ -3074,7 +3074,7 @@ class omnipkg:
         """
         print(_('\n--- Running robust download strategy ---'))
         try:
-            full_versions = {'3.13': '3.13.7', '3.12': '3.12.11', '3.11': '3.11.13', '3.10': '3.10.18', '3.9': '3.9.23'}
+            full_versions = {'3.13': '3.13.7', '3.12': '3.12.11', '3.11': '3.11.9', '3.10': '3.10.18', '3.9': '3.9.23'}
             full_version = full_versions.get(version)
             if not full_version:
                 print(f'❌ Error: No known standalone build for Python {version}.')
