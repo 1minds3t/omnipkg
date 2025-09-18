@@ -1,6 +1,6 @@
 # .github/workflows/windows_test.yml
 
-name: Omnipkg Windows Compatibility Test
+name: Omnipkg Full Lifecycle Test (Windows)
 
 on:
   push:
@@ -14,7 +14,7 @@ on:
         default: 'development'
 
 jobs:
-  test-windows:
+  full-lifecycle-test-windows:
     runs-on: windows-latest
 
     steps:
@@ -23,7 +23,15 @@ jobs:
         with:
           ref: ${{ github.event.inputs.branch || 'development' }}
 
-      - name: Set up Python 3.10
+      # Step 1: Set up the test environment.
+      # We install Python 3.11 first so it exists on the system.
+      # Then we install 3.10, which makes it the default python/pip for the shell.
+      # This creates the perfect scenario to test the 'adopt' command.
+      - name: Set up Python 3.11 (for adopting)
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Set up Python 3.10 (as the starting version)
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
@@ -32,18 +40,37 @@ jobs:
         run: pip install -e .
         shell: pwsh
 
-      # --- FIX APPLIED HERE ---
-      # Set the PYTHONUTF8 environment variable to force UTF-8 mode.
-      # This will allow emojis to be printed to the Windows console.
-      - name: Run omnipkg to trigger first-time setup and adoption
-        run: omnipkg status
+      # Step 2: Test if omnipkg can adopt a discovered interpreter.
+      # This is your first requirement: test `omnipkg python adopt 3.11`.
+      - name: Adopt the existing Python 3.11 interpreter
+        run: omnipkg python adopt 3.11
+        shell: pwsh
+        env:
+          PYTHONUTF8: "1"
+
+      # Step 3: Test if omnipkg can swap to the newly adopted interpreter.
+      # This is your second requirement: test `omnipkg swap python 3.11`.
+      - name: Swap the active context to Python 3.11
+        run: omnipkg swap python 3.11
         shell: pwsh
         env:
           PYTHONUTF8: "1"
         
-      # --- FIX APPLIED HERE ---
-      - name: Verify Python 3.11 was adopted
-        run: omnipkg list python
+      # Step 4: Test package installation AFTER swapping.
+      # This is your third requirement: confirm omnipkg still works.
+      # We use 'six' as a small, simple test package.
+      - name: Install a package in the new 3.11 context
+        run: omnipkg install six==1.16.0
+        shell: pwsh
+        env:
+          PYTHONUTF8: "1"
+
+      # Step 5: Verify the knowledge base was updated correctly.
+      # This is your final requirement: check if the cache was updated.
+      # We check the output of 'info' for the correct version. If it's not
+      # there, the `Select-String` (grep) will fail, failing the workflow.
+      - name: Verify package info is in the knowledge base
+        run: omnipkg info six | Select-String -Pattern "1.16.0"
         shell: pwsh
         env:
           PYTHONUTF8: "1"
