@@ -2,56 +2,45 @@
 
 name: Omnipkg Windows Compatibility Test
 
-# This workflow runs on every push to the 'development' branch.
-# It also allows for manual runs from the GitHub Actions tab (workflow_dispatch).
 on:
   push:
     branches:
       - development
+  # --- IMPROVEMENT ---
+  # Add an 'input' so you can choose the branch to test
   workflow_dispatch:
+    inputs:
+      branch:
+        description: 'The branch to test'
+        required: true
+        default: 'development'
 
 jobs:
   test-windows:
-    # Use the latest available Windows runner environment.
     runs-on: windows-latest
 
     steps:
-      # Step 1: Check out the code from the 'development' branch.
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          ref: development
+          # --- IMPROVEMENT ---
+          # Use the branch from the manual input, or default to 'development'
+          # for push-triggered runs.
+          ref: ${{ github.event.inputs.branch || 'development' }}
 
-      # Step 2: Set up a non-3.11 Python environment.
-      # This is crucial to force omnipkg to run its first-time setup and
-      # attempt to "adopt" the required Python 3.11 interpreter,
-      # which is the process that was failing. We'll use Python 3.10.
       - name: Set up Python 3.10
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
 
-      # Step 3: Install the omnipkg package from the local source code.
-      # The '-e' flag installs it in "editable" mode, so the workflow
-      # uses the code from your development branch, including your potential fixes.
       - name: Install omnipkg in editable mode
-        run: |
-          pip install -e .
+        run: pip install -e .
         shell: pwsh
 
-      # Step 4: Run a basic omnipkg command to trigger the first-time setup.
-      # This is the main test. The output of this step will show whether the
-      # interpreter adoption, symlinking (or junction creation), and database
-      # initialization now work correctly on Windows.
       - name: Run omnipkg to trigger first-time setup and adoption
-        run: |
-          omnipkg status
+        run: omnipkg status
         shell: pwsh
         
-      # Step 5: Verify that the required Python 3.11 was successfully installed and registered.
-      # This command checks if omnipkg now recognizes the new 3.11 interpreter,
-      # confirming that the adoption process was successful.
       - name: Verify Python 3.11 was adopted
-        run: |
-          omnipkg list python
+        run: omnipkg list python
         shell: pwsh
