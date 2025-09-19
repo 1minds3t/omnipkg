@@ -1,3 +1,4 @@
+from .common_utils import safe_print
 """
 omnipkg_metadata_builder.py - v11 - The "Multi-Version Complete" Edition
 A fully integrated, self-aware metadata gatherer with complete multi-version
@@ -26,15 +27,12 @@ try:
     HAS_TQDM = True
 except ImportError:
     HAS_TQDM = False
-        
 try:
     import redis
     REDIS_AVAILABLE = True
 except ImportError:
     redis = None
     REDIS_AVAILABLE = False
-
-  
 
 def get_python_version():
     """Get current Python version in X.Y format"""
@@ -65,7 +63,8 @@ def get_bin_paths():
     return paths
 
 class omnipkgMetadataGatherer:
-    def __init__(self, config: Dict, env_id: str, force_refresh: bool = False, omnipkg_instance=None, target_context_version: Optional[str] = None):
+
+    def __init__(self, config: Dict, env_id: str, force_refresh: bool=False, omnipkg_instance=None, target_context_version: Optional[str]=None):
         self.cache_client = None
         self.omnipkg_instance = omnipkg_instance
         self.cache_client = self.omnipkg_instance.cache_client if self.omnipkg_instance else None
@@ -73,17 +72,12 @@ class omnipkgMetadataGatherer:
         self.security_report = {}
         self.target_context_version = target_context_version
         self.config = config
-
-        # --- CORE FIX: Prioritize the override ENV VAR to get the correct ID ---
-        # This ensures this class instance uses the env_id passed from the parent.
         self.env_id = os.environ.get('OMNIPKG_ENV_ID_OVERRIDE', env_id)
-        # --- END CORE FIX ---
-
         self.package_path_registry = {}
         if self.force_refresh:
-            print(_('🟢 --force flag detected. Caching will be ignored.'))
+            safe_print(_('🟢 --force flag detected. Caching will be ignored.'))
         if not HAS_TQDM:
-            print(_("⚠️ Install 'tqdm' for a better progress bar."))
+            safe_print(_("⚠️ Install 'tqdm' for a better progress bar."))
 
     @property
     def redis_key_prefix(self) -> str:
@@ -99,7 +93,7 @@ class omnipkgMetadataGatherer:
             py_ver_str = f'py{match.group(1)}'
         else:
             try:
-                result = subprocess.run([python_exe_path, '-c', "import sys; print(f'py{sys.version_info.major}.{sys.version_info.minor}')"], capture_output=True, text=True, check=True, timeout=2)
+                result = subprocess.run([python_exe_path, '-c', "import sys; safe_print(f'py{sys.version_info.major}.{sys.version_info.minor}')"], capture_output=True, text=True, check=True, timeout=2)
                 py_ver_str = result.stdout.strip()
             except Exception:
                 py_ver_str = f'py{sys.version_info.major}.{sys.version_info.minor}'
@@ -113,60 +107,29 @@ class omnipkgMetadataGatherer:
         Generates comprehensive package name variants to handle ALL Python packaging
         naming conventions including dots, hyphens, underscores.
         """
-        # Using a set automatically handles duplicates
-        variants = {
-            name,
-            canonicalize_name(name),
-            name.replace('-', '_'),
-            name.replace('_', '-'),
-            name.replace('-', '.'),  # Handle ruamel-yaml -> ruamel.yaml
-            name.replace('.', '-'),  # Handle ruamel.yaml -> ruamel-yaml
-            name.replace('_', '.'),  # Handle ruamel_yaml -> ruamel.yaml
-            name.replace('.', '_'),  # Handle ruamel.yaml -> ruamel_yaml
-            name.lower(),
-            name.upper(),
-        }
-        
-        # Add variants with common prefixes/suffixes removed
+        variants = {name, canonicalize_name(name), name.replace('-', '_'), name.replace('_', '-'), name.replace('-', '.'), name.replace('.', '-'), name.replace('_', '.'), name.replace('.', '_'), name.lower(), name.upper()}
         clean_name = name.lower()
         if clean_name.startswith('python-'):
             base = clean_name[7:]
-            variants.update({
-                base, base.replace('-', '_'), base.replace('-', '.'), 
-                base.replace('_', '.'), base.replace('_', '-')
-            })
+            variants.update({base, base.replace('-', '_'), base.replace('-', '.'), base.replace('_', '.'), base.replace('_', '-')})
         if clean_name.startswith('py-'):
             base = clean_name[3:]
-            variants.update({
-                base, base.replace('-', '_'), base.replace('-', '.'),
-                base.replace('_', '.'), base.replace('_', '-')
-            })
+            variants.update({base, base.replace('-', '_'), base.replace('-', '.'), base.replace('_', '.'), base.replace('_', '-')})
         if clean_name.endswith('-python'):
             base = clean_name[:-7]
-            variants.update({
-                base, base.replace('-', '_'), base.replace('-', '.'),
-                base.replace('_', '.'), base.replace('_', '-')
-            })
-        
+            variants.update({base, base.replace('-', '_'), base.replace('-', '.'), base.replace('_', '.'), base.replace('_', '-')})
         return list(variants)
-    
+
     def _is_known_subcomponent(self, dist_info_path: Path) -> bool:
         """Check if this dist-info belongs to a sub-component that shouldn't be treated independently."""
         name = dist_info_path.name
-        
-        # Known sub-components that are part of larger packages
-        subcomponent_patterns = [
-            'tensorboard_data_server-',
-            'tensorboard_plugin_',
-        ]
-        
+        subcomponent_patterns = ['tensorboard_data_server-', 'tensorboard_plugin_']
         for pattern in subcomponent_patterns:
             if name.startswith(pattern):
                 return True
-        
         return False
 
-    def _discover_distributions(self, targeted_packages: Optional[List[str]], verbose: bool = False) -> List[importlib.metadata.Distribution]:
+    def _discover_distributions(self, targeted_packages: Optional[List[str]], verbose: bool=False) -> List[importlib.metadata.Distribution]:
         """
         FIXED DISCOVERY V7: Now properly handles nested directory structures 
         where dist-info is inside package version directories.
@@ -177,11 +140,10 @@ class omnipkgMetadataGatherer:
         """
         if targeted_packages:
             if verbose:
-                print(f'🎯 Running in targeted mode for {len(targeted_packages)} package(s).')
+                safe_print(f'🎯 Running in targeted mode for {len(targeted_packages)} package(s).')
             discovered_dists = []
             site_packages = Path(self.config.get('site_packages_path', '/dev/null'))
             multiversion_base = Path(self.config.get('multiversion_base', '/dev/null'))
-            
             for spec in targeted_packages:
                 try:
                     if '==' in spec:
@@ -189,276 +151,171 @@ class omnipkgMetadataGatherer:
                     else:
                         name = spec
                         version = None
-                    
                     found_dist = None
                     name_variants = self._get_package_name_variants(name)
-                    
                     if verbose:
-                        print(f"   🔍 Searching for '{spec}' with variants: {name_variants}")
-                    
-                    # Search all relevant paths
+                        safe_print(f"   🔍 Searching for '{spec}' with variants: {name_variants}")
                     for base_path in [p for p in [site_packages, multiversion_base] if p and p.is_dir()]:
                         if verbose:
-                            print(f"      -> Searching in: {base_path}")
-
-                        # Strategy 0: VENDORED PACKAGE SEARCH
+                            safe_print(_('      -> Searching in: {}').format(base_path))
                         if verbose:
-                            print(f"      -> Strategy 0: Checking for vendored packages...")
+                            safe_print(f'      -> Strategy 0: Checking for vendored packages...')
                         vendored_dist_infos = list(base_path.rglob('*/_vendor/*.dist-info'))
                         if verbose:
-                            print(f"         Found {len(vendored_dist_infos)} vendored dist-info directories")
-                        
+                            safe_print(_('         Found {} vendored dist-info directories').format(len(vendored_dist_infos)))
                         for vendor_dist_info in vendored_dist_infos:
                             if not vendor_dist_info.is_dir():
                                 continue
-                            
                             try:
                                 dist = importlib.metadata.Distribution.at(vendor_dist_info)
                                 dist_name = dist.metadata.get('Name', '')
-                                
-                                # Check if this vendored package matches what we're looking for
-                                name_matches = any(
-                                    canonicalize_name(dist_name) == canonicalize_name(variant) or
-                                    dist_name.lower() == variant.lower() or
-                                    dist_name.replace('.', '-').lower() == variant.replace('.', '-').lower() or
-                                    dist_name.replace('-', '.').lower() == variant.replace('-', '.').lower()
-                                    for variant in name_variants
-                                )
-                                
+                                name_matches = any((canonicalize_name(dist_name) == canonicalize_name(variant) or dist_name.lower() == variant.lower() or dist_name.replace('.', '-').lower() == variant.replace('.', '-').lower() or (dist_name.replace('-', '.').lower() == variant.replace('-', '.').lower()) for variant in name_variants))
                                 if name_matches:
                                     if version is None or dist.version == version:
-                                        # Extract the parent package name for reporting
                                         vendor_parent = str(vendor_dist_info).split('/_vendor/')[0].split('/')[-1]
                                         found_dist = dist
-                                        print(f'✅ Found VENDORED {dist_name} v{dist.version} (inside {vendor_parent}) at {vendor_dist_info}')
+                                        safe_print(_('✅ Found VENDORED {} v{} (inside {}) at {}').format(dist_name, dist.version, vendor_parent, vendor_dist_info))
                                         break
                                     elif verbose:
                                         vendor_parent = str(vendor_dist_info).split('/_vendor/')[0].split('/')[-1]
-                                        print(f'         ⚠️  Found VENDORED {dist_name} v{dist.version} (inside {vendor_parent}) but need v{version}')
-                                        
+                                        safe_print(_('         ⚠️  Found VENDORED {} v{} (inside {}) but need v{}').format(dist_name, dist.version, vendor_parent, version))
                             except Exception as e:
                                 if verbose:
-                                    print(f'         ❌ Error reading vendored {vendor_dist_info}: {e}')
+                                    safe_print(_('         ❌ Error reading vendored {}: {}').format(vendor_dist_info, e))
                                 continue
-                        
-                        # If we found it in vendored packages, we're done with this base_path
                         if found_dist:
                             break
-
-                        # Strategy 1: Direct dist-info pattern matching (flat structure)
                         for variant in name_variants:
                             if version:
-                                # Looking for specific version - be more flexible with patterns
-                                patterns = [
-                                    f'{variant}-{version}.dist-info',
-                                    f'{variant}-{version}-*.dist-info',  # Handle build tags
-                                    f'{variant.replace(".", "_")}-{version}.dist-info',  # Canonical form
-                                    f'{variant.replace(".", "_")}-{version}-*.dist-info',
-                                ]
+                                patterns = [f'{variant}-{version}.dist-info', f'{variant}-{version}-*.dist-info', f"{variant.replace('.', '_')}-{version}.dist-info", f"{variant.replace('.', '_')}-{version}-*.dist-info"]
                             else:
-                                # Looking for any version
-                                patterns = [
-                                    f'{variant}-*.dist-info',
-                                    f'{variant.replace(".", "_")}-*.dist-info',
-                                ]
-                            
+                                patterns = [f'{variant}-*.dist-info', f"{variant.replace('.', '_')}-*.dist-info"]
                             for pattern in patterns:
                                 matching_paths = list(base_path.glob(pattern))
                                 if verbose:
-                                    print(f"         Pattern '{pattern}' found: {len(matching_paths)} matches")
-                                
+                                    safe_print(_("         Pattern '{}' found: {} matches").format(pattern, len(matching_paths)))
                                 for dist_info_path in matching_paths:
                                     if not dist_info_path.is_dir():
                                         continue
-                                        
                                     try:
                                         dist = importlib.metadata.Distribution.at(dist_info_path)
                                         dist_name = dist.metadata.get('Name', '')
-                                        
-                                        # More flexible name matching
-                                        if (canonicalize_name(dist_name) == canonicalize_name(name) or
-                                            dist_name.lower() == name.lower() or
-                                            dist_name.replace('.', '-').lower() == name.replace('.', '-').lower() or
-                                            dist_name.replace('-', '.').lower() == name.replace('-', '.').lower()):
-                                            
+                                        if canonicalize_name(dist_name) == canonicalize_name(name) or dist_name.lower() == name.lower() or dist_name.replace('.', '-').lower() == name.replace('.', '-').lower() or (dist_name.replace('-', '.').lower() == name.replace('-', '.').lower()):
                                             if version is None or dist.version == version:
                                                 found_dist = dist
-                                                print(f'✅ Found {dist_name} v{dist.version} at {dist_info_path}')
+                                                safe_print(_('✅ Found {} v{} at {}').format(dist_name, dist.version, dist_info_path))
                                                 break
                                             elif verbose:
-                                                print(f'         ⚠️  Found {dist_name} v{dist.version} but need v{version}')
+                                                safe_print(_('         ⚠️  Found {} v{} but need v{}').format(dist_name, dist.version, version))
                                         elif verbose:
-                                            print(f'         ❌ Name mismatch: found "{dist_name}", looking for "{name}"')
-                                            
+                                            safe_print(f'         ❌ Name mismatch: found "{dist_name}", looking for "{name}"')
                                     except Exception as e:
                                         if verbose:
-                                            print(f'         ❌ Error reading {dist_info_path}: {e}')
+                                            safe_print(_('         ❌ Error reading {}: {}').format(dist_info_path, e))
                                         continue
-                                
                                 if found_dist:
                                     break
-                            
                             if found_dist:
                                 break
-                        
-                        # Strategy 2: NESTED SEARCH - look inside subdirectories for dist-info
                         if not found_dist:
                             if verbose:
-                                print(f"      -> Searching nested directories for dist-info...")
-                            
-                            # Look for directories that might contain our package
+                                safe_print(f'      -> Searching nested directories for dist-info...')
                             for variant in name_variants:
                                 if version:
-                                    # Look for directories like: uv-0.8.16/ inside multiversion_base
-                                    nested_dir_patterns = [
-                                        f'{variant}-{version}',
-                                        f'{variant.replace(".", "_")}-{version}',
-                                    ]
+                                    nested_dir_patterns = [f'{variant}-{version}', f"{variant.replace('.', '_')}-{version}"]
                                 else:
-                                    # Look for any version directories
-                                    nested_dir_patterns = [
-                                        f'{variant}-*',
-                                        f'{variant.replace(".", "_")}-*',
-                                    ]
-                                
+                                    nested_dir_patterns = [f'{variant}-*', f"{variant.replace('.', '_')}-*"]
                                 for pattern in nested_dir_patterns:
                                     matching_dirs = list(base_path.glob(pattern))
                                     if verbose:
-                                        print(f"         Nested dir pattern '{pattern}' found: {len(matching_dirs)} directories")
-                                    
+                                        safe_print(_("         Nested dir pattern '{}' found: {} directories").format(pattern, len(matching_dirs)))
                                     for nested_dir in matching_dirs:
                                         if not nested_dir.is_dir():
                                             continue
-                                        
-                                        # Now look for dist-info inside this directory
                                         dist_info_pattern = '*.dist-info'
                                         dist_infos = list(nested_dir.glob(dist_info_pattern))
-                                        
                                         for dist_info_path in dist_infos:
                                             if not dist_info_path.is_dir():
                                                 continue
-                                            
                                             try:
                                                 dist = importlib.metadata.Distribution.at(dist_info_path)
                                                 dist_name = dist.metadata.get('Name', '')
-                                                
-                                                # Check if this matches what we're looking for
-                                                name_matches = any(
-                                                    canonicalize_name(dist_name) == canonicalize_name(v) 
-                                                    for v in name_variants
-                                                )
-                                                
+                                                name_matches = any((canonicalize_name(dist_name) == canonicalize_name(v) for v in name_variants))
                                                 if name_matches:
                                                     if version is None or dist.version == version:
                                                         found_dist = dist
-                                                        print(f'✅ Found nested {dist_name} v{dist.version} at {dist_info_path}')
+                                                        safe_print(_('✅ Found nested {} v{} at {}').format(dist_name, dist.version, dist_info_path))
                                                         break
                                                     elif verbose:
-                                                        print(f'         ⚠️  Found nested {dist_name} v{dist.version} but need v{version}')
-                                                        
+                                                        safe_print(_('         ⚠️  Found nested {} v{} but need v{}').format(dist_name, dist.version, version))
                                             except Exception as e:
                                                 if verbose:
-                                                    print(f'         ❌ Error reading nested {dist_info_path}: {e}')
+                                                    safe_print(_('         ❌ Error reading nested {}: {}').format(dist_info_path, e))
                                                 continue
-                                        
                                         if found_dist:
                                             break
-                                    
                                     if found_dist:
                                         break
-                                
                                 if found_dist:
                                     break
-                        
-                        # Strategy 3: Fallback - scan ALL dist-info directories in path AND subdirectories
                         if not found_dist:
                             if verbose:
-                                print(f"      -> Fallback: scanning all .dist-info directories...")
-                            
-                            # First try direct children
+                                safe_print(f'      -> Fallback: scanning all .dist-info directories...')
                             all_dist_infos = list(base_path.glob('*.dist-info'))
-                            
-                            # Then try nested (one level deep)
                             all_dist_infos.extend(list(base_path.glob('*/*.dist-info')))
-                            
                             if verbose:
-                                print(f"         Found {len(all_dist_infos)} dist-info directories to check")
-                            
+                                safe_print(_('         Found {} dist-info directories to check').format(len(all_dist_infos)))
                             for dist_info_path in all_dist_infos:
                                 if not dist_info_path.is_dir():
                                     continue
-                                
                                 try:
                                     dist = importlib.metadata.Distribution.at(dist_info_path)
                                     dist_name = dist.metadata.get('Name', '')
-                                    
-                                    # Check if this matches what we're looking for
-                                    name_matches = any(
-                                        canonicalize_name(dist_name) == canonicalize_name(variant)
-                                        for variant in name_variants
-                                    )
-                                    
+                                    name_matches = any((canonicalize_name(dist_name) == canonicalize_name(variant) for variant in name_variants))
                                     if name_matches:
                                         if version is None or dist.version == version:
                                             found_dist = dist
-                                            print(f'✅ Fallback found {dist_name} v{dist.version} at {dist_info_path}')
+                                            safe_print(_('✅ Fallback found {} v{} at {}').format(dist_name, dist.version, dist_info_path))
                                             break
                                         elif verbose:
-                                            print(f'         ⚠️  Fallback found {dist_name} v{dist.version} but need v{version}')
-                                            
+                                            safe_print(_('         ⚠️  Fallback found {} v{} but need v{}').format(dist_name, dist.version, version))
                                 except Exception as e:
                                     continue
-                        
                         if found_dist:
                             break
-                    
                     if found_dist:
                         discovered_dists.append(found_dist)
                         if verbose:
                             if version:
-                                print(f'   -> Found distribution for {name}=={version}')
+                                safe_print(f'   -> Found distribution for {name}=={version}')
                             else:
-                                print(f'   -> Found distribution for {name} v{found_dist.version}')
+                                safe_print(f'   -> Found distribution for {name} v{found_dist.version}')
+                    elif version:
+                        safe_print(_("❌ Could not find distribution matching '{}=={}'").format(name, version))
+                        if verbose:
+                            safe_print(_('   💡 Available variants tried: {}').format(name_variants))
                     else:
-                        # Only show failure message - this is important info
-                        if version:
-                            print(f"❌ Could not find distribution matching '{name}=={version}'")
-                            if verbose:
-                                print(f"   💡 Available variants tried: {name_variants}")
-                        else:
-                            print(f"❌ Could not find distribution matching '{name}'")
-                            
+                        safe_print(_("❌ Could not find distribution matching '{}'").format(name))
                 except ValueError as e:
-                    print(f"❌ Could not parse spec '{spec}': {e}")
-                    
+                    safe_print(_("❌ Could not parse spec '{}': {}").format(spec, e))
             return discovered_dists
-        
-        # Full scan logic - also needs to handle nested structure
         if verbose:
-            print('🔍 Discovering all packages from file system (ground truth)...')
+            safe_print('🔍 Discovering all packages from file system (ground truth)...')
         search_paths = []
         site_packages_path = self.config.get('site_packages_path')
         if site_packages_path and Path(site_packages_path).is_dir():
             search_paths.append(site_packages_path)
-        
         multiversion_base_path = self.config.get('multiversion_base')
         if multiversion_base_path and Path(multiversion_base_path).is_dir():
-            # For full scan, we need to handle nested structure too
             base_path = Path(multiversion_base_path)
-            
-            # Add direct dist-info directories
             search_paths.append(str(base_path))
-            
-            # Add nested directories that contain dist-info
             for subdir in base_path.iterdir():
                 if subdir.is_dir():
-                    # Check if this subdirectory contains any dist-info directories
                     if list(subdir.glob('*.dist-info')):
                         search_paths.append(str(subdir))
-        
         dists = list(importlib.metadata.distributions(path=search_paths))
         if verbose:
-            print(_('✅ Discovery complete. Found {} total package versions to process.').format(len(dists)))
+            safe_print(_('✅ Discovery complete. Found {} total package versions to process.').format(len(dists)))
         return dists
 
     def _is_bubbled(self, dist: importlib.metadata.Distribution) -> bool:
@@ -470,7 +327,7 @@ class omnipkgMetadataGatherer:
         Authoritatively discovers all active and bubbled packages from the file system,
         and cleans up any "ghost" entries from the Redis index that no longer exist.
         """
-        print(_('🔍 Discovering all packages from file system (ground truth)...'))
+        safe_print(_('🔍 Discovering all packages from file system (ground truth)...'))
         from packaging.utils import canonicalize_name
         found_on_disk = {}
         active_packages = {}
@@ -484,7 +341,7 @@ class omnipkgMetadataGatherer:
                 found_on_disk[pkg_name].add(dist.version)
                 active_packages[pkg_name] = dist.version
         except Exception as e:
-            print(_('⚠️ Error discovering active packages: {}').format(e))
+            safe_print(_('⚠️ Error discovering active packages: {}').format(e))
         multiversion_base_path = Path(self.config['multiversion_base'])
         if multiversion_base_path.is_dir():
             for bubble_dir in multiversion_base_path.iterdir():
@@ -501,13 +358,13 @@ class omnipkgMetadataGatherer:
                         found_on_disk[pkg_name].add(dist.version)
                     except Exception:
                         continue
-        print(_('    -> Reconciling file system state with Redis knowledge base...'))
+        safe_print(_('    -> Reconciling file system state with Redis knowledge base...'))
         self._store_active_versions(active_packages)
         result_list = []
         for pkg_name, versions_set in found_on_disk.items():
             for version_str in versions_set:
                 result_list.append((pkg_name, version_str))
-        print(_('✅ Discovery complete. Found {} unique packages with {} total versions to process.').format(len(found_on_disk), len(result_list)))
+        safe_print(_('✅ Discovery complete. Found {} unique packages with {} total versions to process.').format(len(found_on_disk), len(result_list)))
         return sorted(result_list, key=lambda x: x[0])
 
     def _register_bubble_path(self, pkg_name: str, version: str, bubble_path: Path):
@@ -526,84 +383,65 @@ class omnipkgMetadataGatherer:
             try:
                 self.cache_client.hset(main_key, 'active_version', version)
             except Exception as e:
-                print(_('⚠️ Failed to store active version for {}: {}').format(pkg_name, e))
+                safe_print(_('⚠️ Failed to store active version for {}: {}').format(pkg_name, e))
 
     def _perform_security_scan(self, packages: Dict[str, str]):
         """
         Runs a security check using a dedicated, isolated 'safety' tool bubble,
         created on-demand by the bubble_manager to guarantee isolation.
         """
-        print(f'🛡️ Performing security scan for {len(packages)} active package(s) using isolated tool...')
-        
+        safe_print(f'🛡️ Performing security scan for {len(packages)} active package(s) using isolated tool...')
         if not packages:
-            print(_(' - No active packages found to scan.'))
+            safe_print(_(' - No active packages found to scan.'))
             self.security_report = {}
             return
-
         if not self.omnipkg_instance:
-            print(" ⚠️ Cannot run security scan: omnipkg_instance not available to builder.")
+            safe_print(_(' ⚠️ Cannot run security scan: omnipkg_instance not available to builder.'))
             self.security_report = {}
             return
-
-        TOOL_SPEC = "safety==3.6.0"
+        TOOL_SPEC = 'safety==3.6.0'
         TOOL_NAME, TOOL_VERSION = TOOL_SPEC.split('==')
-
         try:
-            bubble_path = self.omnipkg_instance.multiversion_base / f"{TOOL_NAME}-{TOOL_VERSION}"
-            
-            # Check for the physical directory. If it's not there, we build it.
+            bubble_path = self.omnipkg_instance.multiversion_base / f'{TOOL_NAME}-{TOOL_VERSION}'
             if not bubble_path.is_dir():
-                print(f" 💡 First-time setup: Creating isolated bubble for '{TOOL_SPEC}' tool...")
-                # Use the dedicated bubble creation method, NOT smart_install
+                safe_print(f" 💡 First-time setup: Creating isolated bubble for '{TOOL_SPEC}' tool...")
                 success = self.omnipkg_instance.bubble_manager.create_isolated_bubble(TOOL_NAME, TOOL_VERSION)
                 if not success:
-                    print(f" ❌ Failed to create the tool bubble for {TOOL_SPEC}. Skipping scan.")
+                    safe_print(f' ❌ Failed to create the tool bubble for {TOOL_SPEC}. Skipping scan.')
                     self.security_report = {}
                     return
-                print(f" ✅ Successfully created tool bubble.")
-            
-            # Create requirements file
+                safe_print(_(' ✅ Successfully created tool bubble.'))
             with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.txt') as reqs_file:
                 reqs_file_path = reqs_file.name
                 for name, version in packages.items():
                     reqs_file.write(f'{name}=={version}\n')
-
-            print(f" 🌀 Force-activating '{TOOL_SPEC}' context to run scan...")
-            # The loader will now find the bubble that was just created.
+            safe_print(_(" 🌀 Force-activating '{}' context to run scan...").format(TOOL_SPEC))
             with omnipkgLoader(TOOL_SPEC, config=self.omnipkg_instance.config, force_activation=True, quiet=True):
                 python_exe = self.config.get('python_executable', sys.executable)
                 cmd = [python_exe, '-m', 'safety', 'check', '-r', reqs_file_path, '--json']
                 result = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
-
-            # Parse results
             self.security_report = {}
             if result.stdout:
                 try:
-                    json_match = re.search(r'(\[.*\]|\{.*\})', result.stdout, re.DOTALL)
+                    json_match = re.search('(\\[.*\\]|\\{.*\\})', result.stdout, re.DOTALL)
                     if json_match:
                         self.security_report = json.loads(json_match.group(1))
                 except json.JSONDecodeError:
-                    print(f' ⚠️ Could not parse safety JSON output.')
-            
-            if result.stderr and "error" in result.stderr.lower():
-                 print(_(' ⚠️ Safety tool produced errors: {}').format(result.stderr.strip()))
-
+                    safe_print(_(' ⚠️ Could not parse safety JSON output.'))
+            if result.stderr and 'error' in result.stderr.lower():
+                safe_print(_(' ⚠️ Safety tool produced errors: {}').format(result.stderr.strip()))
         except Exception as e:
-            print(_(' ⚠️ An unexpected error occurred during the isolated security scan: {}').format(e))
+            safe_print(_(' ⚠️ An unexpected error occurred during the isolated security scan: {}').format(e))
             self.security_report = {}
         finally:
-            # Clean up requirements file
             if 'reqs_file_path' in locals() and os.path.exists(reqs_file_path):
                 os.unlink(reqs_file_path)
-
-        # Report the findings
         issue_count = 0
         if isinstance(self.security_report, list):
             issue_count = len(self.security_report)
         elif isinstance(self.security_report, dict) and 'vulnerabilities' in self.security_report:
             issue_count = len(self.security_report['vulnerabilities'])
-        
-        print(_('✅ Security scan complete. Found {} potential issues.').format(issue_count))
+        safe_print(_('✅ Security scan complete. Found {} potential issues.').format(issue_count))
 
     def run(self, targeted_packages: Optional[List[str]]=None, newly_active_packages: Optional[Dict[str, str]]=None):
         """
@@ -611,7 +449,7 @@ class omnipkgMetadataGatherer:
         package metadata during the pre-scan phase, preventing crashes.
         """
         if not self.cache_client:
-            print(_('❌ Cache client not available to the builder. Aborting.'))
+            safe_print(_('❌ Cache client not available to the builder. Aborting.'))
             return
         distributions_to_process = self._discover_distributions(targeted_packages)
         if targeted_packages:
@@ -631,12 +469,12 @@ class omnipkgMetadataGatherer:
                         name = canonicalize_name(raw_name)
                         all_active_packages_to_scan[name] = dist.version
                     else:
-                        print(_("\n⚠️  WARNING: Skipping corrupted package found at '{}'.").format(dist._path))
-                        print(_("    This package's metadata is missing a name. This is often caused by an"))
-                        print(_("    interrupted 'pip install'. Please manually delete this directory."))
+                        safe_print(_("\n⚠️  WARNING: Skipping corrupted package found at '{}'.").format(dist._path))
+                        safe_print(_("    This package's metadata is missing a name. This is often caused by an"))
+                        safe_print(_("    interrupted 'pip install'. Please manually delete this directory."))
             self._perform_security_scan(all_active_packages_to_scan)
         if not distributions_to_process:
-            print(_('✅ No packages found or specified to process.'))
+            safe_print(_('✅ No packages found or specified to process.'))
             return
         iterator = distributions_to_process
         if HAS_TQDM:
@@ -645,7 +483,7 @@ class omnipkgMetadataGatherer:
         for dist in iterator:
             if self._process_package(dist):
                 updated_count += 1
-        print(_('\n🎉 Metadata building complete! Updated {} package(s).').format(updated_count))
+        safe_print(_('\n🎉 Metadata building complete! Updated {} package(s).').format(updated_count))
         return distributions_to_process
 
     def _process_package(self, dist: importlib.metadata.Distribution) -> bool:
@@ -653,68 +491,44 @@ class omnipkgMetadataGatherer:
         FIXED: Processes a single, definitive Distribution object and now gracefully
         handles corrupted packages by initializing error-reporting variables early.
         """
-        # --- THIS IS THE FIX ---
-        # Initialize variables for the error handler *before* any operation that might fail.
-        # We can get the version safely, as it's a direct property.
-        pkg_name_for_error = f"Unknown Package at {dist._path}"
+        pkg_name_for_error = _('Unknown Package at {}').format(dist._path)
         version_for_error = dist.version
-        
         try:
             raw_name = dist.metadata.get('Name')
             if not raw_name:
                 if self._is_known_subcomponent(dist._path):
-                    print(f"   -> Skipping {dist._path.name} - known sub-component of a larger package.")
+                    safe_print(_('   -> Skipping {} - known sub-component of a larger package.').format(dist._path.name))
                     return False
-                print(_("\n⚠️ CORRUPTION DETECTED: Package at '{}' is missing a name.").format(dist._path))
-                # --- AUTO-REPAIR LOGIC ---
+                safe_print(_("\n⚠️ CORRUPTION DETECTED: Package at '{}' is missing a name.").format(dist._path))
                 if self.omnipkg_instance:
-                    print(" - 🛡️ Attempting auto-repair...")
-                    # Try to parse name and version from the directory name itself
-                    match = re.match(r"([\w\.\-]+)-([\w\.\+a-z0-9]+)\.dist-info", dist._path.name)
+                    safe_print(_(' - 🛡️ Attempting auto-repair...'))
+                    match = re.match('([\\w\\.\\-]+)-([\\w\\.\\+a-z0-9]+)\\.dist-info', dist._path.name)
                     if match:
                         name, version = match.groups()
-                        package_to_reinstall = f"{name}=={version}"
-                        # Determine if the corruption is in a bubble or the main env
+                        package_to_reinstall = f'{name}=={version}'
                         is_in_bubble = str(dist._path).startswith(self.config.get('multiversion_base', '/dev/null'))
                         target_dir = dist._path.parent if is_in_bubble else None
                         cleanup_path = dist._path.parent if is_in_bubble else Path(self.config.get('site_packages_path'))
-                        
-                        print(f" - Cleaning up corrupted files for '{name}' at {cleanup_path}...")
+                        safe_print(f" - Cleaning up corrupted files for '{name}' at {cleanup_path}...")
                         self.omnipkg_instance._brute_force_package_cleanup(name, cleanup_path)
-                        
-                        print(f" - 🚀 Re-installing '{package_to_reinstall}' to heal the environment...")
-                        self.omnipkg_instance.smart_install(
-                            [package_to_reinstall], 
-                            force_reinstall=True, 
-                            target_directory=target_dir
-                        )
-                        # After reinstalling, we don't process the *old* corrupted object.
-                        # The new one will be picked up by the next sync.
+                        safe_print(_(" - 🚀 Re-installing '{}' to heal the environment...").format(package_to_reinstall))
+                        self.omnipkg_instance.smart_install([package_to_reinstall], force_reinstall=True, target_directory=target_dir)
                         return False
                     else:
-                        print(" - ❌ Auto-repair failed: Could not parse package name from path.")
+                        safe_print(' - ❌ Auto-repair failed: Could not parse package name from path.')
                 else:
-                    print(_(" To fix, please manually delete this directory and re-run your command."))
+                    safe_print(_(' To fix, please manually delete this directory and re-run your command.'))
                 return False
-            
-            # --- CRITICAL FIX: Extract name from metadata ---
-            name = raw_name.strip()  # This was missing!
+            name = raw_name.strip()
             version = dist.version
-            
-            # Update error reporting variables with actual package info
             pkg_name_for_error = name
             version_for_error = version
-            
-            # --- START MODIFIED CODE ---
             metadata = self._build_comprehensive_metadata(dist)
-            is_active = not self._is_bubbled(dist)  # Determine status from path
+            is_active = not self._is_bubbled(dist)
             self._store_in_redis(name, version, metadata, is_active=is_active)
-            # --- END MODIFIED CODE ---
-            
             return True
-            
         except Exception as e:
-            print(_('\n❌ Error processing {} (v{}): {}').format(pkg_name_for_error, version_for_error, e))
+            safe_print(_('\n❌ Error processing {} (v{}): {}').format(pkg_name_for_error, version_for_error, e))
             import traceback
             traceback.print_exc()
             return False
@@ -726,19 +540,12 @@ class omnipkgMetadataGatherer:
         """
         package_name = canonicalize_name(dist.metadata['Name'])
         metadata = {k: v for k, v in dist.metadata.items()}
-        
-        # --- START NEW CODE ---
         try:
-            # dist.locate_file('') gives the path to the top-level package directory
             package_path = dist.locate_file('')
             metadata['path'] = str(package_path)
         except Exception:
-            # Fallback to the .dist-info path if the above fails
             metadata['path'] = str(dist._path)
-        # --- END NEW CODE ---
-
         metadata['last_indexed'] = datetime.now().isoformat()
-
         context_version = self.target_context_version if self.target_context_version else get_python_version()
         metadata['indexed_by_python'] = context_version
         metadata['dependencies'] = [str(req) for req in dist.requires] if dist.requires else []
@@ -828,94 +635,39 @@ class omnipkgMetadataGatherer:
         package_name = canonicalize_name(dist.metadata['Name'])
         is_bubbled = self._is_bubbled(dist)
         bubble_path = str(dist._path.parent) if is_bubbled else None
-        
-        # Strategy 1: Use authoritative top_level.txt
         import_candidates = self._get_import_candidates(dist, package_name)
-        
-        # Build the verification script
-        script_lines = [
-            'import sys',
-            'import importlib',
-            'import traceback',
-            'results = []'
-        ]
-        
+        script_lines = ['import sys', 'import importlib', 'import traceback', 'results = []']
         if bubble_path:
             script_lines.append(f"sys.path.insert(0, r'{bubble_path}')")
-        
-        # Test each import candidate
         for candidate in import_candidates:
-            script_lines.extend([
-                f"# Testing import: {candidate}",
-                "try:",
-                f"    mod = importlib.import_module('{candidate}')",
-                f"    version = getattr(mod, '__version__', None)",
-                f"    results.append(('{candidate}', True, version))",
-                "except Exception as e:",
-                f"    results.append(('{candidate}', False, str(e)))"
-            ])
-        
-        # Output results
-        script_lines.extend([
-            "import json",
-            "print(json.dumps(results))"
-        ])
-        
+            script_lines.extend([_('# Testing import: {}').format(candidate), 'try:', _("    mod = importlib.import_module('{}')").format(candidate), _("    version = getattr(mod, '__version__', None)"), _("    results.append(('{}', True, version))").format(candidate), 'except Exception as e:', _("    results.append(('{}', False, str(e)))").format(candidate)])
+        script_lines.extend(['import json', 'safe_print(json.dumps(results))'])
         script = '\n'.join(script_lines)
         import json
         try:
             python_exe = self.config.get('python_executable', sys.executable)
-            result = subprocess.run(
-                [python_exe, '-c', script], 
-                capture_output=True, 
-                text=True, 
-                check=True, 
-                timeout=10
-            )
-            
-            # Parse results
+            result = subprocess.run([python_exe, '-c', script], capture_output=True, text=True, check=True, timeout=10)
             import json
             test_results = json.loads(result.stdout.strip())
-            
-            # Analyze results
             successful_imports = [(name, version) for name, success, version in test_results if success]
             failed_imports = [(name, error) for name, success, error in test_results if not success]
-            
             if successful_imports:
-                # Package is importable - get version from successful import or metadata
                 import_version = None
                 for name, version in successful_imports:
                     if version and version != 'None':
                         import_version = version
                         break
-                
-                # Fallback to metadata version
                 if not import_version:
                     try:
                         import_version = dist.version
                     except:
-                        import_version = "unknown"
-                
-                return {
-                    'importable': True,
-                    'version': import_version,
-                    'successful_modules': [name for name, _ in successful_imports],
-                    'failed_modules': [name for name, _ in failed_imports] if failed_imports else []
-                }
+                        import_version = 'unknown'
+                return {'importable': True, 'version': import_version, 'successful_modules': [name for name, _ in successful_imports], 'failed_modules': [name for name, _ in failed_imports] if failed_imports else []}
             else:
-                return {
-                    'importable': False,
-                    'error': f"All import attempts failed: {dict(failed_imports)}",
-                    'attempted_modules': import_candidates
-                }
-                
+                return {'importable': False, 'error': f'All import attempts failed: {dict(failed_imports)}', 'attempted_modules': import_candidates}
         except (subprocess.CalledProcessError, subprocess.TimeoutExpired, json.JSONDecodeError) as e:
             error_msg = e.stderr.strip() if hasattr(e, 'stderr') and e.stderr else str(e)
-            return {
-                'importable': False, 
-                'error': f"Subprocess failed: {error_msg}",
-                'attempted_modules': import_candidates
-            }
+            return {'importable': False, 'error': _('Subprocess failed: {}').format(error_msg), 'attempted_modules': import_candidates}
 
     def _get_import_candidates(self, dist: importlib.metadata.Distribution, package_name: str) -> List[str]:
         """
@@ -923,39 +675,25 @@ class omnipkgMetadataGatherer:
         Uses multiple strategies in order of reliability.
         """
         candidates = []
-        
-        # Strategy 1: Read top_level.txt (most authoritative)
         try:
             if hasattr(dist, 'read_text'):
                 top_level_content = dist.read_text('top_level.txt')
                 if top_level_content:
-                    candidates.extend([
-                        line.strip() for line in top_level_content.strip().split('\n') 
-                        if line.strip()
-                    ])
+                    candidates.extend([line.strip() for line in top_level_content.strip().split('\n') if line.strip()])
         except Exception:
             pass
-        
-        # Strategy 2: Parse RECORD file for top-level modules
         if not candidates:
             candidates.extend(self._parse_record_for_modules(dist))
-        
-        # Strategy 3: Use package structure heuristics
         if not candidates:
             candidates.extend(self._generate_import_heuristics(package_name))
-        
-        # Strategy 4: Last resort - the naive approach
         if not candidates:
             candidates.append(package_name.replace('-', '_'))
-        
-        # Remove duplicates while preserving order
         seen = set()
         unique_candidates = []
         for candidate in candidates:
             if candidate not in seen:
                 seen.add(candidate)
                 unique_candidates.append(candidate)
-        
         return unique_candidates
 
     def _parse_record_for_modules(self, dist: importlib.metadata.Distribution) -> List[str]:
@@ -971,21 +709,17 @@ class omnipkgMetadataGatherer:
                     top_level_dirs = set()
                     for line in record_content.strip().split('\n'):
                         if line.strip():
-                            file_path = line.split(',')[0]  # First part is the file path
-                            # Get top-level directory/module
+                            file_path = line.split(',')[0]
                             parts = file_path.split('/')
-                            if parts and not parts[0].endswith('.dist-info'):
-                                # Check if it's a module file or package directory
+                            if parts and (not parts[0].endswith('.dist-info')):
                                 top_part = parts[0]
                                 if '.' not in top_part or top_part.endswith('.py'):
                                     module_name = top_part.replace('.py', '')
-                                    if module_name and not module_name.startswith('_'):
+                                    if module_name and (not module_name.startswith('_')):
                                         top_level_dirs.add(module_name)
-                    
                     candidates.extend(sorted(top_level_dirs))
         except Exception:
             pass
-        
         return candidates
 
     def _generate_import_heuristics(self, package_name: str) -> List[str]:
@@ -993,44 +727,22 @@ class omnipkgMetadataGatherer:
         Generate smart import candidates based on package name patterns.
         """
         candidates = []
-        
-        # Handle common namespace package patterns
         if '.' in package_name:
-            # For packages like 'ruamel.yaml', try both 'ruamel.yaml' and 'ruamel'
-            candidates.append(package_name)  # ruamel.yaml
-            candidates.append(package_name.split('.')[0])  # ruamel
-        
-        # Handle dash-to-underscore conversion
+            candidates.append(package_name)
+            candidates.append(package_name.split('.')[0])
         underscore_name = package_name.replace('-', '_')
         if underscore_name != package_name:
             candidates.append(underscore_name)
-        
-        # Handle common patterns
         if package_name.startswith('python-'):
-            # python-requests -> requests
             candidates.append(package_name[7:])
             candidates.append(package_name[7:].replace('-', '_'))
-        
         if package_name.endswith('-python'):
-            # something-python -> something
             candidates.append(package_name[:-7])
             candidates.append(package_name[:-7].replace('-', '_'))
-        
-        # Handle PyPI vs import name mismatches (common cases)
-        common_mappings = {
-            'beautifulsoup4': ['bs4'],
-            'pillow': ['PIL'],
-            'pyyaml': ['yaml'],
-            'msgpack-python': ['msgpack'],
-            'protobuf': ['google.protobuf', 'google'],
-            'python-dateutil': ['dateutil'],
-            'setuptools-scm': ['setuptools_scm'],
-        }
-        
+        common_mappings = {'beautifulsoup4': ['bs4'], 'pillow': ['PIL'], 'pyyaml': ['yaml'], 'msgpack-python': ['msgpack'], 'protobuf': ['google.protobuf', 'google'], 'python-dateutil': ['dateutil'], 'setuptools-scm': ['setuptools_scm']}
         canonical = canonicalize_name(package_name)
         if canonical in common_mappings:
             candidates.extend(common_mappings[canonical])
-        
         return candidates
 
     def _check_binary_integrity(self, bin_path: str) -> Dict:
@@ -1080,7 +792,7 @@ class omnipkgMetadataGatherer:
             if result.stdout:
                 self.security_report = json.loads(result.stdout)
         except Exception as e:
-            print(_('    ⚠️ Bulk security scan failed: {}').format(e))
+            safe_print(_('    ⚠️ Bulk security scan failed: {}').format(e))
         finally:
             if os.path.exists(reqs_file_path):
                 os.remove(reqs_file_path)
@@ -1197,75 +909,52 @@ class omnipkgMetadataGatherer:
             else:
                 items.append((new_key, str(v)))
         return dict(items)
-
 if __name__ == '__main__':
     import json
     from pathlib import Path
     import hashlib
-    # --- START OF CHANGE ---
-    # Import the SQLite client needed for standalone execution
     from omnipkg.cache import SQLiteCacheClient
-    # --- END OF CHANGE ---
-
-    print(_('🚀 Starting omnipkg Metadata Builder v12 (SQLite/Redis Edition)...'))
+    safe_print(_('🚀 Starting omnipkg Metadata Builder v12 (SQLite/Redis Edition)...'))
     try:
         config_path = Path.home() / '.config' / 'omnipkg' / 'config.json'
         with open(config_path, 'r') as f:
             full_config = json.load(f)
-        
-        # --- CORE FIX: Determine the one true env_id, prioritizing the override ---
         env_id_from_os = os.environ.get('OMNIPKG_ENV_ID_OVERRIDE')
         if env_id_from_os:
             env_id = env_id_from_os
-            print(f"   (Inherited environment ID: {env_id})")
+            safe_print(_('   (Inherited environment ID: {})').format(env_id))
         else:
-            # This is the fallback for when the script is run directly
-            # We must find the venv root the same way ConfigManager does.
             current_dir = Path(sys.executable).resolve().parent
-            venv_path = Path(sys.prefix) # fallback
+            venv_path = Path(sys.prefix)
             while current_dir != current_dir.parent:
                 if (current_dir / 'pyvenv.cfg').exists():
                     venv_path = current_dir
                     break
                 current_dir = current_dir.parent
             env_id = hashlib.md5(str(venv_path.resolve()).encode()).hexdigest()[:8]
-            print(f"   (Calculated environment ID: {env_id})")
-        # --- END CORE FIX ---
-
+            safe_print(_('   (Calculated environment ID: {})').format(env_id))
         config = full_config['environments'][env_id]
     except (FileNotFoundError, KeyError) as e:
-        print(f'❌ CRITICAL: Could not load omnipkg configuration for this environment (ID: {env_id}). Error: {e}. Aborting.')
+        safe_print(f'❌ CRITICAL: Could not load omnipkg configuration for this environment (ID: {env_id}). Error: {e}. Aborting.')
         sys.exit(1)
-        
-    # The gatherer is created without the omnipkg_instance, so its cache_client is initially None.
     gatherer = omnipkgMetadataGatherer(config=config, env_id=env_id, force_refresh='--force' in sys.argv)
-    
-    # --- START OF REPLACEMENT for connect_redis() ---
     try:
-        # 1. Manually create the SQLiteCacheClient instance for standalone mode.
-        #    It's best practice to get the cache path from the config.
         cache_dir = Path(config.get('cache_dir', Path.home() / '.cache' / 'omnipkg'))
         db_path = cache_dir / f'omnipkg_cache_{env_id}.db'
-        
-        print(f"   (Using SQLite cache at: {db_path})")
-        
-        # 2. Assign the created client directly to the gatherer instance.
+        safe_print(_('   (Using SQLite cache at: {})').format(db_path))
         gatherer.cache_client = SQLiteCacheClient(db_path=db_path)
-
-        # 3. Check if the connection is valid, similar to the old ping() check.
         if gatherer.cache_client and gatherer.cache_client.ping():
             targeted_packages = [arg for arg in sys.argv[1:] if not arg.startswith('--')]
             if targeted_packages:
                 gatherer.run(targeted_packages=targeted_packages)
             else:
                 gatherer.run()
-            print(_('\n🎉 Metadata building complete!'))
+            safe_print(_('\n🎉 Metadata building complete!'))
         else:
-            print(_('❌ Failed to connect to SQLite cache. Aborting.'))
+            safe_print(_('❌ Failed to connect to SQLite cache. Aborting.'))
             sys.exit(1)
-    # --- END OF REPLACEMENT for connect_redis() ---
     except Exception as e:
-        print(_('\n❌ An unexpected error occurred during metadata build: {}').format(e))
+        safe_print(_('\n❌ An unexpected error occurred during metadata build: {}').format(e))
         import traceback
         traceback.print_exc()
         sys.exit(1)

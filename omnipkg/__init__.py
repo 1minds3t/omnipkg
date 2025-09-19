@@ -1,3 +1,4 @@
+from .common_utils import safe_print
 # In /home/minds3t/omnipkg/omnipkg/__init__.py
 
 from .i18n import _

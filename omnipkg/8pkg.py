@@ -1,3 +1,4 @@
+from .common_utils import safe_print
 #!/usr/bin/env python3
 """
 8pkg - The infinity package manager (alias for omnipkg)

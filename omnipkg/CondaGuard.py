@@ -1,3 +1,4 @@
+from .common_utils import safe_print
 """
 CondaGuard: A lightweight, robust system to protect Conda environments
 from metadata corruption during high-intensity filesystem operations like
@@ -109,40 +110,40 @@ def fix_conda_corruption():
     This is useful for scripts or manual repair. It creates its own backups
     and cleans them up.
     """
-    print(_('--- Running Standalone Conda Corruption Check & Fix ---'))
+    safe_print(_('--- Running Standalone Conda Corruption Check & Fix ---'))
     guard = CondaGuard()
     guard.backup()
     restored_files = guard.restore()
     guard.cleanup()
     if restored_files:
-        print(_('🔧 Fix applied. Restored files: {}').format(', '.join(restored_files)))
+        safe_print(_('🔧 Fix applied. Restored files: {}').format(', '.join(restored_files)))
         return True
     else:
-        print(_('✅ No corruption found in protected files.'))
+        safe_print(_('✅ No corruption found in protected files.'))
         return False
 if __name__ == '__main__':
     fix_conda_corruption()
-    print('\n' + '=' * 50 + '\n')
+    safe_print('\n' + '=' * 50 + '\n')
 
     @protected_operation
     def my_risky_hotswap_function(file_to_corrupt):
-        print(_('-> Running a risky function that might corrupt Conda...'))
+        safe_print(_('-> Running a risky function that might corrupt Conda...'))
         p = Path(file_to_corrupt)
         if p.exists():
-            print(_("   ...simulating corruption of '{}'").format(p.name))
+            safe_print(_("   ...simulating corruption of '{}'").format(p.name))
             with open(p, 'w') as f:
                 f.write('this is corrupted json')
-        print(_('-> Risky function finished.'))
-    print(_('🧪 Testing decorator...'))
+        safe_print(_('-> Risky function finished.'))
+    safe_print(_('🧪 Testing decorator...'))
     my_risky_hotswap_function('/opt/conda/envs/evocoder_env/conda-meta/nodejs-24.4.1-heeeca48_0.json')
-    print('\n' + '=' * 50 + '\n')
-    print(_('🧪 Testing context manager...'))
+    safe_print('\n' + '=' * 50 + '\n')
+    safe_print(_('🧪 Testing context manager...'))
     with CondaGuard():
-        print('-> Entering safe context for a risky operation...')
+        safe_print('-> Entering safe context for a risky operation...')
         file_to_corrupt = '/opt/conda/envs/evocoder_env/conda-meta/nodejs-24.4.1-heeeca48_0.json'
         p = Path(file_to_corrupt)
         if p.exists():
-            print(_("   ...simulating deletion of '{}'").format(p.name))
+            safe_print(_("   ...simulating deletion of '{}'").format(p.name))
             os.remove(p)
-        print(_('-> Leaving safe context...'))
-    print(_('\n✅ Demo finished.'))
+        safe_print(_('-> Leaving safe context...'))
+    safe_print(_('\n✅ Demo finished.'))
