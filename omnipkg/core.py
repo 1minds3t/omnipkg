@@ -901,7 +901,7 @@ class ConfigManager:
         return Path(sys.prefix)
 
         
-def _verify_python_version(self, python_path: str) -> Optional[Tuple[int, int]]:
+    def _verify_python_version(self, python_path: str) -> Optional[Tuple[int, int]]:
         """
         Verify that a Python executable works and get its version.
         Returns (major, minor) tuple or None if invalid.
