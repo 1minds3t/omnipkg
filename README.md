@@ -81,7 +81,7 @@
 <!-- COMPARISON_STATS_START -->
 ## ⚖️ Multi-Version Support
 
-[![omnipkg](https://img.shields.io/badge/omnipkg-547%20Wins-brightgreen?logo=python&logoColor=white)](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml) [![pip](https://img.shields.io/badge/pip-550%20Failures-red?logo=pypi&logoColor=white)](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml) [![uv](https://img.shields.io/badge/uv-550%20Failures-red?logo=python&logoColor=white)](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml)
+[![omnipkg](https://img.shields.io/badge/omnipkg-546%20Wins-brightgreen?logo=python&logoColor=white)](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml) [![pip](https://img.shields.io/badge/pip-549%20Failures-red?logo=pypi&logoColor=white)](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml) [![uv](https://img.shields.io/badge/uv-549%20Failures-red?logo=python&logoColor=white)](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml)
 
 *Multi-version installation tests run hourly. [Live results here.](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml)*
 
@@ -287,7 +287,10 @@ uv 0.8.11
 ## 🛠️ Get Started in 30 Seconds
 
 ### No Prerequisites Required!
-`omnipkg` now works out of the box with **automatic SQLite fallback** when Redis isn't available. Redis is optional for enhanced performance.
+`omnipkg` works out of the box with **automatic SQLite fallback** when Redis isn't available. Redis is optional for enhanced performance.
+
+Ready to end dependency hell?
+  uv pip install omnipkg && omnipkg demo to see the magic in under 30 seconds.
 
 ### Installation Options
 
@@ -461,7 +464,7 @@ You now have both versions available in one environment, ready for use anytime!
 ## 🌟 Coming Soon
 
 *   **Time Machine Technology for Legacy Packages**: Install ancient packages with historically accurate build tools and dependencies that are 100% proven to work in any environment.
-*   **Concurrent 3x Python & Package Versions Running in Single Script, Single Environment**: Already proven it works locally, creating CI and a demo for it soon!
+*   **Concurrent 3x Python & Package Versions Running in Single Script, Single Environment**: I've proven it works locally and am creating a demo and CI.
 *   **Ensuring Python-Interpreter Hotswaps Work Flawlessly In CI/CD**: Improving code so that CI can consistently execute mid-script interpreter hot-swapping without issues.
 
 ---
