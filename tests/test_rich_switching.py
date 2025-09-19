@@ -1,3 +1,7 @@
+try:
+    from .common_utils import safe_print
+except ImportError:
+    from omnipkg.common_utils import safe_print
 import sys
 import os
 from pathlib import Path

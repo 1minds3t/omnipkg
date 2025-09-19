@@ -1,3 +1,7 @@
+try:
+    from .common_utils import safe_print
+except ImportError:
+    from omnipkg.common_utils import safe_print
 import sys
 import os
 import subprocess
@@ -40,6 +44,10 @@ try:
 except ImportError as e:
     print(f'FATAL: Could not import omnipkg modules after bootstrap. Is the project installed? Error: {e}')
     sys.exit(1)
+try:
+    from .common_utils import safe_print
+except ImportError:
+    from omnipkg.common_utils import safe_print
 
 def run_legacy_payload():
     """Simulates a legacy task requiring older numpy/scipy."""

@@ -1,4 +1,7 @@
-from .common_utils import safe_print
+try:
+    from .common_utils import safe_print
+except ImportError:
+    from omnipkg.common_utils import safe_print
 import sys
 import os
 import json
@@ -60,6 +63,11 @@ def force_omnipkg_context_to_current_python():
         safe_print('   Proceeding anyway - this may cause issues with bubble operations')
         return False
 force_omnipkg_context_to_current_python()
+
+try:
+    from .common_utils import safe_print
+except ImportError:
+    from omnipkg.common_utils import safe_print
 
 def print_with_flush(message):
     """Print with immediate flush to avoid buffering issues"""
