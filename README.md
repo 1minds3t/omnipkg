@@ -328,9 +328,10 @@ conda install -c conda-forge omnipkg
 mamba install -c conda-forge omnipkg
 ```
 
-<a href="[https://anaconda.org/minds3t/omnipkg](https://anaconda.org/minds3t/omnipkg)">
-  <img src="[https://img.shields.io/badge/conda--channel-minds3t-blue?logo=anaconda&logoColor=white](https://img.shields.io/badge/conda--channel-minds3t-blue?logo=anaconda&logoColor=white)" alt="Minds3t Conda Channel">
+<a href="https://anaconda.org/minds3t/omnipkg">
+  <img src="https://img.shields.io/badge/conda--channel-minds3t-blue?logo=anaconda&logoColor=white" alt="Minds3t Conda Channel">
 </a>
+
 
 ```bash
 conda install -c minds3t omnipkg
