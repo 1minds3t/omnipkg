@@ -1,3 +1,7 @@
+try:
+    from .common_utils import safe_print
+except ImportError:
+    from omnipkg.common_utils import safe_print
 import sys
 import os
 from pathlib import Path
@@ -22,7 +26,10 @@ if os.environ.get('OMNIPKG_RELAUNCHED') != '1':
 sync_context_to_runtime()
 # --- END BOOTSTRAP ---
 
-
+try:
+    from .common_utils import safe_print
+except ImportError:
+    from omnipkg.common_utils import safe_print
 import json
 import subprocess
 import shutil
