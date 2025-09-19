@@ -1,3 +1,4 @@
+from .common_utils import safe_print
 import sys
 import os
 import json
@@ -23,7 +24,7 @@ try:
     from omnipkg.loader import omnipkgLoader
     from omnipkg.common_utils import run_command, print_header
 except ImportError as e:
-    print(f'❌ Failed to import omnipkg modules. Is it installed correctly? Error: {e}', flush=True)
+    safe_print(f'❌ Failed to import omnipkg modules. Is it installed correctly? Error: {e}', flush=True)
     sys.exit(1)
 
 def force_omnipkg_context_to_current_python():
@@ -32,45 +33,45 @@ def force_omnipkg_context_to_current_python():
     """
     current_python = f'{sys.version_info.major}.{sys.version_info.minor}'
     try:
-        print(_('🔄 Forcing omnipkg context to match script Python version: {}').format(current_python))
+        safe_print(_('🔄 Forcing omnipkg context to match script Python version: {}').format(current_python))
         omnipkg_cmd_base = [sys.executable, '-m', 'omnipkg.cli']
         result = subprocess.run(omnipkg_cmd_base + ['swap', 'python', current_python], capture_output=True, text=True, check=True)
-        print(_('✅ omnipkg context synchronized to Python {}').format(current_python))
+        safe_print(_('✅ omnipkg context synchronized to Python {}').format(current_python))
         return True
     except subprocess.CalledProcessError as e:
-        print(_('⚠️  Could not synchronize omnipkg context via CLI: {}').format(e))
-        print(_('   CLI output: {}').format(e.stdout))
-        print(_('   CLI error: {}').format(e.stderr))
+        safe_print(_('⚠️  Could not synchronize omnipkg context via CLI: {}').format(e))
+        safe_print(_('   CLI output: {}').format(e.stdout))
+        safe_print(_('   CLI error: {}').format(e.stderr))
         try:
-            print(_('🔄 Attempting direct config modification...'))
+            safe_print(_('🔄 Attempting direct config modification...'))
             config_manager = ConfigManager()
             python_exe = sys.executable
             config_manager.config['active_python_version'] = current_python
             config_manager.config['active_python_executable'] = python_exe
             config_manager.save_config()
-            print(f'✅ Direct config update successful for Python {current_python}')
+            safe_print(f'✅ Direct config update successful for Python {current_python}')
             return True
         except Exception as e2:
-            print(_('⚠️  Direct config modification also failed: {}').format(e2))
-            print('   Proceeding anyway - this may cause issues with bubble operations')
+            safe_print(_('⚠️  Direct config modification also failed: {}').format(e2))
+            safe_print('   Proceeding anyway - this may cause issues with bubble operations')
             return False
     except Exception as e:
-        print(_('⚠️  Unexpected error synchronizing omnipkg context: {}').format(e))
-        print('   Proceeding anyway - this may cause issues with bubble operations')
+        safe_print(_('⚠️  Unexpected error synchronizing omnipkg context: {}').format(e))
+        safe_print('   Proceeding anyway - this may cause issues with bubble operations')
         return False
 force_omnipkg_context_to_current_python()
 
 def print_with_flush(message):
     """Print with immediate flush to avoid buffering issues"""
-    print(message, flush=True)
+    safe_print(message, flush=True)
 
 def show_progress_dots():
     """Show progress dots for long operations"""
-    print('   ', end='', flush=True)
+    safe_print('   ', end='', flush=True)
     for i in range(3):
         time.sleep(0.5)
-        print(_('.'), end='', flush=True)
-    print(' ', flush=True)
+        safe_print(_('.'), end='', flush=True)
+    safe_print(' ', flush=True)
 
 def run_subprocess_with_output(cmd, description='', show_output=True, timeout_hint=None):
     """

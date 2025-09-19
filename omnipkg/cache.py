@@ -1,3 +1,4 @@
+from .common_utils import safe_print
 import sqlite3
 import json
 from pathlib import Path
@@ -112,7 +113,7 @@ class SQLiteCacheClient(CacheClient):
             added_count = cursor.rowcount
             self.conn.commit()
         except self.conn.Error as e:
-            print(_('   ⚠️  [SQLiteCache] Error in sadd: {}').format(e))
+            safe_print(_('   ⚠️  [SQLiteCache] Error in sadd: {}').format(e))
             self.conn.rollback()
         finally:
             cursor.close()

@@ -1,3 +1,4 @@
+from .common_utils import safe_print
 """omnipkg CLI - Enhanced with runtime interpreter switching and language support"""
 import sys
 import argparse
@@ -42,32 +43,32 @@ def handle_python_requirement(required_version_str: str, pkg_instance: OmnipkgCo
     if actual_version_tuple == required_version_tuple:
         return True
     print_header(_('Python Version Requirement'))
-    print(_('  ⚠️  This Demo Requires Python {}').format(required_version_str))
-    print(_('  - Current Python version: {}.{}').format(actual_version_tuple[0], actual_version_tuple[1]))
-    print(_('  - omnipkg will now attempt to automatically configure the correct interpreter.'))
-    print('-' * 60)
+    safe_print(_('  ⚠️  This Demo Requires Python {}').format(required_version_str))
+    safe_print(_('  - Current Python version: {}.{}').format(actual_version_tuple[0], actual_version_tuple[1]))
+    safe_print(_('  - omnipkg will now attempt to automatically configure the correct interpreter.'))
+    safe_print('-' * 60)
     managed_interpreters = pkg_instance.interpreter_manager.list_available_interpreters()
     if required_version_str not in managed_interpreters:
         discovered_interpreters = pkg_instance.config_manager.list_available_pythons()
         if required_version_str in discovered_interpreters:
-            print(_('🐍 Python {} found on your system. Adopting it...').format(required_version_str))
+            safe_print(_('🐍 Python {} found on your system. Adopting it...').format(required_version_str))
             if pkg_instance.adopt_interpreter(required_version_str) != 0:
-                print(_('❌ Failed to adopt Python {}. Please try manually.').format(required_version_str))
-                print(_('   Run: {} python adopt {}').format(parser_prog, required_version_str))
+                safe_print(_('❌ Failed to adopt Python {}. Please try manually.').format(required_version_str))
+                safe_print(_('   Run: {} python adopt {}').format(parser_prog, required_version_str))
                 return False
-            print(_('✅ Successfully adopted Python {}.').format(required_version_str))
+            safe_print(_('✅ Successfully adopted Python {}.').format(required_version_str))
         else:
-            print(_('❌ Required Python version {} not found on your system.').format(required_version_str))
-            print(_('   Please install Python {} and ensure it is in your PATH.').format(required_version_str))
+            safe_print(_('❌ Required Python version {} not found on your system.').format(required_version_str))
+            safe_print(_('   Please install Python {} and ensure it is in your PATH.').format(required_version_str))
             return False
-    print(_('🔄 Swapping active interpreter to Python {}...').format(required_version_str))
+    safe_print(_('🔄 Swapping active interpreter to Python {}...').format(required_version_str))
     if pkg_instance.switch_active_python(required_version_str) != 0:
-        print(_('❌ Failed to swap to Python {}. Please try manually.').format(required_version_str))
-        print(_('   Run: {} swap python {}').format(parser_prog, required_version_str))
+        safe_print(_('❌ Failed to swap to Python {}. Please try manually.').format(required_version_str))
+        safe_print(_('   Run: {} swap python {}').format(parser_prog, required_version_str))
         return False
-    print(_('✅ Environment successfully configured for Python {}.').format(required_version_str))
-    print(_('🚀 Proceeding to run the demo...'))
-    print('=' * 60)
+    safe_print(_('✅ Environment successfully configured for Python {}.').format(required_version_str))
+    safe_print(_('🚀 Proceeding to run the demo...'))
+    safe_print('=' * 60)
     return True
 
 def get_version():
@@ -92,38 +93,38 @@ def stress_test_command():
     """Handle stress test command - BLOCK if not Python 3.11."""
     actual_version = get_actual_python_version()
     if actual_version != (3, 11):
-        print('=' * 60)
-        print(_('  ⚠️  Stress Test Requires Python 3.11'))
-        print('=' * 60)
-        print(_('Current Python version: {}.{}').format(actual_version[0], actual_version[1]))
-        print()
-        print(_('The omnipkg stress test only works in Python 3.11 environments.'))
-        print(_('To run the stress test:'))
-        print(_('1. Switch to Python 3.11: omnipkg swap python 3.11'))
-        print(_('2. If not available, adopt it first: omnipkg python adopt 3.11'))
-        print(_("3. Run 'omnipkg stress-test' from there"))
-        print('=' * 60)
+        safe_print('=' * 60)
+        safe_print(_('  ⚠️  Stress Test Requires Python 3.11'))
+        safe_print('=' * 60)
+        safe_print(_('Current Python version: {}.{}').format(actual_version[0], actual_version[1]))
+        safe_print()
+        safe_print(_('The omnipkg stress test only works in Python 3.11 environments.'))
+        safe_print(_('To run the stress test:'))
+        safe_print(_('1. Switch to Python 3.11: omnipkg swap python 3.11'))
+        safe_print(_('2. If not available, adopt it first: omnipkg python adopt 3.11'))
+        safe_print(_("3. Run 'omnipkg stress-test' from there"))
+        safe_print('=' * 60)
         return False
-    print('=' * 60)
-    print(_('  🚀 omnipkg Nuclear Stress Test - Runtime Version Swapping'))
-    print(_('Current Python version: {}.{}').format(actual_version[0], actual_version[1]))
-    print('=' * 60)
-    print(_('🎪 This demo showcases IMPOSSIBLE package combinations:'))
-    print(_('   • Runtime swapping between numpy/scipy versions mid-execution'))
-    print(_('   • Different numpy+scipy combos (1.24.3+1.12.0 → 1.26.4+1.16.1)'))
-    print(_("   • Previously 'incompatible' versions working together seamlessly"))
-    print(_('   • Live PYTHONPATH manipulation without process restart'))
-    print(_('   • Space-efficient deduplication (shows deduplication - normally'))
-    print(_('     we average ~60% savings, but less for C extensions/binaries)'))
-    print()
-    print(_('🤯 What makes this impossible with traditional tools:'))
-    print(_("   • numpy 1.24.3 + scipy 1.12.0 → 'incompatible dependencies'"))
-    print(_('   • Switching versions requires environment restart'))
-    print(_('   • Dependency conflicts prevent coexistence'))
-    print(_("   • Package managers can't handle multiple versions"))
-    print()
-    print(_('✨ omnipkg does this LIVE, in the same Python process!'))
-    print(_('📊 Expected downloads: ~500MB | Duration: 30 seconds - 3 minutes'))
+    safe_print('=' * 60)
+    safe_print(_('  🚀 omnipkg Nuclear Stress Test - Runtime Version Swapping'))
+    safe_print(_('Current Python version: {}.{}').format(actual_version[0], actual_version[1]))
+    safe_print('=' * 60)
+    safe_print(_('🎪 This demo showcases IMPOSSIBLE package combinations:'))
+    safe_print(_('   • Runtime swapping between numpy/scipy versions mid-execution'))
+    safe_print(_('   • Different numpy+scipy combos (1.24.3+1.12.0 → 1.26.4+1.16.1)'))
+    safe_print(_("   • Previously 'incompatible' versions working together seamlessly"))
+    safe_print(_('   • Live PYTHONPATH manipulation without process restart'))
+    safe_print(_('   • Space-efficient deduplication (shows deduplication - normally'))
+    safe_print(_('     we average ~60% savings, but less for C extensions/binaries)'))
+    safe_print()
+    safe_print(_('🤯 What makes this impossible with traditional tools:'))
+    safe_print(_("   • numpy 1.24.3 + scipy 1.12.0 → 'incompatible dependencies'"))
+    safe_print(_('   • Switching versions requires environment restart'))
+    safe_print(_('   • Dependency conflicts prevent coexistence'))
+    safe_print(_("   • Package managers can't handle multiple versions"))
+    safe_print()
+    safe_print(_('✨ omnipkg does this LIVE, in the same Python process!'))
+    safe_print(_('📊 Expected downloads: ~500MB | Duration: 30 seconds - 3 minutes'))
     try:
         response = input(_('🚀 Ready to witness the impossible? (y/n): ')).lower().strip()
     except EOFError:
@@ -131,29 +132,29 @@ def stress_test_command():
     if response == 'y':
         return True
     else:
-        print(_("🎪 Cancelled. Run 'omnipkg stress-test' anytime!"))
+        safe_print(_("🎪 Cancelled. Run 'omnipkg stress-test' anytime!"))
         return False
 
 def run_actual_stress_test():
     """Run the actual stress test - only called if Python 3.11."""
-    print(_('🔥 Starting stress test...'))
+    safe_print(_('🔥 Starting stress test...'))
     try:
         from . import stress_test
         stress_test.run()
     except ImportError:
-        print(_('❌ Stress test module not found. Implementation needed.'))
+        safe_print(_('❌ Stress test module not found. Implementation needed.'))
     except Exception as e:
-        print(_('❌ An error occurred during stress test execution: {}').format(e))
+        safe_print(_('❌ An error occurred during stress test execution: {}').format(e))
         import traceback
         traceback.print_exc()
 
 def run_demo_with_live_streaming(test_file, demo_name):
     """Run a demo with true, line-by-line live streaming output."""
-    print(_('🚀 Running {} test from {}...').format(demo_name.capitalize(), test_file))
-    print(_('📡 Live streaming output (this may take several minutes for heavy packages)...'))
-    print(_("💡 Don't worry if there are pauses - packages are downloading/installing!"))
-    print(_('🛑 Press Ctrl+C to safely cancel if needed'))
-    print('-' * 60)
+    safe_print(_('🚀 Running {} test from {}...').format(demo_name.capitalize(), test_file))
+    safe_print(_('📡 Live streaming output (this may take several minutes for heavy packages)...'))
+    safe_print(_("💡 Don't worry if there are pauses - packages are downloading/installing!"))
+    safe_print(_('🛑 Press Ctrl+C to safely cancel if needed'))
+    safe_print('-' * 60)
     process = None
     try:
         cm = ConfigManager()
@@ -168,21 +169,21 @@ def run_demo_with_live_streaming(test_file, demo_name):
         python_exe = cm.config.get('python_executable', sys.executable)
         process = subprocess.Popen([python_exe, str(test_file)], text=True, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, encoding='utf-8', errors='replace')
         for line in process.stdout:
-            print(line, end='')
+            safe_print(line, end='')
         returncode = process.wait()
-        print('-' * 60)
+        safe_print('-' * 60)
         if returncode == 0:
-            print(_('🎉 Demo completed successfully!'))
+            safe_print(_('🎉 Demo completed successfully!'))
         else:
-            print(_('❌ Demo failed with return code {}').format(returncode))
+            safe_print(_('❌ Demo failed with return code {}').format(returncode))
         return returncode
     except KeyboardInterrupt:
-        print(_('\n⚠️  Demo cancelled by user (Ctrl+C)'))
+        safe_print(_('\n⚠️  Demo cancelled by user (Ctrl+C)'))
         if process:
             process.terminate()
         return 130
     except Exception as e:
-        print(_('❌ Demo failed with error: {}').format(e))
+        safe_print(_('❌ Demo failed with error: {}').format(e))
         import traceback
         traceback.print_exc()
         return 1
@@ -260,9 +261,9 @@ def create_parser():
 
 def print_header(title):
     """Print a formatted header."""
-    print('\n' + '=' * 60)
-    print(_('  🚀 {}').format(title))
-    print('=' * 60)
+    safe_print('\n' + '=' * 60)
+    safe_print(_('  🚀 {}').format(title))
+    safe_print('=' * 60)
 
 def main():
     """Main application entry point with pre-flight version check."""
@@ -270,9 +271,9 @@ def main():
         if '-v' in sys.argv or '--version' in sys.argv:
             prog_name = Path(sys.argv[0]).name
             if prog_name == '8pkg' or (len(sys.argv) > 0 and '8pkg' in sys.argv[0]):
-                print(_('8pkg {}').format(get_version()))
+                safe_print(_('8pkg {}').format(get_version()))
             else:
-                print(_('omnipkg {}').format(get_version()))
+                safe_print(_('omnipkg {}').format(get_version()))
             return 0
         cm = ConfigManager()
         temp_parser = argparse.ArgumentParser(add_help=False)
@@ -293,37 +294,37 @@ def main():
         args = parser.parse_args()
         if args.command is None:
             parser.print_help()
-            print(_('\n👋 Welcome back to omnipkg! Run a command or see --help for details.'))
+            safe_print(_('\n👋 Welcome back to omnipkg! Run a command or see --help for details.'))
             return 0
         if args.command == 'config':
             if args.config_command == 'view':
                 print_header('omnipkg Configuration')
                 for key, value in sorted(cm.config.items()):
-                    print(_('  - {}: {}').format(key, value))
+                    safe_print(_('  - {}: {}').format(key, value))
                 return 0
             elif args.config_command == 'set':
                 if args.key == 'language':
                     if args.value not in SUPPORTED_LANGUAGES:
-                        print(_("❌ Error: Language '{}' not supported. Supported: {}").format(args.value, ', '.join(SUPPORTED_LANGUAGES.keys())))
+                        safe_print(_("❌ Error: Language '{}' not supported. Supported: {}").format(args.value, ', '.join(SUPPORTED_LANGUAGES.keys())))
                         return 1
                     cm.set('language', args.value)
                     _.set_language(args.value)
                     lang_name = SUPPORTED_LANGUAGES.get(args.value, args.value)
-                    print(_('✅ Language permanently set to: {lang}').format(lang=lang_name))
+                    safe_print(_('✅ Language permanently set to: {lang}').format(lang=lang_name))
                 elif args.key == 'install_strategy':
                     valid_strategies = ['stable-main', 'latest-active']
                     if args.value not in valid_strategies:
-                        print(_('❌ Error: Invalid install strategy. Must be one of: {}').format(', '.join(valid_strategies)))
+                        safe_print(_('❌ Error: Invalid install strategy. Must be one of: {}').format(', '.join(valid_strategies)))
                         return 1
                     cm.set('install_strategy', args.value)
-                    print(_('✅ Install strategy permanently set to: {}').format(args.value))
+                    safe_print(_('✅ Install strategy permanently set to: {}').format(args.value))
                 else:
                     parser.print_help()
                     return 1
                 return 0
             elif args.config_command == 'reset':
                 if args.key == 'interpreters':
-                    print(_('Resetting managed interpreters registry...'))
+                    safe_print(_('Resetting managed interpreters registry...'))
                     return pkg_instance.rescan_interpreters()
                 return 0
             parser.print_help()
@@ -334,15 +335,15 @@ def main():
                 discovered = pkg_instance.config_manager.list_available_pythons()
                 print_header('Managed Python Interpreters')
                 if not interpreters:
-                    print('   No interpreters are currently managed by omnipkg for this environment.')
+                    safe_print('   No interpreters are currently managed by omnipkg for this environment.')
                 else:
                     for ver, path in sorted(interpreters.items()):
-                        print(_('   • Python {}: {}').format(ver, path))
+                        safe_print(_('   • Python {}: {}').format(ver, path))
                 print_header('Discovered System Interpreters')
-                print("   (Use 'omnipkg python adopt <version>' to make these available for swapping)")
+                safe_print("   (Use 'omnipkg python adopt <version>' to make these available for swapping)")
                 for ver, path in sorted(discovered.items()):
                     if ver not in interpreters:
-                        print(_('   • Python {}: {}').format(ver, path))
+                        safe_print(_('   • Python {}: {}').format(ver, path))
                 return 0
             else:
                 return pkg_instance.list_packages(args.filter)
@@ -360,10 +361,10 @@ def main():
                 return 1
         elif args.command == 'swap':
             if not args.target:
-                print(_('❌ Error: You must specify what to swap.'))
-                print(_('Examples:'))
-                print(_('  {} swap python           # Interactive Python version picker').format(parser.prog))
-                print(_('  {} swap python 3.11      # Switch to Python 3.11').format(parser.prog))
+                safe_print(_('❌ Error: You must specify what to swap.'))
+                safe_print(_('Examples:'))
+                safe_print(_('  {} swap python           # Interactive Python version picker').format(parser.prog))
+                safe_print(_('  {} swap python 3.11      # Switch to Python 3.11').format(parser.prog))
                 return 1
             if args.target.lower() == 'python':
                 if args.version:
@@ -371,43 +372,43 @@ def main():
                 else:
                     interpreters = pkg_instance.config_manager.list_available_pythons()
                     if not interpreters:
-                        print(_('❌ No Python interpreters found.'))
+                        safe_print(_('❌ No Python interpreters found.'))
                         return 1
-                    print(_('🐍 Available Python versions:'))
+                    safe_print(_('🐍 Available Python versions:'))
                     versions = sorted(interpreters.keys())
                     for i, ver in enumerate(versions, 1):
-                        print(_('  {}. Python {}').format(i, ver))
+                        safe_print(_('  {}. Python {}').format(i, ver))
                     try:
                         choice = input(_('Select version (1-{}): ').format(len(versions))).strip()
                         if choice.isdigit() and 1 <= int(choice) <= len(versions):
                             selected_version = versions[int(choice) - 1]
                             return pkg_instance.switch_active_python(selected_version)
                         else:
-                            print(_('❌ Invalid selection.'))
+                            safe_print(_('❌ Invalid selection.'))
                             return 1
                     except (EOFError, KeyboardInterrupt):
-                        print(_('\n❌ Operation cancelled.'))
+                        safe_print(_('\n❌ Operation cancelled.'))
                         return 1
             else:
-                print(_("❌ Error: Unknown swap target '{}'. Currently supported: python").format(args.target))
+                safe_print(_("❌ Error: Unknown swap target '{}'. Currently supported: python").format(args.target))
                 return 1
         elif args.command == 'status':
             return pkg_instance.show_multiversion_status()
         elif args.command == 'demo':
             actual_version = get_actual_python_version()
-            print(_('Current Python version: {}.{}').format(actual_version[0], actual_version[1]))
-            print(_('🎪 Omnipkg supports version switching for:'))
-            print(_('   • Python modules (e.g., rich): See tests/test_rich_switching.py'))
-            print(_('   • Binary packages (e.g., uv): See tests/test_uv_switching.py'))
-            print(_('   • C-extension packages (e.g., numpy, scipy): See stress_test.py'))
-            print(_('   • Complex dependency packages (e.g., TensorFlow): See tests/test_tensorflow_switching.py'))
-            print(_('   • Note: The Flask demo is under construction and not currently available.'))
-            print(_('\nSelect a demo to run:'))
-            print(_('1. Rich test (Python module switching)'))
-            print(_('2. UV test (binary switching)'))
-            print(_('3. NumPy + SciPy stress test (C-extension switching)'))
-            print(_('4. TensorFlow test (complex dependency switching)'))
-            print(_('5. Flask test (under construction)'))
+            safe_print(_('Current Python version: {}.{}').format(actual_version[0], actual_version[1]))
+            safe_print(_('🎪 Omnipkg supports version switching for:'))
+            safe_print(_('   • Python modules (e.g., rich): See tests/test_rich_switching.py'))
+            safe_print(_('   • Binary packages (e.g., uv): See tests/test_uv_switching.py'))
+            safe_print(_('   • C-extension packages (e.g., numpy, scipy): See stress_test.py'))
+            safe_print(_('   • Complex dependency packages (e.g., TensorFlow): See tests/test_tensorflow_switching.py'))
+            safe_print(_('   • Note: The Flask demo is under construction and not currently available.'))
+            safe_print(_('\nSelect a demo to run:'))
+            safe_print(_('1. Rich test (Python module switching)'))
+            safe_print(_('2. UV test (binary switching)'))
+            safe_print(_('3. NumPy + SciPy stress test (C-extension switching)'))
+            safe_print(_('4. TensorFlow test (complex dependency switching)'))
+            safe_print(_('5. Flask test (under construction)'))
             try:
                 response = input(_('Enter your choice (1-4): ')).strip()
             except EOFError:
@@ -433,13 +434,13 @@ def main():
             elif response == '5':
                 test_file = TESTS_DIR / 'test_rich_switching.py'
                 demo_name = 'rich'
-                print(_('⚠️ The Flask demo is under construction and not currently available.'))
-                print(_('Switching to the Rich test (option 1) for now!'))
+                safe_print(_('⚠️ The Flask demo is under construction and not currently available.'))
+                safe_print(_('Switching to the Rich test (option 1) for now!'))
             else:
-                print(_('❌ Invalid choice. Please select 1, 2, 3, 4, or 5.'))
+                safe_print(_('❌ Invalid choice. Please select 1, 2, 3, 4, or 5.'))
                 return 1
             if not test_file.exists():
-                print(_('❌ Error: Test file {} not found.').format(test_file))
+                safe_print(_('❌ Error: Test file {} not found.').format(test_file))
                 return 1
             return run_demo_with_live_streaming(test_file, demo_name)
         elif args.command == 'stress-test':
@@ -451,9 +452,9 @@ def main():
             if args.requirement:
                 req_path = Path(args.requirement)
                 if not req_path.is_file():
-                    print(_("❌ Error: Requirements file not found at '{}'").format(req_path))
+                    safe_print(_("❌ Error: Requirements file not found at '{}'").format(req_path))
                     return 1
-                print(_('📄 Reading packages from {}...').format(req_path.name))
+                safe_print(_('📄 Reading packages from {}...').format(req_path.name))
                 with open(req_path, 'r') as f:
                     packages_to_process = [line.split('#')[0].strip() for line in f if line.split('#')[0].strip()]
             elif args.packages:
@@ -476,16 +477,16 @@ def main():
                 active_version_str = f'{active_version_tuple[0]}.{active_version_tuple[1]}' if active_version_tuple else None
                 print_header(_('Python Interpreter Information'))
                 managed_interpreters = pkg_instance.interpreter_manager.list_available_interpreters()
-                print(_('🐍 Managed Python Versions (available for swapping):'))
+                safe_print(_('🐍 Managed Python Versions (available for swapping):'))
                 for ver, path in sorted(managed_interpreters.items()):
                     marker = ' ⭐ (currently active)' if active_version_str and ver == active_version_str else ''
-                    print(_('   • Python {}: {}{}').format(ver, path, marker))
+                    safe_print(_('   • Python {}: {}{}').format(ver, path, marker))
                 if active_version_str:
-                    print(_('\n🎯 Active Context: Python {}').format(active_version_str))
-                    print(_('📍 Configured Path: {}').format(configured_active_exe))
+                    safe_print(_('\n🎯 Active Context: Python {}').format(active_version_str))
+                    safe_print(_('📍 Configured Path: {}').format(configured_active_exe))
                 else:
-                    print('\n⚠️ Could not determine active Python version from config.')
-                print(_('\n💡 To switch context, use: {} swap python <version>').format(parser.prog))
+                    safe_print('\n⚠️ Could not determine active Python version from config.')
+                safe_print(_('\n💡 To switch context, use: {} swap python <version>').format(parser.prog))
                 return 0
             else:
                 return pkg_instance.show_package_info(args.package_spec)
@@ -506,13 +507,13 @@ def main():
             return execute_run_command(args.script_and_args, cm)
         else:
             parser.print_help()
-            print(_("\n💡 Did you mean 'omnipkg config set language <code>'?"))
+            safe_print(_("\n💡 Did you mean 'omnipkg config set language <code>'?"))
             return 1
     except KeyboardInterrupt:
-        print(_('\n❌ Operation cancelled by user.'))
+        safe_print(_('\n❌ Operation cancelled by user.'))
         return 1
     except Exception as e:
-        print(_('\n❌ An unexpected error occurred: {}').format(e))
+        safe_print(_('\n❌ An unexpected error occurred: {}').format(e))
         import traceback
         traceback.print_exc()
         return 1

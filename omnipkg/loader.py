@@ -1,3 +1,4 @@
+from .common_utils import safe_print
 import sys
 import importlib
 import shutil
@@ -33,7 +34,7 @@ class omnipkgLoader:
         self.python_version = f'{sys.version_info.major}.{sys.version_info.minor}'
         self.python_version_nodot = f'{sys.version_info.major}{sys.version_info.minor}'
         self.force_activation = force_activation
-        print(_('🐍 [omnipkg loader] Running in Python {} context').format(self.python_version))
+        safe_print(_('🐍 [omnipkg loader] Running in Python {} context').format(self.python_version))
         self._initialize_version_aware_paths()
         self._store_clean_original_state()
         self._current_package_spec = package_spec
@@ -58,18 +59,18 @@ class omnipkgLoader:
             configured_site_packages = Path(self.config['site_packages_path'])
             if self._is_version_compatible_path(configured_site_packages):
                 self.site_packages_root = configured_site_packages
-                print(_('✅ [omnipkg loader] Using configured site-packages: {}').format(self.site_packages_root))
+                safe_print(_('✅ [omnipkg loader] Using configured site-packages: {}').format(self.site_packages_root))
             else:
-                print(_('⚠️ [omnipkg loader] Configured site-packages path is not compatible with Python {}. Auto-detecting...').format(self.python_version))
+                safe_print(_('⚠️ [omnipkg loader] Configured site-packages path is not compatible with Python {}. Auto-detecting...').format(self.python_version))
                 self.site_packages_root = self._auto_detect_compatible_site_packages()
         else:
-            print(_('⚠️ [omnipkg loader] Config not provided or incomplete. Auto-detecting Python {}-compatible paths.').format(self.python_version))
+            safe_print(_('⚠️ [omnipkg loader] Config not provided or incomplete. Auto-detecting Python {}-compatible paths.').format(self.python_version))
             self.site_packages_root = self._auto_detect_compatible_site_packages()
             self.multiversion_base = self.site_packages_root / '.omnipkg_versions'
         if not self.multiversion_base.exists():
             try:
                 self.multiversion_base.mkdir(parents=True, exist_ok=True)
-                print(_('✅ [omnipkg loader] Created bubble directory: {}').format(self.multiversion_base))
+                safe_print(_('✅ [omnipkg loader] Created bubble directory: {}').format(self.multiversion_base))
             except Exception as e:
                 raise RuntimeError(_('Failed to create bubble directory at {}: {}').format(self.multiversion_base, e))
 
@@ -87,7 +88,7 @@ class omnipkgLoader:
         if path_version == self.python_version:
             return True
         else:
-            print(_('🚫 [omnipkg loader] Rejecting incompatible path (contains python{}) for context python{}: {}').format(path_version, self.python_version, path))
+            safe_print(_('🚫 [omnipkg loader] Rejecting incompatible path (contains python{}) for context python{}: {}').format(path_version, self.python_version, path))
             return False
 
     def _auto_detect_compatible_site_packages(self) -> Path:
@@ -98,20 +99,20 @@ class omnipkgLoader:
             for site_path in site.getsitepackages():
                 candidate = Path(site_path)
                 if candidate.exists() and self._is_version_compatible_path(candidate):
-                    print(_('✅ [omnipkg loader] Auto-detected compatible site-packages: {}').format(candidate))
+                    safe_print(_('✅ [omnipkg loader] Auto-detected compatible site-packages: {}').format(candidate))
                     return candidate
         except (AttributeError, IndexError):
             pass
         python_version_path = f'python{self.python_version}'
         candidate = Path(sys.prefix) / 'lib' / python_version_path / 'site-packages'
         if candidate.exists():
-            print(_('✅ [omnipkg loader] Using sys.prefix-based site-packages: {}').format(candidate))
+            safe_print(_('✅ [omnipkg loader] Using sys.prefix-based site-packages: {}').format(candidate))
             return candidate
         for path_str in sys.path:
             if 'site-packages' in path_str:
                 candidate = Path(path_str)
                 if candidate.exists() and self._is_version_compatible_path(candidate):
-                    print(_('✅ [omnipkg loader] Using sys.path-derived site-packages: {}').format(candidate))
+                    safe_print(_('✅ [omnipkg loader] Using sys.path-derived site-packages: {}').format(candidate))
                     return candidate
         raise RuntimeError(_('Could not auto-detect Python {}-compatible site-packages directory').format(self.python_version))
 
@@ -128,15 +129,15 @@ class omnipkgLoader:
             else:
                 contaminated_paths.append(path_str)
         if contaminated_paths:
-            print(_('🧹 [omnipkg loader] Filtered out {} incompatible paths from sys.path:').format(len(contaminated_paths)))
+            safe_print(_('🧹 [omnipkg loader] Filtered out {} incompatible paths from sys.path:').format(len(contaminated_paths)))
             for path in contaminated_paths[:3]:
-                print(_('   🚫 {}').format(path))
+                safe_print(_('   🚫 {}').format(path))
             if len(contaminated_paths) > 3:
-                print(_('   ... and {} more').format(len(contaminated_paths) - 3))
+                safe_print(_('   ... and {} more').format(len(contaminated_paths) - 3))
         self.original_sys_modules_keys = set(sys.modules.keys())
         self.original_path_env = os.environ.get('PATH', '')
         self.original_pythonpath_env = os.environ.get('PYTHONPATH', '')
-        print(_('✅ [omnipkg loader] Stored clean original state with {} compatible paths').format(len(self.original_sys_path)))
+        safe_print(_('✅ [omnipkg loader] Stored clean original state with {} compatible paths').format(len(self.original_sys_path)))
 
     def _filter_environment_paths(self, env_var: str) -> str:
         """
@@ -166,13 +167,13 @@ class omnipkgLoader:
                     if self._is_version_compatible_path(dep_path) and (self.site_packages_root in dep_path.parents or dep_path == self.site_packages_root / dep):
                         found_deps[dep] = dep_path
                         if not self.quiet:
-                            print(_('✅ [omnipkg loader] Found compatible dependency: {} at {}').format(dep, dep_path))
+                            safe_print(_('✅ [omnipkg loader] Found compatible dependency: {} at {}').format(dep, dep_path))
                     elif not self.quiet:
-                        print(_('🚫 [omnipkg loader] Skipped incompatible dependency: {} at {}').format(dep, dep_path))
+                        safe_print(_('🚫 [omnipkg loader] Skipped incompatible dependency: {} at {}').format(dep, dep_path))
             except ImportError:
                 continue
             except Exception as e:
-                print(_('⚠️ [omnipkg loader] Error detecting dependency {}: {}').format(dep, e))
+                safe_print(_('⚠️ [omnipkg loader] Error detecting dependency {}: {}').format(dep, e))
                 continue
         return found_deps
 
@@ -186,28 +187,28 @@ class omnipkgLoader:
             if bubble_dep_path.exists():
                 continue
             if not self._is_version_compatible_path(dep_path):
-                print(_('🚫 [omnipkg loader] Skipping incompatible dependency link: {}').format(dep_name))
+                safe_print(_('🚫 [omnipkg loader] Skipping incompatible dependency link: {}').format(dep_name))
                 continue
             try:
                 if dep_path.is_dir():
                     bubble_dep_path.symlink_to(dep_path, target_is_directory=True)
                 else:
                     bubble_dep_path.symlink_to(dep_path)
-                print(_('🔗 [omnipkg loader] Linked version-compatible {} to bubble').format(dep_name))
+                safe_print(_('🔗 [omnipkg loader] Linked version-compatible {} to bubble').format(dep_name))
             except Exception as e:
-                print(_('⚠️ [omnipkg loader] Failed to link {} to bubble: {}').format(dep_name, e))
+                safe_print(_('⚠️ [omnipkg loader] Failed to link {} to bubble: {}').format(dep_name, e))
                 site_packages_str = str(self.site_packages_root)
                 if site_packages_str not in sys.path:
                     insertion_point = 1 if len(sys.path) > 1 else len(sys.path)
                     sys.path.insert(insertion_point, site_packages_str)
-                    print(_('🔧 [omnipkg loader] Added compatible site-packages fallback at position {}').format(insertion_point))
+                    safe_print(_('🔧 [omnipkg loader] Added compatible site-packages fallback at position {}').format(insertion_point))
 
     def __enter__(self):
         """Activates the specified package snapshot with strict version isolation."""
         self._activation_start_time = time.perf_counter_ns()
         if not self._current_package_spec:
             raise ValueError("omnipkgLoader must be instantiated with a package_spec (e.g., 'pkg==ver') when used as a context manager.")
-        print(_('\n🌀 omnipkg loader: Activating {} in Python {} context...').format(self._current_package_spec, self.python_version))
+        safe_print(_('\n🌀 omnipkg loader: Activating {} in Python {} context...').format(self._current_package_spec, self.python_version))
         try:
             pkg_name, requested_version = self._current_package_spec.split('==')
             pkg_name_normalized = pkg_name.lower().replace('-', '_')
@@ -220,16 +221,16 @@ class omnipkgLoader:
                     self._activation_end_time = time.perf_counter_ns()
                     self._total_activation_time_ns = self._activation_end_time - self._activation_start_time
                     if not hasattr(self, 'quiet') or not self.quiet:
-                        print(_(' ✅ System version already matches requested version ({}). No bubble activation needed.').format(current_system_version))
-                        print(_(' ⏱️  Activation time: {:.3f} μs ({:,} ns)').format(self._total_activation_time_ns / 1000, self._total_activation_time_ns))
+                        safe_print(_(' ✅ System version already matches requested version ({}). No bubble activation needed.').format(current_system_version))
+                        safe_print(_(' ⏱️  Activation time: {:.3f} μs ({:,} ns)').format(self._total_activation_time_ns / 1000, self._total_activation_time_ns))
                     self._activation_successful = True
                     return self
             except PackageNotFoundError:
                 pass
             except Exception as e:
-                print(_('⚠️ [omnipkg loader] Error checking system version for {}: {}. Proceeding with bubble search.').format(pkg_name, e))
+                safe_print(_('⚠️ [omnipkg loader] Error checking system version for {}: {}. Proceeding with bubble search.').format(pkg_name, e))
         else:
-            print(_(' 🚀 Force activation enabled - bypassing system version check'))
+            safe_print(_(' 🚀 Force activation enabled - bypassing system version check'))
         bubble_dir_name = f'{pkg_name_normalized}-{requested_version}'
         bubble_path = self.multiversion_base / bubble_dir_name
         if not bubble_path.is_dir():
@@ -241,7 +242,7 @@ class omnipkgLoader:
             bubble_bin_path = bubble_path / 'bin'
             if bubble_bin_path.is_dir():
                 os.environ['PATH'] = f'{str(bubble_bin_path)}{os.pathsep}{self.original_path_env}'
-                print(_(' ⚙️ Added to PATH: {}').format(bubble_bin_path))
+                safe_print(_(' ⚙️ Added to PATH: {}').format(bubble_bin_path))
             new_sys_path = []
             new_sys_path.append(bubble_path_str)
             current_interpreter_version_str = f'python{sys.version_info.major}.{sys.version_info.minor}'
@@ -262,28 +263,28 @@ class omnipkgLoader:
             self._activation_end_time = time.perf_counter_ns()
             self._total_activation_time_ns = self._activation_end_time - self._activation_start_time
             activation_mode = 'FORCED' if self.force_activation else 'NORMAL'
-            print(_(' ✅ Activated bubble with Python {} isolation ({}): {}').format(self.python_version, activation_mode, bubble_path_str))
-            print(_(' 🔧 sys.path[0]: {}').format(sys.path[0]))
-            print(_(' 🛡️ Version isolation: Only Python {}-compatible paths active').format(self.python_version))
-            print(_(' 🔗 Ensured version-compatible omnipkg dependencies for subprocess support'))
-            print(_(' ⏱️  Activation time: {:.3f} μs ({:,} ns)').format(self._total_activation_time_ns / 1000, self._total_activation_time_ns))
+            safe_print(_(' ✅ Activated bubble with Python {} isolation ({}): {}').format(self.python_version, activation_mode, bubble_path_str))
+            safe_print(_(' 🔧 sys.path[0]: {}').format(sys.path[0]))
+            safe_print(_(' 🛡️ Version isolation: Only Python {}-compatible paths active').format(self.python_version))
+            safe_print(_(' 🔗 Ensured version-compatible omnipkg dependencies for subprocess support'))
+            safe_print(_(' ⏱️  Activation time: {:.3f} μs ({:,} ns)').format(self._total_activation_time_ns / 1000, self._total_activation_time_ns))
             manifest_path = bubble_path / '.omnipkg_manifest.json'
             if manifest_path.exists():
                 with open(manifest_path, 'r') as f:
                     manifest = json.load(f)
                     pkg_count = len(manifest.get('packages', {}))
-                    print(_(' ℹ️ Bubble contains {} packages (Python {} compatible).').format(pkg_count, self.python_version))
+                    safe_print(_(' ℹ️ Bubble contains {} packages (Python {} compatible).').format(pkg_count, self.python_version))
             self._activation_successful = True
             return self
         except Exception as e:
-            print(_(' ❌ Activation failed: {}').format(str(e)))
+            safe_print(_(' ❌ Activation failed: {}').format(str(e)))
             self._panic_restore_cloaks()
             raise
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         """Deactivates the snapshot and restores the clean environment."""
         self._deactivation_start_time = time.perf_counter_ns()
-        print(_('\n🌀 omnipkg loader: Deactivating {} (Python {} context)...').format(self._current_package_spec, self.python_version))
+        safe_print(_('\n🌀 omnipkg loader: Deactivating {} (Python {} context)...').format(self._current_package_spec, self.python_version))
         if not self._activation_successful and (not self._cloaked_main_modules):
             return
         pkg_name = self._current_package_spec.split('==')[0]
@@ -313,10 +314,10 @@ class omnipkgLoader:
         self._deactivation_end_time = time.perf_counter_ns()
         self._total_deactivation_time_ns = self._deactivation_end_time - self._deactivation_start_time
         total_swap_time_ns = self._total_activation_time_ns + self._total_deactivation_time_ns
-        print(_(' ✅ Environment restored to clean Python {} state.').format(self.python_version))
-        print(_(' 🛡️ Version isolation maintained throughout operation'))
-        print(_(' ⏱️  Deactivation time: {:.3f} μs ({:,} ns)').format(self._total_deactivation_time_ns / 1000, self._total_deactivation_time_ns))
-        print(_(' 🎯 TOTAL SWAP TIME: {:.3f} μs ({:,} ns)').format(total_swap_time_ns / 1000, total_swap_time_ns))
+        safe_print(_(' ✅ Environment restored to clean Python {} state.').format(self.python_version))
+        safe_print(_(' 🛡️ Version isolation maintained throughout operation'))
+        safe_print(_(' ⏱️  Deactivation time: {:.3f} μs ({:,} ns)').format(self._total_deactivation_time_ns / 1000, self._total_deactivation_time_ns))
+        safe_print(_(' 🎯 TOTAL SWAP TIME: {:.3f} μs ({:,} ns)').format(total_swap_time_ns / 1000, total_swap_time_ns))
 
     def _cleanup_omnipkg_links_in_bubble(self, bubble_path_str: str):
         """
@@ -333,11 +334,11 @@ class omnipkgLoader:
 
     def debug_version_compatibility(self):
         """Debug helper to check version compatibility of current paths."""
-        print(_('\n🔍 DEBUG: Python Version Compatibility Check'))
-        print(_('Current Python version: {}').format(self.python_version))
-        print(_('Site-packages root: {}').format(self.site_packages_root))
-        print(_('Compatible: {}').format(self._is_version_compatible_path(self.site_packages_root)))
-        print(_('\n🔍 Current sys.path compatibility ({} entries):').format(len(sys.path)))
+        safe_print(_('\n🔍 DEBUG: Python Version Compatibility Check'))
+        safe_print(_('Current Python version: {}').format(self.python_version))
+        safe_print(_('Site-packages root: {}').format(self.site_packages_root))
+        safe_print(_('Compatible: {}').format(self._is_version_compatible_path(self.site_packages_root)))
+        safe_print(_('\n🔍 Current sys.path compatibility ({} entries):').format(len(sys.path)))
         compatible_count = 0
         for i, path in enumerate(sys.path):
             path_obj = Path(path)
@@ -346,9 +347,9 @@ class omnipkgLoader:
             status = '✅' if exists and is_compatible else '🚫' if exists else '❌'
             if is_compatible and exists:
                 compatible_count += 1
-            print(_('   [{}] {} {}').format(i, status, path))
-        print(_('\n📊 Summary: {}/{} paths are Python {}-compatible').format(compatible_count, len(sys.path), self.python_version))
-        print()
+            safe_print(_('   [{}] {} {}').format(i, status, path))
+        safe_print(_('\n📊 Summary: {}/{} paths are Python {}-compatible').format(compatible_count, len(sys.path), self.python_version))
+        safe_print()
 
     def get_performance_stats(self):
         """Returns detailed performance statistics for CI/logging purposes."""
@@ -372,20 +373,20 @@ class omnipkgLoader:
         """Prints a CI-friendly performance summary."""
         stats = self.get_performance_stats()
         if not stats:
-            print(_('⚠️  No performance data available'))
+            safe_print(_('⚠️  No performance data available'))
             return
-        print('\n' + '=' * 60)
-        print(_('🚀 OMNIPKG PERFORMANCE REPORT'))
-        print('=' * 60)
-        print(_('Package: {}').format(stats['package_spec']))
-        print(_('Python Version: {}').format(stats['python_version']))
-        print(f"Activation:   {stats['activation_time_us']:>8.3f} μs ({stats['activation_time_ns']:>10,} ns)")
-        print(f"Deactivation: {stats['deactivation_time_us']:>8.3f} μs ({stats['deactivation_time_ns']:>10,} ns)")
-        print(f"TOTAL SWAP:   {stats['total_swap_time_us']:>8.3f} μs ({stats['total_swap_time_ns']:>10,} ns)")
-        print(_('Speed Class:  {}').format(stats['swap_speed_description']))
-        print('=' * 60)
-        print(_('🛡️ Version-isolated environment - ZERO cross-contamination!'))
-        print('=' * 60 + '\n')
+        safe_print('\n' + '=' * 60)
+        safe_print(_('🚀 OMNIPKG PERFORMANCE REPORT'))
+        safe_print('=' * 60)
+        safe_print(_('Package: {}').format(stats['package_spec']))
+        safe_print(_('Python Version: {}').format(stats['python_version']))
+        safe_print(f"Activation:   {stats['activation_time_us']:>8.3f} μs ({stats['activation_time_ns']:>10,} ns)")
+        safe_print(f"Deactivation: {stats['deactivation_time_us']:>8.3f} μs ({stats['deactivation_time_ns']:>10,} ns)")
+        safe_print(f"TOTAL SWAP:   {stats['total_swap_time_us']:>8.3f} μs ({stats['total_swap_time_ns']:>10,} ns)")
+        safe_print(_('Speed Class:  {}').format(stats['swap_speed_description']))
+        safe_print('=' * 60)
+        safe_print(_('🛡️ Version-isolated environment - ZERO cross-contamination!'))
+        safe_print('=' * 60 + '\n')
 
     def _get_package_modules(self, pkg_name: str):
         """Helper to find all modules related to a package in sys.modules."""
@@ -421,13 +422,13 @@ class omnipkgLoader:
                         else:
                             os.unlink(cloak_path)
                     except Exception as e:
-                        print(_(' ⚠️ Warning: Could not remove existing cloak {}: {}').format(cloak_path.name, e))
+                        safe_print(_(' ⚠️ Warning: Could not remove existing cloak {}: {}').format(cloak_path.name, e))
                 try:
                     shutil.move(str(original_path), str(cloak_path))
                     cloak_record = (original_path, cloak_path, True)
-                    print(_(' 🛡️ Cloaked main {} to {}').format(original_path.name, cloak_path.name))
+                    safe_print(_(' 🛡️ Cloaked main {} to {}').format(original_path.name, cloak_path.name))
                 except Exception as e:
-                    print(_(' ⚠️ Failed to cloak {}: {}').format(original_path.name, e))
+                    safe_print(_(' ⚠️ Failed to cloak {}: {}').format(original_path.name, e))
                 self._cloaked_main_modules.append(cloak_record)
 
     def _restore_cloaked_modules(self):
@@ -445,39 +446,39 @@ class omnipkgLoader:
                         else:
                             os.unlink(original_path)
                     except Exception as e:
-                        print(_(' ⚠️ Warning: Could not remove conflicting path {}: {}').format(original_path.name, e))
+                        safe_print(_(' ⚠️ Warning: Could not remove conflicting path {}: {}').format(original_path.name, e))
                 try:
                     shutil.move(str(cloak_path), str(original_path))
-                    print(_(' 🛡️ Restored {}').format(original_path.name))
+                    safe_print(_(' 🛡️ Restored {}').format(original_path.name))
                     restored_count += 1
                 except Exception as e:
-                    print(_(' ❌ Failed to restore {} from {}: {}').format(original_path.name, cloak_path.name, e))
+                    safe_print(_(' ❌ Failed to restore {} from {}: {}').format(original_path.name, cloak_path.name, e))
                     failed_count += 1
                     try:
                         if cloak_path.is_dir():
                             shutil.rmtree(cloak_path, ignore_errors=True)
                         else:
                             os.unlink(cloak_path)
-                        print(_(' 🧹 Cleaned up orphaned cloak {}').format(cloak_path.name))
+                        safe_print(_(' 🧹 Cleaned up orphaned cloak {}').format(cloak_path.name))
                     except:
                         pass
             else:
-                print(_(' ❌ CRITICAL: Cloaked path {} is missing! Package {} may be lost.').format(cloak_path.name, original_path.name))
+                safe_print(_(' ❌ CRITICAL: Cloaked path {} is missing! Package {} may be lost.').format(cloak_path.name, original_path.name))
                 failed_count += 1
                 pkg_name = self._current_package_spec.split('==')[0] if self._current_package_spec else 'unknown'
                 try:
                     get_version(pkg_name)
-                    print(_(' ℹ️ Package {} still appears to be installed in system.').format(pkg_name))
+                    safe_print(_(' ℹ️ Package {} still appears to be installed in system.').format(pkg_name))
                 except PackageNotFoundError:
-                    print(_(' ❌ Package {} is no longer available in system. Consider reinstalling.').format(pkg_name))
-                    print(_('   Suggestion: pip install --force-reinstall --no-deps {}').format(pkg_name))
+                    safe_print(_(' ❌ Package {} is no longer available in system. Consider reinstalling.').format(pkg_name))
+                    safe_print(_('   Suggestion: pip install --force-reinstall --no-deps {}').format(pkg_name))
         self._cloaked_main_modules.clear()
         if failed_count > 0:
-            print(_(' ⚠️ Cloak restore summary: {} successful, {} failed').format(restored_count, failed_count))
+            safe_print(_(' ⚠️ Cloak restore summary: {} successful, {} failed').format(restored_count, failed_count))
 
     def _panic_restore_cloaks(self):
         """Emergency cloak restoration when activation fails."""
-        print(_(' 🚨 Emergency cloak restoration in progress...'))
+        safe_print(_(' 🚨 Emergency cloak restoration in progress...'))
         self._restore_cloaked_modules()
 
     def cleanup_abandoned_cloaks(self):
@@ -485,34 +486,34 @@ class omnipkgLoader:
         Utility method to clean up any abandoned cloak files.
         Can be called manually if you suspect there are leftover cloaks.
         """
-        print(_('🧹 Scanning for abandoned omnipkg cloaks...'))
+        safe_print(_('🧹 Scanning for abandoned omnipkg cloaks...'))
         cloak_pattern = '*_omnipkg_cloaked*'
         found_cloaks = list(self.site_packages_root.glob(cloak_pattern))
         if not found_cloaks:
-            print(_(' ✅ No abandoned cloaks found.'))
+            safe_print(_(' ✅ No abandoned cloaks found.'))
             return
-        print(_(' 🔍 Found {} potential abandoned cloak(s):').format(len(found_cloaks)))
+        safe_print(_(' 🔍 Found {} potential abandoned cloak(s):').format(len(found_cloaks)))
         for cloak_path in found_cloaks:
-            print(_('   - {}').format(cloak_path.name))
-        print(_(' ℹ️ To remove these manually: rm -rf /path/to/site-packages/*_omnipkg_cloaked*'))
-        print(_(" ⚠️ WARNING: Only remove if you're sure no omnipkg operations are running!"))
+            safe_print(_('   - {}').format(cloak_path.name))
+        safe_print(_(' ℹ️ To remove these manually: rm -rf /path/to/site-packages/*_omnipkg_cloaked*'))
+        safe_print(_(" ⚠️ WARNING: Only remove if you're sure no omnipkg operations are running!"))
 
     def debug_sys_path(self):
         """Debug helper to print current sys.path state."""
-        print(_('\n🔍 DEBUG: Current sys.path ({} entries):').format(len(sys.path)))
+        safe_print(_('\n🔍 DEBUG: Current sys.path ({} entries):').format(len(sys.path)))
         for i, path in enumerate(sys.path):
             path_obj = Path(path)
             status = '✅' if path_obj.exists() else '❌'
-            print(_('   [{}] {} {}').format(i, status, path))
-        print()
+            safe_print(_('   [{}] {} {}').format(i, status, path))
+        safe_print()
 
     def debug_omnipkg_dependencies(self):
         """Debug helper to show detected omnipkg dependencies."""
-        print(_('\n🔍 DEBUG: Detected omnipkg dependencies:'))
+        safe_print(_('\n🔍 DEBUG: Detected omnipkg dependencies:'))
         if not self._omnipkg_dependencies:
-            print(_('   ❌ No dependencies detected'))
+            safe_print(_('   ❌ No dependencies detected'))
             return
         for dep_name, dep_path in self._omnipkg_dependencies.items():
             status = '✅' if dep_path.exists() else '❌'
-            print(_('   {} {}: {}').format(status, dep_name, dep_path))
-        print()
+            safe_print(_('   {} {}: {}').format(status, dep_name, dep_path))
+        safe_print()
