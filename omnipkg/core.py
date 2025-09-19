@@ -1077,60 +1077,56 @@ class ConfigManager:
         
         return site_packages_path
 
-    def _get_paths_for_interpreter(self, python_exe_path: str) -> Optional[Dict[str, str]]:
-        """
-        Runs an interpreter in a subprocess to ask for its version and calculates
-        its site-packages path. This is the only reliable way to get paths for an
-        interpreter that isn't the currently running one.
-        Enhanced with Windows-specific fallback logic.
-        """
-        import platform
         
-        try:
-            cmd = [python_exe_path, '-I', '-c', "import sys; import json; print(json.dumps({'version': f'{sys.version_info.major}.{sys.version_info.minor}', 'prefix': sys.prefix}))"]
-            result = subprocess.run(cmd, capture_output=True, text=True, check=True, timeout=10)
-            interp_info = json.loads(result.stdout)
-            version = interp_info['version']
-            prefix = Path(interp_info['prefix'])
-            
-            # Try to get site-packages via subprocess
-            site_packages_cmd = [python_exe_path, '-I', '-c', 'import site; import json; print(json.dumps(site.getsitepackages()))']
-            sp_result = subprocess.run(site_packages_cmd, capture_output=True, text=True, check=True, timeout=10)
-            sp_list = json.loads(sp_result.stdout)
-            
-            if sp_list:
-                site_packages = Path(sp_list[0])
-            else:
-                # Fallback: construct manually based on platform
-                is_windows = platform.system() == 'Windows'
-                if is_windows:
-                    # Try Windows-specific paths
-                    candidates = [
-                        prefix / 'Lib' / 'site-packages',
-                        prefix / 'lib' / 'site-packages',
-                        prefix / 'lib' / f'python{version}' / 'site-packages'
-                    ]
-                    for candidate in candidates:
-                        if candidate.exists():
-                            site_packages = candidate
-                            break
-                    else:
-                        site_packages = prefix / 'Lib' / 'site-packages'
-                else:
-                    site_packages = prefix / 'lib' / f'python{version}' / 'site-packages'
-            
-            return {
-                'site_packages_path': str(site_packages),
-                'multiversion_base': str(site_packages / '.omnipkg_versions'),
-                'python_executable': python_exe_path
-            }
-            
-        except (subprocess.CalledProcessError, FileNotFoundError, json.JSONDecodeError, KeyError, RuntimeError) as e:
-            error_details = f'Error: {e}'
-            if isinstance(e, subprocess.CalledProcessError):
-                error_details += f'\nSTDOUT: {e.stdout}\nSTDERR: {e.stderr}'
-            print(f'⚠️ Could not determine paths for interpreter {python_exe_path}: {error_details}')
-            return None
+    def _get_paths_for_interpreter(self, python_exe_path: str) -> Optional[Dict[str, str]]:
+            """
+            Runs an interpreter in a subprocess to ask for its version and calculates
+            its site-packages path. This is the only reliable way to get paths for an
+            interpreter that isn't the currently running one.
+            """
+            from .common_utils import safe_print
+            try:
+                # Step 1: Get version and prefix (this part works fine)
+                cmd = [python_exe_path, '-I', '-c', "import sys, json; print(json.dumps({'version': f'{sys.version_info.major}.{sys.version_info.minor}', 'prefix': sys.prefix}))"]
+                result = subprocess.run(cmd, capture_output=True, text=True, check=True, timeout=10)
+                interp_info = json.loads(result.stdout)
+
+                # Step 2: Ask the interpreter for its site-packages path authoritatively.
+                # This improved command is more robust on all platforms, including Windows CI.
+                site_packages_cmd = [
+                    python_exe_path, '-I', '-c',
+                    "import site, json; print(json.dumps(site.getsitepackages() or [sp for sp in sys.path if 'site-packages' in sp]))"
+                ]
+                sp_result = subprocess.run(site_packages_cmd, capture_output=True, text=True, check=True, timeout=10)
+                sp_list = json.loads(sp_result.stdout)
+
+                if not sp_list:
+                    raise RuntimeError("Subprocess could not determine site-packages location.")
+
+                # On Windows CI, site.getsitepackages() can return the parent dir.
+                # We must find the path that actually contains 'site-packages'.
+                site_packages_path = None
+                for path in sp_list:
+                    if 'site-packages' in path and Path(path).exists():
+                        site_packages_path = Path(path)
+                        break
+                
+                if not site_packages_path:
+                    raise RuntimeError(f"No valid site-packages directory found in {sp_list}")
+
+                return {
+                    'site_packages_path': str(site_packages_path),
+                    'multiversion_base': str(site_packages_path / '.omnipkg_versions'),
+                    'python_executable': python_exe_path
+                }
+            except (subprocess.CalledProcessError, FileNotFoundError, json.JSONDecodeError, KeyError, RuntimeError) as e:
+                error_details = f'Error: {e}'
+                if isinstance(e, subprocess.CalledProcessError):
+                    error_details += f'\nSTDERR:\n{e.stderr}'
+                safe_print(f'⚠️  Could not determine paths for interpreter {python_exe_path}: {error_details}')
+                return None
+
+    
 
     def list_available_pythons(self) -> Dict[str, str]:
         """
