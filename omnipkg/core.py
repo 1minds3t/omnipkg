@@ -4349,7 +4349,7 @@ class omnipkg:
         if not package_names:
             return {}
         python_exe = self.config.get('python_executable', sys.executable)
-        script = f'\nimport sys, json, importlib.metadata\nresults = {{}}\nfor pkg_name in {package_names!r}:\n    try:\n        dist = importlib.metadata.distribution(pkg_name)\n        if dist.files:\n            results[pkg_name] = [str(dist.locate_file(f)) for f in dist.files if dist.locate_file(f).is_file()]\n    except Exception:\n        results[pkg_name] = []\nsafe_print(json.dumps(results))\n'
+        script = f'\nimport sys, json, importlib.metadata\nresults = {{}}\nfor pkg_name in {package_names!r}:\n    try:\n        dist = importlib.metadata.distribution(pkg_name)\n        if dist.files:\n            results[pkg_name] = [str(dist.locate_file(f)) for f in dist.files if dist.locate_file(f).is_file()]\n    except Exception:\n        results[pkg_name] = []\nprint(json.dumps(results))\n'
         try:
             cmd = [python_exe, '-I', '-c', script]
             result = subprocess.run(cmd, capture_output=True, text=True, check=True, timeout=120)
