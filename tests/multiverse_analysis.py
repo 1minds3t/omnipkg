@@ -16,7 +16,7 @@ try:
     sys.path.insert(0, str(project_root))
     from omnipkg.core import ConfigManager
 except ImportError as e:
-    print(f'FATAL: Could not import omnipkg modules. Make sure this script is placed correctly. Error: {e}')
+    safe_print(f'FATAL: Could not import omnipkg modules. Make sure this script is placed correctly. Error: {e}')
     sys.exit(1)
 log_file = project_root / 'multiverse_log.jsonl'
 
@@ -29,11 +29,11 @@ def run_legacy_payload():
     import numpy
     import json
     import sys
-    print(f'--- Executing in Python {sys.version[:3]} with SciPy {scipy.__version__} ---', file=sys.stderr)
+    safe_print(f'--- Executing in Python {sys.version[:3]} with SciPy {scipy.__version__} ---', file=sys.stderr)
     data = numpy.array([1, 2, 3, 4, 5])
     result = int(scipy.signal.convolve(data, data).sum())
     analysis_result = {'result': result}
-    print(json.dumps(analysis_result))
+    safe_print(json.dumps(analysis_result))
     log_result('legacy_payload', analysis_result)
     return analysis_result
 
@@ -42,7 +42,7 @@ def run_modern_payload(legacy_data_json: str):
     import numpy as np
     import json
     import sys
-    print(f'--- Executing in Python {sys.version[:3]} with TensorFlow {tf.__version__} ---', file=sys.stderr)
+    safe_print(f'--- Executing in Python {sys.version[:3]} with TensorFlow {tf.__version__} ---', file=sys.stderr)
     try:
         input_data = json.loads(legacy_data_json)
         legacy_value = input_data['result']
@@ -57,17 +57,17 @@ def run_modern_payload(legacy_data_json: str):
             prediction_score = float(model(tf_input).numpy()[0][0])
         prediction = 'SUCCESS' if legacy_value > 50 and validation_passed and (prediction_score > 0.5) else 'FAILURE'
         final_result = {'prediction': prediction, 'legacy_result': legacy_value, 'numpy_result': numpy_result, 'relative_error': relative_error, 'prediction_score': prediction_score, 'validation_passed': validation_passed}
-        print(json.dumps(final_result))
+        safe_print(json.dumps(final_result))
         log_result('modern_payload', final_result)
         return final_result
     except Exception as e:
-        print(_('Error in modern payload: {}').format(e), file=sys.stderr)
+        safe_print(_('Error in modern payload: {}').format(e), file=sys.stderr)
         sys.exit(1)
 
 def run_command(command, description, check=True):
-    print(_('\n▶️  Executing: {}').format(description))
-    print(_('   Command: {}').format(' '.join(command)))
-    print(_('   --- Live Output ---'))
+    safe_print(_('\n▶️  Executing: {}').format(description))
+    safe_print(_('   Command: {}').format(' '.join(command)))
+    safe_print(_('   --- Live Output ---'))
     process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding='utf-8', errors='replace', bufsize=1, universal_newlines=True, env=os.environ)
     output_lines = []
     try:
@@ -75,33 +75,33 @@ def run_command(command, description, check=True):
             if line:
                 stripped_line = line.rstrip('\n\r')
                 if stripped_line:
-                    print(_('   | {}').format(stripped_line))
+                    safe_print(_('   | {}').format(stripped_line))
                 output_lines.append(line)
     except Exception as e:
-        print(_('   | Error reading output: {}').format(e))
+        safe_print(_('   | Error reading output: {}').format(e))
     process.stdout.close()
     return_code = process.wait()
-    print('   -------------------')
-    print(f'   ✅ Command finished with exit code: {return_code}')
+    safe_print('   -------------------')
+    safe_print(f'   ✅ Command finished with exit code: {return_code}')
     full_output = ''.join(output_lines)
     if check and return_code != 0:
         raise subprocess.CalledProcessError(return_code, command, output=full_output)
     return full_output
 
 def get_interpreter_path(version: str) -> str:
-    print(f'\n   Finding interpreter path for Python {version}...')
+    safe_print(f'\n   Finding interpreter path for Python {version}...')
     output = run_command(['omnipkg', 'info', 'python'], 'Querying interpreters')
     for line in output.splitlines():
         if f'Python {version}' in line:
             match = re.search(':\\s*(/\\S+)', line)
             if match:
                 path = match.group(1).strip()
-                print(_('   ✅ Found at: {}').format(path))
+                safe_print(_('   ✅ Found at: {}').format(path))
                 return path
     raise RuntimeError(_('Could not find managed Python {}.').format(version))
 
 def install_packages_with_omnipkg(packages: list, description: str):
-    print(_('\n   🔧 Installing packages via OMNIPKG: {}').format(', '.join(packages)))
+    safe_print(_('\n   🔧 Installing packages via OMNIPKG: {}').format(', '.join(packages)))
     omnipkg_command = ['omnipkg', 'install'] + packages
     run_command(omnipkg_command, description)
 
@@ -109,40 +109,40 @@ def multiverse_analysis():
     original_version = '3.11'
     timings = {}
     try:
-        print(f'🚀 Starting multiverse analysis from dimension: Python {original_version}')
+        safe_print(f'🚀 Starting multiverse analysis from dimension: Python {original_version}')
         start_time = time.perf_counter()
-        print(_('\n📦 MISSION STEP 1: Setting up Python 3.9 dimension...'))
+        safe_print(_('\n📦 MISSION STEP 1: Setting up Python 3.9 dimension...'))
         run_command(['omnipkg', 'swap', 'python', '3.9'], 'Swapping to Python 3.9')
         timings['swap_3.9'] = time.perf_counter() - start_time
         python_3_9_exe = get_interpreter_path('3.9')
         install_packages_with_omnipkg(['numpy==1.26.4', 'scipy==1.13.1'], 'Installing numpy==1.26.4 and scipy==1.13.1 via omnipkg for Python 3.9')
-        print(_('\n   🧪 Executing legacy payload in Python 3.9...'))
+        safe_print(_('\n   🧪 Executing legacy payload in Python 3.9...'))
         result_3_9 = subprocess.run([python_3_9_exe, __file__, '--run-legacy'], capture_output=True, text=True, check=True)
         legacy_data = json.loads(result_3_9.stdout)
-        print(f"✅ Artifact retrieved from 3.9: Scipy analysis complete. Result: {legacy_data['result']}")
+        safe_print(f"✅ Artifact retrieved from 3.9: Scipy analysis complete. Result: {legacy_data['result']}")
         start_time = time.perf_counter()
-        print(_('\n📦 MISSION STEP 2: Setting up Python 3.11 dimension...'))
+        safe_print(_('\n📦 MISSION STEP 2: Setting up Python 3.11 dimension...'))
         run_command(['omnipkg', 'swap', 'python', '3.11'], 'Swapping to Python 3.11')
         timings['swap_3.11'] = time.perf_counter() - start_time
         get_interpreter_path('3.11')
         install_packages_with_omnipkg(['tensorflow==2.20.0'], 'Installing tensorflow==2.20.0 via omnipkg for Python 3.11')
-        print(_("\n   🧪 Executing modern payload in Python 3.11 using 'omnipkg run' to trigger auto-healing..."))
+        safe_print(_("\n   🧪 Executing modern payload in Python 3.11 using 'omnipkg run' to trigger auto-healing..."))
         omnipkg_run_command = ['omnipkg', 'run', __file__, '--run-modern', json.dumps(legacy_data)]
         try:
             modern_output = run_command(omnipkg_run_command, 'Executing modern payload with auto-healing enabled')
             json_output = [line for line in modern_output.splitlines() if line.strip().startswith('{')][-1]
             final_prediction = json.loads(json_output)
-            print(_("✅ Artifact processed by 3.11: TensorFlow prediction complete. Prediction: '{}'").format(final_prediction['prediction']))
-            print(f"   🔍 Cross-dimensional validation: SciPy result = {final_prediction['legacy_result']}, NumPy result = {final_prediction['numpy_result']}, Relative Error = {final_prediction['relative_error']:.6f}, Validation {('Passed' if final_prediction['validation_passed'] else 'Failed')}, TF Prediction Score = {final_prediction['prediction_score']:.4f}")
+            safe_print(_("✅ Artifact processed by 3.11: TensorFlow prediction complete. Prediction: '{}'").format(final_prediction['prediction']))
+            safe_print(f"   🔍 Cross-dimensional validation: SciPy result = {final_prediction['legacy_result']}, NumPy result = {final_prediction['numpy_result']}, Relative Error = {final_prediction['relative_error']:.6f}, Validation {('Passed' if final_prediction['validation_passed'] else 'Failed')}, TF Prediction Score = {final_prediction['prediction_score']:.4f}")
             timings['payload_3.11'] = time.perf_counter() - start_time
             return final_prediction['prediction'] == 'SUCCESS' and final_prediction['validation_passed']
         except subprocess.CalledProcessError as e:
-            print(f"❌ Modern payload failed even with 'omnipkg run'! Exit code: {e.returncode}")
-            print(_('   Output: {}').format(e.output))
+            safe_print(f"❌ Modern payload failed even with 'omnipkg run'! Exit code: {e.returncode}")
+            safe_print(_('   Output: {}').format(e.output))
             return False
     finally:
         start_time = time.perf_counter()
-        print(_('\n🌀 SAFETY PROTOCOL: Returning to original dimension (Python {})...').format(original_version))
+        safe_print(_('\n🌀 SAFETY PROTOCOL: Returning to original dimension (Python {})...').format(original_version))
         run_command(['omnipkg', 'swap', 'python', original_version], 'Returning to original context', check=False)
         timings['return_swap'] = time.perf_counter() - start_time
         log_result('timings', timings)
@@ -167,16 +167,16 @@ if __name__ == '__main__':
         legacy_json_arg = sys.argv[sys.argv.index('--run-modern') + 1]
         run_modern_payload(legacy_json_arg)
     else:
-        print('=' * 80, '\n  🚀 OMNIPKG MULTIVERSE ANALYSIS TEST\n' + '=' * 80)
+        safe_print('=' * 80, '\n  🚀 OMNIPKG MULTIVERSE ANALYSIS TEST\n' + '=' * 80)
         start_time = time.perf_counter()
         success = multiverse_analysis()
         end_time = time.perf_counter()
-        print('\n' + '=' * 80, '\n  📊 TEST SUMMARY\n' + '=' * 80)
+        safe_print('\n' + '=' * 80, '\n  📊 TEST SUMMARY\n' + '=' * 80)
         if success:
-            print(_('🎉🎉🎉 MULTIVERSE ANALYSIS COMPLETE! Context switching, package management, and cross-dimensional validation working perfectly! 🎉🎉🎉'))
+            safe_print(_('🎉🎉🎉 MULTIVERSE ANALYSIS COMPLETE! Context switching, package management, and cross-dimensional validation working perfectly! 🎉🎉🎉'))
         else:
-            print('🔥🔥🔥 MULTIVERSE ANALYSIS FAILED! Check the output above for issues. 🔥🔥🔥')
-        print(f'\n⚡ PERFORMANCE: Total test runtime: {(end_time - start_time) * 1000:.2f} ms')
+            safe_print('🔥🔥🔥 MULTIVERSE ANALYSIS FAILED! Check the output above for issues. 🔥🔥🔥')
+        safe_print(f'\n⚡ PERFORMANCE: Total test runtime: {(end_time - start_time) * 1000:.2f} ms')
         chart_config = plot_results()
         if chart_config:
-            print(_('\n📊 Generated bar chart comparing SciPy, NumPy, and TensorFlow results. Visualize it in a Chart.js-compatible viewer!'))
+            safe_print(_('\n📊 Generated bar chart comparing SciPy, NumPy, and TensorFlow results. Visualize it in a Chart.js-compatible viewer!'))
