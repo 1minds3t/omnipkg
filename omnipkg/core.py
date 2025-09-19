@@ -1,4 +1,7 @@
-from .common_utils import safe_print
+try:
+    from .common_utils import safe_print
+except ImportError:
+    from omnipkg.common_utils import safe_print
 """
 omnipkg
 An intelligent installer that lets pip run, then surgically cleans up downgrades

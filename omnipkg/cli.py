@@ -1,4 +1,7 @@
-from .common_utils import safe_print
+try:
+    from .common_utils import safe_print
+except ImportError:
+    from omnipkg.common_utils import safe_print
 """omnipkg CLI - Enhanced with runtime interpreter switching and language support"""
 import sys
 import argparse

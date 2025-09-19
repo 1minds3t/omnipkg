@@ -1,4 +1,7 @@
-from .common_utils import safe_print
+try:
+    from .common_utils import safe_print
+except ImportError:
+    from omnipkg.common_utils import safe_print
 # In /home/minds3t/omnipkg/omnipkg/__init__.py
 
 from .i18n import _
