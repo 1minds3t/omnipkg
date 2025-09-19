@@ -1,4 +1,7 @@
-from .common_utils import safe_print
+try:
+    from .common_utils import safe_print
+except ImportError:
+    from omnipkg.common_utils import safe_print
 """
 CondaGuard: A lightweight, robust system to protect Conda environments
 from metadata corruption during high-intensity filesystem operations like

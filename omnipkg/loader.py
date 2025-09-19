@@ -1,4 +1,27 @@
-from .common_utils import safe_print
+try:
+    from .common_utils import safe_print
+except ImportError:
+    from omnipkg.common_utils import safe_print
+import sys
+_builtin_print = print
+def safe_print(*args, **kwargs):
+    """
+    A self-contained, robust print function for the omnipkgLoader.
+    It handles UnicodeEncodeError and is immune to sys.path changes
+    made by the loader itself.
+    """
+    try:
+        _builtin_print(*args, **kwargs)
+    except UnicodeEncodeError:
+        try:
+            encoding = sys.stdout.encoding or 'utf-8'
+            safe_args = [
+                str(arg).encode(encoding, 'replace').decode(encoding)
+                for arg in args
+            ]
+            _builtin_print(*safe_args, **kwargs)
+        except Exception:
+            _builtin_print("[omnipkgLoader: A message could not be displayed due to an encoding error.]")
 import sys
 import importlib
 import shutil

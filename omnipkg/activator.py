@@ -1,4 +1,7 @@
-from .common_utils import safe_print
+try:
+    from .common_utils import safe_print
+except ImportError:
+    from omnipkg.common_utils import safe_print
 import sys
 import os
 import importlib.util
