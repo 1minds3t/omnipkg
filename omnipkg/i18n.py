@@ -1,3 +1,4 @@
+from .common_utils import safe_print
 # In omnipkg/i18n.py - Enhanced version with comprehensive language support
 
 import gettext
