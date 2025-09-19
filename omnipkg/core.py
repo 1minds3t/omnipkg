@@ -900,13 +900,25 @@ class ConfigManager:
                 return current_path
         return Path(sys.prefix)
 
-    def _verify_python_version(self, python_path: str) -> Optional[Tuple[int, int]]:
+        
+def _verify_python_version(self, python_path: str) -> Optional[Tuple[int, int]]:
         """
         Verify that a Python executable works and get its version.
         Returns (major, minor) tuple or None if invalid.
         """
+        from .common_utils import safe_print
         try:
-            result = subprocess.run([python_path, '-c', 'import sys; safe_print(f"{sys.version_info.major}.{sys.version_info.minor}")'], capture_output=True, text=True, timeout=10)
+            # --- THIS IS THE FIX ---
+            # The subprocess is an isolated environment and only knows built-in functions.
+            # We must use 'print', not 'safe_print', inside the command string.
+            command_string = 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")'
+            
+            result = subprocess.run(
+                [python_path, '-c', command_string],
+                capture_output=True, text=True, timeout=10
+            )
+            # --- END FIX ---
+
             if result.returncode == 0:
                 version_str = result.stdout.strip()
                 major, minor = map(int, version_str.split('.'))
