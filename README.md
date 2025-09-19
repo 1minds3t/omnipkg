@@ -63,10 +63,10 @@
     <img src="https://img.shields.io/badge/🚀_Live_NumPy+SciPy_Hot--Swapping-passing-success?logo=github-actions" alt="Hot-Swapping">
   </a>
 <a href="https://github.com/1minds3t/omnipkg/actions/workflows/multiverse_test.yml">
-  <img src="https://img.shields.io/badge/🔥_Python_Interpreter_Hot--Swapping-Live-orange?logo=python&logoColor=white" alt="Python Hot-Swapping">
+  <img src="https://img.shields.io/badge/🔥_0.25s_Python_Interpreter_Hot--Swapping-Live-orange?logo=python&logoColor=white" alt="Python Hot-Swapping">
 </a>
   <a href="https://github.com/1minds3t/omnipkg/actions/workflows/old_rich_test.yml">
-  <img src="https://img.shields.io/badge/⚡_Auto--Healing-5.15x_Faster_than_UV-gold?logo=lightning&logoColor=white" alt="Auto-Healing Performance">
+  <img src="https://img.shields.io/badge/⚡_Auto--Healing-7.76x_Faster_than_UV-gold?logo=lightning&logoColor=white" alt="Auto-Healing Performance">
 </a>
     <a href="https://github.com/1minds3t/omnipkg/actions/workflows/language_test.yml">
     <img src="https://img.shields.io/badge/💥_Breaking_Language_Barriers-24_Languages-success?logo=babel&logoColor=white" alt="24 Languages">
@@ -78,91 +78,10 @@
 
 `omnipkg` radically simplifies Python dependency management, providing a robust alternative to tools like `pipx`, `uv`, `conda`, and `Docker` for handling conflicting packages. Born from a real-world nightmare—a forced downgrade that wrecked a `conda-forge` environment on a Friday night—`omnipkg` was built in a weekend to solve what others couldn't: running multiple versions of the same package in one environment without conflicts.
 
----
-
-## 🎉 **NEW: Zero-Dependency Setup & Conda-forge Official**
-
-**Redis is now OPTIONAL!** `omnipkg` automatically falls back to local SQLite cache when Redis isn't available, eliminating setup friction while maintaining full functionality.
-
-**Fresh on conda-forge TODAY!** Official conda-forge distribution now available alongside Docker and PyPI. 
-Link: https://anaconda.org/conda-forge/omnipkg
-
-Run: 
-```
-conda install -c conda-forge omnipkg
-```
----
-
-## 🔥 **BREAKTHROUGH: Multiverse Analysis - Single Script, Single Environment**
-
-The impossible is now routine. Watch `omnipkg` seamlessly run the same script across multiple Python versions **in a single environment** with automatic dependency management, auto-healing, and zero process restarts:
-
-<a href="https://github.com/1minds3t/omnipkg/actions/workflows/multiverse_test.yml">
-  <img src="https://img.shields.io/badge/🔥_Python_Interpreter_Hot--Swapping-Live-orange?logo=python&logoColor=white" alt="Python Hot-Swapping">
-</a>
-
-```bash
-🚀 Launching multiverse analysis from Python 3.11…
-
-📦 Step 1: Swapping to Python 3.9…
-🐍 Active interpreter switched in <1 second!
-✅ All dependencies auto-healed
-   - NumPy 1.26.4
-   - SciPy 1.13.1
-🧪 SciPy result: 225
-
-📦 Step 2: Swapping back to Python 3.11…
-🐍 Hot-swapped Python interpreter instantly
-✅ TensorFlow 2.20.0 ready to go
-🧪 TensorFlow prediction: SUCCESS
-
-🌀 SAFETY PROTOCOL: Returned to original Python 3.11 environment
-```
-
-**Key Achievement:** Total test runtime 22 seconds for complete multiverse analysis with automatic healing when NumPy compatibility issues arise.
-
----
-
-## 🛡️ **BREAKTHROUGH: Auto-Healing with `omnipkg run`**
-
-<a href="https://github.com/1minds3t/omnipkg/actions/workflows/old_rich_test.yml">
-  <img src="https://img.shields.io/badge/⚡_Auto--Healing-5.15x_Faster_than_UV-gold?logo=lightning&logoColor=white" alt="Auto-Healing Performance">
-</a>
-
-When external tools cause compatibility crashes, `omnipkg run` automatically detects and fixes issues in real-time:
-
-```bash
-⏱️  UV run failed in: 5379.237 ms (5,379,236,666 ns)
-🔍 NumPy 2.0 compatibility issue detected. Auto-healing with numpy downgrade...
-   - Downgrading to numpy<2.0 for compatibility
-✅ Using bubble: numpy-1.26.4
-
-🚀 Re-running with omnipkg auto-heal...
-✅ Script completed successfully inside omnipkg bubble.
-
-======================================================================
-🚀 PERFORMANCE COMPARISON: UV vs OMNIPKG
-======================================================================
-UV Failed Run:      5379.237 ms  (5,379,236,666 ns)
-omnipkg Healing:     693.212 ms  ( 693,211,844 ns)
-----------------------------------------------------------------------
-🎯 omnipkg is   7.76x FASTER than UV!
-💥 That's   675.99% improvement!
-======================================================================
-```
-
-**Auto-healing detects and fixes:**
-- NumPy 2.0 compatibility issues
-- Binary incompatibility errors
-- Dependency version conflicts
-- C-extension loading failures
-
----
-
 <!-- COMPARISON_STATS_START -->
 ## ⚖️ Multi-Version Support
 
-[![omnipkg](https://img.shields.io/badge/omnipkg-542%20Wins-brightgreen?logo=python&logoColor=white)](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml) [![pip](https://img.shields.io/badge/pip-545%20Failures-red?logo=pypi&logoColor=white)](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml) [![uv](https://img.shields.io/badge/uv-545%20Failures-red?logo=python&logoColor=white)](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml)
+[![omnipkg](https://img.shields.io/badge/omnipkg-541%20Wins-brightgreen?logo=python&logoColor=white)](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml) [![pip](https://img.shields.io/badge/pip-544%20Failures-red?logo=pypi&logoColor=white)](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml) [![uv](https://img.shields.io/badge/uv-544%20Failures-red?logo=python&logoColor=white)](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml)
 
 *Multi-version installation tests run hourly. [Live results here.](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml)*
 
@@ -184,7 +103,61 @@ omnipkg Healing:     693.212 ms  ( 693,211,844 ns)
 
 ## 🧠 Revolutionary Core Features
 
-### 1. Dynamic Version Switching [![💥 Nuclear Test: NumPy+SciPy](https://img.shields.io/badge/💥_Nuclear_Test:NumPy+SciPy-passing-success)](https://github.com/1minds3t/omnipkg/actions/workflows/numpy-scipy-c-extension-test.yml)
+### 1. Multiverse Orchestration & Python Hot-Swapping [![🐍 Multi-Interpreter Freedom](https://img.shields.io/badge/🐍_Multi--Interpreter_Freedom-Live-orange?logo=python&logoColor=white)](https://github.com/1minds3t/omnipkg/releases)
+
+The impossible is now routine. Run a single script across multiple Python versions **in a single environment** with automatic dependency management and zero process restarts. `omnipkg` provides true multi-interpreter freedom, ideal for running legacy code and modern packages in the same terminal session.
+
+**Live CI Output from Multiverse Analysis:**
+```bash
+🚀 Launching multiverse analysis from Python 3.11…
+
+📦 Step 1: Swapping to Python 3.9…
+🐍 Active interpreter switched in <1 second!
+✅ All dependencies auto-healed
+   - NumPy 1.26.4
+   - SciPy 1.13.1
+🧪 SciPy result: 225
+
+📦 Step 2: Swapping back to Python 3.11…
+🐍 Hot-swapped Python interpreter instantly
+✅ TensorFlow 2.20.0 ready to go
+🧪 TensorFlow prediction: SUCCESS
+
+🌀 SAFETY PROTOCOL: Returned to original Python 3.11 environment
+```
+**Key Achievement:** Total test runtime only ~12 seconds for complete multiverse analysis, with automatic healing when NumPy compatibility issues arise. Interpreter swaps finish in just 0.25 seconds!
+
+---
+
+### 2. Real-Time Auto-Healing [![⚡ Auto-Healing: 7.76x Faster than UV](https://img.shields.io/badge/⚡_Auto--Healing-7.76x_Faster_than_UV-gold?logo=lightning&logoColor=white)](https://github.com/1minds3t/omnipkg/actions/workflows/old_rich_test.yml)
+
+When external tools or scripts cause compatibility crashes, `omnipkg run` automatically detects, diagnoses, and fixes the issues in real-time, often faster than the original command took to fail.
+
+**Live CI Output from Auto-Healing:**
+```bash
+⏱️  UV run failed in: 5379.237 ms (5,379,236,666 ns)
+🔍 NumPy 2.0 compatibility issue detected. Auto-healing with numpy downgrade...
+   - Downgrading to numpy<2.0 for compatibility
+✅ Using bubble: numpy-1.26.4
+
+🚀 Re-running with omnipkg auto-heal...
+✅ Script completed successfully inside omnipkg bubble.
+
+======================================================================
+🚀 PERFORMANCE COMPARISON: UV vs OMNIPKG
+======================================================================
+UV Failed Run:      5379.237 ms  (5,379,236,666 ns)
+omnipkg Healing:     693.212 ms  ( 693,211,844 ns)
+----------------------------------------------------------------------
+🎯 omnipkg is   7.76x FASTER than UV!
+💥 That's   675.99% improvement!
+======================================================================
+```
+**Auto-healing detects and fixes:** NumPy 2.0 issues, binary incompatibility errors, dependency version conflicts, C-extension loading failures, and missing packages.
+
+---
+
+### 3. Dynamic Package Switching [![💥 Nuclear Test: NumPy+SciPy](https://img.shields.io/badge/💥_Nuclear_Test:NumPy+SciPy-passing-success)](https://github.com/1minds3t/omnipkg/actions/workflows/numpy-scipy-c-extension-test.yml)
 
 Switch package versions mid-script using `omnipkgLoader`, without restarting or changing environments. `omnipkg` seamlessly juggles C-extension packages like `numpy` and `scipy` in the same Python process. The loader even handles complex **nested dependency contexts**, a feat unmatched by other tools.
 
@@ -214,38 +187,7 @@ print(numpy.__version__)  # Outputs: Original main env version (e.g., 1.26.4)
 ```
 ---
 
-### 2. Python Interpreter Hot-Swapping [![🐍 Multi-Interpreter Freedom](https://img.shields.io/badge/🐍_Multi--Interpreter_Freedom-Live-orange?logo=python&logoColor=white)](https://github.com/1minds3t/omnipkg/releases)
-
-Switch between Python versions **on the fly**, without restarting your shell or script. `omnipkg` provides true multi-interpreter freedom with zero-friction adoption of your system's native Python. This is ideal for running legacy code and modern packages in the same terminal session.
-
-**Live CI Output from Multiverse Analysis:**
-```bash
-📦 MISSION STEP 1: Setting up Python 3.9 dimension...
-🐍 Switching active Python context to version 3.9...
-   - Found managed interpreter at: /opt/conda/envs/.omnipkg/interpreters/cpython-3.9.18/bin/python3.9
-   - Updating configuration to new context...
-   - ✅ Configuration saved.
-🔧 Updating default Python links...
-   ✅ Default Python links updated to use Python 3.9.
-🎉 Successfully switched omnipkg context to Python 3.9!
-
-🧪 Executing legacy payload in Python 3.9...
-✅ Artifact retrieved from 3.9: Scipy analysis complete. Result: 225
-
-📦 MISSION STEP 2: Setting up Python 3.11 dimension...
-🐍 Switching active Python context to version 3.11...
-✅ Artifact processed by 3.11: TensorFlow prediction complete. Prediction: 'SUCCESS'
-```
-
-**Key Architecture:**
-- **Zero-Friction Adoption**: Your native Python is automatically managed on first run.
-- **Control Plane Stability**: A dedicated Python 3.11 control plane ensures bulletproof operations.
-- **Automatic Context Switching**: Demos and scripts can trigger an interpreter swap automatically.
-- **Multiverse Analysis**: Single script runs across multiple Python versions in one environment.
-
----
-
-### 3. 🌍 Global Intelligence & AI-Driven Localization [![🤖 AI-Powered: 24 Languages](https://img.shields.io/badge/🤖_AI--Powered-24_Languages-brightgreen?logo=openai&logoColor=white)](https://github.com/1minds3t/omnipkg/actions/workflows/language_test.yml)
+### 4. 🌍 Global Intelligence & AI-Driven Localization [![🤖 AI-Powered: 24 Languages](https://img.shields.io/badge/🤖_AI--Powered-24_Languages-brightgreen?logo=openai&logoColor=white)](https://github.com/1minds3t/omnipkg/actions/workflows/language_test.yml)
 
 `omnipkg` eliminates language barriers with advanced AI localization supporting 24+ languages, making package management accessible to developers worldwide in their native language.
 
@@ -259,18 +201,14 @@ omnipkg config set language zh_CN
 # Temporary language override
 omnipkg --lang es install requests
 
-# Interactive language picker
-omnipkg reset-config
-
 # View current configuration
 cat ~/.config/omnipkg/config.json
 ```
-
 Zero setup required—works in your language from first run with graceful fallbacks and clear beta transparency.
 
 ---
 
-### 4. Downgrade Protection & Conflict Resolution [![🔧 Simple UV Multi-Version Test](https://img.shields.io/badge/🔧_Simple_UV_Multi--Version_Test-passing-success)](https://github.com/1minds3t/omnipkg/actions/workflows/test_uv_install.yml)
+### 5. Downgrade Protection & Conflict Resolution [![🔧 Simple UV Multi-Version Test](https://img.shields.io/badge/🔧_Simple_UV_Multi--Version_Test-passing-success)](https://github.com/1minds3t/omnipkg/actions/workflows/test_uv_install.yml)
 
 `omnipkg` automatically reorders installations and isolates conflicts, preventing environment-breaking downgrades.
 
@@ -288,35 +226,9 @@ omnipkg install torch==2.0.0 torch==2.7.1
 🫧 Creating bubble for torch==2.0.0... ✅ Done
 🔄 Restoring torch==2.7.1... ✅ Environment secure
 ```
-
 ---
 
-### 5. Python Library, Binary, & C-Extension Support [![⚡ UV Binary Test](https://img.shields.io/badge/⚡_UV_Binary_Test-passing-success)](https://github.com/1minds3t/omnipkg/actions/workflows/test-uv-binary-switching.yml) [![💥 TensorFlow Hot-Swap](https://img.shields.io/badge/💥_TensorFlow_Hot_Swap-passing-success)](https://github.com/1minds3t/omnipkg/actions/workflows/test-tensorflow-switching.yml) [![🧪 Rich Version Juggling](https://img.shields.io/badge/🧪_Rich_Version_Juggling-passing-success)](https://github.com/1minds3t/omnipkg/actions/workflows/rich-module-switching-test.yml)
-
-`omnipkg` seamlessly switches binary tools (e.g., `uv`) and complex C-extension version combinations (e.g., `tensorflow`, `numpy`, `scipy`) during runtime, a feat traditional tools struggle with.
-
-**Key CI Output Excerpts (TensorFlow):**
-
-```bash
-🔧 Testing initial state: tensorflow==2.13.0 with typing-extensions==4.14.1 and keras==2.13.1 (main)
-TensorFlow version: 2.13.0
-Typing Extensions version: 4.14.1
-Keras version: 2.13.1
-✅ Model created successfully
-
-🫧 Testing switch to typing-extensions==4.5.0 bubble
-🌀 omnipkg loader: Activating typing_extensions==4.5.0...
- ✅ Activated bubble: /opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/.omnipkg_versions/typing_extensions-4.5.0
-TensorFlow version: 2.13.0
-Typing Extensions version: 4.5.0
-Keras version: 2.13.1
-✅ Model created successfully with typing-extensions 4.5.0 bubble
-✅ Successfully switched to older version: typing-extensions=4.5.0
-😎 TensorFlow escaped the matrix! 🚀
-```
-
----
-### 6. Deep Package Intelligence [![🔍 Package Discovery Demo - Omnipkg Intelligence](https://github.com/1minds3t/omnipkg/actions/workflows/knowledge_base_check.yml/badge.svg)](https://github.com/1minds3t/omnipkg/actions/workflows/knowledge_base_check.yml)
+### 6. Deep Package Intelligence [![🔍 Package Discovery Demo](https://github.com/1minds3t/omnipkg/actions/workflows/knowledge_base_check.yml/badge.svg)](https://github.com/1minds3t/omnipkg/actions/workflows/knowledge_base_check.yml)
 
 Unlike tools that only track "package installed/not installed," `omnipkg` builds a knowledge base with 60+ metadata fields per package version, stored in Redis for instant analysis (or SQLite as fallback).
 
@@ -331,10 +243,6 @@ omnipkg info uv
 🔒 Security Issues : 0  
 🛡️ Audit Status  : checked_in_bulk
 ✅ Importable      : True
-
----[ Build Info ]---
-⏰ Last Indexed: 2025-08-17T12:51:28
-🔐 Checksum: b7b75f1e...cdd22
 ```
 
 | **Intelligence Includes** | **Redis/SQLite Superpowers** |
@@ -367,26 +275,12 @@ Current uv version (after uv's operation): uv 0.7.13
 📝 The following actions will be taken to restore the environment:
   - Fix Version: uv==0.8.11
 🚀 Starting revert operation...
-⚙️ Running pip install for: uv==0.8.11...
-      Successfully uninstalled uv-0.7.13
-Successfully installed uv-0.8.11
 ✅ Environment successfully reverted to the last known good state.
 
 --- Verifying UV version after omnipkg revert ---
 uv 0.8.11
 ```
-
 **UV is saved, along with any deps!**
-
----
-
-### 🏗️ The Architecture: How Hot-Swapping Works
-
-Solving interpreter hot-swapping required a complete architectural reimagining. The core challenges we solved:
-
-*   **The State Problem**: Python interpreters maintain complex internal state. Our solution creates isolated execution contexts while maintaining a seamless user experience.
-*   **The Control Plane Solution**: All sensitive operations execute through a dedicated Python 3.11 "control plane," ensuring reliability regardless of your active interpreter version.
-*   **Native Adoption Breakthrough**: The biggest user friction point—getting "stuck" after switching away from your native Python—is eliminated by automatically managing your existing interpreter from day one.
 
 ---
 
@@ -482,12 +376,6 @@ omnipkg swap python 3.10
 python --version  # Now Python 3.10.x
 ```
 
-### Try the Multiverse Analysis
-```bash
-omnipkg stress-test
-```
-Watch `omnipkg` run the same script across multiple Python versions in a single environment!
-
 ### Optional: Enhanced Performance with Redis
 For maximum performance, install Redis:
 
@@ -551,8 +439,8 @@ You now have both versions available in one environment, ready for use anytime!
 ## 🌟 Coming Soon
 
 *   **Time Machine Technology for Legacy Packages**: Install ancient packages with historically accurate build tools and dependencies that are 100% proven to work in any environment.
-*   **Bubble validation**: Ensuring your bubbled packages are stored with functional dependencies by testing during installs.
-*   **Enhanced CI Workflows**: Public CI demonstrating mid-script interpreter hot-swapping.
+*   **Concurrent 3x Python & Package Versions Running in Single Script, Single Environment**: Already proven it works locally, creating CI and a demo for it soon!
+*   **Ensuring Python-Interpreter Hotswaps Work Flawlessly In CI/CD**: Improving code so that CI can consistently execute mid-script interpreter hot-swapping without issues.
 
 ---
 
@@ -596,7 +484,7 @@ This project thrives on community collaboration. Contributions, bug reports, and
 | different Python versions!"             |
 |                                         |
 | omnipkg: *runs multiverse analysis      |
-| across 3 Python versions in 22 seconds  |
+| across 3 Python versions in 12 seconds  |
 | in one environment with auto-healing*   |
 | "Wait, that's illegal!"                 |
 \_________________________________________/
