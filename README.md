@@ -291,9 +291,18 @@ uv 0.8.11
 
 ### Installation Options
 
-#### 📦 PyPI (Recommended)    
+#### ⚡ UV 
 
+<a href="https://github.com/astral-sh/uv">
+<img src="https://img.shields.io/badge/uv-install-blueviolet?logo=uv&logoColor=white" alt="uv Install">
 </a>
+
+```bash
+uv pip install omnipkg
+```
+
+#### 📦 PyPi
+
   <a href="https://pypi.org/project/omnipkg/">
     <img src="https://img.shields.io/pypi/v/omnipkg?color=blue&logo=pypi" alt="PyPI">
   </a>
@@ -302,7 +311,7 @@ uv 0.8.11
 pip install omnipkg
 ```
 
-#### 🏠 Official Conda-Forge (BRAND NEW!!!)
+#### 🏠 Official Conda-Forge Channel
 
   <a href="https://anaconda.org/conda-forge/omnipkg">
   <img src="https://anaconda.org/conda-forge/omnipkg/badges/platforms.svg" alt="Platforms / Noarch">
@@ -319,7 +328,7 @@ conda install -c conda-forge omnipkg
 mamba install -c conda-forge omnipkg
 ```
 
-#### 🍺 Homebrew (macOS/Linux)
+#### 🍺 Homebrew
 ```bash
 # Add the tap first
 brew tap 1minds3t/omnipkg
@@ -338,7 +347,7 @@ brew install omnipkg
 docker pull 1minds3t/omnipkg:latest
 ```
 
-### 🌱 From GitHub (Developer / Latest)
+### 🌱 GitHub
 ```bash
 # Clone the repo
 git clone https://github.com/1minds3t/omnipkg.git
