@@ -288,32 +288,6 @@ class ConfigManager:
                         pass
         return False
 
-    def _get_paths_for_interpreter(self, python_exe_path: str) -> Optional[Dict[str, str]]:
-        """
-        Runs an interpreter in a subprocess to ask for its version and calculates
-        its site-packages path. This is the only reliable way to get paths for an
-        interpreter that isn't the currently running one.
-        """
-        try:
-            cmd = [python_exe_path, '-I', '-c', "import sys; import json; print(json.dumps({'version': f'{sys.version_info.major}.{sys.version_info.minor}', 'prefix': sys.prefix}))"]
-            result = subprocess.run(cmd, capture_output=True, text=True, check=True, timeout=10)
-            interp_info = json.loads(result.stdout)
-            version = interp_info['version']
-            prefix = Path(interp_info['prefix'])
-            site_packages_cmd = [python_exe_path, '-I', '-c', 'import site; import json; print(json.dumps(site.getsitepackages()))']
-            sp_result = subprocess.run(site_packages_cmd, capture_output=True, text=True, check=True, timeout=10)
-            sp_list = json.loads(sp_result.stdout)
-            if not sp_list:
-                raise RuntimeError('Could not determine site-packages location.')
-            site_packages = Path(sp_list[0])
-            return {'site_packages_path': str(site_packages), 'multiversion_base': str(site_packages / '.omnipkg_versions'), 'python_executable': python_exe_path}
-        except (subprocess.CalledProcessError, FileNotFoundError, json.JSONDecodeError, KeyError, RuntimeError) as e:
-            error_details = f'Error: {e}'
-            if isinstance(e, subprocess.CalledProcessError):
-                error_details += f'\nSTDERR:\n{e.stderr}'
-            print(f'⚠️  Could not determine paths for interpreter {python_exe_path}: {error_details}')
-            return None
-
     def _align_config_to_interpreter(self, python_exe_path_str: str):
         """
         Updates and saves config paths to match the specified Python executable
@@ -981,49 +955,170 @@ class ConfigManager:
         except Exception:
             return 'en'
 
-    def _get_sensible_defaults(self) -> Dict:
+    def get_sensible_defaults(self) -> Dict:
         """
         Generates sensible default configuration paths based STRICTLY on the
         currently active virtual environment to ensure safety and prevent permission errors.
         """
         safe_print(_('💡 Grounding configuration in the current active environment...'))
         active_python_exe = sys.executable
-        safe_print(_('   ✅ Using: {} (Your active interpreter)').format(active_python_exe))
+        safe_print(_(' ✅ Using: {} (Your active interpreter)').format(active_python_exe))
         calculated_paths = self._get_paths_for_interpreter(active_python_exe)
+        
         if not calculated_paths:
-            safe_print(_('   ⚠️  Falling back to basic path detection within the current environment.'))
+            safe_print(_(' ⚠️ Falling back to basic path detection within the current environment.'))
             site_packages = str(self._get_actual_current_site_packages())
-            calculated_paths = {'site_packages_path': site_packages, 'multiversion_base': str(Path(site_packages) / '.omnipkg_versions'), 'python_executable': sys.executable}
-        return {**calculated_paths, 'python_interpreters': self.list_available_pythons() or {}, 'preferred_python_version': f'{self._preferred_version[0]}.{self._preferred_version[1]}', 'builder_script_path': str(Path(__file__).parent / 'package_meta_builder.py'), 'redis_host': 'localhost', 'redis_port': 6379, 'redis_key_prefix': 'omnipkg:pkg:', 'install_strategy': 'stable-main', 'uv_executable': 'uv', 'paths_to_index': self._get_bin_paths(), 'language': self._get_system_lang_code(), 'enable_python_hotswap': True}
+            calculated_paths = {
+                'site_packages_path': site_packages,
+                'multiversion_base': str(Path(site_packages) / '.omnipkg_versions'),
+                'python_executable': sys.executable
+            }
+        
+        return {
+            **calculated_paths,
+            'python_interpreters': self.list_available_pythons() or {},
+            'preferred_python_version': f'{self._preferred_version[0]}.{self._preferred_version[1]}',
+            'builder_script_path': str(Path(__file__).parent / 'package_meta_builder.py'),
+            'redis_host': 'localhost',
+            'redis_port': 6379,
+            'redis_key_prefix': 'omnipkg:pkg:',
+            'install_strategy': 'stable-main',
+            'uv_executable': 'uv',
+            'paths_to_index': self._get_bin_paths(),
+            'language': self._get_system_lang_code(),
+            'enable_python_hotswap': True
+        }
 
     def _get_actual_current_site_packages(self) -> Path:
         """
         Gets the ACTUAL site-packages directory for the currently running Python interpreter.
         This is more reliable than calculating it from sys.prefix when hotswapping is involved.
+        Cross-platform compatible with special handling for Windows.
         """
+        import platform
+        is_windows = platform.system() == 'Windows'
+        
         try:
+            # First, try to use site.getsitepackages() - most reliable method
             site_packages_list = site.getsitepackages()
             if site_packages_list:
-                current_python_dir = Path(sys.executable).parent.parent
+                current_python_dir = Path(sys.executable).parent
+                
+                # Find the site-packages that belongs to our current Python
                 for sp in site_packages_list:
                     sp_path = Path(sp)
                     try:
+                        # Check if this site-packages is under our Python installation
                         sp_path.relative_to(current_python_dir)
-                        return sp_path
+                        # Additional validation: check if it actually contains packages
+                        if sp_path.exists():
+                            return sp_path
                     except ValueError:
                         continue
+                
+                # If relative path matching fails, prefer the longest path (most specific)
+                # and ensure it exists
+                for sp in sorted(site_packages_list, key=len, reverse=True):
+                    sp_path = Path(sp)
+                    if sp_path.exists():
+                        return sp_path
+                
+                # Fallback to first path (even if it doesn't exist yet)
                 return Path(site_packages_list[0])
-        except:
+        except Exception:
+            # Continue with fallback logic
             pass
+        
+        # Fallback: Manual construction based on OS
         python_version = f'python{sys.version_info.major}.{sys.version_info.minor}'
         current_python_path = Path(sys.executable)
+        
+        # Handle omnipkg's own interpreter management
         if '.omnipkg/interpreters' in str(current_python_path):
             interpreter_root = current_python_path.parent.parent
-            site_packages_path = interpreter_root / 'lib' / python_version / 'site-packages'
+            if is_windows:
+                site_packages_path = interpreter_root / 'Lib' / 'site-packages'
+            else:
+                site_packages_path = interpreter_root / 'lib' / python_version / 'site-packages'
         else:
+            # Standard environment detection
             venv_path = Path(sys.prefix)
-            site_packages_path = venv_path / 'lib' / python_version / 'site-packages'
+            
+            if is_windows:
+                # Windows has multiple possible locations, try in order of preference
+                candidates = [
+                    venv_path / 'Lib' / 'site-packages',  # Standard Windows location
+                    venv_path / 'lib' / 'site-packages',  # Sometimes used
+                    venv_path / 'lib' / python_version / 'site-packages'  # Version-specific
+                ]
+                
+                for candidate in candidates:
+                    if candidate.exists():
+                        site_packages_path = candidate
+                        break
+                else:
+                    # Default to the most common Windows location
+                    site_packages_path = venv_path / 'Lib' / 'site-packages'
+            else:
+                # Unix-like systems (Linux, macOS)
+                site_packages_path = venv_path / 'lib' / python_version / 'site-packages'
+        
         return site_packages_path
+
+    def _get_paths_for_interpreter(self, python_exe_path: str) -> Optional[Dict[str, str]]:
+        """
+        Runs an interpreter in a subprocess to ask for its version and calculates
+        its site-packages path. This is the only reliable way to get paths for an
+        interpreter that isn't the currently running one.
+        Enhanced with Windows-specific fallback logic.
+        """
+        import platform
+        
+        try:
+            cmd = [python_exe_path, '-I', '-c', "import sys; import json; print(json.dumps({'version': f'{sys.version_info.major}.{sys.version_info.minor}', 'prefix': sys.prefix}))"]
+            result = subprocess.run(cmd, capture_output=True, text=True, check=True, timeout=10)
+            interp_info = json.loads(result.stdout)
+            version = interp_info['version']
+            prefix = Path(interp_info['prefix'])
+            
+            # Try to get site-packages via subprocess
+            site_packages_cmd = [python_exe_path, '-I', '-c', 'import site; import json; print(json.dumps(site.getsitepackages()))']
+            sp_result = subprocess.run(site_packages_cmd, capture_output=True, text=True, check=True, timeout=10)
+            sp_list = json.loads(sp_result.stdout)
+            
+            if sp_list:
+                site_packages = Path(sp_list[0])
+            else:
+                # Fallback: construct manually based on platform
+                is_windows = platform.system() == 'Windows'
+                if is_windows:
+                    # Try Windows-specific paths
+                    candidates = [
+                        prefix / 'Lib' / 'site-packages',
+                        prefix / 'lib' / 'site-packages',
+                        prefix / 'lib' / f'python{version}' / 'site-packages'
+                    ]
+                    for candidate in candidates:
+                        if candidate.exists():
+                            site_packages = candidate
+                            break
+                    else:
+                        site_packages = prefix / 'Lib' / 'site-packages'
+                else:
+                    site_packages = prefix / 'lib' / f'python{version}' / 'site-packages'
+            
+            return {
+                'site_packages_path': str(site_packages),
+                'multiversion_base': str(site_packages / '.omnipkg_versions'),
+                'python_executable': python_exe_path
+            }
+            
+        except (subprocess.CalledProcessError, FileNotFoundError, json.JSONDecodeError, KeyError, RuntimeError) as e:
+            error_details = f'Error: {e}'
+            if isinstance(e, subprocess.CalledProcessError):
+                error_details += f'\nSTDOUT: {e.stdout}\nSTDERR: {e.stderr}'
+            print(f'⚠️ Could not determine paths for interpreter {python_exe_path}: {error_details}')
+            return None
 
     def list_available_pythons(self) -> Dict[str, str]:
         """
