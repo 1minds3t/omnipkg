@@ -328,6 +328,16 @@ conda install -c conda-forge omnipkg
 mamba install -c conda-forge omnipkg
 ```
 
+<a href="[https://anaconda.org/minds3t/omnipkg](https://anaconda.org/minds3t/omnipkg)">
+  <img src="[https://img.shields.io/badge/conda--channel-minds3t-blue?logo=anaconda&logoColor=white](https://img.shields.io/badge/conda--channel-minds3t-blue?logo=anaconda&logoColor=white)" alt="Minds3t Conda Channel">
+</a>
+
+```bash
+conda install -c minds3t omnipkg
+# Or with mamba
+mamba install -c minds3t omnipkg
+```
+
 #### 🍺 Homebrew
 ```bash
 # Add the tap first
@@ -347,18 +357,6 @@ docker pull 1minds3t/omnipkg:latest
 
 # Pull from GitHub Container Registry (GHCR)
 docker pull ghcr.io/1minds3t/omnipkg:latest
-```
-
-#### Personal Conda Channel
-
-<a href="[https://anaconda.org/minds3t/omnipkg](https://anaconda.org/minds3t/omnipkg)">
-  <img src="[https://img.shields.io/badge/conda--channel-minds3t-blue?logo=anaconda&logoColor=white](https://img.shields.io/badge/conda--channel-minds3t-blue?logo=anaconda&logoColor=white)" alt="Minds3t Conda Channel">
-</a>
-
-```bash
-conda install -c minds3t omnipkg
-# Or with mamba
-mamba install -c minds3t omnipkg
 ```
 
 ### 🌱 GitHub
