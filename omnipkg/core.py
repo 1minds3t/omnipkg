@@ -955,7 +955,7 @@ class ConfigManager:
         except Exception:
             return 'en'
 
-    def get_sensible_defaults(self) -> Dict:
+    def _get_sensible_defaults(self) -> Dict:
         """
         Generates sensible default configuration paths based STRICTLY on the
         currently active virtual environment to ensure safety and prevent permission errors.
