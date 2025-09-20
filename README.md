@@ -314,6 +314,18 @@ uv pip install omnipkg
 pip install omnipkg
 ```
 
+#### 🥧 piwheels (for Raspberry Pi)
+
+<a href="https://www.piwheels.org/project/omnipkg/">
+  <img src="https://img.shields.io/badge/piwheels-install-97BF0D?logo=raspberrypi&logoColor=white" alt="piwheels Install">
+</a>
+
+For users on Raspberry Pi, you can use the optimized wheels from piwheels for faster installation.
+
+```bash
+pip install --index-url=https://www.piwheels.org/simple/ omnipkg
+```
+
 #### 🏠 Official Conda-Forge Channel
 
   <a href="https://anaconda.org/conda-forge/omnipkg">
