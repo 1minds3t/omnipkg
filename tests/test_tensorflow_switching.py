@@ -61,10 +61,20 @@ def print_header(title):
 def print_subheader(title):
     safe_print(_('\\n--- {} ---').format(title))
 
+    
 def ensure_tensorflow_bubbles(config_manager: ConfigManager):
     """Ensures we have the necessary TensorFlow bubbles created."""
     safe_print(_('   📦 Ensuring TensorFlow bubbles exist...'))
     omnipkg_core = OmnipkgCore(config_manager)
+
+    # Determine the correct Python context for the bubbles, just like in smart_install.
+    configured_exe = config_manager.config.get('python_executable', sys.executable)
+    version_tuple = config_manager._verify_python_version(configured_exe)
+    python_context_version = f'{version_tuple[0]}.{version_tuple[1]}' if version_tuple else 'unknown'
+    if python_context_version == 'unknown':
+        safe_print("   ⚠️ CRITICAL: Could not determine Python context for test bubble creation.")
+        return False  # Early exit if we can't determine Python version
+
     packages_to_bubble = {'tensorflow': ['2.13.0', '2.12.0'], 'typing_extensions': ['4.14.1', '4.5.0']}
     for pkg_name, versions in packages_to_bubble.items():
         for version in versions:
@@ -72,13 +82,26 @@ def ensure_tensorflow_bubbles(config_manager: ConfigManager):
             bubble_path = omnipkg_core.multiversion_base / bubble_name
             if not bubble_path.exists():
                 safe_print(f'   🫧 Force-creating bubble for {pkg_name}=={version}...')
-                if omnipkg_core.bubble_manager.create_isolated_bubble(pkg_name, version):
+                # Pass the context to the bubble creator
+                if omnipkg_core.bubble_manager.create_isolated_bubble(pkg_name, version, python_context_version):
                     safe_print(_('   ✅ Created {}=={} bubble').format(pkg_name, version))
-                    omnipkg_core.rebuild_package_kb([f'{pkg_name}=={version}'])
+                    
+                    # ======================================================================
+                    # THIS IS THE FINAL, CRITICAL FIX
+                    # We MUST pass the context to the KB rebuild command.
+                    # ======================================================================
+                    omnipkg_core.rebuild_package_kb(
+                        [f'{pkg_name}=={version}'], 
+                        target_python_version=python_context_version
+                    )
+                    # ======================================================================
+
                 else:
                     safe_print(f'   ❌ Failed to create bubble for {pkg_name}=={version}')
             else:
                 safe_print(_('   ✅ {}=={} bubble already exists').format(pkg_name, version))
+    
+    return True  # Success
 
 def setup_environment():
     print_header('STEP 1: Environment Setup & Bubble Creation')
@@ -88,7 +111,12 @@ def setup_environment():
     for pkg in ['tensorflow', 'tensorflow_estimator', 'keras', 'typing_extensions']:
         for cloaked in site_packages.glob(f'{pkg}.*_omnipkg_cloaked*'):
             shutil.rmtree(cloaked, ignore_errors=True)
-    ensure_tensorflow_bubbles(config_manager)
+    
+    # Handle potential failure
+    if not ensure_tensorflow_bubbles(config_manager):
+        safe_print('❌ Failed to ensure TensorFlow bubbles exist')
+        return None
+    
     safe_print(_('✅ Environment prepared'))
     return config_manager
 

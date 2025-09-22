@@ -18,7 +18,16 @@ try:
 except ImportError as e:
     safe_print(f'FATAL: Could not import omnipkg modules. Make sure this script is placed correctly. Error: {e}')
     sys.exit(1)
-log_file = project_root / 'multiverse_log.jsonl'
+import tempfile
+
+# Use the system's temporary directory for logs, which is always writable.
+# We give it a predictable name so we can find it later if needed for debugging.
+temp_dir = Path(tempfile.gettempdir())
+log_file = temp_dir / 'omnipkg_multiverse_log.jsonl'
+
+# Ensure the log file is clean before we start a new run
+if log_file.exists():
+    log_file.unlink()
 
 def log_result(step: str, data: dict):
     with open(log_file, 'a') as f:

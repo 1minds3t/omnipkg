@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "omnipkg"
-version = "1.4.7"
+version = "1.5.0"
 authors = [
   { name = "1minds3t", email = "1minds3t@proton.me" },
 ]
@@ -81,3 +81,4 @@ exclude = [
 
 [tool.setuptools]
 license-files = ["LICENSE", "COMMERCIAL_LICENSE.md"]
+include-package-data = true
