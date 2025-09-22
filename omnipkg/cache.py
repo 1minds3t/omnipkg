@@ -241,5 +241,15 @@ class SQLitePipeline:
     def hdel(self, key, *fields):
         self.commands.append((self.client.hdel, [key] + list(fields), {}))
         return self
+    
+    def sadd(self, name: str, *values):
+        # Pass `name` and the tuple of `values` to the client's sadd method
+        self.commands.append((self.client.sadd, [name] + list(values), {}))
+        return self
+
+    def set(self, key, value, ex=None):
+        # The 'ex' argument for TTL is needed for redis-py compatibility
+        self.commands.append((self.client.set, [key, value], {'ex': ex}))
+        return self
 
     # Add other methods here as needed to expand pipeline functionality.
