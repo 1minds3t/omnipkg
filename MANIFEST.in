@@ -15,3 +15,7 @@ recursive-include omnipkg/locale *.mo
 # Include all files in the tests directory
 recursive-include tests *.py
 
+# Include list of top-level module imports    
+include top_level.txt
+
+  

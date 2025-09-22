@@ -10,12 +10,14 @@ import os
 import subprocess
 import tempfile
 import json
+import requests as http_requests
 from .i18n import _, SUPPORTED_LANGUAGES
 from .core import omnipkg as OmnipkgCore
 from .core import ConfigManager
 from .common_utils import print_header, run_script_in_omnipkg_env, UVFailureDetector
 from .commands.run import execute_run_command
 from .common_utils import sync_context_to_runtime
+project_root = Path(__file__).resolve().parent.parent
 TESTS_DIR = Path(__file__).parent.parent / 'tests'
 DEMO_DIR = Path(__file__).parent
 try:
@@ -151,42 +153,98 @@ def run_actual_stress_test():
         import traceback
         traceback.print_exc()
 
-def run_demo_with_live_streaming(test_file, demo_name):
-    """Run a demo with true, line-by-line live streaming output."""
-    safe_print(_('🚀 Running {} test from {}...').format(demo_name.capitalize(), test_file))
-    safe_print(_('📡 Live streaming output (this may take several minutes for heavy packages)...'))
-    safe_print(_("💡 Don't worry if there are pauses - packages are downloading/installing!"))
-    safe_print(_('🛑 Press Ctrl+C to safely cancel if needed'))
-    safe_print('-' * 60)
+    
+    
+def run_demo_with_live_streaming(test_file_name: str, demo_name: str, python_exe: str = None, isolate_env: bool = False):
+    """
+    (FINAL v3) Run a demo with live streaming.
+    - If given an ABSOLUTE path (like a temp file), it uses it directly.
+    - If given a RELATIVE name (like a test file), it dynamically locates it.
+    - It ALWAYS dynamically determines the correct project root for PYTHONPATH to ensure imports work.
+    """
     process = None
     try:
-        cm = ConfigManager()
-        current_lang = cm.config.get('language', 'en')
-        project_root = FILE_PATH.parent.parent
+        cm = ConfigManager(suppress_init_messages=True)
+        effective_python_exe = python_exe or cm.config.get('python_executable', sys.executable)
+        
+        # --- START: ROBUST PATHING LOGIC ---
+        # Step 1: ALWAYS find the project root for the target Python context.
+        # This is essential for setting PYTHONPATH so the subprocess can 'import omnipkg'.
+        cmd = [
+            effective_python_exe, '-c',
+            "import omnipkg; from pathlib import Path; print(Path(omnipkg.__file__).resolve().parent.parent)"
+        ]
+        result = subprocess.run(cmd, capture_output=True, text=True, check=True, encoding='utf-8')
+        project_root_in_context = Path(result.stdout.strip())
+        
+        # Step 2: Determine the final path to the SCRIPT to be executed.
+        input_path = Path(test_file_name)
+        if input_path.is_absolute():
+            # For temp files, the path is already correct and absolute.
+            test_file_path = input_path
+        else:
+            # For project-internal tests, build the path relative to the context's project root.
+            source_dir_name = 'omnipkg' if "stress_test" in str(test_file_name) else 'tests'
+            test_file_path = project_root_in_context / source_dir_name / input_path.name
+        # --- END: ROBUST PATHING LOGIC ---
+        
+        safe_print(_('🚀 Running {} demo from source: {}...').format(demo_name.capitalize(), test_file_path))
+        
+        if not test_file_path.exists():
+            safe_print(_('❌ CRITICAL ERROR: Test file not found at: {}').format(test_file_path))
+            safe_print(_(' (This can happen if omnipkg is not installed in the target Python environment.)'))
+            return 1
+        
+        safe_print(_('📡 Live streaming output...'))
+        safe_print('-' * 60)
+        safe_print(f"(Executing with: {effective_python_exe})")
+        
         env = os.environ.copy()
-        env['OMNIPKG_LANG'] = current_lang
-        env['LANG'] = f'{current_lang}.UTF-8'
-        env['LANGUAGE'] = current_lang
+        # Step 3: Set PYTHONPATH using the dynamically found project root. This is now always correct.
+        if isolate_env:
+            env['PYTHONPATH'] = str(project_root_in_context)
+            safe_print(" - Running in ISOLATED environment mode.")
+        else:
+            current_pythonpath = env.get('PYTHONPATH', '')
+            env['PYTHONPATH'] = str(project_root_in_context) + os.pathsep + current_pythonpath
+        
+        # FORCE UNBUFFERED OUTPUT for true live streaming
         env['PYTHONUNBUFFERED'] = '1'
-        env['PYTHONPATH'] = str(project_root) + os.pathsep + env.get('PYTHONPATH', '')
-        python_exe = cm.config.get('python_executable', sys.executable)
-        process = subprocess.Popen([python_exe, str(test_file)], text=True, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, encoding='utf-8', errors='replace')
-        for line in process.stdout:
-            safe_print(line, end='')
+        
+        process = subprocess.Popen(
+            [effective_python_exe, '-u', str(test_file_path)],  # -u forces unbuffered
+            text=True, 
+            env=env, 
+            stdout=subprocess.PIPE, 
+            stderr=subprocess.STDOUT,
+            encoding='utf-8', 
+            errors='replace',
+            bufsize=0  # Unbuffered
+        )
+        
+        # Force real-time streaming with immediate flush
+        while True:
+            output = process.stdout.read(1)  # Read one character at a time
+            if output == '' and process.poll() is not None:
+                break
+            if output:
+                safe_print(output, end='', flush=True)  # Force flush immediately
+        
         returncode = process.wait()
         safe_print('-' * 60)
+        
         if returncode == 0:
             safe_print(_('🎉 Demo completed successfully!'))
         else:
             safe_print(_('❌ Demo failed with return code {}').format(returncode))
+        
         return returncode
-    except KeyboardInterrupt:
-        safe_print(_('\n⚠️  Demo cancelled by user (Ctrl+C)'))
-        if process:
-            process.terminate()
-        return 130
-    except Exception as e:
-        safe_print(_('❌ Demo failed with error: {}').format(e))
+        
+    except (Exception, subprocess.CalledProcessError) as e:
+        safe_print(_('❌ Demo failed with a critical error: {}').format(e))
+        if isinstance(e, subprocess.CalledProcessError):
+            safe_print("--- Stderr ---")
+            safe_print(e.stderr)
         import traceback
         traceback.print_exc()
         return 1
@@ -411,16 +469,24 @@ def main():
             safe_print(_('2. UV test (binary switching)'))
             safe_print(_('3. NumPy + SciPy stress test (C-extension switching)'))
             safe_print(_('4. TensorFlow test (complex dependency switching)'))
-            safe_print(_('5. Flask test (under construction)'))
+            safe_print(_('5. 🚀 Multiverse Healing Test (Cross-Python Hot-Swapping Mid-Script)'))
+            safe_print(_('6. Flask test (under construction)'))
+            safe_print(_('7. Auto-healing Test (omnipkg run)')) # <--- ADD THIS
+            safe_print(_('8. 🌠 Quantum Multiverse Warp (Concurrent Python Installations)'))
             try:
-                response = input(_('Enter your choice (1-4): ')).strip()
+                response = input(_('Enter your choice (1-8): ')).strip()
             except EOFError:
                 response = ''
             test_file = None
             demo_name = ''
             if response == '1':
-                test_file = TESTS_DIR / 'test_rich_switching.py'
+                # Corrected logic for the Rich demo
                 demo_name = 'rich'
+                test_file = TESTS_DIR / 'test_rich_switching.py'
+                if not test_file.exists():
+                    safe_print(_('❌ Error: Test file {} not found.').format(test_file))
+                    return 1
+                return run_demo_with_live_streaming(str(test_file), demo_name)
             elif response == '2':
                 test_file = TESTS_DIR / 'test_uv_switching.py'
                 demo_name = 'uv'
@@ -435,12 +501,109 @@ def main():
                 test_file = TESTS_DIR / 'test_tensorflow_switching.py'
                 demo_name = 'tensorflow'
             elif response == '5':
+                safe_print(_('\n' + '!'*60))
+                safe_print(_('  🚀 INITIATING MULTIVERSE HEALING & ANALYSIS DEMO!'))
+                safe_print(_('  This is a test of omnipkg\'s cross-context capabilities.'))
+                safe_print(_('  Creating a sterile temporary copy to ensure a clean run...'))
+                safe_print('!'*60)
+                
+                # 1. Find the source script.
+                source_script_path = TESTS_DIR / 'multiverse_healing.py'
+                if not source_script_path.exists():
+                    safe_print(_('❌ Error: Source test file {} not found.').format(source_script_path))
+                    return 1
+
+                # 2. Create a temporary, sterile copy of the script.
+                with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False, encoding='utf-8') as temp_script:
+                    temp_script_path = Path(temp_script.name)
+                    temp_script.write(source_script_path.read_text(encoding='utf-8'))
+                
+                safe_print(f"   - Sterile script created at: {temp_script_path}")
+
+                try:
+                    # 3. Get the required Python 3.11 interpreter.
+                    python_311_exe = pkg_instance.config_manager.get_interpreter_for_version('3.11')
+                    if not python_311_exe or not python_311_exe.exists():
+                        safe_print("❌ Python 3.11 is required and not managed by omnipkg.")
+                        safe_print("   Please adopt it first: omnipkg python adopt 3.11")
+                        return 1
+
+                    # 4. Execute the STERILE script, which will have a clean sys.path.
+                    return run_demo_with_live_streaming(
+                        test_file_name=str(temp_script_path), # Use the absolute path to the temp file
+                        demo_name='multiverse_healing',
+                        python_exe=str(python_311_exe)
+                    )
+                finally:
+                    # 5. Clean up the temporary script no matter what.
+                    temp_script_path.unlink(missing_ok=True)
+            elif response == '6':
                 test_file = TESTS_DIR / 'test_rich_switching.py'
                 demo_name = 'rich'
                 safe_print(_('⚠️ The Flask demo is under construction and not currently available.'))
                 safe_print(_('Switching to the Rich test (option 1) for now!'))
+            elif response == '7': # <--- ADD THIS ENTIRE BLOCK
+                demo_name = 'auto-heal'
+                test_file_path = TESTS_DIR / 'test_old_rich.py'
+                safe_print(_('🚀 Running {} demo from source: {}...').format(demo_name, test_file_path))
+                safe_print(_('📡 Live streaming output...'))
+                safe_print('-' * 60)
+                
+                # We must call omnipkg as a subprocess to properly test the 'run' command
+                cmd = [parser.prog, 'run', str(test_file_path)]
+                process = subprocess.Popen(cmd, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, encoding='utf-8', errors='replace')
+                for line in process.stdout:
+                    safe_print(line, end='')
+                returncode = process.wait()
+
+                safe_print('-' * 60)
+                if returncode == 0:
+                    safe_print(_('🎉 Demo completed successfully!'))
+                else:
+                    safe_print(_('❌ Demo failed with return code {}').format(returncode))
+                return returncode
+            elif response == '8':
+                demo_name = 'rich_multiverse'
+                source_script_path = TESTS_DIR / 'test_concurrent_install.py'
+                if not source_script_path.exists():
+                    safe_print(f'❌ Error: Source test file {source_script_path} not found.')
+                    return 1
+
+                safe_print(_('🚀 Running {} demo from a sterile environment...').format(demo_name))
+                safe_print(_('   (This ensures no PYTHONPATH contamination from the orchestrator)'))
+                
+                # Create a sterile copy of the script in /tmp
+                with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False, encoding='utf-8') as temp_script:
+                    temp_script_path = Path(temp_script.name)
+                    temp_script.write(source_script_path.read_text(encoding='utf-8'))
+                
+                safe_print(f"   - Sterile script created at: {temp_script_path}")
+                
+                returncode = 1 # Default to failure
+                try:
+                    safe_print('📡 Live streaming output...')
+                    safe_print('-' * 60)
+                    
+                    # Execute the STERILE script using 'omnipkg run'
+                    cmd = [parser.prog, 'run', str(temp_script_path)]
+                    process = subprocess.Popen(cmd, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, encoding='utf-8', errors='replace')
+                    for line in process.stdout:
+                        safe_print(line, end='')
+                    returncode = process.wait()
+
+                    safe_print('-' * 60)
+                    if returncode == 0:
+                        safe_print(_('🎉 Demo completed successfully!'))
+                    else:
+                        safe_print(_('❌ Demo failed with return code {}').format(returncode))
+                
+                finally:
+                    # ALWAYS clean up the temporary file
+                    temp_script_path.unlink(missing_ok=True)
+                
+                return returncode
             else:
-                safe_print(_('❌ Invalid choice. Please select 1, 2, 3, 4, or 5.'))
+                safe_print(_('❌ Invalid choice. Please select 1, 2, 3, 4, 5, 6, 7, or 8.'))
                 return 1
             if not test_file.exists():
                 safe_print(_('❌ Error: Test file {} not found.').format(test_file))
