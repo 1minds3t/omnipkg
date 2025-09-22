@@ -599,7 +599,9 @@ class omnipkgMetadataGatherer:
             bubble_path = self.omnipkg_instance.multiversion_base / f'{TOOL_NAME}-{TOOL_VERSION}'
             if not bubble_path.is_dir():
                 safe_print(f" 💡 First-time setup: Creating isolated bubble for '{TOOL_SPEC}' tool...")
-                success = self.omnipkg_instance.bubble_manager.create_isolated_bubble(TOOL_NAME, TOOL_VERSION)
+                success = self.omnipkg_instance.bubble_manager.create_isolated_bubble(
+                    TOOL_NAME, TOOL_VERSION, python_context_version=self.target_context_version
+                )
                 if not success:
                     safe_print(f' ❌ Failed to create the tool bubble for {TOOL_SPEC}. Skipping scan.')
                     self.security_report = {}
