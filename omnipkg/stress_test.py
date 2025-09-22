@@ -145,8 +145,7 @@ def setup():
     return (config_manager, "completed", {})
 
 def run_test():
-    """The core of the OMNIPKG Nuclear Stress Test."""
-    # This function remains unchanged.
+    """The core of the OMNIPKG Nuclear Stress Test with combo testing."""
     config_manager = ConfigManager()
     omnipkg_config = config_manager.config
     ROOT_DIR = Path(__file__).resolve().parent.parent
@@ -189,10 +188,133 @@ def run_test():
                     print_with_flush(f'   🎯 Version verification: PASSED')
         except Exception as e:
             print_with_flush(f'   ❌ Activation/Test failed for scipy=={scipy_ver}: {e}!')
-    
-    # The combo test remains the same
-    # ...
 
+    # ADD THE COMBO TEST BACK HERE
+    print_with_flush(('\n\n🤯 NUMPY + SCIPY VERSION MIXING:'))
+    combos = [('1.24.3', '1.12.0'), ('1.26.4', '1.16.1')]
+    temp_script_path = Path(os.getcwd()) / 'omnipkg_combo_test.py'
+    
+    for np_ver, sp_ver in combos:
+        print_with_flush(('\\n🌀 COMBO: numpy=={} + scipy=={}').format(np_ver, sp_ver))
+        combo_start_time = time.perf_counter()
+        config_json_str = json.dumps(omnipkg_config)
+        
+        temp_script_content = f'''
+import sys
+import os
+import json  # To load config
+import importlib
+import time
+from importlib.metadata import version as get_version, PackageNotFoundError
+from pathlib import Path
+
+# Ensure omnipkg's root is in sys.path for importing its modules
+sys.path.insert(0, r"{ROOT_DIR}")
+
+# Load config in the subprocess
+subprocess_config = json.loads('{config_json_str}')
+
+def run_combo_test():
+    start_time = time.perf_counter()
+    
+    # Retrieve bubble paths from the loaded config in the subprocess
+    numpy_bubble_path = Path(subprocess_config['multiversion_base']) / f"numpy-{np_ver}"
+    scipy_bubble_path = Path(subprocess_config['multiversion_base']) / f"scipy-{sp_ver}"
+
+    # Manually construct PYTHONPATH for this specific test as it was originally designed
+    # by prepending bubble paths to sys.path in this subprocess.
+    bubble_paths_to_add = []
+    if numpy_bubble_path.is_dir():
+        bubble_paths_to_add.append(str(numpy_bubble_path))
+    if scipy_bubble_path.is_dir():
+        bubble_paths_to_add.append(str(scipy_bubble_path))
+        
+    # Prepend bubble paths to sys.path for this subprocess
+    sys.path = bubble_paths_to_add + sys.path 
+    
+    print("🔍 Python path (first 5 entries):", flush=True)
+    for idx, path in enumerate(sys.path[:5]):
+        print(f"   {{idx}}: {{path}}", flush=True)
+
+    try:
+        import numpy as np
+        import scipy as sp
+        import scipy.sparse
+        
+        setup_time = time.perf_counter() - start_time
+        
+        print(f"   🧪 numpy: {{np.__version__}}, scipy: {{sp.__version__}}", flush=True)
+        print(f"   📍 numpy location: {{np.__file__}}", flush=True)
+        print(f"   📍 scipy location: {{sp.__file__}}", flush=True)
+        print(f"   ⚡ Setup time: {{setup_time*1000:.2f}}ms", flush=True)
+        
+        result = np.array([1,2,3]) @ sp.sparse.eye(3).toarray()
+        print(f"   🔗 Compatibility check: {{result}}", flush=True)
+        
+        # Version validation
+        np_ok = False
+        sp_ok = False
+        try:
+            if get_version('numpy') == "{np_ver}":
+                np_ok = True
+            else:
+                print(f"   ❌ Numpy version mismatch! Expected {np_ver}, got {{get_version('numpy')}}", file=sys.stderr, flush=True)
+        except PackageNotFoundError:
+            print(f"   ❌ Numpy not found in subprocess!", file=sys.stderr, flush=True)
+
+        try:
+            if get_version('scipy') == "{sp_ver}":
+                sp_ok = True
+            else:
+                print(f"   ❌ Scipy version mismatch! Expected {sp_ver}, got {{get_version('scipy')}}", file=sys.stderr, flush=True)
+        except PackageNotFoundError:
+            print(f"   ❌ Scipy not found in subprocess!", file=sys.stderr, flush=True)
+
+        if np_ok and sp_ok:
+            total_time = time.perf_counter() - start_time
+            print(f"   🎯 Version verification: BOTH PASSED!", flush=True)
+            print(f"   ⚡ Total combo time: {{total_time*1000:.2f}}ms", flush=True)
+            sys.exit(0)
+        else:
+            sys.exit(1)
+
+    except Exception as e:
+        print(f"   ❌ Test failed in subprocess: {{e}}", file=sys.stderr, flush=True)
+        import traceback
+        traceback.print_exc(file=sys.stderr)
+        sys.stderr.flush()
+        sys.exit(1)
+
+if __name__ == "__main__":
+    run_combo_test()
+'''
+        try:
+            with open(temp_script_path, 'w') as f:
+                f.write(temp_script_content)
+            
+            success, stdout, stderr = run_subprocess_with_output(
+                [sys.executable, str(temp_script_path)], 
+                f'Running combo test for numpy=={np_ver} + scipy=={sp_ver}'
+            )
+            
+            combo_total_time = time.perf_counter() - combo_start_time
+            print_with_flush(f'   ⚡ Total combo execution: {combo_total_time * 1000:.2f}ms')
+            
+            if not success:
+                print_with_flush(f'   ❌ Subprocess test failed for combo numpy=={np_ver} + scipy=={sp_ver}')
+                if stderr:
+                    print_with_flush(('   💥 Error: {}').format(stderr))
+                sys.exit(1)
+        except Exception as e:
+            print_with_flush(('   ❌ An unexpected error occurred during combo test subprocess setup: {}').format(e))
+            import traceback
+            traceback.print_exc(file=sys.stderr)
+            sys.stderr.flush()
+            sys.exit(1)
+        finally:
+            if temp_script_path.exists():
+                os.remove(temp_script_path)
+    
     print_with_flush('\n\n🚨 OMNIPKG SURVIVED NUCLEAR TESTING! 🎇')
 
 
