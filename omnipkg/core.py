@@ -2844,12 +2844,26 @@ class omnipkg:
             # Fallback for safety
             return f'py{sys.version_info.major}.{sys.version_info.minor}'
 
-    def initialize_pypi_cache(self):
-        """(MODIFIED) Initialize PyPI version cache system."""
-        # No changes needed here, the context will be passed in _get_latest_version_from_pypi
+        def initialize_pypi_cache(self):
+        """(MODIFIED & FIXED) Initialize PyPI version cache system."""
+
+        # Default to no Redis client
+        redis_instance = None
+
+        # This is the defensive check:
+        # 1. First, check if the 'redis' module was successfully imported (is not None).
+        # 2. Then, check if a cache_client has even been configured on the instance.
+        if redis and self.cache_client:
+            # ONLY if both of the above are true, is it safe to check the instance type.
+            if isinstance(self.cache_client, redis.Redis):
+                redis_instance = self.cache_client
+
+        # Now, instantiate the cache. redis_instance is guaranteed to be either a
+        # valid Redis client or None, which prevents the crash.
         self.pypi_cache = PyPIVersionCache(
-            redis_client=self.cache_client if isinstance(self.cache_client, redis.Redis) else None
+            redis_client=redis_instance
         )
+
         self.pypi_cache.clear_expired_cache()
         stats = self.pypi_cache.get_cache_stats()
         safe_print(f"📊 PyPI Contextual Cache initialized: {stats['valid_entries']} valid entries.")
