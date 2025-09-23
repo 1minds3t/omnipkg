@@ -312,6 +312,42 @@ def create_parser():
     config_set_parser.add_argument('value', help=_('Value to set for the key'))
     config_reset_parser = config_subparsers.add_parser('reset', help=_('Reset a specific configuration key to its default'))
     config_reset_parser.add_argument('key', choices=['interpreters'], help=_('Configuration key to reset (e.g., interpreters)'))
+    doctor_parser = subparsers.add_parser(
+        'doctor', 
+        help=_('Diagnose and repair a corrupted environment with conflicting package versions.'),
+        formatter_class=argparse.RawTextHelpFormatter,
+        epilog=_("🩺  Finds and removes orphaned package metadata ('ghosts') left behind\n"
+                 "   by failed or interrupted installations from other package managers.")
+    )
+    doctor_parser.add_argument(
+        '--dry-run', 
+        action='store_true', 
+        help=_('Diagnose the environment and show the healing plan without making any changes.')
+    )
+    doctor_parser.add_argument(
+        '--yes', '-y', 
+        dest='force', 
+        action='store_true', 
+        help=_('Automatically confirm and proceed with healing without prompting.')
+    )
+    heal_parser = subparsers.add_parser(
+    'heal',
+    help=('Audits the environment for dependency conflicts and attempts to repair them.'),
+    formatter_class=argparse.RawTextHelpFormatter,
+    epilog=("❤️‍🩹  Automatically resolves version conflicts and installs missing packages\n"
+            "   required by your currently installed packages.")
+    )
+    heal_parser.add_argument(
+        '--dry-run',
+        action='store_true',
+        help=('Show the list of packages that would be installed/reinstalled without making changes.')
+    )
+    heal_parser.add_argument(
+        '--yes', '-y',
+        dest='force',
+        action='store_true',
+        help=('Automatically proceed with healing without prompting.')
+    )
     run_parser = subparsers.add_parser('run', help=_('Run a script with auto-healing for version conflicts'))
     run_parser.add_argument('script_and_args', nargs=argparse.REMAINDER, help=_('The script to run, followed by its arguments'))
     prune_parser = subparsers.add_parser('prune', help=_('Clean up old, bubbled package versions'))
@@ -390,6 +426,10 @@ def main():
                 return 0
             parser.print_help()
             return 1
+        elif args.command == 'doctor':
+            return pkg_instance.doctor(dry_run=args.dry_run, force=args.force)
+        elif args.command == 'heal':
+            return pkg_instance.heal(dry_run=args.dry_run, force=args.force)
         elif args.command == 'list':
             if args.filter and args.filter.lower() == 'python':
                 interpreters = pkg_instance.interpreter_manager.list_available_interpreters()
