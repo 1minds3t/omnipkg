@@ -6815,7 +6815,7 @@ class omnipkg:
                             safe_print(f'    🚀 JACKPOT! Latest PyPI version {latest_pypi_version} is already installed!')
                             safe_print('    ⚡ Skipping all test installations - using installed version')
                             # Cache the result and return
-                            self.pypi_cache.cache_version(package_name, latest_pypi_version)
+                            self.pypi_cache.cache_version(package_name, latest_pypi_version, py_context) 
                             return latest_pypi_version
                         else:
                             safe_print(f'    📋 Installed version ({installed_version}) differs from latest PyPI ({latest_pypi_version})')
