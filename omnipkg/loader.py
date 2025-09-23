@@ -33,6 +33,7 @@ import subprocess
 import re
 import textwrap
 import tempfile
+from typing import Optional, Dict, Any, List, Tuple
 import json
 import site
 import concurrent.futures
@@ -51,6 +52,7 @@ class omnipkgLoader:
     - Maintains clean version-specific site-packages isolation
     - Enhanced path validation and cleanup
     """
+    _dependency_cache: Optional[Dict[str, Path]] = None
 
     def __init__(self, package_spec: str=None, config: dict=None, quiet: bool=False, force_activation: bool=False):
         """
@@ -75,7 +77,7 @@ class omnipkgLoader:
         self._deactivation_end_time = None
         self._total_activation_time_ns = None
         self._total_deactivation_time_ns = None
-        self._omnipkg_dependencies = self._detect_omnipkg_dependencies()
+        self._omnipkg_dependencies = self._get_omnipkg_dependencies()
 
     def _initialize_version_aware_paths(self):
         """
@@ -184,6 +186,76 @@ class omnipkgLoader:
             if self._is_version_compatible_path(Path(path_str)):
                 filtered_paths.append(path_str)
         return os.pathsep.join(filtered_paths)
+    
+    def _get_omnipkg_dependencies(self) -> Dict[str, Path]:
+        """
+        (UPGRADED WITH FILE CACHING) Gets omnipkg's dependency paths, using a
+        two-layer cache (in-memory and file-based) to ensure maximum performance
+        across separate process invocations.
+        """
+        # --- Tier 1: Check the fast in-memory class cache ---
+        if omnipkgLoader._dependency_cache is not None:
+            return omnipkgLoader._dependency_cache
+
+        # --- Tier 2: Check the persistent file cache ---
+        cache_file = self.multiversion_base / '.cache' / f'loader_deps_{self.python_version}.json'
+        if cache_file.exists():
+            try:
+                with open(cache_file, 'r') as f:
+                    # Load the paths from the file
+                    cached_paths_str = json.load(f)
+                    # Convert string paths back to Path objects
+                    dependencies = {name: Path(path) for name, path in cached_paths_str.items()}
+                
+                # Populate the in-memory cache for this run
+                omnipkgLoader._dependency_cache = dependencies
+                if not self.quiet:
+                    safe_print(f"🎯 [omnipkg loader] Using cached dependencies from file ({len(dependencies)} deps)")
+                return dependencies
+            except (json.JSONDecodeError, IOError):
+                # If the cache file is corrupt, we'll just overwrite it.
+                pass
+
+        # --- Tier 3: If all caches miss, compute, then save ---
+        if not self.quiet:
+            safe_print(_('🔍 [omnipkg loader] Running dependency detection (first time)...'))
+        
+        dependencies = self._detect_omnipkg_dependencies()
+        
+        # Populate the in-memory cache for this run
+        omnipkgLoader._dependency_cache = dependencies
+        
+        # Save to the file cache for the *next* run
+        try:
+            cache_file.parent.mkdir(parents=True, exist_ok=True)
+            # Convert Path objects to strings for JSON serialization
+            paths_to_save = {name: str(path) for name, path in dependencies.items()}
+            with open(cache_file, 'w') as f:
+                json.dump(paths_to_save, f)
+            if not self.quiet:
+                safe_print(_('💾 [omnipkg loader] Cached {} dependencies to file for future use').format(len(dependencies)))
+        except IOError as e:
+            if not self.quiet:
+                safe_print(f"⚠️ [omnipkg loader] Could not write dependency cache file: {e}")
+
+        return dependencies
+    
+    def _compute_omnipkg_dependencies(self) -> Dict[str, Path]:
+        """
+        (CORRECTED) Gets omnipkg's dependency paths, using a class-level
+        cache to ensure the expensive detection runs only once per session.
+        """
+        # --- Check the cache first ---
+        if omnipkgLoader._dependency_cache is not None:
+            return omnipkgLoader._dependency_cache
+
+        # --- If cache is empty, run the original detection logic ---
+        # FIXED: Call the actual implementation instead of recursing
+        dependencies = self._detect_omnipkg_dependencies()
+        
+        # --- Store the result in the cache for next time ---
+        omnipkgLoader._dependency_cache = dependencies
+        return dependencies
 
     def _detect_omnipkg_dependencies(self):
         """

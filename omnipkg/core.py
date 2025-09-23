@@ -42,6 +42,8 @@ from filelock import FileLock
 from importlib.metadata import version, metadata, PackageNotFoundError
 from packaging.utils import canonicalize_name
 from packaging.version import parse as parse_version, InvalidVersion
+from packaging.version import parse as parse_version
+from packaging.utils import canonicalize_name
 from .i18n import _
 from .package_meta_builder import omnipkgMetadataGatherer
 from .cache import SQLiteCacheClient
@@ -2539,6 +2541,7 @@ class omnipkg:
         self.cache_client = None
         self.initialize_pypi_cache()
         self._info_cache = {}
+        self._prime_loader_cache()
         self._installed_packages_cache = None
         self.http_session = http_requests.Session()
         self.multiversion_base.mkdir(parents=True, exist_ok=True)
@@ -2577,6 +2580,40 @@ class omnipkg:
         self._self_heal_omnipkg_installation()
         self.hook_manager.install_import_hook()
         safe_print(_('✅ Omnipkg core initialized successfully.'))
+
+    def _prime_loader_cache(self):
+        """
+        (NEW) Proactively builds the omnipkgLoader dependency cache if it doesn't
+        exist. This ensures the first auto-healing run is as fast as possible.
+        """
+        try:
+            # Determine the correct cache file path using the loader's own logic
+            # to ensure consistency.
+            python_version = f'{sys.version_info.major}.{sys.version_info.minor}'
+            multiversion_base = Path(self.config['multiversion_base'])
+            cache_file = multiversion_base / '.cache' / f'loader_deps_{python_version}.json'
+
+            # If the cache already exists, our work is done. Exit immediately.
+            if cache_file.exists():
+                return
+
+            # If the cache is missing, we build it now so the loader doesn't have to.
+            from omnipkg.loader import omnipkgLoader
+            
+            # Create a temporary, "quiet" loader instance just to run its
+            # dependency detection logic.
+            # We pass `quiet=True` to prevent any output during this background task.
+            temp_loader = omnipkgLoader(config=self.config, quiet=True)
+            
+            # The _get_omnipkg_dependencies method now contains the logic to
+            # compute and save the cache file. Calling it is enough.
+            temp_loader._get_omnipkg_dependencies()
+
+        except Exception:
+            # This is a non-critical optimization. If it fails for any reason
+            # (e.g., permissions), we silently ignore it. The loader will
+            # simply build the cache on its first run as before.
+            pass
 
     def _self_heal_omnipkg_installation(self):
         """
@@ -2788,6 +2825,34 @@ class omnipkg:
         """Creates a short, stable hash from the venv path to uniquely identify it."""
         venv_path = str(Path(sys.prefix).resolve())
         return hashlib.md5(venv_path.encode()).hexdigest()[:8]
+
+    @property
+    def current_python_context(self) -> str:
+        """
+        (NEW) Helper property to get the current Python context string (e.g., 'py3.9').
+        This is the single source of truth for the active context.
+        """
+        try:
+            # This logic is derived from your redis_key_prefix property
+            python_exe_path = self.config.get('python_executable', sys.executable)
+            result = subprocess.run(
+                [python_exe_path, '-c', "import sys; print(f'py{sys.version_info.major}.{sys.version_info.minor}')"],
+                capture_output=True, text=True, check=True, timeout=2
+            )
+            return result.stdout.strip()
+        except Exception:
+            # Fallback for safety
+            return f'py{sys.version_info.major}.{sys.version_info.minor}'
+
+    def initialize_pypi_cache(self):
+        """(MODIFIED) Initialize PyPI version cache system."""
+        # No changes needed here, the context will be passed in _get_latest_version_from_pypi
+        self.pypi_cache = PyPIVersionCache(
+            redis_client=self.cache_client if isinstance(self.cache_client, redis.Redis) else None
+        )
+        self.pypi_cache.clear_expired_cache()
+        stats = self.pypi_cache.get_cache_stats()
+        safe_print(f"📊 PyPI Contextual Cache initialized: {stats['valid_entries']} valid entries.")
 
     @property
     def redis_env_prefix(self) -> str:
@@ -3770,6 +3835,247 @@ class omnipkg:
         if ghost_count > 0:
             safe_print(f"🎉 Exorcised {ghost_count} ghost .dist-info directories.")
 
+    def doctor(self, dry_run: bool = False, force: bool = False) -> int:
+        """
+        Diagnoses and repairs a corrupted environment by removing orphaned
+        package metadata ("ghosts").
+        """
+        safe_print('\n' + '=' * 60)
+        safe_print("🩺 OMNIPKG ENVIRONMENT DOCTOR")
+        safe_print('=' * 60)
+        safe_print(f"🔬 Performing forensic scan of: {self.config['site_packages_path']}")
+
+        site_packages = Path(self.config['site_packages_path'])
+        all_dist_infos = list(site_packages.glob('*.dist-info'))
+        
+        # Step 1: Group metadata by package name to find conflicts
+        packages = defaultdict(list)
+        for path in all_dist_infos:
+            try:
+                # Extract name like 'rich' from 'rich-14.1.0.dist-info'
+                package_name = path.name.split('-')[0].lower().replace('_', '-')
+                packages[package_name].append(path)
+            except IndexError:
+                continue
+
+        conflicted_packages = {name: paths for name, paths in packages.items() if len(paths) > 1}
+
+        if not conflicted_packages:
+            safe_print("\n✅ Environment is healthy. No conflicts found.")
+            return 0
+
+        safe_print(f"\n🚨 DIAGNOSIS: Found {len(conflicted_packages)} packages with conflicting metadata!")
+        
+        ghosts_to_exorcise = []
+        
+        # Step 2 & 3: Perform the autopsy and identify ghosts for each conflict
+        for name, paths in conflicted_packages.items():
+            safe_print(f"\n--- Autopsy for: '{name}' ---")
+            found_versions = sorted([p.name.split('-')[1] for p in paths])
+            safe_print(f"  - Found Metadata Versions: {', '.join(found_versions)}")
+
+            canonical_version = None
+            try:
+                # Ask the code for the ground truth
+                python_exe = self.config['python_executable']
+                # We need to find the importable name (e.g., markdown-it-py -> markdown_it)
+                import_name = name.replace('-', '_')
+                
+                cmd = [
+                    python_exe, '-c',
+                    f"import importlib.metadata; import {import_name}; print(getattr({import_name}, '__version__', importlib.metadata.version('{name}')))"
+                ]
+                result = subprocess.run(cmd, capture_output=True, text=True, check=True, timeout=5)
+                canonical_version = result.stdout.strip()
+                safe_print(f"  - Live Code Version (Ground Truth): {canonical_version}  ✅")
+            
+            except (subprocess.CalledProcessError, FileNotFoundError, ImportError):
+                safe_print(f"  - ⚠️  Could not determine live code version for '{name}'. It might be severely broken. Skipping.")
+                continue
+            
+            # Identify the keeper and the ghosts
+            keeper_dist_info = site_packages / f"{name}-{canonical_version}.dist-info"
+            
+            try:
+                # Use the packaging library to create a comparable Version object
+                parsed_canonical_version = parse_version(canonical_version)
+            except Exception as e:
+                safe_print(f"  - ⚠️  Could not parse live version '{canonical_version}' for '{name}'. Skipping. Error: {e}")
+                continue
+
+            # Identify the keeper and the ghosts
+            for path in paths:
+                is_keeper = False
+                try:
+                    # 'rich-14.1.0.dist-info' -> 'rich-14.1.0'
+                    base_name = path.name.removesuffix('.dist-info')
+                    
+                    # Reliably split name and version by splitting from the right
+                    package_part, version_part = base_name.rsplit('-', 1)
+
+                    # Compare using normalized names and parsed versions
+                    parsed_path_version = parse_version(version_part)
+                    
+                    if (canonicalize_name(package_part) == canonicalize_name(name) and 
+                        parsed_path_version == parsed_canonical_version):
+                        # This is the keeper, do not delete
+                        is_keeper = True
+                
+                except Exception:
+                    # If parsing the directory name fails, it's non-standard.
+                    # Treat it as a ghost.
+                    pass
+                
+                if not is_keeper:
+                    # If it's not the keeper, it's a ghost.
+                    ghosts_to_exorcise.append(path)
+
+        if not ghosts_to_exorcise:
+            safe_print("\n✅ All conflicts resolved without action (e.g., could not determine canonical version).")
+            return 0
+
+        # Step 4: Present the healing plan
+        safe_print("\n" + "─" * 60)
+        safe_print("💔 HEALING PLAN: The following orphaned metadata ('ghosts') will be deleted:")
+        for ghost in ghosts_to_exorcise:
+            safe_print(f"  - 👻 {ghost.name}")
+        safe_print("─" * 60)
+
+        if dry_run:
+            safe_print("\n🔬 Dry run complete. No changes were made.")
+            return 0
+
+        if not force:
+            confirm = input("\n🤔 Proceed with the exorcism? (y/N): ").lower().strip()
+            if confirm != 'y':
+                safe_print("🚫 Healing cancelled by user.")
+                return 1
+
+        # Step 5: Execute the healing
+        safe_print("\n🔥 Starting exorcism...")
+        healed_count = 0
+        for ghost in ghosts_to_exorcise:
+            try:
+                safe_print(f"  - 🗑️  Deleting {ghost.name}...")
+                shutil.rmtree(ghost)
+                healed_count += 1
+            except OSError as e:
+                safe_print(f"  - ❌ FAILED to delete {ghost.name}: {e}")
+
+        safe_print(f"\n✨ Healing complete. {healed_count} ghosts exorcised.")
+
+        # Step 6: Finalize and resync
+        safe_print("🧠 The environment has changed. Forcing a full knowledge base rebuild...")
+        self.rebuild_knowledge_base(force=True)
+        
+        safe_print("\n🎉 Your environment is now clean and healthy!")
+        return 0
+    
+    def heal(self, dry_run: bool = False, force: bool = False) -> int:
+        """
+        (UPGRADED) Audits, reconciles conflicting requirements, and attempts
+        to fix dependency conflicts by installing a single, consistent set of packages.
+        """
+        safe_print('\n' + '=' * 60)
+        safe_print("❤️‍🩹 OMNIPKG ENVIRONMENT HEALER")
+        safe_print('=' * 60)
+        safe_print("🔬 Auditing package dependencies...")
+
+        try:
+            pip_exe = Path(self.config['python_executable']).parent / 'pip'
+            result = subprocess.run([str(pip_exe), 'check'], capture_output=True, text=True, encoding='utf-8')
+        except Exception as e:
+            safe_print(f"❌ An unexpected error occurred during the audit: {e}")
+            return 1
+
+        if result.returncode == 0:
+            safe_print("\n✅ Your environment is healthy. No dependency conflicts found!")
+            return 0
+        
+        # Step 2a: Group all requirements by package name
+        conflict_output = result.stdout
+        safe_print("\n🚨 DIAGNOSIS: Found dependency conflicts!")
+        
+        conflict_regex = re.compile(r"(\S+) \S+ (?:has requirement|requires) ([^,]+),")
+        
+        grouped_reqs = defaultdict(list)
+        for line in conflict_output.splitlines():
+            # A more robust regex to capture the full specifier
+            match = re.search(r"has requirement (.+?), but you have", line)
+            if not match:
+                match = re.search(r"requires (.+?), which is not installed", line)
+
+            if match:
+                spec = match.group(1).strip()
+                pkg_name_match = re.match(r"([a-zA-Z0-9_.-]+)", spec)
+                if pkg_name_match:
+                    pkg_name = canonicalize_name(pkg_name_match.group(1))
+                    grouped_reqs[pkg_name].append(spec)
+
+        if not grouped_reqs:
+            safe_print("\n🤔 Could not parse any specific actions from the audit.")
+            return 1
+            
+        # Step 2b: Reconcile conflicts by electing one "winner" version for each package
+        reconciled_plan = []
+        safe_print("\n" + "─" * 60)
+        safe_print("🤝 Reconciling conflicting requirements...")
+        
+        for pkg_name, specs in grouped_reqs.items():
+            if len(specs) == 1:
+                # No conflict, just add the single requirement
+                reconciled_plan.append(specs[0])
+            else:
+                # CONFLICT! Resolve all specs and pick the latest version as the winner.
+                safe_print(f"   - Conflict for '{pkg_name}':")
+                for spec in specs:
+                    safe_print(f"     - Wants: {spec}")
+                
+                resolved_versions = []
+                for spec in specs:
+                    # We use our powerful resolver here
+                    resolved_spec = self._find_best_version_for_spec(spec)
+                    if resolved_spec:
+                        _, version = self._parse_package_spec(resolved_spec)
+                        if version:
+                            resolved_versions.append(version)
+                
+                if not resolved_versions:
+                    safe_print(f"   - ❌ Could not resolve any version for '{pkg_name}'. Skipping.")
+                    continue
+
+                # Elect the latest version as the winner for the main environment
+                winner_version = max(resolved_versions, key=parse_version)
+                winner_spec = f"{pkg_name}=={winner_version}"
+                reconciled_plan.append(winner_spec)
+                safe_print(f"   - ✅ Elected Winner: {winner_spec}")
+        
+        if not reconciled_plan:
+            safe_print("\n" + "─" * 60)
+            safe_print("" "✅ No actions needed after reconciliation.")
+            return 0
+
+        # Step 3: Present the final, possible healing plan
+        safe_print("\n" + "─" * 60)
+        safe_print("💊 FINAL HEALING PLAN:")
+        for pkg in sorted(reconciled_plan):
+            safe_print(f"  - 🎯 {pkg}")
+        safe_print("─" * 60)
+
+        if dry_run:
+            safe_print("\n🔬 Dry run complete. No changes were made.")
+            return 0
+
+        if not force:
+            confirm = input("\n🤔 Proceed with healing? (y/N): ").lower().strip()
+            if confirm != 'y':
+                safe_print("🚫 Healing cancelled by user.")
+                return 1
+
+        # Step 4: Execute the reconciled plan
+        safe_print("\n🔥 Applying treatment...")
+        return self.smart_install(reconciled_plan)
+
     def _update_hash_index_for_delta(self, before: Dict, after: Dict):
         """Surgically updates the cached hash index in Redis after an install."""
         if not self.cache_client:
@@ -4642,6 +4948,7 @@ class omnipkg:
     def smart_install(self, packages: List[str], dry_run: bool=False, force_reinstall: bool=False, target_directory: Optional[Path]=None) -> int:
         if not self._connect_cache():
             return 1
+        self._heal_conda_environment()
         if dry_run:
             safe_print('🔬 Running in --dry-run mode. No changes will be made.')
             return 0
@@ -4765,30 +5072,41 @@ class omnipkg:
             pkg_name, requested_version = self._parse_package_spec(pkg_spec)
             if pkg_name.lower() == 'omnipkg':
                 packages_to_process.remove(pkg_spec)
-                active_omnipkg_version = self._get_active_version_from_environment('omnipkg')
-                if not active_omnipkg_version:
-                    safe_print('⚠️ Warning: Cannot determine active omnipkg version. Proceeding with caution.')
-                if requested_version and active_omnipkg_version and (parse_version(requested_version) == parse_version(active_omnipkg_version)):
-                    safe_print('✅ omnipkg=={} is already the active omnipkg. No bubble needed.'.format(requested_version))
-                    continue
                 safe_print("✨ Special handling: omnipkg '{}' requested.".format(pkg_spec))
+
+                # --- START: THE MINIMAL, CORRECT FIX ---
+                # If the original spec had no version, use the version we already
+                # resolved during the pre-flight check. This avoids a second network call.
                 if not requested_version:
-                    safe_print("  Skipping bubbling of 'omnipkg' without a specific version for now.")
+                    resolved_spec = resolved_package_cache.get(pkg_spec)
+                    if not resolved_spec:
+                        safe_print(f"  ❌ CRITICAL: Could not find pre-resolved version for '{pkg_spec}'. Skipping.")
+                        continue
+                    # We now have the full spec, e.g., "omnipkg==1.5.0"
+                    pkg_name, requested_version = self._parse_package_spec(resolved_spec)
+                    safe_print(f"  -> Using pre-flight resolved version: {resolved_spec}")
+                # --- END: THE MINIMAL, CORRECT FIX ---
+
+                active_omnipkg_version = self._get_active_version_from_environment('omnipkg')
+                if active_omnipkg_version and (parse_version(requested_version) == parse_version(active_omnipkg_version)):
+                    safe_print('✅ omnipkg=={} is already the active version. No bubble needed.'.format(requested_version))
                     continue
-                bubble_dir_name = 'omnipkg-{}'.format(requested_version)
-                target_bubble_path = Path(self.config['multiversion_base']) / bubble_dir_name
-                wheel_url = self.get_wheel_url_from_pypi(pkg_name, requested_version)
-                if not wheel_url:
-                    safe_print('❌ Could not find a compatible wheel for omnipkg=={}. Cannot create bubble.'.format(requested_version))
-                    continue
-                if not self.extract_wheel_into_bubble(wheel_url, target_bubble_path, pkg_name, requested_version):
-                    safe_print('❌ Failed to create bubble for omnipkg=={}.'.format(requested_version))
-                    continue
-                self.register_package_in_knowledge_base(pkg_name, requested_version, str(target_bubble_path), 'bubble')
-                safe_print('✅ omnipkg=={} successfully bubbled.'.format(requested_version))
-                fake_before = {}
-                fake_after = {pkg_name: requested_version}
-                self.run_metadata_builder_for_delta(fake_before, fake_after)
+
+                bubble_path = self.multiversion_base / f'omnipkg-{requested_version}'
+                if bubble_path.exists():
+                     safe_print(f'✅ Bubble for omnipkg=={requested_version} already exists. Nothing to do.')
+                     continue
+
+                safe_print(f"🫧 Creating isolated bubble for omnipkg v{requested_version}...")
+                bubble_created = self.bubble_manager.create_isolated_bubble(
+                    'omnipkg', requested_version, python_context_version=python_context_version
+                )
+
+                if bubble_created:
+                    safe_print('✅ omnipkg=={} successfully bubbled and registered.'.format(requested_version))
+                    self._synchronize_knowledge_base_with_reality()
+                else:
+                    safe_print(f'❌ Failed to create bubble for omnipkg=={requested_version}.')
         
         if not packages_to_process:
             safe_print(_('\n🎉 All package operations complete.'))
@@ -4848,7 +5166,39 @@ class omnipkg:
             return_code = self._run_pip_install(packages_to_install, target_directory=target_directory, force_reinstall=force_reinstall)
             
             if return_code != 0:
-                safe_print('❌ Pip installation failed for {}. Continuing...'.format(package_spec))
+                safe_print(f'❌ Pip installation failed for {package_spec}.')
+                pkg_name, requested_version = self._parse_package_spec(package_spec)
+
+                # Check if the failure was due to a cached version
+                py_context = self.current_python_context
+                cached_version = self.pypi_cache.get_cached_version(pkg_name, py_context)
+
+                if requested_version and cached_version == requested_version:
+                    # The failed version came from our cache! Invalidate and retry.
+                    self.pypi_cache.invalidate_cache_entry(pkg_name, py_context)
+                    safe_print(f"🔄 Retrying {pkg_name} by re-resolving the latest compatible version...")
+
+                    # Re-run the full resolver to get the truly latest compatible version
+                    new_compatible_version = self._get_latest_version_from_pypi(pkg_name)
+
+                    if new_compatible_version and new_compatible_version != requested_version:
+                        new_spec = f'{pkg_name}=={new_compatible_version}'
+                        safe_print(f"   ✅ Found new compatible version: {new_spec}. Retrying install...")
+                        retry_code = self._run_pip_install([new_spec], target_directory=target_directory, force_reinstall=force_reinstall)
+                        if retry_code == 0:
+                            safe_print(f"   🎉 Successfully installed {new_spec} on retry!")
+                            return_code = 0 # Mark as successful
+                        else:
+                            safe_print(f"   ❌ Retry also failed for {new_spec}.")
+                    elif new_compatible_version:
+                         safe_print(f"   🤷 Re-resolver found the same version ({new_compatible_version}). Cannot auto-correct further.")
+                    else:
+                        safe_print(f"   ❌ Could not find any compatible version for {pkg_name} on retry.")
+                else:
+                    safe_print("   -> Failure was not due to a cached version. Continuing...")
+
+            if return_code != 0:
+                safe_print('❌ Unrecoverable installation failure for {}. Continuing...'.format(package_spec))
                 continue
                 
             any_installations_made = True
@@ -4985,6 +5335,281 @@ class omnipkg:
         self._save_last_known_good_snapshot()
         self._synchronize_knowledge_base_with_reality()
         return 0
+
+    def _detect_conda_corruption_from_error(stderr_output: str) -> Optional[Tuple[str, str]]:
+        """
+        Detect corruption patterns in conda command stderr output.
+        
+        Args:
+            stderr_output: Standard error from failed conda command
+            
+        Returns:
+            Tuple of (corrupted_file_path, environment_path) if detected, None otherwise
+        """
+        if "CorruptedEnvironmentError" not in stderr_output:
+            return None
+        
+        # Patterns to match different corruption error formats
+        patterns = [
+            # Full error with environment location and corrupted file
+            r"environment location:\s*(.+?)\s*corrupted file:\s*(.+?)(?:\n|$)",
+            # Just corrupted file mentioned
+            r"corrupted file:\s*(.+?)(?:\n|$)",
+            # Alternative format
+            r"CorruptedEnvironmentError.*?(\/.+?\.json)",
+        ]
+        
+        for pattern in patterns:
+            match = re.search(pattern, stderr_output, re.MULTILINE | re.DOTALL)
+            if match:
+                groups = match.groups()
+                if len(groups) == 2:
+                    # Full match with env location and file
+                    return groups[1].strip(), groups[0].strip()
+                elif len(groups) == 1:
+                    # Just file path, derive env location
+                    file_path = groups[0].strip()
+                    if "/conda-meta/" in file_path:
+                        env_path = file_path.split("/conda-meta/")[0]
+                        return file_path, env_path
+        
+        return None
+
+
+    def _backup_corrupted_file(file_path: str, backup_base_dir: Optional[str] = None) -> bool:
+        """
+        Create a backup of a corrupted file before removal.
+        
+        Args:
+            file_path: Path to the corrupted file
+            backup_base_dir: Base directory for backups (default: ~/.omnipkg/conda-backups)
+            
+        Returns:
+            True if backup successful, False otherwise
+        """
+        try:
+            if not os.path.exists(file_path):
+                return True  # File already gone, no backup needed
+            
+            if backup_base_dir is None:
+                backup_base_dir = os.path.join(Path.home(), ".omnipkg", "conda-backups")
+            
+            timestamp_dir = os.path.join(backup_base_dir, str(int(time.time())))
+            os.makedirs(timestamp_dir, exist_ok=True)
+            
+            backup_path = os.path.join(timestamp_dir, os.path.basename(file_path))
+            shutil.copy2(file_path, backup_path)
+            
+            print(f"   - 💾 Backed up corrupted file to: {backup_path}")
+            return True
+            
+        except Exception as e:
+            print(f"   - ⚠️  Failed to backup {file_path}: {e}")
+            return False
+
+
+    def _run_conda_with_healing(cmd_args: List[str], max_attempts: int = 3) -> subprocess.CompletedProcess:
+        """
+        Run a conda command with automatic corruption healing.
+        
+        Args:
+            cmd_args: Conda command arguments (e.g., ['install', 'package'])
+            max_attempts: Maximum number of repair attempts
+            
+        Returns:
+            CompletedProcess result
+        """
+        full_cmd = ["conda"] + cmd_args
+        
+        for attempt in range(max_attempts):
+            try:
+                proc = subprocess.run(
+                    full_cmd,
+                    capture_output=True,
+                    text=True,
+                    timeout=300
+                )
+                
+                # If successful, return immediately
+                if proc.returncode == 0:
+                    return proc
+                
+                # Check for corruption in the error output
+                corruption_info = _detect_conda_corruption_from_error(proc.stderr)
+                
+                if not corruption_info:
+                    # Not a corruption error, return the failed result
+                    return proc
+                
+                corrupted_file, env_location = corruption_info
+                
+                if attempt < max_attempts - 1:  # Don't heal on the last attempt
+                    print(f"\n🛡️  AUTO-HEAL: Detected corruption (attempt {attempt + 1}/{max_attempts})")
+                    print(f"   - 💀 Corrupted file: {os.path.basename(corrupted_file)}")
+                    
+                    # Backup and remove the corrupted file
+                    if _backup_corrupted_file(corrupted_file):
+                        try:
+                            if os.path.exists(corrupted_file):
+                                os.unlink(corrupted_file)
+                                print(f"   - 🗑️  Removed corrupted file")
+                            
+                            # Also clean up any related .pyc files
+                            corrupted_dir = os.path.dirname(corrupted_file)
+                            if os.path.exists(corrupted_dir):
+                                for pyc_file in Path(corrupted_dir).glob("*.pyc"):
+                                    pyc_file.unlink()
+                            
+                            print(f"   - 🔄 Retrying conda command...")
+                            
+                        except Exception as e:
+                            print(f"   - ❌ Failed to remove corrupted file: {e}")
+                            return proc
+                else:
+                    print(f"❌ Max repair attempts ({max_attempts}) reached. Manual intervention needed.")
+                    return proc
+                    
+            except subprocess.TimeoutExpired:
+                print("❌ Conda command timed out")
+                raise
+            except Exception as e:
+                print(f"❌ Error running conda command: {e}")
+                raise
+        
+        return proc  # Should never reach here, but just in case
+
+
+    def _heal_conda_environment(self=None, also_run_clean: bool = True):
+        """
+        Enhanced conda environment healing that combines proactive scanning 
+        with reactive error-based healing.
+        
+        This function:
+        1. Proactively scans for corrupted JSON files in conda-meta
+        2. Can also reactively heal based on conda command errors
+        3. Optionally runs 'conda clean' after repairs
+        
+        Args:
+            self: Optional self reference if called as method
+            also_run_clean: Whether to run 'conda clean --all' after healing
+        """
+        conda_prefix_str = os.environ.get('CONDA_PREFIX')
+        if not conda_prefix_str:
+            return  # Not in a conda environment
+        
+        conda_meta_path = Path(conda_prefix_str) / 'conda-meta'
+        if not conda_meta_path.is_dir():
+            return  # No metadata directory
+        
+        print('\n' + '─' * 60)
+        print("🛡️  AUTO-HEAL: Scanning conda environment for corruption...")
+        
+        # Proactive scan for corrupted files
+        corrupted_files_found = []
+        total_files = 0
+        
+        for meta_file in conda_meta_path.glob('*.json'):
+            total_files += 1
+            try:
+                # Check 1: Empty file
+                if meta_file.stat().st_size == 0:
+                    corrupted_files_found.append(str(meta_file))
+                    continue
+                
+                # Check 2: Invalid JSON
+                with open(meta_file, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                    
+                    # Check 3: Missing required fields (basic validation)
+                    required_fields = ['name', 'version']
+                    if not all(field in data for field in required_fields):
+                        corrupted_files_found.append(str(meta_file))
+                        continue
+                        
+            except (json.JSONDecodeError, UnicodeDecodeError):
+                corrupted_files_found.append(str(meta_file))
+            except Exception:
+                # Other errors ignored, only care about JSON corruption
+                continue
+        
+        print(f"   - 📊 Scanned {total_files} metadata files")
+        
+        if not corrupted_files_found:
+            print("   - ✅ No corruption detected in conda metadata")
+            print('─' * 60)
+            return
+        
+        # Healing process
+        print(f"   - 💀 Found {len(corrupted_files_found)} corrupted file(s)")
+        backup_dir = Path.home() / ".omnipkg" / "conda-backups" / str(int(time.time()))
+        
+        cleaned_count = 0
+        for corrupted_file in corrupted_files_found:
+            file_name = os.path.basename(corrupted_file)
+            print(f"      -> Processing: {file_name}")
+            
+            if _backup_corrupted_file(corrupted_file, str(backup_dir.parent)):
+                try:
+                    if os.path.exists(corrupted_file):
+                        os.unlink(corrupted_file)
+                        cleaned_count += 1
+                        print(f"         ✅ Removed corrupted file")
+                except Exception as e:
+                    print(f"         ❌ Failed to remove: {e}")
+        
+        if cleaned_count > 0:
+            print(f"   - 🧹 Successfully cleaned {cleaned_count} corrupted file(s)")
+            
+            # Optionally run conda clean to clear caches
+            if also_run_clean:
+                print("   - 🧽 Running conda clean to clear caches...")
+                try:
+                    clean_proc = subprocess.run(
+                        ["conda", "clean", "--all", "--yes"],
+                        capture_output=True,
+                        text=True,
+                        timeout=60
+                    )
+                    if clean_proc.returncode == 0:
+                        print("      ✅ Conda clean completed successfully")
+                    else:
+                        print(f"      ⚠️  Conda clean had issues: {clean_proc.stderr}")
+                except Exception as e:
+                    print(f"      ❌ Error running conda clean: {e}")
+            
+            print("   - 💡 Conda environment should now be stable")
+        
+        print('─' * 60)
+
+
+    def safe_conda_command(cmd_args: List[str], max_heal_attempts: int = 2) -> bool:
+        """
+        Wrapper function to run conda commands with automatic healing.
+        
+        Args:
+            cmd_args: Conda command arguments (e.g., ['install', '-y', 'package'])
+            max_heal_attempts: Maximum healing attempts on corruption
+            
+        Returns:
+            True if command succeeded, False otherwise
+        """
+        try:
+            # First, do a proactive heal
+            _heal_conda_environment(also_run_clean=False)
+            
+            # Then run the command with reactive healing
+            proc = _run_conda_with_healing(cmd_args, max_heal_attempts)
+            
+            if proc.returncode == 0:
+                return True
+            else:
+                print(f"❌ Conda command failed: {proc.stderr}")
+                return False
+                
+        except Exception as e:
+            print(f"❌ Exception during conda command: {e}")
+            return False
+
     
     def _auto_heal_invalid_distributions(self, pip_output: str, site_packages_path: Path):
         """
@@ -5354,6 +5979,7 @@ class omnipkg:
     def smart_uninstall(self, packages: List[str], force: bool=False, install_type: Optional[str]=None) -> int:
         if not self._connect_cache():
             return 1
+        self._heal_conda_environment()
         self._synchronize_knowledge_base_with_reality()
         core_deps = _get_core_dependencies()
 
@@ -5479,7 +6105,6 @@ class omnipkg:
             self._save_last_known_good_snapshot()
 
         return 0
-            
 
     def revert_to_last_known_good(self, force: bool=False):
         """Compares the current env to the last snapshot and restores it."""
@@ -5663,17 +6288,95 @@ class omnipkg:
         safe_print(_('Just kidding, omnipkg handled it for you automatically!'))
         return 0
 
+    def _find_best_version_for_spec(self, package_spec: str) -> Optional[str]:
+        """
+        Resolves a complex package specifier (e.g., 'numpy>=1.20,<1.22') to the
+        latest compliant version by querying all available versions from PyPI.
+        """
+        from packaging.specifiers import SpecifierSet
+        from packaging.version import parse as parse_version
+
+        safe_print(f"    -> Resolving complex specifier: '{package_spec}'")
+        try:
+            # 1. Reliably separate the package name from the version constraints
+            # This regex handles names like 'requests' or 'markdown-it-py'
+            match = re.match(r"^\s*([a-zA-Z0-9_.-]+)\s*(.*)", package_spec)
+            if not match:
+                safe_print(f"    ❌ Could not parse package name from '{package_spec}'")
+                return None
+            
+            pkg_name = match.group(1).strip()
+            spec_str = match.group(2).strip()
+            
+            if not spec_str: # It was just a simple name like 'requests'
+                return self._get_latest_version_from_pypi(pkg_name)
+
+            # 2. Fetch ALL available versions for this package from PyPI
+            safe_print(f"    -> Fetching all available versions for '{pkg_name}'...")
+            response = http_requests.get(f'https://pypi.org/pypi/{pkg_name}/json', timeout=10)
+            response.raise_for_status()
+            data = response.json()
+            all_versions = list(data['releases'].keys())
+
+            # 3. Use the 'packaging' library to do the hard work
+            specifier = SpecifierSet(spec_str)
+            
+            # Filter the list of all versions to get only the ones that match
+            valid_versions = list(specifier.filter(all_versions))
+
+            if not valid_versions:
+                safe_print(f"    ❌ No version of '{pkg_name}' found that matches '{spec_str}'")
+                return None
+
+            # 4. From the valid versions, find the latest one
+            # We filter out pre-releases unless the specifier explicitly allows them
+            stable_versions = [v for v in valid_versions if not parse_version(v).is_prerelease]
+            
+            if stable_versions:
+                latest_valid_version = max(stable_versions, key=parse_version)
+            else:
+                # If no stable versions match, use the latest pre-release
+                latest_valid_version = max(valid_versions, key=parse_version)
+
+            resolved_spec = f"{pkg_name}=={latest_valid_version}"
+            safe_print(f"    ✅ Resolved '{package_spec}' to '{resolved_spec}'")
+            return resolved_spec
+
+        except http_requests.RequestException as e:
+            safe_print(f"    ❌ Network error while resolving '{pkg_name}': {e}")
+            return None
+        except Exception as e:
+            safe_print(f"    ❌ Failed to resolve complex specifier '{package_spec}': {e}")
+            return None
+
     def _resolve_package_versions(self, packages: List[str]) -> List[str]:
         """
-        Takes a list of packages and ensures every entry has an explicit version.
-        Uses the PyPI API to find the latest version for packages specified without one.
+        (UPGRADED) Takes a list of packages and ensures every entry has an
+        explicit '==' version. It now intelligently dispatches to the correct
+        resolver based on the specifier complexity.
         """
         safe_print(_('🔎 Resolving package versions via PyPI API...'))
         resolved_packages = []
+        
+        # Define characters that indicate a complex specifier
+        complex_spec_chars = ['<', '>', '~', '!', ',']
+
         for pkg_spec in packages:
+            # Case 1: Already has an exact version. Keep it.
             if '==' in pkg_spec:
                 resolved_packages.append(pkg_spec)
                 continue
+
+            # Case 2: Has a complex specifier (e.g., >=, <,). Use the new powerful resolver.
+            if any(op in pkg_spec for op in complex_spec_chars):
+                resolved = self._find_best_version_for_spec(pkg_spec)
+                if resolved:
+                    resolved_packages.append(resolved)
+                else:
+                    safe_print(f"    ⚠️  Could not resolve '{pkg_spec}'. Skipping.")
+                continue
+
+            # Case 3: It's a simple package name. Use the fast, existing resolver.
             pkg_name = self._parse_package_spec(pkg_spec)[0]
             safe_print(_("    -> Finding latest version for '{}'...").format(pkg_name))
             target_version = self._get_latest_version_from_pypi(pkg_name)
@@ -5683,6 +6386,7 @@ class omnipkg:
                 resolved_packages.append(new_spec)
             else:
                 safe_print(_("    ⚠️  Could not resolve a version for '{}' via PyPI. Skipping.").format(pkg_name))
+        
         return resolved_packages
 
     def _find_python_executable_in_dir(self, directory: Path) -> Optional[Path]:
@@ -6066,20 +6770,6 @@ class omnipkg:
             safe_print(_('    ❌ Quick compatibility check failed: {}').format(e))
             return None
 
-    def initialize_pypi_cache(self):
-        """Initialize PyPI version cache system."""
-        self.pypi_cache = PyPIVersionCache(
-            redis_client=getattr(self, 'redis_client', None)
-        )
-        
-        # Optional: Clean up expired entries on startup
-        self.pypi_cache.clear_expired_cache()
-        
-        # Show cache stats
-        stats = self.pypi_cache.get_cache_stats()
-        safe_print(f"📊 PyPI Cache initialized: {stats['valid_entries']} valid entries, "
-                f" {'Redis ✅' if stats['redis_available'] else ''}")
-
     def _get_latest_version_from_pypi(self, package_name: str) -> Optional[str]:
         """
         (ENHANCED CACHING) Gets the latest compatible version of a package.
@@ -6087,23 +6777,19 @@ class omnipkg:
         2. If cache miss, performs full network-based resolution
         3. Background refresh keeps cache fresh without user waiting
         """
-        safe_print(f" -> Finding latest COMPATIBLE version for '{package_name}' using super-optimized approach with background caching...")
-        
-        # Initialize cache if not already done
+        safe_print(f" -> Finding latest COMPATIBLE version for '{package_name}' using background caching...")
+        py_context = self.current_python_context        
         if not hasattr(self, 'pypi_cache'):
             self.initialize_pypi_cache()
-        
-        # --- ENHANCED CACHING LOGIC WITH BACKGROUND REFRESH ---
-        cached_version = self.pypi_cache.get_cached_version(package_name)
-        if cached_version:
-            # IMMEDIATE: Return cached version for instant user experience
-            safe_print(f"    💾 Using cached version: {cached_version}")
-            
-            # 🔥 BACKGROUND: Silently refresh cache for next time (non-blocking!)
-            self._start_background_cache_refresh(package_name)
-            
-            return cached_version
 
+        # Pass the python_context to the cache get method
+        cached_version = self.pypi_cache.get_cached_version(package_name, py_context)
+        if cached_version:
+            safe_print(f"    💾 Using cached version for {py_context}: {cached_version}")
+            # Pass the context to the background refresh as well
+            self._start_background_cache_refresh(package_name, py_context)
+            return cached_version
+        
         # If we are here, it was a cache miss. Now we proceed with the network lookup.
         latest_pypi_version = None
         compatible_version = None
@@ -6164,7 +6850,7 @@ class omnipkg:
                 if compatible_version:
                     safe_print(f'    🎯 Found compatible version {compatible_version} - caching and returning!')
                     # Cache the result and return
-                    self.pypi_cache.cache_version(package_name, compatible_version)
+                    self.pypi_cache.cache_version(package_name, compatible_version, py_context)
                     return compatible_version
             except Exception as e:
                 safe_print(f'    ⚠️ Quick compatibility check failed: {e}')
@@ -6289,39 +6975,36 @@ class omnipkg:
             safe_print(f" ❌ An unexpected error occurred while running the pip resolver for '{package_name}': {e}")
             return None
     
-    def _start_background_cache_refresh(self, package_name: str):
+    def _start_background_cache_refresh(self, package_name: str, python_context: str):
         """
-        Starts a background thread to silently update the cache.
-        This ensures the cache stays fresh without blocking the user.
+        (FIXED) Starts a background thread to silently update the cache for a specific context.
         """
         def background_refresh():
             try:
-                # Small delay to ensure main response finishes first
                 time.sleep(0.1)
                 
-                safe_print(f"    🔄 [Background] Refreshing cache for '{package_name}'...")
+                # Fetch the absolute latest version from PyPI
                 fresh_version = self._fetch_latest_pypi_version_only(package_name)
                 
                 if fresh_version:
-                    # Get current cached version to compare
-                    current_cached = self.pypi_cache.get_cached_version(package_name)
+                    # Get the current cached version for this specific context to compare
+                    current_cached = self.pypi_cache.get_cached_version(package_name, python_context)
                     
                     if fresh_version != current_cached:
-                        # Update cache with new version
-                        self.pypi_cache.cache_version(package_name, fresh_version)
-                        safe_print(f"    🆕 [Background] Cache updated: {package_name} {current_cached} → {fresh_version}")
+                        # Update the context-specific cache with the new version
+                        self.pypi_cache.cache_version(package_name, fresh_version, python_context)
+                        safe_print(f"    🆕 [Background] Cache updated for {python_context}: {package_name} {current_cached} → {fresh_version}")
                     else:
-                        # Version is same, just refresh the TTL
-                        self.pypi_cache.cache_version(package_name, fresh_version)
-                        safe_print(f"    ✅ [Background] Cache refreshed: {package_name} {fresh_version} (no version change)")
+                        # Version is the same, just refresh the TTL
+                        self.pypi_cache.cache_version(package_name, fresh_version, python_context)
                 else:
-                    safe_print(f"    ⚠️ [Background] Could not refresh cache for '{package_name}'")
+                    # Could not fetch a fresh version, do nothing to the cache
+                    pass
                     
-            except Exception as e:
-                # Silent failure - don't interrupt user experience
-                safe_print(f"    🔇 [Background] Cache refresh failed silently for '{package_name}': {e}")
+            except Exception:
+                # Silently fail
+                pass
         
-        # Start background thread (daemon=True means it won't block program exit)
         refresh_thread = threading.Thread(target=background_refresh, daemon=True)
         refresh_thread.start()
 
@@ -6368,7 +7051,7 @@ class omnipkg:
                             safe_print(f'    🚀 JACKPOT! Latest PyPI version {latest_pypi_version} is already installed!')
                             safe_print('    ⚡ Skipping all test installations - using installed version')
                             # Cache the result and return
-                            self.pypi_cache.cache_version(package_name, latest_pypi_version)
+                            self.pypi_cache.cache_version(package_name, latest_pypi_version, py_context)
                             return latest_pypi_version
                         else:
                             safe_print(f'    📋 Installed version ({installed_version}) differs from latest PyPI ({latest_pypi_version})')
@@ -6553,26 +7236,26 @@ class omnipkg:
     
 class PyPIVersionCache:
     """
-    Manages 24-hour caching of PyPI latest versions to optimize package resolution.
-    Uses both Redis (if available) and local file fallback for persistence.
+    (MODIFIED) Manages 24-hour caching of PyPI latest versions.
+    The cache is now context-aware and specific to each Python interpreter version.
     """
-    
+
     def __init__(self, redis_client=None, cache_dir: str = "~/.omnipkg/cache"):
         self.redis_client = redis_client
         self.cache_dir = os.path.expanduser(cache_dir)
-        self.cache_file = os.path.join(self.cache_dir, "pypi_versions.json")
+        # The file cache will store contexts in a nested dictionary.
+        self.cache_file = os.path.join(self.cache_dir, "pypi_versions_contextual.json")
         self.cache_ttl = 24 * 60 * 60  # 24 hours in seconds
-        
-        # Ensure cache directory exists
+
         os.makedirs(self.cache_dir, exist_ok=True)
-        
-        # Load existing cache from file if Redis not available
+
         if not self.redis_client:
             self._load_file_cache()
     
-    def _get_cache_key(self, package_name: str) -> str:
-        """Generate cache key for package."""
-        return f"pypi_version:{package_name.lower()}"
+    def _get_cache_key(self, package_name: str, python_context: str) -> str:
+        """(MODIFIED) Generate a context-aware cache key."""
+        # Example key: "pypi_version:py3.9:numpy"
+        return f"pypi_version:{python_context}:{package_name.lower()}"
     
     def _load_file_cache(self):
         """Load cache from local file."""
@@ -6593,83 +7276,79 @@ class PyPIVersionCache:
         except Exception as e:
             safe_print(f"⚠️ Warning: Could not save cache to file: {e}")
     
-    def get_cached_version(self, package_name: str) -> Optional[str]:
-        """
-        Get cached latest version for package if still valid (within 24 hours).
-        
-        Returns:
-            str: Latest version if cached and valid
-            None: If not cached or cache expired
-        """
-        cache_key = self._get_cache_key(package_name)
-        
-        # Try Redis first
+    def get_cached_version(self, package_name: str, python_context: str) -> Optional[str]:
+        """(MODIFIED) Get cached version for a specific python_context."""
+        cache_key = self._get_cache_key(package_name, python_context)
+
         if self.redis_client:
             try:
                 cached_data = self.redis_client.get(cache_key)
                 if cached_data:
                     data = json.loads(cached_data)
-                    cached_time = data.get('timestamp', 0)
-                    if time.time() - cached_time < self.cache_ttl:
-                        version = data.get('version')
-                        if version:
-                            safe_print(f"    🚀 CACHE HIT: {package_name} latest version {version} (Redis)")
-                            return version
-                    else:
-                        # Cache expired, remove it
-                        self.redis_client.delete(cache_key)
+                    # Redis handles TTL automatically, so we just return the version.
+                    version = data.get('version')
+                    if version:
+                        safe_print(f"    🚀 CACHE HIT: {package_name} (for Python {python_context}) -> v{version} (Redis)")
+                        return version
             except Exception as e:
                 safe_print(f"    ⚠️ Redis cache read error: {e}")
-        
-        # Try file cache as fallback
+
         if hasattr(self, '_file_cache'):
+            # File cache needs manual TTL check
             cached_entry = self._file_cache.get(cache_key)
             if cached_entry:
                 cached_time = cached_entry.get('timestamp', 0)
                 if time.time() - cached_time < self.cache_ttl:
                     version = cached_entry.get('version')
                     if version:
-                        safe_print(f"    🚀 CACHE HIT: {package_name} latest version {version} (file)")
+                        safe_print(f"    🚀 CACHE HIT: {package_name} (for Python {python_context}) -> v{version} (file)")
                         return version
                 else:
-                    # Cache expired, remove it
+                    # Cache expired
                     del self._file_cache[cache_key]
                     self._save_file_cache()
-        
+
         return None
     
-    def cache_version(self, package_name: str, version: str):
-        """
-        Cache the latest version for a package with current timestamp.
-        
-        Args:
-            package_name: Name of the package
-            version: Latest version to cache
-        """
-        cache_key = self._get_cache_key(package_name)
+    def cache_version(self, package_name: str, version: str, python_context: str):
+        """(MODIFIED) Cache the version for a specific python_context."""
+        cache_key = self._get_cache_key(package_name, python_context)
         cache_data = {
             'version': version,
             'timestamp': time.time(),
             'cached_at': datetime.now().isoformat()
         }
-        
-        # Cache in Redis
+
         if self.redis_client:
             try:
                 self.redis_client.setex(
-                    cache_key, 
-                    self.cache_ttl, 
+                    cache_key,
+                    self.cache_ttl,
                     json.dumps(cache_data)
                 )
-                safe_print(f"    💾 Cached {package_name}=={version} in Redis (24h TTL)")
+                safe_print(f"    💾 Cached {package_name}=={version} for Python {python_context} in Redis.")
             except Exception as e:
                 safe_print(f"    ⚠️ Redis cache write error: {e}")
-        
-        # Also cache in file as backup
+
         if hasattr(self, '_file_cache'):
             self._file_cache[cache_key] = cache_data
             self._save_file_cache()
-            safe_print(f"    💾 Cached {package_name}=={version} in file cache (24h TTL)")
+            safe_print(f"    💾 Cached {package_name}=={version} for Python {python_context} in file cache.")
+
+    def invalidate_cache_entry(self, package_name: str, python_context: str):
+        """(NEW) Explicitly remove a cache entry, e.g., after an install failure."""
+        cache_key = self._get_cache_key(package_name, python_context)
+        safe_print(f"    🔥 Invalidating cache for {package_name} on Python {python_context} due to install error.")
+
+        if self.redis_client:
+            try:
+                self.redis_client.delete(cache_key)
+            except Exception:
+                pass # Ignore errors during invalidation
+
+        if hasattr(self, '_file_cache') and cache_key in self._file_cache:
+            del self._file_cache[cache_key]
+            self._save_file_cache()
     
     def clear_expired_cache(self):
         """Remove all expired entries from cache."""
