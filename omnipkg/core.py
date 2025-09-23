@@ -2844,7 +2844,7 @@ class omnipkg:
             # Fallback for safety
             return f'py{sys.version_info.major}.{sys.version_info.minor}'
 
-        def initialize_pypi_cache(self):
+    def initialize_pypi_cache(self):
         """(MODIFIED & FIXED) Initialize PyPI version cache system."""
 
         # Default to no Redis client
