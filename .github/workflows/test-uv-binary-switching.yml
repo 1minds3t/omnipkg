@@ -88,52 +88,52 @@ jobs:
           EOF
 
       - name: 🧪 Run the Demo - UV Test (Binary Switching)
-              id: run_demo
-              run: |
-                echo "--- Running Omnipkg Demo for UV Test (Binary Switching) ---"
-                # Create a temporary directory for artifacts
-                mkdir -p /tmp/omnipkg-artifacts
-                
-                # Run demo with real-time output and timeout
-                # We pipe '2' (the choice for the UV demo) into the command
-                timeout 300 bash -c 'echo "2" | omnipkg demo 2>&1 | tee /tmp/omnipkg-artifacts/demo_output.txt'
-                DEMO_EXIT_CODE=$?
-                
-                # Save output to GitHub step summary for easy debugging
-                echo "## UV Demo Output" >> $GITHUB_STEP_SUMMARY
-                echo '```' >> $GITHUB_STEP_SUMMARY
-                cat /tmp/omnipkg-artifacts/demo_output.txt >> $GITHUB_STEP_SUMMARY
-                echo '```' >> $GITHUB_STEP_SUMMARY
-                
-                if [ $DEMO_EXIT_CODE -eq 0 ]; then
-                  echo "Demo completed successfully."
-                  echo "demo_outcome=success" >> $GITHUB_OUTPUT
-      
-                  # --- START: THE DYNAMIC FIX ---
-                  # Instead of checking for a specific version, we now check for the generic
-                  # "PASSED" markers that your improved test script reliably outputs.
-                  # This makes the test resilient to changes in the base environment.
-                  if grep -q "Main environment test: PASSED" /tmp/omnipkg-artifacts/demo_output.txt && \
-                     grep -q "ALL UV BINARY TESTS PASSED" /tmp/omnipkg-artifacts/demo_output.txt && \
-                     grep -q "Testing Bubble (uv==0.4.30)" /tmp/omnipkg-artifacts/demo_output.txt && \
-                     grep -q "Testing Bubble (uv==0.5.11)" /tmp/omnipkg-artifacts/demo_output.txt; then
-                    echo "UV demo verified: Main environment test passed, bubbles for 0.4.30 and 0.5.11 were tested, and all final tests passed!"
-                  else
-                    echo "Error: Key success markers from the UV demo were not found in the output."
-                    echo "Missing one of: 'Main environment test: PASSED', 'ALL UV BINARY TESTS PASSED', or 'Testing Bubble (...)'"
-                    echo "--- Full Demo Output ---"
-                    cat /tmp/omnipkg-artifacts/demo_output.txt
-                    exit 1
-                  fi
-                  # --- END: THE DYNAMIC FIX ---
-      
-                else
-                  echo "Demo failed with exit code $DEMO_EXIT_CODE."
-                  echo "demo_outcome=failure" >> $GITHUB_OUTPUT
-                  echo "--- Full Demo Output ---"
-                  cat /tmp/omnipkg-artifacts/demo_output.txt
-                  exit 1
-                fi
+        id: run_demo
+        run: |
+          echo "--- Running Omnipkg Demo for UV Test (Binary Switching) ---"
+          # Create a temporary directory for artifacts
+          mkdir -p /tmp/omnipkg-artifacts
+          
+          # Run demo with real-time output and timeout
+          # We pipe '2' (the choice for the UV demo) into the command
+          timeout 300 bash -c 'echo "2" | omnipkg demo 2>&1 | tee /tmp/omnipkg-artifacts/demo_output.txt'
+          DEMO_EXIT_CODE=$?
+          
+          # Save output to GitHub step summary for easy debugging
+          echo "## UV Demo Output" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          cat /tmp/omnipkg-artifacts/demo_output.txt >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          
+          if [ $DEMO_EXIT_CODE -eq 0 ]; then
+            echo "Demo completed successfully."
+            echo "demo_outcome=success" >> $GITHUB_OUTPUT
+
+            # --- START: THE DYNAMIC FIX ---
+            # Instead of checking for a specific version, we now check for the generic
+            # "PASSED" markers that your improved test script reliably outputs.
+            # This makes the test resilient to changes in the base environment.
+            if grep -q "Main environment test: PASSED" /tmp/omnipkg-artifacts/demo_output.txt && \
+               grep -q "ALL UV BINARY TESTS PASSED" /tmp/omnipkg-artifacts/demo_output.txt && \
+               grep -q "Testing Bubble (uv==0.4.30)" /tmp/omnipkg-artifacts/demo_output.txt && \
+               grep -q "Testing Bubble (uv==0.5.11)" /tmp/omnipkg-artifacts/demo_output.txt; then
+              echo "UV demo verified: Main environment test passed, bubbles for 0.4.30 and 0.5.11 were tested, and all final tests passed!"
+            else
+              echo "Error: Key success markers from the UV demo were not found in the output."
+              echo "Missing one of: 'Main environment test: PASSED', 'ALL UV BINARY TESTS PASSED', or 'Testing Bubble (...)'"
+              echo "--- Full Demo Output ---"
+              cat /tmp/omnipkg-artifacts/demo_output.txt
+              exit 1
+            fi
+            # --- END: THE DYNAMIC FIX ---
+
+          else
+            echo "Demo failed with exit code $DEMO_EXIT_CODE."
+            echo "demo_outcome=failure" >> $GITHUB_OUTPUT
+            echo "--- Full Demo Output ---"
+            cat /tmp/omnipkg-artifacts/demo_output.txt
+            exit 1
+          fi
 
       - name: 📦 Archive Demo Output
         if: always()
