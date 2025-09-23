@@ -8,6 +8,10 @@ packaging (v25.0)
 License: Apache-2.0 or BSD-2-Clause
 See licenses/packaging.txt for full license text
 
+Authlib (v1.6.4)
+License: BSD-3-Clause
+See licenses/authlib.txt for full license text
+
 requests (v2.32.4)
 License: Apache-2.0
 See licenses/requests.txt for full license text
