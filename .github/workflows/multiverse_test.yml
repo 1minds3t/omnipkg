@@ -1,4 +1,3 @@
-
 name: "🌠 LIVE - Omnipkg Quantum Multiverse Warp"
 
 on:
@@ -36,6 +35,7 @@ jobs:
           python -m pip install --upgrade pip
           # Use -e . for editable install
           pip install -e . redis rich==13.7.1
+          
       - name: Configure omnipkg for non-interactive use
         run: |
           python - << 'EOF'
@@ -84,34 +84,11 @@ jobs:
               print(f"Error writing config: {e}")
               sys.exit(1)
           EOF
-      - name: Adopt Required Python Versions
-        run: |
-          echo "--- Adopting Python Versions for Multiverse Test ---"
-          
-          # Check current Python version
-          CURRENT_PYTHON_VERSION=$(python -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
-          echo "Current Python version: $CURRENT_PYTHON_VERSION"
-          
-          # Define required versions
-          REQUIRED_VERSIONS=("3.9" "3.10" "3.11")
-          
-          # Adopt each version if not already current
-          for VERSION in "${REQUIRED_VERSIONS[@]}"; do
-            if [ "$VERSION" != "$CURRENT_PYTHON_VERSION" ]; then
-              echo "Adopting Python $VERSION..."
-              # Use a generous timeout for the first time adoption which downloads/builds interpreters
-              if timeout 600 omnipkg python adopt $VERSION; then
-                echo "✅ Successfully adopted Python $VERSION"
-              else
-                echo "❌ Failed to adopt Python $VERSION"
-                exit 1
-              fi
-            else
-              echo "✅ Python $VERSION is already current version"
-            fi
-          done
-          
-          echo "All required Python versions have been adopted!"
+
+      # THIS STEP HAS BEEN REMOVED
+      # - name: Adopt Required Python Versions
+      #   ...
+
       - name: Run Quantum Multiverse Demo and Verify
         id: run_multiverse_demo
         run: |
@@ -122,7 +99,8 @@ jobs:
           set -o pipefail
           
           # Run the demo with option 8 (Quantum Multiverse Warp)
-          # Redirect all output to a file and to stdout
+          # The test script itself now handles adopting interpreters concurrently.
+          # The timeout might need to be generous to account for cold-start downloads.
           if ! timeout 900 bash -c 'echo "8" | omnipkg demo' 2>&1 | tee /tmp/omnipkg-artifacts/multiverse_demo_output.txt; then
             echo "❌ Demo execution failed or timed out. See full output below."
             cat /tmp/omnipkg-artifacts/multiverse_demo_output.txt
@@ -144,6 +122,16 @@ jobs:
           fi
           
           # Core Success Check 3: All 3 Python versions swapped context successfully
+          # We can also check for the adoption messages as a sanity check
+          PYTHON_39_ADOPT=$(grep -c "Successfully adopted Python 3.9" /tmp/omnipkg-artifacts/multiverse_demo_output.txt)
+          PYTHON_310_ADOPT=$(grep -c "Successfully adopted Python 3.10" /tmp/omnipkg-artifacts/multiverse_demo_output.txt)
+          
+          if [ $PYTHON_39_ADOPT -ge 1 ] && [ $PYTHON_310_ADOPT -ge 1 ]; then
+             echo "✅ Adoption PASSED! Required interpreters were successfully adopted."
+          else
+             echo "⚠️ Adoption WARNING: Could not find adoption success messages. Continuing with swap verification..."
+          fi
+          
           PYTHON_39_SWITCH=$(grep -c "Context switched to Python 3.9" /tmp/omnipkg-artifacts/multiverse_demo_output.txt)
           PYTHON_310_SWITCH=$(grep -c "Context switched to Python 3.10" /tmp/omnipkg-artifacts/multiverse_demo_output.txt)
           PYTHON_311_SWITCH=$(grep -c "Context switched to Python 3.11" /tmp/omnipkg-artifacts/multiverse_demo_output.txt)
@@ -166,7 +154,6 @@ jobs:
             echo "   - Python 3.11 switches: $PYTHON_311_SWITCH"
             exit 1
           fi
-      # The unnecessary 'Verify Multiverse Success Indicators' step has been removed.
 
       - name: Archive Multiverse Demo Output
         if: always()
