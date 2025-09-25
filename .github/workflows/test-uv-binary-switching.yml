@@ -5,6 +5,22 @@ on:
     branches: [ main ]
   pull_request:
     branches: [ main ]
+  workflow_dispatch:  # Enable manual triggering
+    inputs:
+      branch:
+        description: 'Branch to run tests on'
+        required: true
+        default: 'main'
+        type: choice
+        options:
+          - main
+          - development
+          - staging
+      test_timeout:
+        description: 'Test timeout in seconds'
+        required: false
+        default: '300'
+        type: string
 
 jobs:
   test:
@@ -23,6 +39,18 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          # Use the selected branch from manual dispatch, or default to the triggered ref
+          ref: ${{ github.event.inputs.branch || github.ref }}
+
+      - name: 🎯 Display selected branch
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "Manual run triggered on branch: ${{ github.event.inputs.branch }}"
+            echo "Test timeout: ${{ github.event.inputs.test_timeout }} seconds"
+          else
+            echo "Automatic run on branch: ${{ github.ref_name }}"
+          fi
 
       - name: Set up Python 3.11
         uses: actions/setup-python@v5
@@ -94,9 +122,13 @@ jobs:
           # Create a temporary directory for artifacts
           mkdir -p /tmp/omnipkg-artifacts
           
+          # Use custom timeout if provided in manual run
+          TIMEOUT_SECONDS=${{ github.event.inputs.test_timeout || '300' }}
+          echo "Using timeout: ${TIMEOUT_SECONDS} seconds"
+          
           # Run demo with real-time output and timeout
           # We pipe '2' (the choice for the UV demo) into the command
-          timeout 300 bash -c 'echo "2" | omnipkg demo 2>&1 | tee /tmp/omnipkg-artifacts/demo_output.txt'
+          timeout ${TIMEOUT_SECONDS} bash -c 'echo "2" | omnipkg demo 2>&1 | tee /tmp/omnipkg-artifacts/demo_output.txt'
           DEMO_EXIT_CODE=$?
           
           # Save output to GitHub step summary for easy debugging
@@ -139,7 +171,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: omnipkg-uv-demo-output
+          name: omnipkg-uv-demo-output-${{ github.event.inputs.branch || github.ref_name }}
           path: /tmp/omnipkg-artifacts/
           retention-days: 7
           compression-level: 6
