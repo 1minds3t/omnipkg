@@ -27,6 +27,9 @@ except ImportError as e:
 # --- Thread-safe utilities ---
 print_lock = threading.Lock()
 omnipkg_lock = threading.Lock()
+# NEW: A dedicated lock for the adoption process to prevent race conditions on downloads
+adopt_lock = threading.Lock()
+
 
 def thread_safe_print(*args, **kwargs):
     """Thread-safe wrapper around safe_print."""
@@ -132,6 +135,41 @@ def check_package_installed(python_exe: str, package: str, version: str) -> Tupl
     duration_ms = (time.perf_counter() - start_time) * 1000
     return result.returncode == 0, duration_ms
 
+def prepare_interpreter_dimension(py_version: str, omnipkg_instance: omnipkg, thread_id: int):
+    """
+    NEW: Worker function dedicated to adopting a Python interpreter if it's missing.
+    This runs concurrently with other preparations and tests.
+    """
+    prefix = f"[T{thread_id}|Adopt]"
+    try:
+        # Check if interpreter already exists to avoid unnecessary work
+        if omnipkg_instance.config_manager.get_interpreter_for_version(py_version):
+            thread_safe_print(f'{prefix} ✅ Python {py_version} already adopted.')
+            return True
+        
+        # Use a dedicated lock for the adoption process
+        with adopt_lock:
+            # Double-check after acquiring the lock in case another thread just finished
+            if omnipkg_instance.config_manager.get_interpreter_for_version(py_version):
+                thread_safe_print(f'{prefix} ✅ Python {py_version} was adopted by another thread.')
+                return True
+
+            thread_safe_print(f'{prefix} 🚀 ADOPTING Python {py_version}...')
+            start_time = time.perf_counter()
+            # The adopt method is already part of the omnipkg core class
+            success = omnipkg_instance.adopt_python(py_version, quiet=True) # Use quiet to avoid noisy output
+            duration = (time.perf_counter() - start_time) * 1000
+            
+            if success:
+                thread_safe_print(f'{prefix} ✅ Successfully adopted Python {py_version} in {format_duration(duration)}')
+                return True
+            else:
+                thread_safe_print(f'{prefix} ❌ FAILED to adopt Python {py_version}.')
+                return False
+    except Exception as e:
+        thread_safe_print(f'{prefix} ❌ FAILED with exception: {e}')
+        return False
+
 def prepare_and_test_dimension(config: Tuple[str, str], omnipkg_instance: omnipkg, thread_id: int):
     """
     (CORRECTED) The main worker function for each thread, now using the
@@ -151,7 +189,8 @@ def prepare_and_test_dimension(config: Tuple[str, str], omnipkg_instance: omnipk
         python_exe_path = omnipkg_instance.config_manager.get_interpreter_for_version(py_version)
 
         if not python_exe_path:
-            raise RuntimeError(f"Could not find interpreter for {py_version}")
+            # This should not happen if the adoption phase completed successfully
+            raise RuntimeError(f"Could not find interpreter for {py_version} after adoption phase.")
         python_exe = str(python_exe_path)
 
         # === STEP 2: Check if package is installed (HITS THE CACHE) ===
@@ -301,7 +340,25 @@ def rich_multiverse_test():
     test_configs = [('3.9', '13.4.2'), ('3.10', '13.6.0'), ('3.11', '13.7.1')]
     results = []  # Initialize results list
     
-    with concurrent.futures.ThreadPoolExecutor(max_workers=len(test_configs)) as executor:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=len(test_configs) * 2) as executor:
+        # --- NEW: Concurrent Adoption Phase ---
+        # First, submit all the adoption tasks.
+        adoption_futures = [
+            executor.submit(prepare_interpreter_dimension, config[0], shared_omnipkg_instance, i+1)
+            for i, config in enumerate(test_configs)
+        ]
+        
+        # Wait for all interpreters to be ready before starting the tests.
+        # This ensures the environment is fully prepared for the testing phase.
+        adoption_results = [future.result() for future in concurrent.futures.as_completed(adoption_futures)]
+        
+        if not all(adoption_results):
+            thread_safe_print("💥💥💥 MULTIVERSE TEST FAILED: Not all interpreters could be adopted. 💥💥💥")
+            return
+
+        thread_safe_print("✅ All interpreters are adopted and ready. Starting concurrent tests.")
+        
+        # --- Concurrent Testing Phase (as before) ---
         future_to_config = {
             # Pass the SAME instance to every thread
             executor.submit(prepare_and_test_dimension, config, shared_omnipkg_instance, i+1): config 
