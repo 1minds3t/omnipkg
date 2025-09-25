@@ -125,20 +125,41 @@ jobs:
 
           # 1. Install rich==13.4.2 into Python 3.9 environment
           echo "Installing rich 13.4.2 for Python 3.9..."
-          omnipkg swap python 3.9
-          omnipkg install rich==13.4.2
-          echo "✅ rich==13.4.2 installed in Python 3.9"
+          if timeout 300 omnipkg swap python 3.9; then
+            echo "✅ Successfully swapped to Python 3.9"
+            if timeout 300 omnipkg install rich==13.4.2; then
+              echo "✅ rich==13.4.2 installed in Python 3.9"
+            else
+              echo "❌ Failed to install rich==13.4.2 in Python 3.9"
+              exit 1
+            fi
+          else
+            echo "❌ Failed to swap to Python 3.9"
+            exit 1
+          fi
 
           # 2. Install rich==13.6.0 into Python 3.10 environment
           echo "Installing rich 13.6.0 for Python 3.10..."
-          omnipkg swap python 3.10
-          omnipkg install rich==13.6.0
-          echo "✅ rich==13.6.0 installed in Python 3.10"
+          if timeout 300 omnipkg swap python 3.10; then
+            echo "✅ Successfully swapped to Python 3.10"
+            if timeout 300 omnipkg install rich==13.6.0; then
+              echo "✅ rich==13.6.0 installed in Python 3.10"
+            else
+              echo "❌ Failed to install rich==13.6.0 in Python 3.10"
+              exit 1
+            fi
+          else
+            echo "❌ Failed to swap to Python 3.10"
+            exit 1
+          fi
           
           # 3. Swap back to the starting Python 3.11 environment
-          omnipkg swap python 3.11
-          echo "✅ Swapped back to Python 3.11 (native host)"
-
+          if timeout 300 omnipkg swap python 3.11; then
+            echo "✅ Swapped back to Python 3.11 (native host)"
+          else
+            echo "❌ Failed to swap back to Python 3.11"
+            exit 1
+          fi
 
       - name: Run Quantum Multiverse Demo and Verify
         id: run_multiverse_demo
@@ -172,9 +193,9 @@ jobs:
           fi
           
           # Core Success Check 3: All 3 Python versions swapped context successfully
-          PYTHON_39_SWITCH=$(grep -c "Context switched to Python 3.9" /tmp/omnipkg-artifacts/multiverse_demo_output.txt)
-          PYTHON_310_SWITCH=$(grep -c "Context switched to Python 3.10" /tmp/omnipkg-artifacts/multiverse_demo_output.txt)
-          PYTHON_311_SWITCH=$(grep -c "Context switched to Python 3.11" /tmp/omnipkg-artifacts/multiverse_demo_output.txt)
+          PYTHON_39_SWITCH=$(grep -c "Context switched to Python 3.9" /tmp/omnipkg-artifacts/multiverse_demo_output.txt || echo "0")
+          PYTHON_310_SWITCH=$(grep -c "Context switched to Python 3.10" /tmp/omnipkg-artifacts/multiverse_demo_output.txt || echo "0")
+          PYTHON_311_SWITCH=$(grep -c "Context switched to Python 3.11" /tmp/omnipkg-artifacts/multiverse_demo_output.txt || echo "0")
           
           if [ $PYTHON_39_SWITCH -ge 1 ] && [ $PYTHON_310_SWITCH -ge 1 ] && [ $PYTHON_311_SWITCH -ge 1 ]; then
             echo "✅ Core functionality PASSED! All 3 Python versions successfully swapped context (3.9: ${PYTHON_39_SWITCH}, 3.10: ${PYTHON_310_SWITCH}, 3.11: ${PYTHON_311_SWITCH})."
@@ -182,7 +203,7 @@ jobs:
             
             # --- Artifact Summary ---
             echo "## Quantum Multiverse Demo Summary" >> $GITHUB_STEP_SUMMARY
-            grep -E "DIMENSION TEST COMPLETE|Total Concurrent Runtime" /tmp/omnipkg-artifacts/multiverse_demo_output.txt >> $GITHUB_STEP_SUMMARY
+            grep -E "DIMENSION TEST COMPLETE|Total Concurrent Runtime" /tmp/omnipkg-artifacts/multiverse_demo_output.txt >> $GITHUB_STEP_SUMMARY || echo "Summary patterns not found" >> $GITHUB_STEP_SUMMARY
             echo '```bash' >> $GITHUB_STEP_SUMMARY
             tail -n 20 /tmp/omnipkg-artifacts/multiverse_demo_output.txt >> $GITHUB_STEP_SUMMARY
             echo '```' >> $GITHUB_STEP_SUMMARY
@@ -192,10 +213,11 @@ jobs:
             echo "   - Python 3.9 switches: $PYTHON_39_SWITCH"
             echo "   - Python 3.10 switches: $PYTHON_310_SWITCH"
             echo "   - Python 3.11 switches: $PYTHON_311_SWITCH"
+            echo ""
+            echo "--- Full output for debugging ---"
+            cat /tmp/omnipkg-artifacts/multiverse_demo_output.txt
             exit 1
           fi
-
-      # The unnecessary 'Verify Multiverse Success Indicators' step has been removed.
 
       - name: Archive Multiverse Demo Output
         if: always()
