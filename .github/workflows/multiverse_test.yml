@@ -119,6 +119,28 @@ jobs:
           
           echo "All required Python versions have been adopted!"
 
+      - name: Pre-Install Packages into All Interpreters
+        run: |
+          echo "--- Pre-installing rich into Python 3.9 and 3.10 to warm caches ---"
+
+          # 1. Install rich==1.1.1 into Python 3.9 environment
+          omnipkg swap python 3.9
+          omnipkg install rich==1.1.1
+          echo "✅ rich==1.1.1 installed in Python 3.9"
+
+          # 2. Install rich==1.1.1 into Python 3.10 environment
+          omnipkg swap python 3.10
+          omnipkg install rich==1.1.1
+          echo "✅ rich==1.1.1 installed in Python 3.10"
+          
+          # 3. Swap back to the starting Python 3.11 environment
+          omnipkg swap python 3.11
+          echo "✅ Swapped back to Python 3.11 (native host)"
+          
+          # Note: The rich==13.7.1 for Python 3.11 was already installed 
+          # in the 'Install dependencies' step, so no need to do it here.
+
+
       - name: Run Quantum Multiverse Demo and Verify
         id: run_multiverse_demo
         run: |
