@@ -79,6 +79,10 @@ jobs:
         run: pip install -e .
         shell: pwsh
 
+      - name: Install uv for additional path testing
+        run: pip install uv
+        shell: pwsh
+
       - name: "PHASE 2: Post-Installation Package Analysis"
         run: |
           Write-Host "=" * 80
@@ -89,7 +93,7 @@ jobs:
           pip list
           
           Write-Host "`n--- Critical Package Locations (pip show) ---"
-          $critical_packages = @('packaging', 'omnipkg', 'setuptools', 'pip')
+          $critical_packages = @('packaging', 'omnipkg', 'setuptools', 'pip', 'uv')
           foreach ($pkg in $critical_packages) {
             Write-Host "`n--- Package: $pkg ---"
             $show_output = pip show $pkg 2>$null
@@ -98,6 +102,30 @@ jobs:
             } else {
               Write-Host "Package $pkg not found or error occurred"
             }
+          }
+          
+          Write-Host "`n--- UV Path Detection Test ---"
+          try {
+            $uv_location = Get-Command uv -ErrorAction Stop | Select-Object -ExpandProperty Source
+            Write-Host "uv executable found at: '$uv_location'"
+            
+            # Test uv functionality
+            $uv_version = uv --version 2>$null
+            Write-Host "uv version: $uv_version"
+            
+            # Check uv's Scripts directory
+            $uv_dir = Split-Path -Parent $uv_location
+            Write-Host "uv directory: '$uv_dir'"
+            Write-Host "uv directory exists: $(Test-Path $uv_dir)"
+            
+            # Look for Scripts vs bin
+            $scripts_dir = Join-Path (Split-Path -Parent $uv_dir) "Scripts"
+            $bin_dir = Join-Path (Split-Path -Parent $uv_dir) "bin"
+            Write-Host "Scripts directory: '$scripts_dir' (exists: $(Test-Path $scripts_dir))"
+            Write-Host "bin directory: '$bin_dir' (exists: $(Test-Path $bin_dir))"
+            
+          } catch {
+            Write-Host "uv executable not found in PATH: $($_.Exception.Message)"
           }
           
           Write-Host "`n--- Site-packages Directory Analysis ---"
@@ -121,10 +149,13 @@ jobs:
                   try:
                       contents = os.listdir(loc)
                       print(f'       Contents count: {len(contents)}')
-                      # Look for omnipkg specifically
+                      # Look for omnipkg and uv specifically
                       omnipkg_items = [c for c in contents if 'omnipkg' in c.lower()]
+                      uv_items = [c for c in contents if 'uv' in c.lower()]
                       if omnipkg_items:
                           print(f'       omnipkg related: {omnipkg_items}')
+                      if uv_items:
+                          print(f'       uv related: {uv_items}')
                   except Exception as e:
                       print(f'       Error listing contents: {e}')
           
@@ -317,6 +348,22 @@ jobs:
                   print('  Contains packaging .dist-info:', packaging_dist)
           "
           
+          # Method 5: UV package location
+          Write-Host "`nMethod 5 (UV package location via pip show):"
+          try {
+            $uv_pip_output = pip show uv 2>$null
+            $uv_location_line = $uv_pip_output | Select-String -Pattern "Location:"
+            if ($uv_location_line) {
+              $uv_pip_location = $uv_location_line.Line.Split(' ', 2)[1].Trim()
+              Write-Host "UV package location (pip show): '$uv_pip_location'"
+              Write-Host "UV location matches packaging location: $(if ($pip_location -eq $uv_pip_location) { 'YES' } else { 'NO' })"
+            } else {
+              Write-Host "UV package location (pip show): FAILED"
+            }
+          } catch {
+            Write-Host "UV package location (pip show): ERROR - $($_.Exception.Message)"
+          }
+          
           Write-Host "`n--- omnipkg Configuration Comparison ---"
           if (Test-Path ~\.config\omnipkg\config.json) {
             $config = Get-Content ~\.config\omnipkg\config.json | ConvertFrom-Json
@@ -443,16 +490,46 @@ jobs:
         shell: pwsh
 
       # =============================================================================
-      # ARTIFACTS AND CLEANUP
+      # ARTIFACTS COLLECTION (FIXED)
       # =============================================================================
 
-      - name: Upload omnipkg output as artifact
+      - name: Copy config files to workspace for artifact collection
+        run: |
+          Write-Host "Copying config files to workspace for artifact collection..."
+          
+          # Create debug output directory in workspace
+          New-Item -ItemType Directory -Path "debug-output" -Force
+          
+          # Copy omnipkg output
+          if (Test-Path "omnipkg_output.txt") {
+            Copy-Item "omnipkg_output.txt" "debug-output/" -Force
+            Write-Host "Copied omnipkg_output.txt"
+          }
+          
+          # Copy entire omnipkg config directory if it exists
+          if (Test-Path ~\.config\omnipkg) {
+            Copy-Item ~\.config\omnipkg "debug-output/" -Recurse -Force
+            Write-Host "Copied omnipkg config directory"
+          } else {
+            # Create a placeholder file to indicate config wasn't created
+            "omnipkg config directory was not created" | Out-File -FilePath "debug-output\config-not-created.txt"
+            Write-Host "Created placeholder for missing config"
+          }
+          
+          # List what we're about to upload
+          Write-Host "`nFiles to be uploaded:"
+          Get-ChildItem "debug-output" -Recurse | ForEach-Object {
+            Write-Host "  $($_.FullName.Replace((Get-Location).Path + '\debug-output\', ''))"
+          }
+        shell: pwsh
+        if: always()
+
+      - name: Upload omnipkg debug output as artifact
         uses: actions/upload-artifact@v4
         with:
-          name: omnipkg-debug-output
-          path: |
-            omnipkg_output.txt
-            ~/.config/omnipkg/**
+          name: omnipkg-debug-output-${{ github.run_number }}
+          path: debug-output/
+          retention-days: 30
         if: always()
 
       - name: Final Status
