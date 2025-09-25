@@ -109,20 +109,20 @@ Born from a real-world nightmare—a forced downgrade that wrecked a production 
 
 ### 1. Multiverse Orchestration & Python Hot-Swapping [![🐍 Multi-Interpreter Freedom](https://img.shields.io/badge/🐍_Multi--Interpreter_Freedom-Live-orange?logo=python&logoColor=white)](https://github.com/1minds3t/omnipkg/releases)
 
-## The "Quantum Multiverse Warp": Doing The Impossible in 6 Seconds
+## The "Quantum Multiverse Warp": Doing The Impossible in Half a Second
 
-Our "Quantum Multiverse Warp" demo executes a single script across three different Python interpreters and three package versions **concurrently** in the same environment. 
+Our "Quantum Multiverse Warp" demo executes a single script across three different Python interpreters and three package versions **concurrently** in the same environment. The results are not just fast; they redefine what's possible.
 
 | Task (Same Script, Same Environment) | Execution Time |
 | ------------------------------------ | :------------: |
-| 🧵 **Thread 1:** Python 3.9 + Rich 13.4.2  | ✅ **2.05s**   |
-| 🧵 **Thread 2:** Python 3.10 + Rich 13.6.0 | ✅ **2.18s**   |
-| 🧵 **Thread 3:** Python 3.11 + Rich 13.7.1 | ✅ **1.91s**   |
-| 🏆 **Total Concurrent Runtime**        | **6.22s**      |
+| 🧵 **Thread 1:** Python 3.9 + Rich 13.4.2  | ✅ **397.1ms**   |
+| 🧵 **Thread 2:** Python 3.10 + Rich 13.6.0 | ✅ **431.8ms**   |
+| 🧵 **Thread 3:** Python 3.11 + Rich 13.7.1 | ✅ **541.4ms**   |
+| 🏆 **Total Concurrent Runtime**        | **542.5ms**      |
 
-This is a **7x-22x speedup** over traditional Docker or venv workflows, achieved in a single environment with zero setup. It's not a simulation; it's a new reality for Python CI/CD.
+This isn't just a speedup; it's a paradigm shift. What traditionally takes minutes with Docker or complex venv scripting, `omnipkg` accomplishes in **just over 500 milliseconds**. It's not a simulation; it's a new reality for high-performance Python CI/CD.
 
-Don't believe me? Select **Demo 8** for the "Quantum Multiverse Warp" to see the impossible happen in real-time.
+Don't believe it? Select **Demo 8** for the "Quantum Multiverse Warp" to see the impossible happen in real-time.
 
 ```bash
 uv pip install omnipkg && omnipkg demo
