@@ -1,4 +1,5 @@
-name: "Simple Python Adoption Test"
+
+name: "🌠 LIVE - Omnipkg Quantum Multiverse Warp"
 
 on:
   push:
@@ -8,7 +9,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  test-python-adoption:
+  test:
     runs-on: ubuntu-latest
     services:
       redis:
@@ -25,7 +26,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Python 3.11 (base environment)
+      - name: Set up Python 3.11
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
@@ -33,73 +34,145 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e . redis
-
-      - name: Test Basic Python Adoption and Swapping
-        id: full_test_run
+          # Use -e . for editable install
+          pip install -e . redis rich==13.7.1
+      - name: Configure omnipkg for non-interactive use
         run: |
-          set -e
-          echo "=== Testing Basic Python Management ==="
+          python - << 'EOF'
+          import sys
+          import site
+          import json
+          from pathlib import Path
+          import os
+          import sysconfig
+          try:
+              site_packages_path = site.getsitepackages()[0]
+          except (IndexError, AttributeError):
+              site_packages_path = sysconfig.get_paths()['purelib']
+          # Get the correct site-packages path to set for the config, which is critical for omnipkg
+          # The logic below ensures it points to the root environment's site-packages where interpreters are managed
+          omnipkg_base_path = Path(sys.executable).parent.parent / 'lib' / f'python{sys.version_info.major}.{sys.version_info.minor}' / 'site-packages'
+          project_root = Path(os.environ['GITHUB_WORKSPACE'])
+          builder_script = project_root / 'omnipkg' / 'package_meta_builder.py'
+          if not builder_script.exists():
+              print(f"Error: {builder_script} does not exist")
+              sys.exit(1)
+          config_data = {
+              # Use the derived path instead of generic site.getsitepackages()
+              'site_packages_path': str(omnipkg_base_path),
+              'multiversion_base': str(omnipkg_base_path / '.omnipkg_versions'),
+              'python_executable': sys.executable,
+              'builder_script_path': str(builder_script),
+              'redis_host': 'localhost',
+              'redis_port': 6379,
+              'redis_key_prefix': 'omnipkg:pkg:',
+              # Use the paths from the hosted runner environment
+              'paths_to_index': [str(Path(sys.executable).parent), '/usr/local/bin', '/usr/bin', '/bin', '/usr/sbin', '/sbin'],
+              'auto_cleanup': True,
+              'cleanup_threshold_days': 30
+          }
+          config_dir = Path.home() / '.config' / 'omnipkg'
+          config_dir.mkdir(parents=True, exist_ok=True)
+          config_path = config_dir / 'config.json'
           
-          # Set consistent config path
-          export OMNIPKG_CONFIG_PATH="${{ github.workspace }}/.omnipkg_config/config.json"
-          echo "Config path: $OMNIPKG_CONFIG_PATH"
-          
-          # Initialize omnipkg config (let the CLI handle it)
-          echo "--- Initializing omnipkg ---"
-          echo "Omnipkg will auto-initialize on first command"
-          
-          # Adopt Python 3.11 (current)
-          echo "--- Adopting Python 3.11 ---"
-          omnipkg python adopt 3.11
-          
-          # Check current status
-          echo "--- Checking Python info ---"
-          omnipkg info python
-          
-          # Adopt Python 3.9
-          echo "--- Adopting Python 3.9 ---"
-          omnipkg python adopt 3.9
-          
-          # List available interpreters
-          echo "--- Listing managed interpreters ---"
-          omnipkg list python
-          
-          # Test swapping to Python 3.9
-          echo "--- Swapping to Python 3.9 ---"
-          omnipkg swap python 3.9
-          
-          # Verify the swap worked
-          echo "--- Verifying Python 3.9 is active ---"
-          omnipkg info python
-          
-          # Re-adopt Python 3.11 to ensure it's in the current context
-          echo "--- Re-adopting Python 3.11 to restore context ---"
-          omnipkg python adopt 3.11
-          
-          # Test swapping back to Python 3.11
-          echo "--- Swapping back to Python 3.11 ---"
-          omnipkg swap python 3.11
-          
-          # Final verification
-          echo "--- Final verification ---"
-          omnipkg info python
-          
-          echo "✅ All basic Python adoption and swapping tests passed!"
-
-      - name: Test Summary
-        if: always()
+          try:
+              with open(config_path, 'w') as f:
+                  json.dump(config_data, f, indent=2)
+              print(f'omnipkg config created at {config_path}:')
+              print(json.dumps(config_data, indent=2))
+          except Exception as e:
+              print(f"Error writing config: {e}")
+              sys.exit(1)
+          EOF
+      - name: Adopt Required Python Versions
         run: |
-          echo "## Test Results Summary" >> $GITHUB_STEP_SUMMARY
-          if [[ "${{ steps.full_test_run.outcome }}" == "success" ]]; then
-            echo "✅ **Simple Python Adoption Test: PASSED**" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "Successfully tested:" >> $GITHUB_STEP_SUMMARY
-            echo "- Python interpreter adoption (3.11 and 3.9)" >> $GITHUB_STEP_SUMMARY
-            echo "- Context switching between interpreters" >> $GITHUB_STEP_SUMMARY
-            echo "- Basic omnipkg info and list commands" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "❌ **Simple Python Adoption Test: FAILED**" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "Check the workflow logs for details." >> $GITHUB_STEP_SUMMARY
+          echo "--- Adopting Python Versions for Multiverse Test ---"
+          
+          # Check current Python version
+          CURRENT_PYTHON_VERSION=$(python -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
+          echo "Current Python version: $CURRENT_PYTHON_VERSION"
+          
+          # Define required versions
+          REQUIRED_VERSIONS=("3.9" "3.10" "3.11")
+          
+          # Adopt each version if not already current
+          for VERSION in "${REQUIRED_VERSIONS[@]}"; do
+            if [ "$VERSION" != "$CURRENT_PYTHON_VERSION" ]; then
+              echo "Adopting Python $VERSION..."
+              # Use a generous timeout for the first time adoption which downloads/builds interpreters
+              if timeout 600 omnipkg python adopt $VERSION; then
+                echo "✅ Successfully adopted Python $VERSION"
+              else
+                echo "❌ Failed to adopt Python $VERSION"
+                exit 1
+              fi
+            else
+              echo "✅ Python $VERSION is already current version"
+            fi
+          done
+          
+          echo "All required Python versions have been adopted!"
+      - name: Run Quantum Multiverse Demo and Verify
+        id: run_multiverse_demo
+        run: |
+          echo "--- Running Omnipkg Quantum Multiverse Warp Demo (Option 8) ---"
+          mkdir -p /tmp/omnipkg-artifacts
+          
+          # Set pipefail to catch any failures in the pipeline
+          set -o pipefail
+          
+          # Run the demo with option 8 (Quantum Multiverse Warp)
+          # Redirect all output to a file and to stdout
+          if ! timeout 900 bash -c 'echo "8" | omnipkg demo' 2>&1 | tee /tmp/omnipkg-artifacts/multiverse_demo_output.txt; then
+            echo "❌ Demo execution failed or timed out. See full output below."
+            cat /tmp/omnipkg-artifacts/multiverse_demo_output.txt
+            exit 1
           fi
+          
+          # --- Verification ---
+          
+          # Core Success Check 1: Final success message
+          if ! grep -q "🎉 Demo completed successfully!" /tmp/omnipkg-artifacts/multiverse_demo_output.txt; then
+            echo "❌ Final success message 'Demo completed successfully!' NOT found."
+            exit 1
+          fi
+          
+          # Core Success Check 2: Multiverse completion message
+          if ! grep -q "🎉🎉🎉 MULTIVERSE TEST COMPLETE! 🎉🎉🎉" /tmp/omnipkg-artifacts/multiverse_demo_output.txt; then
+            echo "❌ Final multiverse completion message NOT found."
+            exit 1
+          fi
+          
+          # Core Success Check 3: All 3 Python versions swapped context successfully
+          PYTHON_39_SWITCH=$(grep -c "Context switched to Python 3.9" /tmp/omnipkg-artifacts/multiverse_demo_output.txt)
+          PYTHON_310_SWITCH=$(grep -c "Context switched to Python 3.10" /tmp/omnipkg-artifacts/multiverse_demo_output.txt)
+          PYTHON_311_SWITCH=$(grep -c "Context switched to Python 3.11" /tmp/omnipkg-artifacts/multiverse_demo_output.txt)
+          
+          if [ $PYTHON_39_SWITCH -ge 1 ] && [ $PYTHON_310_SWITCH -ge 1 ] && [ $PYTHON_311_SWITCH -ge 1 ]; then
+            echo "✅ Core functionality PASSED! All 3 Python versions successfully swapped context (3.9: ${PYTHON_39_SWITCH}, 3.10: ${PYTHON_310_SWITCH}, 3.11: ${PYTHON_311_SWITCH})."
+            echo "demo_outcome=success" >> $GITHUB_OUTPUT
+            
+            # --- Artifact Summary ---
+            echo "## Quantum Multiverse Demo Summary" >> $GITHUB_STEP_SUMMARY
+            grep -E "DIMENSION TEST COMPLETE|Total Concurrent Runtime" /tmp/omnipkg-artifacts/multiverse_demo_output.txt >> $GITHUB_STEP_SUMMARY
+            echo '```bash' >> $GITHUB_STEP_SUMMARY
+            tail -n 20 /tmp/omnipkg-artifacts/multiverse_demo_output.txt >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            exit 0
+          else
+            echo "❌ Context switching FAILED. Required 1+ switch for each version. Found:"
+            echo "   - Python 3.9 switches: $PYTHON_39_SWITCH"
+            echo "   - Python 3.10 switches: $PYTHON_310_SWITCH"
+            echo "   - Python 3.11 switches: $PYTHON_311_SWITCH"
+            exit 1
+          fi
+      # The unnecessary 'Verify Multiverse Success Indicators' step has been removed.
+
+      - name: Archive Multiverse Demo Output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: omnipkg-multiverse-demo-output
+          path: /tmp/omnipkg-artifacts/
+          retention-days: 7
+          compression-level: 6

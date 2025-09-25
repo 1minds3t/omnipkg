@@ -1,0 +1,105 @@
+name: "Simple Python Adoption Test"
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  test-python-adoption:
+    runs-on: ubuntu-latest
+    services:
+      redis:
+        image: redis:7
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11 (base environment)
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e . redis
+
+      - name: Test Basic Python Adoption and Swapping
+        id: full_test_run
+        run: |
+          set -e
+          echo "=== Testing Basic Python Management ==="
+          
+          # Set consistent config path
+          export OMNIPKG_CONFIG_PATH="${{ github.workspace }}/.omnipkg_config/config.json"
+          echo "Config path: $OMNIPKG_CONFIG_PATH"
+          
+          # Initialize omnipkg config (let the CLI handle it)
+          echo "--- Initializing omnipkg ---"
+          echo "Omnipkg will auto-initialize on first command"
+          
+          # Adopt Python 3.11 (current)
+          echo "--- Adopting Python 3.11 ---"
+          omnipkg python adopt 3.11
+          
+          # Check current status
+          echo "--- Checking Python info ---"
+          omnipkg info python
+          
+          # Adopt Python 3.9
+          echo "--- Adopting Python 3.9 ---"
+          omnipkg python adopt 3.9
+          
+          # List available interpreters
+          echo "--- Listing managed interpreters ---"
+          omnipkg list python
+          
+          # Test swapping to Python 3.9
+          echo "--- Swapping to Python 3.9 ---"
+          omnipkg swap python 3.9
+          
+          # Verify the swap worked
+          echo "--- Verifying Python 3.9 is active ---"
+          omnipkg info python
+          
+          # Re-adopt Python 3.11 to ensure it's in the current context
+          echo "--- Re-adopting Python 3.11 to restore context ---"
+          omnipkg python adopt 3.11
+          
+          # Test swapping back to Python 3.11
+          echo "--- Swapping back to Python 3.11 ---"
+          omnipkg swap python 3.11
+          
+          # Final verification
+          echo "--- Final verification ---"
+          omnipkg info python
+          
+          echo "✅ All basic Python adoption and swapping tests passed!"
+
+      - name: Test Summary
+        if: always()
+        run: |
+          echo "## Test Results Summary" >> $GITHUB_STEP_SUMMARY
+          if [[ "${{ steps.full_test_run.outcome }}" == "success" ]]; then
+            echo "✅ **Simple Python Adoption Test: PASSED**" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Successfully tested:" >> $GITHUB_STEP_SUMMARY
+            echo "- Python interpreter adoption (3.11 and 3.9)" >> $GITHUB_STEP_SUMMARY
+            echo "- Context switching between interpreters" >> $GITHUB_STEP_SUMMARY
+            echo "- Basic omnipkg info and list commands" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ **Simple Python Adoption Test: FAILED**" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Check the workflow logs for details." >> $GITHUB_STEP_SUMMARY
+          fi

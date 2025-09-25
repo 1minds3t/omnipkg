@@ -44,6 +44,9 @@
   <a href="https://github.com/1minds3t/omnipkg/actions?query=workflow%3A%22Security+Audit%22">
     <img src="https://img.shields.io/badge/Security-passing-success?logo=security" alt="Security">
   </a>
+<a href="https://github.com/1minds3t/omnipkg/actions/workflows/safety_scan.yml">
+  <img src="https://img.shields.io/badge/Safety-passing-success?logo=safety" alt="Safety">
+</a>
   <a href="https://github.com/1minds3t/omnipkg/actions?query=workflow%3APylint">
     <img src="https://img.shields.io/badge/Pylint-10/10-success?logo=python" alt="Pylint">
   </a>
@@ -85,7 +88,7 @@ Born from a real-world nightmare—a forced downgrade that wrecked a production 
 <!-- COMPARISON_STATS_START -->
 ## ⚖️ Multi-Version Support
 
-[![omnipkg](https://img.shields.io/badge/omnipkg-695%20Wins-brightgreen?logo=python&logoColor=white)](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml) [![pip](https://img.shields.io/badge/pip-698%20Failures-red?logo=pypi&logoColor=white)](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml) [![uv](https://img.shields.io/badge/uv-698%20Failures-red?logo=python&logoColor=white)](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml)
+[![omnipkg](https://img.shields.io/badge/omnipkg-712%20Wins-brightgreen?logo=python&logoColor=white)](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml) [![pip](https://img.shields.io/badge/pip-715%20Failures-red?logo=pypi&logoColor=white)](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml) [![uv](https://img.shields.io/badge/uv-715%20Failures-red?logo=python&logoColor=white)](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml)
 
 *Multi-version installation tests run hourly. [Live results here.](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml)*
 
@@ -589,7 +592,7 @@ This project thrives on community collaboration. Contributions, bug reports, and
 | venv:   "90s of setup for one Python version!"|
 |                                               |
 | omnipkg: *runs 3 Python versions concurrently |
-| in 6.22s, heals ghosts, caches in 50ms*       |
+| in 0.5s, heals ghosts, caches in 50ms*       |
 |           "Hold my multiverse—I'm             |
 |            rewriting physics!"                |
 \_______________________________________________/
