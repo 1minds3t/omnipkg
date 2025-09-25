@@ -44,9 +44,8 @@
   <a href="https://github.com/1minds3t/omnipkg/actions?query=workflow%3A%22Security+Audit%22">
     <img src="https://img.shields.io/badge/Security-passing-success?logo=security" alt="Security">
   </a>
-  <a href="https://github.com/1minds3t/omnipkg/actions/workflows/safety_scan.yml">
-  <img src="https://github.com/1minds3t/omnipkg/actions/workflows/safety_scan.yml/badge.svg" 
-       alt="Safety Scan">
+<a href="https://github.com/1minds3t/omnipkg/actions/workflows/safety_scan.yml">
+  <img src="https://github.com/1minds3t/omnipkg/actions/workflows/safety_scan.yml/badge.svg" alt="Safety">
 </a>
   <a href="https://github.com/1minds3t/omnipkg/actions?query=workflow%3APylint">
     <img src="https://img.shields.io/badge/Pylint-10/10-success?logo=python" alt="Pylint">
