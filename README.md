@@ -593,7 +593,7 @@ This project thrives on community collaboration. Contributions, bug reports, and
 | venv:   "90s of setup for one Python version!"|
 |                                               |
 | omnipkg: *runs 3 Python versions concurrently |
-| in 6.22s, heals ghosts, caches in 50ms*       |
+| in 0.5s, heals ghosts, caches in 50ms*       |
 |           "Hold my multiverse—I'm             |
 |            rewriting physics!"                |
 \_______________________________________________/
