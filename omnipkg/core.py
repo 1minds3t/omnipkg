@@ -3187,7 +3187,7 @@ class omnipkg:
         safe_print(_('🧠 Checking knowledge base synchronization...'))
         configured_python_exe = self.config.get('python_executable', sys.executable)
         version_tuple = self.config_manager._verify_python_version(configured_python_exe)
-        current_python_version = f'{version_tuple[0]}.{version_tuple[1]}' if version_tuple else get_python_version()
+        current_python_version = f'{version_tuple[0]}.{version_tuple[1]}' if version_tuple else self.get_python_version()
         safe_print(_('   🐍 For Python context: {}').format(current_python_version))
         if not self.cache_client: self._connect_cache()
         if not self.cache_client: return []
@@ -5350,7 +5350,7 @@ class omnipkg:
         self._synchronize_knowledge_base_with_reality()
         return 0
 
-    def _detect_conda_corruption_from_error(stderr_output: str) -> Optional[Tuple[str, str]]:
+    def _detect_conda_corruption_from_error(self, stderr_output: str) -> Optional[Tuple[str, str]]:
         """
         Detect corruption patterns in conda command stderr output.
         
@@ -5389,8 +5389,7 @@ class omnipkg:
         
         return None
 
-
-    def _backup_corrupted_file(file_path: str, backup_base_dir: Optional[str] = None) -> bool:
+    def _backup_corrupted_file(self, file_path: str, backup_base_dir: Optional[str] = None) -> bool:
         """
         Create a backup of a corrupted file before removal.
         
@@ -5422,7 +5421,7 @@ class omnipkg:
             return False
 
 
-    def _run_conda_with_healing(cmd_args: List[str], max_attempts: int = 3) -> subprocess.CompletedProcess:
+    def _run_conda_with_healing(self, cmd_args: List[str], max_attempts: int = 3) -> subprocess.CompletedProcess:
         """
         Run a conda command with automatic corruption healing.
         
@@ -5449,7 +5448,7 @@ class omnipkg:
                     return proc
                 
                 # Check for corruption in the error output
-                corruption_info = _detect_conda_corruption_from_error(proc.stderr)
+                corruption_info = self._detect_conda_corruption_from_error(proc.stderr)
                 
                 if not corruption_info:
                     # Not a corruption error, return the failed result
@@ -5462,7 +5461,7 @@ class omnipkg:
                     print(f"   - 💀 Corrupted file: {os.path.basename(corrupted_file)}")
                     
                     # Backup and remove the corrupted file
-                    if _backup_corrupted_file(corrupted_file):
+                    if self._backup_corrupted_file(corrupted_file):
                         try:
                             if os.path.exists(corrupted_file):
                                 os.unlink(corrupted_file)
@@ -5492,8 +5491,7 @@ class omnipkg:
         
         return proc  # Should never reach here, but just in case
 
-
-    def _heal_conda_environment(self=None, also_run_clean: bool = True):
+    def _heal_conda_environment(self, also_run_clean: bool = True):
         """
         Enhanced conda environment healing that combines proactive scanning 
         with reactive error-based healing.
@@ -5562,7 +5560,7 @@ class omnipkg:
             file_name = os.path.basename(corrupted_file)
             print(f"      -> Processing: {file_name}")
             
-            if _backup_corrupted_file(corrupted_file, str(backup_dir.parent)):
+            if self._backup_corrupted_file(corrupted_file, str(backup_dir.parent)):
                 try:
                     if os.path.exists(corrupted_file):
                         os.unlink(corrupted_file)
@@ -5596,7 +5594,7 @@ class omnipkg:
         print('─' * 60)
 
 
-    def safe_conda_command(cmd_args: List[str], max_heal_attempts: int = 2) -> bool:
+    def safe_conda_command(self, cmd_args: List[str], max_heal_attempts: int = 2) -> bool:
         """
         Wrapper function to run conda commands with automatic healing.
         
@@ -5609,10 +5607,10 @@ class omnipkg:
         """
         try:
             # First, do a proactive heal
-            _heal_conda_environment(also_run_clean=False)
+            self._heal_conda_environment(also_run_clean=False)
             
             # Then run the command with reactive healing
-            proc = _run_conda_with_healing(cmd_args, max_heal_attempts)
+            proc = self._run_conda_with_healing(cmd_args, max_heal_attempts)
             
             if proc.returncode == 0:
                 return True
@@ -7065,7 +7063,7 @@ class omnipkg:
                             safe_print(f'    🚀 JACKPOT! Latest PyPI version {latest_pypi_version} is already installed!')
                             safe_print('    ⚡ Skipping all test installations - using installed version')
                             # Cache the result and return
-                            self.pypi_cache.cache_version(package_name, latest_pypi_version, py_context)
+                            self.pypi_cache.cache_version(package_name, latest_pypi_version, self.python_context)
                             return latest_pypi_version
                         else:
                             safe_print(f'    📋 Installed version ({installed_version}) differs from latest PyPI ({latest_pypi_version})')

@@ -1,7 +1,7 @@
 
 # omnipkg/commands/run.py
 try:
-    from .common_utils import safe_print
+    from ..common_utils import safe_print
 except ImportError:
     from omnipkg.common_utils import safe_print
 import sys
@@ -145,7 +145,6 @@ def analyze_runtime_failure_and_heal(stderr: str, cmd_args: list, original_scrip
     print(_("❌ Script failed with an unhandled runtime error that could not be auto-healed."))
     return 1, None
 
-# ... (convert_module_to_package_name remains the same) ...
 def convert_module_to_package_name(module_name: str) -> str:
     """
     Convert a module name to its likely PyPI package name.

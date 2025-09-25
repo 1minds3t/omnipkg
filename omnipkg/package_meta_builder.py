@@ -1105,64 +1105,6 @@ class omnipkgMetadataGatherer:
             except (FileNotFoundError, NotADirectoryError):
                 continue
         return files
-    
-    def _perform_security_scan(self, packages: Dict[str, str]):
-        """
-        Runs a security check using a dedicated, isolated 'safety' tool bubble,
-        created on-demand by the bubble_manager to guarantee isolation.
-        """
-        safe_print(f'🛡️ Performing security scan for {len(packages)} active package(s) using isolated tool...')
-        if not packages:
-            safe_print(_(' - No active packages found to scan.'))
-            self.security_report = {}
-            return
-        if not self.omnipkg_instance:
-            safe_print(_(' ⚠️ Cannot run security scan: omnipkg_instance not available to builder.'))
-            self.security_report = {}
-            return
-        TOOL_SPEC = 'safety==3.6.0'
-        TOOL_NAME, TOOL_VERSION = TOOL_SPEC.split('==')
-        try:
-            bubble_path = self.omnipkg_instance.multiversion_base / f'{TOOL_NAME}-{TOOL_VERSION}'
-            if not bubble_path.is_dir():
-                safe_print(f" 💡 First-time setup: Creating isolated bubble for '{TOOL_SPEC}' tool...")
-                success = self.omnipkg_instance.bubble_manager.create_isolated_bubble(TOOL_NAME, TOOL_VERSION)
-                if not success:
-                    safe_print(f' ❌ Failed to create the tool bubble for {TOOL_SPEC}. Skipping scan.')
-                    self.security_report = {}
-                    return
-                safe_print(_(' ✅ Successfully created tool bubble.'))
-            with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.txt') as reqs_file:
-                reqs_file_path = reqs_file.name
-                for name, version in packages.items():
-                    reqs_file.write(f'{name}=={version}\n')
-            safe_print(_(" 🌀 Force-activating '{}' context to run scan...").format(TOOL_SPEC))
-            with omnipkgLoader(TOOL_SPEC, config=self.omnipkg_instance.config, force_activation=True, quiet=True):
-                python_exe = self.config.get('python_executable', sys.executable)
-                cmd = [python_exe, '-m', 'safety', 'check', '-r', reqs_file_path, '--json']
-                result = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
-            self.security_report = {}
-            if result.stdout:
-                try:
-                    json_match = re.search('(\\[.*\\]|\\{.*\\})', result.stdout, re.DOTALL)
-                    if json_match:
-                        self.security_report = json.loads(json_match.group(1))
-                except json.JSONDecodeError:
-                    safe_print(_(' ⚠️ Could not parse safety JSON output.'))
-            if result.stderr and 'error' in result.stderr.lower():
-                safe_print(_(' ⚠️ Safety tool produced errors: {}').format(result.stderr.strip()))
-        except Exception as e:
-            safe_print(_(' ⚠️ An unexpected error occurred during the isolated security scan: {}').format(e))
-            self.security_report = {}
-        finally:
-            if 'reqs_file_path' in locals() and os.path.exists(reqs_file_path):
-                os.unlink(reqs_file_path)
-        issue_count = 0
-        if isinstance(self.security_report, list):
-            issue_count = len(self.security_report)
-        elif isinstance(self.security_report, dict) and 'vulnerabilities' in self.security_report:
-            issue_count = len(self.security_report['vulnerabilities'])
-        safe_print(_('✅ Security scan complete. Found {} potential issues.').format(issue_count))
 
     def _run_bulk_security_check(self, packages: Dict[str, str]):
         reqs_file_path = '/tmp/bulk_safety_reqs.txt'

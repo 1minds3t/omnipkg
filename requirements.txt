@@ -4,7 +4,6 @@
 #
 #    pip-compile --cert=None --client-cert=None --index-url=None --output-file=requirements.txt --pip-args=None pyproject.toml
 #
---index-url https://pkgs.safetycli.com/repository/omnipkg/pypi/simple/
 
 aiohappyeyeballs==2.6.1
     # via aiohttp
