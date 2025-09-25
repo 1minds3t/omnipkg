@@ -14,6 +14,7 @@ import shutil
 import functools
 import json
 import logging
+from omnipkg.i18n import _
 from pathlib import Path
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - CondaGuard - %(levelname)s - %(message)s')
 

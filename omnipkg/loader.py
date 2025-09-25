@@ -3,6 +3,12 @@ try:
 except ImportError:
     from omnipkg.common_utils import safe_print
 import sys
+try:
+    # --- ADD THIS LINE ---
+    from .common_utils import safe_print, UVFailureDetector
+except ImportError:
+    # --- AND ADD THIS LINE ---
+    from omnipkg.common_utils import safe_print, UVFailureDetector
 _builtin_print = print
 def safe_print(*args, **kwargs):
     """
@@ -617,11 +623,13 @@ class omnipkgLoader:
         safe_print('🚀 EXECUTION ANALYSIS: Standard Runner vs. Omnipkg Auto-Healing')
         safe_print('=' * 70)
 
+        loader_stats = self.get_performance_stats()
+
+
         uv_failed_ms = uv_failure_detector.get_execution_time_ms()
-        # The healing time is the *total* swap time of the loader
+        
         omnipkg_heal_and_run_ms = loader_stats.get('total_swap_time_ms', 0) if loader_stats else 0
         
-        # The "Total Time to Success" is the key metric
         total_omnipkg_time_ms = uv_failed_ms + omnipkg_heal_and_run_ms
 
         safe_print(f"  - Standard Runner (uv):   [ FAILED ] at {uv_failed_ms:>8.3f} ms")
