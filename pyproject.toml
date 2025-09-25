@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "omnipkg"
-version = "1.5.1"
+version = "1.5.2"
 authors = [
   { name = "1minds3t", email = "1minds3t@proton.me" },
 ]
