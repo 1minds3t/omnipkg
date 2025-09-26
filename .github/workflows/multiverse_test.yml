@@ -112,7 +112,45 @@ jobs:
           fi
           
           echo "✅ All Python environments have been primed."
-      
+
+      - name: Configure omnipkg and Establish Environment ID
+        id: setup_omnipkg
+        run: |
+          # ... (your existing config.json creation logic) ...
+          
+          # Now, calculate and export the single, authoritative ENV_ID for this entire job
+          ENV_ID=$(python -c "from omnipkg.core import ConfigManager; print(ConfigManager().env_id)")
+          echo "Authoritative Environment ID for this job: $ENV_ID"
+          echo "OMNIPKG_ENV_ID_OVERRIDE=$ENV_ID" >> $GITHUB_ENV
+
+      - name: Adopt All Required Python Versions
+        env:
+          OMNIPKG_ENV_ID_OVERRIDE: ${{ env.OMNIPKG_ENV_ID_OVERRIDE }}
+        run: |
+          echo "--- Adopting Python Versions for Multiverse Test ---"
+          omnipkg python adopt 3.9
+          omnipkg python adopt 3.10
+
+      - name: Reset and Prime Environments to Build Knowledge Bases
+        env:
+          OMNIPKG_ENV_ID_OVERRIDE: ${{ env.OMNIPKG_ENV_ID_OVERRIDE }}
+        run: |
+          echo "--- Resetting and Priming Python environments ---"
+          PYTHON_39_EXE="..." # Parsing logic here
+          PYTHON_310_EXE="..." # Parsing logic here
+
+          echo "Priming Python 3.9 environment..."
+          # This now correctly operates on the MAIN environment's config
+          "$PYTHON_39_EXE" -m omnipkg.cli reset --yes
+          
+          echo "Priming Python 3.10 environment..."
+          "$PYTHON_310_EXE" -m omnipkg.cli reset --yes
+
+
+      - name: Pre-Install Packages (Robust)
+        env:
+          OMNIPKG_ENV_ID_OVERRIDE: ${{ env.OMNIPKG_ENV_ID_OVERRIDE }}
+        run: |
       - name: Pre-Install Packages into All Interpreters (FIXED)
         run: |
           echo "--- Pre-installing exact rich versions for each Python context ---"
