@@ -191,6 +191,38 @@ class ConfigManager:
                 json.dump(versions_to_rebuild, f)
         safe_print(_('   🚩 Flag set: Python {} will build its knowledge base on first use.').format(version_str))
 
+    def _clear_rebuild_flag_for_version(self, version_str: str):
+        """
+        Removes a specific version from the .needs_kb_rebuild flag file.
+        This is called after a successful manual rebuild (like reset --yes)
+        to prevent a redundant "first-use" build later.
+        """
+        flag_file = self.venv_path / '.omnipkg' / '.needs_kb_rebuild'
+        if not flag_file.exists():
+            return
+        
+        lock_file = self.venv_path / '.omnipkg' / '.needs_kb_rebuild.lock'
+        with FileLock(lock_file):
+            try:
+                with open(flag_file, 'r') as f:
+                    versions_to_rebuild = json.load(f)
+                
+                if version_str in versions_to_rebuild:
+                    versions_to_rebuild.remove(version_str)
+                    safe_print(f"   -> Automatically clearing 'first use' flag for Python {version_str}...")
+                    
+                    if not versions_to_rebuild:
+                        # If the list is empty, delete the file entirely.
+                        flag_file.unlink()
+                    else:
+                        # Otherwise, write the modified list back.
+                        with open(flag_file, 'w') as f:
+                            json.dump(versions_to_rebuild, f)
+            except (json.JSONDecodeError, IOError, Exception):
+                # If we fail to read/write, it's safer to just remove the flag file.
+                safe_print(f"   -> Warning: Could not cleanly update flag file. Removing it to be safe.")
+                flag_file.unlink(missing_ok=True)
+
     def _peek_config_for_flag(self, flag_name: str) -> bool:
         """
         Safely checks the config file for a boolean flag for the current environment
@@ -1025,125 +1057,124 @@ class ConfigManager:
         }
 
     def get_actual_current_site_packages(self) -> Path:
-    """
-    Gets the ACTUAL site-packages directory for the currently running Python interpreter.
-    This is more reliable than calculating it from sys.prefix when hotswapping is involved.
-    Cross-platform compatible with special handling for Windows.
-    """
-    import platform
-    is_windows = platform.system() == 'Windows'
-    
-    try:
-        # Method 1: Use site.getsitepackages() - most reliable method
-        site_packages_list = site.getsitepackages()
-        if site_packages_list:
-            current_python_dir = Path(sys.executable).parent
-            
-            # Find the site-packages that belongs to our current Python
-            for sp in site_packages_list:
-                sp_path = Path(sp)
-                try:
-                    # Check if this site-packages is under our Python installation
-                    sp_path.relative_to(current_python_dir)
-                    # Additional validation: check if it actually contains packages
-                    if sp_path.exists():
-                        return sp_path
-                except ValueError:
-                    continue
-            
-            # If relative path matching fails, prefer paths that actually exist
-            # and sort by specificity (longer paths first)
-            existing_paths = [Path(sp) for sp in site_packages_list if Path(sp).exists()]
-            if existing_paths:
-                # For Windows, prefer 'lib' over 'Lib' when both exist (lowercase is more standard)
-                if is_windows and len(existing_paths) > 1:
-                    lib_paths = [p for p in existing_paths if 'lib' in str(p).lower()]
-                    lowercase_lib = [p for p in lib_paths if '/lib/' in str(p) or '\\lib\\' in str(p)]
-                    if lowercase_lib:
-                        return sorted(lowercase_lib, key=len, reverse=True)[0]
-                
-                return sorted(existing_paths, key=len, reverse=True)[0]
-            
-            # Fallback to first path (even if it doesn't exist yet)
-            return Path(site_packages_list[0])
-            
-    except Exception:
-        # Continue with fallback logic
-        pass
-    
-    # Method 2: Try to find an existing package and derive site-packages from it
-    try:
-        # Look for a common package that should exist
-        common_packages = ['pip', 'setuptools', 'packaging']
-        for pkg_name in common_packages:
-            try:
-                pkg = __import__(pkg_name)
-                if hasattr(pkg, '__file__') and pkg.__file__:
-                    pkg_path = Path(pkg.__file__).parent
-                    # Navigate up to find site-packages
-                    current = pkg_path
-                    while current.parent != current:
-                        if current.name == 'site-packages':
-                            return current
-                        current = current.parent
-            except ImportError:
-                continue
-    except Exception:
-        pass
-    
-    # Method 3: Check sys.path for site-packages directories
-    try:
-        for path_str in sys.path:
-            if path_str and 'site-packages' in path_str:
-                path_obj = Path(path_str)
-                if path_obj.exists() and path_obj.name == 'site-packages':
-                    return path_obj
-    except Exception:
-        pass
-    
-    # Method 4: Manual construction based on OS (fallback)
-    python_version = f'python{sys.version_info.major}.{sys.version_info.minor}'
-    current_python_path = Path(sys.executable)
-    
-    # Handle omnipkg's own interpreter management
-    if '.omnipkg/interpreters' in str(current_python_path):
-        interpreter_root = current_python_path.parent.parent
-        if is_windows:
-            # Try both case variations for Windows
-            candidates = [
-                interpreter_root / 'lib' / 'site-packages',  # Prefer lowercase
-                interpreter_root / 'Lib' / 'site-packages'   # Windows standard
-            ]
-            for candidate in candidates:
-                if candidate.exists():
-                    return candidate
-            # Default to lowercase if neither exists
-            return interpreter_root / 'lib' / 'site-packages'
-        else:
-            return interpreter_root / 'lib' / python_version / 'site-packages'
-    else:
-        # Standard environment detection
-        venv_path = Path(sys.prefix)
+        """
+        Gets the ACTUAL site-packages directory for the currently running Python interpreter.
+        This is more reliable than calculating it from sys.prefix when hotswapping is involved.
+        Cross-platform compatible with special handling for Windows.
+        """
+        import platform
+        is_windows = platform.system() == 'Windows'
         
-        if is_windows:
-            # Windows has multiple possible locations, try in order of preference
-            # Based on the debug output, both 'lib' and 'Lib' exist, prefer 'lib' (lowercase)
-            candidates = [
-                venv_path / 'lib' / 'site-packages',  # Prefer lowercase (more standard)
-                venv_path / 'Lib' / 'site-packages',  # Windows default
-                venv_path / 'lib' / python_version / 'site-packages'  # Version-specific
-            ]
-            
-            for candidate in candidates:
-                if candidate.exists():
-                    return candidate
-            
-            # If none exist, default to lowercase (more portable)
-            return venv_path / 'lib' / 'site-packages'
+        try:
+            # Method 1: Use site.getsitepackages() - most reliable method
+            site_packages_list = site.getsitepackages()
+            if site_packages_list:
+                current_python_dir = Path(sys.executable).parent
+                
+                # Find the site-packages that belongs to our current Python
+                for sp in site_packages_list:
+                    sp_path = Path(sp)
+                    try:
+                        # Check if this site-packages is under our Python installation
+                        sp_path.relative_to(current_python_dir)
+                        # Additional validation: check if it actually contains packages
+                        if sp_path.exists():
+                            return sp_path
+                    except ValueError:
+                        continue
+                
+                # If relative path matching fails, prefer paths that actually exist
+                # and sort by specificity (longer paths first)
+                existing_paths = [Path(sp) for sp in site_packages_list if Path(sp).exists()]
+                if existing_paths:
+                    # For Windows, prefer 'lib' over 'Lib' when both exist (lowercase is more standard)
+                    if is_windows and len(existing_paths) > 1:
+                        lib_paths = [p for p in existing_paths if 'lib' in str(p).lower()]
+                        lowercase_lib = [p for p in lib_paths if '/lib/' in str(p) or '\\lib\\' in str(p)]
+                        if lowercase_lib:
+                            return sorted(lowercase_lib, key=len, reverse=True)[0]
+                    
+                    return sorted(existing_paths, key=len, reverse=True)[0]
+                
+                # Fallback to first path (even if it doesn't exist yet)
+                return Path(site_packages_list[0])
+                
+        except Exception:
+            # Continue with fallback logic
+            pass
+        
+        # Method 2: Try to find an existing package and derive site-packages from it
+        try:
+            # Look for a common package that should exist
+            common_packages = ['pip', 'setuptools', 'packaging']
+            for pkg_name in common_packages:
+                try:
+                    pkg = __import__(pkg_name)
+                    if hasattr(pkg, '__file__') and pkg.__file__:
+                        pkg_path = Path(pkg.__file__).parent
+                        # Navigate up to find site-packages
+                        current = pkg_path
+                        while current.parent != current:
+                            if current.name == 'site-packages':
+                                return current
+                            current = current.parent
+                except ImportError:
+                    continue
+        except Exception:
+            pass
+        
+        # Method 3: Check sys.path for site-packages directories
+        try:
+            for path_str in sys.path:
+                if path_str and 'site-packages' in path_str:
+                    path_obj = Path(path_str)
+                    if path_obj.exists() and path_obj.name == 'site-packages':
+                        return path_obj
+        except Exception:
+            pass
+        
+        # Method 4: Manual construction based on OS (fallback)
+        python_version = f'python{sys.version_info.major}.{sys.version_info.minor}'
+        current_python_path = Path(sys.executable)
+        
+        # Handle omnipkg's own interpreter management
+        if '.omnipkg/interpreters' in str(current_python_path):
+            interpreter_root = current_python_path.parent.parent
+            if is_windows:
+                # Try both case variations for Windows
+                candidates = [
+                    interpreter_root / 'lib' / 'site-packages',  # Prefer lowercase
+                    interpreter_root / 'Lib' / 'site-packages'   # Windows standard
+                ]
+                for candidate in candidates:
+                    if candidate.exists():
+                        return candidate
+                # Default to lowercase if neither exists
+                return interpreter_root / 'lib' / 'site-packages'
+            else:
+                return interpreter_root / 'lib' / python_version / 'site-packages'
         else:
-            # Unix-like systems (Linux, macOS)
-            return venv_path / 'lib' / python_version / 'site-packages'
-
+            # Standard environment detection
+            venv_path = Path(sys.prefix)
+            
+            if is_windows:
+                # Windows has multiple possible locations, try in order of preference
+                # Based on the debug output, both 'lib' and 'Lib' exist, prefer 'lib' (lowercase)
+                candidates = [
+                    venv_path / 'lib' / 'site-packages',  # Prefer lowercase (more standard)
+                    venv_path / 'Lib' / 'site-packages',  # Windows default
+                    venv_path / 'lib' / python_version / 'site-packages'  # Version-specific
+                ]
+                
+                for candidate in candidates:
+                    if candidate.exists():
+                        return candidate
+                
+                # If none exist, default to lowercase (more portable)
+                return venv_path / 'lib' / 'site-packages'
+            else:
+                # Unix-like systems (Linux, macOS)
+                return venv_path / 'lib' / python_version / 'site-packages'
     
     def _get_paths_for_interpreter(self, python_exe_path: str) -> Optional[Dict[str, str]]:
             """
@@ -3034,7 +3065,7 @@ class omnipkg:
     def reset_knowledge_base(self, force: bool=False) -> int:
         """
         Deletes ALL omnipkg data for the CURRENT environment from Redis,
-        as well as any legacy global data. It then triggers a full rebuild.
+        and then triggers a full rebuild.
         """
         if not self._connect_cache():
             return 1
@@ -3071,7 +3102,26 @@ class omnipkg:
             return 1
         self._info_cache.clear()
         self._installed_packages_cache = None
-        return self.rebuild_knowledge_base(force=True)
+
+        # --- START OF THE CORRECTED LOGIC ---
+        # 1. Run the rebuild and capture its success/failure status.
+        rebuild_status = self.rebuild_knowledge_base(force=True)
+
+        # 2. ONLY if the rebuild was successful (status 0) AND it was a forced
+        #    run (like in CI), do we clear the "first use" flag.
+        if rebuild_status == 0 and force:
+            try:
+                configured_exe = self.config.get('python_executable')
+                version_tuple = self.config_manager._verify_python_version(configured_exe)
+                if version_tuple:
+                    current_version_str = f'{version_tuple[0]}.{version_tuple[1]}'
+                    self.config_manager._clear_rebuild_flag_for_version(current_version_str)
+            except Exception as e:
+                # This is a non-critical cleanup; log a warning but don't fail.
+                safe_print(f"   - ⚠️  Warning: Could not automatically clear first-use flag: {e}")
+                
+        # 3. Return the original status of the rebuild operation.
+        return rebuild_status
 
     def rebuild_knowledge_base(self, force: bool=False):
         """
@@ -3192,6 +3242,18 @@ class omnipkg:
                 safe_print(_('💡 First use of Python {} detected.').format(current_version_str))
                 safe_print(_('   Building its knowledge base now...'))
                 rebuild_status = self.rebuild_knowledge_base(force=True)
+                if rebuild_status != 0:
+                    return 1 # Return failure if the rebuild failed
+
+                # --- THIS IS THE NEW, CORRECT LOGIC YOU SUGGESTED ---
+                # After a successful reset in a non-interactive context, the "first use" is
+                # officially complete. We now automatically clear the flag.
+                if self.config.get('auto_confirm', False) or force:
+                    configured_exe = self.config.get('python_executable')
+                    version_tuple = self.config_manager._verify_python_version(configured_exe)
+                    if version_tuple:
+                        current_version_str = f'{version_tuple[0]}.{version_tuple[1]}'
+                        self.config_manager._clear_rebuild_flag_for_version(current_version_str)
                 if rebuild_status == 0:
                     versions_to_rebuild.remove(current_version_str)
                     if not versions_to_rebuild:
