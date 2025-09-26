@@ -1,4 +1,4 @@
-name: "🌠 LIVE - Omnipkg Quantum Multiverse Warp (CORRECTED)"
+name: "🌠 LIVE - Omnipkg Quantum Multiverse Warp (FINAL)"
 on:
   push:
     branches: [ main ]
@@ -21,7 +21,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
       
-      - name: Set up Python 3.11 (for the main runner)
+      - name: Set up Python 3.11
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
@@ -29,7 +29,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e . redis rich==13.7.1
+          pip install -e . redis rich
           
       - name: Configure omnipkg and Establish Authoritative ENV_ID
         id: setup_omnipkg
@@ -39,12 +39,9 @@ jobs:
           import os
           from pathlib import Path
           from omnipkg.core import ConfigManager
-
-          # This path MUST match the path used inside the omnipkg core code.
           config_dir = Path.home() / '.config' / 'omnipkg'
           config_dir.mkdir(parents=True, exist_ok=True)
           
-          # Write the base non-interactive config
           config = {
               "interactive": False,
               "auto_confirm": True,
@@ -54,11 +51,9 @@ jobs:
               json.dump(config, f, indent=2)
           print("✅ Omnipkg configured for non-interactive use")
           
-          # Calculate the ENV_ID based on the main runner's environment
           main_env_id = ConfigManager().env_id
           print(f"Authoritative Environment ID for this job: {main_env_id}")
           
-          # Export it for all subsequent steps
           with open(os.environ['GITHUB_ENV'], 'a') as f:
               f.write(f"OMNIPKG_ENV_ID_OVERRIDE={main_env_id}\n")
           EOF
@@ -76,52 +71,79 @@ jobs:
           OMNIPKG_ENV_ID_OVERRIDE: ${{ env.OMNIPKG_ENV_ID_OVERRIDE }}
         run: |
           echo "--- Resetting and Priming Python environments ---"
-          
-          # CORRECTED AWK COMMAND: Use $4 to get the path.
           PYTHON_39_EXE=$(omnipkg info python | grep 'Python 3.9:' | awk '{print $4}')
           PYTHON_310_EXE=$(omnipkg info python | grep 'Python 3.10:' | awk '{print $4}')
-
+          PYTHON_311_EXE=$(omnipkg info python | grep 'Python 3.11:' | awk '{print $4}')
+          
           echo "Priming Python 3.9 by forcing KB rebuild..."
           "$PYTHON_39_EXE" -m omnipkg.cli reset --yes
           
           echo "Priming Python 3.10 by forcing KB rebuild..."
           "$PYTHON_310_EXE" -m omnipkg.cli reset --yes
           
+          echo "Priming Python 3.11 by forcing KB rebuild..."
+          "$PYTHON_311_EXE" -m omnipkg.cli reset --yes
+          
           echo "✅ All Python environments have been primed."
-
-      - name: Pre-Install and Verify Test Packages
+      
+      - name: Pre-Install Test Packages
         env:
           OMNIPKG_ENV_ID_OVERRIDE: ${{ env.OMNIPKG_ENV_ID_OVERRIDE }}
         run: |
           echo "--- Pre-installing exact rich versions ---"
-          # CORRECTED AWK COMMAND: Use $4 to get the path.
           PYTHON_39_EXE=$(omnipkg info python | grep 'Python 3.9:' | awk '{print $4}')
           PYTHON_310_EXE=$(omnipkg info python | grep 'Python 3.10:' | awk '{print $4}')
+          PYTHON_311_EXE=$(omnipkg info python | grep 'Python 3.11:' | awk '{print $4}')
           
-          # Uninstall any existing rich to ensure a clean install, not a bubble
-          "$PYTHON_39_EXE" -m omnipkg.cli uninstall rich --yes || true
+          echo "Installing rich==13.4.2 for Python 3.9 (expecting it to be bubbled)..."
           "$PYTHON_39_EXE" -m omnipkg.cli install rich==13.4.2
           
-          "$PYTHON_310_EXE" -m omnipkg.cli uninstall rich --yes || true
+          echo "Installing rich==13.6.0 for Python 3.10 (expecting it to be bubbled)..."
           "$PYTHON_310_EXE" -m omnipkg.cli install rich==13.6.0
           
-          echo "✅ All packages installed. Skipping verification - let the actual test handle it."
-
-      - name: Final Sync of Main Context
+          echo "Installing rich==13.7.1 for Python 3.11 (expecting it to be bubbled)..."
+          "$PYTHON_311_EXE" -m omnipkg.cli install rich==13.7.1
+      
+      - name: Verify Correct State (Bubbles are Present)
         env:
-          # We still need the override to ensure it syncs the correct environment
           OMNIPKG_ENV_ID_OVERRIDE: ${{ env.OMNIPKG_ENV_ID_OVERRIDE }}
         run: |
-          echo "--- Performing final KB sync for the main (3.11) context ---"
-          # Running a simple, read-only command like 'status' is enough to trigger
-          # the knowledge base synchronization. This will find the new bubbles
-          # and update the KB now, instead of during the timed test.
-          omnipkg status
-          echo "✅ Main context is now aware of all pre-installed bubbles."
+          echo "--- Verifying Package State ---"
+          PYTHON_39_EXE=$(omnipkg info python | grep 'Python 3.9:' | awk '{print $4}')
+          PYTHON_310_EXE=$(omnipkg info python | grep 'Python 3.10:' | awk '{print $4}')
+          PYTHON_311_EXE=$(omnipkg info python | grep 'Python 3.11:' | awk '{print $4}')
+          
+          echo "Verifying state for Python 3.9..."
+          if "$PYTHON_39_EXE" -m omnipkg.cli info rich | grep -q "13.4.2 (bubble)"; then
+            echo "✅ Correct: rich 13.4.2 is available in a bubble."
+          else
+            echo "❌ FAILED: rich 13.4.2 was not found in a bubble."
+            "$PYTHON_39_EXE" -m omnipkg.cli info rich
+            exit 1
+          fi
+          
+          echo "Verifying state for Python 3.10..."
+          if "$PYTHON_310_EXE" -m omnipkg.cli info rich | grep -q "13.6.0 (bubble)"; then
+            echo "✅ Correct: rich 13.6.0 is available in a bubble."
+          else
+            echo "❌ FAILED: rich 13.6.0 was not found in a bubble."
+            "$PYTHON_310_EXE" -m omnipkg.cli info rich
+            exit 1
+          fi
+          
+          echo "Verifying state for Python 3.11..."
+          if "$PYTHON_311_EXE" -m omnipkg.cli info rich | grep -q "13.7.1 (bubble)"; then
+            echo "✅ Correct: rich 13.7.1 is available in a bubble."
+          else
+            echo "❌ FAILED: rich 13.7.1 was not found in a bubble."
+            "$PYTHON_311_EXE" -m omnipkg.cli info rich
+            exit 1
+          fi
       
       - name: Run Quantum Multiverse Demo and Verify
         env:
           OMNIPKG_ENV_ID_OVERRIDE: ${{ env.OMNIPKG_ENV_ID_OVERRIDE }}
         run: |
           echo "--- Running Omnipkg Quantum Multiverse Warp Demo ---"
+          # The test itself will use the import hook to find and activate the bubbled versions.
           echo "8" | omnipkg demo
