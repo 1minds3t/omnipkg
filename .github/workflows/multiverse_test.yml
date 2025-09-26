@@ -106,6 +106,18 @@ jobs:
           "$PYTHON_310_EXE" -m omnipkg.cli install rich==13.6.0
           
           echo "✅ All packages installed. Skipping verification - let the actual test handle it."
+
+      - name: Final Sync of Main Context
+        env:
+          # We still need the override to ensure it syncs the correct environment
+          OMNIPKG_ENV_ID_OVERRIDE: ${{ env.OMNIPKG_ENV_ID_OVERRIDE }}
+        run: |
+          echo "--- Performing final KB sync for the main (3.11) context ---"
+          # Running a simple, read-only command like 'status' is enough to trigger
+          # the knowledge base synchronization. This will find the new bubbles
+          # and update the KB now, instead of during the timed test.
+          omnipkg status
+          echo "✅ Main context is now aware of all pre-installed bubbles."
       
       - name: Run Quantum Multiverse Demo and Verify
         env:
