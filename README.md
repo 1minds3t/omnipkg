@@ -7,7 +7,7 @@
 <p align="center">
   <p align="center">
     <p align="center">
-  <strong><strong>One environment. Infinite package and Python versions. Zero conflicts.</strong>
+  <strong><strong>One environment. Infinite Python and package versions. Zero conflicts.</strong>
     
 <p align="center">
   <!-- Core Project Info -->
