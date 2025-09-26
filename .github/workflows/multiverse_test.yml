@@ -9,13 +9,20 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
-    # ... (services section is correct) ...
+    services:
+      redis:
+        image: redis:7
+        options: >-
+          --health-cmd "redis-cli ping" --health-interval 10s --health-timeout 5s --health-retries 5
+        ports:
+          - 6379:6379
     
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
       
-      - name: Set up Python 3.11
+      - name: Set up Python 3.11 (for the main runner)
+        id: setup_python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
@@ -32,11 +39,15 @@ jobs:
           # that will be used for the rest of this job.
           python - << 'EOF'
           import json
+          import os
           from pathlib import Path
           from omnipkg.core import ConfigManager
 
+          # Create the .omnipkg directory for config
           config_dir = Path.home() / '.omnipkg'
           config_dir.mkdir(exist_ok=True)
+          
+          # Write the base non-interactive config
           config = {
               "interactive": False,
               "auto_confirm": True,
@@ -50,7 +61,7 @@ jobs:
           main_env_id = ConfigManager().env_id
           print(f"Authoritative Environment ID for this job: {main_env_id}")
           
-          # Export it for all subsequent steps
+          # Export it for all subsequent steps via the GITHUB_ENV file
           with open(os.environ['GITHUB_ENV'], 'a') as f:
               f.write(f"OMNIPKG_ENV_ID_OVERRIDE={main_env_id}\n")
           EOF
@@ -75,7 +86,7 @@ jobs:
           PYTHON_310_EXE=$(omnipkg info python | grep 'Python 3.10:' | awk '{print $3}')
 
           echo "Priming Python 3.9 by forcing KB rebuild..."
-          # This now correctly resets the KB for the main environment ID
+          # This now correctly resets the KB for the MAIN environment ID
           "$PYTHON_39_EXE" -m omnipkg.cli reset --yes
           
           echo "Priming Python 3.10 by forcing KB rebuild..."
@@ -100,8 +111,8 @@ jobs:
           "$PYTHON_310_EXE" -m omnipkg.cli install rich==13.6.0
           
           echo "--- Verifying Package Installations ---"
-          "$PYTHON_39_EXE" -c "import rich; assert rich.__version__ == '13.4.2'"
-          "$PYTHON_310_EXE" -c "import rich; assert rich.__version__ == '13.6.0'"
+          "$PYTHON_39_EXE" -c "import rich; assert rich.__version__ == '13.4.2', f'Wrong version found: {rich.__version__}'"
+          "$PYTHON_310_EXE" -c "import rich; assert rich.__version__ == '13.6.0', f'Wrong version found: {rich.__version__}'"
           echo "✅ All packages correctly installed and verified."
       
       - name: Run Quantum Multiverse Demo and Verify
