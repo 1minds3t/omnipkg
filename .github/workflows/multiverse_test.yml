@@ -22,7 +22,6 @@ jobs:
         uses: actions/checkout@v4
       
       - name: Set up Python 3.11 (for the main runner)
-        id: setup_python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
@@ -36,16 +35,14 @@ jobs:
         id: setup_omnipkg
         run: |
           python - << 'EOF'
-          # --- THIS IS THE FIX ---
           import json
-          import os  # <-- THIS IMPORT WAS MISSING
+          import os
           from pathlib import Path
           from omnipkg.core import ConfigManager
-          # --- END FIX ---
 
-          # Create the .omnipkg directory for config
-          config_dir = Path.home() / '.omnipkg'
-          config_dir.mkdir(exist_ok=True)
+          # This path MUST match the path used inside the omnipkg core code.
+          config_dir = Path.home() / '.config' / 'omnipkg'
+          config_dir.mkdir(parents=True, exist_ok=True)
           
           # Write the base non-interactive config
           config = {
@@ -68,7 +65,6 @@ jobs:
           
       - name: Adopt All Required Python Versions
         env:
-          # Inject the authoritative ENV_ID into this step
           OMNIPKG_ENV_ID_OVERRIDE: ${{ env.OMNIPKG_ENV_ID_OVERRIDE }}
         run: |
           echo "--- Adopting Python Versions ---"
@@ -77,13 +73,13 @@ jobs:
       
       - name: Reset and Prime Environments to Build Knowledge Bases
         env:
-          # Inject the authoritative ENV_ID here as well
           OMNIPKG_ENV_ID_OVERRIDE: ${{ env.OMNIPKG_ENV_ID_OVERRIDE }}
         run: |
           echo "--- Resetting and Priming Python environments ---"
           
-          PYTHON_39_EXE=$(omnipkg info python | grep 'Python 3.9:' | awk '{print $3}')
-          PYTHON_310_EXE=$(omnipkg info python | grep 'Python 3.10:' | awk '{print $3}')
+          # CORRECTED AWK COMMAND: Use $4 to get the path.
+          PYTHON_39_EXE=$(omnipkg info python | grep 'Python 3.9:' | awk '{print $4}')
+          PYTHON_310_EXE=$(omnipkg info python | grep 'Python 3.10:' | awk '{print $4}')
 
           echo "Priming Python 3.9 by forcing KB rebuild..."
           "$PYTHON_39_EXE" -m omnipkg.cli reset --yes
@@ -95,12 +91,12 @@ jobs:
 
       - name: Pre-Install and Verify Test Packages
         env:
-          # And inject it here
           OMNIPKG_ENV_ID_OVERRIDE: ${{ env.OMNIPKG_ENV_ID_OVERRIDE }}
         run: |
           echo "--- Pre-installing exact rich versions ---"
-          PYTHON_39_EXE=$(omnipkg info python | grep 'Python 3.9:' | awk '{print $3}')
-          PYTHON_310_EXE=$(omnipkg info python | grep 'Python 3.10:' | awk '{print $3}')
+          # CORRECTED AWK COMMAND: Use $4 to get the path.
+          PYTHON_39_EXE=$(omnipkg info python | grep 'Python 3.9:' | awk '{print $4}')
+          PYTHON_310_EXE=$(omnipkg info python | grep 'Python 3.10:' | awk '{print $4}')
           
           # Uninstall any existing rich to ensure a clean install, not a bubble
           "$PYTHON_39_EXE" -m omnipkg.cli uninstall rich --yes || true
@@ -116,7 +112,6 @@ jobs:
       
       - name: Run Quantum Multiverse Demo and Verify
         env:
-          # And finally, here too.
           OMNIPKG_ENV_ID_OVERRIDE: ${{ env.OMNIPKG_ENV_ID_OVERRIDE }}
         run: |
           echo "--- Running Omnipkg Quantum Multiverse Warp Demo ---"
