@@ -1,4 +1,4 @@
-name: Windows Path Detection Deep Debug
+name: Windows Path Detection Deep Debug - Fixed
 on:
   push:
     branches:
@@ -190,10 +190,10 @@ jobs:
         shell: pwsh
         continue-on-error: true
 
-      - name: "PHASE 4: Configuration File Analysis"
+      - name: "PHASE 4: Configuration File Analysis - FIXED"
         run: |
           Write-Host "=" * 80
-          Write-Host "PHASE 4: CONFIGURATION FILE ANALYSIS"
+          Write-Host "PHASE 4: CONFIGURATION FILE ANALYSIS - FIXED"
           Write-Host "=" * 80
           
           Write-Host "`n--- Post-run Directory State ---"
@@ -212,7 +212,7 @@ jobs:
             $config_content = Get-Content ~\.config\omnipkg\config.json -Raw
             Write-Host $config_content
             
-            # Parse and analyze
+            # Parse and analyze - FIXED JSON PARSING
             try {
               $config = $config_content | ConvertFrom-Json
               Write-Host "`n--- Parsed Configuration Analysis ---"
@@ -220,20 +220,33 @@ jobs:
               
               if ($config.environments) {
                 Write-Host "Environments found: $($config.environments.PSObject.Properties.Name.Count)"
-                foreach ($env_id in $config.environments.PSObject.Properties.Name) {
+                
+                # FIXED: Properly access the first environment
+                $env_ids = @($config.environments.PSObject.Properties.Name)
+                foreach ($env_id in $env_ids) {
                   $env_config = $config.environments.$env_id
                   Write-Host "`nEnvironment ID: $env_id"
-                  Write-Host "  python_executable: '$($env_config.python_executable)'"
-                  Write-Host "  site_packages_path: '$($env_config.site_packages_path)'"
-                  Write-Host "  version: '$($env_config.version)'"
-                  Write-Host "  created_at: '$($env_config.created_at)'"
+                  
+                  # FIXED: Properly check for null/empty values
+                  $python_exe = if ($env_config.python_executable) { $env_config.python_executable } else { "" }
+                  $site_path = if ($env_config.site_packages_path) { $env_config.site_packages_path } else { "" }
+                  $version = if ($env_config.version) { $env_config.version } else { "" }
+                  $created_at = if ($env_config.created_at) { $env_config.created_at } else { "" }
+                  
+                  Write-Host "  python_executable: '$python_exe'"
+                  Write-Host "  site_packages_path: '$site_path'"
+                  Write-Host "  version: '$version'"
+                  Write-Host "  created_at: '$created_at'"
                   
                   # Check if paths exist
-                  if ($env_config.python_executable) {
-                    Write-Host "  python_executable exists: $(Test-Path $env_config.python_executable)"
+                  if ($python_exe) {
+                    Write-Host "  python_executable exists: $(Test-Path $python_exe)"
+                  } else {
+                    Write-Host "  python_executable is EMPTY!"
                   }
-                  if ($env_config.site_packages_path) {
-                    Write-Host "  site_packages_path exists: $(Test-Path $env_config.site_packages_path)"
+                  
+                  if ($site_path) {
+                    Write-Host "  site_packages_path exists: $(Test-Path $site_path)"
                   } else {
                     Write-Host "  site_packages_path is EMPTY!"
                   }
@@ -243,20 +256,17 @@ jobs:
               }
             } catch {
               Write-Host "Failed to parse config.json: $($_.Exception.Message)"
+              Write-Host "Full error: $($_ | Out-String)"
             }
           } else {
             Write-Host "config.json does not exist!"
           }
         shell: pwsh
 
-      # =============================================================================
-      # PHASE 5: GROUND TRUTH vs OMNIPKG COMPARISON
-      # =============================================================================
-
-      - name: "PHASE 5: Ground Truth Discovery and Comparison"
+      - name: "PHASE 5: Ground Truth Discovery and Comparison - FIXED"
         run: |
           Write-Host "=" * 80
-          Write-Host "PHASE 5: GROUND TRUTH vs OMNIPKG COMPARISON"
+          Write-Host "PHASE 5: GROUND TRUTH vs OMNIPKG COMPARISON - FIXED"
           Write-Host "=" * 80
           
           Write-Host "`n--- Multiple Ground Truth Methods ---"
@@ -317,28 +327,33 @@ jobs:
                   print('  Contains packaging .dist-info:', packaging_dist)
           "
           
-          Write-Host "`n--- omnipkg Configuration Comparison ---"
+          Write-Host "`n--- omnipkg Configuration Comparison - FIXED ---"
           if (Test-Path ~\.config\omnipkg\config.json) {
             $config = Get-Content ~\.config\omnipkg\config.json | ConvertFrom-Json
-            $omnipkg_path = $config.environments.psobject.properties[0].Value.site_packages_path
             
-            Write-Host "Ground Truth (pip show): '$pip_location'"
-            Write-Host "omnipkg Config: '$omnipkg_path'"
-            Write-Host "Paths match: $(if ($pip_location -eq $omnipkg_path) { 'YES' } else { 'NO' })"
-            Write-Host "omnipkg path empty: $(if ([string]::IsNullOrEmpty($omnipkg_path)) { 'YES' } else { 'NO' })"
-            
-            # Case sensitivity check
-            if (![string]::IsNullOrEmpty($pip_location) -and ![string]::IsNullOrEmpty($omnipkg_path)) {
-              Write-Host "Case-insensitive match: $(if ($pip_location.ToLower() -eq $omnipkg_path.ToLower()) { 'YES' } else { 'NO' })"
+            # FIXED: Properly extract the site_packages_path
+            $env_ids = @($config.environments.PSObject.Properties.Name)
+            if ($env_ids.Count -gt 0) {
+              $first_env_id = $env_ids[0]
+              $first_env = $config.environments.$first_env_id
+              $omnipkg_path = if ($first_env.site_packages_path) { $first_env.site_packages_path } else { "" }
+              
+              Write-Host "Ground Truth (pip show): '$pip_location'"
+              Write-Host "omnipkg Config: '$omnipkg_path'"
+              Write-Host "Paths match: $(if ($pip_location -eq $omnipkg_path) { 'YES' } else { 'NO' })"
+              Write-Host "omnipkg path empty: $(if ([string]::IsNullOrEmpty($omnipkg_path)) { 'YES' } else { 'NO' })"
+              
+              # Case sensitivity check
+              if (![string]::IsNullOrEmpty($pip_location) -and ![string]::IsNullOrEmpty($omnipkg_path)) {
+                Write-Host "Case-insensitive match: $(if ($pip_location.ToLower() -eq $omnipkg_path.ToLower()) { 'YES' } else { 'NO' })"
+              }
+            } else {
+              Write-Host "No environments found in omnipkg config"
             }
           } else {
             Write-Host "Cannot compare - omnipkg config.json not found"
           }
         shell: pwsh
-
-      # =============================================================================
-      # PHASE 6: PATH CONSTRUCTION DEBUGGING
-      # =============================================================================
 
       - name: "PHASE 6: Path Construction Logic Debugging"
         run: |
@@ -402,10 +417,10 @@ jobs:
           "
         shell: pwsh
 
-      - name: "PHASE 7: Final Diagnosis and Summary"
+      - name: "PHASE 7: Final Diagnosis and Summary - FIXED"
         run: |
           Write-Host "=" * 80
-          Write-Host "PHASE 7: FINAL DIAGNOSIS AND SUMMARY"
+          Write-Host "PHASE 7: FINAL DIAGNOSIS AND SUMMARY - FIXED"
           Write-Host "=" * 80
           
           Write-Host "`n--- Summary of Findings ---"
@@ -413,9 +428,30 @@ jobs:
           
           if (Test-Path ~\.config\omnipkg\config.json) {
             $config = Get-Content ~\.config\omnipkg\config.json | ConvertFrom-Json
-            $omnipkg_path = $config.environments.psobject.properties[0].Value.site_packages_path
-            Write-Host "2. omnipkg detected site-packages: '$omnipkg_path'"
-            Write-Host "3. Config path is empty: $(if ([string]::IsNullOrEmpty($omnipkg_path)) { 'YES - THIS IS THE PROBLEM' } else { 'NO' })"
+            
+            # FIXED: Properly extract environment data
+            $env_ids = @($config.environments.PSObject.Properties.Name)
+            if ($env_ids.Count -gt 0) {
+              $first_env_id = $env_ids[0]
+              $first_env = $config.environments.$first_env_id
+              $omnipkg_path = if ($first_env.site_packages_path) { $first_env.site_packages_path } else { "" }
+              
+              Write-Host "2. omnipkg detected site-packages: '$omnipkg_path'"
+              Write-Host "3. Config path is empty: $(if ([string]::IsNullOrEmpty($omnipkg_path)) { 'YES - THIS IS THE PROBLEM' } else { 'NO - PATH DETECTED CORRECTLY' })"
+              
+              # Check other important fields
+              $python_exe = if ($first_env.python_executable) { $first_env.python_executable } else { "" }
+              $version = if ($first_env.version) { $first_env.version } else { "" }
+              $created_at = if ($first_env.created_at) { $first_env.created_at } else { "" }
+              
+              Write-Host "4. Python executable: '$python_exe'"
+              Write-Host "5. Version field: '$version' $(if ([string]::IsNullOrEmpty($version)) { '(MISSING)' } else { '(OK)' })"
+              Write-Host "6. Created at field: '$created_at' $(if ([string]::IsNullOrEmpty($created_at)) { '(MISSING)' } else { '(OK)' })"
+              
+            } else {
+              Write-Host "2. omnipkg environments: NONE FOUND"
+              Write-Host "3. This indicates omnipkg failed during environment creation"
+            }
           } else {
             Write-Host "2. omnipkg config.json: NOT CREATED"
             Write-Host "3. This indicates omnipkg failed during initialization"
@@ -431,28 +467,68 @@ jobs:
             }
           } catch {}
           
-          Write-Host "4. Ground truth (pip): '$pip_location'"
+          Write-Host "7. Ground truth (pip): '$pip_location'"
           
-          Write-Host "`n--- Recommended Investigation Areas ---"
-          Write-Host "- Check omnipkg's site-packages path detection logic for Windows"
-          Write-Host "- Verify Windows path case handling (Lib vs lib)"
-          Write-Host "- Check if omnipkg is using sys.prefix vs sys.executable for path construction"
-          Write-Host "- Investigate any Windows-specific path normalization issues"
-          Write-Host "- Review error handling in the configuration initialization code"
+          Write-Host "`n--- Status Assessment ---"
+          if (Test-Path ~\.config\omnipkg\config.json) {
+            $config = Get-Content ~\.config\omnipkg\config.json | ConvertFrom-Json
+            $env_ids = @($config.environments.PSObject.Properties.Name)
+            if ($env_ids.Count -gt 0) {
+              $first_env = $config.environments.$($env_ids[0])
+              $has_site_path = ![string]::IsNullOrEmpty($first_env.site_packages_path)
+              $has_python_exe = ![string]::IsNullOrEmpty($first_env.python_executable)
+              
+              if ($has_site_path -and $has_python_exe) {
+                Write-Host "STATUS: PATH DETECTION WORKING - Core functionality appears intact"
+              } else {
+                Write-Host "STATUS: PARTIAL SUCCESS - Some fields missing"
+              }
+            } else {
+              Write-Host "STATUS: INITIALIZATION FAILED - No environments created"
+            }
+          } else {
+            Write-Host "STATUS: COMPLETE FAILURE - No config file created"
+          }
           
         shell: pwsh
 
       # =============================================================================
-      # ARTIFACTS AND CLEANUP
+      # ARTIFACTS AND CLEANUP - FIXED
       # =============================================================================
 
-      - name: Upload omnipkg output as artifact
+      - name: Copy omnipkg config to workspace for upload
+        run: |
+          # Create a directory in the workspace to copy config files
+          New-Item -ItemType Directory -Path "./debug-artifacts" -Force
+          
+          if (Test-Path ~\.config\omnipkg) {
+            # Copy the entire omnipkg config directory to workspace
+            Copy-Item -Path ~\.config\omnipkg -Destination "./debug-artifacts/" -Recurse -Force
+            Write-Host "Copied omnipkg config to workspace"
+          } else {
+            Write-Host "No omnipkg config to copy"
+            # Create an empty marker file
+            New-Item -ItemType File -Path "./debug-artifacts/no-config-created.txt" -Force
+          }
+          
+          # Also copy the output file if it exists
+          if (Test-Path "./omnipkg_output.txt") {
+            Copy-Item -Path "./omnipkg_output.txt" -Destination "./debug-artifacts/" -Force
+          }
+          
+          # List what we're about to upload
+          Write-Host "`nFiles to be uploaded:"
+          Get-ChildItem -Path "./debug-artifacts" -Recurse | ForEach-Object {
+            Write-Host "  $($_.FullName)"
+          }
+        shell: pwsh
+        if: always()
+
+      - name: Upload omnipkg debug artifacts - FIXED
         uses: actions/upload-artifact@v4
         with:
-          name: omnipkg-debug-output
-          path: |
-            omnipkg_output.txt
-            ~/.config/omnipkg/**
+          name: omnipkg-debug-output-fixed
+          path: ./debug-artifacts/
         if: always()
 
       - name: Final Status
@@ -461,6 +537,20 @@ jobs:
             Write-Host "INVESTIGATION COMPLETE: omnipkg failed with exit code ${{ steps.omnipkg_run.outputs.OMNIPKG_EXIT_CODE }}"
             exit 1
           } else {
-            Write-Host "INVESTIGATION COMPLETE: omnipkg ran but may have path detection issues"
+            Write-Host "INVESTIGATION COMPLETE: omnipkg ran successfully"
+            # Additional check for path detection
+            if (Test-Path ~\.config\omnipkg\config.json) {
+              $config = Get-Content ~\.config\omnipkg\config.json | ConvertFrom-Json
+              $env_ids = @($config.environments.PSObject.Properties.Name)
+              if ($env_ids.Count -gt 0) {
+                $first_env = $config.environments.$($env_ids[0])
+                if ([string]::IsNullOrEmpty($first_env.site_packages_path)) {
+                  Write-Host "WARNING: Path detection failed - site_packages_path is empty"
+                  exit 1
+                } else {
+                  Write-Host "SUCCESS: Path detection working correctly"
+                }
+              }
+            }
           }
         shell: pwsh
