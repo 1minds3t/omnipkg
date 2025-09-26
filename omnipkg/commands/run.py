@@ -47,6 +47,43 @@ def analyze_runtime_failure_and_heal(stderr: str, cmd_args: list, original_scrip
             print("   - Downgrading to numpy<2.0 for compatibility")
             return heal_with_bubble("numpy==1.26.4", original_script_path_for_analysis, cmd_args[1:], config_manager)
 
+    # Pattern 1.5: Deep ABI incompatibility issues that require package reinstallation
+    abi_incompatibility_patterns = [
+        # TensorFlow-specific ABI issues with undefined symbols
+        (r"tensorflow\.python\.framework\.errors_impl\.NotFoundError:.*?undefined symbol.*?tensorflow", "tensorflow", "TensorFlow ABI incompatibility"),
+        # Generic undefined symbol issues in compiled packages
+        (r"ImportError:.*?undefined symbol.*?(_ZN\w+)", None, "Generic ABI incompatibility"),
+        # Other common ABI issues
+        (r"OSError:.*?cannot open shared object file.*?No such file or directory", None, "Missing shared library"),
+        (r"ImportError:.*?DLL load failed.*?The specified module could not be found", None, "Windows DLL load failure")
+    ]
+    
+    for regex, target_package, description in abi_incompatibility_patterns:
+        match = re.search(regex, stderr, re.MULTILINE | re.DOTALL)
+        if match:
+            print(f"\n🔍 {description} detected. This requires package reinstallation...")
+            
+            if target_package:
+                # We know the specific problematic package
+                print(f"   - The issue is with '{target_package}' package")
+                print(f"   - This package was likely compiled against incompatible dependencies")
+                print(f"🚀 Auto-healing by reinstalling '{target_package}' to rebuild against current environment...")
+                return heal_with_package_reinstall(target_package, original_script_path_for_analysis, cmd_args[1:], config_manager)
+            else:
+                # Try to extract the problematic package from the traceback
+                # Look for the last package import in the traceback that's not a built-in
+                import_matches = re.findall(r"File \".*?/site-packages/(\w+)/", stderr)
+                if import_matches:
+                    problematic_package = import_matches[-1]  # Last package in the chain
+                    print(f"   - The issue appears to be with '{problematic_package}' package")
+                    print(f"   - This package likely has ABI incompatibilities with current dependencies")
+                    print(f"🚀 Auto-healing by reinstalling '{problematic_package}' to rebuild against current environment...")
+                    return heal_with_package_reinstall(problematic_package, original_script_path_for_analysis, cmd_args[1:], config_manager)
+                else:
+                    print(f"   - Could not identify the specific problematic package")
+                    print(f"❌ Auto-healing aborted. Manual intervention may be required.")
+                    return 1, None
+
     # Pattern 2: Handle explicit version conflicts from requirements.
     conflict_patterns = [
         (r"AssertionError: Incorrect ([\w\-]+) version! Expected ([\d\.]+)", 1, 2, "Runtime version assertion"),
@@ -144,6 +181,67 @@ def analyze_runtime_failure_and_heal(stderr: str, cmd_args: list, original_scrip
     # Final fallback if no patterns match.
     print(_("❌ Script failed with an unhandled runtime error that could not be auto-healed."))
     return 1, None
+
+
+def heal_with_package_reinstall(package_name: str, script_path: Path, script_args: list, config_manager: ConfigManager):
+    """Reinstalls a package completely to fix ABI/compilation issues.
+    This is more aggressive than bubbling and is used when packages have been
+    compiled against incompatible dependencies.
+    """
+    print(f"🔄 Starting package reinstallation for '{package_name}'...")
+    
+    try:
+        # Step 1: Uninstall the problematic package completely
+        print(f"🗑️  Uninstalling '{package_name}' completely...")
+        uninstall_result = subprocess.run([
+            sys.executable, '-m', 'pip', 'uninstall', package_name, '-y'
+        ], capture_output=True, text=True, timeout=300)
+        
+        if uninstall_result.returncode == 0:
+            print(f"✅ Successfully uninstalled '{package_name}'")
+        else:
+            print(f"⚠️  Uninstall had issues, but continuing: {uninstall_result.stderr}")
+        
+        # Step 2: Clear pip cache to ensure fresh download
+        print(f"🧹 Clearing pip cache for '{package_name}'...")
+        cache_clear_result = subprocess.run([
+            sys.executable, '-m', 'pip', 'cache', 'remove', package_name
+        ], capture_output=True, text=True, timeout=60)
+        
+        if cache_clear_result.returncode == 0:
+            print(f"✅ Successfully cleared cache for '{package_name}'")
+        else:
+            print(f"⚠️  Cache clear had issues, but continuing...")
+        
+        # Step 3: Reinstall the package
+        print(f"📦 Reinstalling '{package_name}' with fresh compilation...")
+        install_result = subprocess.run([
+            sys.executable, '-m', 'pip', 'install', package_name, '--no-cache-dir', '--force-reinstall'
+        ], capture_output=True, text=True, timeout=600)
+        
+        if install_result.returncode != 0:
+            print(f"❌ Failed to reinstall '{package_name}': {install_result.stderr}")
+            return 1, None
+        
+        print(f"✅ Successfully reinstalled '{package_name}'")
+        
+        # Step 4: Re-run the original script
+        print(f"🚀 Re-running script after '{package_name}' reinstallation...")
+        return _run_script_with_healing(
+            script_path=script_path,
+            script_args=script_args,
+            config_manager=config_manager,
+            original_script_path_for_analysis=script_path,
+            heal_type=f'package_reinstall_{package_name}',
+            is_context_aware_run=False
+        )
+        
+    except subprocess.TimeoutExpired:
+        print(f"❌ Package reinstallation timed out for '{package_name}'")
+        return 1, None
+    except Exception as e:
+        print(f"❌ Unexpected error during package reinstallation: {e}")
+        return 1, None
 
 def convert_module_to_package_name(module_name: str) -> str:
     """

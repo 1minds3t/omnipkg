@@ -191,6 +191,38 @@ class ConfigManager:
                 json.dump(versions_to_rebuild, f)
         safe_print(_('   🚩 Flag set: Python {} will build its knowledge base on first use.').format(version_str))
 
+    def _clear_rebuild_flag_for_version(self, version_str: str):
+        """
+        Removes a specific version from the .needs_kb_rebuild flag file.
+        This is called after a successful manual rebuild (like reset --yes)
+        to prevent a redundant "first-use" build later.
+        """
+        flag_file = self.venv_path / '.omnipkg' / '.needs_kb_rebuild'
+        if not flag_file.exists():
+            return
+        
+        lock_file = self.venv_path / '.omnipkg' / '.needs_kb_rebuild.lock'
+        with FileLock(lock_file):
+            try:
+                with open(flag_file, 'r') as f:
+                    versions_to_rebuild = json.load(f)
+                
+                if version_str in versions_to_rebuild:
+                    versions_to_rebuild.remove(version_str)
+                    safe_print(f"   -> Automatically clearing 'first use' flag for Python {version_str}...")
+                    
+                    if not versions_to_rebuild:
+                        # If the list is empty, delete the file entirely.
+                        flag_file.unlink()
+                    else:
+                        # Otherwise, write the modified list back.
+                        with open(flag_file, 'w') as f:
+                            json.dump(versions_to_rebuild, f)
+            except (json.JSONDecodeError, IOError, Exception):
+                # If we fail to read/write, it's safer to just remove the flag file.
+                safe_print(f"   -> Warning: Could not cleanly update flag file. Removing it to be safe.")
+                flag_file.unlink(missing_ok=True)
+
     def _peek_config_for_flag(self, flag_name: str) -> bool:
         """
         Safely checks the config file for a boolean flag for the current environment
@@ -1024,7 +1056,7 @@ class ConfigManager:
             'enable_python_hotswap': True
         }
 
-    def _get_actual_current_site_packages(self) -> Path:
+    def get_actual_current_site_packages(self) -> Path:
         """
         Gets the ACTUAL site-packages directory for the currently running Python interpreter.
         This is more reliable than calculating it from sys.prefix when hotswapping is involved.
@@ -1034,7 +1066,7 @@ class ConfigManager:
         is_windows = platform.system() == 'Windows'
         
         try:
-            # First, try to use site.getsitepackages() - most reliable method
+            # Method 1: Use site.getsitepackages() - most reliable method
             site_packages_list = site.getsitepackages()
             if site_packages_list:
                 current_python_dir = Path(sys.executable).parent
@@ -1051,20 +1083,57 @@ class ConfigManager:
                     except ValueError:
                         continue
                 
-                # If relative path matching fails, prefer the longest path (most specific)
-                # and ensure it exists
-                for sp in sorted(site_packages_list, key=len, reverse=True):
-                    sp_path = Path(sp)
-                    if sp_path.exists():
-                        return sp_path
+                # If relative path matching fails, prefer paths that actually exist
+                # and sort by specificity (longer paths first)
+                existing_paths = [Path(sp) for sp in site_packages_list if Path(sp).exists()]
+                if existing_paths:
+                    # For Windows, prefer 'lib' over 'Lib' when both exist (lowercase is more standard)
+                    if is_windows and len(existing_paths) > 1:
+                        lib_paths = [p for p in existing_paths if 'lib' in str(p).lower()]
+                        lowercase_lib = [p for p in lib_paths if '/lib/' in str(p) or '\\lib\\' in str(p)]
+                        if lowercase_lib:
+                            return sorted(lowercase_lib, key=len, reverse=True)[0]
+                    
+                    return sorted(existing_paths, key=len, reverse=True)[0]
                 
                 # Fallback to first path (even if it doesn't exist yet)
                 return Path(site_packages_list[0])
+                
         except Exception:
             # Continue with fallback logic
             pass
         
-        # Fallback: Manual construction based on OS
+        # Method 2: Try to find an existing package and derive site-packages from it
+        try:
+            # Look for a common package that should exist
+            common_packages = ['pip', 'setuptools', 'packaging']
+            for pkg_name in common_packages:
+                try:
+                    pkg = __import__(pkg_name)
+                    if hasattr(pkg, '__file__') and pkg.__file__:
+                        pkg_path = Path(pkg.__file__).parent
+                        # Navigate up to find site-packages
+                        current = pkg_path
+                        while current.parent != current:
+                            if current.name == 'site-packages':
+                                return current
+                            current = current.parent
+                except ImportError:
+                    continue
+        except Exception:
+            pass
+        
+        # Method 3: Check sys.path for site-packages directories
+        try:
+            for path_str in sys.path:
+                if path_str and 'site-packages' in path_str:
+                    path_obj = Path(path_str)
+                    if path_obj.exists() and path_obj.name == 'site-packages':
+                        return path_obj
+        except Exception:
+            pass
+        
+        # Method 4: Manual construction based on OS (fallback)
         python_version = f'python{sys.version_info.major}.{sys.version_info.minor}'
         current_python_path = Path(sys.executable)
         
@@ -1072,35 +1141,41 @@ class ConfigManager:
         if '.omnipkg/interpreters' in str(current_python_path):
             interpreter_root = current_python_path.parent.parent
             if is_windows:
-                site_packages_path = interpreter_root / 'Lib' / 'site-packages'
+                # Try both case variations for Windows
+                candidates = [
+                    interpreter_root / 'lib' / 'site-packages',  # Prefer lowercase
+                    interpreter_root / 'Lib' / 'site-packages'   # Windows standard
+                ]
+                for candidate in candidates:
+                    if candidate.exists():
+                        return candidate
+                # Default to lowercase if neither exists
+                return interpreter_root / 'lib' / 'site-packages'
             else:
-                site_packages_path = interpreter_root / 'lib' / python_version / 'site-packages'
+                return interpreter_root / 'lib' / python_version / 'site-packages'
         else:
             # Standard environment detection
             venv_path = Path(sys.prefix)
             
             if is_windows:
                 # Windows has multiple possible locations, try in order of preference
+                # Based on the debug output, both 'lib' and 'Lib' exist, prefer 'lib' (lowercase)
                 candidates = [
-                    venv_path / 'Lib' / 'site-packages',  # Standard Windows location
-                    venv_path / 'lib' / 'site-packages',  # Sometimes used
+                    venv_path / 'lib' / 'site-packages',  # Prefer lowercase (more standard)
+                    venv_path / 'Lib' / 'site-packages',  # Windows default
                     venv_path / 'lib' / python_version / 'site-packages'  # Version-specific
                 ]
                 
                 for candidate in candidates:
                     if candidate.exists():
-                        site_packages_path = candidate
-                        break
-                else:
-                    # Default to the most common Windows location
-                    site_packages_path = venv_path / 'Lib' / 'site-packages'
+                        return candidate
+                
+                # If none exist, default to lowercase (more portable)
+                return venv_path / 'lib' / 'site-packages'
             else:
                 # Unix-like systems (Linux, macOS)
-                site_packages_path = venv_path / 'lib' / python_version / 'site-packages'
-        
-        return site_packages_path
-
-        
+                return venv_path / 'lib' / python_version / 'site-packages'
+    
     def _get_paths_for_interpreter(self, python_exe_path: str) -> Optional[Dict[str, str]]:
             """
             Runs an interpreter in a subprocess to ask for its version and calculates
@@ -2472,24 +2547,57 @@ class ImportHookManager:
 
     def validate_bubble(self, package_name: str, version: str) -> bool:
         """
-        Validates a bubble's integrity by checking for its physical existence
-        and the presence of a manifest file.
+        (SMARTER VALIDATION) Validates a bubble's integrity. It now intelligently
+        checks for a 'bin' directory ONLY if the bubble's manifest indicates it
+        should contain executables.
         """
         bubble_path_str = self.get_package_path(package_name, version)
         if not bubble_path_str:
             safe_print(_("    ❌ Bubble not found in HookManager's map for {}=={}").format(package_name, version))
             return False
+            
         bubble_path = Path(bubble_path_str)
         if not bubble_path.is_dir():
             safe_print(_('    ❌ Bubble directory does not exist at: {}').format(bubble_path))
             return False
+            
         manifest_path = bubble_path / '.omnipkg_manifest.json'
         if not manifest_path.exists():
             safe_print(_('    ❌ Bubble is incomplete: Missing manifest file at {}').format(manifest_path))
             return False
-        bin_path = bubble_path / 'bin'
-        if not bin_path.is_dir():
-            safe_print(_("    ⚠️  Warning: Bubble for {}=={} does not contain a 'bin' directory.").format(package_name, version))
+
+        # --- THIS IS THE NEW, SMARTER LOGIC ---
+        try:
+            with open(manifest_path, 'r') as f:
+                manifest = json.load(f)
+            
+            # Check if any package in the bubble is expected to have executables.
+            # We look for packages that aren't 'pure_python' or 'mixed'.
+            # A more direct check could be to see if the manifest stores executable info.
+            # For now, let's assume packages with native code might have executables.
+            has_executables = any(
+                info.get('type') not in ['pure_python', 'mixed'] 
+                for info in manifest.get('packages', {}).values()
+            )
+            
+            # The manifest might also have a direct count of binaries
+            if 'binaries_count' in manifest.get('stats', {}):
+                if manifest['stats']['binaries_count'] > 0:
+                    has_executables = True
+
+            bin_path = bubble_path / 'bin'
+            if has_executables and not bin_path.is_dir():
+                # Only warn if we expect a bin directory and it's not there.
+                safe_print(_("    ⚠️  Warning: Bubble for {}=={} should contain executables, but 'bin' directory is missing.").format(package_name, version))
+
+        except (json.JSONDecodeError, KeyError):
+            # If manifest is broken, fall back to the old check for safety.
+            bin_path = bubble_path / 'bin'
+            if not bin_path.is_dir():
+                safe_print(_("    ⚠️  Warning: Bubble for {}=={} does not contain a 'bin' directory (manifest unreadable).").format(package_name, version))
+        
+        # --- END OF NEW LOGIC ---
+
         safe_print(_('    ✅ Bubble validated successfully: {}=={}').format(package_name, version))
         return True
 
@@ -2957,7 +3065,7 @@ class omnipkg:
     def reset_knowledge_base(self, force: bool=False) -> int:
         """
         Deletes ALL omnipkg data for the CURRENT environment from Redis,
-        as well as any legacy global data. It then triggers a full rebuild.
+        and then triggers a full rebuild.
         """
         if not self._connect_cache():
             return 1
@@ -2994,7 +3102,26 @@ class omnipkg:
             return 1
         self._info_cache.clear()
         self._installed_packages_cache = None
-        return self.rebuild_knowledge_base(force=True)
+
+        # --- START OF THE CORRECTED LOGIC ---
+        # 1. Run the rebuild and capture its success/failure status.
+        rebuild_status = self.rebuild_knowledge_base(force=True)
+
+        # 2. ONLY if the rebuild was successful (status 0) AND it was a forced
+        #    run (like in CI), do we clear the "first use" flag.
+        if rebuild_status == 0 and force:
+            try:
+                configured_exe = self.config.get('python_executable')
+                version_tuple = self.config_manager._verify_python_version(configured_exe)
+                if version_tuple:
+                    current_version_str = f'{version_tuple[0]}.{version_tuple[1]}'
+                    self.config_manager._clear_rebuild_flag_for_version(current_version_str)
+            except Exception as e:
+                # This is a non-critical cleanup; log a warning but don't fail.
+                safe_print(f"   - ⚠️  Warning: Could not automatically clear first-use flag: {e}")
+                
+        # 3. Return the original status of the rebuild operation.
+        return rebuild_status
 
     def rebuild_knowledge_base(self, force: bool=False):
         """
@@ -3115,6 +3242,18 @@ class omnipkg:
                 safe_print(_('💡 First use of Python {} detected.').format(current_version_str))
                 safe_print(_('   Building its knowledge base now...'))
                 rebuild_status = self.rebuild_knowledge_base(force=True)
+                if rebuild_status != 0:
+                    return 1 # Return failure if the rebuild failed
+
+                # --- THIS IS THE NEW, CORRECT LOGIC YOU SUGGESTED ---
+                # After a successful reset in a non-interactive context, the "first use" is
+                # officially complete. We now automatically clear the flag.
+                if self.config.get('auto_confirm', False) or force:
+                    configured_exe = self.config.get('python_executable')
+                    version_tuple = self.config_manager._verify_python_version(configured_exe)
+                    if version_tuple:
+                        current_version_str = f'{version_tuple[0]}.{version_tuple[1]}'
+                        self.config_manager._clear_rebuild_flag_for_version(current_version_str)
                 if rebuild_status == 0:
                     versions_to_rebuild.remove(current_version_str)
                     if not versions_to_rebuild:
@@ -6826,8 +6965,8 @@ class omnipkg:
                         if installed_version == latest_pypi_version:
                             safe_print(f'    🚀 JACKPOT! Latest PyPI version {latest_pypi_version} is already installed!')
                             safe_print('    ⚡ Skipping all test installations - using installed version')
-                            # Cache the result and return
-                            self.pypi_cache.cache_version(package_name, latest_pypi_version)
+                            # Cache the result and return - FIX: Include python_context
+                            self.pypi_cache.cache_version(package_name, latest_pypi_version, py_context)
                             return latest_pypi_version
                         else:
                             safe_print(f'    📋 Installed version ({installed_version}) differs from latest PyPI ({latest_pypi_version})')
@@ -6861,7 +7000,7 @@ class omnipkg:
                 compatible_version = self._quick_compatibility_check(package_name, latest_pypi_version)
                 if compatible_version:
                     safe_print(f'    🎯 Found compatible version {compatible_version} - caching and returning!')
-                    # Cache the result and return
+                    # Cache the result and return - FIX: Include python_context
                     self.pypi_cache.cache_version(package_name, compatible_version, py_context)
                     return compatible_version
             except Exception as e:
@@ -6875,8 +7014,8 @@ class omnipkg:
                 test_result = self._test_install_to_get_compatible_version(package_name)
                 if test_result:
                     safe_print(f'    🎯 Test approach successful! Version {test_result} ready for smart installer')
-                    # Cache the result and return
-                    self.pypi_cache.cache_version(package_name, test_result)
+                    # Cache the result and return - FIX: Include python_context
+                    self.pypi_cache.cache_version(package_name, test_result, py_context)
                     return test_result
             except Exception as e:
                 safe_print(f'    ⚠️ Test installation approach failed: {e}')
@@ -6909,8 +7048,8 @@ class omnipkg:
                     version = match.group(1).strip()
                     safe_print(f' ✅ Package already installed with version: {version}')
                     if re.match('^[0-9]+(?:\\.[0-9]+)*(?:[a-zA-Z0-9\\.-_]*)?$', version):
-                        # Cache the result and return
-                        self.pypi_cache.cache_version(package_name, version)
+                        # Cache the result and return - FIX: Include python_context
+                        self.pypi_cache.cache_version(package_name, version, py_context)
                         return version
                     else:
                         safe_print(f" ⚠️  Version '{version}' has invalid format, continuing search...")
@@ -6926,8 +7065,8 @@ class omnipkg:
                     if version_match:
                         version = version_match.group(1).strip()
                         safe_print(f' ✅ Found latest version via pip index: {version}')
-                        # Cache the result and return
-                        self.pypi_cache.cache_version(package_name, version)
+                        # Cache the result and return - FIX: Include python_context
+                        self.pypi_cache.cache_version(package_name, version, py_context)
                         return version
 
             # Parse output for version patterns
@@ -6945,8 +7084,8 @@ class omnipkg:
                     version = match.group(1)
                     safe_print(f' ✅ Pip resolver identified latest compatible version: {version} (pattern {i})')
                     if re.match('^[0-9]+(?:\\.[0-9]+)*(?:[a-zA-Z0-9\\.-_]*)?$', version):
-                        # Cache the result and return
-                        self.pypi_cache.cache_version(package_name, version)
+                        # Cache the result and return - FIX: Include python_context
+                        self.pypi_cache.cache_version(package_name, version, py_context)
                         return version
                     else:
                         safe_print(f" ⚠️  Version '{version}' has invalid format, continuing search...")
@@ -6963,8 +7102,8 @@ class omnipkg:
                         if list_match:
                             version = list_match.group(1).strip()
                             safe_print(f' ✅ Found installed version via pip list: {version}')
-                            # Cache the result and return
-                            self.pypi_cache.cache_version(package_name, version)
+                            # Cache the result and return - FIX: Include python_context
+                            self.pypi_cache.cache_version(package_name, version, py_context)
                             return version
                 except Exception as e:
                     safe_print(f' -> pip list approach failed: {e}')
@@ -6989,32 +7128,25 @@ class omnipkg:
     
     def _start_background_cache_refresh(self, package_name: str, python_context: str):
         """
-        (FIXED) Starts a background thread to silently update the cache for a specific context.
+        (FIXED) The background refresh now ALSO uses the robust `pip`-based check
+        to prevent it from ever polluting the cache with incompatible versions.
         """
         def background_refresh():
             try:
-                time.sleep(0.1)
+                # Use the fast but robust dry-run check to get a fresh, COMPATIBLE version.
+                fresh_compatible_version = self._quick_compatibility_check(package_name)
                 
-                # Fetch the absolute latest version from PyPI
-                fresh_version = self._fetch_latest_pypi_version_only(package_name)
-                
-                if fresh_version:
-                    # Get the current cached version for this specific context to compare
+                if fresh_compatible_version:
                     current_cached = self.pypi_cache.get_cached_version(package_name, python_context)
                     
-                    if fresh_version != current_cached:
-                        # Update the context-specific cache with the new version
-                        self.pypi_cache.cache_version(package_name, fresh_version, python_context)
-                        safe_print(f"    🆕 [Background] Cache updated for {python_context}: {package_name} {current_cached} → {fresh_version}")
+                    if fresh_compatible_version != current_cached:
+                        self.pypi_cache.cache_version(package_name, fresh_compatible_version, python_context)
+                        safe_print(f"    🆕 [Background] Cache updated for {python_context}: {package_name} {current_cached or 'N/A'} → {fresh_compatible_version}")
                     else:
-                        # Version is the same, just refresh the TTL
-                        self.pypi_cache.cache_version(package_name, fresh_version, python_context)
-                else:
-                    # Could not fetch a fresh version, do nothing to the cache
-                    pass
-                    
+                        # Re-set the value to refresh the TTL.
+                        self.pypi_cache.cache_version(package_name, fresh_compatible_version, python_context)
             except Exception:
-                # Silently fail
+                # Silently fail in the background.
                 pass
         
         refresh_thread = threading.Thread(target=background_refresh, daemon=True)
