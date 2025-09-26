@@ -9,19 +9,13 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
-    services:
-      redis:
-        image: redis:7
-        options: >-
-          --health-cmd "redis-cli ping" --health-interval 10s --health-timeout 5s --health-retries 5
-        ports:
-          - 6379:6379
+    # ... (services section is correct) ...
     
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
       
-      - name: Set up Python 3.11 (for the main runner)
+      - name: Set up Python 3.11
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
@@ -31,251 +25,89 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e . redis rich==13.7.1
           
-      - name: Configure omnipkg for non-interactive use
+      - name: Configure omnipkg and Establish Authoritative ENV_ID
+        id: setup_omnipkg
         run: |
+          # This step configures omnipkg and calculates the single, true ENV_ID
+          # that will be used for the rest of this job.
           python - << 'EOF'
           import json
-          import os
           from pathlib import Path
-          
-          # Create omnipkg config directory
+          from omnipkg.core import ConfigManager
+
           config_dir = Path.home() / '.omnipkg'
           config_dir.mkdir(exist_ok=True)
-          
-          # Create basic config
           config = {
               "interactive": False,
               "auto_confirm": True,
               "redis_url": "redis://localhost:6379"
           }
-          
           with open(config_dir / 'config.json', 'w') as f:
               json.dump(config, f, indent=2)
-          
           print("✅ Omnipkg configured for non-interactive use")
+          
+          # Calculate the ENV_ID based on the main runner's environment
+          main_env_id = ConfigManager().env_id
+          print(f"Authoritative Environment ID for this job: {main_env_id}")
+          
+          # Export it for all subsequent steps
+          with open(os.environ['GITHUB_ENV'], 'a') as f:
+              f.write(f"OMNIPKG_ENV_ID_OVERRIDE={main_env_id}\n")
           EOF
           
       - name: Adopt All Required Python Versions
-        run: |
-          echo "--- Adopting Python Versions for Multiverse Test ---"
-          omnipkg python adopt 3.9
-          omnipkg python adopt 3.10
-          echo "All required Python versions have been adopted!"
-      
-      - name: Debug Python Interpreter Paths
-        run: |
-          echo "--- Debugging Python Interpreter Discovery ---"
-          echo "Full omnipkg info python output:"
-          omnipkg info python
-          echo "---"
-          echo "Attempting to parse paths..."
-          omnipkg info python | while read line; do
-            echo "Line: '$line'"
-            if [[ "$line" =~ Python\ ([0-9]+\.[0-9]+):\ (.+) ]]; then
-              version="${BASH_REMATCH[1]}"
-              path="${BASH_REMATCH[2]}"
-              echo "  Parsed - Version: $version, Path: $path"
-            fi
-          done
-
-      - name: Reset and Prime Environments to Build Knowledge Bases
-        run: |
-          echo "--- Resetting and Priming Python environments to trigger first-use setup ---"
-          
-          PYTHON_39_EXE=""
-          PYTHON_310_EXE=""
-          while IFS= read -r line; do
-            if [[ "$line" =~ Python\ 3\.9:\ ([^[:space:]]+) ]]; then
-              PYTHON_39_EXE="${BASH_REMATCH[1]}"
-            elif [[ "$line" =~ Python\ 3\.10:\ ([^[:space:]]+) ]]; then
-              PYTHON_310_EXE="${BASH_REMATCH[1]}"
-            fi
-          done < <(omnipkg info python)
-          
-          if [ -z "$PYTHON_39_EXE" ] || [ -z "$PYTHON_310_EXE" ]; then
-            echo "❌ Failed to parse Python executable paths for priming."
-            exit 1
-          fi
-
-          echo "Priming Python 3.9 environment by forcing KB rebuild..."
-          # This command deletes the old KB and forces a fresh build,
-          # which is exactly what we need to do in the setup phase.
-          if ! "$PYTHON_39_EXE" -m omnipkg.cli reset --yes; then
-            echo "❌ Failed to prime Python 3.9"
-            exit 1
-          fi
-          
-          echo "Priming Python 3.10 environment by forcing KB rebuild..."
-          if ! "$PYTHON_310_EXE" -m omnipkg.cli reset --yes; then
-            echo "❌ Failed to prime Python 3.10"
-            exit 1
-          fi
-          
-          echo "✅ All Python environments have been primed."
-
-      - name: Configure omnipkg and Establish Environment ID
-        id: setup_omnipkg
-        run: |
-          # ... (your existing config.json creation logic) ...
-          
-          # Now, calculate and export the single, authoritative ENV_ID for this entire job
-          ENV_ID=$(python -c "from omnipkg.core import ConfigManager; print(ConfigManager().env_id)")
-          echo "Authoritative Environment ID for this job: $ENV_ID"
-          echo "OMNIPKG_ENV_ID_OVERRIDE=$ENV_ID" >> $GITHUB_ENV
-
-      - name: Adopt All Required Python Versions
         env:
+          # Inject the authoritative ENV_ID into this step
           OMNIPKG_ENV_ID_OVERRIDE: ${{ env.OMNIPKG_ENV_ID_OVERRIDE }}
         run: |
-          echo "--- Adopting Python Versions for Multiverse Test ---"
+          echo "--- Adopting Python Versions ---"
           omnipkg python adopt 3.9
           omnipkg python adopt 3.10
-
+      
       - name: Reset and Prime Environments to Build Knowledge Bases
         env:
+          # Inject the authoritative ENV_ID here as well
           OMNIPKG_ENV_ID_OVERRIDE: ${{ env.OMNIPKG_ENV_ID_OVERRIDE }}
         run: |
           echo "--- Resetting and Priming Python environments ---"
-          PYTHON_39_EXE="..." # Parsing logic here
-          PYTHON_310_EXE="..." # Parsing logic here
+          
+          PYTHON_39_EXE=$(omnipkg info python | grep 'Python 3.9:' | awk '{print $3}')
+          PYTHON_310_EXE=$(omnipkg info python | grep 'Python 3.10:' | awk '{print $3}')
 
-          echo "Priming Python 3.9 environment..."
-          # This now correctly operates on the MAIN environment's config
+          echo "Priming Python 3.9 by forcing KB rebuild..."
+          # This now correctly resets the KB for the main environment ID
           "$PYTHON_39_EXE" -m omnipkg.cli reset --yes
           
-          echo "Priming Python 3.10 environment..."
+          echo "Priming Python 3.10 by forcing KB rebuild..."
           "$PYTHON_310_EXE" -m omnipkg.cli reset --yes
+          
+          echo "✅ All Python environments have been primed."
 
-
-      - name: Pre-Install Packages (Robust)
+      - name: Pre-Install and Verify Test Packages
         env:
+          # And inject it here
           OMNIPKG_ENV_ID_OVERRIDE: ${{ env.OMNIPKG_ENV_ID_OVERRIDE }}
         run: |
-      - name: Pre-Install Packages into All Interpreters (FIXED)
-        run: |
-          echo "--- Pre-installing exact rich versions for each Python context ---"
+          echo "--- Pre-installing exact rich versions ---"
+          PYTHON_39_EXE=$(omnipkg info python | grep 'Python 3.9:' | awk '{print $3}')
+          PYTHON_310_EXE=$(omnipkg info python | grep 'Python 3.10:' | awk '{print $3}')
           
-          # More robust parsing using regex matching
-          PYTHON_39_EXE=""
-          PYTHON_310_EXE=""
+          # Uninstall any existing rich to ensure a clean install, not a bubble
+          "$PYTHON_39_EXE" -m omnipkg.cli uninstall rich --yes || true
+          "$PYTHON_39_EXE" -m omnipkg.cli install rich==13.4.2
           
-          while IFS= read -r line; do
-            if [[ "$line" =~ Python\ 3\.9:\ (.+) ]]; then
-              PYTHON_39_EXE="${BASH_REMATCH[1]}"
-            elif [[ "$line" =~ Python\ 3\.10:\ (.+) ]]; then
-              PYTHON_310_EXE="${BASH_REMATCH[1]}"
-            fi
-          done < <(omnipkg info python)
+          "$PYTHON_310_EXE" -m omnipkg.cli uninstall rich --yes || true
+          "$PYTHON_310_EXE" -m omnipkg.cli install rich==13.6.0
           
-          echo "Parsed Python 3.9 Executable: '$PYTHON_39_EXE'"
-          echo "Parsed Python 3.10 Executable: '$PYTHON_310_EXE'"
-          
-          # Validate that we found the executables
-          if [ -z "$PYTHON_39_EXE" ]; then
-            echo "❌ Failed to find Python 3.9 executable path"
-            exit 1
-          fi
-          
-          if [ -z "$PYTHON_310_EXE" ]; then
-            echo "❌ Failed to find Python 3.10 executable path"
-            exit 1
-          fi
-          
-          # Verify executables exist and are executable
-          if [ ! -x "$PYTHON_39_EXE" ]; then
-            echo "❌ Python 3.9 executable not found or not executable: $PYTHON_39_EXE"
-            exit 1
-          fi
-          
-          if [ ! -x "$PYTHON_310_EXE" ]; then
-            echo "❌ Python 3.10 executable not found or not executable: $PYTHON_310_EXE"
-            exit 1
-          fi
-          
-          echo "✅ Both Python executables verified"
-          
-          # Test executables
-          echo "Testing Python 3.9 executable:"
-          "$PYTHON_39_EXE" --version
-          
-          echo "Testing Python 3.10 executable:"
-          "$PYTHON_310_EXE" --version
-          
-          # Install packages using the specific Python interpreters
-          echo "Installing rich 13.4.2 for Python 3.9..."
-          if ! "$PYTHON_39_EXE" -m omnipkg.cli install rich==13.4.2; then
-            echo "❌ Failed to install rich==13.4.2 for Python 3.9"
-            exit 1
-          fi
-          
-          echo "Installing rich 13.6.0 for Python 3.10..."
-          if ! "$PYTHON_310_EXE" -m omnipkg.cli install rich==13.6.0; then
-            echo "❌ Failed to install rich==13.6.0 for Python 3.10"
-            exit 1
-          fi
-          
-          echo "✅ All packages pre-installed into their respective contexts."
-      
-      - name: Verify Package Installations
-        run: |
           echo "--- Verifying Package Installations ---"
-          
-          # Parse interpreter paths again (could be refactored to use outputs from previous step)
-          PYTHON_39_EXE=""
-          PYTHON_310_EXE=""
-          
-          while IFS= read -r line; do
-            if [[ "$line" =~ Python\ 3\.9:\ (.+) ]]; then
-              PYTHON_39_EXE="${BASH_REMATCH[1]}"
-            elif [[ "$line" =~ Python\ 3\.10:\ (.+) ]]; then
-              PYTHON_310_EXE="${BASH_REMATCH[1]}"
-            fi
-          done < <(omnipkg info python)
-          
-          echo "Verifying rich installation in Python 3.9:"
-          "$PYTHON_39_EXE" -c "import rich; print(f'Rich version: {rich.__version__}')" || echo "❌ Rich not found in Python 3.9"
-          
-          echo "Verifying rich installation in Python 3.10:"
-          "$PYTHON_310_EXE" -c "import rich; print(f'Rich version: {rich.__version__}')" || echo "❌ Rich not found in Python 3.10"
-
-      - name: Manually Clear First-Use State Flags for CI
-        run: |
-          echo "--- Manually clearing .needs_kb_rebuild flag ---"
-          # This is the surgical fix. After the KBs are built, we remove the
-          # flag that triggers the "First use..." message in the test.
-          # This is a safe and necessary step for a CI environment.
-          
-          # We need to find the venv root to locate the flag file
-          VENV_ROOT=$(${{ env.pythonLocation }}/bin/python -c 'import sys; print(sys.prefix)')
-          
-          FLAG_FILE="$VENV_ROOT/.omnipkg/.needs_kb_rebuild"
-          
-          if [ -f "$FLAG_FILE" ]; then
-            echo "   - Found state flag file at $FLAG_FILE"
-            rm "$FLAG_FILE"
-            echo "   - ✅ Successfully removed state flag."
-          else
-            echo "   - ✅ No state flag file found. Environment is clean."
-          fi
+          "$PYTHON_39_EXE" -c "import rich; assert rich.__version__ == '13.4.2'"
+          "$PYTHON_310_EXE" -c "import rich; assert rich.__version__ == '13.6.0'"
+          echo "✅ All packages correctly installed and verified."
       
       - name: Run Quantum Multiverse Demo and Verify
+        env:
+          # And finally, here too.
+          OMNIPKG_ENV_ID_OVERRIDE: ${{ env.OMNIPKG_ENV_ID_OVERRIDE }}
         run: |
-          echo "--- Running Omnipkg Quantum Multiverse Warp Demo (Option 8) ---"
-          # The demo itself is self-contained and manages its own context,
-          # so it can be run directly.
+          echo "--- Running Omnipkg Quantum Multiverse Warp Demo ---"
           echo "8" | omnipkg demo
-      
-      - name: Additional Debug Information (if needed)
-        if: failure()
-        run: |
-          echo "--- Debug Information ---"
-          echo "Python version:"
-          python --version
-          echo "Pip list:"
-          pip list
-          echo "Omnipkg info:"
-          omnipkg info python || true
-          echo "Redis status:"
-          redis-cli ping || true
-          echo "File system check:"
-          find /opt/hostedtoolcache/Python/ -name "*python*" -type f -executable 2>/dev/null | head -20 || true
