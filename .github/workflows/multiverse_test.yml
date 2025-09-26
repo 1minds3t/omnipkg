@@ -164,6 +164,23 @@ jobs:
           
           echo "Verifying rich installation in Python 3.10:"
           "$PYTHON_310_EXE" -c "import rich; print(f'Rich version: {rich.__version__}')" || echo "❌ Rich not found in Python 3.10"
+
+      - name: Prime Python Environments and Build Knowledge Bases
+        run: |
+          echo "--- Priming Python environments to trigger first-use setup ---"
+          
+          # Parse the executable paths (same logic as your other steps)
+          PYTHON_39_EXE=""
+          PYTHON_310_EXE=""
+          while IFS= read -r line; do
+            if [[ "$line" =~ Python\ 3\.9:\ (.+) ]]; then
+              PYTHON_39_EXE="${BASH_REMATCH[1]}"
+            elif [[ "$line" =~ Python\ 3\.10:\ (.+) ]]; then
+              PYTHON_310_EXE="${BASH_REMATCH[1]}"
+            fi
+          done < <(omnipkg info python)
+          
+          echo "Priming Python 3
       
       - name: Run Quantum Multiverse Demo and Verify
         run: |
