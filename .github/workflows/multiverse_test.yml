@@ -1,5 +1,4 @@
 name: "🌠 LIVE - Omnipkg Quantum Multiverse Warp (CORRECTED)"
-
 on:
   push:
     branches: [ main ]
@@ -17,27 +16,43 @@ jobs:
           --health-cmd "redis-cli ping" --health-interval 10s --health-timeout 5s --health-retries 5
         ports:
           - 6379:6379
-
+    
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-
+      
       - name: Set up Python 3.11 (for the main runner)
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-
+      
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -e . redis rich==13.7.1
           
-      # This configuration step is correct and can remain.
       - name: Configure omnipkg for non-interactive use
         run: |
-          # Your existing python script to create the initial config.json is fine.
           python - << 'EOF'
-          # ... (your python config script here) ...
+          import json
+          import os
+          from pathlib import Path
+          
+          # Create omnipkg config directory
+          config_dir = Path.home() / '.omnipkg'
+          config_dir.mkdir(exist_ok=True)
+          
+          # Create basic config
+          config = {
+              "interactive": False,
+              "auto_confirm": True,
+              "redis_url": "redis://localhost:6379"
+          }
+          
+          with open(config_dir / 'config.json', 'w') as f:
+              json.dump(config, f, indent=2)
+          
+          print("✅ Omnipkg configured for non-interactive use")
           EOF
           
       - name: Adopt All Required Python Versions
@@ -46,40 +61,128 @@ jobs:
           omnipkg python adopt 3.9
           omnipkg python adopt 3.10
           echo "All required Python versions have been adopted!"
-
-      - name: Pre-Install Packages into All Interpreters (THE RIGHT WAY)
-        id: preinstall
+      
+      - name: Debug Python Interpreter Paths
+        run: |
+          echo "--- Debugging Python Interpreter Discovery ---"
+          echo "Full omnipkg info python output:"
+          omnipkg info python
+          echo "---"
+          echo "Attempting to parse paths..."
+          omnipkg info python | while read line; do
+            echo "Line: '$line'"
+            if [[ "$line" =~ Python\ ([0-9]+\.[0-9]+):\ (.+) ]]; then
+              version="${BASH_REMATCH[1]}"
+              path="${BASH_REMATCH[2]}"
+              echo "  Parsed - Version: $version, Path: $path"
+            fi
+          done
+      
+      - name: Pre-Install Packages into All Interpreters (FIXED)
         run: |
           echo "--- Pre-installing exact rich versions for each Python context ---"
-
-          # Use omnipkg to get the exact path for each interpreter
-          PYTHON_39_EXE=$(omnipkg info python | grep 'Python 3.9:' | awk '{print $3}')
-          PYTHON_310_EXE=$(omnipkg info python | grep 'Python 3.10:' | awk '{print $3}')
           
-          if [ -z "$PYTHON_39_EXE" ] || [ -z "$PYTHON_310_EXE" ]; then
-            echo "❌ Failed to get interpreter paths from omnipkg info."
+          # More robust parsing using regex matching
+          PYTHON_39_EXE=""
+          PYTHON_310_EXE=""
+          
+          while IFS= read -r line; do
+            if [[ "$line" =~ Python\ 3\.9:\ (.+) ]]; then
+              PYTHON_39_EXE="${BASH_REMATCH[1]}"
+            elif [[ "$line" =~ Python\ 3\.10:\ (.+) ]]; then
+              PYTHON_310_EXE="${BASH_REMATCH[1]}"
+            fi
+          done < <(omnipkg info python)
+          
+          echo "Parsed Python 3.9 Executable: '$PYTHON_39_EXE'"
+          echo "Parsed Python 3.10 Executable: '$PYTHON_310_EXE'"
+          
+          # Validate that we found the executables
+          if [ -z "$PYTHON_39_EXE" ]; then
+            echo "❌ Failed to find Python 3.9 executable path"
             exit 1
           fi
-
-          echo "Found Python 3.9 Executable: $PYTHON_39_EXE"
-          echo "Found Python 3.10 Executable: $PYTHON_310_EXE"
-
-          # --- THIS IS THE CRITICAL FIX ---
-          # Instead of swapping, we now execute omnipkg using the specific Python
-          # interpreter for the context we want to modify. This guarantees that the
-          # command runs in the correct environment.
           
+          if [ -z "$PYTHON_310_EXE" ]; then
+            echo "❌ Failed to find Python 3.10 executable path"
+            exit 1
+          fi
+          
+          # Verify executables exist and are executable
+          if [ ! -x "$PYTHON_39_EXE" ]; then
+            echo "❌ Python 3.9 executable not found or not executable: $PYTHON_39_EXE"
+            exit 1
+          fi
+          
+          if [ ! -x "$PYTHON_310_EXE" ]; then
+            echo "❌ Python 3.10 executable not found or not executable: $PYTHON_310_EXE"
+            exit 1
+          fi
+          
+          echo "✅ Both Python executables verified"
+          
+          # Test executables
+          echo "Testing Python 3.9 executable:"
+          "$PYTHON_39_EXE" --version
+          
+          echo "Testing Python 3.10 executable:"
+          "$PYTHON_310_EXE" --version
+          
+          # Install packages using the specific Python interpreters
           echo "Installing rich 13.4.2 for Python 3.9..."
-          "$PYTHON_39_EXE" -m omnipkg.cli install rich==13.4.2
+          if ! "$PYTHON_39_EXE" -m omnipkg.cli install rich==13.4.2; then
+            echo "❌ Failed to install rich==13.4.2 for Python 3.9"
+            exit 1
+          fi
           
           echo "Installing rich 13.6.0 for Python 3.10..."
-          "$PYTHON_310_EXE" -m omnipkg.cli install rich==13.6.0
+          if ! "$PYTHON_310_EXE" -m omnipkg.cli install rich==13.6.0; then
+            echo "❌ Failed to install rich==13.6.0 for Python 3.10"
+            exit 1
+          fi
           
           echo "✅ All packages pre-installed into their respective contexts."
-
+      
+      - name: Verify Package Installations
+        run: |
+          echo "--- Verifying Package Installations ---"
+          
+          # Parse interpreter paths again (could be refactored to use outputs from previous step)
+          PYTHON_39_EXE=""
+          PYTHON_310_EXE=""
+          
+          while IFS= read -r line; do
+            if [[ "$line" =~ Python\ 3\.9:\ (.+) ]]; then
+              PYTHON_39_EXE="${BASH_REMATCH[1]}"
+            elif [[ "$line" =~ Python\ 3\.10:\ (.+) ]]; then
+              PYTHON_310_EXE="${BASH_REMATCH[1]}"
+            fi
+          done < <(omnipkg info python)
+          
+          echo "Verifying rich installation in Python 3.9:"
+          "$PYTHON_39_EXE" -c "import rich; print(f'Rich version: {rich.__version__}')" || echo "❌ Rich not found in Python 3.9"
+          
+          echo "Verifying rich installation in Python 3.10:"
+          "$PYTHON_310_EXE" -c "import rich; print(f'Rich version: {rich.__version__}')" || echo "❌ Rich not found in Python 3.10"
+      
       - name: Run Quantum Multiverse Demo and Verify
         run: |
           echo "--- Running Omnipkg Quantum Multiverse Warp Demo (Option 8) ---"
           # The demo itself is self-contained and manages its own context,
           # so it can be run directly.
           echo "8" | omnipkg demo
+      
+      - name: Additional Debug Information (if needed)
+        if: failure()
+        run: |
+          echo "--- Debug Information ---"
+          echo "Python version:"
+          python --version
+          echo "Pip list:"
+          pip list
+          echo "Omnipkg info:"
+          omnipkg info python || true
+          echo "Redis status:"
+          redis-cli ping || true
+          echo "File system check:"
+          find /opt/hostedtoolcache/Python/ -name "*python*" -type f -executable 2>/dev/null | head -20 || true
