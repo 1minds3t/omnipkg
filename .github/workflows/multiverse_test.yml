@@ -78,16 +78,13 @@ jobs:
             fi
           done
 
-      - name: Prime Environments to Build Knowledge Bases
+      - name: Reset and Prime Environments to Build Knowledge Bases
         run: |
-          echo "--- Priming Python environments to trigger first-use setup ---"
+          echo "--- Resetting and Priming Python environments to trigger first-use setup ---"
           
-          # Parse the executable paths to ensure we have them
           PYTHON_39_EXE=""
           PYTHON_310_EXE=""
-          
           while IFS= read -r line; do
-            # Use a more robust regex to handle potential extra text like the active star
             if [[ "$line" =~ Python\ 3\.9:\ ([^[:space:]]+) ]]; then
               PYTHON_39_EXE="${BASH_REMATCH[1]}"
             elif [[ "$line" =~ Python\ 3\.10:\ ([^[:space:]]+) ]]; then
@@ -95,23 +92,21 @@ jobs:
             fi
           done < <(omnipkg info python)
           
-          # Check if paths were found
           if [ -z "$PYTHON_39_EXE" ] || [ -z "$PYTHON_310_EXE" ]; then
-            echo "❌ Failed to parse all Python executable paths."
-            omnipkg info python # Print info for debugging
+            echo "❌ Failed to parse Python executable paths for priming."
             exit 1
           fi
 
-          echo "Priming Python 3.9 environment..."
-          # Running a simple command like 'status' from WITHIN the context
-          # is the correct way to trigger the one-time knowledge base build.
-          if ! "$PYTHON_39_EXE" -m omnipkg.cli status; then
+          echo "Priming Python 3.9 environment by forcing KB rebuild..."
+          # This command deletes the old KB and forces a fresh build,
+          # which is exactly what we need to do in the setup phase.
+          if ! "$PYTHON_39_EXE" -m omnipkg.cli reset --yes; then
             echo "❌ Failed to prime Python 3.9"
             exit 1
           fi
           
-          echo "Priming Python 3.10 environment..."
-          if ! "$PYTHON_310_EXE" -m omnipkg.cli status; then
+          echo "Priming Python 3.10 environment by forcing KB rebuild..."
+          if ! "$PYTHON_310_EXE" -m omnipkg.cli reset --yes; then
             echo "❌ Failed to prime Python 3.10"
             exit 1
           fi
