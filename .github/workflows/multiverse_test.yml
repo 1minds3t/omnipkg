@@ -106,8 +106,21 @@ jobs:
           "$PYTHON_310_EXE" -m omnipkg.cli install rich==13.6.0
           
           echo "--- Verifying Package Installations ---"
-          "$PYTHON_39_EXE" -c "import rich; assert rich.__version__ == '13.4.2', f'Wrong version found: {rich.__version__}'"
-          "$PYTHON_310_EXE" -c "import rich; assert rich.__version__ == '13.6.0', f'Wrong version found: {rich.__version__}'"
+          # Fixed version check - use importlib.metadata instead of __version__
+          "$PYTHON_39_EXE" -c "
+          import importlib.metadata
+          version = importlib.metadata.version('rich')
+          assert version == '13.4.2', f'Wrong version found: {version}'
+          print(f'✅ Python 3.9 rich version verified: {version}')
+          "
+          
+          "$PYTHON_310_EXE" -c "
+          import importlib.metadata
+          version = importlib.metadata.version('rich')
+          assert version == '13.6.0', f'Wrong version found: {version}'
+          print(f'✅ Python 3.10 rich version verified: {version}')
+          "
+          
           echo "✅ All packages correctly installed and verified."
       
       - name: Run Quantum Multiverse Demo and Verify
