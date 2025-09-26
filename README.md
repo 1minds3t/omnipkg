@@ -8,8 +8,8 @@
   <p align="center">
     <p align="center">
   <strong><strong>One environment. Infinite package and Python versions. Zero conflicts.</strong>
+    
 <p align="center">
-  
   <!-- Core Project Info -->
       <a href="https://github.com/1minds3t/omnipkg/blob/main/LICENSE">
     <img src="https://img.shields.io/badge/License-AGPLv3-d94c31?logo=gnu" alt="License">
