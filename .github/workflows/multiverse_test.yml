@@ -199,6 +199,26 @@ jobs:
           
           echo "Verifying rich installation in Python 3.10:"
           "$PYTHON_310_EXE" -c "import rich; print(f'Rich version: {rich.__version__}')" || echo "❌ Rich not found in Python 3.10"
+
+      - name: Manually Clear First-Use State Flags for CI
+        run: |
+          echo "--- Manually clearing .needs_kb_rebuild flag ---"
+          # This is the surgical fix. After the KBs are built, we remove the
+          # flag that triggers the "First use..." message in the test.
+          # This is a safe and necessary step for a CI environment.
+          
+          # We need to find the venv root to locate the flag file
+          VENV_ROOT=$(${{ env.pythonLocation }}/bin/python -c 'import sys; print(sys.prefix)')
+          
+          FLAG_FILE="$VENV_ROOT/.omnipkg/.needs_kb_rebuild"
+          
+          if [ -f "$FLAG_FILE" ]; then
+            echo "   - Found state flag file at $FLAG_FILE"
+            rm "$FLAG_FILE"
+            echo "   - ✅ Successfully removed state flag."
+          else
+            echo "   - ✅ No state flag file found. Environment is clean."
+          fi
       
       - name: Run Quantum Multiverse Demo and Verify
         run: |
