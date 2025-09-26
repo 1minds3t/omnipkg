@@ -3211,7 +3211,7 @@ class omnipkg:
         safe_print(_("\n🎉 Pruning complete for '{}'.").format(c_name))
         return 0
 
-    def check_and_run_pending_rebuild(self) -> bool:
+    def _check_and_run_pending_rebuild(self) -> bool:
         """
         Checks for a flag file indicating a new interpreter needs its KB built.
         If the current context matches a version in the flag, it runs the build.
