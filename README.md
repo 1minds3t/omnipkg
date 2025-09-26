@@ -9,6 +9,7 @@
     <p align="center">
   <strong><strong>One environment. Infinite package and Python versions. Zero conflicts.</strong>
 <p align="center">
+  
   <!-- Core Project Info -->
       <a href="https://github.com/1minds3t/omnipkg/blob/main/LICENSE">
     <img src="https://img.shields.io/badge/License-AGPLv3-d94c31?logo=gnu" alt="License">
@@ -62,6 +63,9 @@
 </p>
 <p align="center">
   <!-- Key Features -->
+    <a href="https://github.com/1minds3t/omnipkg/actions/workflows/multiverse_test.yml">
+    <img src="https://img.shields.io/badge/<600ms 3 Py Interps 1 Script 1 Env-passing-success?logo=python&logoColor=white" alt="Concurrent Python Interpreters">
+  </a>
   <a href="https://github.com/1minds3t/omnipkg/actions/workflows/numpy_scipy_test.yml">
     <img src="https://img.shields.io/badge/🚀0.25s_Live_NumPy+SciPy_Hot--Swapping-passing-success?logo=github-actions" alt="Hot-Swapping">
   </a>
@@ -88,7 +92,7 @@ Born from a real-world nightmare—a forced downgrade that wrecked a production 
 <!-- COMPARISON_STATS_START -->
 ## ⚖️ Multi-Version Support
 
-[![omnipkg](https://img.shields.io/badge/omnipkg-743%20Wins-brightgreen?logo=python&logoColor=white)](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml) [![pip](https://img.shields.io/badge/pip-746%20Failures-red?logo=pypi&logoColor=white)](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml) [![uv](https://img.shields.io/badge/uv-746%20Failures-red?logo=python&logoColor=white)](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml)
+[![omnipkg](https://img.shields.io/badge/omnipkg-742%20Wins-brightgreen?logo=python&logoColor=white)](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml) [![pip](https://img.shields.io/badge/pip-745%20Failures-red?logo=pypi&logoColor=white)](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml) [![uv](https://img.shields.io/badge/uv-745%20Failures-red?logo=python&logoColor=white)](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml)
 
 *Multi-version installation tests run hourly. [Live results here.](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml)*
 
@@ -102,10 +106,10 @@ Born from a real-world nightmare—a forced downgrade that wrecked a production 
 
 **The Multi-Interpreter Wall is Gone**: Legacy codebases often require older Python versions (e.g., Django on 3.8) while modern ML demands the latest (Python 3.11+). This forces developers to constantly manage and switch between separate, isolated environments, killing productivity.
 
-**The `omnipkg` Solution: One Environment, Every Reality, Concurrently.**
+**The `omnipkg` Solution: One Environment, Infinite Python Versions & Packages, Zero Conflicts, Downtime, or Setup. Faster than UV.**
 
 `omnipkg` doesn't just solve these problems—it makes them irrelevant.
-*   **Run Concurrently:** Execute tests for Python 3.9, 3.10, and 3.11 **at the same time, from one command**. No more sequential CI jobs.
+*   **Run Concurrently:** Execute tests for Python 3.9, 3.10, and 3.11 **at the same time, from one command, test is done in under 500ms**. No more sequential CI jobs.
 *   **Switch Mid-Script:** Seamlessly use `torch==2.0.0` and `torch==2.7.1` in the same script without restarting.
 *   **Instant Healing:** Recover from environment damage in microseconds, not hours.
 *   **Speak Your Language:** All of this, in your native tongue.
@@ -116,26 +120,24 @@ This is the new reality: one environment, one script, everything **just works**.
 
 ## 🧠 Revolutionary Core Features
 
-### 1. Multiverse Orchestration & Python Hot-Swapping [![🐍 Multi-Interpreter Freedom](https://img.shields.io/badge/🐍_Multi--Interpreter_Freedom-Live-orange?logo=python&logoColor=white)](https://github.com/1minds3t/omnipkg/releases)
+### 1. Multiverse Orchestration & Python Hot-Swapping [![<600ms 3 Py Interps 1 Script 1 Env](https://img.shields.io/badge/<600ms%203%20Py%20Interps%201%20Script%201%20Env-passing-success?logo=python&logoColor=white)](https://github.com/1minds3t/omnipkg/actions/workflows/multiverse_test.yml)
 
-## The "Quantum Multiverse Warp": Doing The Impossible in Half a Second
+## The "Quantum Multiverse Warp": 3 Pythons, 1 Script, < 600ms
 
-Our "Quantum Multiverse Warp" demo executes a single script across three different Python interpreters and three package versions **concurrently** in the same environment. The results are not just fast; they redefine what's possible.
+Our "Quantum Multiverse Warp" demo, validated live in our CI, executes a single script across three different Python interpreters and three package versions **concurrently** in the same environment. The results are not just fast; they redefine what's possible for CI/CD.
 
 | Task (Same Script, Same Environment) | Execution Time |
 | ------------------------------------ | :------------: |
-| 🧵 **Thread 1:** Python 3.9 + Rich 13.4.2  | ✅ **397.1ms**   |
-| 🧵 **Thread 2:** Python 3.10 + Rich 13.6.0 | ✅ **431.8ms**   |
-| 🧵 **Thread 3:** Python 3.11 + Rich 13.7.1 | ✅ **541.4ms**   |
-| 🏆 **Total Concurrent Runtime**        | **542.5ms**      |
+| 🧵 **Thread 1:** Python 3.9 + Rich 13.4.2  | ✅ **579.6ms**   |
+| 🧵 **Thread 2:** Python 3.10 + Rich 13.6.0 | ✅ **548.4ms**   |
+| 🧵 **Thread 3:** Python 3.11 + Rich 13.7.1 | ✅ **571.8ms**   |
+| 🏆 **Total Concurrent Runtime**        | **580.1ms**      |
 
-This isn't just a speedup; it's a paradigm shift. What traditionally takes minutes with Docker or complex venv scripting, `omnipkg` accomplishes in **just over 500 milliseconds**. It's not a simulation; it's a new reality for high-performance Python CI/CD.
+This isn't just a speedup; it's a paradigm shift. What traditionally takes minutes with Docker or complex venv scripting, `omnipkg` accomplishes in **under 600 milliseconds**. This isn't a simulation; it's a live, production-ready capability for high-performance Python automation.
 
-Don't believe it? Select **Demo 8** for the "Quantum Multiverse Warp" to see the impossible happen in real-time.
-
+Don't believe it? See the live proof, then run **Demo 8** to experience it yourself.
 ```bash
 uv pip install omnipkg && omnipkg demo
-```
 
 **Live CI Output from Multiverse Analysis:**
 ```bash
@@ -329,6 +331,8 @@ Ready to end dependency hell?
 
 ### Installation Options
 
+**Available via UV, pip, conda-forge, Docker, brew, Github, and piwheels, support for Linux, Windows, Mac, and Rasperry Pi**
+
 #### ⚡ UV 
 
 <a href="https://github.com/astral-sh/uv">
@@ -347,18 +351,6 @@ uv pip install omnipkg
   
 ```bash
 pip install omnipkg
-```
-
-#### 🥧 piwheels (for Raspberry Pi)
-
-<a href="https://www.piwheels.org/project/omnipkg/">
-  <img src="https://img.shields.io/badge/piwheels-install-97BF0D?logo=raspberrypi&logoColor=white" alt="piwheels Install">
-</a>
-
-For users on Raspberry Pi, you can use the optimized wheels from piwheels for faster installation.
-
-```bash
-pip install --index-url=https://www.piwheels.org/simple/ omnipkg
 ```
 
 #### 🏠 Official Conda-Forge Channel
@@ -389,14 +381,6 @@ conda install -c minds3t omnipkg
 mamba install -c minds3t omnipkg
 ```
 
-#### 🍺 Homebrew
-```bash
-# Add the tap first
-brew tap 1minds3t/omnipkg
-# Install omnipkg
-brew install omnipkg
-```
-
 #### 🐋 Docker 
 <a href="https://hub.docker.com/r/1minds3t/omnipkg">
   <img src="https://img.shields.io/docker/pulls/1minds3t/omnipkg?logo=docker" alt="Docker Pulls">
@@ -408,6 +392,26 @@ docker pull 1minds3t/omnipkg:latest
 
 # Pull from GitHub Container Registry (GHCR)
 docker pull ghcr.io/1minds3t/omnipkg:latest
+```
+
+#### 🍺 Homebrew
+```bash
+# Add the tap first
+brew tap 1minds3t/omnipkg
+# Install omnipkg
+brew install omnipkg
+```
+
+#### 🥧 piwheels (for Raspberry Pi)
+
+<a href="https://www.piwheels.org/project/omnipkg/">
+  <img src="https://img.shields.io/badge/piwheels-install-97BF0D?logo=raspberrypi&logoColor=white" alt="piwheels Install">
+</a>
+
+For users on Raspberry Pi, you can use the optimized wheels from piwheels for faster installation.
+
+```bash
+pip install --index-url=https://www.piwheels.org/simple/ omnipkg
 ```
 
 ### 🌱 GitHub
@@ -586,21 +590,24 @@ This project thrives on community collaboration. Contributions, bug reports, and
 ## Dev Humor
 
 ```
- _______________________________________________
-/ pip:    "Version conflicts? New env or bust!" \
-| Docker: "Spin up containers for 45s each!"    |
-| venv:   "90s of setup for one Python version!"|
-|                                               |
-| omnipkg: *runs 3 Python versions concurrently |
-| in 0.5s, heals ghosts, caches in 50ms*       |
-|           "Hold my multiverse—I'm             |
-|            rewriting physics!"                |
-\_______________________________________________/
+ ________________________________________________________________
+/                                                                \
+| pip:    "Version conflicts? New env please!"                   |
+| Docker: "Spin up containers for 45s each!"                     |
+| venv:   "90s of setup for one Python version!"                 |
+|                                                                |
+| omnipkg: *runs 3 Python versions concurrently in 580ms,        |
+|           caches installs in 50ms*                             |
+|                                                                |
+|          "Hold my multiverse—I just ran your entire            |
+|           CI matrix faster than you blinked."                  |
+\________________________________________________________________/
         \   ^__^
          \  (🐍)\_______
             (__)\       )\/\
                 ||----w |
                 ||     ||
 
+                ~ omnipkg: The Multiverse Package Manager ~
 ```
 
