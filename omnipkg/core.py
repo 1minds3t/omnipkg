@@ -3211,7 +3211,7 @@ class omnipkg:
         safe_print(_("\n🎉 Pruning complete for '{}'.").format(c_name))
         return 0
 
-    def _check_and_run_pending_rebuild(self) -> bool:
+    def check_and_run_pending_rebuild(self) -> bool:
         """
         Checks for a flag file indicating a new interpreter needs its KB built.
         If the current context matches a version in the flag, it runs the build.
@@ -3220,12 +3220,15 @@ class omnipkg:
         flag_file = self.config_manager.venv_path / '.omnipkg' / '.needs_kb_rebuild'
         if not flag_file.exists():
             return False
+        
         configured_exe = self.config.get('python_executable')
         version_tuple = self.config_manager._verify_python_version(configured_exe)
         if not version_tuple:
             return False
+        
         current_version_str = f'{version_tuple[0]}.{version_tuple[1]}'
         lock_file = self.config_manager.venv_path / '.omnipkg' / '.needs_kb_rebuild.lock'
+        
         with FileLock(lock_file):
             versions_to_rebuild = []
             try:
@@ -3234,34 +3237,31 @@ class omnipkg:
             except (json.JSONDecodeError, IOError):
                 flag_file.unlink(missing_ok=True)
                 return False
+            
             if current_version_str in versions_to_rebuild:
                 safe_print(_('💡 First use of Python {} detected.').format(current_version_str))
-                safe_print(_('   Building its knowledge base now...'))
+                safe_print(_(' Building its knowledge base now...'))
+                
                 rebuild_status = self.rebuild_knowledge_base(force=True)
-                if rebuild_status != 0:
-                    return 1 # Return failure if the rebuild failed
-
-                # --- THIS IS THE NEW, CORRECT LOGIC YOU SUGGESTED ---
-                # After a successful reset in a non-interactive context, the "first use" is
-                # officially complete. We now automatically clear the flag.
-                if self.config.get('auto_confirm', False) or force:
-                    configured_exe = self.config.get('python_executable')
-                    version_tuple = self.config_manager._verify_python_version(configured_exe)
-                    if version_tuple:
-                        current_version_str = f'{version_tuple[0]}.{version_tuple[1]}'
-                        self.config_manager._clear_rebuild_flag_for_version(current_version_str)
+                
                 if rebuild_status == 0:
+                    # --- NEW LOGIC: Clear rebuild flag after successful rebuild ---
+                    # After a successful rebuild, automatically clear the rebuild flag
+                    # This prevents repeated rebuilds on subsequent runs
+                    self.config_manager._clear_rebuild_flag_for_version(current_version_str)
                     versions_to_rebuild.remove(current_version_str)
                     if not versions_to_rebuild:
                         flag_file.unlink(missing_ok=True)
                     else:
                         with open(flag_file, 'w') as f:
                             json.dump(versions_to_rebuild, f)
-                    safe_print(f'   ✅ Knowledge base for Python {current_version_str} is ready.')
+                    
+                    safe_print(f' ✅ Knowledge base for Python {current_version_str} is ready.')
                     return True
                 else:
-                    safe_print(_('   ❌ Failed to build knowledge base. It will be re-attempted on the next run.'))
+                    safe_print(_(' ❌ Failed to build knowledge base. It will be re-attempted on the next run.'))
                     return False
+        
         return False
 
     def _repair_manifest_context_mismatch(self, dist: importlib.metadata.Distribution, current_python_version: str) -> bool:
