@@ -193,9 +193,7 @@ class ConfigManager:
 
     def _clear_rebuild_flag_for_version(self, version_str: str):
         """
-        Removes a specific version from the .needs_kb_rebuild flag file.
-        This is called after a successful manual rebuild (like reset --yes)
-        to prevent a redundant "first-use" build later.
+        Surgically removes a specific version from the .needs_kb_rebuild flag file.
         """
         flag_file = self.venv_path / '.omnipkg' / '.needs_kb_rebuild'
         if not flag_file.exists():
@@ -212,15 +210,11 @@ class ConfigManager:
                     safe_print(f"   -> Automatically clearing 'first use' flag for Python {version_str}...")
                     
                     if not versions_to_rebuild:
-                        # If the list is empty, delete the file entirely.
                         flag_file.unlink()
                     else:
-                        # Otherwise, write the modified list back.
                         with open(flag_file, 'w') as f:
                             json.dump(versions_to_rebuild, f)
             except (json.JSONDecodeError, IOError, Exception):
-                # If we fail to read/write, it's safer to just remove the flag file.
-                safe_print(f"   -> Warning: Could not cleanly update flag file. Removing it to be safe.")
                 flag_file.unlink(missing_ok=True)
 
     def _peek_config_for_flag(self, flag_name: str) -> bool:
@@ -3115,11 +3109,13 @@ class omnipkg:
                 version_tuple = self.config_manager._verify_python_version(configured_exe)
                 if version_tuple:
                     current_version_str = f'{version_tuple[0]}.{version_tuple[1]}'
+                    # NOTE: You will need to add the _clear_rebuild_flag_for_version
+                    # helper method to your ConfigManager class for this to work.
                     self.config_manager._clear_rebuild_flag_for_version(current_version_str)
             except Exception as e:
-                # This is a non-critical cleanup; log a warning but don't fail.
+                # This is a non-critical cleanup; log a warning but don't fail the command.
                 safe_print(f"   - ⚠️  Warning: Could not automatically clear first-use flag: {e}")
-                
+            
         # 3. Return the original status of the rebuild operation.
         return rebuild_status
 
