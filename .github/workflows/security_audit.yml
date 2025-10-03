@@ -20,9 +20,9 @@ jobs:
         with:
           python-version: '3.11'
       
-      - name: Upgrade pip to patched version
+      - name: Install safe pip version (before GHSA-4xh5-x5gv-qwph)
         run: |
-          python -m pip install --upgrade "pip>=25.3"
+          python -m pip install "pip==25.1.1"
       
       - name: Install build tools
         run: |
@@ -34,8 +34,3 @@ jobs:
       
       - name: Run pip-audit
         uses: pypa/gh-action-pip-audit@v1.1.0
-        with:
-          # Ignore vulnerabilities in pip itself since we've upgraded it
-          # and the action may use its own pip version
-          ignore-vulns: |
-            GHSA-4xh5-x5gv-qwph
