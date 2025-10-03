@@ -2683,6 +2683,32 @@ class omnipkg:
         self.hook_manager.install_import_hook()
         safe_print(_('✅ Omnipkg core initialized successfully.'))
 
+    def _get_omnipkg_version_from_site_packages(self, site_packages_path: str) -> str:
+        """
+        Gets omnipkg version directly from dist-info in a specific site-packages.
+        This is the only reliable way to check the true installed version in another context.
+        """
+        try:
+            site_pkg = Path(site_packages_path)
+            dist_info_dirs = list(site_pkg.glob('omnipkg-*.dist-info'))
+            if not dist_info_dirs:
+                return 'not-installed'
+            
+            # Find the highest version if multiple exist
+            dist_info_dirs.sort(key=lambda p: parse_version(p.name.split('-')[1]), reverse=True)
+            metadata_file = dist_info_dirs[0] / 'METADATA'
+            
+            if metadata_file.exists():
+                with open(metadata_file, 'r') as f:
+                    for line in f:
+                        if line.lower().startswith('version:'):
+                            return line.split(':', 1)[1].strip()
+            
+            # Fallback if METADATA is weird
+            return dist_info_dirs[0].name.split('-')[1]
+        except Exception:
+            return 'unknown'
+
     def _prime_loader_cache(self):
         """
         (NEW) Proactively builds the omnipkgLoader dependency cache if it doesn't
@@ -2719,87 +2745,67 @@ class omnipkg:
 
     def _self_heal_omnipkg_installation(self):
         """
-        Detects and automatically repairs inconsistencies between the running omnipkg version
-        and the version installed in the target Python context. Now includes a smarter
-        check to avoid unnecessary healing attempts in developer environments.
+        Ensures the target Python context is running the correct developer version of omnipkg
+        by asking the interpreter directly for its version in a clean environment.
         """
         try:
-            def _print_healing_header(title):
-                safe_print('\n' + '=' * 60)
-                safe_print(f'  🚀 {title}')
-                safe_print('=' * 60)
+            # The master version is the one from the source code (pyproject.toml).
+            master_version_str = _get_dynamic_omnipkg_version()
+            if master_version_str in ['unknown', 'unknown-dev']:
+                return # Not a dev environment, do nothing.
 
-            # 1. Get the version of the code that is currently executing.
-            running_version = _get_dynamic_omnipkg_version()
-            if running_version in ['unknown', 'unknown-dev']: return
+            # Get the Python executable for the context we are about to operate in.
+            target_exe = self.config_manager.config.get('python_executable')
+            if not target_exe:
+                return # Cannot heal without a configured target.
 
-            # 2. Get the Python executable for the target context.
-            configured_exe = self.config.get('python_executable', sys.executable)
-            
-            # 3. Ask the target context what version it has formally installed.
-            context_version = None
+            # Ask the target interpreter directly what version of omnipkg it sees.
+            target_version_str = 'unknown'
             try:
-                cmd = [configured_exe, '-m', 'pip', 'show', 'omnipkg']
-                result = subprocess.run(cmd, capture_output=True, text=True, check=True, timeout=10)
-                match = re.search(r"^Version:\s*(.*)$", result.stdout, re.MULTILINE)
-                if match: context_version = match.group(1).strip()
-            except (subprocess.CalledProcessError, FileNotFoundError):
-                context_version = None
+                # --- THIS IS THE CRITICAL FIX ---
+                # Create a clean environment for the subprocess, without PYTHONPATH,
+                # to prevent the parent's editable install from contaminating the check.
+                clean_env = os.environ.copy()
+                clean_env.pop('PYTHONPATH', None)
+                
+                cmd = [target_exe, "-c", "from omnipkg import __version__; print(__version__)"]
+                # Run the check in the clean environment.
+                result = subprocess.run(cmd, capture_output=True, text=True, check=True, timeout=5, env=clean_env)
+                # --- END OF FIX ---
+                target_version_str = result.stdout.strip()
+            except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired):
+                target_version_str = 'not-installed'
             
-            # 4. If versions are identical, everything is perfect. We're done.
-            if running_version == context_version:
+            # If the versions match, we are in sync. Nothing to do.
+            if target_version_str == master_version_str:
                 return
 
-            # 5. Versions mismatch. Before we panic, do a smarter check:
-            #    Can the target context IMPORT omnipkg anyway (e.g., from an editable install)?
-            can_import_omnipkg = False
-            try:
-                # We ask the target python to try importing omnipkg. If this works, we don't need to heal.
-                importer_cmd = [configured_exe, '-c', 'import omnipkg; print(omnipkg.__version__)']
-                importer_result = subprocess.run(importer_cmd, capture_output=True, text=True, check=True, timeout=5)
-                # If the imported version matches our running version, it's a valid editable install.
-                if importer_result.stdout.strip() == running_version:
-                    can_import_omnipkg = True
-            except (subprocess.CalledProcessError, FileNotFoundError):
-                can_import_omnipkg = False
-
-            # If it can be imported correctly, we don't need to heal.
-            if can_import_omnipkg:
-                return
-
-            # 6. OK, it's truly broken. Versions mismatch AND it's not importable. NOW we heal.
-            _print_healing_header("omnipkg Self-Healing")
-            context_py_ver_tuple = self.config_manager._verify_python_version(configured_exe)
-            context_py_ver_str = f"Python {context_py_ver_tuple[0]}.{context_py_ver_tuple[1]}" if context_py_ver_tuple else "Target"
-            
-            safe_print(_("  - Mismatch Detected:"))
-            safe_print(_("    - Running Code Version : {}").format(running_version))
-            safe_print(_("    - {} Context Version: {}").format(context_py_ver_str, context_version or "Not Installed"))
-            safe_print(_("  - Synchronizing to ensure context is aware of the running code..."))
+            # --- HEALING IS REQUIRED ---
+            safe_print('\n' + '=' * 60)
+            safe_print("🔧 OMNIPKG AUTO-SYNC: Aligning Context")
+            safe_print('=' * 60)
+            safe_print(f"  - Source Code Version : {master_version_str}")
+            safe_print(f"  - Target Context      : {target_version_str} (Stale)")
+            safe_print(f"  - Synchronizing target Python context...")
 
             project_root = self.config_manager._find_project_root()
             if not project_root:
-                safe_print(_("  - ⚠️ WARNING: Cannot self-heal automatically. Not running from a developer source checkout."))
+                safe_print("  - ❌ Could not find project root. Cannot perform developer auto-sync.")
                 return
 
-            heal_cmd = [configured_exe, '-m', 'pip', 'install', '--disable-pip-version-check', '-e', str(project_root)]
-            safe_print(f"  - Executing: {' '.join(heal_cmd)}")
-            
-            heal_result = subprocess.run(heal_cmd, capture_output=True, text=True, timeout=120)
+            # Use the TARGET python executable to install the editable version into ITSELF.
+            heal_cmd = [target_exe, '-m', 'pip', 'install', '--no-deps', '-e', str(project_root)]
+            result = subprocess.run(heal_cmd, capture_output=True, text=True)
 
-            if heal_result.returncode == 0:
-                safe_print(_("  - ✅ Self-healing successful. Context is now synchronized."))
-                safe_print(_("  - Forcing a knowledge base rebuild for the updated context..."))
-                self.rebuild_knowledge_base(force=True)
-            else:
-                safe_print(_("  - ❌ Self-healing FAILED. This can happen due to dependency conflicts."))
-                safe_print(_("  - Details:"))
-                safe_print(heal_result.stderr)
+            if result.returncode != 0:
+                safe_print("  - ❌ FATAL: Auto-sync failed.")
+                safe_print(result.stderr)
+                sys.exit(1)
+
+            safe_print("  - ✅ Sync successful!")
 
         except Exception as e:
             safe_print(f"  - ⚠️  An unexpected error occurred during self-healing: {e}")
-            import traceback
-            traceback.print_exc()
 
     def _perform_redis_key_migration(self, migration_flag_key: str):
         """
@@ -2809,7 +2815,7 @@ class omnipkg:
         """
         safe_print('🔧 Performing one-time Knowledge Base upgrade for multi-environment support...')
         old_prefix = 'omnipkg:pkg:'
-        
+    
         # This uses your existing property to get the correct new prefix
         new_prefix_for_current_env = self.redis_key_prefix
         
@@ -3245,10 +3251,8 @@ class omnipkg:
                 rebuild_status = self.rebuild_knowledge_base(force=True)
                 
                 if rebuild_status == 0:
-                    # --- NEW LOGIC: Clear rebuild flag after successful rebuild ---
-                    # After a successful rebuild, automatically clear the rebuild flag
-                    # This prevents repeated rebuilds on subsequent runs
-                    self.config_manager._clear_rebuild_flag_for_version(current_version_str)
+                    # After a successful rebuild, update the flag file directly
+                    # since we already hold the lock.
                     versions_to_rebuild.remove(current_version_str)
                     if not versions_to_rebuild:
                         flag_file.unlink(missing_ok=True)
@@ -4592,7 +4596,7 @@ class omnipkg:
             return result
         source_exe_path = Path(source_path_str)
         try:
-            cmd = [str(source_exe_path), '-c', 'import sys; safe_print(sys.prefix)']
+            cmd = [str(source_exe_path), '-c', 'import sys; print(sys.prefix)']
             cmd_result = subprocess.run(cmd, capture_output=True, text=True, check=True, timeout=10)
             source_root = Path(os.path.realpath(cmd_result.stdout.strip()))
             current_venv_root = self.config_manager.venv_path.resolve()
@@ -5524,6 +5528,7 @@ class omnipkg:
         
         return None
 
+
     def _backup_corrupted_file(self, file_path: str, backup_base_dir: Optional[str] = None) -> bool:
         """
         Create a backup of a corrupted file before removal.
@@ -5548,14 +5553,13 @@ class omnipkg:
             backup_path = os.path.join(timestamp_dir, os.path.basename(file_path))
             shutil.copy2(file_path, backup_path)
             
-            print(f"   - 💾 Backed up corrupted file to: {backup_path}")
+            safe_print(f"   - 💾 Backed up corrupted file to: {backup_path}")
             return True
             
         except Exception as e:
-            print(f"   - ⚠️  Failed to backup {file_path}: {e}")
+            safe_print(f"   - ⚠️  Failed to backup {file_path}: {e}")
             return False
-
-
+            
     def _run_conda_with_healing(self, cmd_args: List[str], max_attempts: int = 3) -> subprocess.CompletedProcess:
         """
         Run a conda command with automatic corruption healing.
@@ -5592,15 +5596,15 @@ class omnipkg:
                 corrupted_file, env_location = corruption_info
                 
                 if attempt < max_attempts - 1:  # Don't heal on the last attempt
-                    print(f"\n🛡️  AUTO-HEAL: Detected corruption (attempt {attempt + 1}/{max_attempts})")
-                    print(f"   - 💀 Corrupted file: {os.path.basename(corrupted_file)}")
+                    safe_print(f"\n🛡️  AUTO-HEAL: Detected corruption (attempt {attempt + 1}/{max_attempts})")
+                    safe_print(f"   - 💀 Corrupted file: {os.path.basename(corrupted_file)}")
                     
                     # Backup and remove the corrupted file
                     if self._backup_corrupted_file(corrupted_file):
                         try:
                             if os.path.exists(corrupted_file):
                                 os.unlink(corrupted_file)
-                                print(f"   - 🗑️  Removed corrupted file")
+                                safe_print(f"   - 🗑️  Removed corrupted file")
                             
                             # Also clean up any related .pyc files
                             corrupted_dir = os.path.dirname(corrupted_file)
@@ -5608,24 +5612,24 @@ class omnipkg:
                                 for pyc_file in Path(corrupted_dir).glob("*.pyc"):
                                     pyc_file.unlink()
                             
-                            print(f"   - 🔄 Retrying conda command...")
+                            safe_print(f"   - 🔄 Retrying conda command...")
                             
                         except Exception as e:
-                            print(f"   - ❌ Failed to remove corrupted file: {e}")
+                            safe_print(f"   - ❌ Failed to remove corrupted file: {e}")
                             return proc
                 else:
-                    print(f"❌ Max repair attempts ({max_attempts}) reached. Manual intervention needed.")
+                    safe_print(f"❌ Max repair attempts ({max_attempts}) reached. Manual intervention needed.")
                     return proc
                     
             except subprocess.TimeoutExpired:
-                print("❌ Conda command timed out")
+                safe_print("❌ Conda command timed out")
                 raise
             except Exception as e:
-                print(f"❌ Error running conda command: {e}")
+                safe_print(f"❌ Error running conda command: {e}")
                 raise
         
         return proc  # Should never reach here, but just in case
-
+        
     def _heal_conda_environment(self, also_run_clean: bool = True):
         """
         Enhanced conda environment healing that combines proactive scanning 
@@ -5648,8 +5652,8 @@ class omnipkg:
         if not conda_meta_path.is_dir():
             return  # No metadata directory
         
-        print('\n' + '─' * 60)
-        print("🛡️  AUTO-HEAL: Scanning conda environment for corruption...")
+        safe_print('\n' + '─' * 60)
+        safe_print("🛡️  AUTO-HEAL: Scanning conda environment for corruption...")
         
         # Proactive scan for corrupted files
         corrupted_files_found = []
@@ -5679,37 +5683,37 @@ class omnipkg:
                 # Other errors ignored, only care about JSON corruption
                 continue
         
-        print(f"   - 📊 Scanned {total_files} metadata files")
+        safe_print(f"   - 📊 Scanned {total_files} metadata files")
         
         if not corrupted_files_found:
-            print("   - ✅ No corruption detected in conda metadata")
-            print('─' * 60)
+            safe_print("   - ✅ No corruption detected in conda metadata")
+            safe_print('─' * 60)
             return
         
         # Healing process
-        print(f"   - 💀 Found {len(corrupted_files_found)} corrupted file(s)")
+        safe_print(f"   - 💀 Found {len(corrupted_files_found)} corrupted file(s)")
         backup_dir = Path.home() / ".omnipkg" / "conda-backups" / str(int(time.time()))
         
         cleaned_count = 0
         for corrupted_file in corrupted_files_found:
             file_name = os.path.basename(corrupted_file)
-            print(f"      -> Processing: {file_name}")
+            safe_print(f"      -> Processing: {file_name}")
             
             if self._backup_corrupted_file(corrupted_file, str(backup_dir.parent)):
                 try:
                     if os.path.exists(corrupted_file):
                         os.unlink(corrupted_file)
                         cleaned_count += 1
-                        print(f"         ✅ Removed corrupted file")
+                        safe_print(f"         ✅ Removed corrupted file")
                 except Exception as e:
-                    print(f"         ❌ Failed to remove: {e}")
+                    safe_print(f"         ❌ Failed to remove: {e}")
         
         if cleaned_count > 0:
-            print(f"   - 🧹 Successfully cleaned {cleaned_count} corrupted file(s)")
+            safe_print(f"   - 🧹 Successfully cleaned {cleaned_count} corrupted file(s)")
             
             # Optionally run conda clean to clear caches
             if also_run_clean:
-                print("   - 🧽 Running conda clean to clear caches...")
+                safe_print("   - 🧽 Running conda clean to clear caches...")
                 try:
                     clean_proc = subprocess.run(
                         ["conda", "clean", "--all", "--yes"],
@@ -5718,17 +5722,16 @@ class omnipkg:
                         timeout=60
                     )
                     if clean_proc.returncode == 0:
-                        print("      ✅ Conda clean completed successfully")
+                        safe_print("      ✅ Conda clean completed successfully")
                     else:
-                        print(f"      ⚠️  Conda clean had issues: {clean_proc.stderr}")
+                        safe_print(f"      ⚠️  Conda clean had issues: {clean_proc.stderr}")
                 except Exception as e:
-                    print(f"      ❌ Error running conda clean: {e}")
+                    safe_print(f"      ❌ Error running conda clean: {e}")
             
-            print("   - 💡 Conda environment should now be stable")
+            safe_print("   - 💡 Conda environment should now be stable")
         
-        print('─' * 60)
-
-
+        safe_print('─' * 60)
+        
     def safe_conda_command(self, cmd_args: List[str], max_heal_attempts: int = 2) -> bool:
         """
         Wrapper function to run conda commands with automatic healing.
@@ -5750,11 +5753,11 @@ class omnipkg:
             if proc.returncode == 0:
                 return True
             else:
-                print(f"❌ Conda command failed: {proc.stderr}")
+                safe_print(f"❌ Conda command failed: {proc.stderr}")
                 return False
                 
         except Exception as e:
-            print(f"❌ Exception during conda command: {e}")
+            safe_print(f"❌ Exception during conda command: {e}")
             return False
 
     
