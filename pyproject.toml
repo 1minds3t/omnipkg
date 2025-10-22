@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "omnipkg"
-version = "1.5.4"
+version = "1.5.5"
 authors = [
   { name = "1minds3t", email = "1minds3t@proton.me" },
 ]
@@ -35,7 +35,7 @@ dependencies = [
     # Use older packaging on Python 3.9 to match the older safety dependency
     "packaging<22.0,>=21.0; python_version < '3.10'",
     "requests>=2.20",
-    "authlib>=1.6.4",
+    "authlib>=1.6.5",
     "filelock>=3.9",
     "tomli; python_version < '3.11'",
     "safety>=2.3.5,<3.0; python_version < '3.10'",
