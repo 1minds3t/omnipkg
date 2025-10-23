@@ -513,8 +513,9 @@ def main():
             safe_print(_('6. Flask test (under construction)'))
             safe_print(_('7. Auto-healing Test (omnipkg run)')) # <--- ADD THIS
             safe_print(_('8. 🌠 Quantum Multiverse Warp (Concurrent Python Installations)'))
+            safe_print(_('9. Flask Port Finder Test (auto-healing with Flask)')) # <--- ADD THIS
             try:
-                response = input(_('Enter your choice (1-8): ')).strip()
+                response = input(_('Enter your choice (1-9): ')).strip()
             except EOFError:
                 response = ''
             test_file = None
@@ -533,7 +534,7 @@ def main():
             elif response == '3':
                 if not handle_python_requirement('3.11', pkg_instance, parser.prog):
                     return 1
-                test_file = DEMO_DIR / 'stress_test.py'
+                test_file = TESTS_DIR / 'test_version_combos.py'
                 demo_name = 'numpy_scipy'
             elif response == '4':
                 if not handle_python_requirement('3.11', pkg_instance, parser.prog):
@@ -548,7 +549,8 @@ def main():
                 safe_print('!'*60)
                 
                 # 1. Find the source script.
-                source_script_path = TESTS_DIR / 'multiverse_healing.py'
+                source_script_path = TESTS_DIR / 'test_multiverse_healing.py'
+
                 if not source_script_path.exists():
                     safe_print(_('❌ Error: Source test file {} not found.').format(source_script_path))
                     return 1
@@ -642,8 +644,28 @@ def main():
                     temp_script_path.unlink(missing_ok=True)
                 
                 return returncode
+            elif response == '9':
+                demo_name = 'flask_port_finder'
+                test_file = TESTS_DIR / 'test_flask_port_finder.py'
+                if not test_file.exists():
+                    safe_print(_('❌ Error: Test file {} not found.').format(test_file))
+                    return 1
+                # This demo is best run via 'omnipkg run' to showcase auto-healing
+                safe_print(_('🚀 This demo uses "omnipkg run" to showcase auto-healing of missing modules.'))
+                cmd = [parser.prog, 'run', str(test_file)]
+                process = subprocess.Popen(cmd, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, encoding='utf-8', errors='replace')
+                for line in process.stdout:
+                    safe_print(line, end='')
+                returncode = process.wait()
+
+                safe_print('-' * 60)
+                if returncode == 0:
+                    safe_print(_('🎉 Demo completed successfully!'))
+                else:
+                    safe_print(_('❌ Demo failed with return code {}').format(returncode))
+                return returncode
             else:
-                safe_print(_('❌ Invalid choice. Please select 1, 2, 3, 4, 5, 6, 7, or 8.'))
+                safe_print(_('❌ Invalid choice. Please select 1, 2, 3, 4, 5, 6, 7, 8, or 9.'))
                 return 1
             if not test_file.exists():
                 safe_print(_('❌ Error: Test file {} not found.').format(test_file))
