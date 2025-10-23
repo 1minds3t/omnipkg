@@ -1,16 +1,16 @@
 [build-system]
-requires = ["setuptools>=61.0", "pip==25.1.1"]
+requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "omnipkg"
-version = "1.5.5"
+version = "1.5.6"
 authors = [
   { name = "1minds3t", email = "1minds3t@proton.me" },
 ]
 description = "The Ultimate Python Dependency Resolver. One environment. Infinite packages. Zero conflicts."
 readme = "README.md"
-requires-python = ">=3.9, <3.14"
+requires-python = ">=3.7, <3.16"
 license = { text = "AGPL-3.0-only OR LicenseRef-Proprietary" }
 classifiers = [
     "Development Status :: 5 - Production/Stable",
@@ -19,11 +19,14 @@ classifiers = [
     "License :: OSI Approved :: GNU Affero General Public License v3 or later (AGPLv3+)",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Programming Language :: Python :: 3.15",
     "Environment :: Console",
     "Topic :: Software Development :: Build Tools",
     "Topic :: System :: Software Distribution",
@@ -38,9 +41,9 @@ dependencies = [
     "authlib>=1.6.5",
     "filelock>=3.9",
     "tomli; python_version < '3.11'",
-    "safety>=2.3.5,<3.0; python_version < '3.10'",
-    "safety>=3.0; python_version >= '3.10'",
+    "safety>=3.0; python_version >= '3.10' and python_version < '3.14'",
     "aiohttp", 
+    "pip-audit>=2.6.0; python_version >= '3.14'",
     "uv" 
 ]
 

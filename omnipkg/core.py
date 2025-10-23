@@ -459,7 +459,7 @@ class ConfigManager:
             safe_print(_('   -> Scanning directory: {}').format(interp_dir.name))
             found_exe_path = None
             search_locations = [interp_dir / 'bin', interp_dir / 'Scripts', interp_dir]
-            possible_exe_names = ['python3.12', 'python3.11', 'python3.10', 'python3.9', 'python3', 'python', 'python.exe']
+            possible_exe_names = ['python3.14', 'python3.13', 'python3.12', 'python3.11', 'python3.10', 'python3.8', 'python3.9', 'python3', 'python', 'python.exe']
             for location in search_locations:
                 if location.is_dir():
                     for exe_name in possible_exe_names:
@@ -553,6 +553,27 @@ class ConfigManager:
                 safe_print('   ----------------')
                 raise
         try:
+            safe_print('   - Attempting bootstrap with built-in ensurepip (most reliable)...')
+            ensurepip_cmd = [str(python_exe), '-m', 'ensurepip', '--upgrade']
+            run_verbose(ensurepip_cmd, "ensurepip bootstrap failed.")
+            safe_print('   ✅ Pip bootstrap complete via ensurepip.')
+            core_deps = _get_core_dependencies()
+            if core_deps:
+                safe_print(_('   - Installing omnipkg core dependencies...'))
+                deps_install_cmd = [str(python_exe), '-m', 'pip', 'install', '--no-cache-dir'] + sorted(list(core_deps))
+                run_verbose(deps_install_cmd, 'Failed to install omnipkg dependencies.')
+                safe_print(_('   ✅ Core dependencies installed.'))
+            safe_print(_('   - Installing omnipkg application layer...'))
+            project_root = self._find_project_root()
+            if project_root:
+                safe_print(_('     (Developer mode detected: performing editable install)'))
+                install_cmd = [str(python_exe), '-m', 'pip', 'install', '--no-cache-dir', '--no-deps', '-e', str(project_root)]
+            else:
+                safe_print('     (Standard mode detected: installing from PyPI)')
+                install_cmd = [str(python_exe), '-m', 'pip', 'install', '--no-cache-dir', '--no-deps', 'omnipkg']
+            run_verbose(install_cmd, 'Failed to install omnipkg application.')
+            safe_print(_('   ✅ Omnipkg bootstrapped successfully!'))
+        except Exception as e:
             safe_print(_('   - Bootstrapping pip, setuptools, wheel...'))
             with tempfile.NamedTemporaryFile(suffix='.py', delete=False, mode='w', encoding='utf-8') as tmp_file:
                 script_path = tmp_file.name
@@ -790,7 +811,8 @@ class ConfigManager:
         py_arch = py_arch_map.get(arch)
         if not py_arch:
             raise OSError(_('Unsupported architecture: {}').format(arch))
-        VERSION_TO_RELEASE_TAG_MAP = {'3.13.7': '20250818', '3.13.6': '20250807', '3.13.1': '20241211', '3.13.0': '20241016', '3.12.11': '20250818', '3.12.8': '20241211', '3.12.7': '20241008', '3.12.6': '20240814', '3.12.5': '20240726', '3.12.4': '20240726', '3.12.3': '20240415', '3.11.13': '20250603', '3.11.12': '20241211', '3.11.10': '20241008', '3.11.9': '20240726', '3.11.6': '20231002', '3.10.18': '20250818', '3.10.15': '20241008', '3.10.14': '20240726', '3.10.13': '20231002', '3.9.23': '20250818', '3.9.21': '20241211', '3.9.20': '20241008', '3.9.19': '20240726', '3.9.18': '20231002'}
+        VERSION_TO_RELEASE_TAG_MAP = {'3.8.20': '20241002',
+            '3.14.0': '20251014','3.13.7': '20250818', '3.13.6': '20250807', '3.13.1': '20241211', '3.13.0': '20241016', '3.12.11': '20250818', '3.12.8': '20241211', '3.12.7': '20241008', '3.12.6': '20240814', '3.12.5': '20240726', '3.12.4': '20240726', '3.12.3': '20240415', '3.11.13': '20250603', '3.11.12': '20241211', '3.11.10': '20241008', '3.11.9': '20240726', '3.11.6': '20231002', '3.10.18': '20250818', '3.10.15': '20241008', '3.10.14': '20240726', '3.10.13': '20231002', '3.9.23': '20250818', '3.9.21': '20241211', '3.9.20': '20241008', '3.9.19': '20240726', '3.9.18': '20231002'}
         release_tag = VERSION_TO_RELEASE_TAG_MAP.get(full_version)
         if not release_tag:
             available_versions = list(VERSION_TO_RELEASE_TAG_MAP.keys())
@@ -2994,7 +3016,7 @@ class omnipkg:
             py_ver_str = f'py{match.group(1)}'
         else:
             try:
-                result = subprocess.run([python_exe_path, '-c', "import sys; safe_print(f'py{sys.version_info.major}.{sys.version_info.minor}')"], capture_output=True, text=True, check=True, timeout=2)
+                result = subprocess.run([python_exe_path, '-c', "import sys; print(f'py{sys.version_info.major}.{sys.version_info.minor}')"], capture_output=True, text=True, check=True, timeout=2)
                 py_ver_str = result.stdout.strip()
             except Exception:
                 py_ver_str = f'py{sys.version_info.major}.{sys.version_info.minor}'
@@ -4635,7 +4657,7 @@ class omnipkg:
             return False
         bin_dir = path / 'bin'
         if bin_dir.is_dir():
-            for name in ['python', 'python3', 'python3.9', 'python3.10', 'python3.11', 'python3.12']:
+            for name in ['python3.14', 'python3.13', 'python3.12', 'python3.11', 'python3.10', 'python3.9', 'python3.8', 'python3', 'python', 'python.exe']:
                 exe_path = bin_dir / name
                 if exe_path.is_file() and os.access(exe_path, os.X_OK):
                     try:
@@ -4673,7 +4695,7 @@ class omnipkg:
         """
         safe_print(_('\n--- Running robust download strategy ---'))
         try:
-            full_versions = {'3.13': '3.13.7', '3.12': '3.12.11', '3.11': '3.11.9', '3.10': '3.10.18', '3.9': '3.9.23'}
+            full_versions = {'3.14': '3.14.0', '3.13': '3.13.7', '3.12': '3.12.11', '3.11': '3.11.9', '3.10': '3.10.18', '3.9': '3.9.23', '3.8': '3.8.20'}
             full_version = full_versions.get(version)
             if not full_version:
                 safe_print(f'❌ Error: No known standalone build for Python {version}.')
@@ -5652,7 +5674,6 @@ class omnipkg:
         if not conda_meta_path.is_dir():
             return  # No metadata directory
         
-        safe_print('\n' + '─' * 60)
         safe_print("🛡️  AUTO-HEAL: Scanning conda environment for corruption...")
         
         # Proactive scan for corrupted files
@@ -5687,7 +5708,6 @@ class omnipkg:
         
         if not corrupted_files_found:
             safe_print("   - ✅ No corruption detected in conda metadata")
-            safe_print('─' * 60)
             return
         
         # Healing process

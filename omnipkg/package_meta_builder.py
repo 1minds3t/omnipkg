@@ -33,7 +33,11 @@ import tempfile
 import subprocess
 import json
 import re
-
+try:
+    import safety
+    SAFETY_AVAILABLE = True
+except ImportError:
+    SAFETY_AVAILABLE = False
 # Add this global recursion tracking code at module level (after imports, before class definition)
 _security_scan_depth = threading.local()
 _max_depth = 10  # Adjust as needed
@@ -584,6 +588,23 @@ class omnipkgMetadataGatherer:
         Runs a security check using a dedicated, isolated 'safety' tool bubble,
         created on-demand by the bubble_manager to guarantee isolation.
         """
+        is_incompatible_with_safety = False
+        if self.target_context_version:
+            try:
+                major, minor = map(int, self.target_context_version.split('.'))
+                if (major, minor) >= (3, 14):
+                    is_incompatible_with_safety = True
+            except (ValueError, TypeError):
+                pass
+
+        if is_incompatible_with_safety:
+            safe_print("🛡️  'safety' is incompatible with Python 3.14+. Using 'pip audit' as a fallback.")
+            self._run_pip_audit_fallback(packages)
+            return
+        if not SAFETY_AVAILABLE:
+            safe_print("⚠️  Security scan skipped: 'safety' package is not installed or is incompatible with the current Python version.")
+            self.security_report = {}
+            return
         safe_print(f'🛡️ Performing security scan for {len(packages)} active package(s) using isolated tool...')
         if not packages:
             safe_print(_(' - No active packages found to scan.'))
@@ -638,6 +659,60 @@ class omnipkgMetadataGatherer:
         elif isinstance(self.security_report, dict) and 'vulnerabilities' in self.security_report:
             issue_count = len(self.security_report['vulnerabilities'])
         safe_print(_('✅ Security scan complete. Found {} potential issues.').format(issue_count))
+
+    def _run_pip_audit_fallback(self, packages: Dict[str, str]):
+        """Runs `pip audit` as a fallback security scanner."""
+        if not packages:
+            safe_print(_(' - No active packages found to scan.'))
+            self.security_report = {}
+            return
+
+        reqs_file_path = None
+        try:
+            with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.txt') as reqs_file:
+                reqs_file_path = reqs_file.name
+                for name, version in packages.items():
+                    reqs_file.write(f'{name}=={version}\n')
+
+            python_exe = self.config.get('python_executable', sys.executable)
+            cmd = [python_exe, '-m', 'pip', 'audit', '--json', '-r', reqs_file_path]
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
+
+            if result.returncode == 0 and result.stdout:
+                audit_data = json.loads(result.stdout)
+                self.security_report = self._parse_pip_audit_output(audit_data)
+            else:
+                self.security_report = [] # No issues found or error occurred
+
+            issue_count = len(self.security_report)
+            safe_print(_('✅ Security scan complete (via pip audit). Found {} potential issues.').format(issue_count))
+
+        except (json.JSONDecodeError, subprocess.SubprocessError, FileNotFoundError) as e:
+            safe_print(_(' ⚠️ An error occurred during the pip audit fallback scan: {}').format(e))
+            self.security_report = {}
+        finally:
+            if reqs_file_path and os.path.exists(reqs_file_path):
+                os.unlink(reqs_file_path)
+
+    def _parse_pip_audit_output(self, audit_data: List[Dict]) -> List[Dict]:
+        """
+        Parses the JSON output from `pip audit` and transforms it into the same
+        format used by the `safety` tool for consistency.
+        """
+        report = []
+        for item in audit_data:
+            package_name = item.get('name')
+            installed_version = item.get('version')
+            for vuln in item.get('vulns', []):
+                report.append({
+                    "package_name": package_name,
+                    "vulnerable_spec": f"<{','.join(vuln.get('fixed_in', []))}",
+                    "analyzed_version": installed_version,
+                    "advisory": vuln.get('summary', 'N/A'),
+                    "vulnerability_id": vuln.get('id', 'N/A'),
+                    "fixed_in": vuln.get('fixed_in', []),
+                })
+        return report
 
     def run(self, targeted_packages: Optional[List[str]]=None, newly_active_packages: Optional[Dict[str, str]]=None):
         """
@@ -728,12 +803,8 @@ class omnipkgMetadataGatherer:
         total_packages = len(distributions_to_process)
         pkgs_per_sec = total_packages / total_time if total_time > 0 else float('inf')
 
-        print("\n" + "="*60)
         print("🚀 KNOWLEDGE BASE BUILD - PERFORMANCE SUMMARY 🚀")
-        print("="*60)
-        print(f"   - Processed {total_packages} packages in {total_time:.2f} seconds.")
         print(f"   - 🔥 Average Throughput: {pkgs_per_sec:.2f} pkg/s")
-        print("="*60 + "\n")
                 
         safe_print(_('🎉 Metadata building complete! Updated {} package(s) for this context.').format(updated_count))
         return distributions_to_process
