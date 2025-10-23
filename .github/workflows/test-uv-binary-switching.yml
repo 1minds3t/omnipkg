@@ -171,7 +171,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: omnipkg-uv-demo-output-${{ github.event.inputs.branch || github.ref_name }}
+          name: omnipkg-uv-demo-output-${{ github.ref_name | replace('/', '-') }}
           path: /tmp/omnipkg-artifacts/
           retention-days: 7
           compression-level: 6
