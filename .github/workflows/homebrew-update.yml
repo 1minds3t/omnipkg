@@ -27,7 +27,6 @@ jobs:
         fi
         echo "VERSION=$VERSION" >> $GITHUB_ENV
         echo "Building Homebrew formula for version: $VERSION"
-
     - name: Wait and get PyPI package info with retry
       run: |
         # --- RESILIENT RETRY LOGIC FOR PYPI AVAILABILITY ---
@@ -103,7 +102,6 @@ jobs:
         
         # Clean up the downloaded file
         rm -f "omnipkg-${{ env.VERSION }}.tar.gz"
-
     - name: Checkout Homebrew tap
       uses: actions/checkout@v4
       with:
@@ -130,7 +128,6 @@ jobs:
         
         echo "=== Updated main formula section ==="
         head -15 omnipkg.rb
-
     - name: Update dependency versions and hashes
       run: |
         cd homebrew-tap
@@ -224,7 +221,6 @@ jobs:
             print(f"❌ Error writing formula: {e}")
             sys.exit(1)
         EOF
-
     - name: Verify updated formula
       run: |
         cd homebrew-tap
@@ -248,7 +244,6 @@ jobs:
         fi
         
         echo "✅ Basic validation passed"
-
     - name: Commit and push changes
       run: |
         cd homebrew-tap
@@ -268,7 +263,6 @@ jobs:
         
         # Create detailed commit message
         commit_msg="Update omnipkg to version ${{ env.VERSION }}
-
         - Updated main package to v${{ env.VERSION }}
         - Updated SHA256 hash: ${{ env.SHA256 }}
         - Refreshed dependency versions from PyPI
