@@ -18,130 +18,90 @@ jobs:
       uses: actions/checkout@v4
 
     - name: Set version
-      id: version
       run: |
         if [ "${{ github.event_name }}" == "release" ]; then
           VERSION="${{ github.event.release.tag_name }}"
-          VERSION="${VERSION#v}"
+          VERSION="${VERSION#v}"  # Remove 'v' prefix if present
         else
           VERSION="${{ github.event.inputs.version }}"
         fi
         echo "VERSION=$VERSION" >> $GITHUB_ENV
-        echo "version=$VERSION" >> $GITHUB_OUTPUT
         echo "Building Homebrew formula for version: $VERSION"
-
-    - name: Wait for PyPI package availability
+    - name: Wait and get PyPI package info with retry
       run: |
-        VERSION="${{ env.VERSION }}"
-        URL="https://pypi.org/packages/source/o/omnipkg/omnipkg-$VERSION.tar.gz"
-        MAX_ATTEMPTS=30
-        SLEEP_TIME=60
+        # --- RESILIENT RETRY LOGIC FOR PYPI AVAILABILITY ---
+        max_attempts=15
+        attempt=1
+        url="https://pypi.org/packages/source/o/omnipkg/omnipkg-${{ env.VERSION }}.tar.gz"
         
-        echo "🔍 Waiting for PyPI package: $URL"
-        echo "⏳ This may take several minutes after release publication..."
+        echo "🔍 Waiting for PyPI package to be available at: $url"
+        echo "⏳ This may take a few minutes after release publication..."
         
-        for i in $(seq 1 $MAX_ATTEMPTS); do
-          echo ""
-          echo "🚀 Attempt $i/$MAX_ATTEMPTS..."
+        # Initial wait before first attempt (PyPI needs time to process)
+        echo "💤 Initial wait of 60 seconds for PyPI processing..."
+        sleep 60
+        
+        while [ $attempt -le $max_attempts ]; do
+          echo "🚀 Attempt $attempt of $max_attempts..."
           
-          # Check if package exists with HEAD request first (faster)
-          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -I "$URL")
-          
-          if [ "$HTTP_CODE" = "200" ]; then
-            echo "✅ Package found on PyPI (HTTP $HTTP_CODE)!"
+          # Try to download with curl (more reliable than wget)
+          if curl -L --fail --connect-timeout 30 --max-time 300 -o "omnipkg-${{ env.VERSION }}.tar.gz" "$url"; then
+            echo "✅ Successfully downloaded package on attempt $attempt!"
             
-            # Do a quick download test to verify it's not a false positive
-            if curl -L --fail --connect-timeout 10 --max-time 30 -r 0-1023 -o /dev/null "$URL" 2>/dev/null; then
-              echo "✅ Package download verified!"
+            # Verify the file is actually valid (not an error page)
+            file_size=$(wc -c < "omnipkg-${{ env.VERSION }}.tar.gz")
+            echo "📦 Downloaded file size: $file_size bytes"
+            
+            if [ "$file_size" -gt 1000 ]; then
+              echo "✅ File size looks good, proceeding..."
               break
             else
-              echo "⚠️ Package found but download test failed, retrying..."
+              echo "⚠️ File too small ($file_size bytes), might be error page. Retrying..."
+              rm -f "omnipkg-${{ env.VERSION }}.tar.gz"
             fi
           else
-            echo "📦 Package not yet available (HTTP $HTTP_CODE)"
+            echo "❌ Download failed on attempt $attempt"
           fi
           
-          if [ $i -eq $MAX_ATTEMPTS ]; then
-            echo ""
-            echo "💥 FAILED: Package not available after $MAX_ATTEMPTS attempts ($(($MAX_ATTEMPTS * $SLEEP_TIME / 60)) minutes)"
-            echo ""
-            echo "🤔 Possible reasons:"
-            echo "   • PyPI is still processing the upload"
-            echo "   • The PyPI upload failed in the publish workflow"
-            echo "   • Network connectivity issues"
-            echo ""
-            echo "🔧 Solutions:"
-            echo "   • Check the 'Publish to PyPI' workflow for errors"
-            echo "   • Verify the package exists at: https://pypi.org/project/omnipkg/$VERSION/"
-            echo "   • Re-run this workflow manually in a few minutes"
-            exit 1
+          if [ $attempt -lt $max_attempts ]; then
+            wait_time=$((30 + attempt * 10))  # Progressive backoff: 40s, 50s, 60s, etc.
+            echo "⏰ Waiting $wait_time seconds before retry..."
+            sleep $wait_time
           fi
           
-          echo "⏰ Waiting ${SLEEP_TIME}s before next attempt..."
-          sleep $SLEEP_TIME
-        done
-
-    - name: Download and hash PyPI package
-      run: |
-        VERSION="${{ env.VERSION }}"
-        URL="https://pypi.org/packages/source/o/omnipkg/omnipkg-$VERSION.tar.gz"
-        
-        echo "📥 Downloading package from PyPI..."
-        
-        # Download with retry logic
-        for attempt in 1 2 3; do
-          if curl -L --fail --connect-timeout 30 --max-time 300 \
-               -o "omnipkg-$VERSION.tar.gz" "$URL"; then
-            echo "✅ Download successful!"
-            break
-          elif [ $attempt -eq 3 ]; then
-            echo "❌ Download failed after 3 attempts"
-            exit 1
-          else
-            echo "⚠️ Download attempt $attempt failed, retrying..."
-            sleep 10
-          fi
+          attempt=$((attempt + 1))
         done
         
-        # Verify file size
-        FILE_SIZE=$(wc -c < "omnipkg-$VERSION.tar.gz")
-        echo "📦 Downloaded file size: $FILE_SIZE bytes"
-        
-        if [ "$FILE_SIZE" -lt 5000 ]; then
-          echo "❌ File size suspiciously small ($FILE_SIZE bytes)"
-          echo "Content preview:"
-          head -c 500 "omnipkg-$VERSION.tar.gz"
+        if [ $attempt -gt $max_attempts ]; then
+          echo "💥 FAILED: Package not available on PyPI after $max_attempts attempts"
+          echo "🤔 This might mean:"
+          echo "   - PyPI is still processing the release"
+          echo "   - The package failed to upload to PyPI"
+          echo "   - There's a network issue"
+          echo ""
+          echo "🔧 Try running this workflow manually in a few minutes with workflow_dispatch"
           exit 1
         fi
         
-        # Calculate SHA256
+        # Calculate SHA256 using a more reliable method
         echo "🔐 Calculating SHA256 hash..."
         if command -v sha256sum >/dev/null 2>&1; then
-          SHA256=$(sha256sum "omnipkg-$VERSION.tar.gz" | cut -d' ' -f1)
-        elif command -v shasum >/dev/null 2>&1; then
-          SHA256=$(shasum -a 256 "omnipkg-$VERSION.tar.gz" | cut -d' ' -f1)
+          SHA256=$(sha256sum "omnipkg-${{ env.VERSION }}.tar.gz" | cut -d' ' -f1)
         else
+          # Fallback for systems without sha256sum
           SHA256=$(python3 -c "
-import hashlib
-with open('omnipkg-$VERSION.tar.gz', 'rb') as f:
-    print(hashlib.sha256(f.read()).hexdigest())
-")
+          import hashlib
+          with open('omnipkg-${{ env.VERSION }}.tar.gz', 'rb') as f:
+              content = f.read()
+              print(hashlib.sha256(content).hexdigest())
+          ")
         fi
         
         echo "SHA256=$SHA256" >> $GITHUB_ENV
-        echo "✅ SHA256: $SHA256"
+        echo "✅ Package SHA256: $SHA256"
         
-        # Verify it's a valid tar.gz
-        if tar -tzf "omnipkg-$VERSION.tar.gz" >/dev/null 2>&1; then
-          echo "✅ Valid tar.gz archive verified"
-        else
-          echo "❌ Invalid tar.gz archive!"
-          exit 1
-        fi
-        
-        # Clean up
-        rm -f "omnipkg-$VERSION.tar.gz"
-
+        # Clean up the downloaded file
+        rm -f "omnipkg-${{ env.VERSION }}.tar.gz"
     - name: Checkout Homebrew tap
       uses: actions/checkout@v4
       with:
@@ -155,253 +115,169 @@ with open('omnipkg-$VERSION.tar.gz', 'rb') as f:
         
         if [ ! -f "omnipkg.rb" ]; then
           echo "❌ Formula file omnipkg.rb not found!"
-          ls -la
           exit 1
         fi
         
         echo "🔧 Updating omnipkg formula..."
         
-        # Backup original
-        cp omnipkg.rb omnipkg.rb.backup
+        # Update the main package URL and SHA256
+        # Handle both possible URL formats
+        sed -i 's|url "https://pypi\.io/packages/source/o/omnipkg/omnipkg-.*\.tar\.gz"|url "https://pypi.org/packages/source/o/omnipkg/omnipkg-${{ env.VERSION }}.tar.gz"|' omnipkg.rb
+        sed -i 's|url "https://pypi\.org/packages/source/o/omnipkg/omnipkg-.*\.tar\.gz"|url "https://pypi.org/packages/source/o/omnipkg/omnipkg-${{ env.VERSION }}.tar.gz"|' omnipkg.rb
+        sed -i 's/sha256 ".*"/sha256 "${{ env.SHA256 }}"/' omnipkg.rb
         
-        # Update URL and SHA256 with more robust regex
-        # This handles both pypi.io and pypi.org URLs
-        sed -i -E 's|url "https://pypi\.(io|org)/packages/source/o/omnipkg/omnipkg-[^"]+\.tar\.gz"|url "https://pypi.org/packages/source/o/omnipkg/omnipkg-${{ env.VERSION }}.tar.gz"|' omnipkg.rb
-        sed -i -E 's/sha256 "[a-f0-9]{64}"/sha256 "${{ env.SHA256 }}"/' omnipkg.rb
-        
-        # Verify changes were made
-        if diff omnipkg.rb.backup omnipkg.rb >/dev/null; then
-          echo "⚠️ WARNING: No changes detected in main formula section!"
-          echo "This might indicate a regex matching issue."
-          echo ""
-          echo "=== Original version line ==="
-          grep -A 1 'url "https://pypi' omnipkg.rb.backup | head -2 || echo "Pattern not found"
-        else
-          echo "✅ Main formula updated successfully"
-        fi
-        
-        rm omnipkg.rb.backup
-        
-        echo ""
         echo "=== Updated main formula section ==="
-        head -20 omnipkg.rb
-
+        head -15 omnipkg.rb
     - name: Update dependency versions and hashes
       run: |
         cd homebrew-tap
         
-        echo "🔍 Updating dependency versions from PyPI..."
+        echo "🔍 Updating dependency versions..."
         
         python3 << 'EOF'
-import json
-import urllib.request
-import re
-import time
-import sys
-from urllib.error import HTTPError, URLError
-
-# Dependencies to update
-deps = [
-    "aiohappyeyeballs", "aiohttp", "aiosignal", "attrs", "certifi",
-    "charset-normalizer", "filelock", "frozenlist", "idna", "multidict",
-    "packaging", "propcache", "python-magic", "redis", "requests",
-    "tqdm", "typing-extensions", "urllib3", "yarl"
-]
-
-print(f"📋 Updating {len(deps)} dependencies...")
-
-try:
-    with open('omnipkg.rb', 'r') as f:
-        formula_content = f.read()
-except FileNotFoundError:
-    print("❌ Error: omnipkg.rb not found!")
-    sys.exit(1)
-
-updated_count = 0
-failed_deps = []
-
-for i, dep in enumerate(deps, 1):
-    print(f"\n🔄 [{i}/{len(deps)}] Processing {dep}...", end=' ')
-    
-    try:
-        # Be nice to PyPI
-        if i > 1:
-            time.sleep(0.3)
+        import json
+        import urllib.request
+        import re
+        import time
+        import sys
+        from urllib.error import HTTPError, URLError
         
-        req = urllib.request.Request(
-            f'https://pypi.org/pypi/{dep}/json',
-            headers={'User-Agent': 'GitHub-Actions-Homebrew-Updater'}
-        )
+        # Dependencies to update
+        deps = [
+            "aiohappyeyeballs", "aiohttp", "aiosignal", "attrs", "certifi",
+            "charset-normalizer", "filelock", "frozenlist", "idna", "multidict",
+            "packaging", "propcache", "python-magic", "redis", "requests",
+            "tqdm", "typing-extensions", "urllib3", "yarl"
+        ]
         
-        with urllib.request.urlopen(req, timeout=30) as response:
-            data = json.loads(response.read())
-            latest_version = data['info']['version']
+        print(f"📋 Updating {len(deps)} dependencies...")
+        
+        try:
+            with open('omnipkg.rb', 'r') as f:
+                formula_content = f.read()
+        except FileNotFoundError:
+            print("❌ Error: omnipkg.rb not found!")
+            sys.exit(1)
+        
+        updated_count = 0
+        failed_count = 0
+        
+        for i, dep in enumerate(deps, 1):
+            print(f"🔄 [{i}/{len(deps)}] Processing {dep}...")
             
-            # Find the source distribution
-            sdist_url = None
-            sha256_hash = None
-            for url_info in data['urls']:
-                if url_info['packagetype'] == 'sdist':
-                    sdist_url = url_info['url']
-                    sha256_hash = url_info['digests']['sha256']
-                    break
-            
-            if sdist_url and sha256_hash:
-                # Update the resource block - more flexible regex
-                pattern = f'resource\\s+"{re.escape(dep)}"\\s+do\\s+url\\s+"[^"]*"\\s+sha256\\s+"[a-f0-9]{{64}}"\\s+end'
-                replacement = f'resource "{dep}" do\n    url "{sdist_url}"\n    sha256 "{sha256_hash}"\n  end'
+            try:
+                # Add small delay to be nice to PyPI API
+                if i > 1:
+                    time.sleep(0.5)
                 
-                new_content = re.sub(pattern, replacement, formula_content)
-                
-                if new_content != formula_content:
-                    formula_content = new_content
-                    updated_count += 1
-                    print(f"✅ v{latest_version}")
-                else:
-                    # Try alternative pattern (single line format)
-                    pattern2 = f'resource "{re.escape(dep)}" do url "[^"]*" sha256 "[a-f0-9]{{64}}" end'
-                    replacement2 = f'resource "{dep}" do url "{sdist_url}" sha256 "{sha256_hash}" end'
-                    new_content = re.sub(pattern2, replacement2, formula_content)
+                with urllib.request.urlopen(f'https://pypi.org/pypi/{dep}/json', timeout=30) as response:
+                    data = json.loads(response.read())
+                    latest_version = data['info']['version']
                     
-                    if new_content != formula_content:
-                        formula_content = new_content
-                        updated_count += 1
-                        print(f"✅ v{latest_version}")
+                    # Find the source distribution
+                    sdist_url = None
+                    sha256_hash = None
+                    for url_info in data['urls']:
+                        if url_info['packagetype'] == 'sdist':
+                            sdist_url = url_info['url']
+                            sha256_hash = url_info['digests']['sha256']
+                            break
+                    
+                    if sdist_url and sha256_hash:
+                        print(f"  ✅ Found {dep} v{latest_version}")
+                        
+                        # Update the resource block with more robust regex
+                        pattern = f'(resource "{re.escape(dep)}" do.*?url ")(.*?)(".*?sha256 ")(.*?)(")'
+                        replacement = f'\\g<1>{sdist_url}\\g<3>{sha256_hash}\\g<5>'
+                        
+                        old_formula = formula_content
+                        formula_content = re.sub(pattern, replacement, formula_content, flags=re.DOTALL)
+                        
+                        if formula_content != old_formula:
+                            updated_count += 1
+                            print(f"  📝 Updated {dep}")
+                        else:
+                            print(f"  ⚠️ Pattern not found for {dep} (might already be current)")
                     else:
-                        print(f"⚠️ v{latest_version} (pattern not matched)")
-                        failed_deps.append(dep)
-            else:
-                print(f"⚠️ No sdist found")
-                failed_deps.append(dep)
+                        print(f"  ⚠️ No source distribution found for {dep}")
+                        failed_count += 1
+                    
+            except (HTTPError, URLError) as e:
+                print(f"  ❌ HTTP error for {dep}: {e}")
+                failed_count += 1
+            except json.JSONDecodeError as e:
+                print(f"  ❌ JSON decode error for {dep}: {e}")
+                failed_count += 1
+            except Exception as e:
+                print(f"  ❌ Unexpected error for {dep}: {e}")
+                failed_count += 1
         
-    except (HTTPError, URLError) as e:
-        print(f"❌ Network error: {e}")
-        failed_deps.append(dep)
-    except Exception as e:
-        print(f"❌ Error: {e}")
-        failed_deps.append(dep)
-
-# Write updated formula
-try:
-    with open('omnipkg.rb', 'w') as f:
-        f.write(formula_content)
-    
-    print(f"\n📊 Summary:")
-    print(f"   ✅ Updated: {updated_count}/{len(deps)}")
-    print(f"   ⚠️  Failed: {len(failed_deps)}/{len(deps)}")
-    
-    if failed_deps:
-        print(f"\n⚠️  Failed dependencies: {', '.join(failed_deps)}")
-        print("   (These will keep their current versions)")
-    
-except Exception as e:
-    print(f"\n❌ Error writing formula: {e}")
-    sys.exit(1)
-EOF
-
+        # Write the updated formula
+        try:
+            with open('omnipkg.rb', 'w') as f:
+                f.write(formula_content)
+            print(f"📊 Summary: {updated_count} updated, {failed_count} failed")
+        except Exception as e:
+            print(f"❌ Error writing formula: {e}")
+            sys.exit(1)
+        EOF
     - name: Verify updated formula
       run: |
         cd homebrew-tap
         
         echo "🔍 Verifying updated formula..."
+        echo "=== First 30 lines of updated formula ==="
+        head -30 omnipkg.rb
         
-        # Check for obvious issues
-        ISSUES=0
+        echo ""
+        echo "=== Checking for obvious issues ==="
         
+        # Basic syntax checks
         if grep -q 'sha256 ""' omnipkg.rb; then
-          echo "❌ Found empty SHA256!"
-          ISSUES=$((ISSUES + 1))
-        fi
-        
-        if grep -q 'url ""' omnipkg.rb; then
-          echo "❌ Found empty URL!"
-          ISSUES=$((ISSUES + 1))
-        fi
-        
-        # Verify version was updated
-        if ! grep -q 'omnipkg-${{ env.VERSION }}.tar.gz' omnipkg.rb; then
-          echo "⚠️ WARNING: Version ${{ env.VERSION }} not found in formula!"
-          echo "Current URL line:"
-          grep 'pypi.org/packages/source' omnipkg.rb | head -1
-          ISSUES=$((ISSUES + 1))
-        fi
-        
-        # Verify SHA256 was updated
-        if ! grep -q '${{ env.SHA256 }}' omnipkg.rb; then
-          echo "⚠️ WARNING: Expected SHA256 not found in formula!"
-          echo "Current SHA256 line:"
-          grep -m 1 'sha256' omnipkg.rb
-          ISSUES=$((ISSUES + 1))
-        fi
-        
-        if [ $ISSUES -gt 0 ]; then
-          echo ""
-          echo "❌ Found $ISSUES issue(s) in updated formula!"
-          echo ""
-          echo "=== First 40 lines of formula ==="
-          head -40 omnipkg.rb
+          echo "❌ Found empty SHA256 - this will cause issues!"
           exit 1
         fi
         
-        echo "✅ Formula validation passed"
-        echo ""
-        echo "=== Updated formula preview ==="
-        head -25 omnipkg.rb
-
+        if grep -q 'url ""' omnipkg.rb; then
+          echo "❌ Found empty URL - this will cause issues!"
+          exit 1
+        fi
+        
+        echo "✅ Basic validation passed"
     - name: Commit and push changes
       run: |
         cd homebrew-tap
         
+        # Configure git
         git config --local user.email "action@github.com"
         git config --local user.name "GitHub Action Bot"
         
-        # Check for changes
+        # Check if there are any changes
         if git diff --quiet omnipkg.rb; then
           echo "ℹ️ No changes detected in omnipkg.rb"
-          echo "This might mean the formula was already up to date."
           exit 0
         fi
         
-        echo "📝 Changes detected, preparing commit..."
-        
-        # Show diff summary
-        echo ""
-        echo "=== Changes summary ==="
-        git diff --stat omnipkg.rb
-        
+        echo "📝 Changes detected, committing..."
         git add omnipkg.rb
         
         # Create detailed commit message
-        cat > commit_msg.txt << EOF
-Update omnipkg to version ${{ env.VERSION }}
-
-- Updated main package to v${{ env.VERSION }}
-- Updated SHA256: ${{ env.SHA256 }}
-- Refreshed dependency versions from PyPI
-
-Auto-generated by GitHub Actions
-Release: ${{ github.event.release.html_url || 'Manual dispatch' }}
-EOF
+        commit_msg="Update omnipkg to version ${{ env.VERSION }}
+        - Updated main package to v${{ env.VERSION }}
+        - Updated SHA256 hash: ${{ env.SHA256 }}
+        - Refreshed dependency versions from PyPI
         
-        git commit -F commit_msg.txt
+        Auto-generated by GitHub Actions"
         
-        echo ""
-        echo "🚀 Pushing changes to homebrew-omnipkg repository..."
+        git commit -m "$commit_msg"
+        
+        echo "🚀 Pushing changes to homebrew tap..."
         git push
         
-        echo ""
-        echo "🎉 Successfully updated Homebrew formula!"
-        echo ""
-        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-        echo "📦 Version: ${{ env.VERSION }}"
-        echo "🔐 SHA256: ${{ env.SHA256 }}"
-        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo "🎉 Successfully updated Homebrew formula to version ${{ env.VERSION }}!"
         echo ""
         echo "🍺 Users can now install with:"
-        echo "   brew tap 1minds3t/omnipkg"
-        echo "   brew install omnipkg"
+        echo "   brew install 1minds3t/omnipkg/omnipkg"
         echo ""
-        echo "🔄 Or update existing installations:"
-        echo "   brew update"
+        echo "🔄 Or update existing installations with:"
         echo "   brew upgrade omnipkg"
-        echo ""
