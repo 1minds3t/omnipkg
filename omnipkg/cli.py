@@ -266,7 +266,8 @@ def create_parser():
     parser = argparse.ArgumentParser(prog='omnipkg', description=_('🚀 The intelligent Python package manager that eliminates dependency hell'), formatter_class=argparse.RawTextHelpFormatter, epilog=translated_epilog)
     parser.add_argument('-v', '--version', action='version', version=_('%(prog)s {}').format(VERSION))
     parser.add_argument('--lang', metavar='CODE', help=_('Override the display language for this command (e.g., es, de, ja)'))
-    subparsers = parser.add_subparsers(dest='command', help=_('Available commands:'), required=False)
+    parser.add_argument('--verbose', '-V', action='store_true', help=_('Enable verbose output for detailed debugging'))
+    subparsers = parser.add_subparsers(dest='command', help=_('Available commands:'), required=False)    
     install_parser = subparsers.add_parser('install', help=_('Install packages with intelligent conflict resolution'))
     install_parser.add_argument('packages', nargs='*', help=_('Packages to install (e.g., "requests==2.25.1", "numpy>=1.20")'))
     install_parser.add_argument('-r', '--requirement', help=_('Install from requirements file'), metavar='FILE')
@@ -365,30 +366,48 @@ def print_header(title):
 def main():
     """Main application entry point with pre-flight version check."""
     try:
-        if '-v' in sys.argv or '--version' in sys.argv:
+        # --- START: ROBUST PRE-PARSING LOGIC ---
+        
+        # This pre-parser finds global flags like --verbose and --lang,
+        # even if they come after a command like 'run'.
+        global_parser = argparse.ArgumentParser(add_help=False)
+        global_parser.add_argument('--lang', default=None)
+        global_parser.add_argument('--verbose', '-V', action='store_true')
+        
+        # Parse ONLY the known global flags and keep the rest.
+        global_args, remaining_args = global_parser.parse_known_args()
+
+        # Handle version check separately as it exits immediately.
+        if '-v' in remaining_args or '--version' in remaining_args:
             prog_name = Path(sys.argv[0]).name
             if prog_name == '8pkg' or (len(sys.argv) > 0 and '8pkg' in sys.argv[0]):
                 safe_print(_('8pkg {}').format(get_version()))
             else:
                 safe_print(_('omnipkg {}').format(get_version()))
             return 0
+        
+        # --- END: ROBUST PRE-PARSING LOGIC ---
+        
         cm = ConfigManager()
-        temp_parser = argparse.ArgumentParser(add_help=False)
-        temp_parser.add_argument('--lang', default=None)
-        temp_args, remaining_args = temp_parser.parse_known_args()
-        if temp_args.lang:
-            user_lang = temp_args.lang
-        else:
-            user_lang = cm.config.get('language')
+        
+        # Set language based on pre-scanned flag or config
+        user_lang = global_args.lang or cm.config.get('language')
         if user_lang:
             _.set_language(user_lang)
+
         pkg_instance = OmnipkgCore(config_manager=cm)
         prog_name = Path(sys.argv[0]).name
         if prog_name == '8pkg' or (len(sys.argv) > 0 and '8pkg' in sys.argv[0]):
             parser = create_8pkg_parser()
         else:
             parser = create_parser()
-        args = parser.parse_args()
+
+        # Now, parse ONLY the remaining arguments with the full parser.
+        args = parser.parse_args(remaining_args)
+
+        # Manually add the pre-scanned global flags to the final args namespace.
+        args.verbose = global_args.verbose
+        args.lang = global_args.lang
         if args.command is None:
             parser.print_help()
             safe_print(_('\n👋 Welcome back to omnipkg! Run a command or see --help for details.'))
@@ -732,7 +751,7 @@ def main():
         elif args.command == 'reset-config':
             return pkg_instance.reset_configuration(force=args.force)
         elif args.command == 'run':
-            return execute_run_command(args.script_and_args, cm)
+            return execute_run_command(args.script_and_args, cm, verbose=args.verbose)
         else:
             parser.print_help()
             safe_print(_("\n💡 Did you mean 'omnipkg config set language <code>'?"))
