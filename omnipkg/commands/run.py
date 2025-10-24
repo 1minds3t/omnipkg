@@ -959,6 +959,9 @@ def heal_with_bubble(required_specs, original_script_path, original_script_args,
                 # If conversion fails, try the import name directly
                 if imp.lower() not in already_handled:  # ← FIX 6: Check here too
                     additional_packages.add(imp)
+        if 'omnipkg' in additional_packages:
+            safe_print("   ℹ️  Ignoring 'omnipkg' as an additional dependency to prevent recursion.")
+            additional_packages.remove('omnipkg')
         
         if additional_packages:
             additional_list = sorted(list(additional_packages))

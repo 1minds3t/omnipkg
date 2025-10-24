@@ -60,7 +60,8 @@ class omnipkgLoader:
     """
     _dependency_cache: Optional[Dict[str, Path]] = None
 
-    def __init__(self, package_spec: str=None, config: dict=None, quiet: bool=False, force_activation: bool=False):
+    def __init__(self, package_spec: str=None, config: dict=None, quiet: bool=False, force_activation: bool=False, isolation_mode: str='strict'):
+
         """
         Initializes the loader with enhanced Python version awareness.
         """
@@ -76,6 +77,7 @@ class omnipkgLoader:
         self._current_package_spec = package_spec
         self._activated_bubble_path = None
         self._cloaked_main_modules = []
+        self.isolation_mode = isolation_mode
         self._activation_successful = False
         self._activation_start_time = None
         self._activation_end_time = None
