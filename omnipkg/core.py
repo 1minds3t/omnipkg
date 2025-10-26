@@ -1806,19 +1806,28 @@ class BubbleIsolationManager:
         install_source = None
         is_editable = False
         
-        try:
-            # Check if this is a live, editable installation
-            dist = importlib.metadata.distribution(package_name)
-            direct_url_json = dist.read_text('direct_url.json')
-            if direct_url_json:
-                # direct_url.json exists for editable/local installs
-                project_root = self.parent_omnipkg.config_manager._find_project_root()
-                if project_root and (project_root / 'pyproject.toml').exists():
-                    install_source = str(project_root)
-                    is_editable = True
-                    safe_print(f"   - Detected local development source: {install_source}")
-        except (importlib.metadata.PackageNotFoundError, TypeError, FileNotFoundError):
-            pass
+        # --- CHECK IF THIS IS A DEV ENVIRONMENT (even if not currently installed) ---
+        if package_name == 'omnipkg':  # Special handling for omnipkg itself
+            project_root = self.parent_omnipkg.config_manager._find_project_root()
+            if project_root and (project_root / 'pyproject.toml').exists():
+                # We're in a dev environment - use the source
+                install_source = str(project_root)
+                is_editable = True
+                safe_print(f"   - Detected development environment: {install_source}")
+        
+        # --- FALLBACK: Check if currently installed version is editable ---
+        if not is_editable:
+            try:
+                dist = importlib.metadata.distribution(package_name)
+                direct_url_json = dist.read_text('direct_url.json')
+                if direct_url_json:
+                    project_root = self.parent_omnipkg.config_manager._find_project_root()
+                    if project_root and (project_root / 'pyproject.toml').exists():
+                        install_source = str(project_root)
+                        is_editable = True
+                        safe_print(f"   - Detected local development source: {install_source}")
+            except (importlib.metadata.PackageNotFoundError, TypeError, FileNotFoundError):
+                pass
 
         if not install_source:
             install_source = f"{package_name}=={version}"
@@ -1826,8 +1835,6 @@ class BubbleIsolationManager:
 
         # --- SPECIAL HANDLING FOR EDITABLE INSTALLS ---
         if is_editable:
-            # For editable installs, we can't do a temp pip install
-            # Instead, copy directly from the source and current site-packages
             return self._create_bubble_from_editable_install(
                 package_name, version, install_source, python_context_version
             )
@@ -1860,12 +1867,11 @@ class BubbleIsolationManager:
             
             return self._create_deduplicated_bubble(installed_tree, bubble_path, temp_path, python_context_version=python_context_version)
 
-
     def _create_bubble_from_editable_install(self, package_name: str, version: str, 
-                                            source_path: str, python_context_version: str) -> bool:
+                                        source_path: str, python_context_version: str) -> bool:
         """
         Creates a bubble from an editable install by copying files from the live source.
-        This preserves the current dev version as a fallback before upgrading.
+        This preserves the current dev version WITH ALL DEPENDENCIES as a fallback.
         """
         safe_print(f"   - Creating bubble from editable source (copy, not move)...")
         
@@ -1873,26 +1879,63 @@ class BubbleIsolationManager:
             source_root = Path(source_path)
             
             # Find the actual package directory in the source
-            # Could be: /home/minds3t/omnipkg/omnipkg (the package itself)
             package_dir = source_root / package_name
             if not package_dir.exists():
-                # Sometimes the package is at the root level
                 package_dir = source_root
             
-            # Get current site-packages to find dependencies
-            site_packages = Path(self.parent_omnipkg.config['site_packages'])
+            # Get current site-packages
+            site_packages = None
+            for key in ['site_packages', 'main_site_packages', 'site_packages_path']:
+                if key in self.parent_omnipkg.config:
+                    site_packages = Path(self.parent_omnipkg.config[key])
+                    break
             
-            # Create a temp directory with the package files
+            if not site_packages:
+                import site as site_module
+                site_packages = Path(site_module.getsitepackages()[0])
+            
+            safe_print(f"   - Using site-packages: {site_packages}")
+            
+            # --- GET DEPENDENCIES FROM PYPROJECT.TOML ---
+            dependencies = []
+            pyproject_path = source_root / 'pyproject.toml'
+            if pyproject_path.exists():
+                try:
+                    if sys.version_info >= (3, 11):
+                        import tomllib
+                    else:
+                        import tomli as tomllib
+                    
+                    with open(pyproject_path, 'rb') as f:
+                        pyproject_data = tomllib.load(f)
+                    
+                    # Get dependencies from project.dependencies
+                    deps = pyproject_data.get('project', {}).get('dependencies', [])
+                    
+                    # Parse dependency specs (e.g., "requests>=2.20" -> "requests")
+                    for dep_spec in deps:
+                        # Remove version constraints, extras, and markers
+                        dep_name = dep_spec.split('[')[0].split('>')[0].split('<')[0].split('=')[0].split(';')[0].strip()
+                        if dep_name:
+                            dependencies.append(dep_name)
+                    
+                    safe_print(f"   - Found {len(dependencies)} dependencies in pyproject.toml")
+                except Exception as e:
+                    safe_print(f"   - ⚠️  Could not parse pyproject.toml: {e}")
+            
+            # Create a temp directory with the package AND its dependencies
             with tempfile.TemporaryDirectory() as temp_dir:
                 temp_path = Path(temp_dir)
-                temp_pkg_dir = temp_path / package_name
                 
-                # Copy the package source to temp
+                # 1. Copy the main package source
+                temp_pkg_dir = temp_path / package_name
                 safe_print(f"   - Copying source files from: {package_dir}")
                 shutil.copytree(package_dir, temp_pkg_dir, symlinks=False, 
-                            ignore=shutil.ignore_patterns('__pycache__', '*.pyc', '.git*', '.pytest_cache'))
+                            ignore=shutil.ignore_patterns('__pycache__', '*.pyc', '.git*', 
+                                                        '.pytest_cache', '*.egg-info'))
                 
-                # Copy the dist-info or egg-info from site-packages
+                # 2. Copy the package's dist-info
+                dist_info_found = False
                 for dist_info_pattern in [f'{package_name}-*.dist-info', 
                                         f'{package_name}-*.egg-info',
                                         f'__editable__*.dist-info']:
@@ -1904,8 +1947,44 @@ class BubbleIsolationManager:
                             else:
                                 shutil.copy2(dist_info, dest)
                             safe_print(f"   - Copied metadata: {dist_info.name}")
+                            dist_info_found = True
                 
-                # Now analyze what we copied
+                if not dist_info_found:
+                    safe_print(f"   - ⚠️  No dist-info found, creating minimal metadata...")
+                    dist_info_dir = temp_path / f'{package_name}-{version}.dist-info'
+                    dist_info_dir.mkdir(exist_ok=True)
+                    metadata_file = dist_info_dir / 'METADATA'
+                    metadata_file.write_text(f"Metadata-Version: 2.1\nName: {package_name}\nVersion: {version}\n")
+                
+                # 3. Copy ALL dependencies from site-packages
+                safe_print(f"   - Copying {len(dependencies)} dependencies...")
+                for dep_name in dependencies:
+                    dep_canonical = canonicalize_name(dep_name)
+                    
+                    # Find and copy the dependency package directory
+                    dep_dir = None
+                    for potential_name in [dep_name, dep_name.replace('-', '_'), dep_canonical]:
+                        potential_dir = site_packages / potential_name
+                        if potential_dir.exists() and potential_dir.is_dir():
+                            dep_dir = potential_dir
+                            break
+                    
+                    if dep_dir:
+                        dest_dir = temp_path / dep_dir.name
+                        if not dest_dir.exists():
+                            shutil.copytree(dep_dir, dest_dir, symlinks=False,
+                                        ignore=shutil.ignore_patterns('__pycache__', '*.pyc'))
+                            safe_print(f"      ✓ {dep_name}")
+                    
+                    # Copy dependency's dist-info
+                    for dist_info in site_packages.glob(f'{dep_canonical}*.dist-info'):
+                        dest = temp_path / dist_info.name
+                        if not dest.exists():
+                            shutil.copytree(dist_info, dest, symlinks=False)
+                
+                safe_print(f"   - Analyzing complete dependency tree...")
+                
+                # Now analyze what we copied (package + all deps)
                 installed_tree = self._analyze_installed_tree(temp_path)
                 
                 # Create the final bubble
