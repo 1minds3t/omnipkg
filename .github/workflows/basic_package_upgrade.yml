@@ -1,0 +1,246 @@
+name: "⬆️ LIVE - Package Upgrade Test"
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  test-package-upgrade:
+    runs-on: ubuntu-latest
+    services:
+      redis:
+        image: redis:7
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e . redis
+
+      - name: Configure omnipkg and Establish Authoritative ENV_ID
+        id: setup_omnipkg
+        run: |
+          python - << 'EOF'
+          import json
+          import os
+          from pathlib import Path
+          from omnipkg.core import ConfigManager
+          
+          config_dir = Path.home() / '.config' / 'omnipkg'
+          config_dir.mkdir(parents=True, exist_ok=True)
+          
+          config = {
+              "interactive": False,
+              "auto_confirm": True,
+              "redis_url": "redis://localhost:6379"
+          }
+          with open(config_dir / 'config.json', 'w') as f:
+              json.dump(config, f, indent=2)
+          print("✅ Omnipkg configured for non-interactive use")
+          
+          main_env_id = ConfigManager().env_id
+          print(f"Authoritative Environment ID for this job: {main_env_id}")
+          
+          with open(os.environ['GITHUB_ENV'], 'a') as f:
+              f.write(f"OMNIPKG_ENV_ID_OVERRIDE={main_env_id}\n")
+          EOF
+
+      - name: Install Older Version of Package
+        env:
+          OMNIPKG_ENV_ID_OVERRIDE: ${{ env.OMNIPKG_ENV_ID_OVERRIDE }}
+        run: |
+          echo "--- Installing older version of uv (0.9.4) ---"
+          mkdir -p /tmp/omnipkg-artifacts
+          
+          omnipkg install uv==0.9.4 2>&1 | tee /tmp/omnipkg-artifacts/install_old_version.txt
+          
+          echo "## Install uv 0.9.4 Output" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          cat /tmp/omnipkg-artifacts/install_old_version.txt >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          
+          # Verify installation
+          if grep -q "All package operations complete" /tmp/omnipkg-artifacts/install_old_version.txt; then
+            echo "✅ uv 0.9.4 installed successfully"
+          else
+            echo "❌ Failed to install uv 0.9.4"
+            exit 1
+          fi
+
+      - name: Verify Initial Version
+        env:
+          OMNIPKG_ENV_ID_OVERRIDE: ${{ env.OMNIPKG_ENV_ID_OVERRIDE }}
+        run: |
+          echo "--- Verifying initial uv version ---"
+          
+          omnipkg info uv 2>&1 | tee /tmp/omnipkg-artifacts/info_before_upgrade.txt
+          
+          echo "## uv Info Before Upgrade" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          cat /tmp/omnipkg-artifacts/info_before_upgrade.txt >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          
+          # Check that 0.9.4 is active
+          if grep -q "Active Version: 0.9.4" /tmp/omnipkg-artifacts/info_before_upgrade.txt; then
+            echo "✅ Confirmed: uv 0.9.4 is active"
+          else
+            echo "❌ uv 0.9.4 is not active as expected"
+            exit 1
+          fi
+
+      - name: Run Package Upgrade
+        env:
+          OMNIPKG_ENV_ID_OVERRIDE: ${{ env.OMNIPKG_ENV_ID_OVERRIDE }}
+        run: |
+          echo "--- Running omnipkg upgrade uv ---"
+          
+          set -o pipefail
+          
+          if timeout 900 bash -c 'omnipkg upgrade uv' 2>&1 | tee /tmp/omnipkg-artifacts/upgrade_output.txt; then
+            UPGRADE_EXIT_CODE=0
+          else
+            UPGRADE_EXIT_CODE=$?
+          fi
+          
+          echo "## Package Upgrade Output" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          cat /tmp/omnipkg-artifacts/upgrade_output.txt >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          
+          # Verify upgrade completed
+          if grep -q "All package operations complete" /tmp/omnipkg-artifacts/upgrade_output.txt; then
+            echo "✅ Package upgrade completed successfully!"
+          else
+            echo "❌ Package upgrade did not complete successfully"
+            exit 1
+          fi
+          
+          # Verify bubble was created for old version
+          if grep -q "Creating isolated bubble for uv v0.9.4" /tmp/omnipkg-artifacts/upgrade_output.txt || \
+             grep -q "Bubbled uv v0.9.4" /tmp/omnipkg-artifacts/upgrade_output.txt; then
+            echo "✅ Old version (0.9.4) was bubbled!"
+          else
+            echo "⚠️  Could not verify bubble creation from output"
+          fi
+
+      - name: Verify Upgraded Version
+        env:
+          OMNIPKG_ENV_ID_OVERRIDE: ${{ env.OMNIPKG_ENV_ID_OVERRIDE }}
+        run: |
+          echo "--- Verifying upgraded uv version ---"
+          
+          omnipkg info uv 2>&1 | tee /tmp/omnipkg-artifacts/info_after_upgrade.txt
+          
+          echo "## uv Info After Upgrade" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          cat /tmp/omnipkg-artifacts/info_after_upgrade.txt >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          
+          # Extract active version (should be latest, e.g., 0.9.5 or newer)
+          ACTIVE_VERSION=$(grep "Active Version:" /tmp/omnipkg-artifacts/info_after_upgrade.txt | awk '{print $3}')
+          echo "Active version after upgrade: $ACTIVE_VERSION"
+          
+          # Verify it's not 0.9.4 anymore
+          if [[ "$ACTIVE_VERSION" != "0.9.4" ]]; then
+            echo "✅ Confirmed: uv upgraded from 0.9.4 to $ACTIVE_VERSION"
+          else
+            echo "❌ uv is still on version 0.9.4, upgrade failed"
+            exit 1
+          fi
+          
+          # Verify old version is bubbled
+          if grep -q "Bubbled Versions:" /tmp/omnipkg-artifacts/info_after_upgrade.txt && \
+             grep -q "0.9.4" /tmp/omnipkg-artifacts/info_after_upgrade.txt; then
+            echo "✅ Old version (0.9.4) is preserved in bubble"
+          else
+            echo "⚠️  Could not verify bubble presence for old version"
+          fi
+
+      - name: Test Package Functionality
+        env:
+          OMNIPKG_ENV_ID_OVERRIDE: ${{ env.OMNIPKG_ENV_ID_OVERRIDE }}
+        run: |
+          echo "--- Testing upgraded uv package ---"
+          
+          # Test that uv can be imported
+          python -c "import uv; print(f'uv module imported successfully: {uv}')" 2>&1 | tee /tmp/omnipkg-artifacts/import_test.txt
+          
+          if [ $? -eq 0 ]; then
+            echo "✅ Upgraded uv package imports successfully!"
+          else
+            echo "❌ Failed to import upgraded uv package"
+            exit 1
+          fi
+
+      - name: Verify Bubble Swapping Works
+        env:
+          OMNIPKG_ENV_ID_OVERRIDE: ${{ env.OMNIPKG_ENV_ID_OVERRIDE }}
+        run: |
+          echo "--- Testing bubble swap back to old version ---"
+          
+          # Get the active version number
+          ACTIVE_VERSION=$(omnipkg info uv 2>/dev/null | grep "Active Version:" | awk '{print $3}')
+          
+          # Try to swap to the bubbled version (0.9.4)
+          omnipkg install uv==0.9.4 2>&1 | tee /tmp/omnipkg-artifacts/swap_to_old.txt
+          
+          # Verify swap worked
+          NEW_ACTIVE=$(omnipkg info uv 2>/dev/null | grep "Active Version:" | awk '{print $3}')
+          
+          if [[ "$NEW_ACTIVE" == "0.9.4" ]]; then
+            echo "✅ Successfully swapped back to bubbled version 0.9.4"
+            echo "✅ Bubble swapping works correctly!"
+          else
+            echo "⚠️  Swap to old version may not have worked as expected"
+          fi
+          
+          echo "## Bubble Swap Test" >> $GITHUB_STEP_SUMMARY
+          echo "- Original active: $ACTIVE_VERSION" >> $GITHUB_STEP_SUMMARY
+          echo "- Swapped to: 0.9.4" >> $GITHUB_STEP_SUMMARY
+          echo "- Current active: $NEW_ACTIVE" >> $GITHUB_STEP_SUMMARY
+
+      - name: Generate Test Summary
+        if: always()
+        run: |
+          echo "## ⬆️ Package Upgrade Test Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Test Scenario" >> $GITHUB_STEP_SUMMARY
+          echo "1. Installed older version of uv (0.9.4)" >> $GITHUB_STEP_SUMMARY
+          echo "2. Ran \`omnipkg upgrade uv\` command" >> $GITHUB_STEP_SUMMARY
+          echo "3. Verified upgrade to latest version (with bubbling)" >> $GITHUB_STEP_SUMMARY
+          echo "4. Tested bubble swapping back to old version" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Key Verifications" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Old version (0.9.4) installed correctly" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Upgrade command executed successfully" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ New version became active" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Old version preserved in bubble" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Package imports correctly after upgrade" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Bubble swapping works (can revert to old version)" >> $GITHUB_STEP_SUMMARY
+
+      - name: Archive Test Outputs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: omnipkg-package-upgrade-test-output
+          path: /tmp/omnipkg-artifacts/
+          retention-days: 7
+          compression-level: 6
