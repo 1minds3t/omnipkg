@@ -5803,7 +5803,7 @@ class omnipkg:
         duration_ms = (time.perf_counter() - start_time) * 1000
         return False, duration_ms
 
-    def smart_install(self, packages: List[str], dry_run: bool = False, force_reinstall: bool = False, target_directory: Optional[Path] = None) -> int:
+    def smart_install(self, packages: List[str], dry_run: bool = False, force_reinstall: bool = False, override_strategy: Optional[str] = None, target_directory: Optional[Path] = None) -> int:
         # ====================================================================
         # ULTRA-FAST PREFLIGHT CHECK (Before any heavy initialization)
         # ====================================================================
@@ -5865,6 +5865,12 @@ class omnipkg:
         # ====================================================================
         # NORMAL INITIALIZATION (Only runs if packages need work)
         # ====================================================================
+        original_strategy = None
+        if override_strategy:
+            original_strategy = self.config.get('install_strategy', 'stable-main')
+            if original_strategy != override_strategy:
+                safe_print(f'   - 🔄 Using override strategy: {override_strategy}')
+                self.config['install_strategy'] = override_strategy
         if not self._connect_cache():
             return 1
         self._heal_conda_environment()
@@ -5961,13 +5967,19 @@ class omnipkg:
                 try:
                     for pkg_spec in needs_resolution:
                         safe_print(f'  🔍 Resolving version for {pkg_spec}...')
-                        resolved = self._resolve_package_versions([pkg_spec])
-                        if not resolved:
+                        try:  # ADD THIS INNER TRY-CATCH
+                            resolved = self._resolve_package_versions([pkg_spec])
+                            if not resolved:
+                                all_packages_satisfied = False
+                                break
+                        except ValueError as e:  # CATCH THE ValueError HERE
+                            safe_print(f"❌ Failed to resolve '{pkg_spec}': {e}")
                             all_packages_satisfied = False
                             break
+                        
                         resolved_spec = resolved[0]
                         resolved_specs.append(resolved_spec)
-                        resolved_package_cache[pkg_spec] = resolved_spec  # Cache the resolution result
+                        resolved_package_cache[pkg_spec] = resolved_spec
                         
                         # Now check if this resolved version is satisfied via fast check
                         pkg_name, version = self._parse_package_spec(resolved_spec)
@@ -5999,6 +6011,9 @@ class omnipkg:
                     new_omnipkg_instance = self.__class__(new_config_manager)
 
                     return new_omnipkg_instance.smart_install(packages, dry_run, force_reinstall, target_directory)
+                if not all_packages_satisfied:
+                    safe_print(_('❌ Could not resolve all packages. Aborting installation.'))
+                    return 1
             
             # Phase 3: KB check only for complex cases (nested packages, complex strategies)
             if needs_kb_check and all_packages_satisfied:
@@ -6159,12 +6174,17 @@ class omnipkg:
             else:
                 # Force reinstall case or no cache - resolve normally with full logging
                 resolved_packages = self._resolve_package_versions(packages_to_process)
-            
+
+
             if not resolved_packages:
                 safe_print(_('❌ Could not resolve any packages to install. Aborting.'))
                 return 1
 
             sorted_packages = self._sort_packages_for_install(resolved_packages, strategy=install_strategy)
+
+        except ValueError as e:  # ADD THIS CATCH BLOCK
+            safe_print(f"\n❌ Resolution failed: {e}")
+            return 1
 
         except NoCompatiblePythonError as e:
             # --- THIS IS THE "QUANTUM HEALING" CATCH BLOCK ---
@@ -6201,9 +6221,10 @@ class omnipkg:
 
         # Rest of the installation logic remains the same...
         user_requested_cnames = {canonicalize_name(self._parse_package_spec(p)[0]) for p in packages}
-        any_installations_made = False
         main_env_kb_updates = {}
+        any_failures = False 
         bubbled_kb_updates = {}
+        any_installations_made = False
         kb_deletions = set()
         
         for package_spec in sorted_packages:
@@ -6259,6 +6280,7 @@ class omnipkg:
 
                 if return_code != 0:
                     safe_print('❌ Unrecoverable installation failure for {}. Continuing...'.format(package_spec))
+                    any_failures = True  # <--- ADD THIS LINE
                     continue
                     
                 any_installations_made = True
@@ -6365,11 +6387,11 @@ class omnipkg:
                 
                 # Re-run the entire smart_install with the original package list
                 return new_omnipkg_instance.smart_install(packages, dry_run, force_reinstall, target_directory)
-    
-        if not any_installations_made:
-            safe_print(_('\n✅ All requirements were already satisfied.'))
-            return 0
 
+            except ValueError as e:
+                safe_print(f"\n❌ Aborting installation: {e}")
+                return 1
+    
         # Knowledge base update and cleanup logic remains the same...
         safe_print(_('\n🧠 Updating knowledge base (consolidated)...'))
         all_changed_specs = set()
@@ -6404,21 +6426,7 @@ class omnipkg:
 
         # Cleanup and final steps
         if not force_reinstall:
-            safe_print(_('\n🧹 Cleaning redundant bubbles...'))
-            final_active_packages = self.get_installed_packages(live=True)
-            cleaned_count = 0
-            for pkg_name, active_version in final_active_packages.items():
-                bubble_path = self.multiversion_base / f'{pkg_name}-{active_version}'
-                if bubble_path.exists() and bubble_path.is_dir():
-                    try:
-                        shutil.rmtree(bubble_path)
-                        cleaned_count += 1
-                        if hasattr(self, 'hook_manager'):
-                            self.hook_manager.remove_bubble_from_tracking(pkg_name, active_version)
-                    except Exception as e:
-                        safe_print(_('    ❌ Failed to remove bubble directory: {}').format(e))
-            if cleaned_count > 0:
-                safe_print('    ✅ Removed {} redundant bubbles'.format(cleaned_count))
+                self._cleanup_redundant_bubbles()
 
         safe_print(_('\n🎉 All package operations complete.'))
         self._save_last_known_good_snapshot()
@@ -6664,6 +6672,37 @@ class omnipkg:
             import traceback
             traceback.print_exc()
             return None
+
+    def _cleanup_redundant_bubbles(self):
+        """
+        Scans for and removes any bubbles that are identical to the currently
+        active version of a package in the main environment.
+        """
+        safe_print(_('\n🧹 Cleaning redundant bubbles...'))
+        try:
+            final_active_packages = self.get_installed_packages(live=True)
+            cleaned_count = 0
+            for pkg_name, active_version in final_active_packages.items():
+                # Construct the path to a potentially redundant bubble
+                bubble_path = self.multiversion_base / f'{pkg_name}-{active_version}'
+                
+                if bubble_path.exists() and bubble_path.is_dir():
+                    safe_print(f"   - Found redundant bubble for active package: {pkg_name}=={active_version}")
+                    try:
+                        shutil.rmtree(bubble_path)
+                        cleaned_count += 1
+                        if hasattr(self, 'hook_manager'):
+                            self.hook_manager.remove_bubble_from_tracking(pkg_name, active_version)
+                        safe_print(f"   - ✅ Removed redundant bubble.")
+                    except Exception as e:
+                        safe_print(_('    ❌ Failed to remove bubble directory: {}').format(e))
+            
+            if cleaned_count > 0:
+                safe_print('    ✅ Removed {} redundant bubble(s).'.format(cleaned_count))
+            else:
+                safe_print('    ✅ No redundant bubbles found.')
+        except Exception as e:
+            safe_print(f"   - ⚠️  An error occurred during bubble cleanup: {e}")
 
     def _detect_conda_corruption_from_error(self, stderr_output: str) -> Optional[Tuple[str, str]]:
         """
@@ -7717,7 +7756,9 @@ class omnipkg:
                 safe_print(_("    ✅ Resolved '{}' to '{}'").format(pkg_name, new_spec))
                 resolved_packages.append(new_spec)
             else:
-                safe_print(_("    ⚠️  Could not resolve a version for '{}' via PyPI. Skipping.").format(pkg_name))
+                safe_print(_("    ❌ CRITICAL: Could not resolve a version for '{}' via PyPI.").format(pkg_name))
+                # Raise an exception to abort the entire installation
+                raise ValueError(f"Package '{pkg_name}' not found or could not be resolved.")
         
         return resolved_packages
 
