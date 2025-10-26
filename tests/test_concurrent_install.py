@@ -232,28 +232,17 @@ def prepare_and_test_dimension(config: Tuple[str, str], omnipkg_instance: omnipk
             thread_safe_print(f'{prefix} 🔒 LOCK ACQUIRED - Modifying shared environment')
             
             # --- SWAP CONTEXT (SUBPROCESS) ---
-            timings['swap_start'] = time.perf_counter()
-            swap_output, swap_returncode, swap_duration = run_command_isolated(
-                ['swap', 'python', py_version],
-                f"Swapping to Python {py_version}",
-                'omnipkg',
-                thread_id
-            )
-            timings['swap_end'] = time.perf_counter()
-            if swap_returncode != 0:
-                raise RuntimeError(f"Failed to swap to Python {py_version}")
-            
-            # --- INSTALL PACKAGE (SUBPROCESS to ensure correct context) ---
             install_duration = 0.0
             timings['install_start'] = time.perf_counter()
             if is_installed:
                 thread_safe_print(f'{prefix} ⚡ CACHE HIT: rich=={rich_version} already installed in Python {py_version}')
             else:
                 thread_safe_print(f'{prefix} 📦 INSTALLING: rich=={rich_version} for Python {py_version}')
+                # CRITICAL CHANGE: We call the specific python_exe, not the generic 'omnipkg' command.
                 returncode, install_duration = run_and_stream_install(
                     ['install', f'rich=={rich_version}'],
                     f"Installing rich=={rich_version}",
-                    'omnipkg',
+                    python_exe,  # <--- THIS IS THE FIX
                     thread_id
                 )
                 if returncode != 0:
