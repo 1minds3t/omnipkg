@@ -70,45 +70,111 @@ jobs:
       - name: Prime Python Environments in Parallel (Trigger KB Rebuild)
         run: |
           Write-Host "--- Getting Python interpreter paths for parallel priming ---"
-          $PYTHON_INFO = python -m omnipkg.cli info python 2>&1
+          
+          # Get raw output first for debugging
+          $PYTHON_INFO = python -m omnipkg.cli info python 2>&1 | Out-String
           if ($LASTEXITCODE -ne 0) {
             Write-Host "❌ Failed to get Python info for priming. Aborting."
             Write-Host $PYTHON_INFO
             exit 1
           }
-
+          
+          # DEBUG: Show what we're working with
+          Write-Host "=== RAW PYTHON INFO OUTPUT ==="
+          Write-Host $PYTHON_INFO
+          Write-Host "=== END RAW OUTPUT ==="
+          
           $PythonExecutables = @{}
-          ($PYTHON_INFO -split '\r?\n' | Select-String -Pattern 'Python (\d\.\d+):') | ForEach-Object {
+          
+          # Parse each line looking for Python version info
+          foreach ($line in ($PYTHON_INFO -split '\r?\n')) {
+            if ($line -match 'Python (\d\.\d+):(.+)') {
               $version = $matches[1]
-              $path = ($_.ToString().Split(':', 2)[1].Trim()).Split(' ')[0]
+              $fullPath = $matches[2].Trim()
+              # Extract just the path (before any status info)
+              $path = ($fullPath -split '\s+')[0]
+              
+              Write-Host "DEBUG: Found Python $version at: $path"
+              
               if ($path -and (Test-Path $path)) {
-                  $PythonExecutables[$version] = $path
+                $PythonExecutables[$version] = $path
+                Write-Host "✅ Added Python $version to priming list"
+              } else {
+                Write-Host "⚠️  Path doesn't exist: $path"
               }
+            }
           }
-
+          
+          Write-Host "=== FINAL PYTHON EXECUTABLES ==="
+          $PythonExecutables | Format-Table -AutoSize
+          Write-Host "=== END ==="
+          
           if ($PythonExecutables.Count -eq 0) {
-              Write-Host "❌ No managed Python interpreters found to prime."
-              exit 1
+            Write-Host "❌ No managed Python interpreters found to prime."
+            Write-Host "This might mean omnipkg hasn't adopted any Python versions yet."
+            exit 1
           }
-
+          
+          # Define the priming script block with better output
           $scriptBlock = {
-              param($pyVer, $pyExe)
-              Write-Host "--- [Job for Python $pyVer] Starting Knowledge Base rebuild... ---"
-              & $pyExe -m omnipkg.cli reset --yes
-              $exitCode = $LASTEXITCODE
-              Write-Host "--- [Job for Python $pyVer] Finished with exit code $exitCode ---"
-              # We don't fail the whole step if one priming fails, just warn.
+            param($pyVer, $pyExe)
+            $timestamp = Get-Date -Format "HH:mm:ss"
+            Write-Host "[$timestamp] [Python $pyVer] Starting Knowledge Base rebuild..."
+            
+            $output = & $pyExe -m omnipkg.cli reset --yes 2>&1
+            $exitCode = $LASTEXITCODE
+            
+            $timestamp = Get-Date -Format "HH:mm:ss"
+            Write-Host "[$timestamp] [Python $pyVer] Finished with exit code $exitCode"
+            
+            if ($exitCode -ne 0) {
+              Write-Host "[$timestamp] [Python $pyVer] ERROR OUTPUT:"
+              Write-Host $output
+            }
+            
+            return @{
+              Version = $pyVer
+              ExitCode = $exitCode
+              Output = $output
+            }
           }
-
+          
           $jobs = @()
           foreach ($version in $PythonExecutables.Keys) {
-              Write-Host "🚀 Launching background priming job for Python $version"
-              $jobs += Start-Job -ScriptBlock $scriptBlock -ArgumentList $version, $PythonExecutables[$version]
+            $timestamp = Get-Date -Format "HH:mm:ss"
+            Write-Host "[$timestamp] 🚀 Launching background priming job for Python $version"
+            $jobs += Start-Job -ScriptBlock $scriptBlock -ArgumentList $version, $PythonExecutables[$version]
           }
-
-          Write-Host "⏳ Waiting for all priming jobs to complete... (This will take ~3 minutes)"
-          $jobs | Wait-Job | Receive-Job -Wait -AutoRemoveJob
           
+          Write-Host ""
+          Write-Host "⏳ Waiting for all priming jobs to complete..."
+          Write-Host "   (Typically takes 2-3 minutes for multiple Python versions)"
+          Write-Host ""
+          
+          # Wait with progress updates
+          $completed = 0
+          while ($jobs | Where-Object { $_.State -eq 'Running' }) {
+            $running = ($jobs | Where-Object { $_.State -eq 'Running' }).Count
+            $timestamp = Get-Date -Format "HH:mm:ss"
+            Write-Host "[$timestamp] Still running: $running jobs..."
+            Start-Sleep -Seconds 10
+          }
+          
+          # Collect results
+          $results = $jobs | Wait-Job | Receive-Job -Wait -AutoRemoveJob
+          
+          Write-Host ""
+          Write-Host "=== PRIMING RESULTS ==="
+          foreach ($result in $results) {
+            if ($result.ExitCode -eq 0) {
+              Write-Host "✅ Python $($result.Version): SUCCESS"
+            } else {
+              Write-Host "❌ Python $($result.Version): FAILED (exit code $($result.ExitCode))"
+            }
+          }
+          Write-Host "=== END RESULTS ==="
+          
+          Write-Host ""
           Write-Host "✅ All parallel priming jobs have finished."
         shell: pwsh
       
