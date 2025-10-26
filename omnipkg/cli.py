@@ -894,13 +894,23 @@ def main():
         elif args.command == 'run':
             return execute_run_command(args.script_and_args, cm, verbose=args.verbose)
         elif args.command == 'upgrade':
-            if args.package.lower() == 'omnipkg':
-                return pkg_instance.smart_upgrade(version=args.version, force=args.force, skip_dev_check=args.force_dev)
+            package_name = args.package_name[0] if args.package_name else 'omnipkg'
 
-            else:
-                # Upgrading other packages is just a reinstall of the latest
-                safe_print(_("Redirecting to smart_install to get the latest version of '{}'...").format(args.package))
-                return pkg_instance.smart_install([args.package], force_reinstall=True)
+            # Handle self-upgrade as a special case
+            if package_name.lower() == 'omnipkg':
+                return pkg_instance.smart_upgrade(
+                    version=args.version,
+                    force=args.force,
+                    skip_dev_check=args.force_dev
+                )
+
+            # For all other packages, use smart_install with a temporary strategy override
+            safe_print(f"🔄 Upgrading '{package_name}' to latest version...")
+            return pkg_instance.smart_install(
+                packages=[package_name],
+                force_reinstall=True,
+                override_strategy='latest-active' # Temporarily use this strategy for the upgrade
+            )
         else:
             parser.print_help()
             safe_print(_("\n💡 Did you mean 'omnipkg config set language <code>'?"))
