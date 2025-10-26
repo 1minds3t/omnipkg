@@ -7266,7 +7266,15 @@ class omnipkg:
             safe_print(_("   Run 'omnipkg list python' to see managed interpreters."))
             safe_print(f"   If Python {version} is 'Discovered', first adopt it with: omnipkg python adopt {version}")
             return 1
-        target_interpreter_str = str(target_interpreter_path)
+        if "venv-native" in str(target_interpreter_path):
+            # If it is, IGNORE the symlink path and get the TRUE native path.
+            # This is the sacred path that must be preserved.
+            true_native_path = str(self.config_manager.venv_path / 'bin' / f'python{version}')
+            target_interpreter_str = true_native_path
+            safe_print(f"   - ✅ Detected swap to native interpreter. Using original path: {target_interpreter_str}")
+        else:
+            # For all OTHER interpreters, the managed path is correct.
+            target_interpreter_str = str(target_interpreter_path)
         safe_print(_('   - Found managed interpreter at: {}').format(target_interpreter_str))
         new_paths = self.config_manager._get_paths_for_interpreter(target_interpreter_str)
         if not new_paths:
