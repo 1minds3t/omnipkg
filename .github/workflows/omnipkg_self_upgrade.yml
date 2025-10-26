@@ -1,0 +1,176 @@
+name: "🔄 LIVE - Omnipkg Self-Upgrade Test"
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  test-self-upgrade:
+    runs-on: ubuntu-latest
+    services:
+      redis:
+        image: redis:7
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies and older omnipkg version
+        run: |
+          python -m pip install --upgrade pip
+          # Install an older version first (e.g., 1.5.7 if 1.5.8 is current)
+          pip install omnipkg==1.5.7 redis
+          echo "Installed omnipkg version:"
+          pip show omnipkg | grep Version
+
+      - name: Configure omnipkg for non-interactive use
+        run: |
+          python - << 'EOF'
+          import sys
+          import site
+          import json
+          from pathlib import Path
+          import os
+          import sysconfig
+          
+          try:
+              site_packages_path = site.getsitepackages()[0]
+          except (IndexError, AttributeError):
+              site_packages_path = sysconfig.get_paths()['purelib']
+          
+          project_root = Path(os.environ['GITHUB_WORKSPACE'])
+          builder_script = project_root / 'omnipkg' / 'package_meta_builder.py'
+          
+          if not builder_script.exists():
+              print(f"Error: {builder_script} does not exist")
+              sys.exit(1)
+          
+          config_data = {
+              'site_packages_path': site_packages_path,
+              'multiversion_base': str(Path(site_packages_path) / '.omnipkg_versions'),
+              'python_executable': sys.executable,
+              'builder_script_path': str(builder_script),
+              'redis_host': 'localhost',
+              'redis_port': 6379,
+              'redis_key_prefix': 'omnipkg:pkg:',
+              'paths_to_index': [str(Path(sys.executable).parent), '/usr/local/bin', '/usr/bin', '/bin', '/usr/sbin', '/sbin'],
+              'auto_cleanup': True,
+              'cleanup_threshold_days': 30
+          }
+          
+          config_dir = Path.home() / '.config' / 'omnipkg'
+          config_dir.mkdir(parents=True, exist_ok=True)
+          config_path = config_dir / 'config.json'
+          
+          try:
+              with open(config_path, 'w') as f:
+                  json.dump(config_data, f, indent=2)
+              print(f'omnipkg config created at {config_path}:')
+              print(json.dumps(config_data, indent=2))
+          except Exception as e:
+              print(f"Error writing config: {e}")
+              sys.exit(1)
+          EOF
+
+      - name: Verify initial omnipkg installation
+        run: |
+          echo "--- Initial omnipkg version check ---"
+          8pkg --version
+          8pkg info omnipkg || true
+
+      - name: Run Self-Upgrade Test
+        id: run_upgrade
+        run: |
+          echo "--- Running Omnipkg Self-Upgrade Test ---"
+          mkdir -p /tmp/omnipkg-artifacts
+          
+          set -o pipefail
+          
+          # Perform the self-upgrade using --force-dev flag to upgrade from dev source
+          if timeout 900 bash -c '8pkg upgrade omnipkg --force-dev -y' 2>&1 | tee /tmp/omnipkg-artifacts/upgrade_output.txt; then
+            UPGRADE_EXIT_CODE=0
+          else
+            UPGRADE_EXIT_CODE=$?
+          fi
+          
+          echo "## Self-Upgrade Output" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          cat /tmp/omnipkg-artifacts/upgrade_output.txt >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          
+          # Check if upgrade completed successfully
+          if grep -q "FILESYSTEM UPGRADE COMPLETE" /tmp/omnipkg-artifacts/upgrade_output.txt && \
+             grep -q "successfully upgraded to version" /tmp/omnipkg-artifacts/upgrade_output.txt; then
+            
+            echo "✅ Self-upgrade completed successfully!"
+            echo "upgrade_outcome=success" >> $GITHUB_OUTPUT
+          else
+            echo "❌ Self-upgrade failed or did not complete successfully."
+            echo "upgrade_outcome=failure" >> $GITHUB_OUTPUT
+            echo "Upgrade output:"
+            cat /tmp/omnipkg-artifacts/upgrade_output.txt
+            exit 1
+          fi
+
+      - name: Verify upgraded version
+        run: |
+          echo "--- Verifying upgraded omnipkg version ---"
+          8pkg --version 2>&1 | tee /tmp/omnipkg-artifacts/version_after_upgrade.txt
+          
+          echo "## Version After Upgrade" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          cat /tmp/omnipkg-artifacts/version_after_upgrade.txt >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+
+      - name: Test bubble creation and version info
+        run: |
+          echo "--- Testing bubble and version info ---"
+          8pkg info omnipkg 2>&1 | tee /tmp/omnipkg-artifacts/info_after_upgrade.txt
+          
+          echo "## Omnipkg Info After Upgrade" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          cat /tmp/omnipkg-artifacts/info_after_upgrade.txt >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          
+          # Verify bubble was created for old version
+          if grep -q "Bubbled Versions:" /tmp/omnipkg-artifacts/info_after_upgrade.txt; then
+            echo "✅ Bubble verification: Old version was preserved in bubble!"
+          else
+            echo "⚠️ Warning: Could not verify bubble creation from info output"
+          fi
+
+      - name: Test basic omnipkg functionality
+        run: |
+          echo "--- Testing basic functionality after upgrade ---"
+          8pkg list 2>&1 | tee /tmp/omnipkg-artifacts/list_after_upgrade.txt
+          
+          if [ $? -eq 0 ]; then
+            echo "✅ Basic functionality test passed: 8pkg list command works!"
+          else
+            echo "❌ Basic functionality test failed: 8pkg list command failed!"
+            exit 1
+          fi
+
+      - name: Archive Upgrade Test Outputs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: omnipkg-self-upgrade-test-output
+          path: /tmp/omnipkg-artifacts/
+          retention-days: 7
+          compression-level: 6
