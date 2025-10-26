@@ -9,6 +9,12 @@ on:
 jobs:
   update-requirements:
     runs-on: ubuntu-latest
+    
+    # --- THIS IS THE FIX ---
+    # Grant the job the necessary permissions to push code.
+    permissions:
+      contents: write
+
     steps:
       - uses: actions/checkout@v4
       
@@ -23,10 +29,11 @@ jobs:
       - name: Compile requirements
         run: pip-compile pyproject.toml -o requirements.txt --resolver=backtracking
       
-      - name: Commit changes
+      - name: Commit and push changes
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
           git add requirements.txt
+          # This command only commits if there's an actual change
           git diff --staged --quiet || git commit -m "chore: Update requirements.txt"
           git push

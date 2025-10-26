@@ -14,6 +14,8 @@ jobs:
   # First job: Wait for PyPI to have the package
   wait-for-pypi:
     runs-on: ubuntu-latest
+    # Add a timeout to this specific job
+    timeout-minutes: 25 
     outputs:
       version: ${{ steps.get-version.outputs.version }}
       sha256: ${{ steps.get-sha.outputs.sha256 }}
@@ -23,6 +25,7 @@ jobs:
       run: |
         if [ "${{ github.event_name }}" == "release" ]; then
           VERSION="${{ github.event.release.tag_name }}"
+          # Remove 'v' prefix if it exists
           VERSION="${VERSION#v}"
         else
           VERSION="${{ github.event.inputs.version }}"
@@ -34,10 +37,11 @@ jobs:
       id: wait-pypi
       run: |
         VERSION="${{ steps.get-version.outputs.version }}"
-        MAX_ATTEMPTS=20
+        # Increased attempts and sleep time for a total wait of up to 20 minutes
+        MAX_ATTEMPTS=40
         SLEEP_TIME=30
         
-        echo "Checking for omnipkg version $VERSION on PyPI..."
+        echo "Checking for omnipkg version $VERSION on PyPI (will try for up to 20 minutes)..."
         
         for i in $(seq 1 $MAX_ATTEMPTS); do
           echo "Attempt $i/$MAX_ATTEMPTS..."
@@ -49,18 +53,20 @@ jobs:
           if [ "$HTTP_CODE" = "200" ]; then
             echo "✓ Package version found on PyPI API!"
             
-            # Also verify the tar.gz file is downloadable
+            # Also verify the tar.gz file is downloadable from the CDN
             DOWNLOAD_URL="https://files.pythonhosted.org/packages/source/o/omnipkg/omnipkg-$VERSION.tar.gz"
             DOWNLOAD_CODE=$(curl -s -o /dev/null -w "%{http_code}" -I "$DOWNLOAD_URL")
             
             if [ "$DOWNLOAD_CODE" = "200" ] || [ "$DOWNLOAD_CODE" = "302" ]; then
-              echo "✓ Package file is downloadable!"
+              echo "✓ Package file is downloadable! Proceeding."
+              # Give it a few extra seconds just in case
+              sleep 5
               break
             else
-              echo "⚠ Package found in API but file not yet available (HTTP $DOWNLOAD_CODE)"
+              echo "⚠ Package found in API but file not yet available on CDN (HTTP $DOWNLOAD_CODE)"
             fi
           else
-            echo "Package not yet available (HTTP $HTTP_CODE)"
+            echo "Package not yet available on API (HTTP $HTTP_CODE)"
           fi
           
           if [ $i -eq $MAX_ATTEMPTS ]; then
@@ -69,7 +75,7 @@ jobs:
             exit 1
           fi
           
-          echo "Waiting ${SLEEP_TIME}s..."
+          echo "Waiting ${SLEEP_TIME}s before next attempt..."
           sleep $SLEEP_TIME
         done
 
@@ -79,32 +85,22 @@ jobs:
         VERSION="${{ steps.get-version.outputs.version }}"
         
         echo "Downloading package from PyPI..."
-        # Try the files.pythonhosted.org URL first (CDN)
         if ! curl -L -f -o "omnipkg-$VERSION.tar.gz" \
           "https://files.pythonhosted.org/packages/source/o/omnipkg/omnipkg-$VERSION.tar.gz"; then
-          # Fallback to pypi.org URL
-          echo "CDN failed, trying pypi.org..."
+          echo "CDN failed, trying pypi.org fallback..."
           curl -L -f -o "omnipkg-$VERSION.tar.gz" \
             "https://pypi.org/packages/source/o/omnipkg/omnipkg-$VERSION.tar.gz"
         fi
         
-        # Verify file size
         FILE_SIZE=$(wc -c < "omnipkg-$VERSION.tar.gz")
         echo "File size: $FILE_SIZE bytes"
-        
         if [ "$FILE_SIZE" -lt 10000 ]; then
-          echo "Error: File too small ($FILE_SIZE bytes)"
+          echo "Error: Downloaded file is too small ($FILE_SIZE bytes), which is suspicious."
           exit 1
         fi
         
         echo "Calculating SHA256..."
-        if command -v sha256sum &> /dev/null; then
-          SHA256=$(sha256sum "omnipkg-$VERSION.tar.gz" | cut -d' ' -f1)
-        elif command -v shasum &> /dev/null; then
-          SHA256=$(shasum -a 256 "omnipkg-$VERSION.tar.gz" | cut -d' ' -f1)
-        else
-          SHA256=$(python3 -c "import hashlib; print(hashlib.sha256(open('omnipkg-$VERSION.tar.gz', 'rb').read()).hexdigest())")
-        fi
+        SHA256=$(sha256sum "omnipkg-$VERSION.tar.gz" | cut -d' ' -f1)
         
         echo "sha256=$SHA256" >> $GITHUB_OUTPUT
         echo "SHA256: $SHA256"
@@ -113,8 +109,11 @@ jobs:
   update-feedstock:
     needs: wait-for-pypi
     runs-on: ubuntu-latest
+    # Add a timeout to this specific job
+    timeout-minutes: 20 
     if: github.event_name == 'release'
     steps:
+    # ... (steps for this job remain the same) ...
     - name: Checkout your feedstock fork
       uses: actions/checkout@v4
       with:
@@ -135,11 +134,9 @@ jobs:
         
         echo "Updating recipe/meta.yaml to version $VERSION with SHA256: $SHA256"
         
-        # Update version and sha256 in meta.yaml
         sed -i "s/{% set version = \".*\" %}/{% set version = \"$VERSION\" %}/" recipe/meta.yaml
         sed -i "s/sha256: .*/sha256: $SHA256/" recipe/meta.yaml
         
-        # Show the changes
         echo "=== Updated meta.yaml (first 30 lines) ==="
         head -30 recipe/meta.yaml
 
@@ -178,16 +175,20 @@ jobs:
         base: main
         push-to-fork: 1minds3t/omnipkg-feedstock
 
+
   # Third job: Build conda packages for your own channel
   build-and-upload:
     needs: wait-for-pypi
     runs-on: ${{ matrix.os }}
+    # Add a timeout to this job, which applies to each matrix instance
+    timeout-minutes: 45
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
         python-version: ['3.10', '3.11', '3.12']
 
     steps:
+    # ... (steps for this job remain the same) ...
     - name: Checkout code
       uses: actions/checkout@v4
 
@@ -212,7 +213,6 @@ jobs:
         
         echo "Using version $VERSION with SHA256: $SHA256"
         
-        # Update the version and sha256 in meta.yaml (cross-platform sed)
         if [[ "$RUNNER_OS" == "macOS" ]]; then
           sed -i '' "s/{% set version = \".*\" %}/{% set version = \"$VERSION\" %}/" omnipkg/conda-recipe/meta.yaml
           sed -i '' "s/sha256: .*/sha256: $SHA256/" omnipkg/conda-recipe/meta.yaml
