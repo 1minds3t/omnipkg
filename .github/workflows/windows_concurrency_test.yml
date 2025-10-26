@@ -68,6 +68,7 @@ jobs:
       
       # --- THIS IS THE FIXED, PARALLEL STEP ---
       - name: Prime Python Environments in Parallel (Trigger KB Rebuild)
+        timeout-minutes: 10 
         run: |
           Write-Host "--- Getting Python interpreter paths for parallel priming ---"
           
