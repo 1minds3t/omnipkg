@@ -15,6 +15,7 @@ import locale as sys_locale
 import os
 import threading
 import platform
+import textwrap
 import time
 import re
 import shutil
@@ -3192,7 +3193,16 @@ class omnipkg:
                 safe_print(f"    - Current: {old_ver} (Stale)")
                 safe_print(f"    - Target:  {master_version_str}")
 
-                heal_cmd = [target_exe, '-m', 'pip', 'install', '--upgrade', '--no-deps'] + install_spec
+                safe_print(f"    - Forcing reinstall to ensure alignment...")
+                # This is the key: --force-reinstall tells pip "I don't care what you think is
+                # installed, overwrite it with this." --no-deps is still crucial.
+                heal_cmd = [
+                    target_exe, '-m', 'pip', 'install',
+                    '--force-reinstall',
+                    '--no-deps',
+                    '--no-cache-dir'  # Prevents using a stale cached wheel
+                ] + install_spec
+
                 result = subprocess.run(heal_cmd, capture_output=True, text=True)
 
                 if result.returncode != 0:
@@ -6152,7 +6162,7 @@ class omnipkg:
         # --- The upgrader script that will be executed by a new, clean process ---
         # It has one job: replace the files on disk. Nothing more.
         upgrader_script_content = textwrap.dedent(f"""
-            import sys, os, subprocess, time
+            import sys, os, subprocess, time, textwrap
 
             def run_cmd(cmd, description):
                 print(f"--- [Upgrader] Executing: {{description}} ---")
