@@ -43,8 +43,11 @@ except ImportError:  # Python < 3.8 fallback
 try:
     import tomllib
 except ModuleNotFoundError:
-    # The `as tomllib` makes the rest of the code work seamlessly.
-    import tomli as tomllib
+    try:
+        import tomli as tomllib
+    except ImportError:
+        # If neither is available, create a dummy that will fail gracefully
+        tomllib = None
 # --- END OF FIX ---
 
 __version__ = "0.0.0"   # fallback default
@@ -59,15 +62,15 @@ try:
     __dependencies__ = {dep.split()[0]: dep for dep in requires}
 except PackageNotFoundError:
     # Likely running from source → try pyproject.toml
-    pyproject_path = Path(__file__).parent.parent / "pyproject.toml"
-    if pyproject_path.exists():
-        with pyproject_path.open("rb") as f:
-            # Use the aliased `tomllib` which works on all versions
-            pyproject_data = tomllib.load(f)
-        __version__ = pyproject_data["project"]["version"]
-        __dependencies__ = {
-            dep.split()[0]: dep for dep in pyproject_data["project"].get("dependencies", [])
-        }
+    if tomllib is not None:  # Only try if we have a TOML parser
+        pyproject_path = Path(__file__).parent.parent / "pyproject.toml"
+        if pyproject_path.exists():
+            with pyproject_path.open("rb") as f:
+                pyproject_data = tomllib.load(f)
+            __version__ = pyproject_data["project"]["version"]
+            __dependencies__ = {
+                dep.split()[0]: dep for dep in pyproject_data["project"].get("dependencies", [])
+            }
 
 __all__ = [
     "core",
