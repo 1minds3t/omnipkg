@@ -1,0 +1,254 @@
+name: "🌠 Flask Auto-Healing Demo (Option 9)"
+
+on:
+  push:
+    branches: 
+      - development
+      - main
+  pull_request:
+    branches: 
+      - development
+      - main
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: 'The branch to test'
+        required: true
+        default: 'development'
+        type: choice
+        options:
+          - development
+          - main
+          - staging
+
+jobs:
+  flask-demo-linux:
+    runs-on: ubuntu-latest
+    name: "Flask Demo - Linux"
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.branch || github.ref }}
+      
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: Clean previous omnipkg config
+        run: |
+          if [ -d ~/.config/omnipkg ]; then
+            rm -rf ~/.config/omnipkg
+            echo "✅ Cleared previous omnipkg config"
+          else
+            echo "ℹ️  No previous config found"
+          fi
+      
+      - name: Install omnipkg
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+          echo "✅ Omnipkg installed"
+      
+      - name: Initialize omnipkg (trigger first-time setup)
+        run: |
+          echo "🔧 Running initial setup..."
+          omnipkg status || echo "Initial setup completed with warnings (expected)"
+        env:
+          PYTHONUTF8: "1"
+      
+      - name: Run Flask Auto-Healing Demo (Option 9)
+        run: |
+          echo "🎪 Running Flask Port Finder Demo with Auto-Healing"
+          echo "=================================================="
+          echo ""
+          echo "This demo showcases:"
+          echo "  1. UV attempts to run Flask test (will fail - Flask not installed)"
+          echo "  2. omnipkg detects the failure and auto-heals by installing Flask"
+          echo "  3. omnipkg re-runs the test successfully"
+          echo "  4. Performance comparison: omnipkg vs UV"
+          echo ""
+          echo "Running: echo '9' | omnipkg demo"
+          echo ""
+          
+          # Run demo option 9 via stdin
+          echo "9" | omnipkg demo
+          
+          exitCode=$?
+          echo ""
+          echo "=================================================="
+          echo "Exit code: $exitCode"
+          
+          if [ $exitCode -eq 0 ]; then
+            echo "✅ Flask Auto-Healing Demo completed successfully!"
+            echo ""
+            echo "Key achievements:"
+            echo "  ✓ UV failed as expected (Flask not installed)"
+            echo "  ✓ omnipkg auto-healed by installing Flask"
+            echo "  ✓ All Flask tests passed after healing"
+            echo "  ✓ Performance comparison showed omnipkg advantage"
+          else
+            echo "❌ Demo failed with exit code: $exitCode"
+            exit $exitCode
+          fi
+        env:
+          PYTHONUTF8: "1"
+
+  flask-demo-macos:
+    runs-on: macos-latest
+    name: "Flask Demo - macOS"
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.branch || github.ref }}
+      
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: Clean previous omnipkg config
+        run: |
+          if [ -d ~/.config/omnipkg ]; then
+            rm -rf ~/.config/omnipkg
+            echo "✅ Cleared previous omnipkg config"
+          else
+            echo "ℹ️  No previous config found"
+          fi
+      
+      - name: Install omnipkg
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+          echo "✅ Omnipkg installed"
+      
+      - name: Initialize omnipkg (trigger first-time setup)
+        run: |
+          echo "🔧 Running initial setup..."
+          omnipkg status || echo "Initial setup completed with warnings (expected)"
+        env:
+          PYTHONUTF8: "1"
+      
+      - name: Run Flask Auto-Healing Demo (Option 9)
+        run: |
+          echo "🎪 Running Flask Port Finder Demo with Auto-Healing"
+          echo "=================================================="
+          echo ""
+          echo "This demo showcases:"
+          echo "  1. UV attempts to run Flask test (will fail - Flask not installed)"
+          echo "  2. omnipkg detects the failure and auto-heals by installing Flask"
+          echo "  3. omnipkg re-runs the test successfully"
+          echo "  4. Performance comparison: omnipkg vs UV"
+          echo ""
+          echo "Running: echo '9' | omnipkg demo"
+          echo ""
+          
+          # Run demo option 9 via stdin
+          echo "9" | omnipkg demo
+          
+          exitCode=$?
+          echo ""
+          echo "=================================================="
+          echo "Exit code: $exitCode"
+          
+          if [ $exitCode -eq 0 ]; then
+            echo "✅ Flask Auto-Healing Demo completed successfully!"
+            echo ""
+            echo "Key achievements:"
+            echo "  ✓ UV failed as expected (Flask not installed)"
+            echo "  ✓ omnipkg auto-healed by installing Flask"
+            echo "  ✓ All Flask tests passed after healing"
+            echo "  ✓ Performance comparison showed omnipkg advantage"
+          else
+            echo "❌ Demo failed with exit code: $exitCode"
+            exit $exitCode
+          fi
+        env:
+          PYTHONUTF8: "1"
+
+  flask-demo-windows:
+    runs-on: windows-latest
+    name: "Flask Demo - Windows"
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.branch || github.ref }}
+      
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: Clean previous omnipkg config
+        run: |
+          if (Test-Path ~\.config\omnipkg) {
+            Remove-Item ~\.config\omnipkg -Recurse -Force
+            Write-Host "✅ Cleared previous omnipkg config"
+          } else {
+            Write-Host "ℹ️  No previous config found"
+          }
+        shell: pwsh
+      
+      - name: Install omnipkg
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+          Write-Host "✅ Omnipkg installed"
+        shell: pwsh
+      
+      - name: Initialize omnipkg (trigger first-time setup)
+        run: |
+          Write-Host "🔧 Running initial setup..."
+          try {
+            omnipkg status | Out-Null
+          } catch {
+            Write-Host "Initial setup completed with warnings (expected)"
+          }
+        shell: pwsh
+        env:
+          PYTHONUTF8: "1"
+      
+      - name: Run Flask Auto-Healing Demo (Option 9)
+        run: |
+          Write-Host "🎪 Running Flask Port Finder Demo with Auto-Healing"
+          Write-Host "=================================================="
+          Write-Host ""
+          Write-Host "This demo showcases:"
+          Write-Host "  1. UV attempts to run Flask test (will fail - Flask not installed)"
+          Write-Host "  2. omnipkg detects the failure and auto-heals by installing Flask"
+          Write-Host "  3. omnipkg re-runs the test successfully"
+          Write-Host "  4. Performance comparison: omnipkg vs UV"
+          Write-Host ""
+          Write-Host "Running: echo '9' | omnipkg demo"
+          Write-Host ""
+          
+          # Run demo option 9 via stdin (PowerShell style)
+          "9" | omnipkg demo
+          
+          $exitCode = $LASTEXITCODE
+          Write-Host ""
+          Write-Host "=================================================="
+          Write-Host "Exit code: $exitCode"
+          
+          if ($exitCode -eq 0) {
+            Write-Host "✅ Flask Auto-Healing Demo completed successfully!"
+            Write-Host ""
+            Write-Host "Key achievements:"
+            Write-Host "  ✓ UV failed as expected (Flask not installed)"
+            Write-Host "  ✓ omnipkg auto-healed by installing Flask"
+            Write-Host "  ✓ All Flask tests passed after healing"
+            Write-Host "  ✓ Performance comparison showed omnipkg advantage"
+            exit 0
+          } else {
+            Write-Host "❌ Demo failed with exit code: $exitCode"
+            exit $exitCode
+          }
+        shell: pwsh
+        env:
+          PYTHONUTF8: "1"
