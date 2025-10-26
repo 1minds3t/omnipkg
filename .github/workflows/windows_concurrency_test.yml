@@ -1,12 +1,3 @@
-name: "🚀 Windows - Omnipkg Demo Test (CI - No Redis)"
-
-on:
-  push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
-  workflow_dispatch:
-
 jobs:
   test:
     runs-on: windows-latest
@@ -27,8 +18,9 @@ jobs:
         shell: pwsh
       
       - name: Install rich via omnipkg
+        # Use python -m here for robustness
         run: |
-          omnipkg install rich
+          python -m omnipkg.cli install rich
         shell: pwsh
           
       - name: Configure omnipkg for non-interactive use
@@ -52,13 +44,13 @@ jobs:
           Write-Host "--- Adopting Python Versions ---"
           
           Write-Host "Adopting Python 3.9..."
-          omnipkg python adopt 3.9 2>&1 | Out-Null
+          python -m omnipkg.cli python adopt 3.9 2>&1 | Out-Null
           if ($LASTEXITCODE -ne 0) {
             Write-Host "⚠️  Python 3.9 adoption returned exit code $LASTEXITCODE (continuing anyway)"
           }
           
           Write-Host "Adopting Python 3.10..."
-          omnipkg python adopt 3.10 2>&1 | Out-Null
+          python -m omnipkg.cli python adopt 3.10 2>&1 | Out-Null
           if ($LASTEXITCODE -ne 0) {
             Write-Host "⚠️  Python 3.10 adoption returned exit code $LASTEXITCODE (continuing anyway)"
           }
@@ -72,7 +64,7 @@ jobs:
           
           # Capture output and explicitly check for errors
           Write-Host "Getting Python interpreter paths..."
-          $PYTHON_INFO = omnipkg info python 2>&1
+          $PYTHON_INFO = python -m omnipkg.cli info python 2>&1
           $infoExitCode = $LASTEXITCODE
           
           Write-Host "omnipkg info python exit code: $infoExitCode"
@@ -156,7 +148,7 @@ jobs:
         run: |
           Write-Host "--- Pre-installing test packages ---"
           
-          $PYTHON_INFO = omnipkg info python 2>&1
+          $PYTHON_INFO = python -m omnipkg.cli info python 2>&1
           if ($LASTEXITCODE -ne 0) {
             Write-Host "❌ Failed to get Python info"
             exit 1
@@ -198,7 +190,7 @@ jobs:
           Write-Host ""
           
           # Run demo with option 8 (non-interactive via stdin)
-          echo "8" | omnipkg demo
+          echo "8" | python -m omnipkg.cli demo
           
           $exitCode = $LASTEXITCODE
           Write-Host ""
