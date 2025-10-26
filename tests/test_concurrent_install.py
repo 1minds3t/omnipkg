@@ -221,8 +221,8 @@ def prepare_and_test_dimension(config: Tuple[str, str], omnipkg_instance: omnipk
             raise RuntimeError(f"Could not find interpreter for {py_version}")
         python_exe = str(python_exe_path)
 
-        # === STEP 2: Check if package is installed (Direct check in target Python) ===
-        is_installed, check_duration = check_package_installed(python_exe, 'rich', rich_version)
+        # === STEP 2: Check if package is installed (using omnipkg's fast, bubble-aware check) ===
+        is_installed, check_duration = omnipkg_instance.check_package_installed_fast(python_exe, 'rich', rich_version)
         
         # === STEP 3: Critical section (SUBPROCESS OPERATIONS) ===
         thread_safe_print(f'{prefix} ⏳ WAITING for lock...')
