@@ -531,7 +531,6 @@ class ConfigManager:
             
             safe_print(_('   -> Scanning directory: {}').format(interp_dir.name))
             found_exe_path = None
-<<<<<<< HEAD
             
             # --- START FIX: TWO-PASS SEARCH STRATEGY ---
 
@@ -539,10 +538,6 @@ class ConfigManager:
             search_locations = [interp_dir / 'bin', interp_dir / 'Scripts']
             possible_exe_names = ['python3.14', 'python3.13', 'python3.12', 'python3.11', 'python3.10', 'python3.9', 'python3.8', 'python3', 'python', 'python.exe']
 
-=======
-            search_locations = [interp_dir / 'bin', interp_dir / 'Scripts', interp_dir]
-            possible_exe_names = ['python3.14', 'python3.13', 'python3.12', 'python3.11', 'python3.10', 'python3.9', 'python3.8', 'python3', 'python', 'python.exe']
->>>>>>> b51ef64 (chore: Improve python executable search order)
             for location in search_locations:
                 if location.is_dir():
                     for exe_name in possible_exe_names:
