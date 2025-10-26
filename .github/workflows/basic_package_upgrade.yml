@@ -69,9 +69,6 @@ jobs:
         run: |
           echo "--- Setting install strategy to latest-active ---"
           omnipkg config set install_strategy latest-active
-          
-          echo "--- Verifying configuration ---"
-          omnipkg config show | grep install_strategy
 
       - name: Install Older Version of Package
         env:
