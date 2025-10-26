@@ -82,3 +82,5 @@ branch_diffs/
 multiverse_log.jsonl
 omnipkg-*.tar.gz
 .safety-project.ini
+detailed_changes.txt
+detailed_changes.txt

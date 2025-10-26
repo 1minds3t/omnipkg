@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "omnipkg"
-version = "1.5.7"
+version = "1.5.8"
 authors = [
   { name = "1minds3t", email = "1minds3t@proton.me" },
 ]
@@ -26,7 +26,6 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
     "Programming Language :: Python :: 3.14",
-    "Programming Language :: Python :: 3.15",
     "Environment :: Console",
     "Topic :: Software Development :: Build Tools",
     "Topic :: System :: Software Distribution",
@@ -42,7 +41,7 @@ dependencies = [
     "filelock>=3.9",
     "tomli; python_version < '3.11'",
     "safety>=3.0; python_version >= '3.10' and python_version < '3.14'",
-    "aiohttp", 
+    "aiohttp>=3.13.1",
     "pip-audit>=2.6.0; python_version >= '3.14'",
     "uv>=0.9.5" 
 ]
