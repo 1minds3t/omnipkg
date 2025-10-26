@@ -600,6 +600,8 @@ def main():
             else:
                 parser.print_help()
                 return 1
+        elif args.command == 'upgrade':
+            return upgrade(args, pkg_instance)
         elif args.command == 'swap':
             if not args.target:
                 safe_print(_('❌ Error: You must specify what to swap.'))
