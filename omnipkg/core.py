@@ -309,7 +309,7 @@ class ConfigManager:
                 python_311_path = registry.get('interpreters', {}).get('3.11')
                 if python_311_path and Path(python_311_path).exists():
                     try:
-                        result = subprocess.run([python_311_path, '-c', "import sys; safe_print(f'{sys.version_info.major}.{sys.version_info.minor}')"], capture_output=True, text=True, timeout=5)
+                        result = subprocess.run([python_311_path, '-c', "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')"], capture_output=True, text=True, timeout=5)
                         if result.returncode == 0 and result.stdout.strip() == '3.11':
                             return True
                     except:
@@ -330,7 +330,7 @@ class ConfigManager:
                 exe_path = bin_dir / (f'{possible_name}.exe' if platform.system() == 'Windows' else possible_name)
                 if exe_path.exists():
                     try:
-                        result = subprocess.run([str(exe_path), '-c', "import sys; safe_print(f'{sys.version_info.major}.{sys.version_info.minor}')"], capture_output=True, text=True, timeout=5)
+                        result = subprocess.run([str(exe_path), '-c', "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')"], capture_output=True, text=True, timeout=5)
                         if result.returncode == 0 and result.stdout.strip() == '3.11':
                             return True
                     except:

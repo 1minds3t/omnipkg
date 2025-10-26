@@ -6,6 +6,12 @@ import re
 from pathlib import Path
 import time
 import traceback
+try:
+    from omnipkg.common_utils import safe_print
+except ImportError:
+    # Fallback if run in a weird context before omnipkg is in path
+    def safe_print(*args, **kwargs):
+        print(*args, **kwargs)
 
 # --- PROJECT PATH SETUP ---
 project_root = Path(__file__).resolve().parent.parent
@@ -100,7 +106,7 @@ def run_command_with_isolated_context(command, description, check=True):
     Runs a command with isolated omnipkg context (no auto-alignment).
     This prevents the parent script's context from interfering with subcommands.
     """
-    print(f"\n▶️ Executing: {description}")
+    safe_print(f"\n>> Executing: {description}")
     print(f" Command: {' '.join(command)}")
     print(" --- Live Output ---")
     
@@ -135,7 +141,7 @@ def run_command_with_isolated_context(command, description, check=True):
     process.stdout.close()
     return_code = process.wait()
     print(" -------------------")
-    print(f" ✅ Command finished with exit code: {return_code}")
+    safe_print(f" [OK] Command finished with exit code: {return_code}")
     full_output = "".join(output_lines)
     if check and return_code != 0:
         raise subprocess.CalledProcessError(return_code, command, output=full_output)
@@ -150,23 +156,23 @@ def get_interpreter_path(version: str) -> str:
             match = re.search(r":\s*(/\S+)", line)
             if match:
                 path = match.group(1).strip()
-                print(f" ✅ Found at: {path}")
+                safe_print(f" [OK] Found at: {path}")
                 return path
     raise RuntimeError(f"Could not find managed Python {version}.")
 
 def install_packages_with_omnipkg(packages: list, description: str):
     """Uses omnipkg to install packages into the current context."""
-    print(f"\n 🔧 {description}")
+    safe_print(f"\n [TOOL] {description}")
     run_command_with_isolated_context(["omnipkg", "install"] + packages, f"Installing {' '.join(packages)}")
 
 # --- MAIN ORCHESTRATOR ---
 def multiverse_analysis():
     original_version = "3.11"
     try:
-        print(f"🚀 Starting multiverse analysis from dimension: Python {original_version}")
+        safe_print(f"[START] Starting multiverse analysis from dimension: Python {original_version}")
         
         # === STEP 1: PYTHON 3.9 CONTEXT ===
-        print("\n📦 MISSION STEP 1: Setting up Python 3.9 dimension...")
+        safe_print("\n[STEP 1] MISSION STEP 1: Setting up Python 3.9 dimension...")
         run_command_with_isolated_context(["omnipkg", "swap", "python", "3.9"], "Swapping to Python 3.9 context")
         python_3_9_exe = get_interpreter_path("3.9")
         install_packages_with_omnipkg(
@@ -174,7 +180,7 @@ def multiverse_analysis():
             "Installing legacy packages for Python 3.9"
         )
         
-        print("\n 🧪 Executing legacy payload in Python 3.9...")
+        safe_print("\n [TEST] Executing legacy payload in Python 3.9...")
         result_3_9 = subprocess.run(
             [python_3_9_exe, __file__, '--run-legacy'], 
             capture_output=True, 
@@ -188,7 +194,7 @@ def multiverse_analysis():
         print(f"DEBUG: Stderr: '{result_3_9.stderr}'")
         
         if result_3_9.returncode != 0:
-            print(f"❌ Legacy payload failed with exit code {result_3_9.returncode}")
+            safe_print(f"[ERROR] Legacy payload failed with exit code {result_3_9.returncode}")
             print(f"Stderr: {result_3_9.stderr}")
             raise RuntimeError(f"Legacy payload execution failed")
         
@@ -201,17 +207,17 @@ def multiverse_analysis():
             raise RuntimeError(f"No JSON output found in legacy payload. Output was: {result_3_9.stdout}")
         
         legacy_data = json.loads(json_lines[-1])
-        print(f"✅ Artifact retrieved from 3.9: Scipy analysis complete. Result: {legacy_data['result']}")
+        safe_print(f"[OK] Artifact retrieved from 3.9: Scipy analysis complete. Result: {legacy_data['result']}")
         
         # === STEP 2: PYTHON 3.11 CONTEXT ===
-        print("\n📦 MISSION STEP 2: Setting up Python 3.11 dimension...")
+        safe_print("\n[STEP 2] MISSION STEP 2: Setting up Python 3.11 dimension...")
         run_command_with_isolated_context(["omnipkg", "swap", "python", "3.11"], "Swapping back to Python 3.11 context")
         install_packages_with_omnipkg(
             ["tensorflow"],
             "Installing modern packages for Python 3.11"
         )
         
-        print("\n 🧪 Executing modern payload using 'omnipkg run' to trigger auto-healing...")
+        safe_print("\n [TEST] Executing modern payload using 'omnipkg run' to trigger auto-healing...")
         omnipkg_run_command = [
             "omnipkg", "run", __file__, '--run-modern', json.dumps(legacy_data)
         ]
@@ -223,13 +229,13 @@ def multiverse_analysis():
         # The actual JSON result is the last line of the script's output that is a JSON object.
         json_output = [line for line in modern_output.splitlines() if line.strip().startswith('{')][-1]
         final_prediction = json.loads(json_output)
-        print(f"✅ Artifact processed by 3.11: TensorFlow prediction complete. Prediction: '{final_prediction['prediction']}'")
+        safe_print(f"[OK] Artifact processed by 3.11: TensorFlow prediction complete. Prediction: '{final_prediction['prediction']}'")
         
         return final_prediction['prediction'] == 'SUCCESS'
         
     finally:
         # --- SAFETY PROTOCOL ---
-        print(f"\n🌀 SAFETY PROTOCOL: Returning to original dimension (Python {original_version})...")
+        safe_print(f"\n[CLEANUP] SAFETY PROTOCOL: Returning to original dimension (Python {original_version})...")
         run_command_with_isolated_context(["omnipkg", "swap", "python", original_version], "Returning to original context", check=False)
 
 if __name__ == "__main__":
@@ -243,20 +249,20 @@ if __name__ == "__main__":
         sys.exit(0)
     
     # Main orchestrator logic starts here when no flags are present...
-    print("=" * 80, "\n 🚀 OMNIPKG MULTIVERSE ANALYSIS TEST\n" + "=" * 80)
+    safe_print("=" * 80 + "\n [START] OMNIPKG MULTIVERSE ANALYSIS TEST\n" + "=" * 80)
     start_time = time.perf_counter()
     success = False
     
     try:
         success = multiverse_analysis()
     except Exception as e:
-        print(f"\n🔥🔥🔥 An error occurred during the analysis: {e} 🔥🔥🔥")
+        safe_print(f"\n[ERROR] An error occurred during the analysis: {e}")
         traceback.print_exc()
     
     end_time = time.perf_counter()
-    print("\n" + "=" * 80, "\n 📊 TEST SUMMARY\n" + "=" * 80)
+    safe_print("\n" + "=" * 80 + "\n [SUMMARY] TEST SUMMARY\n" + "=" * 80)
     if success:
-        print("🎉🎉🎉 MULTIVERSE ANALYSIS COMPLETE! Context switching, package management, and auto-healing working perfectly! 🎉🎉🎉")
+        safe_print("[SUCCESS] MULTIVERSE ANALYSIS COMPLETE! Context switching, package management, and auto-healing working perfectly!")
     else:
-        print("🔥🔥🔥 MULTIVERSE ANALYSIS FAILED! Check the output above for issues. 🔥🔥🔥")
-    print(f"\n⚡ PERFORMANCE: Total test runtime: {(end_time - start_time):.2f} seconds")
+        safe_print("[FAILED] MULTIVERSE ANALYSIS FAILED! Check the output above for issues.")
+    safe_print(f"\n[PERFORMANCE] Total test runtime: {(end_time - start_time):.2f} seconds")
