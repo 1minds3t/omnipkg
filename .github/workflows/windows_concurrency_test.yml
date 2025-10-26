@@ -27,7 +27,6 @@ jobs:
         shell: pwsh
       
       - name: Install rich via omnipkg
-        # Use python -m here for robustness
         run: |
           python -m omnipkg.cli install rich
         shell: pwsh
@@ -67,90 +66,50 @@ jobs:
           Write-Host "✅ Python versions adopted (or already present)"
         shell: pwsh
       
-      - name: Prime Python Environments (Trigger KB Rebuild)
+      # --- THIS IS THE FIXED, PARALLEL STEP ---
+      - name: Prime Python Environments in Parallel (Trigger KB Rebuild)
         run: |
-          Write-Host "--- Priming Python environments ---"
-          
-          # Capture output and explicitly check for errors
-          Write-Host "Getting Python interpreter paths..."
+          Write-Host "--- Getting Python interpreter paths for parallel priming ---"
           $PYTHON_INFO = python -m omnipkg.cli info python 2>&1
-          $infoExitCode = $LASTEXITCODE
-          
-          Write-Host "omnipkg info python exit code: $infoExitCode"
-          
-          if ($infoExitCode -ne 0) {
-            Write-Host "❌ Failed to get Python info"
-            Write-Host "Output: $PYTHON_INFO"
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "❌ Failed to get Python info for priming. Aborting."
+            Write-Host $PYTHON_INFO
             exit 1
           }
-          
-          Write-Host "Python info output:"
-          Write-Host $PYTHON_INFO
-          Write-Host ""
-          
-          # Parse the paths more carefully
-          $PYTHON_39_EXE = ($PYTHON_INFO -split '\r?\n' | Select-String -Pattern 'Python 3.9:' | ForEach-Object { 
-            $parts = $_ -split ':', 2
-            if ($parts.Length -eq 2) { $parts[1].Trim() }
-          })
-          $PYTHON_310_EXE = ($PYTHON_INFO -split '\r?\n' | Select-String -Pattern 'Python 3.10:' | ForEach-Object { 
-            $parts = $_ -split ':', 2
-            if ($parts.Length -eq 2) { $parts[1].Trim() }
-          })
-          $PYTHON_311_EXE = ($PYTHON_INFO -split '\r?\n' | Select-String -Pattern 'Python 3.11:' | ForEach-Object { 
-            $parts = $_ -split ':', 2
-            if ($parts.Length -eq 2) { $parts[1].Trim() }
-          })
-          
-          Write-Host "Detected Python paths:"
-          Write-Host "  3.9:  '$PYTHON_39_EXE'"
-          Write-Host "  3.10: '$PYTHON_310_EXE'"
-          Write-Host "  3.11: '$PYTHON_311_EXE'"
-          Write-Host ""
-          
-          # Prime each version and explicitly check exit codes
-          if ($PYTHON_39_EXE -and (Test-Path $PYTHON_39_EXE)) {
-            Write-Host "Priming Python 3.9..."
-            & $PYTHON_39_EXE -m omnipkg.cli reset --yes 2>&1 | Out-Null
-            $exitCode = $LASTEXITCODE
-            if ($exitCode -eq 0) {
-              Write-Host "  ✅ Python 3.9 primed successfully"
-            } else {
-              Write-Host "  ⚠️  Python 3.9 reset returned exit code $exitCode (may be expected)"
-            }
-          } else {
-            Write-Host "  ⚠️  Python 3.9 not found or invalid path"
+
+          $PythonExecutables = @{}
+          ($PYTHON_INFO -split '\r?\n' | Select-String -Pattern 'Python (\d\.\d+):') | ForEach-Object {
+              $version = $matches[1]
+              $path = ($_.ToString().Split(':', 2)[1].Trim()).Split(' ')[0]
+              if ($path -and (Test-Path $path)) {
+                  $PythonExecutables[$version] = $path
+              }
           }
-          
-          if ($PYTHON_310_EXE -and (Test-Path $PYTHON_310_EXE)) {
-            Write-Host "Priming Python 3.10..."
-            & $PYTHON_310_EXE -m omnipkg.cli reset --yes 2>&1 | Out-Null
-            $exitCode = $LASTEXITCODE
-            if ($exitCode -eq 0) {
-              Write-Host "  ✅ Python 3.10 primed successfully"
-            } else {
-              Write-Host "  ⚠️  Python 3.10 reset returned exit code $exitCode (may be expected)"
-            }
-          } else {
-            Write-Host "  ⚠️  Python 3.10 not found or invalid path"
+
+          if ($PythonExecutables.Count -eq 0) {
+              Write-Host "❌ No managed Python interpreters found to prime."
+              exit 1
           }
-          
-          if ($PYTHON_311_EXE -and (Test-Path $PYTHON_311_EXE)) {
-            Write-Host "Priming Python 3.11..."
-            & $PYTHON_311_EXE -m omnipkg.cli reset --yes 2>&1 | Out-Null
-            $exitCode = $LASTEXITCODE
-            if ($exitCode -eq 0) {
-              Write-Host "  ✅ Python 3.11 primed successfully"
-            } else {
-              Write-Host "  ⚠️  Python 3.11 reset returned exit code $exitCode (may be expected)"
-            }
-          } else {
-            Write-Host "  ⚠️  Python 3.11 not found or invalid path"
+
+          $scriptBlock = {
+              param($pyVer, $pyExe)
+              Write-Host "--- [Job for Python $pyVer] Starting Knowledge Base rebuild... ---"
+              & $pyExe -m omnipkg.cli reset --yes
+              $exitCode = $LASTEXITCODE
+              Write-Host "--- [Job for Python $pyVer] Finished with exit code $exitCode ---"
+              # We don't fail the whole step if one priming fails, just warn.
           }
+
+          $jobs = @()
+          foreach ($version in $PythonExecutables.Keys) {
+              Write-Host "🚀 Launching background priming job for Python $version"
+              $jobs += Start-Job -ScriptBlock $scriptBlock -ArgumentList $version, $PythonExecutables[$version]
+          }
+
+          Write-Host "⏳ Waiting for all priming jobs to complete... (This will take ~3 minutes)"
+          $jobs | Wait-Job | Receive-Job -Wait -AutoRemoveJob
           
-          Write-Host ""
-          Write-Host "✅ Priming step completed"
-          exit 0
+          Write-Host "✅ All parallel priming jobs have finished."
         shell: pwsh
       
       - name: Pre-Install Test Packages (Cache Warm)
@@ -165,15 +124,15 @@ jobs:
           
           $PYTHON_39_EXE = ($PYTHON_INFO -split '\r?\n' | Select-String -Pattern 'Python 3.9:' | ForEach-Object { 
             $parts = $_ -split ':', 2
-            if ($parts.Length -eq 2) { $parts[1].Trim() }
+            if ($parts.Length -eq 2) { ($parts[1].Trim()).Split(' ')[0] }
           })
           $PYTHON_310_EXE = ($PYTHON_INFO -split '\r?\n' | Select-String -Pattern 'Python 3.10:' | ForEach-Object { 
             $parts = $_ -split ':', 2
-            if ($parts.Length -eq 2) { $parts[1].Trim() }
+            if ($parts.Length -eq 2) { ($parts[1].Trim()).Split(' ')[0] }
           })
           $PYTHON_311_EXE = ($PYTHON_INFO -split '\r?\n' | Select-String -Pattern 'Python 3.11:' | ForEach-Object { 
             $parts = $_ -split ':', 2
-            if ($parts.Length -eq 2) { $parts[1].Trim() }
+            if ($parts.Length -eq 2) { ($parts[1].Trim()).Split(' ')[0] }
           })
           
           if ($PYTHON_39_EXE -and (Test-Path $PYTHON_39_EXE)) {
@@ -190,7 +149,6 @@ jobs:
           }
           
           Write-Host "✅ Test packages pre-installed."
-          exit 0
         shell: pwsh
       
       - name: Run Demo (Option 8 - Quantum Multiverse)
