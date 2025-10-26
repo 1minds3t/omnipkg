@@ -1,86 +1,201 @@
-# .github/workflows/cross_platform_test.yml
-name: Cross-Platform Sanity Check
+name: "🚀 Windows - Omnipkg Demo Test (CI - No Redis)"
+
 on:
   push:
-    branches:
-      - development
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
   workflow_dispatch:
-    inputs:
-      branch:
-        description: 'The branch to test'
-        required: true
-        default: 'development'
-        type: choice
-        options:
-          - development
-          - main
-          - staging
+
 jobs:
-  sanity-check:
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-    runs-on: ${{ matrix.os }}
+  test:
+    runs-on: windows-latest
+    
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.inputs.branch || 'development' }}
-          
-      - name: Display selected branch and OS
-        run: |
-          echo "Testing on: ${{ matrix.os }}"
-          echo "Branch: ${{ github.event.inputs.branch || 'development' }}"
-          
-      - name: Wipe previous omnipkg config (Windows)
-        run: |
-          if (Test-Path ~\.config\omnipkg) {
-            Remove-Item ~\.config\omnipkg -Recurse -Force
-            Write-Host "Cleared omnipkg config"
-          } else {
-            Write-Host "No previous omnipkg config found"
-          }
-        shell: pwsh
-        if: runner.os == 'Windows'
-        continue-on-error: true
-        
-      - name: Wipe previous omnipkg config (Linux/macOS)
-        run: |
-          if [ -d ~/.config/omnipkg ]; then
-            rm -rf ~/.config/omnipkg
-            echo "Cleared omnipkg config"
-          else
-            echo "No previous omnipkg config found"
-          fi
-        if: runner.os != 'Windows'
-        continue-on-error: true
-        
-      - name: Set up Python
+      
+      - name: Set up Python (3.11)
         uses: actions/setup-python@v5
         with:
-          python-version: '3.10'
-        
+          python-version: '3.11'
+
       - name: Install omnipkg
-        run: pip install -e .
-        
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+        shell: pwsh
+      
+      - name: Install rich via omnipkg
+        run: |
+          python -m omnipkg.cli install rich
+        shell: pwsh
+          
       - name: Configure omnipkg for non-interactive use
         run: |
-          if [ "$RUNNER_OS" == "Windows" ]; then
-            mkdir -p ~/.config/omnipkg
-            echo '{"interactive": false, "auto_confirm": true}' > ~/.config/omnipkg/config.json
-          else
-            mkdir -p ~/.config/omnipkg
-            echo '{"interactive": false, "auto_confirm": true}' > ~/.config/omnipkg/config.json
-          fi
-        shell: bash
-        
-      - name: Run Demo (Let it handle everything)
+          $configDir = "$HOME\.config\omnipkg"
+          New-Item -ItemType Directory -Force -Path $configDir | Out-Null
+          
+          $config = @{
+              interactive = $false
+              auto_confirm = $true
+          }
+          
+          $config | ConvertTo-Json -Depth 4 | Out-File -FilePath "$configDir\config.json" -Encoding utf8
+          
+          Write-Host "✅ Omnipkg configured for non-interactive use"
+          Get-Content "$configDir\config.json"
+        shell: pwsh
+          
+      - name: Adopt Python Versions (Pre-warm)
         run: |
-          echo "--- Running Omnipkg Demo ---"
-          echo "Demo will handle adoption, installation, and KB rebuild automatically"
-          echo ""
+          Write-Host "--- Adopting Python Versions ---"
+          
+          Write-Host "Adopting Python 3.9..."
+          python -m omnipkg.cli python adopt 3.9 2>&1 | Out-Null
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "⚠️  Python 3.9 adoption returned exit code $LASTEXITCODE (continuing anyway)"
+          }
+          
+          Write-Host "Adopting Python 3.10..."
+          python -m omnipkg.cli python adopt 3.10 2>&1 | Out-Null
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "⚠️  Python 3.10 adoption returned exit code $LASTEXITCODE (continuing anyway)"
+          }
+          
+          Write-Host "✅ Python versions adopted (or already present)"
+        shell: pwsh
+      
+      - name: Prime Python Environments with Timeout
+        timeout-minutes: 5
+        run: |
+          Write-Host "--- Priming Python environments (with timeout) ---"
+          
+          $PYTHON_INFO = python -m omnipkg.cli info python 2>&1 | Out-String
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "❌ Failed to get Python info"
+            exit 1
+          }
+          
+          # Parse Python versions
+          $versions = @()
+          foreach ($line in ($PYTHON_INFO -split '\r?\n')) {
+            if ($line -match 'Python (\d\.\d+):(.+)') {
+              $version = $matches[1]
+              $path = ($matches[2].Trim() -split '\s+')[0]
+              
+              if ($path -and (Test-Path $path)) {
+                $versions += @{Version = $version; Path = $path}
+                Write-Host "Found Python $version"
+              }
+            }
+          }
+          
+          if ($versions.Count -eq 0) {
+            Write-Host "⚠️  No Python versions found to prime, skipping..."
+            exit 0
+          }
+          
+          # Try each version sequentially with individual timeouts
+          foreach ($pyInfo in $versions) {
+            $version = $pyInfo.Version
+            $pyExe = $pyInfo.Path
+            
+            Write-Host ""
+            Write-Host "🔄 Priming Python $version..."
+            
+            try {
+              $job = Start-Job -ScriptBlock {
+                param($exe)
+                & $exe -m omnipkg.cli reset --yes 2>&1
+                return $LASTEXITCODE
+              } -ArgumentList $pyExe
+              
+              # Wait max 90 seconds per version
+              $completed = Wait-Job -Job $job -Timeout 90
+              
+              if ($completed) {
+                $exitCode = Receive-Job -Job $job
+                Remove-Job -Job $job -Force
+                
+                if ($exitCode -eq 0) {
+                  Write-Host "✅ Python $version primed successfully"
+                } else {
+                  Write-Host "⚠️  Python $version priming failed (exit $exitCode) - continuing anyway"
+                }
+              } else {
+                Write-Host "⚠️  Python $version priming timed out after 90s - stopping it"
+                Stop-Job -Job $job
+                Remove-Job -Job $job -Force
+                Write-Host "   This version might have issues, but continuing..."
+              }
+            } catch {
+              Write-Host "⚠️  Python $version priming error: $($_.Exception.Message)"
+              Write-Host "   Continuing anyway..."
+            }
+          }
+          
+          Write-Host ""
+          Write-Host "✅ Priming complete (some versions may have been skipped)"
+        shell: pwsh
+        continue-on-error: true
+      
+      - name: Pre-Install Test Packages (Cache Warm)
+        run: |
+          Write-Host "--- Pre-installing test packages ---"
+          
+          $PYTHON_INFO = python -m omnipkg.cli info python 2>&1
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "❌ Failed to get Python info"
+            exit 1
+          }
+          
+          $PYTHON_39_EXE = ($PYTHON_INFO -split '\r?\n' | Select-String -Pattern 'Python 3.9:' | ForEach-Object { 
+            $parts = $_ -split ':', 2
+            if ($parts.Length -eq 2) { ($parts[1].Trim()).Split(' ')[0] }
+          })
+          $PYTHON_310_EXE = ($PYTHON_INFO -split '\r?\n' | Select-String -Pattern 'Python 3.10:' | ForEach-Object { 
+            $parts = $_ -split ':', 2
+            if ($parts.Length -eq 2) { ($parts[1].Trim()).Split(' ')[0] }
+          })
+          $PYTHON_311_EXE = ($PYTHON_INFO -split '\r?\n' | Select-String -Pattern 'Python 3.11:' | ForEach-Object { 
+            $parts = $_ -split ':', 2
+            if ($parts.Length -eq 2) { ($parts[1].Trim()).Split(' ')[0] }
+          })
+          
+          if ($PYTHON_39_EXE -and (Test-Path $PYTHON_39_EXE)) {
+            Write-Host "Installing rich==13.4.2 for Python 3.9..."
+            & $PYTHON_39_EXE -m omnipkg.cli install rich==13.4.2 2>&1 | Out-Null
+          }
+          if ($PYTHON_310_EXE -and (Test-Path $PYTHON_310_EXE)) {
+            Write-Host "Installing rich==13.6.0 for Python 3.10..."
+            & $PYTHON_310_EXE -m omnipkg.cli install rich==13.6.0 2>&1 | Out-Null
+          }
+          if ($PYTHON_311_EXE -and (Test-Path $PYTHON_311_EXE)) {
+            Write-Host "Installing rich==13.7.1 for Python 3.11..."
+            & $PYTHON_311_EXE -m omnipkg.cli install rich==13.7.1 2>&1 | Out-Null
+          }
+          
+          Write-Host "✅ Test packages pre-installed."
+        shell: pwsh
+      
+      - name: Run Demo (Option 8 - Quantum Multiverse)
+        run: |
+          Write-Host "--- Running Omnipkg Demo: Quantum Multiverse ---"
+          Write-Host ""
+          
+          # Run demo with option 8 (non-interactive via stdin)
           echo "8" | python -m omnipkg.cli demo
-        shell: bash
-        env:
-          PYTHONUTF8: "1"
+          
+          $exitCode = $LASTEXITCODE
+          Write-Host ""
+          Write-Host "Demo exit code: $exitCode"
+          
+          if ($exitCode -eq 0) {
+            Write-Host "✅ Demo completed successfully! (Should be fast ~500ms)"
+            exit 0
+          } else {
+            Write-Host "❌ Demo failed with exit code: $exitCode"
+            exit $exitCode
+          }
+        shell: pwsh
