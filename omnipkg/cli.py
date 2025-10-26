@@ -471,10 +471,11 @@ def create_parser():
     prune_parser.add_argument('--keep-latest', type=int, metavar='N', help=_('Keep N most recent bubbled versions'))
     prune_parser.add_argument('--yes', '-y', dest='force', action='store_true', help=_('Skip confirmation'))
     upgrade_parser = subparsers.add_parser('upgrade', help=_('Upgrade omnipkg or other packages to the latest version'))
-    upgrade_parser.add_argument('package', nargs='?', default='omnipkg', help=_('Package to upgrade (defaults to omnipkg itself)'))
-    upgrade_parser.add_argument('--version', help=_('Specify a version to upgrade/downgrade to'))
+    upgrade_parser.add_argument('package_name', nargs='*', default=['omnipkg'], help='Package to upgrade (defaults to omnipkg itself)')
+    upgrade_parser.add_argument('--version', help='(For omnipkg self-upgrade only) Specify a target version')
     upgrade_parser.add_argument('--yes', '-y', dest='force', action='store_true', help=_('Skip confirmation prompt'))
     upgrade_parser.add_argument('--force-dev', action='store_true', help=_('Force upgrade even in a developer environment (use with caution)'))
+    upgrade_parser.set_defaults(func=upgrade)  # CRITICAL: This connects the handler!
     return parser
 
 def print_header(title):
