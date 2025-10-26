@@ -2278,6 +2278,7 @@ class BubbleIsolationManager:
             if len(py_files_in_subdirs) > 1:
                 complex_packages.add(pkg_name)
                 stats['package_modules'][pkg_name] = len(py_files_in_subdirs)
+                
         if c_ext_packages:
             safe_print(_('    🔬 Found C-extension packages: {}').format(', '.join(c_ext_packages)))
         if binary_packages:
@@ -2314,6 +2315,7 @@ class BubbleIsolationManager:
                 elif is_python_module:
                     stats['python_files'] += 1
                 should_copy = True
+
                 if should_deduplicate_this_package:
                     if is_python_module and '/__pycache__/' not in str(source_path):
                         should_copy = True
@@ -6477,7 +6479,12 @@ class omnipkg:
         if not self.bubble_manager.create_bubble_for_package('omnipkg', current_version_str, python_context_version=python_context):
             safe_print(f"   - ❌ Failed to bubble current version v{current_version_str}. Aborting.")
             return 1
-        safe_print(f"   - ✅ Successfully bubbled omnipkg v{current_version_str}.")
+        
+        # --- ADD THIS BLOCK TO FIX THE MISSING METADATA ---
+
+        # --- END OF FIX ---
+
+        safe_print(f"   - ✅ Successfully bubbled and indexed omnipkg v{current_version_str}.")
 
         # --- The upgrader script that will be executed by a new, clean process ---
         # It has one job: replace the files on disk. Nothing more.
@@ -7190,7 +7197,7 @@ class omnipkg:
                         return (pkg_name, None)
         return (pkg_spec.strip(), None)
 
-    def rebuild_package_kb(self, packages: List[str], force: bool=True, target_python_version: Optional[str]=None) -> int:
+    def rebuild_package_kb(self, packages: List[str], force: bool=True, target_python_version: Optional[str]=None, search_path_override: Optional[str]=None) -> int:
         """
         Forces a targeted KB rebuild and now intelligently detects and
         deletes "ghost" entries by comparing CANONICAL package names.
@@ -7201,8 +7208,25 @@ class omnipkg:
         if not self.cache_client:
             return 1
         try:
-            gatherer = omnipkgMetadataGatherer(config=self.config, env_id=self.env_id, force_refresh=force, omnipkg_instance=self, target_context_version=target_python_version)
-            found_distributions = gatherer.run(targeted_packages=packages)
+            # Tell the gatherer to ONLY look inside the multiversion_base for bubbles
+            search_path_override = None
+            if any(self.multiversion_base / f'{self._parse_package_spec(p)[0]}-{self._parse_package_spec(p)[1]}' for p in packages):
+                 search_path_override = str(self.multiversion_base)
+                 safe_print(f"   -> Targeting KB build to bubble directory: {search_path_override}")
+
+            gatherer = omnipkgMetadataGatherer(
+                config=self.config, 
+                env_id=self.env_id, 
+                force_refresh=force, 
+                omnipkg_instance=self, 
+                target_context_version=target_python_version
+            )
+            
+            # Pass the override path to the gatherer's run method
+            found_distributions = gatherer.run(
+                targeted_packages=packages, 
+                search_path_override=search_path_override
+            )
             if found_distributions is None:
                 found_distributions = []
             requested_specs_canonical = set()
@@ -7264,6 +7288,16 @@ class omnipkg:
         if pre_discovered_dists is not None:
             all_dists = pre_discovered_dists
         else:
+            # FALLBACK: The KB is out of sync. Trigger immediate rebuild for this package.
+            safe_print(f"   ⚠️  KB entry missing for {c_name}=={dist.version}. Triggering rebuild...")
+            
+            # Rebuild just this package
+            self.rebuild_package_kb(
+                packages=[f"{dist.metadata['Name']}=={dist.version}"],
+                force=True,
+                target_python_version=self.current_python_context.replace('py', '')
+            )
+            
             # Fallback if no pre-discovered distributions are provided.
             configured_exe = self.config.get('python_executable', sys.executable)
             version_tuple = self.config_manager._verify_python_version(configured_exe)
