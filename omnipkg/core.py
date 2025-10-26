@@ -15,6 +15,7 @@ import locale as sys_locale
 import os
 import threading
 import platform
+import textwrap
 import time
 import re
 import shutil
@@ -51,8 +52,14 @@ from .loader import omnipkgLoader # <--- ADD THIS LINE
 
 try:
     import tomllib
+    HAS_TOMLLIB = True
 except ModuleNotFoundError:
-    import tomli as tomllib
+    try:
+        import tomli as tomllib
+        HAS_TOMLLIB = True
+    except ImportError:
+        tomllib = None
+        HAS_TOMLLIB = False
 try:
     from tqdm import tqdm
     HAS_TQDM = True
@@ -66,20 +73,34 @@ except ImportError:
     HAS_MAGIC = False
 
 def _get_dynamic_omnipkg_version():
-    """Gets the omnipkg version from metadata or pyproject.toml."""
+    """
+    Gets the omnipkg version, prioritizing pyproject.toml in developer mode.
+    """
+    if not HAS_TOMLLIB:
+        # Can't read TOML, skip to metadata fallback
+        try:
+            return importlib.metadata.version('omnipkg')
+        except importlib.metadata.PackageNotFoundError:
+            return 'unknown'
+    
+    # Try pyproject.toml first (developer mode)
     try:
-        # This will get the version of the currently installed omnipkg package
+        pyproject_path = Path(__file__).parent.parent / 'pyproject.toml'
+        if pyproject_path.exists():
+            with pyproject_path.open('rb') as f:
+                data = tomllib.load(f)
+            version_from_toml = data.get('project', {}).get('version')
+            if version_from_toml:
+                return version_from_toml
+    except Exception as e:
+        safe_print(f"⚠️  Could not read version from pyproject.toml: {e}")
+    
+    # Fallback to installed metadata
+    try:
         return importlib.metadata.version('omnipkg')
     except importlib.metadata.PackageNotFoundError:
-        # Fallback for development environments
-        try:
-            pyproject_path = Path(__file__).parent.parent / 'pyproject.toml'
-            if pyproject_path.exists():
-                with pyproject_path.open('rb') as f:
-                    data = tomllib.load(f)
-                return data.get('project', {}).get('version', 'unknown-dev')
-        except Exception:
-            pass # Fall through
+        pass
+    
     return 'unknown'
 
 def _get_core_dependencies() -> set:
@@ -642,25 +663,27 @@ class ConfigManager:
                 if (path / 'pyproject.toml').exists() or (path / 'setup.py').exists():
                     # Verify it's actually an omnipkg project
                     if (path / 'pyproject.toml').exists():
-                        try:
-                            # Conditional import - tomli might not be available during bootstrap
-                            if sys.version_info < (3, 11):
-                                import tomli
-                            else:
-                                import tomllib as tomli
-                            
-                            with open(path / 'pyproject.toml', 'rb') as f:
-                                data = tomli.load(f)
-                                if data.get('project', {}).get('name') == 'omnipkg':
-                                    safe_print(_('     (Found project root: {})').format(path))
-                                    return path
-                        except (ImportError, ModuleNotFoundError):
-                            # tomli not available during bootstrap - that's fine
-                            # We can't verify it's omnipkg, but that's okay
-                            pass
-                        except Exception:
-                            # Any other error parsing the file - skip this candidate
-                            continue
+                        if (path / 'pyproject.toml').exists():
+                            try:
+                                # Conditional import - handle both Python < 3.11 and >= 3.11
+                                if sys.version_info < (3, 11):
+                                    import tomli
+                                else:
+                                    import tomllib as tomli
+                                
+                                with open(path / 'pyproject.toml', 'rb') as f:
+                                    data = tomli.load(f)
+                                    if data.get('project', {}).get('name') == 'omnipkg':
+                                        safe_print(_('     (Found project root: {})').format(path))
+                                        return path
+                            except (ImportError, ModuleNotFoundError):
+                                # tomli/tomllib not available - just check if file exists
+                                # Assume any pyproject.toml in the search path is omnipkg's
+                                safe_print(_('     (Found project root: {})').format(path))
+                                return path
+                            except Exception:
+                                # Any other error parsing - skip this candidate
+                                continue
                     
                     # If we have setup.py, assume it's valid
                     elif (path / 'setup.py').exists():
@@ -1776,35 +1799,50 @@ class BubbleIsolationManager:
     def create_bubble_for_package(self, package_name: str, version: str, python_context_version: str) -> bool:
         """
         Creates a complete, isolated bubble for a package, including all its dependencies.
-        It intelligently installs from the local project path for development versions,
-        or from PyPI for standard versions.
+        For editable/dev installs, copies directly from the source directory.
         """
         safe_print(f"🫧 Creating complete bubble for {package_name} v{version}...")
         
         install_source = None
-        try:
-            # Check if this is a live, editable installation
-            dist = importlib.metadata.distribution(package_name)
-            if dist.read_text('direct_url.json'):
-                # direct_url.json exists for editable/local installs
-                # Find the project root to install from
-                project_root = self.parent_omnipkg.config_manager._find_project_root()
-                if project_root and (project_root / 'pyproject.toml').exists():
-                    install_source = str(project_root)
-                    safe_print(f"   - Detected local development source: {install_source}")
-        except (importlib.metadata.PackageNotFoundError, TypeError, FileNotFoundError):
-            # Not a local dev install, or package not found, so we'll use PyPI
-            pass
+        is_editable = False
+        
+        # --- CHECK IF THIS IS A DEV ENVIRONMENT (even if not currently installed) ---
+        if package_name == 'omnipkg':  # Special handling for omnipkg itself
+            project_root = self.parent_omnipkg.config_manager._find_project_root()
+            if project_root and (project_root / 'pyproject.toml').exists():
+                # We're in a dev environment - use the source
+                install_source = str(project_root)
+                is_editable = True
+                safe_print(f"   - Detected development environment: {install_source}")
+        
+        # --- FALLBACK: Check if currently installed version is editable ---
+        if not is_editable:
+            try:
+                dist = importlib.metadata.distribution(package_name)
+                direct_url_json = dist.read_text('direct_url.json')
+                if direct_url_json:
+                    project_root = self.parent_omnipkg.config_manager._find_project_root()
+                    if project_root and (project_root / 'pyproject.toml').exists():
+                        install_source = str(project_root)
+                        is_editable = True
+                        safe_print(f"   - Detected local development source: {install_source}")
+            except (importlib.metadata.PackageNotFoundError, TypeError, FileNotFoundError):
+                pass
 
         if not install_source:
             install_source = f"{package_name}=={version}"
             safe_print(f"   - Using PyPI as source: {install_source}")
 
-        # Now, proceed with the robust temporary installation process
+        # --- SPECIAL HANDLING FOR EDITABLE INSTALLS ---
+        if is_editable:
+            return self._create_bubble_from_editable_install(
+                package_name, version, install_source, python_context_version
+            )
+        
+        # --- NORMAL PYPI BUBBLE CREATION ---
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)
             
-            # Step 1: Install the package and its full dependency tree into the temp directory
             safe_print(f"   - Installing full dependency tree to temporary location...")
             cmd = [
                 self.parent_omnipkg.config['python_executable'], '-m', 'pip', 'install',
@@ -1818,20 +1856,152 @@ class BubbleIsolationManager:
                 safe_print("--- Pip Error ---")
                 safe_print(result.stderr)
                 safe_print("-----------------")
-                # This is where the original error happened. We now see why.
                 if "No matching distribution found" in result.stderr:
-                    safe_print("   - 💡 This can happen if a development version is not available on PyPI.")
+                    safe_print("   - 💡 This package version is not available on PyPI.")
                 return False
 
-            # Step 2: Analyze the complete tree that was installed in the temp directory
             installed_tree = self._analyze_installed_tree(temp_path)
-            
-            # Step 3: Create the final, deduplicated bubble from the complete temp installation
             bubble_path = self.multiversion_base / f'{package_name}-{version}'
             if bubble_path.exists():
                 shutil.rmtree(bubble_path)
             
             return self._create_deduplicated_bubble(installed_tree, bubble_path, temp_path, python_context_version=python_context_version)
+
+    def _create_bubble_from_editable_install(self, package_name: str, version: str, 
+                                        source_path: str, python_context_version: str) -> bool:
+        """
+        Creates a bubble from an editable install by copying files from the live source.
+        This preserves the current dev version WITH ALL DEPENDENCIES as a fallback.
+        """
+        safe_print(f"   - Creating bubble from editable source (copy, not move)...")
+        
+        try:
+            source_root = Path(source_path)
+            
+            # Find the actual package directory in the source
+            package_dir = source_root / package_name
+            if not package_dir.exists():
+                package_dir = source_root
+            
+            # Get current site-packages
+            site_packages = None
+            for key in ['site_packages', 'main_site_packages', 'site_packages_path']:
+                if key in self.parent_omnipkg.config:
+                    site_packages = Path(self.parent_omnipkg.config[key])
+                    break
+            
+            if not site_packages:
+                import site as site_module
+                site_packages = Path(site_module.getsitepackages()[0])
+            
+            safe_print(f"   - Using site-packages: {site_packages}")
+            
+            # --- GET DEPENDENCIES FROM PYPROJECT.TOML ---
+            dependencies = []
+            pyproject_path = source_root / 'pyproject.toml'
+            if pyproject_path.exists():
+                try:
+                    if sys.version_info >= (3, 11):
+                        import tomllib
+                    else:
+                        import tomli as tomllib
+                    
+                    with open(pyproject_path, 'rb') as f:
+                        pyproject_data = tomllib.load(f)
+                    
+                    # Get dependencies from project.dependencies
+                    deps = pyproject_data.get('project', {}).get('dependencies', [])
+                    
+                    # Parse dependency specs (e.g., "requests>=2.20" -> "requests")
+                    for dep_spec in deps:
+                        # Remove version constraints, extras, and markers
+                        dep_name = dep_spec.split('[')[0].split('>')[0].split('<')[0].split('=')[0].split(';')[0].strip()
+                        if dep_name:
+                            dependencies.append(dep_name)
+                    
+                    safe_print(f"   - Found {len(dependencies)} dependencies in pyproject.toml")
+                except Exception as e:
+                    safe_print(f"   - ⚠️  Could not parse pyproject.toml: {e}")
+            
+            # Create a temp directory with the package AND its dependencies
+            with tempfile.TemporaryDirectory() as temp_dir:
+                temp_path = Path(temp_dir)
+                
+                # 1. Copy the main package source
+                temp_pkg_dir = temp_path / package_name
+                safe_print(f"   - Copying source files from: {package_dir}")
+                shutil.copytree(package_dir, temp_pkg_dir, symlinks=False, 
+                            ignore=shutil.ignore_patterns('__pycache__', '*.pyc', '.git*', 
+                                                        '.pytest_cache', '*.egg-info'))
+                
+                # 2. Copy the package's dist-info
+                dist_info_found = False
+                for dist_info_pattern in [f'{package_name}-*.dist-info', 
+                                        f'{package_name}-*.egg-info',
+                                        f'__editable__*.dist-info']:
+                    for dist_info in site_packages.glob(dist_info_pattern):
+                        if package_name in dist_info.name or 'editable' in dist_info.name:
+                            dest = temp_path / dist_info.name
+                            if dist_info.is_dir():
+                                shutil.copytree(dist_info, dest, symlinks=False)
+                            else:
+                                shutil.copy2(dist_info, dest)
+                            safe_print(f"   - Copied metadata: {dist_info.name}")
+                            dist_info_found = True
+                
+                if not dist_info_found:
+                    safe_print(f"   - ⚠️  No dist-info found, creating minimal metadata...")
+                    dist_info_dir = temp_path / f'{package_name}-{version}.dist-info'
+                    dist_info_dir.mkdir(exist_ok=True)
+                    metadata_file = dist_info_dir / 'METADATA'
+                    metadata_file.write_text(f"Metadata-Version: 2.1\nName: {package_name}\nVersion: {version}\n")
+                
+                # 3. Copy ALL dependencies from site-packages
+                safe_print(f"   - Copying {len(dependencies)} dependencies...")
+                for dep_name in dependencies:
+                    dep_canonical = canonicalize_name(dep_name)
+                    
+                    # Find and copy the dependency package directory
+                    dep_dir = None
+                    for potential_name in [dep_name, dep_name.replace('-', '_'), dep_canonical]:
+                        potential_dir = site_packages / potential_name
+                        if potential_dir.exists() and potential_dir.is_dir():
+                            dep_dir = potential_dir
+                            break
+                    
+                    if dep_dir:
+                        dest_dir = temp_path / dep_dir.name
+                        if not dest_dir.exists():
+                            shutil.copytree(dep_dir, dest_dir, symlinks=False,
+                                        ignore=shutil.ignore_patterns('__pycache__', '*.pyc'))
+                            safe_print(f"      ✓ {dep_name}")
+                    
+                    # Copy dependency's dist-info
+                    for dist_info in site_packages.glob(f'{dep_canonical}*.dist-info'):
+                        dest = temp_path / dist_info.name
+                        if not dest.exists():
+                            shutil.copytree(dist_info, dest, symlinks=False)
+                
+                safe_print(f"   - Analyzing complete dependency tree...")
+                
+                # Now analyze what we copied (package + all deps)
+                installed_tree = self._analyze_installed_tree(temp_path)
+                
+                # Create the final bubble
+                bubble_path = self.multiversion_base / f'{package_name}-{version}'
+                if bubble_path.exists():
+                    shutil.rmtree(bubble_path)
+                
+                return self._create_deduplicated_bubble(
+                    installed_tree, bubble_path, temp_path, 
+                    python_context_version=python_context_version
+                )
+        
+        except Exception as e:
+            safe_print(f"   - ❌ Failed to create bubble from editable install: {e}")
+            import traceback
+            traceback.print_exc()
+            return False
 
     def _get_historical_dependencies(self, package_name: str, version: str) -> List[str]:
         safe_print(_('    -> Trying strategy 1: pip dry-run...'))
@@ -3001,6 +3171,7 @@ class omnipkg:
         self.config = config_manager.config
         if not self.config:
             raise RuntimeError('OmnipkgCore cannot initialize: Configuration is missing or invalid.')
+        self._self_heal_omnipkg_installation()
         self.env_id = self._get_env_id()
         self.multiversion_base = Path(self.config['multiversion_base'])
         self.cache_client = None
@@ -3028,8 +3199,9 @@ class omnipkg:
                  self.cache_client.set(migration_flag_key, 'true')
         # --- END MIGRATION LOGIC ---
         self.interpreter_manager = InterpreterManager(self.config_manager)
-        self.hook_manager = ImportHookManager(str(self.multiversion_base), config=self.config, cache_client=self.cache_client)
+        self.hook_manager = ImportHookManager(str(self.config.get('multiversion_base')), config=self.config, cache_client=None)
         self.bubble_manager = BubbleIsolationManager(self.config, self)
+
         migration_flag_key = f'omnipkg:env_{self.env_id}:migration_v2_env_aware_keys_complete'
         if not self.cache_client.get(migration_flag_key):
             old_keys_iterator = self.cache_client.scan_iter('omnipkg:pkg:*', count=1)
@@ -3040,25 +3212,55 @@ class omnipkg:
         migration_v3_flag_key = f'{self.redis_env_prefix}migration_v3_install_type_complete'
         if not self.cache_client.get(migration_v3_flag_key):
             self._perform_v3_metadata_migration(migration_v3_flag_key)
+
         self.hook_manager.load_version_map()
-        self.hook_manager.load_version_map()
-        self._self_heal_omnipkg_installation()
         self.hook_manager.install_import_hook()
         safe_print(_('✅ Omnipkg core initialized successfully.'))
 
     def _get_omnipkg_version_from_site_packages(self, site_packages_path: str) -> str:
         """
         Gets omnipkg version directly from dist-info in a specific site-packages.
-        This is the only reliable way to check the true installed version in another context.
+        Handles both regular and editable installs.
         """
         try:
             site_pkg = Path(site_packages_path)
+            
+            # Check for regular install
             dist_info_dirs = list(site_pkg.glob('omnipkg-*.dist-info'))
+            
+            # Check for editable install (PEP 660 style)
+            if not dist_info_dirs:
+                dist_info_dirs = list(site_pkg.glob('__editable___omnipkg*.dist-info'))
+            
+            # Check for old-style editable install via .pth files
+            if not dist_info_dirs:
+                pth_files = list(site_pkg.glob('*.pth'))
+                for pth_file in pth_files:
+                    content = pth_file.read_text()
+                    if 'omnipkg' in content and '/omnipkg' in content:
+                        # Found an editable install - read version from the source pyproject.toml
+                        for line in content.split('\n'):
+                            if 'omnipkg' in line and line.strip().startswith('/'):
+                                project_path = Path(line.strip())
+                                if project_path.exists():
+                                    pyproject_path = project_path / 'pyproject.toml'
+                                    if pyproject_path.exists():
+                                        try:
+                                            if sys.version_info >= (3, 11):
+                                                import tomllib
+                                            else:
+                                                import tomli as tomllib
+                                            with open(pyproject_path, 'rb') as f:
+                                                data = tomllib.load(f)
+                                            return data.get('project', {}).get('version', 'unknown')
+                                        except Exception:
+                                            pass
+            
             if not dist_info_dirs:
                 return 'not-installed'
             
             # Find the highest version if multiple exist
-            dist_info_dirs.sort(key=lambda p: parse_version(p.name.split('-')[1]), reverse=True)
+            dist_info_dirs.sort(key=lambda p: parse_version(p.name.split('-')[1].replace('__editable___omnipkg', '').split('.dist')[0]), reverse=True)
             metadata_file = dist_info_dirs[0] / 'METADATA'
             
             if metadata_file.exists():
@@ -3068,7 +3270,8 @@ class omnipkg:
                             return line.split(':', 1)[1].strip()
             
             # Fallback if METADATA is weird
-            return dist_info_dirs[0].name.split('-')[1]
+            version_str = dist_info_dirs[0].name.split('-')[1].replace('__editable___omnipkg', '').split('.dist')[0]
+            return version_str
         except Exception:
             return 'unknown'
 
@@ -3108,112 +3311,102 @@ class omnipkg:
 
     def _self_heal_omnipkg_installation(self):
         """
-        (UPGRADED - UNIVERSAL SYNC) Ensures ALL managed Python interpreters are running the
-        same version of omnipkg as the currently active control plane. This works for
-        both developer (editable) and user (PyPI) installations.
+        (V13 - OPTIMIZED) Silently aligns all interpreters with concurrent installs.
+        Only shows output when sync is needed.
         """
         try:
-            # Step 1: Determine the "master" version and the correct installation source.
-            master_version_str = _get_dynamic_omnipkg_version()
-            if master_version_str == 'unknown':
-                return # Can't sync without a known version.
-
-            project_root = self.config_manager._find_project_root()
-            is_dev_mode = project_root is not None
+            master_version_str = 'unknown'
+            install_spec = []
             
-            if is_dev_mode:
+            project_root = self.config_manager._find_project_root()
+            if project_root:
+                toml_path = Path(project_root) / 'pyproject.toml'
+                if toml_path.exists():
+                    try:
+                        if sys.version_info >= (3, 11):
+                            import tomllib
+                        else:
+                            import tomli as tomllib
+                        
+                        with open(toml_path, 'rb') as f:
+                            toml_data = tomllib.load(f)
+                            master_version_str = toml_data.get('project', {}).get('version', 'unknown')
+                    except Exception:
+                        return
+                else:
+                    return
+                
                 install_spec = ['-e', str(project_root)]
-                mode_str = f"developer mode (editable from {project_root})"
             else:
-                # Try to find the wheel file that was used to install this version
-                import site
-                site_packages = site.getsitepackages()[0]
-                dist_info = Path(site_packages) / f"omnipkg-{master_version_str}.dist-info"
-                
-                # Check if there's a direct_url.json that indicates local install
-                direct_url_file = dist_info / "direct_url.json"
-                wheel_path = None
-                mode_str = None  # Don't assume mode yet!
-                
-                if direct_url_file.exists():
-                    import json
-                    with open(direct_url_file) as f:
-                        direct_url_data = json.load(f)
-                        if direct_url_data.get('url', '').startswith('file://'):
-                            # Extract the wheel path from the file:// URL
-                            wheel_path = direct_url_data['url'].replace('file://', '')
-                            if Path(wheel_path).exists():
-                                install_spec = [wheel_path]
-                                mode_str = f"local wheel: {wheel_path}"
-                            else:
-                                wheel_path = None
-                
-                # Fallback to PyPI if no local wheel found
-                if not mode_str:
+                native_python_exe = str(self.config_manager.venv_path / 'bin' / 'python')
+                try:
+                    cmd = [native_python_exe, "-c", "from importlib.metadata import version; print(version('omnipkg'))"]
+                    result = subprocess.run(cmd, capture_output=True, text=True, check=True, timeout=5)
+                    master_version_str = result.stdout.strip()
                     install_spec = [f'omnipkg=={master_version_str}']
-                    mode_str = f"PyPI"
-
-            all_interpreters = self.interpreter_manager.list_available_interpreters()
+                except Exception:
+                    return
+            
+            if master_version_str in ['unknown', 'not-installed']:
+                return
+            
+            # --- CHECK ALL INTERPRETERS ---
+            interpreter_manager = InterpreterManager(self.config_manager)
+            all_interpreters = interpreter_manager.list_available_interpreters()
             sync_needed_for = []
 
-            # Step 2: Check every managed interpreter for version drift.
             for py_ver, exe_path in all_interpreters.items():
                 target_exe = str(exe_path)
                 
-                # Don't try to heal the interpreter that is currently running this code.
-                if Path(target_exe).resolve() == Path(sys.executable).resolve():
-                    continue
-
-                target_version_str = 'not-installed'
                 try:
-                    # Use a clean environment to avoid PYTHONPATH contamination
-                    clean_env = os.environ.copy()
-                    clean_env.pop('PYTHONPATH', None)
-                    cmd = [target_exe, "-c", "from importlib.metadata import version; print(version('omnipkg'))"]
-                    result = subprocess.run(cmd, capture_output=True, text=True, check=True, timeout=5, env=clean_env)
-                    target_version_str = result.stdout.strip()
-                except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired):
-                    pass # Stays 'not-installed'
+                    cmd = [target_exe, "-c", "import site; print(site.getsitepackages()[0])"]
+                    result = subprocess.run(cmd, capture_output=True, text=True, check=True, timeout=5)
+                    site_packages = result.stdout.strip()
+                    target_version_str = self._get_omnipkg_version_from_site_packages(site_packages)
+                except Exception:
+                    target_version_str = 'not-installed'
                 
                 if target_version_str != master_version_str:
-                    sync_needed_for.append((py_ver, target_exe, target_version_str))
+                    sync_needed_for.append((py_ver, target_exe))
 
             if not sync_needed_for:
-                return # All interpreters are in sync.
+                return  # Silent success - everything in sync
 
-            # Step 3: If any interpreters are out of sync, print a big banner and perform the healing.
-            safe_print('\n' + '=' * 60)
-            safe_print("🔧 OMNIPKG AUTO-SYNC: Aligning All Interpreters")
-            safe_print('=' * 60)
-            safe_print(f"  - Master Version: {master_version_str} ({mode_str})")
+            # --- CONCURRENT SYNC ---
+            versions_to_sync = ', '.join([f"Python {ver}" for ver, _ in sync_needed_for])
+            safe_print(f"🔄 Syncing {versions_to_sync} to v{master_version_str}...")
             
-            for py_ver, target_exe, old_ver in sync_needed_for:
-                safe_print(f"\n  - Synchronizing Python {py_ver} context...")
-                safe_print(f"    - Current: {old_ver} (Stale)")
-                safe_print(f"    - Target:  {master_version_str}")
-
-                heal_cmd = [target_exe, '-m', 'pip', 'install', '--upgrade', '--no-deps'] + install_spec
-                result = subprocess.run(heal_cmd, capture_output=True, text=True)
-
-                if result.returncode != 0:
-                    # Check if it's a "not found on PyPI" error
-                    if "Could not find a version that satisfies the requirement" in result.stderr:
-                        safe_print(f"  - ⚠️  Version {master_version_str} not available on PyPI.")
-                        safe_print(f"  - 💡 Auto-sync skipped. Please install manually or publish to PyPI.")
-                    else:
-                        safe_print(f"  - ❌ FATAL: Auto-sync failed for Python {py_ver}.")
-                        safe_print(result.stderr)
-                else:
-                    safe_print(f"  - ✅ Sync successful for Python {py_ver}!")
+            import concurrent.futures
             
-            safe_print("\n" + "="*60)
-            safe_print("  - ✨ All managed interpreters are now aligned.")
-            safe_print("="*60)
+            def sync_interpreter(py_ver, target_exe):
+                """Sync a single interpreter (runs in thread)"""
+                heal_cmd = [
+                    target_exe, '-m', 'pip', 'install',
+                    '--force-reinstall', '--no-deps', '--no-cache-dir', '-q'  # -q for quiet
+                ] + install_spec
+                
+                result = subprocess.run(heal_cmd, capture_output=True, text=True, timeout=60)
+                return (py_ver, result.returncode == 0)
+            
+            # Run all syncs concurrently
+            with concurrent.futures.ThreadPoolExecutor(max_workers=6) as executor:
+                futures = [executor.submit(sync_interpreter, py_ver, exe) for py_ver, exe in sync_needed_for]
+                results = [f.result() for f in concurrent.futures.as_completed(futures)]
+            
+            # Report results
+            success = [ver for ver, ok in results if ok]
+            failed = [ver for ver, ok in results if not ok]
+            
+            if success:
+                success_str = ', '.join(success)
+                safe_print(f"   ✅ Synced: {success_str}")
+            if failed:
+                failed_str = ', '.join(failed)
+                safe_print(f"   ❌ Failed: {failed_str}")
 
-        except Exception as e:
-            safe_print(f"  - ⚠️  An unexpected error occurred during universal self-healing: {e}")
-            import traceback
-            traceback.print_exc()
+        except Exception:
+            # Silent failure - don't disrupt normal operation
+            pass
 
     def _perform_redis_key_migration(self, migration_flag_key: str):
         """
@@ -6152,7 +6345,7 @@ class omnipkg:
         # --- The upgrader script that will be executed by a new, clean process ---
         # It has one job: replace the files on disk. Nothing more.
         upgrader_script_content = textwrap.dedent(f"""
-            import sys, os, subprocess, time
+            import sys, os, subprocess, time, textwrap
 
             def run_cmd(cmd, description):
                 print(f"--- [Upgrader] Executing: {{description}} ---")
