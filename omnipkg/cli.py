@@ -37,6 +37,42 @@ def get_actual_python_version():
         return sys.version_info[:2]
     except Exception:
         return sys.version_info[:2]
+    
+def upgrade(args, core):
+    """Handler for the upgrade command."""
+    package_name = args.package_name[0] if args.package_name else 'omnipkg'
+
+    # Handle self-upgrade as a special case
+    if package_name.lower() == 'omnipkg':
+        return core.smart_upgrade(
+            version=args.version,
+            force=args.force,
+            skip_dev_check=args.force_dev
+        )
+
+    # For non-omnipkg packages: temporarily switch strategy, install, then restore
+    original_strategy = core.config.get('install_strategy', 'stable-main')
+    
+    try:
+        if original_strategy != 'latest-active':
+            safe_print(f"   - 🔄 Temporarily switching to 'latest-active' strategy...")
+            core.config_manager.set('install_strategy', 'latest-active')
+            # Also update the in-memory config so smart_install sees it
+            core.config['install_strategy'] = 'latest-active'
+        
+        safe_print(f"🔄 Upgrading '{package_name}' to latest version...")
+        
+        return core.smart_install(
+            packages=[package_name],
+            force_reinstall=True
+        )
+    
+    finally:
+        # ALWAYS restore the original strategy
+        if original_strategy != 'latest-active':
+            core.config_manager.set('install_strategy', original_strategy)
+            core.config['install_strategy'] = original_strategy
+            safe_print(f"   - ✅ Strategy restored to '{original_strategy}'")
 
 def run_demo_with_enforced_context(
     source_script_path: Path,
