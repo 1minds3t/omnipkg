@@ -37,6 +37,42 @@ def get_actual_python_version():
         return sys.version_info[:2]
     except Exception:
         return sys.version_info[:2]
+    
+def upgrade(args, core):
+    """Handler for the upgrade command."""
+    package_name = args.package_name[0] if args.package_name else 'omnipkg'
+
+    # Handle self-upgrade as a special case
+    if package_name.lower() == 'omnipkg':
+        return core.smart_upgrade(
+            version=args.version,
+            force=args.force,
+            skip_dev_check=args.force_dev
+        )
+
+    # For non-omnipkg packages: temporarily switch strategy, install, then restore
+    original_strategy = core.config.get('install_strategy', 'stable-main')
+    
+    try:
+        if original_strategy != 'latest-active':
+            safe_print(f"   - 🔄 Temporarily switching to 'latest-active' strategy...")
+            core.config_manager.set('install_strategy', 'latest-active')
+            # Also update the in-memory config so smart_install sees it
+            core.config['install_strategy'] = 'latest-active'
+        
+        safe_print(f"🔄 Upgrading '{package_name}' to latest version...")
+        
+        return core.smart_install(
+            packages=[package_name],
+            force_reinstall=True
+        )
+    
+    finally:
+        # ALWAYS restore the original strategy
+        if original_strategy != 'latest-active':
+            core.config_manager.set('install_strategy', original_strategy)
+            core.config['install_strategy'] = original_strategy
+            safe_print(f"   - ✅ Strategy restored to '{original_strategy}'")
 
 def run_demo_with_enforced_context(
     source_script_path: Path,
@@ -435,10 +471,11 @@ def create_parser():
     prune_parser.add_argument('--keep-latest', type=int, metavar='N', help=_('Keep N most recent bubbled versions'))
     prune_parser.add_argument('--yes', '-y', dest='force', action='store_true', help=_('Skip confirmation'))
     upgrade_parser = subparsers.add_parser('upgrade', help=_('Upgrade omnipkg or other packages to the latest version'))
-    upgrade_parser.add_argument('package', nargs='?', default='omnipkg', help=_('Package to upgrade (defaults to omnipkg itself)'))
-    upgrade_parser.add_argument('--version', help=_('Specify a version to upgrade/downgrade to'))
+    upgrade_parser.add_argument('package_name', nargs='*', default=['omnipkg'], help='Package to upgrade (defaults to omnipkg itself)')
+    upgrade_parser.add_argument('--version', help='(For omnipkg self-upgrade only) Specify a target version')
     upgrade_parser.add_argument('--yes', '-y', dest='force', action='store_true', help=_('Skip confirmation prompt'))
     upgrade_parser.add_argument('--force-dev', action='store_true', help=_('Force upgrade even in a developer environment (use with caution)'))
+    upgrade_parser.set_defaults(func=upgrade)  # CRITICAL: This connects the handler!
     return parser
 
 def print_header(title):
@@ -563,6 +600,8 @@ def main():
             else:
                 parser.print_help()
                 return 1
+        elif args.command == 'upgrade':
+            return upgrade(args, pkg_instance)
         elif args.command == 'swap':
             if not args.target:
                 safe_print(_('❌ Error: You must specify what to swap.'))
@@ -855,13 +894,23 @@ def main():
         elif args.command == 'run':
             return execute_run_command(args.script_and_args, cm, verbose=args.verbose)
         elif args.command == 'upgrade':
-            if args.package.lower() == 'omnipkg':
-                return pkg_instance.smart_upgrade(version=args.version, force=args.force, skip_dev_check=args.force_dev)
+            package_name = args.package_name[0] if args.package_name else 'omnipkg'
 
-            else:
-                # Upgrading other packages is just a reinstall of the latest
-                safe_print(_("Redirecting to smart_install to get the latest version of '{}'...").format(args.package))
-                return pkg_instance.smart_install([args.package], force_reinstall=True)
+            # Handle self-upgrade as a special case
+            if package_name.lower() == 'omnipkg':
+                return pkg_instance.smart_upgrade(
+                    version=args.version,
+                    force=args.force,
+                    skip_dev_check=args.force_dev
+                )
+
+            # For all other packages, use smart_install with a temporary strategy override
+            safe_print(f"🔄 Upgrading '{package_name}' to latest version...")
+            return pkg_instance.smart_install(
+                packages=[package_name],
+                force_reinstall=True,
+                override_strategy='latest-active' # Temporarily use this strategy for the upgrade
+            )
         else:
             parser.print_help()
             safe_print(_("\n💡 Did you mean 'omnipkg config set language <code>'?"))
