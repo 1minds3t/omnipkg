@@ -63,25 +63,35 @@ jobs:
               f.write(f"OMNIPKG_ENV_ID_OVERRIDE={main_env_id}\n")
           EOF
 
+      - name: Set Install Strategy to Latest-Active
+        env:
+          OMNIPKG_ENV_ID_OVERRIDE: ${{ env.OMNIPKG_ENV_ID_OVERRIDE }}
+        run: |
+          echo "--- Setting install strategy to latest-active ---"
+          omnipkg config set install_strategy latest-active
+          
+          echo "--- Verifying configuration ---"
+          omnipkg config show | grep install_strategy
+
       - name: Install Older Version of Package
         env:
           OMNIPKG_ENV_ID_OVERRIDE: ${{ env.OMNIPKG_ENV_ID_OVERRIDE }}
         run: |
-          echo "--- Installing older version of uv (0.9.4) ---"
+          echo "--- Installing older version of requests (2.28.0) ---"
           mkdir -p /tmp/omnipkg-artifacts
           
-          omnipkg install uv==0.9.4 2>&1 | tee /tmp/omnipkg-artifacts/install_old_version.txt
+          omnipkg install requests==2.28.0 2>&1 | tee /tmp/omnipkg-artifacts/install_old_version.txt
           
-          echo "## Install uv 0.9.4 Output" >> $GITHUB_STEP_SUMMARY
+          echo "## Install requests 2.28.0 Output" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
           cat /tmp/omnipkg-artifacts/install_old_version.txt >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
           
           # Verify installation
           if grep -q "All package operations complete" /tmp/omnipkg-artifacts/install_old_version.txt; then
-            echo "✅ uv 0.9.4 installed successfully"
+            echo "✅ requests 2.28.0 installed successfully"
           else
-            echo "❌ Failed to install uv 0.9.4"
+            echo "❌ Failed to install requests 2.28.0"
             exit 1
           fi
 
@@ -89,20 +99,20 @@ jobs:
         env:
           OMNIPKG_ENV_ID_OVERRIDE: ${{ env.OMNIPKG_ENV_ID_OVERRIDE }}
         run: |
-          echo "--- Verifying initial uv version ---"
+          echo "--- Verifying initial requests version ---"
           
-          omnipkg info uv 2>&1 | tee /tmp/omnipkg-artifacts/info_before_upgrade.txt
+          omnipkg info requests 2>&1 | tee /tmp/omnipkg-artifacts/info_before_upgrade.txt
           
-          echo "## uv Info Before Upgrade" >> $GITHUB_STEP_SUMMARY
+          echo "## requests Info Before Upgrade" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
           cat /tmp/omnipkg-artifacts/info_before_upgrade.txt >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
           
-          # Check that 0.9.4 is active
-          if grep -q "Active Version: 0.9.4" /tmp/omnipkg-artifacts/info_before_upgrade.txt; then
-            echo "✅ Confirmed: uv 0.9.4 is active"
+          # Check that 2.28.0 is active
+          if grep -q "Active Version: 2.28.0" /tmp/omnipkg-artifacts/info_before_upgrade.txt; then
+            echo "✅ Confirmed: requests 2.28.0 is active"
           else
-            echo "❌ uv 0.9.4 is not active as expected"
+            echo "❌ requests 2.28.0 is not active as expected"
             exit 1
           fi
 
@@ -110,11 +120,11 @@ jobs:
         env:
           OMNIPKG_ENV_ID_OVERRIDE: ${{ env.OMNIPKG_ENV_ID_OVERRIDE }}
         run: |
-          echo "--- Running omnipkg upgrade uv ---"
+          echo "--- Running omnipkg upgrade requests ---"
           
           set -o pipefail
           
-          if timeout 900 bash -c 'omnipkg upgrade uv' 2>&1 | tee /tmp/omnipkg-artifacts/upgrade_output.txt; then
+          if timeout 900 bash -c 'omnipkg upgrade requests' 2>&1 | tee /tmp/omnipkg-artifacts/upgrade_output.txt; then
             UPGRADE_EXIT_CODE=0
           else
             UPGRADE_EXIT_CODE=$?
@@ -134,9 +144,10 @@ jobs:
           fi
           
           # Verify bubble was created for old version
-          if grep -q "Creating isolated bubble for uv v0.9.4" /tmp/omnipkg-artifacts/upgrade_output.txt || \
-             grep -q "Bubbled uv v0.9.4" /tmp/omnipkg-artifacts/upgrade_output.txt; then
-            echo "✅ Old version (0.9.4) was bubbled!"
+          if grep -q "Creating isolated bubble for requests v2.28.0" /tmp/omnipkg-artifacts/upgrade_output.txt || \
+             grep -q "Bubbled requests v2.28.0" /tmp/omnipkg-artifacts/upgrade_output.txt || \
+             grep -q "LATEST-ACTIVE STRATEGY: Preserving replaced versions" /tmp/omnipkg-artifacts/upgrade_output.txt; then
+            echo "✅ Old version (2.28.0) was bubbled!"
           else
             echo "⚠️  Could not verify bubble creation from output"
           fi
@@ -145,31 +156,31 @@ jobs:
         env:
           OMNIPKG_ENV_ID_OVERRIDE: ${{ env.OMNIPKG_ENV_ID_OVERRIDE }}
         run: |
-          echo "--- Verifying upgraded uv version ---"
+          echo "--- Verifying upgraded requests version ---"
           
-          omnipkg info uv 2>&1 | tee /tmp/omnipkg-artifacts/info_after_upgrade.txt
+          omnipkg info requests 2>&1 | tee /tmp/omnipkg-artifacts/info_after_upgrade.txt
           
-          echo "## uv Info After Upgrade" >> $GITHUB_STEP_SUMMARY
+          echo "## requests Info After Upgrade" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
           cat /tmp/omnipkg-artifacts/info_after_upgrade.txt >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
           
-          # Extract active version (should be latest, e.g., 0.9.5 or newer)
+          # Extract active version (should be latest, not 2.28.0)
           ACTIVE_VERSION=$(grep "Active Version:" /tmp/omnipkg-artifacts/info_after_upgrade.txt | awk '{print $3}')
           echo "Active version after upgrade: $ACTIVE_VERSION"
           
-          # Verify it's not 0.9.4 anymore
-          if [[ "$ACTIVE_VERSION" != "0.9.4" ]]; then
-            echo "✅ Confirmed: uv upgraded from 0.9.4 to $ACTIVE_VERSION"
+          # Verify it's not 2.28.0 anymore
+          if [[ "$ACTIVE_VERSION" != "2.28.0" ]]; then
+            echo "✅ Confirmed: requests upgraded from 2.28.0 to $ACTIVE_VERSION"
           else
-            echo "❌ uv is still on version 0.9.4, upgrade failed"
+            echo "❌ requests is still on version 2.28.0, upgrade failed"
             exit 1
           fi
           
           # Verify old version is bubbled
           if grep -q "Bubbled Versions:" /tmp/omnipkg-artifacts/info_after_upgrade.txt && \
-             grep -q "0.9.4" /tmp/omnipkg-artifacts/info_after_upgrade.txt; then
-            echo "✅ Old version (0.9.4) is preserved in bubble"
+             grep -q "2.28.0" /tmp/omnipkg-artifacts/info_after_upgrade.txt; then
+            echo "✅ Old version (2.28.0) is preserved in bubble"
           else
             echo "⚠️  Could not verify bubble presence for old version"
           fi
@@ -178,15 +189,15 @@ jobs:
         env:
           OMNIPKG_ENV_ID_OVERRIDE: ${{ env.OMNIPKG_ENV_ID_OVERRIDE }}
         run: |
-          echo "--- Testing upgraded uv package ---"
+          echo "--- Testing upgraded requests package ---"
           
-          # Test that uv can be imported
-          python -c "import uv; print(f'uv module imported successfully: {uv}')" 2>&1 | tee /tmp/omnipkg-artifacts/import_test.txt
+          # Test that requests can be imported and used
+          python -c "import requests; print(f'requests version: {requests.__version__}'); r = requests.get('https://httpbin.org/json'); print(f'Status: {r.status_code}')" 2>&1 | tee /tmp/omnipkg-artifacts/import_test.txt
           
           if [ $? -eq 0 ]; then
-            echo "✅ Upgraded uv package imports successfully!"
+            echo "✅ Upgraded requests package works correctly!"
           else
-            echo "❌ Failed to import upgraded uv package"
+            echo "❌ Failed to use upgraded requests package"
             exit 1
           fi
 
@@ -197,16 +208,16 @@ jobs:
           echo "--- Testing bubble swap back to old version ---"
           
           # Get the active version number
-          ACTIVE_VERSION=$(omnipkg info uv 2>/dev/null | grep "Active Version:" | awk '{print $3}')
+          ACTIVE_VERSION=$(omnipkg info requests 2>/dev/null | grep "Active Version:" | awk '{print $3}')
           
-          # Try to swap to the bubbled version (0.9.4)
-          omnipkg install uv==0.9.4 2>&1 | tee /tmp/omnipkg-artifacts/swap_to_old.txt
+          # Try to swap to the bubbled version (2.28.0)
+          omnipkg install requests==2.28.0 2>&1 | tee /tmp/omnipkg-artifacts/swap_to_old.txt
           
           # Verify swap worked
-          NEW_ACTIVE=$(omnipkg info uv 2>/dev/null | grep "Active Version:" | awk '{print $3}')
+          NEW_ACTIVE=$(omnipkg info requests 2>/dev/null | grep "Active Version:" | awk '{print $3}')
           
-          if [[ "$NEW_ACTIVE" == "0.9.4" ]]; then
-            echo "✅ Successfully swapped back to bubbled version 0.9.4"
+          if [[ "$NEW_ACTIVE" == "2.28.0" ]]; then
+            echo "✅ Successfully swapped back to bubbled version 2.28.0"
             echo "✅ Bubble swapping works correctly!"
           else
             echo "⚠️  Swap to old version may not have worked as expected"
@@ -214,7 +225,7 @@ jobs:
           
           echo "## Bubble Swap Test" >> $GITHUB_STEP_SUMMARY
           echo "- Original active: $ACTIVE_VERSION" >> $GITHUB_STEP_SUMMARY
-          echo "- Swapped to: 0.9.4" >> $GITHUB_STEP_SUMMARY
+          echo "- Swapped to: 2.28.0" >> $GITHUB_STEP_SUMMARY
           echo "- Current active: $NEW_ACTIVE" >> $GITHUB_STEP_SUMMARY
 
       - name: Generate Test Summary
@@ -223,17 +234,19 @@ jobs:
           echo "## ⬆️ Package Upgrade Test Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Test Scenario" >> $GITHUB_STEP_SUMMARY
-          echo "1. Installed older version of uv (0.9.4)" >> $GITHUB_STEP_SUMMARY
-          echo "2. Ran \`omnipkg upgrade uv\` command" >> $GITHUB_STEP_SUMMARY
-          echo "3. Verified upgrade to latest version (with bubbling)" >> $GITHUB_STEP_SUMMARY
-          echo "4. Tested bubble swapping back to old version" >> $GITHUB_STEP_SUMMARY
+          echo "1. Set install strategy to 'latest-active'" >> $GITHUB_STEP_SUMMARY
+          echo "2. Installed older version of requests (2.28.0)" >> $GITHUB_STEP_SUMMARY
+          echo "3. Ran \`omnipkg upgrade requests\` command" >> $GITHUB_STEP_SUMMARY
+          echo "4. Verified upgrade to latest version (with bubbling)" >> $GITHUB_STEP_SUMMARY
+          echo "5. Tested bubble swapping back to old version" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Key Verifications" >> $GITHUB_STEP_SUMMARY
-          echo "- ✅ Old version (0.9.4) installed correctly" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Install strategy set to 'latest-active'" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Old version (2.28.0) installed correctly" >> $GITHUB_STEP_SUMMARY
           echo "- ✅ Upgrade command executed successfully" >> $GITHUB_STEP_SUMMARY
           echo "- ✅ New version became active" >> $GITHUB_STEP_SUMMARY
           echo "- ✅ Old version preserved in bubble" >> $GITHUB_STEP_SUMMARY
-          echo "- ✅ Package imports correctly after upgrade" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Package works correctly after upgrade" >> $GITHUB_STEP_SUMMARY
           echo "- ✅ Bubble swapping works (can revert to old version)" >> $GITHUB_STEP_SUMMARY
 
       - name: Archive Test Outputs
