@@ -531,7 +531,6 @@ class ConfigManager:
             
             safe_print(_('   -> Scanning directory: {}').format(interp_dir.name))
             found_exe_path = None
-<<<<<<< HEAD
             
             # --- START FIX: TWO-PASS SEARCH STRATEGY ---
 
@@ -539,10 +538,6 @@ class ConfigManager:
             search_locations = [interp_dir / 'bin', interp_dir / 'Scripts']
             possible_exe_names = ['python3.14', 'python3.13', 'python3.12', 'python3.11', 'python3.10', 'python3.9', 'python3.8', 'python3', 'python', 'python.exe']
 
-=======
-            search_locations = [interp_dir / 'bin', interp_dir / 'Scripts', interp_dir]
-            possible_exe_names = ['python3.14', 'python3.13', 'python3.12', 'python3.11', 'python3.10', 'python3.9', 'python3.8', 'python3', 'python', 'python.exe']
->>>>>>> b51ef64 (chore: Improve python executable search order)
             for location in search_locations:
                 if location.is_dir():
                     for exe_name in possible_exe_names:
@@ -6110,330 +6105,115 @@ class omnipkg:
 
     def smart_upgrade(self, version: Optional[str] = None, force: bool = False, skip_dev_check: bool = False) -> int:
         """
-        (V17 - LIVE MODE with Fixed Version Detection and PyPI-only bubbles)
-        Performs omnipkg self-upgrade with proper version detection and metadata cleanup.
+        (V23 - The Minimalist Finalizer) The definitive self-upgrade. Trusts the
+        core library's self-healing capabilities and focuses solely on correctly
+        updating the filesystem installation via a standalone process.
         """
-        print_header("omnipkg Self-Upgrade (Live Mode)")
-        
-        # Get ACTUAL installed version (not from source code)
+        print_header("omnipkg Self-Upgrade (Minimalist Finalizer)")
+
         current_version_str = self._get_active_version_from_environment('omnipkg')
         if not current_version_str:
             safe_print("   - ❌ Could not detect currently installed omnipkg version. Aborting.")
             return 1
-        
         safe_print(f"   - Current installed version: {current_version_str}")
-        
-        # Check for dev mode
+
         project_root = self.config_manager._find_project_root()
         if project_root and not skip_dev_check:
             safe_print("\n" + "🛡️" * 30)
             safe_print("   DEV MODE DETECTED: Self-upgrade is disabled.")
-            safe_print("   To upgrade: `git pull` and `pip install .`")
+            safe_print("   To upgrade: `git pull` and then `pip install -e .`")
             safe_print("   (Use --force-dev to override and test user-mode upgrade)")
             safe_print("🛡️" * 30)
             return 0
-        
-        # Fetch target version from PyPI (not from local source!)
+
         target_version_str = version or self._fetch_latest_pypi_version_only('omnipkg')
         if not target_version_str:
             safe_print("   - ❌ Could not determine target version from PyPI. Aborting.")
             return 1
-        
-        safe_print(f"\n- Target PyPI version: {target_version_str}. Preparing to upgrade.")
-        
-        # Check if already on target version
+        safe_print(f"   - Target PyPI version: {target_version_str}")
+
         if current_version_str == target_version_str and not force:
             safe_print(f"✅ Already on version {target_version_str}. No upgrade needed.")
             return 0
-        
+
         if not force:
-            if input("🤔 WARNING: This will modify your environment. Proceed with the upgrade? (y/N): ").lower().strip() != 'y':
+            if input("\n🤔 WARNING: This will irrevocably replace the current omnipkg installation. Proceed? (y/N): ").lower().strip() != 'y':
                 safe_print("🚫 Upgrade cancelled.")
                 return 1
 
         python_context = self.current_python_context.replace('py', '')
 
-        # Step 1: Bubble the CURRENT version (using YOUR existing method that handles dev installs!)
         safe_print(f"\n   - Step 1: Preserving current version (v{current_version_str}) in a bubble...")
         if not self.bubble_manager.create_bubble_for_package('omnipkg', current_version_str, python_context_version=python_context):
             safe_print(f"   - ❌ Failed to bubble current version v{current_version_str}. Aborting.")
             return 1
         safe_print(f"   - ✅ Successfully bubbled omnipkg v{current_version_str}.")
 
-        # Step 2: Bubble the NEW version (from PyPI only, since it's not installed yet)
-        safe_print(f"\n   - Step 2: Creating bubble for target version v{target_version_str}...")
-        if not self._create_pypi_only_bubble('omnipkg', target_version_str, python_context):
-            safe_print(f"   - ❌ Failed to create bubble for target version v{target_version_str}. Aborting.")
-            return 1
-        safe_print("   - ✅ Both bubbles created successfully.")
+        # --- The upgrader script that will be executed by a new, clean process ---
+        # It has one job: replace the files on disk. Nothing more.
+        upgrader_script_content = textwrap.dedent(f"""
+            import sys, os, subprocess, time
 
-        # Step 3: Handover to the LIVE handover script
-        safe_print("\n   - Step 3: Handing over to the new version to complete the upgrade...")
-        main_python_exe = self.config['python_executable']
-        site_packages = self.config['site_packages_path']
-        
-        # Get the dev source location to protect it
-        dev_source_path = str(project_root) if project_root else ""
-            
-        # --- ### ENHANCED LIVE, DESTRUCTIVE SCRIPT ### ---
-        upgrade_script = f"""
-import sys, os, shutil, subprocess, importlib.metadata
-from pathlib import Path
+            def run_cmd(cmd, description):
+                print(f"--- [Upgrader] Executing: {{description}} ---")
+                print(f"    $ {{' '.join(cmd)}}")
+                process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding='utf-8')
+                for line in iter(process.stdout.readline, ''):
+                    print(f"    | {{line.strip()}}")
+                return_code = process.wait()
+                if return_code != 0:
+                    print(f"--- ❌ [Upgrader] FAILED: {{description}} (exit code {{return_code}}) ---")
+                    sys.exit(return_code)
+                print(f"--- ✅ [Upgrader] SUCCESS: {{description}} ---")
 
-def safe_print(msg): 
-    print(msg)
-    sys.stdout.flush()
-
-def is_safe_to_delete(path, dev_source):
-    '''Ensure we never delete from the dev source directory'''
-    path_resolved = Path(path).resolve()
-    if dev_source:
-        dev_source_resolved = Path(dev_source).resolve()
-        if path_resolved == dev_source_resolved or dev_source_resolved in path_resolved.parents:
-            return False
-    return True
-
-def is_ghost_dist_info(dist_info_path):
-    '''
-    Determines if a .dist-info directory is a "ghost" by checking if its files exist.
-    Returns True if it's a ghost (files don't exist), False if it's live.
-    '''
-    try:
-        dist = importlib.metadata.Distribution.at(dist_info_path)
-        if not dist.files:
-            return False
-
-        for file_path_obj in dist.files:
-            file_path_str = str(file_path_obj)
-            
-            # Ignore metadata, pycache, and compiled bytecode
-            if (dist_info_path.name in file_path_str or 
-                '__pycache__' in file_path_str or 
-                file_path_str.endswith(('.pyc', '.pyo'))):
-                continue
-
-            absolute_path = dist.locate_file(file_path_obj)
-            if absolute_path and absolute_path.exists():
-                # Found a live file, so it is NOT a ghost
-                return False
-
-        # If we checked all real files and found none, it IS a ghost
-        return True
-
-    except Exception:
-        # On any error, play it safe and assume it's not a ghost
-        return False
-
-try:
-    safe_print('--- 🚀 [LIVE] Executing final upgrade step ---')
-    safe_print('   ' + '─' * 70)
-    
-    site_packages_path = Path('{site_packages}')
-    dev_source = '{dev_source_path}'
-    
-    safe_print(f'--- 🔍 DEBUG: Site-packages path: {{site_packages_path.resolve()}}')
-    if dev_source:
-        safe_print(f'--- 🛡️  PROTECTED: Dev source path: {{Path(dev_source).resolve()}}')
-    
-    # Search for ALL omnipkg metadata directories using ghost detection
-    safe_print('--- 🔍 Searching for omnipkg installations...')
-    metadata_patterns = ['omnipkg-*.dist-info', 'omnipkg-*.egg-info']
-    items_to_delete = []
-    
-    for pattern in metadata_patterns:
-        found = list(site_packages_path.glob(pattern))
-        safe_print(f'--- 🔍 Pattern "{{pattern}}": Found {{len(found)}} match(es)')
-        for p in found:
-            # Check if it's safe to delete (not in dev source)
-            if not is_safe_to_delete(p, dev_source):
-                safe_print(f'       • {{p.name}} [PROTECTED - dev source]')
-                continue
-            
-            # For .dist-info, use ghost detection
-            if p.name.endswith('.dist-info'):
-                is_ghost = is_ghost_dist_info(p)
-                status = "GHOST - will delete" if is_ghost else "LIVE - will delete anyway (cleanup)"
-                safe_print(f'       • {{p.name}} [{{status}}]')
-                items_to_delete.append(p)
-            else:
-                # For .egg-info, always delete if not protected
-                safe_print(f'       • {{p.name}} [will delete]')
-                items_to_delete.append(p)
-    
-    # Also check for the omnipkg package directory itself
-    omnipkg_package_dir = site_packages_path / 'omnipkg'
-    if omnipkg_package_dir.exists() and omnipkg_package_dir.is_dir():
-        safe_print(f'--- 🔍 Found package directory: omnipkg')
-        # Check if it's a symlink or editable install (don't delete those)
-        if omnipkg_package_dir.is_symlink():
-            safe_print(f'       • [PROTECTED - symlink/editable install]')
-        elif not is_safe_to_delete(omnipkg_package_dir, dev_source):
-            safe_print(f'       • [PROTECTED - dev source]')
-        else:
-            safe_print(f'       • [will delete and let pip reinstall fresh]')
-            items_to_delete.append(omnipkg_package_dir)
-    
-    if not items_to_delete:
-        safe_print('--- ✅ No items need cleanup.')
-    else:
-        safe_print(f'\\n--- 📋 Cleaning {{len(items_to_delete)}} item(s)...')
-        
-        # Delete all identified items
-        for item_path in items_to_delete:
-            if item_path.exists():
-                try:
-                    safe_print(f'--- 🗑️  DELETING: {{item_path.name}}')
-                    if item_path.is_dir():
-                        shutil.rmtree(item_path)
-                    else:
-                        item_path.unlink()
-                    safe_print(f'    ✅ Deleted successfully')
-                except Exception as e:
-                    safe_print(f'    ⚠️  WARNING: Could not delete: {{e}}')
-            else:
-                safe_print(f'--- ℹ️  Already gone: {{item_path.name}}')
-
-    # Now perform the pip install
-    omnipkg_spec = 'omnipkg=={target_version_str}'
-    cmd = [sys.executable, '-m', 'pip', 'install', '--upgrade', '--force-reinstall', '--no-deps', omnipkg_spec]
-    
-    safe_print(f"\\n--- 🔩 RUNNING PIP INSTALL ---")
-    safe_print(f"    Command: {{' '.join(cmd)}}")
-    safe_print('--- 📤 Output from pip:')
-    
-    result = subprocess.run(cmd, capture_output=True, text=True, encoding='utf-8')
-    
-    # Show pip output
-    if result.stdout:
-        for line in result.stdout.splitlines():
-            safe_print(f'    {{line}}')
-    
-    if result.returncode != 0:
-        safe_print('\\n--- ❌ PIP INSTALL FAILED ---')
-        if result.stderr:
-            safe_print('--- Error output:')
-            for line in result.stderr.splitlines():
-                safe_print(f'    {{line}}')
-        sys.exit(1)
-    
-    safe_print('--- ✅ Pip install completed successfully.')
-    
-    # POST-INSTALL CLEANUP: Remove all OLD omnipkg metadata (keep only the fresh one)
-    safe_print('\\n--- 🧹 POST-INSTALL: Cleaning up old metadata...')
-    target_dist_info = f'omnipkg-{target_version_str}.dist-info'
-    
-    for pattern in ['omnipkg-*.dist-info', 'omnipkg-*.egg-info']:
-        found = list(site_packages_path.glob(pattern))
-        for p in found:
-            # Keep the newly installed version, delete everything else
-            if p.name == target_dist_info:
-                safe_print(f'--- ✅ KEEPING: {{p.name}} (newly installed)')
-                continue
-            
-            if not is_safe_to_delete(p, dev_source):
-                safe_print(f'--- 🛡️  PROTECTED: {{p.name}} (dev source)')
-                continue
-            
             try:
-                safe_print(f'--- 🗑️  DELETING OLD: {{p.name}}')
-                if p.is_dir():
-                    shutil.rmtree(p)
-                else:
-                    p.unlink()
-                safe_print(f'    ✅ Deleted')
+                print("--- 🚀 [Upgrader] Standalone upgrader process started. ---")
+                time.sleep(1)
+
+                run_cmd(
+                    [sys.executable, "-m", "pip", "uninstall", "-y", "omnipkg"],
+                    "Clean uninstall of old omnipkg version"
+                )
+
+                run_cmd(
+                    [sys.executable, "-m", "pip", "install", "--no-cache-dir", "omnipkg=={target_version_str}"],
+                    "Install new omnipkg version"
+                )
+
+                print("\\n" + "="*70)
+                print("--- ✅ [Upgrader] FILESYSTEM UPGRADE COMPLETE ---")
+                print(f"--- omnipkg has been successfully upgraded to version {target_version_str}. ---")
+                print("--- The Knowledge Base will sync automatically on your next command. ---")
+                print("="*70)
+                sys.exit(0)
+
             except Exception as e:
-                safe_print(f'    ⚠️  Failed: {{e}}')
-    
-    # Verify the final state
-    safe_print('\\n--- 🔍 Verifying final state...')
-    new_metadata_dirs = list(site_packages_path.glob('omnipkg-*.dist-info'))
-    safe_print(f'--- Found {{len(new_metadata_dirs)}} metadata director(ies):')
-    for p in new_metadata_dirs:
-        safe_print(f'       • {{p.name}}')
-    
-    # Clean up temporary upgrade bubble
-    upgrade_bubble_path = Path('{self.multiversion_base}') / f'omnipkg-{target_version_str}'
-    if upgrade_bubble_path.exists():
-        safe_print(f"\\n--- 🧹 DELETING temporary upgrade bubble: {{upgrade_bubble_path}} ---")
-        shutil.rmtree(upgrade_bubble_path)
-        safe_print('--- ✅ Temporary upgrade bubble cleaned up.')
-    
-    safe_print('\\n' + '   ' + '─' * 70)
-    safe_print('--- ✅ Final upgrade step successful. ---')
-    sys.exit(0)
-    
-except Exception as e:
-    safe_print(f"\\n--- ❌ An unexpected error occurred in the upgrade script: {{e}} ---")
-    import traceback
-    safe_print('--- Traceback:')
-    safe_print(traceback.format_exc())
-    sys.exit(1)
-"""
-        # --- END OF ENHANCED LIVE SCRIPT ---
+                print(f"--- ❌ [Upgrader] A fatal error occurred: {{e}} ---")
+                import traceback
+                traceback.print_exc()
+                sys.exit(1)
+        """)
 
-        # Execute the live, destructive script
-        with omnipkgLoader(f'omnipkg=={target_version_str}', config=self.config, force_activation=True, quiet=True):
-            result = subprocess.run([main_python_exe, "-c", upgrade_script], capture_output=True, text=True, encoding='utf-8')
-            print(result.stdout)
-            if result.stderr:
-                print("--- Handover Script Errors ---")
-                print(result.stderr)
-            if result.returncode != 0:
-                safe_print("   - ❌ The final upgrade step failed. Please review the errors above.")
-                return 1
-        
-        # Final targeted KB update
-        safe_print("\n   - Performing targeted knowledge base update...")
-        packages_to_resync = [f'omnipkg=={current_version_str}', f'omnipkg=={target_version_str}']
-        self.rebuild_package_kb(packages_to_resync, target_python_version=python_context)
+        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.py', prefix='omnipkg_upgrader_') as f:
+            f.write(upgrader_script_content)
+            upgrader_script_path = f.name
 
-        safe_print("\n✅ Upgrade process complete!")
-        safe_print("🚀 Relaunching to continue with the new version...")
-        
-        return 0
+        # --- THE HANDOFF ---
+        safe_print("\n   - Step 2: Handing over to the standalone upgrader process...")
+        main_python_exe = self.config['python_executable']
+        args_for_exec = [main_python_exe, upgrader_script_path]
 
-    def _create_pypi_only_bubble(self, package_name: str, version: str, python_context: str) -> bool:
-        """
-        Creates a bubble by downloading ONLY from PyPI, never from local source.
-        This ensures upgrade bubbles contain the actual PyPI version.
-        """
-        safe_print(f"🫧 Creating PyPI-sourced bubble for {package_name} v{version}...")
-        
-        install_source = f"{package_name}=={version}"
-        safe_print(f"   - Using PyPI source: {install_source}")
+        try:
+            if os.name == 'nt':
+                subprocess.Popen(args_for_exec, creationflags=subprocess.DETACHED_PROCESS, close_fds=True)
+                sys.exit(0)
+            else:
+                os.execv(main_python_exe, args_for_exec)
+        except Exception as e:
+            safe_print(f"\n   - ❌ CRITICAL: Handover failed: {e}")
+            return 1
 
-        with tempfile.TemporaryDirectory() as temp_dir:
-            temp_path = Path(temp_dir)
-            
-            # Install from PyPI explicitly
-            safe_print(f"   - Installing full dependency tree from PyPI to temporary location...")
-            cmd = [
-                self.config['python_executable'], '-m', 'pip', 'install',
-                '--target', str(temp_path),
-                '--no-cache-dir',  # Force fresh download
-                install_source
-            ]
-            result = subprocess.run(cmd, capture_output=True, text=True)
-
-            if result.returncode != 0:
-                safe_print(f'   - ❌ Failed to install "{install_source}" from PyPI.')
-                safe_print("--- Pip Error ---")
-                safe_print(result.stderr)
-                safe_print("-----------------")
-                return False
-
-            # Analyze the installed tree
-            installed_tree = self.bubble_manager._analyze_installed_tree(temp_path)
-            
-            # Create the deduplicated bubble
-            bubble_path = self.multiversion_base / f'{package_name}-{version}'
-            if bubble_path.exists():
-                shutil.rmtree(bubble_path)
-            
-            return self.bubble_manager._create_deduplicated_bubble(
-                installed_tree, bubble_path, temp_path, 
-                python_context_version=python_context
-            )
+        return 1
 
     def _create_pypi_only_bubble(self, package_name: str, version: str, python_context: str) -> bool:
         """
