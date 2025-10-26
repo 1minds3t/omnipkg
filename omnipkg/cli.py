@@ -1,8 +1,8 @@
+"""omnipkg CLI - Enhanced with runtime interpreter switching and language support"""
 try:
     from .common_utils import safe_print
 except ImportError:
     from omnipkg.common_utils import safe_print
-"""omnipkg CLI - Enhanced with runtime interpreter switching and language support"""
 import sys
 import argparse
 from pathlib import Path
@@ -38,41 +38,115 @@ def get_actual_python_version():
     except Exception:
         return sys.version_info[:2]
 
+def run_demo_with_enforced_context(
+    source_script_path: Path,
+    demo_name: str,
+    pkg_instance: OmnipkgCore,
+    parser_prog: str,
+    required_version: str = None
+) -> int:
+    """
+    Run a demo test with enforced Python context.
+    
+    Args:
+        source_script_path: Path to the test script to run
+        demo_name: Name of the demo (for display purposes)
+        pkg_instance: Initialized OmnipkgCore instance
+        parser_prog: Parser program name (for error messages)
+        required_version: Optional specific version (e.g., "3.11"). 
+                         If None, uses currently detected version.
+    
+    Returns:
+        Exit code (0 for success, 1 for failure)
+    """
+    # Detect the actual current Python version
+    actual_version = get_actual_python_version()
+    
+    # Use required version if specified, otherwise use detected version
+    target_version_str = required_version if required_version else f"{actual_version[0]}.{actual_version[1]}"
+    
+    # Validate the source script exists
+    if not source_script_path.exists():
+        safe_print(f'❌ Error: Source test file {source_script_path} not found.')
+        return 1
+    
+    # Get the Python executable for the target version
+    python_exe = pkg_instance.config_manager.get_interpreter_for_version(target_version_str)
+    if not python_exe or not python_exe.exists():
+        safe_print(f"❌ Python {target_version_str} is not managed by omnipkg.")
+        safe_print(f"   Please adopt it first: {parser_prog} python adopt {target_version_str}")
+        return 1
+    
+    safe_print(f'🚀 Running {demo_name} demo with Python {target_version_str} via sterile environment...')
+    
+    # Create a sterile copy of the script in /tmp to avoid PYTHONPATH contamination
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False, encoding='utf-8') as temp_script:
+        temp_script_path = Path(temp_script.name)
+        temp_script.write(source_script_path.read_text(encoding='utf-8'))
+    
+    safe_print(f"   - Sterile script created at: {temp_script_path}")
+    
+    try:
+        # Execute using the enforced Python context
+        return run_demo_with_live_streaming(
+            test_file_name=str(temp_script_path),
+            demo_name=demo_name,
+            python_exe=str(python_exe)
+        )
+    finally:
+        # Always clean up the temporary file
+        temp_script_path.unlink(missing_ok=True)
+
 def handle_python_requirement(required_version_str: str, pkg_instance: OmnipkgCore, parser_prog: str) -> bool:
     """
     Checks if the current Python version matches the requirement.
-    If not, it attempts to automatically adopt and/or swap.
+    If not, it automatically finds, adopts (or downloads), and swaps to it.
     """
+    # Get the true version of the currently configured Python context
     actual_version_tuple = get_actual_python_version()
     required_version_tuple = tuple(map(int, required_version_str.split('.')))
+
+    # If we are already in the correct context, we're done.
     if actual_version_tuple == required_version_tuple:
         return True
+
+    # --- Start the full healing process ---
     print_header(_('Python Version Requirement'))
-    safe_print(_('  ⚠️  This Demo Requires Python {}').format(required_version_str))
-    safe_print(_('  - Current Python version: {}.{}').format(actual_version_tuple[0], actual_version_tuple[1]))
-    safe_print(_('  - omnipkg will now attempt to automatically configure the correct interpreter.'))
-    safe_print('-' * 60)
+    safe_print(_('  - Diagnosis: This operation requires Python {}').format(required_version_str))
+    safe_print(_('  - Current Context: Python {}.{}').format(actual_version_tuple[0], actual_version_tuple[1]))
+    safe_print(_('  - Action: omnipkg will now attempt to automatically configure the correct interpreter.'))
+    
+    # Check if the required version is already managed by omnipkg
     managed_interpreters = pkg_instance.interpreter_manager.list_available_interpreters()
+    
     if required_version_str not in managed_interpreters:
-        discovered_interpreters = pkg_instance.config_manager.list_available_pythons()
-        if required_version_str in discovered_interpreters:
-            safe_print(_('🐍 Python {} found on your system. Adopting it...').format(required_version_str))
-            if pkg_instance.adopt_interpreter(required_version_str) != 0:
-                safe_print(_('❌ Failed to adopt Python {}. Please try manually.').format(required_version_str))
-                safe_print(_('   Run: {} python adopt {}').format(parser_prog, required_version_str))
-                return False
-            safe_print(_('✅ Successfully adopted Python {}.').format(required_version_str))
-        else:
-            safe_print(_('❌ Required Python version {} not found on your system.').format(required_version_str))
-            safe_print(_('   Please install Python {} and ensure it is in your PATH.').format(required_version_str))
+        #
+        # >>>>>>>> THIS IS THE CRITICAL NEW LOGIC <<<<<<<<
+        #
+        # The required version is NOT managed. We must now run the full adopt
+        # process, which will either find it locally or download it.
+        safe_print(_('\n   - Step 1: Adopting Python {}... (This may trigger a download)').format(required_version_str))
+        
+        # Call the core adopt_interpreter method. This is the robust function that
+        # contains the full logic: check local system -> fallback to download.
+        if pkg_instance.adopt_interpreter(required_version_str) != 0:
+            safe_print(_('   - ❌ Failed to adopt Python {}. Cannot proceed with healing.').format(required_version_str))
             return False
-    safe_print(_('🔄 Swapping active interpreter to Python {}...').format(required_version_str))
+        
+        safe_print(_('   - ✅ Successfully adopted Python {}.').format(required_version_str))
+        #
+        # >>>>>>>> END OF CRITICAL NEW LOGIC <<<<<<<<
+        #
+
+    # By this point, we are GUARANTEED that the interpreter is managed. Now we can swap.
+    safe_print(_('\n   - Step 2: Swapping active context to Python {}...').format(required_version_str))
     if pkg_instance.switch_active_python(required_version_str) != 0:
-        safe_print(_('❌ Failed to swap to Python {}. Please try manually.').format(required_version_str))
-        safe_print(_('   Run: {} swap python {}').format(parser_prog, required_version_str))
+        safe_print(_('   - ❌ Failed to swap to Python {}. Please try manually.').format(required_version_str))
+        safe_print(_('      Run: {} swap python {}').format(parser_prog, required_version_str))
         return False
-    safe_print(_('✅ Environment successfully configured for Python {}.').format(required_version_str))
-    safe_print(_('🚀 Proceeding to run the demo...'))
+        
+    safe_print(_('   - ✅ Environment successfully configured for Python {}.').format(required_version_str))
+    safe_print(_('🚀 Proceeding...'))
     safe_print('=' * 60)
     return True
 
@@ -141,13 +215,17 @@ def stress_test_command():
         return False
 
 def run_actual_stress_test():
-    """Run the actual stress test - only called if Python 3.11."""
+    """Run the actual stress test by locating and executing the test file."""
     safe_print(_('🔥 Starting stress test...'))
     try:
-        from . import stress_test
-        stress_test.run()
-    except ImportError:
-        safe_print(_('❌ Stress test module not found. Implementation needed.'))
+        # Define the correct path to the refactored test file
+        test_file_path = TESTS_DIR / 'test_version_combos.py'
+        
+        # Reuse the robust live streaming runner
+        run_demo_with_live_streaming(
+            test_file_name=str(test_file_path),
+            demo_name="Stress Test"
+        )
     except Exception as e:
         safe_print(_('❌ An error occurred during stress test execution: {}').format(e))
         import traceback
@@ -179,15 +257,16 @@ def run_demo_with_live_streaming(test_file_name: str, demo_name: str, python_exe
         
         # Step 2: Determine the final path to the SCRIPT to be executed.
         input_path = Path(test_file_name)
+        
         if input_path.is_absolute():
-            # For temp files, the path is already correct and absolute.
+            # If we're given an absolute path (like for a temp file), use it directly.
             test_file_path = input_path
         else:
-            # For project-internal tests, build the path relative to the context's project root.
-            source_dir_name = 'omnipkg' if "stress_test" in str(test_file_name) else 'tests'
-            test_file_path = project_root_in_context / source_dir_name / input_path.name
-        # --- END: ROBUST PATHING LOGIC ---
-        
+            # Otherwise, assume all standard demo tests are in the 'tests' directory.
+            # This is simpler and more reliable than checking filenames.
+            test_file_path = project_root_in_context / 'tests' / input_path.name
+        # --- END OF NEW LOGIC ---
+
         safe_print(_('🚀 Running {} demo from source: {}...').format(demo_name.capitalize(), test_file_path))
         
         if not test_file_path.exists():
@@ -355,6 +434,11 @@ def create_parser():
     prune_parser.add_argument('package', help=_('Package whose bubbles to prune'))
     prune_parser.add_argument('--keep-latest', type=int, metavar='N', help=_('Keep N most recent bubbled versions'))
     prune_parser.add_argument('--yes', '-y', dest='force', action='store_true', help=_('Skip confirmation'))
+    upgrade_parser = subparsers.add_parser('upgrade', help=_('Upgrade omnipkg or other packages to the latest version'))
+    upgrade_parser.add_argument('package', nargs='?', default='omnipkg', help=_('Package to upgrade (defaults to omnipkg itself)'))
+    upgrade_parser.add_argument('--version', help=_('Specify a version to upgrade/downgrade to'))
+    upgrade_parser.add_argument('--yes', '-y', dest='force', action='store_true', help=_('Skip confirmation prompt'))
+    upgrade_parser.add_argument('--force-dev', action='store_true', help=_('Force upgrade even in a developer environment (use with caution)'))
     return parser
 
 def print_header(title):
@@ -532,9 +616,14 @@ def main():
             safe_print(_('6. Flask test (under construction)'))
             safe_print(_('7. Auto-healing Test (omnipkg run)')) # <--- ADD THIS
             safe_print(_('8. 🌠 Quantum Multiverse Warp (Concurrent Python Installations)'))
-            safe_print(_('9. Flask Port Finder Test (auto-healing with Flask)')) # <--- ADD THIS
+            safe_print(_('9. Flask Port Finder Test (auto-healing with Flask)')) # <-- ADD THIS LINE
+            def run_and_stream(cmd_list):
+                process = subprocess.Popen(cmd_list, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, encoding='utf-8', errors='replace')
+                for line in process.stdout:
+                    safe_print(line, end='')
+                return process.wait()
             try:
-                response = input(_('Enter your choice (1-9): ')).strip()
+                response = input(_('Enter your choice (1-8): ')).strip()
             except EOFError:
                 response = ''
             test_file = None
@@ -548,8 +637,44 @@ def main():
                     return 1
                 return run_demo_with_live_streaming(str(test_file), demo_name)
             elif response == '2':
-                test_file = TESTS_DIR / 'test_uv_switching.py'
+                # INSERT THESE LINES HERE (after line 586):
+                actual_version = get_actual_python_version()
+                actual_version_str = f"{actual_version[0]}.{actual_version[1]}"
+                
                 demo_name = 'uv'
+                demo_name = 'uv'
+                source_script_path = TESTS_DIR / 'test_uv_switching.py'
+                if not source_script_path.exists():
+                    safe_print(f'❌ Error: Source test file {source_script_path} not found.')
+                    return 1
+
+                # Get the Python executable for the current version
+                python_exe = pkg_instance.config_manager.get_interpreter_for_version(actual_version_str)
+                if not python_exe or not python_exe.exists():
+                    safe_print(f"❌ Python {actual_version_str} is not managed by omnipkg.")
+                    safe_print(f"   Please adopt it first: {parser.prog} python adopt {actual_version_str}")
+                    return 1
+
+                safe_print(f'🚀 Running {demo_name} demo with Python {actual_version_str} via sterile environment...')
+                
+                # Create sterile copy
+                with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False, encoding='utf-8') as temp_script:
+                    temp_script_path = Path(temp_script.name)
+                    temp_script.write(source_script_path.read_text(encoding='utf-8'))
+                
+                safe_print(f"   - Sterile script created at: {temp_script_path}")
+                
+                returncode = 1
+                try:
+                    # Use run_demo_with_live_streaming with the detected Python version
+                    return run_demo_with_live_streaming(
+                        test_file_name=str(temp_script_path),
+                        demo_name=demo_name,
+                        python_exe=str(python_exe)
+                    )
+                finally:
+                    temp_script_path.unlink(missing_ok=True)
+
             elif response == '3':
                 if not handle_python_requirement('3.11', pkg_instance, parser.prog):
                     return 1
@@ -567,37 +692,14 @@ def main():
                 safe_print(_('  Creating a sterile temporary copy to ensure a clean run...'))
                 safe_print('!'*60)
                 
-                # 1. Find the source script.
-                source_script_path = TESTS_DIR / 'test_multiverse_healing.py'
+                return run_demo_with_enforced_context(
+                    source_script_path=TESTS_DIR / 'test_multiverse_healing.py',
+                    demo_name='multiverse_healing',
+                    pkg_instance=pkg_instance,
+                    parser_prog=parser.prog,
+                    required_version='3.11'  # This test requires 3.11 specifically
+                )
 
-                if not source_script_path.exists():
-                    safe_print(_('❌ Error: Source test file {} not found.').format(source_script_path))
-                    return 1
-
-                # 2. Create a temporary, sterile copy of the script.
-                with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False, encoding='utf-8') as temp_script:
-                    temp_script_path = Path(temp_script.name)
-                    temp_script.write(source_script_path.read_text(encoding='utf-8'))
-                
-                safe_print(f"   - Sterile script created at: {temp_script_path}")
-
-                try:
-                    # 3. Get the required Python 3.11 interpreter.
-                    python_311_exe = pkg_instance.config_manager.get_interpreter_for_version('3.11')
-                    if not python_311_exe or not python_311_exe.exists():
-                        safe_print("❌ Python 3.11 is required and not managed by omnipkg.")
-                        safe_print("   Please adopt it first: omnipkg python adopt 3.11")
-                        return 1
-
-                    # 4. Execute the STERILE script, which will have a clean sys.path.
-                    return run_demo_with_live_streaming(
-                        test_file_name=str(temp_script_path), # Use the absolute path to the temp file
-                        demo_name='multiverse_healing',
-                        python_exe=str(python_311_exe)
-                    )
-                finally:
-                    # 5. Clean up the temporary script no matter what.
-                    temp_script_path.unlink(missing_ok=True)
             elif response == '6':
                 test_file = TESTS_DIR / 'test_rich_switching.py'
                 demo_name = 'rich'
@@ -684,7 +786,7 @@ def main():
                     safe_print(_('❌ Demo failed with return code {}').format(returncode))
                 return returncode
             else:
-                safe_print(_('❌ Invalid choice. Please select 1, 2, 3, 4, 5, 6, 7, 8, or 9.'))
+                safe_print(_('❌ Invalid choice. Please select 1, 2, 3, 4, 5, 6, 7, 8 or 9.'))
                 return 1
             if not test_file.exists():
                 safe_print(_('❌ Error: Test file {} not found.').format(test_file))
@@ -752,6 +854,14 @@ def main():
             return pkg_instance.reset_configuration(force=args.force)
         elif args.command == 'run':
             return execute_run_command(args.script_and_args, cm, verbose=args.verbose)
+        elif args.command == 'upgrade':
+            if args.package.lower() == 'omnipkg':
+                return pkg_instance.smart_upgrade(version=args.version, force=args.force, skip_dev_check=args.force_dev)
+
+            else:
+                # Upgrading other packages is just a reinstall of the latest
+                safe_print(_("Redirecting to smart_install to get the latest version of '{}'...").format(args.package))
+                return pkg_instance.smart_install([args.package], force_reinstall=True)
         else:
             parser.print_help()
             safe_print(_("\n💡 Did you mean 'omnipkg config set language <code>'?"))
@@ -762,6 +872,7 @@ def main():
     except Exception as e:
         safe_print(_('\n❌ An unexpected error occurred: {}').format(e))
         import traceback
+
         traceback.print_exc()
         return 1
 if __name__ == '__main__':
