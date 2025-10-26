@@ -130,8 +130,17 @@ jobs:
           Write-Host "=== Looking for Python 3.10 in omnipkg output ==="
           try {
             $output = omnipkg list python 2>&1
+            $exitCode = $LASTEXITCODE
+            
+            if ($exitCode -ne 0) {
+              Write-Host "❌ omnipkg list python failed with exit code: $exitCode"
+              exit 1
+            }
+            
+            # Now safe to check output
             if ($output -match "3\.10") {
-              Write-Host "✅ Found Python 3.10 in omnipkg list"
+              Write-Host "✅ Found Python 3.10"
+            }
             } elseif ($output -match "managed" -or $output -match "Managed") {
               Write-Host "✅ Found managed Python interpreters"
             } else {
