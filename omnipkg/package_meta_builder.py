@@ -585,58 +585,78 @@ class omnipkgMetadataGatherer:
 
     def _perform_security_scan(self, packages: Dict[str, str]):
         """
-        Runs a security check using a dedicated, isolated 'safety' tool bubble,
-        created on-demand by the bubble_manager to guarantee isolation.
+        Runs a security check. Intelligently selects between 'safety' (preferred for <3.14)
+        and 'pip-audit' (fallback for >=3.14 or when safety is unavailable).
         """
+        # 1. Determine the effective Python version for this scan
+        effective_version_str = self.target_context_version or get_python_version()
         is_incompatible_with_safety = False
-        if self.target_context_version:
-            try:
-                major, minor = map(int, self.target_context_version.split('.'))
-                if (major, minor) >= (3, 14):
-                    is_incompatible_with_safety = True
-            except (ValueError, TypeError):
-                pass
+        try:
+            major, minor = map(int, effective_version_str.split('.')[:2])
+            if (major, minor) >= (3, 14):
+                is_incompatible_with_safety = True
+        except (ValueError, TypeError):
+            # Fallback to safe assumption if version string is weird
+            pass
 
+        # 2. Route to the appropriate scanner
         if is_incompatible_with_safety:
-            safe_print("🛡️  'safety' is incompatible with Python 3.14+. Using 'pip audit' as a fallback.")
+            safe_print(f"🛡️  'safety' is incompatible with Python {effective_version_str}. Using 'pip audit' as a fallback.")
             self._run_pip_audit_fallback(packages)
             return
+
         if not SAFETY_AVAILABLE:
-            safe_print("⚠️  Security scan skipped: 'safety' package is not installed or is incompatible with the current Python version.")
-            self.security_report = {}
+            # Try fallback if safety is just missing, even on compatible versions
+            safe_print("⚠️  'safety' package not found. Attempting 'pip audit' fallback...")
+            self._run_pip_audit_fallback(packages)
             return
+
+        # 3. Standard 'safety' scan for compatible versions
         safe_print(f'🛡️ Performing security scan for {len(packages)} active package(s) using isolated tool...')
+        
         if not packages:
             safe_print(_(' - No active packages found to scan.'))
             self.security_report = {}
             return
+            
         if not self.omnipkg_instance:
             safe_print(_(' ⚠️ Cannot run security scan: omnipkg_instance not available to builder.'))
             self.security_report = {}
             return
+
         TOOL_SPEC = 'safety==3.6.0'
         TOOL_NAME, TOOL_VERSION = TOOL_SPEC.split('==')
+        
         try:
+            # Ensure tool bubble exists
             bubble_path = self.omnipkg_instance.multiversion_base / f'{TOOL_NAME}-{TOOL_VERSION}'
             if not bubble_path.is_dir():
                 safe_print(f" 💡 First-time setup: Creating isolated bubble for '{TOOL_SPEC}' tool...")
+                # Pass the target context version to ensure compatibility
                 success = self.omnipkg_instance.bubble_manager.create_isolated_bubble(
                     TOOL_NAME, TOOL_VERSION, python_context_version=self.target_context_version
                 )
                 if not success:
-                    safe_print(f' ❌ Failed to create the tool bubble for {TOOL_SPEC}. Skipping scan.')
-                    self.security_report = {}
+                    safe_print(f' ❌ Failed to create the tool bubble for {TOOL_SPEC}. attempting pip-audit fallback.')
+                    self._run_pip_audit_fallback(packages)
                     return
                 safe_print(_(' ✅ Successfully created tool bubble.'))
+
+            # Create requirements file
             with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.txt') as reqs_file:
                 reqs_file_path = reqs_file.name
                 for name, version in packages.items():
                     reqs_file.write(f'{name}=={version}\n')
+
+            # Run scan
             safe_print(_(" 🌀 Force-activating '{}' context to run scan...").format(TOOL_SPEC))
-            with omnipkgLoader(TOOL_SPEC, config=self.omnipkg_instance.config, force_activation=True, quiet=True):
+            # Use the new isolation_mode in the loader call here too, just to be safe and consistent
+            with omnipkgLoader(TOOL_SPEC, config=self.omnipkg_instance.config, force_activation=True, quiet=True, isolation_mode='strict'):
                 python_exe = self.config.get('python_executable', sys.executable)
                 cmd = [python_exe, '-m', 'safety', 'check', '-r', reqs_file_path, '--json']
                 result = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
+
+            # Parse results
             self.security_report = {}
             if result.stdout:
                 try:
@@ -645,14 +665,22 @@ class omnipkgMetadataGatherer:
                         self.security_report = json.loads(json_match.group(1))
                 except json.JSONDecodeError:
                     safe_print(_(' ⚠️ Could not parse safety JSON output.'))
+            
             if result.stderr and 'error' in result.stderr.lower():
-                safe_print(_(' ⚠️ Safety tool produced errors: {}').format(result.stderr.strip()))
+                 # If safety failed unpredictably, try fallback as a last resort
+                safe_print(_(' ⚠️ Safety tool produced errors. Trying pip-audit fallback.'))
+                self._run_pip_audit_fallback(packages)
+                return
+
         except Exception as e:
-            safe_print(_(' ⚠️ An unexpected error occurred during the isolated security scan: {}').format(e))
-            self.security_report = {}
+            safe_print(_(' ⚠️ An error occurred during isolated security scan. Trying pip-audit fallback: {}').format(e))
+            self._run_pip_audit_fallback(packages)
+            return
         finally:
             if 'reqs_file_path' in locals() and os.path.exists(reqs_file_path):
                 os.unlink(reqs_file_path)
+
+        # Final report summary
         issue_count = 0
         if isinstance(self.security_report, list):
             issue_count = len(self.security_report)
@@ -803,8 +831,11 @@ class omnipkgMetadataGatherer:
         total_packages = len(distributions_to_process)
         pkgs_per_sec = total_packages / total_time if total_time > 0 else float('inf')
 
-        print("🚀 KNOWLEDGE BASE BUILD - PERFORMANCE SUMMARY 🚀")
-        print(f"   - 🔥 Average Throughput: {pkgs_per_sec:.2f} pkg/s")
+        safe_print("\n" + "─" * 60)
+        safe_print("🚀 KNOWLEDGE BASE BUILD - PERFORMANCE SUMMARY 🚀")
+        safe_print(f"   - ⏱️  Total Time: {total_time:.2f}s for {total_packages} packages")
+        safe_print(f"   - 🔥 Average Throughput: {pkgs_per_sec:.2f} pkg/s")
+        safe_print("─" * 60)
                 
         safe_print(_('🎉 Metadata building complete! Updated {} package(s) for this context.').format(updated_count))
         return distributions_to_process
