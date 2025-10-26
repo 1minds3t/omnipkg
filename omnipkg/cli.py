@@ -752,7 +752,7 @@ def main():
                 safe_print('-' * 60)
                 
                 # We must call omnipkg as a subprocess to properly test the 'run' command
-                cmd = [parser.prog, 'run', str(test_file_path)]
+                cmd = [sys.executable, '-m', 'omnipkg.cli', 'run', str(test_file_path)]
                 process = subprocess.Popen(cmd, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, encoding='utf-8', errors='replace')
                 for line in process.stdout:
                     safe_print(line, end='')
@@ -787,7 +787,7 @@ def main():
                     safe_print('-' * 60)
                     
                     # Execute the STERILE script using 'omnipkg run'
-                    cmd = [parser.prog, 'run', str(temp_script_path)]
+                    cmd = [sys.executable, '-m', 'omnipkg.cli', 'run', str(temp_script_path)]
                     process = subprocess.Popen(cmd, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, encoding='utf-8', errors='replace')
                     for line in process.stdout:
                         safe_print(line, end='')
@@ -812,7 +812,7 @@ def main():
                     return 1
                 # This demo is best run via 'omnipkg run' to showcase auto-healing
                 safe_print(_('🚀 This demo uses "omnipkg run" to showcase auto-healing of missing modules.'))
-                cmd = [parser.prog, 'run', str(test_file)]
+                cmd = [sys.executable, '-m', 'omnipkg.cli', 'run', str(test_file)]
                 process = subprocess.Popen(cmd, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, encoding='utf-8', errors='replace')
                 for line in process.stdout:
                     safe_print(line, end='')

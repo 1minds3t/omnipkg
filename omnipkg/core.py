@@ -7288,17 +7288,11 @@ class omnipkg:
         if pre_discovered_dists is not None:
             all_dists = pre_discovered_dists
         else:
-            # FALLBACK: The KB is out of sync. Trigger immediate rebuild for this package.
-            safe_print(f"   ⚠️  KB entry missing for {c_name}=={dist.version}. Triggering rebuild...")
-            
-            # Rebuild just this package
-            self.rebuild_package_kb(
-                packages=[f"{dist.metadata['Name']}=={dist.version}"],
-                force=True,
-                target_python_version=self.current_python_context.replace('py', '')
-            )
-            
-            # Fallback if no pre-discovered distributions are provided.
+            # --- FIX STARTS HERE ---
+            # The original code had a faulty fallback that tried to use the `dist`
+            # variable before it was defined. The correct fallback is simply to
+            # perform the filesystem scan, which is what the subsequent code does.
+            # We remove the erroneous lines and proceed directly to the scan.
             configured_exe = self.config.get('python_executable', sys.executable)
             version_tuple = self.config_manager._verify_python_version(configured_exe)
             current_python_version = f'{version_tuple[0]}.{version_tuple[1]}' if version_tuple else None
@@ -7308,6 +7302,7 @@ class omnipkg:
                 target_context_version=current_python_version
             )
             all_dists = gatherer._discover_distributions(None, verbose=False)
+            # --- FIX ENDS HERE ---
 
         target_dists = [
             dist for dist in all_dists
@@ -7324,14 +7319,10 @@ class omnipkg:
         keys_to_fetch = []
         dist_map = {}  # Maps a key back to its dist object for fallback.
         for dist in unique_dists:
-            # --- THIS IS THE CRITICAL FIX ---
-            # The unique identifier for a package instance is its METADATA PATH (.dist-info),
-            # not the general site-packages directory. This replicates the builder's logic.
             resolved_path_str = str(dist._path.resolve())
             unique_instance_identifier = f"{resolved_path_str}::{dist.version}"
             instance_hash = hashlib.sha256(unique_instance_identifier.encode()).hexdigest()[:12]
             instance_key = f"{self.redis_key_prefix.replace(':pkg:', ':inst:')}{c_name}:{dist.version}:{instance_hash}"
-            # --- END FIX ---
 
             keys_to_fetch.append(instance_key)
             dist_map[instance_key] = dist
@@ -7351,11 +7342,13 @@ class omnipkg:
             if redis_data:
                 # SUCCESS: We found the rich data in Redis.
                 redis_data['is_active'] = (redis_data.get('Version') == active_version_str and redis_data.get('install_type') == 'active')
-                # Store the correct key for debugging.
                 redis_data['redis_key'] = key
                 found_installations.append(redis_data)
             else:
                 # FALLBACK: The KB is out of sync. Build a basic entry from the dist object.
+                # This is better than recursively rebuilding here; we just report what we found.
+                # The main sync logic will handle the full KB repair.
+                safe_print(f"   ⚠️  KB is out of sync for {c_name}=={dist.version}. (key: {key})")
                 from .package_meta_builder import omnipkgMetadataGatherer
                 gatherer = omnipkgMetadataGatherer(config=self.config, env_id=self.env_id, omnipkg_instance=self)
                 context_info = gatherer._get_install_context(dist)
@@ -7366,7 +7359,7 @@ class omnipkg:
                     'path': str(dist._path.resolve()),
                     'install_type': context_info.get('install_type', 'unknown'),
                     'owner_package': context_info.get('owner_package'),
-                    'redis_key': f"(not found in KB: {key})", # Clearly indicate a sync issue.
+                    'redis_key': f"(not found in KB: {key})",
                 }
                 basic_info['is_active'] = (basic_info['Version'] == active_version_str and basic_info['install_type'] == 'active')
                 found_installations.append(basic_info)
