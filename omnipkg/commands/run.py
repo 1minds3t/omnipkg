@@ -1415,7 +1415,8 @@ def run_with_healing_wrapper(required_specs, original_script_path, original_scri
     for spec in required_specs:
         # Sanitize the spec to create a valid Python variable name
         pkg_name = re.sub(r'[^a-zA-Z0-9_]', '_', spec.split('==')[0])
-        nested_loaders_str += f"{indentation}with omnipkgLoader('{spec}', config=config, isolation_mode='{isolation_mode}') as loader_{pkg_name}:\n"
+        # THE FIX: Add force_activation=True because this is a healing action
+        nested_loaders_str += f"{indentation}with omnipkgLoader('{spec}', config=config, isolation_mode='{isolation_mode}', force_activation=True) as loader_{pkg_name}:\n"
         indentation += "    "
     
     # The code that runs at the deepest nesting level

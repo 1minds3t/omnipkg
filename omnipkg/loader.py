@@ -446,18 +446,21 @@ class omnipkgLoader:
             raise ValueError(f"Invalid package_spec format: '{self._current_package_spec}'")
 
         # --- THIS IS THE RESTORED LOGIC ---
-        if not self.force_activation:
-            try:
-                current_system_version = get_version(pkg_name)
-                if current_system_version == requested_version:
-                    if not self.quiet:
-                        safe_print(_('✅ System version already matches requested version ({}). No bubble needed.').format(current_system_version))
-                    self._activation_successful = True
-                    self._activation_end_time = time.perf_counter_ns() # Still record time
-                    self._total_activation_time_ns = self._activation_end_time - self._activation_start_time
-                    return self # Exit early
-            except PackageNotFoundError:
-                pass # The package is not in the main env, so we must use a bubble.
+        try:
+            # Check if the package exists in the main environment
+            current_system_version = get_version(pkg_name)
+            
+            # If versions match AND we are NOT forcing activation, we can skip the bubble.
+            if current_system_version == requested_version and not self.force_activation:
+                if not self.quiet:
+                    safe_print(_('✅ System version already matches requested version ({}). No bubble needed.').format(current_system_version))
+                self._activation_successful = True
+                self._activation_end_time = time.perf_counter_ns() # Still record time
+                self._total_activation_time_ns = self._activation_end_time - self._activation_start_time
+                return self # Exit early
+        except PackageNotFoundError:
+            # The package is not in the main env, so we must use a bubble regardless.
+            pass
         # --- END OF RESTORED LOGIC ---
 
         if not self.quiet:
