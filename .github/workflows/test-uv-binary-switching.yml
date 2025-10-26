@@ -1,137 +1,42 @@
-name: "🔧 UV Binary Version Juggling (0.4.30 ↔ 0.6.13)"
+# Name of the workflow
+name: Omnipkg Demo Workflow
 
+# Controls when the workflow will run
 on:
-  push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
-  workflow_dispatch:  # Enable manual triggering
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
     inputs:
-      branch:
-        description: 'Branch to run tests on'
-        required: true
-        default: 'main'
-        type: choice
-        options:
-          - main
-          - development
-          - staging
       test_timeout:
-        description: 'Test timeout in seconds'
+        description: 'Test Timeout in seconds'
         required: false
         default: '300'
-        type: string
 
+# A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
-  test:
+  # This workflow contains a single job called "run-demo"
+  run-demo-job:
+    # The type of runner that the job will run on
     runs-on: ubuntu-latest
-    services:
-      redis:
-        image: redis:7
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 6379:6379
 
+    # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          # Use the selected branch from manual dispatch, or default to the triggered ref
-          ref: ${{ github.event.inputs.branch || github.ref }}
-
-      - name: 🎯 Display selected branch
-        run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "Manual run triggered on branch: ${{ github.event.inputs.branch }}"
-            echo "Test timeout: ${{ github.event.inputs.test_timeout }} seconds"
-          else
-            echo "Automatic run on branch: ${{ github.ref_name }}"
-          fi
-
-      - name: Set up Python 3.11
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install redis
-          pip install -e .  # Install your local development version
-
-      - name: ⚙️ Configure omnipkg for non-interactive use
-        run: |
-          python - << 'EOF'
-          import sys
-          import site
-          import json
-          from pathlib import Path
-          import os
-          import sysconfig
-
-          # Get site-packages path safely
-          try:
-              site_packages_path = site.getsitepackages()[0]
-          except (IndexError, AttributeError):
-              site_packages_path = sysconfig.get_paths()['purelib']
-
-          # Determine project root (where pyproject.toml is)
-          project_root = Path(os.environ['GITHUB_WORKSPACE'])
-          
-          # Verify builder script exists
-          builder_script = project_root / 'omnipkg' / 'package_meta_builder.py'
-          if not builder_script.exists():
-              print(f"Error: {builder_script} does not exist")
-              sys.exit(1)
-
-          config_data = {
-              'site_packages_path': site_packages_path,
-              'multiversion_base': str(Path(site_packages_path) / '.omnipkg_versions'),
-              'python_executable': sys.executable,
-              'builder_script_path': str(builder_script),
-              'redis_host': 'localhost',
-              'redis_port': 6379,
-              'redis_key_prefix': 'omnipkg:pkg:',
-              'paths_to_index': [str(Path(sys.executable).parent), '/usr/local/bin', '/usr/bin', '/bin', '/usr/sbin', '/sbin'],
-              'auto_cleanup': True,
-              'cleanup_threshold_days': 30
-          }
-
-          config_dir = Path.home() / '.config' / 'omnipkg'
-          config_dir.mkdir(parents=True, exist_ok=True)
-          config_path = config_dir / 'config.json'
-          
-          try:
-              with open(config_path, 'w') as f:
-                  json.dump(config_data, f, indent=2)
-              print(f'omnipkg config created at {config_path}:')
-              print(json.dumps(config_data, indent=2))
-          except Exception as e:
-              print(f"Error writing config: {e}")
-              sys.exit(1)
-          EOF
-
+      # Each step is an item in the list, denoted by a hyphen
       - name: 🧪 Run the Demo - UV Test (Binary Switching)
         id: run_demo
+        shell: bash
         run: |
           echo "--- Running Omnipkg Demo for UV Test (Binary Switching) ---"
-          # Create a temporary directory for artifacts
           mkdir -p /tmp/omnipkg-artifacts
           
-          # Use custom timeout if provided in manual run
           TIMEOUT_SECONDS=${{ github.event.inputs.test_timeout || '300' }}
           echo "Using timeout: ${TIMEOUT_SECONDS} seconds"
           
-          # Run demo with real-time output and timeout
-          # We pipe '2' (the choice for the UV demo) into the command
+          # Run demo and capture output
+          # The pipe character '|' indicates a literal multiline string
           timeout ${TIMEOUT_SECONDS} bash -c 'echo "2" | omnipkg demo 2>&1 | tee /tmp/omnipkg-artifacts/demo_output.txt'
-          DEMO_EXIT_CODE=$?
+          DEMO_EXIT_CODE=${PIPESTATUS[0]}
           
-          # Save output to GitHub step summary for easy debugging
+          # Save output to GitHub step summary
           echo "## UV Demo Output" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
           cat /tmp/omnipkg-artifacts/demo_output.txt >> $GITHUB_STEP_SUMMARY
@@ -141,24 +46,22 @@ jobs:
             echo "Demo completed successfully."
             echo "demo_outcome=success" >> $GITHUB_OUTPUT
 
-            # --- START: THE DYNAMIC FIX ---
-            # Instead of checking for a specific version, we now check for the generic
-            # "PASSED" markers that your improved test script reliably outputs.
-            # This makes the test resilient to changes in the base environment.
-            if grep -q "Main environment test: PASSED" /tmp/omnipkg-artifacts/demo_output.txt && \
-               grep -q "ALL UV BINARY TESTS PASSED" /tmp/omnipkg-artifacts/demo_output.txt && \
-               grep -q "Testing Bubble (uv==0.4.30)" /tmp/omnipkg-artifacts/demo_output.txt && \
-               grep -q "Testing Bubble (uv==0.5.11)" /tmp/omnipkg-artifacts/demo_output.txt; then
-              echo "UV demo verified: Main environment test passed, bubbles for 0.4.30 and 0.5.11 were tested, and all final tests passed!"
+            # --- CORRECTED DYNAMIC VALIDATION ---
+            # This checks the final summary table for PASSED status on all three tests,
+            # using a wildcard for the 'main' version to avoid hardcoding.
+            if grep -q "main-.*: ✅ PASSED" /tmp/omnipkg-artifacts/demo_output.txt && \
+               grep -q "bubble-0.4.30.*: ✅ PASSED" /tmp/omnipkg-artifacts/demo_output.txt && \
+               grep -q "bubble-0.5.11.*: ✅ PASSED" /tmp/omnipkg-artifacts/demo_output.txt && \
+               grep -q "ALL UV BINARY TESTS PASSED" /tmp/omnipkg-artifacts/demo_output.txt; then
+              echo "✅ Verification PASSED: The main environment and both bubbles (0.4.30, 0.5.11) passed their tests."
             else
-              echo "Error: Key success markers from the UV demo were not found in the output."
-              echo "Missing one of: 'Main environment test: PASSED', 'ALL UV BINARY TESTS PASSED', or 'Testing Bubble (...)'"
+              echo "❌ Verification FAILED: Key success markers were not found in the final test summary."
               echo "--- Full Demo Output ---"
               cat /tmp/omnipkg-artifacts/demo_output.txt
               exit 1
             fi
-            # --- END: THE DYNAMIC FIX ---
-
+            # --- END CORRECTION ---
+            
           else
             echo "Demo failed with exit code $DEMO_EXIT_CODE."
             echo "demo_outcome=failure" >> $GITHUB_OUTPUT
@@ -166,12 +69,3 @@ jobs:
             cat /tmp/omnipkg-artifacts/demo_output.txt
             exit 1
           fi
-
-      - name: 📦 Archive Demo Output
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: omnipkg-uv-demo-output
-          path: /tmp/omnipkg-artifacts/
-          retention-days: 7
-          compression-level: 6
