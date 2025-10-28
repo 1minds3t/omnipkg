@@ -3665,54 +3665,49 @@ class omnipkg:
         if self._cache_connection_status in ['redis_ok', 'sqlite_ok']:
             return True
 
-        # 2. The "Off Switch": User has explicitly disabled Redis in config.
-        if self.config.get('redis_enabled', True) is False:
-            # We haven't tried SQLite yet, so proceed to the SQLite block.
-            pass # Let execution fall through to the SQLite connection logic.
-        
-        # 3. Redis Attempt (only if not disabled and not already failed)
-        elif self._cache_connection_status != 'redis_failed':
-            try:
-                # The "Golden Rule": Default to localhost if no host is specified.
-                redis_host = self.config.get('redis_host', 'localhost')
-                redis_port = self.config.get('redis_port', 6379)
-                
-                # Use a very aggressive timeout. 0.2 seconds is plenty.
-                cache_client = redis.Redis(
-                    host=redis_host,
-                    port=redis_port,
-                    decode_responses=True,
-                    socket_connect_timeout=0.2, # Extremely fast timeout
-                    socket_timeout=0.2
-                )
-                cache_client.ping()
-                
-                self.cache_client = cache_client
-                self._cache_connection_status = 'redis_ok' # SUCCESS! Remember this.
-                safe_print('⚡️ Connected to Redis successfully (High-performance mode).')
-                return True
-                
-            except redis.exceptions.ConnectionError:
-                safe_print('⚠️ Redis not found or offline. Falling back to local SQLite cache.')
-                self._cache_connection_status = 'redis_failed' # FAILURE! Remember this.
-            except Exception as e:
-                safe_print(f'⚠️ Redis connection failed: {e}. Falling back to SQLite.')
-                self._cache_connection_status = 'redis_failed' # FAILURE! Remember this.
+        # 2. THE CRITICAL FIX: Check if Redis is even installed BEFORE trying to use it.
+        if REDIS_AVAILABLE and self.config.get('redis_enabled', True) is True:
+            # This block now ONLY runs if the 'redis' library was successfully imported.
+            
+            # 3. Redis Attempt (only if not already failed)
+            if self._cache_connection_status != 'redis_failed':
+                try:
+                    redis_host = self.config.get('redis_host', 'localhost')
+                    redis_port = self.config.get('redis_port', 6379)
+                    
+                    cache_client = redis.Redis(
+                        host=redis_host,
+                        port=redis_port,
+                        decode_responses=True,
+                        socket_connect_timeout=0.2,
+                        socket_timeout=0.2
+                    )
+                    cache_client.ping()
+                    
+                    self.cache_client = cache_client
+                    self._cache_connection_status = 'redis_ok'
+                    safe_print('⚡️ Connected to Redis successfully (High-performance mode).')
+                    return True
+                    
+                except redis.exceptions.ConnectionError:
+                    safe_print('⚠️ Redis not found or offline. Falling back to local SQLite cache.')
+                    self._cache_connection_status = 'redis_failed'
+                except Exception as e:
+                    safe_print(f'⚠️ Redis connection failed: {e}. Falling back to SQLite.')
+                    self._cache_connection_status = 'redis_failed'
 
-        # 4. SQLite Fallback (runs if Redis is disabled, failed, or not installed)
+        # 4. SQLite Fallback (runs if Redis is disabled, not installed, or failed to connect)
         try:
             sqlite_db_path = self.config_manager.config_dir / f'cache_{self.env_id}.sqlite'
             self.cache_client = SQLiteCacheClient(sqlite_db_path)
             if not self.cache_client.ping():
                 raise RuntimeError('SQLite connection failed ping test.')
             
-            self._cache_connection_status = 'sqlite_ok' # SUCCESS! Remember this.
+            self._cache_connection_status = 'sqlite_ok'
             
-            # Only print the "Using SQLite" message on the first successful connection.
-            # This prevents redundant messages on subsequent calls.
-            if self.cache_client is not None and not hasattr(self, '_sqlite_message_printed'):
-                safe_print(f'✅ Using local SQLite cache at: {sqlite_db_path}')
-                self._sqlite_message_printed = True # Prevent this message from printing again.
+            if not hasattr(self, '_sqlite_message_printed'):
+                safe_print(f'✅ Using local SQLite cache.')
+                self._sqlite_message_printed = True
                 
             return True
             
