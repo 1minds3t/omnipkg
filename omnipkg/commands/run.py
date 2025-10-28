@@ -1,4 +1,4 @@
-
+from __future__ import annotations  # Python 3.6+ compatibility
 # omnipkg/commands/run.py
 try:
     from ..common_utils import safe_print
