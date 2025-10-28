@@ -1577,7 +1577,7 @@ class ConfigManager:
             final_config['multiversion_base'] = bubble_path
             python_path = input(_('Python executable path [{}]: ').format(defaults['python_executable'])).strip() or defaults['python_executable']
             final_config['python_executable'] = python_path
-            edis_choice = input(_('⚡️ Attempt to use Redis for high-performance caching? (y/n) [y]: ')).strip().lower()
+            redis_choice = input(_('⚡️ Attempt to use Redis for high-performance caching? (y/n) [y]: ')).strip().lower()
             final_config['redis_enabled'] = redis_choice != 'n'
             if final_config['redis_enabled']:
                 # Only ask for host and port if Redis is enabled
