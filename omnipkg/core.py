@@ -1239,6 +1239,7 @@ class ConfigManager:
             'redis_host': 'localhost',
             'redis_port': 6379,
             'redis_key_prefix': 'omnipkg:pkg:',
+            'redis_enabled': True,
             'install_strategy': 'stable-main',
             'uv_executable': 'uv',
             'paths_to_index': self._get_bin_paths(),
@@ -1576,16 +1577,20 @@ class ConfigManager:
             final_config['multiversion_base'] = bubble_path
             python_path = input(_('Python executable path [{}]: ').format(defaults['python_executable'])).strip() or defaults['python_executable']
             final_config['python_executable'] = python_path
-            while True:
-                host_input = input(_('Redis host [{}]: ').format(defaults['redis_host'])) or defaults['redis_host']
-                try:
-                    import socket
-                    socket.gethostbyname(host_input)
-                    final_config['redis_host'] = host_input
-                    break
-                except socket.gaierror:
-                    safe_print(_("   ❌ Error: Invalid hostname '{}'. Please try again.").format(host_input))
-            final_config['redis_port'] = int(input(_('Redis port [{}]: ').format(defaults['redis_port'])) or defaults['redis_port'])
+            edis_choice = input(_('⚡️ Attempt to use Redis for high-performance caching? (y/n) [y]: ')).strip().lower()
+            final_config['redis_enabled'] = redis_choice != 'n'
+            if final_config['redis_enabled']:
+                # Only ask for host and port if Redis is enabled
+                while True:
+                    host_input = input(_('   -> Redis host [{}]: ').format(defaults['redis_host'])) or defaults['redis_host']
+                    try:
+                        import socket
+                        socket.gethostbyname(host_input)
+                        final_config['redis_host'] = host_input
+                        break
+                    except socket.gaierror:
+                        safe_print(_("      ❌ Error: Invalid hostname '{}'. Please try again.").format(host_input))
+                final_config['redis_port'] = int(input(_('   -> Redis port [{}]: ').format(defaults['redis_port'])) or defaults['redis_port'])
             hotswap_choice = input(_('Enable Python interpreter hotswapping? (y/n) [y]: ')).strip().lower()
             final_config['enable_python_hotswap'] = hotswap_choice != 'n'
         
@@ -3224,6 +3229,7 @@ class omnipkg:
         self.env_id = self._get_env_id()
         self.multiversion_base = Path(self.config['multiversion_base'])
         self.cache_client = None
+        self._cache_connection_status = None
         self.initialize_pypi_cache()
         self._info_cache = {}
         self._prime_loader_cache()
@@ -3652,37 +3658,69 @@ class omnipkg:
 
     def _connect_cache(self) -> bool:
         """
-        Attempts to connect to Redis if the library is installed. If it fails or
-        is not installed, falls back to a local SQLite database.
+        Establishes a cache connection using a robust, fast-failing circuit breaker.
+        Defaults to 'localhost' within the native OS.
         """
-        if REDIS_AVAILABLE:
+        # 1. Fast Path: If we already have a working connection, we're done.
+        if self._cache_connection_status in ['redis_ok', 'sqlite_ok']:
+            return True
+
+        # 2. The "Off Switch": User has explicitly disabled Redis in config.
+        if self.config.get('redis_enabled', True) is False:
+            # We haven't tried SQLite yet, so proceed to the SQLite block.
+            pass # Let execution fall through to the SQLite connection logic.
+        
+        # 3. Redis Attempt (only if not disabled and not already failed)
+        elif self._cache_connection_status != 'redis_failed':
             try:
+                # The "Golden Rule": Default to localhost if no host is specified.
                 redis_host = self.config.get('redis_host', 'localhost')
                 redis_port = self.config.get('redis_port', 6379)
-                if not redis_host:
-                    raise redis.ConnectionError('Redis is not configured.')
-                cache_client = redis.Redis(host=redis_host, port=redis_port, decode_responses=True, socket_connect_timeout=1)
+                
+                # Use a very aggressive timeout. 0.2 seconds is plenty.
+                cache_client = redis.Redis(
+                    host=redis_host,
+                    port=redis_port,
+                    decode_responses=True,
+                    socket_connect_timeout=0.2, # Extremely fast timeout
+                    socket_timeout=0.2
+                )
                 cache_client.ping()
+                
                 self.cache_client = cache_client
-                safe_print(_('⚡️ Connected to Redis successfully (High-performance mode).'))
+                self._cache_connection_status = 'redis_ok' # SUCCESS! Remember this.
+                safe_print('⚡️ Connected to Redis successfully (High-performance mode).')
                 return True
-            except redis.ConnectionError:
-                safe_print(_('⚠️ Could not connect to Redis. Falling back to local SQLite cache.'))
+                
+            except redis.exceptions.ConnectionError:
+                safe_print('⚠️ Redis not found or offline. Falling back to local SQLite cache.')
+                self._cache_connection_status = 'redis_failed' # FAILURE! Remember this.
             except Exception as e:
-                safe_print(_('⚠️ Redis connection attempt failed: {}. Falling back to SQLite.').format(e))
-        else:
-            safe_print(_('⚠️ Redis library not installed. Falling back to local SQLite cache.'))
+                safe_print(f'⚠️ Redis connection failed: {e}. Falling back to SQLite.')
+                self._cache_connection_status = 'redis_failed' # FAILURE! Remember this.
+
+        # 4. SQLite Fallback (runs if Redis is disabled, failed, or not installed)
         try:
             sqlite_db_path = self.config_manager.config_dir / f'cache_{self.env_id}.sqlite'
             self.cache_client = SQLiteCacheClient(sqlite_db_path)
             if not self.cache_client.ping():
                 raise RuntimeError('SQLite connection failed ping test.')
-            safe_print(_('✅ Using local SQLite cache at: {}').format(sqlite_db_path))
+            
+            self._cache_connection_status = 'sqlite_ok' # SUCCESS! Remember this.
+            
+            # Only print the "Using SQLite" message on the first successful connection.
+            # This prevents redundant messages on subsequent calls.
+            if self.cache_client is not None and not hasattr(self, '_sqlite_message_printed'):
+                safe_print(f'✅ Using local SQLite cache at: {sqlite_db_path}')
+                self._sqlite_message_printed = True # Prevent this message from printing again.
+                
             return True
+            
         except Exception as e:
-            safe_print(_('❌ FATAL: Could not initialize SQLite fallback cache: {}').format(e))
+            safe_print(f'❌ FATAL: Could not initialize SQLite fallback cache: {e}')
             import traceback
             traceback.print_exc()
+            self._cache_connection_status = 'failed_all'
             return False
 
     def reset_configuration(self, force: bool=False) -> int:
@@ -5770,10 +5808,10 @@ class omnipkg:
         self.rescan_interpreters()
         return 0
     
-    def check_package_installed_fast(self, python_exe: str, package: str, version: str) -> Tuple[bool, float]:
-        """Check if a specific package version is already installed - ultra fast check.
-
-        Checks both main environment and bubble locations for maximum speed.
+    def check_package_installed_fast(self, python_exe: str, package: str, version: str) -> Tuple[Optional[str], float]:
+        """
+        Check if a specific package version is already installed - ultra fast check.
+        Returns the status ('active', 'bubble', or None) and the duration.
         """
         start_time = time.perf_counter()
 
@@ -5786,7 +5824,7 @@ class omnipkg:
 
         if result.returncode == 0:
             duration_ms = (time.perf_counter() - start_time) * 1000
-            return True, duration_ms
+            return 'active', duration_ms
 
         # Phase 2: If not in main env, check if a valid BUBBLE exists.
         bubble_path = self.multiversion_base / f'{package}-{version}'
@@ -5800,70 +5838,14 @@ class omnipkg:
 
             if any(marker.exists() for marker in metadata_markers):
                 duration_ms = (time.perf_counter() - start_time) * 1000
-                return True, duration_ms
+                return 'bubble', duration_ms
 
         duration_ms = (time.perf_counter() - start_time) * 1000
-        return False, duration_ms
+        return None, duration_ms
 
     def smart_install(self, packages: List[str], dry_run: bool = False, force_reinstall: bool = False, override_strategy: Optional[str] = None, target_directory: Optional[Path] = None) -> int:
-        # ====================================================================
-        # ULTRA-FAST PREFLIGHT CHECK (Before any heavy initialization)
-        # ====================================================================
-        if not force_reinstall and packages:
-            configured_exe = self.config.get('python_executable', sys.executable)
-            all_satisfied = True
-            check_details = []
-            total_check_time = 0.0
-            
-            for pkg_spec in packages:
-                if '==' in pkg_spec:
-                    pkg_name, version = self._parse_package_spec(pkg_spec)
-                    check_start = time.perf_counter()
-                    
-                    # Check 1: Active environment (subprocess, ~5ms)
-                    is_installed_cmd = [
-                        configured_exe, '-c',
-                        f"import importlib.metadata; import sys; sys.exit(0) if importlib.metadata.version('{pkg_name}') == '{version}' else sys.exit(1)"
-                    ]
-                    result = subprocess.run(is_installed_cmd, capture_output=True)
-                    
-                    check_time = (time.perf_counter() - check_start) * 1000
-                    total_check_time += check_time
-                    
-                    if result.returncode == 0:
-                        check_details.append(f'{pkg_spec} [active: {check_time:.1f}ms]')
-                        continue  # Found in active env
-                    
-                    # Check 2: Bubble filesystem (no subprocess, <1ms)
-                    bubble_check_start = time.perf_counter()
-                    bubble_path = self.multiversion_base / f'{pkg_name}-{version}'
-                    if bubble_path.exists():
-                        pkg_name_underscore = pkg_name.replace("-", "_")
-                        metadata_markers = [
-                            bubble_path / f'{pkg_name}-{version}.dist-info',
-                            bubble_path / f'{pkg_name_underscore}-{version}.dist-info',
-                        ]
-                        if any(marker.exists() for marker in metadata_markers):
-                            bubble_check_time = (time.perf_counter() - bubble_check_start) * 1000
-                            total_check_time += bubble_check_time
-                            check_details.append(f'{pkg_spec} [bubble: {bubble_check_time:.1f}ms]')
-                            continue  # Found as bubble
-                    
-                    # Not found anywhere
-                    all_satisfied = False
-                    break
-                else:
-                    # Package without version - need to check against latest
-                    # This requires initialization, so skip ultra-fast path
-                    all_satisfied = False
-                    break
-            
-            if all_satisfied:
-                safe_print(f'⚡ ULTRA-FAST PREFLIGHT: All {len(packages)} package(s) already satisfied! ({total_check_time:.1f}ms)')
-                for detail in check_details:
-                    safe_print(f'   ✓ {detail}')
-                return 0
         
+
         # ====================================================================
         # NORMAL INITIALIZATION (Only runs if packages need work)
         # ====================================================================
@@ -5912,19 +5894,27 @@ class omnipkg:
                     break
                 
                 # Use the new ultra-fast check here!
-                is_installed, unused_duration = self.check_package_installed_fast(configured_exe, pkg_name, version)
-                if not is_installed:
+                install_status, unused_duration = self.check_package_installed_fast(configured_exe, pkg_name, version)
+                
+                if install_status == 'active':
+                    safe_print(f'✅ {pkg_spec} already satisfied (active in main env)')
+                    continue
+                elif install_status == 'bubble' and install_strategy == 'stable-main':
+                    safe_print(f'✅ {pkg_spec} already satisfied (found as bubble)')
+                    continue
+                elif install_status == 'bubble' and install_strategy == 'latest-active':
+                    # Bubble exists but we need it in main env - NOT satisfied
                     is_satisfied = False
                     break
                 else:
-                    safe_print(f'✅ {pkg_spec} already satisfied (fast check)')
+                    # Not found anywhere
+                    is_satisfied = False
+                    break
 
             preflight_time = (time.perf_counter() - preflight_start) * 1000
             if is_satisfied:
                 safe_print(f'✅ PREFLIGHT SUCCESS: All {len(packages)} package(s) already satisfied! ({preflight_time:.1f}ms)')
                 return 0
-            
-            safe_print(f'📦 Preflight detected packages need installation ({preflight_time:.1f}ms)')
 
             # --- UNIFIED SMART PREFLIGHT CHECK ---
             resolved_package_cache = {}  # Cache resolved versions to avoid duplicate PyPI calls
@@ -5944,24 +5934,38 @@ class omnipkg:
                     # Package has version specified - try fast check first
                     pkg_name, version = self._parse_package_spec(pkg_spec)
                     resolved_package_cache[pkg_spec] = pkg_spec  # Cache the already-resolved spec
-                    is_installed, check_time = self.check_package_installed_fast(configured_exe, pkg_name, version)
-                    if is_installed:
-                        # Fast check passed - this covers both main env and bubbles
-                        # For simple strategies, we can trust this completely
+                    
+                    # Call the MODIFIED helper function
+                    install_status, check_time = self.check_package_installed_fast(configured_exe, pkg_name, version)
+                    
+                    if install_status == 'active':
+                        # ALWAYS satisfied if it's the active package in the main environment.
+                        safe_print(f'✅ {pkg_spec} already satisfied (active in main env)')
+                        processed_packages.append(pkg_spec)
+                        continue
+                        
+                    elif install_status == 'bubble':
+                        # If found in a bubble, satisfaction DEPENDS on the install strategy.
                         if install_strategy == 'stable-main':
-                            safe_print(f'✅ {pkg_spec} already satisfied (fast check)')
+                            # For stable-main, a bubble is good enough.
+                            safe_print(f'✅ {pkg_spec} already satisfied (found as bubble)')
                             processed_packages.append(pkg_spec)
                             continue
                         else:
-                            # For complex strategies that might involve nested packages,
-                            # we still need KB verification
-                            needs_kb_check.append(pkg_spec)
-                    else:
-                        # Not found in main env or standard bubbles - might be nested, need KB check
+                            # For 'latest-active', a bubble is NOT good enough. We need to install.
+                            # Mark as not satisfied and stop checking. The main installer will handle it.
+                            all_packages_satisfied = False
+                            break # Exit the loop immediately
+                            
+                    elif install_status is None:
+                        # Not found in main env or as a bubble. Might be nested, so check the KB.
                         needs_kb_check.append(pkg_spec)
+                        
                 else:
                     # Package needs version resolution from PyPI
                     needs_resolution.append(pkg_spec)
+
+            # This break is crucial. If the loop was broken, we must exit Phase 1
             
             # Phase 2: Resolve versions for packages without explicit versions
             resolved_specs = []
@@ -5986,10 +5990,18 @@ class omnipkg:
                         # Now check if this resolved version is satisfied via fast check
                         pkg_name, version = self._parse_package_spec(resolved_spec)
                         is_installed, unused_duration = self.check_package_installed_fast(configured_exe, pkg_name, version) 
-                        if is_installed and install_strategy == 'stable-main':
-                            safe_print(f'✅ {resolved_spec} already satisfied (fast check)')
+                        if install_status == 'active':
+                            safe_print(f'✅ {resolved_spec} already satisfied (active in main env)')
                             processed_packages.append(resolved_spec)
+                        elif install_status == 'bubble' and install_strategy == 'stable-main':
+                            safe_print(f'✅ {resolved_spec} already satisfied (found as bubble)')
+                            processed_packages.append(resolved_spec)
+                        elif install_status == 'bubble' and install_strategy != 'stable-main':
+                            # 'latest-active' needs this to be installed in main env. Not satisfied.
+                            all_packages_satisfied = False
+                            break # Exit the loop immediately
                         else:
+                            # Not found or requires KB check for complex strategies
                             needs_kb_check.append(resolved_spec)
                 
                 except NoCompatiblePythonError as e:
@@ -6050,9 +6062,6 @@ class omnipkg:
             preflight_time = (time.perf_counter() - preflight_start) * 1000
             
             # Early exit if everything is satisfied
-            if all_packages_satisfied:
-                safe_print(f'✅ PREFLIGHT SUCCESS: All {len(processed_packages)} package(s) already satisfied! ({preflight_time:.1f}ms)')
-                return 0
             
             safe_print(f'📦 Preflight detected packages need installation ({preflight_time:.1f}ms)')
 
@@ -6393,7 +6402,8 @@ class omnipkg:
             except ValueError as e:
                 safe_print(f"\n❌ Aborting installation: {e}")
                 return 1
-    
+        if not force_reinstall:
+           self._cleanup_redundant_bubbles()
         # Knowledge base update and cleanup logic remains the same...
         safe_print(_('\n🧠 Updating knowledge base (consolidated)...'))
         all_changed_specs = set()
@@ -6426,9 +6436,6 @@ class omnipkg:
         else:
             safe_print(_('    ✅ Knowledge base is already up to date.'))
 
-        # Cleanup and final steps
-        if not force_reinstall:
-                self._cleanup_redundant_bubbles()
 
         safe_print(_('\n🎉 All package operations complete.'))
         self._save_last_known_good_snapshot()
@@ -6682,8 +6689,8 @@ class omnipkg:
 
     def _cleanup_redundant_bubbles(self):
         """
-        Scans for and removes any bubbles that are identical to the currently
-        active version of a package in the main environment.
+        Scans for and REMOVES any bubbles from the filesystem that are identical
+        to the currently active version of a package. Does NOT modify the KB.
         """
         safe_print(_('\n🧹 Cleaning redundant bubbles...'))
         try:
@@ -6698,14 +6705,12 @@ class omnipkg:
                     try:
                         shutil.rmtree(bubble_path)
                         cleaned_count += 1
-                        if hasattr(self, 'hook_manager'):
-                            self.hook_manager.remove_bubble_from_tracking(pkg_name, active_version)
-                        safe_print(f"   - ✅ Removed redundant bubble.")
+                        safe_print(f"   - ✅ Removed redundant bubble directory.")
                     except Exception as e:
                         safe_print(_('    ❌ Failed to remove bubble directory: {}').format(e))
             
             if cleaned_count > 0:
-                safe_print('    ✅ Removed {} redundant bubble(s).'.format(cleaned_count))
+                safe_print('    ✅ Removed {} redundant bubble directory(s).'.format(cleaned_count))
             else:
                 safe_print('    ✅ No redundant bubbles found.')
         except Exception as e:

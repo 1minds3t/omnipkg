@@ -1,3 +1,4 @@
+from __future__ import annotations  # Python 3.6+ compatibility
 import sys
 import threading
 import sqlite3
