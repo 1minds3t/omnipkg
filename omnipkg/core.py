@@ -5843,9 +5843,7 @@ class omnipkg:
         duration_ms = (time.perf_counter() - start_time) * 1000
         return None, duration_ms
 
-    def smart_install(self, packages: List[str], dry_run: bool = False, force_reinstall: bool = False, override_strategy: Optional[str] = None, target_directory: Optional[Path] = None) -> int:
-        
-
+    def smart_install(self, packages: List[str], dry_run: bool = False, force_reinstall: bool = False, override_strategy: Optional[str] = None, target_directory: Optional[Path] = None) -> int:        
         # ====================================================================
         # NORMAL INITIALIZATION (Only runs if packages need work)
         # ====================================================================
@@ -5973,12 +5971,12 @@ class omnipkg:
                 try:
                     for pkg_spec in needs_resolution:
                         safe_print(f'  🔍 Resolving version for {pkg_spec}...')
-                        try:  # ADD THIS INNER TRY-CATCH
+                        try:
                             resolved = self._resolve_package_versions([pkg_spec])
                             if not resolved:
                                 all_packages_satisfied = False
                                 break
-                        except ValueError as e:  # CATCH THE ValueError HERE
+                        except ValueError as e:
                             safe_print(f"❌ Failed to resolve '{pkg_spec}': {e}")
                             all_packages_satisfied = False
                             break
@@ -5989,7 +5987,7 @@ class omnipkg:
                         
                         # Now check if this resolved version is satisfied via fast check
                         pkg_name, version = self._parse_package_spec(resolved_spec)
-                        is_installed, unused_duration = self.check_package_installed_fast(configured_exe, pkg_name, version) 
+                        install_status, unused_duration = self.check_package_installed_fast(configured_exe, pkg_name, version) 
                         if install_status == 'active':
                             safe_print(f'✅ {resolved_spec} already satisfied (active in main env)')
                             processed_packages.append(resolved_spec)
@@ -6003,6 +6001,13 @@ class omnipkg:
                         else:
                             # Not found or requires KB check for complex strategies
                             needs_kb_check.append(resolved_spec)
+                    
+                    # *** ADD THIS CHECK RIGHT HERE ***
+                    # After resolution loop, check if everything was satisfied
+                    if all_packages_satisfied and not needs_kb_check:
+                        preflight_time = (time.perf_counter() - preflight_start) * 1000
+                        safe_print(f'✅ PREFLIGHT SUCCESS: All {len(processed_packages)} package(s) already satisfied! ({preflight_time:.1f}ms)')
+                        return 0
                 
                 except NoCompatiblePythonError as e:
                     # Quantum healing during preflight!
