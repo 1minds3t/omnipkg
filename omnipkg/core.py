@@ -5848,6 +5848,25 @@ class omnipkg:
             if original_strategy != override_strategy:
                 safe_print(f'   - 🔄 Using override strategy: {override_strategy}')
                 self.config['install_strategy'] = override_strategy
+        
+        # ✅ MOVE THIS LINE HERE - Define install_strategy EARLY
+        install_strategy = self.config.get('install_strategy', 'stable-main')
+        
+        if not self._connect_cache():
+            return 1
+        self._heal_conda_environment()
+           
+        # ====================================================================
+        # NORMAL INITIALIZATION (Only runs if packages need work)
+        # ====================================================================
+        original_strategy = None
+        if override_strategy:
+            original_strategy = self.config.get('install_strategy', 'stable-main')
+            if original_strategy != override_strategy:
+                safe_print(f'   - 🔄 Using override strategy: {override_strategy}')
+                self.config['install_strategy'] = override_strategy
+        install_strategy = self.config.get('install_strategy', 'stable-main')
+    
         if not self._connect_cache():
             return 1
         self._heal_conda_environment()
@@ -6025,10 +6044,14 @@ class omnipkg:
                     new_omnipkg_instance = self.__class__(new_config_manager)
 
                     return new_omnipkg_instance.smart_install(packages, dry_run, force_reinstall, target_directory)
+                #
+                # Instead, just log and continue:
                 if not all_packages_satisfied:
-                    safe_print(_('❌ Could not resolve all packages. Aborting installation.'))
-                    return 1
+                    preflight_time = (time.perf_counter() - preflight_start) * 1000
+                    
+                    # Continue to main installation logic below...
             
+            # Phase 3: KB check only for complex cases (nested packages, complex strategies)
             # Phase 3: KB check only for complex cases (nested packages, complex strategies)
             if needs_kb_check and all_packages_satisfied:
                 safe_print(f'🔍 Checking {len(needs_kb_check)} package(s) requiring deeper verification...')
@@ -6052,18 +6075,17 @@ class omnipkg:
                     if not nested_found:
                         # If we get here, package is truly not satisfied anywhere
                         kb_satisfied = False
-                        break
+                        break  # ✅ ADD THIS BREAK
                     else:
                         safe_print(f'✅ {pkg_spec} already satisfied (nested)')
                         processed_packages.append(pkg_spec)
                 
                 all_packages_satisfied = kb_satisfied
             
-            preflight_time = (time.perf_counter() - preflight_start) * 1000
-            
-            # Early exit if everything is satisfied
-            
-            safe_print(f'📦 Preflight detected packages need installation ({preflight_time:.1f}ms)')
+            # ✅ ADD THIS CHECK AFTER PHASE 3
+            if not all_packages_satisfied:
+                safe_print(f'📦 Preflight detected packages need installation ({preflight_time:.1f}ms)')
+                # Continue to main installation...
 
         # --- MAIN INSTALLATION LOGIC STARTS HERE ---
         # Continue with the rest of your installation logic...
