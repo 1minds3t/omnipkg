@@ -141,7 +141,7 @@ typing-extensions==4.15.0
     #   typer
 urllib3==2.5.0
     # via requests
-uv==0.9.5
+uv==0.9.6
     # via omnipkg (pyproject.toml)
 yarl==1.20.1
     # via aiohttp
