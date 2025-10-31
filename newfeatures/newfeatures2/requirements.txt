@@ -1,0 +1,10 @@
+# Test requirements for omnipkg v1.0.7
+# We are intentionally mixing the order to test the sorting logic.
+
+poetry==1.7.1 # Legacy poetry version
+
+uv==0.8.5
+poetry==1.8.0 # The newer version of poetry
+
+# And a legacy version of uv
+uv==0.7.13

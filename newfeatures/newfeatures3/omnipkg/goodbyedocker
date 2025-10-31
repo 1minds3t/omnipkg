@@ -1,0 +1,296 @@
+good bye docker
+
+test_env_312) ) patrickryan@Patricks-MacBook-Air omnipkg % rm -rf test_env_312
+rm -rf ~/.config/omnipkg
+
+python3.12 -m venv test_env_312
+source test_env_312/bin/activate
+pip install -e . --no-cache-dir
+
+# Run omnipkg for the first time
+omnipkg
+Obtaining file:///Users/patrickryan/Library/Mobile%20Documents/com~apple~CloudDocs/stealth-sync/omnipkg
+  Installing build dependencies ... done
+  Checking if build backend supports build_editable ... done
+  Getting requirements to build editable ... done
+  Preparing editable metadata (pyproject.toml) ... done
+Collecting redis (from omnipkg==1.0.8)
+  Downloading redis-6.4.0-py3-none-any.whl.metadata (10 kB)
+Collecting packaging (from omnipkg==1.0.8)
+  Downloading packaging-25.0-py3-none-any.whl.metadata (3.3 kB)
+Collecting requests (from omnipkg==1.0.8)
+  Downloading requests-2.32.4-py3-none-any.whl.metadata (4.9 kB)
+Collecting charset_normalizer<4,>=2 (from requests->omnipkg==1.0.8)
+  Downloading charset_normalizer-3.4.3-cp312-cp312-macosx_10_13_universal2.whl.metadata (36 kB)
+Collecting idna<4,>=2.5 (from requests->omnipkg==1.0.8)
+  Downloading idna-3.10-py3-none-any.whl.metadata (10 kB)
+Collecting urllib3<3,>=1.21.1 (from requests->omnipkg==1.0.8)
+  Downloading urllib3-2.5.0-py3-none-any.whl.metadata (6.5 kB)
+Collecting certifi>=2017.4.17 (from requests->omnipkg==1.0.8)
+  Downloading certifi-2025.8.3-py3-none-any.whl.metadata (2.4 kB)
+Downloading packaging-25.0-py3-none-any.whl (66 kB)
+Downloading redis-6.4.0-py3-none-any.whl (279 kB)
+Downloading requests-2.32.4-py3-none-any.whl (64 kB)
+Downloading charset_normalizer-3.4.3-cp312-cp312-macosx_10_13_universal2.whl (205 kB)
+Downloading idna-3.10-py3-none-any.whl (70 kB)
+Downloading urllib3-2.5.0-py3-none-any.whl (129 kB)
+Downloading certifi-2025.8.3-py3-none-any.whl (161 kB)
+Building wheels for collected packages: omnipkg
+  Building editable for omnipkg (pyproject.toml) ... done
+  Created wheel for omnipkg: filename=omnipkg-1.0.8-0.editable-py3-none-any.whl size=8707 sha256=838497cda2c3d75ded3ff64bf0788e3b097a065a847d47d79338d27df7cac892
+  Stored in directory: /private/var/folders/t0/9m3t4vtj1g59805swj3nfzrr0000gn/T/pip-ephem-wheel-cache-poay14gd/wheels/9c/42/4f/7414670acd7571d7d9aa32db1649748fc9202a384d9a697e7e
+Successfully built omnipkg
+Installing collected packages: urllib3, redis, packaging, idna, charset_normalizer, certifi, requests, omnipkg
+Successfully installed certifi-2025.8.3 charset_normalizer-3.4.3 idna-3.10 omnipkg-1.0.8 packaging-25.0 redis-6.4.0 requests-2.32.4 urllib3-2.5.0
+
+[notice] A new release of pip is available: 25.1.1 -> 25.2
+[notice] To update, run: pip install --upgrade pip
+zsh: command not found: #
+
+============================================================
+  🚀 One-Time Environment Upgrade Required
+============================================================
+omnipkg works best with Python 3.11 for maximum compatibility.
+Your current environment is running Python 3.12.
+
+To ensure everything 'just works', omnipkg will now:
+  1. Download a self-contained Python 3.11 into your virtual environment.
+  2. Register omnipkg with the new interpreter.
+  3. Relaunch seamlessly to continue your command.
+
+This is a one-time setup. Future runs will be instant.
+
+Do you want to proceed with the automatic upgrade? (y/n): y
+
+🚀 Upgrading environment to Python 3.11...
+📥 Downloading Python 3.11 for Macos (this may take a moment)...
+📦 Extracting Python 3.11...
+📦 Installing essential packages...
+   ✅ Essential packages installed successfully!
+✅ Python 3.11 downloaded and configured.
+🔧 Finalizing environment upgrade...
+   - Registering project with new Python 3.11 interpreter...
+   ✅ Project registered with Python 3.11.
+🔧 Creating new omnipkg executable...
+   ✅ New omnipkg executable created.
+🔧 Updating default Python links...
+   ✅ Default Python links updated to use Python 3.11.
+   (Stub) Registering interpreter /Users/patrickryan/Library/Mobile Documents/com~apple~CloudDocs/stealth-sync/omnipkg/test_env_312/.omnipkg/interpreters/cpython-3.11.6/bin/python3.11 in Redis...
+   (Stub) Updating bubble mappings for /Users/patrickryan/Library/Mobile Documents/com~apple~CloudDocs/stealth-sync/omnipkg/test_env_312/.omnipkg/interpreters/cpython-3.11.6/bin/python3.11...
+🔧 Registering all available Python interpreters...
+   ✅ Registered 2 Python interpreters:
+      - Python 3.11: /Users/patrickryan/Library/Mobile Documents/com~apple~CloudDocs/stealth-sync/omnipkg/test_env_312/.omnipkg/interpreters/cpython-3.11.6/bin/python3.11
+      - Python 3.12: /Users/patrickryan/Library/Mobile Documents/com~apple~CloudDocs/stealth-sync/omnipkg/test_env_312/bin/python3.12
+
+✅ Success! The environment is now fully upgraded to Python 3.11.
+   Your current command will now continue on the new version.
+
+   IMPORTANT: For the change to stick in your terminal for future commands, please run:
+   source "/Users/patrickryan/Library/Mobile Documents/com~apple~CloudDocs/stealth-sync/omnipkg/test_env_312/bin/activate"
+   ...after this one finishes.
+🔄 Environment has changed. Updating config to use new Python interpreter...
+✅ Config file updated successfully.
+👋 Welcome to omnipkg! Run `omnipkg --help` for commands.
+((test_env_312) ) patrickryan@Patricks-MacBook-Air omnipkg % omnipkg status
+🔄 omnipkg System Status
+==================================================
+🌍 Main Environment:
+  - Path: /Users/patrickryan/Library/Mobile Documents/com~apple~CloudDocs/stealth-sync/omnipkg/test_env_312/.omnipkg/interpreters/cpython-3.11.6/lib/python3.11/site-packages
+  - Active Packages: 11
+
+ izolasyon Alanı (Bubbles):
+  - No isolated package versions found.
+((test_env_312) ) patrickryan@Patricks-MacBook-Air omnipkg % omnipkg stress-test
+
+============================================================
+  🚀 omnipkg Ultimate Stress Test
+============================================================
+This test will install, bubble, and test multiple large scientific packages.
+
+⚠️  This will download several hundred MB and may take several minutes.
+
+Proceed with the stress test? (y/n): y
+
+============================================================
+  🚀 STEP 1: Preparing a Clean Test Environment
+============================================================
+   - Setting main environment to a known good state...
+
+────────────────────────────────────────────────────────────
+📦 Processing: numpy==1.26.4
+────────────────────────────────────────────────────────────
+
+📸 Taking LIVE pre-installation snapshot...
+    - Found 11 packages
+
+⚙️  Running pip install for: numpy==1.26.4...
+Collecting numpy==1.26.4
+  Using cached numpy-1.26.4-cp311-cp311-macosx_10_9_x86_64.whl.metadata (61 kB)
+Using cached numpy-1.26.4-cp311-cp311-macosx_10_9_x86_64.whl (20.6 MB)
+Installing collected packages: numpy
+Successfully installed numpy-1.26.4
+
+
+🔬 Analyzing post-installation changes...
+✅ No downgrades detected. Installation completed safely.
+
+🧠 Updating knowledge base with final environment state...
+🧠 Updating knowledge base for 1 changed package(s)...
+✅ Knowledge base updated successfully.
+🔄 Updating cached file hash index...
+✅ Hash index updated.
+
+────────────────────────────────────────────────────────────
+📦 Processing: scipy==1.16.1
+────────────────────────────────────────────────────────────
+
+📸 Taking LIVE pre-installation snapshot...
+    - Found 12 packages
+
+⚙️  Running pip install for: scipy==1.16.1...
+Collecting scipy==1.16.1
+  Using cached scipy-1.16.1-cp311-cp311-macosx_14_0_x86_64.whl.metadata (61 kB)
+Requirement already satisfied: numpy<2.6,>=1.25.2 in ./test_env_312/.omnipkg/interpreters/cpython-3.11.6/lib/python3.11/site-packages (from scipy==1.16.1) (1.26.4)
+Using cached scipy-1.16.1-cp311-cp311-macosx_14_0_x86_64.whl (23.5 MB)
+Installing collected packages: scipy
+Successfully installed scipy-1.16.1
+
+
+🔬 Analyzing post-installation changes...
+✅ No downgrades detected. Installation completed safely.
+
+🧠 Updating knowledge base with final environment state...
+🧠 Updating knowledge base for 1 changed package(s)...
+✅ Knowledge base updated successfully.
+🔄 Updating cached file hash index...
+✅ Hash index updated.
+
+============================================================
+🎉 All package operations complete.
+📸 Saving snapshot of the current environment as 'last known good'...
+   ✅ Snapshot saved.
+✅ Environment is clean and ready for testing.
+
+============================================================
+  🚀 STEP 2: Creating Test Bubbles with `omnipkg`
+============================================================
+
+--- Creating bubble for numpy==1.24.3 ---
+🫧 Creating isolated bubble for numpy v1.24.3
+    -> Trying strategy 1: pip dry-run...
+    -> Trying strategy 2: PyPI API...
+    ✅ Success: Dependencies resolved via PyPI API.
+    📦 Installing full dependency tree to temporary location...
+    🧹 Creating deduplicated bubble at /Users/patrickryan/Library/Mobile Documents/com~apple~CloudDocs/stealth-sync/omnipkg/test_env_312/.omnipkg/interpreters/cpython-3.11.6/lib/python3.11/site-packages/.omnipkg_versions/numpy-1.24.3
+    ⚡️ Loading main environment hash index from cache...
+    📈 Loaded 15270 file hashes from Redis.
+    ⚠️  Disabling deduplication for native package: numpy
+    ✅ Bubble created: 1362 files copied, 0 deduplicated.
+    📊 Space efficiency: 0.0% saved.
+
+--- Creating bubble for scipy==1.12.0 ---
+🫧 Creating isolated bubble for scipy v1.12.0
+    -> Trying strategy 1: pip dry-run...
+    -> Trying strategy 2: PyPI API...
+    ✅ Success: Dependencies resolved via PyPI API.
+    📦 Installing full dependency tree to temporary location...
+    🧹 Creating deduplicated bubble at /Users/patrickryan/Library/Mobile Documents/com~apple~CloudDocs/stealth-sync/omnipkg/test_env_312/.omnipkg/interpreters/cpython-3.11.6/lib/python3.11/site-packages/.omnipkg_versions/scipy-1.12.0
+    ⚡️ Loading main environment hash index from cache...
+    📈 Loaded 15270 file hashes from Redis.
+    ⚠️  Disabling deduplication for native package: numpy
+    ⚠️  Disabling deduplication for native package: scipy
+    ✅ Bubble created: 3552 files copied, 0 deduplicated.
+    📊 Space efficiency: 0.0% saved.
+
+============================================================
+  🚀 STEP 3: Executing the Nuclear Test
+============================================================
+
+💥 NUMPY VERSION JUGGLING:
+
+⚡ Switching to numpy==1.24.3
+
+🌀 omnipkg loader: Activating numpy==1.24.3...
+ ✅ Activated bubble: /Users/patrickryan/Library/Mobile Documents/com~apple~CloudDocs/stealth-sync/omnipkg/test_env_312/.omnipkg/interpreters/cpython-3.11.6/lib/python3.11/site-packages/.omnipkg_versions/numpy-1.24.3
+ 🔧 sys.path[0]: /Users/patrickryan/Library/Mobile Documents/com~apple~CloudDocs/stealth-sync/omnipkg/test_env_312/.omnipkg/interpreters/cpython-3.11.6/lib/python3.11/site-packages/.omnipkg_versions/numpy-1.24.3
+ ℹ️ Bubble contains 1 packages.
+   ✅ Version: 1.24.3
+   🔢 Array sum: 6
+   🎯 Version verification: PASSED
+
+⚡ Switching to numpy==1.26.4
+
+🌀 omnipkg loader: Activating numpy==1.26.4...
+ 🧹 Deactivated bubble: numpy-1.24.3
+ ✅ System version already matches requested version (1.26.4). No bubble activation needed.
+   ✅ Version: 1.26.4
+   🔢 Array sum: 6
+   🎯 Version verification: PASSED
+
+
+🔥 SCIPY C-EXTENSION TEST:
+
+🌋 Switching to scipy==1.12.0
+
+🌀 omnipkg loader: Activating scipy==1.12.0...
+ ✅ Activated bubble: /Users/patrickryan/Library/Mobile Documents/com~apple~CloudDocs/stealth-sync/omnipkg/test_env_312/.omnipkg/interpreters/cpython-3.11.6/lib/python3.11/site-packages/.omnipkg_versions/scipy-1.12.0
+ 🔧 sys.path[0]: /Users/patrickryan/Library/Mobile Documents/com~apple~CloudDocs/stealth-sync/omnipkg/test_env_312/.omnipkg/interpreters/cpython-3.11.6/lib/python3.11/site-packages/.omnipkg_
+ ℹ️ Bubble contains 2 packages.
+   ✅ Version: 1.12.0
+   ♻️ Sparse matrix: 3 non-zeros
+   📐 Linalg det: -2.0
+   🎯 Version verification: PASSED
+
+🌋 Switching to scipy==1.16.1
+
+🌀 omnipkg loader: Activating scipy==1.16.1...
+ 🧹 Deactivated bubble: scipy-1.12.0
+ ✅ System version already matches requested version (1.16.1). No bubble activation needed.
+   ✅ Version: 1.16.1
+   ♻️ Sparse matrix: 3 non-zeros
+   📐 Linalg det: -2.0
+   🎯 Version verification: PASSED
+
+
+🤯 NUMPY + SCIPY VERSION MIXING:
+
+🌀 COMBO: numpy==1.24.3 + scipy==1.12.0
+   🔧 PYTHONPATH: /Users/patrickryan/Library/Mobile Documents/com~apple~CloudDocs/stealth-sync/omnipkg/test_env_312/.omnipkg/interpreters/cpython-3.11.6/lib/python3.11/site-packages/.omnipkg_versions/numpy-1.24.3:/Users/patrickryan/Library/Mobile Documents/com~apple~CloudDocs/stealth-sync/omnipkg/test_env_312/.omnipkg/interpreters/cpython-3.11.6/lib/python3.11/site-packages/.omnipkg_versions/scipy-1.12.0
+🔍 Python path (first 5 entries):
+   0: /Users/patrickryan/Library/Mobile Documents/com~apple~CloudDocs/stealth-sync/omnipkg
+   1: /Users/patrickryan/Library/Mobile Documents/com~apple~CloudDocs/stealth-sync/omnipkg/test_env_312/.omnipkg/interpreters/cpython-3.11.6/lib/python3.11/site-packages/.omnipkg_versions/numpy-1.24.3
+   2: /Users/patrickryan/Library/Mobile Documents/com~apple~CloudDocs/stealth-sync/omnipkg/test_env_312/.omnipkg/interpreters/cpython-3.11.6/lib/python3.11/site-packages/.omnipkg_versions/scipy-1.12.0
+   3: /Users/patrickryan/Library/Mobile Documents/com~apple~CloudDocs/stealth-sync/omnipkg/test_env_312/.omnipkg/interpreters/cpython-3.11.6/lib/python311.zip
+   4: /Users/patrickryan/Library/Mobile Documents/com~apple~CloudDocs/stealth-sync/omnipkg/test_env_312/.omnipkg/interpreters/cpython-3.11.6/lib/python3.11
+   🧪 numpy: 1.24.3, scipy: 1.12.0
+
+ync/omnipkg/test_env_312/.omnipkg/interpreters/cpython-3.11.6/lib/python3.11/site-packages/.omnipkg_versions/numpy-1.24.3/numpy/__init__.py
+   📍 scipy location: /Users/patrickryan/Library/Mobile Documents/com~apple~CloudDocs/stealth-sync/omnipkg/test_env_312/.omnipkg/interpreters/cpython-3.11.6/lib/python3.11/site-packages/.omnipkg_versions/scipy-1.12.0/scipy/__init__.py
+   🔗 Compatibility check: [1. 2. 3.]
+   🎯 Version verification: BOTH PASSED!
+
+🌀 COMBO: numpy==1.26.4 + scipy==1.16.1
+   🔧 PYTHONPATH: 
+🔍 Python path (first 5 entries):
+   0: /Users/patrickryan/Library/Mobile Documents/com~apple~CloudDocs/stealth-sync/omnipkg
+   1: /Users/patrickryan/Library/Mobile Documents/com~apple~CloudDocs/stealth-sync/omnipkg/test_env_312/.omnipkg/interpreters/cpython-3.11.6/lib/python311.zip
+   2: /Users/patrickryan/Library/Mobile Documents/com~apple~CloudDocs/stealth-sync/omnipkg/test_env_312/.omnipkg/interpreters/cpython-3.11.6/lib/python3.11
+   3: /Users/patrickryan/Library/Mobile Documents/com~apple~CloudDocs/stealth-sync/omnipkg/test_env_312/.omnipkg/interpreters/cpython-3.11.6/lib/python3.11/lib-dynload
+   4: /Users/patrickryan/Library/Mobile Documents/com~apple~CloudDocs/stealth-sync/omnipkg/test_env_312/.omnipkg/interpreters/cpython-3.11.6/lib/python3.11/site-packages
+   🧪 numpy: 1.26.4, scipy: 1.16.1
+   📍 numpy location: /Users/patrickryan/Library/Mobile Documents/com~apple~CloudDocs/stealth-sync/omnipkg/test_env_312/.omnipkg/interpreters/cpython-3.11.6/lib/python3.11/site-packages/numpy/__init__.py
+   📍 scipy location: /Users/patrickryan/Library/Mobile Documents/com~apple~CloudDocs/stealth-sync/omnipkg/test_env_312/.omnipkg/interpreters/cpython-3.11.6/lib/python3.11/site-packages/scipy/__init__.py
+   🔗 Compatibility check: [1. 2. 3.]
+   🎯 Version verification: BOTH PASSED!
+
+
+ 🚨 OMNIPKG SURVIVED NUCLEAR TESTING! 🎇
+
+============================================================
+  🚀 STEP 3: Cleaning Up Test Environment
+============================================================
+   - Removing test bubble: numpy-1.24.3
+   - Removing test bubble: scipy-1.12.0
+
+✅ Cleanup complete. Your environment is back to normal.
+((test_env_312) ) patrickryan@Patricks-MacBook-Air omnipkg % 
