@@ -1,3 +1,4 @@
+from __future__ import annotations  # Python 3.6+ compatibility
 try:
     from .common_utils import safe_print
 except ImportError:
