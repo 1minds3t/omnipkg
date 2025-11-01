@@ -1,3 +1,4 @@
+from __future__ import annotations  # Python 3.6+ compatibility
 try:
     from .common_utils import safe_print
 except ImportError:
@@ -208,7 +209,7 @@ class omnipkgMetadataGatherer:
                 pass
             return None
 
-    def _discover_distributions(self, targeted_packages: Optional[List[str]], verbose: bool=False) -> List[importlib.metadata.Distribution]:
+    def _discover_distributions(self, targeted_packages: Optional[List[str]], verbose: bool=False, search_path_override: Optional[str] = None) -> List[importlib.metadata.Distribution]:
         """
         ENHANCED DISCOVERY V10: Combines V9's authoritative file system scanning 
         with V7's comprehensive targeted search features and vendored package detection.
@@ -221,6 +222,21 @@ class omnipkgMetadataGatherer:
             targeted_packages: Optional list of specific packages to find
             verbose: If True, shows detailed search progress. If False, only shows results.
         """
+        if search_path_override:
+            # If an override is provided, search ONLY that path.
+            search_paths = [Path(search_path_override)]
+            safe_print(f"      -> Searching in specified path: {search_path_override}")
+        else:
+            # Otherwise, use the standard search paths.
+            main_site_packages = Path(self.config.get('site_packages_path'))
+            multiversion_base = Path(self.config.get('multiversion_base'))
+            search_paths = [main_site_packages, multiversion_base]
+        # --- END OF CHANGE ---
+
+        all_dist_info_paths = []
+        for path in search_paths:
+            if path.exists():
+                all_dist_info_paths.extend(path.rglob('*.dist-info'))
         # Get the ground-truth paths from the config (loaded by omnipkg core)
         site_packages_path = self.config.get('site_packages_path')
         multiversion_base_path = self.config.get('multiversion_base')
@@ -742,7 +758,8 @@ class omnipkgMetadataGatherer:
                 })
         return report
 
-    def run(self, targeted_packages: Optional[List[str]]=None, newly_active_packages: Optional[Dict[str, str]]=None):
+    def run(self, targeted_packages: Optional[List[str]]=None, search_path_override: Optional[str] = None):
+
         """
         (V5.3 - Robust Path Fix) The main execution loop. Now uses robust logic
         to locate the bubble root and correctly determine context compatibility.
