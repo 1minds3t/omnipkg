@@ -1,3 +1,4 @@
+from __future__ import annotations  # Python 3.6+ compatibility
 """omnipkg CLI - Enhanced with runtime interpreter switching and language support"""
 try:
     from .common_utils import safe_print
@@ -27,16 +28,58 @@ except NameError:
 
 def get_actual_python_version():
     """Get the actual Python version being used by omnipkg, not just sys.version_info."""
+    from omnipkg.core import ConfigManager
+    
+    debug_python_context("INSIDE get_actual_python_version")
+    
     try:
-        cm = ConfigManager()
+        cm = ConfigManager(suppress_init_messages=True)
         configured_exe = cm.config.get('python_executable')
+        
+        print(f"\n🔍 get_actual_python_version:")
+        print(f"   sys.executable:     {sys.executable}")
+        print(f"   sys.version_info:   {sys.version_info[:2]}")
+        print(f"   configured_exe:     {configured_exe}")
+        
         if configured_exe:
             version_tuple = cm._verify_python_version(configured_exe)
+            print(f"   verified version:   {version_tuple}")
             if version_tuple:
                 return version_tuple[:2]
         return sys.version_info[:2]
-    except Exception:
+    except Exception as e:
+        print(f"   ⚠️  Exception in get_actual_python_version: {e}")
         return sys.version_info[:2]
+
+def debug_python_context(label=""):
+    """Print comprehensive Python context information for debugging."""
+    print(f"\n{'='*70}")
+    print(f"🔍 DEBUG CONTEXT CHECK: {label}")
+    print(f"{'='*70}")
+    print(f"📍 sys.executable:        {sys.executable}")
+    print(f"📍 sys.version:           {sys.version}")
+    print(f"📍 sys.version_info:      {sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}")
+    print(f"📍 os.getpid():           {os.getpid()}")
+    print(f"📍 __file__ (if exists):  {__file__ if '__file__' in globals() else 'N/A'}")
+    print(f"📍 Path.cwd():            {Path.cwd()}")
+    
+    # Environment variables that might affect context
+    relevant_env_vars = [
+        'PYTHONPATH', 'VIRTUAL_ENV', 'CONDA_PREFIX',
+        'OMNIPKG_MAIN_ORCHESTRATOR_PID', 'OMNIPKG_RELAUNCHED',
+        'OMNIPKG_LANG', 'PYTHONHOME', 'PYTHONEXECUTABLE'
+    ]
+    print(f"\n📦 Relevant Environment Variables:")
+    for var in relevant_env_vars:
+        value = os.environ.get(var, 'NOT SET')
+        print(f"   {var}: {value}")
+    
+    # Check sys.path for omnipkg locations
+    print(f"\n📂 sys.path (first 5 entries):")
+    for i, path in enumerate(sys.path[:5]):
+        print(f"   [{i}] {path}")
+    
+    print(f"{'='*70}\n")
     
 def upgrade(args, core):
     """Handler for the upgrade command."""
@@ -641,18 +684,17 @@ def main():
             actual_version = get_actual_python_version()
             safe_print(_('Current Python version: {}.{}').format(actual_version[0], actual_version[1]))
             safe_print(_('🎪 Omnipkg supports version switching for:'))
-            safe_print(_('   • Python modules (e.g., rich): See tests/test_rich_switching.py'))
-            safe_print(_('   • Binary packages (e.g., uv): See tests/test_uv_switching.py'))
-            safe_print(_('   • C-extension packages (e.g., numpy, scipy): See stress_test.py'))
-            safe_print(_('   • Complex dependency packages (e.g., TensorFlow): See tests/test_tensorflow_switching.py'))
-            safe_print(_('   • Note: The Flask demo is under construction and not currently available.'))
+            safe_print(_('   • Python modules (e.g., rich)'')   '))
+            safe_print(_('   • Binary packages (e.g., uv)'))
+            safe_print(_('   • C-extension packages (e.g., numpy, scipy)'))
+            safe_print(_('   • Complex dependency packages (e.g., TensorFlow)'))
             safe_print(_('\nSelect a demo to run:'))
             safe_print(_('1. Rich test (Python module switching)'))
             safe_print(_('2. UV test (binary switching)'))
             safe_print(_('3. NumPy + SciPy stress test (C-extension switching)'))
             safe_print(_('4. TensorFlow test (complex dependency switching)'))
             safe_print(_('5. 🚀 Multiverse Healing Test (Cross-Python Hot-Swapping Mid-Script)'))
-            safe_print(_('6. Flask test (under construction)'))
+            safe_print(_('6. Old Flask Test (legacy package healing)'))
             safe_print(_('7. Auto-healing Test (omnipkg run)')) # <--- ADD THIS
             safe_print(_('8. 🌠 Quantum Multiverse Warp (Concurrent Python Installations)'))
             safe_print(_('9. Flask Port Finder Test (auto-healing with Flask)')) # <-- ADD THIS LINE
@@ -680,7 +722,6 @@ def main():
                 actual_version = get_actual_python_version()
                 actual_version_str = f"{actual_version[0]}.{actual_version[1]}"
                 
-                demo_name = 'uv'
                 demo_name = 'uv'
                 source_script_path = TESTS_DIR / 'test_uv_switching.py'
                 if not source_script_path.exists():
@@ -738,12 +779,46 @@ def main():
                     parser_prog=parser.prog,
                     required_version='3.11'  # This test requires 3.11 specifically
                 )
-
             elif response == '6':
-                test_file = TESTS_DIR / 'test_rich_switching.py'
-                demo_name = 'rich'
-                safe_print(_('⚠️ The Flask demo is under construction and not currently available.'))
-                safe_print(_('Switching to the Rich test (option 1) for now!'))
+                source_script_path = TESTS_DIR / 'test_old_flask.py'
+                if not source_script_path.exists():
+                    safe_print(f'❌ Error: Source test file {source_script_path} not found.')
+                    return 1
+
+                safe_print(_('🚀 Running {} demo from a sterile environment...').format(demo_name))
+                safe_print(_('   (This ensures no PYTHONPATH contamination from the orchestrator)'))
+                
+                # Create a sterile copy of the script in /tmp
+                with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False, encoding='utf-8') as temp_script:
+                    temp_script_path = Path(temp_script.name)
+                    temp_script.write(source_script_path.read_text(encoding='utf-8'))
+                
+                safe_print(f"   - Sterile script created at: {temp_script_path}")
+                
+                returncode = 1 # Default to failure
+                try:
+                    safe_print('📡 Live streaming output...')
+                    safe_print('-' * 60)
+                    
+                    # Execute the STERILE script using 'omnipkg run'
+                    cmd = [sys.executable, '-m', 'omnipkg.cli', 'run', str(temp_script_path)]
+                    process = subprocess.Popen(cmd, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, encoding='utf-8', errors='replace')
+                    for line in process.stdout:
+                        safe_print(line, end='')
+                    returncode = process.wait()
+
+                    safe_print('-' * 60)
+                    if returncode == 0:
+                        safe_print(_('🎉 Demo completed successfully!'))
+                    else:
+                        safe_print(_('❌ Demo failed with return code {}').format(returncode))
+                
+                finally:
+                    # ALWAYS clean up the temporary file
+                    temp_script_path.unlink(missing_ok=True)
+                
+                return returncode
+            
             elif response == '7': # <--- ADD THIS ENTIRE BLOCK
                 demo_name = 'auto-heal'
                 test_file_path = TESTS_DIR / 'test_old_rich.py'
@@ -752,7 +827,7 @@ def main():
                 safe_print('-' * 60)
                 
                 # We must call omnipkg as a subprocess to properly test the 'run' command
-                cmd = [parser.prog, 'run', str(test_file_path)]
+                cmd = [sys.executable, '-m', 'omnipkg.cli', 'run', str(test_file_path)]
                 process = subprocess.Popen(cmd, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, encoding='utf-8', errors='replace')
                 for line in process.stdout:
                     safe_print(line, end='')
@@ -787,7 +862,7 @@ def main():
                     safe_print('-' * 60)
                     
                     # Execute the STERILE script using 'omnipkg run'
-                    cmd = [parser.prog, 'run', str(temp_script_path)]
+                    cmd = [sys.executable, '-m', 'omnipkg.cli', 'run', str(temp_script_path)]
                     process = subprocess.Popen(cmd, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, encoding='utf-8', errors='replace')
                     for line in process.stdout:
                         safe_print(line, end='')
@@ -812,7 +887,7 @@ def main():
                     return 1
                 # This demo is best run via 'omnipkg run' to showcase auto-healing
                 safe_print(_('🚀 This demo uses "omnipkg run" to showcase auto-healing of missing modules.'))
-                cmd = [parser.prog, 'run', str(test_file)]
+                cmd = [sys.executable, '-m', 'omnipkg.cli', 'run', str(test_file)]
                 process = subprocess.Popen(cmd, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, encoding='utf-8', errors='replace')
                 for line in process.stdout:
                     safe_print(line, end='')

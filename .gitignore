@@ -4,6 +4,10 @@
 *.pyd
 __pycache__/
 
+# Ignore experimental features and analysis files
+newfeatures/
+diff_analysis/
+
 # Distribution & build files
 /build/
 /dist/

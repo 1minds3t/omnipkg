@@ -1,4 +1,4 @@
-
+from __future__ import annotations  # Python 3.6+ compatibility
 # omnipkg/commands/run.py
 try:
     from ..common_utils import safe_print
@@ -13,12 +13,12 @@ import re
 import textwrap
 import time
 from pathlib import Path
-try:
-    import select
-    HAS_SELECT = True
-except ImportError:
-    # This will be the case on Windows, which is fine.
-    HAS_SELECT = False
+import os
+import select # We can import it, but we check the OS before using it
+
+# THE FIX: HAS_SELECT is only True on non-Windows (POSIX) systems.
+HAS_SELECT = (os.name == 'posix')
+
 try:
     # Assuming the file is now in a 'utils' subdirectory
     from omnipkg.utils.flask_port_finder import auto_patch_flask_port
@@ -1084,7 +1084,7 @@ def execute_run_command(cmd_args: list, config_manager: ConfigManager, verbose: 
                     break
                 
                 # Use select to check if there's data available (Unix-like systems)
-                if hasattr(select, 'select'):
+                if HAS_SELECT:
                     ready, _unused1, _unused2 = select.select([process.stdout], [], [], 0.1)
                     if ready:
                         line = process.stdout.readline()
