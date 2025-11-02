@@ -22,7 +22,6 @@ try:
 except ImportError as e:
     safe_print(f'FATAL: Could not import omnipkg modules. Make sure this script is placed correctly. Error: {e}')
     sys.exit(1)
-    
 
 # --- Thread-safe utilities ---
 print_lock = threading.Lock()
