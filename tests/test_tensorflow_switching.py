@@ -11,10 +11,6 @@ project_root = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(project_root))
 
 # --- BOOTSTRAP SECTION ---
-from omnipkg.common_utils import ensure_python_or_relaunch, sync_context_to_runtime
-if os.environ.get('OMNIPKG_RELAUNCHED') != '1':
-    ensure_python_or_relaunch("3.11")
-sync_context_to_runtime()
 # --- END BOOTSTRAP ---
 
 import json
