@@ -127,65 +127,33 @@ def debug_python_context(label=""):
 
 def sync_context_to_runtime():
     """
-    Ensures omnipkg's active context matches the currently running Python interpreter
-    by using the omnipkg API directly. This is the robust method for post-relaunch
-    synchronization, avoiding the state conflicts of CLI subprocesses.
+    Ensures omnipkg's active context matches the currently running Python interpreter.
+    This version is now silent for production use.
     """
-    # Add debug BEFORE any imports
-    debug_python_context("BEFORE sync_context_to_runtime")
-    
-    # Lazy import to avoid circular import
     from omnipkg.core import ConfigManager
-    from omnipkg.common_utils import safe_print
     from omnipkg.i18n import _
-    
-    safe_print(_('🔄 Forcing omnipkg context to match script Python version: {}...').format(f'{sys.version_info.major}.{sys.version_info.minor}'))
     
     try:
         config_manager = ConfigManager(suppress_init_messages=True)
         current_executable = str(Path(sys.executable).resolve())
         
-        # DEBUG: Show what omnipkg thinks the context is
-        stored_executable = config_manager.config.get('python_executable')
-        print(f"\n🔍 DEBUG sync_context_to_runtime:")
-        print(f"   Current sys.executable:  {current_executable}")
-        print(f"   Stored in omnipkg:       {stored_executable}")
-        print(f"   Match: {stored_executable == current_executable}")
-        
         if config_manager.config.get('python_executable') == current_executable:
-            safe_print(_('✅ Context is already synchronized.'))
-            debug_python_context("AFTER sync_context_to_runtime (no change needed)")
-            return
+            return # Context is already synchronized.
         
-        # DEBUG: Show what paths we're about to set
-        print(f"\n🔧 Getting new paths for: {current_executable}")
+        # This print is helpful for the user to know a sync is happening.
+        safe_print(_('🔄 Forcing omnipkg context to match script Python version: {}...').format(f'{sys.version_info.major}.{sys.version_info.minor}'))
+
         new_paths = config_manager._get_paths_for_interpreter(current_executable)
         
         if not new_paths:
             raise RuntimeError(f'Could not determine paths for the current interpreter: {current_executable}')
         
-        print(f"   New paths to be set:")
-        for key, value in new_paths.items():
-            print(f"      {key}: {value}")
-        
-        safe_print(_('   - Aligning configuration to the new runtime...'))
         config_manager.set('python_executable', new_paths['python_executable'])
         config_manager.set('site_packages_path', new_paths['site_packages_path'])
         config_manager.set('multiversion_base', new_paths['multiversion_base'])
-        
-        print(f"   - Updating default Python links...")
         config_manager._update_default_python_links(config_manager.venv_path, Path(current_executable))
         
-        safe_print(_('✅ omnipkg context synchronized successfully via API.'))
-        
-        # DEBUG: Verify the changes were applied
-        config_manager = ConfigManager(suppress_init_messages=True)  # Reload
-        print(f"\n✅ Verification after sync:")
-        print(f"   python_executable:   {config_manager.config.get('python_executable')}")
-        print(f"   site_packages_path:  {config_manager.config.get('site_packages_path')}")
-        
-        debug_python_context("AFTER sync_context_to_runtime (changes applied)")
-        return
+        safe_print(_('✅ omnipkg context synchronized successfully.'))
         
     except Exception as e:
         safe_print(_('❌ A critical error occurred during context synchronization: {}').format(e))
