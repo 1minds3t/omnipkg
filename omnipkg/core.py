@@ -1488,78 +1488,91 @@ class ConfigManager:
         else:
             safe_print(_(' ⚠️  Using: {} (System interpreter)').format(native_python_exe))
         
-        # --- CREATE THE CONFIGURATION FROM THE NATIVE VENV PATH ---
-        self.config_dir.mkdir(parents=True, exist_ok=True)
-        defaults = self._get_sensible_defaults(str(native_python_exe))
-        final_config = defaults.copy()
-        
-        # Rest of interactive setup...
-        if interactive and (not os.environ.get('CI')):
-            safe_print(_("🌍 Welcome to omnipkg! Let's get you configured."))
-            # ... (keep all the interactive prompts)
-        
-        # Save config
-        try:
-            with open(self.config_path, 'r') as f:
-                full_config = json.load(f)
-        except (FileNotFoundError, json.JSONDecodeError):
-            full_config = {'environments': {}}
-        if 'environments' not in full_config:
-            full_config['environments'] = {}
-        full_config['environments'][self.env_id] = final_config
-        with open(self.config_path, 'w') as f:
-            json.dump(full_config, f, indent=4)
-        
-        # After config is saved, THEN adopt the interpreter for swapping purposes
-        # but DON'T change the config to point to it
+        # --- PLATFORM-SPECIFIC INTERPRETER ADOPTION ---
         native_version = f'{sys.version_info.major}.{sys.version_info.minor}'
-        try:
-            if hasattr(self, 'interpreter_manager'):
-                self.interpreter_manager.adopt_interpreter(native_version)
-            safe_print(_('   - ✅ Native Python registered for future version swapping.'))
-        except:
-            pass
+        major_minor_micro = f'{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}'
         
-        # --- STEP 1: ADOPT THE NATIVE PYTHON USING EXISTING MECHANISM ---
-        native_version = f'{sys.version_info.major}.{sys.version_info.minor}'
-        try:
+        if platform.system() == 'Windows':
+            # --- WINDOWS-SPECIFIC LOGIC: Use %LOCALAPPDATA% for short paths ---
+            safe_print(_('   - Setting up managed Python interpreter for Windows...'))
+            
+            # Use a short, stable path to avoid MAX_PATH issues
+            managed_base_dir = Path.home() / 'AppData' / 'Local' / 'omnipkg' / 'interpreters'
+            managed_base_dir.mkdir(parents=True, exist_ok=True)
+            
+            dest_path = managed_base_dir / f'cpython-{major_minor_micro}'
+            managed_python_exe = dest_path / 'Scripts' / 'python.exe'
+            
+            # Check if a managed copy already exists
+            if not managed_python_exe.exists():
+                safe_print(_('   - Creating managed copy at: {}').format(dest_path))
+                try:
+                    import venv
+                    # Create a full, standalone copy (no symlinks, no admin rights needed)
+                    venv.create(dest_path, with_pip=True, symlinks=False, clear=True)
+                    
+                    # Verify the copy works
+                    if not managed_python_exe.exists():
+                        raise OSError("venv.create succeeded but python.exe not found")
+                    
+                    result = subprocess.run(
+                        [str(managed_python_exe), '--version'],
+                        check=True,
+                        capture_output=True,
+                        text=True
+                    )
+                    safe_print(_('   - ✅ Managed Python copy created: {}').format(result.stdout.strip()))
+                    
+                except Exception as e:
+                    safe_print(_('   - ❌ FATAL: Failed to create managed Python copy: {}').format(e))
+                    if dest_path.exists():
+                        import shutil
+                        shutil.rmtree(dest_path, ignore_errors=True)
+                    raise RuntimeError(f"Could not create managed Python environment on Windows: {e}") from e
+            else:
+                safe_print(_('   - ✅ Found existing managed Python copy'))
+            
+            # Register this interpreter for version swapping
+            try:
+                self._register_all_interpreters(managed_base_dir)
+            except Exception as e:
+                safe_print(_('   - ⚠️  Warning: Could not register interpreter: {}').format(e))
+            
+            # Use the managed copy for configuration
+            managed_python_exe_str = str(managed_python_exe)
+            
+        else:
+            # --- MACOS/LINUX LOGIC: Use existing symlink-based adoption ---
             safe_print(_('   - Registering native Python for future version swapping...'))
-            # Use simple symlink method - don't try to call InterpreterManager yet
-            self._register_and_link_existing_interpreter(Path(sys.executable), native_version)
-            safe_print(_('   - ✅ Native Python registered for future version swapping.'))
-        except Exception as e:
-            safe_print(_('   - ⚠️ Failed to adopt Python {}: {}').format(native_version, e))
-            safe_print(_('   - Omnipkg will continue but hotswapping may be limited.'))
             
-            if result != 0:
-                raise RuntimeError(f"Failed to adopt Python {native_version}")
+            try:
+                # Use existing mechanism that works well on Unix systems
+                self._register_and_link_existing_interpreter(Path(sys.executable), native_version)
+                safe_print(_('   - ✅ Native Python registered successfully'))
+            except Exception as e:
+                safe_print(_('   - ⚠️ Failed to adopt Python {}: {}').format(native_version, e))
+                safe_print(_('   - Omnipkg will continue but hotswapping may be limited'))
             
-            safe_print(_('   - ✅ Python {} adopted successfully.').format(native_version))
+            # Force a rescan to ensure registration
+            self._register_all_interpreters(self.venv_path)
             
-        except Exception as e:
-            safe_print(_('   - ⚠️ Failed to adopt Python {}: {}').format(native_version, e))
-            safe_print(_('   - Falling back to symlink adoption...'))
-            # Ultimate fallback: just symlink it
-            self._register_and_link_existing_interpreter(Path(sys.executable), native_version)
+            # Get the registered path
+            registered_path = self.get_interpreter_for_version(native_version)
+            if not registered_path:
+                raise RuntimeError("FATAL: First-time setup failed. Could not find the adopted Python interpreter.")
+            
+            managed_python_exe_str = str(registered_path)
         
-        # --- STEP 2: GET THE REGISTERED PATH ---
-        # Force a rescan to ensure registration
-        self._register_all_interpreters(self.venv_path)
-        
-        registered_path = self.get_interpreter_for_version(native_version)
-        if not registered_path:
-            raise RuntimeError("FATAL: First-time setup failed. Could not find the adopted Python interpreter.")
-        
-        managed_python_exe_str = str(registered_path)
-        
-        # --- STEP 3: CREATE THE CONFIGURATION ---
+        # --- CREATE THE CONFIGURATION ---
         self.config_dir.mkdir(parents=True, exist_ok=True)
         defaults = self._get_sensible_defaults(managed_python_exe_str)
         final_config = defaults.copy()
         
+        # Interactive prompts (if not in CI)
         if interactive and (not os.environ.get('CI')):
             safe_print(_("🌍 Welcome to omnipkg! Let's get you configured."))
             safe_print('-' * 60)
+            
             available_pythons = defaults['python_interpreters']
             if len(available_pythons) > 1:
                 safe_print(_('🐍 Discovered Python interpreters:'))
@@ -1567,20 +1580,25 @@ class ConfigManager:
                     marker = ' ⭐' if version == defaults['preferred_python_version'] else ''
                     safe_print(_('   Python {}: {}{}').format(version, path, marker))
                 safe_print()
+            
             safe_print('Auto-detecting paths for your environment. Press Enter to accept defaults.\n')
+            
             safe_print(_('📦 Choose your default installation strategy:'))
             safe_print(_('   1) stable-main:  Prioritize a stable main environment. (Recommended)'))
             safe_print(_('   2) latest-active: Prioritize having the latest versions active.'))
             strategy = input(_('   Enter choice (1 or 2) [1]: ')).strip() or '1'
             final_config['install_strategy'] = 'stable-main' if strategy == '1' else 'latest-active'
+            
             bubble_path = input(f"Path for version bubbles [{defaults['multiversion_base']}]: ").strip() or defaults['multiversion_base']
             final_config['multiversion_base'] = bubble_path
+            
             python_path = input(_('Python executable path [{}]: ').format(defaults['python_executable'])).strip() or defaults['python_executable']
             final_config['python_executable'] = python_path
+            
             redis_choice = input(_('⚡️ Attempt to use Redis for high-performance caching? (y/n) [y]: ')).strip().lower()
             final_config['redis_enabled'] = redis_choice != 'n'
+            
             if final_config['redis_enabled']:
-                # Only ask for host and port if Redis is enabled
                 while True:
                     host_input = input(_('   -> Redis host [{}]: ').format(defaults['redis_host'])) or defaults['redis_host']
                     try:
@@ -1590,18 +1608,24 @@ class ConfigManager:
                         break
                     except socket.gaierror:
                         safe_print(_("      ❌ Error: Invalid hostname '{}'. Please try again.").format(host_input))
+                
                 final_config['redis_port'] = int(input(_('   -> Redis port [{}]: ').format(defaults['redis_port'])) or defaults['redis_port'])
+            
             hotswap_choice = input(_('Enable Python interpreter hotswapping? (y/n) [y]: ')).strip().lower()
             final_config['enable_python_hotswap'] = hotswap_choice != 'n'
         
+        # Save configuration
         try:
             with open(self.config_path, 'r') as f:
                 full_config = json.load(f)
         except (FileNotFoundError, json.JSONDecodeError):
             full_config = {'environments': {}}
+        
         if 'environments' not in full_config:
             full_config['environments'] = {}
+        
         full_config['environments'][self.env_id] = final_config
+        
         with open(self.config_path, 'w') as f:
             json.dump(full_config, f, indent=4)
         
@@ -1612,6 +1636,7 @@ class ConfigManager:
             safe_print(_('   This may take a moment with large environments.'))
             safe_print(_('   💡 Future startups will be instant!'))
         
+        # Initialize knowledge base
         rebuild_cmd = [str(final_config['python_executable']), '-m', 'omnipkg.cli', 'reset', '-y']
         try:
             if interactive and (not os.environ.get('CI')):
