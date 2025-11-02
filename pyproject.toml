@@ -43,7 +43,7 @@ dependencies = [
     "safety>=3.0; python_version >= '3.10' and python_version < '3.14'",
     "aiohttp>=3.13.1",
     "pip-audit>=2.6.0; python_version >= '3.14'",
-    "uv>=0.9.5" 
+    "uv>=0.9.6" 
 ]
 
 [project.optional-dependencies]
