@@ -720,4 +720,4 @@ class RuntimeHealer:
         ]
         
         for pattern in patterns:
-            match = re.search(pattern, error_output
+            match = re.search(pattern, error_output)
