@@ -201,6 +201,17 @@ def check_package_version(package_name, expected_version):
         print(_('  ❌ {}: Not found or not installed').format(package_name))
 
 def main():
+    if len(sys.argv) < 2:
+        print("Usage: python deptimemachine.py <package>==<version> [--auto-install]")
+        return 1
+    
+    pkg_spec = sys.argv[1]
+    if '==' not in pkg_spec:
+        print("Error: Please provide a package with a specific version (e.g., 'flask-login==0.4.1')")
+        return 1
+
+    target_pkg, target_ver = pkg_spec.split('==', 1)
+    auto_install = '--auto-install' in sys.argv
     target_pkg = 'flask-login'
     target_ver = '0.4.1'
     auto_install = False
