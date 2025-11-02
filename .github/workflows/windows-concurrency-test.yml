@@ -107,7 +107,8 @@ jobs:
             try {
               $job = Start-Job -ScriptBlock {
                 param($exe)
-                & $exe -m omnipkg.cli reset --yes 2>&1
+                # Use 'status' for a fast, lightweight prime instead of a full reset.
+                & $exe -m omnipkg.cli status 2>&1
                 return $LASTEXITCODE
               } -ArgumentList $pyExe
               
