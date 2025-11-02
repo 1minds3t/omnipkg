@@ -18,30 +18,6 @@ from omnipkg.common_utils import run_command, print_header
 
 # --- [Helper functions from original script] ---
 
-def force_omnipkg_context_to_current_python():
-    """Forces omnipkg's active context to match the currently running Python version."""
-    current_python = f'{sys.version_info.major}.{sys.version_info.minor}'
-    try:
-        safe_print(('🔄 Forcing omnipkg context to match script Python version: {}').format(current_python))
-        omnipkg_cmd_base = [sys.executable, '-m', 'omnipkg.cli']
-        result = subprocess.run(omnipkg_cmd_base + ['swap', 'python', current_python], capture_output=True, text=True, check=True)
-        safe_print(('✅ omnipkg context synchronized to Python {}').format(current_python))
-        return True
-    except subprocess.CalledProcessError:
-        try:
-            safe_print(('🔄 Attempting direct config modification...'))
-            config_manager = ConfigManager()
-            config_manager.config['active_python_version'] = current_python
-            config_manager.config['active_python_executable'] = sys.executable
-            config_manager.save_config()
-            safe_print(f'✅ Direct config update successful for Python {current_python}')
-            return True
-        except Exception as e2:
-            safe_print(('⚠️  Direct config modification also failed: {}').format(e2))
-            return False
-
-force_omnipkg_context_to_current_python()
-
 def print_with_flush(message):
     """Print with immediate flush."""
     safe_print(message, flush=True)
