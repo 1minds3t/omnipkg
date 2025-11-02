@@ -1488,78 +1488,91 @@ class ConfigManager:
         else:
             safe_print(_(' ⚠️  Using: {} (System interpreter)').format(native_python_exe))
         
-        # --- CREATE THE CONFIGURATION FROM THE NATIVE VENV PATH ---
-        self.config_dir.mkdir(parents=True, exist_ok=True)
-        defaults = self._get_sensible_defaults(str(native_python_exe))
-        final_config = defaults.copy()
-        
-        # Rest of interactive setup...
-        if interactive and (not os.environ.get('CI')):
-            safe_print(_("🌍 Welcome to omnipkg! Let's get you configured."))
-            # ... (keep all the interactive prompts)
-        
-        # Save config
-        try:
-            with open(self.config_path, 'r') as f:
-                full_config = json.load(f)
-        except (FileNotFoundError, json.JSONDecodeError):
-            full_config = {'environments': {}}
-        if 'environments' not in full_config:
-            full_config['environments'] = {}
-        full_config['environments'][self.env_id] = final_config
-        with open(self.config_path, 'w') as f:
-            json.dump(full_config, f, indent=4)
-        
-        # After config is saved, THEN adopt the interpreter for swapping purposes
-        # but DON'T change the config to point to it
+        # --- PLATFORM-SPECIFIC INTERPRETER ADOPTION ---
         native_version = f'{sys.version_info.major}.{sys.version_info.minor}'
-        try:
-            if hasattr(self, 'interpreter_manager'):
-                self.interpreter_manager.adopt_interpreter(native_version)
-            safe_print(_('   - ✅ Native Python registered for future version swapping.'))
-        except:
-            pass
+        major_minor_micro = f'{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}'
         
-        # --- STEP 1: ADOPT THE NATIVE PYTHON USING EXISTING MECHANISM ---
-        native_version = f'{sys.version_info.major}.{sys.version_info.minor}'
-        try:
+        if platform.system() == 'Windows':
+            # --- WINDOWS-SPECIFIC LOGIC: Use %LOCALAPPDATA% for short paths ---
+            safe_print(_('   - Setting up managed Python interpreter for Windows...'))
+            
+            # Use a short, stable path to avoid MAX_PATH issues
+            managed_base_dir = Path.home() / 'AppData' / 'Local' / 'omnipkg' / 'interpreters'
+            managed_base_dir.mkdir(parents=True, exist_ok=True)
+            
+            dest_path = managed_base_dir / f'cpython-{major_minor_micro}'
+            managed_python_exe = dest_path / 'Scripts' / 'python.exe'
+            
+            # Check if a managed copy already exists
+            if not managed_python_exe.exists():
+                safe_print(_('   - Creating managed copy at: {}').format(dest_path))
+                try:
+                    import venv
+                    # Create a full, standalone copy (no symlinks, no admin rights needed)
+                    venv.create(dest_path, with_pip=True, symlinks=False, clear=True)
+                    
+                    # Verify the copy works
+                    if not managed_python_exe.exists():
+                        raise OSError("venv.create succeeded but python.exe not found")
+                    
+                    result = subprocess.run(
+                        [str(managed_python_exe), '--version'],
+                        check=True,
+                        capture_output=True,
+                        text=True
+                    )
+                    safe_print(_('   - ✅ Managed Python copy created: {}').format(result.stdout.strip()))
+                    
+                except Exception as e:
+                    safe_print(_('   - ❌ FATAL: Failed to create managed Python copy: {}').format(e))
+                    if dest_path.exists():
+                        import shutil
+                        shutil.rmtree(dest_path, ignore_errors=True)
+                    raise RuntimeError(f"Could not create managed Python environment on Windows: {e}") from e
+            else:
+                safe_print(_('   - ✅ Found existing managed Python copy'))
+            
+            # Register this interpreter for version swapping
+            try:
+                self._register_all_interpreters(managed_base_dir)
+            except Exception as e:
+                safe_print(_('   - ⚠️  Warning: Could not register interpreter: {}').format(e))
+            
+            # Use the managed copy for configuration
+            managed_python_exe_str = str(managed_python_exe)
+            
+        else:
+            # --- MACOS/LINUX LOGIC: Use existing symlink-based adoption ---
             safe_print(_('   - Registering native Python for future version swapping...'))
-            # Use simple symlink method - don't try to call InterpreterManager yet
-            self._register_and_link_existing_interpreter(Path(sys.executable), native_version)
-            safe_print(_('   - ✅ Native Python registered for future version swapping.'))
-        except Exception as e:
-            safe_print(_('   - ⚠️ Failed to adopt Python {}: {}').format(native_version, e))
-            safe_print(_('   - Omnipkg will continue but hotswapping may be limited.'))
             
-            if result != 0:
-                raise RuntimeError(f"Failed to adopt Python {native_version}")
+            try:
+                # Use existing mechanism that works well on Unix systems
+                self._register_and_link_existing_interpreter(Path(sys.executable), native_version)
+                safe_print(_('   - ✅ Native Python registered successfully'))
+            except Exception as e:
+                safe_print(_('   - ⚠️ Failed to adopt Python {}: {}').format(native_version, e))
+                safe_print(_('   - Omnipkg will continue but hotswapping may be limited'))
             
-            safe_print(_('   - ✅ Python {} adopted successfully.').format(native_version))
+            # Force a rescan to ensure registration
+            self._register_all_interpreters(self.venv_path)
             
-        except Exception as e:
-            safe_print(_('   - ⚠️ Failed to adopt Python {}: {}').format(native_version, e))
-            safe_print(_('   - Falling back to symlink adoption...'))
-            # Ultimate fallback: just symlink it
-            self._register_and_link_existing_interpreter(Path(sys.executable), native_version)
+            # Get the registered path
+            registered_path = self.get_interpreter_for_version(native_version)
+            if not registered_path:
+                raise RuntimeError("FATAL: First-time setup failed. Could not find the adopted Python interpreter.")
+            
+            managed_python_exe_str = str(registered_path)
         
-        # --- STEP 2: GET THE REGISTERED PATH ---
-        # Force a rescan to ensure registration
-        self._register_all_interpreters(self.venv_path)
-        
-        registered_path = self.get_interpreter_for_version(native_version)
-        if not registered_path:
-            raise RuntimeError("FATAL: First-time setup failed. Could not find the adopted Python interpreter.")
-        
-        managed_python_exe_str = str(registered_path)
-        
-        # --- STEP 3: CREATE THE CONFIGURATION ---
+        # --- CREATE THE CONFIGURATION ---
         self.config_dir.mkdir(parents=True, exist_ok=True)
         defaults = self._get_sensible_defaults(managed_python_exe_str)
         final_config = defaults.copy()
         
+        # Interactive prompts (if not in CI)
         if interactive and (not os.environ.get('CI')):
             safe_print(_("🌍 Welcome to omnipkg! Let's get you configured."))
             safe_print('-' * 60)
+            
             available_pythons = defaults['python_interpreters']
             if len(available_pythons) > 1:
                 safe_print(_('🐍 Discovered Python interpreters:'))
@@ -1567,20 +1580,25 @@ class ConfigManager:
                     marker = ' ⭐' if version == defaults['preferred_python_version'] else ''
                     safe_print(_('   Python {}: {}{}').format(version, path, marker))
                 safe_print()
+            
             safe_print('Auto-detecting paths for your environment. Press Enter to accept defaults.\n')
+            
             safe_print(_('📦 Choose your default installation strategy:'))
             safe_print(_('   1) stable-main:  Prioritize a stable main environment. (Recommended)'))
             safe_print(_('   2) latest-active: Prioritize having the latest versions active.'))
             strategy = input(_('   Enter choice (1 or 2) [1]: ')).strip() or '1'
             final_config['install_strategy'] = 'stable-main' if strategy == '1' else 'latest-active'
+            
             bubble_path = input(f"Path for version bubbles [{defaults['multiversion_base']}]: ").strip() or defaults['multiversion_base']
             final_config['multiversion_base'] = bubble_path
+            
             python_path = input(_('Python executable path [{}]: ').format(defaults['python_executable'])).strip() or defaults['python_executable']
             final_config['python_executable'] = python_path
+            
             redis_choice = input(_('⚡️ Attempt to use Redis for high-performance caching? (y/n) [y]: ')).strip().lower()
             final_config['redis_enabled'] = redis_choice != 'n'
+            
             if final_config['redis_enabled']:
-                # Only ask for host and port if Redis is enabled
                 while True:
                     host_input = input(_('   -> Redis host [{}]: ').format(defaults['redis_host'])) or defaults['redis_host']
                     try:
@@ -1590,18 +1608,24 @@ class ConfigManager:
                         break
                     except socket.gaierror:
                         safe_print(_("      ❌ Error: Invalid hostname '{}'. Please try again.").format(host_input))
+                
                 final_config['redis_port'] = int(input(_('   -> Redis port [{}]: ').format(defaults['redis_port'])) or defaults['redis_port'])
+            
             hotswap_choice = input(_('Enable Python interpreter hotswapping? (y/n) [y]: ')).strip().lower()
             final_config['enable_python_hotswap'] = hotswap_choice != 'n'
         
+        # Save configuration
         try:
             with open(self.config_path, 'r') as f:
                 full_config = json.load(f)
         except (FileNotFoundError, json.JSONDecodeError):
             full_config = {'environments': {}}
+        
         if 'environments' not in full_config:
             full_config['environments'] = {}
+        
         full_config['environments'][self.env_id] = final_config
+        
         with open(self.config_path, 'w') as f:
             json.dump(full_config, f, indent=4)
         
@@ -1612,6 +1636,7 @@ class ConfigManager:
             safe_print(_('   This may take a moment with large environments.'))
             safe_print(_('   💡 Future startups will be instant!'))
         
+        # Initialize knowledge base
         rebuild_cmd = [str(final_config['python_executable']), '-m', 'omnipkg.cli', 'reset', '-y']
         try:
             if interactive and (not os.environ.get('CI')):
@@ -1773,18 +1798,198 @@ class BubbleIsolationManager:
         self.package_path_registry[c_name][version].append({'path': path_str, 'hash': file_hash, 'type': file_type, 'bubble_path': str(bubble_path)})
         self._save_path_registry()
 
+    # In omnipkg/core.py, inside the BubbleIsolationManager class
+
+    # --- [ THIS NEW FUNCTION REPLACES `create_isolated_bubble` AND `_install_exact_version_tree` ] ---
     def create_isolated_bubble(self, package_name: str, target_version: str, python_context_version: str) -> bool:
-        safe_print(_('🫧 Creating isolated bubble for {} v{} (Python {} context)').format(package_name, target_version, python_context_version))
+        """
+        --- THE DEFINITIVE BUBBLE CREATION LOGIC V4 ---
+        Creates a SELF-CONTAINED bubble with the package AND all its dependencies inside.
+        This version installs the full universe into a sandbox, analyzes it to gather
+        metadata, and then copies the entire sandbox to the final bubble location.
+        """
+        safe_print(f'🫧 Creating isolated bubble for {package_name} v{target_version} (Python {python_context_version} context)')
+        
+        final_bubble_path = self.multiversion_base / f'{package_name}-{target_version}'
+        
+        with tempfile.TemporaryDirectory(prefix=f'omnipkg_bubble_{package_name}_') as temp_dir:
+            temp_path = Path(temp_dir)
+            
+            # STEP 1: Try modern install
+            safe_print(f"   - Step 1: Attempting modern install into temporary sandbox...")
+            return_code, captured_output = self.parent_omnipkg._run_pip_install(
+                [f"{package_name}=={target_version}"],
+                target_directory=temp_path,
+                force_reinstall=True
+            )
+            
+            # STEP 2: Verify with import test
+            import_test_passed = self.parent_omnipkg._run_post_install_import_test(
+                package_name,
+                install_dir_override=temp_path
+            )
+            
+            # STEP 3: If installation failed, engage the Time Machine
+            if return_code != 0 or not import_test_passed:
+                print_header(f"TIME MACHINE FALLBACK (Bubble): Installation failed for {package_name}=={target_version}")
+                
+                safe_print("   - Wiping failed sandbox...")
+                for item in temp_path.iterdir():
+                    if item.is_dir():
+                        shutil.rmtree(item)
+                    else:
+                        item.unlink()
+                
+                # The Time Machine will install the complete historical universe into the sandbox.
+                time_machine_succeeded = self.parent_omnipkg._run_historical_install_fallback(
+                    package_name, 
+                    target_version, 
+                    target_directory_override=temp_path
+                )
+                
+                if not time_machine_succeeded or not self.parent_omnipkg._run_post_install_import_test(package_name, install_dir_override=temp_path):
+                    safe_print(f"❌ Time Machine failed or its result was not verifiable. Bubble for {package_name}=={target_version} cannot be created.")
+                    return False
+            
+            safe_print("   - ✅ Sandbox installation verified successfully.")
+            
+            # --- THE CRITICAL FIX ---
+            # STEP 4: Analyze the complete sandbox to get the required data for the manifest.
+            safe_print("   - Step 2: Analyzing complete self-contained universe...")
+            installed_tree = self._analyze_installed_tree(temp_path)
+            stats = {
+                'total_files': sum(len(info.get('files', [])) for info in installed_tree.values()),
+                'copied_files': sum(len(info.get('files', [])) for info in installed_tree.values()), # All files are "copied" in this model
+                'deduplicated_files': 0,
+                'c_extensions': [], # You can enhance this later if needed
+                'binaries': [],
+            }
+
+            # STEP 5: Copy the entire sandbox to the final bubble location.
+            safe_print(f"   - Step 3: Copying complete universe to bubble location...")
+            if final_bubble_path.exists():
+                shutil.rmtree(final_bubble_path)
+            shutil.copytree(temp_path, final_bubble_path)
+            
+            # STEP 6: Create the manifest using the correctly generated data.
+            self._create_bubble_manifest(
+                final_bubble_path,
+                installed_tree, # Now passing the correct Dictionary
+                stats,          # Now passing the correct Dictionary
+                python_context_version
+            )
+            # --- END CRITICAL FIX ---
+
+            self.parent_omnipkg.hook_manager.refresh_bubble_map(package_name, target_version, str(final_bubble_path))
+            self.parent_omnipkg.hook_manager.validate_bubble(package_name, target_version)
+            
+            return True
+
+    def create_bubble_from_main_env(self, package_name: str, version: str, python_context_version: str) -> bool:
+        """
+        Creates a bubble by copying the package and its co-located dependencies
+        from the current main environment. Used after Time Machine installs to main env.
+        """
+        site_packages = Path(self.parent_omnipkg.config['python_executable']).parent.parent / 'lib' / f'python{python_context_version}' / 'site-packages'
+        
+        final_bubble_path = self.multiversion_base / f'{package_name}-{version}'
+        
+        if final_bubble_path.exists():
+            shutil.rmtree(final_bubble_path)
+        
+        final_bubble_path.mkdir(parents=True, exist_ok=True)
+        
+        # Get all packages currently in main env
+        current_packages = self.parent_omnipkg.get_installed_packages(live=True)
+        
+        # Copy EVERYTHING from site-packages to the bubble
+        # The Time Machine just installed a complete working universe there
+        safe_print(f"   - Copying complete universe from main environment...")
+        
+        files_copied = 0
+        for item in site_packages.iterdir():
+            if item.is_dir() or item.suffix == '.pth':
+                shutil.copytree(item, final_bubble_path / item.name, dirs_exist_ok=True)
+                files_copied += 1
+            elif item.is_file():
+                shutil.copy2(item, final_bubble_path / item.name)
+                files_copied += 1
+        
+        safe_print(f"   - Copied {files_copied} items to bubble")
+        
+        # Create manifest
+        self._create_bubble_manifest(
+            final_bubble_path,
+            package_name,
+            version,
+            python_context_version
+        )
+        
+        # Register with hook manager
+        self.parent_omnipkg.hook_manager.refresh_bubble_map(
+            package_name, 
+            version, 
+            str(final_bubble_path)
+        )
+        self.parent_omnipkg.hook_manager.validate_bubble(package_name, version)
+        
+        return True
+
+    def install_and_verify(self, package_name: str, version: str, python_context_version: str, destination_path: Path):
+        """
+        The one true installation function. Installs to a temp directory, verifies,
+        and then moves the result to the final destination.
+        Contains the Time Machine fallback for legacy packages.
+        """
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)
-            if not self._install_exact_version_tree(package_name, target_version, temp_path):
-                return False
+            
+            # --- STAGE 1: Attempt a normal, modern installation ---
+            safe_print(f"   - Attempting modern install for {package_name}=={version} into temp directory...")
+            
+            # Use the existing robust _run_pip_install from the parent omnipkg class
+            return_code, captured_output = self.parent_omnipkg._run_pip_install(
+                [f"{package_name}=={version}"],
+                target_directory=temp_path
+            )
+
+            # --- STAGE 2: If it fails, engage the Time Machine ---
+            if return_code != 0:
+                error_output = captured_output.get("stderr", "").lower()
+                build_failure_indicators = ['metadata-generation-failed', 'failed building wheel', 'setup.py egg_info']
+                
+                if any(indicator in error_output for indicator in build_failure_indicators):
+                    print_header(f"TIME MACHINE FALLBACK: Detected legacy build failure for {package_name}=={version}")
+                    
+                    # Call the Time Machine, but tell it to install into our SAFE temp directory
+                    time_machine_succeeded = self.parent_omnipkg._run_historical_install_fallback(
+                        package_name, version, target_directory_override=temp_path
+                    )
+                    
+                    if not time_machine_succeeded:
+                        safe_print(f"❌ Time Machine failed. The installation for {package_name}=={version} is unrecoverable.")
+                        return False # Hard failure
+                else:
+                    # It was a different kind of pip error
+                    safe_print(f"❌ Pip installation failed. See output for details.")
+                    return False
+            
+            # --- STAGE 3: Analyze and create the final installation/bubble ---
+            # Whether the modern install or the Time Machine succeeded, temp_path now contains the files.
+            safe_print("   - Analyzing temporary installation...")
             installed_tree = self._analyze_installed_tree(temp_path)
-            bubble_path = self.multiversion_base / f'{package_name}-{target_version}'
-            if bubble_path.exists():
-                shutil.rmtree(bubble_path)
-            # Pass the context version down
-            return self._create_deduplicated_bubble(installed_tree, bubble_path, temp_path, python_context_version=python_context_version)
+            
+            safe_print(f"   - Moving verified package to final destination: {destination_path}")
+            if destination_path.exists() and destination_path != self.site_packages:
+                shutil.rmtree(destination_path)
+
+            # This function already handles verification, import tests, and copying.
+            return self._create_deduplicated_bubble(
+                installed_tree, 
+                destination_path,
+                temp_path, 
+                python_context_version=python_context_version
+            )
 
     def _install_exact_version_tree(self, package_name: str, version: str, target_path: Path) -> bool:
         try:
@@ -1793,10 +1998,38 @@ class BubbleIsolationManager:
             cmd = [self.config['python_executable'], '-m', 'pip', 'install', '--target', str(target_path)] + install_specs
             safe_print(_('    📦 Installing full dependency tree to temporary location...'))
             result = subprocess.run(cmd, capture_output=True, text=True)
-            if result.returncode != 0:
-                safe_print(_('    ❌ Failed to install exact version tree: {}').format(result.stderr))
-                return False
-            return True
+            
+            if result.returncode == 0:
+                # SUCCESS! The normal install worked.
+                return True
+
+            # --- [ START OF THE NEW FALLBACK LOGIC ] ---
+            # If the normal pip install fails, we check for build errors.
+            error_output = result.stderr.lower()
+            build_failure_indicators = [
+                'metadata-generation-failed',
+                'failed building wheel',
+                'error: command errored out with exit status 1',
+                'setup.py egg_info',
+                "importerror: cannot import name 'feature' from 'setuptools'"
+            ]
+
+            if any(indicator in error_output for indicator in build_failure_indicators):
+                print_header(f"TIME MACHINE FALLBACK (Bubble): Detected legacy build failure for {package_name}=={version}")
+                
+                # We call the main omnipkg instance's Time Machine method.
+                # It will install the healed packages directly into the SAME `target_path`.
+                time_machine_succeeded = self.parent_omnipkg._run_historical_install_fallback(
+                    package_name, version, target_directory_override=target_path
+                )
+                
+                return time_machine_succeeded # Return the success status of the Time Machine
+
+            # If it wasn't a build failure, just report the original error and fail.
+            safe_print(_('    ❌ Failed to install exact version tree: {}').format(result.stderr))
+            return False
+            # --- [ END OF THE ADDITION ] ---
+            
         except Exception as e:
             safe_print(_('    ❌ Unexpected error during installation: {}').format(e))
             return False
@@ -3216,11 +3449,27 @@ class NoCompatiblePythonError(Exception):
         }
 
 class omnipkg:
-
     def __init__(self, config_manager: ConfigManager):
-        """
-        Initializes the Omnipkg core engine with a robust, fail-safe sequence.
-        """
+        # SLOW PATH: This is your original, full initialization logic.
+        self.config_manager = config_manager
+        self.config = config_manager.config
+        if not self.config:
+            raise RuntimeError('OmnipkgCore cannot initialize: Configuration is missing or invalid.')
+        self._self_heal_omnipkg_installation()
+        self.env_id = self._get_env_id()
+        self.multiversion_base = Path(self.config['multiversion_base'])
+        self.cache_client = None
+        self._cache_connection_status = None
+        self.initialize_pypi_cache()
+        self._info_cache = {}
+        self._prime_loader_cache()
+        self._installed_packages_cache = None
+        self.interpreter_manager = InterpreterManager(self.config_manager)
+        self.hook_manager = ImportHookManager(str(self.multiversion_base), config=self.config, cache_client=self.cache_client)
+        self.bubble_manager = BubbleIsolationManager(self.config, self)
+        # >>>>> END OF NEW LOGIC <<<<<
+
+        # SLOW PATH: Full, normal initialization for any command that is NOT a child of 'run'.
         self.config_manager = config_manager
         self.config = config_manager.config
         if not self.config:
@@ -6277,10 +6526,122 @@ class omnipkg:
                 packages_to_install = [package_spec]
                 packages_before = self.get_installed_packages(live=True)
                 safe_print('⚙️ Running pip install for: {}...'.format(', '.join(packages_to_install)))
-                return_code = self._run_pip_install(packages_to_install, target_directory=target_directory, force_reinstall=force_reinstall)
+                return_code, captured_output = self._run_pip_install(
+                    packages_to_install, 
+                    target_directory=target_directory, 
+                    force_reinstall=force_reinstall
+                )
                 
-                if return_code != 0:
-                    safe_print(f'❌ Pip installation failed for {package_spec}.')
+                pkg_name_to_test, requested_version = self._parse_package_spec(package_spec)
+                
+                # Always run the import test after an install attempt.
+                # Replace the Time Machine handling block with this corrected version:
+
+# Always run the import test after an install attempt.
+                import_test_passed = self._run_post_install_import_test(pkg_name_to_test)
+                
+                if return_code == 0 and import_test_passed:
+                    # This is the only true success path.
+                    any_installations_made = True
+                else:
+                    # If pip failed OR the import test failed, we attempt to heal.
+                    if not import_test_passed:
+                        safe_print(f"❌ Post-install import test failed. The package is likely broken.")
+                    else: # This means pip itself failed
+                        safe_print(f'❌ Pip installation failed for {package_spec}.')
+                
+                    # Now, attempt the Time Machine fallback.
+                    print_header(f"TIME MACHINE FALLBACK: Detected broken install for {package_spec}")
+                    
+                    # ✅ CAPTURE STATE BEFORE TIME MACHINE
+                    packages_before_time_machine = self.get_installed_packages(live=True)
+                    
+                    time_machine_succeeded = self._run_historical_install_fallback(pkg_name_to_test, requested_version)
+                
+                    if time_machine_succeeded:
+                        safe_print(f"✅ Time Machine successfully healed the installation of {package_spec}.")
+                        any_installations_made = True
+                        
+                        # ✅ CAPTURE STATE AFTER TIME MACHINE
+                        packages_after_time_machine = self.get_installed_packages(live=True)
+                        
+                        # ✅ DETECT WHAT CHANGED
+                        replacements = self._detect_version_replacements(
+                            packages_before_time_machine, 
+                            packages_after_time_machine
+                        )
+                        
+                        if replacements:
+                            for rep in replacements:
+                                kb_deletions.add(rep['package'])
+                                self._cleanup_version_from_kb(rep['package'], rep['old_version'])
+                        
+                        # ✅ THE KEY CHANGE: For stable-main, bubble the TARGET PACKAGE
+                        # with all its dependencies, THEN restore main env
+                        if install_strategy == 'stable-main':
+                            downgrades_to_fix = self._detect_downgrades(
+                                packages_before_time_machine, 
+                                packages_after_time_machine
+                            )
+                            upgrades_to_fix = self._detect_upgrades(
+                                packages_before_time_machine, 
+                                packages_after_time_machine
+                            )
+                            
+                            if downgrades_to_fix or upgrades_to_fix:
+                                safe_print('🛡️ STABILITY PROTECTION ACTIVATED! (Post-Time Machine)')
+                                
+                                # ✅ THE CRITICAL INSIGHT: We don't bubble each dependency separately!
+                                # The Time Machine already installed the complete universe to main env.
+                                # We just need to:
+                                # 1. Create ONE bubble containing the target package (which pip already put deps next to)
+                                # 2. Restore ALL the modern versions
+                                
+                                # Create bubble for the target package (pip co-located its deps already)
+                                safe_print(f"   - Creating self-contained bubble for {pkg_name_to_test} v{requested_version}...")
+                                bubble_created = self.bubble_manager.create_bubble_from_main_env(
+                                    pkg_name_to_test,
+                                    requested_version,
+                                    python_context_version
+                                )
+                                
+                                if bubble_created:
+                                    bubbled_kb_updates[pkg_name_to_test] = requested_version
+                                    safe_print(f"   - ✅ Bubbled {pkg_name_to_test} v{requested_version} with all dependencies")
+                                else:
+                                    safe_print(f"   - ❌ Failed to bubble {pkg_name_to_test} v{requested_version}")
+                                
+                                # Now restore ALL the stable versions
+                                safe_print("   - Restoring stable versions to main environment...")
+                                all_packages_to_restore = []
+                                
+                                for fix in downgrades_to_fix:
+                                    all_packages_to_restore.append(f"{fix['package']}=={fix['good_version']}")
+                                for fix in upgrades_to_fix:
+                                    all_packages_to_restore.append(f"{fix['package']}=={fix['old_version']}")
+                                
+                                if all_packages_to_restore:
+                                    restore_result = subprocess.run(
+                                        [self.config['python_executable'], '-m', 'pip', 'install', '--quiet'] + all_packages_to_restore,
+                                        capture_output=True, text=True
+                                    )
+                                    
+                                    if restore_result.returncode == 0:
+                                        for pkg_spec in all_packages_to_restore:
+                                            pkg_name, ver = self._parse_package_spec(pkg_spec)
+                                            main_env_kb_updates[pkg_name] = ver
+                                        safe_print(f"   - ✅ Restored {len(all_packages_to_restore)} package(s) to stable versions")
+                                    else:
+                                        safe_print(f"   - ⚠️ Some packages failed to restore")
+                                
+                                safe_print('   -> Stability protection complete.')
+                        
+                        # NOW continue to next package
+                        continue
+                    else:
+                        safe_print(f"❌ Time Machine also failed. The installation for {package_spec} is unrecoverable.")
+                        any_failures = True
+                        continue
                     pkg_name, requested_version = self._parse_package_spec(package_spec)
 
                     # Check if the failure was due to a cached version
@@ -6310,6 +6671,46 @@ class omnipkg:
                             safe_print(f"   ❌ Could not find any compatible version for {pkg_name} on retry.")
                     else:
                         safe_print("   -> Failure was not due to a cached version. Continuing...")
+
+                    error_output = captured_output.get('stderr', '').lower()
+                    build_failure_indicators = [
+                        'metadata-generation-failed',
+                        'failed building wheel',
+                        'error: command errored out with exit status 1',
+                        'setup.py egg_info'
+                    ]
+                    
+                    if any(indicator in error_output for indicator in build_failure_indicators):
+                        print_header(f"TIME MACHINE FALLBACK: Detected legacy build failure for {package_spec}")
+                        safe_print("   - Attempting to rebuild from the past using deptimemachine.py...")
+
+                        # Construct the path to the deptimemachine.py script
+                        script_path = Path(__file__).parent / 'deptimemachine.py'
+                        if not script_path.exists():
+                            safe_print(f"❌ Critical Error: Dependency Time Machine script not found at {script_path}")
+                            any_failures = True
+                            continue # Move to the next package
+
+                        # Use the currently configured Python to run the script.
+                        # Add --auto-install to bypass the interactive prompt in the script.
+                        python_exe = self.config.get('python_executable', sys.executable)
+                        cmd = [python_exe, str(script_path), package_spec, "--auto-install"]
+
+                        # Stream the output live so the user can see the progress
+                        process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding='utf-8')
+                        for line in iter(process.stdout.readline, ''):
+                            safe_print(f"     [TimeMachine] {line.strip()}")
+                        
+                        tm_returncode = process.wait()
+
+                        if tm_returncode == 0:
+                            safe_print(f"✅ Dependency Time Machine successfully installed {package_spec}.")
+                            # The install was successful, so we can skip the rest of this loop iteration.
+                            # We also need to mark that an installation was made.
+                            any_installations_made = True
+                            continue # Success! Move to the next package in the list.
+                        else:
+                            safe_print(f"❌ Dependency Time Machine also failed for {package_spec}. This package may be unrecoverable.")
 
                 if return_code != 0:
                     safe_print('❌ Unrecoverable installation failure for {}. Continuing...'.format(package_spec))
@@ -7205,7 +7606,7 @@ class omnipkg:
             safe_print(_('❌ Error parsing PyPI data: {}').format(e))
             return None
 
-    def _parse_package_spec(self, pkg_spec: str) -> tuple[str, Optional[str]]:
+    def _parse_package_spec(self, pkg_spec: str) -> Tuple[str, Optional[str]]:
         """
         Parse a package specification like 'package==1.0.0' or 'package>=2.0'
         Returns (package_name, version) where version is None if no version specified.
@@ -7859,14 +8260,18 @@ class omnipkg:
             safe_print(f'   ⚠️  Could not get file list from live environment: {e}')
             return {name: [] for name in package_names}
 
-    def _run_pip_install(self, packages: List[str], force_reinstall: bool=False, target_directory: Optional[Path]=None) -> int:
+    def _run_pip_install(self, packages: List[str], force_reinstall: bool=False, target_directory: Optional[Path]=None, extra_flags: Optional[List[str]]=None) -> Tuple[int, Dict[str, str]]:
         """
         Runs `pip install` with LIVE, STREAMING output and automatic recovery
         from corrupted 'no RECORD file' errors. Can now target a specific directory.
+        Returns: (return_code, captured_output_dict)
         """
         if not packages:
-            return 0
+            return 0, {"stdout": "", "stderr": ""}
+        
         cmd = [self.config['python_executable'], '-u', '-m', 'pip', 'install']
+        if extra_flags:
+            cmd.extend(extra_flags)
         if force_reinstall:
             cmd.append('--upgrade')
         if target_directory:
@@ -7876,16 +8281,24 @@ class omnipkg:
         
         try:
             process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding='utf-8', errors='replace', bufsize=1, universal_newlines=True)
-            stdout_lines, stderr_lines = ([], [])
+            
+            stdout_lines, stderr_lines = [], []
+            
+            # This logic streams output live while capturing it
             for line in process.stdout:
                 safe_print(line, end='')
                 stdout_lines.append(line)
             for line in process.stderr:
                 safe_print(line, end='', file=sys.stderr)
                 stderr_lines.append(line)
+            
             return_code = process.wait()
             
-            full_output = ''.join(stdout_lines) + ''.join(stderr_lines)
+            full_stdout = ''.join(stdout_lines)
+            full_stderr = ''.join(stderr_lines)
+            captured_output = {"stdout": full_stdout, "stderr": full_stderr}
+            
+            full_output = full_stdout + full_stderr
             cleanup_path = target_directory if target_directory else Path(self.config.get('site_packages_path'))
 
             # Heal 'invalid distribution' warnings first
@@ -7908,7 +8321,7 @@ class omnipkg:
                         safe_print(f"💡 Package: {package_name}")
                         safe_print(f"💡 Requested version: {package_spec}")
                         safe_print(f"💡 Check pip output above for available versions")
-                        return 1  # Just exit, don't trigger quantum healing
+                        return 1, captured_output  # FIXED: Return tuple
                     else:
                         # No version works - might be Python incompatibility
                         raise NoCompatiblePythonError(
@@ -7930,23 +8343,314 @@ class omnipkg:
                         if retry_process.returncode == 0:
                             safe_print(retry_process.stdout)
                             safe_print(_('   - ✅ Recovery successful!'))
-                            return 0
+                            return 0, {"stdout": retry_process.stdout, "stderr": retry_process.stderr}  # FIXED: Return tuple
                         else:
                             safe_print(_('   - ❌ Recovery failed. Pip error after cleanup:'))
                             safe_print(retry_process.stderr)
-                            return 1
+                            return 1, {"stdout": retry_process.stdout, "stderr": retry_process.stderr}  # FIXED: Return tuple
                     else:
-                        return 1
+                        return 1, captured_output  # FIXED: Return tuple
                 
-                return return_code
+                return return_code, captured_output  # FIXED: Return tuple
                 
-            return 0
+            return 0, captured_output  # FIXED: Return tuple
             
         except NoCompatiblePythonError:
             raise  # Re-raise for smart_install to handle
         except Exception as e:
             safe_print(_('    ❌ An unexpected error occurred during pip install: {}').format(e))
-            return 1
+            return 1, {"stdout": "", "stderr": str(e)}  # FIXED: Return tuple
+
+    def _get_import_candidates(self, package_name: str) -> List[str]:
+        """
+        Authoritatively finds import candidates by reading top_level.txt from the
+        installed package's .dist-info directory.
+        """
+        try:
+            dist = importlib.metadata.distribution(package_name)
+            
+            # This is the most reliable way to find the importable names.
+            if dist.read_text('top_level.txt'):
+                return [line.strip() for line in dist.read_text('top_level.txt').split('\n') if line.strip()]
+
+        except importlib.metadata.PackageNotFoundError:
+            pass # Fall through to heuristics
+        except Exception as e:
+            safe_print(f"   - Warning: Could not read top_level.txt for {package_name}: {e}")
+
+        # Fallback to smart name mangling if top_level.txt is missing or fails.
+        candidates = {package_name.replace('-', '_'), package_name.lower()}
+        return sorted(list(candidates))
+
+    # In omnipkg/core.py, inside the omnipkg class
+
+    def _run_post_install_import_test(self, package_name: str, install_dir_override: Optional[Path] = None) -> bool:
+        """
+        Runs a simple 'import' test in a subprocess to verify an installation.
+        Can now target a specific installation directory.
+        """
+        target_desc = f"in sandbox '{install_dir_override}'" if install_dir_override else "in main environment"
+        safe_print(f"   🧪 Verifying installation with import test for: {package_name} {target_desc}")
+        
+        try:
+            import_names = [package_name.replace('-', '_')]
+            python_exe = self.config.get('python_executable', sys.executable)
+            
+            for import_name in import_names:
+                script_lines = ["import sys"]
+                if install_dir_override:
+                    script_lines.append(f"sys.path.insert(0, r'{str(install_dir_override)}')")
+                script_lines.append(f"import {import_name}")
+
+                script = "; ".join(script_lines)
+                cmd = [python_exe, "-c", script]
+
+                result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+                
+                if result.returncode == 0:
+                    safe_print(f"      ✅ Import test passed for '{import_name}'")
+                    return True
+
+            safe_print(f"      ❌ All import attempts failed for package '{package_name}'. The package is likely broken.")
+            return False
+        except Exception as e:
+            safe_print(f"      ❌ An unexpected error occurred during the import test: {e}")
+            return False
+
+    # In omnipkg/core.py, inside the `omnipkg` class
+
+    def _run_historical_install_fallback(self, target_pkg, target_ver, target_directory_override: Optional[Path] = None):
+        """
+        --- [MODIFIED] ---
+        Orchestrator for the Dependency Time Machine logic, run as an automatic fallback.
+        This method now accepts a target_directory_override to ensure installations are isolated.
+        """
+        safe_print(f"   - Attempting to rebuild {target_pkg}=={target_ver} from the past...")
+        
+        release_date = self._get_historical_release_date(target_pkg, target_ver)
+        if not release_date:
+            safe_print('   - ❌ Failed to get release date. Time Machine cannot proceed.')
+            return False
+
+        dep_names = self._get_historical_dependency_names(target_pkg, target_ver)
+        if dep_names is None: # Explicitly check for None in case of error
+            safe_print('   - ❌ Failed to determine dependencies. Time Machine cannot proceed.')
+            return False
+
+        if not dep_names:
+            safe_print('   - ℹ️ No dependencies found. Attempting a direct simple install.')
+            # --- [FIX] Pass the override to the execution function ---
+            return self._execute_historical_install(target_pkg, target_ver, {}, target_directory_override=target_directory_override)
+
+        historical_versions = self._find_historical_versions(dep_names, release_date)
+        
+        if historical_versions is not None:
+            return self._execute_historical_install(
+                target_pkg, target_ver, historical_versions, target_directory_override=target_directory_override
+            )
+        else:
+            safe_print('   - ❌ Could not resolve any historical dependencies. Time Machine failed.')
+            return False
+
+    def _execute_historical_install(self, target_pkg, target_ver, historical_versions, target_directory_override: Optional[Path] = None):
+        """
+        --- [REWRITTEN FOR SAFETY] ---
+        Executes a three-stage installation for legacy packages into a specified target directory.
+        If no target is specified, it defaults to the main environment but this is now explicit.
+        """
+        install_target_desc = f"temporary sandbox ('{target_directory_override}')" if target_directory_override else "main environment"
+        safe_print(f"      - 🎯 Install Target: {install_target_desc}")
+
+        # --- STAGE 1: Install ANCIENT setuptools that still has Feature ---
+        safe_print('\n      - ⚙️ Stage 1: Installing ANCIENT build system (setuptools with Feature support)...')
+        build_system_fix = ["setuptools==40.8.0", "wheel"]
+        
+        # --- [FIX] All pip installs now respect the target_directory_override ---
+        return_code, _ = self._run_pip_install(
+            build_system_fix, 
+            force_reinstall=True,
+            target_directory=target_directory_override
+        )
+        
+        if return_code != 0:
+            safe_print("      - ❌ Stage 1 failed. Could not install ancient setuptools.")
+            return False
+        safe_print("      - ✅ Stage 1 complete: Ancient build system (setuptools 40.x) is now active.")
+
+        # --- STAGE 2: Install historical dependencies ---
+        safe_print('\n      - ⚙️ Stage 2: Installing historical dependencies...')
+        dependency_specs = [f"{pkg}=={ver}" for pkg, ver in historical_versions.items()]
+        
+        if dependency_specs:
+            return_code, _ = self._run_pip_install(
+                dependency_specs,
+                force_reinstall=True,
+                target_directory=target_directory_override,
+                extra_flags=['--no-build-isolation']
+            )
+            if return_code != 0:
+                safe_print("      - ❌ Stage 2 failed. Could not install historical dependencies.")
+                return False
+        safe_print("      - ✅ Stage 2 complete: All historical dependencies installed.")
+
+        # --- STAGE 3: Build the target package ---
+        safe_print(f'\n      - ⚙️ Stage 3: Building {target_pkg}=={target_ver}...')
+        target_spec = [f"{target_pkg}=={target_ver}"]
+        
+        return_code, _ = self._run_pip_install(
+            target_spec,
+            force_reinstall=True,
+            target_directory=target_directory_override,
+            extra_flags=['--no-build-isolation']
+        )
+
+        if return_code != 0:
+            safe_print("      - ❌ Stage 3 failed. Package could not be built.")
+            return False
+        safe_print("      - ✅ Stage 3 complete.")
+        
+        # Verification happens after the bubble is created by the calling function.
+        # We just need to signal success here.
+        return True
+
+    def _get_historical_release_date(self, package_name, version):
+        """Uses PyPI JSON API to get the release date for a specific version."""
+        safe_print(f"      - Getting release date for {package_name}=={version}...")
+        try:
+            url = f"https://pypi.org/pypi/{package_name}/{version}/json"
+            response = http_requests.get(url, timeout=10)
+            response.raise_for_status()
+            data = response.json()
+            # Get the upload time of the first file in the release, which is a reliable indicator
+            upload_time = data['urls'][0]['upload_time_iso_8601']
+            safe_print(f"      - ✓ Found release date: {upload_time}")
+            return upload_time
+        except (requests.exceptions.RequestException, KeyError, IndexError) as e:
+            safe_print(f'      - ❌ Error fetching release date from PyPI: {e}')
+            return None
+
+    def _get_historical_dependency_names(self, package_name, version):
+        """Creates a temp venv, installs the package, and freezes deps to find them."""
+        safe_print('      - Getting actual dependencies via temporary real install...')
+        temp_dir = tempfile.mkdtemp()
+        venv_path = os.path.join(temp_dir, 'venv')
+        venv_python = os.path.join(venv_path, 'bin', 'python')
+        try:
+            subprocess.run([sys.executable, '-m', 'venv', venv_path], check=True, capture_output=True)
+            subprocess.run([venv_python, '-m', 'pip', 'install', f'{package_name}=={version}'], check=True, capture_output=True)
+            freeze_result = subprocess.run([venv_python, '-m', 'pip', 'freeze'], check=True, capture_output=True, text=True)
+            
+            dep_names = [line.split('==')[0].strip() for line in freeze_result.stdout.splitlines() if line.split('==')[0].strip().lower() != package_name.lower()]
+            
+            safe_print(f'      - ✓ Discovered dependencies: {dep_names}')
+            return dep_names
+        except subprocess.CalledProcessError as e:
+            safe_print(f'      - ❌ Error during temp install: {e.stderr}')
+            return []
+        finally:
+            shutil.rmtree(temp_dir)
+
+    def _find_historical_versions(self, dependencies, cutoff_date):
+        """Finds the latest version for each dependency before a given date."""
+        safe_print('      - Finding historical versions of dependencies...')
+        historical_versions = {}
+        cutoff_datetime = datetime.fromisoformat(cutoff_date.replace('Z', '+00:00'))
+        
+        for dep_name in dependencies:
+            try:
+                url = f'https://pypi.org/pypi/{dep_name}/json'
+                response = http_requests.get(url, timeout=10)
+                response.raise_for_status()
+                dep_data = response.json()
+                latest_valid_version = None
+                
+                for version, releases in dep_data.get('releases', {}).items():
+                    if not releases: continue
+                    release_date_str = releases[0].get('upload_time_iso_8601')
+                    if not release_date_str: continue
+                    
+                    release_date = datetime.fromisoformat(release_date_str.replace('Z', '+00:00'))
+                    if release_date <= cutoff_datetime:
+                        if latest_valid_version is None or parse_version(version) > parse_version(latest_valid_version):
+                            latest_valid_version = version
+                
+                if latest_valid_version:
+                    historical_versions[dep_name] = latest_valid_version
+            except Exception:
+                pass # Ignore failures for individual dependencies
+        
+        safe_print(f"      - ✓ Resolved historical versions: {historical_versions}")
+        return historical_versions
+
+    # In omnipkg/core.py, inside the `omnipkg` class
+# REPLACE this entire function.
+
+    # In omnipkg/core.py, inside the `omnipkg` class
+# REPLACE this entire function.
+
+    def _execute_historical_install(self, target_pkg, target_ver, historical_versions, target_directory_override: Path = None):
+        """
+        Executes a three-stage installation for legacy packages.
+        Stage 1: Install ANCIENT build system (setuptools from ~2018 era)
+        Stage 2: Install historical dependencies 
+        Stage 3: Install target package
+        """
+        
+        # --- STAGE 1: Install ANCIENT setuptools that still has Feature ---
+        safe_print('\n      - ⚙️ Stage 1: Installing ANCIENT build system (setuptools with Feature support)...')
+        # Feature was available in setuptools <= 40.x
+        build_system_fix = ["setuptools==40.8.0", "wheel"]
+        
+        return_code, _ = self._run_pip_install(
+            build_system_fix, 
+            force_reinstall=True,
+            target_directory=target_directory_override
+        )
+        
+        if return_code != 0:
+            safe_print("      - ❌ Stage 1 failed. Could not install ancient setuptools.")
+            return False
+        safe_print("      - ✅ Stage 1 complete: Ancient build system (setuptools 40.x) is now active.")
+    
+        # --- STAGE 2: Install historical dependencies with --no-build-isolation ---
+        safe_print('\n      - ⚙️ Stage 2: Installing historical dependencies...')
+        dependency_specs = [f"{pkg}=={ver}" for pkg, ver in historical_versions.items()]
+        
+        if dependency_specs:
+            return_code, _ = self._run_pip_install(
+                dependency_specs,
+                force_reinstall=True,
+                target_directory=target_directory_override,
+                extra_flags=['--no-build-isolation']  # Use the ancient setuptools we just installed
+            )
+            if return_code != 0:
+                safe_print("      - ❌ Stage 2 failed. Could not install historical dependencies.")
+                return False
+        safe_print("      - ✅ Stage 2 complete: All dependencies installed.")
+    
+        # --- STAGE 3: Build the target package ---
+        safe_print(f'\n      - ⚙️ Stage 3: Building {target_pkg}=={target_ver}...')
+        target_spec = [f"{target_pkg}=={target_ver}"]
+        
+        return_code, _ = self._run_pip_install(
+            target_spec,
+            force_reinstall=True,
+            target_directory=target_directory_override,
+            extra_flags=['--no-build-isolation']
+        )
+    
+        if return_code != 0:
+            safe_print("      - ❌ Stage 3 failed. Package could not be built.")
+            return False
+        safe_print("      - ✅ Stage 3 complete.")
+        
+        # Verification
+        safe_print("      - 🧪 Verifying installation...")
+        if self._run_post_install_import_test(target_pkg):
+            return True
+        else:
+            safe_print("      - ❌ Verification failed.")
+            return False
 
     def _run_pip_uninstall(self, packages: List[str]) -> int:
         """Runs `pip uninstall` with LIVE, STREAMING output."""
