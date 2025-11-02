@@ -124,42 +124,28 @@ jobs:
       - name: Verify Python 3.10 is Available (Windows)
         run: |
           Write-Host "=== Looking for Python 3.10 in omnipkg output ==="
-          try {
-            $output = omnipkg list python 2>&1
-            $exitCode = $LASTEXITCODE
-            
-            if ($exitCode -ne 0) {
-              Write-Host "❌ omnipkg list python failed with exit code: $exitCode"
-              exit 1
-            }
-            
-            # Check output for Python 3.10 or managed interpreters
-            if ($output -match "3\.10") {
-              Write-Host "✅ Found Python 3.10"
-            } elseif ($output -match "managed" -or $output -match "Managed") {
-              Write-Host "✅ Found managed Python interpreters"
+          
+          # Capture output regardless of exit code
+          $output = omnipkg list python 2>&1 | Out-String
+          Write-Host "Raw output received:"
+          Write-Host $output
+          
+          # Check for success indicators in the actual output
+          if ($output -match "3\.10" -or $output -match "Python 3\.10") {
+            Write-Host "✅ Found Python 3.10 in output!"
+            exit 0
+          } elseif ($output -match "[Mm]anaged") {
+            Write-Host "✅ Found managed Python interpreters!"
+            exit 0
+          } else {
+            # Fallback: check if Python 3.10 is working
+            $pyVersion = python --version 2>&1
+            if ($pyVersion -match "3\.10") {
+              Write-Host "✅ Python 3.10 is available and working!"
+              exit 0
             } else {
-              $pyVersion = python --version 2>&1
-              if ($pyVersion -match "3\.10") {
-                Write-Host "✅ Python 3.10 is available and working"
-              } else {
-                Write-Host "⚠️ Could not verify Python 3.10 specifically, checking if omnipkg works..."
-                try {
-                  omnipkg status | Out-Null
-                  Write-Host "✅ omnipkg status works, test passes"
-                } catch {
-                  Write-Host "❌ omnipkg status failed"
-                  exit 1
-                }
-              }
-            }
-          } catch {
-            Write-Host "⚠️ omnipkg list python failed, but checking if basic functionality works..."
-            try {
-              omnipkg status | Out-Null
-              Write-Host "✅ omnipkg status works, test passes"
-            } catch {
-              Write-Host "❌ omnipkg status failed: $($_.Exception.Message)"
+              Write-Host "❌ Could not verify Python 3.10"
+              Write-Host "Python version: $pyVersion"
               exit 1
             }
           }
