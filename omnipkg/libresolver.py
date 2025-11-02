@@ -1,3 +1,4 @@
+from .common_utils import safe_print
 #!/usr/bin/env python3
 """
 System Library Version Swapper for OmniPkg
@@ -95,7 +96,7 @@ class SysLibSwapper:
                 with open(self.compat_db) as f:
                     return json.load(f)
             except Exception as e:
-                print(f"⚠️  Error loading compatibility DB: {e}")
+                safe_print(f"⚠️  Error loading compatibility DB: {e}")
         return {"tested_combinations": {}, "known_working": {}, "known_broken": {}}
 
     def _save_compatibility_matrix(self):
@@ -119,29 +120,29 @@ class SysLibSwapper:
 
     def ensure_library_version(self, lib_name: str, version: str) -> Optional[SysLibVersion]:
         """Ensure a specific version of a system library is available."""
-        print(f"\n🔧 Ensuring {lib_name} {version} is available...")
+        safe_print(f"\n🔧 Ensuring {lib_name} {version} is available...")
         
         # Check if already built
         expected_path = self.store_dir / f"{lib_name}-{version}"
         if expected_path.exists():
-            print(f"✅ {lib_name} {version} already available")
+            safe_print(f"✅ {lib_name} {version} already available")
             return self._load_syslib_metadata(expected_path)
         
         # Need to build it
         config = self.lib_configs.get(lib_name)
         if not config:
-            print(f"❌ Unknown library: {lib_name}")
+            safe_print(f"❌ Unknown library: {lib_name}")
             return None
         
         if version not in config["versions"]:
-            print(f"❌ Unsupported version {version} for {lib_name}")
+            safe_print(f"❌ Unsupported version {version} for {lib_name}")
             return None
         
         return self._build_library(lib_name, version, config)
 
     def _build_library(self, lib_name: str, version: str, config: Dict) -> Optional[SysLibVersion]:
         """Download and build a specific library version."""
-        print(f"📦 Building {lib_name} {version}...")
+        safe_print(f"📦 Building {lib_name} {version}...")
         
         # Download source
         url = config["url_template"].format(version=version)
@@ -154,7 +155,7 @@ class SysLibSwapper:
         build_script = config["build_script"]
         
         if not build_script(source_path, install_path, version):
-            print(f"❌ Failed to build {lib_name} {version}")
+            safe_print(f"❌ Failed to build {lib_name} {version}")
             return None
         
         # Compute ABI hash
@@ -176,7 +177,7 @@ class SysLibSwapper:
         with open(metadata_file, 'w') as f:
             json.dump(syslib.to_dict(), f, indent=2)
         
-        print(f"✅ Built {lib_name} {version} with ABI hash {abi_hash}")
+        safe_print(f"✅ Built {lib_name} {version} with ABI hash {abi_hash}")
         return syslib
 
     def _download_source(self, url: str, lib_name: str, version: str) -> Optional[Path]:
@@ -184,14 +185,14 @@ class SysLibSwapper:
         cache_file = self.cache_dir / f"{lib_name}-{version}.tar.gz"
         
         if not cache_file.exists():
-            print(f"⬇️  Downloading {url}...")
+            safe_print(f"⬇️  Downloading {url}...")
             try:
                 response = requests.get(url, stream=True, timeout=60)
                 response.raise_for_status()
                 with open(cache_file, 'wb') as f:
                     shutil.copyfileobj(response.raw, f)
             except Exception as e:
-                print(f"❌ Download failed: {e}")
+                safe_print(f"❌ Download failed: {e}")
                 return None
         
         # Extract
@@ -211,7 +212,7 @@ class SysLibSwapper:
                     actual_src.rename(extract_dir)
                 return extract_dir
         except Exception as e:
-            print(f"❌ Extraction failed: {e}")
+            safe_print(f"❌ Extraction failed: {e}")
         
         return None
 
@@ -236,7 +237,7 @@ class SysLibSwapper:
             
             return True
         except subprocess.CalledProcessError as e:
-            print(f"Build error: {e.stderr.decode()}")
+            safe_print(f"Build error: {e.stderr.decode()}")
             return False
 
     def _build_openssl(self, source_path: Path, install_path: Path, version: str) -> bool:
@@ -294,7 +295,7 @@ class SysLibSwapper:
         Context manager that creates an isolated runtime environment
         with specific system library versions.
         """
-        print(f"\n🌍 Creating runtime environment with: {syslib_versions}")
+        safe_print(f"\n🌍 Creating runtime environment with: {syslib_versions}")
         
         # Ensure all requested libraries are available
         syslibs = {}
@@ -335,13 +336,13 @@ class SysLibSwapper:
         try:
             # Apply environment
             os.environ.update(new_env)
-            print(f"✅ Runtime environment active")
+            safe_print(f"✅ Runtime environment active")
             yield syslibs
         finally:
             # Restore original environment
             os.environ.clear()
             os.environ.update(original_env)
-            print("🔄 Runtime environment restored")
+            safe_print("🔄 Runtime environment restored")
 
     def test_compatibility(self, package_name: str, package_version: str, 
                           syslib_versions: Dict[str, str]) -> Dict[str, Any]:
@@ -353,11 +354,11 @@ class SysLibSwapper:
         
         # Check cache first
         if test_id in self.compatibility_matrix["tested_combinations"]:
-            print(f"💾 Using cached result for {test_id}")
+            safe_print(f"💾 Using cached result for {test_id}")
             return self.compatibility_matrix["tested_combinations"][test_id]
         
-        print(f"\n🧪 Testing compatibility: {package_name}=={package_version}")
-        print(f"    System libs: {syslib_versions}")
+        safe_print(f"\n🧪 Testing compatibility: {package_name}=={package_version}")
+        safe_print(f"    System libs: {syslib_versions}")
         
         result = {
             "package": package_name,
@@ -457,7 +458,7 @@ except Exception as e:
     result["errors"].append(f"Runtime error: {{str(e)}}")
     result["errors"].append(traceback.format_exc())
 
-print("OMNIPKG_TEST_RESULT:" + str(result))
+safe_print("OMNIPKG_TEST_RESULT:" + str(result))
 '''
         
         try:
@@ -533,23 +534,23 @@ print("OMNIPKG_TEST_RESULT:" + str(result))
         total_tests = len(packages) * len(syslib_combos)
         current_test = 0
         
-        print(f"\n🔥 BRUTE FORCE COMPATIBILITY TESTING")
-        print(f"    Packages: {len(packages)}")
-        print(f"    Syslib combinations: {len(syslib_combos)}")
-        print(f"    Total tests: {total_tests}")
-        print(f"    Estimated time: {total_tests * 45} seconds")
+        safe_print(f"\n🔥 BRUTE FORCE COMPATIBILITY TESTING")
+        safe_print(f"    Packages: {len(packages)}")
+        safe_print(f"    Syslib combinations: {len(syslib_combos)}")
+        safe_print(f"    Total tests: {total_tests}")
+        safe_print(f"    Estimated time: {total_tests * 45} seconds")
         
         for pkg_name, pkg_version in packages:
             for syslib_combo in syslib_combos:
                 current_test += 1
-                print(f"\n[{current_test}/{total_tests}] Testing {pkg_name}=={pkg_version}")
+                safe_print(f"\n[{current_test}/{total_tests}] Testing {pkg_name}=={pkg_version}")
                 
                 result = self.test_compatibility(pkg_name, pkg_version, syslib_combo)
                 status = "✅ PASS" if result["success"] else "❌ FAIL"
-                print(f"    {status}")
+                safe_print(f"    {status}")
                 
                 if result["errors"]:
-                    print(f"    Errors: {len(result['errors'])}")
+                    safe_print(f"    Errors: {len(result['errors'])}")
 
     def find_working_combination(self, package_name: str, package_version: str) -> Optional[Dict[str, str]]:
         """Find a known working system library combination for a package."""
@@ -567,11 +568,11 @@ print("OMNIPKG_TEST_RESULT:" + str(result))
         Analyze a runtime error and suggest system library versions that might fix it.
         This is the core of the "runtime healer" functionality.
         """
-        print(f"\n🔧 HEALING: {package_name} failed with: {error_msg}")
+        safe_print(f"\n🔧 HEALING: {package_name} failed with: {error_msg}")
         
         # Error pattern matching
         if "SSL" in error_msg or "ssl" in error_msg:
-            print("    🔍 SSL-related error detected")
+            safe_print("    🔍 SSL-related error detected")
             # Try different OpenSSL versions
             for ssl_version in ["1.1.1l", "3.0.8", "1.0.2u"]:
                 combo = {"openssl": ssl_version, "zlib": "1.2.11"}
@@ -579,20 +580,20 @@ print("OMNIPKG_TEST_RESULT:" + str(result))
                     return combo
         
         elif "zlib" in error_msg or "compression" in error_msg:
-            print("    🔍 Compression-related error detected")
+            safe_print("    🔍 Compression-related error detected")
             for zlib_version in ["1.2.11", "1.2.13", "1.3"]:
                 combo = {"zlib": zlib_version}
                 if self._quick_test_combo(package_name, combo, error_msg):
                     return combo
         
         elif "GLIBC" in error_msg or "libc" in error_msg:
-            print("    🔍 GLIBC-related error detected")
+            safe_print("    🔍 GLIBC-related error detected")
             for glibc_version in ["2.31", "2.34", "2.38"]:
                 combo = {"glibc": glibc_version}
                 if self._quick_test_combo(package_name, combo, error_msg):
                     return combo
         
-        print("    ❌ No automatic fix found")
+        safe_print("    ❌ No automatic fix found")
         return None
 
     def _quick_test_combo(self, package_name: str, syslib_combo: Dict[str, str], 
@@ -602,7 +603,7 @@ print("OMNIPKG_TEST_RESULT:" + str(result))
             with self.runtime_environment(syslib_combo):
                 # Try to import the problematic package
                 proc = subprocess.run([
-                    sys.executable, "-c", f"import {package_name}; print('SUCCESS')"
+                    sys.executable, "-c", f"import {package_name}; safe_print('SUCCESS')"
                 ], capture_output=True, text=True, timeout=10)
                 
                 return proc.returncode == 0 and "SUCCESS" in proc.stdout
@@ -683,15 +684,15 @@ class RuntimeHealer:
         Analyze an import error and automatically fix it by finding compatible
         system library versions.
         """
-        print(f"\n🏥 RUNTIME HEALER: Analyzing error from {script_path}")
+        safe_print(f"\n🏥 RUNTIME HEALER: Analyzing error from {script_path}")
         
         # Extract package name from error
         package_name = self._extract_package_from_error(error_output)
         if not package_name:
-            print("❌ Could not identify problematic package")
+            safe_print("❌ Could not identify problematic package")
             return False
         
-        print(f"🎯 Identified problematic package: {package_name}")
+        safe_print(f"🎯 Identified problematic package: {package_name}")
         
         # Try to find a working combination
         working_combo = self.swapper.find_working_combination(package_name, "latest")
@@ -701,7 +702,7 @@ class RuntimeHealer:
             working_combo = self.swapper.heal_runtime_error(package_name, error_output)
         
         if working_combo:
-            print(f"💊 Found healing combination: {working_combo}")
+            safe_print(f"💊 Found healing combination: {working_combo}")
             # Re-run script with the working environment
             return self._rerun_script_with_environment(script_path, working_combo)
         
