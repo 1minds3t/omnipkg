@@ -1,3 +1,4 @@
+from __future__ import annotations
 """
 omnipkg
 An intelligent installer that lets pip run, then surgically cleans up downgrades
