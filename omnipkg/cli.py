@@ -696,7 +696,7 @@ def main():
                     '3': ('NumPy/SciPy Test', TESTS_DIR / 'test_version_combos.py', '3.11'),
                     '4': ('TensorFlow Test', TESTS_DIR / 'test_tensorflow_switching.py', '3.11'),
                     '5': ('Multiverse Healing', TESTS_DIR / 'test_multiverse_healing.py', '3.11'),
-                    '6': ('Old Flask Test', TESTS_DIR / 'test_old_flask.py', None),
+                    '6': ('Old Flask Test', TESTS_DIR / 'test_old_flask.py', '3.8'),
                     '7': ('Auto-healing Test', TESTS_DIR / 'test_old_rich.py', None),
                     '8': ('Quantum Multiverse Warp', TESTS_DIR / 'test_concurrent_install.py', '3.11'),
                     '9': ('Flask Port Finder', TESTS_DIR / 'test_flask_port_finder.py', None),
