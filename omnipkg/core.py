@@ -105,28 +105,68 @@ def _get_dynamic_omnipkg_version():
 
 def _get_core_dependencies() -> set:
     """
-    Correctly reads omnipkg's own production dependencies and returns them as a set.
+    Correctly reads omnipkg's own production dependencies (including transitive deps)
+    and returns them as a set.
     """
     try:
+        # Start with omnipkg's direct dependencies
         pkg_meta = metadata('omnipkg')
         reqs = pkg_meta.get_all('Requires-Dist') or []
-        dependencies = {canonicalize_name(re.match('^[a-zA-Z0-9\\-_.]+', req).group(0)) for req in reqs if re.match('^[a-zA-Z0-9\\-_.]+', req)}
+        dependencies = {canonicalize_name(re.match('^[a-zA-Z0-9\\-_.]+', req).group(0)) 
+                       for req in reqs if re.match('^[a-zA-Z0-9\\-_.]+', req)}
+        
         if sys.version_info < (3, 11):
             dependencies.add('tomli')
-        return dependencies
+        
+        # Now recursively get all transitive dependencies
+        all_deps = set(dependencies)  # Start with direct deps
+        to_process = list(dependencies)  # Queue of packages to check
+        processed = set()  # Track what we've already processed
+        
+        while to_process:
+            pkg_name = to_process.pop(0)
+            if pkg_name in processed:
+                continue
+            processed.add(pkg_name)
+            
+            try:
+                # Get this package's dependencies
+                dep_meta = metadata(pkg_name)
+                dep_reqs = dep_meta.get_all('Requires-Dist') or []
+                
+                for req in dep_reqs:
+                    match = re.match('^[a-zA-Z0-9\\-_.]+', req)
+                    if match:
+                        dep_name = canonicalize_name(match.group(0))
+                        if dep_name not in all_deps:
+                            all_deps.add(dep_name)
+                            to_process.append(dep_name)
+            except PackageNotFoundError:
+                # Package not installed, skip it
+                continue
+            except Exception as e:
+                # Log but continue
+                safe_print(_('⚠️ Could not get dependencies for {}: {}').format(pkg_name, e))
+                continue
+        
+        return all_deps
+        
     except PackageNotFoundError:
         try:
             pyproject_path = Path(__file__).parent.parent / 'pyproject.toml'
             if pyproject_path.exists():
                 with pyproject_path.open('rb') as f:
                     pyproject_data = tomllib.load(f)
-                return pyproject_data['project'].get('dependencies', [])
+                deps = pyproject_data['project'].get('dependencies', [])
+                # For fallback, just return direct deps since we can't resolve transitive
+                return {canonicalize_name(re.match('^[a-zA-Z0-9\\-_.]+', dep).group(0)) 
+                       for dep in deps if re.match('^[a-zA-Z0-9\\-_.]+', dep)}
         except Exception as e:
             safe_print(_('⚠️ Could not parse pyproject.toml, falling back to empty list: {}').format(e))
-            return []
+            return set()
     except Exception as e:
         safe_print(_('⚠️ Could not determine core dependencies, falling back to empty list: {}').format(e))
-        return []
+        return set()
 
 class ConfigManager:
     """
@@ -6202,7 +6242,6 @@ class omnipkg:
     
         if not self._connect_cache():
             return 1
-        self._heal_conda_environment()
         
         # ... rest of your existing smart_install code continues here ...
         if dry_run:
@@ -6214,8 +6253,7 @@ class omnipkg:
         from .i18n import _  # Add this line at the top
 
         install_strategy = None  # ✅ Initialize at the top so it's always defined
-        if not self._connect_cache():
-            return 1
+        
         self.doctor(dry_run=False, force=True)
         self._heal_conda_environment()
         if dry_run:
