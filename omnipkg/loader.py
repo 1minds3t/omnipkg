@@ -67,7 +67,20 @@ class omnipkgLoader:
         """
         Initializes the loader with enhanced Python version awareness.
         """
-        self.config = config
+        if config is None:
+            # If no config is passed, become self-sufficient and load it.
+            # Lazy import to prevent circular dependencies.
+            from omnipkg.core import ConfigManager
+            try:
+                # Suppress messages because this is a background load.
+                cm = ConfigManager(suppress_init_messages=True)
+                self.config = cm.config
+            except Exception:
+                # If config fails to load for any reason, proceed with None.
+                # The auto-detection logic will still serve as a fallback.
+                self.config = {}
+        else:
+            self.config = config
         self.quiet = quiet
         self.python_version = f'{sys.version_info.major}.{sys.version_info.minor}'
         self.python_version_nodot = f'{sys.version_info.major}{sys.version_info.minor}'
@@ -88,6 +101,8 @@ class omnipkgLoader:
         self._total_activation_time_ns = None
         self._total_deactivation_time_ns = None
         self._omnipkg_dependencies = self._get_omnipkg_dependencies()
+        self._activated_bubble_dependencies = [] # To track everything we need to exorcise
+
 
     def _initialize_version_aware_paths(self):
         """
@@ -449,6 +464,7 @@ class omnipkgLoader:
 
         # --- THIS IS THE RESTORED LOGIC ---
         try:
+            
             # Check if the package exists in the main environment
             current_system_version = get_version(pkg_name)
             
@@ -479,6 +495,13 @@ class omnipkgLoader:
             raise RuntimeError(f"Bubble not found for {self._current_package_spec}")
 
         try:
+            self._activated_bubble_dependencies = list(self._get_bubble_dependencies(bubble_path).keys())
+            
+            # Now, when we cloak and clean, we do it for EVERYTHING.
+            for pkg in self._activated_bubble_dependencies:
+                self._aggressive_module_cleanup(pkg)
+            
+            self._batch_cloak_packages(self._activated_bubble_dependencies)
             # Use fast dependency detection
             bubble_packages = self._get_bubble_dependencies(bubble_path)
             
@@ -526,45 +549,33 @@ class omnipkgLoader:
         if not self._activation_successful and not self._cloaked_main_modules:
             return
         
-        pkg_name = self._current_package_spec.split('==')[0]
-        
-        # Cleanup bubble-specific environment
-        os.environ.pop('OMNIPKG_BUBBLE_ACTIVE', None)
-        os.environ.pop('OMNIPKG_ISOLATED_MODE', None)
-        
-        # Existing cleanup logic
-        if self._activated_bubble_path:
-            self._cleanup_omnipkg_links_in_bubble(self._activated_bubble_path)
-        
+        # --- START: HYPER-AGGRESSIVE CLEANUP ---
+
+        # 1. Restore cloaked modules and original PATH first.
+        # This makes the main environment's packages visible again.
         self._restore_cloaked_modules()
-        
-        # Restore original sys.path
-        sys.path.clear()
-        sys.path.extend(self.original_sys_path)
-        
-        # Module cleanup
-        current_modules_keys = set(sys.modules.keys())
-        for mod_name in current_modules_keys:
-            if mod_name not in self.original_sys_modules_keys:
-                if mod_name in sys.modules:
-                    del sys.modules[mod_name]
-        
-        self._aggressive_module_cleanup(pkg_name)
-        
-        # Restore environment
         os.environ['PATH'] = self.original_path_env
-        if self.original_pythonpath_env:
-            filtered_pythonpath = self._filter_environment_paths('PYTHONPATH')
-            if filtered_pythonpath:
-                os.environ['PYTHONPATH'] = filtered_pythonpath
-            elif 'PYTHONPATH' in os.environ:
-                del os.environ['PYTHONPATH']
-        elif 'PYTHONPATH' in os.environ:
-            del os.environ['PYTHONPATH']
+
+        # 2. Restore the original sys.path.
+        sys.path[:] = self.original_sys_path
         
-        # Final cleanup
+        # 3. Purge every single module that was part of the bubble.
+        # This is the exorcism that kills the ghosts.
+        if not self.quiet and self._activated_bubble_dependencies:
+            safe_print(f"   - 👻 Exorcising {len(self._activated_bubble_dependencies)} bubble modules from memory...")
+        
+        for pkg_name in self._activated_bubble_dependencies:
+            self._aggressive_module_cleanup(pkg_name)
+        
+        # Also clean up the main package spec just in case
+        main_pkg_name = self._current_package_spec.split('==')[0]
+        self._aggressive_module_cleanup(main_pkg_name)
+        
+        # 4. Invalidate import caches to force Python to re-evaluate the now-clean path.
         if hasattr(importlib, 'invalidate_caches'):
             importlib.invalidate_caches()
+        
+        # 5. Run garbage collection to be extra sure.
         gc.collect()
         
         self._deactivation_end_time = time.perf_counter_ns()
