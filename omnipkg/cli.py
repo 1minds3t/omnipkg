@@ -680,7 +680,7 @@ def main():
                 safe_print(_('3. NumPy + SciPy stress test (C-extension switching)'))
                 safe_print(_('4. TensorFlow test (complex dependency switching)'))
                 safe_print(_('5. 🚀 Multiverse Healing Test (Cross-Python Hot-Swapping Mid-Script)'))
-                safe_print(_('6. Old Flask Test (legacy package healing) - 🚧 Under Construction'))
+                safe_print(_('6. Old Flask Test (legacy package healing) - Fully functional!'))
                 safe_print(_('7. Auto-healing Test (omnipkg run)'))
                 safe_print(_('8. 🌠 Quantum Multiverse Warp (Concurrent Python Installations)'))
                 safe_print(_('9. Flask Port Finder Test (auto-healing with Flask)'))
@@ -689,9 +689,6 @@ def main():
                     response = input(_('Enter your choice (1-9): ')).strip()
                 except EOFError:
                     response = ''
-                if response == '6':
-                    safe_print(_("\n🚧 That demo is being polished. Allowing testing for developer."))
-                    response = '6'
                 
                 demo_map = {
                     '1': ('Rich Test', TESTS_DIR / 'test_rich_switching.py', None),
