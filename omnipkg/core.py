@@ -7883,6 +7883,227 @@ class omnipkg:
         except (subprocess.CalledProcessError, json.JSONDecodeError, Exception) as e:
             safe_print(f'   ⚠️  Could not get file list from live environment: {e}')
             return {name: [] for name in package_names}
+        
+    def _get_import_candidates(self, package_name: str) -> List[str]:
+        """
+        Authoritatively finds import candidates by reading top_level.txt from the
+        installed package's .dist-info directory.
+        """
+        try:
+            dist = importlib.metadata.distribution(package_name)
+            
+            # This is the most reliable way to find the importable names.
+            if dist.read_text('top_level.txt'):
+                return [line.strip() for line in dist.read_text('top_level.txt').split('\n') if line.strip()]
+
+        except importlib.metadata.PackageNotFoundError:
+            pass # Fall through to heuristics
+        except Exception as e:
+            safe_print(f"   - Warning: Could not read top_level.txt for {package_name}: {e}")
+
+        # Fallback to smart name mangling if top_level.txt is missing or fails.
+        candidates = {package_name.replace('-', '_'), package_name.lower()}
+        return sorted(list(candidates))
+
+    # In omnipkg/core.py, inside the omnipkg class
+
+    def _run_post_install_import_test(self, package_name: str, install_dir_override: Optional[Path] = None) -> bool:
+        """
+        Runs a simple 'import' test in a subprocess to verify an installation.
+        Can now target a specific installation directory.
+        """
+        target_desc = f"in sandbox '{install_dir_override}'" if install_dir_override else "in main environment"
+        safe_print(f"   🧪 Verifying installation with import test for: {package_name} {target_desc}")
+        
+        try:
+            import_names = [package_name.replace('-', '_')]
+            python_exe = self.config.get('python_executable', sys.executable)
+            
+            for import_name in import_names:
+                script_lines = ["import sys"]
+                if install_dir_override:
+                    script_lines.append(f"sys.path.insert(0, r'{str(install_dir_override)}')")
+                script_lines.append(f"import {import_name}")
+
+                script = "; ".join(script_lines)
+                cmd = [python_exe, "-c", script]
+
+                result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+                
+                if result.returncode == 0:
+                    safe_print(f"      ✅ Import test passed for '{import_name}'")
+                    return True
+
+            safe_print(f"      ❌ All import attempts failed for package '{package_name}'. The package is likely broken.")
+            return False
+        except Exception as e:
+            safe_print(f"      ❌ An unexpected error occurred during the import test: {e}")
+            return False
+
+    # In omnipkg/core.py, inside the `omnipkg` class
+
+    def _run_historical_install_fallback(self, target_pkg, target_ver, target_directory_override: Optional[Path] = None):
+        """
+        --- [MODIFIED] ---
+        Orchestrator for the Dependency Time Machine logic, run as an automatic fallback.
+        This method now accepts a target_directory_override to ensure installations are isolated.
+        """
+        safe_print(f"   - Attempting to rebuild {target_pkg}=={target_ver} from the past...")
+        
+        release_date = self._get_historical_release_date(target_pkg, target_ver)
+        if not release_date:
+            safe_print('   - ❌ Failed to get release date. Time Machine cannot proceed.')
+            return False
+
+        dep_names = self._get_historical_dependency_names(target_pkg, target_ver)
+        if dep_names is None: # Explicitly check for None in case of error
+            safe_print('   - ❌ Failed to determine dependencies. Time Machine cannot proceed.')
+            return False
+
+        if not dep_names:
+            safe_print('   - ℹ️ No dependencies found. Attempting a direct simple install.')
+            # --- [FIX] Pass the override to the execution function ---
+            return self._execute_historical_install(target_pkg, target_ver, {}, target_directory_override=target_directory_override)
+
+        historical_versions = self._find_historical_versions(dep_names, release_date)
+        
+        if historical_versions is not None:
+            return self._execute_historical_install(
+                target_pkg, target_ver, historical_versions, target_directory_override=target_directory_override
+            )
+        else:
+            safe_print('   - ❌ Could not resolve any historical dependencies. Time Machine failed.')
+            return False
+
+    def _execute_historical_install(self, target_pkg, target_ver, historical_versions, target_directory_override: Optional[Path] = None):
+        """
+        --- [REWRITTEN FOR SAFETY] ---
+        Executes a three-stage installation for legacy packages into a specified target directory.
+        If no target is specified, it defaults to the main environment but this is now explicit.
+        """
+        install_target_desc = f"temporary sandbox ('{target_directory_override}')" if target_directory_override else "main environment"
+        safe_print(f"      - 🎯 Install Target: {install_target_desc}")
+
+        # --- STAGE 1: Install ANCIENT setuptools that still has Feature ---
+        safe_print('\n      - ⚙️ Stage 1: Installing ANCIENT build system (setuptools with Feature support)...')
+        build_system_fix = ["setuptools==40.8.0", "wheel"]
+        
+        # --- [FIX] All pip installs now respect the target_directory_override ---
+        return_code, _ = self._run_pip_install(
+            build_system_fix, 
+            force_reinstall=True,
+            target_directory=target_directory_override
+        )
+        
+        if return_code != 0:
+            safe_print("      - ❌ Stage 1 failed. Could not install ancient setuptools.")
+            return False
+        safe_print("      - ✅ Stage 1 complete: Ancient build system (setuptools 40.x) is now active.")
+
+        # --- STAGE 2: Install historical dependencies ---
+        safe_print('\n      - ⚙️ Stage 2: Installing historical dependencies...')
+        dependency_specs = [f"{pkg}=={ver}" for pkg, ver in historical_versions.items()]
+        
+        if dependency_specs:
+            return_code, _ = self._run_pip_install(
+                dependency_specs,
+                force_reinstall=True,
+                target_directory=target_directory_override,
+                extra_flags=['--no-build-isolation']
+            )
+            if return_code != 0:
+                safe_print("      - ❌ Stage 2 failed. Could not install historical dependencies.")
+                return False
+        safe_print("      - ✅ Stage 2 complete: All historical dependencies installed.")
+
+        # --- STAGE 3: Build the target package ---
+        safe_print(f'\n      - ⚙️ Stage 3: Building {target_pkg}=={target_ver}...')
+        target_spec = [f"{target_pkg}=={target_ver}"]
+        
+        return_code, _ = self._run_pip_install(
+            target_spec,
+            force_reinstall=True,
+            target_directory=target_directory_override,
+            extra_flags=['--no-build-isolation']
+        )
+
+        if return_code != 0:
+            safe_print("      - ❌ Stage 3 failed. Package could not be built.")
+            return False
+        safe_print("      - ✅ Stage 3 complete.")
+        
+        # Verification happens after the bubble is created by the calling function.
+        # We just need to signal success here.
+        return True
+
+    def _get_historical_release_date(self, package_name, version):
+        """Uses PyPI JSON API to get the release date for a specific version."""
+        safe_print(f"      - Getting release date for {package_name}=={version}...")
+        try:
+            url = f"https://pypi.org/pypi/{package_name}/{version}/json"
+            response = http_requests.get(url, timeout=10)
+            response.raise_for_status()
+            data = response.json()
+            # Get the upload time of the first file in the release, which is a reliable indicator
+            upload_time = data['urls'][0]['upload_time_iso_8601']
+            safe_print(f"      - ✓ Found release date: {upload_time}")
+            return upload_time
+        except (requests.exceptions.RequestException, KeyError, IndexError) as e:
+            safe_print(f'      - ❌ Error fetching release date from PyPI: {e}')
+            return None
+
+    def _get_historical_dependency_names(self, package_name, version):
+        """Creates a temp venv, installs the package, and freezes deps to find them."""
+        safe_print('      - Getting actual dependencies via temporary real install...')
+        temp_dir = tempfile.mkdtemp()
+        venv_path = os.path.join(temp_dir, 'venv')
+        venv_python = os.path.join(venv_path, 'bin', 'python')
+        try:
+            subprocess.run([sys.executable, '-m', 'venv', venv_path], check=True, capture_output=True)
+            subprocess.run([venv_python, '-m', 'pip', 'install', f'{package_name}=={version}'], check=True, capture_output=True)
+            freeze_result = subprocess.run([venv_python, '-m', 'pip', 'freeze'], check=True, capture_output=True, text=True)
+            
+            dep_names = [line.split('==')[0].strip() for line in freeze_result.stdout.splitlines() if line.split('==')[0].strip().lower() != package_name.lower()]
+            
+            safe_print(f'      - ✓ Discovered dependencies: {dep_names}')
+            return dep_names
+        except subprocess.CalledProcessError as e:
+            safe_print(f'      - ❌ Error during temp install: {e.stderr}')
+            return []
+        finally:
+            shutil.rmtree(temp_dir)
+
+    def _find_historical_versions(self, dependencies, cutoff_date):
+        """Finds the latest version for each dependency before a given date."""
+        safe_print('      - Finding historical versions of dependencies...')
+        historical_versions = {}
+        cutoff_datetime = datetime.fromisoformat(cutoff_date.replace('Z', '+00:00'))
+        
+        for dep_name in dependencies:
+            try:
+                url = f'https://pypi.org/pypi/{dep_name}/json'
+                response = http_requests.get(url, timeout=10)
+                response.raise_for_status()
+                dep_data = response.json()
+                latest_valid_version = None
+                
+                for version, releases in dep_data.get('releases', {}).items():
+                    if not releases: continue
+                    release_date_str = releases[0].get('upload_time_iso_8601')
+                    if not release_date_str: continue
+                    
+                    release_date = datetime.fromisoformat(release_date_str.replace('Z', '+00:00'))
+                    if release_date <= cutoff_datetime:
+                        if latest_valid_version is None or parse_version(version) > parse_version(latest_valid_version):
+                            latest_valid_version = version
+                
+                if latest_valid_version:
+                    historical_versions[dep_name] = latest_valid_version
+            except Exception:
+                pass # Ignore failures for individual dependencies
+        
+        safe_print(f"      - ✓ Resolved historical versions: {historical_versions}")
+        return historical_versions
 
     def _run_pip_install(self, packages: List[str], force_reinstall: bool=False, target_directory: Optional[Path]=None) -> int:
         """
