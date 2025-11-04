@@ -8215,14 +8215,18 @@ class omnipkg:
         safe_print(f"      - ✓ Resolved historical versions: {historical_versions}")
         return historical_versions
 
-    def _run_pip_install(self, packages: List[str], force_reinstall: bool=False, target_directory: Optional[Path]=None) -> int:
+    def _run_pip_install(self, packages: List[str], force_reinstall: bool=False, target_directory: Optional[Path]=None, extra_flags: Optional[List[str]]=None) -> Tuple[int, Dict[str, str]]:
         """
         Runs `pip install` with LIVE, STREAMING output and automatic recovery
         from corrupted 'no RECORD file' errors. Can now target a specific directory.
+        Returns: (return_code, captured_output_dict)
         """
         if not packages:
-            return 0
+            return 0, {"stdout": "", "stderr": ""}
+        
         cmd = [self.config['python_executable'], '-u', '-m', 'pip', 'install']
+        if extra_flags:
+            cmd.extend(extra_flags)
         if force_reinstall:
             cmd.append('--upgrade')
         if target_directory:
@@ -8232,16 +8236,24 @@ class omnipkg:
         
         try:
             process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding='utf-8', errors='replace', bufsize=1, universal_newlines=True)
-            stdout_lines, stderr_lines = ([], [])
+            
+            stdout_lines, stderr_lines = [], []
+            
+            # This logic streams output live while capturing it
             for line in process.stdout:
                 safe_print(line, end='')
                 stdout_lines.append(line)
             for line in process.stderr:
                 safe_print(line, end='', file=sys.stderr)
                 stderr_lines.append(line)
+            
             return_code = process.wait()
             
-            full_output = ''.join(stdout_lines) + ''.join(stderr_lines)
+            full_stdout = ''.join(stdout_lines)
+            full_stderr = ''.join(stderr_lines)
+            captured_output = {"stdout": full_stdout, "stderr": full_stderr}
+            
+            full_output = full_stdout + full_stderr
             cleanup_path = target_directory if target_directory else Path(self.config.get('site_packages_path'))
 
             # Heal 'invalid distribution' warnings first
@@ -8264,7 +8276,7 @@ class omnipkg:
                         safe_print(f"💡 Package: {package_name}")
                         safe_print(f"💡 Requested version: {package_spec}")
                         safe_print(f"💡 Check pip output above for available versions")
-                        return 1  # Just exit, don't trigger quantum healing
+                        return 1, captured_output  # FIXED: Return tuple
                     else:
                         # No version works - might be Python incompatibility
                         raise NoCompatiblePythonError(
@@ -8286,23 +8298,23 @@ class omnipkg:
                         if retry_process.returncode == 0:
                             safe_print(retry_process.stdout)
                             safe_print(_('   - ✅ Recovery successful!'))
-                            return 0
+                            return 0, {"stdout": retry_process.stdout, "stderr": retry_process.stderr}  # FIXED: Return tuple
                         else:
                             safe_print(_('   - ❌ Recovery failed. Pip error after cleanup:'))
                             safe_print(retry_process.stderr)
-                            return 1
+                            return 1, {"stdout": retry_process.stdout, "stderr": retry_process.stderr}  # FIXED: Return tuple
                     else:
-                        return 1
+                        return 1, captured_output  # FIXED: Return tuple
                 
-                return return_code
+                return return_code, captured_output  # FIXED: Return tuple
                 
-            return 0
+            return 0, captured_output  # FIXED: Return tuple
             
         except NoCompatiblePythonError:
             raise  # Re-raise for smart_install to handle
         except Exception as e:
             safe_print(_('    ❌ An unexpected error occurred during pip install: {}').format(e))
-            return 1
+            return 1, {"stdout": "", "stderr": str(e)}  # FIXED: Return tuple
 
     def _run_pip_uninstall(self, packages: List[str]) -> int:
         """Runs `pip uninstall` with LIVE, STREAMING output."""
