@@ -6009,10 +6009,10 @@ class omnipkg:
         self.rescan_interpreters()
         return 0
     
-    def check_package_installed_fast(self, python_exe: str, package: str, version: str) -> Tuple[Optional[str], float]:
-        """
-        Check if a specific package version is already installed - ultra fast check.
-        Returns the status ('active', 'bubble', or None) and the duration.
+    def check_package_installed_fast(self, python_exe: str, package: str, version: str) -> Tuple[bool, float]:
+        """Check if a specific package version is already installed - ultra fast check.
+
+        Checks both main environment and bubble locations for maximum speed.
         """
         start_time = time.perf_counter()
 
@@ -6025,7 +6025,7 @@ class omnipkg:
 
         if result.returncode == 0:
             duration_ms = (time.perf_counter() - start_time) * 1000
-            return 'active', duration_ms
+            return True, duration_ms
 
         # Phase 2: If not in main env, check if a valid BUBBLE exists.
         bubble_path = self.multiversion_base / f'{package}-{version}'
@@ -6039,14 +6039,155 @@ class omnipkg:
 
             if any(marker.exists() for marker in metadata_markers):
                 duration_ms = (time.perf_counter() - start_time) * 1000
-                return 'bubble', duration_ms
+                return True, duration_ms
 
         duration_ms = (time.perf_counter() - start_time) * 1000
-        return None, duration_ms
+        return False, duration_ms
+    
+    def _resolve_spec_with_pip(self, package_spec: str) -> Tuple[Optional[str], str]:
+        """
+        (V2 - JSON Report) Uses `pip install --dry-run --report` to reliably resolve a spec.
+        This is superior to regex parsing as it uses a stable, machine-readable format.
+        """
+        try:
+            # --report - tells pip to output a JSON summary of its plan to stdout.
+            # --no-deps is a major speedup, as we only need to resolve the top-level package.
+            cmd = [self.config['python_executable'], '-m', 'pip', 'install', '--dry-run', '--ignore-installed', '--no-deps', '--report', '-', package_spec]
+            result = subprocess.run(cmd, capture_output=True, text=True, check=False, timeout=60, env=dict(os.environ, PYTHONIOENCODING='utf-8'))
+            
+            # For --report, the JSON is on stdout and user-facing errors are on stderr.
+            pip_report_str = result.stdout.strip()
+            pip_user_error_output = result.stderr.strip()
+
+            if result.returncode == 0 and pip_report_str:
+                # Pip succeeded. The report on stdout is our source of truth.
+                report = json.loads(pip_report_str)
+                install_plan = report.get('install', [])
+                
+                # Find the package the user actually asked for in the install plan.
+                req_name = self._parse_package_spec(package_spec)[0]
+                
+                for item in install_plan:
+                    metadata = item.get('metadata', {})
+                    pkg_name = metadata.get('name')
+                    
+                    if canonicalize_name(pkg_name) == canonicalize_name(req_name):
+                        version = metadata.get('version')
+                        if version:
+                            resolved_spec = f"{pkg_name}=={version}"
+                            # Return the success and any informational text from stderr
+                            return resolved_spec, pip_user_error_output
+            
+            # If we reach here, it's an error. The valuable info is on stderr.
+            return None, pip_user_error_output
+
+        except json.JSONDecodeError:
+            # This can happen if pip outputs an unexpected warning to stdout instead of JSON.
+            # In this case, the full output is the error.
+            return None, (result.stdout + result.stderr).strip()
+        except Exception as e:
+            return None, f"An unexpected error occurred during pip resolution: {e}"
 
     def smart_install(self, packages: List[str], dry_run: bool = False, force_reinstall: bool = False, override_strategy: Optional[str] = None, target_directory: Optional[Path] = None) -> int:        
 
-
+        # ====================================================================
+        # ULTRA-FAST PREFLIGHT CHECK (Before any heavy initialization)
+        # ====================================================================
+        if not force_reinstall and packages:
+            safe_print('⚡ Running ultra-fast preflight check...')
+            preflight_start = time.perf_counter()
+            configured_exe = self.config.get('python_executable', sys.executable)
+            install_strategy = self.config.get('install_strategy', 'stable-main')
+            
+            fully_resolved_specs = []
+            needs_installation = []  # Packages that need to be installed
+            
+            # --- Phase 1: Resolve versions and check if already satisfied ---
+            for pkg_spec in packages:
+                pkg_name, version = self._parse_package_spec(pkg_spec)
+                
+                # Step 1: Get the version (either from spec or from cache/PyPI)
+                if version:
+                    # Version already specified
+                    resolved_spec = pkg_spec
+                else:
+                    # No version specified - get latest from cache/PyPI
+                    latest_version = self._get_latest_version_from_pypi(pkg_name)
+                    
+                    if latest_version:
+                        resolved_spec = f"{pkg_name}=={latest_version}"
+                        version = latest_version
+                    else:
+                        # Cache/PyPI failed - mark for pip resolution later
+                        safe_print(f"   ⚠️  Fast checks failed for '{pkg_name}'. Marked for pip fallback.")
+                        needs_installation.append(pkg_spec)
+                        continue
+                
+                # Step 2: Check if this version is already installed
+                is_installed, duration_ms = self.check_package_installed_fast(configured_exe, pkg_name, version)
+                
+                if is_installed:
+                    # Found in main env or bubble
+                    # Check if bubble is acceptable for current strategy
+                    bubble_path = self.multiversion_base / f'{pkg_name}-{version}'
+                    is_in_bubble = bubble_path.exists() and bubble_path.is_dir()
+                    
+                    if not is_in_bubble:
+                        # In main env - always satisfied
+                        safe_print(f'   ✓ {resolved_spec} [satisfied: {duration_ms:.1f}ms - active in main env]')
+                        fully_resolved_specs.append(resolved_spec)
+                        continue
+                    elif install_strategy == 'stable-main':
+                        # In bubble and stable-main allows bubbles - satisfied
+                        safe_print(f'   ✓ {resolved_spec} [satisfied: {duration_ms:.1f}ms - bubble]')
+                        fully_resolved_specs.append(resolved_spec)
+                        continue
+                    else:
+                        # In bubble but latest-active needs it in main env - NOT satisfied
+                        safe_print(f'   ⚠️  {resolved_spec} found in bubble but needs to be active')
+                        needs_installation.append(resolved_spec)
+                        continue
+                else:
+                    # Not found anywhere - needs installation
+                    needs_installation.append(resolved_spec)
+            
+            # --- Phase 2: If everything satisfied, we're done! ---
+            if not needs_installation:
+                total_check_time = (time.perf_counter() - preflight_start) * 1000
+                safe_print(f'⚡ PREFLIGHT SUCCESS: All {len(packages)} package(s) already satisfied! ({total_check_time:.1f}ms)')
+                return 0
+            
+            # --- Phase 3: Validate unresolved packages with pip (ONLY if needed) ---
+            if needs_installation:
+                safe_print(f"\n📦 {len(needs_installation)} package(s) need installation/validation")
+                
+                # Only call pip for packages that actually need it
+                validated_specs = []
+                for spec in needs_installation:
+                    pkg_name, version = self._parse_package_spec(spec)
+                    
+                    if not version:
+                        # Need pip to resolve version
+                        safe_print(f"   🔍 Resolving version for '{pkg_name}' with pip...")
+                        resolved_spec, pip_output = self._resolve_spec_with_pip(spec)
+                    else:
+                        # Have version, just validate it exists
+                        safe_print(f"   ⚙️  Validating '{spec}' with pip...")
+                        resolved_spec, pip_output = self._resolve_spec_with_pip(spec)
+                    
+                    if resolved_spec:
+                        safe_print(f"   ✓ Pip validated '{spec}' -> '{resolved_spec}'")
+                        validated_specs.append(resolved_spec)
+                    else:
+                        # Pip failed - version doesn't exist or is invalid
+                        safe_print(f"\n❌ Could not find the specified version for '{pkg_name}'.")
+                        safe_print("   Pip provided the following information and available versions:")
+                        for line in pip_output.splitlines():
+                            safe_print(f"   | {line}")
+                        return 1
+                
+                # Fall through to installation logic below...
+                packages = validated_specs  # Update packages list for installation
            
         # ====================================================================
         # NORMAL INITIALIZATION (Only runs if packages need work)
@@ -6906,13 +7047,25 @@ class omnipkg:
     def _cleanup_redundant_bubbles(self):
         """
         Scans for and REMOVES any bubbles from the filesystem that are identical
-        to the currently active version of a package. Does NOT modify the KB.
+        to the currently active version of a package. Now ignores protected tool bubbles.
         """
         safe_print(_('\n🧹 Cleaning redundant bubbles...'))
         try:
+            # --- START OF FIX ---
+            # Define a set of package names that should never be cleaned up.
+            # These are internal tools managed by omnipkg itself.
+            PROTECTED_TOOL_PACKAGES = {'safety'}
+            # --- END OF FIX ---
+
             final_active_packages = self.get_installed_packages(live=True)
             cleaned_count = 0
             for pkg_name, active_version in final_active_packages.items():
+                # --- ADD THIS CHECK ---
+                if canonicalize_name(pkg_name) in PROTECTED_TOOL_PACKAGES:
+                    safe_print(f"   - 🛡️  Skipping cleanup for protected tool: {pkg_name}")
+                    continue
+                # --- END OF CHECK ---
+
                 # Construct the path to a potentially redundant bubble
                 bubble_path = self.multiversion_base / f'{pkg_name}-{active_version}'
                 
