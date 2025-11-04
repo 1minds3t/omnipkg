@@ -303,6 +303,7 @@ def convert_module_to_package_name(module_name: str) -> str:
         'google.auth': 'google-auth',
         'google.cloud': 'google-cloud-core',
         'jwt': 'pyjwt',
+        'absl': 'absl-py', # <--- ADD THIS LINE
         'dateutil': 'python-dateutil',
         'magic': 'python-magic',
         'psutil': 'psutil',
