@@ -6009,10 +6009,10 @@ class omnipkg:
         self.rescan_interpreters()
         return 0
     
-    def check_package_installed_fast(self, python_exe: str, package: str, version: str) -> Tuple[Optional[str], float]:
-        """
-        Check if a specific package version is already installed - ultra fast check.
-        Returns the status ('active', 'bubble', or None) and the duration.
+    def check_package_installed_fast(self, python_exe: str, package: str, version: str) -> Tuple[bool, float]:
+        """Check if a specific package version is already installed - ultra fast check.
+
+        Checks both main environment and bubble locations for maximum speed.
         """
         start_time = time.perf_counter()
 
@@ -6025,7 +6025,7 @@ class omnipkg:
 
         if result.returncode == 0:
             duration_ms = (time.perf_counter() - start_time) * 1000
-            return 'active', duration_ms
+            return True, duration_ms
 
         # Phase 2: If not in main env, check if a valid BUBBLE exists.
         bubble_path = self.multiversion_base / f'{package}-{version}'
@@ -6039,14 +6039,70 @@ class omnipkg:
 
             if any(marker.exists() for marker in metadata_markers):
                 duration_ms = (time.perf_counter() - start_time) * 1000
-                return 'bubble', duration_ms
+                return True, duration_ms
 
         duration_ms = (time.perf_counter() - start_time) * 1000
-        return None, duration_ms
+        return False, duration_ms
 
     def smart_install(self, packages: List[str], dry_run: bool = False, force_reinstall: bool = False, override_strategy: Optional[str] = None, target_directory: Optional[Path] = None) -> int:        
 
-
+        # ====================================================================
+        # ULTRA-FAST PREFLIGHT CHECK (Before any heavy initialization)
+        # ====================================================================
+        if not force_reinstall and packages:
+            configured_exe = self.config.get('python_executable', sys.executable)
+            all_satisfied = True
+            check_details = []
+            total_check_time = 0.0
+            
+            for pkg_spec in packages:
+                if '==' in pkg_spec:
+                    pkg_name, version = self._parse_package_spec(pkg_spec)
+                    check_start = time.perf_counter()
+                    
+                    # Check 1: Active environment (subprocess, ~5ms)
+                    is_installed_cmd = [
+                        configured_exe, '-c',
+                        f"import importlib.metadata; import sys; sys.exit(0) if importlib.metadata.version('{pkg_name}') == '{version}' else sys.exit(1)"
+                    ]
+                    result = subprocess.run(is_installed_cmd, capture_output=True)
+                    
+                    check_time = (time.perf_counter() - check_start) * 1000
+                    total_check_time += check_time
+                    
+                    if result.returncode == 0:
+                        check_details.append(f'{pkg_spec} [active: {check_time:.1f}ms]')
+                        continue  # Found in active env
+                    
+                    # Check 2: Bubble filesystem (no subprocess, <1ms)
+                    bubble_check_start = time.perf_counter()
+                    bubble_path = self.multiversion_base / f'{pkg_name}-{version}'
+                    if bubble_path.exists():
+                        pkg_name_underscore = pkg_name.replace("-", "_")
+                        metadata_markers = [
+                            bubble_path / f'{pkg_name}-{version}.dist-info',
+                            bubble_path / f'{pkg_name_underscore}-{version}.dist-info',
+                        ]
+                        if any(marker.exists() for marker in metadata_markers):
+                            bubble_check_time = (time.perf_counter() - bubble_check_start) * 1000
+                            total_check_time += bubble_check_time
+                            check_details.append(f'{pkg_spec} [bubble: {bubble_check_time:.1f}ms]')
+                            continue  # Found as bubble
+                    
+                    # Not found anywhere
+                    all_satisfied = False
+                    break
+                else:
+                    # Package without version - need to check against latest
+                    # This requires initialization, so skip ultra-fast path
+                    all_satisfied = False
+                    break
+            
+            if all_satisfied:
+                safe_print(f'⚡ ULTRA-FAST PREFLIGHT: All {len(packages)} package(s) already satisfied! ({total_check_time:.1f}ms)')
+                for detail in check_details:
+                    safe_print(f'   ✓ {detail}')
+                return 0
            
         # ====================================================================
         # NORMAL INITIALIZATION (Only runs if packages need work)
@@ -6243,7 +6299,6 @@ class omnipkg:
                     
                     # Continue to main installation logic below...
             
-            # Phase 3: KB check only for complex cases (nested packages, complex strategies)
             # Phase 3: KB check only for complex cases (nested packages, complex strategies)
             if needs_kb_check and all_packages_satisfied:
                 safe_print(f'🔍 Checking {len(needs_kb_check)} package(s) requiring deeper verification...')
@@ -6473,8 +6528,56 @@ class omnipkg:
                     packages_to_install, target_directory=target_directory, force_reinstall=force_reinstall)
                 
                 if return_code != 0:
+                    stderr_output = pkg_install_output.get("stderr", "").lower()
+                    stdout_output = pkg_install_output.get("stdout", "").lower()
+                    
+                    # Check for import test failure
+                    import_test_failed = "post-install verification failed" in stderr_output
+
+                    
+                    build_failure_indicators = [
+                        'metadata-generation-failed', 
+                        'failed building wheel', 
+                        'setup.py egg_info', 
+                        'importerror: cannot import name'
+                    ]
+
+                    py_version = sys.version_info[:2]
+                    
+                    # Trigger for BOTH build failures AND import failures
+                    if py_version >= (3, 9) and (any(indicator in stderr_output for indicator in build_failure_indicators) or import_test_failed):
+                        
+                        safe_print('\n' + "="*60)
+                        safe_print("🌌 QUANTUM HEALING: Time Machine Activated")
+                        safe_print("="*60)
+                        
+                        if import_test_failed:
+                            safe_print(f"   - Diagnosis: '{package_spec}' imports broken on Python {py_version[0]}.{py_version[1]}.")
+                        else:
+                            safe_print(f"   - Diagnosis: Cannot build '{package_spec}' on Python {py_version[0]}.{py_version[1]}.")
+                        
+                        safe_print(f"   - Prescription: Forcing Python 3.8 context.")
+                        
+                        from .cli import handle_python_requirement
+                        required_version = '3.8'
+
+                        if not handle_python_requirement(required_version, self, "omnipkg"):
+                            safe_print(f"❌ Healing failed: Could not switch to Python {required_version}.")
+                            return 1
+
+                        safe_print(f"\n🚀 Retrying in Python {required_version} context...")
+                        
+                        new_config_manager = ConfigManager()
+                        new_omnipkg_instance = self.__class__(new_config_manager)
+                        
+                        return new_omnipkg_instance.smart_install(
+                            packages, dry_run, force_reinstall, override_strategy, target_directory
+                        )
+                    else:
+                        safe_print('❌ Unrecoverable installation failure for {}. Continuing...'.format(package_spec))
+                        any_failures = True
                     safe_print(f'❌ Pip installation failed for {package_spec}.')
-                    pkg_name, requested_version = self._parse_package_spec(package_spec)
+                    stderr_output = pkg_install_output.get("stderr", "").lower()
 
                     # Check if the failure was due to a cached version
                     py_context = self.current_python_context
@@ -6503,13 +6606,8 @@ class omnipkg:
                         else:
                             safe_print(f"   ❌ Could not find any compatible version for {pkg_name} on retry.")
                     else:
-                        safe_print("   -> Failure was not due to a cached version. Continuing...")
-
-                if return_code != 0:
-                    safe_print('❌ Unrecoverable installation failure for {}. Continuing...'.format(package_spec))
-                    any_failures = True  # <--- ADD THIS LINE
-                    continue
-                    
+                        safe_print("   -> Failure was not due to a cached version. Continuing...")                    
+                        
                 any_installations_made = True
                 packages_after = self.get_installed_packages(live=True)
                 replacements = self._detect_version_replacements(packages_before, packages_after)
@@ -8432,7 +8530,21 @@ class omnipkg:
 
             # Heal 'invalid distribution' warnings first
             self._auto_heal_invalid_distributions(full_output, cleanup_path)
-            
+            if return_code == 0:
+                # Pip thinks it succeeded. We don't trust it. VERIFY.
+                install_dir = target_directory if target_directory else Path(self.config.get('site_packages_path'))
+                
+                for pkg_spec in packages:
+                    pkg_name, _ = self._parse_package_spec(pkg_spec)
+                    
+                    if not self._run_post_install_import_test(pkg_name, install_dir_override=install_dir):
+                        # The import test failed! This is a silent failure.
+                        # We will treat this as if pip had returned an error.
+                        safe_print(f"   - ⚠️  Pip reported success, but post-install verification FAILED for '{pkg_name}'.")
+                        captured_output["stderr"] += "\n[omnipkg] Error: post-install verification failed."
+                        return_code = 1 
+                        break
+                    
             if return_code != 0:
                 # Check for the specific "no compatible version" error
                 no_dist_found = "no matching distribution found" in full_output.lower() or \
