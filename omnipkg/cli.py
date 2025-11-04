@@ -701,7 +701,7 @@ def main():
                     '5': ('Multiverse Healing', TESTS_DIR / 'test_multiverse_healing.py', '3.11'),
                     '6': ('Old Flask Test', TESTS_DIR / 'test_old_flask.py', None),
                     '7': ('Auto-healing Test', TESTS_DIR / 'test_old_rich.py', None),
-                    '8': ('Quantum Multiverse Warp', TESTS_DIR / 'test_concurrent_install.py', None),
+                    '8': ('Quantum Multiverse Warp', TESTS_DIR / 'test_concurrent_install.py', '3.11'),
                     '9': ('Flask Port Finder', TESTS_DIR / 'test_flask_port_finder.py', None),
                 }
 
