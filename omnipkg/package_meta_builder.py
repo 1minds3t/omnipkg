@@ -211,41 +211,18 @@ class omnipkgMetadataGatherer:
 
     def _discover_distributions(self, targeted_packages: Optional[List[str]], verbose: bool=False, search_path_override: Optional[str] = None) -> List[importlib.metadata.Distribution]:
         """
-        ENHANCED DISCOVERY V10: Combines V9's authoritative file system scanning 
-        with V7's comprehensive targeted search features and vendored package detection.
-        
-        This version completely ignores the running interpreter's sys.path and ONLY scans 
-        the exact file paths provided by the configuration for the target context, 
-        eliminating all context bleed while preserving all advanced search capabilities.
-        
-        Args:
-            targeted_packages: Optional list of specific packages to find
-            verbose: If True, shows detailed search progress. If False, only shows results.
+        (V11 - FINAL & CLEAN) Discovers distributions by first performing a fast, parallel
+        filesystem scan to find all potential metadata directories, then parsing them
+        concurrently. This version is cleaned of all duplicate logic.
         """
+        # --- Stage 1: Determine the correct, authoritative search paths ---
         if search_path_override:
-            # If an override is provided, search ONLY that path.
             search_paths = [Path(search_path_override)]
-            safe_print(f"      -> Searching in specified path: {search_path_override}")
         else:
-            # Otherwise, use the standard search paths.
             main_site_packages = Path(self.config.get('site_packages_path'))
             multiversion_base = Path(self.config.get('multiversion_base'))
-            search_paths = [main_site_packages, multiversion_base]
-        # --- END OF CHANGE ---
-
-        all_dist_info_paths = []
-        for path in search_paths:
-            if path.exists():
-                all_dist_info_paths.extend(path.rglob('*.dist-info'))
-        # Get the ground-truth paths from the config (loaded by omnipkg core)
-        site_packages_path = self.config.get('site_packages_path')
-        multiversion_base_path = self.config.get('multiversion_base')
-        search_paths = []
-        
-        if site_packages_path and Path(site_packages_path).is_dir():
-            search_paths.append(Path(site_packages_path))
-        if multiversion_base_path and Path(multiversion_base_path).is_dir():
-            search_paths.append(Path(multiversion_base_path))
+            # Only include paths that actually exist to avoid errors
+            search_paths = [p for p in [main_site_packages, multiversion_base] if p.exists()]
             
         if not search_paths:
             safe_print("   - ⚠️ No valid site-packages or multiversion paths found in config. Cannot discover packages.")
@@ -599,74 +576,85 @@ class omnipkgMetadataGatherer:
             except Exception as e:
                 safe_print(_('⚠️ Failed to store active version for {}: {}').format(pkg_name, e))
 
-    def _perform_security_scan(self, packages: Dict[str, str]):
+    def _perform_security_scan(self, all_packages_in_context: Dict[str, Set[str]]):
         """
-        Runs a security check. Intelligently selects between 'safety' (preferred for <3.14)
-        and 'pip-audit' (fallback for >=3.14 or when safety is unavailable).
+        (V2) Runs a security check on ALL packages in the current context (active and bubbled).
+        It dynamically finds the latest version of the 'safety' tool, creates or
+        updates its bubble as needed, and then performs the scan.
         """
         # 1. Determine the effective Python version for this scan
         effective_version_str = self.target_context_version or get_python_version()
         is_incompatible_with_safety = False
         try:
             major, minor = map(int, effective_version_str.split('.')[:2])
-            if (major, minor) >= (3, 14):
+            if (major, minor) >= (3, 14): # Safety doesn't support 3.14+ yet
                 is_incompatible_with_safety = True
         except (ValueError, TypeError):
-            # Fallback to safe assumption if version string is weird
             pass
 
         # 2. Route to the appropriate scanner
         if is_incompatible_with_safety:
             safe_print(f"🛡️  'safety' is incompatible with Python {effective_version_str}. Using 'pip audit' as a fallback.")
-            self._run_pip_audit_fallback(packages)
+            self._run_pip_audit_fallback({name: list(versions)[0] for name, versions in all_packages_in_context.items()})
             return
 
         if not SAFETY_AVAILABLE:
-            # Try fallback if safety is just missing, even on compatible versions
             safe_print("⚠️  'safety' package not found. Attempting 'pip audit' fallback...")
-            self._run_pip_audit_fallback(packages)
-            return
-
-        # 3. Standard 'safety' scan for compatible versions
-        safe_print(f'🛡️ Performing security scan for {len(packages)} active package(s) using isolated tool...')
-        
-        if not packages:
-            safe_print(_(' - No active packages found to scan.'))
-            self.security_report = {}
+            self._run_pip_audit_fallback({name: list(versions)[0] for name, versions in all_packages_in_context.items()})
             return
             
+        if not all_packages_in_context:
+            safe_print(_(' - No packages found to scan.'))
+            self.security_report = {}
+            return
+
+        safe_print(f'🛡️  Performing security scan for {len(all_packages_in_context)} package(s) using isolated tool...')
+
         if not self.omnipkg_instance:
             safe_print(_(' ⚠️ Cannot run security scan: omnipkg_instance not available to builder.'))
             self.security_report = {}
             return
 
-        TOOL_SPEC = 'safety==3.6.0'
-        TOOL_NAME, TOOL_VERSION = TOOL_SPEC.split('==')
-        
         try:
-            # Ensure tool bubble exists
-            bubble_path = self.omnipkg_instance.multiversion_base / f'{TOOL_NAME}-{TOOL_VERSION}'
+            # Dynamically get the latest version of the tool
+            TOOL_NAME = 'safety'
+            latest_tool_version = self.omnipkg_instance._get_latest_version_from_pypi(TOOL_NAME)
+            if not latest_tool_version:
+                safe_print(f"❌ Could not determine the latest version of '{TOOL_NAME}'. Using last known good or failing.")
+                # Fallback to a known good version or handle error
+                latest_tool_version = "3.6.2" # A safe fallback
+
+            TOOL_SPEC = f'{TOOL_NAME}=={latest_tool_version}'
+
+            # Ensure tool bubble exists and is up-to-date
+            bubble_path = self.omnipkg_instance.multiversion_base / f'{TOOL_NAME}-{latest_tool_version}'
             if not bubble_path.is_dir():
-                safe_print(f" 💡 First-time setup: Creating isolated bubble for '{TOOL_SPEC}' tool...")
-                # Pass the target context version to ensure compatibility
+                safe_print(f"💡 First-time setup or upgrade: Creating isolated bubble for '{TOOL_SPEC}'...")
+                
+                # Clean up any old versions of the tool
+                for old_bubble in self.omnipkg_instance.multiversion_base.glob(f'{TOOL_NAME}-*'):
+                    safe_print(f"   -> Removing old tool bubble: {old_bubble.name}")
+                    import shutil
+                    shutil.rmtree(old_bubble)
+                
                 success = self.omnipkg_instance.bubble_manager.create_isolated_bubble(
-                    TOOL_NAME, TOOL_VERSION, python_context_version=self.target_context_version
+                    TOOL_NAME, latest_tool_version, python_context_version=self.target_context_version
                 )
                 if not success:
-                    safe_print(f' ❌ Failed to create the tool bubble for {TOOL_SPEC}. attempting pip-audit fallback.')
-                    self._run_pip_audit_fallback(packages)
+                    safe_print(f'❌ Failed to create the tool bubble for {TOOL_SPEC}. attempting pip-audit fallback.')
+                    self._run_pip_audit_fallback({name: list(versions)[0] for name, versions in all_packages_in_context.items()})
                     return
-                safe_print(_(' ✅ Successfully created tool bubble.'))
+                safe_print(_('✅ Successfully created tool bubble.'))
 
-            # Create requirements file
+            # Create requirements file with ALL packages
             with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.txt') as reqs_file:
                 reqs_file_path = reqs_file.name
-                for name, version in packages.items():
-                    reqs_file.write(f'{name}=={version}\n')
+                for name, versions in all_packages_in_context.items():
+                    for version in versions:
+                        reqs_file.write(f'{name}=={version}\n')
 
             # Run scan
-            safe_print(_(" 🌀 Force-activating '{}' context to run scan...").format(TOOL_SPEC))
-            # Use the new isolation_mode in the loader call here too, just to be safe and consistent
+            safe_print(_("🌀 Force-activating '{}' context to run scan...").format(TOOL_SPEC))
             with omnipkgLoader(TOOL_SPEC, config=self.omnipkg_instance.config, force_activation=True, quiet=True, isolation_mode='strict'):
                 python_exe = self.config.get('python_executable', sys.executable)
                 cmd = [python_exe, '-m', 'safety', 'check', '-r', reqs_file_path, '--json']
@@ -821,7 +809,14 @@ class omnipkgMetadataGatherer:
             canonicalize_name(dist.metadata['Name']): dist.version
             for dist in distributions_to_process if self._get_install_context(dist)['install_type'] == 'active'
         }
-        self._perform_security_scan(active_packages_to_scan)
+        all_packages_to_scan = {}
+        for dist in distributions_to_process:
+            c_name = canonicalize_name(dist.metadata['Name'])
+            if c_name not in all_packages_to_scan:
+                all_packages_to_scan[c_name] = set()
+            all_packages_to_scan[c_name].add(dist.version)
+            
+        self._perform_security_scan(all_packages_to_scan)
 
         import time
         start_time = time.perf_counter()
