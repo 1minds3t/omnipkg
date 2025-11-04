@@ -6282,7 +6282,7 @@ class omnipkg:
                     # Now perform the actual upgrade/downgrade in main environment
                     safe_print(f"📦 Installing omnipkg=={requested_version} to main environment...")
                     packages_before = self.get_installed_packages(live=True)
-                    return_code = self._run_pip_install(
+                    return_code, install_result = self._run_pip_install(
                         [f'omnipkg=={requested_version}'],
                         target_directory=None,
                         force_reinstall=force_reinstall
@@ -6410,7 +6410,8 @@ class omnipkg:
                 packages_to_install = [package_spec]
                 packages_before = self.get_installed_packages(live=True)
                 safe_print('⚙️ Running pip install for: {}...'.format(', '.join(packages_to_install)))
-                return_code = self._run_pip_install(packages_to_install, target_directory=target_directory, force_reinstall=force_reinstall)
+                return_code, pkg_install_output = self._run_pip_install(
+                    packages_to_install, target_directory=target_directory, force_reinstall=force_reinstall)
                 
                 if return_code != 0:
                     safe_print(f'❌ Pip installation failed for {package_spec}.')
@@ -6431,7 +6432,8 @@ class omnipkg:
                         if new_compatible_version and new_compatible_version != requested_version:
                             new_spec = f'{pkg_name}=={new_compatible_version}'
                             safe_print(f"   ✅ Found new compatible version: {new_spec}. Retrying install...")
-                            retry_code = self._run_pip_install([new_spec], target_directory=target_directory, force_reinstall=force_reinstall)
+                            retry_code, retry_output = self._run_pip_install(
+                                [new_spec], target_directory=target_directory, force_reinstall=force_reinstall)
                             if retry_code == 0:
                                 safe_print(f"   🎉 Successfully installed {new_spec} on retry!")
                                 return_code = 0 # Mark as successful
@@ -7272,7 +7274,7 @@ class omnipkg:
             self._run_pip_uninstall(to_uninstall)
         if to_install_or_fix:
             safe_print(_('   -> Installing/Fixing: {}').format(', '.join(to_install_or_fix)))
-            self._run_pip_install(to_install_or_fix + ['--no-deps'])
+            install_code, fix_output = self._run_pip_install(to_install_or_fix + ['--no-deps'])
         safe_print(_('   ✅ Environment restored.'))
 
     def _extract_wheel_into_bubble(self, wheel_url: str, target_bubble_path: Path, pkg_name: str, pkg_version: str) -> bool:
@@ -7338,7 +7340,7 @@ class omnipkg:
             safe_print(_('❌ Error parsing PyPI data: {}').format(e))
             return None
 
-    def _parse_package_spec(self, pkg_spec: str) -> tuple[str, Optional[str]]:
+    def _parse_package_spec(self, pkg_spec: str) -> Tuple[str, Optional[str]]:
         """
         Parse a package specification like 'package==1.0.0' or 'package>=2.0'
         Returns (package_name, version) where version is None if no version specified.
