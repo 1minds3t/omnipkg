@@ -6088,7 +6088,7 @@ class omnipkg:
         """
         (V2 - JSON Report) Uses `pip install --dry-run --report` to reliably resolve a spec.
         This is superior to regex parsing as it uses a stable, machine-readable format.
-        Now supports both pip 24.x and pip 25.3+ JSON formats with detailed debugging.
+        Now handles pip 25.3+ which outputs progress messages before JSON.
         """
         try:
             # --report - tells pip to output a JSON summary of its plan to stdout.
@@ -6101,61 +6101,61 @@ class omnipkg:
             pip_user_error_output = result.stderr.strip()
     
             if result.returncode == 0 and pip_report_str:
-                # Pip succeeded. The report on stdout is our source of truth.
+                # FIXED: pip 25.3+ outputs progress messages before JSON on stdout
+                # We need to extract only the JSON part (starts with '{' and ends with '}')
+                
+                # Find the first '{' - that's where JSON starts
+                json_start = pip_report_str.find('{')
+                if json_start == -1:
+                    # No JSON found at all
+                    return None, pip_user_error_output
+                
+                # Find the last '}' - that's where JSON ends
+                json_end = pip_report_str.rfind('}')
+                if json_end == -1 or json_end < json_start:
+                    # No valid JSON structure
+                    return None, pip_user_error_output
+                
+                # Extract just the JSON portion
+                json_str = pip_report_str[json_start:json_end + 1]
+                
                 try:
-                    report = json.loads(pip_report_str)
+                    report = json.loads(json_str)
                 except json.JSONDecodeError as e:
-                    safe_print(f"   ⚠️  Failed to parse pip JSON output: {e}")
-                    safe_print(f"   ⚠️  Raw stdout (first 500 chars): {pip_report_str[:500]}")
+                    safe_print(f"   ⚠️  Failed to parse pip JSON: {e}")
+                    safe_print(f"   ⚠️  Extracted JSON (first 500 chars): {json_str[:500]}")
                     return None, pip_user_error_output
                 
                 install_plan = report.get('install', [])
                 
                 if not install_plan:
-                    safe_print(f"   ⚠️  No packages in install plan. Report keys: {list(report.keys())}")
-                    safe_print(f"   ⚠️  Full report: {json.dumps(report, indent=2)[:1000]}")
+                    # No packages in install plan - something went wrong
                     return None, pip_user_error_output
                 
                 # Find the package the user actually asked for in the install plan.
                 req_name = self._parse_package_spec(package_spec)[0]
                 
-                for idx, item in enumerate(install_plan):
+                for item in install_plan:
                     metadata = item.get('metadata', {})
                     
                     if not metadata:
-                        safe_print(f"   ⚠️  Item {idx} has no metadata. Keys: {list(item.keys())}")
-                        safe_print(f"   ⚠️  Item structure: {json.dumps(item, indent=2)[:500]}")
                         continue
                     
                     pkg_name = metadata.get('name')
                     version = metadata.get('version')
                     
-                    if not pkg_name:
-                        safe_print(f"   ⚠️  Item {idx} metadata has no 'name'. Metadata keys: {list(metadata.keys())}")
-                        continue
-                    
-                    if not version:
-                        safe_print(f"   ⚠️  Item {idx} metadata has no 'version'. Metadata keys: {list(metadata.keys())}")
-                        continue
-                    
-                    # Compare canonicalized names
-                    if canonicalize_name(pkg_name) == canonicalize_name(req_name):
+                    if pkg_name and version and canonicalize_name(pkg_name) == canonicalize_name(req_name):
                         resolved_spec = f"{pkg_name}=={version}"
-                        # Success - return resolved spec
+                        # Return the success and any informational text from stderr
                         return resolved_spec, pip_user_error_output
                 
-                # If we get here, we didn't find the requested package in the install plan
-                safe_print(f"   ⚠️  Package '{req_name}' not found in install plan")
-                safe_print(f"   ⚠️  Install plan packages: {[item.get('metadata', {}).get('name') for item in install_plan]}")
+                # Package not found in install plan
                 return None, pip_user_error_output
             
-            # If we reach here, pip failed or returned no output
+            # If we reach here, it's an error. The valuable info is on stderr.
             return None, pip_user_error_output
     
         except Exception as e:
-            import traceback
-            safe_print(f"   ⚠️  Exception in _resolve_spec_with_pip: {e}")
-            safe_print(f"   ⚠️  Traceback: {traceback.format_exc()}")
             return None, f"An unexpected error occurred during pip resolution: {e}"
 
     def smart_install(self, packages: List[str], dry_run: bool = False, force_reinstall: bool = False, override_strategy: Optional[str] = None, target_directory: Optional[Path] = None) -> int:        
