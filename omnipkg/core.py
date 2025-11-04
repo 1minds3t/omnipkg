@@ -5232,7 +5232,6 @@ class omnipkg:
             return 1
             
         # --- FIX: Capture the results of the sync scan ---
-        # The synchronize function now returns the list of all distributions it found on disk.
         all_discovered_distributions = self._synchronize_knowledge_base_with_reality()
         
         try:
@@ -5241,8 +5240,26 @@ class omnipkg:
                 safe_print('\n' + '=' * 60)
                 safe_print(_('📄 Detailed info for {} v{}').format(pkg_name, requested_version))
                 safe_print('=' * 60)
-                # We still use the old method for specific versions as it's targeted
-                self._show_version_details(pkg_name, requested_version)
+                
+                # FIX: Find the installation and pass the dict, not the string
+                installations = self._find_package_installations(pkg_name)
+                
+                # Look for the specific version
+                target_install = None
+                for install in installations:
+                    if install.get('Version') == requested_version:
+                        target_install = install
+                        break
+                
+                if not target_install:
+                    safe_print(_('❌ Version {} not found for package {}').format(requested_version, pkg_name))
+                    safe_print(_('💡 Available versions:'))
+                    for install in installations:
+                        safe_print(f"   - {install.get('Version')} ({install.get('install_type', 'unknown')})")
+                    return 1
+                
+                # Pass the dict to _show_version_details
+                self._show_version_details(target_install)
             else:
                 # --- FIX: Pass the discovered distributions down to the display function ---
                 self._show_enhanced_package_data(pkg_name, pre_discovered_dists=all_discovered_distributions)
@@ -5348,7 +5365,7 @@ class omnipkg:
         versions.extend(bubble_versions)
         return sorted(versions, key=lambda v: v)
 
-    def _show_version_details_from_data(self, data: Dict):
+    def _show_version_details(self, data: Dict):
         """
         (FIXED) Displays detailed information from a pre-loaded dictionary of package
         instance data, using correct syntax and key lookups.

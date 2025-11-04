@@ -690,8 +690,8 @@ def main():
                 except EOFError:
                     response = ''
                 if response == '6':
-                    safe_print(_("\n🚧 That demo is being polished. Launching the stable 'Flask port' demo instead..."))
-                    response = '9'
+                    safe_print(_("\n🚧 That demo is being polished. Allowing testing for developer."))
+                    response = '6'
                 
                 demo_map = {
                     '1': ('Rich Test', TESTS_DIR / 'test_rich_switching.py', None),
