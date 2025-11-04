@@ -1825,6 +1825,112 @@ class BubbleIsolationManager:
         except Exception as e:
             safe_print(_('    ❌ Unexpected error during installation: {}').format(e))
             return False
+        
+    def create_bubble_from_main_env(self, package_name: str, version: str, python_context_version: str) -> bool:
+        """
+        Creates a bubble by copying the package and its co-located dependencies
+        from the current main environment. Used after Time Machine installs to main env.
+        """
+        site_packages = Path(self.parent_omnipkg.config['python_executable']).parent.parent / 'lib' / f'python{python_context_version}' / 'site-packages'
+        
+        final_bubble_path = self.multiversion_base / f'{package_name}-{version}'
+        
+        if final_bubble_path.exists():
+            shutil.rmtree(final_bubble_path)
+        
+        final_bubble_path.mkdir(parents=True, exist_ok=True)
+        
+        # Get all packages currently in main env
+        current_packages = self.parent_omnipkg.get_installed_packages(live=True)
+        
+        # Copy EVERYTHING from site-packages to the bubble
+        # The Time Machine just installed a complete working universe there
+        safe_print(f"   - Copying complete universe from main environment...")
+        
+        files_copied = 0
+        for item in site_packages.iterdir():
+            if item.is_dir() or item.suffix == '.pth':
+                shutil.copytree(item, final_bubble_path / item.name, dirs_exist_ok=True)
+                files_copied += 1
+            elif item.is_file():
+                shutil.copy2(item, final_bubble_path / item.name)
+                files_copied += 1
+        
+        safe_print(f"   - Copied {files_copied} items to bubble")
+        
+        # Create manifest
+        self._create_bubble_manifest(
+            final_bubble_path,
+            package_name,
+            version,
+            python_context_version
+        )
+        
+        # Register with hook manager
+        self.parent_omnipkg.hook_manager.refresh_bubble_map(
+            package_name, 
+            version, 
+            str(final_bubble_path)
+        )
+        self.parent_omnipkg.hook_manager.validate_bubble(package_name, version)
+        
+        return True
+
+    def install_and_verify(self, package_name: str, version: str, python_context_version: str, destination_path: Path):
+        """
+        The one true installation function. Installs to a temp directory, verifies,
+        and then moves the result to the final destination.
+        Contains the Time Machine fallback for legacy packages.
+        """
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            
+            # --- STAGE 1: Attempt a normal, modern installation ---
+            safe_print(f"   - Attempting modern install for {package_name}=={version} into temp directory...")
+            
+            # Use the existing robust _run_pip_install from the parent omnipkg class
+            return_code, captured_output = self.parent_omnipkg._run_pip_install(
+                [f"{package_name}=={version}"],
+                target_directory=temp_path
+            )
+
+            # --- STAGE 2: If it fails, engage the Time Machine ---
+            if return_code != 0:
+                error_output = captured_output.get("stderr", "").lower()
+                build_failure_indicators = ['metadata-generation-failed', 'failed building wheel', 'setup.py egg_info']
+                
+                if any(indicator in error_output for indicator in build_failure_indicators):
+                    print_header(f"TIME MACHINE FALLBACK: Detected legacy build failure for {package_name}=={version}")
+                    
+                    # Call the Time Machine, but tell it to install into our SAFE temp directory
+                    time_machine_succeeded = self.parent_omnipkg._run_historical_install_fallback(
+                        package_name, version, target_directory_override=temp_path
+                    )
+                    
+                    if not time_machine_succeeded:
+                        safe_print(f"❌ Time Machine failed. The installation for {package_name}=={version} is unrecoverable.")
+                        return False # Hard failure
+                else:
+                    # It was a different kind of pip error
+                    safe_print(f"❌ Pip installation failed. See output for details.")
+                    return False
+            
+            # --- STAGE 3: Analyze and create the final installation/bubble ---
+            # Whether the modern install or the Time Machine succeeded, temp_path now contains the files.
+            safe_print("   - Analyzing temporary installation...")
+            installed_tree = self._analyze_installed_tree(temp_path)
+            
+            safe_print(f"   - Moving verified package to final destination: {destination_path}")
+            if destination_path.exists() and destination_path != self.site_packages:
+                shutil.rmtree(destination_path)
+
+            # This function already handles verification, import tests, and copying.
+            return self._create_deduplicated_bubble(
+                installed_tree, 
+                destination_path,
+                temp_path, 
+                python_context_version=python_context_version
+            )
 
     def create_bubble_for_package(self, package_name: str, version: str, python_context_version: str) -> bool:
         """
@@ -2032,6 +2138,8 @@ class BubbleIsolationManager:
             import traceback
             traceback.print_exc()
             return False
+        
+    
 
     def _get_historical_dependencies(self, package_name: str, version: str) -> List[str]:
         safe_print(_('    -> Trying strategy 1: pip dry-run...'))
