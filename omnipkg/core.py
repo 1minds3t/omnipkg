@@ -105,68 +105,95 @@ def _get_dynamic_omnipkg_version():
 
 def _get_core_dependencies() -> set:
     """
-    Correctly reads omnipkg's own production dependencies (including transitive deps)
-    and returns them as a set.
+    Reads omnipkg's DIRECT production dependencies from pyproject.toml.
+    
+    We ONLY return direct dependencies - pip will automatically handle
+    transitive dependencies and filter out packages incompatible with 
+    the target Python version.
     """
     try:
-        # Start with omnipkg's direct dependencies
+        # Try to find pyproject.toml relative to this file
+        pyproject_path = Path(__file__).parent.parent / 'pyproject.toml'
+        
+        if not pyproject_path.exists():
+            # Fallback: try current working directory
+            pyproject_path = Path.cwd() / 'pyproject.toml'
+        
+        if pyproject_path.exists():
+            # Read the toml file
+            if sys.version_info >= (3, 11):
+                import tomllib
+                with pyproject_path.open('rb') as f:
+                    pyproject_data = tomllib.load(f)
+            else:
+                try:
+                    import tomli
+                    with pyproject_path.open('rb') as f:
+                        pyproject_data = tomli.load(f)
+                except ImportError:
+                    # If tomli not available, fall through to metadata fallback
+                    raise
+            
+            # Get ONLY direct dependencies (no optional, no dev)
+            deps = pyproject_data.get('project', {}).get('dependencies', [])
+            
+            # Extract just the package names (strip version specs)
+            core_deps = set()
+            for dep in deps:
+                # Match package name before any version specifier
+                match = re.match(r'^([a-zA-Z0-9\-_.]+)', dep)
+                if match:
+                    pkg_name = canonicalize_name(match.group(1))
+                    core_deps.add(pkg_name)
+            
+            safe_print(f'   📋 Found {len(core_deps)} direct dependencies in pyproject.toml')
+            return core_deps
+        
+        # If no pyproject.toml found, try to get from installed metadata
+        safe_print('   ⚠️  No pyproject.toml found, trying installed metadata...')
+        
+    except Exception as e:
+        safe_print(f'   ⚠️  Could not read pyproject.toml: {e}')
+        safe_print('   📋 Falling back to installed metadata...')
+    
+    # Fallback: Get from installed metadata
+    try:
+        from importlib.metadata import metadata, PackageNotFoundError
+        
         pkg_meta = metadata('omnipkg')
         reqs = pkg_meta.get_all('Requires-Dist') or []
-        dependencies = {canonicalize_name(re.match('^[a-zA-Z0-9\\-_.]+', req).group(0)) 
-                       for req in reqs if re.match('^[a-zA-Z0-9\\-_.]+', req)}
         
+        # Only get DIRECT dependencies (no extras, no conditionals)
+        dependencies = set()
+        for req in reqs:
+            # Skip conditional dependencies (extras like [dev], [test], etc.)
+            if 'extra ==' in req:
+                continue
+            
+            match = re.match(r'^([a-zA-Z0-9\-_.]+)', req)
+            if match:
+                pkg_name = canonicalize_name(match.group(1))
+                dependencies.add(pkg_name)
+        
+        # Add tomli for Python < 3.11 if not already present
         if sys.version_info < (3, 11):
             dependencies.add('tomli')
         
-        # Now recursively get all transitive dependencies
-        all_deps = set(dependencies)  # Start with direct deps
-        to_process = list(dependencies)  # Queue of packages to check
-        processed = set()  # Track what we've already processed
+        safe_print(f'   📋 Found {len(dependencies)} direct dependencies from metadata')
+        return dependencies
         
-        while to_process:
-            pkg_name = to_process.pop(0)
-            if pkg_name in processed:
-                continue
-            processed.add(pkg_name)
-            
-            try:
-                # Get this package's dependencies
-                dep_meta = metadata(pkg_name)
-                dep_reqs = dep_meta.get_all('Requires-Dist') or []
-                
-                for req in dep_reqs:
-                    match = re.match('^[a-zA-Z0-9\\-_.]+', req)
-                    if match:
-                        dep_name = canonicalize_name(match.group(0))
-                        if dep_name not in all_deps:
-                            all_deps.add(dep_name)
-                            to_process.append(dep_name)
-            except PackageNotFoundError:
-                # Package not installed, skip it
-                continue
-            except Exception as e:
-                # Log but continue
-                safe_print(_('⚠️ Could not get dependencies for {}: {}').format(pkg_name, e))
-                continue
-        
-        return all_deps
-        
-    except PackageNotFoundError:
-        try:
-            pyproject_path = Path(__file__).parent.parent / 'pyproject.toml'
-            if pyproject_path.exists():
-                with pyproject_path.open('rb') as f:
-                    pyproject_data = tomllib.load(f)
-                deps = pyproject_data['project'].get('dependencies', [])
-                # For fallback, just return direct deps since we can't resolve transitive
-                return {canonicalize_name(re.match('^[a-zA-Z0-9\\-_.]+', dep).group(0)) 
-                       for dep in deps if re.match('^[a-zA-Z0-9\\-_.]+', dep)}
-        except Exception as e:
-            safe_print(_('⚠️ Could not parse pyproject.toml, falling back to empty list: {}').format(e))
-            return set()
     except Exception as e:
-        safe_print(_('⚠️ Could not determine core dependencies, falling back to empty list: {}').format(e))
-        return set()
+        safe_print(f'   ⚠️  Could not determine dependencies from metadata: {e}')
+        safe_print('   📦 Using minimal essential fallback set')
+        
+        # Absolute minimal fallback - just what omnipkg absolutely needs
+        minimal_deps = {'redis', 'rich', 'requests'}
+        
+        # Add tomli for older Python versions
+        if sys.version_info < (3, 11):
+            minimal_deps.add('tomli')
+        
+        return minimal_deps
 
 class ConfigManager:
     """
