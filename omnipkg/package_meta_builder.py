@@ -1125,6 +1125,7 @@ class omnipkgMetadataGatherer:
 
             # --- THE FIX ---
             # The hash MUST be based on the unique, resolved, absolute filesystem path.
+            raw_path_str = str(dist._path)
             # Using .resolve() guarantees a canonical path string for the hash.
             resolved_path_str = str(dist._path.resolve())
             unique_instance_identifier = f"{resolved_path_str}::{version_str}"
