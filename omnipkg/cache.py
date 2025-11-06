@@ -243,6 +243,11 @@ class SQLitePipeline:
         self.commands.append((self.client.hdel, [key] + list(fields), {}))
         return self
     
+    def hget(self, key, field):
+        """Queues an HGET command."""
+        self.commands.append(('hget', [key, field], {}))
+        return self
+    
     def sadd(self, name: str, *values):
         # Pass `name` and the tuple of `values` to the client's sadd method
         self.commands.append((self.client.sadd, [name] + list(values), {}))
