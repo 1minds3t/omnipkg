@@ -25,6 +25,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Set, Tuple, Optional
 from packaging.utils import canonicalize_name
+from packaging.version import parse as parse_version
 from omnipkg.loader import omnipkgLoader
 import threading
 import traceback
@@ -618,7 +619,7 @@ class omnipkgMetadataGatherer:
             # CI/CD: Don't upgrade, just warn
             safe_print(f'    ⚠️  Safety tool outdated: v{current_version} (latest: v{latest_version})')
             safe_print('    💡 Non-interactive mode detected - skipping auto-upgrade')
-            safe_print('    📝 Manual upgrade: `8pkg install safety --upgrade`')
+            safe_print('    📝 Manual upgrade: `8pkg upgrade safety')
             self._cache_safety_decision(False)
             return False
         
@@ -653,117 +654,115 @@ class omnipkgMetadataGatherer:
     
     def _perform_security_scan(self, all_packages_in_context: Dict[str, Set[str]]):
         """
-        (V2) Runs a security check on ALL packages in the current context (active and bubbled).
-        It dynamically finds the latest version of the 'safety' tool, creates or
-        updates its bubble as needed, and then performs the scan.
+        (V3 - Environment Aware) Runs a security check on ALL packages in the current context.
+        It now correctly detects the 'safety' tool in EITHER a dedicated bubble OR the main
+        environment, ensuring the upgrade prompt is triggered correctly.
         """
-        # 1. Determine the effective Python version for this scan
         effective_version_str = self.target_context_version or get_python_version()
+        # ... (the Python 3.14+ incompatibility check remains the same)
         is_incompatible_with_safety = False
         try:
             major, minor = map(int, effective_version_str.split('.')[:2])
-            if (major, minor) >= (3, 14): # Safety doesn't support 3.14+ yet
+            if (major, minor) >= (3, 14):
                 is_incompatible_with_safety = True
         except (ValueError, TypeError):
             pass
-    
-        # 2. Route to the appropriate scanner
+
         if is_incompatible_with_safety:
             safe_print(f"🛡️  'safety' is incompatible with Python {effective_version_str}. Using 'pip audit' as a fallback.")
             self._run_pip_audit_fallback({name: list(versions)[0] for name, versions in all_packages_in_context.items()})
             return
-    
+
         if not SAFETY_AVAILABLE:
             safe_print("⚠️  'safety' package not found. Attempting 'pip audit' fallback...")
             self._run_pip_audit_fallback({name: list(versions)[0] for name, versions in all_packages_in_context.items()})
             return
-            
+
         if not all_packages_in_context:
             safe_print(_(' - No packages found to scan.'))
             self.security_report = {}
             return
-    
+
         safe_print(f'🛡️  Performing security scan for {len(all_packages_in_context)} package(s) using isolated tool...')
-    
+
         if not self.omnipkg_instance:
             safe_print(_(' ⚠️ Cannot run security scan: omnipkg_instance not available to builder.'))
             self.security_report = {}
             return
-    
+
         try:
             TOOL_NAME = 'safety'
-            latest_tool_version = self.omnipkg_instance._get_latest_version_from_pypi(TOOL_NAME)
-            if not latest_tool_version:
-                latest_tool_version = "3.6.2"  # Fallback
-    
-            # Check if we have an existing version installed
-            current_bubble = None
+            latest_tool_version = self.omnipkg_instance._get_latest_version_from_pypi(TOOL_NAME) or "3.6.2"
+
+            # --- THIS IS THE NEW, CORRECTED LOGIC ---
+            # Step 1: Find the current version, prioritizing a bubble but checking the main env as a fallback.
             current_version = None
-            for existing_bubble in self.omnipkg_instance.multiversion_base.glob(f'{TOOL_NAME}-*'):
-                current_version = existing_bubble.name.split('-', 1)[1]
-                current_bubble = existing_bubble
-                break
+            current_bubble = None
             
-            # Decide whether to upgrade
+            # First, look for a dedicated tool bubble. This is the preferred method.
+            for bubble in self.omnipkg_instance.multiversion_base.glob(f'{TOOL_NAME}-*'):
+                current_version = bubble.name.split('-', 1)[1]
+                current_bubble = bubble
+                safe_print(f"   -> Found existing 'safety' tool bubble: v{current_version}")
+                break
+
+            # If no bubble exists, check the main environment. This is the fix.
+            if not current_version:
+                current_version = self.omnipkg_instance._get_active_version_from_environment(TOOL_NAME)
+                if current_version:
+                    safe_print(f"   -> Found 'safety' in main environment: v{current_version}")
+            # --- END OF NEW LOGIC ---
+
             should_upgrade = False
-            if current_version and current_version != latest_tool_version:
+            if current_version and latest_tool_version and (parse_version(current_version) < parse_version(latest_tool_version)):
                 should_upgrade = self._should_upgrade_safety(current_version, latest_tool_version)
             elif not current_version:
-                # No existing version, must install
+                # No existing version anywhere, so we must install.
                 should_upgrade = True
-            
-            # Use appropriate version
-            if should_upgrade or not current_version:
-                TOOL_SPEC = f'{TOOL_NAME}=={latest_tool_version}'
-                bubble_path = self.omnipkg_instance.multiversion_base / f'{TOOL_NAME}-{latest_tool_version}'
+
+            tool_version_to_use = latest_tool_version if should_upgrade else current_version
+            TOOL_SPEC = f'{TOOL_NAME}=={tool_version_to_use}'
+            bubble_path = self.omnipkg_instance.multiversion_base / f'{TOOL_NAME}-{tool_version_to_use}'
+
+            # Only create/recreate the bubble if it doesn't exist or if we're upgrading.
+            if should_upgrade or not bubble_path.is_dir():
+                if should_upgrade and current_version:
+                    safe_print(f"📦 Upgrading safety tool: v{current_version} → v{tool_version_to_use}")
+                else:
+                    safe_print(f"💡 First-time setup: Creating isolated bubble for '{TOOL_SPEC}'...")
                 
-                if not bubble_path.is_dir():
-                    if current_version and should_upgrade:
-                        safe_print(f"📦 Upgrading safety: v{current_version} → v{latest_tool_version}")
-                    else:
-                        safe_print(f"💡 First-time setup: Creating isolated bubble for '{TOOL_SPEC}'...")
-                    
-                    # Clean up old versions
-                    for old_bubble in self.omnipkg_instance.multiversion_base.glob(f'{TOOL_NAME}-*'):
+                # Clean up any old versions before creating the new one
+                for old_bubble in self.omnipkg_instance.multiversion_base.glob(f'{TOOL_NAME}-*'):
+                    if old_bubble.name != bubble_path.name:
                         safe_print(f"   -> Removing old tool bubble: {old_bubble.name}")
                         import shutil
                         shutil.rmtree(old_bubble)
-                    
-                    success = self.omnipkg_instance.bubble_manager.create_isolated_bubble(
-                        TOOL_NAME, latest_tool_version, python_context_version=self.target_context_version
-                    )
-                    if not success:
-                        safe_print(f'❌ Failed to create tool bubble. Using pip-audit fallback.')
-                        self._run_pip_audit_fallback({name: list(versions)[0] for name, versions in all_packages_in_context.items()})
-                        return
-                    safe_print(f"   -> 🧠 Indexing new '{TOOL_SPEC}' bubble in the Knowledge Base...")
-                    self.omnipkg_instance.rebuild_package_kb(
-                        packages=[TOOL_SPEC],
-                        target_python_version=self.target_context_version
-                    )
-            else:
-                # Use existing version (user declined upgrade or cached decision)
-                TOOL_SPEC = f'{TOOL_NAME}=={current_version}'
-                bubble_path = current_bubble
-                cached_decision = self._get_cached_safety_decision()
-                if cached_decision == False:  # Only show on first decline
-                    safe_print(f'    ℹ️  Using safety v{current_version} (v{latest_tool_version} available)')
-    
-            # Create requirements file with ALL packages
+
+                success = self.omnipkg_instance.bubble_manager.create_isolated_bubble(
+                    TOOL_NAME, tool_version_to_use, python_context_version=self.target_context_version
+                )
+                if not success:
+                    safe_print(f'❌ Failed to create tool bubble. Using pip-audit fallback.')
+                    self._run_pip_audit_fallback({name: list(versions)[0] for name, versions in all_packages_in_context.items()})
+                    return
+                
+                safe_print(f"   -> 🧠 Indexing new '{TOOL_SPEC}' bubble in the Knowledge Base...")
+                self.omnipkg_instance.rebuild_package_kb(packages=[TOOL_SPEC], target_python_version=self.target_context_version)
+
+            # ... (the rest of the function for creating reqs file and running the scan remains the same) ...
+
             with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.txt') as reqs_file:
                 reqs_file_path = reqs_file.name
                 for name, versions in all_packages_in_context.items():
                     for version in versions:
                         reqs_file.write(f'{name}=={version}\n')
-    
-            # Run scan
+
             safe_print(_("🌀 Force-activating '{}' context to run scan...").format(TOOL_SPEC))
             with omnipkgLoader(TOOL_SPEC, config=self.omnipkg_instance.config, force_activation=True, quiet=True, isolation_mode='strict'):
                 python_exe = self.config.get('python_executable', sys.executable)
                 cmd = [python_exe, '-m', 'safety', 'check', '-r', reqs_file_path, '--json']
                 result = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
-    
-            # Parse results
+
             self.security_report = {}
             if result.stdout:
                 try:
@@ -772,13 +771,12 @@ class omnipkgMetadataGatherer:
                         self.security_report = json.loads(json_match.group(1))
                 except json.JSONDecodeError:
                     safe_print(_(' ⚠️ Could not parse safety JSON output.'))
-            
+
             if result.stderr and 'error' in result.stderr.lower():
-                 # If safety failed unpredictably, try fallback as a last resort
                 safe_print(_(' ⚠️ Safety tool produced errors. Trying pip-audit fallback.'))
                 self._run_pip_audit_fallback({name: list(versions)[0] for name, versions in all_packages_in_context.items()})
                 return
-    
+
         except Exception as e:
             safe_print(_(' ⚠️ An error occurred during isolated security scan. Trying pip-audit fallback: {}').format(e))
             self._run_pip_audit_fallback({name: list(versions)[0] for name, versions in all_packages_in_context.items()})
@@ -786,8 +784,7 @@ class omnipkgMetadataGatherer:
         finally:
             if 'reqs_file_path' in locals() and os.path.exists(reqs_file_path):
                 os.unlink(reqs_file_path)
-    
-        # Final report summary
+
         issue_count = 0
         if isinstance(self.security_report, list):
             issue_count = len(self.security_report)
