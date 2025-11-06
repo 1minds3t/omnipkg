@@ -4326,6 +4326,14 @@ class omnipkg:
         (UPGRADED - THE REPAIR BOT v7) Now uses skip_existing_checksums=True during
         targeted rebuilds to avoid processing already-registered instances.
         """
+        
+        if self._check_and_run_pending_rebuild():
+            # If a rebuild was just run, the KB is perfectly in sync.
+            # We can return early to avoid redundant work.
+            safe_print("   ✅ First-use KB build complete. Synchronization is guaranteed.")
+            return self._discover_distributions(None, verbose=False)
+        # --- END OF "FIRST USE" LOGIC ---
+
         self._clean_corrupted_installs()
         if self._check_and_run_pending_rebuild():
             pass
@@ -4370,19 +4378,9 @@ class omnipkg:
                 instance_hash = hashlib.sha256(unique_instance_identifier.encode()).hexdigest()[:12]
                 
                                 
-                # --- DEBUGGING LOGS START ---
-                raw_path_str = str(dist._path)
-                resolved_path_str = str(dist._path.resolve())
-                unique_instance_identifier = f"{resolved_path_str}::{dist.version}"
-                instance_hash = hashlib.sha256(unique_instance_identifier.encode()).hexdigest()[:12]
+                 instance_hash = hashlib.sha256(unique_instance_identifier.encode()).hexdigest()[:12]
                 
                 # This will print for every package found during the full sync
-                if "uv" in c_name: # Filter for the problematic package
-                    safe_print(f"   [DEBUG-SYNC] Pkg: {c_name}=={dist.version}")
-                    safe_print(f"   [DEBUG-SYNC]   Raw Path:      {raw_path_str}")
-                    safe_print(f"   [DEBUG-SYNC]   Resolved Path: {resolved_path_str}")
-                    safe_print(f"   [DEBUG-SYNC]   Instance Hash: {instance_hash}")
-                
                 disk_instance_map_by_hash[instance_hash] = dist
             except Exception:
                 continue

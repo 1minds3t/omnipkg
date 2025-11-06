@@ -1151,11 +1151,6 @@ class omnipkgMetadataGatherer:
             resolved_path_str = str(dist._path.resolve())
             unique_instance_identifier = f"{resolved_path_str}::{version_str}"
             instance_hash = hashlib.sha256(unique_instance_identifier.encode()).hexdigest()[:12]
-            # --- END FIX ---
-            safe_print(f"   [DEBUG-STORE] Pkg: {package_name}=={version_str}")
-            safe_print(f"   [DEBUG-STORE]   Raw Path:      {raw_path_str}")
-            safe_print(f"   [DEBUG-STORE]   Resolved Path: {resolved_path_str}")
-            safe_print(f"   [DEBUG-STORE]   Instance Hash: {instance_hash}")
             instance_key = f"{self.redis_key_prefix.replace(':pkg:', ':inst:')}{package_name}:{version_str}:{instance_hash}"
 
             data_to_store = metadata.copy()
