@@ -4369,6 +4369,20 @@ class omnipkg:
                 unique_instance_identifier = f"{resolved_path_str}::{dist.version}"
                 instance_hash = hashlib.sha256(unique_instance_identifier.encode()).hexdigest()[:12]
                 
+                                
+                # --- DEBUGGING LOGS START ---
+                raw_path_str = str(dist._path)
+                resolved_path_str = str(dist._path.resolve())
+                unique_instance_identifier = f"{resolved_path_str}::{dist.version}"
+                instance_hash = hashlib.sha256(unique_instance_identifier.encode()).hexdigest()[:12]
+                
+                # This will print for every package found during the full sync
+                if "uv" in c_name: # Filter for the problematic package
+                    safe_print(f"   [DEBUG-SYNC] Pkg: {c_name}=={dist.version}")
+                    safe_print(f"   [DEBUG-SYNC]   Raw Path:      {raw_path_str}")
+                    safe_print(f"   [DEBUG-SYNC]   Resolved Path: {resolved_path_str}")
+                    safe_print(f"   [DEBUG-SYNC]   Instance Hash: {instance_hash}")
+                
                 disk_instance_map_by_hash[instance_hash] = dist
             except Exception:
                 continue
@@ -9945,6 +9959,7 @@ class PyPIVersionCache:
             if expired_keys:
                 self._save_file_cache()
                 safe_print(f"    🧹 Cleared {len(expired_keys)} expired entries from file cache")
+        
         
         # Redis entries expire automatically due to TTL
 
