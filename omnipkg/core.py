@@ -4251,11 +4251,80 @@ class omnipkg:
             return False
             
         return False
+    
+    def _fast_register_cloned_instances(self, instances_to_clone: List[importlib.metadata.Distribution], all_checksums_map: Dict[str, str]):
+        """
+        Efficiently registers new package instances by cloning metadata from existing
+        identical instances already in the Knowledge Base.
+
+        Args:
+            instances_to_clone: A list of new Distribution objects to register.
+            all_checksums_map: A pre-fetched dict mapping {checksum: existing_redis_key}.
+        """
+        if not instances_to_clone:
+            return
+
+        safe_print(f"   -> ⚡ Fast-registering {len(instances_to_clone)} new instance(s) with existing content...")
+        
+        from .package_meta_builder import omnipkgMetadataGatherer
+        gatherer = omnipkgMetadataGatherer(
+            config=self.config, env_id=self.env_id, omnipkg_instance=self
+        )
+
+        with self.cache_client.pipeline() as pipe:
+            for dist in instances_to_clone:
+                try:
+                    # 1. Generate the checksum for the new instance.
+                    temp_metadata = gatherer._build_comprehensive_metadata(dist)
+                    checksum = temp_metadata.get('checksum')
+
+                    if not checksum or checksum not in all_checksums_map:
+                        continue # Should not happen, but a safeguard
+
+                    # 2. Find the Redis key of an existing twin package.
+                    twin_key = all_checksums_map[checksum]
+                    cloned_data = self.cache_client.hgetall(twin_key)
+
+                    if not cloned_data:
+                        continue
+
+                    # 3. Get the new instance's context (path, owner, etc.).
+                    context_info = gatherer._get_install_context(dist)
+                    is_active = (context_info.get('install_type') == 'active')
+
+                    # 4. Update the cloned data with the new instance's specific info.
+                    cloned_data.update(context_info)
+                    cloned_data['path'] = str(dist._path.resolve())
+                    cloned_data['last_indexed'] = datetime.now().isoformat()
+
+                    # 5. Generate the NEW, UNIQUE Redis key for this new instance.
+                    c_name = canonicalize_name(dist.metadata['Name'])
+                    resolved_path_str = str(dist._path.resolve())
+                    unique_id = f"{resolved_path_str}::{dist.version}"
+                    instance_hash = hashlib.sha256(unique_id.encode()).hexdigest()[:12]
+                    new_instance_key = f"{self.redis_key_prefix.replace(':pkg:', ':inst:')}{c_name}:{dist.version}:{instance_hash}"
+                    cloned_data['installation_hash'] = instance_hash
+
+                    # 6. Queue the commands to store the new instance in Redis.
+                    flattened_data = self._flatten_dict(cloned_data)
+                    pipe.delete(new_instance_key) # Ensure clean write
+                    pipe.hset(new_instance_key, mapping=flattened_data)
+
+                    # Also update the main package records
+                    main_key = f'{self.redis_key_prefix}{c_name}'
+                    pipe.sadd(f"{main_key}:installed_versions", dist.version)
+                    pipe.sadd(f"{main_key}:{dist.version}:instances", instance_hash)
+
+                except Exception as e:
+                    safe_print(f"      - ⚠️  Failed to fast-clone {dist.metadata['Name']}: {e}")
+
+            # 7. Execute all registrations in a single transaction.
+            pipe.execute()
 
     def _synchronize_knowledge_base_with_reality(self, verbose: bool = False) -> List[importlib.metadata.Distribution]:
         """
-        (UPGRADED - THE REPAIR BOT v3) Fixes the race condition by using direct,
-        synchronous writes instead of a pipeline for repairs.
+        (UPGRADED - THE REPAIR BOT v7) Now uses skip_existing_checksums=True during
+        targeted rebuilds to avoid processing already-registered instances.
         """
         self._clean_corrupted_installs()
         if self._check_and_run_pending_rebuild():
@@ -4278,6 +4347,7 @@ class omnipkg:
             target_context_version=current_python_version
         )
         
+        # Initial discovery without filtering (to know what's on disk)
         all_discovered_dists = gatherer._discover_distributions(targeted_packages=None, verbose=False)
         
         active_dists_on_disk = {
@@ -4287,114 +4357,77 @@ class omnipkg:
         }
         
         # ========================================================================
-        # SURGICAL ADDITION: Instance-level healing for empty/corrupted KB entries
+        # INSTALLATION-HASH-BASED INSTANCE HEALING (v7)
         # ========================================================================
-        disk_instance_map = {}
+        
+        # Step 1: Build map of disk instances by their installation hashes
+        disk_instance_map_by_hash = {}
         for dist in all_discovered_dists:
-            resolved_path_str = str(dist._path.resolve())
-            unique_id = f"{resolved_path_str}::{dist.version}"
-            instance_hash = hashlib.sha256(unique_id.encode()).hexdigest()[:12]
-            c_name = canonicalize_name(dist.metadata['Name'])
-            instance_key = f"{self.redis_key_prefix.replace(':pkg:', ':inst:')}{c_name}:{dist.version}:{instance_hash}"
-            disk_instance_map[instance_key] = dist
-
+            try:
+                c_name = canonicalize_name(dist.metadata['Name'])
+                resolved_path_str = str(dist._path.resolve())
+                unique_instance_identifier = f"{resolved_path_str}::{dist.version}"
+                instance_hash = hashlib.sha256(unique_instance_identifier.encode()).hexdigest()[:12]
+                
+                disk_instance_map_by_hash[instance_hash] = dist
+            except Exception:
+                continue
+        
+        # Step 2: Get all KB instance keys and extract their installation hashes
         kb_instance_keys = set(self.cache_client.keys(self.redis_key_prefix.replace(':pkg:', ':inst:') + '*'))
-        disk_instance_keys = set(disk_instance_map.keys())
-
-        instances_to_rebuild = []
         
-        # Check 1: Instances on disk but completely missing from KB
-        missing_from_kb = disk_instance_keys - kb_instance_keys
-        if missing_from_kb:
-            safe_print(f"   -> 🔧 HEALING: Found {len(missing_from_kb)} instance(s) missing from KB.")
-            for key in missing_from_kb:
-                instances_to_rebuild.append(disk_instance_map[key])
-
-        # Check 2: Instances in KB but corrupted/empty (< 5 fields means it's broken)
-        for key in (disk_instance_keys & kb_instance_keys):
-            field_count = self.cache_client.hlen(key)
-            if field_count < 5:
-                pkg_name = key.split(':')[-3]
-                safe_print(f"   -> ⚠️  HEALING: KB entry for {pkg_name} is corrupted ({field_count} fields). Rebuilding.")
-                instances_to_rebuild.append(disk_instance_map[key])
+        kb_hashes_to_keys = {}  # Map: installation_hash -> redis_key
+        with self.cache_client.pipeline() as pipe:
+            for key in kb_instance_keys:
+                pipe.hget(key, 'installation_hash')
+            results = pipe.execute()
         
-        # Check 3: Ghost instances in KB that don't exist on disk anymore
-        ghost_keys = kb_instance_keys - disk_instance_keys
+        for key, stored_hash in zip(kb_instance_keys, results):
+            if stored_hash:
+                kb_hashes_to_keys[stored_hash] = key
         
-        # Execute healing actions with location-aware rebuilds
+        # Step 3: Identify instances that need registration (hash not in KB)
+        disk_hashes = set(disk_instance_map_by_hash.keys())
+        kb_hashes = set(kb_hashes_to_keys.keys())
+        
+        hashes_needing_registration = disk_hashes - kb_hashes
+        instances_to_rebuild = [disk_instance_map_by_hash[hash_val] for hash_val in hashes_needing_registration]
+        
         if instances_to_rebuild:
-            safe_print(f"   -> 🧠 Preparing to rebuild {len(instances_to_rebuild)} corrupted/missing instance(s)...")
+            safe_print(f"   -> 🔍 Found {len(instances_to_rebuild)} unregistered instance(s) at new paths.")
             
-            # CRITICAL FIX: Group instances by their parent directory
-            # This ensures we pass search_path_override to target the exact location
-            multiversion_base = Path(self.config.get('multiversion_base'))
-            instances_by_location = {}
+            if verbose:
+                for dist in instances_to_rebuild:
+                    try:
+                        safe_print(f"      - {dist.metadata['Name']}=={dist.version} at {dist._path}")
+                    except Exception:
+                        pass
             
-            for dist in instances_to_rebuild:
-                dist_path = Path(dist._path)
-                
-                # Determine if this is a bubble instance or main env instance
-                try:
-                    if dist_path.is_relative_to(multiversion_base):
-                        # This is a bubble - find its specific bubble directory
-                        relative = dist_path.relative_to(multiversion_base)
-                        bubble_name = relative.parts[0]  # e.g., "safety-3.6.2"
-                        search_override = str(multiversion_base / bubble_name)
-                    else:
-                        # This is in main environment
-                        search_override = self.config.get('site_packages_path')
-                except (ValueError, IndexError):
-                    # Fallback to main env if path resolution fails
-                    search_override = self.config.get('site_packages_path')
-                
-                if search_override not in instances_by_location:
-                    instances_by_location[search_override] = []
-                instances_by_location[search_override].append(dist)
+            # --- THIS IS THE FIX ---
+            # Instead of creating generic specs and re-discovering, we pass the
+            # exact list of new Distribution objects directly to the builder.
+            safe_print(f"   -> 🧠 Surgically rebuilding KB for {len(instances_to_rebuild)} new instance(s)...")
             
-            # Rebuild each location group separately with proper search_path_override
-            for search_path, dist_list in instances_by_location.items():
-                if '.omnipkg_versions' in search_path:
-                    safe_print(f"      -> Rebuilding {len(dist_list)} instance(s) inside: {search_path}")
-                else:
-                    safe_print(f"      -> Rebuilding {len(dist_list)} instance(s) in main environment...")
-                
-                specs_to_rebuild = [
-                    f"{canonicalize_name(dist.metadata['Name'])}=={dist.version}"
-                    for dist in dist_list
-                ]
-                
-                # Create a new gatherer with the search_path_override
-                location_gatherer = gatherer.__class__(
-                    config=self.config,
-                    env_id=self.env_id,
-                    omnipkg_instance=self,
-                    target_context_version=current_python_version
-                )
-                
-                # Run with the specific search path override
-                location_gatherer.run(
-                    targeted_packages=specs_to_rebuild,
-                    search_path_override=search_path
-                )
-            
-            self._installed_packages_cache = None
-
-        if ghost_keys:
-            safe_print(f"   -> 👻 Removing {len(ghost_keys)} ghost instance(s) from KB...")
-            self.cache_client.delete(*ghost_keys)
+            gatherer.run(pre_discovered_distributions=instances_to_rebuild)
             self._installed_packages_cache = None
         
-        if instances_to_rebuild or ghost_keys:
+        # Step 4: Clean up ghost instances (KB hashes that don't exist on disk)
+        ghost_hashes = kb_hashes - disk_hashes
+        if ghost_hashes:
+            safe_print(f"   -> 👻 Removing {len(ghost_hashes)} ghost instance(s) from KB...")
+            ghost_keys = [kb_hashes_to_keys[hash_val] for hash_val in ghost_hashes]
+            if ghost_keys:
+                self.cache_client.delete(*ghost_keys)
+        
+        if instances_to_rebuild or ghost_hashes:
             safe_print("   -> ✅ Instance-level healing complete.")
+        
         # ========================================================================
-        # END SURGICAL ADDITION
+        # END INSTALLATION-HASH-BASED INSTANCE HEALING
         # ========================================================================
 
-        # --- THIS IS THE CRITICAL FIX ---
-        # Perform a "deep sync" by checking and repairing the KB using direct writes.
+        # --- Repair active version mismatches (this logic stays the same) ---
         repairs_made = 0
-
-        # Get a complete list of what the KB *thinks* is active
         kb_active_versions = {}
         index_key = f"{self.redis_env_prefix}index"
         all_kb_packages = self.cache_client.smembers(index_key)
@@ -4404,7 +4437,6 @@ class omnipkg:
             if active_ver:
                 kb_active_versions[pkg_name] = active_ver
 
-        # Compare ground truth (disk) with the KB's view
         all_package_names = set(active_dists_on_disk.keys()) | set(kb_active_versions.keys())
 
         for pkg_name in sorted(list(all_package_names)):
@@ -4412,7 +4444,6 @@ class omnipkg:
             kb_version = kb_active_versions.get(pkg_name)
 
             if disk_version != kb_version:
-                # An inconsistency was found!
                 if verbose:
                     safe_print(f"\n   - 💥 Inconsistency found for '{pkg_name}':")
                     safe_print(f"     - On Disk (Ground Truth): v{disk_version or 'Not Found'}")
@@ -4420,32 +4451,26 @@ class omnipkg:
 
                 main_key = f'{self.redis_key_prefix}{pkg_name}'
                 if disk_version:
-                    # The disk is the source of truth, so update the KB to match.
                     safe_print(f"   - 🔧 REPAIRING KB: Setting '{pkg_name}' active version to v{disk_version}.")
                     self.cache_client.hset(main_key, 'active_version', disk_version)
                 else:
-                    # The package is no longer on disk, but the KB thinks it is. Remove it.
                     safe_print(f"   - 🔧 REPAIRING KB: Removing stale active version for '{pkg_name}'.")
                     self.cache_client.hdel(main_key, 'active_version')
                 
                 repairs_made += 1
-        # --- END OF FIX ---
         
         if repairs_made > 0:
             safe_print(_('   - ✅ Repaired {} inconsistent "active" statuses in the knowledge base.').format(repairs_made))
             self._installed_packages_cache = None
 
-        # Final verification: Check if everything is now in sync
+        # Final verification: Check for any remaining ghost entries at the package level
         disk_specs = {f"{canonicalize_name(dist.metadata['Name'])}=={dist.version}" for dist in all_discovered_dists}
         kb_specs = set()
-        index_key = f"{self.redis_env_prefix}index"
-        all_kb_packages = self.cache_client.smembers(index_key)
         for pkg_name in all_kb_packages:
             versions = self.cache_client.smembers(f"{self.redis_key_prefix}{pkg_name}:installed_versions")
             for version in versions:
                 kb_specs.add(f"{pkg_name}=={version}")
 
-        # Handle any remaining ghost entries at the package level
         ghosts_in_kb = kb_specs - disk_specs
         if ghosts_in_kb:
             safe_print(f"   -> 👻 Found {len(ghosts_in_kb)} ghost package(s) to exorcise...")
@@ -4453,7 +4478,7 @@ class omnipkg:
                 self._exorcise_ghost_entry(spec)
 
         # Check if we're fully synchronized now
-        if disk_specs == kb_specs and repairs_made == 0 and not (instances_to_rebuild or ghost_keys or ghosts_in_kb):
+        if disk_specs == kb_specs and repairs_made == 0 and not (instances_to_rebuild or ghost_hashes or ghosts_in_kb):
             safe_print(_('   ✅ Knowledge base is in sync.'))
         else:
             safe_print(_('   ✅ Sync and repair complete.'))
