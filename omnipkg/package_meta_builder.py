@@ -518,9 +518,30 @@ class omnipkgMetadataGatherer:
                         discovered_dists.append(result)
             
             if verbose:
-                safe_print(f'✅ Authoritative discovery complete. Found {len(discovered_dists)} total package versions.')
+                safe_print(f'   - Deduplicating {len(discovered_dists)} raw discoveries...')
+            
+            # --- DEDUPLICATION FIX ---
+            # Prevent duplicate discoveries when .omnipkg_versions is scanned twice
+            unique_dists_by_path = {}
+            for dist in discovered_dists:
+                try:
+                    # Use os.path.realpath for a guaranteed canonical key
+                    resolved_path = os.path.realpath(str(dist._path))
+                    if resolved_path not in unique_dists_by_path:
+                        unique_dists_by_path[resolved_path] = dist
+                except Exception:
+                    # Ignore distributions that have path-related errors
+                    continue
+
+            final_dists = list(unique_dists_by_path.values())
+            
+            if verbose:
+                if len(final_dists) < len(discovered_dists):
+                    safe_print(f'   -> Pruned to {len(final_dists)} unique physical package instances.')
+                safe_print(f'✅ Authoritative discovery complete. Found {len(final_dists)} total package versions.')
                 
-            return discovered_dists
+            return final_dists
+            # --- END DEDUPLICATION FIX ---
 
     def _is_bubbled(self, dist: importlib.metadata.Distribution) -> bool:
         multiversion_base = self.config.get('multiversion_base', '/dev/null')
