@@ -4265,8 +4265,8 @@ class omnipkg:
 
         configured_python_exe = self.config.get('python_executable', sys.executable)
         version_tuple = self.config_manager._verify_python_version(configured_python_exe)
-        # This is the variable we need to pass down
-        current_python_version = f'{version_tuple[0]}.{version_tuple[1]}' if version_tuple else get_python_version()
+        current_python_version = f'{version_tuple[0]}.{version_tuple[1]}' if version_tuple else 'unknown'
+
         if not self.cache_client: self._connect_cache()
         if not self.cache_client: return []
 
@@ -4285,6 +4285,110 @@ class omnipkg:
             for dist in all_discovered_dists
             if gatherer._get_install_context(dist)['install_type'] == 'active'
         }
+        
+        # ========================================================================
+        # SURGICAL ADDITION: Instance-level healing for empty/corrupted KB entries
+        # ========================================================================
+        disk_instance_map = {}
+        for dist in all_discovered_dists:
+            resolved_path_str = str(dist._path.resolve())
+            unique_id = f"{resolved_path_str}::{dist.version}"
+            instance_hash = hashlib.sha256(unique_id.encode()).hexdigest()[:12]
+            c_name = canonicalize_name(dist.metadata['Name'])
+            instance_key = f"{self.redis_key_prefix.replace(':pkg:', ':inst:')}{c_name}:{dist.version}:{instance_hash}"
+            disk_instance_map[instance_key] = dist
+
+        kb_instance_keys = set(self.cache_client.keys(self.redis_key_prefix.replace(':pkg:', ':inst:') + '*'))
+        disk_instance_keys = set(disk_instance_map.keys())
+
+        instances_to_rebuild = []
+        
+        # Check 1: Instances on disk but completely missing from KB
+        missing_from_kb = disk_instance_keys - kb_instance_keys
+        if missing_from_kb:
+            safe_print(f"   -> 🔧 HEALING: Found {len(missing_from_kb)} instance(s) missing from KB.")
+            for key in missing_from_kb:
+                instances_to_rebuild.append(disk_instance_map[key])
+
+        # Check 2: Instances in KB but corrupted/empty (< 5 fields means it's broken)
+        for key in (disk_instance_keys & kb_instance_keys):
+            field_count = self.cache_client.hlen(key)
+            if field_count < 5:
+                pkg_name = key.split(':')[-3]
+                safe_print(f"   -> ⚠️  HEALING: KB entry for {pkg_name} is corrupted ({field_count} fields). Rebuilding.")
+                instances_to_rebuild.append(disk_instance_map[key])
+        
+        # Check 3: Ghost instances in KB that don't exist on disk anymore
+        ghost_keys = kb_instance_keys - disk_instance_keys
+        
+        # Execute healing actions with location-aware rebuilds
+        if instances_to_rebuild:
+            safe_print(f"   -> 🧠 Preparing to rebuild {len(instances_to_rebuild)} corrupted/missing instance(s)...")
+            
+            # CRITICAL FIX: Group instances by their parent directory
+            # This ensures we pass search_path_override to target the exact location
+            multiversion_base = Path(self.config.get('multiversion_base'))
+            instances_by_location = {}
+            
+            for dist in instances_to_rebuild:
+                dist_path = Path(dist._path)
+                
+                # Determine if this is a bubble instance or main env instance
+                try:
+                    if dist_path.is_relative_to(multiversion_base):
+                        # This is a bubble - find its specific bubble directory
+                        relative = dist_path.relative_to(multiversion_base)
+                        bubble_name = relative.parts[0]  # e.g., "safety-3.6.2"
+                        search_override = str(multiversion_base / bubble_name)
+                    else:
+                        # This is in main environment
+                        search_override = self.config.get('site_packages_path')
+                except (ValueError, IndexError):
+                    # Fallback to main env if path resolution fails
+                    search_override = self.config.get('site_packages_path')
+                
+                if search_override not in instances_by_location:
+                    instances_by_location[search_override] = []
+                instances_by_location[search_override].append(dist)
+            
+            # Rebuild each location group separately with proper search_path_override
+            for search_path, dist_list in instances_by_location.items():
+                if '.omnipkg_versions' in search_path:
+                    safe_print(f"      -> Rebuilding {len(dist_list)} instance(s) inside: {search_path}")
+                else:
+                    safe_print(f"      -> Rebuilding {len(dist_list)} instance(s) in main environment...")
+                
+                specs_to_rebuild = [
+                    f"{canonicalize_name(dist.metadata['Name'])}=={dist.version}"
+                    for dist in dist_list
+                ]
+                
+                # Create a new gatherer with the search_path_override
+                location_gatherer = gatherer.__class__(
+                    config=self.config,
+                    env_id=self.env_id,
+                    omnipkg_instance=self,
+                    target_context_version=current_python_version
+                )
+                
+                # Run with the specific search path override
+                location_gatherer.run(
+                    targeted_packages=specs_to_rebuild,
+                    search_path_override=search_path
+                )
+            
+            self._installed_packages_cache = None
+
+        if ghost_keys:
+            safe_print(f"   -> 👻 Removing {len(ghost_keys)} ghost instance(s) from KB...")
+            self.cache_client.delete(*ghost_keys)
+            self._installed_packages_cache = None
+        
+        if instances_to_rebuild or ghost_keys:
+            safe_print("   -> ✅ Instance-level healing complete.")
+        # ========================================================================
+        # END SURGICAL ADDITION
+        # ========================================================================
 
         # --- THIS IS THE CRITICAL FIX ---
         # Perform a "deep sync" by checking and repairing the KB using direct writes.
@@ -4329,9 +4433,9 @@ class omnipkg:
         
         if repairs_made > 0:
             safe_print(_('   - ✅ Repaired {} inconsistent "active" statuses in the knowledge base.').format(repairs_made))
-            self._installed_packages_cache = None # Invalidate cache
+            self._installed_packages_cache = None
 
-        # (The rest of the shallow sync logic for ghost/missing packages remains the same)
+        # Final verification: Check if everything is now in sync
         disk_specs = {f"{canonicalize_name(dist.metadata['Name'])}=={dist.version}" for dist in all_discovered_dists}
         kb_specs = set()
         index_key = f"{self.redis_env_prefix}index"
@@ -4341,21 +4445,19 @@ class omnipkg:
             for version in versions:
                 kb_specs.add(f"{pkg_name}=={version}")
 
-        if disk_specs == kb_specs and repairs_made == 0:
-            safe_print(_('   ✅ Knowledge base is in sync.'))
-            return all_discovered_dists
-        
-        missing_from_kb = disk_specs - kb_specs
+        # Handle any remaining ghost entries at the package level
         ghosts_in_kb = kb_specs - disk_specs
-        
         if ghosts_in_kb:
             safe_print(f"   -> 👻 Found {len(ghosts_in_kb)} ghost package(s) to exorcise...")
             for spec in ghosts_in_kb:
                 self._exorcise_ghost_entry(spec)
-        if missing_from_kb:
-            self.rebuild_package_kb(list(missing_from_kb), target_python_version=current_python_version)
-            
-        safe_print(_('   ✅ Sync and repair complete.'))
+
+        # Check if we're fully synchronized now
+        if disk_specs == kb_specs and repairs_made == 0 and not (instances_to_rebuild or ghost_keys or ghosts_in_kb):
+            safe_print(_('   ✅ Knowledge base is in sync.'))
+        else:
+            safe_print(_('   ✅ Sync and repair complete.'))
+        
         return all_discovered_dists
 
     def _get_disk_specs_for_context(self, python_version: str) -> set:
@@ -7949,18 +8051,32 @@ class omnipkg:
                 item_type = item.get('install_type')
                 item_name = item.get('Name')
                 item_version = item.get('Version')
-                item_path_str = item.get('path')
+                # --- THIS IS THE DEFENSIVE FIX ---
+                item_path_str = item.get('path') # Get the path safely
 
                 if item_type == 'active':
                     safe_print(_("🗑️ Uninstalling '{}' from main environment via pip...").format(item_name))
                     self._run_pip_uninstall([item_name])
-                elif item_type == 'bubble' and item_path_str:
+                # Check if the path is a valid string before trying to use it
+                elif item_type == 'bubble' and item_path_str and isinstance(item_path_str, str):
+                    # The path from the KB IS the bubble directory we need to delete.
+                    # Do NOT take its parent.
                     bubble_dir = Path(item_path_str)
-                    if bubble_dir.name == f"{c_name}-{item_version}" and bubble_dir.is_dir():
+
+                    # A critical sanity check to ensure we're deleting the correct directory.
+                    expected_bubble_name = f"{canonicalize_name(item_name)}-{item_version}"
+                    if bubble_dir.name == expected_bubble_name and bubble_dir.is_dir():
                         safe_print(_('🗑️  Deleting bubble directory: {}').format(bubble_dir))
                         shutil.rmtree(bubble_dir, ignore_errors=True)
                     else:
-                        safe_print(f"   ⚠️ Path mismatch, skipping filesystem deletion for {item_name}=={item_version}.")
+                        safe_print(f"   ⚠️ Path mismatch or directory not found, skipping filesystem deletion for {item_name}=={item_version}.")
+                        safe_print(f"      - Expected name: {expected_bubble_name}")
+                        safe_print(f"      - Path Being Checked: {bubble_dir}")
+                        safe_print(f"      - Name Being Checked:    {bubble_dir.name}")
+                # --- END OF FIX ---
+                else:
+                    # This branch handles cases where the path is missing from a broken KB entry
+                    safe_print(f"   ⚠️ Could not determine path for {item_name}=={item_version} from KB. Skipping filesystem deletion.")
 
                 redis_key = item.get('redis_key')
                 if redis_key and 'unknown' not in redis_key:

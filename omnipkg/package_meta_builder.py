@@ -209,306 +209,275 @@ class omnipkgMetadataGatherer:
                 # Silently ignore corrupted or unreadable metadata
                 pass
             return None
+    
+    def _run_strategy_1(self, base_path: Path, name_variants: List[str], version: Optional[str], verbose: bool) -> List[Tuple[importlib.metadata.Distribution, Path]]:
+        """Strategy 1: Check for vendored packages"""
+        results = []
+        if verbose:
+            safe_print(f'      -> Strategy 1: Checking for vendored packages...')
+        
+        vendored_dist_infos = list(base_path.rglob('*/_vendor/*.dist-info'))
+        if verbose:
+            safe_print(f'         Found {len(vendored_dist_infos)} vendored dist-info directories')
+        
+        for vendor_dist_info in vendored_dist_infos:
+            if not vendor_dist_info.is_dir():
+                continue
+            try:
+                dist = importlib.metadata.Distribution.at(vendor_dist_info)
+                dist_name = dist.metadata.get('Name', '')
+                name_matches = any((
+                    canonicalize_name(dist_name) == canonicalize_name(variant) 
+                    for variant in name_variants
+                ))
+                if name_matches and (version is None or dist.version == version):
+                    results.append((dist, vendor_dist_info.resolve()))
+                    vendor_parent = str(vendor_dist_info).split('/_vendor/')[0].split('/')[-1]
+                    safe_print(f'✅ Found VENDORED {dist_name} v{dist.version} (inside {vendor_parent}) at {vendor_dist_info}')
+            except Exception:
+                continue
+        return results
+
+    def _run_strategy_2(self, base_path: Path, name: str, name_variants: List[str], version: Optional[str], verbose: bool) -> List[Tuple[importlib.metadata.Distribution, Path]]:
+        """Strategy 2: Direct pattern matching"""
+        results = []
+        if verbose:
+            safe_print(f'      -> Strategy 2: Direct pattern matching...')
+        
+        for variant in name_variants:
+            if version:
+                patterns = [
+                    f'{variant}-{version}.dist-info', 
+                    f'{variant}-{version}-*.dist-info',
+                    f"{variant.replace('.', '_')}-{version}.dist-info", 
+                    f"{variant.replace('.', '_')}-{version}-*.dist-info"
+                ]
+            else:
+                patterns = [
+                    f'{variant}-*.dist-info', 
+                    f"{variant.replace('.', '_')}-*.dist-info"
+                ]
+            
+            for pattern in patterns:
+                matching_paths = list(base_path.glob(pattern))
+                for dist_info_path in matching_paths:
+                    if not dist_info_path.is_dir():
+                        continue
+                    try:
+                        dist = importlib.metadata.Distribution.at(dist_info_path)
+                        dist_name = dist.metadata.get('Name', '')
+                        if canonicalize_name(dist_name) == canonicalize_name(name):
+                            if version is None or dist.version == version:
+                                results.append((dist, dist_info_path.resolve()))
+                                safe_print(f'✅ Found {dist_name} v{dist.version} at {dist_info_path}')
+                    except Exception:
+                        continue
+        return results
+
+    def _run_strategy_3(self, base_path: Path, name_variants: List[str], version: Optional[str], verbose: bool) -> List[Tuple[importlib.metadata.Distribution, Path]]:
+        """Strategy 3: Nested directory search"""
+        results = []
+        if verbose:
+            safe_print(f'      -> Strategy 3: Searching nested directories...')
+        
+        for variant in name_variants:
+            if version:
+                patterns = [f'{variant}-{version}', f"{variant.replace('.', '_')}-{version}"]
+            else:
+                patterns = [f'{variant}-*', f"{variant.replace('.', '_')}-*"]
+            
+            for pattern in patterns:
+                matching_dirs = list(base_path.glob(pattern))
+                for nested_dir in matching_dirs:
+                    if not nested_dir.is_dir():
+                        continue
+                    for dist_info_path in nested_dir.glob('*.dist-info'):
+                        if not dist_info_path.is_dir():
+                            continue
+                        try:
+                            dist = importlib.metadata.Distribution.at(dist_info_path)
+                            dist_name = dist.metadata.get('Name', '')
+                            name_matches = any((
+                                canonicalize_name(dist_name) == canonicalize_name(v) 
+                                for v in name_variants
+                            ))
+                            if name_matches and (version is None or dist.version == version):
+                                results.append((dist, dist_info_path.resolve()))
+                                safe_print(f'✅ Found nested {dist_name} v{dist.version} at {dist_info_path}')
+                        except Exception:
+                            continue
+        return results
+
+    def _run_strategy_4(self, base_path: Path, name_variants: List[str], version: Optional[str], verbose: bool) -> List[Tuple[importlib.metadata.Distribution, Path]]:
+        """Strategy 4: Comprehensive fallback scan"""
+        results = []
+        if verbose:
+            safe_print(f'      -> Strategy 4: Fallback comprehensive scan...')
+        
+        all_dist_infos = list(base_path.glob('*.dist-info'))
+        all_dist_infos.extend(list(base_path.glob('*/*.dist-info')))
+        all_dist_infos.extend(list(base_path.rglob('*.dist-info')))
+        
+        # Deduplicate
+        seen = set()
+        unique_dist_infos = []
+        for path in all_dist_infos:
+            if path not in seen:
+                seen.add(path)
+                unique_dist_infos.append(path)
+        
+        if verbose:
+            safe_print(f'         Found {len(unique_dist_infos)} unique dist-info directories to check')
+        
+        for dist_info_path in unique_dist_infos:
+            if not dist_info_path.is_dir():
+                continue
+            try:
+                dist = importlib.metadata.Distribution.at(dist_info_path)
+                dist_name = dist.metadata.get('Name', '')
+                name_matches = any((
+                    canonicalize_name(dist_name) == canonicalize_name(variant) 
+                    for variant in name_variants
+                ))
+                if name_matches and (version is None or dist.version == version):
+                    results.append((dist, dist_info_path.resolve()))
+                    safe_print(f'✅ Found {dist_name} v{dist.version} at {dist_info_path}')
+            except Exception:
+                continue
+        return results
+
 
     def _discover_distributions(self, targeted_packages: Optional[List[str]], verbose: bool=False, search_path_override: Optional[str] = None) -> List[importlib.metadata.Distribution]:
         """
-        (V11 - FINAL & CLEAN) Discovers distributions by first performing a fast, parallel
-        filesystem scan to find all potential metadata directories, then parsing them
-        concurrently. This version is cleaned of all duplicate logic.
+        (V13 - CONCURRENT) Discovers distributions by running all search strategies
+        in parallel for maximum speed in targeted mode.
         """
-        # --- Stage 1: Determine the correct, authoritative search paths ---
+        # --- Stage 1: Determine search paths ---
         if search_path_override:
-            search_paths = [Path(search_path_override)]
+            search_paths = [Path(search_path_override).resolve()]
+            safe_print(f"   - STRATEGY: Constrained search. ONLY this path will be used: {search_paths[0]}")
         else:
-            main_site_packages = Path(self.config.get('site_packages_path'))
-            multiversion_base = Path(self.config.get('multiversion_base'))
-            # Only include paths that actually exist to avoid errors
+            main_site_packages = Path(self.config.get('site_packages_path')).resolve()
+            multiversion_base = Path(self.config.get('multiversion_base')).resolve()
             search_paths = [p for p in [main_site_packages, multiversion_base] if p.exists()]
-            
+
         if not search_paths:
-            safe_print("   - ⚠️ No valid site-packages or multiversion paths found in config. Cannot discover packages.")
+            safe_print("   - ❌ ERROR: No valid search paths determined. Aborting discovery.")
             return []
 
+        # --- TARGETED PACKAGE MODE ---
         if targeted_packages:
             if verbose:
-                safe_print(f'🎯 Running AUTHORITATIVE targeted scan for {len(targeted_packages)} package(s).')
-            discovered_dists = []
+                safe_print(f'🎯 Running CONCURRENT targeted scan for {len(targeted_packages)} package(s).')
+            
+            all_found_dists = []
             
             for spec in targeted_packages:
                 try:
+                    # Parse spec
                     if '==' in spec:
                         name, version = spec.split('==', 1)
                     else:
                         name = spec
                         version = None
-                        
-                    found_dist = None
+                    
                     name_variants = self._get_package_name_variants(name)
                     
                     if verbose:
-                        safe_print(f"   🔍 Searching for '{spec}' with variants: {name_variants}")
+                        safe_print(f"   🔍 Concurrently searching for '{spec}' with variants: {name_variants}")
                     
-                    # Search each configured path using authoritative file system scanning
+                    found_dists_for_spec = []
+                    seen_paths = set()
+                    
+                    # Search each path using concurrent strategies
                     for base_path in search_paths:
                         if verbose:
-                            safe_print(_('      -> Authoritative scan in: {}').format(base_path))
+                            safe_print(f'      -> Scanning {base_path} with 4 concurrent strategies...')
                         
-                        # Strategy 1: Check for vendored packages (V7 feature)
-                        if verbose:
-                            safe_print(f'      -> Strategy 1: Checking for vendored packages...')
-                        vendored_dist_infos = list(base_path.rglob('*/_vendor/*.dist-info'))
-                        if verbose:
-                            safe_print(_('         Found {} vendored dist-info directories').format(len(vendored_dist_infos)))
-                        
-                        for vendor_dist_info in vendored_dist_infos:
-                            if not vendor_dist_info.is_dir():
-                                continue
-                            try:
-                                dist = importlib.metadata.Distribution.at(vendor_dist_info)
-                                dist_name = dist.metadata.get('Name', '')
-                                name_matches = any((
-                                    canonicalize_name(dist_name) == canonicalize_name(variant) or 
-                                    dist_name.lower() == variant.lower() or 
-                                    dist_name.replace('.', '-').lower() == variant.replace('.', '-').lower() or 
-                                    dist_name.replace('-', '.').lower() == variant.replace('-', '.').lower() 
-                                    for variant in name_variants
-                                ))
-                                if name_matches:
-                                    if version is None or dist.version == version:
-                                        vendor_parent = str(vendor_dist_info).split('/_vendor/')[0].split('/')[-1]
-                                        found_dist = dist
-                                        safe_print(_('✅ Found VENDORED {} v{} (inside {}) at {}').format(
-                                            dist_name, dist.version, vendor_parent, vendor_dist_info))
-                                        break
-                                    elif verbose:
-                                        vendor_parent = str(vendor_dist_info).split('/_vendor/')[0].split('/')[-1]
-                                        safe_print(_('         ⚠️  Found VENDORED {} v{} (inside {}) but need v{}').format(
-                                            dist_name, dist.version, vendor_parent, version))
-                            except Exception as e:
-                                if verbose:
-                                    safe_print(_('         ❌ Error reading vendored {}: {}').format(vendor_dist_info, e))
-                                continue
-                        
-                        if found_dist:
-                            break
-                        
-                        # Strategy 2: Direct pattern matching (V7 feature)
-                        if verbose:
-                            safe_print(f'      -> Strategy 2: Direct pattern matching...')
-                        for variant in name_variants:
-                            if version:
-                                patterns = [
-                                    f'{variant}-{version}.dist-info', 
-                                    f'{variant}-{version}-*.dist-info',
-                                    f"{variant.replace('.', '_')}-{version}.dist-info", 
-                                    f"{variant.replace('.', '_')}-{version}-*.dist-info"
-                                ]
-                            else:
-                                patterns = [
-                                    f'{variant}-*.dist-info', 
-                                    f"{variant.replace('.', '_')}-*.dist-info"
-                                ]
-                                
-                            for pattern in patterns:
-                                matching_paths = list(base_path.glob(pattern))
-                                if verbose:
-                                    safe_print(_("         Pattern '{}' found: {} matches").format(pattern, len(matching_paths)))
-                                
-                                for dist_info_path in matching_paths:
-                                    if not dist_info_path.is_dir():
-                                        continue
-                                    try:
-                                        dist = importlib.metadata.Distribution.at(dist_info_path)
-                                        dist_name = dist.metadata.get('Name', '')
-                                        if (canonicalize_name(dist_name) == canonicalize_name(name) or 
-                                            dist_name.lower() == name.lower() or 
-                                            dist_name.replace('.', '-').lower() == name.replace('.', '-').lower() or 
-                                            dist_name.replace('-', '.').lower() == name.replace('-', '.').lower()):
-                                            if version is None or dist.version == version:
-                                                found_dist = dist
-                                                safe_print(_('✅ Found {} v{} at {}').format(dist_name, dist.version, dist_info_path))
-                                                break
-                                            elif verbose:
-                                                safe_print(_('         ⚠️  Found {} v{} but need v{}').format(dist_name, dist.version, version))
-                                        elif verbose:
-                                            safe_print(f'         ❌ Name mismatch: found "{dist_name}", looking for "{name}"')
-                                    except Exception as e:
-                                        if verbose:
-                                            safe_print(_('         ❌ Error reading {}: {}').format(dist_info_path, e))
-                                        continue
-                                if found_dist:
-                                    break
-                            if found_dist:
-                                break
-                        
-                        if found_dist:
-                            break
-                        
-                        # Strategy 3: Nested directory search (V7 feature)  
-                        if verbose:
-                            safe_print(f'      -> Strategy 3: Searching nested directories for dist-info...')
-                        for variant in name_variants:
-                            if version:
-                                nested_dir_patterns = [
-                                    f'{variant}-{version}', 
-                                    f"{variant.replace('.', '_')}-{version}"
-                                ]
-                            else:
-                                nested_dir_patterns = [
-                                    f'{variant}-*', 
-                                    f"{variant.replace('.', '_')}-*"
-                                ]
-                                
-                            for pattern in nested_dir_patterns:
-                                matching_dirs = list(base_path.glob(pattern))
-                                if verbose:
-                                    safe_print(_("         Nested dir pattern '{}' found: {} directories").format(pattern, len(matching_dirs)))
-                                
-                                for nested_dir in matching_dirs:
-                                    if not nested_dir.is_dir():
-                                        continue
-                                        
-                                    dist_info_pattern = '*.dist-info'
-                                    dist_infos = list(nested_dir.glob(dist_info_pattern))
-                                    
-                                    for dist_info_path in dist_infos:
-                                        if not dist_info_path.is_dir():
-                                            continue
-                                        try:
-                                            dist = importlib.metadata.Distribution.at(dist_info_path)
-                                            dist_name = dist.metadata.get('Name', '')
-                                            name_matches = any((
-                                                canonicalize_name(dist_name) == canonicalize_name(v) 
-                                                for v in name_variants
-                                            ))
-                                            if name_matches:
-                                                if version is None or dist.version == version:
-                                                    found_dist = dist
-                                                    safe_print(_('✅ Found nested {} v{} at {}').format(
-                                                        dist_name, dist.version, dist_info_path))
-                                                    break
-                                                elif verbose:
-                                                    safe_print(_('         ⚠️  Found nested {} v{} but need v{}').format(
-                                                        dist_name, dist.version, version))
-                                        except Exception as e:
-                                            if verbose:
-                                                safe_print(_('         ❌ Error reading nested {}: {}').format(dist_info_path, e))
-                                            continue
-                                    if found_dist:
-                                        break
-                                if found_dist:
-                                    break
-                            if found_dist:
-                                break
-                        
-                        if found_dist:
-                            break
-                        
-                        # Strategy 4: Comprehensive fallback scan (V7 feature)
-                        if verbose:
-                            safe_print(f'      -> Strategy 4: Fallback comprehensive scan...')
-                        all_dist_infos = list(base_path.glob('*.dist-info'))
-                        all_dist_infos.extend(list(base_path.glob('*/*.dist-info')))
-                        # Add recursive search for deeper nesting
-                        all_dist_infos.extend(list(base_path.rglob('*.dist-info')))
-                        
-                        # Remove duplicates while preserving order
-                        seen = set()
-                        unique_dist_infos = []
-                        for path in all_dist_infos:
-                            if path not in seen:
-                                seen.add(path)
-                                unique_dist_infos.append(path)
-                        
-                        if verbose:
-                            safe_print(_('         Found {} unique dist-info directories to check').format(len(unique_dist_infos)))
-                        
-                        for dist_info_path in unique_dist_infos:
-                            if not dist_info_path.is_dir():
-                                continue
-                            try:
-                                dist = importlib.metadata.Distribution.at(dist_info_path)
-                                dist_name = dist.metadata.get('Name', '')
-                                name_matches = any((
-                                    canonicalize_name(dist_name) == canonicalize_name(variant) 
-                                    for variant in name_variants
-                                ))
-                                if name_matches:
-                                    if version is None or dist.version == version:
-                                        found_dist = dist
-                                        safe_print(_('✅ Fallback found {} v{} at {}').format(
-                                            dist_name, dist.version, dist_info_path))
-                                        break
-                                    elif verbose:
-                                        safe_print(_('         ⚠️  Fallback found {} v{} but need v{}').format(
-                                            dist_name, dist.version, version))
-                            except Exception as e:
-                                continue
-                        
-                        if found_dist:
-                            break
+                        # Run all 4 strategies in parallel
+                        with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
+                            future_s1 = executor.submit(self._run_strategy_1, base_path, name_variants, version, verbose)
+                            future_s2 = executor.submit(self._run_strategy_2, base_path, name, name_variants, version, verbose)
+                            future_s3 = executor.submit(self._run_strategy_3, base_path, name_variants, version, verbose)
+                            future_s4 = executor.submit(self._run_strategy_4, base_path, name_variants, version, verbose)
+                            
+                            # Collect all results as they complete
+                            futures = [future_s1, future_s2, future_s3, future_s4]
+                            for future in concurrent.futures.as_completed(futures):
+                                try:
+                                    strategy_results = future.result()
+                                    for dist, resolved_path in strategy_results:
+                                        if resolved_path not in seen_paths:
+                                            seen_paths.add(resolved_path)
+                                            found_dists_for_spec.append(dist)
+                                except Exception as e:
+                                    if verbose:
+                                        safe_print(f"      -> ⚠️  A search strategy failed: {e}")
                     
                     # Record results
-                    if found_dist:
-                        discovered_dists.append(found_dist)
-                        if verbose:
-                            if version:
-                                safe_print(f'   -> Successfully found distribution for {name}=={version}')
-                            else:
-                                safe_print(f'   -> Successfully found distribution for {name} v{found_dist.version}')
+                    if found_dists_for_spec:
+                        all_found_dists.extend(found_dists_for_spec)
+                        safe_print(f'   -> Found {len(found_dists_for_spec)} unique instance(s) of {spec}')
                     elif version:
-                        safe_print(_("❌ Could not find distribution matching '{}=={}'").format(name, version))
+                        safe_print(f"❌ Could not find distribution matching '{name}=={version}'")
                         if verbose:
-                            safe_print(_('   💡 Available variants tried: {}').format(name_variants))
+                            safe_print(f'   💡 Available variants tried: {name_variants}')
                     else:
-                        safe_print(_("❌ Could not find distribution matching '{}'").format(name))
+                        safe_print(f"❌ Could not find distribution matching '{name}'")
                         
                 except ValueError as e:
-                    safe_print(_("❌ Could not parse spec '{}': {}").format(spec, e))
-                    
-            return discovered_dists
+                    safe_print(f"❌ Could not parse spec '{spec}': {e}")
+            
+            # Final deduplication across all specs
+            unique_dists = {dist._path.resolve(): dist for dist in all_found_dists}
+            final_list = list(unique_dists.values())
+            
+            if len(final_list) < len(all_found_dists):
+                safe_print(f"   -> Deduplicated discovery results from {len(all_found_dists)} to {len(final_list)} unique instances.")
+            
+            return final_list
         
-        # Full discovery mode using V9's authoritative approach with V7's comprehensive scanning
-        if verbose:
-            safe_print('🔍 Running AUTHORITATIVE full discovery scan (no context bleed)...')
-        
-        # Phase 1: Rapidly locate all potential package metadata files using authoritative paths
-        safe_print("   - Phase 1: Rapidly locating all potential package metadata files...")
-        all_dist_info_paths = []
-        
-        for path in search_paths:
+        # --- FULL DISCOVERY MODE ---
+        else:
             if verbose:
-                safe_print(f"      -> Authoritative scan of: {path}")
-            # Use rglob to find all .dist-info directories recursively (V9 approach)
-            all_dist_info_paths.extend(path.rglob('*.dist-info'))
-        
-        safe_print(f"   - Phase 2: Parsing {len(all_dist_info_paths)} metadata files in parallel...")
-        
-        # Phase 2: Process these concrete paths in parallel (V9's efficient approach)
-        discovered_dists = []
-        max_workers = min(32, (os.cpu_count() or 4) + 4)
-        
-        with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
-            # Filter out non-directories before submitting to avoid worker errors
-            valid_paths = [path for path in all_dist_info_paths if path.is_dir()]
-            future_to_path = {
-                executor.submit(self._parse_distribution_worker, path): path 
-                for path in valid_paths
-            }
+                safe_print('🔍 Running AUTHORITATIVE full discovery scan (no context bleed)...')
             
-            iterator = concurrent.futures.as_completed(future_to_path)
-            if HAS_TQDM:
-                iterator = tqdm(iterator, total=len(future_to_path), desc="      Parsing", unit="pkg")
+            # Phase 1: Rapidly locate all potential package metadata files
+            safe_print("   - Phase 1: Rapidly locating all potential package metadata files...")
+            all_dist_info_paths = []
             
-            for future in iterator:
-                result = future.result()
-                if result:
-                    discovered_dists.append(result)
-        
-        if verbose:
-            safe_print(_('✅ Authoritative discovery complete. Found {} total package versions.').format(len(discovered_dists)))
+            for path in search_paths:
+                if verbose:
+                    safe_print(f"      -> Authoritative scan of: {path}")
+                all_dist_info_paths.extend(path.rglob('*.dist-info'))
             
-        return discovered_dists
+            safe_print(f"   - Phase 2: Parsing {len(all_dist_info_paths)} metadata files in parallel...")
+            
+            # Phase 2: Process these concrete paths in parallel
+            discovered_dists = []
+            max_workers = min(32, (os.cpu_count() or 4) + 4)
+            
+            with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+                # Filter out non-directories before submitting to avoid worker errors
+                valid_paths = [path for path in all_dist_info_paths if path.is_dir()]
+                future_to_path = {
+                    executor.submit(self._parse_distribution_worker, path): path 
+                    for path in valid_paths
+                }
+                
+                iterator = concurrent.futures.as_completed(future_to_path)
+                if HAS_TQDM:
+                    iterator = tqdm(iterator, total=len(future_to_path), desc="      Parsing", unit="pkg")
+                
+                for future in iterator:
+                    result = future.result()
+                    if result:
+                        discovered_dists.append(result)
+            
+            if verbose:
+                safe_print(f'✅ Authoritative discovery complete. Found {len(discovered_dists)} total package versions.')
+                
+            return discovered_dists
 
     def _is_bubbled(self, dist: importlib.metadata.Distribution) -> bool:
         multiversion_base = self.config.get('multiversion_base', '/dev/null')
@@ -725,6 +694,11 @@ class omnipkgMetadataGatherer:
                         safe_print(f'❌ Failed to create tool bubble. Using pip-audit fallback.')
                         self._run_pip_audit_fallback({name: list(versions)[0] for name, versions in all_packages_in_context.items()})
                         return
+                    safe_print(f"   -> 🧠 Indexing new '{TOOL_SPEC}' bubble in the Knowledge Base...")
+                    self.omnipkg_instance.rebuild_package_kb(
+                        packages=[TOOL_SPEC],
+                        target_python_version=self.target_context_version
+                    )
             else:
                 # Use existing version (user declined upgrade or cached decision)
                 TOOL_SPEC = f'{TOOL_NAME}=={current_version}'
@@ -1435,6 +1409,7 @@ class omnipkgMetadataGatherer:
             else:
                 items.append((new_key, str(v)))
         return dict(items)
+    
 if __name__ == '__main__':
     import json
     from pathlib import Path
