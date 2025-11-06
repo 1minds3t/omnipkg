@@ -4378,7 +4378,6 @@ class omnipkg:
                 instance_hash = hashlib.sha256(unique_instance_identifier.encode()).hexdigest()[:12]
                 
                                 
-                 instance_hash = hashlib.sha256(unique_instance_identifier.encode()).hexdigest()[:12]
                 
                 # This will print for every package found during the full sync
                 disk_instance_map_by_hash[instance_hash] = dist
