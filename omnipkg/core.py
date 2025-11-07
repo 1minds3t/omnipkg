@@ -2002,7 +2002,7 @@ class BubbleIsolationManager:
                     print_header(f"TIME MACHINE FALLBACK: Detected broken install for {package_name}=={version}")
 
                 # Call the Time Machine, telling it to install into our SAFE temp directory
-                time_machine_succeeded = self.parent_omnipkg._run_historical_install_fallback(
+                time_machine_succeeded = self.parent_omnipkg.run_historical_install_fallback(
                     package_name, version, target_directory_override=temp_path
                 )
                 
@@ -8552,43 +8552,166 @@ class omnipkg:
             safe_print(f"      ❌ An unexpected error occurred during the import test: {e}")
             return False
 
-    def _run_historical_install_fallback(self, target_pkg, target_ver, target_directory_override: Optional[Path] = None):
-        """
-        --- [MODIFIED] ---
-        Orchestrator for the Dependency Time Machine logic, run as an automatic fallback.
-        This method now accepts a target_directory_override to ensure installations are isolated.
-        """
-        safe_print(f"   - Attempting to rebuild {target_pkg}=={target_ver} from the past...")
+    def _get_platform_tags() -> Dict[str, any]:
+        """Get current platform information for wheel matching."""
+        system = platform.system().lower()
+        machine = platform.machine().lower()
+        py_version = f"{sys.version_info.major}{sys.version_info.minor}"
         
-        release_date = self._get_historical_release_date(target_pkg, target_ver)
-        if not release_date:
-            safe_print('   - ❌ Failed to get release date. Time Machine cannot proceed.')
-            return False
-
-        dep_names = self._get_historical_dependency_names(target_pkg, target_ver)
-        if dep_names is None: # Explicitly check for None in case of error
-            safe_print('   - ❌ Failed to determine dependencies. Time Machine cannot proceed.')
-            return False
-
-        if not dep_names:
-            safe_print('   - ℹ️ No dependencies found. Attempting a direct simple install.')
-            # --- [FIX] Pass the override to the execution function ---
-            return self._execute_historical_install(target_pkg, target_ver, {}, target_directory_override=target_directory_override)
-
-        historical_versions = self._find_historical_versions(dep_names, release_date)
+        # Python implementation and ABI
+        py_impl = 'cp' if platform.python_implementation() == 'CPython' else 'py'
+        abi_tag = f"cp{py_version}" if py_impl == 'cp' else 'none'
         
-        if historical_versions is not None:
-            return self._execute_historical_install(
-                target_pkg, target_ver, historical_versions, target_directory_override=target_directory_override
-            )
+        # Platform tag mapping
+        if system == 'linux':
+            # Check for musl vs glibc
+            try:
+                import subprocess
+                ldd_output = subprocess.check_output(['ldd', '--version'], stderr=subprocess.STDOUT, text=True)
+                is_musl = 'musl' in ldd_output.lower()
+            except:
+                is_musl = False
+            
+            if machine in ('x86_64', 'amd64'):
+                platform_tags = ['manylinux2014_x86_64', 'manylinux2010_x86_64', 'manylinux1_x86_64', 'linux_x86_64']
+            elif machine in ('aarch64', 'arm64'):
+                platform_tags = ['manylinux2014_aarch64', 'manylinux_2_17_aarch64', 'linux_aarch64']
+            elif machine.startswith('arm'):
+                platform_tags = ['linux_armv7l', 'linux_armv6l']
+            else:
+                platform_tags = [f'linux_{machine}']
+                
+            if is_musl:
+                platform_tags = [f'musllinux_1_1_{machine}'] + platform_tags
+                
+        elif system == 'darwin':
+            if machine == 'arm64':
+                platform_tags = ['macosx_11_0_arm64', 'macosx_10_9_universal2']
+            else:
+                platform_tags = ['macosx_10_9_x86_64', 'macosx_10_6_intel']
+                
+        elif system == 'windows':
+            if machine in ('amd64', 'x86_64'):
+                platform_tags = ['win_amd64']
+            else:
+                platform_tags = ['win32']
         else:
-            safe_print('   - ❌ Could not resolve any historical dependencies. Time Machine failed.')
-            return False
+            platform_tags = ['any']
+        
+        return {
+            'py_version': py_version,
+            'py_impl': py_impl,
+            'abi_tag': abi_tag,
+            'platform_tags': platform_tags,
+            'system': system
+        }
 
-    def _execute_historical_install(self, target_pkg, target_ver, historical_versions, target_directory_override: Optional[Path] = None):
+    def _score_wheel_compatibility(filename: str, platform_info: Dict) -> int:
+        """
+        Score a wheel filename for compatibility with current platform.
+        Higher score = better match. Returns 0 if incompatible.
+        """
+        # Parse wheel filename: {distribution}-{version}(-{build tag})?-{python tag}-{abi tag}-{platform tag}.whl
+        parts = filename.replace('.whl', '').split('-')
+        if len(parts) < 5:
+            return 0
+        
+        # Extract tags (handle optional build tag)
+        if len(parts) == 5:
+            _, _, python_tag, abi_tag, platform_tag = parts
+        else:
+            # Has build tag
+            _, _, _, python_tag, abi_tag, platform_tag = parts
+        
+        score = 0
+        py_version = platform_info['py_version']
+        py_impl = platform_info['py_impl']
+        current_abi = platform_info['abi_tag']
+        
+        # Check Python version compatibility
+        if python_tag == f"{py_impl}{py_version}":
+            score += 1000  # Exact match
+        elif python_tag == f"py{sys.version_info.major}":
+            score += 500   # Major version match (py3)
+        elif python_tag == 'py2.py3':
+            score += 250   # Universal Python 2/3
+        elif python_tag == 'py3':
+            score += 200   # Python 3 generic
+        elif re.match(rf"{py_impl}\d+", python_tag):
+            # Check if it's compatible with our version
+            tag_version = int(python_tag.replace(py_impl, ''))
+            if tag_version <= int(py_version):
+                score += 100 - (int(py_version) - tag_version) * 10
+            else:
+                return 0  # Too new
+        else:
+            return 0  # Incompatible Python version
+        
+        # Check ABI compatibility
+        if abi_tag == current_abi:
+            score += 100  # Exact ABI match
+        elif abi_tag == 'none':
+            score += 50   # Pure Python wheel
+        elif abi_tag.startswith('abi3'):
+            score += 75   # Stable ABI
+        else:
+            # ABI mismatch for binary wheels
+            if platform_info['system'] != 'any':
+                return 0
+        
+        # Check platform compatibility
+        platform_score = 0
+        if platform_tag == 'any':
+            platform_score = 25  # Universal platform (pure Python)
+        else:
+            for idx, compatible_platform in enumerate(platform_info['platform_tags']):
+                if platform_tag == compatible_platform:
+                    # Earlier in list = more specific/preferred
+                    platform_score = 200 - (idx * 20)
+                    break
+        
+        if platform_score == 0:
+            return 0  # Incompatible platform
+        
+        score += platform_score
+        
+        return score
+    
+    def _select_best_file(files: List[Dict], platform_info: Dict) -> Optional[Dict]:
+        """
+        Select the best file (wheel or sdist) for the current platform.
+        Returns the file dict or None if no compatible file found.
+        """
+        wheels = [f for f in files if f['packagetype'] == 'bdist_wheel']
+        sdists = [f for f in files if f['packagetype'] == 'sdist']
+        
+        if wheels:
+            # Score all wheels
+            scored_wheels = []
+            for wheel in wheels:
+                score = _score_wheel_compatibility(wheel['filename'], platform_info)
+                if score > 0:
+                    scored_wheels.append((score, wheel))
+            
+            if scored_wheels:
+                # Return highest scoring wheel
+                scored_wheels.sort(reverse=True, key=lambda x: x[0])
+                return scored_wheels[0][1]
+        
+        # Fallback to source distribution
+        if sdists:
+            return sdists[0]
+        
+        return None
+
+    def run_historical_install_fallback(self, target_pkg, target_ver, historical_versions, target_directory_override: Optional[Path] = None):
         install_target_desc = f"temporary sandbox ('{target_directory_override}')" if target_directory_override else "main environment"
         safe_print(f"      - 🎯 Install Target: {install_target_desc}")
-
+        
+        # Get platform information once
+        platform_info = _get_platform_tags()
+        safe_print(f"      - 🖥️  Platform: Python {platform_info['py_version']} on {platform_info['system']} ({', '.join(platform_info['platform_tags'][:2])})")
+    
         # Stage 1: Ancient setuptools
         safe_print('\n      - ⚙️ Stage 1: Installing ANCIENT build system (setuptools with Feature support)...')
         build_system_fix = ["setuptools==40.8.0", "wheel"]
@@ -8603,7 +8726,7 @@ class omnipkg:
             safe_print("      - ❌ Stage 1 failed.")
             return False
         safe_print("      - ✅ Stage 1 complete: Ancient build system (setuptools 40.x) is now active.")
-
+    
         # Stage 2: Download and install - BUT DO ITSDANGEROUS LAST
         safe_print('\n      - ⚙️ Stage 2: Downloading and installing historical package files...')
         
@@ -8632,19 +8755,19 @@ class omnipkg:
                 if not files:
                     safe_print(f"      - ⚠️  No files found for {pkg_name}=={pkg_ver}")
                     continue
-                    
-                wheel_file = next((f for f in files if f['packagetype'] == 'bdist_wheel'), None)
-                sdist_file = next((f for f in files if f['packagetype'] == 'sdist'), None)
                 
-                file_to_download = wheel_file or sdist_file
+                # Use smart selection
+                file_to_download = _select_best_file(files, platform_info)
+                
                 if not file_to_download:
-                    safe_print(f"      - ⚠️  No suitable file found for {pkg_name}=={pkg_ver}")
+                    safe_print(f"      - ⚠️  No compatible file found for {pkg_name}=={pkg_ver}")
                     continue
                 
                 download_url = file_to_download['url']
                 filename = file_to_download['filename']
+                file_type = "wheel" if file_to_download['packagetype'] == 'bdist_wheel' else "source"
                 
-                safe_print(f"      - 📥 Downloading {filename}...")
+                safe_print(f"      - 📥 Downloading {filename} ({file_type})...")
                 
                 temp_file = Path(tempfile.gettempdir()) / filename
                 file_response = http_requests.get(download_url, timeout=30)
@@ -8713,7 +8836,7 @@ class omnipkg:
             temp_file.unlink()
         
         safe_print("      - ✅ Stage 2 complete.")
-
+    
         # Stage 3
         safe_print(f'\n      - ⚙️ Stage 3: Building {target_pkg}=={target_ver}...')
         target_spec = [f"{target_pkg}=={target_ver}"]
@@ -8726,7 +8849,7 @@ class omnipkg:
         )
         
         self._restore_modern_setuptools()
-
+    
         if return_code != 0:
             safe_print("      - ❌ Stage 3 failed.")
             return False
