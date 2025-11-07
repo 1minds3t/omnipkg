@@ -4332,9 +4332,10 @@ class omnipkg:
             # If a rebuild was just run, the KB is perfectly in sync.
             # We can return early to avoid redundant work.
             safe_print("   ✅ First-use KB build complete. Synchronization is guaranteed.")
-            return self._discover_distributions(None, verbose=False)
+            gatherer = omnipkgMetadataGatherer(config=self.config, env_id=self.env_id, omnipkg_instance=self)
+            return gatherer._discover_distributions(None, verbose=False)
         # --- END OF "FIRST USE" LOGIC ---
-
+    
         self._clean_corrupted_installs()
         if self._check_and_run_pending_rebuild():
             pass
