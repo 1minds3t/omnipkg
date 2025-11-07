@@ -4321,10 +4321,11 @@ class omnipkg:
             # 7. Execute all registrations in a single transaction.
             pipe.execute()
 
+     
     def _synchronize_knowledge_base_with_reality(self, verbose: bool = False) -> List[importlib.metadata.Distribution]:
         """
-        (UPGRADED - THE REPAIR BOT v7) Now uses skip_existing_checksums=True during
-        targeted rebuilds to avoid processing already-registered instances.
+        (UPGRADED - THE REPAIR BOT v7) Now uses resolved paths consistently
+        for hash generation to prevent ghost/rebuild loops.
         """
         
         if self._check_and_run_pending_rebuild():
@@ -4369,24 +4370,19 @@ class omnipkg:
         # ========================================================================
         
         # Step 1: Build map of disk instances by their installation hashes
-        safe_print("   -> [DIAGNOSTIC] Building map of all instances found on disk...")
         disk_instance_map_by_hash = {}
         for dist in all_discovered_dists:
             try:
                 c_name = canonicalize_name(dist.metadata['Name'])
-                raw_path_str = str(dist._path)
                 resolved_path_str = str(dist._path.resolve())
                 unique_instance_identifier = f"{resolved_path_str}::{dist.version}"
                 instance_hash = hashlib.sha256(unique_instance_identifier.encode()).hexdigest()[:12]
-                
-                safe_print(f"      - DISK: Found '{c_name}=={dist.version}'. Path: '{raw_path_str}'. Resolved Path: '{resolved_path_str}'. -> HASH: {instance_hash}")
                 
                 disk_instance_map_by_hash[instance_hash] = dist
             except Exception:
                 continue
         
         # Step 2: Get all KB instance keys and extract their installation hashes
-        safe_print("   -> [DIAGNOSTIC] Getting all instance hashes from Knowledge Base (Redis)...")
         kb_instance_keys = set(self.cache_client.keys(self.redis_key_prefix.replace(':pkg:', ':inst:') + '*'))
         
         kb_hashes_to_keys = {}  # Map: installation_hash -> redis_key
@@ -4398,9 +4394,6 @@ class omnipkg:
         for key, stored_hash in zip(kb_instance_keys, results):
             if stored_hash:
                 kb_hashes_to_keys[stored_hash] = key
-                safe_print(f"      - KB: Found Key '{key}' -> HASH: {stored_hash}")
-            else:
-                safe_print(f"      - KB WARNING: Key '{key}' is missing its 'installation_hash' field!")
         
         # Step 3: Identify instances that need registration (hash not in KB)
         disk_hashes = set(disk_instance_map_by_hash.keys())
@@ -4408,28 +4401,18 @@ class omnipkg:
         
         hashes_needing_registration = disk_hashes - kb_hashes
         instances_to_rebuild = [disk_instance_map_by_hash[hash_val] for hash_val in hashes_needing_registration]
-
-        if instances_to_rebuild:
-            safe_print(f"   -> [DIAGNOSTIC] The following {len(hashes_needing_registration)} hashes are NEW (on disk, but not in KB):")
-            for h in hashes_needing_registration:
-                dist = disk_instance_map_by_hash.get(h)
-                safe_print(f"      - NEW HASH: {h} (corresponds to disk path: '{dist._path.resolve() if dist else '??'}')")
         
         # Step 4: Clean up ghost instances (KB hashes that don't exist on disk)
         ghost_hashes = kb_hashes - disk_hashes
-        if ghost_hashes:
-            safe_print(f"   -> [DIAGNOSTIC] The following {len(ghost_hashes)} hashes are GHOSTS (in KB, but not found on disk):")
-            for h in ghost_hashes:
-                safe_print(f"      - GHOST HASH: {h} (corresponds to KB key: '{kb_hashes_to_keys.get(h)}')")
-
-            safe_print(f"   -> 👻 Removing {len(ghost_hashes)} ghost instance(s) from KB...")
-            ghost_keys = [kb_hashes_to_keys[hash_val] for hash_val in ghost_hashes]
-            if ghost_keys:
-                self.cache_client.delete(*ghost_keys)
+        
+        # Only print if we found discrepancies
+        if instances_to_rebuild or ghost_hashes:
+            if instances_to_rebuild:
+                safe_print(f"   -> 🔍 Found {len(instances_to_rebuild)} new instance(s) to register")
+            if ghost_hashes:
+                safe_print(f"   -> 👻 Removing {len(ghost_hashes)} ghost instance(s) from KB")
         
         if instances_to_rebuild:
-            safe_print(f"   -> 🔍 Found {len(instances_to_rebuild)} unregistered instance(s) at new paths.")
-            
             if verbose:
                 for dist in instances_to_rebuild:
                     try:
@@ -4437,14 +4420,15 @@ class omnipkg:
                     except Exception:
                         pass
             
-            # --- THIS IS THE FIX ---
-            # Instead of creating generic specs and re-discovering, we pass the
-            # exact list of new Distribution objects directly to the builder.
-            safe_print(f"   -> 🧠 Surgically rebuilding KB for {len(instances_to_rebuild)} new instance(s)...")
-            
+            safe_print(f"   -> 🧠 Rebuilding KB for {len(instances_to_rebuild)} instance(s)...")
             gatherer.run(pre_discovered_distributions=instances_to_rebuild)
             self._installed_packages_cache = None
-
+        
+        if ghost_hashes:
+            ghost_keys = [kb_hashes_to_keys[hash_val] for hash_val in ghost_hashes]
+            if ghost_keys:
+                self.cache_client.delete(*ghost_keys)
+        
         if instances_to_rebuild or ghost_hashes:
             safe_print("   -> ✅ Instance-level healing complete.")
         
@@ -4510,8 +4494,14 @@ class omnipkg:
             safe_print(_('   ✅ Sync and repair complete.'))
         
         return all_discovered_dists
-
-
+    
+    
+    
+    
+    
+    
+    
+    
     def _get_disk_specs_for_context(self, python_version: str) -> set:
         """
         (V3 - ROBUST PATH FIX) A lightweight, READ-ONLY function to get the ground truth
