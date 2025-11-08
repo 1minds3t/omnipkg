@@ -664,7 +664,7 @@ class omnipkgMetadataGatherer:
                 return True
             else:
                 safe_print(f'    ⏭️  Continuing with v{current_version} (newer available)')
-                safe_print('    💡 To upgrade later: `8pkg install safety --upgrade`')
+                safe_print('    💡 To upgrade later: `8pkg upgrade safety`')
                 self._cache_safety_decision(False)
                 return False
         except (EOFError, KeyboardInterrupt):
@@ -675,12 +675,12 @@ class omnipkgMetadataGatherer:
     
     def _perform_security_scan(self, all_packages_in_context: Dict[str, Set[str]]):
         """
-        (V3 - Environment Aware) Runs a security check on ALL packages in the current context.
-        It now correctly detects the 'safety' tool in EITHER a dedicated bubble OR the main
-        environment, ensuring the upgrade prompt is triggered correctly.
+        (V4 - Context Aware) Runs a security check on ALL packages in the current context.
+        Now properly detects compatible safety versions for the target Python context.
         """
         effective_version_str = self.target_context_version or get_python_version()
-        # ... (the Python 3.14+ incompatibility check remains the same)
+        
+        # Check Python 3.14+ incompatibility
         is_incompatible_with_safety = False
         try:
             major, minor = map(int, effective_version_str.split('.')[:2])
@@ -713,41 +713,61 @@ class omnipkgMetadataGatherer:
 
         try:
             TOOL_NAME = 'safety'
-            latest_tool_version = self.omnipkg_instance._get_latest_version_from_pypi(TOOL_NAME) or "3.6.2"
-
-            # --- THIS IS THE NEW, CORRECTED LOGIC ---
-            # Step 1: Find the current version, prioritizing a bubble but checking the main env as a fallback.
+            
+            # Step 1: Get the latest COMPATIBLE version for THIS Python context
+            # This respects the target Python version and finds what actually works
+            latest_compatible = self.omnipkg_instance._get_latest_version_from_pypi(
+                TOOL_NAME,
+                python_context_version=self.target_context_version
+            )
+            
+            if not latest_compatible:
+                safe_print(f'⚠️  No compatible safety version found for Python {effective_version_str}')
+                self._run_pip_audit_fallback({name: list(versions)[0] for name, versions in all_packages_in_context.items()})
+                return
+            
+            safe_print(f'   💾 Latest compatible version for Python {effective_version_str}: {latest_compatible}')
+            
+            # Step 2: Check if we already have a bubble for this context
             current_version = None
             current_bubble = None
             
-            # First, look for a dedicated tool bubble. This is the preferred method.
+            # Look for existing tool bubble that matches our target context
             for bubble in self.omnipkg_instance.multiversion_base.glob(f'{TOOL_NAME}-*'):
-                current_version = bubble.name.split('-', 1)[1]
+                bubble_version = bubble.name.split('-', 1)[1]
+                # Check if this bubble was created for our Python context
+                # (You might want to store context info in bubble metadata)
+                current_version = bubble_version
                 current_bubble = bubble
                 safe_print(f"   -> Found existing 'safety' tool bubble: v{current_version}")
                 break
-
-            # If no bubble exists, check the main environment. This is the fix.
+            
+            # Step 3: Decide if we need to create/upgrade
+            should_create_or_upgrade = False
+            
             if not current_version:
-                current_version = self.omnipkg_instance._get_active_version_from_environment(TOOL_NAME)
-                if current_version:
-                    safe_print(f"   -> Found 'safety' in main environment: v{current_version}")
-            # --- END OF NEW LOGIC ---
-
-            should_upgrade = False
-            if current_version and latest_tool_version and (parse_version(current_version) < parse_version(latest_tool_version)):
-                should_upgrade = self._should_upgrade_safety(current_version, latest_tool_version)
-            elif not current_version:
-                # No existing version anywhere, so we must install.
-                should_upgrade = True
-
-            tool_version_to_use = latest_tool_version if should_upgrade else current_version
+                # No bubble exists at all
+                safe_print(f'   💡 No existing safety bubble for Python {effective_version_str}')
+                should_create_or_upgrade = True
+                tool_version_to_use = latest_compatible
+            elif parse_version(current_version) < parse_version(latest_compatible):
+                # Bubble exists but is outdated
+                should_upgrade = self._should_upgrade_safety(current_version, latest_compatible)
+                if should_upgrade:
+                    should_create_or_upgrade = True
+                    tool_version_to_use = latest_compatible
+                else:
+                    tool_version_to_use = current_version
+            else:
+                # Bubble exists and is up to date
+                tool_version_to_use = current_version
+            
             TOOL_SPEC = f'{TOOL_NAME}=={tool_version_to_use}'
             bubble_path = self.omnipkg_instance.multiversion_base / f'{TOOL_NAME}-{tool_version_to_use}'
 
-            # Only create/recreate the bubble if it doesn't exist or if we're upgrading.
-            if should_upgrade or not bubble_path.is_dir():
-                if should_upgrade and current_version:
+            # Step 4: Create or upgrade bubble if needed
+            if should_create_or_upgrade or not bubble_path.is_dir():
+                if should_create_or_upgrade and current_version:
                     safe_print(f"📦 Upgrading safety tool: v{current_version} → v{tool_version_to_use}")
                 else:
                     safe_print(f"💡 First-time setup: Creating isolated bubble for '{TOOL_SPEC}'...")
@@ -770,8 +790,7 @@ class omnipkgMetadataGatherer:
                 safe_print(f"   -> 🧠 Indexing new '{TOOL_SPEC}' bubble in the Knowledge Base...")
                 self.omnipkg_instance.rebuild_package_kb(packages=[TOOL_SPEC], target_python_version=self.target_context_version)
 
-            # ... (the rest of the function for creating reqs file and running the scan remains the same) ...
-
+            # Step 5: Run the scan
             with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.txt') as reqs_file:
                 reqs_file_path = reqs_file.name
                 for name, versions in all_packages_in_context.items():
