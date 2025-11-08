@@ -32,12 +32,18 @@ jobs:
           pip-audit --require pyproject.toml
       
       - name: Try Safety as fallback (if available)
-        if: steps.pip-audit.outcome == 'failure' && secrets.SAFETY_API_KEY != ''
+        if: steps.pip-audit.outcome == 'failure'
         continue-on-error: true
+        env:
+          SAFETY_API_KEY: ${{ secrets.SAFETY_API_KEY }}
         run: |
-          pip install safety
-          echo "## Safety Scan (Fallback)" >> $GITHUB_STEP_SUMMARY
-          safety check --output json || echo "Safety API is down"
+          if [ -n "$SAFETY_API_KEY" ]; then
+            pip install safety
+            echo "## Safety Scan (Fallback)" >> $GITHUB_STEP_SUMMARY
+            safety check --output json || echo "Safety API is down"
+          else
+            echo "Safety API key not configured, skipping fallback"
+          fi
       
       - name: Security scan summary
         if: always()
