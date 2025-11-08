@@ -37,7 +37,7 @@ jobs:
         run: |
           pip install safety
           echo "## Safety Scan (Fallback)" >> $GITHUB_STEP_SUMMARY
-          safety check --output json || echo "Safety API is down (as usual) 🤡"
+          safety check --output json || echo "Safety API is down"
       
       - name: Security scan summary
         if: always()
