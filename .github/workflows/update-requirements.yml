@@ -1,53 +1,33 @@
-name: Security Scan
+name: Update requirements.txt
 
 on:
   push:
     branches: [main]
-  pull_request:
-  schedule:
-    - cron: '0 0 * * 0'  # Weekly on Sunday
+    paths:
+      - 'pyproject.toml'
   workflow_dispatch:
 
 jobs:
-  security:
+  update-requirements:
     runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
     
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
-      
-      - name: Install pip-audit
-        run: pip install pip-audit
-      
-      - name: Run pip-audit (primary)
-        id: pip-audit
-        continue-on-error: true
+          python-version: '3.12'
+          python-version: '3.11'  # Changed from 3.12 - more stable for pip-tools
+
+      - name: Install pip-tools
         run: |
-          echo "## pip-audit Security Scan" >> $GITHUB_STEP_SUMMARY
-          pip-audit --desc --format markdown >> $GITHUB_STEP_SUMMARY || true
-          pip-audit --require pyproject.toml
+          pip install --upgrade pip
+          pip install pip-tools>=7.4.0
+          pip install pip-tools>=7.4.1  # Use latest patch version
       
-      - name: Try Safety as fallback (if available)
-        if: steps.pip-audit.outcome == 'failure'
-        continue-on-error: true
-        env:
-          SAFETY_API_KEY: ${{ secrets.SAFETY_API_KEY }}
-        run: |
-          if [ -n "$SAFETY_API_KEY" ]; then
-            pip install safety
-            echo "## Safety Scan (Fallback)" >> $GITHUB_STEP_SUMMARY
-            safety check --output json || echo "Safety API is down"
-          else
-            echo "Safety API key not configured, skipping fallback"
-          fi
-      
-      - name: Security scan summary
-        if: always()
-        run: |
-          echo "✅ Security scan completed"
-          echo "Primary scanner: pip-audit (PyPA official tool)"
-          echo "Fallback: Safety (when their API isn't broken)"
+      - name: Compile requirements
+        run: pip-compile pyproject.toml -o requirements.txt --resolver=backtracking
