@@ -1,28 +1,31 @@
 name: Update requirements.txt
+
 on:
   push:
     branches: [main]
     paths:
       - 'pyproject.toml'
   workflow_dispatch:
+
 jobs:
   update-requirements:
     runs-on: ubuntu-latest
     
     permissions:
       contents: write
+    
     steps:
       - uses: actions/checkout@v4
       
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
+          python-version: '3.11'  # Changed from 3.12 - more stable for pip-tools
       
       - name: Install pip-tools
         run: |
           pip install --upgrade pip
-          pip install pip-tools>=7.4.0
+          pip install pip-tools>=7.4.1  # Use latest patch version
       
       - name: Compile requirements
         run: pip-compile pyproject.toml -o requirements.txt --resolver=backtracking
