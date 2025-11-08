@@ -1,10 +1,12 @@
 [build-system]
-requires = ["setuptools>=61.0"]
+# Python 3.7 needs older setuptools (setuptools 61.0 requires Python 3.7.9+)
+# But to be safe and support 3.7.0+, use setuptools 50.x which supports 3.6+
+requires = ["setuptools>=50.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "omnipkg"
-version = "1.5.14"
+version = "1.5.15"
 authors = [
   { name = "1minds3t", email = "1minds3t@proton.me" },
 ]
@@ -19,6 +21,7 @@ classifiers = [
     "License :: OSI Approved :: GNU Affero General Public License v3 or later (AGPLv3+)",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.7",
     "Programming Language :: Python :: 3.8",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
@@ -30,27 +33,62 @@ classifiers = [
     "Topic :: Software Development :: Build Tools",
     "Topic :: System :: Software Distribution",
 ]
-
 dependencies = [
-    # Use modern packaging for modern Python (3.10+)
-    "packaging>=23.0; python_version >= '3.10'",
-    # Use older packaging on Python 3.9 to match the older safety dependency
-    "packaging<22.0,>=21.0; python_version < '3.10'",
+    # Core dependencies that work on Python 3.7+
     "requests>=2.20",
-    "authlib>=1.6.5",
     "filelock>=3.9",
-    "tomli; python_version < '3.11'",
+    
+    # Python 3.7-3.9: Need older packaging + backports
+    "packaging>=20.0,<21.0; python_version < '3.8'",
+    "packaging>=21.0,<22.0; python_version >= '3.8' and python_version < '3.10'",
+    "packaging>=23.0; python_version >= '3.10'",
+    
+    # Python 3.7-3.10 need tomli (tomllib is built-in for 3.11+)
+    "tomli>=1.0.0; python_version < '3.11'",
+    
+    # Python 3.7-3.9: Need typing extensions backports
+    "typing-extensions>=4.0.0; python_version < '3.10'",
+    
+    # importlib-metadata backport for Python < 3.8
+    "importlib-metadata>=1.0; python_version < '3.8'",
+    
+    # dataclasses backport for Python 3.7
+    "dataclasses>=0.8; python_version == '3.7'",
+    
+    # authlib with Python 3.7 compatibility
+    "authlib>=1.2.0; python_version >= '3.7'",
+    
+    # aiohttp 3.13+ requires Python 3.8+, use older version for 3.7
+    "aiohttp>=3.7.0,<3.9.0; python_version == '3.7'",
+    "aiohttp>=3.13.1; python_version >= '3.8'",
+    
+    # Safety: different versions for different Python versions
+    # Python 3.7-3.9: Use older safety
+    "safety>=2.0.0,<3.0; python_version < '3.10'",
     "safety>=3.0; python_version >= '3.10' and python_version < '3.14'",
-    "aiohttp>=3.13.1",
+    
+    # pip-audit only for 3.14+
     "pip-audit>=2.6.0; python_version >= '3.14'",
-    "uv>=0.9.6" 
+    
+    # uv: Check minimum Python version (may need adjustment)
+    "uv>=0.9.6; python_version >= '3.8'",
 ]
 
 [project.optional-dependencies]
 full = [
-    "tqdm",
-    "python-magic",
-    "redis>=5.0"
+    "tqdm>=4.50.0",
+    "python-magic>=0.4.18",
+    # Redis 5.0 requires Python 3.8+
+    "redis>=4.0.0,<5.0; python_version == '3.7'",
+    "redis>=5.0; python_version >= '3.8'",
+]
+
+# Python 3.7 testing dependencies
+dev = [
+    "pytest>=6.0",
+    "pytest-cov>=2.0",
+    "black>=22.0; python_version >= '3.8'",  # black requires 3.8+
+    "ruff>=0.1.0; python_version >= '3.8'",   # ruff requires 3.8+
 ]
 
 [project.urls]

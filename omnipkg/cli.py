@@ -12,6 +12,7 @@ import subprocess
 import tempfile
 import json
 import requests as http_requests
+from contextlib import contextmanager
 from .i18n import _, SUPPORTED_LANGUAGES
 from .core import omnipkg as OmnipkgCore
 from .core import ConfigManager
@@ -70,7 +71,33 @@ def debug_python_context(label=""):
         print(f"   [{i}] {path}")
     
     print(f"{'='*70}\n")
+
+@contextmanager   
+def temporary_install_strategy(core: OmnipkgCore, strategy: str):
+    """
+    A context manager to temporarily set the install strategy and restore it on exit.
+    """
+    original_strategy = core.config.get('install_strategy', 'stable-main')
     
+    # Only perform the switch if the desired strategy is different from the current one.
+    switched = False
+    if original_strategy != strategy:
+        safe_print(f"   - 🔄 Temporarily switching install strategy to '{strategy}'...")
+        # Update both the in-memory config for the current run and the persistent config
+        core.config['install_strategy'] = strategy
+        core.config_manager.set('install_strategy', strategy)
+        switched = True
+    
+    try:
+        # This 'yield' passes control to the code inside the 'with' block
+        yield
+    finally:
+        # This code runs after the 'with' block, guaranteed.
+        if switched:
+            core.config['install_strategy'] = original_strategy
+            core.config_manager.set('install_strategy', original_strategy)
+            safe_print(f"   - ✅ Strategy restored to '{original_strategy}'")
+
 def upgrade(args, core):
     """Handler for the upgrade command."""
     package_name = args.package_name[0] if args.package_name else 'omnipkg'
@@ -83,29 +110,13 @@ def upgrade(args, core):
             skip_dev_check=args.force_dev
         )
 
-    # For non-omnipkg packages: temporarily switch strategy, install, then restore
-    original_strategy = core.config.get('install_strategy', 'stable-main')
-    
-    try:
-        if original_strategy != 'latest-active':
-            safe_print(f"   - 🔄 Temporarily switching to 'latest-active' strategy...")
-            core.config_manager.set('install_strategy', 'latest-active')
-            # Also update the in-memory config so smart_install sees it
-            core.config['install_strategy'] = 'latest-active'
-        
-        safe_print(f"🔄 Upgrading '{package_name}' to latest version...")
-        
+    # For all other packages, use the context manager to handle the strategy.
+    safe_print(f"🔄 Upgrading '{package_name}' to latest version...")
+    with temporary_install_strategy(core, 'latest-active'):
         return core.smart_install(
             packages=[package_name],
             force_reinstall=True
         )
-    
-    finally:
-        # ALWAYS restore the original strategy
-        if original_strategy != 'latest-active':
-            core.config_manager.set('install_strategy', original_strategy)
-            core.config['install_strategy'] = original_strategy
-            safe_print(f"   - ✅ Strategy restored to '{original_strategy}'")
 
 def run_demo_with_enforced_context(
     source_script_path: Path,
@@ -593,7 +604,9 @@ def main():
         elif args.command == 'doctor':
             return pkg_instance.doctor(dry_run=args.dry_run, force=args.force)
         elif args.command == 'heal':
-            return pkg_instance.heal(dry_run=args.dry_run, force=args.force)
+            # Use the context manager to wrap the call to the core heal logic.
+            with temporary_install_strategy(pkg_instance, 'latest-active'):
+                return pkg_instance.heal(dry_run=args.dry_run, force=args.force)
         elif args.command == 'list':
             if args.filter and args.filter.lower() == 'python':
                 interpreters = pkg_instance.interpreter_manager.list_available_interpreters()
@@ -752,21 +765,49 @@ def main():
                 run_actual_stress_test()
             return 0
         elif args.command == 'install':
-            packages_to_process = []
-            if args.requirement:
-                req_path = Path(args.requirement)
-                if not req_path.is_file():
-                    safe_print(_("❌ Error: Requirements file not found at '{}'").format(req_path))
+            # --- [ START: "Return to Origin" Logic ] ---
+            # Store the original Python context before the operation begins.
+            original_python_tuple = get_actual_python_version()
+            original_python_str = f"{original_python_tuple[0]}.{original_python_tuple[1]}"
+            exit_code = 1 # Default to failure
+
+            try:
+                # This is the original logic to determine which packages to install
+                packages_to_process = []
+                if args.requirement:
+                    req_path = Path(args.requirement)
+                    if not req_path.is_file():
+                        safe_print(_("❌ Error: Requirements file not found at '{}'").format(req_path))
+                        return 1
+                    safe_print(_('📄 Reading packages from {}...').format(req_path.name))
+                    with open(req_path, 'r') as f:
+                        packages_to_process = [line.split('#')[0].strip() for line in f if line.split('#')[0].strip()]
+                elif args.packages:
+                    packages_to_process = args.packages
+                else:
+                    parser.parse_args(['install', '--help'])
                     return 1
-                safe_print(_('📄 Reading packages from {}...').format(req_path.name))
-                with open(req_path, 'r') as f:
-                    packages_to_process = [line.split('#')[0].strip() for line in f if line.split('#')[0].strip()]
-            elif args.packages:
-                packages_to_process = args.packages
-            else:
-                parser.parse_args(['install', '--help'])
-                return 1
-            return pkg_instance.smart_install(packages_to_process)
+                
+                # Execute the core install logic and store its exit code
+                exit_code = pkg_instance.smart_install(packages_to_process)
+                return exit_code
+
+            finally:
+                # This block ALWAYS runs, ensuring we return to the user's original context.
+                current_version_after_install_tuple = get_actual_python_version()
+                current_version_after_install_str = f"{current_version_after_install_tuple[0]}.{current_version_after_install_tuple[1]}"
+
+                if original_python_str != current_version_after_install_str:
+                    # The context was changed by Quantum Healing, so we switch it back.
+                    print_header(f"Restoring original Python {original_python_str} context")
+                    
+                    # We must create a new OmnipkgCore instance because the config
+                    # was modified during the swap. This ensures we are acting on the
+                    # most current state before switching back.
+                    final_cm = ConfigManager(suppress_init_messages=True)
+                    final_pkg_instance = OmnipkgCore(config_manager=final_cm)
+                    final_pkg_instance.switch_active_python(original_python_str)
+            # --- [ END: "Return to Origin" Logic ] ---
         elif args.command == 'install-with-deps':
             packages_to_process = [args.package] + args.dependency
             return pkg_instance.smart_install(packages_to_process)

@@ -168,75 +168,69 @@ def install_packages_with_omnipkg(packages: list, description: str):
 # --- MAIN ORCHESTRATOR ---
 def multiverse_analysis():
     original_version = "3.11"
-    try:
-        safe_print(f"[START] Starting multiverse analysis from dimension: Python {original_version}")
-        
-        # === STEP 1: PYTHON 3.9 CONTEXT ===
-        safe_print("\n[STEP 1] MISSION STEP 1: Setting up Python 3.9 dimension...")
-        run_command_with_isolated_context(["omnipkg", "swap", "python", "3.9"], "Swapping to Python 3.9 context")
-        python_3_9_exe = get_interpreter_path("3.9")
-        install_packages_with_omnipkg(
-            ["numpy<2", "scipy"],
-            "Installing legacy packages for Python 3.9"
-        )
-        
-        safe_print("\n [TEST] Executing legacy payload in Python 3.9...")
-        result_3_9 = subprocess.run(
-            [python_3_9_exe, __file__, '--run-legacy'], 
-            capture_output=True, 
-            text=True, 
-            check=False
-        )
-        
-        # Debug output to see what we actually got
-        print(f"DEBUG: Exit code: {result_3_9.returncode}")
-        print(f"DEBUG: Stdout: '{result_3_9.stdout}'")
-        print(f"DEBUG: Stderr: '{result_3_9.stderr}'")
-        
-        if result_3_9.returncode != 0:
-            safe_print(f"[ERROR] Legacy payload failed with exit code {result_3_9.returncode}")
-            print(f"Stderr: {result_3_9.stderr}")
-            raise RuntimeError(f"Legacy payload execution failed")
-        
-        if not result_3_9.stdout.strip():
-            raise RuntimeError("Legacy payload produced no output")
-        
-        # Try to extract JSON from the last line that looks like JSON
-        json_lines = [line.strip() for line in result_3_9.stdout.splitlines() if line.strip().startswith('{')]
-        if not json_lines:
-            raise RuntimeError(f"No JSON output found in legacy payload. Output was: {result_3_9.stdout}")
-        
-        legacy_data = json.loads(json_lines[-1])
-        safe_print(f"[OK] Artifact retrieved from 3.9: Scipy analysis complete. Result: {legacy_data['result']}")
-        
-        # === STEP 2: PYTHON 3.11 CONTEXT ===
-        safe_print("\n[STEP 2] MISSION STEP 2: Setting up Python 3.11 dimension...")
-        run_command_with_isolated_context(["omnipkg", "swap", "python", "3.11"], "Swapping back to Python 3.11 context")
-        install_packages_with_omnipkg(
-            ["tensorflow"],
-            "Installing modern packages for Python 3.11"
-        )
-        
-        safe_print("\n [TEST] Executing modern payload using 'omnipkg run' to trigger auto-healing...")
-        omnipkg_run_command = [
-            "omnipkg", "run", __file__, '--run-modern', json.dumps(legacy_data)
-        ]
-        modern_output = run_command_with_isolated_context(
-            omnipkg_run_command,
-            "Executing modern payload with auto-healing enabled"
-        )
-        
-        # The actual JSON result is the last line of the script's output that is a JSON object.
-        json_output = [line for line in modern_output.splitlines() if line.strip().startswith('{')][-1]
-        final_prediction = json.loads(json_output)
-        safe_print(f"[OK] Artifact processed by 3.11: TensorFlow prediction complete. Prediction: '{final_prediction['prediction']}'")
-        
-        return final_prediction['prediction'] == 'SUCCESS'
-        
-    finally:
-        # --- SAFETY PROTOCOL ---
-        safe_print(f"\n[CLEANUP] SAFETY PROTOCOL: Returning to original dimension (Python {original_version})...")
-        run_command_with_isolated_context(["omnipkg", "swap", "python", original_version], "Returning to original context", check=False)
+    safe_print(f"[START] Starting multiverse analysis from dimension: Python {original_version}")
+    
+    # === STEP 1: PYTHON 3.9 CONTEXT ===
+    safe_print("\n[STEP 1] MISSION STEP 1: Setting up Python 3.9 dimension...")
+    run_command_with_isolated_context(["omnipkg", "swap", "python", "3.9"], "Swapping to Python 3.9 context")
+    python_3_9_exe = get_interpreter_path("3.9")
+    install_packages_with_omnipkg(
+        ["numpy<2", "scipy"],
+        "Installing legacy packages for Python 3.9"
+    )
+    
+    safe_print("\n [TEST] Executing legacy payload in Python 3.9...")
+    result_3_9 = subprocess.run(
+        [python_3_9_exe, __file__, '--run-legacy'], 
+        capture_output=True, 
+        text=True, 
+        check=False
+    )
+    
+    # Debug output to see what we actually got
+    print(f"DEBUG: Exit code: {result_3_9.returncode}")
+    print(f"DEBUG: Stdout: '{result_3_9.stdout}'")
+    print(f"DEBUG: Stderr: '{result_3_9.stderr}'")
+    
+    if result_3_9.returncode != 0:
+        safe_print(f"[ERROR] Legacy payload failed with exit code {result_3_9.returncode}")
+        print(f"Stderr: {result_3_9.stderr}")
+        raise RuntimeError(f"Legacy payload execution failed")
+    
+    if not result_3_9.stdout.strip():
+        raise RuntimeError("Legacy payload produced no output")
+    
+    # Try to extract JSON from the last line that looks like JSON
+    json_lines = [line.strip() for line in result_3_9.stdout.splitlines() if line.strip().startswith('{')]
+    if not json_lines:
+        raise RuntimeError(f"No JSON output found in legacy payload. Output was: {result_3_9.stdout}")
+    
+    legacy_data = json.loads(json_lines[-1])
+    safe_print(f"[OK] Artifact retrieved from 3.9: Scipy analysis complete. Result: {legacy_data['result']}")
+    
+    # === STEP 2: PYTHON 3.11 CONTEXT ===
+    safe_print("\n[STEP 2] MISSION STEP 2: Setting up Python 3.11 dimension...")
+    run_command_with_isolated_context(["omnipkg", "swap", "python", "3.11"], "Swapping back to Python 3.11 context")
+    install_packages_with_omnipkg(
+        ["tensorflow"],
+        "Installing modern packages for Python 3.11"
+    )
+    
+    safe_print("\n [TEST] Executing modern payload using 'omnipkg run' to trigger auto-healing...")
+    omnipkg_run_command = [
+        "omnipkg", "run", __file__, '--run-modern', json.dumps(legacy_data)
+    ]
+    modern_output = run_command_with_isolated_context(
+        omnipkg_run_command,
+        "Executing modern payload with auto-healing enabled"
+    )
+    
+    # The actual JSON result is the last line of the script's output that is a JSON object.
+    json_output = [line for line in modern_output.splitlines() if line.strip().startswith('{')][-1]
+    final_prediction = json.loads(json_output)
+    safe_print(f"[OK] Artifact processed by 3.11: TensorFlow prediction complete. Prediction: '{final_prediction['prediction']}'")
+    
+    return final_prediction['prediction'] == 'SUCCESS'
 
 if __name__ == "__main__":
     # This logic allows the script to call itself to run the payloads.

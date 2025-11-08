@@ -778,24 +778,63 @@ class ConfigManager:
             """Helper to run a command and show its output."""
             safe_print(_('   🔩 Running: {}').format(' '.join(cmd)))
             try:
-                subprocess.run(cmd, check=True, capture_output=True, text=True, timeout=300)
+                result = subprocess.run(cmd, check=True, capture_output=True, text=True, timeout=300)
+                return result
             except subprocess.CalledProcessError as e:
                 safe_print(_('   ❌ {}').format(error_msg))
+                safe_print('   --- Stdout ---')
+                safe_print(e.stdout if e.stdout else '(empty)')
                 safe_print('   --- Stderr ---')
-                safe_print(e.stderr)
+                safe_print(e.stderr if e.stderr else '(empty)')
                 safe_print('   ----------------')
                 raise
+        
+        # Get Python version of the target interpreter
+        version_result = subprocess.run(
+            [str(python_exe), '-c', 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")'],
+            capture_output=True, text=True, timeout=30
+        )
+        target_py_version = version_result.stdout.strip()
+        safe_print(f'   📌 Target interpreter: Python {target_py_version}')
+        
         try:
             safe_print('   - Attempting bootstrap with built-in ensurepip (most reliable)...')
             ensurepip_cmd = [str(python_exe), '-m', 'ensurepip', '--upgrade']
             run_verbose(ensurepip_cmd, "ensurepip bootstrap failed.")
             safe_print('   ✅ Pip bootstrap complete via ensurepip.')
+            
             core_deps = _get_core_dependencies()
             if core_deps:
-                safe_print(_('   - Installing omnipkg core dependencies...'))
-                deps_install_cmd = [str(python_exe), '-m', 'pip', 'install', '--no-cache-dir'] + sorted(list(core_deps))
-                run_verbose(deps_install_cmd, 'Failed to install omnipkg dependencies.')
-                safe_print(_('   ✅ Core dependencies installed.'))
+                # Filter dependencies based on target Python version
+                filtered_deps = []
+                for dep in core_deps:
+                    dep_lower = dep.lower()
+                    # Skip uv for Python 3.7
+                    if 'uv' in dep_lower and target_py_version.startswith('3.7'):
+                        safe_print(f'   ⏭️  Skipping {dep} (not compatible with Python {target_py_version})')
+                        continue
+                    # Skip pip-audit for Python < 3.14
+                    if 'pip-audit' in dep_lower and not target_py_version.startswith('3.14'):
+                        safe_print(f'   ⏭️  Skipping {dep} (requires Python 3.14+, have {target_py_version})')
+                        continue
+                    # Skip safety 3.x for Python < 3.10
+                    if 'safety' in dep_lower:
+                        major, minor = map(int, target_py_version.split('.'))
+                        if major == 3 and minor < 10:
+                            # Use older safety for Python 3.7-3.9
+                            filtered_deps.append('safety>=2.0.0,<3.0')
+                            continue
+                    filtered_deps.append(dep)
+                
+                if filtered_deps:
+                    safe_print(_('   - Installing {} omnipkg core dependencies...').format(len(filtered_deps)))
+                    deps_install_cmd = [str(python_exe), '-m', 'pip', 'install', '--no-cache-dir'] + sorted(list(filtered_deps))
+                    try:
+                        run_verbose(deps_install_cmd, 'Failed to install omnipkg dependencies.')
+                        safe_print(_('   ✅ Core dependencies installed.'))
+                    except subprocess.CalledProcessError:
+                        safe_print(_('   ⚠️  Some dependencies failed to install. Continuing anyway...'))
+                
             safe_print(_('   - Installing omnipkg application layer...'))
             project_root = self._find_project_root()
             if project_root:
@@ -806,35 +845,75 @@ class ConfigManager:
                 install_cmd = [str(python_exe), '-m', 'pip', 'install', '--no-cache-dir', '--no-deps', 'omnipkg']
             run_verbose(install_cmd, 'Failed to install omnipkg application.')
             safe_print(_('   ✅ Omnipkg bootstrapped successfully!'))
+            
         except Exception as e:
-            safe_print(_('   - Bootstrapping pip, setuptools, wheel...'))
-            with tempfile.NamedTemporaryFile(suffix='.py', delete=False, mode='w', encoding='utf-8') as tmp_file:
-                script_path = tmp_file.name
-                with urllib.request.urlopen('https://bootstrap.pypa.io/get-pip.py') as response:
-                    tmp_file.write(response.read().decode('utf-8'))
-            pip_cmd = [str(python_exe), script_path, '--no-cache-dir', 'pip', 'setuptools', 'wheel']
-            run_verbose(pip_cmd, 'Failed to bootstrap pip.')
-            os.unlink(script_path)
-            safe_print(_('   ✅ Pip bootstrap complete.'))
-            core_deps = _get_core_dependencies()
-            if core_deps:
-                safe_print(_('   - Installing omnipkg core dependencies...'))
-                deps_install_cmd = [str(python_exe), '-m', 'pip', 'install', '--no-cache-dir'] + sorted(list(core_deps))
-                run_verbose(deps_install_cmd, 'Failed to install omnipkg dependencies.')
-                safe_print(_('   ✅ Core dependencies installed.'))
-            safe_print(_('   - Installing omnipkg application layer...'))
-            project_root = self._find_project_root()
-            if project_root:
-                safe_print(_('     (Developer mode detected: performing editable install)'))
-                install_cmd = [str(python_exe), '-m', 'pip', 'install', '--no-cache-dir', '--no-deps', '-e', str(project_root)]
-            else:
-                safe_print('     (Standard mode detected: installing from PyPI)')
-                install_cmd = [str(python_exe), '-m', 'pip', 'install', '--no-cache-dir', '--no-deps', 'omnipkg']
-            run_verbose(install_cmd, 'Failed to install omnipkg application.')
-            safe_print(_('   ✅ Omnipkg bootstrapped successfully!'))
-        except Exception as e:
-            safe_print(_('❌ A critical error occurred during the bootstrap process: {}').format(e))
-            raise
+            safe_print(_('   ⚠️  Primary bootstrap failed: {}').format(e))
+            safe_print(_('   - Falling back to get-pip.py bootstrap...'))
+            
+            try:
+                with tempfile.NamedTemporaryFile(suffix='.py', delete=False, mode='w', encoding='utf-8') as tmp_file:
+                    script_path = tmp_file.name
+                    safe_print(_('   - Downloading get-pip.py...'))
+                    # Use version-specific get-pip.py for Python 3.7
+                    if target_py_version.startswith('3.7'):
+                        pip_url = 'https://bootstrap.pypa.io/pip/3.7/get-pip.py'
+                        safe_print(_('   - Using archived get-pip.py for Python 3.7'))
+                    else:
+                        pip_url = 'https://bootstrap.pypa.io/get-pip.py'
+                    with urllib.request.urlopen(pip_url) as response:
+                        tmp_file.write(response.read().decode('utf-8'))
+                
+                safe_print(_('   - Running get-pip.py...'))
+                pip_cmd = [str(python_exe), script_path, '--no-cache-dir']
+                result = run_verbose(pip_cmd, 'Failed to bootstrap pip.')
+                os.unlink(script_path)
+                safe_print(_('   ✅ Pip bootstrap complete via get-pip.py'))
+                
+                # Now try installing dependencies again
+                core_deps = _get_core_dependencies()
+                if core_deps:
+                    # Filter dependencies based on target Python version (same logic as above)
+                    filtered_deps = []
+                    for dep in core_deps:
+                        dep_lower = dep.lower()
+                        if 'uv' in dep_lower and target_py_version.startswith('3.7'):
+                            safe_print(f'   ⏭️  Skipping {dep} (not compatible with Python {target_py_version})')
+                            continue
+                        if 'pip-audit' in dep_lower and not target_py_version.startswith('3.14'):
+                            safe_print(f'   ⏭️  Skipping {dep} (requires Python 3.14+, have {target_py_version})')
+                            continue
+                        if 'safety' in dep_lower:
+                            major, minor = map(int, target_py_version.split('.'))
+                            if major == 3 and minor < 10:
+                                filtered_deps.append('safety>=2.0.0,<3.0')
+                                continue
+                        filtered_deps.append(dep)
+                    
+                    if filtered_deps:
+                        safe_print(_('   - Installing {} omnipkg core dependencies...').format(len(filtered_deps)))
+                        deps_install_cmd = [str(python_exe), '-m', 'pip', 'install', '--no-cache-dir'] + sorted(list(filtered_deps))
+                        try:
+                            run_verbose(deps_install_cmd, 'Failed to install omnipkg dependencies.')
+                            safe_print(_('   ✅ Core dependencies installed.'))
+                        except subprocess.CalledProcessError:
+                            safe_print(_('   ⚠️  Some dependencies failed to install. Continuing anyway...'))
+                
+                safe_print(_('   - Installing omnipkg application layer...'))
+                project_root = self._find_project_root()
+                if project_root:
+                    safe_print(_('     (Developer mode detected: performing editable install)'))
+                    install_cmd = [str(python_exe), '-m', 'pip', 'install', '--no-cache-dir', '--no-deps', '-e', str(project_root)]
+                else:
+                    safe_print('     (Standard mode detected: installing from PyPI)')
+                    install_cmd = [str(python_exe), '-m', 'pip', 'install', '--no-cache-dir', '--no-deps', 'omnipkg']
+                run_verbose(install_cmd, 'Failed to install omnipkg application.')
+                safe_print(_('   ✅ Omnipkg bootstrapped successfully!'))
+                
+            except Exception as fallback_error:
+                safe_print(_('❌ Both bootstrap methods failed!'))
+                safe_print(_('   Primary error: {}').format(e))
+                safe_print(_('   Fallback error: {}').format(fallback_error))
+                raise
 
     def _create_omnipkg_executable(self, new_python_exe: Path, venv_path: Path):
         """
@@ -1032,6 +1111,7 @@ class ConfigManager:
         else:
             safe_print(_('   ℹ️  No managed interpreters found.'))
 
+    
     def _install_managed_python(self, venv_path: Path, full_version: str) -> Path:
         """
         Downloads and installs a specific, self-contained version of Python
@@ -1044,23 +1124,102 @@ class ConfigManager:
         py_arch = py_arch_map.get(arch)
         if not py_arch:
             raise OSError(_('Unsupported architecture: {}').format(arch))
-        VERSION_TO_RELEASE_TAG_MAP = {'3.8.20': '20241002',
-            '3.14.0': '20251014','3.13.7': '20250818', '3.13.6': '20250807', '3.13.1': '20241211', '3.13.0': '20241016', '3.12.11': '20250818', '3.12.8': '20241211', '3.12.7': '20241008', '3.12.6': '20240814', '3.12.5': '20240726', '3.12.4': '20240726', '3.12.3': '20240415', '3.11.13': '20250603', '3.11.12': '20241211', '3.11.10': '20241008', '3.11.9': '20240726', '3.11.6': '20231002', '3.10.18': '20250818', '3.10.15': '20241008', '3.10.14': '20240726', '3.10.13': '20231002', '3.9.23': '20250818', '3.9.21': '20241211', '3.9.20': '20241008', '3.9.19': '20240726', '3.9.18': '20231002'}
-        release_tag = VERSION_TO_RELEASE_TAG_MAP.get(full_version)
+        
+        # Base version to release tag mapping
+        VERSION_TO_RELEASE_TAG_MAP = {
+            '3.8.20': '20241002',
+            '3.14.0': '20251014',
+            '3.13.7': '20250818',
+            '3.13.6': '20250807',
+            '3.13.1': '20241211',
+            '3.13.0': '20241016',
+            '3.12.11': '20250818',
+            '3.12.8': '20241211',
+            '3.12.7': '20241008',
+            '3.12.6': '20240814',
+            '3.12.5': '20240726',
+            '3.12.4': '20240726',
+            '3.12.3': '20240415',
+            '3.11.13': '20250603',
+            '3.11.12': '20241211',
+            '3.11.10': '20241008',
+            '3.11.9': '20240726',
+            '3.11.6': '20231002',
+            '3.10.18': '20250818',
+            '3.10.15': '20241008',
+            '3.10.14': '20240726',
+            '3.10.13': '20231002',
+            '3.9.23': '20250818',
+            '3.9.21': '20241211',
+            '3.9.20': '20241008',
+            '3.9.19': '20240726',
+            '3.9.18': '20231002'
+        }
+        
+        # OS-specific overrides for versions with platform-specific fixes
+        # macOS uses 20200823 for 3.7.9 to avoid libintl.dylib dependency issue
+        OS_SPECIFIC_RELEASE_TAGS = {
+            'darwin': {
+                '3.7.9': '20200823',  # macOS-specific fix for libintl.dylib issue
+            },
+            'linux': {
+                '3.7.9': '20200822',
+            },
+            'windows': {
+                '3.7.9': '20200822',
+            }
+        }
+        
+        # Normalize system name
+        if system == 'macos':
+            system = 'darwin'
+        
+        # Try OS-specific release tag first, then fall back to general mapping
+        release_tag = None
+        if system in OS_SPECIFIC_RELEASE_TAGS:
+            release_tag = OS_SPECIFIC_RELEASE_TAGS[system].get(full_version)
+        
+        if not release_tag:
+            release_tag = VERSION_TO_RELEASE_TAG_MAP.get(full_version)
+        
         if not release_tag:
             available_versions = list(VERSION_TO_RELEASE_TAG_MAP.keys())
             safe_print(_('❌ No known standalone build for Python version {}.').format(full_version))
             safe_print(_('   Available versions: {}').format(', '.join(sorted(available_versions))))
             raise ValueError(f'No known standalone build for Python version {full_version}. Cannot download.')
+        
         py_ver_plus_tag = f'{full_version}+{release_tag}'
         base_url = f'https://github.com/astral-sh/python-build-standalone/releases/download/{release_tag}'
-        archive_name_templates = {'linux': f'cpython-{py_ver_plus_tag}-{py_arch}-unknown-linux-gnu-install_only.tar.gz', 'darwin': f'cpython-{py_ver_plus_tag}-{py_arch}-apple-darwin-install_only.tar.gz', 'windows': f'cpython-{py_ver_plus_tag}-{py_arch}-pc-windows-msvc-install_only.tar.gz'}
-        if system == 'macos':
-            system = 'darwin'
+        
+        # Older releases (pre-2021) used different naming: -pgo instead of -install_only
+        # The 20200822/20200823 releases use .tar.zst format with -pgo suffix
+        # NOTE: Release 20200822 has files dated 20200823 in their filenames!
+        use_legacy_naming = release_tag in ['20200822', '20200823']
+        
+        if use_legacy_naming:
+            # Legacy format: cpython-X.Y.Z-platform-pgo-YYYYMMDDTHHMM.tar.zst
+            # The 20200822 release has files with 20200823 timestamps
+            file_date = '20200823' if release_tag == '20200822' else release_tag
+            
+            archive_name_templates = {
+                'linux': f'cpython-{full_version}-{py_arch}-unknown-linux-gnu-pgo-{file_date}T0036.tar.zst',
+                'darwin': f'cpython-{full_version}-{py_arch}-apple-darwin-pgo-{file_date}T2228.tar.zst',
+                'windows': f'cpython-{full_version}-{py_arch}-pc-windows-msvc-shared-pgo-{file_date}T0118.tar.zst'
+            }
+        else:
+            # Modern format: cpython-X.Y.Z+TAG-platform-install_only.tar.gz
+            archive_name_templates = {
+                'linux': f'cpython-{py_ver_plus_tag}-{py_arch}-unknown-linux-gnu-install_only.tar.gz',
+                'darwin': f'cpython-{py_ver_plus_tag}-{py_arch}-apple-darwin-install_only.tar.gz',
+                'windows': f'cpython-{py_ver_plus_tag}-{py_arch}-pc-windows-msvc-install_only.tar.gz'
+            }
+        
         archive_name = archive_name_templates.get(system)
         if not archive_name:
             raise OSError(_('Unsupported operating system: {}').format(system))
+        
         url = f'{base_url}/{archive_name}'
+        
         with tempfile.TemporaryDirectory() as temp_dir:
             archive_path = Path(temp_dir) / archive_name
             safe_print(f'📥 Downloading Python {full_version} for {system.title()}...')
@@ -1075,32 +1234,86 @@ class ConfigManager:
                     raise OSError(_('Downloaded file is too small ({} bytes), likely incomplete or invalid').format(file_size))
                 safe_print(_('✅ Downloaded {} bytes').format(file_size))
                 safe_print(_('   - Extracting archive...'))
-                with tarfile.open(archive_path, 'r:gz') as tar:
-                    extract_path = Path(temp_dir) / 'extracted'
-                    tar.extractall(extract_path)
-                source_python_dir = extract_path / 'python'
-                if not source_python_dir.exists():
-                    possible_dirs = list(extract_path.glob('**/python'))
-                    if possible_dirs:
-                        source_python_dir = possible_dirs[0]
-                    else:
-                        raise OSError(_('Could not find python directory in extracted archive'))
+                
+                extract_path = Path(temp_dir) / 'extracted'
+                
+                # Legacy releases use .tar.zst, modern ones use .tar.gz
+                if archive_name.endswith('.tar.zst'):
+                    # For .tar.zst files, we need zstandard support
+                    try:
+                        import zstandard as zstd
+                    except ImportError:
+                        raise OSError(_('zstandard module required for legacy Python releases. Install with: pip install zstandard'))
+                    
+                    safe_print(_('   - Decompressing zstd archive...'))
+                    with open(archive_path, 'rb') as ifh:
+                        dctx = zstd.ZstdDecompressor()
+                        with tempfile.NamedTemporaryFile(suffix='.tar', delete=False) as ofh:
+                            decompressed_path = Path(ofh.name)
+                            dctx.copy_stream(ifh, ofh)
+                    
+                    safe_print(_('   - Extracting tar archive...'))
+                    with tarfile.open(decompressed_path, 'r:') as tar:
+                        tar.extractall(extract_path)
+                    
+                    # Clean up decompressed tar file
+                    decompressed_path.unlink()
+                else:
+                    # Modern .tar.gz format
+                    with tarfile.open(archive_path, 'r:gz') as tar:
+                        tar.extractall(extract_path)
+                
+                # Legacy releases have a different directory structure
+                # Modern: extract_path/python/...
+                # Legacy: extract_path/python/install/... (the actual Python is in an 'install' subdirectory)
+                if use_legacy_naming:
+                    # Legacy structure: check for install subdirectory
+                    possible_install_dirs = [
+                        extract_path / 'python' / 'install',
+                        extract_path / 'install',
+                        extract_path / 'python'
+                    ]
+                    source_python_dir = None
+                    for possible_dir in possible_install_dirs:
+                        if possible_dir.exists() and (possible_dir / 'bin').exists():
+                            source_python_dir = possible_dir
+                            break
+                    
+                    if not source_python_dir:
+                        # Debug: show what we actually extracted
+                        extracted_contents = list(extract_path.rglob('*'))[:20]  # First 20 items
+                        safe_print(_('   - Debug: Extracted contents: {}').format([str(p.relative_to(extract_path)) for p in extracted_contents]))
+                        raise OSError(_('Could not find valid python installation directory in legacy archive'))
+                else:
+                    # Modern structure
+                    source_python_dir = extract_path / 'python'
+                    if not source_python_dir.exists():
+                        possible_dirs = list(extract_path.glob('**/python'))
+                        if possible_dirs:
+                            source_python_dir = possible_dirs[0]
+                        else:
+                            raise OSError(_('Could not find python directory in extracted archive'))
+                
                 python_dest = venv_path / '.omnipkg' / 'interpreters' / f'cpython-{full_version}'
                 safe_print(_('   - Installing to: {}').format(python_dest))
                 python_dest.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copytree(source_python_dir, python_dest, dirs_exist_ok=True)
+                
                 python_exe_candidates = []
                 if system == 'windows':
                     python_exe_candidates = [python_dest / 'python.exe', python_dest / 'Scripts/python.exe']
                 else:
                     python_exe_candidates = [python_dest / 'bin/python3', python_dest / 'bin/python', python_dest / f"bin/python{full_version.split('.')[0]}.{full_version.split('.')[1]}"]
+                
                 python_exe = None
                 for candidate in python_exe_candidates:
                     if candidate.exists():
                         python_exe = candidate
                         break
+                
                 if not python_exe:
                     raise OSError(_('Python executable not found in expected locations: {}').format([str(c) for c in python_exe_candidates]))
+                
                 if system != 'windows':
                     python_exe.chmod(493)
                     major_minor = '.'.join(full_version.split('.')[:2])
@@ -1110,12 +1323,15 @@ class ConfigManager:
                             versioned_symlink.symlink_to(python_exe.name)
                         except OSError as e:
                             safe_print(_('   - Warning: Could not create versioned symlink: {}').format(e))
+                
                 safe_print(_('   - Testing installation...'))
                 result = subprocess.run([str(python_exe), '--version'], capture_output=True, text=True, timeout=30)
                 if result.returncode != 0:
                     raise OSError(_('Python executable test failed: {}').format(result.stderr))
                 safe_print(_('   - ✅ Python version: {}').format(result.stdout.strip()))
+                
                 self._install_essential_packages(python_exe)
+                
                 safe_print(_('\n✨ New interpreter bootstrapped.'))
                 try:
                     safe_print(_('🔧 Forcing rescan to register the new interpreter...'))
@@ -1125,9 +1341,11 @@ class ConfigManager:
                     safe_print(_('   ⚠️  Interpreter registration failed: {}').format(e))
                     import traceback
                     traceback.print_exc()
+                
                 major_minor_version = '.'.join(full_version.split('.')[:2])
                 self._set_rebuild_flag_for_version(major_minor_version)
                 return python_exe
+                
             except urllib.error.HTTPError as e:
                 if e.code == 404:
                     safe_print(_('❌ Python {} not found in python-build-standalone releases.').format(full_version))
@@ -3651,7 +3869,10 @@ class omnipkg:
             else:
                 native_python_exe = str(self.config_manager.venv_path / 'bin' / 'python')
                 try:
-                    cmd = [native_python_exe, "-c", "from importlib.metadata import version; print(version('omnipkg'))"]
+                    cmd = [native_python_exe, "-c", 
+                    "try: from importlib.metadata import version\n"
+                    "except ImportError: from importlib_metadata import version\n"
+                    "print(version('omnipkg'))"]
                     result = subprocess.run(cmd, capture_output=True, text=True, check=True, timeout=5)
                     master_version_str = result.stdout.strip()
                     install_spec = [f'omnipkg=={master_version_str}']
@@ -5173,7 +5394,9 @@ class omnipkg:
                     safe_print(f"  - ⚠️  Direct import unavailable. Falling back to metadata...")
                     cmd = [
                         python_exe, '-c',
-                        f"import importlib.metadata; print(importlib.metadata.version('{name}'))"
+                        f"try: import importlib.metadata as meta\n"
+                        f"except ImportError: import importlib_metadata as meta\n"
+                        f"print(meta.version('{name}'))"
                     ]
                     result = subprocess.run(cmd, capture_output=True, text=True, check=True, timeout=5)
                     canonical_version = result.stdout.strip()
@@ -5314,34 +5537,57 @@ class omnipkg:
         safe_print("\n" + "─" * 60)
         safe_print("🤝 Reconciling conflicting requirements...")
         
-        for pkg_name, specs in grouped_reqs.items():
-            if len(specs) == 1:
-                # No conflict, just add the single requirement
-                reconciled_plan.append(specs[0])
-            else:
-                # CONFLICT! Resolve all specs and pick the latest version as the winner.
-                safe_print(f"   - Conflict for '{pkg_name}':")
-                for spec in specs:
-                    safe_print(f"     - Wants: {spec}")
-                
-                resolved_versions = []
-                for spec in specs:
-                    # We use our powerful resolver here
-                    resolved_spec = self._find_best_version_for_spec(spec)
-                    if resolved_spec:
-                        _, version = self._parse_package_spec(resolved_spec)
-                        if version:
-                            resolved_versions.append(version)
-                
-                if not resolved_versions:
-                    safe_print(f"   - ❌ Could not resolve any version for '{pkg_name}'. Skipping.")
-                    continue
+        reconciled_plan = []
+        safe_print("\n" + "─" * 60)
+        safe_print("🤝 Reconciling conflicting requirements...")
 
-                # Elect the latest version as the winner for the main environment
-                winner_version = max(resolved_versions, key=parse_version)
-                winner_spec = f"{pkg_name}=={winner_version}"
-                reconciled_plan.append(winner_spec)
-                safe_print(f"   - ✅ Elected Winner: {winner_spec}")
+        for pkg_name, specs in grouped_reqs.items():
+            safe_print(f"   - Reconciling '{pkg_name}':")
+            
+            # --- START: NEW INTERSECTION LOGIC ---
+            
+            # 1. Collect ONLY the version specifier parts from each requirement string.
+            version_constraints = []
+            for spec_str in specs:
+                # Use regex to robustly strip the package name and any markers
+                match = re.match(r"^\s*([a-zA-Z0-9_.-]+)\s*(.*)", spec_str)
+                if match:
+                    # part will be like '>=0.24.0; python_version > "3.8"'
+                    part = match.group(2).strip()
+                    # remove the marker part
+                    if ';' in part:
+                        part = part.split(';', 1)[0].strip()
+                    
+                    if part:
+                        version_constraints.append(part)
+                        safe_print(f"     - Found constraint: {part}")
+
+            if not version_constraints:
+                safe_print(f"   - ⚠️  Could not extract any version constraints for '{pkg_name}'. Skipping.")
+                continue
+
+            # 2. Combine all constraints into a single, comma-separated string.
+            # This represents the intersection of all requirements.
+            # Example: ">=0.24.0,<0.18,>=0.16.4,>=0.25.0"
+            combined_spec = f"{pkg_name}{','.join(version_constraints)}"
+            safe_print(f"     - Combined spec: '{combined_spec}'")
+
+            # 3. Use our powerful resolver on this SINGLE combined spec.
+            # _find_best_version_for_spec is smart enough to handle this.
+            resolved_spec_str = self._find_best_version_for_spec(combined_spec)
+
+            if resolved_spec_str:
+                safe_print(f"   - ✅ Elected Winner via intersection: {resolved_spec_str}")
+                reconciled_plan.append(resolved_spec_str)
+            else:
+                # This is CRITICAL. It now correctly identifies truly impossible situations.
+                safe_print(f"   - ❌ Unresolvable conflict for '{pkg_name}'. The combined requirements are impossible to satisfy.")
+                safe_print(f"     - Failed to resolve: '{combined_spec}'")
+                # In a future version, you could add logic here to suggest upgrading the
+                # packages that are causing the constraint (e.g., 'tokenizers').
+                # For now, we notify the user and cannot proceed with this package.
+
+        # --- END: NEW INTERSECTION LOGIC ---
         
         if not reconciled_plan:
             safe_print("\n" + "─" * 60)
@@ -5830,7 +6076,9 @@ class omnipkg:
         """
         safe_print(_('\n--- Running robust download strategy ---'))
         try:
-            full_versions = {'3.14': '3.14.0', '3.13': '3.13.7', '3.12': '3.12.11', '3.11': '3.11.9', '3.10': '3.10.18', '3.9': '3.9.23', '3.8': '3.8.20'}
+            full_versions = {'3.7': '3.7.9',
+            
+            '3.14': '3.14.0', '3.13': '3.13.7', '3.12': '3.12.11', '3.11': '3.11.9', '3.10': '3.10.18', '3.9': '3.9.23', '3.8': '3.8.20'}
             full_version = full_versions.get(version)
             if not full_version:
                 safe_print(f'❌ Error: No known standalone build for Python {version}.')
@@ -6221,41 +6469,66 @@ class omnipkg:
         self.rescan_interpreters()
         return 0
     
-    def check_package_installed_fast(self, python_exe: str, package: str, version: str) -> Tuple[bool, float]:
-        """Check if a specific package version is already installed - ultra fast check.
+    
+    def check_package_installed_fast(self, python_exe: str, package: str, version: str) -> Tuple[Optional[str], float]:
+        """
+        (REWRITTEN & ROBUST) Checks if a specific package version is already installed.
+        Uses DIRECT filesystem checks for maximum reliability and speed.
 
-        Checks both main environment and bubble locations for maximum speed.
+        Returns:
+            A tuple of (status, duration_ms) where status is one of:
+            - 'active': The exact version is installed in the main environment.
+            - 'bubble': The exact version exists as a bubble.
+            - None: The package is not satisfied.
         """
         start_time = time.perf_counter()
         
+        # --- Phase 1: Check main environment via direct dist-info inspection ---
+        try:
+            # Get site-packages directory from the target python_exe
+            cmd = [python_exe, '-c', 'import site; print(site.getsitepackages())']
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=5, check=True)
+            
+            import ast
+            site_packages_paths = [Path(p) for p in ast.literal_eval(result.stdout.strip())]
+            
+            pkg_name_normalized = package.replace('-', '_').lower()
 
-        # Phase 1: Check if it's the ACTIVE package in the main environment.
-        is_installed_cmd = [
-            python_exe, '-c',
-            f"import importlib.metadata; import sys; sys.exit(0) if importlib.metadata.version('{package}') == '{version}' else sys.exit(1)"
-        ]
-        result = subprocess.run(is_installed_cmd, capture_output=True, text=True)
+            for site_packages in site_packages_paths:
+                if not site_packages.is_dir():
+                    continue
 
-        if result.returncode == 0:
-            duration_ms = (time.perf_counter() - start_time) * 1000
-            return True, duration_ms
+                # Use glob for case-insensitivity and name variations
+                for dist_info in site_packages.glob(f'{pkg_name_normalized}-{version}.dist-info'):
+                    if dist_info.is_dir():
+                        # We found a potential match. Verify version from METADATA.
+                        metadata_file = dist_info / 'METADATA'
+                        if metadata_file.exists():
+                            try:
+                                with open(metadata_file, 'r', encoding='utf-8') as f:
+                                    for line in f:
+                                        if line.lower().startswith('version:'):
+                                            found_version = line.split(':', 1)[1].strip()
+                                            if found_version == version:
+                                                duration_ms = (time.perf_counter() - start_time) * 1000
+                                                return 'active', duration_ms # ✅ IT'S ACTIVE
+                            except Exception:
+                                pass # Corrupted metadata, treat as not found.
+        except Exception:
+            # If the subprocess fails for any reason, we can't confirm it's active.
+            pass
 
-        # Phase 2: If not in main env, check if a valid BUBBLE exists.
+        # --- Phase 2: If not active, check if a valid bubble exists ---
         bubble_path = self.multiversion_base / f'{package}-{version}'
-        if bubble_path.exists() and bubble_path.is_dir():
-            # A valid bubble MUST contain the package's metadata.
-            pkg_name_underscore = package.replace("-", "_")
-            metadata_markers = [
-                bubble_path / f'{package}-{version}.dist-info',
-                bubble_path / f'{pkg_name_underscore}-{version}.dist-info',
-            ]
-
-            if any(marker.exists() for marker in metadata_markers):
+        if bubble_path.is_dir():
+            # Check for the existence of the manifest file for a quick, reliable check.
+            if (bubble_path / '.omnipkg_manifest.json').exists():
                 duration_ms = (time.perf_counter() - start_time) * 1000
-                return True, duration_ms
+                return 'bubble', duration_ms # ✅ IT'S IN A BUBBLE
 
+        # --- Phase 3: Not satisfied ---
         duration_ms = (time.perf_counter() - start_time) * 1000
-        return False, duration_ms
+        return None, duration_ms
     
     def _check_package_exists_on_pypi(self, package_name: str) -> bool:
         """
@@ -6271,36 +6544,36 @@ class omnipkg:
     
     def _resolve_spec_with_pip(self, package_spec: str) -> Tuple[Optional[str], str]:
         """
-        (V4 - THE CORRECT FIX) Uses `pip install --dry-run --report` and adds an
-        intelligent fallback to differentiate between invalid packages and
-        Python-incompatible packages, preserving the robust JSON parsing.
+        (V5 - UNIVERSAL PIP COMPATIBILITY) Works with pip from the Stone Age to modern times.
+        Detects ancient pip and falls back to `pip download` which has existed forever.
         """
         try:
+            # First try modern approach with --dry-run --report
             cmd = [self.config['python_executable'], '-m', 'pip', 'install', '--dry-run', '--ignore-installed', '--no-deps', '--report', '-', package_spec]
             result = subprocess.run(cmd, capture_output=True, text=True, check=False, timeout=60, env=dict(os.environ, PYTHONIOENCODING='utf-8'))
             
             pip_report_str = result.stdout.strip()
             pip_user_error_output = result.stderr.strip()
 
-            # Your existing, excellent JSON parsing logic for the success case.
+            # Check if this failed because of ancient pip
+            is_ancient_pip = "no such option: --dry-run" in pip_user_error_output
+            
+            if is_ancient_pip:
+                safe_print(f"   ⏳ Ancient pip detected - falling back to `pip download` method...")
+                # This call can now RAISE the error, which will be caught below
+                return self._resolve_spec_with_ancient_pip(package_spec)
+            
             if result.returncode == 0 and pip_report_str:
                 json_start = pip_report_str.find('{')
-                if json_start == -1:
-                    return None, pip_user_error_output
-                
+                if json_start == -1: return None, pip_user_error_output
                 json_end = pip_report_str.rfind('}')
-                if json_end == -1 or json_end < json_start:
-                    return None, pip_user_error_output
-                
+                if json_end == -1 or json_end < json_start: return None, pip_user_error_output
                 json_str = pip_report_str[json_start:json_end + 1]
                 
                 try:
                     report = json.loads(json_str)
                     install_plan = report.get('install', [])
-                    
-                    if not install_plan:
-                        return None, pip_user_error_output
-                    
+                    if not install_plan: return None, pip_user_error_output
                     req_name = self._parse_package_spec(package_spec)[0]
                     
                     for item in install_plan:
@@ -6309,51 +6582,127 @@ class omnipkg:
                             pkg_name = metadata.get('name')
                             version = metadata.get('version')
                             if pkg_name and version and canonicalize_name(pkg_name) == canonicalize_name(req_name):
-                                resolved_spec = f"{pkg_name}=={version}"
-                                return resolved_spec, pip_user_error_output
-                    
+                                return f"{pkg_name}=={version}", pip_user_error_output
                     return None, pip_user_error_output
-
                 except json.JSONDecodeError as e:
                     safe_print(f"   ⚠️  Failed to parse pip JSON: {e}")
                     safe_print(f"   ⚠️  Extracted JSON (first 500 chars): {json_str[:500]}")
                     return None, pip_user_error_output
 
-            # ======================= THE ADDED INTELLIGENCE =======================
-            # If we reach here, it means result.returncode != 0. This is a pip failure.
-            # Now we get smart about *why* it failed.
             is_no_match_error = "Could not find a version" in pip_user_error_output or "No matching distribution" in pip_user_error_output
         
             if is_no_match_error:
-                pkg_name_to_check = self._parse_package_spec(package_spec)[0]
-                
-                # Check if package exists on PyPI and get its info
+                pkg_name_to_check, requested_version = self._parse_package_spec(package_spec)
                 try:
                     response = http_requests.get(f'https://pypi.org/pypi/{pkg_name_to_check}/json', timeout=10)
                     if response.status_code == 200:
                         pypi_data = response.json()
-                        latest_version = pypi_data['info']['version']
-                        
-                        # Find compatible Python version
-                        compatible_py = self._find_compatible_python_version(pkg_name_to_check, latest_version)
-                        
+                        version_to_check = requested_version or pypi_data['info']['version']
+                        compatible_py = self._find_compatible_python_version(pkg_name_to_check, version_to_check)
                         safe_print(f"   💡 Pip validation failed for '{pkg_name_to_check}', but package exists on PyPI.")
-                        safe_print(f"      Latest version: {latest_version}, Requires Python: {compatible_py or 'unknown'}")
+                        safe_print(f"      - Target Version: {version_to_check}, Requires Python: {compatible_py or 'unknown'}")
                         
-                        # Return the original spec so healing can kick in
-                        # The caller will know this means "valid package, wrong Python"
-                        return package_spec, pip_user_error_output
+                        raise NoCompatiblePythonError(
+                            package_name=pkg_name_to_check,
+                            package_version=version_to_check,
+                            current_python=self.current_python_context.replace('py', ''),
+                            compatible_python=compatible_py
+                        )
                 except Exception:
                     pass
-            # ================================
             
             return None, pip_user_error_output
 
+        except NoCompatiblePythonError:
+            # CATCH AND RE-RAISE the specific error to prevent it from being swallowed.
+            # This is the crucial fix.
+            raise
         except Exception as e:
             return None, f"An unexpected error occurred during pip resolution: {e}"
 
-    def smart_install(self, packages: List[str], dry_run: bool = False, force_reinstall: bool = False, override_strategy: Optional[str] = None, target_directory: Optional[Path] = None, preflight_compatibility_cache: Optional[Dict] = None) -> int:
+    def _resolve_spec_with_ancient_pip(self, package_spec: str) -> Tuple[Optional[str], str]:
+        """
+        (AUTHORITATIVE FIX) Fallback for ancient pip. When `pip download` fails,
+        it intelligently parses the error and RAISES NoCompatiblePythonError if
+        the package exists but is incompatible.
+        """
+        temp_dir = tempfile.mkdtemp()
+        try:
+            cmd = [
+                self.config['python_executable'], '-m', 'pip', 'download',
+                '--no-deps', '--no-cache-dir', '--dest', temp_dir, package_spec
+            ]
+            result = subprocess.run(cmd, capture_output=True, text=True, check=False, timeout=60)
+
+            # --- Success Path ---
+            if result.returncode == 0:
+                downloaded_files = list(Path(temp_dir).glob('*'))
+                if downloaded_files:
+                    version = self._extract_version_from_filename(downloaded_files[0].name, package_spec)
+                    if version:
+                        return f"{self._parse_package_spec(package_spec)[0]}=={version}", ""
+
+            # --- FAILURE PATH: THIS IS THE FIX ---
+            pip_output = result.stderr.strip()
+            is_no_match_error = "could not find a version" in pip_output.lower() or \
+                                "no matching distribution" in pip_output.lower()
+
+            if is_no_match_error:
+                pkg_name, requested_version = self._parse_package_spec(package_spec)
+                
+                # Check if the package *exists* on PyPI. If so, it's an incompatibility.
+                if self._check_package_exists_on_pypi(pkg_name):
+                    # It exists. Find out what Python it needs.
+                    compatible_py = self._find_compatible_python_version(pkg_name, target_package_version=requested_version)
+                    
+                    # RAISE THE EXCEPTION to be caught by smart_install.
+                    raise NoCompatiblePythonError(
+                        package_name=pkg_name,
+                        package_version=requested_version,
+                        current_python=self.current_python_context.replace('py',''),
+                        compatible_python=compatible_py
+                    )
+
+            # If we get here, it was a real failure (e.g., package doesn't exist), not an incompatibility.
+            return None, pip_output
+            
+        except NoCompatiblePythonError:
+            raise # Let smart_install catch this.
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+            
+    def _extract_version_from_filename(self, filename: str, package_spec: str) -> Optional[str]:
+        """
+        Extract version from various pip download filename formats across pip eras.
+        """
+        pkg_name = self._parse_package_spec(package_spec)[0]
         
+        # Pattern 1: Modern wheels - rich-13.8.1-py3-none-any.whl
+        wheel_pattern = rf"{re.escape(pkg_name)}-([\d\.]+(?:[a-z]+)?[\d]*)-\w+-\w+-\w+\.whl"
+        match = re.match(wheel_pattern, filename, re.IGNORECASE)
+        if match:
+            return match.group(1)
+        
+        # Pattern 2: Source distributions - rich-13.8.1.tar.gz
+        sdist_pattern = rf"{re.escape(pkg_name)}-([\d\.]+(?:[a-z]+)?[\d]*)\.(?:tar\.gz|zip)"
+        match = re.match(sdist_pattern, filename, re.IGNORECASE)
+        if match:
+            return match.group(1)
+        
+        # Pattern 3: Ancient packages - Django-1.0-final.tar.gz
+        ancient_pattern = rf"{re.escape(pkg_name)}-([\d\.]+(?:-\w+)?)\.(?:tar\.gz|zip)"
+        match = re.match(ancient_pattern, filename, re.IGNORECASE)
+        if match:
+            version = match.group(1)
+            # Normalize "1.0-final" to "1.0"
+            return re.sub(r'-\w+$', '', version)
+        
+        return None
+
+    def smart_install(self, packages: List[str], dry_run: bool = False, force_reinstall: bool = False, 
+                  override_strategy: Optional[str] = None, target_directory: Optional[Path] = None, 
+                  preflight_compatibility_cache: Optional[Dict] = None) -> int:
+    
         # ====================================================================
         # ULTRA-FAST PREFLIGHT CHECK (Before any heavy initialization)
         # ====================================================================
@@ -6367,47 +6716,99 @@ class omnipkg:
             fully_resolved_specs = []
             needs_installation = []
             
+            # Define complex specifier characters
+            complex_spec_chars = ['<', '>', '~', '!', ',']
+            
             # --- Phase 1: Resolve versions and check if already satisfied ---
             for pkg_spec in packages:
                 pkg_name, version = self._parse_package_spec(pkg_spec)
                 
                 # Step 1: Get the version (either from spec or from cache/PyPI)
                 if version:
+                    # Already has explicit version (e.g., numpy==1.26.4)
                     resolved_spec = pkg_spec
                 else:
-                    try:
-                        latest_version = self._get_latest_version_from_pypi(pkg_name)
-                    except NoCompatiblePythonError as e:
-                        # 🔥 IMMEDIATE QUANTUM HEALING - NO CACHING!
-                        safe_print("\n" + "="*60)
-                        safe_print("🌌 QUANTUM HEALING: Python Incompatibility Detected During Preflight")
-                        safe_print("="*60)
-                        safe_print(f"   - Diagnosis: Cannot resolve '{e.package_name}' v{e.package_version} on Python {e.current_python}.")
-                        safe_print(f"   - Prescription: This package requires Python {e.compatible_python}.")
+                    # Check if it's a complex specifier BEFORE calling _get_latest_version_from_pypi
+                    is_complex_spec = any(op in pkg_spec for op in complex_spec_chars)
+                    
+                    if is_complex_spec:
+                        safe_print(f"   🔍 Detected complex specifier: '{pkg_spec}'")
+                        safe_print(f"   → Resolving to exact version for Python {self.current_python_context}...")
                         
-                        from .cli import handle_python_requirement
-                        if not e.compatible_python or e.compatible_python == "unknown":
-                            safe_print(f"❌ Healing failed: Could not determine compatible Python version.")
-                            return 1
-    
-                        if not handle_python_requirement(e.compatible_python, self, "omnipkg"):
-                            safe_print(f"❌ Healing failed: Could not switch to Python {e.compatible_python}.")
-                            return 1
-    
-                        safe_print(f"\n🚀 Retrying in new Python {e.compatible_python} context...")
-                        new_config_manager = ConfigManager()
-                        new_omnipkg_instance = self.__class__(new_config_manager)
-    
-                        # Recursively retry with the ORIGINAL packages list
-                        return new_omnipkg_instance.smart_install(packages, dry_run, force_reinstall, override_strategy, target_directory)
-    
-                    if latest_version:
-                        resolved_spec = f"{pkg_name}=={latest_version}"
-                        version = latest_version
+                        try:
+                            # Use _find_best_version_for_spec to respect the constraint
+                            resolved_spec = self._find_best_version_for_spec(pkg_spec)
+                            
+                            if resolved_spec:
+                                # Successfully resolved (e.g., "numpy<2" -> "numpy==1.26.4")
+                                pkg_name, version = self._parse_package_spec(resolved_spec)
+                                safe_print(f"   ✅ Resolved '{pkg_spec}' to '{resolved_spec}'")
+                            else:
+                                # Could not resolve - mark for pip validation
+                                safe_print(f"   ⚠️  Could not resolve '{pkg_spec}'. Marked for pip fallback.")
+                                needs_installation.append(pkg_spec)
+                                continue
+                                
+                        except NoCompatiblePythonError as e:
+                            # Complex specifier resolution triggered quantum healing
+                            safe_print("\n" + "="*60)
+                            safe_print("🌌 QUANTUM HEALING: Python Incompatibility Detected During Preflight")
+                            safe_print("="*60)
+                            safe_print(f"   - Diagnosis: Cannot resolve '{e.package_name}' v{e.package_version} on Python {e.current_python}.")
+                            safe_print(f"   - Prescription: This package requires Python {e.compatible_python}.")
+                            
+                            from .cli import handle_python_requirement
+                            if not e.compatible_python or e.compatible_python == "unknown":
+                                safe_print(f"❌ Healing failed: Could not determine compatible Python version.")
+                                return 1
+            
+                            if not handle_python_requirement(e.compatible_python, self, "omnipkg"):
+                                safe_print(f"❌ Healing failed: Could not switch to Python {e.compatible_python}.")
+                                return 1
+            
+                            safe_print(f"\n🚀 Retrying in new Python {e.compatible_python} context...")
+                            new_config_manager = ConfigManager()
+                            new_omnipkg_instance = self.__class__(new_config_manager)
+            
+                            # Recursively retry with the ORIGINAL packages list
+                            return new_omnipkg_instance.smart_install(packages, dry_run, force_reinstall, 
+                                                                    override_strategy, target_directory)
                     else:
-                        safe_print(f"   ⚠️  Fast checks could not resolve '{pkg_name}'. Marked for pip fallback.")
-                        needs_installation.append(pkg_spec)
-                        continue
+                        # Simple package name without version - get latest compatible
+                        try:
+                            latest_version = self._get_latest_version_from_pypi(pkg_name)
+                        except NoCompatiblePythonError as e:
+                            # 🔥 IMMEDIATE QUANTUM HEALING - NO CACHING!
+                            safe_print("\n" + "="*60)
+                            safe_print("🌌 QUANTUM HEALING: Python Incompatibility Detected During Preflight")
+                            safe_print("="*60)
+                            safe_print(f"   - Diagnosis: Cannot resolve '{e.package_name}' v{e.package_version} on Python {e.current_python}.")
+                            safe_print(f"   - Prescription: This package requires Python {e.compatible_python}.")
+                            
+                            from .cli import handle_python_requirement
+                            if not e.compatible_python or e.compatible_python == "unknown":
+                                safe_print(f"❌ Healing failed: Could not determine compatible Python version.")
+                                return 1
+            
+                            if not handle_python_requirement(e.compatible_python, self, "omnipkg"):
+                                safe_print(f"❌ Healing failed: Could not switch to Python {e.compatible_python}.")
+                                return 1
+            
+                            safe_print(f"\n🚀 Retrying in new Python {e.compatible_python} context...")
+                            new_config_manager = ConfigManager()
+                            new_omnipkg_instance = self.__class__(new_config_manager)
+            
+                            # Recursively retry with the ORIGINAL packages list
+                            return new_omnipkg_instance.smart_install(packages, dry_run, force_reinstall, 
+                                                                    override_strategy, target_directory)
+            
+                        if latest_version:
+                            resolved_spec = f"{pkg_name}=={latest_version}"
+                            version = latest_version
+                        else:
+                            safe_print(f"   ⚠️  Fast checks could not resolve '{pkg_name}'. Marked for pip fallback.")
+                            needs_installation.append(pkg_spec)
+                            continue
             
                 # Step 2: Check if this version is already installed
                 is_installed, duration_ms = self.check_package_installed_fast(configured_exe, pkg_name, version)
@@ -6443,27 +6844,52 @@ class omnipkg:
                 
                 validated_specs = []
                 for spec in needs_installation:
-                    pkg_name, version = self._parse_package_spec(spec)
-                    
-                    if not version:
-                        safe_print(f"   🔍 Resolving version for '{pkg_name}' with pip...")
-                        resolved_spec, pip_output = self._resolve_spec_with_pip(spec)
-                    else:
-                        safe_print(f"   ⚙️  Validating '{spec}' with pip...")
-                        resolved_spec, pip_output = self._resolve_spec_with_pip(spec)
-                    
-                    if resolved_spec:
-                        safe_print(f"   ✓ Pip validated '{spec}' -> '{resolved_spec}'")
-                        validated_specs.append(resolved_spec)
-                    else:
-                        safe_print(f"\n❌ Could not find the specified version for '{pkg_name}'.")
-                        safe_print("   Pip provided the following information and available versions:")
-                        for line in pip_output.splitlines():
-                            safe_print(f"   | {line}")
-                        return 1
+                    try:
+                        pkg_name, version = self._parse_package_spec(spec)
+                        
+                        if not version:
+                            safe_print(f"   🔍 Resolving version for '{pkg_name}' with pip...")
+                            resolved_spec, pip_output = self._resolve_spec_with_pip(spec)
+                        else:
+                            safe_print(f"   ⚙️  Validating '{spec}' with pip...")
+                            resolved_spec, pip_output = self._resolve_spec_with_pip(spec)
+                        
+                        if resolved_spec:
+                            safe_print(f"   ✓ Pip validated '{spec}' -> '{resolved_spec}'")
+                            validated_specs.append(resolved_spec)
+                        else:
+                            safe_print(f"\n❌ Could not find the specified version for '{pkg_name}'.")
+                            safe_print("   Pip provided the following information and available versions:")
+                            for line in pip_output.splitlines():
+                                safe_print(f"   | {line}")
+                            return 1
+                            
+                    except NoCompatiblePythonError as e:
+                        # Quantum healing during preflight!
+                        safe_print("\n" + "="*60)
+                        safe_print("🌌 QUANTUM HEALING: Python Incompatibility Detected During Preflight")
+                        safe_print("="*60)
+                        safe_print(f"   - Diagnosis: Cannot resolve '{e.package_name}' v{e.package_version} on Python {e.current_python}.")
+                        safe_print(f"   - Prescription: This package requires Python {e.compatible_python}.")
+                        from .cli import handle_python_requirement
+                        if not e.compatible_python or e.compatible_python == "unknown":
+                            safe_print(f"❌ Healing failed: Could not determine compatible Python version.")
+                            return 1
+
+                        if not handle_python_requirement(e.compatible_python, self, "omnipkg"):
+                            safe_print(f"❌ Healing failed: Could not switch to Python {e.compatible_python}.")
+                            return 1
+
+                        safe_print(f"\n🚀 Retrying in new Python {e.compatible_python} context...")
+                        new_config_manager = ConfigManager()
+                        new_omnipkg_instance = self.__class__(new_config_manager)
+
+                        # Recursively retry with the ORIGINAL packages list
+                        return new_omnipkg_instance.smart_install(packages, dry_run, force_reinstall, 
+                                                                override_strategy, target_directory)
                 
                 packages = validated_specs
-
+    
 
         # ====================================================================
         # NORMAL INITIALIZATION (Only runs if packages need work)
@@ -7237,10 +7663,13 @@ class omnipkg:
     
     def _find_compatible_python_version(self, package_name: str, target_package_version: Optional[str] = None) -> Optional[str]:
         """
-        Queries PyPI to find the LATEST Python version that has wheels available
-        for a given package version.
+        (REWRITTEN) Queries PyPI to find a compatible Python version for a package.
+        Handles both UPGRADE and DOWNGRADE scenarios by analyzing wheel files first.
+
+        Returns: A recommended Python version string (e.g., "3.9") if the current
+                 version is incompatible, otherwise returns None.
         """
-        safe_print(f"   - 🐍 Searching PyPI for LATEST Python version compatible with '{package_name}'...")
+        safe_print(f"   - 🐍 Searching PyPI for Python requirements for '{package_name}'...")
         try:
             from packaging.specifiers import SpecifierSet
             from packaging.version import parse as parse_version
@@ -7248,77 +7677,101 @@ class omnipkg:
             response = http_requests.get(f'https://pypi.org/pypi/{package_name}/json', timeout=15)
             response.raise_for_status()
             data = response.json()
-            
-            # Python versions to check (newest first)
-            potential_py_versions = [
-                "3.14", "3.13", "3.12", "3.11", "3.10", "3.9", "3.8", "3.7"
-            ]
-            
-            # If specific version requested, only check that
+
+            current_py_str = self.current_python_context.replace('py', '')  # "py3.7" -> "3.7"
+            current_py_tuple = tuple(map(int, current_py_str.split('.')))
+            safe_print(f"   - 📍 Current Python: {current_py_str}")
+
+            # Determine which package version to check
             if target_package_version:
                 if target_package_version not in data['releases']:
-                    safe_print(f"   - ❌ Version {target_package_version} not found on PyPI for {package_name}.")
-                    return None
-                
+                    safe_print(f"   - ❌ Version {target_package_version} not found on PyPI for '{package_name}'")
+                    return "unknown"
                 release_info = data['releases'][target_package_version]
-                safe_print(f"   - 🎯 Checking specific version: {package_name}=={target_package_version}")
+                safe_print(f"   - 🎯 Checking compatibility for: {package_name}=={target_package_version}")
             else:
-                # Use the latest version
                 target_package_version = data['info']['version']
-                release_info = data['releases'][target_package_version]
-                safe_print(f"   - 📦 Checking latest version: {package_name}=={target_package_version}")
-            
-            # Extract Python versions that actually have wheels available
-            available_py_versions = set()
-            
+                release_info = data['releases'].get(target_package_version, [])
+                safe_print(f"   - 🎯 Checking compatibility for latest version: {package_name}=={target_package_version}")
+
+            # ============================================================
+            # STRATEGY 1: Parse wheel filenames (MOST ACCURATE)
+            # ============================================================
+            supported_py_versions = set()
             for file_info in release_info:
                 filename = file_info.get('filename', '')
-                packagetype = file_info.get('packagetype', '')
+                if file_info.get('packagetype') == 'bdist_wheel' and filename.endswith('.whl'):
+                    # Handles tags like cp38, py3, cp310, py2.py3
+                    matches = re.findall(r'-(?:cp|py)(\d)(\d{1,2})?-', filename)
+                    for match in matches:
+                        major, minor = match
+                        if minor:
+                            supported_py_versions.add(f"{major}.{minor}")
+
+            if supported_py_versions:
+                safe_print(f"   - Found Python versions supported by wheels: {', '.join(sorted(supported_py_versions))}")
                 
-                # Check wheel files for Python tag
-                if packagetype == 'bdist_wheel' and filename.endswith('.whl'):
-                    # Parse wheel filename: package-version-pyXX-abi-platform.whl
-                    # Example: tensorflow-2.20.0-cp39-cp39-manylinux_2_17_x86_64.whl
-                    # Extract cpXX tags (cp39, cp310, cp311, etc.)
-                    import re
-                    py_tags = re.findall(r'-cp(\d)(\d+)-', filename)
-                    for major, minor in py_tags:
-                        py_version = f"{major}.{minor}"
-                        available_py_versions.add(py_version)
-            
-            if not available_py_versions:
-                safe_print(f"   - ⚠️  No wheel files found for {package_name}=={target_package_version}")
-                return None
-            
-            safe_print(f"   - 📋 Available Python versions with wheels: {', '.join(sorted(available_py_versions))}")
-            
-            # Find the LATEST Python version that has wheels
-            for py_ver in potential_py_versions:
-                if py_ver in available_py_versions:
-                    safe_print(f"   - ✅ Found compatible configuration: {package_name}=={target_package_version} supports Python {py_ver}")
-                    
-                    # Also check requires_python constraint to be safe
-                    requires_python = data['info'].get('requires_python')
-                    if requires_python:
-                        safe_print(f"   - 📋 Python requirement: {requires_python}")
-                        try:
-                            spec = SpecifierSet(requires_python)
-                            if not spec.contains(f"{py_ver}.0"):
-                                safe_print(f"   - ⚠️  Python {py_ver} doesn't satisfy requirement '{requires_python}', checking next...")
-                                continue
-                        except:
-                            pass
-                    
-                    return py_ver
-            
-            safe_print(f"   - ❌ No compatible Python version found for {package_name}=={target_package_version}")
-            return None
+                supported_tuples = sorted([tuple(map(int, v.split('.'))) for v in supported_py_versions])
+
+                if any(current_py_tuple == v_tuple for v_tuple in supported_tuples):
+                    safe_print(f"   - ✅ Current Python {current_py_str} is compatible according to wheel data.")
+                    return None  # It's compatible!
+
+                # If not directly compatible, find the best path.
+                # Prioritize UPGRADE path
+                future_versions = [v for v in supported_tuples if v > current_py_tuple]
+                if future_versions:
+                    recommended = min(future_versions)
+                    rec_str = f"{recommended[0]}.{recommended[1]}"
+                    safe_print(f"   - 💡 Recommendation: Upgrade to Python {rec_str} for this package.")
+                    return rec_str
+
+                # If no future versions, it's a DOWNGRADE path
+                past_versions = [v for v in supported_tuples if v < current_py_tuple]
+                if past_versions:
+                    recommended = max(past_versions)
+                    rec_str = f"{recommended[0]}.{recommended[1]}"
+                    safe_print(f"   - 💡 Recommendation: Downgrade to Python {rec_str} for this package (e.g., tensorflow).")
+                    return rec_str
+
+            # ============================================================
+            # STRATEGY 2: FALLBACK to requires_python metadata
+            # ============================================================
+            safe_print("   - ⚠️  Could not determine compatibility from wheels, falling back to metadata.")
+            requires_python = data['info'].get('requires_python')
+
+            if not requires_python:
+                safe_print(f"   - ⚠️  No Python requirements specified in metadata.")
+                return "unknown"
+
+            safe_print(f"   - 📋 requires_python metadata: '{requires_python}'")
+            spec = SpecifierSet(requires_python)
+
+            if not spec.contains(current_py_str):
+                # The spec does NOT contain our version, so it's incompatible.
+                # Try to find the closest valid version we support.
+                our_supported_versions = ["3.13", "3.12", "3.11", "3.10", "3.9", "3.8", "3.7"]
+                
+                # Find best upgrade path
+                for py_ver in reversed(our_supported_versions):
+                     if tuple(map(int, py_ver.split('.'))) > current_py_tuple and spec.contains(py_ver):
+                         safe_print(f"   - 💡 Recommendation (from metadata): Upgrade to Python {py_ver}.")
+                         return py_ver
+                
+                # Find best downgrade path
+                for py_ver in our_supported_versions:
+                    if tuple(map(int, py_ver.split('.'))) < current_py_tuple and spec.contains(py_ver):
+                        safe_print(f"   - 💡 Recommendation (from metadata): Downgrade to Python {py_ver}.")
+                        return py_ver
+                
+                return "unknown" # Can't find a path
+
+            safe_print(f"   - ✅ Current Python {current_py_str} seems compatible based on metadata.")
+            return None # Compatible based on metadata
 
         except Exception as e:
-            safe_print(f"   - ⚠️  Could not query PyPI for Python compatibility: {e}")
-            import traceback
-            traceback.print_exc()
-            return None
+            safe_print(f"   - ⚠️  Error during compatibility check: {e}")
+            return "unknown"
 
     def _cleanup_redundant_bubbles(self):
         """
@@ -8354,14 +8807,37 @@ class omnipkg:
         """
         Resolves a complex package specifier (e.g., 'numpy>=1.20,<1.22') to the
         latest compliant version by querying all available versions from PyPI.
+        NOW RESPECTS CURRENT PYTHON CONTEXT!
+        SUPPORTS PEP 508 environment markers (e.g., 'package>=1.0; python_version >= "3.8"')
         """
         from packaging.specifiers import SpecifierSet
         from packaging.version import parse as parse_version
+        from packaging.markers import Marker
 
         safe_print(f"    -> Resolving complex specifier: '{package_spec}'")
         try:
-            # 1. Reliably separate the package name from the version constraints
-            # This regex handles names like 'requests' or 'markdown-it-py'
+            # 0. Split off environment markers if present (PEP 508)
+            # Example: "aiohttp>=3.13.1; python_version >= '3.8'" -> "aiohttp>=3.13.1"
+            if ';' in package_spec:
+                spec_part, marker_part = package_spec.split(';', 1)
+                package_spec = spec_part.strip()
+                marker_str = marker_part.strip()
+                safe_print(f"    -> Detected environment marker: '{marker_str}'")
+                
+                # Evaluate the marker for current Python version
+                try:
+                    marker = Marker(marker_str)
+                    # This evaluates the marker against the current environment
+                    if not marker.evaluate():
+                        safe_print(f"    ⚠️  Environment marker not satisfied for current Python context")
+                        safe_print(f"    -> Marker: {marker_str}")
+                        safe_print(f"    -> Current Python: {self.current_python_context}")
+                        # Could return None here, or continue anyway - your choice
+                        # For now, let's continue and try to resolve anyway
+                except Exception as e:
+                    safe_print(f"    ⚠️  Could not evaluate environment marker: {e}")
+            
+            # 1. Parse package name and constraints
             match = re.match(r"^\s*([a-zA-Z0-9_.-]+)\s*(.*)", package_spec)
             if not match:
                 safe_print(f"    ❌ Could not parse package name from '{package_spec}'")
@@ -8370,40 +8846,116 @@ class omnipkg:
             pkg_name = match.group(1).strip()
             spec_str = match.group(2).strip()
             
-            if not spec_str: # It was just a simple name like 'requests'
+            if not spec_str:
                 return self._get_latest_version_from_pypi(pkg_name)
 
-            # 2. Fetch ALL available versions for this package from PyPI
+            # 2. Fetch ALL versions from PyPI
             safe_print(f"    -> Fetching all available versions for '{pkg_name}'...")
             response = http_requests.get(f'https://pypi.org/pypi/{pkg_name}/json', timeout=10)
             response.raise_for_status()
             data = response.json()
-            all_versions = list(data['releases'].keys())
+            all_releases = data['releases']
 
-            # 3. Use the 'packaging' library to do the hard work
+            # 3. Filter by version constraint
             specifier = SpecifierSet(spec_str)
-            
-            # Filter the list of all versions to get only the ones that match
-            valid_versions = list(specifier.filter(all_versions))
+            valid_versions = list(specifier.filter(all_releases.keys()))
 
             if not valid_versions:
                 safe_print(f"    ❌ No version of '{pkg_name}' found that matches '{spec_str}'")
                 return None
 
-            # 4. From the valid versions, find the latest one
-            # We filter out pre-releases unless the specifier explicitly allows them
-            stable_versions = [v for v in valid_versions if not parse_version(v).is_prerelease]
+            # 4. Get current Python context
+            py_context = self.current_python_context
+            py_tag = py_context.replace('py', '').replace('.', '')  # "py3.9" -> "39"
+            py_parts = tuple(map(int, py_context.replace('py', '').split('.')))
             
-            if stable_versions:
-                latest_valid_version = max(stable_versions, key=parse_version)
-            else:
-                # If no stable versions match, use the latest pre-release
-                latest_valid_version = max(valid_versions, key=parse_version)
+            safe_print(f"    -> Filtering for Python {py_context} compatibility...")
+            
+            # 5. Sort versions from newest to oldest and find the first compatible one
+            sorted_versions = sorted(valid_versions, key=parse_version, reverse=True)
+            
+            for version in sorted_versions:
+                # Skip pre-releases unless explicitly requested
+                if parse_version(version).is_prerelease:
+                    continue
+                
+                # Check if this version has wheels for current Python
+                files = all_releases.get(version, [])
+                has_compatible_wheel = False
+                
+                for file_info in files:
+                    if file_info.get('packagetype') == 'bdist_wheel':
+                        filename = file_info.get('filename', '')
+                        # Check for cp39, py39, py3, etc.
+                        if (re.search(rf'-(?:cp|py){py_tag}', filename) or 
+                            '-py3-' in filename or 
+                            '-py2.py3-' in filename):
+                            has_compatible_wheel = True
+                            break
+                
+                if has_compatible_wheel:
+                    resolved_spec = f"{pkg_name}=={version}"
+                    safe_print(f"    ✅ Resolved '{package_spec}' to '{resolved_spec}' (compatible with {py_context})")
+                    return resolved_spec
+                
+                # If no wheel found, check metadata as fallback
+                version_data = all_releases.get(version, [{}])[0] if all_releases.get(version) else {}
+                requires_python = version_data.get('requires_python')
+                
+                if requires_python:
+                    try:
+                        spec = SpecifierSet(requires_python)
+                        current_py_str = py_context.replace('py', '')
+                        
+                        if spec.contains(current_py_str):
+                            # Metadata says it's compatible
+                            resolved_spec = f"{pkg_name}=={version}"
+                            safe_print(f"    ✅ Resolved '{package_spec}' to '{resolved_spec}' (metadata check passed)")
+                            return resolved_spec
+                    except Exception:
+                        pass
 
-            resolved_spec = f"{pkg_name}=={latest_valid_version}"
-            safe_print(f"    ✅ Resolved '{package_spec}' to '{resolved_spec}'")
-            return resolved_spec
+            # If we get here, no compatible version was found for current Python
+            safe_print(f"    ❌ No version matching '{spec_str}' is compatible with {py_context}")
+            
+            # Find what Python version would work
+            best_version = sorted_versions[0]  # Latest version matching spec
+            safe_print(f"    🔍 Checking Python requirements for {pkg_name} v{best_version}...")
+            
+            # Try to determine what Python version is needed
+            version_files = all_releases.get(best_version, [])
+            min_python_from_wheels = None
+            
+            for file_info in version_files:
+                if file_info.get('packagetype') == 'bdist_wheel':
+                    filename = file_info.get('filename', '')
+                    # Extract Python version from wheel filename (e.g., cp310, cp311)
+                    wheel_match = re.search(r'-cp(\d)(\d+)-', filename)
+                    if wheel_match:
+                        wheel_py_major = int(wheel_match.group(1))
+                        wheel_py_minor = int(wheel_match.group(2))
+                        if not min_python_from_wheels or (wheel_py_major, wheel_py_minor) < min_python_from_wheels:
+                            min_python_from_wheels = (wheel_py_major, wheel_py_minor)
+            
+            if min_python_from_wheels:
+                required_python = f"{min_python_from_wheels[0]}.{min_python_from_wheels[1]}"
+                safe_print(f"    💡 {pkg_name} v{best_version} requires Python {required_python}+")
+                
+                # Raise the error to trigger quantum healing
+                raise NoCompatiblePythonError(
+                    package_name=pkg_name,
+                    package_version=best_version,
+                    current_python=py_context,
+                    compatible_python=required_python,
+                    message=f"Package '{pkg_name}' v{best_version} requires Python {required_python}, current is {py_context}"
+                )
+            
+            # Last resort: just return None
+            safe_print(f"    ❌ Could not determine compatible Python version")
+            return None
 
+        except NoCompatiblePythonError:
+            raise  # Re-raise to trigger quantum healing
         except http_requests.RequestException as e:
             safe_print(f"    ❌ Network error while resolving '{pkg_name}': {e}")
             return None
@@ -8424,22 +8976,26 @@ class omnipkg:
         complex_spec_chars = ['<', '>', '~', '!', ',']
 
         for pkg_spec in packages:
+            safe_print(f"🔍 DEBUG: Processing '{pkg_spec}'")
+            
             # Case 1: Already has an exact version. Keep it.
             if '==' in pkg_spec:
+                safe_print(f"    → Case 1: Already pinned")
                 resolved_packages.append(pkg_spec)
                 continue
 
-            # Case 2: Has a complex specifier (e.g., >=, <,). Use the new powerful resolver.
+            # Case 2: Has a complex specifier
+            safe_print(f"    → Checking for complex spec chars: {complex_spec_chars}")
             if any(op in pkg_spec for op in complex_spec_chars):
+                safe_print(f"    → Case 2: Complex specifier detected! Calling _find_best_version_for_spec")
                 resolved = self._find_best_version_for_spec(pkg_spec)
                 if resolved:
                     resolved_packages.append(resolved)
                 else:
                     safe_print(f"    ⚠️  Could not resolve '{pkg_spec}'. Skipping.")
                 continue
-
-            # Case 3: It's a simple package name. Use the fast, existing resolver.
-            pkg_name = self._parse_package_spec(pkg_spec)[0]
+            
+            safe_print(f"    → Case 3: Simple package name")
             safe_print(_("    -> Finding latest version for '{}'...").format(pkg_name))
             target_version = self._get_latest_version_from_pypi(pkg_name)
             if target_version:
@@ -8480,14 +9036,34 @@ class omnipkg:
 
     def _get_file_list_for_packages_live(self, package_names: List[str]) -> Dict[str, List[str]]:
         """
-        Runs a subprocess in the configured Python context to get the
-        authoritative file list for a batch of packages. This is the ONLY
-        safe way to inspect a different Python environment.
+        Runs a subprocess in the configured Python context to get the authoritative file list for a batch of packages.
+        This is the ONLY safe way to inspect a different Python environment.
         """
         if not package_names:
             return {}
+        
         python_exe = self.config.get('python_executable', sys.executable)
-        script = f'\nimport sys, json, importlib.metadata\nresults = {{}}\nfor pkg_name in {package_names!r}:\n    try:\n        dist = importlib.metadata.distribution(pkg_name)\n        if dist.files:\n            results[pkg_name] = [str(dist.locate_file(f)) for f in dist.files if dist.locate_file(f).is_file()]\n    except Exception:\n        results[pkg_name] = []\nprint(json.dumps(results))\n'
+        
+        # Different import strategy for Python 3.7 vs 3.8+
+        script = f'''
+    import sys, json
+    try:
+        import importlib.metadata as metadata
+    except ImportError:
+        # Python 3.7 fallback - use backport
+        import importlib_metadata as metadata
+
+    results = {{}}
+    for pkg_name in {package_names!r}:
+        try:
+            dist = metadata.distribution(pkg_name)
+            if dist.files:
+                results[pkg_name] = [str(dist.locate_file(f)) for f in dist.files if dist.locate_file(f).is_file()]
+        except Exception:
+            results[pkg_name] = []
+    print(json.dumps(results))
+    '''
+        
         try:
             cmd = [python_exe, '-I', '-c', script]
             result = subprocess.run(cmd, capture_output=True, text=True, check=True, timeout=120)
@@ -8585,8 +9161,166 @@ class omnipkg:
             safe_print('   - ❌ Could not resolve any historical dependencies. Time Machine failed.')
             return False
 
+    # Add these three functions right BEFORE _execute_historical_install (around line 8588)
+# They should be methods of the omnipkg class
+
+    def _get_platform_tags(self) -> Dict[str, any]:
+        """Get current platform information for wheel matching."""
+        system = platform.system().lower()
+        machine = platform.machine().lower()
+        py_version = f"{sys.version_info.major}{sys.version_info.minor}"
+        
+        # Python implementation and ABI
+        py_impl = 'cp' if platform.python_implementation() == 'CPython' else 'py'
+        abi_tag = f"cp{py_version}" if py_impl == 'cp' else 'none'
+        
+        # Platform tag mapping
+        if system == 'linux':
+            # Check for musl vs glibc
+            try:
+                import subprocess
+                ldd_output = subprocess.check_output(['ldd', '--version'], stderr=subprocess.STDOUT, text=True)
+                is_musl = 'musl' in ldd_output.lower()
+            except:
+                is_musl = False
+            
+            if machine in ('x86_64', 'amd64'):
+                platform_tags = ['manylinux2014_x86_64', 'manylinux2010_x86_64', 'manylinux1_x86_64', 'linux_x86_64']
+            elif machine in ('aarch64', 'arm64'):
+                platform_tags = ['manylinux2014_aarch64', 'manylinux_2_17_aarch64', 'linux_aarch64']
+            elif machine.startswith('arm'):
+                platform_tags = ['linux_armv7l', 'linux_armv6l']
+            else:
+                platform_tags = [f'linux_{machine}']
+                
+            if is_musl:
+                platform_tags = [f'musllinux_1_1_{machine}'] + platform_tags
+                
+        elif system == 'darwin':
+            if machine == 'arm64':
+                platform_tags = ['macosx_11_0_arm64', 'macosx_10_9_universal2']
+            else:
+                platform_tags = ['macosx_10_9_x86_64', 'macosx_10_6_intel']
+                
+        elif system == 'windows':
+            if machine in ('amd64', 'x86_64'):
+                platform_tags = ['win_amd64']
+            else:
+                platform_tags = ['win32']
+        else:
+            platform_tags = ['any']
+        
+        return {
+            'py_version': py_version,
+            'py_impl': py_impl,
+            'abi_tag': abi_tag,
+            'platform_tags': platform_tags,
+            'system': system
+        }
+
+    def _score_wheel_compatibility(self, filename: str, platform_info: Dict) -> int:
+        """
+        Score a wheel filename for compatibility with current platform.
+        Higher score = better match. Returns 0 if incompatible.
+        """
+        # Parse wheel filename: {distribution}-{version}(-{build tag})?-{python tag}-{abi tag}-{platform tag}.whl
+        parts = filename.replace('.whl', '').split('-')
+        if len(parts) < 5:
+            return 0
+        
+        # Extract tags (handle optional build tag)
+        if len(parts) == 5:
+            _, _, python_tag, abi_tag, platform_tag = parts
+        else:
+            # Has build tag
+            _, _, _, python_tag, abi_tag, platform_tag = parts
+        
+        score = 0
+        py_version = platform_info['py_version']
+        py_impl = platform_info['py_impl']
+        current_abi = platform_info['abi_tag']
+        
+        # Check Python version compatibility
+        if python_tag == f"{py_impl}{py_version}":
+            score += 1000  # Exact match
+        elif python_tag == f"py{sys.version_info.major}":
+            score += 500   # Major version match (py3)
+        elif python_tag == 'py2.py3':
+            score += 250   # Universal Python 2/3
+        elif python_tag == 'py3':
+            score += 200   # Python 3 generic
+        elif re.match(rf"{py_impl}\d+", python_tag):
+            # Check if it's compatible with our version
+            tag_version = int(python_tag.replace(py_impl, ''))
+            if tag_version <= int(py_version):
+                score += 100 - (int(py_version) - tag_version) * 10
+            else:
+                return 0  # Too new
+        else:
+            return 0  # Incompatible Python version
+        
+        # Check ABI compatibility
+        if abi_tag == current_abi:
+            score += 100  # Exact ABI match
+        elif abi_tag == 'none':
+            score += 50   # Pure Python wheel
+        elif abi_tag.startswith('abi3'):
+            score += 75   # Stable ABI
+        else:
+            # ABI mismatch for binary wheels
+            if platform_info['system'] != 'any':
+                return 0
+        
+        # Check platform compatibility
+        platform_score = 0
+        if platform_tag == 'any':
+            platform_score = 25  # Universal platform (pure Python)
+        else:
+            for idx, compatible_platform in enumerate(platform_info['platform_tags']):
+                if platform_tag == compatible_platform:
+                    # Earlier in list = more specific/preferred
+                    platform_score = 200 - (idx * 20)
+                    break
+        
+        if platform_score == 0:
+            return 0  # Incompatible platform
+        
+        score += platform_score
+        
+        return score
+    
+    def _select_best_file(self, files: List[Dict], platform_info: Dict) -> Optional[Dict]:
+        """
+        Select the best file (wheel or sdist) for the current platform.
+        Returns the file dict or None if no compatible file found.
+        """
+        wheels = [f for f in files if f['packagetype'] == 'bdist_wheel']
+        sdists = [f for f in files if f['packagetype'] == 'sdist']
+        
+        if wheels:
+            # Score all wheels
+            scored_wheels = []
+            for wheel in wheels:
+                score = self._score_wheel_compatibility(wheel['filename'], platform_info)
+                if score > 0:
+                    scored_wheels.append((score, wheel))
+            
+            if scored_wheels:
+                # Return highest scoring wheel
+                scored_wheels.sort(reverse=True, key=lambda x: x[0])
+                return scored_wheels[0][1]
+        
+        # Fallback to source distribution
+        if sdists:
+            return sdists[0]
+        
+        return None
+
     def _execute_historical_install(self, target_pkg, target_ver, historical_versions, target_directory_override: Optional[Path] = None):
         install_target_desc = f"temporary sandbox ('{target_directory_override}')" if target_directory_override else "main environment"
+        # Get platform information once
+        platform_info = self._get_platform_tags()
+        safe_print(f"      - 🖥️  Platform: Python {platform_info['py_version']} on {platform_info['system']} ({', '.join(platform_info['platform_tags'][:2])})")
         safe_print(f"      - 🎯 Install Target: {install_target_desc}")
 
         # Stage 1: Ancient setuptools
@@ -8633,10 +9367,9 @@ class omnipkg:
                     safe_print(f"      - ⚠️  No files found for {pkg_name}=={pkg_ver}")
                     continue
                     
-                wheel_file = next((f for f in files if f['packagetype'] == 'bdist_wheel'), None)
-                sdist_file = next((f for f in files if f['packagetype'] == 'sdist'), None)
+                # Use smart selection
+                file_to_download = self._select_best_file(files, platform_info)
                 
-                file_to_download = wheel_file or sdist_file
                 if not file_to_download:
                     safe_print(f"      - ⚠️  No suitable file found for {pkg_name}=={pkg_ver}")
                     continue
@@ -9167,38 +9900,47 @@ class omnipkg:
             result = subprocess.run(cmd, capture_output=True, text=True, check=False, timeout=60, env=dict(os.environ, PYTHONIOENCODING='utf-8'))
             
             full_output = result.stdout + result.stderr
+            
+            # ========== DETECT ANCIENT PIP FIRST ==========
+            if "no such option: --dry-run" in full_output.lower():
+                safe_print('    ⏳ Ancient pip detected - quick check not available')
+                safe_print('    ' + '─' * 58)
+                return None  # Bail early, let caller use fallback
+            # ===============================================
 
             if result.returncode == 0:
-                # ... (your existing success logic remains the same)
-                install_patterns = [f'Would install\\s+{re.escape(package_name)}-([0-9]+(?:\\.[0-9]+)*(?:[a-zA-Z0-9\\.-_]*)?)', f'Collecting\\s+{re.escape(package_name)}==([0-9]+(?:\\.[0-9]+)*(?:[a-zA-Z0-9\\.-_]*)?)']
+                install_patterns = [
+                    f'Would install\\s+{re.escape(package_name)}-([0-9]+(?:\\.[0-9]+)*(?:[a-zA-Z0-9\\.-_]*)?)', 
+                    f'Collecting\\s+{re.escape(package_name)}==([0-9]+(?:\\.[0-9]+)*(?:[a-zA-Z0-9\\.-_]*)?)'
+                ]
                 for pattern in install_patterns:
                     match = re.search(pattern, full_output, re.IGNORECASE)
                     if match:
                         compatible_version = match.group(1)
-                        safe_print(_('    ✅ Latest version {} is compatible!').format(compatible_version))
+                        safe_print(f'    ✅ Latest version {compatible_version} is compatible!')
                         return compatible_version
                 return version_to_test if version_to_test else None
 
             else:
-                # =================== THIS IS THE FIX ===================
-                # This block runs on failure. We'll add verbose logging here.
-                
-                # --- ADD THIS LOGGING ---
+                # Failure case - try to extract version list
                 safe_print('    ' + '─' * 58)
-                # --- END OF LOGGING ---
-
-                version_list_patterns = ['from versions:\\s*([^)]+)\\)', 'available versions:\\s*([^\\n\\r]+)', '\\(from versions:\\s*([^)]+)\\)']
+                
+                version_list_patterns = [
+                    'from versions:\\s*([^)]+)\\)', 
+                    'available versions:\\s*([^\\n\\r]+)', 
+                    '\\(from versions:\\s*([^)]+)\\)'
+                ]
+                
                 for pattern in version_list_patterns:
                     match = re.search(pattern, full_output, re.IGNORECASE | re.DOTALL)
                     if match:
                         versions_text = match.group(1).strip()
-                        # ... (rest of your parsing logic)
-                        # This part seems to have a typo: compaible_versions -> compatible_versions
                         compatible_versions = []
                         raw_versions = [v.strip(' \'"') for v in versions_text.split(',')]
+                        
                         for raw_version in raw_versions:
                             if re.match('^[0-9]+(?:\\.[0-9]+)*(?:[a-zA-Z0-9\\.-_]*)?$', raw_version):
-                                compatible_versions.append(raw_version) # Corrected variable name
+                                compatible_versions.append(raw_version)
                         
                         if compatible_versions:
                             try:
@@ -9206,27 +9948,65 @@ class omnipkg:
                                 stable_versions = [v for v in compatible_versions if not re.search('[a-zA-Z]', v)]
                                 versions_to_sort = stable_versions if stable_versions else compatible_versions
                                 latest_compatible = sorted(versions_to_sort, key=parse_version, reverse=True)[0]
-                                safe_print(_('    🎯 Latest compatible version: {}').format(latest_compatible))
+                                safe_print(f'    🎯 Latest compatible version: {latest_compatible}')
                                 return latest_compatible
                             except Exception as e:
-                                safe_print(_('    ⚠️ Error sorting versions: {}').format(e))
+                                safe_print(f'    ⚠️ Error sorting versions: {e}')
                                 return compatible_versions[-1] if compatible_versions else None
                 
                 return None
-                # ================= END OF THE FIX ======================
 
         except Exception as e:
-            safe_print(_('    ❌ Quick compatibility check failed: {}').format(e))
+            safe_print(f'    ❌ Quick compatibility check failed: {e}')
+            return None
+                    
+    def _get_package_minimum_python_from_spec(self, spec) -> Optional[str]:
+        """Extract minimum Python version from a SpecifierSet (e.g., '>=3.8' -> 'py3.8')"""
+        try:
+            for specifier in spec:
+                if specifier.operator in ('>=', '>'):
+                    version_str = str(specifier.version)
+                    major_minor = '.'.join(version_str.split('.')[:2])  # "3.8.0" -> "3.8"
+                    return f"py{major_minor}"
+            return None
+        except:
             return None
 
-    def _get_latest_version_from_pypi(self, package_name: str) -> Optional[str]:
+    def _find_newest_version_for_python(self, package_name: str, target_python: str, pypi_data: dict) -> Optional[str]:
+        """Find newest package version with wheels for target Python version"""
+        try:
+            from packaging.version import parse as parse_version
+            releases = pypi_data.get('releases', {})
+            
+            target_py_tag = target_python.replace('py', '').replace('.', '')  # "py3.8" -> "38"
+            
+            # Sort versions newest first
+            sorted_versions = sorted(releases.keys(), key=lambda v: parse_version(v), reverse=True)
+            
+            for version in sorted_versions:
+                files = releases[version]
+                for file_info in files:
+                    if file_info.get('packagetype') == 'bdist_wheel':
+                        filename = file_info.get('filename', '')
+                        # Check for cp38, py38, py3, etc.
+                        if re.search(rf'-(?:cp|py){target_py_tag}', filename) or '-py3-' in filename:
+                            safe_print(f'    🎯 Found compatible version: {version} (has wheels for {target_python})')
+                            return version
+            
+            return None
+        except Exception as e:
+            safe_print(f'    ⚠️  Error finding compatible version: {e}')
+            return None
+
+    def _get_latest_version_from_pypi(self, package_name: str, python_context_version: Optional[str] = None) -> Optional[str]:
         """
         (ENHANCED CACHING) Gets the latest compatible version of a package.
         Returns None if package doesn't exist.
         Raises NoCompatiblePythonError if package exists but no compatible Python version.
         """
         safe_print(f" -> Finding latest COMPATIBLE version for '{package_name}' using background caching...")
-        py_context = self.current_python_context        
+        py_context = python_context_version or self.current_python_context
+   
         if not hasattr(self, 'pypi_cache'):
             self.initialize_pypi_cache()
 
@@ -9249,7 +10029,36 @@ class omnipkg:
                 latest_pypi_version = pypi_data['info']['version']
                 package_exists_on_pypi = True
                 safe_print(f'    📦 Latest PyPI version: {latest_pypi_version}')
-                
+
+                # NEW: For legacy Python contexts, preemptively check compatibility
+                py_parts = tuple(map(int, py_context.replace('py', '').split('.')))
+                is_legacy = py_parts < (3, 10)
+
+                if is_legacy:
+                    requires_python = pypi_data['info'].get('requires_python')
+                    if requires_python:
+                        from packaging.specifiers import SpecifierSet
+                        spec = SpecifierSet(requires_python)
+                        current_py_str = py_context.replace('py', '')
+                        
+                        if not spec.contains(current_py_str):
+                            # INCOMPATIBLE - find target Python and raise immediately
+                            pkg_min_python = self._get_package_minimum_python_from_spec(spec)
+                            if pkg_min_python:
+                                baseline_version = self._find_newest_version_for_python(package_name, pkg_min_python, pypi_data)
+                                target_version = baseline_version or latest_pypi_version
+                                
+                                safe_print(f'    ⚠️  Incompatible: {package_name} v{target_version} requires {pkg_min_python}')
+                                
+                                # RAISE IMMEDIATELY - don't waste time on test installations
+                                raise NoCompatiblePythonError(
+                                    package_name=package_name,
+                                    package_version=target_version,
+                                    current_python=py_context,
+                                    compatible_python=pkg_min_python.replace('py', ''),
+                                    message=f"Package '{package_name}' v{target_version} requires Python {pkg_min_python}, current is {py_context}"
+                                )
+            
                 # Check if this version is already installed and compatible
                 safe_print(f'    🔍 Checking if version {latest_pypi_version} is already installed...')
                 cmd_check = [self.config['python_executable'], '-m', 'pip', 'show', package_name]
@@ -9282,7 +10091,8 @@ class omnipkg:
             else:
                 safe_print(f'    ❌ Could not fetch PyPI data (status: {response.status_code})')
                 safe_print('    🧪 Falling back to test installation approach...')
-                
+        except NoCompatiblePythonError:
+            raise  # Re-raise immediately, don't catch it
         except http_requests.exceptions.RequestException as e:
             safe_print(f'    ❌ Network error checking PyPI: {e}')
             safe_print('    🧪 Falling back to test installation approach...')
@@ -9351,7 +10161,7 @@ class omnipkg:
                                 package_name=package_name,
                                 package_version=latest_pypi_version,
                                 current_python=py_context,
-                                compatible_python=compatible_py_version,  # PASS THE COMPATIBLE VERSION!
+                                compatible_python=compatible_py_version,
                                 message=f"Package '{package_name}' v{latest_pypi_version} requires Python {compatible_py_version}, but current Python is {py_context}"
                             )
                         else:
@@ -9372,7 +10182,6 @@ class omnipkg:
                     version = match.group(1).strip()
                     safe_print(f' ✅ Package already installed with version: {version}')
                     if re.match('^[0-9]+(?:\\.[0-9]+)*(?:[a-zA-Z0-9\\.-_]*)?$', version):
-                        # Cache the result and return - FIX: Include python_context
                         self.pypi_cache.cache_version(package_name, version, py_context)
                         return version
                     else:
@@ -9389,7 +10198,6 @@ class omnipkg:
                     if version_match:
                         version = version_match.group(1).strip()
                         safe_print(f' ✅ Found latest version via pip index: {version}')
-                        # Cache the result and return - FIX: Include python_context
                         self.pypi_cache.cache_version(package_name, version, py_context)
                         return version
 
@@ -9408,7 +10216,6 @@ class omnipkg:
                     version = match.group(1)
                     safe_print(f' ✅ Pip resolver identified latest compatible version: {version} (pattern {i})')
                     if re.match('^[0-9]+(?:\\.[0-9]+)*(?:[a-zA-Z0-9\\.-_]*)?$', version):
-                        # Cache the result and return - FIX: Include python_context
                         self.pypi_cache.cache_version(package_name, version, py_context)
                         return version
                     else:
@@ -9426,23 +10233,42 @@ class omnipkg:
                         if list_match:
                             version = list_match.group(1).strip()
                             safe_print(f' ✅ Found installed version via pip list: {version}')
-                            # Cache the result and return - FIX: Include python_context
                             self.pypi_cache.cache_version(package_name, version, py_context)
                             return version
                 except Exception as e:
                     safe_print(f' -> pip list approach failed: {e}')
 
-            # If we get here, nothing worked
-            safe_print(f" ❌ Could not find or resolve a compatible version for package '{package_name}'.")
-            safe_print(' ❌ This might indicate:')
-            safe_print("   1) Package doesn't exist on PyPI")
-            safe_print('   2) Package name is misspelled or contains invalid characters')
-            safe_print('   3) No compatible version exists for your Python environment')
-            safe_print('   4) Network connectivity issues')
-            safe_print('   5) Package requires different installation method')
-            raise NoCompatiblePythonError(package_name)
+            # If we get here, nothing worked - check if package exists but is incompatible
+            if package_exists_on_pypi and latest_pypi_version:
+                safe_print(f' ❌ Package {package_name} v{latest_pypi_version} exists but incompatible with Python {py_context}')
+                safe_print(f' 🔍 Looking up compatible Python versions...')
+                
+                compatible_py_version = self._find_compatible_python_version(package_name, latest_pypi_version)
+                
+                if compatible_py_version:
+                    safe_print(f' ✅ {package_name} v{latest_pypi_version} requires Python {compatible_py_version}')
+                else:
+                    safe_print(f' ⚠️  Could not determine compatible Python version')
+                    compatible_py_version = "unknown"
+                
+                raise NoCompatiblePythonError(
+                    package_name=package_name,
+                    package_version=latest_pypi_version,
+                    current_python=py_context,
+                    compatible_python=compatible_py_version,
+                    message=f"Package '{package_name}' v{latest_pypi_version} requires Python {compatible_py_version}, current is {py_context}"
+                )
+            else:
+                # Could not find package at all
+                safe_print(f" ❌ Could not find or resolve a compatible version for package '{package_name}'.")
+                safe_print(' ❌ This might indicate:')
+                safe_print("   1) Package doesn't exist on PyPI")
+                safe_print('   2) Package name is misspelled or contains invalid characters')
+                safe_print('   3) No compatible version exists for your Python environment')
+                safe_print('   4) Network connectivity issues')
+                safe_print('   5) Package requires different installation method')
+                return None
 
-            
         except subprocess.TimeoutExpired:
             safe_print(f" ❌ Pip resolver timed out while resolving '{package_name}'.")
             return None
@@ -9452,30 +10278,6 @@ class omnipkg:
             safe_print(f" ❌ An unexpected error occurred: {e}")
             return None
         
-        # If we exhausted all methods and found nothing
-        if package_exists_on_pypi and latest_pypi_version:
-            safe_print(f' ❌ Package {package_name} v{latest_pypi_version} exists but incompatible with Python {py_context}')
-            safe_print(f' 🔍 Looking up compatible Python versions...')
-            
-            compatible_py_version = self._find_compatible_python_version(package_name, latest_pypi_version)
-            
-            if compatible_py_version:
-                safe_print(f' ✅ {package_name} v{latest_pypi_version} requires Python {compatible_py_version}')
-            else:
-                safe_print(f' ⚠️  Could not determine compatible Python version')
-                compatible_py_version = "unknown"
-            
-            raise NoCompatiblePythonError(
-                package_name=package_name,
-                package_version=latest_pypi_version,
-                current_python=py_context,
-                compatible_python=compatible_py_version,  # PASS IT!
-                message=f"Package '{package_name}' v{latest_pypi_version} requires Python {compatible_py_version}, current is {py_context}"
-            )
-        else:
-            safe_print(f' ❌ Could not confirm package exists on PyPI')
-            return None
-    
     def _start_background_cache_refresh(self, package_name: str, python_context: str):
         """
         (FIXED) The background refresh now ALSO uses the robust `pip`-based check
