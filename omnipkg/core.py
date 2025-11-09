@@ -7017,7 +7017,7 @@ class omnipkg:
                 if not python_exe:
                     safe_print(_('   - ❌ CRITICAL: Could not find Python executable in {} after extraction.').format(dest_path))
                     return False
-                self._install_essential_packages(python_exe)
+                self.config_manager._install_essential_packages(python_exe)
         
                 safe_print(_('   - ✅ Alternative Python 3.13 download and bootstrap completed'))
                 return True
