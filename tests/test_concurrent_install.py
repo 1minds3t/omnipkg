@@ -23,8 +23,8 @@ def format_duration(ms: float) -> str:
     else:
         return f"{ms/1000:.2f}s"
 
-def run_omnipkg_cli(python_exe: str, args: list, thread_id: int) -> tuple[int, str, float]:
-    """Run omnipkg CLI in the CORRECT Python context and show output on failure."""
+def run_omnipkg_cli(python_exe: str, args: list, thread_id: int) -> tuple[int, str, str, float]:
+    """Run omnipkg CLI and ALWAYS return stdout/stderr."""
     prefix = f"[T{thread_id}]"
     start = time.perf_counter()
     
@@ -43,19 +43,19 @@ def run_omnipkg_cli(python_exe: str, args: list, thread_id: int) -> tuple[int, s
     status = "✅" if result.returncode == 0 else "❌"
     safe_print(f"{prefix} {status} {' '.join(args[:3])} ({format_duration(duration_ms)})")
     
+    # ALWAYS show output on failure
     if result.returncode != 0:
+        safe_print(f"{prefix} ❌ COMMAND FAILED: {' '.join(cmd)}")
         if result.stdout:
             safe_print(f"{prefix} STDOUT:\n{result.stdout.strip()}")
         if result.stderr:
             safe_print(f"{prefix} STDERR:\n{result.stderr.strip()}")
     
-    return result.returncode, result.stdout, duration_ms
+    return result.returncode, result.stdout, result.stderr, duration_ms  # Return stderr too!
+
 
 def verify_registry_contains(version: str, max_attempts: int = 5, delay: float = 0.5) -> bool:
-    """
-    Verify that the registry actually contains the specified Python version.
-    This is critical to ensure adoption completed properly before proceeding.
-    """
+    """Verify registry contains the version WITH DEBUGGING."""
     for attempt in range(max_attempts):
         try:
             result = subprocess.run(
@@ -65,13 +65,24 @@ def verify_registry_contains(version: str, max_attempts: int = 5, delay: float =
                 check=True
             )
             
+            # DEBUG: Show what's actually in the registry
+            if attempt == 0:
+                safe_print(f"[DEBUG] Registry contents:")
+                for line in result.stdout.splitlines():
+                    if 'Python' in line:
+                        safe_print(f"[DEBUG]   {line}")
+            
             for line in result.stdout.splitlines():
                 if f'Python {version}:' in line:
+                    safe_print(f"[DEBUG] ✅ Found Python {version} in registry")
                     return True
+            
+            safe_print(f"[DEBUG] ❌ Attempt {attempt+1}/{max_attempts}: Python {version} NOT in registry")
             
             if attempt < max_attempts - 1:
                 time.sleep(delay)
-        except subprocess.CalledProcessError:
+        except subprocess.CalledProcessError as e:
+            safe_print(f"[DEBUG] ❌ Registry check failed: {e}")
             if attempt < max_attempts - 1:
                 time.sleep(delay)
     
@@ -186,29 +197,41 @@ def test_dimension(config: tuple, thread_id: int, skip_swap: bool = False) -> di
             timings['lock_acquired'] = time.perf_counter()
             safe_print(f"{prefix} 🔒 LOCK ACQUIRED")
             
-            # STEP 1: Swap context (only if needed)
+            # STEP 1: Swap context (WITH FULL ERROR INFO)
             swap_time = 0
             if not skip_swap:
                 safe_print(f"{prefix} 🔄 Swapping to Python {py_version}")
-                swap_code, _, swap_time = run_omnipkg_cli(
+                swap_code, swap_stdout, swap_stderr, swap_time = run_omnipkg_cli(
                     sys.executable,
                     ['swap', 'python', py_version],
                     thread_id
                 )
                 if swap_code != 0:
-                    raise RuntimeError(f"Swap failed")
+                    # Show the ACTUAL error that caused the failure
+                    safe_print(f"{prefix} ❌ SWAP FAILED - Full diagnostics:")
+                    safe_print(f"{prefix}    Command: {sys.executable} -m omnipkg.cli swap python {py_version}")
+                    safe_print(f"{prefix}    Exit code: {swap_code}")
+                    safe_print(f"{prefix}    STDOUT: {swap_stdout}")
+                    safe_print(f"{prefix}    STDERR: {swap_stderr}")
+                    raise RuntimeError(f"Swap failed with exit code {swap_code}: {swap_stderr}")
+            
             timings['swap_end'] = time.perf_counter()
             
-            # STEP 2: Install using TARGET Python
+            # STEP 2: Install (WITH FULL ERROR INFO)
             safe_print(f"{prefix} 📦 Installing rich=={rich_version}")
-            install_code, _, install_time = run_omnipkg_cli(
+            install_code, install_stdout, install_stderr, install_time = run_omnipkg_cli(
                 python_exe,
                 ['install', f'rich=={rich_version}'],
                 thread_id
             )
             if install_code != 0:
-                raise RuntimeError(f"Install failed")
-            timings['install_end'] = time.perf_counter()
+                safe_print(f"{prefix} ❌ INSTALL FAILED:")
+                safe_print(f"{prefix}    Command: {python_exe} -m omnipkg.cli install rich=={rich_version}")
+                safe_print(f"{prefix}    Exit code: {install_code}")
+                safe_print(f"{prefix}    STDOUT: {install_stdout}")
+                safe_print(f"{prefix}    STDERR: {install_stderr}")
+                raise RuntimeError(f"Install failed with exit code {install_code}: {install_stderr}")
+            
             
             safe_print(f"{prefix} 🔓 LOCK RELEASED")
             timings['lock_released'] = time.perf_counter()
