@@ -4385,10 +4385,7 @@ class omnipkg:
         # Determine native interpreter path
         if platform.system() == 'Windows':
             native_exe = self.config_manager.venv_path / 'Scripts' / 'python.exe'
-            is_current_native = (
-                str(current_exe).startswith(str(self.config_manager.venv_path)) and
-                '.omnipkg' not in str(current_exe)
-            )
+            is_current_native = (current_exe.resolve() == native_exe.resolve())
         else:
             native_exe = self.config_manager.venv_path / 'bin' / 'python'
             is_current_native = current_exe.parent == (self.config_manager.venv_path / 'bin')
