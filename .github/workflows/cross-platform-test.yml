@@ -3,6 +3,12 @@ name: Cross-Platform Sanity Check
 on:
   push:
     branches:
+      - main
+      - development
+      - staging
+  pull_request:
+    branches:
+      - main
       - development
   workflow_dispatch:
     inputs:
@@ -26,12 +32,13 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.inputs.branch || 'development' }}
+          ref: ${{ github.event.inputs.branch || github.ref }}
           
       - name: Display selected branch and OS
         run: |
           echo "Testing on: ${{ matrix.os }}"
-          echo "Branch: ${{ github.event.inputs.branch || 'development' }}"
+          echo "Branch: ${{ github.ref_name }}"
+          echo "Commit: ${{ github.sha }}"
           
       - name: Wipe previous omnipkg config (Windows)
         run: |
