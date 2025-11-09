@@ -87,6 +87,11 @@ def adopt_if_needed(version: str, thread_id: int) -> bool:
         
         if result.returncode == 0:
             safe_print(f"{prefix} ✅ Adopted Python {version}")
+            # Force registry reload by checking again
+            try:
+                get_interpreter_path(version)
+            except:
+                safe_print(f"{prefix} ⚠️  Warning: Adoption succeeded but interpreter not found in registry")
             return True
         else:
             safe_print(f"{prefix} ❌ Adoption failed")
