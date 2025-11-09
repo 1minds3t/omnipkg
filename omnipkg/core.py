@@ -563,47 +563,46 @@ class ConfigManager:
         managed_interpreters_dir = self.venv_path / '.omnipkg' / 'interpreters'
         managed_interpreters_dir.mkdir(parents=True, exist_ok=True)
         
-        # Check if this is the native Python by looking at the REAL venv path (not sys.prefix which might be tainted)
-        venv_bin_python = self.venv_path / 'bin' / f'python{sys.version_info.major}.{sys.version_info.minor}'
+        # Platform-aware native detection
         interpreter_resolved = interpreter_path.resolve()
         
-        # DEBUG
-        safe_print(f'   [DEBUG] interpreter_path: {interpreter_path}')
-        safe_print(f'   [DEBUG] interpreter_resolved: {interpreter_resolved}')
-        safe_print(f'   [DEBUG] interpreter_resolved.parent: {interpreter_resolved.parent}')
-        safe_print(f'   [DEBUG] venv_path/bin: {self.venv_path / "bin"}')
-        
-        # If the interpreter being registered is in the main venv bin directory, it's native
-        is_native = interpreter_resolved.parent == (self.venv_path / 'bin')
-        
-        safe_print(f'   [DEBUG] is_native: {is_native}')
+        # On Windows: check if it's in the main venv directory (not in .omnipkg)
+        # On Unix: check if it's in venv_path/bin
+        if platform.system() == 'Windows':
+            # Windows: native if it's in the venv root, not in .omnipkg
+            is_native = (
+                str(interpreter_resolved).startswith(str(self.venv_path)) and
+                '.omnipkg' not in str(interpreter_resolved)
+            )
+        else:
+            # Unix: native if it's in venv_path/bin
+            is_native = interpreter_resolved.parent == (self.venv_path / 'bin')
         
         if is_native:
             safe_print(_('   - Native Python {} - using directly (no symlink)').format(version))
             registry_path = managed_interpreters_dir / 'registry.json'
             
-            # Load existing registry or create a new one
+            # Load existing registry
             registry_data = {'interpreters': {}}
             if registry_path.exists():
                 try:
                     with open(registry_path, 'r') as f:
                         registry_data = json.load(f)
                 except (json.JSONDecodeError, IOError):
-                    pass # Start fresh if corrupted
+                    pass
 
-            # --- THIS IS THE CRITICAL ADDITION ---
-            # Add or update the native interpreter's direct path in the registry.
+            # Register the NATIVE path (not a symlink!)
             registry_data['interpreters'][version] = str(interpreter_resolved)
-            # --- END OF ADDITION ---
 
-            # Save the updated registry back to the file.
             with open(registry_path, 'w') as f:
                 json.dump(registry_data, f, indent=4)
 
             safe_print(f"   - ✅ Registered native Python {version} in registry file.")
-            # We no longer need to call _register_all_interpreters here, 
-            # as the first-time setup will call it later.
-            return
+            return  # EXIT HERE - don't create symlink!
+        
+        # Only create symlink for NON-native interpreters
+        # (This should rarely happen in normal usage)
+        safe_print(_('   - WARNING: Non-native interpreter detected, creating symlink...'))
         
         # For non-native interpreters, create symlink
         safe_print(_('   - Centralizing Python {}...').format(version))
@@ -1685,38 +1684,42 @@ class ConfigManager:
         is_windows = platform.system() == 'Windows'
         
         try:
-            import site
-            all_sps = site.getsitepackages()
-            
-            # Priority 1: Find a path that ENDS with 'site-packages'. This is the most reliable.
-            for path_str in all_sps:
-                if path_str.lower().endswith('site-packages'):
-                    p = Path(path_str)
-                    if p.is_dir():
-                        return p # Found the best match
-
-            # Priority 2 (Fallback): Find a path that CONTAINS 'site-packages'.
-            for path_str in all_sps:
-                if 'site-packages' in path_str.lower():
-                    p = Path(path_str)
-                    if p.is_dir():
-                        return p # Good enough
-
-            # If we still haven't found one, it's a weird environment.
-            # Fall back to the last path given by site, which is often the correct one.
-            if all_sps:
-                return Path(all_sps[-1])
-
-        except (ImportError, Exception):
-            # If `site` module fails, fall back to manual construction
+            # Method 1: Use site.getsitepackages() - most reliable method
+            site_packages_list = site.getsitepackages()
+            if site_packages_list:
+                current_python_dir = Path(sys.executable).parent
+                
+                # Find the site-packages that belongs to our current Python
+                for sp in site_packages_list:
+                    sp_path = Path(sp)
+                    try:
+                        # Check if this site-packages is under our Python installation
+                        sp_path.relative_to(current_python_dir)
+                        # Additional validation: check if it actually contains packages
+                        if sp_path.exists():
+                            return sp_path
+                    except ValueError:
+                        continue
+                
+                # If relative path matching fails, prefer paths that actually exist
+                # and sort by specificity (longer paths first)
+                existing_paths = [Path(sp) for sp in site_packages_list if Path(sp).exists()]
+                if existing_paths:
+                    # For Windows, prefer 'lib' over 'Lib' when both exist (lowercase is more standard)
+                    if is_windows and len(existing_paths) > 1:
+                        lib_paths = [p for p in existing_paths if 'lib' in str(p).lower()]
+                        lowercase_lib = [p for p in lib_paths if '/lib/' in str(p) or '\\lib\\' in str(p)]
+                        if lowercase_lib:
+                            return sorted(lowercase_lib, key=len, reverse=True)[0]
+                    
+                    return sorted(existing_paths, key=len, reverse=True)[0]
+                
+                # Fallback to first path (even if it doesn't exist yet)
+                return Path(site_packages_list[0])
+                
+        except Exception:
+            # Continue with fallback logic
             pass
-        
-        # Absolute fallback if all else fails (should not be reached in normal operation)
-        py_ver = f'python{sys.version_info.major}.{sys.version_info.minor}'
-        if sys.platform == "win32":
-            return Path(sys.prefix) / 'Lib' / 'site-packages'
-        else:
-            return Path(sys.prefix) / 'lib' / py_ver / 'site-packages'
         
         # Method 2: Try to find an existing package and derive site-packages from it
         try:
