@@ -94,7 +94,8 @@ jobs:
         run: |
           Write-Host "=== Using original Python ==="
           $originalPython = "C:\hostedtoolcache\windows\Python\3.10.11\x64\python.exe"
-          & $originalPython -m omnipkg.cli list python
+          try {
+            & $originalPython -m omnipkg.cli list python
           } catch {
             Write-Host "Command failed: $($_.Exception.Message)"
           }
