@@ -328,6 +328,9 @@ class ConfigManager:
         """
         Finds the virtual environment root with enhanced validation to prevent
         environment cross-contamination from stale shell variables.
+        
+        CRITICAL: When running from a managed interpreter (e.g., inside .omnipkg/interpreters/),
+        we must find the ORIGINAL venv root, not create nested structures.
         """
         override = os.environ.get('OMNIPKG_VENV_ROOT')
         if override:
@@ -349,15 +352,33 @@ class ConfigManager:
             if str(current_executable).startswith(str(conda_path)):
                 return conda_path
 
-        # --- THIS IS THE AUTHORITATIVE FIX ---
-        # The most reliable method: search upwards from the current executable for pyvenv.cfg
-        # This works regardless of which swapped interpreter is active.
+        # --- CRITICAL FIX: Detect if we're in a managed interpreter ---
+        # If we're running from .omnipkg/interpreters/*, we need to find the REAL venv root
+        # by going up past the .omnipkg directory
+        executable_str = str(current_executable)
+        if '.omnipkg/interpreters' in executable_str or '.omnipkg\\interpreters' in executable_str:
+            # We're in a managed interpreter - find the original venv root
+            # Split on .omnipkg and take everything before it
+            parts = executable_str.replace('\\', '/').split('/.omnipkg/interpreters')
+            if len(parts) >= 2:
+                original_venv = Path(parts[0])
+                # Verify this is actually a venv by checking for pyvenv.cfg
+                if (original_venv / 'pyvenv.cfg').exists():
+                    return original_venv
+                # If no pyvenv.cfg at that level, search upward from there
+                search_dir = original_venv
+                while search_dir != search_dir.parent:
+                    if (search_dir / 'pyvenv.cfg').exists():
+                        return search_dir
+                    search_dir = search_dir.parent
+        
+        # --- Standard upward search for non-managed interpreters ---
+        # Search upwards from the current executable for pyvenv.cfg
         search_dir = current_executable.parent
-        while search_dir != search_dir.parent: # Stop at the filesystem root
+        while search_dir != search_dir.parent:  # Stop at the filesystem root
             if (search_dir / 'pyvenv.cfg').exists():
                 return search_dir
             search_dir = search_dir.parent
-        # --- END OF FIX ---
 
         # Only use sys.prefix as a last resort if all else fails.
         return Path(sys.prefix)
