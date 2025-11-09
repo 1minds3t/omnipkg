@@ -521,19 +521,14 @@ def print_header(title):
 def main():
     """Main application entry point with pre-flight version check."""
     try:
-        # >>>>> END OF ADDITION <<<<<
         # --- START: ROBUST PRE-PARSING LOGIC ---
-        
-        # This pre-parser finds global flags like --verbose and --lang,
-        # even if they come after a command like 'run'.
         global_parser = argparse.ArgumentParser(add_help=False)
         global_parser.add_argument('--lang', default=None)
         global_parser.add_argument('--verbose', '-V', action='store_true')
         
-        # Parse ONLY the known global flags and keep the rest.
         global_args, remaining_args = global_parser.parse_known_args()
 
-        # Handle version check separately as it exits immediately.
+        # Handle version check separately
         if '-v' in remaining_args or '--version' in remaining_args:
             prog_name = Path(sys.argv[0]).name
             if prog_name == '8pkg' or (len(sys.argv) > 0 and '8pkg' in sys.argv[0]):
@@ -541,6 +536,10 @@ def main():
             else:
                 safe_print(_('omnipkg {}').format(get_version()))
             return 0
+        
+        # --- NEW: EXTRACT COMMAND BEFORE FULL PARSING ---
+        # We need to know the command to decide minimal vs full init
+        command = remaining_args[0] if remaining_args and not remaining_args[0].startswith('-') else None
         
         # --- END: ROBUST PRE-PARSING LOGIC ---
         
@@ -551,17 +550,24 @@ def main():
         if user_lang:
             _.set_language(user_lang)
 
-        pkg_instance = OmnipkgCore(config_manager=cm)
+        # --- NEW: DECIDE MINIMAL VS FULL INITIALIZATION ---
+        # Commands that only need config + interpreter manager (no cache/database)
+        minimal_commands = {'swap', 'config', 'python'}
+        use_minimal = command in minimal_commands
+        
+        pkg_instance = OmnipkgCore(config_manager=cm, minimal_mode=use_minimal)
+        # --- END NEW LOGIC ---
+        
         prog_name = Path(sys.argv[0]).name
         if prog_name == '8pkg' or (len(sys.argv) > 0 and '8pkg' in sys.argv[0]):
             parser = create_8pkg_parser()
         else:
             parser = create_parser()
 
-        # Now, parse ONLY the remaining arguments with the full parser.
+        # Now parse fully
         args = parser.parse_args(remaining_args)
 
-        # Manually add the pre-scanned global flags to the final args namespace.
+        # Manually add the pre-scanned global flags
         args.verbose = global_args.verbose
         args.lang = global_args.lang
         if args.command is None:
