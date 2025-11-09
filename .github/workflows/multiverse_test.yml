@@ -34,50 +34,22 @@ jobs:
       - name: Configure omnipkg for CI
         id: setup_omnipkg
         run: |
-          # This step is still good practice for CI environments.
           python - << 'EOF'
           import json, os
           from pathlib import Path
           from omnipkg.core import ConfigManager
-          
-          # Force non-interactive mode for CI
-          config_dir = Path.home() / '.config' / 'omnipkg'
-          config_dir.mkdir(parents=True, exist_ok=True)
-          full_config_path = config_dir / 'config.json'
-          
-          # Initialize ConfigManager to get the environment ID
           cm = ConfigManager(suppress_init_messages=True)
           env_id = cm.env_id
           print(f"Authoritative Environment ID for this job: {env_id}")
-          
-          # Write a minimal config to ensure non-interactive mode
-          if full_config_path.exists():
-              with open(full_config_path, 'r') as f:
-                  data = json.load(f)
-          else:
-              data = {"environments": {}}
-          
-          if env_id not in data["environments"]:
-              data["environments"][env_id] = {}
-              
-          data["environments"][env_id]["interactive"] = False
-          data["environments"][env_id]["auto_confirm"] = True
-          
-          with open(full_config_path, 'w') as f:
-              json.dump(data, f, indent=4)
-          
-          print("✅ Omnipkg configured for non-interactive use")
-          
-          # Set the ENV ID for subsequent steps
           with open(os.environ['GITHUB_ENV'], 'a') as f:
               f.write(f"OMNIPKG_ENV_ID_OVERRIDE={env_id}\n")
           EOF
 
-      - name: Run The Self-Contained Concurrent Test
+      - name: Run Quantum Multiverse Demo
         env:
-          # Pass the authoritative ENV ID to the test script
           OMNIPKG_ENV_ID_OVERRIDE: ${{ env.OMNIPKG_ENV_ID_OVERRIDE }}
         run: |
-          echo "--- Running The Self-Contained Concurrent Installation Test ---"
-          # Just run the test. It will handle adopting Python versions itself.
-          python tests/test_concurrent_install.p
+          echo "--- Running Omnipkg Quantum Multiverse Warp Demo ---"
+          # This is the correct, robust way to run the test via the intended entry point.
+          # It pipes "8" to select the demo and suppresses the harmless BrokenPipeError.
+          echo "8" | omnipkg demo 2> >(grep -v "BrokenPipeError\|Broken pipe" || true)
