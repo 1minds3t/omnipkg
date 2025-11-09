@@ -2171,22 +2171,45 @@ class InterpreterManager:
     def __init__(self, config_manager: ConfigManager):
         self.config_manager = config_manager
         self.venv_path = config_manager.venv_path
+        self._registry_cache: Optional[Dict[str, Path]] = None
+
+
+    def refresh_registry(self):
+        """
+        FIX: Clears the in-memory cache of interpreters, forcing a re-read from disk on the next call.
+        """
+        self._registry_cache = None
+        safe_print("   - 🔄 Interpreter registry cache invalidated.")
 
     def list_available_interpreters(self) -> Dict[str, Path]:
-        """Returns a dict of version -> path for all available interpreters."""
+        """
+        Returns a dict of version -> path for all available interpreters.
+        Now uses an in-memory cache that can be refreshed.
+        """
+        # Return from cache if it's already loaded
+        if self._registry_cache is not None:
+            return self._registry_cache
+
         registry_path = self.venv_path / '.omnipkg' / 'interpreters' / 'registry.json'
         if not registry_path.exists():
+            self._registry_cache = {}
             return {}
+        
         try:
             with open(registry_path, 'r') as f:
                 registry = json.load(f)
+            
             interpreters = {}
             for version, path_str in registry.get('interpreters', {}).items():
                 path = Path(path_str)
                 if path.exists():
                     interpreters[version] = path
+            
+            # Load into cache
+            self._registry_cache = interpreters
             return interpreters
-        except:
+        except Exception:
+            self._registry_cache = {}
             return {}
 
     def run_with_interpreter(self, version: str, cmd: List[str]) -> subprocess.CompletedProcess:
@@ -6592,7 +6615,12 @@ class omnipkg:
         """
         safe_print(_('Performing a full re-scan of managed interpreters...'))
         try:
+            # This line rewrites the registry.json file on disk.
             self.config_manager._register_all_interpreters(self.config_manager.venv_path)
+
+            # *** THE FIX: After rewriting the file, invalidate the current process's cache. ***
+            self.interpreter_manager.refresh_registry()
+
             safe_print(_('\n✅ Interpreter registry successfully rebuilt.'))
             return 0
         except Exception as e:
@@ -9156,74 +9184,76 @@ class omnipkg:
 
     import time
 
+    # In omnipkg/core.py, inside the omnipkg class
+
+    
     def switch_active_python(self, version: str) -> int:
-        """
-        Switches the active Python context for the entire environment.
-        This updates the config file and the default `python` symlinks.
-        """
         start_time = time.perf_counter_ns()
-        
-        # Check if already in target context
+
+        # === TIER 1: THE NANOSECOND FAST PATH (In-Memory Check) ===
         configured_python = self.config_manager.get('python_executable')
         if configured_python:
-            import re
-            version_match = re.search(r'python(\d+\.\d+)', str(configured_python))
-            if version_match and version_match.group(1) == version:
+            path_str = str(configured_python)
+            # Direct string checks - faster than regex!
+            if f'cpython-{version}' in path_str or path_str.endswith(f'python{version}'):
                 elapsed_ns = time.perf_counter_ns() - start_time
                 elapsed_ms = elapsed_ns / 1_000_000
                 safe_print(_('⚡ Already in Python {} context. No swap needed!').format(version))
                 safe_print(f'   ⏱️  Detection time: {elapsed_ms:.3f}ms ({elapsed_ns:,} ns)')
                 return 0
-        
-        safe_print(_('🐍 Switching to Python {}...').format(version))
-        
+
+        # === TIER 2: THE MILLISECOND FAST PATH (Authoritative Check) ===
+        # If the in-memory check failed, it might be because another process changed
+        # the config on disk. Run the authoritative check before proceeding.
+        target_context = f'py{version}'
+        if self.current_python_context == target_context:
+            # The ground truth says we are already in the correct state. Do nothing.
+            elapsed_ns = time.perf_counter_ns() - start_time
+            elapsed_ms = elapsed_ns / 1_000_000
+            safe_print(_('⚡ Already in Python {} context. No swap needed!').format(version))
+            safe_print(f'   ⏱️  Detection time: {elapsed_ms:.3f}ms ({elapsed_ns:,} ns)')
+            return 0
+
+        # === THE SLOW PATH (ONLY IF A SWAP IS ACTUALLY NEEDED) ===
+        # If we get here, a swap is genuinely required.
+        safe_print(_('🐍 Switching active Python context to version {}...').format(version))
+
         managed_interpreters = self.interpreter_manager.list_available_interpreters()
         target_interpreter_path = managed_interpreters.get(version)
         
         if not target_interpreter_path:
-            safe_print(_('❌ Python {} not found.').format(version))
-            safe_print(_("   Run '8pkg list python' or adopt it with: 8pkg python adopt {}").format(version))
+            safe_print(f"   ❌ Python {version} not found in the registry.")
             return 1
-        
-        # Determine target path
-        if "venv-native" in str(target_interpreter_path):
-            true_native_path = str(self.config_manager.venv_path / 'bin' / f'python{version}')
-            target_interpreter_str = true_native_path
-            safe_print(f"   ✅ Native interpreter: {target_interpreter_str}")
-        else:
-            target_interpreter_str = str(target_interpreter_path)
-            safe_print(_('   ✅ Managed interpreter: {}').format(target_interpreter_str))
-        
-        # Get new paths
-        new_paths = self.config_manager._get_paths_for_interpreter(target_interpreter_str)
+
+        # ... The rest of the swap logic ...
+        safe_print(_('   ✅ Managed interpreter: {}').format(target_interpreter_path))
+        new_paths = self.config_manager._get_paths_for_interpreter(str(target_interpreter_path))
         if not new_paths:
             safe_print(f'❌ Could not determine paths for Python {version}.')
             return 1
         
-        # Update configuration
         safe_print(_('   🔧 Updating configuration...'))
         self.config_manager.set('python_executable', new_paths['python_executable'])
         self.config_manager.set('site_packages_path', new_paths['site_packages_path'])
         self.config_manager.set('multiversion_base', new_paths['multiversion_base'])
         
-        # Update symlinks
         safe_print(_('   🔗 Updating symlinks...'))
-        venv_path = Path(sys.prefix)
+        venv_path = self.config_manager.venv_path
         try:
-            self.config_manager._update_default_python_links(venv_path, target_interpreter_path)
+            self.config_manager._update_default_python_links(venv_path, Path(target_interpreter_path))
         except Exception as e:
             safe_print(_('   ❌ Symlink update failed: {}').format(e))
-        
+
         elapsed_ns = time.perf_counter_ns() - start_time
         elapsed_ms = elapsed_ns / 1_000_000
         
         safe_print(_('\n🎉 Switched to Python {}!').format(version))
         safe_print(_('   To activate in your shell, run: source {}/bin/activate').format(venv_path))
         safe_print(_('\n   Just kidding, omnipkg handled it for you automatically!'))
-        safe_print(f'   ⏱️  Swap completed in: {elapsed_ms:.3f}ms ({elapsed_ns:,} ns)')
+        safe_print(f'   ⏱️  Swap completed in: {elapsed_ms:.3f}ms')
         
         return 0
-
+    
     def _find_best_version_for_spec(self, package_spec: str) -> Optional[str]:
         """
         Resolves a complex package specifier (e.g., 'numpy>=1.20,<1.22') to the
@@ -9271,109 +9301,106 @@ class omnipkg:
                 return self._get_latest_version_from_pypi(pkg_name)
 
             # 2. Fetch ALL versions from PyPI
-            safe_print(f"    -> Fetching all available versions for '{pkg_name}'...")
-            response = http_requests.get(f'https://pypi.org/pypi/{pkg_name}/json', timeout=10)
-            response.raise_for_status()
-            data = response.json()
-            all_releases = data['releases']
+            # 2. Let pip tell us what's actually compatible in the current Python context
+            safe_print(f"    -> Using pip to find compatible versions for '{pkg_name}' in Python {self.current_python_context}...")
+            safe_print(f"    -> Package spec with constraint: '{package_spec}'")
 
-            # 3. Filter by version constraint
-            specifier = SpecifierSet(spec_str)
-            valid_versions = list(specifier.filter(all_releases.keys()))
+            # Use the test installation approach to get pip's answer
+            test_result = self._test_install_to_get_compatible_version(package_spec)  # Pass the FULL spec!
 
-            if not valid_versions:
-                safe_print(f"    ❌ No version of '{pkg_name}' found that matches '{spec_str}'")
+
+            if not test_result:
+                safe_print(f"    ❌ Pip could not find ANY compatible version of '{pkg_name}' for {self.current_python_context}")
+                
+                # Try to determine what Python version IS compatible
+                safe_print(f"    🔍 Checking PyPI metadata to find compatible Python version...")
+                try:
+                    response = http_requests.get(f'https://pypi.org/pypi/{pkg_name}/json', timeout=10)
+                    if response.status_code == 200:
+                        data = response.json()
+                        latest_version = data['info']['version']
+                        requires_python = data['info'].get('requires_python')
+                        
+                        if requires_python:
+                            from packaging.specifiers import SpecifierSet
+                            spec = SpecifierSet(requires_python)
+                            
+                            # Find minimum Python version
+                            min_py = self._get_package_minimum_python_from_spec(spec)
+                            if min_py:
+                                safe_print(f"    💡 {pkg_name} v{latest_version} requires Python {min_py}+")
+                                raise NoCompatiblePythonError(
+                                    package_name=pkg_name,
+                                    package_version=latest_version,
+                                    current_python=self.current_python_context,
+                                    compatible_python=min_py,
+                                    message=f"Package '{pkg_name}' requires Python {min_py}, current is {self.current_python_context}"
+                                )
+                except NoCompatiblePythonError:
+                    raise
+                except Exception as e:
+                    safe_print(f"    ⚠️ Could not determine compatible Python version: {e}")
+                
                 return None
 
-            # 4. Get current Python context
-            py_context = self.current_python_context
-            py_tag = py_context.replace('py', '').replace('.', '')  # "py3.9" -> "39"
-            py_parts = tuple(map(int, py_context.replace('py', '').split('.')))
-            
-            safe_print(f"    -> Filtering for Python {py_context} compatibility...")
-            
-            # 5. Sort versions from newest to oldest and find the first compatible one
-            sorted_versions = sorted(valid_versions, key=parse_version, reverse=True)
-            
-            for version in sorted_versions:
-                # Skip pre-releases unless explicitly requested
-                if parse_version(version).is_prerelease:
-                    continue
-                
-                # Check if this version has wheels for current Python
-                files = all_releases.get(version, [])
-                has_compatible_wheel = False
-                
-                for file_info in files:
-                    if file_info.get('packagetype') == 'bdist_wheel':
-                        filename = file_info.get('filename', '')
-                        # Check for cp39, py39, py3, etc.
-                        if (re.search(rf'-(?:cp|py){py_tag}', filename) or 
-                            '-py3-' in filename or 
-                            '-py2.py3-' in filename):
-                            has_compatible_wheel = True
-                            break
-                
-                if has_compatible_wheel:
-                    resolved_spec = f"{pkg_name}=={version}"
-                    safe_print(f"    ✅ Resolved '{package_spec}' to '{resolved_spec}' (compatible with {py_context})")
-                    return resolved_spec
-                
-                # If no wheel found, check metadata as fallback
-                version_data = all_releases.get(version, [{}])[0] if all_releases.get(version) else {}
-                requires_python = version_data.get('requires_python')
-                
-                if requires_python:
-                    try:
-                        spec = SpecifierSet(requires_python)
-                        current_py_str = py_context.replace('py', '')
-                        
-                        if spec.contains(current_py_str):
-                            # Metadata says it's compatible
-                            resolved_spec = f"{pkg_name}=={version}"
-                            safe_print(f"    ✅ Resolved '{package_spec}' to '{resolved_spec}' (metadata check passed)")
-                            return resolved_spec
-                    except Exception:
-                        pass
+            # 3. Now check if this version satisfies the original constraint
+            safe_print(f"    ✅ Pip found compatible version: {test_result}")
+            specifier = SpecifierSet(spec_str)
 
-            # If we get here, no compatible version was found for current Python
-            safe_print(f"    ❌ No version matching '{spec_str}' is compatible with {py_context}")
-            
-            # Find what Python version would work
-            best_version = sorted_versions[0]  # Latest version matching spec
-            safe_print(f"    🔍 Checking Python requirements for {pkg_name} v{best_version}...")
-            
-            # Try to determine what Python version is needed
-            version_files = all_releases.get(best_version, [])
-            min_python_from_wheels = None
-            
-            for file_info in version_files:
-                if file_info.get('packagetype') == 'bdist_wheel':
-                    filename = file_info.get('filename', '')
-                    # Extract Python version from wheel filename (e.g., cp310, cp311)
-                    wheel_match = re.search(r'-cp(\d)(\d+)-', filename)
-                    if wheel_match:
-                        wheel_py_major = int(wheel_match.group(1))
-                        wheel_py_minor = int(wheel_match.group(2))
-                        if not min_python_from_wheels or (wheel_py_major, wheel_py_minor) < min_python_from_wheels:
-                            min_python_from_wheels = (wheel_py_major, wheel_py_minor)
-            
-            if min_python_from_wheels:
-                required_python = f"{min_python_from_wheels[0]}.{min_python_from_wheels[1]}"
-                safe_print(f"    💡 {pkg_name} v{best_version} requires Python {required_python}+")
+            if not specifier.contains(test_result):
+                safe_print(f"    ⚠️ Compatible version {test_result} does NOT satisfy constraint '{spec_str}'")
+                safe_print(f"    → This means NO version matching '{spec_str}' exists for Python {self.current_python_context}")
                 
-                # Raise the error to trigger quantum healing
-                raise NoCompatiblePythonError(
-                    package_name=pkg_name,
-                    package_version=best_version,
-                    current_python=py_context,
-                    compatible_python=required_python,
-                    message=f"Package '{pkg_name}' v{best_version} requires Python {required_python}, current is {py_context}"
-                )
-            
-            # Last resort: just return None
-            safe_print(f"    ❌ Could not determine compatible Python version")
-            return None
+                # Trigger quantum healing - need different Python version
+                safe_print(f"    🔍 Finding what Python version is needed...")
+                try:
+                    response = http_requests.get(f'https://pypi.org/pypi/{pkg_name}/json', timeout=10)
+                    if response.status_code == 200:
+                        data = response.json()
+                        all_releases = data['releases']
+                        
+                        # Find the latest version that matches the spec
+                        valid_versions = list(specifier.filter(all_releases.keys()))
+                        if valid_versions:
+                            latest_matching = sorted(valid_versions, key=parse_version, reverse=True)[0]
+                            safe_print(f"    💡 Latest version matching '{spec_str}': {latest_matching}")
+                            
+                            # Find what Python it needs
+                            version_files = all_releases.get(latest_matching, [])
+                            min_python_from_wheels = None
+                            
+                            for file_info in version_files:
+                                if file_info.get('packagetype') == 'bdist_wheel':
+                                    filename = file_info.get('filename', '')
+                                    wheel_match = re.search(r'-cp(\d)(\d+)-', filename)
+                                    if wheel_match:
+                                        wheel_py_major = int(wheel_match.group(1))
+                                        wheel_py_minor = int(wheel_match.group(2))
+                                        if not min_python_from_wheels or (wheel_py_major, wheel_py_minor) < min_python_from_wheels:
+                                            min_python_from_wheels = (wheel_py_major, wheel_py_minor)
+                            
+                            if min_python_from_wheels:
+                                required_python = f"{min_python_from_wheels[0]}.{min_python_from_wheels[1]}"
+                                compatible_python_clean = min_py.replace('py', '') if min_py.startswith('py') else min_py
+
+                                raise NoCompatiblePythonError(
+                                    package_name=pkg_name,
+                                    package_version=latest_version,
+                                    current_python=self.current_python_context,
+                                    compatible_python=compatible_python_clean,  # Now "3.11" not "py3.11"
+                                    message=f"Package '{pkg_name}' requires Python {compatible_python_clean}, current is {self.current_python_context}"
+                                )
+                except NoCompatiblePythonError:
+                    raise
+                except Exception as e:
+                    safe_print(f"    ⚠️ Could not determine required Python version: {e}")
+                
+                return None
+
+            # 4. Success! We have a compatible version that satisfies the constraint
+            resolved_spec = f"{pkg_name}=={test_result}"
+            safe_print(f"    ✅ Resolved '{package_spec}' to '{resolved_spec}'")
+            return resolved_spec
 
         except NoCompatiblePythonError:
             raise  # Re-raise to trigger quantum healing
@@ -10206,7 +10233,8 @@ print(json.dumps(results))
         temp_dir = None
         process = None
         try:
-            temp_dir = tempfile.mkdtemp(prefix=f'omnipkg_test_{package_name}_')
+            safe_name = re.sub(r'[<>=!,\s]+', '_', package_name)
+            temp_dir = tempfile.mkdtemp(prefix=f'omnipkg_test_{safe_name}_')
             temp_path = Path(temp_dir)
             cmd = [self.config['python_executable'], '-m', 'pip', 'install', '--target', str(temp_path), '--no-deps', '--no-cache-dir', package_name]
             safe_print(_('    Running: {}').format(' '.join(cmd)))
@@ -10289,10 +10317,16 @@ print(json.dumps(results))
                         safe_print(_('    ✅ Successfully installed latest compatible version: {}').format(version))
                         return version
                 try:
-                    for item in temp_path.glob(f"{package_name.replace('-', '_')}-*.dist-info"):
+                    base_pkg_name = re.match(r'^([a-zA-Z0-9_.-]+)', package_name)
+                    if base_pkg_name:
+                        search_name = base_pkg_name.group(1).replace('-', '_')
+                    else:
+                        search_name = package_name.replace('-', '_')
+
+                    for item in temp_path.glob(f"{search_name}-*.dist-info"):
                         try:
                             dist_info_name = item.name
-                            version_match = re.search(f"^{re.escape(package_name.replace('-', '_'))}-([0-9a-zA-Z.+-]+)\\.dist-info", dist_info_name)
+                            version_match = re.search(f"^{re.escape(search_name)}-([0-9a-zA-Z.+-]+)\\.dist-info", dist_info_name)
                             if version_match:
                                 version = version_match.group(1)
                                 safe_print(f'    ✅ Found installed version from dist-info: {version}')
@@ -10477,7 +10511,7 @@ print(json.dumps(results))
         """
         safe_print(f" -> Finding latest COMPATIBLE version for '{package_name}' using background caching...")
         py_context = python_context_version or self.current_python_context
-   
+    
         if not hasattr(self, 'pypi_cache'):
             self.initialize_pypi_cache()
 
@@ -10487,10 +10521,21 @@ print(json.dumps(results))
             self._start_background_cache_refresh(package_name, py_context)
             return cached_version
         
-        # Track if we confirmed the package actually exists on PyPI
+        # USE THE ROBUST TEST INSTALLATION APPROACH FIRST
+        safe_print(f"    🧪 Using pip to find latest compatible version for Python {py_context}...")
+        try:
+            test_result = self._test_install_to_get_compatible_version(package_name)
+            if test_result:
+                safe_print(f'    🎯 Found compatible version: {test_result}')
+                self.pypi_cache.cache_version(package_name, test_result, py_context)
+                return test_result
+        except Exception as e:
+            safe_print(f'    ⚠️ Test installation approach failed: {e}')
+        
+        # If test installation didn't work, check PyPI to see if package exists
+        # and determine if we need quantum healing
         package_exists_on_pypi = False
         latest_pypi_version = None
-        compatible_version = None
         
         try:
             safe_print(f"    🌐 Fetching latest version from PyPI for '{package_name}'...")
