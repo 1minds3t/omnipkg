@@ -6654,8 +6654,12 @@ class omnipkg:
         """
         Safely adopts a Python version by checking the registry, then trying to copy
         from the local system, and finally falling back to download.
+        
+        CRITICAL FIX: Always refreshes the interpreter registry cache after adoption.
         """
         safe_print(_('🐍 Attempting to adopt Python {} into the environment...').format(version))
+        
+        # Check if already adopted
         managed_interpreters = self.interpreter_manager.list_available_interpreters()
         
         if version in managed_interpreters:
@@ -6667,8 +6671,15 @@ class omnipkg:
         
         if not source_path_str:
             safe_print(_('   - No local Python {} found. Falling back to download strategy.').format(version))
-            # ✅ No rescan needed - download already registers
-            return self._fallback_to_download(version)
+            # Download will handle registration internally
+            result = self._fallback_to_download(version)
+            
+            # CRITICAL: Force registry refresh after download
+            if result == 0:
+                self.interpreter_manager.refresh_registry()
+                safe_print(_('   - ✅ Successfully adopted Python {}.').format(version))
+            
+            return result
         
         source_exe_path = Path(source_path_str)
         
@@ -6684,30 +6695,45 @@ class omnipkg:
                 self._is_system_critical_path(source_root)):
                 
                 safe_print(_('   - ⚠️  Safety checks failed for local copy. Falling back to download.'))
-                # ✅ No rescan needed - download already registers
-                return self._fallback_to_download(version)
+                result = self._fallback_to_download(version)
+                
+                # CRITICAL: Force registry refresh after download
+                if result == 0:
+                    self.interpreter_manager.refresh_registry()
+                    safe_print(_('   - ✅ Successfully adopted Python {}.').format(version))
+                
+                return result
             
             dest_root = self.config_manager.venv_path / '.omnipkg' / 'interpreters' / f'cpython-{version}'
             
             if dest_root.exists():
                 safe_print(_('   - ✅ Adopted copy of Python {} already exists.').format(version))
-                # ✅ No rescan needed - it will be found on next registry read (cache refresh)
                 return 0
             
             safe_print(_('   - Starting safe copy operation...'))
             result = self._perform_safe_copy(source_root, dest_root, version)
             
             if result == 0:
-                # ✅ ONLY THIS RESCAN IS NEEDED - copy doesn't auto-register
+                # Copy doesn't auto-register, so we need to rescan
                 safe_print(_('🔧 Forcing rescan to register the copied interpreter...'))
                 self.rescan_interpreters()
+                
+                # CRITICAL: Force registry refresh after rescan
+                self.interpreter_manager.refresh_registry()
+                safe_print(_('   - ✅ Successfully adopted Python {}.').format(version))
             
             return result
             
         except Exception as e:
             safe_print(_('   - ❌ An error occurred during the copy attempt: {}. Falling back to download.').format(e))
-            # ✅ No rescan needed - download already registers
-            return self._fallback_to_download(version)
+            result = self._fallback_to_download(version)
+            
+            # CRITICAL: Force registry refresh after download
+            if result == 0:
+                self.interpreter_manager.refresh_registry()
+                safe_print(_('   - ✅ Successfully adopted Python {}.').format(version))
+            
+            return result
 
     def _is_interpreter_directory_valid(self, path: Path) -> bool:
         """
@@ -6869,6 +6895,10 @@ class omnipkg:
             traceback.print_exc()
             return 1
 
+    
+# Add this at the START of _download_python_313_alternative, 
+# right after the function signature:
+
     def _download_python_313_alternative(self, dest_path: Path, full_version: str) -> bool:
         """
         Alternative download method specifically for Python 3.13 using python-build-standalone releases.
@@ -6879,6 +6909,8 @@ class omnipkg:
         import platform
         import tempfile
         import shutil
+        
+        # CRITICAL FIX: Verify dest_path doesn't contain nested .omnipkg
         dest_path_str = str(dest_path).replace('\\', '/')
         if dest_path_str.count('/.omnipkg/') > 1:
             safe_print(_('   - ❌ CRITICAL: Detected nested .omnipkg path!'))
@@ -9570,9 +9602,6 @@ class omnipkg:
         return self.cache_client.hgetall(version_key)
 
     import time
-
-    # In omnipkg/core.py, inside the omnipkg class
-
     
     def switch_active_python(self, version: str) -> int:
         start_time = time.perf_counter_ns()
@@ -9608,8 +9637,16 @@ class omnipkg:
         managed_interpreters = self.interpreter_manager.list_available_interpreters()
         target_interpreter_path = managed_interpreters.get(version)
         
+        # CRITICAL FIX: If not found, try refreshing the registry once
+        if not target_interpreter_path:
+            safe_print(_('   - Python {} not found in cache, refreshing registry...').format(version))
+            self.interpreter_manager.refresh_registry()
+            managed_interpreters = self.interpreter_manager.list_available_interpreters()
+            target_interpreter_path = managed_interpreters.get(version)
+        
         if not target_interpreter_path:
             safe_print(f"   ❌ Python {version} not found in the registry.")
+            safe_print(f"   - Available versions: {', '.join(managed_interpreters.keys())}")
             return 1
 
         # ... The rest of the swap logic ...
