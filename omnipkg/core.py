@@ -6730,6 +6730,7 @@ class omnipkg:
             
             # CRITICAL: Force registry refresh after download
             if result == 0:
+                self.rescan_interpreters()
                 self.interpreter_manager.refresh_registry()
                 safe_print(_('   - ✅ Successfully adopted Python {}.').format(version))
             
