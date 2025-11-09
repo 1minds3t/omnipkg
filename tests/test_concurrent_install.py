@@ -172,72 +172,138 @@ def prepare_interpreter_dimension(py_version: str, omnipkg_instance: omnipkg, th
 
 def prepare_and_test_dimension(config: Tuple[str, str], omnipkg_instance: omnipkg, thread_id: int):
     """
-    (CORRECTED) The main worker function for each thread, now using the
-    shared in-process omnipkg instance for all operations.
+    The main worker function for each thread.
+    Uses subprocess calls to ensure packages are installed in the CORRECT Python version's context.
     """
     py_version, rich_version = config
     prefix = f"[T{thread_id}]"
     
-    timings: Dict[str, float] = {k: 0 for k in ['start', 'wait_lock_start', 'lock_acquired', 'install_start', 'install_end', 'lock_released', 'test_start', 'end']}
+    timings: Dict[str, float] = {k: 0 for k in ['start', 'wait_lock_start', 'lock_acquired', 'swap_start', 'swap_end', 'install_start', 'install_end', 'lock_released', 'test_start', 'end']}
     timings['start'] = time.perf_counter()
 
     try:
         thread_safe_print(f'{prefix} 🚀 DIMENSION TEST: Python {py_version} with Rich {rich_version}')
         
-        # === STEP 1: Get interpreter path (HITS THE CACHE) ===
-        # This now calls the method on the shared instance.
+        # === STEP 1: Get interpreter path ===
         python_exe_path = omnipkg_instance.config_manager.get_interpreter_for_version(py_version)
 
         if not python_exe_path:
-            # This should not happen if the adoption phase completed successfully
-            raise RuntimeError(f"Could not find interpreter for {py_version} after adoption phase.")
+            raise RuntimeError(f"Could not find interpreter for {py_version}")
         python_exe = str(python_exe_path)
 
-        # === STEP 2: Check if package is installed (HITS THE CACHE) ===
-        is_installed, check_duration = omnipkg_instance.check_package_installed_fast(python_exe, 'rich', rich_version)
-        
-        # === STEP 3: Critical section (IN-PROCESS) ===
+        # === STEP 2: Check if package is installed (using omnipkg's fast, bubble-aware check) ===
+        # Note: The signature in core.py returns a status string, not a boolean.
+        install_status, check_duration = omnipkg_instance.check_package_installed_fast(python_exe, 'rich', rich_version)
+        is_installed = install_status is not None
+
+        # === STEP 3: Critical section (SUBPROCESS OPERATIONS) ===
         thread_safe_print(f'{prefix} ⏳ WAITING for lock...')
         timings['wait_lock_start'] = time.perf_counter()
         with omnipkg_lock:
             timings['lock_acquired'] = time.perf_counter()
             thread_safe_print(f'{prefix} 🔒 LOCK ACQUIRED - Modifying shared environment')
             
-            # --- SWAP CONTEXT (IN-PROCESS) ---
-            swap_start = time.perf_counter()
-            omnipkg_instance.switch_active_python(py_version)
-            swap_duration = (time.perf_counter() - swap_start) * 1000
-            thread_safe_print(f'{prefix} ✅ Context switched to Python {py_version} in {format_duration(swap_duration)}')
+            # --- SWAP CONTEXT (SUBPROCESS) ---
+            swap_returncode, swap_duration = run_and_stream_install(
+                ['swap', 'python', py_version],
+                f"Swapping to Python {py_version}",
+                'omnipkg',
+                thread_id
+            )
+            if swap_returncode != 0:
+                raise RuntimeError(f"Failed to swap to Python {py_version}")
+            timings['swap_end'] = time.perf_counter()
             
-            # --- INSTALL PACKAGE (IN-PROCESS) ---
+            # --- INSTALL (SUBPROCESS) ---
             install_duration = 0.0
             timings['install_start'] = time.perf_counter()
             if is_installed:
-                thread_safe_print(f'{prefix} ⚡ CACHE HIT: rich=={rich_version} already installed')
+                thread_safe_print(f'{prefix} ⚡ CACHE HIT: rich=={rich_version} already exists for Python {py_version}')
             else:
-                thread_safe_print(f'{prefix} 📦 INSTALLING: rich=={rich_version}')
-                omnipkg_instance.smart_install([f'rich=={rich_version}'])
-                install_duration = (time.perf_counter() - timings['install_start']) * 1000
+                thread_safe_print(f'{prefix} 📦 INSTALLING: rich=={rich_version} for Python {py_version}')
+                install_returncode, install_duration = run_and_stream_install(
+                    ['install', f'rich=={rich_version}'],
+                    f"Installing rich=={rich_version}",
+                    'omnipkg',
+                    thread_id
+                )
+                if install_returncode != 0:
+                    raise RuntimeError(f"Failed to install rich=={rich_version} for Python {py_version}")
             timings['install_end'] = time.perf_counter()
             
             thread_safe_print(f'{prefix} 🔓 LOCK RELEASED')
             timings['lock_released'] = time.perf_counter()
         
-        # === STEP 4: Run the test payload (This MUST be a subprocess) ===
+        # === STEP 4: Run the test payload using the correct interpreter ===
         thread_safe_print(f'{prefix} 🧪 TESTING Rich in Python {py_version}')
         timings['test_start'] = time.perf_counter()
-        # The test itself still needs to run in the target interpreter's context.
-        cmd = [python_exe, __file__, '--test-rich']
-        result = subprocess.run(cmd, capture_output=True, text=True, check=True, timeout=30)
-        test_data = json.loads(result.stdout)
+
+        # [THIS IS THE FIX]
+        # The test script must re-initialize a ConfigManager to read the new, swapped state from disk.
+        test_script = f'''
+import sys
+import json
+import traceback
+try:
+    # This will now run inside the correct Python context (e.g., 3.9)
+    # and load the config that was just modified by the 'omnipkg swap' command.
+    from omnipkg.core import ConfigManager
+    from omnipkg.loader import omnipkgLoader
+
+    # Initialize a new ConfigManager to get the current state from disk.
+    config_manager = ConfigManager(suppress_init_messages=True)
+    omnipkg_config = config_manager.config
+
+    with omnipkgLoader("rich=={rich_version}", config=omnipkg_config):
+        import rich
+        import importlib.metadata
+        
+        result = {{
+            "python_version": sys.version.split()[0],
+            "rich_version": importlib.metadata.version("rich"),
+            "success": True
+        }}
+        print(json.dumps(result))
+
+except Exception as e:
+    result = {{ "success": False, "error": str(e), "traceback": traceback.format_exc() }}
+    print(json.dumps(result), file=sys.stderr)
+    sys.exit(1)
+'''
+        
+        cmd = [python_exe, '-c', test_script]
+        result = subprocess.run(cmd, capture_output=True, text=True, check=False, timeout=30)
+        
+        json_output = None
+        if result.returncode == 0 and result.stdout:
+            for line in result.stdout.splitlines():
+                if line.strip().startswith('{{') and line.strip().endswith('}}'):
+                    json_output = line
+                    break
+        elif result.stderr:
+             for line in result.stderr.splitlines():
+                if line.strip().startswith('{{') and line.strip().endswith('}}'):
+                    json_output = line
+                    break
+
+        if not json_output:
+            thread_safe_print(f'{{prefix}} ❌ Test subprocess failed to produce valid JSON output!')
+            thread_safe_print(f'{{prefix}} STDOUT: {{result.stdout}}')
+            thread_safe_print(f'{{prefix}} STDERR: {{result.stderr}}')
+            raise RuntimeError(f"Test failed for Python {py_version} with Rich {rich_version}")
+
+        test_data = json.loads(json_output)
+        if not test_data.get('success'):
+            thread_safe_print(f"{{prefix}} ❌ Test payload reported failure: {{test_data.get('error')}}")
+            raise RuntimeError(f"Test failed for Python {py_version} with Rich {rich_version}")
+        
         timings['end'] = time.perf_counter()
         
-        # Compile final results for this thread
-        final_results = {
+        final_results = {{
             'thread_id': thread_id,
             'python_version': test_data['python_version'],
             'rich_version': test_data['rich_version'],
-            'timings_ms': {
+            'timings_ms': {{
                 'lookup_and_check': (timings['wait_lock_start'] - timings['start']) * 1000,
                 'wait_for_lock': (timings['lock_acquired'] - timings['wait_lock_start']) * 1000,
                 'swap_time': swap_duration,
@@ -245,14 +311,13 @@ def prepare_and_test_dimension(config: Tuple[str, str], omnipkg_instance: omnipk
                 'total_locked_time': (timings['lock_released'] - timings['lock_acquired']) * 1000,
                 'test_execution': (timings['end'] - timings['test_start']) * 1000,
                 'total_thread_time': (timings['end'] - timings['start']) * 1000,
-            }
-        }
-        thread_safe_print(f'{prefix} ✅ DIMENSION TEST COMPLETE in {format_duration(final_results["timings_ms"]["total_thread_time"])}')
+            }}
+        }}
+        thread_safe_print(f'{{prefix}} ✅ DIMENSION TEST COMPLETE in {{format_duration(final_results["timings_ms"]["total_thread_time"])}}')
         return final_results
         
     except Exception as e:
-        thread_safe_print(f'{prefix} ❌ FAILED: {type(e).__name__}: {e}')
-        # Add traceback for easier debugging
+        thread_safe_print(f'{{prefix}} ❌ FAILED: {{type(e).__name__}}: {{e}}')
         import traceback
         thread_safe_print(traceback.format_exc())
         return None
