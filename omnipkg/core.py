@@ -665,6 +665,15 @@ class ConfigManager:
                             safe_print(_('   ⚠️  Native Python {} no longer exists, removing from registry').format(version))
             except (json.JSONDecodeError, IOError) as e:
                 safe_print(_('   ⚠️  Could not load existing registry: {}').format(e))
+        
+        # === SAFETY CHECK: Auto-preserve current Python if no native found ===
+        if not native_interpreters:
+            current_version = f'{sys.version_info.major}.{sys.version_info.minor}'
+            current_exe = sys.executable
+            # Only add if it's truly not in managed directory
+            if not str(current_exe).startswith(str(managed_interpreters_dir)):
+                native_interpreters[current_version] = current_exe
+                safe_print(_('   ℹ️  Auto-preserving current Python {}: {}').format(current_version, current_exe))
         # === END FIX ===
         
         interpreters = {}
