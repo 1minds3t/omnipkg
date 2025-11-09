@@ -207,7 +207,6 @@ def test_dimension(config: tuple, thread_id: int, skip_swap: bool = False) -> di
                     thread_id
                 )
                 if swap_code != 0:
-                    # Show the ACTUAL error that caused the failure
                     safe_print(f"{prefix} ❌ SWAP FAILED - Full diagnostics:")
                     safe_print(f"{prefix}    Command: {sys.executable} -m omnipkg.cli swap python {py_version}")
                     safe_print(f"{prefix}    Exit code: {swap_code}")
@@ -232,10 +231,10 @@ def test_dimension(config: tuple, thread_id: int, skip_swap: bool = False) -> di
                 safe_print(f"{prefix}    STDERR: {install_stderr}")
                 raise RuntimeError(f"Install failed with exit code {install_code}: {install_stderr}")
             
-            
             safe_print(f"{prefix} 🔓 LOCK RELEASED")
             timings['lock_released'] = time.perf_counter()
         
+        # --- THIS BLOCK IS NOW CORRECTLY INDENTED (OUTSIDE THE 'with' BLOCK) ---
         # STEP 3: Test import with explicit version proof
         safe_print(f"{prefix} 🧪 Testing Rich import...")
         timings['test_start'] = time.perf_counter()
