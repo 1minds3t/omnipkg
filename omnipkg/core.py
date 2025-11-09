@@ -354,23 +354,35 @@ class ConfigManager:
 
         # --- CRITICAL FIX: Detect if we're in a managed interpreter ---
         # If we're running from .omnipkg/interpreters/*, we need to find the REAL venv root
-        # by going up past the .omnipkg directory
+        # by going up past ALL .omnipkg directories (handles nested cases!)
         executable_str = str(current_executable)
-        if '.omnipkg/interpreters' in executable_str or '.omnipkg\\interpreters' in executable_str:
-            # We're in a managed interpreter - find the original venv root
-            # Split on .omnipkg and take everything before it
-            parts = executable_str.replace('\\', '/').split('/.omnipkg/interpreters')
-            if len(parts) >= 2:
-                original_venv = Path(parts[0])
+        
+        # AGGRESSIVE: Handle ANY level of nesting by finding the FIRST .omnipkg in the path
+        if '.omnipkg' in executable_str:
+            # Normalize path separators
+            normalized_path = executable_str.replace('\\', '/')
+            
+            # Find the FIRST occurrence of .omnipkg (going from left/root)
+            omnipkg_parts = normalized_path.split('/.omnipkg/')
+            
+            if len(omnipkg_parts) >= 2:
+                # Everything BEFORE the first .omnipkg is the original venv
+                original_venv = Path(omnipkg_parts[0])
+                
                 # Verify this is actually a venv by checking for pyvenv.cfg
                 if (original_venv / 'pyvenv.cfg').exists():
                     return original_venv
+                
                 # If no pyvenv.cfg at that level, search upward from there
                 search_dir = original_venv
                 while search_dir != search_dir.parent:
                     if (search_dir / 'pyvenv.cfg').exists():
                         return search_dir
                     search_dir = search_dir.parent
+                
+                # Last resort: if we can't find pyvenv.cfg, just use the directory
+                # before .omnipkg as it's definitely the venv root
+                return original_venv
         
         # --- Standard upward search for non-managed interpreters ---
         # Search upwards from the current executable for pyvenv.cfg
@@ -6741,18 +6753,48 @@ class omnipkg:
         Fallback to downloading Python. This function now surgically detects an incomplete
         installation by checking for a valid executable, cleans it up if broken,
         and includes a safety stop to prevent deleting the active interpreter.
+        
+        CRITICAL FIX: Always uses the REAL venv root, not nested paths.
         """
         safe_print(_('\n--- Running robust download strategy ---'))
         try:
-            full_versions = {'3.7': '3.7.9',
+            full_versions = {
+                '3.7': '3.7.9',
+                '3.8': '3.8.20',
+                '3.9': '3.9.23',
+                '3.10': '3.10.18',
+                '3.11': '3.11.9',
+                '3.12': '3.12.11',
+                '3.13': '3.13.7',
+                '3.14': '3.14.0'
+            }
             
-            '3.14': '3.14.0', '3.13': '3.13.7', '3.12': '3.12.11', '3.11': '3.11.9', '3.10': '3.10.18', '3.9': '3.9.23', '3.8': '3.8.20'}
             full_version = full_versions.get(version)
             if not full_version:
                 safe_print(f'❌ Error: No known standalone build for Python {version}.')
                 safe_print(_('   Available versions: {}').format(', '.join(full_versions.keys())))
                 return 1
-            dest_path = self.config_manager.venv_path / '.omnipkg' / 'interpreters' / f'cpython-{full_version}'
+            
+            # CRITICAL: Force recalculation of venv_path to ensure we're not using a nested path
+            # This prevents installing Python 3.13 inside Python 3.14's directory
+            real_venv_path = self.config_manager._get_venv_root()
+            
+            # Double-check: if the venv_path contains .omnipkg, something is wrong
+            if '.omnipkg' in str(real_venv_path):
+                safe_print(_('   - ⚠️  WARNING: Detected nested path in venv_path!'))
+                safe_print(_('   - Current venv_path: {}').format(real_venv_path))
+                
+                # Extract the real root by taking everything before first .omnipkg
+                path_str = str(real_venv_path).replace('\\', '/')
+                parts = path_str.split('/.omnipkg/')
+                if len(parts) >= 2:
+                    real_venv_path = Path(parts[0])
+                    safe_print(_('   - Corrected to: {}').format(real_venv_path))
+            
+            dest_path = real_venv_path / '.omnipkg' / 'interpreters' / f'cpython-{full_version}'
+            
+            safe_print(_('   - Target installation path: {}').format(dest_path))
+            
             if dest_path.exists():
                 safe_print(_('   - Found existing directory for Python {}. Verifying integrity...').format(full_version))
                 if self._is_interpreter_directory_valid(dest_path):
@@ -6760,6 +6802,8 @@ class omnipkg:
                     return 0
                 else:
                     safe_print(_('   - ⚠️  Integrity check failed: Incomplete installation detected (missing or broken executable).'))
+                    
+                    # Safety check: don't delete the currently active interpreter
                     try:
                         active_interpreter_root = Path(sys.executable).resolve().parents[1]
                         if dest_path.resolve() == active_interpreter_root:
@@ -6768,6 +6812,7 @@ class omnipkg:
                             return 1
                     except (IndexError, OSError):
                         pass
+                    
                     safe_print(_('   - Preparing to clean up broken directory...'))
                     try:
                         shutil.rmtree(dest_path)
@@ -6775,22 +6820,26 @@ class omnipkg:
                     except Exception as e:
                         safe_print(_('   - ❌ FATAL: Failed to remove existing broken directory: {}').format(e))
                         return 1
+            
             safe_print(_('   - Starting fresh download and installation...'))
             download_success = False
+            
+            # Try Python 3.13 alternative download method
             if version == '3.13':
                 safe_print(_('   - Using python-build-standalone for Python 3.13...'))
                 download_success = self._download_python_313_alternative(dest_path, full_version)
+            
+            # Fallback to other download methods
             if not download_success:
                 if hasattr(self.config_manager, '_install_managed_python'):
                     try:
-                        # Pass `self` (the omnipkg instance) to the function
-                        self.config_manager._install_managed_python(self.config_manager.venv_path, full_version, omnipkg_instance=self)
+                        self.config_manager._install_managed_python(real_venv_path, full_version, omnipkg_instance=self)
                         download_success = True
                     except Exception as e:
                         safe_print(_('   - Warning: _install_managed_python failed: {}').format(e))
                 elif hasattr(self.config_manager, 'install_managed_python'):
                     try:
-                        self.config_manager.install_managed_python(self.config_manager.venv_path, full_version)
+                        self.config_manager.install_managed_python(real_venv_path, full_version)
                         download_success = True
                     except Exception as e:
                         safe_print(_('   - Warning: install_managed_python failed: {}').format(e))
@@ -6800,9 +6849,12 @@ class omnipkg:
                         download_success = True
                     except Exception as e:
                         safe_print(_('   - Warning: download_python failed: {}').format(e))
+            
             if not download_success:
                 safe_print(_('❌ Error: All download methods failed for Python {}').format(full_version))
                 return 1
+            
+            # Verify installation
             if dest_path.exists() and self._is_interpreter_directory_valid(dest_path):
                 safe_print(_('   - ✅ Download and installation completed successfully.'))
                 self.config_manager._set_rebuild_flag_for_version(version)
@@ -6810,8 +6862,11 @@ class omnipkg:
             else:
                 safe_print(_('   - ❌ Installation completed but integrity check still fails.'))
                 return 1
+                
         except Exception as e:
             safe_print(_('❌ Download and installation process failed: {}').format(e))
+            import traceback
+            traceback.print_exc()
             return 1
 
     def _download_python_313_alternative(self, dest_path: Path, full_version: str) -> bool:
@@ -6824,6 +6879,19 @@ class omnipkg:
         import platform
         import tempfile
         import shutil
+        dest_path_str = str(dest_path).replace('\\', '/')
+        if dest_path_str.count('/.omnipkg/') > 1:
+            safe_print(_('   - ❌ CRITICAL: Detected nested .omnipkg path!'))
+            safe_print(_('   - Bad path: {}').format(dest_path))
+            
+            # Extract the real root
+            parts = dest_path_str.split('/.omnipkg/')
+            if len(parts) >= 2:
+                # Reconstruct path with only ONE .omnipkg
+                real_venv = Path(parts[0])
+                dest_path = real_venv / '.omnipkg' / 'interpreters' / f'cpython-{full_version}'
+                safe_print(_('   - Corrected to: {}').format(dest_path))
+        
         try:
             safe_print(_('   - Attempting Python 3.13 download from python-build-standalone...'))
             system = platform.system().lower()
@@ -6917,7 +6985,8 @@ class omnipkg:
                 if not python_exe:
                     safe_print(_('   - ❌ CRITICAL: Could not find Python executable in {} after extraction.').format(dest_path))
                     return False
-                self.config_manager._install_essential_packages(python_exe)
+                self._install_essential_packages(python_exe)
+        
                 safe_print(_('   - ✅ Alternative Python 3.13 download and bootstrap completed'))
                 return True
             finally:
