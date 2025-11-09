@@ -4065,8 +4065,8 @@ class omnipkg:
 
     def _self_heal_omnipkg_installation(self):
         """
-        (V13 - OPTIMIZED) Silently aligns all interpreters with concurrent installs.
-        Only shows output when sync is needed.
+        (V14 - FIXED NATIVE DETECTION) Silently aligns all interpreters with concurrent installs.
+        Only shows output when sync is needed. Skips native interpreter to avoid circular installs.
         """
         try:
             master_version_str = 'unknown'
@@ -4107,16 +4107,49 @@ class omnipkg:
             if master_version_str in ['unknown', 'not-installed']:
                 return
             
+            # --- GET CURRENT (NATIVE) INTERPRETER INFO ---
+            current_exe = Path(sys.executable).resolve()
+            
+            # Platform-aware native detection (same logic as _register_and_link_existing_interpreter)
+            if platform.system() == 'Windows':
+                # Windows: native if it's in the venv root, not in .omnipkg
+                is_current_native = (
+                    str(current_exe).startswith(str(self.config_manager.venv_path)) and
+                    '.omnipkg' not in str(current_exe)
+                )
+            else:
+                # Unix: native if it's in venv_path/bin
+                is_current_native = current_exe.parent == (self.config_manager.venv_path / 'bin')
+            
             # --- CHECK ALL INTERPRETERS ---
             interpreter_manager = InterpreterManager(self.config_manager)
             all_interpreters = interpreter_manager.list_available_interpreters()
             sync_needed_for = []
 
             for py_ver, exe_path in all_interpreters.items():
-                target_exe = str(exe_path)
+                target_exe = Path(exe_path).resolve()
                 
+                # CRITICAL: Skip the native interpreter if it's the one currently running
+                if is_current_native and target_exe == current_exe:
+                    # Native interpreter running - check if it already has the right version
+                    try:
+                        cmd = [str(target_exe), "-c", "import site; print(site.getsitepackages()[0])"]
+                        result = subprocess.run(cmd, capture_output=True, text=True, check=True, timeout=5)
+                        site_packages = result.stdout.strip()
+                        target_version_str = self._get_omnipkg_version_from_site_packages(site_packages)
+                        
+                        if target_version_str == master_version_str:
+                            continue  # Already in sync, skip
+                    except Exception:
+                        pass
+                    
+                    # Native needs sync but we can't do it while it's running
+                    # This should rarely happen since native is usually already installed
+                    continue
+                
+                # Check version for non-native interpreters
                 try:
-                    cmd = [target_exe, "-c", "import site; print(site.getsitepackages()[0])"]
+                    cmd = [str(target_exe), "-c", "import site; print(site.getsitepackages()[0])"]
                     result = subprocess.run(cmd, capture_output=True, text=True, check=True, timeout=5)
                     site_packages = result.stdout.strip()
                     target_version_str = self._get_omnipkg_version_from_site_packages(site_packages)
@@ -4124,7 +4157,7 @@ class omnipkg:
                     target_version_str = 'not-installed'
                 
                 if target_version_str != master_version_str:
-                    sync_needed_for.append((py_ver, target_exe))
+                    sync_needed_for.append((py_ver, str(target_exe)))
 
             if not sync_needed_for:
                 return  # Silent success - everything in sync
