@@ -261,6 +261,10 @@ try:
         rich_version_actual = importlib.metadata.version('rich')
         rich_file = rich.__file__
         
+        # ✅ ACCEPT BOTH: Verify version matches, regardless of bubble location
+        if rich_version_actual != "{rich_version}":
+            raise RuntimeError(f"Version mismatch: expected {rich_version}, got {{rich_version_actual}}")
+        
         result = {{
             "success": True,
             "python_version": python_version,

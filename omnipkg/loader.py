@@ -464,7 +464,6 @@ class omnipkgLoader:
 
         # --- THIS IS THE RESTORED LOGIC ---
         try:
-            
             # Check if the package exists in the main environment
             current_system_version = get_version(pkg_name)
             
@@ -473,30 +472,58 @@ class omnipkgLoader:
                 if not self.quiet:
                     safe_print(_('✅ System version already matches requested version ({}). No bubble needed.').format(current_system_version))
                 self._activation_successful = True
-                self._activation_end_time = time.perf_counter_ns() # Still record time
+                self._activation_end_time = time.perf_counter_ns()
                 self._total_activation_time_ns = self._activation_end_time - self._activation_start_time
-                return self # Exit early
+                return self  # Exit early
+            else:
+                # ✅ NEW: Debug info when version mismatch
+                if not self.quiet:
+                    safe_print(f"   🔍 Main env has {pkg_name}=={current_system_version}, but need {requested_version}. Checking bubble...")
         except PackageNotFoundError:
-            # The package is not in the main env, so we must use a bubble regardless.
-            pass
+            # ✅ NEW: Debug info when package not in main env
+            if not self.quiet:
+                safe_print(f"   🔍 {pkg_name} not in main environment. Checking bubble...")
         # --- END OF RESTORED LOGIC ---
 
         if not self.quiet:
             safe_print(_('🚀 Fast-activating {} ...').format(self._current_package_spec))
         
         bubble_path = self.multiversion_base / f'{pkg_name}-{requested_version}'
-        try:
-            pkg_name, requested_version = self._current_package_spec.split('==')
-        except ValueError:
-            raise ValueError(f"Invalid package_spec format: '{self._current_package_spec}'")
-
-        bubble_path = self.multiversion_base / f'{pkg_name}-{requested_version}'
+        
+        # ✅ NEW: Show what we're looking for
+        if not self.quiet:
+            safe_print(f"   📂 Looking for bubble at: {bubble_path}")
+        
         if not bubble_path.is_dir():
-            raise RuntimeError(f"Bubble not found for {self._current_package_spec}")
+            # ✅ NEW: Show what actually exists
+            parent_dir = bubble_path.parent
+            if parent_dir.exists():
+                available_bubbles = [d.name for d in parent_dir.iterdir() if d.is_dir() and d.name.startswith(pkg_name)]
+                if available_bubbles:
+                    safe_print(f"   ❌ Bubble not found, but found these {pkg_name} bubbles: {available_bubbles}")
+                else:
+                    safe_print(f"   ❌ Bubble not found, and no {pkg_name} bubbles exist in {parent_dir}")
+            else:
+                safe_print(f"   ❌ Bubble directory doesn't exist: {parent_dir}")
+            
+            # Also check main site-packages one more time with details
+            try:
+                import importlib.metadata
+                installed_version = importlib.metadata.version(pkg_name)
+                safe_print(f"   💡 However, {pkg_name}=={installed_version} IS installed in main site-packages!")
+                safe_print(f"      You requested {requested_version}, but got {installed_version}")
+            except importlib.metadata.PackageNotFoundError:
+                safe_print(f"   ❌ {pkg_name} is not installed anywhere (main env or bubbles)")
+            
+            raise RuntimeError(
+                f"Bubble not found for {self._current_package_spec}\n"
+                f"  Searched: {bubble_path}\n"
+                f"  Hint: Try installing with 'omnipkg install {pkg_name}=={requested_version}'"
+            )
 
         try:
             self._activated_bubble_dependencies = list(self._get_bubble_dependencies(bubble_path).keys())
-            
+                    
             # Now, when we cloak and clean, we do it for EVERYTHING.
             for pkg in self._activated_bubble_dependencies:
                 self._aggressive_module_cleanup(pkg)
