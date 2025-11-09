@@ -1685,42 +1685,38 @@ class ConfigManager:
         is_windows = platform.system() == 'Windows'
         
         try:
-            # Method 1: Use site.getsitepackages() - most reliable method
-            site_packages_list = site.getsitepackages()
-            if site_packages_list:
-                current_python_dir = Path(sys.executable).parent
-                
-                # Find the site-packages that belongs to our current Python
-                for sp in site_packages_list:
-                    sp_path = Path(sp)
-                    try:
-                        # Check if this site-packages is under our Python installation
-                        sp_path.relative_to(current_python_dir)
-                        # Additional validation: check if it actually contains packages
-                        if sp_path.exists():
-                            return sp_path
-                    except ValueError:
-                        continue
-                
-                # If relative path matching fails, prefer paths that actually exist
-                # and sort by specificity (longer paths first)
-                existing_paths = [Path(sp) for sp in site_packages_list if Path(sp).exists()]
-                if existing_paths:
-                    # For Windows, prefer 'lib' over 'Lib' when both exist (lowercase is more standard)
-                    if is_windows and len(existing_paths) > 1:
-                        lib_paths = [p for p in existing_paths if 'lib' in str(p).lower()]
-                        lowercase_lib = [p for p in lib_paths if '/lib/' in str(p) or '\\lib\\' in str(p)]
-                        if lowercase_lib:
-                            return sorted(lowercase_lib, key=len, reverse=True)[0]
-                    
-                    return sorted(existing_paths, key=len, reverse=True)[0]
-                
-                # Fallback to first path (even if it doesn't exist yet)
-                return Path(site_packages_list[0])
-                
-        except Exception:
-            # Continue with fallback logic
+            import site
+            all_sps = site.getsitepackages()
+            
+            # Priority 1: Find a path that ENDS with 'site-packages'. This is the most reliable.
+            for path_str in all_sps:
+                if path_str.lower().endswith('site-packages'):
+                    p = Path(path_str)
+                    if p.is_dir():
+                        return p # Found the best match
+
+            # Priority 2 (Fallback): Find a path that CONTAINS 'site-packages'.
+            for path_str in all_sps:
+                if 'site-packages' in path_str.lower():
+                    p = Path(path_str)
+                    if p.is_dir():
+                        return p # Good enough
+
+            # If we still haven't found one, it's a weird environment.
+            # Fall back to the last path given by site, which is often the correct one.
+            if all_sps:
+                return Path(all_sps[-1])
+
+        except (ImportError, Exception):
+            # If `site` module fails, fall back to manual construction
             pass
+        
+        # Absolute fallback if all else fails (should not be reached in normal operation)
+        py_ver = f'python{sys.version_info.major}.{sys.version_info.minor}'
+        if sys.platform == "win32":
+            return Path(sys.prefix) / 'Lib' / 'site-packages'
+        else:
+            return Path(sys.prefix) / 'lib' / py_ver / 'site-packages'
         
         # Method 2: Try to find an existing package and derive site-packages from it
         try:
