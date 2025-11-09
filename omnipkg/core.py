@@ -7069,19 +7069,15 @@ class omnipkg:
         safe_print(_('🔥 Attempting to remove managed Python interpreter: {}').format(version))
         
         # SAFETY CHECK 1: Cannot remove currently active interpreter
-        # Use the CONFIGURED active Python, not the running Python
         configured_python = self.config_manager.get('python_executable')
         if configured_python:
-            # Extract version from configured path (e.g., python3.12 -> 3.12)
             import re
             version_match = re.search(r'python(\d+\.\d+)', str(configured_python))
             if version_match:
                 active_python_version = version_match.group(1)
             else:
-                # Fallback to running Python if we can't parse config
                 active_python_version = f'{sys.version_info.major}.{sys.version_info.minor}'
         else:
-            # Fallback to running Python if no config
             active_python_version = f'{sys.version_info.major}.{sys.version_info.minor}'
         
         if version == active_python_version:
@@ -7099,10 +7095,8 @@ class omnipkg:
         
         # === CRITICAL SAFETY CHECK 2: Check if this is a native interpreter ===
         interpreter_path_obj = Path(interpreter_path)
-        # The venv_path is on the config_manager, not the main omnipkg instance.
         managed_interpreters_dir = self.config_manager.venv_path / '.omnipkg' / 'interpreters'
         
-        # If the interpreter is NOT inside .omnipkg/interpreters/, it's native
         is_native = not str(interpreter_path_obj).startswith(str(managed_interpreters_dir))
         
         if is_native:
@@ -7146,20 +7140,24 @@ class omnipkg:
             safe_print(_('❌ Failed to remove directory: {}').format(e))
             return 1
         
-        # Clean up knowledge base
-        safe_print(f'🧹 Cleaning up Knowledge Base for Python {version}...')
-        try:
-            keys_to_delete_pattern = self._get_redis_key_prefix_for_version(version) + '*'
-            keys = self.cache_client.keys(keys_to_delete_pattern)
-            if keys:
-                safe_print(_('   -> Found {} stale entries in Redis. Purging...').format(len(keys)))
-                delete_command = self.cache_client.unlink if hasattr(self.cache_client, 'unlink') else self.cache_client.delete
-                delete_command(*keys)
-                safe_print(f'   ✅ Knowledge Base for Python {version} has been purged.')
-            else:
-                safe_print(f'   ✅ No Knowledge Base entries found for Python {version}. Nothing to clean.')
-        except Exception as e:
-            safe_print(f'   ⚠️  Warning: Could not clean up Knowledge Base for Python {version}: {e}')
+        # Clean up knowledge base (ONLY if cache is available)
+        # ✅ FIX: Check if we have a cache_client before trying to use it
+        if hasattr(self, 'cache_client') and self.cache_client is not None:
+            safe_print(f'🧹 Cleaning up Knowledge Base for Python {version}...')
+            try:
+                keys_to_delete_pattern = self._get_redis_key_prefix_for_version(version) + '*'
+                keys = self.cache_client.keys(keys_to_delete_pattern)
+                if keys:
+                    safe_print(_('   -> Found {} stale entries in cache. Purging...').format(len(keys)))
+                    delete_command = self.cache_client.unlink if hasattr(self.cache_client, 'unlink') else self.cache_client.delete
+                    delete_command(*keys)
+                    safe_print(f'   ✅ Knowledge Base for Python {version} has been purged.')
+                else:
+                    safe_print(f'   ✅ No Knowledge Base entries found for Python {version}. Nothing to clean.')
+            except Exception as e:
+                safe_print(f'   ⚠️  Warning: Could not clean up Knowledge Base for Python {version}: {e}')
+        else:
+            safe_print(f'   ℹ️  Skipping Knowledge Base cleanup (cache not initialized in minimal mode)')
         
         # Update registry
         safe_print(_('🔧 Rescanning interpreters to update the registry...'))
