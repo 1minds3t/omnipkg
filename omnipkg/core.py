@@ -1919,91 +1919,92 @@ class ConfigManager:
         major_minor_micro = f'{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}'
         
         if platform.system() == 'Windows':
-        # --- WINDOWS-SPECIFIC LOGIC ---
-        
-        # Check if the current Python is already in a managed/isolated location
-        # (like GitHub Actions hosted runners, or already managed by omnipkg)
-        is_already_managed = (
-            'hostedtoolcache' in str(native_python_exe).lower() or  # GitHub Actions
-            'omnipkg' in str(native_python_exe).lower() or          # Already managed
-            'AppData\\Local\\Programs' in str(native_python_exe) or # User installation
-            str(native_python_exe).startswith(str(self.venv_path))  # Already in venv
-        )
-        
-        if is_already_managed:
-            safe_print(_('   - Python is already in a managed location, using directly'))
-            safe_print(_('   - ✅ Using: {}').format(native_python_exe))
+            # --- WINDOWS-SPECIFIC LOGIC ---
             
-            # Just register it without copying
-            managed_interpreters_dir = self.venv_path / '.omnipkg' / 'interpreters'
-            managed_interpreters_dir.mkdir(parents=True, exist_ok=True)
+            # Check if the current Python is already in a managed/isolated location
+            # (like GitHub Actions hosted runners, or already managed by omnipkg)
+            is_already_managed = (
+                'hostedtoolcache' in str(native_python_exe).lower() or  # GitHub Actions
+                'omnipkg' in str(native_python_exe).lower() or          # Already managed
+                'AppData\\Local\\Programs' in str(native_python_exe) or # User installation
+                str(native_python_exe).startswith(str(self.venv_path))  # Already in venv
+            )
             
-            registry_path = managed_interpreters_dir / 'registry.json'
-            registry_data = {'interpreters': {}}
-            if registry_path.exists():
-                try:
-                    with open(registry_path, 'r') as f:
-                        registry_data = json.load(f)
-                except (json.JSONDecodeError, IOError):
-                    pass
-            
-            # Register the native path
-            registry_data['interpreters'][native_version] = str(native_python_exe)
-            
-            with open(registry_path, 'w') as f:
-                json.dump(registry_data, f, indent=4)
-            
-            safe_print(_('   - ✅ Registered Python {} without copying').format(native_version))
-            
-        else:
-            # Only create managed copy for system Python in problematic locations
-            safe_print(_('   - Setting up managed Python interpreter for Windows...'))
-            
-            # Use a short, stable path to avoid MAX_PATH issues
-            managed_base_dir = Path.home() / 'AppData' / 'Local' / 'omnipkg' / 'interpreters'
-            managed_base_dir.mkdir(parents=True, exist_ok=True)
-            
-            dest_path = managed_base_dir / f'cpython-{major_minor_micro}'
-            managed_python_exe = dest_path / 'Scripts' / 'python.exe'
-            
-            # Check if a managed copy already exists
-            if not managed_python_exe.exists():
-                safe_print(_('   - Creating managed copy at: {}').format(dest_path))
-                try:
-                    import venv
-                    # Create a full, standalone copy (no symlinks, no admin rights needed)
-                    venv.create(dest_path, with_pip=True, symlinks=False, clear=True)
-                    
-                    # Verify the copy works
-                    if not managed_python_exe.exists():
-                        raise OSError("venv.create succeeded but python.exe not found")
-                    
-                    result = subprocess.run(
-                        [str(managed_python_exe), '--version'],
-                        check=True,
-                        capture_output=True,
-                        text=True
-                    )
-                    safe_print(_('   - ✅ Managed Python copy created: {}').format(result.stdout.strip()))
-                    
-                except Exception as e:
-                    safe_print(_('   - ❌ FATAL: Failed to create managed Python copy: {}').format(e))
-                    if dest_path.exists():
-                        import shutil
-                        shutil.rmtree(dest_path, ignore_errors=True)
-                    raise RuntimeError(f"Could not create managed Python environment on Windows: {e}") from e
+            if is_already_managed:
+                safe_print(_('   - Python is already in a managed location, using directly'))
+                safe_print(_('   - ✅ Using: {}').format(native_python_exe))
+                
+                # Just register it without copying
+                managed_interpreters_dir = self.venv_path / '.omnipkg' / 'interpreters'
+                managed_interpreters_dir.mkdir(parents=True, exist_ok=True)
+                
+                registry_path = managed_interpreters_dir / 'registry.json'
+                registry_data = {'interpreters': {}}
+                if registry_path.exists():
+                    try:
+                        with open(registry_path, 'r') as f:
+                            registry_data = json.load(f)
+                    except (json.JSONDecodeError, IOError):
+                        pass
+                
+                # Register the native path
+                registry_data['interpreters'][native_version] = str(native_python_exe)
+                
+                with open(registry_path, 'w') as f:
+                    json.dump(registry_data, f, indent=4)
+                
+                safe_print(_('   - ✅ Registered Python {} without copying').format(native_version))
+                managed_python_exe_str = str(native_python_exe)
+                
             else:
-                safe_print(_('   - ✅ Found existing managed Python copy'))
-            
-            # Register this interpreter for version swapping
-            try:
-                self._register_all_interpreters(managed_base_dir)
-            except Exception as e:
-                safe_print(_('   - ⚠️  Warning: Could not register interpreter: {}').format(e))
-            
-            # Use the managed copy for configuration
-            managed_python_exe_str = str(managed_python_exe)
-            
+                # Only create managed copy for system Python in problematic locations
+                safe_print(_('   - Setting up managed Python interpreter for Windows...'))
+                
+                # Use a short, stable path to avoid MAX_PATH issues
+                managed_base_dir = Path.home() / 'AppData' / 'Local' / 'omnipkg' / 'interpreters'
+                managed_base_dir.mkdir(parents=True, exist_ok=True)
+                
+                dest_path = managed_base_dir / f'cpython-{major_minor_micro}'
+                managed_python_exe = dest_path / 'Scripts' / 'python.exe'
+                
+                # Check if a managed copy already exists
+                if not managed_python_exe.exists():
+                    safe_print(_('   - Creating managed copy at: {}').format(dest_path))
+                    try:
+                        import venv
+                        # Create a full, standalone copy (no symlinks, no admin rights needed)
+                        venv.create(dest_path, with_pip=True, symlinks=False, clear=True)
+                        
+                        # Verify the copy works
+                        if not managed_python_exe.exists():
+                            raise OSError("venv.create succeeded but python.exe not found")
+                        
+                        result = subprocess.run(
+                            [str(managed_python_exe), '--version'],
+                            check=True,
+                            capture_output=True,
+                            text=True
+                        )
+                        safe_print(_('   - ✅ Managed Python copy created: {}').format(result.stdout.strip()))
+                        
+                    except Exception as e:
+                        safe_print(_('   - ❌ FATAL: Failed to create managed Python copy: {}').format(e))
+                        if dest_path.exists():
+                            import shutil
+                            shutil.rmtree(dest_path, ignore_errors=True)
+                        raise RuntimeError(f"Could not create managed Python environment on Windows: {e}") from e
+                else:
+                    safe_print(_('   - ✅ Found existing managed Python copy'))
+                
+                # Register this interpreter for version swapping
+                try:
+                    self._register_all_interpreters(managed_base_dir)
+                except Exception as e:
+                    safe_print(_('   - ⚠️  Warning: Could not register interpreter: {}').format(e))
+                
+                # Use the managed copy for configuration
+                managed_python_exe_str = str(managed_python_exe)
+                           
         else:
             # --- MACOS/LINUX LOGIC ---
             safe_print(_('   - Registering native Python for future version swapping...'))
