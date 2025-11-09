@@ -7014,7 +7014,7 @@ class omnipkg:
                 if not python_exe:
                     safe_print(_('   - ❌ CRITICAL: Could not find Python executable in {} after extraction.').format(dest_path))
                     return False
-                self._install_essential_packages(python_exe)
+                self.config_manager._install_essential_packages(python_exe)
         
                 safe_print(_('   - ✅ Alternative Python 3.13 download and bootstrap completed'))
                 return True
@@ -7154,7 +7154,7 @@ class omnipkg:
             # 🔥 CRITICAL FIX: Bootstrap omnipkg into the copied interpreter
             safe_print(_('   - Bootstrapping omnipkg into copied interpreter...'))
             try:
-                self._install_essential_packages(copied_python)
+                self.config_manager._install_essential_packages(copied_python)
             except Exception as e:
                 safe_print(_('   - ⚠️ Bootstrap failed: {}. Trying download fallback...').format(e))
                 shutil.rmtree(dest, ignore_errors=True)
