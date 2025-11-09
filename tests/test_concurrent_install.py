@@ -157,7 +157,7 @@ def prepare_interpreter_dimension(py_version: str, omnipkg_instance: omnipkg, th
             thread_safe_print(f'{prefix} 🚀 ADOPTING Python {py_version}...')
             start_time = time.perf_counter()
             # The adopt method is already part of the omnipkg core class
-            success = omnipkg_instance.adopt_python(py_version, quiet=True) # Use quiet to avoid noisy output
+            success = omnipkg_instance.adopt_interpreter(py_version, quiet=True) # Use quiet to avoid noisy output
             duration = (time.perf_counter() - start_time) * 1000
             
             if success:
