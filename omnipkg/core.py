@@ -3106,8 +3106,8 @@ class BubbleIsolationManager:
             if successful_imports:
                 return {
                     'importable': True,
-                    'successful_modules': [name for name, _ in successful_imports],
-                    'failed_modules': [name for name, _ in failed_imports] if failed_imports else []
+                    'successful_modules': [name for name, _version in successful_imports],
+                    'failed_modules': [name for name, _error in failed_imports] if failed_imports else []
                 }
             else:
                 return {
@@ -4062,7 +4062,7 @@ class omnipkg:
                 return  # Silent success - everything in sync
 
             # --- CONCURRENT SYNC ---
-            versions_to_sync = ', '.join([f"Python {ver}" for ver, _ in sync_needed_for])
+            versions_to_sync = ', '.join([f"Python {ver}" for ver, _exe_path in sync_needed_for])
             safe_print(f"🔄 Syncing {versions_to_sync} to v{master_version_str}...")
             
             import concurrent.futures
@@ -9381,7 +9381,8 @@ class omnipkg:
             
             safe_print(f"    → Case 3: Simple package name")
             safe_print(f"    → Case 3: Simple package name")
-            pkg_name, _ = self._parse_package_spec(pkg_spec)  # Unpack the tuple directly
+            pkg_name, _version = self._parse_package_spec(pkg_spec)  # Unpack the tuple directly
+
 
             safe_print(_("    -> Finding latest version for '{}'...").format(pkg_name))
             target_version = self._get_latest_version_from_pypi(pkg_name)
