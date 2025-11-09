@@ -14,13 +14,21 @@ def safe_print(*args):
     with print_lock:
         print(*args, flush=True)
 
-def run_omnipkg_cli(python_exe: str, args: list, thread_id: int) -> tuple[int, float]:
-    """Run omnipkg CLI in the CORRECT Python context via subprocess."""
+def format_duration(ms: float) -> str:
+    """Format duration for readability."""
+    if ms < 1:
+        return f"{ms*1000:.1f}µs"
+    elif ms < 1000:
+        return f"{ms:.1f}ms"
+    else:
+        return f"{ms/1000:.2f}s"
+
+def run_omnipkg_cli(python_exe: str, args: list, thread_id: int, show_output: bool = False) -> tuple[int, str, str, float]:
+    """Run omnipkg CLI in correct Python context."""
     prefix = f"[T{thread_id}]"
     start = time.perf_counter()
     
     cmd = [python_exe, '-m', 'omnipkg.cli'] + args
-    safe_print(f"{prefix} Running: {' '.join(args[:3])}")
     
     result = subprocess.run(
         cmd,
@@ -32,13 +40,19 @@ def run_omnipkg_cli(python_exe: str, args: list, thread_id: int) -> tuple[int, f
     
     duration_ms = (time.perf_counter() - start) * 1000
     
-    if result.returncode != 0:
-        safe_print(f"{prefix} ❌ Command failed: {result.stderr[:200]}")
+    if show_output or result.returncode != 0:
+        if result.stdout:
+            safe_print(f"{prefix} STDOUT:\n{result.stdout}")
+        if result.stderr:
+            safe_print(f"{prefix} STDERR:\n{result.stderr}")
     
-    return result.returncode, duration_ms
+    status = "✅" if result.returncode == 0 else "❌"
+    safe_print(f"{prefix} {status} {' '.join(args[:3])} ({format_duration(duration_ms)})")
+    
+    return result.returncode, result.stdout, result.stderr, duration_ms
 
 def get_interpreter_path(version: str) -> str:
-    """Get interpreter path from omnipkg (using system Python)."""
+    """Get interpreter path from omnipkg."""
     result = subprocess.run(
         ['omnipkg', 'info', 'python'],
         capture_output=True,
@@ -48,9 +62,10 @@ def get_interpreter_path(version: str) -> str:
     
     for line in result.stdout.splitlines():
         if f'Python {version}:' in line:
-            # Extract path from line like: "• Python 3.9: /path/to/python3.9"
-            path = line.split(':', 1)[1].strip().split()[0]
-            return path
+            parts = line.split(':', 1)
+            if len(parts) == 2:
+                path_part = parts[1].strip().split()[0]
+                return path_part
     
     raise RuntimeError(f"Python {version} not found")
 
@@ -59,12 +74,10 @@ def adopt_if_needed(version: str, thread_id: int) -> bool:
     prefix = f"[T{thread_id}|Adopt]"
     
     try:
-        # Check if already adopted
-        get_interpreter_path(version)
-        safe_print(f"{prefix} ✅ Python {version} already adopted")
+        path = get_interpreter_path(version)
+        safe_print(f"{prefix} ✅ Python {version} at {path}")
         return True
     except RuntimeError:
-        # Need to adopt
         safe_print(f"{prefix} 🚀 Adopting Python {version}...")
         result = subprocess.run(
             ['omnipkg', 'python', 'adopt', version],
@@ -76,24 +89,34 @@ def adopt_if_needed(version: str, thread_id: int) -> bool:
             safe_print(f"{prefix} ✅ Adopted Python {version}")
             return True
         else:
-            safe_print(f"{prefix} ❌ Failed to adopt Python {version}")
+            safe_print(f"{prefix} ❌ Adoption failed")
+            safe_print(f"{prefix} {result.stderr}")
             return False
 
-def test_dimension(config: tuple, thread_id: int) -> dict:
-    """Test one Python+Rich combination using SUBPROCESS calls only."""
+def test_dimension(config: tuple, thread_id: int, skip_swap: bool = False) -> dict:
+    """Test one Python+Rich combination."""
     py_version, rich_version = config
     prefix = f"[T{thread_id}]"
     
-    timings = {}
-    timings['start'] = time.perf_counter()
+    timings = {
+        'start': time.perf_counter(),
+        'wait_start': 0,
+        'lock_acquired': 0,
+        'swap_end': 0,
+        'install_end': 0,
+        'lock_released': 0,
+        'test_start': 0,
+        'end': 0
+    }
     
     try:
         safe_print(f"{prefix} 🚀 Testing Python {py_version} with Rich {rich_version}")
         
-        # Get interpreter path (this is fast, hits cache)
+        # Get interpreter path
         python_exe = get_interpreter_path(py_version)
+        safe_print(f"{prefix} 📍 Using: {python_exe}")
         
-        # CRITICAL: Lock for environment modification
+        # Lock for environment modification
         safe_print(f"{prefix} ⏳ Waiting for lock...")
         timings['wait_start'] = time.perf_counter()
         
@@ -101,81 +124,185 @@ def test_dimension(config: tuple, thread_id: int) -> dict:
             timings['lock_acquired'] = time.perf_counter()
             safe_print(f"{prefix} 🔒 LOCK ACQUIRED")
             
-            # STEP 1: Swap context using SUBPROCESS with correct Python
-            safe_print(f"{prefix} 🔄 Swapping to Python {py_version}")
-            swap_code, swap_time = run_omnipkg_cli(
-                python_exe,
-                ['swap', 'python', py_version],
-                thread_id
-            )
-            if swap_code != 0:
-                raise RuntimeError(f"Swap failed")
+            # STEP 1: Swap context (only if needed)
+            swap_time = 0
+            if not skip_swap:
+                safe_print(f"{prefix} 🔄 Swapping to Python {py_version}")
+                # Use the HOST Python 3.11 for swap command (cleaner)
+                swap_code, _, _, swap_time = run_omnipkg_cli(
+                    sys.executable,  # Use current Python (3.11)
+                    ['swap', 'python', py_version],
+                    thread_id
+                )
+                if swap_code != 0:
+                    raise RuntimeError(f"Swap failed")
+            timings['swap_end'] = time.perf_counter()
             
-            # STEP 2: Install using SUBPROCESS with correct Python
+            # STEP 2: Install using TARGET Python
             safe_print(f"{prefix} 📦 Installing rich=={rich_version}")
-            install_code, install_time = run_omnipkg_cli(
-                python_exe,
+            install_code, _, _, install_time = run_omnipkg_cli(
+                python_exe,  # Use TARGET Python for install
                 ['install', f'rich=={rich_version}'],
                 thread_id
             )
             if install_code != 0:
                 raise RuntimeError(f"Install failed")
+            timings['install_end'] = time.perf_counter()
             
-            timings['lock_released'] = time.perf_counter()
             safe_print(f"{prefix} 🔓 LOCK RELEASED")
+            timings['lock_released'] = time.perf_counter()
         
-        # STEP 3: Test the installation
+        # STEP 3: Test import with explicit version proof
         safe_print(f"{prefix} 🧪 Testing Rich import...")
         timings['test_start'] = time.perf_counter()
         
         test_script = f"""
+import sys
 import json
-import importlib.metadata
-with open('/dev/null', 'w'):  # Suppress omnipkg init messages
-    from omnipkg.loader import omnipkgLoader
-    from omnipkg.core import ConfigManager
-    config = ConfigManager(suppress_init_messages=True).config
+import traceback
+
+try:
+    # Show which Python is actually running this test
+    python_path = sys.executable
+    python_version = sys.version.split()[0]
     
-with omnipkgLoader("rich=={rich_version}", config=config):
-    import rich
-    version = importlib.metadata.version('rich')
-    print(json.dumps({{"success": True, "version": version}}))
+    # Re-load config and use loader
+    from omnipkg.core import ConfigManager
+    config_manager = ConfigManager(suppress_init_messages=True)
+    
+    from omnipkg.loader import omnipkgLoader
+    
+    with omnipkgLoader("rich=={rich_version}", config=config_manager.config):
+        import rich
+        import importlib.metadata
+        
+        rich_version_actual = importlib.metadata.version('rich')
+        rich_file = rich.__file__
+        
+        result = {{
+            "success": True,
+            "python_version": python_version,
+            "python_path": python_path,
+            "rich_version": rich_version_actual,
+            "rich_file": rich_file
+        }}
+        print("JSON_START")
+        print(json.dumps(result))
+        print("JSON_END")
+        
+except Exception as e:
+    error_result = {{
+        "success": False,
+        "error": str(e),
+        "traceback": traceback.format_exc(),
+        "python_version": sys.version.split()[0],
+        "python_path": sys.executable
+    }}
+    print("JSON_START", file=sys.stderr)
+    print(json.dumps(error_result), file=sys.stderr)
+    print("JSON_END", file=sys.stderr)
+    sys.exit(1)
 """
         
+        cmd = [python_exe, '-c', test_script]
         result = subprocess.run(
-            [python_exe, '-c', test_script],
+            cmd,
             capture_output=True,
             text=True,
             timeout=30
         )
         
-        if result.returncode != 0:
-            safe_print(f"{prefix} ❌ Test failed: {result.stderr[:200]}")
-            raise RuntimeError("Test execution failed")
+        # Extract JSON
+        json_output = None
+        output_source = result.stdout if result.returncode == 0 else result.stderr
         
-        test_data = json.loads(result.stdout.strip())
+        if "JSON_START" in output_source and "JSON_END" in output_source:
+            json_section = output_source.split("JSON_START")[1].split("JSON_END")[0].strip()
+            json_output = json_section
+        
+        if not json_output:
+            safe_print(f"{prefix} ❌ No JSON output")
+            safe_print(f"{prefix} STDOUT: {result.stdout}")
+            safe_print(f"{prefix} STDERR: {result.stderr}")
+            raise RuntimeError("Test failed to produce JSON")
+        
+        test_data = json.loads(json_output)
+        
+        if not test_data.get('success'):
+            safe_print(f"{prefix} ❌ Test reported failure: {test_data.get('error')}")
+            raise RuntimeError(test_data.get('error'))
+        
         timings['end'] = time.perf_counter()
         
-        safe_print(f"{prefix} ✅ Test passed! Rich {test_data['version']}")
+        # Show proof
+        safe_print(f"{prefix} ✅ VERIFIED:")
+        safe_print(f"{prefix}    Python: {test_data['python_version']} ({test_data['python_path']})")
+        safe_print(f"{prefix}    Rich: {test_data['rich_version']} (from {test_data['rich_file']})")
         
         return {
             'thread_id': thread_id,
-            'python_version': py_version,
-            'rich_version': test_data['version'],
-            'swap_time_ms': swap_time,
-            'install_time_ms': install_time,
-            'total_time_ms': (timings['end'] - timings['start']) * 1000
+            'python_version': test_data['python_version'],
+            'python_path': test_data['python_path'],
+            'rich_version': test_data['rich_version'],
+            'rich_file': test_data['rich_file'],
+            'timings_ms': {
+                'wait': (timings['lock_acquired'] - timings['wait_start']) * 1000,
+                'swap': swap_time,
+                'install': install_time,
+                'test': (timings['end'] - timings['test_start']) * 1000,
+                'total': (timings['end'] - timings['start']) * 1000
+            }
         }
         
     except Exception as e:
         safe_print(f"{prefix} ❌ FAILED: {e}")
+        import traceback
+        safe_print(f"{prefix} {traceback.format_exc()}")
         return None
+
+def print_summary(results: list, total_time: float):
+    """Print detailed summary table."""
+    safe_print("\n" + "=" * 100)
+    safe_print("📊 DETAILED RESULTS")
+    safe_print("=" * 100)
+    
+    # Header
+    safe_print(f"{'Thread':<8} {'Python':<12} {'Rich':<10} {'Wait':<8} {'Swap':<8} {'Install':<10} {'Test':<8} {'Total':<10}")
+    safe_print("-" * 100)
+    
+    # Sort by thread ID
+    for r in sorted(results, key=lambda x: x['thread_id']):
+        t = r['timings_ms']
+        safe_print(
+            f"T{r['thread_id']:<7} "
+            f"{r['python_version']:<12} "
+            f"{r['rich_version']:<10} "
+            f"{format_duration(t['wait']):<8} "
+            f"{format_duration(t['swap']):<8} "
+            f"{format_duration(t['install']):<10} "
+            f"{format_duration(t['test']):<8} "
+            f"{format_duration(t['total']):<10}"
+        )
+    
+    safe_print("-" * 100)
+    safe_print(f"⏱️  Total concurrent runtime: {format_duration(total_time)}")
+    safe_print("=" * 100)
+    
+    # Verification table
+    safe_print("\n🔍 VERIFICATION - Actual Python Executables Used:")
+    safe_print("-" * 100)
+    for r in sorted(results, key=lambda x: x['thread_id']):
+        safe_print(f"T{r['thread_id']}: {r['python_path']}")
+        safe_print(f"     └─ Rich loaded from: {r['rich_file']}")
+    safe_print("-" * 100)
 
 def main():
     """Main test orchestrator."""
-    safe_print("=" * 80)
+    start_time = time.perf_counter()
+    
+    safe_print("=" * 100)
     safe_print("🚀 CONCURRENT RICH MULTIVERSE TEST")
-    safe_print("=" * 80)
+    safe_print("=" * 100)
     
     test_configs = [
         ('3.9', '13.4.2'),
@@ -183,20 +310,20 @@ def main():
         ('3.11', '13.7.1')
     ]
     
-    # Phase 1: Adopt all interpreters sequentially (safer)
+    # Phase 1: Adopt all interpreters
     safe_print("\n📥 Phase 1: Adopting interpreters...")
     for version, _ in test_configs:
         if not adopt_if_needed(version, 0):
             safe_print(f"❌ Failed to adopt Python {version}")
             sys.exit(1)
     
-    safe_print("\n✅ All interpreters ready. Starting concurrent tests...")
+    safe_print("\n✅ All interpreters ready. Starting concurrent tests...\n")
     
     # Phase 2: Run tests concurrently
     results = []
     with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
         futures = {
-            executor.submit(test_dimension, config, i+1): config
+            executor.submit(test_dimension, config, i+1, skip_swap=False): config
             for i, config in enumerate(test_configs)
         }
         
@@ -205,13 +332,10 @@ def main():
             if result:
                 results.append(result)
     
-    # Report
-    safe_print("\n" + "=" * 80)
-    safe_print("📊 RESULTS")
-    safe_print("=" * 80)
-    for r in sorted(results, key=lambda x: x['thread_id']):
-        safe_print(f"Thread {r['thread_id']}: Python {r['python_version']} | "
-                  f"Rich {r['rich_version']} | Total: {r['total_time_ms']:.0f}ms")
+    total_time = (time.perf_counter() - start_time) * 1000
+    
+    # Print summary
+    print_summary(results, total_time)
     
     success = len(results) == len(test_configs)
     safe_print("\n" + ("🎉 ALL TESTS PASSED!" if success else "❌ SOME TESTS FAILED"))
