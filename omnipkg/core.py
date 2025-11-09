@@ -4295,13 +4295,10 @@ class omnipkg:
         
         for py_ver, exe_path in all_interpreters.items():
             try:
+                # === SKIP THE NATIVE INTERPRETER ===
                 exe_path_obj = Path(exe_path).resolve()
-                
-                # === SKIP THE NATIVE INTERPRETER (cross-platform) ===
-                # Use resolve() + comparison to handle case sensitivity on Windows
-                if exe_path_obj.resolve() == native_exe.resolve():
+                if exe_path_obj == native_exe:
                     continue  # Native is handled separately
-
                 
                 # === DERIVE site-packages FROM INTERPRETER PATH ===
                 # Pattern: /path/to/interpreter/bin/python -> /path/to/interpreter/lib/pythonX.Y/site-packages
@@ -4388,7 +4385,10 @@ class omnipkg:
         # Determine native interpreter path
         if platform.system() == 'Windows':
             native_exe = self.config_manager.venv_path / 'Scripts' / 'python.exe'
-            is_current_native = (current_exe.resolve() == native_exe.resolve())
+            is_current_native = (
+                str(current_exe).startswith(str(self.config_manager.venv_path)) and
+                '.omnipkg' not in str(current_exe)
+            )
         else:
             native_exe = self.config_manager.venv_path / 'bin' / 'python'
             is_current_native = current_exe.parent == (self.config_manager.venv_path / 'bin')
@@ -7017,7 +7017,7 @@ class omnipkg:
                 if not python_exe:
                     safe_print(_('   - ❌ CRITICAL: Could not find Python executable in {} after extraction.').format(dest_path))
                     return False
-                self.config_manager._install_essential_packages(python_exe)
+                self._install_essential_packages(python_exe)
         
                 safe_print(_('   - ✅ Alternative Python 3.13 download and bootstrap completed'))
                 return True
@@ -7157,7 +7157,7 @@ class omnipkg:
             # 🔥 CRITICAL FIX: Bootstrap omnipkg into the copied interpreter
             safe_print(_('   - Bootstrapping omnipkg into copied interpreter...'))
             try:
-                self.config_manager._install_essential_packages(copied_python)
+                self._install_essential_packages(copied_python)
             except Exception as e:
                 safe_print(_('   - ⚠️ Bootstrap failed: {}. Trying download fallback...').format(e))
                 shutil.rmtree(dest, ignore_errors=True)
