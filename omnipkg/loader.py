@@ -462,73 +462,111 @@ class omnipkgLoader:
         except ValueError:
             raise ValueError(f"Invalid package_spec format: '{self._current_package_spec}'")
 
-        # --- THIS IS THE RESTORED LOGIC ---
+        # --- STEP 1: Check if main env already satisfies (QUICK CHECK) ---
         try:
-            # Check if the package exists in the main environment
             current_system_version = get_version(pkg_name)
             
-            # If versions match AND we are NOT forcing activation, we can skip the bubble.
             if current_system_version == requested_version and not self.force_activation:
                 if not self.quiet:
                     safe_print(_('✅ System version already matches requested version ({}). No bubble needed.').format(current_system_version))
                 self._activation_successful = True
                 self._activation_end_time = time.perf_counter_ns()
                 self._total_activation_time_ns = self._activation_end_time - self._activation_start_time
-                return self  # Exit early
+                return self  # Exit early - perfect match in main env
             else:
-                # ✅ NEW: Debug info when version mismatch
+                # Version mismatch - need bubble
                 if not self.quiet:
-                    safe_print(f"   🔍 Main env has {pkg_name}=={current_system_version}, but need {requested_version}. Checking bubble...")
+                    safe_print(f"   🔍 Main env has {pkg_name}=={current_system_version}, need {requested_version}. Looking for bubble...")
         except PackageNotFoundError:
-            # ✅ NEW: Debug info when package not in main env
+            # Not in main env - definitely need bubble
             if not self.quiet:
-                safe_print(f"   🔍 {pkg_name} not in main environment. Checking bubble...")
-        # --- END OF RESTORED LOGIC ---
+                safe_print(f"   🔍 {pkg_name} not in main environment. Looking for bubble...")
 
+        # --- STEP 2: Try to use BUBBLE (PREFERRED) ---
         if not self.quiet:
             safe_print(_('🚀 Fast-activating {} ...').format(self._current_package_spec))
         
         bubble_path = self.multiversion_base / f'{pkg_name}-{requested_version}'
         
-        # ✅ NEW: Show what we're looking for
+        # ✅ DEBUG: Show what we're looking for
         if not self.quiet:
-            safe_print(f"   📂 Looking for bubble at: {bubble_path}")
+            safe_print(f"   📂 Searching for bubble: {bubble_path}")
         
         if not bubble_path.is_dir():
-            # ✅ NEW: Show what actually exists
-            parent_dir = bubble_path.parent
-            if parent_dir.exists():
-                available_bubbles = [d.name for d in parent_dir.iterdir() if d.is_dir() and d.name.startswith(pkg_name)]
-                if available_bubbles:
-                    safe_print(f"   ❌ Bubble not found, but found these {pkg_name} bubbles: {available_bubbles}")
+            # ❌ Bubble not found - show debug info and try fallback
+            if not self.quiet:
+                safe_print(f"   ⚠️  Bubble not found at: {bubble_path}")
+                
+                # Show what bubbles DO exist
+                parent_dir = bubble_path.parent
+                if parent_dir.exists():
+                    available_bubbles = [d.name for d in parent_dir.iterdir() if d.is_dir()]
+                    if available_bubbles:
+                        # Show related bubbles
+                        related = [b for b in available_bubbles if b.startswith(pkg_name)]
+                        if related:
+                            safe_print(f"   📦 Available {pkg_name} bubbles: {', '.join(related)}")
+                        else:
+                            safe_print(f"   📦 No {pkg_name} bubbles found. Total bubbles: {len(available_bubbles)}")
+                            if len(available_bubbles) <= 10:
+                                safe_print(f"      All bubbles: {', '.join(available_bubbles)}")
+                    else:
+                        safe_print(f"   📦 Bubble directory is empty: {parent_dir}")
                 else:
-                    safe_print(f"   ❌ Bubble not found, and no {pkg_name} bubbles exist in {parent_dir}")
-            else:
-                safe_print(f"   ❌ Bubble directory doesn't exist: {parent_dir}")
+                    safe_print(f"   ❌ Bubble directory doesn't exist: {parent_dir}")
             
-            # Also check main site-packages one more time with details
+            # --- STEP 3: FALLBACK to main environment ---
+            if not self.quiet:
+                safe_print(f"   🔄 Falling back to main environment check...")
+            
             try:
                 import importlib.metadata
                 installed_version = importlib.metadata.version(pkg_name)
-                safe_print(f"   💡 However, {pkg_name}=={installed_version} IS installed in main site-packages!")
-                safe_print(f"      You requested {requested_version}, but got {installed_version}")
-            except importlib.metadata.PackageNotFoundError:
-                safe_print(f"   ❌ {pkg_name} is not installed anywhere (main env or bubbles)")
-            
-            raise RuntimeError(
-                f"Bubble not found for {self._current_package_spec}\n"
-                f"  Searched: {bubble_path}\n"
-                f"  Hint: Try installing with 'omnipkg install {pkg_name}=={requested_version}'"
-            )
-
-        try:
-            self._activated_bubble_dependencies = list(self._get_bubble_dependencies(bubble_path).keys())
+                
+                if installed_version == requested_version:
+                    # ✅ Found exact version in main site-packages
+                    if not self.quiet:
+                        safe_print(f"   ✅ Found {pkg_name}=={requested_version} in main site-packages")
+                        safe_print(f"      ⚠️  WARNING: Using main env (not isolated). Consider creating bubble.")
                     
+                    self._activation_successful = True
+                    self._activation_end_time = time.perf_counter_ns()
+                    self._total_activation_time_ns = self._activation_end_time - self._activation_start_time
+                    return self  # Fallback successful
+                else:
+                    # Wrong version in main env
+                    if not self.quiet:
+                        safe_print(f"   ❌ Main env has {pkg_name}=={installed_version}, need {requested_version}")
+                    raise RuntimeError(
+                        f"Package {pkg_name}=={requested_version} not available\n"
+                        f"  Bubble not found: {bubble_path}\n"
+                        f"  Main env has: {installed_version}\n"
+                        f"  Hint: Try 'omnipkg install {pkg_name}=={requested_version}'"
+                    )
+            except importlib.metadata.PackageNotFoundError:
+                # Not in main env either
+                if not self.quiet:
+                    safe_print(f"   ❌ {pkg_name} not found in main environment either")
+                raise RuntimeError(
+                    f"Package {pkg_name}=={requested_version} not found anywhere\n"
+                    f"  Bubble not found: {bubble_path}\n"
+                    f"  Not in main site-packages\n"
+                    f"  Hint: Install with 'omnipkg install {pkg_name}=={requested_version}'"
+                )
+
+        # --- STEP 4: BUBBLE FOUND - Activate it ---
+        try:
+            if not self.quiet:
+                safe_print(f"   ✅ Bubble found: {bubble_path}")
+            
+            self._activated_bubble_dependencies = list(self._get_bubble_dependencies(bubble_path).keys())
+            
             # Now, when we cloak and clean, we do it for EVERYTHING.
             for pkg in self._activated_bubble_dependencies:
                 self._aggressive_module_cleanup(pkg)
             
             self._batch_cloak_packages(self._activated_bubble_dependencies)
+            
             # Use fast dependency detection
             bubble_packages = self._get_bubble_dependencies(bubble_path)
             
@@ -557,7 +595,7 @@ class omnipkgLoader:
             self._total_activation_time_ns = self._activation_end_time - self._activation_start_time
             
             if not self.quiet:
-                safe_print(f"   ⚡ HEALED in {self._total_activation_time_ns / 1000:,.1f} μs (UV failed!)")
+                safe_print(f"   ⚡ HEALED in {self._total_activation_time_ns / 1000:,.1f} μs")
             
             self._activation_successful = True
             return self
