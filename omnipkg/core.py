@@ -4065,138 +4065,346 @@ class omnipkg:
 
     def _self_heal_omnipkg_installation(self):
         """
-        (V14 - FIXED NATIVE DETECTION) Silently aligns all interpreters with concurrent installs.
-        Only shows output when sync is needed. Skips native interpreter to avoid circular installs.
+        (V25 - FILE-BASED CACHE) Ultra-fast version checking with persistent cache.
+        Uses a small JSON file to cache sync status across CLI invocations.
         """
+        import time
+        
+        overall_start = time.perf_counter_ns()
+        
         try:
-            master_version_str = 'unknown'
-            install_spec = []
+            # === TIER 0: FILE-BASED CACHE CHECK (MICROSECONDS) ===
+            cache_data = self._read_heal_cache()
+            cached_master_version = cache_data.get('master_version')
+            cached_timestamp = cache_data.get('timestamp', 0)
             
-            project_root = self.config_manager._find_project_root()
-            if project_root:
-                toml_path = Path(project_root) / 'pyproject.toml'
-                if toml_path.exists():
-                    try:
-                        if sys.version_info >= (3, 11):
-                            import tomllib
-                        else:
-                            import tomli as tomllib
-                        
-                        with open(toml_path, 'rb') as f:
-                            toml_data = tomllib.load(f)
-                            master_version_str = toml_data.get('project', {}).get('version', 'unknown')
-                    except Exception:
-                        return
-                else:
-                    return
-                
-                install_spec = ['-e', str(project_root)]
-            else:
-                native_python_exe = str(self.config_manager.venv_path / 'bin' / 'python')
-                try:
-                    cmd = [native_python_exe, "-c", 
-                    "try: from importlib.metadata import version\n"
-                    "except ImportError: from importlib_metadata import version\n"
-                    "print(version('omnipkg'))"]
-                    result = subprocess.run(cmd, capture_output=True, text=True, check=True, timeout=5)
-                    master_version_str = result.stdout.strip()
-                    install_spec = [f'omnipkg=={master_version_str}']
-                except Exception:
-                    return
-            
-            if master_version_str in ['unknown', 'not-installed']:
+            # === TIER 1: FAST MASTER VERSION DETECTION ===
+            master_version_str, install_spec = self._get_master_version_ultra_fast()
+            if master_version_str in ['unknown', 'not-installed', None]:
                 return
             
-            # --- GET CURRENT (NATIVE) INTERPRETER INFO ---
-            current_exe = Path(sys.executable).resolve()
+            # Check if cache is valid (version matches and less than 60 seconds old)
+            cache_valid = (
+                cached_master_version == master_version_str and
+                (time.time() - cached_timestamp) < 60
+            )
             
-            # Platform-aware native detection (same logic as _register_and_link_existing_interpreter)
-            if platform.system() == 'Windows':
-                # Windows: native if it's in the venv root, not in .omnipkg
-                is_current_native = (
-                    str(current_exe).startswith(str(self.config_manager.venv_path)) and
-                    '.omnipkg' not in str(current_exe)
-                )
-            else:
-                # Unix: native if it's in venv_path/bin
-                is_current_native = current_exe.parent == (self.config_manager.venv_path / 'bin')
+            if cache_valid:
+                if '--verbose' in sys.argv or '-V' in sys.argv:
+                    elapsed_ns = time.perf_counter_ns() - overall_start
+                    elapsed_ms = elapsed_ns / 1_000_000
+                    safe_print(f"   ⚡ All interpreters in sync (cached: {elapsed_ms:.3f}ms)")
+                return
             
-            # --- CHECK ALL INTERPRETERS ---
-            interpreter_manager = InterpreterManager(self.config_manager)
-            all_interpreters = interpreter_manager.list_available_interpreters()
-            sync_needed_for = []
-
-            for py_ver, exe_path in all_interpreters.items():
-                target_exe = Path(exe_path).resolve()
+            # === TIER 2: PATH-BASED SYNC CHECK (1-2ms) ===
+            sync_needed = self._check_sync_status_ultra_fast(master_version_str)
+            
+            if not sync_needed:
+                # Write cache for next time
+                self._write_heal_cache({
+                    'master_version': master_version_str,
+                    'timestamp': time.time()
+                })
                 
-                # CRITICAL: Skip the native interpreter if it's the one currently running
-                if is_current_native and target_exe == current_exe:
-                    # Native interpreter running - check if it already has the right version
-                    try:
-                        cmd = [str(target_exe), "-c", "import site; print(site.getsitepackages()[0])"]
-                        result = subprocess.run(cmd, capture_output=True, text=True, check=True, timeout=5)
-                        site_packages = result.stdout.strip()
-                        target_version_str = self._get_omnipkg_version_from_site_packages(site_packages)
-                        
-                        if target_version_str == master_version_str:
-                            continue  # Already in sync, skip
-                    except Exception:
-                        pass
+                if '--verbose' in sys.argv or '-V' in sys.argv:
+                    elapsed_ns = time.perf_counter_ns() - overall_start
+                    elapsed_ms = elapsed_ns / 1_000_000
+                    safe_print(f"   ⚡ All interpreters in sync (checked in {elapsed_ms:.3f}ms, {elapsed_ns:,} ns)")
+                return
+            
+            # === TIER 3: HEALING REQUIRED (ONLY WHEN NECESSARY) ===
+            self._perform_concurrent_healing(master_version_str, install_spec, sync_needed)
+            
+            # Write cache after successful healing
+            self._write_heal_cache({
+                'master_version': master_version_str,
+                'timestamp': time.time()
+            })
+            
+        except Exception as e:
+            if '--verbose' in sys.argv or '-V' in sys.argv:
+                import traceback
+                safe_print(f"\n⚠️ Self-heal encountered an error: {e}")
+                traceback.print_exc()
+
+
+    def _get_heal_cache_path(self) -> Path:
+        """Returns the path to the self-heal cache file."""
+        return self.config_manager.config_dir / f'heal_cache_{self.config_manager.env_id}.json'
+
+
+    def _read_heal_cache(self) -> dict:
+        """Reads the self-heal cache from a JSON file."""
+        cache_path = self._get_heal_cache_path()
+        if cache_path.exists():
+            try:
+                import json
+                with open(cache_path, 'r') as f:
+                    return json.load(f)
+            except (json.JSONDecodeError, IOError):
+                pass
+        return {}
+
+
+    def _write_heal_cache(self, data: dict):
+        """Writes data to the self-heal cache file."""
+        cache_path = self._get_heal_cache_path()
+        try:
+            import json
+            with open(cache_path, 'w') as f:
+                json.dump(data, f)
+        except IOError:
+            pass  # Fail silently if we can't write the cache
+
+
+    def _get_master_version_ultra_fast(self) -> Tuple[str, List[str]]:
+        """
+        Ultra-fast master version detection using direct file I/O.
+        Returns: (version_string, install_spec)
+        """
+        # Fast path: Check if we're in a project (editable install)
+        project_root = self.config_manager._find_project_root()
+        if project_root:
+            toml_path = Path(project_root) / 'pyproject.toml'
+            if toml_path.exists():
+                try:
+                    # Read only the first 2KB - version is always near the top
+                    content = toml_path.read_text(encoding='utf-8')[:2048]
                     
-                    # Native needs sync but we can't do it while it's running
-                    # This should rarely happen since native is usually already installed
+                    # Ultra-fast string search (no regex, no TOML parsing)
+                    for line in content.split('\n'):
+                        stripped = line.strip()
+                        if stripped.startswith('version'):
+                            # Extract version: version = "1.5.16" or version="1.5.16"
+                            version_str = stripped.split('=', 1)[1].strip().strip('"\'')
+                            return version_str, ['-e', str(project_root)]
+                except Exception:
+                    pass
+        
+        # Fallback: Get version from native interpreter's site-packages
+        # This is fast because we're already running IN the native interpreter
+        try:
+            native_site_packages = site.getsitepackages()[0]
+            version_str = self._get_omnipkg_version_from_site_packages(native_site_packages)
+            if version_str not in ['unknown', 'not-installed']:
+                return version_str, [f'omnipkg=={version_str}']
+        except Exception:
+            pass
+        
+        return 'unknown', []
+
+
+    def _check_sync_status_ultra_fast(self, master_version: str) -> List[Tuple[str, str]]:
+        """
+        CORRECTED path-based sync checking - derives site-packages from interpreter location.
+        This handles standalone Python builds correctly!
+        Excludes the native interpreter from the sync list (it's handled separately).
+        """
+        sync_needed = []
+        
+        # Get all managed interpreters
+        interpreter_manager = InterpreterManager(self.config_manager)
+        all_interpreters = interpreter_manager.list_available_interpreters()
+        
+        # Determine native interpreter to exclude it
+        if platform.system() == 'Windows':
+            native_exe = self.config_manager.venv_path / 'Scripts' / 'python.exe'
+        else:
+            native_exe = self.config_manager.venv_path / 'bin' / 'python'
+        native_exe = native_exe.resolve()
+        
+        # Pre-compute expected dist-info names
+        expected_dist_info = f"omnipkg-{master_version}.dist-info"
+        expected_editable_dist_info = f"__editable___omnipkg-{master_version}.dist-info"
+        
+        for py_ver, exe_path in all_interpreters.items():
+            try:
+                # === SKIP THE NATIVE INTERPRETER ===
+                exe_path_obj = Path(exe_path).resolve()
+                if exe_path_obj == native_exe:
+                    continue  # Native is handled separately
+                
+                # === DERIVE site-packages FROM INTERPRETER PATH ===
+                # Pattern: /path/to/interpreter/bin/python -> /path/to/interpreter/lib/pythonX.Y/site-packages
+                interpreter_root = exe_path_obj.parent.parent
+                
+                if platform.system() == 'Windows':
+                    # Windows: interpreter_root\Lib\site-packages
+                    site_packages = interpreter_root / 'Lib' / 'site-packages'
+                else:
+                    # Unix: interpreter_root/lib/pythonX.Y/site-packages
+                    site_packages = interpreter_root / 'lib' / f'python{py_ver}' / 'site-packages'
+                
+                # Verify the site-packages directory actually exists
+                if not site_packages.exists():
+                    sync_needed.append((py_ver, str(exe_path)))
                     continue
                 
-                # Check version for non-native interpreters
-                try:
-                    cmd = [str(target_exe), "-c", "import site; print(site.getsitepackages()[0])"]
-                    result = subprocess.run(cmd, capture_output=True, text=True, check=True, timeout=5)
-                    site_packages = result.stdout.strip()
-                    target_version_str = self._get_omnipkg_version_from_site_packages(site_packages)
-                except Exception:
-                    target_version_str = 'not-installed'
+                # Fast check: does the expected dist-info exist?
+                has_regular_install = (site_packages / expected_dist_info).exists()
+                has_editable_install = (site_packages / expected_editable_dist_info).exists()
                 
-                if target_version_str != master_version_str:
-                    sync_needed_for.append((py_ver, str(target_exe)))
+                # Additional check for old-style editable (.pth files)
+                has_pth_install = False
+                if not has_regular_install and not has_editable_install:
+                    # Quick check for .pth files containing omnipkg
+                    pth_files = list(site_packages.glob('*.pth'))
+                    for pth_file in pth_files:
+                        try:
+                            # Only read first 512 bytes - .pth files are tiny
+                            content = pth_file.read_text(encoding='utf-8')[:512]
+                            if 'omnipkg' in content:
+                                # For editable installs via .pth, we need to verify the version
+                                # by checking the actual source pyproject.toml
+                                for line in content.split('\n'):
+                                    line = line.strip()
+                                    if line and line.startswith('/') and 'omnipkg' in line:
+                                        project_path = Path(line)
+                                        if project_path.exists():
+                                            pyproject_path = project_path / 'pyproject.toml'
+                                            if pyproject_path.exists():
+                                                # Read version from source
+                                                try:
+                                                    toml_content = pyproject_path.read_text(encoding='utf-8')[:2048]
+                                                    for toml_line in toml_content.split('\n'):
+                                                        stripped = toml_line.strip()
+                                                        if stripped.startswith('version'):
+                                                            source_version = stripped.split('=', 1)[1].strip().strip('"\'')
+                                                            if source_version == master_version:
+                                                                has_pth_install = True
+                                                            break
+                                                except:
+                                                    pass
+                                        break
+                        except:
+                            pass
+                
+                # If none of the expected patterns exist, sync is needed
+                if not (has_regular_install or has_editable_install or has_pth_install):
+                    sync_needed.append((py_ver, str(exe_path)))
+                    
+            except Exception as e:
+                # If anything fails, assume sync is needed (conservative)
+                if '--verbose' in sys.argv or '-V' in sys.argv:
+                    safe_print(f"   ⚠️ Path derivation failed for Python {py_ver}: {e}")
+                sync_needed.append((py_ver, str(exe_path)))
+        
+        return sync_needed
 
-            if not sync_needed_for:
-                return  # Silent success - everything in sync
 
-            # --- CONCURRENT SYNC ---
-            versions_to_sync = ', '.join([f"Python {ver}" for ver, _exe_path in sync_needed_for])
-            safe_print(f"🔄 Syncing {versions_to_sync} to v{master_version_str}...")
+    def _perform_concurrent_healing(self, master_version: str, install_spec: List[str], 
+                                    sync_needed: List[Tuple[str, str]]):
+        """
+        Performs concurrent healing only when necessary.
+        This is the slow path - only hit when versions are actually out of sync.
+        """
+        import textwrap
+        import json
+        import concurrent.futures
+        
+        # Check if current (native) interpreter needs sync
+        current_exe = Path(sys.executable).resolve()
+        current_version = f"{sys.version_info.major}.{sys.version_info.minor}"
+        
+        # Determine native interpreter path
+        if platform.system() == 'Windows':
+            native_exe = self.config_manager.venv_path / 'Scripts' / 'python.exe'
+            is_current_native = (
+                str(current_exe).startswith(str(self.config_manager.venv_path)) and
+                '.omnipkg' not in str(current_exe)
+            )
+        else:
+            native_exe = self.config_manager.venv_path / 'bin' / 'python'
+            is_current_native = current_exe.parent == (self.config_manager.venv_path / 'bin')
+        
+        # Check if native needs sync
+        native_needs_sync = False
+        if is_current_native:
+            try:
+                native_site_packages = site.getsitepackages()[0]
+                current_version_str = self._get_omnipkg_version_from_site_packages(native_site_packages)
+                if current_version_str != master_version:
+                    native_needs_sync = True
+            except Exception:
+                native_needs_sync = True
+        
+        # === SYNC NATIVE FIRST (IF NEEDED) ===
+        native_was_synced = False
+        if native_needs_sync:
+            import tempfile
+            native_sync_start = time.perf_counter()
+            safe_print(f"🔄 Syncing native Python {current_version} to v{master_version}...")
             
-            import concurrent.futures
+            sync_script = textwrap.dedent(f"""
+    import subprocess
+    import sys
+
+    install_spec = {json.dumps(install_spec)}
+    cmd = [
+        sys.executable, '-m', 'pip', 'install',
+        '--force-reinstall', '--no-deps', '--no-cache-dir', '-q'
+    ] + install_spec
+
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    if result.returncode == 0:
+        print("   ✅ Synced: {current_version}")
+    else:
+        print(f"   ❌ Failed to sync: {{result.stderr}}")
+    sys.exit(result.returncode)
+            """)
+            
+            with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.py') as f:
+                f.write(sync_script)
+                sync_script_path = f.name
+            
+            try:
+                result = subprocess.run(
+                    [str(native_exe), sync_script_path],
+                    capture_output=True, text=True, timeout=60
+                )
+                print(result.stdout, end='')
+                
+                if result.returncode == 0:
+                    native_was_synced = True
+                    native_sync_duration = time.perf_counter() - native_sync_start
+                    safe_print(f"   ⏱️  Native sync completed in {native_sync_duration:.2f}s")
+            finally:
+                Path(sync_script_path).unlink(missing_ok=True)
+        
+        # === SYNC OTHER INTERPRETERS CONCURRENTLY ===
+        if sync_needed:
+            concurrent_sync_start = time.perf_counter()
+            versions_to_sync = ', '.join([f"Python {ver}" for ver, _ in sync_needed])
+            safe_print(f"🔄 Syncing {versions_to_sync} to v{master_version}...")
             
             def sync_interpreter(py_ver, target_exe):
-                """Sync a single interpreter (runs in thread)"""
                 heal_cmd = [
                     target_exe, '-m', 'pip', 'install',
-                    '--force-reinstall', '--no-deps', '--no-cache-dir', '-q'  # -q for quiet
+                    '--force-reinstall', '--no-deps', '--no-cache-dir', '-q'
                 ] + install_spec
-                
                 result = subprocess.run(heal_cmd, capture_output=True, text=True, timeout=60)
                 return (py_ver, result.returncode == 0)
             
-            # Run all syncs concurrently
             with concurrent.futures.ThreadPoolExecutor(max_workers=6) as executor:
-                futures = [executor.submit(sync_interpreter, py_ver, exe) for py_ver, exe in sync_needed_for]
+                futures = [executor.submit(sync_interpreter, ver, exe) for ver, exe in sync_needed]
                 results = [f.result() for f in concurrent.futures.as_completed(futures)]
             
-            # Report results
+            concurrent_sync_duration = time.perf_counter() - concurrent_sync_start
+            
             success = [ver for ver, ok in results if ok]
             failed = [ver for ver, ok in results if not ok]
             
             if success:
-                success_str = ', '.join(success)
-                safe_print(f"   ✅ Synced: {success_str}")
+                safe_print(f"   ✅ Synced: {', '.join(success)}")
             if failed:
-                failed_str = ', '.join(failed)
-                safe_print(f"   ❌ Failed: {failed_str}")
-
-        except Exception:
-            # Silent failure - don't disrupt normal operation
-            pass
+                safe_print(f"   ❌ Failed: {', '.join(failed)}")
+            
+            safe_print(f"   ⏱️  Concurrent sync completed in {concurrent_sync_duration:.2f}s")
+        
+        # === AUTO-RELAUNCH IF NATIVE WAS SYNCED ===
+        if native_was_synced and is_current_native:
+            safe_print(f"\n🔄 Restarting command with updated omnipkg v{master_version}...")
+            os.execv(sys.executable, [sys.executable] + sys.argv)
 
     def _perform_redis_key_migration(self, migration_flag_key: str):
         """
@@ -8604,7 +8812,7 @@ class omnipkg:
         except Exception as e:
             safe_print(_('   - ❌ Brute-force cleanup FAILED: {}').format(e))
             return False
-
+        
     def _get_active_version_from_environment(self, pkg_name: str) -> Optional[str]:
         """
         Gets the version of a package actively installed in the current Python environment
