@@ -149,10 +149,11 @@ def run_and_stream_install(cmd_args: List[str], description: str, cmd_name: str,
     start_time = time.perf_counter()
     
     # Handle both Python interpreter calls and direct command calls (like 'omnipkg')
-    if cmd_name.endswith(('python', 'python3', 'python3.9', 'python3.10', 'python3.11', 'python3.12')):
-        cmd = [cmd_name, '-m', 'omnipkg.cli'] + cmd_args
+    if cmd_name.endswith(('python', 'python.exe', 'python3', 'python3.9', 'python3.10', 'python3.11', 'python3.12')):
+        # Construct the command for module execution: python -m omnipkg <args>
+        cmd = [cmd_name, '-m', 'omnipkg'] + cmd_args
     else:
-        # Direct command call (e.g., 'omnipkg')
+        # Construct a direct command: omnipkg <args>
         cmd = [cmd_name] + cmd_args
     
     try:
@@ -232,12 +233,11 @@ def prepare_and_test_dimension(config: Tuple[str, str], omnipkg_instance: omnipk
             thread_safe_print(f'{prefix} 🔒 LOCK ACQUIRED - Modifying shared environment')
             
             # --- SWAP CONTEXT (SUBPROCESS) ---
-            timings['swap_start'] = time.perf_counter()
             swap_returncode, swap_duration = run_and_stream_install(
-                ['swap', 'python', py_version],
-                f"Swapping to Python {py_version}",
-                'omnipkg',
-                thread_id
+                ['swap', 'python', py_version],  # cmd_args
+                f"Swapping to Python {py_version}",  # description
+                'omnipkg',  # cmd_name (use 'omnipkg' command directly)
+                thread_id  # thread_id
             )
             if swap_returncode != 0:
                 raise RuntimeError(f"Failed to swap to Python {py_version}")
@@ -250,14 +250,13 @@ def prepare_and_test_dimension(config: Tuple[str, str], omnipkg_instance: omnipk
                 thread_safe_print(f'{prefix} ⚡ CACHE HIT: rich=={rich_version} already exists for Python {py_version}')
             else:
                 thread_safe_print(f'{prefix} 📦 INSTALLING: rich=={rich_version} for Python {py_version}')
-                # [FIX]: Use the specific python_exe to guarantee context for the install command.
-                returncode, install_duration = run_and_stream_install(
-                    ['install', f'rich=={rich_version}'],
-                    f"Installing rich=={rich_version}",
-                    python_exe,  # <--- THIS IS THE FIX
-                    thread_id
+                install_returncode, install_duration = run_and_stream_install(
+                    ['install', f'rich=={rich_version}'],  # cmd_args
+                    f"Installing rich=={rich_version}",  # description
+                    'omnipkg',  # cmd_name (use 'omnipkg' command directly)
+                    thread_id  # thread_id
                 )
-                if returncode != 0:
+                if install_returncode != 0:
                     raise RuntimeError(f"Failed to install rich=={rich_version} for Python {py_version}")
             timings['install_end'] = time.perf_counter()
             
