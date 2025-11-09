@@ -93,7 +93,7 @@ class omnipkgMetadataGatherer:
         self.omnipkg_instance = omnipkg_instance
         self.cache_client = self.omnipkg_instance.cache_client if self.omnipkg_instance else None
         self.force_refresh = force_refresh
-          
+        self.target_context_version = target_context_version
         self.security_report = {}
         self.target_context_version = target_context_version
         self.config = config
@@ -437,7 +437,7 @@ class omnipkgMetadataGatherer:
                                             
                                             # SMART FILTER: Check if this instance is already in Redis
                                             if skip_existing_checksums and existing_hashes:
-                                                resolved_path_str = str(resolved_path)
+                                                resolved_path_str = str(Path(resolved_path).resolve())
                                                 unique_instance_identifier = f"{resolved_path_str}::{dist.version}"
                                                 instance_hash = hashlib.sha256(unique_instance_identifier.encode()).hexdigest()[:12]
                                                 
@@ -904,7 +904,7 @@ class omnipkgMetadataGatherer:
             # Otherwise, run the normal discovery process.
             all_discovered_dists = self._discover_distributions(targeted_packages, search_path_override=search_path_override, skip_existing_checksums=skip_existing_checksums)
         # --- END OF FIX ---
-
+        
         distributions_to_process = []
         safe_print(f"   -> Filtering {len(all_discovered_dists)} discovered packages for current Python {self.target_context_version} context...")
 
@@ -1088,11 +1088,10 @@ class omnipkgMetadataGatherer:
         """
         package_name = canonicalize_name(dist.metadata['Name'])
         metadata = {k: v for k, v in dist.metadata.items()}
-        try:
-            package_path = dist.locate_file('')
-            metadata['path'] = str(package_path)
-        except Exception:
-            metadata['path'] = str(dist._path)
+        
+        # FIX: Always use dist._path for consistency with hash computation
+        metadata['path'] = str(Path(dist._path).resolve())
+        
         metadata['last_indexed'] = datetime.now().isoformat()
         context_version = self.target_context_version if self.target_context_version else get_python_version()
         metadata['indexed_by_python'] = context_version
@@ -1105,7 +1104,8 @@ class omnipkgMetadataGatherer:
         metadata['cli_analysis'] = self._analyze_cli(metadata.get('help_text', ''))
         metadata['security'] = self._get_security_info(package_name)
         metadata['health'] = self._perform_health_checks(dist, package_files)
-        metadata['checksum'] = self._generate_checksum(metadata)
+        checksum = self._generate_checksum(metadata)
+        metadata['checksum'] = checksum
         return metadata
 
     def _find_distribution_at_path(self, package_name: str, version: str, search_path: Path) -> Optional[importlib.metadata.Distribution]:
@@ -1151,25 +1151,42 @@ class omnipkgMetadataGatherer:
         if current_key:
             metadata[current_key] = '\n'.join(current_value).strip() if current_value else ''
         return metadata
+    
+    def _get_instance_hash(self, dist: importlib.metadata.Distribution) -> str:
+        """
+        (AUTHORITATIVE) Generates the one true, consistent instance hash for any
+        distribution by using its real, canonical path.
+        """
+        import os
+        # This is the single source of truth for a package's physical location.
+        # os.path.realpath resolves symlinks and gives the canonical path.
+        resolved_path_str = os.path.realpath(str(dist._path))
+        
+        # The identifier is a combination of its true path and version.
+        unique_instance_identifier = f"{resolved_path_str}::{dist.version}"
+        
+        # Return the deterministic hash.
+        return hashlib.sha256(unique_instance_identifier.encode()).hexdigest()[:12]
+
 
     def _store_in_redis(self, dist: importlib.metadata.Distribution, is_active: bool, context_info: Dict):
         """
-        (V5.1 - The Absolute Path Fix) Stores metadata using a hash of the
-        unambiguous, resolved, absolute dist._path, ensuring that two installations
-        of the same package version at different locations get unique, deterministic instance keys.
+        Stores metadata using hash of resolved dist._path
         """
         try:
             metadata = self._build_comprehensive_metadata(dist)
             package_name = canonicalize_name(dist.metadata['Name'])
             version_str = dist.version
 
-            # --- THE FIX ---
-            # The hash MUST be based on the unique, resolved, absolute filesystem path.
-            raw_path_str = str(dist._path)
-            # Using .resolve() guarantees a canonical path string for the hash.
-            resolved_path_str = str(dist._path.resolve())
-            unique_instance_identifier = f"{resolved_path_str}::{version_str}"
-            instance_hash = hashlib.sha256(unique_instance_identifier.encode()).hexdigest()[:12]
+            # Compute hash from resolved path
+            instance_hash = self._get_instance_hash(dist)
+
+            # The path stored in metadata MUST match what the hash was generated from.
+            # os.path.realpath is the key to consistency.
+            import os
+            resolved_path_str = os.path.realpath(str(dist._path))
+            metadata['path'] = resolved_path_str
+            
             instance_key = f"{self.redis_key_prefix.replace(':pkg:', ':inst:')}{package_name}:{version_str}:{instance_hash}"
 
             data_to_store = metadata.copy()
@@ -1194,7 +1211,7 @@ class omnipkgMetadataGatherer:
                     pipe.hset(main_key, 'active_version', version_str)
                 
                 if context_info.get('install_type') == 'bubble':
-                    pipe.hset(main_key, 'bubble_version:{version_str}', 'true')
+                    pipe.hset(main_key, f'bubble_version:{version_str}', 'true')
 
                 pipe.execute()
             return True

@@ -558,20 +558,57 @@ class ConfigManager:
 
     def _register_and_link_existing_interpreter(self, interpreter_path: Path, version: str):
         """
-        "Adopts" the native venv interpreter by creating a symlink to it inside
-        the managed .omnipkg/interpreters directory. It then ensures the registry
-        points to this new, centralized symlink.
-        On Windows, falls back to creating a directory junction if creating a symlink fails.
+        Registers the native interpreter WITHOUT symlinking it.
         """
-        safe_print(_('   - Centralizing native Python {}...').format(version))
         managed_interpreters_dir = self.venv_path / '.omnipkg' / 'interpreters'
         managed_interpreters_dir.mkdir(parents=True, exist_ok=True)
-        symlink_dir_name = f'cpython-{version}-venv-native'
-        symlink_path = managed_interpreters_dir / symlink_dir_name
         
-        # --- FIX #1: Correctly identify the root of the Python installation ---
-        # On Windows CI, the python.exe parent IS the root. On other systems,
-        # it might be the parent's parent. Using sys.prefix is most reliable.
+        # Check if this is the native Python by looking at the REAL venv path (not sys.prefix which might be tainted)
+        venv_bin_python = self.venv_path / 'bin' / f'python{sys.version_info.major}.{sys.version_info.minor}'
+        interpreter_resolved = interpreter_path.resolve()
+        
+        # DEBUG
+        safe_print(f'   [DEBUG] interpreter_path: {interpreter_path}')
+        safe_print(f'   [DEBUG] interpreter_resolved: {interpreter_resolved}')
+        safe_print(f'   [DEBUG] interpreter_resolved.parent: {interpreter_resolved.parent}')
+        safe_print(f'   [DEBUG] venv_path/bin: {self.venv_path / "bin"}')
+        
+        # If the interpreter being registered is in the main venv bin directory, it's native
+        is_native = interpreter_resolved.parent == (self.venv_path / 'bin')
+        
+        safe_print(f'   [DEBUG] is_native: {is_native}')
+        
+        if is_native:
+            safe_print(_('   - Native Python {} - using directly (no symlink)').format(version))
+            registry_path = managed_interpreters_dir / 'registry.json'
+            
+            # Load existing registry or create a new one
+            registry_data = {'interpreters': {}}
+            if registry_path.exists():
+                try:
+                    with open(registry_path, 'r') as f:
+                        registry_data = json.load(f)
+                except (json.JSONDecodeError, IOError):
+                    pass # Start fresh if corrupted
+
+            # --- THIS IS THE CRITICAL ADDITION ---
+            # Add or update the native interpreter's direct path in the registry.
+            registry_data['interpreters'][version] = str(interpreter_resolved)
+            # --- END OF ADDITION ---
+
+            # Save the updated registry back to the file.
+            with open(registry_path, 'w') as f:
+                json.dump(registry_data, f, indent=4)
+
+            safe_print(f"   - ✅ Registered native Python {version} in registry file.")
+            # We no longer need to call _register_all_interpreters here, 
+            # as the first-time setup will call it later.
+            return
+        
+        # For non-native interpreters, create symlink
+        safe_print(_('   - Centralizing Python {}...').format(version))
+        symlink_dir_name = f'cpython-{version}-managed'
+        symlink_path = managed_interpreters_dir / symlink_dir_name
         target_for_link = Path(sys.prefix)
 
         if symlink_path.exists():
@@ -585,7 +622,6 @@ class ConfigManager:
                 if platform.system() == 'Windows':
                     safe_print(_('   - ⚠️ Symlink creation failed ({}). Falling back to creating a directory junction...').format(e))
                     try:
-                        import subprocess
                         subprocess.run(['cmd', '/c', 'mklink', '/J', str(symlink_path), str(target_for_link)], check=True, capture_output=True)
                         safe_print(_('   - ✅ Created junction: {} -> {}').format(symlink_path, target_for_link))
                     except (subprocess.CalledProcessError, FileNotFoundError) as junction_error:
@@ -597,34 +633,85 @@ class ConfigManager:
 
         self._register_all_interpreters(self.venv_path)
 
+
     def _register_all_interpreters(self, venv_path: Path):
         """
         FIXED: Discovers and registers ONLY the Python interpreters that are explicitly
-        managed within the .omnipkg/interpreters directory. This version uses a robust,
-        cross-platform deep search to handle varying directory structures (like on Windows).
+        managed within the .omnipkg/interpreters directory, while PRESERVING native
+        interpreter entries that were registered during first-time setup.
         """
         safe_print(_('🔧 Registering all managed Python interpreters...'))
         managed_interpreters_dir = venv_path / '.omnipkg' / 'interpreters'
         managed_interpreters_dir.mkdir(parents=True, exist_ok=True)
         registry_path = managed_interpreters_dir / 'registry.json'
+        
+        # === CRITICAL FIX: Load existing registry and preserve native entries ===
+        existing_registry = {}
+        native_interpreters = {}
+        
+        if registry_path.exists():
+            try:
+                with open(registry_path, 'r') as f:
+                    existing_registry = json.load(f)
+                    
+                # Extract and preserve native interpreter entries (ones without a directory)
+                for version, path_str in existing_registry.get('interpreters', {}).items():
+                    path = Path(path_str)
+                    # If the path is NOT inside .omnipkg/interpreters/, it's native
+                    if not str(path).startswith(str(managed_interpreters_dir)):
+                        if path.exists():  # Only preserve if still exists
+                            native_interpreters[version] = path_str
+                            safe_print(_('   ℹ️  Preserving native Python {}: {}').format(version, path_str))
+                        else:
+                            safe_print(_('   ⚠️  Native Python {} no longer exists, removing from registry').format(version))
+            except (json.JSONDecodeError, IOError) as e:
+                safe_print(_('   ⚠️  Could not load existing registry: {}').format(e))
+        # === END FIX ===
+        
         interpreters = {}
 
         if not managed_interpreters_dir.is_dir():
             safe_print(_('   ⚠️  Managed interpreters directory not found.'))
+            # Still save native interpreters even if no managed ones exist
+            if native_interpreters:
+                registry_data = {
+                    'primary_version': list(native_interpreters.keys())[0] if native_interpreters else None,
+                    'interpreters': native_interpreters,
+                    'last_updated': datetime.now().isoformat()
+                }
+                with open(registry_path, 'w') as f:
+                    json.dump(registry_data, f, indent=4)
             return
 
+        # CLEANUP: Remove the bad native symlink if it exists
+        current_version = f'{sys.version_info.major}.{sys.version_info.minor}'
+        bad_symlink = managed_interpreters_dir / f'cpython-{current_version}-venv-native'
+        if bad_symlink.exists():
+            safe_print(_('   - Removing legacy native symlink...'))
+            if bad_symlink.is_symlink():
+                bad_symlink.unlink()
+            else:
+                import shutil
+                shutil.rmtree(bad_symlink, ignore_errors=True)
+            safe_print(_('   - ✅ Legacy symlink removed'))
+
+        # Scan for managed interpreters (downloaded ones)
         for interp_dir in managed_interpreters_dir.iterdir():
             if not (interp_dir.is_dir() or interp_dir.is_symlink()):
+                continue
+            
+            # Skip the bad native symlink if it somehow still exists
+            if interp_dir.name == f'cpython-{current_version}-venv-native':
                 continue
             
             safe_print(_('   -> Scanning directory: {}').format(interp_dir.name))
             found_exe_path = None
             
-            # --- START FIX: TWO-PASS SEARCH STRATEGY ---
-
             # Pass 1: Fast, shallow search for standard layouts (Linux, macOS)
             search_locations = [interp_dir / 'bin', interp_dir / 'Scripts']
-            possible_exe_names = ['python3.14', 'python3.13', 'python3.12', 'python3.11', 'python3.10', 'python3.9', 'python3.8', 'python3', 'python', 'python.exe']
+            possible_exe_names = ['python3.14', 'python3.13', 'python3.12', 'python3.11', 
+                                'python3.10', 'python3.9', 'python3.8', 'python3', 
+                                'python', 'python.exe']
 
             for location in search_locations:
                 if location.is_dir():
@@ -638,27 +725,21 @@ class ConfigManager:
                 if found_exe_path:
                     break
             
-            # Pass 2: If shallow search fails, perform a deeper, recursive search (for Windows CI structure)
+            # Pass 2: If shallow search fails, perform a deeper, recursive search
             if not found_exe_path:
                 safe_print(_('      -> Standard search failed, trying deep scan for executables...'))
-                # --- FIX #2: Make the deep scan more permissive and robust ---
-                # Find all candidates and sort by path depth to prioritize top-level executables.
                 all_candidates = list(interp_dir.rglob('python.exe' if platform.system() == 'Windows' else 'python*'))
                 sorted_candidates = sorted(all_candidates, key=lambda p: len(p.parts))
 
                 for candidate in sorted_candidates:
-                    # Ignore candidates in known non-interpreter subdirectories to avoid confusion.
                     if any(part in candidate.parts for part in ['Tools', 'Doc', 'include', 'tcl']):
                         continue
                     
-                    # Ensure it's an executable file and verify it's a real Python interpreter.
                     if candidate.is_file() and os.access(candidate, os.X_OK):
                         version_tuple = self._verify_python_version(str(candidate))
                         if version_tuple:
                             found_exe_path = candidate
-                            break # Found the best candidate, stop searching
-            
-            # --- END FIX ---
+                            break
 
             if found_exe_path:
                 version_tuple = self._verify_python_version(str(found_exe_path))
@@ -669,24 +750,34 @@ class ConfigManager:
             else:
                 safe_print(_('      ⚠️  No valid Python executable found in this directory.'))
 
-
-        primary_version = '3.11' if '3.11' in interpreters else sorted(interpreters.keys(), reverse=True)[0] if interpreters else None
+        # === CRITICAL FIX: Merge native and managed interpreters ===
+        all_interpreters = {**native_interpreters, **interpreters}
+        # === END FIX ===
+        
+        # Determine primary version (prefer native if it exists, otherwise latest managed)
+        if native_interpreters:
+            primary_version = sorted(native_interpreters.keys(), reverse=True)[0]
+        elif interpreters:
+            primary_version = sorted(interpreters.keys(), reverse=True)[0]
+        else:
+            primary_version = None
         
         registry_data = {
             'primary_version': primary_version,
-            'interpreters': {k: v for k, v in interpreters.items()},
+            'interpreters': all_interpreters,  # ← Now includes both native and managed!
             'last_updated': datetime.now().isoformat()
         }
 
         with open(registry_path, 'w') as f:
             json.dump(registry_data, f, indent=4)
         
-        if interpreters:
-            safe_print(_('   ✅ Registered {} managed Python interpreters.').format(len(interpreters)))
-            for version, path in sorted(interpreters.items()):
-                safe_print(_('      - Python {}: {}').format(version, path))
+        if all_interpreters:
+            safe_print(_('   ✅ Registered {} Python interpreters (native + managed).').format(len(all_interpreters)))
+            for version, path in sorted(all_interpreters.items()):
+                marker = ' (native)' if version in native_interpreters else ' (managed)'
+                safe_print(_('      - Python {}: {}{}').format(version, path, marker))
         else:
-            safe_print(_('   ⚠️  No managed Python interpreters were found or could be registered.'))
+            safe_print(_('   ⚠️  No Python interpreters were found or could be registered.'))
 
     def _find_existing_python311(self) -> Optional[Path]:
         """Checks if a managed Python 3.11 interpreter already exists."""
@@ -1112,7 +1203,9 @@ class ConfigManager:
             safe_print(_('   ℹ️  No managed interpreters found.'))
 
     
-    def _install_managed_python(self, venv_path: Path, full_version: str) -> Path:
+    def _install_managed_python(self, venv_path: Path, full_version: str, omnipkg_instance: 'omnipkg') -> Path:
+
+
         """
         Downloads and installs a specific, self-contained version of Python
         from the python-build-standalone project. Returns the path to the new executable.
@@ -1243,7 +1336,56 @@ class ConfigManager:
                     try:
                         import zstandard as zstd
                     except ImportError:
-                        raise OSError(_('zstandard module required for legacy Python releases. Install with: pip install zstandard'))
+                        # --- INTERNAL QUANTUM HEALING ---
+                        print_header("Dependency Healing Required")
+                        safe_print("   - Diagnosis: The 'zstandard' package is needed for this operation.")
+                        
+                        original_context = f"{sys.version_info.major}.{sys.version_info.minor}"
+                        safe_print(f"   - Current Context: Python {original_context}")
+
+                        # We need to install zstandard for the Python that is RUNNING this script.
+                        target_context = original_context
+                        
+                        safe_print(f"   - Action: Installing 'zstandard' for Python {target_context} context.")
+
+                        # Temporarily switch to the correct context if needed. This is defensive.
+                        # In this specific case, we are already in the right context, but this
+                        # makes the logic reusable for other scenarios.
+                        if omnipkg_instance.current_python_context != f"py{target_context}":
+                            safe_print(f"   - Swapping to Python {target_context} to install dependency...")
+                            if omnipkg_instance.switch_active_python(target_context) != 0:
+                                raise OSError(f"Failed to switch to Python {target_context} to install dependency.")
+                        
+                        # Use the omnipkg instance to install the dependency
+                        install_result = omnipkg_instance.smart_install(['zstandard'])
+                        
+                        if install_result != 0:
+                            safe_print("   - ❌ Failed to install 'zstandard'. Aborting download.")
+                            # Attempt to swap back if we switched
+                            if omnipkg_instance.current_python_context.replace('py','') != original_context:
+                                omnipkg_instance.switch_active_python(original_context)
+                            raise OSError("Failed to install required dependency 'zstandard'.")
+                        
+                        safe_print("   - ✅ 'zstandard' installed successfully.")
+
+                        # Now that the dependency is installed, we must re-launch the process
+                        # so the new package is available on sys.path.
+                        safe_print("\n   - 🚀 Restarting process to load the new package...")
+                        
+                        # Re-run the original command the user typed.
+                        args_for_exec = [sys.executable] + sys.argv
+                        
+                        try:
+                            # This replaces the current process with a new one.
+                            os.execv(sys.executable, args_for_exec)
+                        except Exception as e:
+                            # If the handoff fails, instruct the user.
+                            safe_print(f"   - ⚠️  Automatic restart failed: {e}")
+                            safe_print("   - Please re-run your command to continue.")
+                            # Exit gracefully.
+                            sys.exit(1)
+                        safe_print("─" * 60)
+                        # --- END OF SELF-HEALING LOGIC ---
                     
                     safe_print(_('   - Decompressing zstd archive...'))
                     with open(archive_path, 'rb') as ifh:
@@ -1827,24 +1969,23 @@ class ConfigManager:
             managed_python_exe_str = str(managed_python_exe)
             
         else:
-            # --- MACOS/LINUX LOGIC: Use existing symlink-based adoption ---
+            # --- MACOS/LINUX LOGIC ---
             safe_print(_('   - Registering native Python for future version swapping...'))
             
             try:
-                # Use existing mechanism that works well on Unix systems
+                # This will now correctly write the native interpreter's path to the registry.json file.
                 self._register_and_link_existing_interpreter(Path(sys.executable), native_version)
-                safe_print(_('   - ✅ Native Python registered successfully'))
             except Exception as e:
                 safe_print(_('   - ⚠️ Failed to adopt Python {}: {}').format(native_version, e))
-                safe_print(_('   - Omnipkg will continue but hotswapping may be limited'))
-            
-            # Force a rescan to ensure registration
-            self._register_all_interpreters(self.venv_path)
-            
-            # Get the registered path
+                # If registration fails, we can't proceed.
+                raise RuntimeError("FATAL: First-time setup failed during interpreter registration.") from e
+
+            # Now, when we look up the interpreter, it will be found in the registry.
             registered_path = self.get_interpreter_for_version(native_version)
+            
             if not registered_path:
-                raise RuntimeError("FATAL: First-time setup failed. Could not find the adopted Python interpreter.")
+                # This error should no longer happen, but it's a critical safety check.
+                raise RuntimeError("FATAL: First-time setup failed. Could not find the adopted Python interpreter after registration.")
             
             managed_python_exe_str = str(registered_path)
         
@@ -3691,14 +3832,30 @@ class NoCompatiblePythonError(Exception):
 
 class omnipkg:
 
-    def __init__(self, config_manager: ConfigManager):
+    def __init__(self, config_manager: ConfigManager, minimal_mode: bool = False):
         """
-        Initializes the Omnipkg core engine with a robust, fail-safe sequence.
+        Initializes Omnipkg with optional minimal mode for lightweight commands.
+        
+        Args:
+            minimal_mode: If True, skips database/cache initialization for commands
+                         that only need config access (swap, version, etc.)
         """
         self.config_manager = config_manager
         self.config = config_manager.config
+        
         if not self.config:
-            raise RuntimeError('OmnipkgCore cannot initialize: Configuration is missing or invalid.')
+            if len(sys.argv) > 1 and sys.argv[1] in ['reset-config', 'doctor']:
+                pass
+            else:
+                raise RuntimeError('OmnipkgCore cannot initialize: Configuration is missing or invalid.')
+        
+        # Minimal initialization for lightweight commands
+        if minimal_mode:
+            self.env_id = self._get_env_id()
+            self.multiversion_base = Path(self.config['multiversion_base'])
+            self.interpreter_manager = InterpreterManager(self.config_manager)
+            safe_print(_('✅ Omnipkg core initialized (minimal mode).'))
+            return  # EXIT EARLY - no cache, no migrations, no hooks
         self._self_heal_omnipkg_installation()
         self.env_id = self._get_env_id()
         self.multiversion_base = Path(self.config['multiversion_base'])
@@ -4135,19 +4292,32 @@ class omnipkg:
 
     def _connect_cache(self) -> bool:
         """
-        Establishes a cache connection using a robust, fast-failing circuit breaker.
-        Defaults to 'localhost' within the native OS.
+        Establishes a cache connection. Auto-corrects misconfigurations gracefully.
         """
-        # 1. Fast Path: If we already have a working connection, we're done.
+        # Fast Path: If a connection is already established, we're done.
         if self._cache_connection_status in ['redis_ok', 'sqlite_ok']:
             return True
 
-        # 2. THE CRITICAL FIX: Check if Redis is even installed BEFORE trying to use it.
-        if REDIS_AVAILABLE and self.config.get('redis_enabled', True) is True:
-            # This block now ONLY runs if the 'redis' library was successfully imported.
+        # Check if the user wants to use Redis.
+        if self.config.get('redis_enabled', True):
+            # The user wants Redis. Now, we check if we CAN use it.
             
-            # 3. Redis Attempt (only if not already failed)
-            if self._cache_connection_status != 'redis_failed':
+            # CRITICAL CHECK 1: Is the 'redis' Python package actually installed?
+            if not REDIS_AVAILABLE:
+                safe_print('\n' + '⚠️ ' * 35)
+                safe_print("CONFIGURATION AUTO-CORRECTION: Redis package not found")
+                safe_print("\n   - Your config has `redis_enabled: true`")
+                safe_print("   - However, the `redis` Python package is not installed")
+                safe_print("   - Auto-switching to SQLite for this session")
+                safe_print("\n   💡 To use Redis: 8pkg install redis")
+                safe_print('⚠️ ' * 35 + '\n')
+                
+                # Auto-fix the config
+                self._disable_redis_in_config(reason='package_not_installed')
+                # Fall through to SQLite initialization below
+                
+            else:
+                # Package is installed, try to connect
                 try:
                     redis_host = self.config.get('redis_host', 'localhost')
                     redis_port = self.config.get('redis_port', 6379)
@@ -4156,8 +4326,8 @@ class omnipkg:
                         host=redis_host,
                         port=redis_port,
                         decode_responses=True,
-                        socket_connect_timeout=0.2,
-                        socket_timeout=0.2
+                        socket_connect_timeout=2,
+                        socket_timeout=2
                     )
                     cache_client.ping()
                     
@@ -4166,34 +4336,115 @@ class omnipkg:
                     safe_print('⚡️ Connected to Redis successfully (High-performance mode).')
                     return True
                     
-                except redis.exceptions.ConnectionError:
-                    safe_print('⚠️ Redis not found or offline. Falling back to local SQLite cache.')
-                    self._cache_connection_status = 'redis_failed'
                 except Exception as e:
-                    safe_print(f'⚠️ Redis connection failed: {e}. Falling back to SQLite.')
-                    self._cache_connection_status = 'redis_failed'
+                    safe_print('\n' + '⚠️ ' * 35)
+                    safe_print("CONFIGURATION AUTO-CORRECTION: Redis server unreachable")
+                    safe_print("\n   - Your config has `redis_enabled: true`")
+                    safe_print("   - However, cannot connect to Redis server")
+                    safe_print(f"   - Error: {type(e).__name__}: {e}")
+                    safe_print("   - Auto-switching to SQLite for this session")
+                    safe_print("\n   💡 To use Redis: Start redis-server or check connection")
+                    safe_print('⚠️ ' * 35 + '\n')
+                    
+                    # Auto-fix the config
+                    self._disable_redis_in_config(reason='server_unreachable')
+                    # Fall through to SQLite initialization below
 
-        # 4. SQLite Fallback (runs if Redis is disabled, not installed, or failed to connect)
+        # SQLite initialization (runs if Redis disabled or failed)
+        safe_print("✅ SQLite cache initialized.")
         try:
             sqlite_db_path = self.config_manager.config_dir / f'cache_{self.env_id}.sqlite'
-            self.cache_client = SQLiteCacheClient(sqlite_db_path)
+            self.cache_client = SQLiteCacheClient(db_path=sqlite_db_path)
             if not self.cache_client.ping():
-                raise RuntimeError('SQLite connection failed ping test.')
+                raise RuntimeError("SQLite connection failed.")
             
             self._cache_connection_status = 'sqlite_ok'
-            
-            if not hasattr(self, '_sqlite_message_printed'):
-                safe_print(f'✅ Using local SQLite cache.')
-                self._sqlite_message_printed = True
-                
             return True
             
         except Exception as e:
-            safe_print(f'❌ FATAL: Could not initialize SQLite fallback cache: {e}')
+            safe_print(f'❌ FATAL: Could not initialize SQLite cache: {e}')
             import traceback
             traceback.print_exc()
             self._cache_connection_status = 'failed_all'
             return False
+
+
+    def _disable_redis_in_config(self, reason: str):
+        """
+        Updates the config file to disable Redis and record why.
+        Does not raise exceptions - gracefully handles any failures.
+        """
+        try:
+            import json
+            from datetime import datetime
+            
+            config_path = self.config_manager.config_path
+            
+            # Read current config
+            with open(config_path, 'r') as f:
+                full_config = json.load(f)
+            
+            # Update the environment's config
+            if 'environments' in full_config and self.env_id in full_config['environments']:
+                env_config = full_config['environments'][self.env_id]
+                
+                # Only update if Redis was actually enabled
+                if env_config.get('redis_enabled', True):
+                    env_config['redis_enabled'] = False
+                    env_config['redis_auto_disabled'] = True
+                    env_config['redis_disabled_reason'] = reason
+                    env_config['redis_disabled_timestamp'] = datetime.now().isoformat()
+                    
+                    # Write back
+                    with open(config_path, 'w') as f:
+                        json.dump(full_config, f, indent=4)
+                    
+                    safe_print('   ✅ Config updated: redis_enabled → false')
+                    safe_print('   📝 Edit ~/.config/omnipkg/config.json to re-enable Redis\n')
+            
+            # Update in-memory config immediately to prevent retry loops
+            self.config['redis_enabled'] = False
+            
+        except Exception as e:
+            # If config update fails, just update in-memory and continue
+            safe_print(f'   ⚠️  Could not persist config change: {e}')
+            self.config['redis_enabled'] = False
+
+    def _handle_redis_fallback(self):
+        """
+        Called when Redis is configured but unavailable. Updates config to prevent
+        repeated connection attempts and notifies the user.
+        """
+        try:
+            # Update the config to disable Redis for this environment
+            config_path = self.config_manager.config_path
+            
+            with open(config_path, 'r') as f:
+                full_config = json.load(f)
+            
+            if 'environments' in full_config and self.env_id in full_config['environments']:
+                env_config = full_config['environments'][self.env_id]
+                
+                # Only update if Redis was actually enabled
+                if env_config.get('redis_enabled', True) is True:
+                    env_config['redis_enabled'] = False
+                    env_config['redis_fallback_reason'] = 'server_unavailable'
+                    env_config['redis_fallback_timestamp'] = str(datetime.now())
+                    
+                    with open(config_path, 'w') as f:
+                        json.dump(full_config, f, indent=4)
+                    
+                    safe_print('   ℹ️  Updated config: redis_enabled → false')
+                    safe_print('   💡 To re-enable Redis later, edit your config or run: 8pkg config set redis_enabled true')
+            
+            # Also update the in-memory config to prevent repeated attempts this session
+            self.config['redis_enabled'] = False
+            
+        except Exception as e:
+            # If we can't update the config, just log it and continue
+            # The in-memory flag is more important
+            safe_print(f'   ⚠️  Could not persist Redis fallback to config: {e}')
+            self.config['redis_enabled'] = False
 
     def reset_configuration(self, force: bool=False) -> int:
         """
@@ -4520,9 +4771,10 @@ class omnipkg:
 
                     # 5. Generate the NEW, UNIQUE Redis key for this new instance.
                     c_name = canonicalize_name(dist.metadata['Name'])
-                    resolved_path_str = str(dist._path.resolve())
-                    unique_id = f"{resolved_path_str}::{dist.version}"
-                    instance_hash = hashlib.sha256(unique_id.encode()).hexdigest()[:12]
+                    dist_info_path = Path(dist._path).resolve()
+                    resolved_path_str = str(dist_info_path)
+                    unique_instance_identifier = f"{resolved_path_str}::{dist.version}"
+                    instance_hash = hashlib.sha256(unique_instance_identifier.encode()).hexdigest()[:12]
                     new_instance_key = f"{self.redis_key_prefix.replace(':pkg:', ':inst:')}{c_name}:{dist.version}:{instance_hash}"
                     cloned_data['installation_hash'] = instance_hash
 
@@ -4548,7 +4800,7 @@ class omnipkg:
         (UPGRADED - THE REPAIR BOT v7) Now uses resolved paths consistently
         for hash generation to prevent ghost/rebuild loops.
         """
-        
+        from .package_meta_builder import omnipkgMetadataGatherer
         if self._check_and_run_pending_rebuild():
             # If a rebuild was just run, the KB is perfectly in sync.
             # We can return early to avoid redundant work.
@@ -4588,71 +4840,71 @@ class omnipkg:
         }
         
         # ========================================================================
-        # INSTALLATION-HASH-BASED INSTANCE HEALING (v7)
+        # AUTHORITATIVE PATH-BASED HEALING (v9)
         # ========================================================================
+
+        import os
+        disk_path_map = {os.path.realpath(str(dist._path)): dist for dist in all_discovered_dists}
+
+        # Step 2: Get all instance keys and their stored paths from the Knowledge Base.
+        kb_instance_keys = self.cache_client.keys(self.redis_key_prefix.replace(':pkg:', ':inst:') + '*')
+        kb_path_map = {}  # Maps a stored path back to its Redis key
         
-        # Step 1: Build map of disk instances by their installation hashes
-        disk_instance_map_by_hash = {}
-        for dist in all_discovered_dists:
-            try:
-                c_name = canonicalize_name(dist.metadata['Name'])
-                resolved_path_str = str(dist._path.resolve())
-                unique_instance_identifier = f"{resolved_path_str}::{dist.version}"
-                instance_hash = hashlib.sha256(unique_instance_identifier.encode()).hexdigest()[:12]
-                
-                disk_instance_map_by_hash[instance_hash] = dist
-            except Exception:
-                continue
-        
-        # Step 2: Get all KB instance keys and extract their installation hashes
-        kb_instance_keys = set(self.cache_client.keys(self.redis_key_prefix.replace(':pkg:', ':inst:') + '*'))
-        
-        kb_hashes_to_keys = {}  # Map: installation_hash -> redis_key
-        with self.cache_client.pipeline() as pipe:
-            for key in kb_instance_keys:
-                pipe.hget(key, 'installation_hash')
-            results = pipe.execute()
-        
-        for key, stored_hash in zip(kb_instance_keys, results):
-            if stored_hash:
-                kb_hashes_to_keys[stored_hash] = key
-        
-        # Step 3: Identify instances that need registration (hash not in KB)
-        disk_hashes = set(disk_instance_map_by_hash.keys())
-        kb_hashes = set(kb_hashes_to_keys.keys())
-        
-        hashes_needing_registration = disk_hashes - kb_hashes
-        instances_to_rebuild = [disk_instance_map_by_hash[hash_val] for hash_val in hashes_needing_registration]
-        
-        # Step 4: Clean up ghost instances (KB hashes that don't exist on disk)
-        ghost_hashes = kb_hashes - disk_hashes
-        
-        # Only print if we found discrepancies
-        if instances_to_rebuild or ghost_hashes:
-            if instances_to_rebuild:
-                safe_print(f"   -> 🔍 Found {len(instances_to_rebuild)} new instance(s) to register")
-            if ghost_hashes:
-                safe_print(f"   -> 👻 Removing {len(ghost_hashes)} ghost instance(s) from KB")
-        
-        if instances_to_rebuild:
-            if verbose:
-                for dist in instances_to_rebuild:
+        if kb_instance_keys:
+            with self.cache_client.pipeline() as pipe:
+                for key in kb_instance_keys:
+                    pipe.hget(key, 'path')
+                stored_paths_results = pipe.execute()
+
+            for key, path_result in zip(kb_instance_keys, stored_paths_results):
+                # --- THIS IS THE CRITICAL FIX ---
+                # We MUST check if the result is a valid string before using it.
+                if isinstance(path_result, str) and path_result.strip():
                     try:
-                        safe_print(f"      - {dist.metadata['Name']}=={dist.version} at {dist._path}")
+                        resolved_path = os.path.realpath(path_result)
+                        kb_path_map[resolved_path] = key
                     except Exception:
+                        # Ignore paths that cause errors during realpath conversion.
                         pass
-            
+                # --- END OF CRITICAL FIX ---
+
+        # Step 3: Compare the sets to find discrepancies.
+        disk_paths = set(disk_path_map.keys())
+        kb_paths = set(kb_path_map.keys())
+
+        ghost_paths = kb_paths - disk_paths
+        new_paths = disk_paths - kb_paths
+        
+        instances_to_rebuild = [disk_path_map[path] for path in new_paths]
+
+        # --- Reporting and Debugging ---
+        if instances_to_rebuild:
+            safe_print(f"   -> 🔍 Found {len(instances_to_rebuild)} new/changed instance(s) that need to be registered.")
+        if ghost_paths:
+            safe_print(f"   -> 👻 Found {len(ghost_paths)} ghost instance(s) in the KB that no longer exist on disk.")
+            safe_print("    -> DEBUG: Analyzing first 5 ghosts to be deleted...")
+            for i, path in enumerate(list(ghost_paths)[:5]):
+                key = kb_path_map.get(path, '(unknown key)')
+                safe_print(f"      - GHOST {i+1}:")
+                safe_print(f"          Path in KB: {path}")
+                safe_print(f"          Key in KB:  {key}")
+
+        # --- Healing Actions ---
+        if instances_to_rebuild:
             safe_print(f"   -> 🧠 Rebuilding KB for {len(instances_to_rebuild)} instance(s)...")
             gatherer.run(pre_discovered_distributions=instances_to_rebuild)
-            self._installed_packages_cache = None
         
-        if ghost_hashes:
-            ghost_keys = [kb_hashes_to_keys[hash_val] for hash_val in ghost_hashes]
-            if ghost_keys:
-                self.cache_client.delete(*ghost_keys)
+        if ghost_paths:
+            keys_to_delete = [kb_path_map[path] for path in ghost_paths]
+            if keys_to_delete:
+                safe_print(f"   -> 🗑️  Deleting {len(keys_to_delete)} ghost keys from the KB...")
+                self.cache_client.delete(*keys_to_delete)
         
-        if instances_to_rebuild or ghost_hashes:
+        if not instances_to_rebuild and not ghost_paths:
+            pass
+        else:
             safe_print("   -> ✅ Instance-level healing complete.")
+            self._installed_packages_cache = None
         
         # ========================================================================
         # END INSTALLATION-HASH-BASED INSTANCE HEALING
@@ -4710,19 +4962,13 @@ class omnipkg:
                 self._exorcise_ghost_entry(spec)
 
         # Check if we're fully synchronized now
-        if disk_specs == kb_specs and repairs_made == 0 and not (instances_to_rebuild or ghost_hashes or ghosts_in_kb):
+        if disk_specs == kb_specs and repairs_made == 0 and not (instances_to_rebuild or ghost_paths or ghosts_in_kb):
+
             safe_print(_('   ✅ Knowledge base is in sync.'))
         else:
             safe_print(_('   ✅ Sync and repair complete.'))
         
         return all_discovered_dists
-    
-    
-    
-    
-    
-    
-    
     
     def _get_disk_specs_for_context(self, python_version: str) -> set:
         """
@@ -5882,19 +6128,23 @@ class omnipkg:
     def _show_version_details(self, data: Dict):
         """
         (FIXED) Displays detailed information from a pre-loaded dictionary of package
-        instance data, using correct syntax and key lookups.
+        instance data, with correct lookup instructions for both Redis and SQLite.
         """
         package_name = data.get('Name')
         version = data.get('Version')
-        # Use the key that was correctly found and passed in the data dictionary.
-        redis_key = data.get('redis_key', '(unknown key)')
+        cache_key = data.get('redis_key', '(unknown key)')
 
         if not package_name or not version:
             safe_print(_('❌ Cannot display details: package name or version not found in the provided data.'))
             return
 
-        # This line now correctly displays the REAL key passed from the calling function.
-        safe_print(_('The data is from Redis key: {}').format(redis_key))
+        # Determine which cache backend is being used
+        is_using_redis = self._cache_connection_status == 'redis_ok'
+        
+        if is_using_redis:
+            safe_print(_('The data is from Redis key: {}').format(cache_key))
+        else:
+            safe_print(_('The data is from SQLite cache (key: {})').format(cache_key))
 
         # --- CORRECTED DICTIONARY KEYS (NO STRAY SPACES) ---
         important_fields = [
@@ -5907,10 +6157,13 @@ class omnipkg:
 
         for field_name, display_name in important_fields:
             if field_name in data:
-                value = data.get(field_name) # Use .get() for safety
+                value = data.get(field_name)
                 if field_name == 'License' and value and len(value) > 100:
                     value = value.split('\n')[0] + '... (truncated)'
-                # --- CORRECTED SYNTAX and VARIABLE NAMES ---
+                # --- ADD THIS ELIF BLOCK ---
+                elif field_name == 'Description' and value and len(value) > 200:
+                    value = value[:200].replace('\n', ' ') + '... (truncated)'
+                # --- END OF CHANGE ---
                 elif field_name in ['dependencies', 'Requires-Dist'] and value:
                     try:
                         dep_list = json.loads(value)
@@ -5929,7 +6182,6 @@ class omnipkg:
             value = data.get(field_name, 'N/A')
             safe_print(_('   {}: {}').format(display_name.ljust(18), value))
 
-        # --- CORRECTED VARIABLE NAME ---
         meta_fields = [
             ('last_indexed', '⏰ Last Indexed'), ('installation_hash', '🔐 Checksum'),
             ('Metadata-Version', '📋 Metadata Version')
@@ -5941,8 +6193,44 @@ class omnipkg:
                 value = f'{value[:12]}...{value[-12:]}'
             safe_print(_('   {}: {}').format(display_name.ljust(18), value))
 
-        # Use the 'redis_key' variable that was defined at the top of the function.
-        safe_print(_('\n💡 For all raw data, use Redis key: "{}"').format(redis_key))
+        # Show how to query the raw data based on cache backend
+        safe_print(_('\n💡 For all raw data:'))
+        if is_using_redis:
+            safe_print(_('   # Option 1: Raw key-value pairs'))
+            safe_print(f'   redis-cli HGETALL "{cache_key}"')
+            safe_print(_('\n   # Option 2: Formatted table view (copy-paste this command)'))
+            
+            # This Lua script fetches the data, sorts it, finds the max key width, and prints a padded table.
+            lua_script = (
+                "local data = redis.call('HGETALL', KEYS[1]); "
+                "local result = {}; "
+                "local max_key_len = 0; "
+                "for i = 1, #data, 2 do "
+                "  if string.len(data[i]) > max_key_len then max_key_len = string.len(data[i]); end; "
+                "  table.insert(result, {key=data[i], value=data[i+1]}); "
+                "end; "
+                "table.sort(result, function(a,b) return a.key < b.key end); "
+                "local output = ''; "
+                "for _, pair in ipairs(result) do "
+                "  local val = pair.value; "
+                "  if string.len(val) > 100 then val = string.sub(val, 1, 100) .. '...'; end; "
+                "  output = output .. string.format('%-' .. max_key_len + 4 .. 's%s\\n', pair.key, val); "
+                "end; "
+                "return output"
+            )
+            
+            # We escape the script for safe inclusion in a shell command.
+            escaped_lua_script = lua_script.replace('"', '\\"').replace("'", "\\'")
+            
+            redis_table_command = f"redis-cli --no-raw EVAL \"{escaped_lua_script}\" 1 \"{cache_key}\""
+            safe_print(f"   {redis_table_command}")
+            
+        else: # This is the SQLite block
+            db_path = self.config_manager.config_dir / f'cache_{self.env_id}.sqlite'
+            safe_print(_('   # View field names and previews (recommended):'))
+            safe_print(_('   sqlite3 -column -header {} "SELECT field, SUBSTR(value, 1, 80) || CASE WHEN LENGTH(value) > 80 THEN \'...\' ELSE \'\' END as value FROM hash_store WHERE key = \'{}\' ORDER BY field;"').format(db_path, cache_key))
+            safe_print(_('   # View specific field (e.g., Summary):'))
+            safe_print(_('   sqlite3 {} "SELECT value FROM hash_store WHERE key = \'{}\' AND field = \'Summary\';"').format(db_path, cache_key))
 
     def _save_last_known_good_snapshot(self):
         """Saves the current environment state to Redis."""
@@ -6115,7 +6403,8 @@ class omnipkg:
             if not download_success:
                 if hasattr(self.config_manager, '_install_managed_python'):
                     try:
-                        self.config_manager._install_managed_python(self.config_manager.venv_path, full_version)
+                        # Pass `self` (the omnipkg instance) to the function
+                        self.config_manager._install_managed_python(self.config_manager.venv_path, full_version, omnipkg_instance=self)
                         download_success = True
                     except Exception as e:
                         safe_print(_('   - Warning: _install_managed_python failed: {}').format(e))
@@ -6422,29 +6711,81 @@ class omnipkg:
         """
         Forcefully removes a managed Python interpreter directory, purges its
         knowledge base from Redis, and updates the registry.
+        
+        SAFETY: This will NEVER remove native interpreters (conda/system Python).
         """
         safe_print(_('🔥 Attempting to remove managed Python interpreter: {}').format(version))
-        active_python_version = f'{sys.version_info.major}.{sys.version_info.minor}'
+        
+        # SAFETY CHECK 1: Cannot remove currently active interpreter
+        # Use the CONFIGURED active Python, not the running Python
+        configured_python = self.config_manager.get('python_executable')
+        if configured_python:
+            # Extract version from configured path (e.g., python3.12 -> 3.12)
+            import re
+            version_match = re.search(r'python(\d+\.\d+)', str(configured_python))
+            if version_match:
+                active_python_version = version_match.group(1)
+            else:
+                # Fallback to running Python if we can't parse config
+                active_python_version = f'{sys.version_info.major}.{sys.version_info.minor}'
+        else:
+            # Fallback to running Python if no config
+            active_python_version = f'{sys.version_info.major}.{sys.version_info.minor}'
+        
         if version == active_python_version:
             safe_print(_('❌ SAFETY LOCK: Cannot remove the currently active Python interpreter ({}).').format(version))
             safe_print(_("   Switch to a different Python version first using 'omnipkg swap python <other_version>'."))
             return 1
+        
+        # Get interpreter info from registry
         managed_interpreters = self.interpreter_manager.list_available_interpreters()
         interpreter_path = managed_interpreters.get(version)
+        
         if not interpreter_path:
             safe_print(_('🤷 Error: Python version {} is not a known managed interpreter.').format(version))
             return 1
-        interpreter_root_dir = interpreter_path.parent.parent
+        
+        # === CRITICAL SAFETY CHECK 2: Check if this is a native interpreter ===
+        interpreter_path_obj = Path(interpreter_path)
+        # The venv_path is on the config_manager, not the main omnipkg instance.
+        managed_interpreters_dir = self.config_manager.venv_path / '.omnipkg' / 'interpreters'
+        
+        # If the interpreter is NOT inside .omnipkg/interpreters/, it's native
+        is_native = not str(interpreter_path_obj).startswith(str(managed_interpreters_dir))
+        
+        if is_native:
+            safe_print(_('❌ SAFETY LOCK: Cannot remove native Python interpreter ({}).').format(version))
+            safe_print(_('   This is your original conda/system Python installation.'))
+            safe_print(_('   Only downloaded/managed interpreters can be removed.'))
+            safe_print(_('   Native interpreter path: {}').format(interpreter_path))
+            return 1
+        # === END SAFETY CHECK ===
+        
+        interpreter_root_dir = interpreter_path_obj.parent.parent
         safe_print(f'   Target directory for deletion: {interpreter_root_dir}')
+        
+        # SAFETY CHECK 3: Verify directory is inside managed interpreters directory
+        if not str(interpreter_root_dir).startswith(str(managed_interpreters_dir)):
+            safe_print(_('❌ SAFETY LOCK: Refusing to delete directory outside managed interpreters area.'))
+            safe_print(_('   Expected location: {}').format(managed_interpreters_dir))
+            safe_print(_('   Attempted location: {}').format(interpreter_root_dir))
+            return 1
+        
         if not interpreter_root_dir.exists():
             safe_print(_('   Directory does not exist. It may have already been cleaned up.'))
             self.rescan_interpreters()
             return 0
+        
+        # Confirmation prompt
         if not force:
-            confirm = input(_('🤔 Are you sure you want to permanently delete this directory? (y/N): ')).lower().strip()
+            safe_print(_('⚠️  This will permanently delete the managed interpreter at:'))
+            safe_print(f'   {interpreter_root_dir}')
+            confirm = input(_('🤔 Are you sure you want to continue? (y/N): ')).lower().strip()
             if confirm != 'y':
                 safe_print(_('🚫 Removal cancelled.'))
                 return 1
+        
+        # Perform deletion
         try:
             safe_print(_('🗑️ Deleting directory: {}').format(interpreter_root_dir))
             shutil.rmtree(interpreter_root_dir)
@@ -6452,6 +6793,8 @@ class omnipkg:
         except Exception as e:
             safe_print(_('❌ Failed to remove directory: {}').format(e))
             return 1
+        
+        # Clean up knowledge base
         safe_print(f'🧹 Cleaning up Knowledge Base for Python {version}...')
         try:
             keys_to_delete_pattern = self._get_redis_key_prefix_for_version(version) + '*'
@@ -6465,10 +6808,13 @@ class omnipkg:
                 safe_print(f'   ✅ No Knowledge Base entries found for Python {version}. Nothing to clean.')
         except Exception as e:
             safe_print(f'   ⚠️  Warning: Could not clean up Knowledge Base for Python {version}: {e}')
+        
+        # Update registry
         safe_print(_('🔧 Rescanning interpreters to update the registry...'))
         self.rescan_interpreters()
+        
+        safe_print(_('✨ Python {} has been successfully removed from the environment.').format(version))
         return 0
-    
     
     def check_package_installed_fast(self, python_exe: str, package: str, version: str) -> Tuple[Optional[str], float]:
         """
@@ -8302,8 +8648,8 @@ class omnipkg:
 
     def rebuild_package_kb(self, packages: List[str], force: bool=True, target_python_version: Optional[str]=None, search_path_override: Optional[str]=None) -> int:
         """
-        Forces a targeted KB rebuild and now intelligently detects and
-        deletes "ghost" entries by comparing CANONICAL package names.
+        (CORRECTED) Forces a targeted KB rebuild, now correctly determining and
+        passing the Python context to prevent accidental ghost exorcisms.
         """
         if not packages:
             return 0
@@ -8311,42 +8657,52 @@ class omnipkg:
         if not self.cache_client:
             return 1
         try:
-            # Tell the gatherer to ONLY look inside the multiversion_base for bubbles
-            search_path_override = None
-            if any(self.multiversion_base / f'{self._parse_package_spec(p)[0]}-{self._parse_package_spec(p)[1]}' for p in packages):
-                 search_path_override = str(self.multiversion_base)
-                 safe_print(f"   -> Targeting KB build to bubble directory: {search_path_override}")
+            # --- THIS IS THE CRITICAL FIX ---
+            # If a target version isn't explicitly passed, we MUST determine it from the
+            # currently configured Python executable. We can no longer allow it to be None.
+            final_target_version = target_python_version
+            if not final_target_version:
+                configured_exe = self.config.get('python_executable', sys.executable)
+                version_tuple = self.config_manager._verify_python_version(configured_exe)
+                if version_tuple:
+                    final_target_version = f'{version_tuple[0]}.{version_tuple[1]}'
+                else:
+                    # Fallback if verification fails for some reason
+                    final_target_version = f'{sys.version_info.major}.{sys.version_info.minor}'
+            # --- END OF FIX ---
+            
+            search_path = search_path_override
+            if not search_path and any(self.multiversion_base / f'{self._parse_package_spec(p)[0]}-{self._parse_package_spec(p)[1]}' for p in packages if '==' in p):
+                 search_path = str(self.multiversion_base)
+                 safe_print(f"   -> Targeting KB build to bubble directory: {search_path}")
 
             gatherer = omnipkgMetadataGatherer(
                 config=self.config, 
                 env_id=self.env_id, 
                 force_refresh=force, 
                 omnipkg_instance=self, 
-                target_context_version=target_python_version
+                target_context_version=final_target_version # Use the guaranteed version
             )
             
-            # Pass the override path to the gatherer's run method
             found_distributions = gatherer.run(
                 targeted_packages=packages, 
-                search_path_override=search_path_override
+                search_path_override=search_path
             )
+            
             if found_distributions is None:
                 found_distributions = []
-            requested_specs_canonical = set()
-            for spec in packages:
-                try:
-                    name, version = self._parse_package_spec(spec)
-                    if name and version:
-                        requested_specs_canonical.add(f'{canonicalize_name(name)}=={version}')
-                except Exception:
-                    continue
+
+            # Ghost hunting logic remains the same, but will now work correctly
+            requested_specs_canonical = {f'{canonicalize_name(self._parse_package_spec(s)[0])}=={self._parse_package_spec(s)[1]}' for s in packages if '==' in s}
             found_specs_canonical = {f"{canonicalize_name(dist.metadata['Name'])}=={dist.version}" for dist in found_distributions}
             ghost_specs_canonical = requested_specs_canonical - found_specs_canonical
+
             if ghost_specs_canonical:
                 original_spec_map = {f'{canonicalize_name(self._parse_package_spec(s)[0])}=={self._parse_package_spec(s)[1]}': s for s in packages if '==' in s}
                 for canonical_spec in ghost_specs_canonical:
                     original_spec = original_spec_map.get(canonical_spec, canonical_spec)
                     self._exorcise_ghost_entry(original_spec)
+
             self._info_cache.clear()
             self._installed_packages_cache = None
             safe_print(f'   ✅ Knowledge base for {len(found_specs_canonical)} package(s) successfully rebuilt.')
@@ -8555,20 +8911,23 @@ class omnipkg:
                     self._run_pip_uninstall([item_name])
                 # Check if the path is a valid string before trying to use it
                 elif item_type == 'bubble' and item_path_str and isinstance(item_path_str, str):
-                    # The path from the KB IS the bubble directory we need to delete.
-                    # Do NOT take its parent.
-                    bubble_dir = Path(item_path_str)
+                    # The path from the KB is to the .dist-info directory.
+                    # The directory we need to delete is its PARENT.
+                    dist_info_path = Path(item_path_str)
+                    bubble_dir = dist_info_path.parent
 
                     # A critical sanity check to ensure we're deleting the correct directory.
                     expected_bubble_name = f"{canonicalize_name(item_name)}-{item_version}"
+                    
                     if bubble_dir.name == expected_bubble_name and bubble_dir.is_dir():
                         safe_print(_('🗑️  Deleting bubble directory: {}').format(bubble_dir))
                         shutil.rmtree(bubble_dir, ignore_errors=True)
                     else:
+                        # This else block is for logging a failure, it's good to keep.
                         safe_print(f"   ⚠️ Path mismatch or directory not found, skipping filesystem deletion for {item_name}=={item_version}.")
-                        safe_print(f"      - Expected name: {expected_bubble_name}")
-                        safe_print(f"      - Path Being Checked: {bubble_dir}")
-                        safe_print(f"      - Name Being Checked:    {bubble_dir.name}")
+                        safe_print(f"      - Expected Bubble Name: {expected_bubble_name}")
+                        safe_print(f"      - Found Bubble Name:    {bubble_dir.name}")
+                        safe_print(f"      - Path Being Checked:   {bubble_dir}")
                 # --- END OF FIX ---
                 else:
                     # This branch handles cases where the path is missing from a broken KB entry
@@ -8758,49 +9117,74 @@ class omnipkg:
         version_key = f'{main_key}:{version}'
         return self.cache_client.hgetall(version_key)
 
+    import time
+
     def switch_active_python(self, version: str) -> int:
         """
         Switches the active Python context for the entire environment.
         This updates the config file and the default `python` symlinks.
         """
-        safe_print(_('🐍 Switching active Python context to version {}...').format(version))
+        start_time = time.perf_counter_ns()
+        
+        # Check if already in target context
+        configured_python = self.config_manager.get('python_executable')
+        if configured_python:
+            import re
+            version_match = re.search(r'python(\d+\.\d+)', str(configured_python))
+            if version_match and version_match.group(1) == version:
+                elapsed_ns = time.perf_counter_ns() - start_time
+                elapsed_ms = elapsed_ns / 1_000_000
+                safe_print(_('⚡ Already in Python {} context. No swap needed!').format(version))
+                safe_print(f'   ⏱️  Detection time: {elapsed_ms:.3f}ms ({elapsed_ns:,} ns)')
+                return 0
+        
+        safe_print(_('🐍 Switching to Python {}...').format(version))
+        
         managed_interpreters = self.interpreter_manager.list_available_interpreters()
         target_interpreter_path = managed_interpreters.get(version)
+        
         if not target_interpreter_path:
-            safe_print(_('❌ Error: Python version {} is not managed by this environment.').format(version))
-            safe_print(_("   Run 'omnipkg list python' to see managed interpreters."))
-            safe_print(f"   If Python {version} is 'Discovered', first adopt it with: omnipkg python adopt {version}")
+            safe_print(_('❌ Python {} not found.').format(version))
+            safe_print(_("   Run '8pkg list python' or adopt it with: 8pkg python adopt {}").format(version))
             return 1
+        
+        # Determine target path
         if "venv-native" in str(target_interpreter_path):
-            # If it is, IGNORE the symlink path and get the TRUE native path.
-            # This is the sacred path that must be preserved.
             true_native_path = str(self.config_manager.venv_path / 'bin' / f'python{version}')
             target_interpreter_str = true_native_path
-            safe_print(f"   - ✅ Detected swap to native interpreter. Using original path: {target_interpreter_str}")
+            safe_print(f"   ✅ Native interpreter: {target_interpreter_str}")
         else:
-            # For all OTHER interpreters, the managed path is correct.
             target_interpreter_str = str(target_interpreter_path)
-        safe_print(_('   - Found managed interpreter at: {}').format(target_interpreter_str))
+            safe_print(_('   ✅ Managed interpreter: {}').format(target_interpreter_str))
+        
+        # Get new paths
         new_paths = self.config_manager._get_paths_for_interpreter(target_interpreter_str)
         if not new_paths:
-            safe_print(f'❌ Error: Could not determine paths for Python {version}. Aborting switch.')
+            safe_print(f'❌ Could not determine paths for Python {version}.')
             return 1
-        safe_print(_('   - Updating configuration to new context...'))
+        
+        # Update configuration
+        safe_print(_('   🔧 Updating configuration...'))
         self.config_manager.set('python_executable', new_paths['python_executable'])
         self.config_manager.set('site_packages_path', new_paths['site_packages_path'])
         self.config_manager.set('multiversion_base', new_paths['multiversion_base'])
-        safe_print(_('   - ✅ Configuration saved.'))
-        safe_print(_('   - Updating default `python` symlinks...'))
+        
+        # Update symlinks
+        safe_print(_('   🔗 Updating symlinks...'))
         venv_path = Path(sys.prefix)
         try:
             self.config_manager._update_default_python_links(venv_path, target_interpreter_path)
         except Exception as e:
-            safe_print(_('   - ❌ Failed to update symlinks: {}').format(e))
-        safe_print(_('\n🎉 Successfully switched omnipkg context to Python {}!').format(version))
-        safe_print('   The configuration has been updated. To activate the new interpreter')
-        safe_print(_('   in your shell, you MUST re-source your activate script:'))
-        safe_print(_('\n      source {}\n').format(venv_path / 'bin' / 'activate'))
-        safe_print(_('Just kidding, omnipkg handled it for you automatically!'))
+            safe_print(_('   ❌ Symlink update failed: {}').format(e))
+        
+        elapsed_ns = time.perf_counter_ns() - start_time
+        elapsed_ms = elapsed_ns / 1_000_000
+        
+        safe_print(_('\n🎉 Switched to Python {}!').format(version))
+        safe_print(_('   To activate in your shell, run: source {}/bin/activate').format(venv_path))
+        safe_print(_('\n   Just kidding, omnipkg handled it for you automatically!'))
+        safe_print(f'   ⏱️  Swap completed in: {elapsed_ms:.3f}ms ({elapsed_ns:,} ns)')
+        
         return 0
 
     def _find_best_version_for_spec(self, package_spec: str) -> Optional[str]:
@@ -8996,6 +9380,9 @@ class omnipkg:
                 continue
             
             safe_print(f"    → Case 3: Simple package name")
+            safe_print(f"    → Case 3: Simple package name")
+            pkg_name, _ = self._parse_package_spec(pkg_spec)  # Unpack the tuple directly
+
             safe_print(_("    -> Finding latest version for '{}'...").format(pkg_name))
             target_version = self._get_latest_version_from_pypi(pkg_name)
             if target_version:
@@ -9004,7 +9391,6 @@ class omnipkg:
                 resolved_packages.append(new_spec)
             else:
                 safe_print(_("    ❌ CRITICAL: Could not resolve a version for '{}' via PyPI.").format(pkg_name))
-                # Raise an exception to abort the entire installation
                 raise ValueError(f"Package '{pkg_name}' not found or could not be resolved.")
         
         return resolved_packages
@@ -9036,40 +9422,87 @@ class omnipkg:
 
     def _get_file_list_for_packages_live(self, package_names: List[str]) -> Dict[str, List[str]]:
         """
-        Runs a subprocess in the configured Python context to get the authoritative file list for a batch of packages.
-        This is the ONLY safe way to inspect a different Python environment.
+        (ROBUST VERSION) Runs a subprocess to get the authoritative file list.
+        The script is now hardened to handle corrupted metadata and provides
+        detailed error reporting if it fails on a specific package.
         """
         if not package_names:
             return {}
         
         python_exe = self.config.get('python_executable', sys.executable)
         
-        # Different import strategy for Python 3.7 vs 3.8+
+        # This script is now much more robust.
         script = f'''
-    import sys, json
-    try:
-        import importlib.metadata as metadata
-    except ImportError:
-        # Python 3.7 fallback - use backport
-        import importlib_metadata as metadata
+import sys, json, traceback
 
-    results = {{}}
+try:
+    import importlib.metadata as metadata
+except ImportError:
+    import importlib_metadata as metadata
+
+results = {{}}
+current_pkg = "None"
+try:
     for pkg_name in {package_names!r}:
+        current_pkg = pkg_name
         try:
             dist = metadata.distribution(pkg_name)
             if dist.files:
-                results[pkg_name] = [str(dist.locate_file(f)) for f in dist.files if dist.locate_file(f).is_file()]
+                file_list = []
+                for file_path_obj in dist.files:
+                    # Process each file individually to prevent one bad
+                    # entry from failing the entire package.
+                    try:
+                        abs_path = dist.locate_file(file_path_obj)
+                        if abs_path and abs_path.is_file():
+                            file_list.append(str(abs_path))
+                    except Exception:
+                        continue # Silently skip broken file entries
+                results[pkg_name] = file_list
+            else:
+                results[pkg_name] = []
+        except metadata.PackageNotFoundError:
+            results[pkg_name] = [] # Package not found is not an error
         except Exception:
+            # Any other exception for a single package is also not fatal.
+            # We just record that we couldn't get its files.
             results[pkg_name] = []
-    print(json.dumps(results))
-    '''
+
+except Exception as e:
+    # THIS IS THE CRITICAL PART: If the loop itself crashes,
+    # we now know exactly which package was being processed.
+    error_info = {{
+        "error": "Omnipkg subprocess failed while processing package files.",
+        "failing_package": current_pkg,
+        "exception_type": type(e).__name__,
+        "exception_message": str(e),
+        "traceback": traceback.format_exc()
+    }}
+    # Print the diagnostic data to stderr so it can be captured.
+    print(json.dumps(error_info), file=sys.stderr)
+    sys.exit(1) # Exit with an error code
+
+# If we get here, everything was successful.
+print(json.dumps(results))
+'''
         
         try:
             cmd = [python_exe, '-I', '-c', script]
             result = subprocess.run(cmd, capture_output=True, text=True, check=True, timeout=120)
             return json.loads(result.stdout)
-        except (subprocess.CalledProcessError, json.JSONDecodeError, Exception) as e:
-            safe_print(f'   ⚠️  Could not get file list from live environment: {e}')
+        except subprocess.CalledProcessError as e:
+            # The subprocess failed. Now we check stderr for our detailed JSON error.
+            try:
+                error_data = json.loads(e.stderr)
+                safe_print(f"   - ⚠️  Subprocess failed while processing package '{error_data.get('failing_package')}'.")
+                safe_print(f"   -   Error: {error_data.get('exception_type')}: {error_data.get('exception_message')}")
+            except (json.JSONDecodeError, KeyError):
+                # If stderr wasn't our JSON, print the raw error.
+                safe_print('   - ⚠️  Could not get file list from live environment. Subprocess failed with a non-JSON error:')
+                safe_print(f"   -   STDERR: {e.stderr.strip()}")
+            return {name: [] for name in package_names}
+        except Exception as e:
+            safe_print(f'   - ⚠️  An unexpected error occurred while running the file-list subprocess: {e}')
             return {name: [] for name in package_names}
         
     def _get_import_candidates(self, package_name: str) -> List[str]:
