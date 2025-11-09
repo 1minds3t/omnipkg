@@ -23,8 +23,8 @@ def format_duration(ms: float) -> str:
     else:
         return f"{ms/1000:.2f}s"
 
-def run_omnipkg_cli(python_exe: str, args: list, thread_id: int, show_output: bool = False) -> tuple[int, str, str, float]:
-    """Run omnipkg CLI in correct Python context."""
+def run_omnipkg_cli(python_exe: str, args: list, thread_id: int) -> tuple[int, str, float]:
+    """Run omnipkg CLI in the CORRECT Python context and show output on failure."""
     prefix = f"[T{thread_id}]"
     start = time.perf_counter()
     
@@ -40,16 +40,17 @@ def run_omnipkg_cli(python_exe: str, args: list, thread_id: int, show_output: bo
     
     duration_ms = (time.perf_counter() - start) * 1000
     
-    if show_output or result.returncode != 0:
-        if result.stdout:
-            safe_print(f"{prefix} STDOUT:\n{result.stdout}")
-        if result.stderr:
-            safe_print(f"{prefix} STDERR:\n{result.stderr}")
-    
     status = "✅" if result.returncode == 0 else "❌"
     safe_print(f"{prefix} {status} {' '.join(args[:3])} ({format_duration(duration_ms)})")
     
-    return result.returncode, result.stdout, result.stderr, duration_ms
+    # *** THIS IS THE FIX: Show STDOUT on failure, because that's where the error is. ***
+    if result.returncode != 0:
+        if result.stdout:
+            safe_print(f"{prefix} STDOUT:\n{result.stdout.strip()}")
+        if result.stderr:
+            safe_print(f"{prefix} STDERR:\n{result.stderr.strip()}")
+    
+    return result.returncode, result.stdout, duration_ms
 
 def get_interpreter_path(version: str) -> str:
     """Get interpreter path from omnipkg."""
