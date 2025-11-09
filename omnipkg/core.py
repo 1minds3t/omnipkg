@@ -642,8 +642,8 @@ class ConfigManager:
         registry_path = managed_interpreters_dir / 'registry.json'
         
         # === CRITICAL: Acquire the lock before ANY registry operations ===
-        from omnipkg.interpreter_manager import InterpreterManager  # Avoid circular import
-        
+        InterpreterManager = globals()['InterpreterManager']
+
         with InterpreterManager._registry_write_lock:
             safe_print("   🔒 Acquired registry write lock")
             
@@ -718,94 +718,96 @@ class ConfigManager:
                 
                 safe_print(_('   -> Scanning directory: {}').format(interp_dir.name))
                 found_exe_path = None
-            
-            # Pass 1: Fast, shallow search for standard layouts (Linux, macOS)
-            search_locations = [interp_dir / 'bin', interp_dir / 'Scripts']
-            possible_exe_names = ['python3.14', 'python3.13', 'python3.12', 'python3.11', 
-                                'python3.10', 'python3.9', 'python3.8', 'python3', 
-                                'python', 'python.exe']
+                
+                # ✅ FIXED: All this needs to be INSIDE the for loop (indented)
+                # Pass 1: Fast, shallow search for standard layouts (Linux, macOS)
+                search_locations = [interp_dir / 'bin', interp_dir / 'Scripts']
+                possible_exe_names = ['python3.14', 'python3.13', 'python3.12', 'python3.11', 
+                                    'python3.10', 'python3.9', 'python3.8', 'python3', 
+                                    'python', 'python.exe']
 
-            for location in search_locations:
-                if location.is_dir():
-                    for exe_name in possible_exe_names:
-                        exe_path = location / exe_name
-                        if exe_path.is_file() and os.access(exe_path, os.X_OK):
-                            version_tuple = self._verify_python_version(str(exe_path))
+                for location in search_locations:
+                    if location.is_dir():
+                        for exe_name in possible_exe_names:
+                            exe_path = location / exe_name
+                            if exe_path.is_file() and os.access(exe_path, os.X_OK):
+                                version_tuple = self._verify_python_version(str(exe_path))
+                                if version_tuple:
+                                    found_exe_path = exe_path
+                                    break
+                    if found_exe_path:
+                        break
+                
+                # Pass 2: If shallow search fails, perform a deeper, recursive search
+                if not found_exe_path:
+                    safe_print(_('      -> Standard search failed, trying deep scan for executables...'))
+                    all_candidates = list(interp_dir.rglob('python.exe' if platform.system() == 'Windows' else 'python*'))
+                    sorted_candidates = sorted(all_candidates, key=lambda p: len(p.parts))
+
+                    for candidate in sorted_candidates:
+                        if any(part in candidate.parts for part in ['Tools', 'Doc', 'include', 'tcl']):
+                            continue
+                        
+                        if candidate.is_file() and os.access(candidate, os.X_OK):
+                            version_tuple = self._verify_python_version(str(candidate))
                             if version_tuple:
-                                found_exe_path = exe_path
+                                found_exe_path = candidate
                                 break
+
                 if found_exe_path:
-                    break
+                    version_tuple = self._verify_python_version(str(found_exe_path))
+                    if version_tuple:
+                        version_str = f'{version_tuple[0]}.{version_tuple[1]}'
+                        safe_print(_('      ✅ Found valid executable: {}').format(found_exe_path))
+                        interpreters[version_str] = str(found_exe_path)
+                else:
+                    safe_print(_('      ⚠️  No valid Python executable found in this directory.'))
+            # ✅ END of for loop - now process results
+
+            # === STEP 4: Merge native and managed interpreters ===
+            all_interpreters = {**native_interpreters, **interpreters}
             
-            # Pass 2: If shallow search fails, perform a deeper, recursive search
-            if not found_exe_path:
-                safe_print(_('      -> Standard search failed, trying deep scan for executables...'))
-                all_candidates = list(interp_dir.rglob('python.exe' if platform.system() == 'Windows' else 'python*'))
-                sorted_candidates = sorted(all_candidates, key=lambda p: len(p.parts))
-
-                for candidate in sorted_candidates:
-                    if any(part in candidate.parts for part in ['Tools', 'Doc', 'include', 'tcl']):
-                        continue
-                    
-                    if candidate.is_file() and os.access(candidate, os.X_OK):
-                        version_tuple = self._verify_python_version(str(candidate))
-                        if version_tuple:
-                            found_exe_path = candidate
-                            break
-
-            if found_exe_path:
-                version_tuple = self._verify_python_version(str(found_exe_path))
-                if version_tuple:
-                    version_str = f'{version_tuple[0]}.{version_tuple[1]}'
-                    safe_print(_('      ✅ Found valid executable: {}').format(found_exe_path))
-                    interpreters[version_str] = str(found_exe_path)
+            # Determine primary version (prefer native if it exists, otherwise latest managed)
+            if native_interpreters:
+                primary_version = sorted(native_interpreters.keys(), reverse=True)[0]
+            elif interpreters:
+                primary_version = sorted(interpreters.keys(), reverse=True)[0]
             else:
-                safe_print(_('      ⚠️  No valid Python executable found in this directory.'))
-
-        # === STEP 4: Merge native and managed interpreters ===
-        all_interpreters = {**native_interpreters, **interpreters}
-        
-        # Determine primary version (prefer native if it exists, otherwise latest managed)
-        if native_interpreters:
-            primary_version = sorted(native_interpreters.keys(), reverse=True)[0]
-        elif interpreters:
-            primary_version = sorted(interpreters.keys(), reverse=True)[0]
-        else:
-            primary_version = None
-        
-        # === STEP 5: Write the registry (ATOMICALLY) ===
-        registry_data = {
-            'primary_version': primary_version,
-            'interpreters': all_interpreters,
-            'last_updated': datetime.now().isoformat()
-        }
-
-        # Write to a temp file first, then atomic rename (prevents partial writes)
-        import tempfile
-        temp_fd, temp_path = tempfile.mkstemp(dir=registry_path.parent, suffix='.json')
-        try:
-            with os.fdopen(temp_fd, 'w') as f:
-                json.dump(registry_data, f, indent=4)
+                primary_version = None
             
-            # Atomic rename (ensures registry.json is never corrupt)
-            os.replace(temp_path, registry_path)
+            # === STEP 5: Write the registry (ATOMICALLY) ===
+            registry_data = {
+                'primary_version': primary_version,
+                'interpreters': all_interpreters,
+                'last_updated': datetime.now().isoformat()
+            }
+
+            # Write to a temp file first, then atomic rename (prevents partial writes)
+            import tempfile
+            temp_fd, temp_path = tempfile.mkstemp(dir=registry_path.parent, suffix='.json')
+            try:
+                with os.fdopen(temp_fd, 'w') as f:
+                    json.dump(registry_data, f, indent=4)
+                
+                # Atomic rename (ensures registry.json is never corrupt)
+                os.replace(temp_path, registry_path)
+                
+                safe_print("   💾 Registry saved atomically")
+            except Exception as e:
+                safe_print(f"   ❌ Failed to write registry: {e}")
+                if os.path.exists(temp_path):
+                    os.unlink(temp_path)
+                raise
             
-            safe_print("   💾 Registry saved atomically")
-        except Exception as e:
-            safe_print(f"   ❌ Failed to write registry: {e}")
-            if os.path.exists(temp_path):
-                os.unlink(temp_path)
-            raise
-        
-        if all_interpreters:
-            safe_print(_('   ✅ Registered {} Python interpreters (native + managed).').format(len(all_interpreters)))
-            for version, path in sorted(all_interpreters.items()):
-                marker = ' (native)' if version in native_interpreters else ' (managed)'
-                safe_print(_('      - Python {}: {}{}').format(version, path, marker))
-        else:
-            safe_print(_('   ⚠️  No Python interpreters were found or could be registered.'))
-        
-        safe_print("   🔓 Released registry write lock")
+            if all_interpreters:
+                safe_print(_('   ✅ Registered {} Python interpreters (native + managed).').format(len(all_interpreters)))
+                for version, path in sorted(all_interpreters.items()):
+                    marker = ' (native)' if version in native_interpreters else ' (managed)'
+                    safe_print(_('      - Python {}: {}{}').format(version, path, marker))
+            else:
+                safe_print(_('   ⚠️  No Python interpreters were found or could be registered.'))
+            
+            safe_print("   🔓 Released registry write lock")
 
     def _find_existing_python311(self) -> Optional[Path]:
         """Checks if a managed Python 3.11 interpreter already exists."""
@@ -6607,53 +6609,60 @@ class omnipkg:
         """
         Safely adopts a Python version by checking the registry, then trying to copy
         from the local system, and finally falling back to download.
-        A rescan is forced after any successful filesystem change to ensure registration.
         """
         safe_print(_('🐍 Attempting to adopt Python {} into the environment...').format(version))
         managed_interpreters = self.interpreter_manager.list_available_interpreters()
+        
         if version in managed_interpreters:
             safe_print(_('   - ✅ Python {} is already adopted and managed.').format(version))
             return 0
+        
         discovered_pythons = self.config_manager.list_available_pythons()
         source_path_str = discovered_pythons.get(version)
+        
         if not source_path_str:
             safe_print(_('   - No local Python {} found. Falling back to download strategy.').format(version))
-            result = self._fallback_to_download(version)
-            if result == 0:
-                safe_print(_('🔧 Forcing rescan to register the new interpreter...'))
-                self.rescan_interpreters()
-            return result
+            # ✅ No rescan needed - download already registers
+            return self._fallback_to_download(version)
+        
         source_exe_path = Path(source_path_str)
+        
         try:
             cmd = [str(source_exe_path), '-c', 'import sys; print(sys.prefix)']
             cmd_result = subprocess.run(cmd, capture_output=True, text=True, check=True, timeout=10)
             source_root = Path(os.path.realpath(cmd_result.stdout.strip()))
             current_venv_root = self.config_manager.venv_path.resolve()
-            if self._is_same_or_child_path(source_root, current_venv_root) or not self._is_valid_python_installation(source_root, source_exe_path) or self._estimate_directory_size(source_root) > 2 * 1024 * 1024 * 1024 or self._is_system_critical_path(source_root):
+            
+            if (self._is_same_or_child_path(source_root, current_venv_root) or 
+                not self._is_valid_python_installation(source_root, source_exe_path) or 
+                self._estimate_directory_size(source_root) > 2 * 1024 * 1024 * 1024 or 
+                self._is_system_critical_path(source_root)):
+                
                 safe_print(_('   - ⚠️  Safety checks failed for local copy. Falling back to download.'))
-                result = self._fallback_to_download(version)
-                if result == 0:
-                    safe_print(_('🔧 Forcing rescan to register the downloaded interpreter...'))
-                    self.rescan_interpreters()
-                return result
+                # ✅ No rescan needed - download already registers
+                return self._fallback_to_download(version)
+            
             dest_root = self.config_manager.venv_path / '.omnipkg' / 'interpreters' / f'cpython-{version}'
+            
             if dest_root.exists():
-                safe_print(_('   - ✅ Adopted copy of Python {} already exists. Ensuring it is registered.').format(version))
-                self.rescan_interpreters()
+                safe_print(_('   - ✅ Adopted copy of Python {} already exists.').format(version))
+                # ✅ No rescan needed - it will be found on next registry read (cache refresh)
                 return 0
+            
             safe_print(_('   - Starting safe copy operation...'))
             result = self._perform_safe_copy(source_root, dest_root, version)
+            
             if result == 0:
+                # ✅ ONLY THIS RESCAN IS NEEDED - copy doesn't auto-register
                 safe_print(_('🔧 Forcing rescan to register the copied interpreter...'))
                 self.rescan_interpreters()
+            
             return result
+            
         except Exception as e:
             safe_print(_('   - ❌ An error occurred during the copy attempt: {}. Falling back to download.').format(e))
-            result = self._fallback_to_download(version)
-            if result == 0:
-                safe_print(_('🔧 Forcing rescan to register the downloaded interpreter...'))
-                self.rescan_interpreters()
-            return result
+            # ✅ No rescan needed - download already registers
+            return self._fallback_to_download(version)
 
     def _is_interpreter_directory_valid(self, path: Path) -> bool:
         """
