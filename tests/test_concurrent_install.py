@@ -149,8 +149,8 @@ def run_and_stream_install(cmd_args: List[str], description: str, cmd_name: str,
     start_time = time.perf_counter()
     
     # Handle both Python interpreter calls and direct command calls (like 'omnipkg')
-    if cmd_name.endswith(('python', 'python3', 'python3.9', 'python3.10', 'python3.11', 'python3.12')):
-        cmd = [cmd_name, '-m', 'omnipkg.cli'] + cmd_args
+    if cmd_name.endswith(('python', 'python.exe', 'python3', 'python3.9', 'python3.10', 'python3.11', 'python3.12')):
+        cmd = [cmd_name, '-m', 'omnipkg'] + cmd_args
     else:
         # Direct command call (e.g., 'omnipkg')
         cmd = [cmd_name] + cmd_args
@@ -239,8 +239,12 @@ def prepare_and_test_dimension(config: Tuple[str, str], omnipkg_instance: omnipk
             else:
                 thread_safe_print(f'{prefix} 📦 INSTALLING: rich=={rich_version} for Python {py_version}')
                 # CRITICAL CHANGE: We call the specific python_exe, not the generic 'omnipkg' command.
-                if cmd_name.endswith(('python', 'python.exe', 'python3', 'python3.9', 'python3.10', 'python3.11', 'python3.12')):
-                    cmd = [cmd_name, '-m', 'omnipkg'] + cmd_args  # Remove .cli
+                returncode, install_duration = run_and_stream_install(
+                    ['install', f'rich=={rich_version}'],
+                    f"Installing rich=={rich_version}",
+                    python_exe,  # Pass the full Python path
+                    thread_id
+                )
                 if returncode != 0:
                     raise RuntimeError(f"Failed to install rich=={rich_version} for Python {py_version}")
             timings['install_end'] = time.perf_counter()
