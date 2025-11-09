@@ -4295,10 +4295,13 @@ class omnipkg:
         
         for py_ver, exe_path in all_interpreters.items():
             try:
-                # === SKIP THE NATIVE INTERPRETER ===
                 exe_path_obj = Path(exe_path).resolve()
-                if exe_path_obj == native_exe:
+                
+                # === SKIP THE NATIVE INTERPRETER (cross-platform) ===
+                # Use resolve() + comparison to handle case sensitivity on Windows
+                if exe_path_obj.resolve() == native_exe.resolve():
                     continue  # Native is handled separately
+
                 
                 # === DERIVE site-packages FROM INTERPRETER PATH ===
                 # Pattern: /path/to/interpreter/bin/python -> /path/to/interpreter/lib/pythonX.Y/site-packages
