@@ -177,8 +177,20 @@ jobs:
         
       - name: Final Status Check
         run: |
+          Write-Host "=== Final omnipkg status ==="
+          $originalPython = "C:\hostedtoolcache\windows\Python\3.10.11\x64\python.exe"
+          & $originalPython -m omnipkg.cli status
+        shell: pwsh
+        if: runner.os == 'Windows'
+        env:
+          PYTHONUTF8: "1"
+        continue-on-error: true
+      
+      - name: Final Status Check (Linux/macOS)
+        run: |
           echo "=== Final omnipkg status ==="
           omnipkg status || echo "Status check completed with issues, but that may be expected"
+        if: runner.os != 'Windows'
         env:
           PYTHONUTF8: "1"
         continue-on-error: true
