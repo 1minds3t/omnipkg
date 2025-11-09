@@ -43,7 +43,6 @@ def run_omnipkg_cli(python_exe: str, args: list, thread_id: int) -> tuple[int, s
     status = "✅" if result.returncode == 0 else "❌"
     safe_print(f"{prefix} {status} {' '.join(args[:3])} ({format_duration(duration_ms)})")
     
-    # *** THIS IS THE FIX: Show STDOUT on failure, because that's where the error is. ***
     if result.returncode != 0:
         if result.stdout:
             safe_print(f"{prefix} STDOUT:\n{result.stdout.strip()}")
@@ -51,6 +50,32 @@ def run_omnipkg_cli(python_exe: str, args: list, thread_id: int) -> tuple[int, s
             safe_print(f"{prefix} STDERR:\n{result.stderr.strip()}")
     
     return result.returncode, result.stdout, duration_ms
+
+def verify_registry_contains(version: str, max_attempts: int = 5, delay: float = 0.5) -> bool:
+    """
+    Verify that the registry actually contains the specified Python version.
+    This is critical to ensure adoption completed properly before proceeding.
+    """
+    for attempt in range(max_attempts):
+        try:
+            result = subprocess.run(
+                ['omnipkg', 'info', 'python'],
+                capture_output=True,
+                text=True,
+                check=True
+            )
+            
+            for line in result.stdout.splitlines():
+                if f'Python {version}:' in line:
+                    return True
+            
+            if attempt < max_attempts - 1:
+                time.sleep(delay)
+        except subprocess.CalledProcessError:
+            if attempt < max_attempts - 1:
+                time.sleep(delay)
+    
+    return False
 
 def get_interpreter_path(version: str) -> str:
     """Get interpreter path from omnipkg."""
@@ -71,14 +96,31 @@ def get_interpreter_path(version: str) -> str:
     raise RuntimeError(f"Python {version} not found")
 
 def adopt_if_needed(version: str, thread_id: int) -> bool:
-    """Adopt Python version if not already present."""
+    """
+    Adopt Python version if not already present.
+    CRITICAL: Use a lock and verify registry after adoption to prevent race conditions.
+    """
     prefix = f"[T{thread_id}|Adopt]"
     
+    # Check if already exists (without lock, fast path)
     try:
         path = get_interpreter_path(version)
-        safe_print(f"{prefix} ✅ Python {version} at {path}")
+        safe_print(f"{prefix} ✅ Python {version} already available at {path}")
         return True
     except RuntimeError:
+        pass
+    
+    # Need to adopt - use lock to prevent concurrent adoptions from interfering
+    with omnipkg_lock:
+        # Double-check after acquiring lock (another thread might have adopted it)
+        try:
+            path = get_interpreter_path(version)
+            safe_print(f"{prefix} ✅ Python {version} at {path} (adopted by another thread)")
+            return True
+        except RuntimeError:
+            pass
+        
+        # Actually perform adoption
         safe_print(f"{prefix} 🚀 Adopting Python {version}...")
         result = subprocess.run(
             ['omnipkg', 'python', 'adopt', version],
@@ -86,18 +128,32 @@ def adopt_if_needed(version: str, thread_id: int) -> bool:
             text=True
         )
         
-        if result.returncode == 0:
-            safe_print(f"{prefix} ✅ Adopted Python {version}")
-            # Force registry reload by checking again
-            try:
-                get_interpreter_path(version)
-            except:
-                safe_print(f"{prefix} ⚠️  Warning: Adoption succeeded but interpreter not found in registry")
-            return True
-        else:
+        if result.returncode != 0:
             safe_print(f"{prefix} ❌ Adoption failed")
-            safe_print(f"{prefix} {result.stderr}")
+            safe_print(f"{prefix} STDOUT: {result.stdout}")
+            safe_print(f"{prefix} STDERR: {result.stderr}")
             return False
+        
+        # CRITICAL: Verify the adoption actually completed and registry was updated
+        safe_print(f"{prefix} 🔍 Verifying registry contains Python {version}...")
+        if not verify_registry_contains(version, max_attempts=10, delay=0.5):
+            safe_print(f"{prefix} ❌ Adoption succeeded but interpreter not in registry after 5 seconds")
+            safe_print(f"{prefix} 🔄 Attempting manual registry refresh...")
+            
+            # Try to manually trigger a registry refresh
+            subprocess.run(
+                ['omnipkg', 'info', 'python'],
+                capture_output=True,
+                text=True
+            )
+            
+            # Check one more time
+            if not verify_registry_contains(version, max_attempts=2, delay=0.5):
+                safe_print(f"{prefix} ❌ Registry verification failed")
+                return False
+        
+        safe_print(f"{prefix} ✅ Adopted and verified Python {version}")
+        return True
 
 def test_dimension(config: tuple, thread_id: int, skip_swap: bool = False) -> dict:
     """Test one Python+Rich combination."""
@@ -134,9 +190,8 @@ def test_dimension(config: tuple, thread_id: int, skip_swap: bool = False) -> di
             swap_time = 0
             if not skip_swap:
                 safe_print(f"{prefix} 🔄 Swapping to Python {py_version}")
-                # Use the HOST Python 3.11 for swap command (cleaner)
-                swap_code, _, _, swap_time = run_omnipkg_cli(
-                    sys.executable,  # Use current Python (3.11)
+                swap_code, _, swap_time = run_omnipkg_cli(
+                    sys.executable,
                     ['swap', 'python', py_version],
                     thread_id
                 )
@@ -146,8 +201,8 @@ def test_dimension(config: tuple, thread_id: int, skip_swap: bool = False) -> di
             
             # STEP 2: Install using TARGET Python
             safe_print(f"{prefix} 📦 Installing rich=={rich_version}")
-            install_code, _, _, install_time = run_omnipkg_cli(
-                python_exe,  # Use TARGET Python for install
+            install_code, _, install_time = run_omnipkg_cli(
+                python_exe,
                 ['install', f'rich=={rich_version}'],
                 thread_id
             )
@@ -168,11 +223,9 @@ import json
 import traceback
 
 try:
-    # Show which Python is actually running this test
     python_path = sys.executable
     python_version = sys.version.split()[0]
     
-    # Re-load config and use loader
     from omnipkg.core import ConfigManager
     config_manager = ConfigManager(suppress_init_messages=True)
     
@@ -316,8 +369,9 @@ def main():
         ('3.11', '13.7.1')
     ]
     
-    # Phase 1: Adopt all interpreters
-    safe_print("\n📥 Phase 1: Adopting interpreters...")
+    # Phase 1: Adopt all interpreters SEQUENTIALLY with verification
+    # This prevents registry corruption from concurrent adoptions
+    safe_print("\n📥 Phase 1: Adopting interpreters (sequential for safety)...")
     for version, _ in test_configs:
         if not adopt_if_needed(version, 0):
             safe_print(f"❌ Failed to adopt Python {version}")

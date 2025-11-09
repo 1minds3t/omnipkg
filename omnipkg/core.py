@@ -632,7 +632,6 @@ class ConfigManager:
 
         self._register_all_interpreters(self.venv_path)
 
-
     def _register_all_interpreters(self, venv_path: Path):
         """
         FIXED: Discovers and registers ONLY the Python interpreters that are explicitly
