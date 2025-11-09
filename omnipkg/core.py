@@ -634,85 +634,90 @@ class ConfigManager:
 
     def _register_all_interpreters(self, venv_path: Path):
         """
-        FIXED: Discovers and registers ONLY the Python interpreters that are explicitly
-        managed within the .omnipkg/interpreters directory, while PRESERVING native
-        interpreter entries that were registered during first-time setup.
+        THREAD-SAFE: Uses InterpreterManager's lock to prevent concurrent registry corruption.
         """
         safe_print(_('🔧 Registering all managed Python interpreters...'))
         managed_interpreters_dir = venv_path / '.omnipkg' / 'interpreters'
         managed_interpreters_dir.mkdir(parents=True, exist_ok=True)
         registry_path = managed_interpreters_dir / 'registry.json'
         
-        # === CRITICAL FIX: Load existing registry and preserve native entries ===
-        existing_registry = {}
-        native_interpreters = {}
+        # === CRITICAL: Acquire the lock before ANY registry operations ===
+        from omnipkg.interpreter_manager import InterpreterManager  # Avoid circular import
         
-        if registry_path.exists():
-            try:
-                with open(registry_path, 'r') as f:
-                    existing_registry = json.load(f)
-                    
-                # Extract and preserve native interpreter entries (ones without a directory)
-                for version, path_str in existing_registry.get('interpreters', {}).items():
-                    path = Path(path_str)
-                    # If the path is NOT inside .omnipkg/interpreters/, it's native
-                    if not str(path).startswith(str(managed_interpreters_dir)):
-                        if path.exists():  # Only preserve if still exists
-                            native_interpreters[version] = path_str
-                            safe_print(_('   ℹ️  Preserving native Python {}: {}').format(version, path_str))
-                        else:
-                            safe_print(_('   ⚠️  Native Python {} no longer exists, removing from registry').format(version))
-            except (json.JSONDecodeError, IOError) as e:
-                safe_print(_('   ⚠️  Could not load existing registry: {}').format(e))
-        
-        # === SAFETY CHECK: Auto-preserve current Python if no native found ===
-        if not native_interpreters:
+        with InterpreterManager._registry_write_lock:
+            safe_print("   🔒 Acquired registry write lock")
+            
+            # === STEP 1: Load existing registry and preserve native entries ===
+            existing_registry = {}
+            native_interpreters = {}
+            
+            if registry_path.exists():
+                try:
+                    with open(registry_path, 'r') as f:
+                        existing_registry = json.load(f)
+                        
+                    # Extract and preserve native interpreter entries
+                    for version, path_str in existing_registry.get('interpreters', {}).items():
+                        path = Path(path_str)
+                        # If the path is NOT inside .omnipkg/interpreters/, it's native
+                        if not str(path).startswith(str(managed_interpreters_dir)):
+                            if path.exists():  # Only preserve if still exists
+                                native_interpreters[version] = path_str
+                                safe_print(_('   ℹ️  Preserving native Python {}: {}').format(version, path_str))
+                            else:
+                                safe_print(_('   ⚠️  Native Python {} no longer exists, removing from registry').format(version))
+                except (json.JSONDecodeError, IOError) as e:
+                    safe_print(_('   ⚠️  Could not load existing registry: {}').format(e))
+            
+            # === STEP 2: Auto-preserve current Python if no native found ===
+            if not native_interpreters:
+                current_version = f'{sys.version_info.major}.{sys.version_info.minor}'
+                current_exe = sys.executable
+                # Only add if it's truly not in managed directory
+                if not str(current_exe).startswith(str(managed_interpreters_dir)):
+                    native_interpreters[current_version] = current_exe
+                    safe_print(_('   ℹ️  Auto-preserving current Python {}: {}').format(current_version, current_exe))
+            
+            # === STEP 3: Scan for managed interpreters ===
+            interpreters = {}
+
+            if not managed_interpreters_dir.is_dir():
+                safe_print(_('   ⚠️  Managed interpreters directory not found.'))
+                # Still save native interpreters even if no managed ones exist
+                if native_interpreters:
+                    registry_data = {
+                        'primary_version': list(native_interpreters.keys())[0] if native_interpreters else None,
+                        'interpreters': native_interpreters,
+                        'last_updated': datetime.now().isoformat()
+                    }
+                    with open(registry_path, 'w') as f:
+                        json.dump(registry_data, f, indent=4)
+                safe_print("   🔓 Released registry write lock")
+                return
+
+            # CLEANUP: Remove the bad native symlink if it exists
             current_version = f'{sys.version_info.major}.{sys.version_info.minor}'
-            current_exe = sys.executable
-            # Only add if it's truly not in managed directory
-            if not str(current_exe).startswith(str(managed_interpreters_dir)):
-                native_interpreters[current_version] = current_exe
-                safe_print(_('   ℹ️  Auto-preserving current Python {}: {}').format(current_version, current_exe))
-        # === END FIX ===
-        
-        interpreters = {}
+            bad_symlink = managed_interpreters_dir / f'cpython-{current_version}-venv-native'
+            if bad_symlink.exists():
+                safe_print(_('   - Removing legacy native symlink...'))
+                if bad_symlink.is_symlink():
+                    bad_symlink.unlink()
+                else:
+                    import shutil
+                    shutil.rmtree(bad_symlink, ignore_errors=True)
+                safe_print(_('   - ✅ Legacy symlink removed'))
 
-        if not managed_interpreters_dir.is_dir():
-            safe_print(_('   ⚠️  Managed interpreters directory not found.'))
-            # Still save native interpreters even if no managed ones exist
-            if native_interpreters:
-                registry_data = {
-                    'primary_version': list(native_interpreters.keys())[0] if native_interpreters else None,
-                    'interpreters': native_interpreters,
-                    'last_updated': datetime.now().isoformat()
-                }
-                with open(registry_path, 'w') as f:
-                    json.dump(registry_data, f, indent=4)
-            return
-
-        # CLEANUP: Remove the bad native symlink if it exists
-        current_version = f'{sys.version_info.major}.{sys.version_info.minor}'
-        bad_symlink = managed_interpreters_dir / f'cpython-{current_version}-venv-native'
-        if bad_symlink.exists():
-            safe_print(_('   - Removing legacy native symlink...'))
-            if bad_symlink.is_symlink():
-                bad_symlink.unlink()
-            else:
-                import shutil
-                shutil.rmtree(bad_symlink, ignore_errors=True)
-            safe_print(_('   - ✅ Legacy symlink removed'))
-
-        # Scan for managed interpreters (downloaded ones)
-        for interp_dir in managed_interpreters_dir.iterdir():
-            if not (interp_dir.is_dir() or interp_dir.is_symlink()):
-                continue
-            
-            # Skip the bad native symlink if it somehow still exists
-            if interp_dir.name == f'cpython-{current_version}-venv-native':
-                continue
-            
-            safe_print(_('   -> Scanning directory: {}').format(interp_dir.name))
-            found_exe_path = None
+            # Scan for managed interpreters (downloaded ones)
+            for interp_dir in managed_interpreters_dir.iterdir():
+                if not (interp_dir.is_dir() or interp_dir.is_symlink()):
+                    continue
+                
+                # Skip the bad native symlink if it somehow still exists
+                if interp_dir.name == f'cpython-{current_version}-venv-native':
+                    continue
+                
+                safe_print(_('   -> Scanning directory: {}').format(interp_dir.name))
+                found_exe_path = None
             
             # Pass 1: Fast, shallow search for standard layouts (Linux, macOS)
             search_locations = [interp_dir / 'bin', interp_dir / 'Scripts']
@@ -757,9 +762,8 @@ class ConfigManager:
             else:
                 safe_print(_('      ⚠️  No valid Python executable found in this directory.'))
 
-        # === CRITICAL FIX: Merge native and managed interpreters ===
+        # === STEP 4: Merge native and managed interpreters ===
         all_interpreters = {**native_interpreters, **interpreters}
-        # === END FIX ===
         
         # Determine primary version (prefer native if it exists, otherwise latest managed)
         if native_interpreters:
@@ -769,14 +773,29 @@ class ConfigManager:
         else:
             primary_version = None
         
+        # === STEP 5: Write the registry (ATOMICALLY) ===
         registry_data = {
             'primary_version': primary_version,
-            'interpreters': all_interpreters,  # ← Now includes both native and managed!
+            'interpreters': all_interpreters,
             'last_updated': datetime.now().isoformat()
         }
 
-        with open(registry_path, 'w') as f:
-            json.dump(registry_data, f, indent=4)
+        # Write to a temp file first, then atomic rename (prevents partial writes)
+        import tempfile
+        temp_fd, temp_path = tempfile.mkstemp(dir=registry_path.parent, suffix='.json')
+        try:
+            with os.fdopen(temp_fd, 'w') as f:
+                json.dump(registry_data, f, indent=4)
+            
+            # Atomic rename (ensures registry.json is never corrupt)
+            os.replace(temp_path, registry_path)
+            
+            safe_print("   💾 Registry saved atomically")
+        except Exception as e:
+            safe_print(f"   ❌ Failed to write registry: {e}")
+            if os.path.exists(temp_path):
+                os.unlink(temp_path)
+            raise
         
         if all_interpreters:
             safe_print(_('   ✅ Registered {} Python interpreters (native + managed).').format(len(all_interpreters)))
@@ -785,6 +804,8 @@ class ConfigManager:
                 safe_print(_('      - Python {}: {}{}').format(version, path, marker))
         else:
             safe_print(_('   ⚠️  No Python interpreters were found or could be registered.'))
+        
+        safe_print("   🔓 Released registry write lock")
 
     def _find_existing_python311(self) -> Optional[Path]:
         """Checks if a managed Python 3.11 interpreter already exists."""
@@ -2176,6 +2197,9 @@ class InterpreterManager:
     Provides methods to switch between interpreters and run commands with specific versions.
     """
 
+    # CLASS-LEVEL LOCK (shared across all instances)
+    _registry_write_lock = threading.Lock()
+
     def __init__(self, config_manager: ConfigManager):
         self.config_manager = config_manager
         self.venv_path = config_manager.venv_path
@@ -2193,6 +2217,7 @@ class InterpreterManager:
         """
         Returns a dict of version -> path for all available interpreters.
         Now uses an in-memory cache that can be refreshed.
+        THREAD-SAFE for reads (cache prevents unnecessary disk I/O).
         """
         # Return from cache if it's already loaded
         if self._registry_cache is not None:
@@ -2204,8 +2229,10 @@ class InterpreterManager:
             return {}
         
         try:
-            with open(registry_path, 'r') as f:
-                registry = json.load(f)
+            # ACQUIRE LOCK BEFORE READING (to prevent reading during a write)
+            with self._registry_write_lock:
+                with open(registry_path, 'r') as f:
+                    registry = json.load(f)
             
             interpreters = {}
             for version, path_str in registry.get('interpreters', {}).items():
@@ -2216,9 +2243,11 @@ class InterpreterManager:
             # Load into cache
             self._registry_cache = interpreters
             return interpreters
-        except Exception:
+        except Exception as e:
+            safe_print(f"   ⚠️ Failed to read registry: {e}")
             self._registry_cache = {}
             return {}
+
 
     def run_with_interpreter(self, version: str, cmd: List[str]) -> subprocess.CompletedProcess:
         """Run a command with a specific Python interpreter version."""
