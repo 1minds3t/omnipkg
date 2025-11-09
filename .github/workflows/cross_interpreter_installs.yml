@@ -34,6 +34,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -e . redis
+
       - name: Configure omnipkg and Establish Authoritative ENV_ID
         id: setup_omnipkg
         run: |
@@ -61,6 +62,7 @@ jobs:
           with open(os.environ['GITHUB_ENV'], 'a') as f:
               f.write(f"OMNIPKG_ENV_ID_OVERRIDE={main_env_id}\n")
           EOF
+
       - name: Adopt and Switch to Python 3.14
         env:
           OMNIPKG_ENV_ID_OVERRIDE: ${{ env.OMNIPKG_ENV_ID_OVERRIDE }}
@@ -96,6 +98,7 @@ jobs:
             echo "⚠️  Could not verify from info output, but swap command succeeded"
             echo "Proceeding with test..."
           fi
+
       - name: Attempt to Install TensorFlow (Should Auto-Adopt 3.13 + Auto-Switch)
         env:
           OMNIPKG_ENV_ID_OVERRIDE: ${{ env.OMNIPKG_ENV_ID_OVERRIDE }}
@@ -140,6 +143,7 @@ jobs:
           else
             echo "⚠️  Installation may not have completed fully"
           fi
+
       - name: Verify Final State
         env:
           OMNIPKG_ENV_ID_OVERRIDE: ${{ env.OMNIPKG_ENV_ID_OVERRIDE }}
@@ -172,6 +176,7 @@ jobs:
           echo '```' >> $GITHUB_STEP_SUMMARY
           cat /tmp/omnipkg-artifacts/tensorflow_info.txt >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
+
       - name: Test TensorFlow Import
         env:
           OMNIPKG_ENV_ID_OVERRIDE: ${{ env.OMNIPKG_ENV_ID_OVERRIDE }}
@@ -193,6 +198,7 @@ jobs:
             echo "⚠️  Could not find Python 3.13 executable"
             exit 1
           fi
+
       - name: Generate Test Summary
         if: always()
         run: |
@@ -212,6 +218,7 @@ jobs:
           echo "- ✅ **Auto-switched from 3.14 → 3.13** (zero user intervention!)" >> $GITHUB_STEP_SUMMARY
           echo "- ✅ TensorFlow installed without any manual steps" >> $GITHUB_STEP_SUMMARY
           echo "- ✅ TensorFlow imports successfully" >> $GITHUB_STEP_SUMMARY
+
       - name: Archive Test Outputs
         if: always()
         uses: actions/upload-artifact@v4
