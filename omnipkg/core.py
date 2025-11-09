@@ -4919,12 +4919,12 @@ class omnipkg:
             safe_print(f"   -> 🔍 Found {len(instances_to_rebuild)} new/changed instance(s) that need to be registered.")
         if ghost_paths:
             safe_print(f"   -> 👻 Found {len(ghost_paths)} ghost instance(s) in the KB that no longer exist on disk.")
-            safe_print("    -> DEBUG: Analyzing first 5 ghosts to be deleted...")
+            #safe_print("    -> DEBUG: Analyzing first 5 ghosts to be deleted...")
             for i, path in enumerate(list(ghost_paths)[:5]):
                 key = kb_path_map.get(path, '(unknown key)')
-                safe_print(f"      - GHOST {i+1}:")
-                safe_print(f"          Path in KB: {path}")
-                safe_print(f"          Key in KB:  {key}")
+               #safe_print(f"      - GHOST {i+1}:")
+                #safe_print(f"          Path in KB: {path}")
+                #safe_print(f"          Key in KB:  {key}")
 
         # --- Healing Actions ---
         if instances_to_rebuild:
