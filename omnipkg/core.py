@@ -1919,7 +1919,44 @@ class ConfigManager:
         major_minor_micro = f'{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}'
         
         if platform.system() == 'Windows':
-            # --- WINDOWS-SPECIFIC LOGIC: Use %LOCALAPPDATA% for short paths ---
+        # --- WINDOWS-SPECIFIC LOGIC ---
+        
+        # Check if the current Python is already in a managed/isolated location
+        # (like GitHub Actions hosted runners, or already managed by omnipkg)
+        is_already_managed = (
+            'hostedtoolcache' in str(native_python_exe).lower() or  # GitHub Actions
+            'omnipkg' in str(native_python_exe).lower() or          # Already managed
+            'AppData\\Local\\Programs' in str(native_python_exe) or # User installation
+            str(native_python_exe).startswith(str(self.venv_path))  # Already in venv
+        )
+        
+        if is_already_managed:
+            safe_print(_('   - Python is already in a managed location, using directly'))
+            safe_print(_('   - ✅ Using: {}').format(native_python_exe))
+            
+            # Just register it without copying
+            managed_interpreters_dir = self.venv_path / '.omnipkg' / 'interpreters'
+            managed_interpreters_dir.mkdir(parents=True, exist_ok=True)
+            
+            registry_path = managed_interpreters_dir / 'registry.json'
+            registry_data = {'interpreters': {}}
+            if registry_path.exists():
+                try:
+                    with open(registry_path, 'r') as f:
+                        registry_data = json.load(f)
+                except (json.JSONDecodeError, IOError):
+                    pass
+            
+            # Register the native path
+            registry_data['interpreters'][native_version] = str(native_python_exe)
+            
+            with open(registry_path, 'w') as f:
+                json.dump(registry_data, f, indent=4)
+            
+            safe_print(_('   - ✅ Registered Python {} without copying').format(native_version))
+            
+        else:
+            # Only create managed copy for system Python in problematic locations
             safe_print(_('   - Setting up managed Python interpreter for Windows...'))
             
             # Use a short, stable path to avoid MAX_PATH issues
