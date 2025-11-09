@@ -332,22 +332,34 @@ class ConfigManager:
         override = os.environ.get('OMNIPKG_VENV_ROOT')
         if override:
             return Path(override)
+
         current_executable = Path(sys.executable).resolve()
+
+        # Check common environment variables first, but validate them
         venv_path_str = os.environ.get('VIRTUAL_ENV')
         if venv_path_str:
             venv_path = Path(venv_path_str).resolve()
+            # CRITICAL: Ensure the current running python is INSIDE this VIRTUAL_ENV
             if str(current_executable).startswith(str(venv_path)):
                 return venv_path
+
         conda_prefix_str = os.environ.get('CONDA_PREFIX')
         if conda_prefix_str:
             conda_path = Path(conda_prefix_str).resolve()
             if str(current_executable).startswith(str(conda_path)):
                 return conda_path
+
+        # --- THIS IS THE AUTHORITATIVE FIX ---
+        # The most reliable method: search upwards from the current executable for pyvenv.cfg
+        # This works regardless of which swapped interpreter is active.
         search_dir = current_executable.parent
-        while search_dir != search_dir.parent:
+        while search_dir != search_dir.parent: # Stop at the filesystem root
             if (search_dir / 'pyvenv.cfg').exists():
                 return search_dir
             search_dir = search_dir.parent
+        # --- END OF FIX ---
+
+        # Only use sys.prefix as a last resort if all else fails.
         return Path(sys.prefix)
 
     def _reset_setup_flag_on_disk(self):
