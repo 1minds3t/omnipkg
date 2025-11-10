@@ -4272,7 +4272,9 @@ class omnipkg:
 
     def _check_sync_status_ultra_fast(self, master_version: str) -> List[Tuple[str, str]]:
         """
-        Path-based sync checking using registry to identify native interpreter.
+        CORRECTED path-based sync checking - derives site-packages from interpreter location.
+        This handles standalone Python builds correctly!
+        Excludes the native interpreter from the sync list (it's handled separately).
         """
         sync_needed = []
         
@@ -4280,27 +4282,12 @@ class omnipkg:
         interpreter_manager = InterpreterManager(self.config_manager)
         all_interpreters = interpreter_manager.list_available_interpreters()
         
-        # === USE REGISTRY TO IDENTIFY NATIVE INTERPRETER ===
-        registry_path = (self.config_manager.venv_path / '.omnipkg' / 'interpreters' / 'registry.json')
-        native_versions = set()
-        
-        if registry_path.exists():
-            try:
-                with open(registry_path, 'r') as f:
-                    registry = json.load(f)
-                    managed_dir = str(self.config_manager.venv_path / '.omnipkg' / 'interpreters')
-                    
-                    # Native interpreters are those NOT in .omnipkg/interpreters/
-                    for version, path_str in registry.get('interpreters', {}).items():
-                        if not str(path_str).startswith(managed_dir):
-                            native_versions.add(version)
-                            if '--verbose' in sys.argv or '-V' in sys.argv:
-                                safe_print(f"   🔍 [Sync Check] Native interpreter: {path_str}")
-            except (json.JSONDecodeError, IOError):
-                pass
-        
-        if '--verbose' in sys.argv or '-V' in sys.argv:
-            safe_print(f"   🔍 [Sync Check] Skipping native interpreter: Python {', '.join(native_versions)}")
+        # Determine native interpreter to exclude it
+        if platform.system() == 'Windows':
+            native_exe = self.config_manager.venv_path / 'Scripts' / 'python.exe'
+        else:
+            native_exe = self.config_manager.venv_path / 'bin' / 'python'
+        native_exe = native_exe.resolve()
         
         # Pre-compute expected dist-info names
         expected_dist_info = f"omnipkg-{master_version}.dist-info"
@@ -4308,14 +4295,10 @@ class omnipkg:
         
         for py_ver, exe_path in all_interpreters.items():
             try:
-                # === SKIP NATIVE INTERPRETERS ===
-                if py_ver in native_versions:
-                    if '--verbose' in sys.argv or '-V' in sys.argv:
-                        safe_print(f"   🔍 [Sync Check] Skipping native interpreter: Python {py_ver} at {exe_path}")
-                    continue
-                
-            # [REST OF THE FUNCTION UNCHANGED - keep all the site-packages checking logic]
-                      # Native is handled separately
+                # === SKIP THE NATIVE INTERPRETER ===
+                exe_path_obj = Path(exe_path).resolve()
+                if exe_path_obj == native_exe:
+                    continue  # Native is handled separately
                 
                 # === DERIVE site-packages FROM INTERPRETER PATH ===
                 # Pattern: /path/to/interpreter/bin/python -> /path/to/interpreter/lib/pythonX.Y/site-packages
@@ -4535,81 +4518,58 @@ class omnipkg:
 
 
     def _perform_concurrent_healing(self, master_version: str, install_spec: List[str], 
-                                sync_needed: List[Tuple[str, str]]):
+                                    sync_needed: List[Tuple[str, str]]):
         """
-        Performs concurrent healing using registry to identify native interpreter.
+        Performs concurrent healing only when necessary.
+        This is the slow path - only hit when versions are actually out of sync.
+        
+        CRITICAL SAFETY RULE: The native interpreter is ALWAYS at venv_path/bin/python.
+        It is NEVER in .omnipkg/interpreters/. Only the native interpreter can update itself.
         """
         import textwrap
         import json
         import concurrent.futures
         
-        # === USE REGISTRY TO IDENTIFY NATIVE INTERPRETER ===
-        registry_path = (self.config_manager.venv_path / '.omnipkg' / 'interpreters' / 'registry.json')
-        native_exe = None
-        native_version = None
-        
-        if registry_path.exists():
-            try:
-                with open(registry_path, 'r') as f:
-                    registry = json.load(f)
-                    managed_dir = str(self.config_manager.venv_path / '.omnipkg' / 'interpreters')
-                    
-                    # Find the first native interpreter (there should only be one)
-                    for version, path_str in registry.get('interpreters', {}).items():
-                        if not str(path_str).startswith(managed_dir):
-                            native_exe = Path(path_str)
-                            native_version = version
-                            break
-            except (json.JSONDecodeError, IOError):
-                pass
-        
-        # Fallback if registry lookup fails
-        if not native_exe:
-            if platform.system() == 'Windows':
-                native_exe = self.config_manager.venv_path / 'Scripts' / 'python.exe'
+        # === DETERMINE THE NATIVE INTERPRETER PATH ===
+        # Native is ALWAYS at venv_path/bin (or Scripts on Windows)
+        # It is NEVER in .omnipkg/interpreters/ - those are managed interpreters
+        # CRITICAL: Find the actual native Python, not the symlink that might point to managed
+        if platform.system() == 'Windows':
+            native_exe = self.config_manager.venv_path / 'Scripts' / 'python.exe'
+        else:
+            # Find the actual versioned Python in bin/ (e.g., python3.11)
+            bin_dir = self.config_manager.venv_path / 'bin'
+            native_candidates = []
+            if bin_dir.exists():
+                for py_file in bin_dir.glob('python3.*'):
+                    if py_file.is_file() and not py_file.is_symlink():
+                        native_candidates.append(py_file)
+                    elif py_file.is_symlink():
+                        # Check if symlink points outside .omnipkg (to system Python)
+                        target = py_file.resolve()
+                        if '.omnipkg' not in str(target):
+                            native_candidates.append(py_file)
+            
+            # Use the first valid candidate, or fall back to 'python'
+            if native_candidates:
+                native_exe = native_candidates[0]
             else:
-                native_exe = self.config_manager.venv_path / 'bin' / 'python'
-            native_version = f"{sys.version_info.major}.{sys.version_info.minor}"
-        
-        # === FIX: Use the ACTIVE context, not sys.executable ===
-        # sys.executable can be wrong due to shebangs/symlinks
-        # The active context is the REAL Python that's running
-        # CORRECT - uses the actual active context
-        from omnipkg.cli import get_actual_python_version
-        actual_major, actual_minor = get_actual_python_version()
-        active_context_version = f"{actual_major}.{actual_minor}"
-        
-        # Get the ACTUAL executable for the active context from registry
-        current_exe = None
-        if registry_path.exists():
-            try:
-                with open(registry_path, 'r') as f:
-                    registry = json.load(f)
-                    current_exe_str = registry.get('interpreters', {}).get(active_context_version)
-                    if current_exe_str:
-                        current_exe = Path(current_exe_str).resolve()
-            except (json.JSONDecodeError, IOError):
-                pass
-        
-        # Fallback to sys.executable if registry lookup fails
-        if not current_exe:
-            current_exe = Path(sys.executable).resolve()
+                native_exe = bin_dir / 'python'
         
         # === CHECK IF WE ARE THE NATIVE INTERPRETER ===
-        is_current_native = (current_exe.resolve() == native_exe.resolve())
-        current_version = active_context_version
+        current_exe = Path(sys.executable).resolve()
+        
+        # Direct path comparison - this is the ONLY reliable check
+        is_current_native = (current_exe == native_exe)
+        
+        # Get current version
+        current_version = f"{sys.version_info.major}.{sys.version_info.minor}"
         
         if '--verbose' in sys.argv or '-V' in sys.argv:
-            safe_print(f"   🔍 Active Python version: {active_context_version}")
-            safe_print(f"   🔍 sys.executable: {sys.executable}")
-            safe_print(f"   🔍 Current exe (from registry): {current_exe}")
+            safe_print(f"   🔍 Current exe: {current_exe}")
             safe_print(f"   🔍 Native exe:  {native_exe}")
             safe_print(f"   🔍 Is native:   {is_current_native}")
             safe_print(f"   🔍 Current version: {current_version}")
-        
-        # [REST OF FUNCTION UNCHANGED]
-    
-    # [REST OF THE FUNCTION UNCHANGED - keep all the sync logic]
         
         # === CRITICAL SAFETY CHECK ===
         # ONLY the native interpreter can update itself
