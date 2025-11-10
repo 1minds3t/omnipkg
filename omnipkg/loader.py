@@ -67,7 +67,20 @@ class omnipkgLoader:
         """
         Initializes the loader with enhanced Python version awareness.
         """
-        self.config = config
+        if config is None:
+            # If no config is passed, become self-sufficient and load it.
+            # Lazy import to prevent circular dependencies.
+            from omnipkg.core import ConfigManager
+            try:
+                # Suppress messages because this is a background load.
+                cm = ConfigManager(suppress_init_messages=True)
+                self.config = cm.config
+            except Exception:
+                # If config fails to load for any reason, proceed with None.
+                # The auto-detection logic will still serve as a fallback.
+                self.config = {}
+        else:
+            self.config = config
         self.quiet = quiet
         self.python_version = f'{sys.version_info.major}.{sys.version_info.minor}'
         self.python_version_nodot = f'{sys.version_info.major}{sys.version_info.minor}'
@@ -88,6 +101,8 @@ class omnipkgLoader:
         self._total_activation_time_ns = None
         self._total_deactivation_time_ns = None
         self._omnipkg_dependencies = self._get_omnipkg_dependencies()
+        self._activated_bubble_dependencies = [] # To track everything we need to exorcise
+
 
     def _initialize_version_aware_paths(self):
         """
@@ -447,38 +462,111 @@ class omnipkgLoader:
         except ValueError:
             raise ValueError(f"Invalid package_spec format: '{self._current_package_spec}'")
 
-        # --- THIS IS THE RESTORED LOGIC ---
+        # --- STEP 1: Check if main env already satisfies (QUICK CHECK) ---
         try:
-            # Check if the package exists in the main environment
             current_system_version = get_version(pkg_name)
             
-            # If versions match AND we are NOT forcing activation, we can skip the bubble.
             if current_system_version == requested_version and not self.force_activation:
                 if not self.quiet:
                     safe_print(_('✅ System version already matches requested version ({}). No bubble needed.').format(current_system_version))
                 self._activation_successful = True
-                self._activation_end_time = time.perf_counter_ns() # Still record time
+                self._activation_end_time = time.perf_counter_ns()
                 self._total_activation_time_ns = self._activation_end_time - self._activation_start_time
-                return self # Exit early
+                return self  # Exit early - perfect match in main env
+            else:
+                # Version mismatch - need bubble
+                if not self.quiet:
+                    safe_print(f"   🔍 Main env has {pkg_name}=={current_system_version}, need {requested_version}. Looking for bubble...")
         except PackageNotFoundError:
-            # The package is not in the main env, so we must use a bubble regardless.
-            pass
-        # --- END OF RESTORED LOGIC ---
+            # Not in main env - definitely need bubble
+            if not self.quiet:
+                safe_print(f"   🔍 {pkg_name} not in main environment. Looking for bubble...")
 
+        # --- STEP 2: Try to use BUBBLE (PREFERRED) ---
         if not self.quiet:
             safe_print(_('🚀 Fast-activating {} ...').format(self._current_package_spec))
         
         bubble_path = self.multiversion_base / f'{pkg_name}-{requested_version}'
-        try:
-            pkg_name, requested_version = self._current_package_spec.split('==')
-        except ValueError:
-            raise ValueError(f"Invalid package_spec format: '{self._current_package_spec}'")
-
-        bubble_path = self.multiversion_base / f'{pkg_name}-{requested_version}'
+        
+        # ✅ DEBUG: Show what we're looking for
+        if not self.quiet:
+            safe_print(f"   📂 Searching for bubble: {bubble_path}")
+        
         if not bubble_path.is_dir():
-            raise RuntimeError(f"Bubble not found for {self._current_package_spec}")
+            # ❌ Bubble not found - show debug info and try fallback
+            if not self.quiet:
+                safe_print(f"   ⚠️  Bubble not found at: {bubble_path}")
+                
+                # Show what bubbles DO exist
+                parent_dir = bubble_path.parent
+                if parent_dir.exists():
+                    available_bubbles = [d.name for d in parent_dir.iterdir() if d.is_dir()]
+                    if available_bubbles:
+                        # Show related bubbles
+                        related = [b for b in available_bubbles if b.startswith(pkg_name)]
+                        if related:
+                            safe_print(f"   📦 Available {pkg_name} bubbles: {', '.join(related)}")
+                        else:
+                            safe_print(f"   📦 No {pkg_name} bubbles found. Total bubbles: {len(available_bubbles)}")
+                            if len(available_bubbles) <= 10:
+                                safe_print(f"      All bubbles: {', '.join(available_bubbles)}")
+                    else:
+                        safe_print(f"   📦 Bubble directory is empty: {parent_dir}")
+                else:
+                    safe_print(f"   ❌ Bubble directory doesn't exist: {parent_dir}")
+            
+            # --- STEP 3: FALLBACK to main environment ---
+            if not self.quiet:
+                safe_print(f"   🔄 Falling back to main environment check...")
+            
+            try:
+                import importlib.metadata
+                installed_version = importlib.metadata.version(pkg_name)
+                
+                if installed_version == requested_version:
+                    # ✅ Found exact version in main site-packages
+                    if not self.quiet:
+                        safe_print(f"   ✅ Found {pkg_name}=={requested_version} in main site-packages")
+                        safe_print(f"      ⚠️  WARNING: Using main env (not isolated). Consider creating bubble.")
+                    
+                    self._activation_successful = True
+                    self._activation_end_time = time.perf_counter_ns()
+                    self._total_activation_time_ns = self._activation_end_time - self._activation_start_time
+                    return self  # Fallback successful
+                else:
+                    # Wrong version in main env
+                    if not self.quiet:
+                        safe_print(f"   ❌ Main env has {pkg_name}=={installed_version}, need {requested_version}")
+                    raise RuntimeError(
+                        f"Package {pkg_name}=={requested_version} not available\n"
+                        f"  Bubble not found: {bubble_path}\n"
+                        f"  Main env has: {installed_version}\n"
+                        f"  Hint: Try 'omnipkg install {pkg_name}=={requested_version}'"
+                    )
+            except importlib.metadata.PackageNotFoundError:
+                # Not in main env either
+                if not self.quiet:
+                    safe_print(f"   ❌ {pkg_name} not found in main environment either")
+                raise RuntimeError(
+                    f"Package {pkg_name}=={requested_version} not found anywhere\n"
+                    f"  Bubble not found: {bubble_path}\n"
+                    f"  Not in main site-packages\n"
+                    f"  Hint: Install with 'omnipkg install {pkg_name}=={requested_version}'"
+                )
 
+        # --- STEP 4: BUBBLE FOUND - Activate it ---
         try:
+            if not self.quiet:
+                safe_print(f"   ✅ Bubble found: {bubble_path}")
+            
+            self._activated_bubble_dependencies = list(self._get_bubble_dependencies(bubble_path).keys())
+            
+            # Now, when we cloak and clean, we do it for EVERYTHING.
+            for pkg in self._activated_bubble_dependencies:
+                self._aggressive_module_cleanup(pkg)
+            
+            self._batch_cloak_packages(self._activated_bubble_dependencies)
+            
             # Use fast dependency detection
             bubble_packages = self._get_bubble_dependencies(bubble_path)
             
@@ -507,7 +595,7 @@ class omnipkgLoader:
             self._total_activation_time_ns = self._activation_end_time - self._activation_start_time
             
             if not self.quiet:
-                safe_print(f"   ⚡ HEALED in {self._total_activation_time_ns / 1000:,.1f} μs (UV failed!)")
+                safe_print(f"   ⚡ HEALED in {self._total_activation_time_ns / 1000:,.1f} μs")
             
             self._activation_successful = True
             return self
@@ -526,45 +614,33 @@ class omnipkgLoader:
         if not self._activation_successful and not self._cloaked_main_modules:
             return
         
-        pkg_name = self._current_package_spec.split('==')[0]
-        
-        # Cleanup bubble-specific environment
-        os.environ.pop('OMNIPKG_BUBBLE_ACTIVE', None)
-        os.environ.pop('OMNIPKG_ISOLATED_MODE', None)
-        
-        # Existing cleanup logic
-        if self._activated_bubble_path:
-            self._cleanup_omnipkg_links_in_bubble(self._activated_bubble_path)
-        
+        # --- START: HYPER-AGGRESSIVE CLEANUP ---
+
+        # 1. Restore cloaked modules and original PATH first.
+        # This makes the main environment's packages visible again.
         self._restore_cloaked_modules()
-        
-        # Restore original sys.path
-        sys.path.clear()
-        sys.path.extend(self.original_sys_path)
-        
-        # Module cleanup
-        current_modules_keys = set(sys.modules.keys())
-        for mod_name in current_modules_keys:
-            if mod_name not in self.original_sys_modules_keys:
-                if mod_name in sys.modules:
-                    del sys.modules[mod_name]
-        
-        self._aggressive_module_cleanup(pkg_name)
-        
-        # Restore environment
         os.environ['PATH'] = self.original_path_env
-        if self.original_pythonpath_env:
-            filtered_pythonpath = self._filter_environment_paths('PYTHONPATH')
-            if filtered_pythonpath:
-                os.environ['PYTHONPATH'] = filtered_pythonpath
-            elif 'PYTHONPATH' in os.environ:
-                del os.environ['PYTHONPATH']
-        elif 'PYTHONPATH' in os.environ:
-            del os.environ['PYTHONPATH']
+
+        # 2. Restore the original sys.path.
+        sys.path[:] = self.original_sys_path
         
-        # Final cleanup
+        # 3. Purge every single module that was part of the bubble.
+        # This is the exorcism that kills the ghosts.
+        if not self.quiet and self._activated_bubble_dependencies:
+            safe_print(f"   - 👻 Exorcising {len(self._activated_bubble_dependencies)} bubble modules from memory...")
+        
+        for pkg_name in self._activated_bubble_dependencies:
+            self._aggressive_module_cleanup(pkg_name)
+        
+        # Also clean up the main package spec just in case
+        main_pkg_name = self._current_package_spec.split('==')[0]
+        self._aggressive_module_cleanup(main_pkg_name)
+        
+        # 4. Invalidate import caches to force Python to re-evaluate the now-clean path.
         if hasattr(importlib, 'invalidate_caches'):
             importlib.invalidate_caches()
+        
+        # 5. Run garbage collection to be extra sure.
         gc.collect()
         
         self._deactivation_end_time = time.perf_counter_ns()

@@ -3,6 +3,12 @@ name: Cross-Platform Sanity Check
 on:
   push:
     branches:
+      - main
+      - development
+      - staging
+  pull_request:
+    branches:
+      - main
       - development
   workflow_dispatch:
     inputs:
@@ -26,12 +32,13 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.inputs.branch || 'development' }}
+          ref: ${{ github.event.inputs.branch || github.ref }}
           
       - name: Display selected branch and OS
         run: |
           echo "Testing on: ${{ matrix.os }}"
-          echo "Branch: ${{ github.event.inputs.branch || 'development' }}"
+          echo "Branch: ${{ github.ref_name }}"
+          echo "Commit: ${{ github.sha }}"
           
       - name: Wipe previous omnipkg config (Windows)
         run: |
@@ -85,9 +92,10 @@ jobs:
         
       - name: Debug - Show all Python output (Windows)
         run: |
-          Write-Host "=== Full omnipkg list python output ==="
+          Write-Host "=== Using original Python ==="
+          $originalPython = "C:\hostedtoolcache\windows\Python\3.10.11\x64\python.exe"
           try {
-            omnipkg list python
+            & $originalPython -m omnipkg.cli list python
           } catch {
             Write-Host "Command failed: $($_.Exception.Message)"
           }
@@ -169,8 +177,20 @@ jobs:
         
       - name: Final Status Check
         run: |
+          Write-Host "=== Final omnipkg status ==="
+          $originalPython = "C:\hostedtoolcache\windows\Python\3.10.11\x64\python.exe"
+          & $originalPython -m omnipkg.cli status
+        shell: pwsh
+        if: runner.os == 'Windows'
+        env:
+          PYTHONUTF8: "1"
+        continue-on-error: true
+      
+      - name: Final Status Check (Linux/macOS)
+        run: |
           echo "=== Final omnipkg status ==="
           omnipkg status || echo "Status check completed with issues, but that may be expected"
+        if: runner.os != 'Windows'
         env:
           PYTHONUTF8: "1"
         continue-on-error: true

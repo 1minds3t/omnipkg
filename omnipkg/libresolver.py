@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from .common_utils import safe_print
 #!/usr/bin/env python3
 """

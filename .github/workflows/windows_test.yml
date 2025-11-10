@@ -1,10 +1,14 @@
 # .github/workflows/windows_test.yml
-
 name: Omnipkg True First-Run Test (Windows)
-
 on:
   push:
     branches:
+      - main
+      - development
+      - staging
+  pull_request:
+    branches:
+      - main
       - development
   workflow_dispatch:
     inputs:
@@ -12,17 +16,27 @@ on:
         description: 'The branch to test'
         required: true
         default: 'development'
-
+        type: choice
+        options:
+          - development
+          - main
+          - staging
 jobs:
   true-first-run-test-windows:
     runs-on: windows-latest
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.inputs.branch || 'development' }}
-
+          ref: ${{ github.event.inputs.branch || github.ref }}
+          
+      - name: Display test info
+        run: |
+          Write-Host "Testing on: Windows"
+          Write-Host "Branch: ${{ github.ref_name }}"
+          Write-Host "Commit: ${{ github.sha }}"
+        shell: pwsh
+        
       # Step 1: ENSURE A CLEAN SLATE
       # This is the most critical fix. It deletes any leftover config or
       # interpreters from previous runs, guaranteeing a true first-time setup.
@@ -35,18 +49,18 @@ jobs:
             Write-Host "No previous omnipkg config found. Starting fresh."
           }
         shell: pwsh
-
+        
       # Step 2: Set up a non-3.11 Python environment to start.
       # Using 3.9 makes it a more distinct test.
       - name: Set up Python 3.9
         uses: actions/setup-python@v5
         with:
           python-version: '3.9'
-
+          
       - name: Install omnipkg in editable mode
         run: pip install -e .
         shell: pwsh
-
+        
       # Step 3: Trigger the REAL first-time setup and 3.11 download.
       # This MUST now perform the full download and bootstrap of 3.11,
       # including installing omnipkg's dependencies into it.
@@ -55,7 +69,7 @@ jobs:
         shell: pwsh
         env:
           PYTHONUTF8: "1"
-
+          
       # Step 4: Swap the active context to the newly downloaded 3.11.
       - name: Swap the active context to Python 3.11
         run: omnipkg swap python 3.11
@@ -69,7 +83,7 @@ jobs:
         shell: pwsh
         env:
           PYTHONUTF8: "1"
-
+          
       # Step 6: Verify the knowledge base was updated correctly post-swap.
       - name: Verify package info is in the knowledge base
         run: omnipkg info six | Select-String -Pattern "1.16.0"

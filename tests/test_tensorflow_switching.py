@@ -24,6 +24,8 @@ import traceback
 from importlib.metadata import version as get_pkg_version
 from omnipkg.i18n import _
 from omnipkg.core import ConfigManager, omnipkg as OmnipkgCore
+from omnipkg.i18n import _
+
 
 # This is the full, self-contained `safe_print` function.
 # It only depends on `sys` and built-in print, so it's perfect for injection.
@@ -68,7 +70,8 @@ def ensure_tensorflow_bubbles(config_manager: ConfigManager):
     version_tuple = config_manager._verify_python_version(configured_exe)
     python_context_version = f'{version_tuple[0]}.{version_tuple[1]}' if version_tuple else 'unknown'
     if python_context_version == 'unknown':
-        safe_print("   ⚠️ CRITICAL: Could not determine Python context for test bubble creation.")
+        safe_print(_("   ⚠️ CRITICAL: Could not determine Python context for test bubble creation."))
+
         return False  # Early exit if we can't determine Python version
 
     packages_to_bubble = {'tensorflow': ['2.13.0', '2.12.0'], 'typing_extensions': ['4.14.1', '4.5.0']}
@@ -215,13 +218,13 @@ def main():
         safe_print("\\n--- Testing with typing_extensions 4.14.1 ---")
         with omnipkgLoader("typing_extensions==4.14.1", config=config_manager.config):
             import typing_extensions
-            te_version, _ = get_version_from_module_file(typing_extensions, 'typing_extensions', '{OMNIPKG_VERSIONS_DIR}')
+            te_version, _source = get_version_from_module_file(typing_extensions, 'typing_extensions', '{OMNIPKG_VERSIONS_DIR}')
             safe_print(f"✅ Typing Extensions version: {{te_version}}")
         
         safe_print("\\n--- Testing with typing_extensions 4.5.0 ---")
         with omnipkgLoader("typing_extensions==4.5.0", config=config_manager.config):
             import typing_extensions
-            te_version, _ = get_version_from_module_file(typing_extensions, 'typing_extensions', '{OMNIPKG_VERSIONS_DIR}')
+            te_version, _source = get_version_from_module_file(typing_extensions, 'typing_extensions', '{OMNIPKG_VERSIONS_DIR}')
             safe_print(f"✅ Typing Extensions version: {{te_version}}")
         return True
     except Exception as e:
@@ -254,12 +257,12 @@ def main():
         safe_print("🌀 Testing nested loader usage...")
         with omnipkgLoader("typing_extensions==4.5.0", config=config_manager.config):
             import typing_extensions as te_outer
-            outer_version, _ = get_version_from_module_file(te_outer, 'typing_extensions', '{OMNIPKG_VERSIONS_DIR}')
+            outer_version, _source = get_version_from_module_file(te_outer, 'typing_extensions', '{OMNIPKG_VERSIONS_DIR}')
             safe_print(f"✅ Outer context - Typing Extensions: {{outer_version}}")
             with omnipkgLoader("tensorflow==2.13.0", config=config_manager.config):
                 import tensorflow as tf
                 import typing_extensions as te_inner
-                inner_version, _ = get_version_from_module_file(te_inner, 'typing_extensions', '{OMNIPKG_VERSIONS_DIR}')
+                inner_version, _source = get_version_from_module_file(te_inner, 'typing_extensions', '{OMNIPKG_VERSIONS_DIR}')
                 safe_print(f"✅ Inner context - TensorFlow: {{tf.__version__}}")
                 safe_print(f"✅ Inner context - Typing Extensions: {{inner_version}}")
                 model = tf.keras.Sequential([tf.keras.layers.Dense(10, input_shape=(5,))])

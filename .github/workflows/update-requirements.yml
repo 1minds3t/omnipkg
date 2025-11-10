@@ -1,39 +1,48 @@
-name: Update requirements.txt
+name: Security Scan
+
 on:
   push:
     branches: [main]
-    paths:
-      - 'pyproject.toml'
+  pull_request:
+  schedule:
+    - cron: '0 0 * * 0'
   workflow_dispatch:
 
 jobs:
-  update-requirements:
+  security:
     runs-on: ubuntu-latest
     
-    # --- THIS IS THE FIX ---
-    # Grant the job the necessary permissions to push code.
-    permissions:
-      contents: write
-
     steps:
       - uses: actions/checkout@v4
       
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
+          python-version: '3.11'
       
-      - name: Install pip-tools
-        run: pip install pip-tools
+      - name: Install pip-audit
+        run: pip install pip-audit
       
-      - name: Compile requirements
-        run: pip-compile pyproject.toml -o requirements.txt --resolver=backtracking
-      
-      - name: Commit and push changes
+      - name: Run pip-audit
+        id: pip-audit
+        continue-on-error: true
         run: |
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
-          git add requirements.txt
-          # This command only commits if there's an actual change
-          git diff --staged --quiet || git commit -m "chore: Update requirements.txt"
-          git push
+          echo "## pip-audit Security Scan" >> $GITHUB_STEP_SUMMARY
+          pip-audit --desc --format markdown >> $GITHUB_STEP_SUMMARY || true
+          pip-audit --require pyproject.toml
+      
+      - name: Try Safety fallback
+        if: steps.pip-audit.outcome == 'failure'
+        continue-on-error: true
+        env:
+          SAFETY_API_KEY: ${{ secrets.SAFETY_API_KEY }}
+        run: |
+          if [ -n "$SAFETY_API_KEY" ]; then
+            pip install safety
+            echo "## Safety Scan" >> $GITHUB_STEP_SUMMARY
+            safety check --output json || echo "Safety API down"
+          fi
+      
+      - name: Summary
+        if: always()
+        run: echo "✅ Security scan completed"
