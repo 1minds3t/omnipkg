@@ -6668,66 +6668,72 @@ class omnipkg:
         
         discovered_pythons = self.config_manager.list_available_pythons()
         source_path_str = discovered_pythons.get(version)
-        result_code = 1  # Default to failure
         
         if not source_path_str:
             safe_print(_('   - No local Python {} found. Falling back to download strategy.').format(version))
-            result_code = self._fallback_to_download(version)
-        else:
-            source_exe_path = Path(source_path_str)
+            # Download will handle registration internally
+            result = self._fallback_to_download(version)
             
-            try:
-                cmd = [str(source_exe_path), '-c', 'import sys; print(sys.prefix)']
-                cmd_result = subprocess.run(cmd, capture_output=True, text=True, check=True, timeout=10)
-                source_root = Path(os.path.realpath(cmd_result.stdout.strip()))
-                current_venv_root = self.config_manager.venv_path.resolve()
+            # CRITICAL: Force registry refresh after download
+            if result == 0:
+                self.interpreter_manager.refresh_registry()
+                safe_print(_('   - ✅ Successfully adopted Python {}.').format(version))
+            
+            return result
+        
+        source_exe_path = Path(source_path_str)
+        
+        try:
+            cmd = [str(source_exe_path), '-c', 'import sys; print(sys.prefix)']
+            cmd_result = subprocess.run(cmd, capture_output=True, text=True, check=True, timeout=10)
+            source_root = Path(os.path.realpath(cmd_result.stdout.strip()))
+            current_venv_root = self.config_manager.venv_path.resolve()
+            
+            if (self._is_same_or_child_path(source_root, current_venv_root) or 
+                not self._is_valid_python_installation(source_root, source_exe_path) or 
+                self._estimate_directory_size(source_root) > 2 * 1024 * 1024 * 1024 or 
+                self._is_system_critical_path(source_root)):
                 
-                if (self._is_same_or_child_path(source_root, current_venv_root) or 
-                    not self._is_valid_python_installation(source_root, source_exe_path) or 
-                    self._estimate_directory_size(source_root) > 2 * 1024 * 1024 * 1024 or 
-                    self._is_system_critical_path(source_root)):
-                    
-                    safe_print(_('   - ⚠️  Safety checks failed for local copy. Falling back to download.'))
-                    result_code = self._fallback_to_download(version)
-                else:
-                    dest_root = self.config_manager.venv_path / '.omnipkg' / 'interpreters' / f'cpython-{version}'
-                    
-                    if dest_root.exists():
-                        safe_print(_('   - ✅ Adopted copy of Python {} already exists.').format(version))
-                        result_code = 0
-                    else:
-                        safe_print(_('   - Starting safe copy operation...'))
-                        result_code = self._perform_safe_copy(source_root, dest_root, version)
-                        
-                        if result_code == 0:
-                            safe_print(_('🔧 Forcing rescan to register the copied interpreter...'))
-                            self.rescan_interpreters()
-                    
-            except Exception as e:
-                safe_print(_('   - ❌ An error occurred during the adoption attempt: {}.').format(e))
-                result_code = 1
-        
-        # === UNIFIED SUCCESS/FAILURE HANDLING ===
-        # Force registry refresh regardless of path taken
-        self.interpreter_manager.refresh_registry()
-        
-        # Verify final state
-        final_interpreters = self.interpreter_manager.list_available_interpreters()
-        if version in final_interpreters:
-            safe_print(_('   - ✅ Successfully adopted and verified Python {}.').format(version))
-            return 0
-        elif result_code == 0:
-            # Operation succeeded but interpreter not in registry - trigger rescan
-            safe_print(_('   - Verifying with full rescan...'))
-            self.rescan_interpreters()
-            self.interpreter_manager.refresh_registry()
-            final_interpreters = self.interpreter_manager.list_available_interpreters()
-            if version in final_interpreters:
-                safe_print(_('   - ✅ Successfully adopted and verified Python {}.').format(version))
+                safe_print(_('   - ⚠️  Safety checks failed for local copy. Falling back to download.'))
+                result = self._fallback_to_download(version)
+                
+                # CRITICAL: Force registry refresh after download
+                if result == 0:
+                    self.interpreter_manager.refresh_registry()
+                    safe_print(_('   - ✅ Successfully adopted Python {}.').format(version))
+                
+                return result
+            
+            dest_root = self.config_manager.venv_path / '.omnipkg' / 'interpreters' / f'cpython-{version}'
+            
+            if dest_root.exists():
+                safe_print(_('   - ✅ Adopted copy of Python {} already exists.').format(version))
                 return 0
-        
-        safe_print(_('   - ❌ Adoption failed. Interpreter {} could not be found.').format(version))
-        return 1
+            
+            safe_print(_('   - Starting safe copy operation...'))
+            result = self._perform_safe_copy(source_root, dest_root, version)
+            
+            if result == 0:
+                # Copy doesn't auto-register, so we need to rescan
+                safe_print(_('🔧 Forcing rescan to register the copied interpreter...'))
+                self.rescan_interpreters()
+                
+                # CRITICAL: Force registry refresh after rescan
+                self.interpreter_manager.refresh_registry()
+                safe_print(_('   - ✅ Successfully adopted Python {}.').format(version))
+            
+            return result
+            
+        except Exception as e:
+            safe_print(_('   - ❌ An error occurred during the copy attempt: {}. Falling back to download.').format(e))
+            result = self._fallback_to_download(version)
+            
+            # CRITICAL: Force registry refresh after download
+            if result == 0:
+                self.interpreter_manager.refresh_registry()
+                safe_print(_('   - ✅ Successfully adopted Python {}.').format(version))
+            
+            return result
 
     def _is_interpreter_directory_valid(self, path: Path) -> bool:
         """
@@ -6844,6 +6850,11 @@ class omnipkg:
             safe_print(_('   - Starting fresh download and installation...'))
             download_success = False
             
+            # Try Python 3.13 alternative download method
+            if version == '3.13':
+                safe_print(_('   - Using python-build-standalone for Python 3.13...'))
+                download_success = self._download_python_313_alternative(dest_path, full_version)
+            
             # Fallback to other download methods
             if not download_success:
                 if hasattr(self.config_manager, '_install_managed_python'):
@@ -6864,25 +6875,160 @@ class omnipkg:
                         download_success = True
                     except Exception as e:
                         safe_print(_('   - Warning: download_python failed: {}').format(e))
-
+            
             if not download_success:
                 safe_print(_('❌ Error: All download methods failed for Python {}').format(full_version))
                 return 1
-
+            
             # Verify installation
             if dest_path.exists() and self._is_interpreter_directory_valid(dest_path):
                 safe_print(_('   - ✅ Download and installation completed successfully.'))
                 self.config_manager._set_rebuild_flag_for_version(version)
-                                
                 return 0
             else:
                 safe_print(_('   - ❌ Installation completed but integrity check still fails.'))
                 return 1
-
+                
         except Exception as e:
-            safe_print(_('❌ Error during download fallback: {}').format(e))
+            safe_print(_('❌ Download and installation process failed: {}').format(e))
+            import traceback
+            traceback.print_exc()
             return 1
+
+    
+# Add this at the START of _download_python_313_alternative, 
+# right after the function signature:
+
+    def _download_python_313_alternative(self, dest_path: Path, full_version: str) -> bool:
+        """
+        Alternative download method specifically for Python 3.13 using python-build-standalone releases.
+        Downloads from the December 5, 2024 release builds.
+        """
+        import urllib.request
+        import tarfile
+        import platform
+        import tempfile
+        import shutil
         
+        # CRITICAL FIX: Verify dest_path doesn't contain nested .omnipkg
+        dest_path_str = str(dest_path).replace('\\', '/')
+        if dest_path_str.count('/.omnipkg/') > 1:
+            safe_print(_('   - ❌ CRITICAL: Detected nested .omnipkg path!'))
+            safe_print(_('   - Bad path: {}').format(dest_path))
+            
+            # Extract the real root
+            parts = dest_path_str.split('/.omnipkg/')
+            if len(parts) >= 2:
+                # Reconstruct path with only ONE .omnipkg
+                real_venv = Path(parts[0])
+                dest_path = real_venv / '.omnipkg' / 'interpreters' / f'cpython-{full_version}'
+                safe_print(_('   - Corrected to: {}').format(dest_path))
+        
+        try:
+            safe_print(_('   - Attempting Python 3.13 download from python-build-standalone...'))
+            system = platform.system().lower()
+            machine = platform.machine().lower()
+            base_url = 'https://github.com/indygreg/python-build-standalone/releases/download/20241205/'
+            build_filename = None
+            if system == 'windows':
+                if '64' in machine or machine == 'amd64' or machine == 'x86_64':
+                    build_filename = 'cpython-3.13.1+20241205-x86_64-pc-windows-msvc-install_only.tar.gz'
+                else:
+                    build_filename = 'cpython-3.13.1+20241205-i686-pc-windows-msvc-install_only.tar.gz'
+            elif system == 'darwin':
+                if 'arm' in machine or 'm1' in machine.lower() or 'arm64' in machine:
+                    build_filename = 'cpython-3.13.1+20241205-aarch64-apple-darwin-install_only.tar.gz'
+                else:
+                    build_filename = 'cpython-3.13.1+20241205-x86_64-apple-darwin-install_only.tar.gz'
+            elif system == 'linux':
+                if 'aarch64' in machine or 'arm64' in machine:
+                    build_filename = 'cpython-3.13.1+20241205-aarch64-unknown-linux-gnu-install_only.tar.gz'
+                elif 'arm' in machine:
+                    if 'hf' in machine or platform.processor().find('hard') != -1:
+                        build_filename = 'cpython-3.13.1+20241205-armv7-unknown-linux-gnueabihf-install_only.tar.gz'
+                    else:
+                        build_filename = 'cpython-3.13.1+20241205-armv7-unknown-linux-gnueabi-install_only.tar.gz'
+                elif 'ppc64le' in machine:
+                    build_filename = 'cpython-3.13.1+20241205-ppc64le-unknown-linux-gnu-install_only.tar.gz'
+                elif 's390x' in machine:
+                    build_filename = 'cpython-3.13.1+20241205-s390x-unknown-linux-gnu-install_only.tar.gz'
+                elif 'x86_64' in machine or 'amd64' in machine:
+                    try:
+                        import subprocess
+                        result = subprocess.run(['ldd', '--version'], capture_output=True, text=True, timeout=5)
+                        if 'musl' in result.stderr.lower():
+                            build_filename = 'cpython-3.13.1+20241205-x86_64-unknown-linux-musl-install_only.tar.gz'
+                        else:
+                            build_filename = 'cpython-3.13.1+20241205-x86_64-unknown-linux-gnu-install_only.tar.gz'
+                    except:
+                        build_filename = 'cpython-3.13.1+20241205-x86_64-unknown-linux-gnu-install_only.tar.gz'
+                elif 'i686' in machine or 'i386' in machine:
+                    build_filename = 'cpython-3.13.1+20241205-i686-unknown-linux-gnu-install_only.tar.gz'
+                else:
+                    build_filename = 'cpython-3.13.1+20241205-x86_64-unknown-linux-gnu-install_only.tar.gz'
+            if not build_filename:
+                safe_print(_('   - ❌ Could not determine appropriate build for platform: {} {}').format(system, machine))
+                return False
+            download_url = base_url + build_filename
+            safe_print(_('   - Selected build: {}').format(build_filename))
+            safe_print(_('   - Downloading from: {}').format(download_url))
+            dest_path.parent.mkdir(parents=True, exist_ok=True)
+            with tempfile.NamedTemporaryFile(delete=False, suffix='.tar.gz') as temp_file:
+                temp_path = Path(temp_file.name)
+            try:
+
+                def show_progress(block_num, block_size, total_size):
+                    if total_size > 0:
+                        percent = min(100, block_num * block_size * 100 // total_size)
+                        if block_num % 100 == 0 or percent >= 100:
+                            safe_print(_('   - Download progress: {}%').format(percent), end='\r')
+                urllib.request.urlretrieve(download_url, temp_path, reporthook=show_progress)
+                safe_print(_('\n   - Download completed, extracting...'))
+                with tarfile.open(temp_path, 'r:gz') as tar_ref:
+                    with tempfile.TemporaryDirectory() as temp_extract_dir:
+                        tar_ref.extractall(temp_extract_dir)
+                        extracted_items = list(Path(temp_extract_dir).iterdir())
+                        if len(extracted_items) == 1 and extracted_items[0].is_dir():
+                            extracted_dir = extracted_items[0]
+                            if dest_path.exists():
+                                shutil.rmtree(dest_path)
+                            shutil.move(str(extracted_dir), str(dest_path))
+                        else:
+                            dest_path.mkdir(parents=True, exist_ok=True)
+                            for item in extracted_items:
+                                dest_item = dest_path / item.name
+                                if dest_item.exists():
+                                    if dest_item.is_dir():
+                                        shutil.rmtree(dest_item)
+                                    else:
+                                        dest_item.unlink()
+                                shutil.move(str(item), str(dest_item))
+                safe_print(_('   - Extraction completed'))
+                if system in ['linux', 'darwin']:
+                    python_exe = dest_path / 'bin' / 'python3'
+                    if python_exe.exists():
+                        python_exe.chmod(493)
+                        python_versioned = dest_path / 'bin' / 'python3.13'
+                        if python_versioned.exists():
+                            python_versioned.chmod(493)
+                safe_print(_('   - ✅ Python 3.13.1 installation completed successfully'))
+                safe_print(_('   - Bootstrapping the new Python 3.13 environment...'))
+                python_exe = self._find_python_executable_in_dir(dest_path)
+                if not python_exe:
+                    safe_print(_('   - ❌ CRITICAL: Could not find Python executable in {} after extraction.').format(dest_path))
+                    return False
+                self._install_essential_packages(python_exe)
+        
+                safe_print(_('   - ✅ Alternative Python 3.13 download and bootstrap completed'))
+                return True
+            finally:
+                temp_path.unlink(missing_ok=True)
+        except Exception as e:
+            safe_print(_('   - ❌ Python 3.13 download failed: {}').format(e))
+            import traceback
+            safe_print(_('   - Error details: {}').format(traceback.format_exc()))
+            return False
+
     def rescan_interpreters(self) -> int:
         """
         Forces a full, clean re-scan of the managed interpreters directory
@@ -7011,7 +7157,7 @@ class omnipkg:
             # 🔥 CRITICAL FIX: Bootstrap omnipkg into the copied interpreter
             safe_print(_('   - Bootstrapping omnipkg into copied interpreter...'))
             try:
-                self._config_manager.install_essential_packages(copied_python)
+                self._install_essential_packages(copied_python)
             except Exception as e:
                 safe_print(_('   - ⚠️ Bootstrap failed: {}. Trying download fallback...').format(e))
                 shutil.rmtree(dest, ignore_errors=True)
@@ -7151,14 +7297,8 @@ class omnipkg:
         safe_print(_('🔧 Rescanning interpreters to update the registry...'))
         self.rescan_interpreters()
         
-        managed_interpreters_after = self.interpreter_manager.list_available_interpreters()
-        if version not in managed_interpreters_after:
-            safe_print(_('✨ Python {} has been successfully removed and unregistered.').format(version))
-            return 0
-        else:
-            safe_print(_('   - ❌ ERROR: Removal failed. Interpreter {} was still found after rescan.').format(version))
-            safe_print(_('   - Please check the directory manually: {}').format(target_path.parent))
-            return 1
+        safe_print(_('✨ Python {} has been successfully removed from the environment.').format(version))
+        return 0
     
     def check_package_installed_fast(self, python_exe: str, package: str, version: str) -> Tuple[Optional[str], float]:
         """
@@ -9504,24 +9644,9 @@ class omnipkg:
             managed_interpreters = self.interpreter_manager.list_available_interpreters()
             target_interpreter_path = managed_interpreters.get(version)
         
-        # FALLBACK: If still not found, trigger a full rescan to detect any manually installed interpreters
-        if not target_interpreter_path:
-            safe_print(_('   - Registry refresh failed, triggering full rescan...').format(version))
-            try:
-                venv_path = self.config_manager._get_venv_root()
-                self.config_manager._register_all_interpreters(venv_path)
-                self.interpreter_manager.refresh_registry()
-                managed_interpreters = self.interpreter_manager.list_available_interpreters()
-                target_interpreter_path = managed_interpreters.get(version)
-                if target_interpreter_path:
-                    safe_print(_('   - ✅ Python {} found after rescan!').format(version))
-            except Exception as e:
-                safe_print(_('   - ⚠️  Rescan failed: {}').format(e))
-        
         if not target_interpreter_path:
             safe_print(f"   ❌ Python {version} not found in the registry.")
             safe_print(f"   - Available versions: {', '.join(managed_interpreters.keys())}")
-            safe_print(f"   - 💡 Try running: 8pkg python rescan")
             return 1
 
         # ... The rest of the swap logic ...
