@@ -4367,235 +4367,46 @@ class omnipkg:
         
         return sync_needed
 
-    
-    def _check_sync_status_ultra_fast(self, master_version: str) -> List[Tuple[str, str]]:
-        """
-        CORRECTED path-based sync checking - derives site-packages from interpreter location.
-        This handles standalone Python builds correctly!
-        
-        CRITICAL: The native interpreter is ALWAYS at venv_path/bin/python (or Scripts/python.exe).
-        It is NEVER in .omnipkg/interpreters/. We must exclude it from the sync list.
-        """
-        sync_needed = []
-        
-        # Get all managed interpreters
-        interpreter_manager = InterpreterManager(self.config_manager)
-        all_interpreters = interpreter_manager.list_available_interpreters()
-        
-        # Determine THE NATIVE interpreter - ALWAYS at venv_path/bin or Scripts
-        # This is the ORIGINAL Python that came with the venv, NOT whatever is currently active
-        # CRITICAL: We need to find the actual native Python executable (e.g., python3.11)
-        if platform.system() == 'Windows':
-            native_exe = self.config_manager.venv_path / 'Scripts' / 'python.exe'
-        else:
-            # The native Python is in bin/ and NOT a symlink to .omnipkg
-            bin_dir = self.config_manager.venv_path / 'bin'
-            native_exe = None
-            
-            if bin_dir.exists():
-                # Collect all valid python3.XX files (where XX is a valid version)
-                candidates = []
-                for py_file in bin_dir.glob('python3.*'):
-                    # Must be a file
-                    if not py_file.is_file():
-                        continue
-                    
-                    # Parse version from filename (e.g., python3.11 -> 3.11)
-                    name = py_file.name
-                    try:
-                        # Extract the version part after "python"
-                        version_part = name.replace('python', '')
-                        # Should be like "3.11" or "3.9"
-                        major, minor = version_part.split('.')
-                        # Validate it's actually a number
-                        if int(major) == 3 and int(minor) >= 0:
-                            # Check if it's a symlink to .omnipkg (managed interpreter)
-                            if py_file.is_symlink():
-                                target = py_file.resolve()
-                                if '.omnipkg' in str(target):
-                                    continue  # Skip managed interpreters
-                            
-                            candidates.append((int(minor), py_file))
-                    except (ValueError, IndexError):
-                        # Not a valid version format, skip
-                        continue
-                
-                # Use the highest version number (most recent Python)
-                # This handles cases where multiple Pythons exist
-                if candidates:
-                    candidates.sort(key=lambda x: x[0], reverse=True)
-                    native_exe = candidates[0][1]
-            
-            # Fallback if we couldn't find it
-            if native_exe is None:
-                native_exe = bin_dir / 'python'
-        
-        if '--verbose' in sys.argv or '-V' in sys.argv:
-            safe_print(f"   🔍 [Sync Check] Native interpreter: {native_exe}")
-        
-        # Pre-compute expected dist-info names
-        expected_dist_info = f"omnipkg-{master_version}.dist-info"
-        expected_editable_dist_info = f"__editable___omnipkg-{master_version}.dist-info"
-        
-        for py_ver, exe_path in all_interpreters.items():
-            try:
-                exe_path_obj = Path(exe_path).resolve()
-                
-                # === CRITICAL: SKIP THE NATIVE INTERPRETER ===
-                if exe_path_obj == native_exe:
-                    if '--verbose' in sys.argv or '-V' in sys.argv:
-                        safe_print(f"   🔍 [Sync Check] Skipping native interpreter: Python {py_ver} at {exe_path}")
-                    continue  # Native is handled separately in _perform_concurrent_healing
-                
-                # Also skip if this is a symlink pointing to native (belt-and-suspenders)
-                if not '.omnipkg' in str(exe_path_obj):
-                    if '--verbose' in sys.argv or '-V' in sys.argv:
-                        safe_print(f"   🔍 [Sync Check] Skipping (not in .omnipkg): Python {py_ver} at {exe_path}")
-                    continue
-                
-                # === DERIVE site-packages FROM INTERPRETER PATH ===
-                interpreter_root = exe_path_obj.parent.parent
-                
-                if platform.system() == 'Windows':
-                    site_packages = interpreter_root / 'Lib' / 'site-packages'
-                else:
-                    site_packages = interpreter_root / 'lib' / f'python{py_ver}' / 'site-packages'
-                
-                # Verify the site-packages directory actually exists
-                if not site_packages.exists():
-                    if '--verbose' in sys.argv or '-V' in sys.argv:
-                        safe_print(f"   🔍 [Sync Check] site-packages not found for Python {py_ver}, adding to sync list")
-                    sync_needed.append((py_ver, str(exe_path)))
-                    continue
-                
-                # Fast check: does the expected dist-info exist?
-                has_regular_install = (site_packages / expected_dist_info).exists()
-                has_editable_install = (site_packages / expected_editable_dist_info).exists()
-                
-                # Additional check for old-style editable (.pth files)
-                has_pth_install = False
-                if not has_regular_install and not has_editable_install:
-                    pth_files = list(site_packages.glob('*.pth'))
-                    for pth_file in pth_files:
-                        try:
-                            content = pth_file.read_text(encoding='utf-8')[:512]
-                            if 'omnipkg' in content:
-                                for line in content.split('\n'):
-                                    line = line.strip()
-                                    if line and line.startswith('/') and 'omnipkg' in line:
-                                        project_path = Path(line)
-                                        if project_path.exists():
-                                            pyproject_path = project_path / 'pyproject.toml'
-                                            if pyproject_path.exists():
-                                                try:
-                                                    toml_content = pyproject_path.read_text(encoding='utf-8')[:2048]
-                                                    for toml_line in toml_content.split('\n'):
-                                                        stripped = toml_line.strip()
-                                                        if stripped.startswith('version'):
-                                                            source_version = stripped.split('=', 1)[1].strip().strip('"\'')
-                                                            if source_version == master_version:
-                                                                has_pth_install = True
-                                                            break
-                                                except:
-                                                    pass
-                                        break
-                        except:
-                            pass
-                
-                # If none of the expected patterns exist, sync is needed
-                if not (has_regular_install or has_editable_install or has_pth_install):
-                    if '--verbose' in sys.argv or '-V' in sys.argv:
-                        safe_print(f"   🔍 [Sync Check] Python {py_ver} needs sync (no valid install found)")
-                    sync_needed.append((py_ver, str(exe_path)))
-                    
-            except Exception as e:
-                # If anything fails, assume sync is needed (conservative)
-                if '--verbose' in sys.argv or '-V' in sys.argv:
-                    safe_print(f"   ⚠️ Path derivation failed for Python {py_ver}: {e}")
-                sync_needed.append((py_ver, str(exe_path)))
-        
-        return sync_needed
-
 
     def _perform_concurrent_healing(self, master_version: str, install_spec: List[str], 
                                     sync_needed: List[Tuple[str, str]]):
         """
         Performs concurrent healing only when necessary.
         This is the slow path - only hit when versions are actually out of sync.
-        
-        CRITICAL SAFETY RULE: The native interpreter is ALWAYS at venv_path/bin/python.
-        It is NEVER in .omnipkg/interpreters/. Only the native interpreter can update itself.
         """
         import textwrap
         import json
         import concurrent.futures
         
-        # === DETERMINE THE NATIVE INTERPRETER PATH ===
-        # Native is ALWAYS at venv_path/bin (or Scripts on Windows)
-        # It is NEVER in .omnipkg/interpreters/ - those are managed interpreters
-        # CRITICAL: Find the actual native Python, not the symlink that might point to managed
-        if platform.system() == 'Windows':
-            native_exe = self.config_manager.venv_path / 'Scripts' / 'python.exe'
-        else:
-            # Find the actual versioned Python in bin/ (e.g., python3.11)
-            bin_dir = self.config_manager.venv_path / 'bin'
-            native_candidates = []
-            if bin_dir.exists():
-                for py_file in bin_dir.glob('python3.*'):
-                    if py_file.is_file() and not py_file.is_symlink():
-                        native_candidates.append(py_file)
-                    elif py_file.is_symlink():
-                        # Check if symlink points outside .omnipkg (to system Python)
-                        target = py_file.resolve()
-                        if '.omnipkg' not in str(target):
-                            native_candidates.append(py_file)
-            
-            # Use the first valid candidate, or fall back to 'python'
-            if native_candidates:
-                native_exe = native_candidates[0]
-            else:
-                native_exe = bin_dir / 'python'
-        
-        # === CHECK IF WE ARE THE NATIVE INTERPRETER ===
+        # Check if current (native) interpreter needs sync
         current_exe = Path(sys.executable).resolve()
-        
-        # Direct path comparison - this is the ONLY reliable check
-        is_current_native = (current_exe == native_exe)
-        
-        # Get current version
         current_version = f"{sys.version_info.major}.{sys.version_info.minor}"
         
-        if '--verbose' in sys.argv or '-V' in sys.argv:
-            safe_print(f"   🔍 Current exe: {current_exe}")
-            safe_print(f"   🔍 Native exe:  {native_exe}")
-            safe_print(f"   🔍 Is native:   {is_current_native}")
-            safe_print(f"   🔍 Current version: {current_version}")
+        # Determine native interpreter path
+        if platform.system() == 'Windows':
+            native_exe = self.config_manager.venv_path / 'Scripts' / 'python.exe'
+            is_current_native = (
+                str(current_exe).startswith(str(self.config_manager.venv_path)) and
+                '.omnipkg' not in str(current_exe)
+            )
+        else:
+            native_exe = self.config_manager.venv_path / 'bin' / 'python'
+            is_current_native = current_exe.parent == (self.config_manager.venv_path / 'bin')
         
-        # === CRITICAL SAFETY CHECK ===
-        # ONLY the native interpreter can update itself
+        # Check if native needs sync
         native_needs_sync = False
-        native_was_synced = False
-        
         if is_current_native:
-            # We ARE the native interpreter - check if we need sync
             try:
                 native_site_packages = site.getsitepackages()[0]
                 current_version_str = self._get_omnipkg_version_from_site_packages(native_site_packages)
                 if current_version_str != master_version:
                     native_needs_sync = True
-                    if '--verbose' in sys.argv or '-V' in sys.argv:
-                        safe_print(f"   🔍 Native needs sync: {current_version_str} -> {master_version}")
-            except Exception as e:
+            except Exception:
                 native_needs_sync = True
-                if '--verbose' in sys.argv or '-V' in sys.argv:
-                    safe_print(f"   🔍 Native sync check failed: {e}")
-        else:
-            # We're on a non-native interpreter - NEVER touch native
-            if '--verbose' in sys.argv or '-V' in sys.argv:
-                safe_print(f"   🔒 Running from non-native interpreter (Python {current_version}) - skipping native sync")
         
-        # === SYNC NATIVE FIRST (ONLY IF WE ARE THE NATIVE INTERPRETER) ===
-        if native_needs_sync and is_current_native:
+        # === SYNC NATIVE FIRST (IF NEEDED) ===
+        native_was_synced = False
+        if native_needs_sync:
             import tempfile
             native_sync_start = time.perf_counter()
             safe_print(f"🔄 Syncing native Python {current_version} to v{master_version}...")
@@ -4670,7 +4481,42 @@ class omnipkg:
         if native_was_synced and is_current_native:
             safe_print(f"\n🔄 Restarting command with updated omnipkg v{master_version}...")
             os.execv(sys.executable, [sys.executable] + sys.argv)
+
+    def _perform_redis_key_migration(self, migration_flag_key: str):
+        """
+        Performs a one-time, automatic migration of Redis keys from the old
+        global format to the new environment-and-python-specific format.
+        This is a critical function for backward compatibility.
+        """
+        safe_print('🔧 Performing one-time Knowledge Base upgrade for multi-environment support...')
+        old_prefix = 'omnipkg:pkg:'
     
+        # This uses your existing property to get the correct new prefix
+        new_prefix_for_current_env = self.redis_key_prefix
+        
+        # Use scan_iter for performance, as it doesn't block the Redis server like KEYS *
+        all_old_keys = self.cache_client.keys(f'{old_prefix}*')
+
+        if not all_old_keys:
+            safe_print('   ✅ No old-format data found to migrate. Marking as complete.')
+            self.cache_client.set(migration_flag_key, 'true')
+            return
+
+        migrated_count = 0
+        # Use a pipeline for a massive performance boost. All commands are sent at once.
+        with self.cache_client.pipeline() as pipe:
+            for old_key in all_old_keys:
+                # Replace only the first occurrence to correctly form the new key
+                new_key = old_key.replace(old_prefix, new_prefix_for_current_env, 1)
+                pipe.rename(old_key, new_key)
+                migrated_count += 1
+            
+            # Set the flag so this never runs again for this environment
+            pipe.set(migration_flag_key, 'true')
+            pipe.execute()
+        
+        safe_print(f'   ✅ Successfully upgraded {migrated_count} KB entries for this environment.')
+
     def _perform_v3_metadata_migration(self, flag_key: str):
         """
         (CORRECTED) Scans all existing package entries and adds the 'install_type' and
