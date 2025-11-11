@@ -97,14 +97,14 @@ class UVFailureDetector:
 def debug_python_context(label=""):
     """Print comprehensive Python context information for debugging."""
     print(f"\n{'='*70}")
-    print(f"🔍 DEBUG CONTEXT CHECK: {label}")
+    safe_print(f"🔍 DEBUG CONTEXT CHECK: {label}")
     print(f"{'='*70}")
-    print(f"📍 sys.executable:        {sys.executable}")
-    print(f"📍 sys.version:           {sys.version}")
-    print(f"📍 sys.version_info:      {sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}")
-    print(f"📍 os.getpid():           {os.getpid()}")
-    print(f"📍 __file__ (if exists):  {__file__ if '__file__' in globals() else 'N/A'}")
-    print(f"📍 Path.cwd():            {Path.cwd()}")
+    safe_print(f"📍 sys.executable:        {sys.executable}")
+    safe_print(f"📍 sys.version:           {sys.version}")
+    safe_print(f"📍 sys.version_info:      {sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}")
+    safe_print(f"📍 os.getpid():           {os.getpid()}")
+    safe_print(f"📍 __file__ (if exists):  {__file__ if '__file__' in globals() else 'N/A'}")
+    safe_print(f"📍 Path.cwd():            {Path.cwd()}")
     
     # Environment variables that might affect context
     relevant_env_vars = [
@@ -112,13 +112,13 @@ def debug_python_context(label=""):
         'OMNIPKG_MAIN_ORCHESTRATOR_PID', 'OMNIPKG_RELAUNCHED',
         'OMNIPKG_LANG', 'PYTHONHOME', 'PYTHONEXECUTABLE'
     ]
-    print(f"\n📦 Relevant Environment Variables:")
+    safe_print(f"\n📦 Relevant Environment Variables:")
     for var in relevant_env_vars:
         value = os.environ.get(var, 'NOT SET')
         print(f"   {var}: {value}")
     
     # Check sys.path for omnipkg locations
-    print(f"\n📂 sys.path (first 5 entries):")
+    safe_print(f"\n📂 sys.path (first 5 entries):")
     for i, path in enumerate(sys.path[:5]):
         print(f"   [{i}] {path}")
     

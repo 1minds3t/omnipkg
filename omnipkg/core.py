@@ -4612,9 +4612,9 @@ class omnipkg:
 
     result = subprocess.run(cmd, capture_output=True, text=True)
     if result.returncode == 0:
-        print("   ✅ Synced: {current_version}")
+        safe_print("   ✅ Synced: {current_version}")
     else:
-        print(f"   ❌ Failed to sync: {{result.stderr}}")
+        safe_print(f"   ❌ Failed to sync: {{result.stderr}}")
     sys.exit(result.returncode)
             """)
             
@@ -8549,12 +8549,12 @@ class omnipkg:
                     print(f"    | {{line.strip()}}")
                 return_code = process.wait()
                 if return_code != 0:
-                    print(f"--- ❌ [Upgrader] FAILED: {{description}} (exit code {{return_code}}) ---")
+                    safe_print(f"--- ❌ [Upgrader] FAILED: {{description}} (exit code {{return_code}}) ---")
                     sys.exit(return_code)
-                print(f"--- ✅ [Upgrader] SUCCESS: {{description}} ---")
+                safe_print(f"--- ✅ [Upgrader] SUCCESS: {{description}} ---")
 
             try:
-                print("--- 🚀 [Upgrader] Standalone upgrader process started. ---")
+                safe_print("--- 🚀 [Upgrader] Standalone upgrader process started. ---")
                 time.sleep(1)
 
                 run_cmd(
@@ -8568,14 +8568,14 @@ class omnipkg:
                 )
 
                 print("\\n" + "="*70)
-                print("--- ✅ [Upgrader] FILESYSTEM UPGRADE COMPLETE ---")
+                safe_print("--- ✅ [Upgrader] FILESYSTEM UPGRADE COMPLETE ---")
                 print(f"--- omnipkg has been successfully upgraded to version {target_version_str}. ---")
                 print("--- The Knowledge Base will sync automatically on your next command. ---")
                 print("="*70)
                 sys.exit(0)
 
             except Exception as e:
-                print(f"--- ❌ [Upgrader] A fatal error occurred: {{e}} ---")
+                safe_print(f"--- ❌ [Upgrader] A fatal error occurred: {{e}} ---")
                 import traceback
                 traceback.print_exc()
                 sys.exit(1)

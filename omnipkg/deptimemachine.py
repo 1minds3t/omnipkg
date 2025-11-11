@@ -11,6 +11,10 @@ import shutil
 import tempfile
 import sys
 from omnipkg.i18n import _
+try:
+    from .common_utils import safe_print
+except ImportError:
+    from omnipkg.common_utils import safe_print
 
 
 def get_release_date(package_name, version):
@@ -90,26 +94,26 @@ def find_historical_versions(dependencies, cutoff_date):
                             latest_valid_datetime = upload_time
             if latest_valid_version:
                 historical_versions[dep_name] = latest_valid_version
-                print(_('    ✓ Found {}=={} (released {})').format(dep_name, latest_valid_version, latest_valid_datetime))
+                safe_print(_('    ✓ Found {}=={} (released {})').format(dep_name, latest_valid_version, latest_valid_datetime))
             else:
-                print(f"    ✗ No compatible version found for '{dep_name}' before {cutoff_date}")
+                safe_print(f"    ✗ No compatible version found for '{dep_name}' before {cutoff_date}")
         except requests.exceptions.RequestException as e:
-            print(f'    ✗ Error fetching metadata for {dep_name}: {e}')
+            safe_print(f'    ✗ Error fetching metadata for {dep_name}: {e}')
         except Exception as e:
-            print(_('    ✗ Unexpected error processing {}: {}').format(dep_name, e))
+            safe_print(_('    ✗ Unexpected error processing {}: {}').format(dep_name, e))
     return historical_versions
 
 def find_compatible_versions(historical_versions, target_pkg, target_ver, cutoff_date):
     """
     Find newer compatible versions for packages that fail to build with historical versions.
     """
-    print(_('\n🔧 Finding build-compatible versions...'))
+    safe_print(_('\n🔧 Finding build-compatible versions...'))
     compatibility_overrides = {'MarkupSafe': '1.1.1', 'Jinja2': '2.11.3', 'itsdangerous': '1.1.0'}
     updated_versions = {}
     for pkg_name, historical_version in historical_versions.items():
         if pkg_name in compatibility_overrides:
             new_version = compatibility_overrides[pkg_name]
-            print(_('  🔄 {}: {} → {} (compatibility fix)').format(pkg_name, historical_version, new_version))
+            safe_print(_('  🔄 {}: {} → {} (compatibility fix)').format(pkg_name, historical_version, new_version))
             updated_versions[pkg_name] = new_version
         else:
             updated_versions[pkg_name] = historical_version
@@ -120,7 +124,7 @@ def execute_historical_install(target_pkg, target_ver, historical_versions, auto
     Execute the actual installation of the target package with historical dependencies.
     """
     print('\n' + '=' * 80)
-    print(_('📋 INITIAL DEPENDENCY RESOLUTION:'))
+    safe_print(_('📋 INITIAL DEPENDENCY RESOLUTION:'))
     print('=' * 80)
     for pkg, ver in historical_versions.items():
         print(_('  {}=={}').format(pkg, ver))
@@ -132,32 +136,32 @@ def execute_historical_install(target_pkg, target_ver, historical_versions, auto
     install_packages.append(f'"{target_pkg}=={target_ver}"')
     install_command = ['pip', 'install'] + [pkg.strip('"') for pkg in install_packages]
     command_str = 'pip install ' + ' '.join(install_packages)
-    print('\n🚀 FINAL INSTALL COMMAND (with compatibility fixes):')
+    safe_print('\n🚀 FINAL INSTALL COMMAND (with compatibility fixes):')
     print('-' * 80)
     print(command_str)
     print('-' * 80)
     if not auto_install:
-        print(_('\n❓ Do you want to execute this installation? (y/N): '), end='')
+        safe_print(_('\n❓ Do you want to execute this installation? (y/N): '), end='')
         response = input().strip().lower()
         if response not in ['y', 'yes']:
-            print(_('❌ Installation cancelled by user.'))
+            safe_print(_('❌ Installation cancelled by user.'))
             return False
-    print(_('\n🔧 Executing installation...'))
+    safe_print(_('\n🔧 Executing installation...'))
     print('=' * 80)
     strategies = [('Standard installation', install_command), ('With --no-build-isolation', install_command + ['--no-build-isolation']), ('Force reinstall', install_command + ['--force-reinstall', '--no-deps'])]
     for strategy_name, cmd in strategies:
-        print(_('\n🎯 Trying: {}').format(strategy_name))
+        safe_print(_('\n🎯 Trying: {}').format(strategy_name))
         print('-' * 40)
         try:
             result = subprocess.run(cmd, check=True, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, bufsize=1, universal_newlines=True)
             print(result.stdout)
             print('=' * 80)
-            print(_('✅ INSTALLATION COMPLETED SUCCESSFULLY! (using {})').format(strategy_name))
+            safe_print(_('✅ INSTALLATION COMPLETED SUCCESSFULLY! (using {})').format(strategy_name))
             print('=' * 80)
             verify_installation(target_pkg, target_ver, compatible_versions)
             return True
         except subprocess.CalledProcessError as e:
-            print(_('❌ {} failed:').format(strategy_name))
+            safe_print(_('❌ {} failed:').format(strategy_name))
             if hasattr(e, 'stdout') and e.stdout:
                 error_lines = e.stdout.strip().split('\n')
                 for line in error_lines[-10:]:
@@ -165,9 +169,9 @@ def execute_historical_install(target_pkg, target_ver, historical_versions, auto
             print()
             continue
     print('=' * 80)
-    print(_('❌ ALL INSTALLATION STRATEGIES FAILED!'))
+    safe_print(_('❌ ALL INSTALLATION STRATEGIES FAILED!'))
     print('=' * 80)
-    print(_('💡 Suggestions:'))
+    safe_print(_('💡 Suggestions:'))
     print(_('  1. Try installing in a fresh Python 3.7 or 3.8 environment'))
     print(_("  2. Use older setuptools: pip install 'setuptools<58'"))
     print('  3. Install packages individually with --no-deps')
@@ -177,7 +181,7 @@ def verify_installation(target_pkg, target_ver, historical_versions):
     """
     Verify that the packages were installed with the correct versions.
     """
-    print(_('\n🔍 Verifying installation...'))
+    safe_print(_('\n🔍 Verifying installation...'))
     print('-' * 50)
     check_package_version(target_pkg, target_ver)
     for pkg_name, expected_version in historical_versions.items():
@@ -194,13 +198,13 @@ def check_package_version(package_name, expected_version):
             if line.startswith('Version:'):
                 installed_version = line.split(':', 1)[1].strip()
                 if installed_version == expected_version:
-                    print(_('  ✓ {}=={} (correct)').format(package_name, installed_version))
+                    safe_print(_('  ✓ {}=={} (correct)').format(package_name, installed_version))
                 else:
-                    print(_('  ⚠️  {}=={} (expected {})').format(package_name, installed_version, expected_version))
+                    safe_print(_('  ⚠️  {}=={} (expected {})').format(package_name, installed_version, expected_version))
                 return
-        print(_('  ❓ {}: Could not determine version').format(package_name))
+        safe_print(_('  ❓ {}: Could not determine version').format(package_name))
     except subprocess.CalledProcessError:
-        print(_('  ❌ {}: Not found or not installed').format(package_name))
+        safe_print(_('  ❌ {}: Not found or not installed').format(package_name))
 
 def main():
     if len(sys.argv) < 2:
@@ -217,53 +221,53 @@ def main():
     target_pkg = 'flask-login'
     target_ver = '0.4.1'
     auto_install = False
-    print(_('🎯 Target: {}=={}').format(target_pkg, target_ver))
-    print(f'\n📅 Step 1: Getting release date for {target_pkg}=={target_ver}')
+    safe_print(_('🎯 Target: {}=={}').format(target_pkg, target_ver))
+    safe_print(f'\n📅 Step 1: Getting release date for {target_pkg}=={target_ver}')
     release_date = get_release_date(target_pkg, target_ver)
     if not release_date:
-        print(_('❌ Failed to get release date. Exiting.'))
+        safe_print(_('❌ Failed to get release date. Exiting.'))
         return 1
-    print(_('✓ Successfully retrieved release date: {}').format(release_date))
-    print(_('\n📦 Step 2: Getting actual dependencies via real install'))
+    safe_print(_('✓ Successfully retrieved release date: {}').format(release_date))
+    safe_print(_('\n📦 Step 2: Getting actual dependencies via real install'))
     dep_names = get_dependency_names_from_real_install(target_pkg, target_ver)
     if not dep_names:
-        print(_('ℹ️ No dependencies found to process.'))
+        safe_print(_('ℹ️ No dependencies found to process.'))
         final_command = _('pip install "{}=={}"').format(target_pkg, target_ver)
-        print(_('\n🚀 Install command:\n{}').format(final_command))
+        safe_print(_('\n🚀 Install command:\n{}').format(final_command))
         if not auto_install:
-            print(_('\n❓ Do you want to install the target package? (y/N): '), end='')
+            safe_print(_('\n❓ Do you want to install the target package? (y/N): '), end='')
             response = input().strip().lower()
             if response not in ['y', 'yes']:
-                print(_('❌ Installation cancelled by user.'))
+                safe_print(_('❌ Installation cancelled by user.'))
                 return 0
         try:
             subprocess.run(['pip', 'install', f'{target_pkg}=={target_ver}'], check=True)
-            print(_('✅ Target package installed successfully!'))
+            safe_print(_('✅ Target package installed successfully!'))
         except subprocess.CalledProcessError as e:
-            print(_('❌ Failed to install target package: {}').format(e))
+            safe_print(_('❌ Failed to install target package: {}').format(e))
             return 1
         return 0
-    print(_('✓ Discovered dependencies: {}').format(dep_names))
-    print(_('\n🔍 Step 3: Finding historical versions'))
+    safe_print(_('✓ Discovered dependencies: {}').format(dep_names))
+    safe_print(_('\n🔍 Step 3: Finding historical versions'))
     historical_versions = find_historical_versions(dep_names, release_date)
     if historical_versions:
         success = execute_historical_install(target_pkg, target_ver, historical_versions, auto_install)
         if success:
-            print(_('\n🎉 Complete! {}=={} and all historical dependencies are now installed.').format(target_pkg, target_ver))
-            print(_('📦 The packages are installed in your current Python environment and can be found'))
+            safe_print(_('\n🎉 Complete! {}=={} and all historical dependencies are now installed.').format(target_pkg, target_ver))
+            safe_print(_('📦 The packages are installed in your current Python environment and can be found'))
             print(_('   in your site-packages directory, accessible to your Python interpreter.'))
             return 0
         else:
             return 1
     else:
-        print(_('\n❌ Could not resolve any dependencies. Exiting.'))
+        safe_print(_('\n❌ Could not resolve any dependencies. Exiting.'))
         return 1
 if __name__ == '__main__':
     try:
         exit(main())
     except KeyboardInterrupt:
-        print(_('\n\n⏹️  Installation interrupted by user.'))
+        safe_print(_('\n\n⏹️  Installation interrupted by user.'))
         exit(1)
     except Exception as e:
-        print(_('\n💥 Unexpected error: {}').format(e))
+        safe_print(_('\n💥 Unexpected error: {}').format(e))
         exit(1)

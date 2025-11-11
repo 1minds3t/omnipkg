@@ -93,3 +93,6 @@ detailed_changes.txt
 newfeatures/
 featurestoadd/
 featurestoadd/
+
+# Development utilities (personal use only)
+omnipkg/utils/emoji_print_fixer.py

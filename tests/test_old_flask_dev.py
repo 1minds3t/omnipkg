@@ -118,15 +118,15 @@ except Exception as e:
     sys.exit(1)
 
 def test_versions(main_ver, bubble_ver):
-    print("🔍 Testing version switching...")
+    safe_print("🔍 Testing version switching...")
     
     # Test 1: Main environment version (should just work normally)
-    print(f"\n📦 Test 1: Using main environment version ({main_ver})...")
+    safe_print(f"\n📦 Test 1: Using main environment version ({main_ver})...")
     try:
         import flask_login
         actual_version = get_version('flask-login')
         assert actual_version == main_ver, f"Expected {main_ver}, got {actual_version}"
-        print(f"✅ Main environment: flask-login {actual_version}")
+        safe_print(f"✅ Main environment: flask-login {actual_version}")
         
         # Clean up module for next test
         if 'flask_login' in sys.modules:
@@ -134,27 +134,27 @@ def test_versions(main_ver, bubble_ver):
         if 'flask' in sys.modules:
             del sys.modules['flask']
     except Exception as e:
-        print(f"❌ Main environment test failed: {e}")
+        safe_print(f"❌ Main environment test failed: {e}")
         import traceback
         traceback.print_exc()
         sys.exit(1)
     
     # Test 2: Bubble version (using omnipkgLoader)
-    print(f"\n📦 Test 2: Switching to bubble version ({bubble_ver})...")
+    safe_print(f"\n📦 Test 2: Switching to bubble version ({bubble_ver})...")
     try:
         with omnipkgLoader(f"flask-login=={bubble_ver}"):
             import flask_login
             actual_version = get_version('flask-login')
             assert actual_version == bubble_ver, f"Expected {bubble_ver}, got {actual_version}"
-            print(f"✅ Bubble version: flask-login {actual_version}")
+            safe_print(f"✅ Bubble version: flask-login {actual_version}")
     except Exception as e:
-        print(f"❌ Bubble version test failed: {e}")
+        safe_print(f"❌ Bubble version test failed: {e}")
         import traceback
         traceback.print_exc()
         sys.exit(1)
     
     print("\n" + "="*60)
-    print("🎯 SUCCESS: Version switching works perfectly!")
+    safe_print("🎯 SUCCESS: Version switching works perfectly!")
     print(f"   Main env: {main_ver}")
     print(f"   Bubble:   {bubble_ver}")
     print("="*60)

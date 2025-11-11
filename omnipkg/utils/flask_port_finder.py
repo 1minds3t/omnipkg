@@ -232,7 +232,7 @@ shutdown_file = Path("{self.shutdown_file}")
 
 def check_shutdown_signal(signum=None, frame=None):
     if shutdown_file.exists():
-        print("\\n🛑 Shutdown signal received, stopping Flask app...")
+        safe_print("\\n🛑 Shutdown signal received, stopping Flask app...")
         sys.exit(0)
 
 signal.signal(signal.SIGTERM, check_shutdown_signal)
