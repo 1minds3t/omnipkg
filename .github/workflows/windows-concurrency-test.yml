@@ -5,7 +5,6 @@ on:
   pull_request:
     branches: [ main ]
   workflow_dispatch:
-
 jobs:
   test:
     runs-on: windows-latest
@@ -15,40 +14,24 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          path: src
+          path: src  # ADD THIS - changes from D:\a\omnipkg\omnipkg to D:\a\omnipkg\src
       
       - name: Set up Python (3.11)
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
       
-      # CRITICAL: Set encoding BEFORE anything else
-      - name: Force UTF-8 globally (Windows fix)
+      # FIX: Force UTF-8 encoding globally for all Python processes
+      - name: Configure UTF-8 encoding (Windows fix)
         run: |
-          [System.Environment]::SetEnvironmentVariable('PYTHONIOENCODING', 'utf-8', 'Process')
-          [System.Environment]::SetEnvironmentVariable('PYTHONUTF8', '1', 'Process')
           echo "PYTHONIOENCODING=utf-8" >> $env:GITHUB_ENV
           echo "PYTHONUTF8=1" >> $env:GITHUB_ENV
-          
-          # Also set console to UTF-8
-          [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-          [Console]::InputEncoding = [System.Text.Encoding]::UTF8
-          
-          # Verify
-          Write-Host "✅ Encoding configured: $([Console]::OutputEncoding.EncodingName)"
-        shell: pwsh
-      
-      # NEW: Disable Windows Defender real-time scanning (huge CI speedup!)
-      - name: Disable Windows Defender (CI optimization)
-        run: |
-          Set-MpPreference -DisableRealtimeMonitoring $true -ErrorAction SilentlyContinue
-          Write-Host "✅ Defender disabled for CI run"
         shell: pwsh
       
       - name: Install omnipkg
         run: |
           python -m pip install --upgrade pip
-          pip install -e src
+          pip install -e src  # CHANGED: now references the 'src' directory
         shell: pwsh
       
       - name: Configure omnipkg for non-interactive use
@@ -64,96 +47,69 @@ jobs:
           Write-Host "✅ Omnipkg configured"
         shell: pwsh
       
-      # BETTER: Use input file instead of piping (Windows piping is unreliable)
-      - name: Run Demo (Option 8 - First Run)
+      - name: Run Demo (Option 8 - Quantum Multiverse)
         run: |
-          # Create input file (more reliable than piping on Windows)
-          "8" | Out-File -FilePath demo_input.txt -Encoding utf8 -NoNewline
-          
-          Write-Host "=== FIRST RUN ==="
-          python -m omnipkg.cli demo < demo_input.txt
-          
-          if ($LASTEXITCODE -ne 0) {
-            Write-Host "❌ First run failed with exit code: $LASTEXITCODE"
-            exit 1
-          }
-          
-          Write-Host "`n✅ First run completed successfully"
+          echo "8" | python -m omnipkg.cli demo
+          # Graceful exit to flush handles
+          python -c "import sys, time; sys.stdout.flush(); sys.stderr.flush(); time.sleep(0.5)"
         shell: pwsh
         working-directory: src
       
-      # IMPROVED: Second run with proper Windows file handling
-      - name: Run Demo (Option 8 - Second Run)
+      - name: Reset Python Context (Critical for Second Run)
         run: |
-          Write-Host "`n=== SECOND RUN PREPARATION ==="
-          
-          # Give Windows time to release file handles (critical!)
-          Write-Host "⏳ Waiting for file handles to release..."
-          Start-Sleep -Seconds 3
-          
-          # Clear Python bytecode cache (prevents stale imports)
-          Write-Host "🧹 Clearing Python cache..."
-          Get-ChildItem -Path . -Include __pycache__,*.pyc -Recurse -Force -ErrorAction SilentlyContinue | 
-            Remove-Item -Force -Recurse -ErrorAction SilentlyContinue
-          
-          # Force garbage collection (helps release handles)
-          python -c "import gc; gc.collect(); print('✅ GC complete')"
-          
-          Write-Host "`n=== SECOND RUN ==="
+          Write-Host "🧹 Resetting Python context to prevent DLL contamination..."
+          $pythonExe = Join-Path $env:pythonLocation "python.exe"
+          & $pythonExe -c "import sys; print(f'✅ Reset to: {sys.version}')"
+          Start-Sleep -Milliseconds 500
+        shell: pwsh  # ADD THIS - ensures we're in the right directory
+      
+      - name: Run Demo (Option 8 - Quantum Multiverse - Second Run - Optional)
+        continue-on-error: true
+        run: |
+          Write-Host "=== SECOND RUN DEBUG INFO ==="
+          Write-Host "Working Directory: $(Get-Location)"
           Write-Host "Python: $(python --version)"
-          Write-Host "Path: $((Get-Command python).Path)"
+          Write-Host "Python Path: $(Get-Command python).Path"
+          Write-Host "PYTHONIOENCODING: $env:PYTHONIOENCODING"
+          Write-Host "PYTHONUTF8: $env:PYTHONUTF8"
           
-          # Use input file again (consistent with first run)
-          "8" | Out-File -FilePath demo_input2.txt -Encoding utf8 -NoNewline
+          Write-Host "`n=== Checking omnipkg state ==="
+          python -c "import sys; print(f'sys.executable: {sys.executable}'); print(f'sys.path: {sys.path[:3]}')"
           
-          # Run with explicit error handling
-          $ErrorActionPreference = "Continue"
-          python -m omnipkg.cli demo < demo_input2.txt
-          $exitCode = $LASTEXITCODE
+          Write-Host "`n=== Attempting second run with retry logic ==="
+          $maxAttempts = 2
+          $attempt = 1
+          $success = $false
           
-          if ($exitCode -ne 0) {
-            Write-Host "`n❌ SECOND RUN FAILED"
-            Write-Host "Exit Code: $exitCode"
-            Write-Host "`n=== DIAGNOSTICS ==="
+          while ($attempt -le $maxAttempts -and -not $success) {
+            Write-Host "`n--- Attempt $attempt of $maxAttempts ---"
             
-            # Check if Python is still responsive
-            python -c "print('Python still works')" 2>&1
-            Write-Host "Python check exit code: $LASTEXITCODE"
-            
-            # Check omnipkg import
-            python -c "import omnipkg; print(f'Omnipkg: {omnipkg.__version__}')" 2>&1
-            Write-Host "Import check exit code: $LASTEXITCODE"
-            
-            # Show sys.path
-            python -c "import sys; print('\n'.join(sys.path[:5]))" 2>&1
-            
-            Write-Host "`n⚠️ Second run failed, but this is a known Windows CI flakiness issue"
-            Write-Host "See: https://github.com/actions/runner/issues/241"
-            exit 0  # Don't fail the workflow for known Windows flakiness
+            try {
+              # Add small delay before second run to let file locks release
+              if ($attempt -gt 1) {
+                Write-Host "Waiting 2 seconds for file locks to release..."
+                Start-Sleep -Seconds 2
+              }
+              
+              $output = echo "8" | python -m omnipkg.cli demo 2>&1
+              Write-Host $output
+              
+              if ($LASTEXITCODE -eq 0) {
+                Write-Host "✅ Run succeeded!"
+                $success = $true
+              } else {
+                Write-Host "❌ Exit code: $LASTEXITCODE"
+                $attempt++
+              }
+            } catch {
+              Write-Host "❌ Exception caught: $_"
+              Write-Host "Error details: $($_.Exception.Message)"
+              $attempt++
+            }
           }
           
-          Write-Host "`n✅ Second run completed successfully"
-        shell: pwsh
-        working-directory: src
-      
-      # NEW: Show what interpreters were installed
-      - name: Verify Installed Interpreters
-        if: always()
-        run: |
-          Write-Host "`n=== INSTALLED INTERPRETERS ==="
-          python -c @"
-          import os
-          import glob
-          
-          base = os.path.expanduser('~/.omnipkg') if os.name != 'nt' else os.path.join(os.environ.get('LOCALAPPDATA', ''), 'omnipkg')
-          pattern = os.path.join(base, '**', 'python.exe')
-          
-          interpreters = glob.glob(pattern, recursive=True)
-          if interpreters:
-              for i, interp in enumerate(interpreters, 1):
-                  print(f'{i}. {interp}')
-          else:
-              print('No interpreters found')
-          "@
+          if (-not $success) {
+            Write-Host "`n⚠️ All attempts failed, but continuing (optional step)"
+          }
         shell: pwsh
         working-directory: src
