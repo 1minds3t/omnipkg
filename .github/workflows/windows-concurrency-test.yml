@@ -1,14 +1,16 @@
 name: "🚀 Windows - Omnipkg Demo Test (CI - No Redis)"
+
 on:
   push:
     branches: [ main ]
   pull_request:
     branches: [ main ]
   workflow_dispatch:
+
 jobs:
   test:
     runs-on: windows-latest
-    timeout-minutes: 30
+    timeout-minutes: 15
     
     steps:
       - name: Checkout repository
@@ -51,9 +53,3 @@ jobs:
         run: echo "8" | python -m omnipkg.cli demo
         shell: pwsh
         working-directory: src  # ADD THIS - ensures we're in the right directory
-      
-      - name: Run Demo (Option 8 - Quantum Multiverse - Second Run - Optional)
-        continue-on-error: true
-        run: echo "8" | python -m omnipkg.cli demo
-        shell: pwsh
-        working-directory: src
