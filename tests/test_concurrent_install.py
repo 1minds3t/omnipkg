@@ -93,7 +93,11 @@ def adopt_interpreter(version: str) -> bool:
     return True
 
 def install_package_safe(python_exe: str, package_spec: str, version: str) -> tuple[bool, float]:
-    """Install a package with proper locking for Windows CI safety."""
+    """Install a package with proper locking for Windows CI safety.
+    
+    Key insight: We must run BOTH swap and install using the TARGET Python interpreter,
+    not the current one. This ensures proper context isolation.
+    """
     prefix = "[PREP]"
     package_name, package_version = package_spec.split('==')
     
@@ -109,22 +113,28 @@ def install_package_safe(python_exe: str, package_spec: str, version: str) -> tu
     
     # CRITICAL: Lock during install for Windows CI safety
     with omnipkg_lock:
-        # Swap context to target Python
+        # Step 1: Swap to target Python using the TARGET interpreter
+        # This ensures the swap happens in the correct context
         swap_result = subprocess.run(
-            [sys.executable, '-m', 'omnipkg.cli', 'swap', 'python', version],
+            [python_exe, '-m', 'omnipkg.cli', 'swap', 'python', version],
             capture_output=True, text=True
         )
         
         if swap_result.returncode != 0:
             safe_print(f"{prefix} ❌ Failed to swap to Python {version}")
+            safe_print(f"{prefix} STDERR: {swap_result.stderr}")
             return False, 0
         
-        # Install package
-        cmd = [python_exe, '-m', 'omnipkg.cli', 'install', package_spec]
-        result = subprocess.run(cmd, capture_output=True, text=True)
+        # Step 2: Install package using the TARGET interpreter
+        # Now the context is set correctly for this Python version
+        install_result = subprocess.run(
+            [python_exe, '-m', 'omnipkg.cli', 'install', package_spec],
+            capture_output=True, text=True
+        )
         
-        if result.returncode != 0:
-            safe_print(f"{prefix} ❌ Install failed: {result.stderr}")
+        if install_result.returncode != 0:
+            safe_print(f"{prefix} ❌ Install failed for {package_spec}")
+            safe_print(f"{prefix} STDERR: {install_result.stderr}")
             return False, 0
     
     duration = (time.perf_counter() - start) * 1000
