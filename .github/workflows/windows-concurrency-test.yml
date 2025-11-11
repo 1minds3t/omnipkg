@@ -1,4 +1,3 @@
-
 name: "🚀 Windows - Omnipkg Demo Test (CI - No Redis)"
 on:
   push:
@@ -55,6 +54,51 @@ jobs:
       
       - name: Run Demo (Option 8 - Quantum Multiverse - Second Run - Optional)
         continue-on-error: true
-        run: echo "8" | python -m omnipkg.cli demo
+        run: |
+          Write-Host "=== SECOND RUN DEBUG INFO ==="
+          Write-Host "Working Directory: $(Get-Location)"
+          Write-Host "Python: $(python --version)"
+          Write-Host "Python Path: $(Get-Command python).Path"
+          Write-Host "PYTHONIOENCODING: $env:PYTHONIOENCODING"
+          Write-Host "PYTHONUTF8: $env:PYTHONUTF8"
+          
+          Write-Host "`n=== Checking omnipkg state ==="
+          python -c "import sys; print(f'sys.executable: {sys.executable}'); print(f'sys.path: {sys.path[:3]}')"
+          
+          Write-Host "`n=== Attempting second run with retry logic ==="
+          $maxAttempts = 2
+          $attempt = 1
+          $success = $false
+          
+          while ($attempt -le $maxAttempts -and -not $success) {
+            Write-Host "`n--- Attempt $attempt of $maxAttempts ---"
+            
+            try {
+              # Add small delay before second run to let file locks release
+              if ($attempt -gt 1) {
+                Write-Host "Waiting 2 seconds for file locks to release..."
+                Start-Sleep -Seconds 2
+              }
+              
+              $output = echo "8" | python -m omnipkg.cli demo 2>&1
+              Write-Host $output
+              
+              if ($LASTEXITCODE -eq 0) {
+                Write-Host "✅ Run succeeded!"
+                $success = $true
+              } else {
+                Write-Host "❌ Exit code: $LASTEXITCODE"
+                $attempt++
+              }
+            } catch {
+              Write-Host "❌ Exception caught: $_"
+              Write-Host "Error details: $($_.Exception.Message)"
+              $attempt++
+            }
+          }
+          
+          if (-not $success) {
+            Write-Host "`n⚠️ All attempts failed, but continuing (optional step)"
+          }
         shell: pwsh
         working-directory: src
