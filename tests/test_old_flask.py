@@ -139,10 +139,10 @@ except Exception as e:
     sys.exit(1)
 
 def test_versions(main_ver, bubble_ver):
-    print("🔍 Testing omnipkg's seamless version switching...")
+    safe_print("🔍 Testing omnipkg's seamless version switching...")
     
     # Test 1: Main environment version
-    print(f"\n📦 Test 1: Using main environment version ({main_ver})...")
+    safe_print(f"\n📦 Test 1: Using main environment version ({main_ver})...")
     try:
         if 'flask_login' in sys.modules:
             del sys.modules['flask_login']
@@ -151,23 +151,23 @@ def test_versions(main_ver, bubble_ver):
         actual_version = get_version('flask-login')
         
         if actual_version != main_ver:
-            print(f"❌ Version mismatch: expected {main_ver}, got {actual_version}")
+            safe_print(f"❌ Version mismatch: expected {main_ver}, got {actual_version}")
             sys.exit(1)
         
-        print(f"✅ Main environment: flask-login {actual_version}")
+        safe_print(f"✅ Main environment: flask-login {actual_version}")
         
         # Check for a feature from modern version
         if hasattr(flask_login, 'LoginManager'):
-            print("✅ LoginManager class found (modern feature works)")
+            safe_print("✅ LoginManager class found (modern feature works)")
         
     except Exception as e:
-        print(f"❌ Main environment test failed: {e}")
+        safe_print(f"❌ Main environment test failed: {e}")
         import traceback
         traceback.print_exc()
         sys.exit(1)
     
     # Test 2: Bubble version (using omnipkgLoader with strict isolation)
-    print(f"\n📦 Test 2: Switching to bubble version ({bubble_ver})...")
+    safe_print(f"\n📦 Test 2: Switching to bubble version ({bubble_ver})...")
     try:
         # Clean modules before switching
         if 'flask_login' in sys.modules:
@@ -180,26 +180,26 @@ def test_versions(main_ver, bubble_ver):
             actual_version = get_version('flask-login')
             
             if actual_version != bubble_ver:
-                print(f"❌ Version mismatch: expected {bubble_ver}, got {actual_version}")
+                safe_print(f"❌ Version mismatch: expected {bubble_ver}, got {actual_version}")
                 sys.exit(1)
             
-            print(f"✅ Bubble version: flask-login {actual_version}")
+            safe_print(f"✅ Bubble version: flask-login {actual_version}")
             
             # Check for core functionality
             if hasattr(flask_login, 'login_user'):
-                print("✅ 'login_user' function found (core 0.4.1 functionality works)")
+                safe_print("✅ 'login_user' function found (core 0.4.1 functionality works)")
             else:
-                print("❌ 'login_user' function NOT found")
+                safe_print("❌ 'login_user' function NOT found")
                 sys.exit(1)
     
     except Exception as e:
-        print(f"❌ Bubble version test failed: {e}")
+        safe_print(f"❌ Bubble version test failed: {e}")
         import traceback
         traceback.print_exc()
         sys.exit(1)
     
     # Test 3: Verify we're back to main version
-    print(f"\n📦 Test 3: Verifying automatic reversion to main environment...")
+    safe_print(f"\n📦 Test 3: Verifying automatic reversion to main environment...")
     try:
         if 'flask_login' in sys.modules:
             del sys.modules['flask_login']
@@ -208,22 +208,22 @@ def test_versions(main_ver, bubble_ver):
         current_version = get_version('flask-login')
         
         if current_version == main_ver:
-            print(f"✅ Back to modern version: {current_version}")
-            print("🔄 Perfect! Seamlessly switched between legacy and modern versions!")
+            safe_print(f"✅ Back to modern version: {current_version}")
+            safe_print("🔄 Perfect! Seamlessly switched between legacy and modern versions!")
         else:
-            print(f"⚠️  Expected {main_ver} but got {current_version}")
+            safe_print(f"⚠️  Expected {main_ver} but got {current_version}")
     
     except Exception as e:
-        print(f"❌ Reversion test failed: {e}")
+        safe_print(f"❌ Reversion test failed: {e}")
         import traceback
         traceback.print_exc()
         sys.exit(1)
     
     print("\n" + "="*60)
-    print("🎯 THE MAGIC: Legacy and modern code coexist perfectly!")
+    safe_print("🎯 THE MAGIC: Legacy and modern code coexist perfectly!")
     print(f"   • Modern ({main_ver}): Active in main environment")
     print(f"   • Legacy ({bubble_ver}): Available in isolated bubble")
-    print("🚀 No virtual environments, no containers - pure Python magic!")
+    safe_print("🚀 No virtual environments, no containers - pure Python magic!")
     print("="*60)
 
 if __name__ == "__main__":

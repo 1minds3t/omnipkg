@@ -194,12 +194,12 @@ class AIImportHealer:
     def _log(self, msg: str):
         """Log message if verbose mode is on."""
         if self.verbose:
-            print(f"🔧 {msg}", file=sys.stderr)
+            safe_print(f"🔧 {msg}", file=sys.stderr)
     
     def _summary(self, msg: str):
         """Show summary message unless silent mode is on."""
         if not self.silent:
-            print(f"🔧 {msg}", file=sys.stderr)
+            safe_print(f"🔧 {msg}", file=sys.stderr)
     
     def detect_hallucinated_imports(self, code: str) -> List[Tuple[str, str, bool]]:
         """
@@ -420,17 +420,21 @@ def main():
     suspicious_but_safe = """
 # This is calculator.py - a real module in this project
 from calculator import add, subtract
+try:
+    from .common_utils import safe_print
+except ImportError:
+    from omnipkg.common_utils import safe_print
 
 def multiply(x, y):
     return add(x, y) * 2  # Uses real calculator module
 """
     
     print("=" * 60)
-    print("🤖 AI IMPORT HALLUCINATION HEALER - IMPROVED DEMO")
+    safe_print("🤖 AI IMPORT HALLUCINATION HEALER - IMPROVED DEMO")
     print("=" * 60)
     
     # Test 1: Obvious hallucinations
-    print("\n📋 Test 1: OBVIOUS hallucinations (WILL be removed)")
+    safe_print("\n📋 Test 1: OBVIOUS hallucinations (WILL be removed)")
     print("-" * 60)
     print(obvious_hallucination)
     print("-" * 60)
@@ -438,7 +442,7 @@ def multiply(x, y):
     healer1 = AIImportHealer(verbose=True, aggressive=False)
     healed1, was_healed1 = healer1.heal(obvious_hallucination)
     
-    print("\n💊 Healed code:")
+    safe_print("\n💊 Healed code:")
     print("-" * 60)
     print(healed1)
     print("-" * 60)
@@ -446,7 +450,7 @@ def multiply(x, y):
     
     # Test 2: Legitimate imports
     print("\n" + "=" * 60)
-    print("📋 Test 2: LEGITIMATE imports (will NOT be removed)")
+    safe_print("📋 Test 2: LEGITIMATE imports (will NOT be removed)")
     print("-" * 60)
     print(legitimate_code)
     print("-" * 60)
@@ -454,7 +458,7 @@ def multiply(x, y):
     healer2 = AIImportHealer(verbose=True, aggressive=False)
     healed2, was_healed2 = healer2.heal(legitimate_code)
     
-    print("\n💊 Result:")
+    safe_print("\n💊 Result:")
     print("-" * 60)
     print(healed2)
     print("-" * 60)
@@ -462,7 +466,7 @@ def multiply(x, y):
     
     # Test 3: Suspicious but contextually safe
     print("\n" + "=" * 60)
-    print("📋 Test 3: SUSPICIOUS but contextually safe")
+    safe_print("📋 Test 3: SUSPICIOUS but contextually safe")
     print("-" * 60)
     print(suspicious_but_safe)
     print("-" * 60)
@@ -470,7 +474,7 @@ def multiply(x, y):
     healer3 = AIImportHealer(verbose=True, aggressive=False)
     healed3, was_healed3 = healer3.heal(suspicious_but_safe)
     
-    print("\n💊 Result:")
+    safe_print("\n💊 Result:")
     print("-" * 60)
     print(healed3)
     print("-" * 60)
@@ -478,7 +482,7 @@ def multiply(x, y):
     
     # Show usage examples
     print("\n" + "=" * 60)
-    print("🔌 OMNIPKG INTEGRATION EXAMPLES:")
+    safe_print("🔌 OMNIPKG INTEGRATION EXAMPLES:")
     print("=" * 60)
     print("""
 # Conservative mode (default) - only removes OBVIOUS placeholders:

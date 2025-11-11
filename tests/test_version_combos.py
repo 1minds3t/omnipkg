@@ -208,7 +208,7 @@ def run_combo_test():
     # Prepend bubble paths to sys.path for this subprocess
     sys.path = bubble_paths_to_add + sys.path 
     
-    print("🔍 Python path (first 5 entries):", flush=True)
+    safe_print("🔍 Python path (first 5 entries):", flush=True)
     for idx, path in enumerate(sys.path[:5]):
         print(f"   {{idx}}: {{path}}", flush=True)
 
@@ -219,13 +219,13 @@ def run_combo_test():
         
         setup_time = time.perf_counter() - start_time
         
-        print(f"   🧪 numpy: {{np.__version__}}, scipy: {{sp.__version__}}", flush=True)
-        print(f"   📍 numpy location: {{np.__file__}}", flush=True)
-        print(f"   📍 scipy location: {{sp.__file__}}", flush=True)
-        print(f"   ⚡ Setup time: {{setup_time*1000:.2f}}ms", flush=True)
+        safe_print(f"   🧪 numpy: {{np.__version__}}, scipy: {{sp.__version__}}", flush=True)
+        safe_print(f"   📍 numpy location: {{np.__file__}}", flush=True)
+        safe_print(f"   📍 scipy location: {{sp.__file__}}", flush=True)
+        safe_print(f"   ⚡ Setup time: {{setup_time*1000:.2f}}ms", flush=True)
         
         result = np.array([1,2,3]) @ sp.sparse.eye(3).toarray()
-        print(f"   🔗 Compatibility check: {{result}}", flush=True)
+        safe_print(f"   🔗 Compatibility check: {{result}}", flush=True)
         
         # Version validation
         np_ok = False
@@ -234,28 +234,28 @@ def run_combo_test():
             if get_version('numpy') == "{np_ver}":
                 np_ok = True
             else:
-                print(f"   ❌ Numpy version mismatch! Expected {np_ver}, got {{get_version('numpy')}}", file=sys.stderr, flush=True)
+                safe_print(f"   ❌ Numpy version mismatch! Expected {np_ver}, got {{get_version('numpy')}}", file=sys.stderr, flush=True)
         except PackageNotFoundError:
-            print(f"   ❌ Numpy not found in subprocess!", file=sys.stderr, flush=True)
+            safe_print(f"   ❌ Numpy not found in subprocess!", file=sys.stderr, flush=True)
 
         try:
             if get_version('scipy') == "{sp_ver}":
                 sp_ok = True
             else:
-                print(f"   ❌ Scipy version mismatch! Expected {sp_ver}, got {{get_version('scipy')}}", file=sys.stderr, flush=True)
+                safe_print(f"   ❌ Scipy version mismatch! Expected {sp_ver}, got {{get_version('scipy')}}", file=sys.stderr, flush=True)
         except PackageNotFoundError:
-            print(f"   ❌ Scipy not found in subprocess!", file=sys.stderr, flush=True)
+            safe_print(f"   ❌ Scipy not found in subprocess!", file=sys.stderr, flush=True)
 
         if np_ok and sp_ok:
             total_time = time.perf_counter() - start_time
-            print(f"   🎯 Version verification: BOTH PASSED!", flush=True)
-            print(f"   ⚡ Total combo time: {{total_time*1000:.2f}}ms", flush=True)
+            safe_print(f"   🎯 Version verification: BOTH PASSED!", flush=True)
+            safe_print(f"   ⚡ Total combo time: {{total_time*1000:.2f}}ms", flush=True)
             sys.exit(0)
         else:
             sys.exit(1)
 
     except Exception as e:
-        print(f"   ❌ Test failed in subprocess: {{e}}", file=sys.stderr, flush=True)
+        safe_print(f"   ❌ Test failed in subprocess: {{e}}", file=sys.stderr, flush=True)
         import traceback
         traceback.print_exc(file=sys.stderr)
         sys.stderr.flush()
