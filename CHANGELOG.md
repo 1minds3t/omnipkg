@@ -1,6 +1,57 @@
 # Changelog
 
-# Changelog
+## [1.6.0]
+
+# omnipkg v1.6.0: The Quantum Lock & Concurrency Release
+
+After a monumentally productive weekend and over **70 developer commits**, this release transforms omnipkg from a powerful tool into a battle-hardened, production-grade orchestrator. This isn't just an update; it's a foundational rewrite of the core engine, focused on eliminating race conditions, conquering state corruption, and achieving true, safe concurrency on all platforms, including Windows.
+
+With over **6,000 lines of code changed**, this release introduces an entirely new level of intelligence, compatibility, and resilience to the system.
+
+## 🚀 New Features & Major Architectural Victories
+
+### True, Multi-Platform Concurrency: The "Impossible" Achieved
+
+Omnipkg now fully supports simultaneous, parallel operations without corrupting its own state. The "Quantum Multiverse" is no longer just a concept—it's a reality. Our Windows CI now proves that **three concurrent threads can simultaneously swap to different Python versions, install different package versions, and operate in the same environment without a single failure.**
+
+This was made possible by a ground-up re-architecture of state management:
+- **Atomic Registry Operations:** All writes to the interpreter `registry.json` are now protected by file locks and atomic move operations.
+- **The "Admin vs. Worker" Firewall:** A critical safety rule has been implemented. The "native" interpreter is a protected "admin" context, and "worker" contexts (e.g., a thread on Python 3.9) are forbidden from modifying the native environment, solving the primary source of self-syncing bugs and race conditions.
+
+### Intelligent, Trustworthy Self-Healing
+
+The "zombie state"—where an interpreter exists on disk but is unknown to the registry—has been eradicated. The core commands are now self-aware and capable of healing the system.
+- **Smart `swap` Command:** Now features a multi-tiered fallback that will **automatically trigger a full filesystem rescan** to find and register "zombie" interpreters before proceeding.
+- **Hardened `adopt` & `remove`:** These commands are now fully transactional, performing a final rescan to verify the ground truth before reporting success. The system will never lie to you again.
+
+### Full Python 3.7+ Compatibility & Next-Gen Resolution
+
+- **Legacy Project Support:** Omnipkg now fully supports managing projects running on Python 3.7. The entire dependency chain has been updated, and omnipkg can now download and manage standalone Python 3.7 interpreters.
+- **Smarter Dependency Resolution:** Omnipkg now intelligently calculates the correct intersection of version requirements (e.g., `numpy<2.0` vs. `numpy>=1.26`).
+
+### Platform-Aware Intelligence & User Experience
+
+- **Platform-Aware Wheel Selection:** Omnipkg now inspects all available package files, parsing wheel tags to select the best binary wheel for your specific OS, CPU architecture, and Python version.
+  > *Pip may still be a reckless time traveler, but with omnipkg, it's now carrying the right passport.*
+- **"Return to Origin" Install Guarantee:** The `install` command now automatically returns you to your original Python context after a "Quantum Healing" event.
+- **Blazing Fast Startup (204x Faster Self-Heal):** The startup self-heal check has been optimized with a multi-tiered caching strategy, reducing its execution time from **138ms down to a mere 0.677ms** on a cache hit.
+
+## 📝 Important Notes & Known Issues
+
+- **Native Interpreter Sync:** To ensure maximum safety and respect for the user's environment, the self-healing mechanism will sync all *managed* interpreters automatically, but it will **not** automatically upgrade the *native* `omipkg` installation. This is intentional. To upgrade the native installation, please use the explicit `omnipkg upgrade omnipkg` command, or `pip install -e .` for developers.
+- **Python 3.7 Self-Heal:** While Python 3.7 is now fully supported for adoption, installation, and swapping, the self-healing logic for identifying it as a "native" interpreter is still under development. This is a known issue that will be resolved in an upcoming patch release.
+
+## 🔮 What's Next: Activating "Quantum Installation"
+
+The individual pieces of our next great leap are already here. This release doesn't just promise future features; it ships the proven, foundational technology for them.
+
+The `install` command's **"Quantum Healing"** engine can already perform fully autonomous, cross-interpreter installations—detecting Python version incompatibilities, adopting the correct Python version, installing the package, and seamlessly returning to the original context. The `run` command's **auto-healing loader** can already activate version "bubbles" at runtime.
+
+The next major step is to **integrate these two proven technologies.**
+
+In a near-future release, the `omnipkg run` loader will be wired directly into the Quantum Healing engine. When a script `import`s a package that requires a completely different version of Python, the loader won't just fail—it will trigger the full, cross-dimensional installation workflow that `omnipkg install` uses today.
+
+The architecture is built. The engine is battle-tested. The final integration is the next logical step. The multiverse is not just expanding; it's becoming fully interactive.
 
 ## [1.5.8] - 2025-10-26
 
