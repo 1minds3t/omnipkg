@@ -1,7 +1,6 @@
 [build-system]
-# Python 3.7 needs older setuptools (setuptools 61.0 requires Python 3.7.9+)
-# But to be safe and support 3.7.0+, use setuptools 50.x which supports 3.6+
-requires = ["setuptools>=50.0", "wheel"]
+# Python 3.7 compatible setuptools (newer versions require Python 3.8+)
+requires = ["setuptools>=50.0,<70.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -13,7 +12,10 @@ authors = [
 description = "The Ultimate Python Dependency Resolver. One environment. Infinite packages. Zero conflicts."
 readme = "README.md"
 requires-python = ">=3.7, <3.15"
+
+# Use old-style license for Python 3.7 compatibility
 license = { text = "AGPL-3.0-only OR LicenseRef-Proprietary" }
+
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
@@ -33,8 +35,8 @@ classifiers = [
     "Topic :: Software Development :: Build Tools",
     "Topic :: System :: Software Distribution",
 ]
+
 dependencies = [
-    # Core dependencies that work on Python 3.7+
     "requests>=2.20",
     "filelock>=3.9",
     
@@ -63,14 +65,13 @@ dependencies = [
     "aiohttp>=3.13.1; python_version >= '3.8'",
     
     # Safety: different versions for different Python versions
-    # Python 3.7-3.9: Use older safety
     "safety>=2.0.0,<3.0; python_version < '3.10'",
     "safety>=3.0; python_version >= '3.10' and python_version < '3.14'",
     
     # pip-audit only for 3.14+
     "pip-audit>=2.6.0; python_version >= '3.14'",
     
-    # uv: Check minimum Python version (may need adjustment)
+    # uv: Check minimum Python version
     "uv>=0.9.6; python_version >= '3.8'",
 ]
 
@@ -83,12 +84,11 @@ full = [
     "redis>=5.0; python_version >= '3.8'",
 ]
 
-# Python 3.7 testing dependencies
 dev = [
     "pytest>=6.0",
     "pytest-cov>=2.0",
-    "black>=22.0; python_version >= '3.8'",  # black requires 3.8+
-    "ruff>=0.1.0; python_version >= '3.8'",   # ruff requires 3.8+
+    "black>=22.0; python_version >= '3.8'",
+    "ruff>=0.1.0; python_version >= '3.8'",
 ]
 
 [project.urls]
@@ -103,20 +103,22 @@ omnipkg = "omnipkg.cli:main"
 8pkg = "omnipkg.cli:main"
 
 [tool.setuptools.packages.find]
-where = ["."]
-include = ["omnipkg*", "tests"]
+where = ["src"]
+include = ["omnipkg*", "tests*"]
 exclude = [
     "build*",
     "dist*",
-    "*.egg-info*"
+    "*.egg-info*",
+    "dev_tools*",
 ]
 
 [tool.setuptools.package-data]
-"omnipkg" = [
+omnipkg = [
     "locale/**/*.mo",
+    "locale/**/*.pot",
 ]
-"tests" = ["**/*.py"]
 
 [tool.setuptools]
+# Old setuptools format (compatible with setuptools 50.x)
 license-files = ["LICENSE", "COMMERCIAL_LICENSE.md"]
 include-package-data = true
