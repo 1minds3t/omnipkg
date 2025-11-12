@@ -157,7 +157,10 @@ def validate_flask_app(code: str, port: int, timeout: float = 5.0) -> bool:
     """
     validation_code = f'''
 import sys
-
+try:
+    from .common_utils import safe_print
+except ImportError:
+    from omnipkg.common_utils import safe_print
 app_code = {repr(code)}
 exec_globals = {{'__name__': '__main__'}}
 exec(app_code, exec_globals)
@@ -227,7 +230,10 @@ import signal
 import sys
 import time
 from pathlib import Path
-
+try:
+    from .common_utils import safe_print
+except ImportError:
+    from omnipkg.common_utils import safe_print
 shutdown_file = Path("{self.shutdown_file}")
 
 def check_shutdown_signal(signum=None, frame=None):

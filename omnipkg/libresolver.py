@@ -412,7 +412,10 @@ import sys
 import time
 import traceback
 import importlib
-
+try:
+    from .common_utils import safe_print
+except ImportError:
+    from omnipkg.common_utils import safe_print
 result = {{
     "success": False,
     "import_success": False,

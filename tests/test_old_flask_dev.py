@@ -104,7 +104,10 @@ def test_version_switching():
 import sys, os
 from importlib.metadata import version as get_version
 from pathlib import Path
-
+try:
+    from .common_utils import safe_print
+except ImportError:
+    from omnipkg.common_utils import safe_print
 # Bootstrap omnipkg loader
 try:
     import importlib.metadata
