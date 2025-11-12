@@ -16,6 +16,7 @@ import os
 import threading
 import platform
 import textwrap
+import shlex
 import time
 import re
 import shutil
@@ -6437,48 +6438,94 @@ class omnipkg:
             import traceback
             traceback.print_exc()
 
-    def show_package_info(self, package_spec: str) -> int:
-        if not self._connect_cache():
-            return 1
-            
-        # --- FIX: Capture the results of the sync scan ---
-        all_discovered_distributions = self._synchronize_knowledge_base_with_reality()
+    def show_package_info(self, pkg_name: str, pre_discovered_dists: Optional[List[importlib.metadata.Distribution]] = None):
+        """
+        Enhanced package data display with interactive selection.
+        """
+        from packaging.utils import canonicalize_name
+        c_name = canonicalize_name(pkg_name)
         
-        try:
-            pkg_name, requested_version = self._parse_package_spec(package_spec)
-            if requested_version:
-                safe_print('\n' + '=' * 60)
-                safe_print(_('📄 Detailed info for {} v{}').format(pkg_name, requested_version))
-                safe_print('=' * 60)
-                
-                # FIX: Find the installation and pass the dict, not the string
-                installations = self._find_package_installations(pkg_name)
-                
-                # Look for the specific version
-                target_install = None
-                for install in installations:
-                    if install.get('Version') == requested_version:
-                        target_install = install
-                        break
-                
-                if not target_install:
-                    safe_print(_('❌ Version {} not found for package {}').format(requested_version, pkg_name))
-                    safe_print(_('💡 Available versions:'))
-                    for install in installations:
-                        safe_print(f"   - {install.get('Version')} ({install.get('install_type', 'unknown')})")
-                    return 1
-                
-                # Pass the dict to _show_version_details
-                self._show_version_details(target_install)
+        # Find all installations
+        installations = self._find_package_installations(c_name)
+        
+        if not installations:
+            safe_print(_('❌ No installations found for package: {}').format(pkg_name))
+            return
+        
+        # Categorize installations
+        active_installs = [i for i in installations if i.get('install_type') == 'active']
+        bubble_installs = [i for i in installations if i.get('install_type') == 'bubble']
+        nested_installs = [i for i in installations if i.get('install_type') == 'nested']
+        vendored_installs = [i for i in installations if i.get('install_type') == 'vendored']
+        
+        safe_print('\n' + _('📋 KEY DATA for \'{}\':\n').format(pkg_name) + '-' * 40)
+        
+        # Show active version
+        if active_installs:
+            active_ver = active_installs[0].get('Version') or active_installs[0].get('version', 'unknown')
+            safe_print(_('🎯 Active Version: {} (active)').format(active_ver))
+        
+        # Show bubbled versions
+        if bubble_installs:
+            bubble_versions = ', '.join([i.get('Version') or i.get('version', '?') for i in bubble_installs])
+            safe_print(_('🫧 Bubbled Versions: {}').format(bubble_versions))
+        
+        # Show nested versions
+        if nested_installs:
+            safe_print(_('📦 Nested Versions: {} found inside other bubbles').format(len(nested_installs)))
+        
+        # Show vendored versions
+        if vendored_installs:
+            safe_print(_('📦 Vendored Versions: {} found inside parent packages').format(len(vendored_installs)))
+        
+        # List all installations for selection
+        safe_print('\n' + _('📦 Available Installations:'))
+        for idx, install in enumerate(installations, 1):
+            version = install.get('Version') or install.get('version', '?')
+            install_type = install.get('install_type', 'unknown')
+            owner = install.get('owner_package')
+
+            # Only add owner info if it's a meaningful value
+            if owner and str(owner) != 'None':
+                safe_print(f"  {idx}) v{version} ({install_type} in {owner})")
             else:
-                # --- FIX: Pass the discovered distributions down to the display function ---
-                self._show_enhanced_package_data(pkg_name, pre_discovered_dists=all_discovered_distributions)
-            return 0
+                safe_print(f"  {idx}) v{version} ({install_type})")
+        
+        # Interactive selection
+        try:
+            safe_print(_('\n💡 Want details on a specific version?'))
+            choice = input(_('Enter number (1-{}) or press Enter to skip: ').format(len(installations)))
+            
+            if choice.strip():
+                selection = int(choice.strip())
+                if 1 <= selection <= len(installations):
+                    selected_inst = installations[selection - 1]
+                    
+                    # === FIX: Normalize the version key ===
+                    # Ensure 'Version' key exists (with capital V)
+                    if 'Version' not in selected_inst and 'version' in selected_inst:
+                        selected_inst['Version'] = selected_inst['version']
+                    elif 'Version' not in selected_inst:
+                        selected_inst['Version'] = '?'
+                    
+                    safe_print('\n' + '=' * 60)
+                    safe_print(_('📄 Detailed info for {} v{} ({})').format(
+                        c_name, 
+                        selected_inst['Version'], 
+                        selected_inst.get('install_type', 'unknown')
+                    ))
+                    safe_print('=' * 60)
+                    
+                    # Pass to detailed display
+                    self._show_version_details(selected_inst)
+                else:
+                    safe_print(_('❌ Invalid selection.'))
+        except (ValueError, KeyboardInterrupt):
+            safe_print(_('\n✅ Skipping detailed view.'))
         except Exception as e:
-            safe_print(_('❌ An unexpected error occurred while showing package info: {}').format(e))
+            safe_print(_('❌ Error during selection: {}').format(e))
             import traceback
             traceback.print_exc()
-            return 1
 
     def _clean_and_format_dependencies(self, raw_deps_json: str) -> str:
         """Parses the raw dependency JSON, filters out noise, and formats it for humans."""
@@ -6578,7 +6625,8 @@ class omnipkg:
     def _show_version_details(self, data: Dict):
         """
         (FIXED) Displays detailed information from a pre-loaded dictionary of package
-        instance data, with correct lookup instructions for both Redis and SQLite.
+        instance data, hiding the 'Owner' field if it's None and providing an
+        interactive prompt to display raw data.
         """
         package_name = data.get('Name')
         version = data.get('Version')
@@ -6588,7 +6636,6 @@ class omnipkg:
             safe_print(_('❌ Cannot display details: package name or version not found in the provided data.'))
             return
 
-        # Determine which cache backend is being used
         is_using_redis = self._cache_connection_status == 'redis_ok'
         
         if is_using_redis:
@@ -6596,7 +6643,6 @@ class omnipkg:
         else:
             safe_print(_('The data is from SQLite cache (key: {})').format(cache_key))
 
-        # --- CORRECTED DICTIONARY KEYS (NO STRAY SPACES) ---
         important_fields = [
             ('Name', '📦 Package'), ('Version', '🏷️  Version'), ('install_type', 'Status'),
             ('owner_package', 'Owner'), ('Summary', '📝 Summary'), ('Author', '👤 Author'),
@@ -6608,12 +6654,15 @@ class omnipkg:
         for field_name, display_name in important_fields:
             if field_name in data:
                 value = data.get(field_name)
+
+                # --- FIX: Hide 'Owner' field if there is no owner ---
+                if field_name == 'owner_package' and (not value or str(value).lower() == 'none'):
+                    continue # Skip printing this line entirely
+
                 if field_name == 'License' and value and len(value) > 100:
                     value = value.split('\n')[0] + '... (truncated)'
-                # --- ADD THIS ELIF BLOCK ---
                 elif field_name == 'Description' and value and len(value) > 200:
                     value = value[:200].replace('\n', ' ') + '... (truncated)'
-                # --- END OF CHANGE ---
                 elif field_name in ['dependencies', 'Requires-Dist'] and value:
                     try:
                         dep_list = json.loads(value)
@@ -6623,6 +6672,7 @@ class omnipkg:
                 else:
                     safe_print(_('{}: {}').format(display_name.ljust(18), value or 'N/A'))
 
+        # --- Health & Security and Build Info sections (unchanged) ---
         security_fields = [
             ('security.issues_found', '🔒 Security Issues'), ('security.audit_status', '🛡️  Audit Status'),
             ('health.import_check.importable', '✅ Importable')
@@ -6643,14 +6693,22 @@ class omnipkg:
                 value = f'{value[:12]}...{value[-12:]}'
             safe_print(_('   {}: {}').format(display_name.ljust(18), value))
 
-        # Show how to query the raw data based on cache backend
+
+        # --- NEW: Interactive prompt to run raw data command ---
         safe_print(_('\n💡 For all raw data:'))
+    
+        command_list = None
+        tool_name = None
+
         if is_using_redis:
-            safe_print(_('   # Option 1: Raw key-value pairs'))
-            safe_print(f'   redis-cli HGETALL "{cache_key}"')
-            safe_print(_('\n   # Option 2: Formatted table view (copy-paste this command)'))
+            tool_name = 'redis-cli'
             
-            # This Lua script fetches the data, sorts it, finds the max key width, and prints a padded table.
+            # --- FIX: Display simple, user-friendly commands ---
+            safe_print(_('   # Option 1: View raw key-value pairs'))
+            safe_print(f"   redis-cli HGETALL \"{cache_key}\"")
+            safe_print(_('\n   # Option 2: The prompt below will run a command for a formatted table view.'))
+
+            # The clean Lua script for background execution (unchanged)
             lua_script = (
                 "local data = redis.call('HGETALL', KEYS[1]); "
                 "local result = {}; "
@@ -6669,18 +6727,44 @@ class omnipkg:
                 "return output"
             )
             
-            # We escape the script for safe inclusion in a shell command.
-            escaped_lua_script = lua_script.replace('"', '\\"').replace("'", "\\'")
+            # --- FIX: Use --raw to get clean output with newlines ---
+            command_list = ['redis-cli', '--raw', 'EVAL', lua_script, '1', cache_key]
             
-            redis_table_command = f"redis-cli --no-raw EVAL \"{escaped_lua_script}\" 1 \"{cache_key}\""
-            safe_print(f"   {redis_table_command}")
-            
-        else: # This is the SQLite block
+        else: # SQLite block remains the same
+            tool_name = 'sqlite3'
             db_path = self.config_manager.config_dir / f'cache_{self.env_id}.sqlite'
-            safe_print(_('   # View field names and previews (recommended):'))
-            safe_print(_('   sqlite3 -column -header {} "SELECT field, SUBSTR(value, 1, 80) || CASE WHEN LENGTH(value) > 80 THEN \'...\' ELSE \'\' END as value FROM hash_store WHERE key = \'{}\' ORDER BY field;"').format(db_path, cache_key))
-            safe_print(_('   # View specific field (e.g., Summary):'))
-            safe_print(_('   sqlite3 {} "SELECT value FROM hash_store WHERE key = \'{}\' AND field = \'Summary\';"').format(db_path, cache_key))
+            full_command = f'sqlite3 -column -header "{db_path}" "SELECT field, SUBSTR(value, 1, 80) || CASE WHEN LENGTH(value) > 80 THEN \'...\' ELSE \'\' END as value FROM hash_store WHERE key = \'{cache_key}\' ORDER BY field;"'
+            safe_print(_('   # To see all raw data, the following command would be run:'))
+            safe_print(f"   {full_command}")
+            command_list = full_command # shell=True will be used for this simple case
+
+        try:
+            # --- FIX: Adjust prompt text for clarity ---
+            prompt_text = _('\n   Do you want to run the formatted view command now? (y/N): ')
+            if not is_using_redis:
+                prompt_text = _('\n   Do you want to run this command now to see the raw data? (y/N): ')
+
+            choice = input(prompt_text).strip().lower()
+            if choice == 'y':
+                if not shutil.which(tool_name):
+                    safe_print(_('\n   ❌ Command failed: \'{}\' is not installed or not in your PATH.').format(tool_name))
+                    return
+
+                safe_print(_('   ---[ Running Command ]---'))
+                
+                use_shell = not isinstance(command_list, list)
+                process = subprocess.run(command_list, shell=use_shell, capture_output=True, text=True, check=False)
+                
+                if process.returncode == 0:
+                    safe_print(process.stdout.strip())
+                else:
+                    safe_print(_('   ❌ Command execution failed.'))
+                    error_output = process.stderr.strip() or process.stdout.strip()
+                    safe_print(f"   Error:\n{error_output}")
+                safe_print(_('   ---[ End of Command Output ]---'))
+
+        except (KeyboardInterrupt, EOFError):
+            safe_print(_('\n   Skipping raw data view.'))
 
     def _save_last_known_good_snapshot(self):
         """Saves the current environment state to Redis."""

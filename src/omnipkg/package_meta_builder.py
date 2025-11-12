@@ -1052,8 +1052,9 @@ class omnipkgMetadataGatherer:
     
     def _get_install_context(self, dist: importlib.metadata.Distribution) -> Dict:
         """
-        (V2 - CORRECTED) Determines the precise installation context (active, bubble, nested, vendored)
-        by comparing the package's identity to its location on the filesystem.
+        (V4 - CANONICALIZATION FIX) Determines the precise installation context.
+        Now properly handles the fact that bubble directory names use underscores
+        while canonicalized names use hyphens.
         """
         dist_path = dist._path
         path_str = str(dist_path)
@@ -1062,7 +1063,6 @@ class omnipkgMetadataGatherer:
 
         # Vendored check (remains the same)
         if '_vendor/' in path_str or '.vendor/' in path_str:
-            # ... (code for vendored packages is correct) ...
             try:
                 parent_path = dist_path
                 while parent_path != site_packages and parent_path != multiversion_base and parent_path.parent != parent_path:
@@ -1075,31 +1075,29 @@ class omnipkgMetadataGatherer:
                 pass
             return {'install_type': 'vendored', 'owner_package': 'Unknown'}
 
-        # --- THIS IS THE FIX ---
+        # Check if in multiversion_base
         try:
-            # Get the top-level directory within the multiversion_base
             relative_path = dist_path.relative_to(multiversion_base)
             bubble_dir_name = relative_path.parts[0]
             
-            # Get the package's own canonical name and version
-            pkg_name = canonicalize_name(dist.metadata['Name'])
+            # Get the package's own name and version
+            pkg_name_raw = dist.metadata['Name']  # Keep the original name with underscores
             version = dist.version
             
-            expected_bubble_name = f"{pkg_name}-{version}"
+            # Build the expected bubble name using the RAW package name (not canonicalized)
+            expected_bubble_name = f"{pkg_name_raw}-{version}"
             
-            # Compare the parent directory name to the package's own identity
+            # Compare directly
             if bubble_dir_name == expected_bubble_name:
-                # It's a true bubble
                 return {'install_type': 'bubble', 'owner_package': None}
             else:
-                # It's nested inside another package's bubble
                 return {'install_type': 'nested', 'owner_package': bubble_dir_name}
+                
         except ValueError:
-            # Not in the multiversion_base, so it must be active or unknown
+            # Not in the multiversion_base
             pass
-        # --- END FIX ---
 
-        # Active check (remains the same)
+        # Active check
         try:
             dist_path.relative_to(site_packages)
             return {'install_type': 'active', 'owner_package': None}
