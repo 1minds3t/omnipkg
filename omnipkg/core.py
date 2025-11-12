@@ -9764,43 +9764,63 @@ class omnipkg:
         return self.cache_client.hgetall(version_key)
 
     import time
-    
+    import platform
+    import sys
+    import time
+    from pathlib import Path
+
     def switch_active_python(self, version: str) -> int:
+        """
+        Switch the active Python context to the specified version.
+        
+        Windows-specific behavior:
+        - Always performs full swap (no fast path) due to DLL caching issues
+        - Includes additional cleanup steps to prevent import errors
+        
+        Linux/macOS behavior:
+        - Uses fast path optimization when already in correct context
+        """
         start_time = time.perf_counter_ns()
+        is_windows = platform.system() == 'Windows'
 
         # === TIER 1: THE NANOSECOND FAST PATH (In-Memory Check) ===
-        configured_python = self.config_manager.get('python_executable')
-        if configured_python:
-            path_str = str(configured_python)
-            # Direct string checks - faster than regex!
-            if f'cpython-{version}' in path_str or path_str.endswith(f'python{version}'):
+        # SKIP THIS ON WINDOWS - Windows DLL caching makes fast path unreliable
+        if not is_windows:
+            configured_python = self.config_manager.get('python_executable')
+            if configured_python:
+                path_str = str(configured_python)
+                # Direct string checks - faster than regex!
+                if f'cpython-{version}' in path_str or path_str.endswith(f'python{version}'):
+                    elapsed_ns = time.perf_counter_ns() - start_time
+                    elapsed_ms = elapsed_ns / 1_000_000
+                    safe_print(_('⚡ Already in Python {} context. No swap needed!').format(version))
+                    safe_print(f'   ⏱️  Detection time: {elapsed_ms:.3f}ms ({elapsed_ns:,} ns)')
+                    return 0
+
+        # === TIER 2: THE MILLISECOND FAST PATH (Authoritative Check) ===
+        # SKIP THIS ON WINDOWS - Same reason as above
+        if not is_windows:
+            target_context = f'py{version}'
+            if self.current_python_context == target_context:
                 elapsed_ns = time.perf_counter_ns() - start_time
                 elapsed_ms = elapsed_ns / 1_000_000
                 safe_print(_('⚡ Already in Python {} context. No swap needed!').format(version))
                 safe_print(f'   ⏱️  Detection time: {elapsed_ms:.3f}ms ({elapsed_ns:,} ns)')
                 return 0
 
-        # === TIER 2: THE MILLISECOND FAST PATH (Authoritative Check) ===
-        # If the in-memory check failed, it might be because another process changed
-        # the config on disk. Run the authoritative check before proceeding.
-        target_context = f'py{version}'
-        if self.current_python_context == target_context:
-            # The ground truth says we are already in the correct state. Do nothing.
-            elapsed_ns = time.perf_counter_ns() - start_time
-            elapsed_ms = elapsed_ns / 1_000_000
-            safe_print(_('⚡ Already in Python {} context. No swap needed!').format(version))
-            safe_print(f'   ⏱️  Detection time: {elapsed_ms:.3f}ms ({elapsed_ns:,} ns)')
-            return 0
-
-        # === THE SLOW PATH (ONLY IF A SWAP IS ACTUALLY NEEDED) ===
-        # If we get here, a swap is genuinely required.
+        # === THE SWAP PATH (Always executed on Windows, conditional on Linux/macOS) ===
         safe_print(_('🐍 Switching active Python context to version {}...').format(version))
+
+        # Windows-specific: Force refresh interpreter registry
+        if is_windows:
+            safe_print(_('   🪟 Windows detected: Forcing interpreter registry refresh...'))
+            self.interpreter_manager.refresh_registry()
 
         managed_interpreters = self.interpreter_manager.list_available_interpreters()
         target_interpreter_path = managed_interpreters.get(version)
         
-        # CRITICAL FIX: If not found, try refreshing the registry once
-        if not target_interpreter_path:
+        # CRITICAL FIX: If not found, try refreshing the registry once (for non-Windows)
+        if not target_interpreter_path and not is_windows:
             safe_print(_('   - Python {} not found in cache, refreshing registry...').format(version))
             self.interpreter_manager.refresh_registry()
             managed_interpreters = self.interpreter_manager.list_available_interpreters()
@@ -9811,7 +9831,6 @@ class omnipkg:
             safe_print(f"   - Available versions: {', '.join(managed_interpreters.keys())}")
             return 1
 
-        # ... The rest of the swap logic ...
         safe_print(_('   ✅ Managed interpreter: {}').format(target_interpreter_path))
         new_paths = self.config_manager._get_paths_for_interpreter(str(target_interpreter_path))
         if not new_paths:
@@ -9822,6 +9841,11 @@ class omnipkg:
         self.config_manager.set('python_executable', new_paths['python_executable'])
         self.config_manager.set('site_packages_path', new_paths['site_packages_path'])
         self.config_manager.set('multiversion_base', new_paths['multiversion_base'])
+        
+        # Windows-specific: Clear module cache to prevent stale imports
+        if is_windows:
+            safe_print(_('   🧹 Windows: Clearing module cache...'))
+            self._clear_windows_module_cache()
         
         safe_print(_('   🔗 Updating symlinks...'))
         venv_path = self.config_manager.venv_path
@@ -9839,6 +9863,39 @@ class omnipkg:
         safe_print(f'   ⏱️  Swap completed in: {elapsed_ms:.3f}ms')
         
         return 0
+
+    def _clear_windows_module_cache(self):
+        """
+        Windows-specific: Clear cached modules that might cause import conflicts.
+        
+        This helps prevent "ImportError: cannot import name 'text_encoding' from 'io'"
+        and similar errors caused by Windows DLL caching across Python version swaps.
+        """
+        import gc
+        
+        # List of critical modules to remove from sys.modules if present
+        # These are the ones most likely to cause issues with stale DLL references
+        critical_modules = [
+            'io', '_io', 
+            'encodings', '_codecs',
+            'sys', '_sys',
+            # Add other problematic modules as discovered
+        ]
+        
+        modules_cleared = []
+        for module_name in critical_modules:
+            if module_name in sys.modules:
+                try:
+                    del sys.modules[module_name]
+                    modules_cleared.append(module_name)
+                except Exception:
+                    pass  # Some modules can't be removed, that's OK
+        
+        # Force garbage collection to clean up any remaining references
+        gc.collect()
+        
+        if modules_cleared:
+            safe_print(f'   📦 Cleared {len(modules_cleared)} cached modules: {", ".join(modules_cleared)}')
     
     def _find_best_version_for_spec(self, package_spec: str) -> Optional[str]:
         """
