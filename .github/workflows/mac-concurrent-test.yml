@@ -1,0 +1,84 @@
+name: "🍎 macOS - Omnipkg Demo Test (CI - No Redis)"
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: macos-latest
+    timeout-minutes: 30
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          path: src  # Clean path structure: /Users/runner/work/omnipkg/omnipkg/src
+      
+      - name: Set up Python (3.11)
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      # macOS-specific: Ensure UTF-8 locale is set
+      - name: Configure UTF-8 encoding (macOS)
+        run: |
+          echo "LANG=en_US.UTF-8" >> $GITHUB_ENV
+          echo "LC_ALL=en_US.UTF-8" >> $GITHUB_ENV
+          echo "PYTHONIOENCODING=utf-8" >> $GITHUB_ENV
+        shell: bash
+      
+      - name: Install omnipkg
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e src
+        shell: bash
+      
+      - name: Configure omnipkg for non-interactive use
+        run: |
+          CONFIG_DIR="$HOME/.config/omnipkg"
+          mkdir -p "$CONFIG_DIR"
+          
+          cat > "$CONFIG_DIR/config.json" << 'EOF'
+          {
+            "interactive": false,
+            "auto_confirm": true
+          }
+          EOF
+          
+          echo "✅ Omnipkg configured"
+          cat "$CONFIG_DIR/config.json"
+        shell: bash
+      
+      - name: Run Demo (Option 8 - Quantum Multiverse)
+        run: echo "8" | python -m omnipkg.cli demo
+        shell: bash
+        working-directory: src
+      
+      - name: Run Demo (Option 8 - Quantum Multiverse - Second Run)
+        run: echo "8" | python -m omnipkg.cli demo
+        shell: bash
+        working-directory: src
+      
+      - name: Run Demo (Option 8 - Quantum Multiverse - Third Run)
+        run: echo "8" | python -m omnipkg.cli demo
+        shell: bash
+        working-directory: src
+      
+      # Optional: Display system info for debugging
+      - name: Display system information
+        if: always()
+        run: |
+          echo "=== System Information ==="
+          sw_vers
+          echo ""
+          echo "=== Python Information ==="
+          python --version
+          which python
+          echo ""
+          echo "=== Omnipkg Installation ==="
+          pip show omnipkg
+        shell: bash
