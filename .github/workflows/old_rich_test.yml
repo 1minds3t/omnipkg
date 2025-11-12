@@ -51,7 +51,8 @@ jobs:
           
           # Run the old rich test using 8pkg run
           echo "--- Running test_old_rich.py with 8pkg run ---"
-          8pkg run tests/test_old_rich.py
+          8pkg run src/tests/test_old_rich.py
+
           
           echo "✅ Old Rich test completed successfully!"
 
