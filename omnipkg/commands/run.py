@@ -1425,7 +1425,10 @@ def run_with_healing_wrapper(required_specs, original_script_path, original_scri
 local_project_path = r"{str(original_script_path.parent)}"
 if local_project_path not in sys.path:
     sys.path.insert(0, local_project_path)
-
+try:
+    from .common_utils import safe_print
+except ImportError:
+    from omnipkg.common_utils import safe_print
 safe_print(f"\\n🚀 Running target script inside the combined bubble + local context...")
 sys.argv = [{str(original_script_path)!r}] + {original_script_args!r}
 runpy.run_path({str(original_script_path)!r}, run_name="__main__")
@@ -1437,8 +1440,10 @@ runpy.run_path({str(original_script_path)!r}, run_name="__main__")
     wrapper_content = textwrap.dedent(f"""\
 import sys, os, runpy, json, re
 from pathlib import Path
-from omnipkg.common_utils import safe_print # <-- THIS IS THE FIX
-
+try:
+    from .common_utils import safe_print
+except ImportError:
+    from omnipkg.common_utils import safe_print
 # DEBUGGING: Show initial state
 safe_print("🔍 WRAPPER SUBPROCESS DEBUGGING:")
 safe_print(f"   Python executable: {{sys.executable}}")

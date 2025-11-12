@@ -96,3 +96,6 @@ featurestoadd/
 
 # Development utilities (personal use only)
 omnipkg/utils/emoji_print_fixer.py
+
+# Development tools (maintainer use only)
+dev_tools/

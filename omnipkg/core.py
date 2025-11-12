@@ -4603,6 +4603,11 @@ class omnipkg:
             sync_script = textwrap.dedent(f"""
     import subprocess
     import sys
+    try:
+        from .common_utils import safe_print
+    except ImportError:
+        from omnipkg.common_utils import safe_print                                  
+                                          
 
     install_spec = {json.dumps(install_spec)}
     cmd = [
@@ -8540,7 +8545,10 @@ class omnipkg:
         # It has one job: replace the files on disk. Nothing more.
         upgrader_script_content = textwrap.dedent(f"""
             import sys, os, subprocess, time, textwrap
-
+            try:
+                from .common_utils import safe_print
+            except ImportError:
+                from omnipkg.common_utils import safe_print
             def run_cmd(cmd, description):
                 print(f"--- [Upgrader] Executing: {{description}} ---")
                 print(f"    $ {{' '.join(cmd)}}")

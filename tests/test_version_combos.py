@@ -183,6 +183,10 @@ import importlib
 import time
 from importlib.metadata import version as get_version, PackageNotFoundError
 from pathlib import Path
+try:
+    from .common_utils import safe_print
+except ImportError:
+    from omnipkg.common_utils import safe_print
 
 # Ensure omnipkg's root is in sys.path for importing its modules
 sys.path.insert(0, r"{ROOT_DIR}")
