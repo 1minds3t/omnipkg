@@ -52,7 +52,7 @@ jobs:
 
           project_root = Path(os.environ['GITHUB_WORKSPACE'])
           
-          builder_script = project_root / 'omnipkg' / 'package_meta_builder.py'
+          builder_script = project_root / 'src' / 'omnipkg' / 'package_meta_builder.py'
           if not builder_script.exists():
               print(f"Error: {builder_script} does not exist")
               sys.exit(1)
