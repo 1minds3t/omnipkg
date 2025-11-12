@@ -36,53 +36,53 @@ jobs:
           pip install -e . redis rich==13.7.1
       
       - name: Configure omnipkg for non-interactive use
-              run: |
-                python - << 'EOF'
-                import sys
-                import site
-                import json
-                from pathlib import Path
-                import os
-                import sysconfig
-      
-                try:
-                    site_packages_path = site.getsitepackages()[0]
-                except (IndexError, AttributeError):
-                    site_packages_path = sysconfig.get_paths()['purelib']
-      
-                project_root = Path(os.environ['GITHUB_WORKSPACE'])
-                
-                builder_script = project_root / 'src' / 'omnipkg' / 'package_meta_builder.py'
-                if not builder_script.exists():
-                    print(f"Error: {builder_script} does not exist")
-                    sys.exit(1)
-      
-                config_data = {
-                    'site_packages_path': site_packages_path,
-                    'multiversion_base': str(Path(site_packages_path) / '.omnipkg_versions'),
-                    'python_executable': sys.executable,
-                    'builder_script_path': str(builder_script),
-                    'redis_host': 'localhost',
-                    'redis_port': 6379,
-                    'redis_key_prefix': 'omnipkg:pkg:',
-                    'paths_to_index': [str(Path(sys.executable).parent), '/usr/local/bin', '/usr/bin', '/bin', '/usr/sbin', '/sbin'],
-                    'auto_cleanup': True,
-                    'cleanup_threshold_days': 30
-                }
-      
-                config_dir = Path.home() / '.config' / 'omnipkg'
-                config_dir.mkdir(parents=True, exist_ok=True)
-                config_path = config_dir / 'config.json'
-                
-                try:
-                    with open(config_path, 'w') as f:
-                        json.dump(config_data, f, indent=2)
-                    print(f'omnipkg config created at {config_path}:')
-                    print(json.dumps(config_data, indent=2))
-                except Exception as e:
-                    print(f"Error writing config: {e}")
-                    sys.exit(1)
-                EOF
+        run: |
+          python - << 'EOF'
+          import sys
+          import site
+          import json
+          from pathlib import Path
+          import os
+          import sysconfig
+
+          try:
+              site_packages_path = site.getsitepackages()[0]
+          except (IndexError, AttributeError):
+              site_packages_path = sysconfig.get_paths()['purelib']
+
+          project_root = Path(os.environ['GITHUB_WORKSPACE'])
+          
+          builder_script = project_root / 'src' / 'omnipkg' / 'package_meta_builder.py'
+          if not builder_script.exists():
+              print(f"Error: {builder_script} does not exist")
+              sys.exit(1)
+
+          config_data = {
+              'site_packages_path': site_packages_path,
+              'multiversion_base': str(Path(site_packages_path) / '.omnipkg_versions'),
+              'python_executable': sys.executable,
+              'builder_script_path': str(builder_script),
+              'redis_host': 'localhost',
+              'redis_port': 6379,
+              'redis_key_prefix': 'omnipkg:pkg:',
+              'paths_to_index': [str(Path(sys.executable).parent), '/usr/local/bin', '/usr/bin', '/bin', '/usr/sbin', '/sbin'],
+              'auto_cleanup': True,
+              'cleanup_threshold_days': 30
+          }
+
+          config_dir = Path.home() / '.config' / 'omnipkg'
+          config_dir.mkdir(parents=True, exist_ok=True)
+          config_path = config_dir / 'config.json'
+          
+          try:
+              with open(config_path, 'w') as f:
+                  json.dump(config_data, f, indent=2)
+              print(f'omnipkg config created at {config_path}:')
+              print(json.dumps(config_data, indent=2))
+          except Exception as e:
+              print(f"Error writing config: {e}")
+              sys.exit(1)
+          EOF
 
       - name: Run the Demo - Rich Test
         id: run_demo
