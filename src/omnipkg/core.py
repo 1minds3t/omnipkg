@@ -9776,9 +9776,11 @@ class omnipkg:
         Windows-specific behavior:
         - Always performs full swap (no fast path) due to DLL caching issues
         - Includes additional cleanup steps to prevent import errors
+        - SKIPS symlink/copy updates (uses config paths directly)
         
         Linux/macOS behavior:
         - Uses fast path optimization when already in correct context
+        - Updates symlinks for shell integration
         """
         start_time = time.perf_counter_ns()
         is_windows = platform.system() == 'Windows'
@@ -9847,19 +9849,28 @@ class omnipkg:
             safe_print(_('   🧹 Windows: Clearing module cache...'))
             self._clear_windows_module_cache()
         
-        safe_print(_('   🔗 Updating symlinks...'))
-        venv_path = self.config_manager.venv_path
-        try:
-            self.config_manager._update_default_python_links(venv_path, Path(target_interpreter_path))
-        except Exception as e:
-            safe_print(_('   ❌ Symlink update failed: {}').format(e))
+        # CRITICAL FIX: Only update symlinks on Unix systems
+        # Windows uses config paths directly and doesn't need file copying/symlinking
+        if not is_windows:
+            safe_print(_('   🔗 Updating symlinks...'))
+            venv_path = self.config_manager.venv_path
+            try:
+                self.config_manager._update_default_python_links(venv_path, Path(target_interpreter_path))
+            except Exception as e:
+                safe_print(_('   ⚠️  Symlink update failed: {}').format(e))
+                safe_print(_('   - Continuing with config-only switch...'))
+        else:
+            safe_print(_('   ✅ Configuration updated (Windows uses direct paths)'))
 
         elapsed_ns = time.perf_counter_ns() - start_time
         elapsed_ms = elapsed_ns / 1_000_000
         
         safe_print(_('\n🎉 Switched to Python {}!').format(version))
-        safe_print(_('   To activate in your shell, run: source {}/bin/activate').format(venv_path))
-        safe_print(_('\n   Just kidding, omnipkg handled it for you automatically!'))
+        
+        if not is_windows:
+            safe_print(_('   To activate in your shell, run: source {}/bin/activate').format(self.config_manager.venv_path))
+            safe_print(_('\n   Just kidding, omnipkg handled it for you automatically!'))
+        
         safe_print(f'   ⏱️  Swap completed in: {elapsed_ms:.3f}ms')
         
         return 0
