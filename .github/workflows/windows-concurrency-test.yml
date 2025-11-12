@@ -1,10 +1,12 @@
 name: "🚀 Windows - Omnipkg Demo Test (CI - No Redis)"
+
 on:
   push:
     branches: [ main ]
   pull_request:
     branches: [ main ]
   workflow_dispatch:
+
 jobs:
   test:
     runs-on: windows-latest
@@ -13,15 +15,13 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          path: src  # ADD THIS - changes from D:\a\omnipkg\omnipkg to D:\a\omnipkg\src
+        # NO path parameter - checks out to D:\a\omnipkg\omnipkg
       
       - name: Set up Python (3.11)
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
       
-      # FIX: Force UTF-8 encoding globally for all Python processes
       - name: Configure UTF-8 encoding (Windows fix)
         run: |
           echo "PYTHONIOENCODING=utf-8" >> $env:GITHUB_ENV
@@ -31,7 +31,7 @@ jobs:
       - name: Install omnipkg
         run: |
           python -m pip install --upgrade pip
-          pip install -e src  # CHANGED: now references the 'src' directory
+          pip install -e .
         shell: pwsh
       
       - name: Configure omnipkg for non-interactive use
@@ -50,10 +50,8 @@ jobs:
       - name: Run Demo (Option 8 - Quantum Multiverse)
         run: echo "8" | python -m omnipkg.cli demo
         shell: pwsh
-        working-directory: src  # ADD THIS - ensures we're in the right directory
       
-      - name: Run Demo (Option 8 - Quantum Multiverse - Second Run - Optional)
+      - name: Run Demo Again (Verify Caching)
         continue-on-error: true
         run: echo "8" | python -m omnipkg.cli demo
         shell: pwsh
-        working-directory: src
