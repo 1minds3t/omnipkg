@@ -4142,11 +4142,44 @@ class omnipkg:
     def _self_heal_omnipkg_installation(self):
         """
         (V25 - FILE-BASED CACHE) Ultra-fast version checking with persistent cache.
-        Uses a small JSON file to cache sync status across CLI invocations.
+        
+        CRITICAL SAFETY RULES:
+        1. Only the NATIVE interpreter can sync other interpreters
+        2. Managed interpreters (in .omnipkg/) NEVER trigger syncs
+        3. On Windows, extra conservative - can be disabled entirely
         """
         import time
         
         overall_start = time.perf_counter_ns()
+        
+        # === SAFETY CHECK 1: Determine if we're the native interpreter ===
+        if platform.system() == 'Windows':
+            native_exe = self.config_manager.venv_path / 'Scripts' / 'python.exe'
+        else:
+            native_exe = self.config_manager.venv_path / 'bin' / 'python'
+        
+        current_exe = Path(sys.executable).resolve()
+        native_exe_resolved = native_exe.resolve()
+        is_native = (current_exe == native_exe_resolved)
+        
+        # Non-native interpreters should NEVER trigger syncs (prevents race conditions)
+        if not is_native:
+            if '--verbose' in sys.argv or '-V' in sys.argv:
+                safe_print(f"   ℹ️  Running from managed interpreter, skipping sync check")
+            return
+        
+        # === SAFETY CHECK 2: Allow disabling sync entirely (env var or config) ===
+        if os.environ.get('OMNIPKG_DISABLE_SYNC') == '1':
+            if '--verbose' in sys.argv or '-V' in sys.argv:
+                safe_print("   ℹ️  Sync disabled via OMNIPKG_DISABLE_SYNC")
+            return
+        
+        # Windows: Extra conservative - disable sync by default unless explicitly enabled
+        if platform.system() == 'Windows':
+            if os.environ.get('OMNIPKG_ENABLE_SYNC') != '1':
+                if '--verbose' in sys.argv or '-V' in sys.argv:
+                    safe_print("   ℹ️  Windows sync disabled (set OMNIPKG_ENABLE_SYNC=1 to enable)")
+                return
         
         try:
             # === TIER 0: FILE-BASED CACHE CHECK (MICROSECONDS) ===
@@ -4189,6 +4222,11 @@ class omnipkg:
                 return
             
             # === TIER 3: HEALING REQUIRED (ONLY WHEN NECESSARY) ===
+            # Extra safety: Warn on Windows
+            if platform.system() == 'Windows':
+                safe_print("   ⚠️  Sync needed on Windows - this may cause issues if other processes are active")
+                safe_print("   💡 Set OMNIPKG_DISABLE_SYNC=1 to disable auto-sync")
+            
             self._perform_concurrent_healing(master_version_str, install_spec, sync_needed)
             
             # Write cache after successful healing
@@ -4202,7 +4240,6 @@ class omnipkg:
                 import traceback
                 safe_print(f"\n⚠️ Self-heal encountered an error: {e}")
                 traceback.print_exc()
-
 
     def _get_heal_cache_path(self) -> Path:
         """Returns the path to the self-heal cache file."""
@@ -4220,7 +4257,6 @@ class omnipkg:
             except (json.JSONDecodeError, IOError):
                 pass
         return {}
-
 
     def _write_heal_cache(self, data: dict):
         """Writes data to the self-heal cache file."""
@@ -4268,17 +4304,19 @@ class omnipkg:
             pass
         
         return 'unknown', []
-
-
+   
+    # Also update the sync check to skip Windows temp files
     def _check_sync_status_ultra_fast(self, master_version: str) -> List[Tuple[str, str]]:
         """
-        CORRECTED path-based sync checking - derives site-packages from interpreter location.
-        This handles standalone Python builds correctly!
-        Excludes the native interpreter from the sync list (it's handled separately).
+        Path-based sync checking with proper error handling.
+        
+        CRITICAL FIXES:
+        1. Skip Windows temp files (~filename)
+        2. Handle missing paths gracefully
+        3. More robust editable install detection
         """
         sync_needed = []
         
-        # Get all managed interpreters
         interpreter_manager = InterpreterManager(self.config_manager)
         all_interpreters = interpreter_manager.list_available_interpreters()
         
@@ -4295,23 +4333,21 @@ class omnipkg:
         
         for py_ver, exe_path in all_interpreters.items():
             try:
-                # === SKIP THE NATIVE INTERPRETER ===
                 exe_path_obj = Path(exe_path).resolve()
-                if exe_path_obj == native_exe:
-                    continue  # Native is handled separately
                 
-                # === DERIVE site-packages FROM INTERPRETER PATH ===
-                # Pattern: /path/to/interpreter/bin/python -> /path/to/interpreter/lib/pythonX.Y/site-packages
+                # Skip the native interpreter
+                if exe_path_obj == native_exe:
+                    continue
+                
+                # Derive site-packages from interpreter path
                 interpreter_root = exe_path_obj.parent.parent
                 
                 if platform.system() == 'Windows':
-                    # Windows: interpreter_root\Lib\site-packages
                     site_packages = interpreter_root / 'Lib' / 'site-packages'
                 else:
-                    # Unix: interpreter_root/lib/pythonX.Y/site-packages
                     site_packages = interpreter_root / 'lib' / f'python{py_ver}' / 'site-packages'
                 
-                # Verify the site-packages directory actually exists
+                # Verify site-packages exists
                 if not site_packages.exists():
                     sync_needed.append((py_ver, str(exe_path)))
                     continue
@@ -4320,202 +4356,72 @@ class omnipkg:
                 has_regular_install = (site_packages / expected_dist_info).exists()
                 has_editable_install = (site_packages / expected_editable_dist_info).exists()
                 
-                # Additional check for old-style editable (.pth files)
+                # Check for old-style editable (.pth files)
                 has_pth_install = False
                 if not has_regular_install and not has_editable_install:
-                    # Quick check for .pth files containing omnipkg
-                    pth_files = list(site_packages.glob('*.pth'))
-                    for pth_file in pth_files:
-                        try:
-                            # Only read first 512 bytes - .pth files are tiny
-                            content = pth_file.read_text(encoding='utf-8')[:512]
-                            if 'omnipkg' in content:
-                                # For editable installs via .pth, we need to verify the version
-                                # by checking the actual source pyproject.toml
-                                for line in content.split('\n'):
-                                    line = line.strip()
-                                    if line and line.startswith('/') and 'omnipkg' in line:
-                                        project_path = Path(line)
-                                        if project_path.exists():
-                                            pyproject_path = project_path / 'pyproject.toml'
-                                            if pyproject_path.exists():
-                                                # Read version from source
-                                                try:
-                                                    toml_content = pyproject_path.read_text(encoding='utf-8')[:2048]
-                                                    for toml_line in toml_content.split('\n'):
-                                                        stripped = toml_line.strip()
-                                                        if stripped.startswith('version'):
-                                                            source_version = stripped.split('=', 1)[1].strip().strip('"\'')
-                                                            if source_version == master_version:
-                                                                has_pth_install = True
-                                                            break
-                                                except:
-                                                    pass
-                                        break
-                        except:
-                            pass
-                
-                # If none of the expected patterns exist, sync is needed
-                if not (has_regular_install or has_editable_install or has_pth_install):
-                    sync_needed.append((py_ver, str(exe_path)))
-                    
-            except Exception as e:
-                # If anything fails, assume sync is needed (conservative)
-                if '--verbose' in sys.argv or '-V' in sys.argv:
-                    safe_print(f"   ⚠️ Path derivation failed for Python {py_ver}: {e}")
-                sync_needed.append((py_ver, str(exe_path)))
-        
-        return sync_needed
-
-    
-    def _check_sync_status_ultra_fast(self, master_version: str) -> List[Tuple[str, str]]:
-        """
-        CORRECTED path-based sync checking - derives site-packages from interpreter location.
-        This handles standalone Python builds correctly!
-        
-        CRITICAL: The native interpreter is ALWAYS at venv_path/bin/python (or Scripts/python.exe).
-        It is NEVER in .omnipkg/interpreters/. We must exclude it from the sync list.
-        """
-        sync_needed = []
-        
-        # Get all managed interpreters
-        interpreter_manager = InterpreterManager(self.config_manager)
-        all_interpreters = interpreter_manager.list_available_interpreters()
-        
-        # Determine THE NATIVE interpreter - ALWAYS at venv_path/bin or Scripts
-        # This is the ORIGINAL Python that came with the venv, NOT whatever is currently active
-        # CRITICAL: We need to find the actual native Python executable (e.g., python3.11)
-        if platform.system() == 'Windows':
-            native_exe = self.config_manager.venv_path / 'Scripts' / 'python.exe'
-        else:
-            # The native Python is in bin/ and NOT a symlink to .omnipkg
-            bin_dir = self.config_manager.venv_path / 'bin'
-            native_exe = None
-            
-            if bin_dir.exists():
-                # Collect all valid python3.XX files (where XX is a valid version)
-                candidates = []
-                for py_file in bin_dir.glob('python3.*'):
-                    # Must be a file
-                    if not py_file.is_file():
-                        continue
-                    
-                    # Parse version from filename (e.g., python3.11 -> 3.11)
-                    name = py_file.name
                     try:
-                        # Extract the version part after "python"
-                        version_part = name.replace('python', '')
-                        # Should be like "3.11" or "3.9"
-                        major, minor = version_part.split('.')
-                        # Validate it's actually a number
-                        if int(major) == 3 and int(minor) >= 0:
-                            # Check if it's a symlink to .omnipkg (managed interpreter)
-                            if py_file.is_symlink():
-                                target = py_file.resolve()
-                                if '.omnipkg' in str(target):
-                                    continue  # Skip managed interpreters
-                            
-                            candidates.append((int(minor), py_file))
-                    except (ValueError, IndexError):
-                        # Not a valid version format, skip
-                        continue
-                
-                # Use the highest version number (most recent Python)
-                # This handles cases where multiple Pythons exist
-                if candidates:
-                    candidates.sort(key=lambda x: x[0], reverse=True)
-                    native_exe = candidates[0][1]
-            
-            # Fallback if we couldn't find it
-            if native_exe is None:
-                native_exe = bin_dir / 'python'
-        
-        if '--verbose' in sys.argv or '-V' in sys.argv:
-            safe_print(f"   🔍 [Sync Check] Native interpreter: {native_exe}")
-        
-        # Pre-compute expected dist-info names
-        expected_dist_info = f"omnipkg-{master_version}.dist-info"
-        expected_editable_dist_info = f"__editable___omnipkg-{master_version}.dist-info"
-        
-        for py_ver, exe_path in all_interpreters.items():
-            try:
-                exe_path_obj = Path(exe_path).resolve()
-                
-                # === CRITICAL: SKIP THE NATIVE INTERPRETER ===
-                if exe_path_obj == native_exe:
-                    if '--verbose' in sys.argv or '-V' in sys.argv:
-                        safe_print(f"   🔍 [Sync Check] Skipping native interpreter: Python {py_ver} at {exe_path}")
-                    continue  # Native is handled separately in _perform_concurrent_healing
-                
-                # Also skip if this is a symlink pointing to native (belt-and-suspenders)
-                if not '.omnipkg' in str(exe_path_obj):
-                    if '--verbose' in sys.argv or '-V' in sys.argv:
-                        safe_print(f"   🔍 [Sync Check] Skipping (not in .omnipkg): Python {py_ver} at {exe_path}")
-                    continue
-                
-                # === DERIVE site-packages FROM INTERPRETER PATH ===
-                interpreter_root = exe_path_obj.parent.parent
-                
-                if platform.system() == 'Windows':
-                    site_packages = interpreter_root / 'Lib' / 'site-packages'
-                else:
-                    site_packages = interpreter_root / 'lib' / f'python{py_ver}' / 'site-packages'
-                
-                # Verify the site-packages directory actually exists
-                if not site_packages.exists():
-                    if '--verbose' in sys.argv or '-V' in sys.argv:
-                        safe_print(f"   🔍 [Sync Check] site-packages not found for Python {py_ver}, adding to sync list")
-                    sync_needed.append((py_ver, str(exe_path)))
-                    continue
-                
-                # Fast check: does the expected dist-info exist?
-                has_regular_install = (site_packages / expected_dist_info).exists()
-                has_editable_install = (site_packages / expected_editable_dist_info).exists()
-                
-                # Additional check for old-style editable (.pth files)
-                has_pth_install = False
-                if not has_regular_install and not has_editable_install:
-                    pth_files = list(site_packages.glob('*.pth'))
-                    for pth_file in pth_files:
-                        try:
-                            content = pth_file.read_text(encoding='utf-8')[:512]
-                            if 'omnipkg' in content:
-                                for line in content.split('\n'):
-                                    line = line.strip()
-                                    if line and line.startswith('/') and 'omnipkg' in line:
-                                        project_path = Path(line)
-                                        if project_path.exists():
-                                            pyproject_path = project_path / 'pyproject.toml'
-                                            if pyproject_path.exists():
-                                                try:
-                                                    toml_content = pyproject_path.read_text(encoding='utf-8')[:2048]
-                                                    for toml_line in toml_content.split('\n'):
-                                                        stripped = toml_line.strip()
-                                                        if stripped.startswith('version'):
-                                                            source_version = stripped.split('=', 1)[1].strip().strip('"\'')
-                                                            if source_version == master_version:
-                                                                has_pth_install = True
-                                                            break
-                                                except:
-                                                    pass
-                                        break
-                        except:
-                            pass
+                        # CRITICAL FIX: Use glob with error handling
+                        pth_files = list(site_packages.glob('*.pth'))
+                        
+                        for pth_file in pth_files:
+                            try:
+                                # Skip Windows temp files
+                                if pth_file.name.startswith('~'):
+                                    continue
+                                
+                                # Skip if file was deleted during iteration
+                                if not pth_file.exists():
+                                    continue
+                                
+                                content = pth_file.read_text(encoding='utf-8', errors='ignore')[:512]
+                                
+                                if 'omnipkg' in content:
+                                    # For editable installs, check version from source
+                                    for line in content.split('\n'):
+                                        line = line.strip()
+                                        if line and 'omnipkg' in line and (line.startswith('/') or line.startswith('D:\\')):
+                                            project_path = Path(line)
+                                            if project_path.exists():
+                                                # Try both pyproject.toml locations (src/ and root)
+                                                for pyproject_path in [
+                                                    project_path / 'pyproject.toml',
+                                                    project_path / 'src' / 'pyproject.toml',
+                                                    project_path.parent / 'pyproject.toml'
+                                                ]:
+                                                    if pyproject_path.exists():
+                                                        try:
+                                                            toml_content = pyproject_path.read_text(encoding='utf-8')[:2048]
+                                                            for toml_line in toml_content.split('\n'):
+                                                                stripped = toml_line.strip()
+                                                                if stripped.startswith('version'):
+                                                                    source_version = stripped.split('=', 1)[1].strip().strip('"\'')
+                                                                    if source_version == master_version:
+                                                                        has_pth_install = True
+                                                                        break
+                                                            if has_pth_install:
+                                                                break
+                                                        except:
+                                                            pass
+                                            if has_pth_install:
+                                                break
+                            except (OSError, IOError):
+                                # File may have been deleted, skip it
+                                continue
+                    except (OSError, IOError):
+                        # glob() itself failed, skip .pth check
+                        pass
                 
                 # If none of the expected patterns exist, sync is needed
                 if not (has_regular_install or has_editable_install or has_pth_install):
-                    if '--verbose' in sys.argv or '-V' in sys.argv:
-                        safe_print(f"   🔍 [Sync Check] Python {py_ver} needs sync (no valid install found)")
                     sync_needed.append((py_ver, str(exe_path)))
-                    
+                        
             except Exception as e:
-                # If anything fails, assume sync is needed (conservative)
+                # Conservative: if anything fails, assume sync is needed
                 if '--verbose' in sys.argv or '-V' in sys.argv:
-                    safe_print(f"   ⚠️ Path derivation failed for Python {py_ver}: {e}")
+                    safe_print(f"   ⚠️ Check failed for Python {py_ver}: {e}")
                 sync_needed.append((py_ver, str(exe_path)))
         
         return sync_needed
-
 
     def _perform_concurrent_healing(self, master_version: str, install_spec: List[str], 
                                     sync_needed: List[Tuple[str, str]]):

@@ -359,6 +359,8 @@ class omnipkgMetadataGatherer:
         (V15 - SMART FILTERING) Discovers distributions by running all search strategies
         in parallel, but intelligently skips instances already registered in Redis.
         
+        CRITICAL SAFETY: Handles Windows temp files and race conditions during scanning.
+        
         Args:
             skip_existing_checksums: If True, filters out distributions whose installation_hash
                                     already exists in the knowledge base (prevents duplicate work)
@@ -492,7 +494,41 @@ class omnipkgMetadataGatherer:
             for path in search_paths:
                 if verbose:
                     safe_print(f"      -> Authoritative scan of: {path}")
-                all_dist_info_paths.extend(path.rglob('*.dist-info'))
+                
+                # CRITICAL FIX: Safe rglob with error handling
+                try:
+                    for dist_info_path in path.rglob('*.dist-info'):
+                        try:
+                            # Skip Windows temp files (start with ~)
+                            if dist_info_path.name.startswith('~'):
+                                if verbose:
+                                    safe_print(f"      -> Skipping temp file: {dist_info_path.name}")
+                                continue
+                            
+                            # Verify the path still exists (could have been deleted during scan)
+                            if not dist_info_path.exists():
+                                if verbose:
+                                    safe_print(f"      -> Skipping deleted path: {dist_info_path.name}")
+                                continue
+                            
+                            # Verify it's actually a directory
+                            if not dist_info_path.is_dir():
+                                if verbose:
+                                    safe_print(f"      -> Skipping non-directory: {dist_info_path.name}")
+                                continue
+                            
+                            all_dist_info_paths.append(dist_info_path)
+                            
+                        except (OSError, FileNotFoundError, PermissionError) as e:
+                            # Individual file disappeared or became inaccessible during iteration
+                            if verbose:
+                                safe_print(f"      -> Skipping inaccessible file: {e}")
+                            continue
+                            
+                except (OSError, FileNotFoundError, PermissionError) as e:
+                    # The entire rglob failed (path disappeared, permission denied, etc.)
+                    safe_print(f"   - ⚠️  Could not scan {path}: {e}")
+                    continue
             
             safe_print(f"   - Phase 2: Parsing {len(all_dist_info_paths)} metadata files in parallel...")
             
@@ -502,7 +538,16 @@ class omnipkgMetadataGatherer:
             
             with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
                 # Filter out non-directories before submitting to avoid worker errors
-                valid_paths = [path for path in all_dist_info_paths if path.is_dir()]
+                valid_paths = []
+                for path in all_dist_info_paths:
+                    try:
+                        # Double-check it's still a directory before submitting to worker
+                        if path.is_dir() and path.exists():
+                            valid_paths.append(path)
+                    except (OSError, FileNotFoundError):
+                        # Path disappeared between collection and validation
+                        continue
+                
                 future_to_path = {
                     executor.submit(self._parse_distribution_worker, path): path 
                     for path in valid_paths
@@ -513,9 +558,15 @@ class omnipkgMetadataGatherer:
                     iterator = tqdm(iterator, total=len(future_to_path), desc="      Parsing", unit="pkg")
                 
                 for future in iterator:
-                    result = future.result()
-                    if result:
-                        discovered_dists.append(result)
+                    try:
+                        result = future.result()
+                        if result:
+                            discovered_dists.append(result)
+                    except Exception as e:
+                        # Worker failed (file disappeared, corrupted metadata, etc.)
+                        if verbose:
+                            safe_print(f"      -> Worker failed: {e}")
+                        continue
             
             if verbose:
                 safe_print(f'   - Deduplicating {len(discovered_dists)} raw discoveries...')
@@ -541,7 +592,6 @@ class omnipkgMetadataGatherer:
                 safe_print(f'✅ Authoritative discovery complete. Found {len(final_dists)} total package versions.')
                 
             return final_dists
-            # --- END DEDUPLICATION FIX ---
 
     def _is_bubbled(self, dist: importlib.metadata.Distribution) -> bool:
         multiversion_base = self.config.get('multiversion_base', '/dev/null')
