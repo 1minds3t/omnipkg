@@ -1,21 +1,22 @@
-# MANIFEST.in (Updated)
+# MANIFEST.in - Source distribution includes
+# Files are relative to project root, but packages are in src/
 
-# Core documentation and license files
+# Core documentation and license files (root level)
 include README.md
 include LICENSE
 include CHANGELOG.md
 include THIRD_PARTY_NOTICES.txt
+include COMMERCIAL_LICENSE.md
 
-# Include the third-party license files
+# Third-party license files (root level)
 recursive-include licenses *.txt
 
-# Include all language files inside the omnipkg/locale directory
-recursive-include omnipkg/locale *.mo
+# Locale files (inside src/omnipkg/)
+recursive-include src/omnipkg/locale *.mo
+recursive-include src/omnipkg/locale *.pot
 
-# Include all files in the tests directory
-recursive-include tests *.py
+# Tests package (inside src/tests/)
+recursive-include src/tests *.py
 
-# Include list of top-level module imports    
+# Top-level module list
 include top_level.txt
-
-  
