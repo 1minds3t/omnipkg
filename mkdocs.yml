@@ -1,0 +1,46 @@
+site_name: omnipkg
+site_description: 'The Ultimate Python Dependency Resolver. One environment. Infinite packages. Zero conflicts.'
+site_url: https://1minds3t.github.io/omnipkg/
+repo_url: https://github.com/1minds3t/omnipkg
+repo_name: 1minds3t/omnipkg
+
+# This is the magic that creates the tabs!
+# The text on the left is the tab name, the file on the right is the content.
+nav:
+  - 'Home': 'index.md'
+  - 'CLI Commands': 'cli_commands_reference.md'
+  - 'Advanced Features':
+    - 'Overview': 'advanced_management.md'
+    - 'Python Hot-Swapping': 'python_hot_swapping.md'
+    - 'Runtime Switching': 'runtime_switching.md'
+    - 'System Libs (LibResolver)': 'LIBRESOLVER.md'
+  - 'Roadmap': 'future_roadmap.md'
+
+# This adds the beautiful theme and features
+theme:
+  name: material
+  palette:
+    # Light mode
+    - scheme: default
+      primary: 'indigo'
+      accent: 'indigo'
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    # Dark mode
+    - scheme: slate
+      primary: 'black'
+      accent: 'indigo'
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.tabs
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.code.annotate
+
+# This tells MkDocs where your documentation files are
+docs_dir: 'docs'
