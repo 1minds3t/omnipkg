@@ -1,0 +1,10 @@
+Dependencies required to build your documentation, typically:
+1. Sphinx itself
+2. Any theme you use (e.g., furo)
+3. Any necessary extensions (e.g., sphinx-rtd-theme, autodoc, numpy)
+Base Sphinx installation
+Sphinx==7.3.7
+Recommended theme for Read the Docs projects (or use 'furo', etc.)
+sphinx-rtd-theme==2.0.0
+If you use autodoc to parse docstrings from your code:
+mock
