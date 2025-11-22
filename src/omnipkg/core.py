@@ -4140,6 +4140,21 @@ class omnipkg:
             # simply build the cache on its first run as before.
             pass
 
+    def get_package_for_command(self, command: str) -> Optional[str]:
+        """
+        Finds which package owns a specific CLI command using the O(1) Knowledge Base index.
+        """
+        if not self.cache_client:
+            return None
+        
+        # This matches the key format we just verified in SQLite
+        # Key: omnipkg:env_...:entrypoint:lollama -> Value: lollama
+        key = f"{self.redis_env_prefix}entrypoint:{command}"
+        
+        # Instant lookup
+        pkg_name = self.cache_client.get(key)
+        return pkg_name if pkg_name else None
+
     def _self_heal_omnipkg_installation(self):
         """
         (V25 - FILE-BASED CACHE) Ultra-fast version checking with persistent cache.
