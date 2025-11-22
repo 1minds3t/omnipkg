@@ -20,14 +20,9 @@ import select # We can import it, but we check the OS before using it
 HAS_SELECT = (os.name == 'posix')
 
 try:
-    # Assuming the file is now in a 'utils' subdirectory
     from omnipkg.utils.flask_port_finder import auto_patch_flask_port
 except ImportError:
-    # Fallback if the structure is different
-    try:
-        from omnipkg.flask_port_finder import auto_patch_flask_port
-    except ImportError:
-        auto_patch_flask_port = None
+    auto_patch_flask_port = None
 
 # --- PROJECT PATH SETUP ---
 project_root = Path(__file__).resolve().parent.parent.parent
