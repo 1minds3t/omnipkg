@@ -4140,6 +4140,62 @@ class omnipkg:
             # simply build the cache on its first run as before.
             pass
 
+    def find_package_by_command(self, command_name: str) -> Optional[Dict]:
+        """
+        Finds the owner package of a command by iterating through all active package
+        instances in the KB. This version correctly handles string data from Redis without
+        erroneous decoding.
+        """
+        if not self.cache_client:
+            return None
+
+        try:
+            # Step 1: Get all package names from the environment's index.
+            index_key = f"{self.redis_env_prefix}index"
+            all_package_names = self.cache_client.smembers(index_key)
+
+            if not all_package_names:
+                return None
+
+            # Step 2: Iterate through each package to check if it owns the command.
+            for pkg_name in all_package_names: # NO DECODE. IT'S ALREADY A STRING.
+
+                # Step 2a: Get the active version and instance hash.
+                main_key = f'{self.redis_key_prefix}{pkg_name}'
+                active_info = self.cache_client.hmget(main_key, ['active_version', 'active_version_instance_hash'])
+                active_version, instance_hash = active_info # NO DECODE.
+
+                if not active_version or not instance_hash:
+                    continue
+
+                # Step 2b: Construct the exact key for the active instance.
+                instance_key = f"{self.redis_key_prefix.replace(':pkg:', ':inst:')}{pkg_name}:{active_version}:{instance_hash}"
+
+                # Step 2c: Fetch ONLY the entry_points field.
+                entry_points_json = self.cache_client.hget(instance_key, 'entry_points')
+
+                if not entry_points_json:
+                    continue
+
+                # Step 2d: Parse the entry points and check for a match.
+                try:
+                    entry_points_list = json.loads(entry_points_json)
+                    for ep in entry_points_list:
+                        if ep.get('name') == command_name:
+                            # MATCH FOUND. Get all data for this instance.
+                            package_data = self.cache_client.hgetall(instance_key)
+                            return package_data # NO DECODE. IT'S ALREADY A DICT OF STRINGS.
+                except (json.JSONDecodeError, TypeError):
+                    continue
+
+            return None
+
+        except Exception as e:
+            safe_print(f"   - ⚠️  Unexpected error during robust find_package_by_command: {e}")
+            import traceback
+            traceback.print_exc()
+            return None
+    
     def _self_heal_omnipkg_installation(self):
         """
         (V25 - FILE-BASED CACHE) Ultra-fast version checking with persistent cache.

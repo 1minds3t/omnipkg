@@ -11,6 +11,8 @@ import os
 import subprocess
 import tempfile
 import json
+import re
+from packaging.utils import canonicalize_name
 import requests as http_requests
 from contextlib import contextmanager
 from .i18n import _, SUPPORTED_LANGUAGES
@@ -518,6 +520,164 @@ def print_header(title):
     safe_print(_('  🚀 {}').format(title))
     safe_print('=' * 60)
 
+def create_healing_wrapper_script(command_args: list, healing_plan: list, config: dict, entry_point: dict) -> Path:
+    """
+    Creates a script that executes a command using a pre-resolved entry point from the KB,
+    eliminating the need for discovery inside the hostile, cloaked environment.
+    """
+    import textwrap
+
+    command_name = command_args[0]
+    command_argv = command_args[1:]
+
+    script_content = f"""
+import sys, os, json, traceback, runpy, shutil
+from pathlib import Path
+
+# Basic setup to get omnipkg loader
+project_root_path = r"{str(project_root)}"
+if project_root_path not in sys.path:
+    sys.path.insert(0, project_root_path)
+
+try:
+    from omnipkg.loader import omnipkgLoader
+    from omnipkg.common_utils import safe_print
+except ImportError as e:
+    print(f"FATAL WRAPPER ERROR: Could not import omnipkg. {{e}}")
+    sys.exit(127)
+
+# --- INJECTED DATA FROM THE KB ---
+config = json.loads(r'''{json.dumps(config)}''')
+healing_plan = {healing_plan!r}
+command_name = "{command_name}"
+command_argv = {command_argv!r}
+entry_point_data = {json.dumps(entry_point)}
+# --- NO MORE DISCOVERY ---
+
+activated_loaders = []
+TRUE_ORIGINAL_SYS_PATH = list(sys.path)
+
+try:
+    # Activate all the necessary package versions
+    loaders_to_activate = [
+        omnipkgLoader(spec, config=config, isolation_mode='overlay', _original_sys_path=TRUE_ORIGINAL_SYS_PATH)
+        for spec in healing_plan
+    ]
+    for loader in loaders_to_activate:
+        loader.__enter__()
+        activated_loaders.append(loader)
+
+    safe_print("--- Environment Ready. Executing Command via Pre-Resolved Entry Point ---")
+    
+    # Directly use the data passed from the KB. No discovery. No bullshit.
+    module_str = entry_point_data['module']
+    safe_print(f"   - Resolved '{{command_name}}' to '{{module_str}}' from KB.")
+    
+    sys.argv = [command_name] + command_argv
+    runpy.run_module(module_str, run_name='__main__')
+
+except Exception as e:
+    safe_print(f"❌ A fatal error occurred: {{e}}")
+    traceback.print_exc()
+    sys.exit(1)
+
+finally:
+    # Cleanly deactivate all loaders
+    for loader in reversed(activated_loaders):
+        try:
+            loader.__exit__(None, None, None)
+        except Exception: pass
+"""
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.py', prefix='8pkg_heal_', delete=False, encoding='utf-8') as f:
+        f.write(textwrap.dedent(script_content))
+        return Path(f.name)
+
+def analyze_error_for_specs(error_text: str) -> list[str]:
+    """Extract specific package version requirements from error messages."""
+    specs = set()
+    # Match "requires X.Y.Z" pattern (without trailing period)
+    match = re.search(r"pydantic version, which requires ([\d]+(?:\.\d+)*)", error_text)
+    if match:
+        version = match.group(1)
+        spec = f"pydantic-core=={version}"
+        specs.add(spec)
+        safe_print(f"   - Found specific fix from error: {spec}")
+    return list(specs)
+
+def get_all_transitive_dependencies(package_name: str, package_version: str = None, 
+                                     max_depth: int = 10) -> set:
+    """
+    Gets ALL dependencies (direct + transitive) for a package from the live environment.
+    """
+    import importlib.metadata
+    
+    def _recurse(pkg_name: str, visited: set, depth: int) -> set:
+        if depth > max_depth or canonicalize_name(pkg_name) in visited:
+            return set()
+        
+        visited.add(canonicalize_name(pkg_name))
+        all_deps = set()
+        
+        try:
+            pkg_meta = importlib.metadata.metadata(pkg_name)
+            reqs = pkg_meta.get_all('Requires-Dist') or []
+            
+            for req in reqs:
+                if 'extra ==' in req: continue
+                
+                match = re.match(r'^([a-zA-Z0-9\-_.]+)', req)
+                if not match: continue
+                    
+                dep_name = match.group(1)
+                
+                try:
+                    dep_version = importlib.metadata.version(dep_name)
+                    dep_spec = f"{canonicalize_name(dep_name)}=={dep_version}"
+                    all_deps.add(dep_spec)
+                    all_deps.update(_recurse(dep_name, visited, depth + 1))
+                except importlib.metadata.PackageNotFoundError:
+                    continue
+                    
+        except Exception as e:
+            safe_print(f"   ⚠️  [Transitive Dep] Could not analyze {pkg_name}: {e}")
+        
+        return all_deps
+    
+    all_deps = _recurse(package_name, set(), depth=0)
+    
+    if package_version:
+        all_deps.add(f"{canonicalize_name(package_name)}=={package_version}")
+    
+    return all_deps
+
+def build_comprehensive_healing_plan(owner_package_name: str, owner_version: str, 
+                                      reactive_overrides: list) -> list:
+    """
+    Builds a complete healing plan with ALL transitive dependencies from the live env.
+    """
+    safe_print(f"💡 Proactive: Command owned by '{owner_package_name}=={owner_version}'. Loading its full dependency tree.")
+    
+    all_deps = get_all_transitive_dependencies(owner_package_name, owner_version)
+    safe_print(f"   🌳 Discovered {len(all_deps)} total packages (direct + transitive).")
+    
+    final_plan_map = {}
+    for spec in all_deps:
+        name, version = spec.split('==', 1)
+        final_plan_map[canonicalize_name(name)] = spec
+    
+    if reactive_overrides:
+        safe_print("💡 Reactive: Applying specific fixes from error analysis...")
+        for spec in reactive_overrides:
+            name, version = spec.split('==', 1)
+            c_name = canonicalize_name(name)
+            if c_name in final_plan_map and final_plan_map[c_name] != spec:
+                safe_print(f"   - Overriding {final_plan_map[c_name]} with reactive fix: {spec}")
+            else:
+                safe_print(f"   - Applying reactive fix: {spec}")
+            final_plan_map[c_name] = spec
+    
+    return sorted(list(final_plan_map.values()))
+    
 def main():
     """Main application entry point with pre-flight version check."""
     try:
@@ -852,40 +1012,200 @@ def main():
         elif args.command == 'rebuild-kb':
             pkg_instance.rebuild_knowledge_base(force=args.force)
             return 0
-        elif args.command == 'reset-config':
-            return pkg_instance.reset_configuration(force=args.force)
+        # START REPLACING FROM HERE
+        # In cli.py, inside the main() function
+
         elif args.command == 'run':
-            return execute_run_command(args.script_and_args, cm, verbose=args.verbose)
-        elif args.command == 'upgrade':
-            package_name = args.package_name[0] if args.package_name else 'omnipkg'
+            if not args.script_and_args:
+                parser.print_help()
+                return 1
 
-            # Handle self-upgrade as a special case
-            if package_name.lower() == 'omnipkg':
-                return pkg_instance.smart_upgrade(
-                    version=args.version,
-                    force=args.force,
-                    skip_dev_check=args.force_dev
+            first_arg = args.script_and_args[0]
+            is_script = first_arg.endswith('.py') and Path(first_arg).is_file()
+
+            if is_script:
+                return execute_run_command(args.script_and_args, cm, verbose=args.verbose)
+
+            command_name = Path(first_arg).name
+            temp_script = None
+            try:
+                # This direct run is for the happy path and for capturing the initial failure
+                process = subprocess.run(args.script_and_args, capture_output=True, text=True, encoding='utf-8', errors='replace')
+                full_output = process.stdout + process.stderr
+                print(full_output, end='')
+                if process.returncode == 0:
+                    return 0
+
+                # --- START OF THE REAL FIX ---
+                # The command failed, so now we use the KB to build the healing script.
+                safe_print(_("\n⚠️  Command failed. Looking up owner package in Knowledge Base..."))
+                
+                # 1. GET THE ENTRY POINT DATA FROM THE KB (THE SMART PART)
+                owner_package_info = pkg_instance.find_package_by_command(command_name)
+                if not owner_package_info:
+                    safe_print(f"❌ Could not find an owner for '{command_name}' in the KB. Cannot heal.")
+                    return process.returncode
+
+                # --- THIS IS THE FUCKING FIX ---
+                # Use .get() with the CORRECT CAPITALIZED keys from the KB.
+                owner_name = owner_package_info.get('Name')
+                owner_version = owner_package_info.get('Version')
+
+                # Add a sanity check in case the KB data is corrupted.
+                if not owner_name or not owner_version:
+                    safe_print(f"❌ KB data for command '{command_name}' is corrupted (missing Name/Version). Please rebuild the KB with '8pkg rebuild-kb'.")
+                    return 1
+                # --- END OF THE FUCKING FIX ---
+
+                safe_print(f"   - Command owned by '{owner_name}'. Building comprehensive healing plan...")
+
+                # --- START OF THE FUCKING FIX ---
+                # This is the logic that was missing. It extracts the entry point data
+                # from the dictionary we already fetched from the KB.
+
+                entry_point_data = None
+                entry_points_json_str = owner_package_info.get('entry_points')
+
+                if not entry_points_json_str:
+                    safe_print(f"❌ KB data for '{owner_name}' is corrupted (missing 'entry_points' field). Please rebuild KB.")
+                    return 1
+                try:
+                    entry_points_list = json.loads(entry_points_json_str)
+                    for ep in entry_points_list:
+                        if ep.get('name') == command_name:
+                            entry_point_data = ep
+                            break
+                except (json.JSONDecodeError, TypeError):
+                    safe_print(f"❌ KB data for '{owner_name}' is corrupted (invalid JSON in 'entry_points'). Please rebuild KB.")
+                    return 1
+
+                if not entry_point_data:
+                    safe_print(f"❌ KB data for '{owner_name}' is missing the entry point definition for '{command_name}'. Please rebuild KB.")
+                    return 1
+                # --- END OF THE FUCKING FIX ---
+
+                reactive_plan_set = set()
+                pydantic_conflict_match = re.search(
+                    r"SystemError: The installed pydantic-core version.*?is incompatible with the current pydantic version, which requires ([\d\.]+)",
+                    full_output
                 )
+                if pydantic_conflict_match:
+                    required_core_version = pydantic_conflict_match.group(1).rstrip('.')
+                    
+                    # YOUR CORRECT MAPPING LOGIC
+                    pydantic_core_to_pydantic_map = {
+                        '2.41.5': '2.12.4',
+                        '2.41.4': '2.12.3',
+                        '2.41.2': '2.12.2',
+                        '2.41.1': '2.12.1',
+                        '2.41.0': '2.12.0',
+                        '2.40.1': '2.11.1',
+                        '2.40.0': '2.11.0',
+                    }
+                    compatible_pydantic_version = pydantic_core_to_pydantic_map.get(required_core_version)
 
-            # For all other packages, use smart_install with a temporary strategy override
-            safe_print(f"🔄 Upgrading '{package_name}' to latest version...")
-            return pkg_instance.smart_install(
-                packages=[package_name],
-                force_reinstall=True,
-                override_strategy='latest-active' # Temporarily use this strategy for the upgrade
-            )
+                    if compatible_pydantic_version:
+                        safe_print(f"\n💡 Reactive: Pydantic/Core conflict requires a matched pair.")
+                        safe_print(f"   - For pydantic-core=={required_core_version}, the correct partner is pydantic=={compatible_pydantic_version}.")
+                        # Add BOTH packages to the plan to treat them as an atomic unit.
+                        reactive_plan_set.add(f"pydantic-core=={required_core_version}")
+                        reactive_plan_set.add(f"pydantic=={compatible_pydantic_version}")
+                    else:
+                        safe_print(f"   - ⚠️  Unknown pydantic-core mapping for {required_core_version}. Adding only core to plan.")
+                        reactive_plan_set.add(f"pydantic-core=={required_core_version}")
+                else:
+                    # Fallback for non-pydantic errors
+                    reactive_plan_set.update(analyze_error_for_specs(full_output))
+                # --- END OF THE FUCKING FIX ---
+
+                # Build the complete plan using the CORRECT reactive overrides.
+                final_plan = build_comprehensive_healing_plan(
+                    owner_package_name=owner_package_info['Name'],
+                    owner_version=owner_package_info['Version'],
+                    reactive_overrides=list(reactive_plan_set)
+                )
+                if not final_plan:
+                    safe_print("❌ Failed to build a valid healing plan. Aborting.")
+                    return process.returncode
+
+                # --- THE FINAL BOSS FIX ---
+                # As you correctly diagnosed, if 'pydantic' is in the healing plan,
+                # we MUST NOT also try to activate a separate 'pydantic-core' bubble.
+                # The pydantic bubble is a self-contained unit and includes the correct core.
+                # This surgical removal prevents the loader conflict.
+                has_pydantic_in_plan = any('pydantic==' in spec for spec in final_plan)
+                if has_pydantic_in_plan:
+                    plan_before_count = len(final_plan)
+                    # Create a new plan that EXCLUDES any pydantic-core entry.
+                    final_plan = [spec for spec in final_plan if not spec.startswith('pydantic-core==')]
+                    plan_after_count = len(final_plan)
+                    
+                    if plan_after_count < plan_before_count:
+                        safe_print("   - 💡 Adjusting plan: Removing separate 'pydantic-core' bubble to rely on the one nested inside the 'pydantic' bubble.")
+                # --- END OF THE FINAL BOSS FIX ---
+
+                safe_print(f"   - Verifying and building sandbox with {len(final_plan)} packages...")
+
+                # --- THIS IS THE FUCKING FIX ---
+                # Wrap the entire bubble creation process in a context that forces the 'stable-main'
+                # strategy. This PREVENTS corruption of the main environment by ensuring that
+                # smart_install creates bubbles instead of overwriting active packages.
+                with temporary_install_strategy(pkg_instance, 'stable-main'):
+                    for spec in final_plan:
+                        if '==' in spec:
+                            pkg_name, pkg_version = spec.split('==', 1)
+                            bubble_dir_name = f'{canonicalize_name(pkg_name)}-{pkg_version}'
+                            bubble_path = Path(cm.config['multiversion_base']) / bubble_dir_name
+                            
+                            if not bubble_path.is_dir():
+                                safe_print(f"   💡 Missing bubble detected: {spec}")
+                                safe_print(f"   🚀 Auto-installing bubble with 'stable-main' policy...")
+                                
+                                if pkg_instance.smart_install([spec]) != 0:
+                                    safe_print(f"\n❌ Auto-install failed for {spec}. Aborting heal.")
+                                    return 1
+                                
+                                safe_print(f"\n   ✅ Bubble installed successfully: {spec}")
+                # --- END OF THE FUCKING FIX ---
+
+                safe_print("-" * 60)
+                safe_print("🚀 All required bubbles are ready. Re-running command inside the healed sandbox...")
+
+                temp_script = create_healing_wrapper_script(
+                    command_args=args.script_and_args,
+                    healing_plan=final_plan,
+                    config=pkg_instance.config,
+                    entry_point=entry_point_data
+                )
+                
+                # 3. EXECUTE THE WRAPPER, WHICH NO LONGER NEEDS TO DISCOVER ANYTHING
+                safe_print("-" * 60)
+                safe_print("🚀 Re-running command inside the healed sandbox (with pre-resolved entry point)...")
+                python_exe = pkg_instance.config.get('python_executable', sys.executable)
+                result = subprocess.run([python_exe, str(temp_script)])
+                
+                if result.returncode == 0:
+                    safe_print("\n✅ Command completed successfully in healed environment.")
+                else:
+                    safe_print(f"\n❌ Command failed even inside the healed environment (exit code: {result.returncode}).")
+                return result.returncode
+                # --- END OF THE REAL FIX ---
+            finally:
+                if temp_script and temp_script.exists():
+                    temp_script.unlink(missing_ok=True)
+        
         else:
             parser.print_help()
-            safe_print(_("\n💡 Did you mean 'omnipkg config set language <code>'?"))
             return 1
+            
     except KeyboardInterrupt:
         safe_print(_('\n❌ Operation cancelled by user.'))
         return 1
     except Exception as e:
         safe_print(_('\n❌ An unexpected error occurred: {}').format(e))
         import traceback
-
         traceback.print_exc()
         return 1
+
 if __name__ == '__main__':
     sys.exit(main())
