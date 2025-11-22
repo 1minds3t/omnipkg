@@ -1322,6 +1322,18 @@ class omnipkgMetadataGatherer:
                 pipe.sadd(index_key, package_name)
                 pipe.hset(main_key, 'name', package_name) 
 
+                # vvvvvvvvv START OF NEW LOGIC vvvvvvvvv
+                # Index CLI commands for fast O(1) lookup
+                if 'entry_points' in metadata and isinstance(metadata['entry_points'], list):
+                    for ep in metadata['entry_points']:
+                        # The developer-port logic saves them as dicts: {'name': 'lollama', ...}
+                        cmd_name = ep.get('name') if isinstance(ep, dict) else None
+                        if cmd_name:
+                            # Create the lookup key: omnipkg:env_ID:entrypoint:lollama -> lollama_pkg
+                            ep_key = f"{self.redis_env_prefix}entrypoint:{cmd_name}"
+                            pipe.set(ep_key, package_name)
+                # ^^^^^^^^^ END OF NEW LOGIC ^^^^^^^^^
+
                 if is_active:
                     pipe.hset(main_key, 'active_version_instance_hash', instance_hash)
                     pipe.hset(main_key, 'active_version', version_str)
