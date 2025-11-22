@@ -314,7 +314,6 @@ class omnipkgMetadataGatherer:
                             continue
         return results
 
-
     def _run_strategy_4(self, base_path: Path, name_variants: List[str], version: Optional[str], verbose: bool) -> List[Tuple[importlib.metadata.Distribution, Path]]:
         """Strategy 4: Comprehensive fallback scan (SILENT except in verbose mode)"""
         results = []
@@ -352,6 +351,37 @@ class omnipkgMetadataGatherer:
                         safe_print(f'✅ Found {dist_name} v{dist.version} at {dist_info_path}')
             except Exception:
                 continue
+        return results
+
+    def _run_strategy_5(self, name: str, version: Optional[str], verbose: bool, search_paths: List[Path]) -> List[Tuple[importlib.metadata.Distribution, Path]]:
+        """
+        Strategy 5: Authoritative lookup via importlib.metadata, scoped to specific paths.
+        """
+        results = []
+        if verbose:
+            safe_print('      -> Strategy 5: Authoritative lookup via importlib.metadata...')
+        
+        target_canonical_name = canonicalize_name(name)
+        
+        try:
+            # Search each path explicitly using PathDistribution
+            for search_path in search_paths:
+                if verbose:
+                    safe_print(f'         -> Checking {search_path}')
+                
+                # Get all distributions from this specific path
+                from importlib.metadata import distributions
+                for dist in distributions(path=[str(search_path)]):
+                    dist_name = dist.metadata.get('Name', '')
+                    if canonicalize_name(dist_name) == target_canonical_name:
+                        if version is None or dist.version == version:
+                            results.append((dist, dist._path.resolve()))
+                            if verbose:
+                                safe_print(f'✅ Found AUTHORITATIVE {dist_name} v{dist.version} at {dist._path}')
+        except Exception as e:
+            if verbose:
+                safe_print(f"      -> ⚠️  Strategy 5 failed: {e}")
+
         return results
     
     def _discover_distributions(self, targeted_packages: Optional[List[str]], verbose: bool=False, search_path_override: Optional[str] = None, skip_existing_checksums: bool = False) -> List[importlib.metadata.Distribution]:
@@ -422,14 +452,16 @@ class omnipkgMetadataGatherer:
                             safe_print(f'      -> Scanning {base_path} with 4 concurrent strategies...')
                         
                         # Run all 4 strategies in parallel
-                        with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
+                        with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
                             future_s1 = executor.submit(self._run_strategy_1, base_path, name_variants, version, verbose)
                             future_s2 = executor.submit(self._run_strategy_2, base_path, name, name_variants, version, verbose)
                             future_s3 = executor.submit(self._run_strategy_3, base_path, name_variants, version, verbose)
                             future_s4 = executor.submit(self._run_strategy_4, base_path, name_variants, version, verbose)
+                            future_s5 = executor.submit(self._run_strategy_5, name, version, verbose, search_paths)
+
                             
-                            # Collect all results as they complete
-                            futures = [future_s1, future_s2, future_s3, future_s4]
+                           #Collect all results as they complete
+                            futures = [future_s1, future_s2, future_s3, future_s4, future_s5]
                             for future in concurrent.futures.as_completed(futures):
                                 try:
                                     strategy_results = future.result()
@@ -1143,7 +1175,43 @@ class omnipkgMetadataGatherer:
         metadata['last_indexed'] = datetime.now().isoformat()
         context_version = self.target_context_version if self.target_context_version else get_python_version()
         metadata['indexed_by_python'] = context_version
-        metadata['dependencies'] = [str(req) for req in dist.requires] if dist.requires else []
+        
+        # ✅ FIX: Canonicalize package names in dependencies
+        if dist.requires:
+            canonicalized_deps = []
+            for req in dist.requires:
+                req_str = str(req)
+                # Extract package name (before any version specifiers or extras)
+                # Examples: "PyYAML>=6.0" -> "pyyaml", "requests[security]>=2.0" -> "requests"
+                pkg_name = req_str.split('>=')[0].split('==')[0].split('<')[0].split('>')[0].split('[')[0].split(';')[0].strip()
+                canonical_name = canonicalize_name(pkg_name)
+                
+                # Reconstruct the requirement with canonical name
+                # If there are version specifiers, preserve them
+                remainder = req_str[len(pkg_name):].strip()
+                if remainder:
+                    canonicalized_deps.append(f"{canonical_name}{remainder}")
+                else:
+                    canonicalized_deps.append(canonical_name)
+            metadata['dependencies'] = canonicalized_deps
+        else:
+            metadata['dependencies'] = []
+        
+        try:
+            console_scripts = [
+                {
+                    'name': ep.name,
+                    # This handles both modern EntryPoint objects and older formats
+                    'module': ep.module if hasattr(ep, 'module') else ep.value.split(':')[0],
+                    'attr': ep.attr if hasattr(ep, 'attr') else ep.value.split(':')[1] if ':' in ep.value else None
+                }
+                for ep in dist.entry_points if ep.group == 'console_scripts'
+            ]
+            metadata['entry_points'] = console_scripts
+        except Exception:
+            # If parsing fails for any reason, we robustly fall back to an empty list.
+            metadata['entry_points'] = []
+      
         package_files = self._find_package_files(dist)
         if package_files.get('binaries'):
             metadata['help_text'] = self._get_help_output(package_files['binaries'][0]).get('help_text', 'No executable binary found.')
