@@ -117,18 +117,18 @@ jobs:
           results = []
           for path, name in endpoints:
               url = f'http://127.0.0.1:5000{path}'
-              print(f"\n🔗 Testing {name}: {url}")
+              print(f"\nTesting {name}: {url}")
               
               for attempt in range(3):
                   try:
                       response = requests.get(url, timeout=5)
-                      print(f"   ✅ Status: {response.status_code}")
-                      print(f"   📝 Response: {response.text[:100]}")
+                      print(f"   [OK] Status: {response.status_code}")
+                      print(f"   Response: {response.text[:100]}")
                       results.append(True)
                       break
                   except Exception as e:
                       if attempt == 2:
-                          print(f"   ❌ Failed: {type(e).__name__}")
+                          print(f"   [FAIL] {type(e).__name__}")
                           results.append(False)
                       time.sleep(1)
           
@@ -147,9 +147,9 @@ jobs:
         if: always() && runner.os == 'Windows'
         run: |
           if (Test-Path "server.pid") {
-            $pid = Get-Content "server.pid"
-            Stop-Process -Id $pid -Force -ErrorAction SilentlyContinue
-            Write-Host "✅ Cleanup complete"
+            $serverId = Get-Content "server.pid"
+            Stop-Process -Id $serverId -Force -ErrorAction SilentlyContinue
+            Write-Host "Cleanup complete"
           }
         shell: pwsh
       
