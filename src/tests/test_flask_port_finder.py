@@ -90,9 +90,9 @@ except ImportError:
         
         # Handle various app.run() patterns and add host='0.0.0.0'
         replacements = [
-            ("app.run()", f"app.run(host='0.0.0.0', port={port})"),
-            ("app.run(debug=True)", f"app.run(host='0.0.0.0', port={port})"),
-            ("app.run(use_reloader=False)", f"app.run(use_reloader=False, host='0.0.0.0', port={port})"),
+            ("app.run()", f"app.run(host='127.0.0.1', port={port})"),
+            ("app.run(debug=True)", f"app.run(host='127.0.0.1', port={port})"),
+            ("app.run(use_reloader=False)", f"app.run(use_reloader=False, host='127.0.0.1', port={port})"),
         ]
         
         patched_code = code
@@ -193,7 +193,7 @@ app = Flask(__name__)
 def hello():
     return 'Success!'
 if __name__ == '__main__':
-    app.run(use_reloader=False, host='0.0.0.0')  # Changed from default 127.0.0.1
+    app.run(use_reloader=False, host='127.0.0.1')  # Changed from 0.0.0.0
 """
         manager = None
         port = None
