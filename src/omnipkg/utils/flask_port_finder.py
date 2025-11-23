@@ -218,45 +218,43 @@ class FlaskAppManager:
             return validate_flask_app(self.code, self.port)
         
         wrapper_code = f'''
-    import signal
-    import sys
-    import time
-    from pathlib import Path
+import signal
+import sys
+import time
+from pathlib import Path
+try:
+    from .common_utils import safe_print
+except ImportError:
+    from omnipkg.common_utils import safe_print
+shutdown_file = Path("{self.shutdown_file}")
 
-    shutdown_file = Path("{self.shutdown_file}")
+def check_shutdown_signal(signum=None, frame=None):
+    if shutdown_file.exists():
+        # safe_print("\\n🛑 Shutdown signal received, stopping Flask app...")
+        sys.exit(0)
 
-    def check_shutdown_signal(signum=None, frame=None):
-        if shutdown_file.exists():
-            sys.exit(0)
+signal.signal(signal.SIGTERM, check_shutdown_signal)
+if hasattr(signal, 'SIGBREAK'):  # Windows
+    signal.signal(signal.SIGBREAK, check_shutdown_signal)
 
-    signal.signal(signal.SIGTERM, check_shutdown_signal)
-    if hasattr(signal, 'SIGBREAK'):
-        signal.signal(signal.SIGBREAK, check_shutdown_signal)
+import threading
+def periodic_check():
+    while True:
+        time.sleep(0.5)
+        check_shutdown_signal()
 
-    import threading
-    def periodic_check():
-        while True:
-            time.sleep(0.5)
-            check_shutdown_signal()
+threading.Thread(target=periodic_check, daemon=True).start()
 
-    threading.Thread(target=periodic_check, daemon=True).start()
-
-    {self.code}
-    '''
+{self.code}
+'''
         
         try:
-            # FIX: Keep temp file reference alive
-            self.temp_file = tempfile.NamedTemporaryFile(
-                mode='w', 
-                suffix='.py', 
-                delete=False  # We'll delete it manually in shutdown()
-            )
-            self.temp_file.write(wrapper_code)
-            self.temp_file.flush()
-            self.temp_file.close()  # Close but don't delete
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as f:
+                f.write(wrapper_code)
+                temp_file = f.name
             
             self.process = subprocess.Popen(
-                [sys.executable, self.temp_file.name],
+                [sys.executable, temp_file],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True
@@ -270,9 +268,6 @@ class FlaskAppManager:
             return True
         except Exception as e:
             safe_print(f"❌ Failed to start Flask app: {e}")
-            # Clean up temp file on error
-            if hasattr(self, 'temp_file') and os.path.exists(self.temp_file.name):
-                os.unlink(self.temp_file.name)
             return False
     
     def shutdown(self):
@@ -303,18 +298,11 @@ class FlaskAppManager:
             if self.shutdown_file.exists():
                 self.shutdown_file.unlink()
             
-            # ADDED: Clean up temp file
-            if hasattr(self, 'temp_file') and os.path.exists(self.temp_file.name):
-                try:
-                    os.unlink(self.temp_file.name)
-                except:
-                    pass
-            
             release_port(self.port)
             self.is_running = False
         except Exception as e:
             safe_print(f"⚠️  Error during shutdown: {e}")
-            release_port(self.port)
+            release_port(self.port)  # Always release port
 
     def wait_for_ready(self, timeout: float = 10.0) -> bool:
         """Wait for Flask app to be ready to accept connections."""
