@@ -1,12 +1,12 @@
-name: "🪟 Windows Flask - Self-Test Approach"
+name: "🎯 Working Windows Flask Server"
 
 on:
   workflow_dispatch:
 
 jobs:
-  windows-flask-test:
+  flask-server:
     runs-on: windows-latest
-    name: "Flask Self-Test"
+    name: "Flask Server Demo"
     
     steps:
       - name: Set up Python 3.11
@@ -14,357 +14,212 @@ jobs:
         with:
           python-version: '3.11'
       
-      - name: Install Dependencies
+      - name: Install Flask
         run: |
           python -m pip install --upgrade pip
-          pip install flask requests waitress
-          Write-Host "[OK] Dependencies installed"
+          pip install flask requests
+          Write-Host "[OK] Flask installed"
         shell: pwsh
       
-      - name: Test 1 - Flask with Self-Test Client
+      - name: Create Flask App
         run: |
-          Write-Host "=========================================="
-          Write-Host "TEST 1: Flask with built-in test client"
-          Write-Host "=========================================="
-          
           $app = @'
-          from flask import Flask
+          from flask import Flask, jsonify
           import sys
-          import time
-          from threading import Thread
-          import requests
           
           app = Flask(__name__)
           
           @app.route('/')
-          def hello():
-              return 'Flask Self-Test Success!'
+          def home():
+              return 'Hello from Windows Flask!'
           
-          def test_client():
-              print('[TEST] Waiting 5 seconds for server startup...', flush=True)
-              time.sleep(5)
-              
-              print('[TEST] Attempting to connect to server...', flush=True)
-              for i in range(10):
-                  try:
-                      response = requests.get('http://127.0.0.1:5001', timeout=2)
-                      print(f'[SUCCESS] Got response: {response.status_code}', flush=True)
-                      print(f'[SUCCESS] Content: {response.text}', flush=True)
-                      return
-                  except Exception as e:
-                      print(f'[TEST] Attempt {i+1} failed: {type(e).__name__}', flush=True)
-                      time.sleep(1)
-              
-              print('[FAIL] All test attempts failed', flush=True)
+          @app.route('/api/data')
+          def get_data():
+              return jsonify({
+                  'status': 'success',
+                  'message': 'Flask is working on Windows!',
+                  'platform': sys.platform
+              })
+          
+          @app.route('/health')
+          def health():
+              return jsonify({'status': 'healthy'})
           
           if __name__ == '__main__':
-              # Start test client in background
-              test_thread = Thread(target=test_client, daemon=True)
-              test_thread.start()
-              
-              print('[SERVER] Starting Flask on 127.0.0.1:5001...', flush=True)
-              
-              # Run server for 20 seconds then exit
-              import signal
-              def timeout_handler(signum, frame):
-                  print('[SERVER] Timeout reached, exiting...', flush=True)
-                  sys.exit(0)
-              
-              try:
-                  signal.signal(signal.SIGALRM, timeout_handler)
-                  signal.alarm(20)
-              except:
-                  pass  # Windows doesn't have SIGALRM
-              
-              app.run(host='127.0.0.1', port=5001, debug=False, use_reloader=False)
+              print('[SERVER] Starting Flask on 127.0.0.1:5000', flush=True)
+              # CRITICAL: Use 127.0.0.1, not 0.0.0.0 on Windows!
+              app.run(host='127.0.0.1', port=5000, debug=False, use_reloader=False)
           '@
           
-          $app | Out-File -FilePath self_test.py -Encoding utf8
-          
-          $env:PYTHONIOENCODING = "utf-8"
-          python self_test.py
+          $app | Out-File -FilePath flask_app.py -Encoding utf8
+          Write-Host "[OK] Flask app created"
         shell: pwsh
-        timeout-minutes: 1
-        continue-on-error: true
       
-      - name: Test 2 - Server in Background, Test in Foreground
+      - name: Start Flask Server
         run: |
-          Write-Host ""
-          Write-Host "=========================================="
-          Write-Host "TEST 2: Background server, foreground test"
-          Write-Host "=========================================="
+          Write-Host "Starting Flask server in background..."
           
-          $server = @'
-          from flask import Flask
-          import sys
-          
-          app = Flask(__name__)
-          
-          @app.route('/')
-          def hello():
-              return 'Background Flask Success!'
-          
-          if __name__ == '__main__':
-              print('[SERVER] Starting on 127.0.0.1:5002...', file=sys.stderr, flush=True)
-              app.run(host='127.0.0.1', port=5002, debug=False, use_reloader=False)
-          '@
-          
-          $server | Out-File -FilePath bg_server.py -Encoding utf8
-          
-          # Start server as background process (not job)
           $proc = Start-Process python `
-            -ArgumentList "bg_server.py" `
+            -ArgumentList "flask_app.py" `
             -PassThru `
+            -RedirectStandardOutput "server.log" `
             -WindowStyle Hidden
           
-          Write-Host "[OK] Server started as PID $($proc.Id)"
-          Write-Host "[INFO] Waiting 10 seconds..."
-          Start-Sleep -Seconds 10
+          Write-Host "[OK] Server started with PID: $($proc.Id)"
           
-          # Check if it's still running
-          $stillRunning = Get-Process -Id $proc.Id -ErrorAction SilentlyContinue
-          if ($stillRunning) {
-            Write-Host "[OK] Process still alive"
+          # Wait for server to be ready
+          Write-Host "[INFO] Waiting for server to initialize..."
+          Start-Sleep -Seconds 5
+          
+          # Verify process is still running
+          $running = Get-Process -Id $proc.Id -ErrorAction SilentlyContinue
+          if ($running) {
+            Write-Host "[OK] Server process is running"
           } else {
-            Write-Host "[FAIL] Process died"
+            Write-Host "[ERROR] Server process died!"
+            exit 1
           }
           
-          # Test from same PowerShell session
-          Write-Host "[TEST] Testing connection..."
+          # Save PID for cleanup
+          $proc.Id | Out-File -FilePath "server.pid" -Encoding ascii
+        shell: pwsh
+      
+      - name: Test Server Endpoints
+        run: |
+          Write-Host ""
+          Write-Host "=========================================="
+          Write-Host "TESTING FLASK ENDPOINTS"
+          Write-Host "=========================================="
+          
+          $testScript = @'
+          import requests
+          import json
+          
+          def test_endpoint(url, name):
+              print(f'\n--- Testing {name} ---')
+              try:
+                  response = requests.get(url, timeout=5)
+                  print(f'Status: {response.status_code}')
+                  print(f'Content: {response.text}')
+                  
+                  if response.status_code == 200:
+                      print(f'✓ {name} SUCCESS')
+                      return True
+                  else:
+                      print(f'✗ {name} FAILED')
+                      return False
+              except Exception as e:
+                  print(f'✗ {name} ERROR: {e}')
+                  return False
+          
+          print('Testing Flask server at http://127.0.0.1:5000')
+          
+          results = []
+          results.append(test_endpoint('http://127.0.0.1:5000/', 'Home page'))
+          results.append(test_endpoint('http://127.0.0.1:5000/api/data', 'API endpoint'))
+          results.append(test_endpoint('http://127.0.0.1:5000/health', 'Health check'))
+          
+          print('\n========================================')
+          print('SUMMARY')
+          print('========================================')
+          passed = sum(results)
+          total = len(results)
+          print(f'Tests passed: {passed}/{total}')
+          
+          if passed == total:
+              print('\n🎉 ALL TESTS PASSED!')
+          else:
+              print(f'\n⚠️ {total - passed} test(s) failed')
+              exit(1)
+          '@
+          
+          $testScript | Out-File -FilePath test_server.py -Encoding utf8
           $env:PYTHONIOENCODING = "utf-8"
-          python -c @"
+          python test_server.py
+        shell: pwsh
+      
+      - name: Check Server Logs
+        if: always()
+        run: |
+          Write-Host ""
+          Write-Host "=========================================="
+          Write-Host "SERVER LOGS"
+          Write-Host "=========================================="
+          
+          if (Test-Path "server.log") {
+            Get-Content "server.log"
+          } else {
+            Write-Host "(No log file found)"
+          }
+        shell: pwsh
+      
+      - name: Load Test (Optional)
+        run: |
+          Write-Host ""
+          Write-Host "=========================================="
+          Write-Host "LOAD TEST - 50 rapid requests"
+          Write-Host "=========================================="
+          
+          $loadTest = @'
           import requests
           import time
+          import statistics
           
-          for i in range(5):
+          url = 'http://127.0.0.1:5000/'
+          num_requests = 50
+          
+          print(f'Sending {num_requests} requests...')
+          
+          times = []
+          successes = 0
+          
+          for i in range(num_requests):
+              start = time.time()
               try:
-                  r = requests.get('http://127.0.0.1:5002', timeout=3)
-                  print(f'[SUCCESS] Status: {r.status_code}, Content: {r.text}')
-                  break
+                  response = requests.get(url, timeout=5)
+                  elapsed = time.time() - start
+                  times.append(elapsed)
+                  
+                  if response.status_code == 200:
+                      successes += 1
+                  
+                  if (i + 1) % 10 == 0:
+                      print(f'  Completed {i + 1}/{num_requests}')
               except Exception as e:
-                  print(f'[FAIL] Attempt {i+1}: {type(e).__name__}: {e}')
-                  time.sleep(2)
-          "@
+                  print(f'  Request {i + 1} failed: {e}')
           
-          # Cleanup
-          Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
-        shell: pwsh
-      
-      - name: Test 3 - Simple Socket Server + Telnet-style Test
-        run: |
-          Write-Host ""
-          Write-Host "=========================================="
-          Write-Host "TEST 3: Raw socket with manual connection"
-          Write-Host "=========================================="
+          print('\nResults:')
+          print(f'  Successful requests: {successes}/{num_requests}')
+          print(f'  Success rate: {successes/num_requests*100:.1f}%')
           
-          $combo = @'
-          import socket
-          import sys
-          import time
-          from threading import Thread
-          
-          def run_server():
-              try:
-                  server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                  server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-                  server.bind(('127.0.0.1', 5003))
-                  server.listen(1)
-                  print('[SERVER] Listening on 127.0.0.1:5003', flush=True)
-                  
-                  server.settimeout(15)  # Timeout after 15 seconds
-                  conn, addr = server.accept()
-                  print(f'[SERVER] Connection from {addr}!', flush=True)
-                  
-                  data = conn.recv(1024)
-                  print(f'[SERVER] Received: {data[:50]}', flush=True)
-                  
-                  response = b'HTTP/1.1 200 OK\r\nContent-Length: 21\r\n\r\nRaw Socket Success!!!'
-                  conn.sendall(response)
-                  print('[SERVER] Sent response', flush=True)
-                  
-                  conn.close()
-                  server.close()
-              except Exception as e:
-                  print(f'[SERVER] Error: {e}', flush=True)
-                  import traceback
-                  traceback.print_exc()
-          
-          def run_client():
-              print('[CLIENT] Waiting 3 seconds...', flush=True)
-              time.sleep(3)
-              
-              for i in range(10):
-                  try:
-                      print(f'[CLIENT] Attempt {i+1}: Connecting to 127.0.0.1:5003...', flush=True)
-                      sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                      sock.settimeout(2)
-                      sock.connect(('127.0.0.1', 5003))
-                      print('[CLIENT] Connected!', flush=True)
-                      
-                      request = b'GET / HTTP/1.1\r\nHost: localhost\r\n\r\n'
-                      sock.sendall(request)
-                      print('[CLIENT] Sent request', flush=True)
-                      
-                      response = sock.recv(1024)
-                      print(f'[CLIENT] Received: {response}', flush=True)
-                      
-                      sock.close()
-                      print('[SUCCESS] Raw socket communication worked!', flush=True)
-                      return
-                  except Exception as e:
-                      print(f'[CLIENT] Attempt {i+1} failed: {type(e).__name__}: {e}', flush=True)
-                      time.sleep(1)
-              
-              print('[FAIL] All client attempts failed', flush=True)
-          
-          if __name__ == '__main__':
-              server_thread = Thread(target=run_server)
-              server_thread.start()
-              
-              run_client()
-              
-              server_thread.join(timeout=5)
-              print('[DONE]', flush=True)
+          if times:
+              print(f'  Avg response time: {statistics.mean(times)*1000:.2f}ms')
+              print(f'  Min response time: {min(times)*1000:.2f}ms')
+              print(f'  Max response time: {max(times)*1000:.2f}ms')
+              print(f'  Median response time: {statistics.median(times)*1000:.2f}ms')
           '@
           
-          $combo | Out-File -FilePath socket_test.py -Encoding utf8
-          $env:PYTHONIOENCODING = "utf-8"
-          python socket_test.py
+          $loadTest | Out-File -FilePath load_test.py -Encoding utf8
+          python load_test.py
         shell: pwsh
       
-      - name: Test 4 - HTTP Server with Direct Test
+      - name: Cleanup
+        if: always()
         run: |
           Write-Host ""
-          Write-Host "=========================================="
-          Write-Host "TEST 4: http.server with urllib test"
-          Write-Host "=========================================="
+          Write-Host "Cleaning up..."
           
-          $combo = @'
-          from http.server import HTTPServer, BaseHTTPRequestHandler
-          import urllib.request
-          import sys
-          import time
-          from threading import Thread
-          
-          class Handler(BaseHTTPRequestHandler):
-              def do_GET(self):
-                  self.send_response(200)
-                  self.send_header('Content-type', 'text/plain')
-                  self.end_headers()
-                  self.wfile.write(b'HTTP.Server Success!')
-              
-              def log_message(self, format, *args):
-                  print(f'[SERVER] {format % args}', flush=True)
-          
-          def run_server():
-              try:
-                  server = HTTPServer(('127.0.0.1', 5004), Handler)
-                  print('[SERVER] Listening on 127.0.0.1:5004', flush=True)
-                  
-                  # Handle one request then stop
-                  server.handle_request()
-                  print('[SERVER] Handled request, shutting down', flush=True)
-              except Exception as e:
-                  print(f'[SERVER] Error: {e}', flush=True)
-          
-          def run_client():
-              print('[CLIENT] Waiting 3 seconds...', flush=True)
-              time.sleep(3)
-              
-              for i in range(5):
-                  try:
-                      print(f'[CLIENT] Attempt {i+1}...', flush=True)
-                      response = urllib.request.urlopen('http://127.0.0.1:5004', timeout=3)
-                      content = response.read().decode()
-                      print(f'[SUCCESS] Got: {content}', flush=True)
-                      return
-                  except Exception as e:
-                      print(f'[CLIENT] Failed: {type(e).__name__}: {e}', flush=True)
-                      time.sleep(1)
-              
-              print('[FAIL] All attempts failed', flush=True)
-          
-          if __name__ == '__main__':
-              server_thread = Thread(target=run_server)
-              server_thread.start()
-              
-              run_client()
-              
-              server_thread.join(timeout=5)
-          '@
-          
-          $combo | Out-File -FilePath http_test.py -Encoding utf8
-          $env:PYTHONIOENCODING = "utf-8"
-          python http_test.py
-        shell: pwsh
-      
-      - name: Test 5 - Check What Netstat Actually Shows
-        run: |
-          Write-Host ""
-          Write-Host "=========================================="
-          Write-Host "TEST 5: Start server and check netstat IMMEDIATELY"
-          Write-Host "=========================================="
-          
-          $server = @'
-          import socket
-          import time
-          
-          sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-          sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-          sock.bind(('127.0.0.1', 5005))
-          sock.listen(5)
-          print('BOUND', flush=True)
-          
-          # Keep alive for 30 seconds
-          time.sleep(30)
-          '@
-          
-          $server | Out-File -FilePath netstat_test.py -Encoding utf8
-          
-          # Start in background
-          $proc = Start-Process python `
-            -ArgumentList "netstat_test.py" `
-            -PassThru `
-            -RedirectStandardOutput "netstat_out.txt" `
-            -WindowStyle Hidden
-          
-          Write-Host "[OK] Started PID $($proc.Id)"
-          
-          # Wait for "BOUND" message
-          Start-Sleep -Seconds 2
-          
-          if (Test-Path "netstat_out.txt") {
-            $output = Get-Content "netstat_out.txt"
-            Write-Host "[INFO] Server output: $output"
+          if (Test-Path "server.pid") {
+            $pid = Get-Content "server.pid"
+            try {
+              Stop-Process -Id $pid -Force -ErrorAction SilentlyContinue
+              Write-Host "[OK] Stopped server process $pid"
+            } catch {
+              Write-Host "[INFO] Process already stopped"
+            }
           }
           
-          Write-Host ""
-          Write-Host "=== NETSTAT (immediately after bind) ==="
-          netstat -ano | Select-String "5005"
-          
-          Write-Host ""
-          Write-Host "=== Get-NetTCPConnection ==="
-          Get-NetTCPConnection -LocalPort 5005 -ErrorAction SilentlyContinue | Format-Table
-          
-          Write-Host ""
-          Write-Host "=== Process info ==="
-          Get-Process -Id $proc.Id -ErrorAction SilentlyContinue | Format-Table Id, ProcessName, @{Name="Handles";Expression={$_.HandleCount}}
-          
-          Write-Host ""
-          Write-Host "=== Python socket test ==="
-          python -c @"
-          import socket
-          sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-          sock.settimeout(2)
-          result = sock.connect_ex(('127.0.0.1', 5005))
-          print(f'Connect result: {result}')
-          if result == 0:
-              print('SUCCESS: Port is listening!')
-          else:
-              print(f'FAIL: Port not listening (error {result})')
-          sock.close()
-          "@
-          
-          # Cleanup
-          Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
+          # Kill any remaining Python processes
+          Get-Process python -ErrorAction SilentlyContinue | Stop-Process -Force
+          Write-Host "[OK] Cleanup complete"
         shell: pwsh
