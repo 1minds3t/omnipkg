@@ -1,6 +1,6 @@
 site_name: omnipkg
 site_description: 'The Ultimate Python Dependency Resolver. One environment. Infinite packages. Zero conflicts.'
-site_url: https://1minds3t.github.io/omnipkg/
+site_url: https://omnipkg.readthedocs.io/
 repo_url: https://github.com/1minds3t/omnipkg
 repo_name: 1minds3t/omnipkg
 
@@ -19,8 +19,8 @@ nav:
 # Material theme configuration
 theme:
   name: material
-  logo: assets/logo.png  # Add if you have a logo
-  favicon: assets/favicon.ico  # Add if you have a favicon
+  logo: assets/logo.svg
+  favicon: assets/favicon.png  # Add this line!
   palette:
     # Light mode
     - scheme: default
@@ -39,62 +39,13 @@ theme:
   features:
     - navigation.tabs
     - navigation.tabs.sticky
-    - navigation.sections
     - navigation.top
-    - navigation.tracking
     - search.suggest
     - search.highlight
-    - search.share
     - content.code.copy
     - content.code.annotate
-    - content.tabs.link
   icon:
     repo: fontawesome/brands/github
 
-# Extensions
-markdown_extensions:
-  - pymdownx.highlight:
-      anchor_linenums: true
-      line_spans: __span
-      pygments_lang_class: true
-  - pymdownx.inlinehilite
-  - pymdownx.snippets
-  - pymdownx.superfences:
-      custom_fences:
-        - name: mermaid
-          class: mermaid
-          format: !!python/name:pymdownx.superfences.fence_code_format
-  - pymdownx.tabbed:
-      alternate_style: true
-  - admonition
-  - pymdownx.details
-  - pymdownx.emoji:
-      emoji_index: !!python/name:material.extensions.emoji.twemoji
-      emoji_generator: !!python/name:material.extensions.emoji.to_svg
-  - attr_list
-  - md_in_html
-  - tables
-  - footnotes
-
-# Plugins
-plugins:
-  - search
-  - git-revision-date-localized:
-      enable_creation_date: true
-
-# Extra
-extra:
-  social:
-    - icon: fontawesome/brands/github
-      link: https://github.com/1minds3t/omnipkg
-    - icon: fontawesome/brands/python
-      link: https://pypi.org/project/omnipkg/
-  version:
-    provider: mike
-
 # Documentation directory
 docs_dir: docs
-
-# Extra CSS (optional)
-extra_css:
-  - stylesheets/extra.css
