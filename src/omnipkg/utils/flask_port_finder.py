@@ -344,7 +344,7 @@ def patch_flask_code(code: str, interactive: bool = False, validate_only: bool =
         # The reloader spawns a child process that is hard to kill cleanly via Popen.
         patched_code = re.sub(
             pattern,
-            f'app.run(host="127.0.0.1", port={free_port}, debug=False, use_reloader=False)',
+            f"app.run(host='127.0.0.1', port={free_port}, debug=False, use_reloader=False)",
             code
         )
     
