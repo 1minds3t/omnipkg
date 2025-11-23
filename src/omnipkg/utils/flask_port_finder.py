@@ -217,6 +217,9 @@ class FlaskAppManager:
             safe_print(f"🔍 Validating Flask app on port {self.port}...")
             return validate_flask_app(self.code, self.port)
         
+        # Escape the code properly for insertion into wrapper
+        escaped_code = self.code.replace('\\', '\\\\').replace('"', '\\"').replace('\n', '\\n')
+        
         wrapper_code = f'''
 import signal
 import sys
@@ -247,18 +250,20 @@ def periodic_check():
 threading.Thread(target=periodic_check, daemon=True).start()
 print("[DEBUG] About to exec Flask code", flush=True)
 
-# Execute the user's Flask code
-exec("""
+# User's code directly embedded (not via exec)
 {self.code}
-""")
 
-# CRITICAL: Force app.run() to execute even if __name__ != '__main__'
+# CRITICAL: Ensure app.run() is called
 print("[DEBUG] Looking for Flask app instance", flush=True)
-if 'app' in locals():
-    print("[DEBUG] Found 'app', calling run()", flush=True)
-    app.run(host='127.0.0.1', port={self.port}, debug=False, use_reloader=False)
-else:
-    print("[ERROR] No Flask app instance named 'app' found!", flush=True)
+try:
+    if 'app' in dir():
+        print("[DEBUG] Found app, calling run()", flush=True)
+        app.run(host='127.0.0.1', port={self.port}, debug=False, use_reloader=False)
+    else:
+        print("[ERROR] No app found in namespace!", flush=True)
+        sys.exit(1)
+except NameError:
+    print("[ERROR] NameError - app not defined!", flush=True)
     sys.exit(1)
 '''
     
@@ -274,8 +279,8 @@ else:
             self.process = subprocess.Popen(
                 [sys.executable, temp_file],
                 stdout=log_handle,
-                stderr=subprocess.STDOUT,  # Merge stderr into stdout
-                bufsize=0  # Unbuffered
+                stderr=subprocess.STDOUT,
+                bufsize=0
             )
             
             self.is_running = True
