@@ -45,7 +45,11 @@ ENV/
 *.mp4
 *.gif
 *.svg
+!docs/assets/*.svg
+!.github/logo.svg
 *.png
+!docs/assets/*.png
+!omnipkg/icon.png
 *.jpg
 *.jpeg
 
