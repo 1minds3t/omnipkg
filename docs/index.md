@@ -1,53 +1,78 @@
-# Welcome to omnipkg
+# omnipkg - The Ultimate Python Dependency Resolver
 
-> The Ultimate Python Dependency Resolver. One environment. Infinite packages. Zero conflicts.
+<div class="grid cards" markdown>
 
-Tired of `pip` breaking your environment every time you install a package for an old project? **omnipkg** solves this by fundamentally changing how packages are managed.
+-   :rocket:{ .lg .middle } __Multi-Version Support__
 
-Instead of overwriting packages, omnipkg isolates every version in a "bubble," allowing you to hot-swap between them at runtime in microseconds. This is the end of dependency hell.
+    ---
 
----
+    Run multiple versions of the same package simultaneously in one environment
 
-## 🚀 Quick Start
+-   :zap:{ .lg .middle } __Python Hot-Swapping__
 
-Install multiple, conflicting versions of a package without breaking your environment:
+    ---
 
+    Switch Python interpreters mid-execution with zero downtime
+
+-   :hospital:{ .lg .middle } __Auto-Healing__
+
+    ---
+
+    Automatically fix dependency conflicts in real-time
+
+-   :infinity:{ .lg .middle } __Universal Execution__
+
+    ---
+
+    Handle any Python input - scripts, heredocs, pipes, inline code
+
+</div>
+
+## What is omnipkg?
+
+omnipkg is not just another package manager. It's an intelligent, self-healing runtime orchestrator that breaks the fundamental laws of Python environments.
+
+For 30 years, developers accepted that you couldn't run multiple Python versions in one script, or safely switch C-extensions like NumPy mid-execution. **omnipkg proves this is no longer true.**
+
+### Quick Start
 ```bash
-# Install the latest version of Flask for your modern app
-omnipkg install flask
+# Install omnipkg
+pip install omnipkg
 
-# Now install an ancient version for a legacy script.
-# omnipkg isolates it instead of overwriting the new one.
-omnipkg install flask==0.12.5
+# Run the interactive demo
+8pkg demo
+
+# Install multiple versions
+8pkg install torch==2.0.0 torch==2.7.1
 ```
 
-Run a script with automatic dependency healing. If the wrong version is active, `omnipkg run` fixes it on the fly for that script's execution only:
+### Why omnipkg?
 
-```bash
-# This script needs an old version, but omnipkg handles it automatically.
-omnipkg run --requires "flask==0.12.5" legacy_app.py
-```
+Traditional package managers force you to choose: Docker overhead, slow venv switching, or dependency conflicts. omnipkg makes these problems irrelevant.
 
----
-
-## Key Features
-
-*   **Peaceful Coexistence:** Install hundreds of versions of the same package. They are all available on demand without conflict.
-*   **Runtime Hot-Swapping:** Your code can switch between package versions in microseconds without restarting the Python interpreter.
-*   **The Time Machine:** Automatically resurrects and rebuilds ancient, broken packages from the past, including their historical dependencies.
-*   **Automatic Healing:** The `omnipkg run` command detects version conflicts before your script even starts and temporarily activates the exact versions required.
-*   **Full Environment Management:** Adopt and switch between multiple Python interpreters (`3.7` through `3.14`) with a single command.
+!!! success "Performance"
+    - **5-7x faster** than UV for healing workflows
+    - **Concurrent Python versions** in one environment
+    - **Auto-healing** for broken dependencies
+    - **24 languages** supported via AI localization
 
 ---
 
-## Dive Deeper
+## Latest Release: v1.6.2
 
-*   **[Getting Started](./getting_started.md):** Your first steps and core concepts.
-*   **[CLI Commands Reference](./cli_commands_reference.md):** Detailed guide to every command.
-*   **[Advanced Management](./advanced_management.md):** Master the Time Machine and version bubbling.
-*   **[Python Hot-Swapping](./python_hot_swapping.md):** See live examples of runtime version switching.
-*   **[LibResolver](./LIBRESOLVER.md):** Learn how omnipkg can even manage system-level library compatibility.
+**Universal Runtime Healing** introduced! omnipkg can now accept Python code via any method and wrap them in an immortal, self-healing context.
+
+[View Release Notes :octicons-arrow-right-24:](https://github.com/1minds3t/omnipkg/releases/tag/v1.6.2){ .md-button .md-button--primary }
 
 ---
 
-Find an issue or want to contribute? Check out the [GitHub Repository](https://github.com/1minds3t/omnipkg).
+## Next Steps
+
+<div class="grid cards" markdown>
+
+-   [Getting Started](getting_started.md)
+-   [CLI Commands](cli_commands_reference.md)
+-   [Python Hot-Swapping](python_hot_swapping.md)
+-   [Runtime Switching](runtime_switching.md)
+
+</div>
