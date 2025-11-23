@@ -66,30 +66,9 @@ except ImportError:
             print(f"\n🔍 DEBUG: Starting Flask on port {self.port}", file=sys.stderr)
             print(f"🔍 DEBUG: Code to execute:\n{self.code}", file=sys.stderr)
             
-            command = [sys.executable, "-c", self.code]
-            self.process = subprocess.Popen(
-                command, 
-                stdout=subprocess.PIPE, 
-                stderr=subprocess.PIPE,
-                text=True
-            )
-            
-            print(f"🔍 DEBUG: Process started with PID {self.process.pid}", file=sys.stderr)
-            
-            # Give it a moment to start
-            time.sleep(0.5)
-            
-            # Check if process died immediately
-            retcode = self.process.poll()
-            if retcode is not None:
-                stdout, stderr = self.process.communicate()
-                print(f"❌ DEBUG: Process died immediately with code {retcode}", file=sys.stderr)
-                print(f"📤 STDOUT:\n{stdout}", file=sys.stderr)
-                print(f"📤 STDERR:\n{stderr}", file=sys.stderr)
-                return False
-            
-            print(f"✅ DEBUG: Process still alive, waiting for ready...", file=sys.stderr)
-            return self.wait_for_ready()
+            # Write to temp file instead of using -c
+            print(f"🔍 DEBUG: Creating temp file...", file=sys.stderr)
+            self.temp_file_obj
         
         def shutdown(self):
             if self.process:
