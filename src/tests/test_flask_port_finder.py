@@ -177,7 +177,7 @@ class TestEnhancedFlaskPortFinder(unittest.TestCase):
 
     def test_6_flask_app_manager_full_lifecycle(self):
         """Tests the full lifecycle: start, validate responsiveness, and shutdown."""
-        safe_print("\n" + "="*70 + "\n🧪 TEST 6: Flask App Manager Full Lifecycle (with Fixes)\n" + "="*70)
+        safe_print("\n" + "="*70 + "\n🧪 TEST 6: Flask App Manager Full Lifecycle \n" + "="*70)
         # FIX: Explicitly disable reloader to ensure Process Management works reliably in tests
         app_code = """
 from flask import Flask
