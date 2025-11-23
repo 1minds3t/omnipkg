@@ -1,36 +1,50 @@
 # Configuration file for the Sphinx documentation builder.
-#
-# For the full list of built-in configuration values, see the documentation:
-# https://www.sphinx-doc.org/en/master/usage/configuration.html
 
 # -- Project information -----------------------------------------------------
-# https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
-
-project = 'My Awesome Project'
-copyright = '2025, Your Name'
-author = 'Your Name'
-release = '0.1.0'
+project = 'omnipkg'
+copyright = '2025, 1minds3t'
+author = '1minds3t'
+release = '1.6.2'
 
 # -- General configuration ---------------------------------------------------
-# https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
-
 extensions = [
-    # Add common extensions here, for example:
-    # 'sphinx.ext.autodoc',  # To automatically document Python code
-    # 'sphinx.ext.napoleon', # To support NumPy and Google style docstrings
+    'sphinx.ext.autodoc',
+    'sphinx.ext.napoleon',
+    'sphinx.ext.viewcode',
+    'sphinx.ext.githubpages',
+    'myst_parser',  # For markdown support
 ]
 
 templates_path = ['_templates']
 exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
 
 # -- Options for HTML output -------------------------------------------------
-# https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
+# Modern, beautiful theme - pick one:
+html_theme = 'furo'  # Recommended - clean, modern, mobile-friendly
+# html_theme = 'sphinx_rtd_theme'  # Alternative - ReadTheDocs style
+# html_theme = 'pydata_sphinx_theme'  # Alternative - PyData style
 
-html_theme = 'alabaster' # Or change to 'furo', 'pydata_sphinx_theme', etc.
 html_static_path = ['_static']
 
-# Note: If you want to use autodoc, you may need to adjust your system path
-# import os
-# import sys
-# sys.path.insert(0, os.path.abspath('../..'))
+# Theme options
+html_theme_options = {
+    "sidebar_hide_name": False,
+    "navigation_with_keys": True,
+}
 
+# Logo and favicon (create these if you have them)
+# html_logo = "_static/logo.png"
+# html_favicon = "_static/favicon.ico"
+
+html_title = "omnipkg Documentation"
+
+# Sidebar settings
+html_sidebars = {
+    "**": [
+        "sidebar/brand.html",
+        "sidebar/search.html",
+        "sidebar/scroll-start.html",
+        "sidebar/navigation.html",
+        "sidebar/scroll-end.html",
+    ]
+}
