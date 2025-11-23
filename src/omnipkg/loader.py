@@ -448,12 +448,155 @@ class omnipkgLoader:
         if needed_safe_packages and main_site_packages not in sys.path:
             sys.path.append(main_site_packages)
 
+    def _get_version_from_original_env(self, package_name: str, requested_version: str) -> tuple[str | None, Path | None]:
+        """
+        Comprehensive strategy-based package detection in main environment.
+        
+        Attempts 6 strategies in order of speed/reliability:
+        1. importlib.metadata (fastest when it works)
+        2. Direct path check (exact dist-info match)
+        3. Cloaked version detection (critical for omnipkg isolation)
+        4. Glob search (handles edge cases)
+        5. Redis cache lookup (source of truth for omnipkg)
+        6. Original sys.path search (pre-cloaking state)
+        
+        Returns:
+            tuple: (version_string, cloaked_path_or_None)
+                - If found uncloaked: (version, None)
+                - If found cloaked: (version, Path_to_cloaked_dir)
+                - If not found: (None, None)
+        """
+        from packaging.utils import canonicalize_name
+        from pathlib import Path
+        import importlib.metadata
+        
+        canonical_target = canonicalize_name(package_name)
+        filesystem_name = package_name.replace('-', '_')
+        search_paths = [p for p in self.original_sys_path if 'site-packages' in p]
+        
+        if not search_paths:
+            if not self.quiet:
+                safe_print(f"      ⚠️  No site-packages found in original_sys_path")
+            return (None, None)
+        
+        site_packages = Path(search_paths[0])
+        
+        # ═══════════════════════════════════════════════════════════
+        # STRATEGY 1: importlib.metadata (fastest when it works)
+        # ═══════════════════════════════════════════════════════════
+
+        exact_dist_info_path = site_packages / f"{filesystem_name}-{requested_version}.dist-info"
+        if exact_dist_info_path.exists() and exact_dist_info_path.is_dir():
+            if not self.quiet:
+                safe_print(f"      ✅ [Strategy 1/6] Found at exact path: {exact_dist_info_path}")
+            return (requested_version, None)
+        # ═══════════════════════════════════════════════════════════
+        # ═══════════════════════════════════════════════════════════
+        # STRATEGY 2: Direct path check (handles most cases)        
+        try:
+            for dist in importlib.metadata.distributions(path=search_paths):
+                if canonicalize_name(dist.name) == canonical_target:
+                    if dist.version == requested_version:
+                        if not self.quiet:
+                            safe_print(f"      ✅ [Strategy 2/6] Found via importlib.metadata: {dist.version}")
+                        return (dist.version, None)
+                    else:
+                        if not self.quiet:
+                            safe_print(f"      ℹ️  [Strategy 2/6] Found {package_name} but version mismatch: {dist.version} != {requested_version}")
+        except Exception as e:
+            if not self.quiet:
+                safe_print(f"      ⚠️  [Strategy 2/6] importlib.metadata failed: {e}")
+        
+        # ═══════════════════════════════════════════════════════════
+        # STRATEGY 3: Check for CLOAKED version (CRITICAL)
+        # ═══════════════════════════════════════════════════════════
+        cloaked_pattern = f"{filesystem_name}-{requested_version}.dist-info.*_omnipkg_cloaked"
+        cloaked_matches = list(site_packages.glob(cloaked_pattern))
+        if cloaked_matches:
+            cloaked_path = cloaked_matches[0]
+            if not self.quiet:
+                safe_print(f"      ✅ [Strategy 3/6] Found CLOAKED version: {cloaked_path.name}")
+            # Return both version AND cloak path so caller can uncloak if needed
+            return (requested_version, cloaked_path)
+        
+        # ═══════════════════════════════════════════════════════════
+        # STRATEGY 4: Glob search for any version with this name
+        # ═══════════════════════════════════════════════════════════
+        glob_pattern = f"{filesystem_name}-*.dist-info"
+        for match in site_packages.glob(glob_pattern):
+            if match.is_dir():
+                try:
+                    # Pattern: typing_extensions-4.15.0.dist-info
+                    version_part = match.name.replace(f"{filesystem_name}-", "").replace(".dist-info", "")
+                    if version_part == requested_version:
+                        if not self.quiet:
+                            safe_print(f"      ✅ [Strategy 4/6] Found via glob: {match}")
+                        return (requested_version, None)
+                except Exception:
+                    continue
+        
+        # ═══════════════════════════════════════════════════════════
+        # STRATEGY 5: REDIS CACHE LOOKUP (source of truth)
+        # ═══════════════════════════════════════════════════════════
+        if self.config and hasattr(self, 'cache_client'):
+            try:
+                from omnipkg.core import ConfigManager
+                cm = ConfigManager(suppress_init_messages=True)
+                
+                # Get the correct redis prefix
+                env_id = cm.env_id
+                python_version = f"py{sys.version_info.major}.{sys.version_info.minor}"
+                redis_prefix = f"omnipkg:env_{env_id}:{python_version}:inst:"
+                
+                # Search for this package in Redis
+                pattern = f"{redis_prefix}{filesystem_name}:{requested_version}:*"
+                
+                if hasattr(cm, 'cache_client') and cm.cache_client:
+                    matching_keys = cm.cache_client.keys(pattern)
+                    if matching_keys:
+                        for key in matching_keys:
+                            path_in_redis = cm.cache_client.hget(key, 'path')
+                            if path_in_redis:
+                                redis_path = Path(path_in_redis)
+                                # Verify it exists (might be cloaked but Redis still has original path)
+                                if redis_path.exists() or any(site_packages.glob(f"{redis_path.name}.*_omnipkg_cloaked")):
+                                    if not self.quiet:
+                                        safe_print(f"      ✅ [Strategy 5/6] Found in REDIS cache: {path_in_redis}")
+                                    return (requested_version, None)
+            except Exception as e:
+                if not self.quiet:
+                    safe_print(f"      ⚠️  [Strategy 5/6] Redis lookup failed: {e}")
+        
+        # ═══════════════════════════════════════════════════════════
+        # STRATEGY 6: Check original_sys_path for pre-cloaking state
+        # ═══════════════════════════════════════════════════════════
+        if hasattr(self, 'original_sys_path'):
+            for path_str in self.original_sys_path:
+                if 'site-packages' in path_str:
+                    check_path = Path(path_str) / f"{filesystem_name}-{requested_version}.dist-info"
+                    if check_path.exists() and check_path.is_dir():
+                        if not self.quiet:
+                            safe_print(f"      ✅ [Strategy 6/6] Found in original_sys_path: {check_path}")
+                        return (requested_version, None)
+        
+        # All strategies exhausted
+        if not self.quiet:
+            safe_print(f"      ❌ All 6 strategies exhausted. {package_name}=={requested_version} not found in main env.")
+        return (None, None)
+
+
     def __enter__(self):
         """
-        (V5 - RESTORED INTELLIGENCE) Activates the snapshot, but first checks
-        if the main environment already satisfies the requirement.
+        (V6 - HIERARCHICAL STRATEGY) Activates the snapshot with intelligent fallback.
+        
+        Flow:
+        1. Quick check: Is requested version already in main env?
+        2. If not, try bubble activation
+        3. If bubble missing, comprehensive main env search with 6 strategies
+        4. Raise detailed error if nothing found
         """
         self._activation_start_time = time.perf_counter_ns()
+        
         if not self._current_package_spec:
             raise ValueError("omnipkgLoader must be instantiated with a package_spec.")
 
@@ -462,7 +605,9 @@ class omnipkgLoader:
         except ValueError:
             raise ValueError(f"Invalid package_spec format: '{self._current_package_spec}'")
 
-        # --- STEP 1: Check if main env already satisfies (QUICK CHECK) ---
+        # ═══════════════════════════════════════════════════════════
+        # STEP 1: Quick check - is main env already perfect?
+        # ═══════════════════════════════════════════════════════════
         try:
             current_system_version = get_version(pkg_name)
             
@@ -472,7 +617,7 @@ class omnipkgLoader:
                 self._activation_successful = True
                 self._activation_end_time = time.perf_counter_ns()
                 self._total_activation_time_ns = self._activation_end_time - self._activation_start_time
-                return self  # Exit early - perfect match in main env
+                return self
             else:
                 # Version mismatch - need bubble
                 if not self.quiet:
@@ -482,128 +627,137 @@ class omnipkgLoader:
             if not self.quiet:
                 safe_print(f"   🔍 {pkg_name} not in main environment. Looking for bubble...")
 
-        # --- STEP 2: Try to use BUBBLE (PREFERRED) ---
+        # ═══════════════════════════════════════════════════════════
+        # STEP 2: Try BUBBLE activation (PREFERRED path)
+        # ═══════════════════════════════════════════════════════════
         if not self.quiet:
             safe_print(_('🚀 Fast-activating {} ...').format(self._current_package_spec))
         
         bubble_path = self.multiversion_base / f'{pkg_name}-{requested_version}'
         
-        # ✅ DEBUG: Show what we're looking for
         if not self.quiet:
             safe_print(f"   📂 Searching for bubble: {bubble_path}")
         
-        if not bubble_path.is_dir():
-            # ❌ Bubble not found - show debug info and try fallback
-            if not self.quiet:
-                safe_print(f"   ⚠️  Bubble not found at: {bubble_path}")
-                
-                # Show what bubbles DO exist
-                parent_dir = bubble_path.parent
-                if parent_dir.exists():
-                    available_bubbles = [d.name for d in parent_dir.iterdir() if d.is_dir()]
-                    if available_bubbles:
-                        # Show related bubbles
-                        related = [b for b in available_bubbles if b.startswith(pkg_name)]
-                        if related:
-                            safe_print(f"   📦 Available {pkg_name} bubbles: {', '.join(related)}")
-                        else:
-                            safe_print(f"   📦 No {pkg_name} bubbles found. Total bubbles: {len(available_bubbles)}")
-                            if len(available_bubbles) <= 10:
-                                safe_print(f"      All bubbles: {', '.join(available_bubbles)}")
-                    else:
-                        safe_print(f"   📦 Bubble directory is empty: {parent_dir}")
-                else:
-                    safe_print(f"   ❌ Bubble directory doesn't exist: {parent_dir}")
-            
-            # --- STEP 3: FALLBACK to main environment ---
-            if not self.quiet:
-                safe_print(f"   🔄 Falling back to main environment check...")
-            
+        if bubble_path.is_dir():
+            # ✅ BUBBLE FOUND - Activate it
             try:
-                import importlib.metadata
-                installed_version = importlib.metadata.version(pkg_name)
-                
-                if installed_version == requested_version:
-                    # ✅ Found exact version in main site-packages
-                    if not self.quiet:
-                        safe_print(f"   ✅ Found {pkg_name}=={requested_version} in main site-packages")
-                        safe_print(f"      ⚠️  WARNING: Using main env (not isolated). Consider creating bubble.")
-                    
-                    self._activation_successful = True
-                    self._activation_end_time = time.perf_counter_ns()
-                    self._total_activation_time_ns = self._activation_end_time - self._activation_start_time
-                    return self  # Fallback successful
-                else:
-                    # Wrong version in main env
-                    if not self.quiet:
-                        safe_print(f"   ❌ Main env has {pkg_name}=={installed_version}, need {requested_version}")
-                    raise RuntimeError(
-                        f"Package {pkg_name}=={requested_version} not available\n"
-                        f"  Bubble not found: {bubble_path}\n"
-                        f"  Main env has: {installed_version}\n"
-                        f"  Hint: Try 'omnipkg install {pkg_name}=={requested_version}'"
-                    )
-            except importlib.metadata.PackageNotFoundError:
-                # Not in main env either
                 if not self.quiet:
-                    safe_print(f"   ❌ {pkg_name} not found in main environment either")
-                raise RuntimeError(
-                    f"Package {pkg_name}=={requested_version} not found anywhere\n"
-                    f"  Bubble not found: {bubble_path}\n"
-                    f"  Not in main site-packages\n"
-                    f"  Hint: Install with 'omnipkg install {pkg_name}=={requested_version}'"
-                )
+                    safe_print(f"   ✅ Bubble found: {bubble_path}")
+                
+                self._activated_bubble_dependencies = list(self._get_bubble_dependencies(bubble_path).keys())
+                
+                # Aggressive cleanup for all bubble dependencies
+                for pkg in self._activated_bubble_dependencies:
+                    self._aggressive_module_cleanup(pkg)
+                
+                self._batch_cloak_packages(self._activated_bubble_dependencies)
+                
+                # Use fast dependency detection
+                bubble_packages = self._get_bubble_dependencies(bubble_path)
+                
+                # Batch cleanup all modules at once
+                all_package_names = list(bubble_packages.keys())
+                for pkg in all_package_names:
+                    self._aggressive_module_cleanup(pkg)
+                
+                # Batch cloak operations
+                cloaked_count = self._batch_cloak_packages(all_package_names)
+                
+                # Fast path setup (minimal logging)
+                bubble_path_str = str(bubble_path)
+                bubble_bin_path = bubble_path / 'bin'
+                if bubble_bin_path.is_dir():
+                    os.environ['PATH'] = f'{str(bubble_bin_path)}{os.pathsep}{self.original_path_env}'
 
-        # --- STEP 4: BUBBLE FOUND - Activate it ---
-        try:
-            if not self.quiet:
-                safe_print(f"   ✅ Bubble found: {bubble_path}")
-            
-            self._activated_bubble_dependencies = list(self._get_bubble_dependencies(bubble_path).keys())
-            
-            # Now, when we cloak and clean, we do it for EVERYTHING.
-            for pkg in self._activated_bubble_dependencies:
-                self._aggressive_module_cleanup(pkg)
-            
-            self._batch_cloak_packages(self._activated_bubble_dependencies)
-            
-            # Use fast dependency detection
-            bubble_packages = self._get_bubble_dependencies(bubble_path)
-            
-            # Batch cleanup all modules at once
-            all_package_names = list(bubble_packages.keys())
-            for pkg in all_package_names:
-                self._aggressive_module_cleanup(pkg)
-            
-            # Batch cloak operations
-            cloaked_count = self._batch_cloak_packages(all_package_names)
-            
-            # Fast path setup (minimal logging)
-            bubble_path_str = str(bubble_path)
-            bubble_bin_path = bubble_path / 'bin'
-            if bubble_bin_path.is_dir():
-                os.environ['PATH'] = f'{str(bubble_bin_path)}{os.pathsep}{self.original_path_env}'
+                # Single sys.path operation
+                new_sys_path = [bubble_path_str] + [p for p in self.original_sys_path if not self._is_main_site_packages(p)]
+                sys.path[:] = new_sys_path
+                
+                self._ensure_omnipkg_access_in_bubble(bubble_path_str)
+                
+                self._activated_bubble_path = bubble_path_str
+                self._activation_end_time = time.perf_counter_ns()
+                self._total_activation_time_ns = self._activation_end_time - self._activation_start_time
+                
+                if not self.quiet:
+                    safe_print(f"   ⚡ HEALED in {self._total_activation_time_ns / 1000:,.1f} μs")
+                
+                self._activation_successful = True
+                return self
 
-            # Single sys.path operation
-            new_sys_path = [bubble_path_str] + [p for p in self.original_sys_path if not self._is_main_site_packages(p)]
-            sys.path[:] = new_sys_path  # In-place replacement is faster
+            except Exception as e:
+                safe_print(_('   ❌ Activation failed: {}').format(str(e)))
+                self._panic_restore_cloaks()
+                raise
+        
+        # ═══════════════════════════════════════════════════════════
+        # STEP 3: Bubble NOT found - Comprehensive main env search
+        # ═══════════════════════════════════════════════════════════
+        if not self.quiet:
+            safe_print(f"   ⚠️  Bubble not found at: {bubble_path}")
             
-            self._ensure_omnipkg_access_in_bubble(bubble_path_str)
+            # Show what bubbles DO exist (helpful debugging)
+            parent_dir = bubble_path.parent
+            if parent_dir.exists():
+                available_bubbles = [d.name for d in parent_dir.iterdir() if d.is_dir()]
+                if available_bubbles:
+                    related = [b for b in available_bubbles if b.startswith(pkg_name)]
+                    if related:
+                        safe_print(f"   📦 Available {pkg_name} bubbles: {', '.join(related)}")
+                    else:
+                        safe_print(f"   📦 No {pkg_name} bubbles found. Total bubbles: {len(available_bubbles)}")
+                        if len(available_bubbles) <= 10:
+                            safe_print(f"      All bubbles: {', '.join(available_bubbles)}")
+                else:
+                    safe_print(f"   📦 Bubble directory is empty: {parent_dir}")
+            else:
+                safe_print(f"   ❌ Bubble directory doesn't exist: {parent_dir}")
             
-            self._activated_bubble_path = bubble_path_str
-            self._activation_end_time = time.perf_counter_ns()
-            self._total_activation_time_ns = self._activation_end_time - self._activation_start_time
-            
+            safe_print(f"   🔄 Falling back to comprehensive main environment search...")
+        
+        # Use hierarchical strategy search
+        found_version, cloaked_path = self._get_version_from_original_env(pkg_name, requested_version)
+        
+        if found_version == requested_version:
+            # ✅ Found exact version in main site-packages
             if not self.quiet:
-                safe_print(f"   ⚡ HEALED in {self._total_activation_time_ns / 1000:,.1f} μs")
+                if cloaked_path:
+                    safe_print(f"   ✅ Found {pkg_name}=={requested_version} in main site-packages (CLOAKED)")
+                    safe_print(f"      🔓 Cloak path: {cloaked_path}")
+                    safe_print(f"      ⚠️  WARNING: Using cloaked package. May need uncloaking.")
+                else:
+                    safe_print(f"   ✅ Found {pkg_name}=={requested_version} in main site-packages")
+                    safe_print(f"      ⚠️  WARNING: Using main env (not isolated). Consider creating bubble.")
             
             self._activation_successful = True
+            self._activation_end_time = time.perf_counter_ns()
+            self._total_activation_time_ns = self._activation_end_time - self._activation_start_time
             return self
-
-        except Exception as e:
-            safe_print(_('   ❌ Activation failed: {}').format(str(e)))
-            self._panic_restore_cloaks()
-            raise
+        
+        # ═══════════════════════════════════════════════════════════
+        # STEP 4: Nothing found - Detailed error with hints
+        # ═══════════════════════════════════════════════════════════
+        # Try one more fallback: check what version IS available
+        try:
+            import importlib.metadata
+            installed_version = importlib.metadata.version(pkg_name)
+            error_msg = (
+                f"Package {pkg_name}=={requested_version} not available\n"
+                f"  ❌ Bubble not found: {bubble_path}\n"
+                f"  ❌ Main env has different version: {installed_version}\n"
+                f"  💡 Hint: Install with 'omnipkg install {pkg_name}=={requested_version}'"
+            )
+        except importlib.metadata.PackageNotFoundError:
+            error_msg = (
+                f"Package {pkg_name}=={requested_version} not found anywhere\n"
+                f"  ❌ Bubble not found: {bubble_path}\n"
+                f"  ❌ Not in main site-packages\n"
+                f"  💡 Hint: Install with 'omnipkg install {pkg_name}=={requested_version}'"
+            )
+        
+        if not self.quiet:
+            safe_print(f"   ❌ {error_msg}")
+        raise RuntimeError(error_msg)
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         """Enhanced deactivation with cleanup of isolation markers."""

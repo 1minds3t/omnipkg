@@ -98,6 +98,41 @@ def temporary_install_strategy(core: OmnipkgCore, strategy: str):
             core.config_manager.set('install_strategy', original_strategy)
             safe_print(f"   - ✅ Strategy restored to '{original_strategy}'")
 
+def separate_python_from_packages(packages):
+    """
+    Separates python version specs from regular packages.
+    
+    Returns:
+        tuple: (regular_packages, python_versions)
+        
+    Examples:
+        ['numpy', 'python==3.12', 'requests'] -> (['numpy', 'requests'], ['3.12'])
+        ['python==3.10', 'python==3.11'] -> ([], ['3.10', '3.11'])
+    """
+    regular_packages = []
+    python_versions = []
+    
+    for pkg in packages:
+        pkg_lower = pkg.lower()
+        
+        # Check if it's a python spec (supports python==3.12, python>=3.10, etc.)
+        if pkg_lower.startswith('python'):
+            # Extract version - handle ==, >=, <=, >, <
+            version_part = pkg[6:].strip()  # Remove 'python'
+            
+            # Strip comparison operators
+            for op in ['==', '>=', '<=', '>', '<', '~=']:
+                if version_part.startswith(op):
+                    version_part = version_part[len(op):].strip()
+                    break
+            
+            if version_part:
+                python_versions.append(version_part)
+        else:
+            regular_packages.append(pkg)
+    
+    return regular_packages, python_versions
+
 def upgrade(args, core):
     """Handler for the upgrade command."""
     package_name = args.package_name[0] if args.package_name else 'omnipkg'
@@ -420,6 +455,8 @@ def create_parser():
     install_parser = subparsers.add_parser('install', help=_('Install packages with intelligent conflict resolution'))
     install_parser.add_argument('packages', nargs='*', help=_('Packages to install (e.g., "requests==2.25.1", "numpy>=1.20")'))
     install_parser.add_argument('-r', '--requirement', help=_('Install from requirements file'), metavar='FILE')
+    install_parser.add_argument('--force', '--force-reinstall', dest='force_reinstall', action='store_true', 
+                            help=_('Force reinstall even if already satisfied'))
     install_with_deps_parser = subparsers.add_parser('install-with-deps', help=_('Install a package with specific dependency versions'))
     install_with_deps_parser.add_argument('package', help=_('Package to install (e.g., "tensorflow==2.13.0")'))
     install_with_deps_parser.add_argument('--dependency', action='append', help=_('Dependency with version (e.g., "numpy==1.24.3")'), default=[])
@@ -431,7 +468,7 @@ def create_parser():
     revert_parser = subparsers.add_parser('revert', help=_('Revert to last known good environment'))
     revert_parser.add_argument('--yes', '-y', action='store_true', help=_('Skip confirmation'))
     swap_parser = subparsers.add_parser('swap', help=_('Swap Python versions or package environments'))
-    swap_parser.add_argument('target', nargs='?', help=_('What to swap (e.g., "python", "python 3.11")'))
+    swap_parser.add_argument('target', nargs='?', help=_('What to swap (e.g., "python", "numpy==1.24.3")'))
     swap_parser.add_argument('version', nargs='?', help=_('Specific version to swap to'))
     list_parser = subparsers.add_parser('list', help=_('View all installed packages and their status'))
     list_parser.add_argument('filter', nargs='?', help=_('Filter packages by name pattern'))
@@ -521,50 +558,71 @@ def print_header(title):
 def main():
     """Main application entry point with pre-flight version check."""
     try:
-        # --- START: ROBUST PRE-PARSING LOGIC ---
+        # 🎪 NORMALIZE FLAGS AND COMMANDS (but not package names)
+        normalized_argv = [sys.argv[0]]
+        for arg in sys.argv[1:]:
+            if arg.startswith('-'):
+                # It's a flag - lowercase it
+                normalized_argv.append(arg.lower())
+            else:
+                # Could be a command or package name
+                # We'll handle this more carefully
+                normalized_argv.append(arg)
+        
+        sys.argv = normalized_argv
+        
         global_parser = argparse.ArgumentParser(add_help=False)
         global_parser.add_argument('--lang', default=None)
         global_parser.add_argument('--verbose', '-V', action='store_true')
         
         global_args, remaining_args = global_parser.parse_known_args()
 
-        # Handle version check separately
-        if '-v' in remaining_args or '--version' in remaining_args:
-            prog_name = Path(sys.argv[0]).name
-            if prog_name == '8pkg' or (len(sys.argv) > 0 and '8pkg' in sys.argv[0]):
-                safe_print(_('8pkg {}').format(get_version()))
-            else:
-                safe_print(_('omnipkg {}').format(get_version()))
+        # Lowercase the command itself (first non-flag arg)
+        if remaining_args and not remaining_args[0].startswith('-'):
+            remaining_args[0] = remaining_args[0].lower()
+
+        # Extract command for initialization logic
+        command = remaining_args[0] if remaining_args and not remaining_args[0].startswith('-') else None
+
+        # Version Check Logic
+        if ('-v' in remaining_args or '--version' in remaining_args) and command != 'run':
+            # Always show "omnipkg" - 8pkg is just an alias
+            safe_print(_('omnipkg {}').format(get_version()))
             return 0
         
-        # --- NEW: EXTRACT COMMAND BEFORE FULL PARSING ---
-        # We need to know the command to decide minimal vs full init
-        command = remaining_args[0] if remaining_args and not remaining_args[0].startswith('-') else None
-        
-        # --- END: ROBUST PRE-PARSING LOGIC ---
-        
         cm = ConfigManager()
-        
-        # Set language based on pre-scanned flag or config
         user_lang = global_args.lang or cm.config.get('language')
         if user_lang:
             _.set_language(user_lang)
 
-        # --- NEW: DECIDE MINIMAL VS FULL INITIALIZATION ---
-        # Commands that only need config + interpreter manager (no cache/database)
-        minimal_commands = {'swap', 'config', 'python'}
-        use_minimal = command in minimal_commands
+        # --- DECIDE MINIMAL VS FULL INITIALIZATION ---
+        use_minimal = False
+
+        if command in {'config', 'python'}:
+            # These commands never need the Knowledge Base / Redis
+            use_minimal = True
+            
+        elif command == 'swap':
+            # Conditional Logic:
+            # 'swap python' -> Minimal (just needs InterpreterManager)
+            # 'swap package' -> Full (needs SmartInstaller/KnowledgeBase)
+            
+            # remaining_args[0] is 'swap'. Check remaining_args[1] for target.
+            if len(remaining_args) > 1 and remaining_args[1].lower() == 'python':
+                use_minimal = True
+            else:
+                use_minimal = False
         
+        # Initialize Core
         pkg_instance = OmnipkgCore(config_manager=cm, minimal_mode=use_minimal)
-        # --- END NEW LOGIC ---
         
-        prog_name = Path(sys.argv[0]).name
-        if prog_name == '8pkg' or (len(sys.argv) > 0 and '8pkg' in sys.argv[0]):
+        # --- PARSER CREATION ---
+        prog_name_lower = Path(sys.argv[0]).name.lower()
+        if prog_name_lower == '8pkg' or '8pkg' in sys.argv[0].lower():
             parser = create_8pkg_parser()
         else:
             parser = create_parser()
 
-        # Now parse fully
         args = parser.parse_args(remaining_args)
 
         # Manually add the pre-scanned global flags
@@ -651,11 +709,22 @@ def main():
                 safe_print(_('Examples:'))
                 safe_print(_('  {} swap python           # Interactive Python version picker').format(parser.prog))
                 safe_print(_('  {} swap python 3.11      # Switch to Python 3.11').format(parser.prog))
+                safe_print(_('  {} swap python==3.11     # Also works!').format(parser.prog))
+                safe_print(_('  {} swap numpy==1.26.4    # Swap main env version to 1.26.4').format(parser.prog))
                 return 1
-            if args.target.lower() == 'python':
-                if args.version:
+            
+            # --- Python Swapping Logic (Minimal Core is fine) ---
+            if args.target.lower().startswith('python'):
+                # Handle both "swap python 3.12" and "swap python==3.12"
+                if '==' in args.target:
+                    # Extract version from python==3.12
+                    version = args.target.split('==')[1]
+                    return pkg_instance.switch_active_python(version)
+                elif args.version:
+                    # "swap python 3.12" (two separate args)
                     return pkg_instance.switch_active_python(args.version)
                 else:
+                    # "swap python" (interactive picker)
                     interpreters = pkg_instance.config_manager.list_available_pythons()
                     if not interpreters:
                         safe_print(_('❌ No Python interpreters found.'))
@@ -675,9 +744,21 @@ def main():
                     except (EOFError, KeyboardInterrupt):
                         safe_print(_('\n❌ Operation cancelled.'))
                         return 1
+            
+            # --- Package Swapping Logic (Requires Full Core) ---
             else:
-                safe_print(_("❌ Error: Unknown swap target '{}'. Currently supported: python").format(args.target))
-                return 1
+                # At this point, use_minimal should already be False from the earlier logic,
+                # so pkg_instance should have full initialization. Just proceed directly.
+                package_spec = args.target
+                if args.version:
+                    package_spec = f"{package_spec}=={args.version}"
+                
+                safe_print(f"🔄 Swapping main environment package to '{package_spec}'...")
+                
+                with temporary_install_strategy(pkg_instance, 'latest-active'):
+                    return pkg_instance.smart_install(
+                        packages=[package_spec],
+                    )
         elif args.command == 'status':
             return pkg_instance.show_multiversion_status()
         elif args.command == 'demo':
@@ -700,12 +781,13 @@ def main():
                 safe_print(_('4. TensorFlow test (complex dependency switching)'))
                 safe_print(_('5. 🚀 Multiverse Healing Test (Cross-Python Hot-Swapping Mid-Script)'))
                 safe_print(_('6. Old Flask Test (legacy package healing) - Fully functional!'))
-                safe_print(_('7. Auto-healing Test (omnipkg run)'))
+                safe_print(_('7. Script-healing Test (omnipkg run scripts)'))
                 safe_print(_('8. 🌠 Quantum Multiverse Warp (Concurrent Python Installations)'))
                 safe_print(_('9. Flask Port Finder Test (auto-healing with Flask)'))
+                safe_print(_('10. CLI Healing Test (omnipkg run shell commands)'))
                 
                 try:
-                    response = input(_('Enter your choice (1-9): ')).strip()
+                    response = input(_('Enter your choice (1-10): ')).strip()
                 except EOFError:
                     response = ''
                 
@@ -719,10 +801,11 @@ def main():
                     '7': ('Auto-healing Test', TESTS_DIR / 'test_old_rich.py', None),
                     '8': ('Quantum Multiverse Warp', TESTS_DIR / 'test_concurrent_install.py', '3.11'),
                     '9': ('Flask Port Finder', TESTS_DIR / 'test_flask_port_finder.py', None),
+                    '10': ('CLI Healing Test', TESTS_DIR / 'test_cli_healing.py', None),
                 }
 
                 if response not in demo_map:
-                    safe_print(_('❌ Invalid choice. Please select 1 through 9.'))
+                    safe_print(_('❌ Invalid choice. Please select 1 through 10.'))
                     return 1
 
                 demo_name, test_file, required_version = demo_map[response]
@@ -771,14 +854,11 @@ def main():
                 run_actual_stress_test()
             return 0
         elif args.command == 'install':
-            # --- [ START: "Return to Origin" Logic ] ---
-            # Store the original Python context before the operation begins.
             original_python_tuple = get_actual_python_version()
             original_python_str = f"{original_python_tuple[0]}.{original_python_tuple[1]}"
-            exit_code = 1 # Default to failure
-
+            exit_code = 1
+            
             try:
-                # This is the original logic to determine which packages to install
                 packages_to_process = []
                 if args.requirement:
                     req_path = Path(args.requirement)
@@ -794,31 +874,57 @@ def main():
                     parser.parse_args(['install', '--help'])
                     return 1
                 
-                # Execute the core install logic and store its exit code
-                exit_code = pkg_instance.smart_install(packages_to_process)
+                # 🎪 HILARIOUS PYTHON-AS-PACKAGE SUPPORT
+                regular_packages, python_versions = separate_python_from_packages(packages_to_process)
+                
+                # Install Python interpreters first (if any)
+                if python_versions:
+                    safe_print(_('🐍 Installing Python interpreter(s): {}').format(', '.join(python_versions)))
+                    for version in python_versions:
+                        result = pkg_instance.adopt_interpreter(version)
+                        if result != 0:
+                            safe_print(_('⚠️  Warning: Failed to install Python {}').format(version))
+                
+                # Then install regular packages (if any)
+                if regular_packages:
+                    exit_code = pkg_instance.smart_install(
+                        regular_packages,
+                        force_reinstall=args.force_reinstall
+                    )
+                else:
+                    exit_code = 0  # Only Python installs, and they succeeded
+                
                 return exit_code
-
+                
             finally:
-                # This block ALWAYS runs, ensuring we return to the user's original context.
                 current_version_after_install_tuple = get_actual_python_version()
                 current_version_after_install_str = f"{current_version_after_install_tuple[0]}.{current_version_after_install_tuple[1]}"
-
+                
                 if original_python_str != current_version_after_install_str:
-                    # The context was changed by Quantum Healing, so we switch it back.
                     print_header(f"Restoring original Python {original_python_str} context")
-                    
-                    # We must create a new OmnipkgCore instance because the config
-                    # was modified during the swap. This ensures we are acting on the
-                    # most current state before switching back.
                     final_cm = ConfigManager(suppress_init_messages=True)
                     final_pkg_instance = OmnipkgCore(config_manager=final_cm)
                     final_pkg_instance.switch_active_python(original_python_str)
-            # --- [ END: "Return to Origin" Logic ] ---
         elif args.command == 'install-with-deps':
             packages_to_process = [args.package] + args.dependency
             return pkg_instance.smart_install(packages_to_process)
         elif args.command == 'uninstall':
-            return pkg_instance.smart_uninstall(args.packages, force=args.force)
+            # 🎪 EQUALLY HILARIOUS PYTHON UNINSTALL SUPPORT
+            regular_packages, python_versions = separate_python_from_packages(args.packages)
+            
+            # Uninstall Python interpreters
+            if python_versions:
+                safe_print(_('🗑️  Uninstalling Python interpreter(s): {}').format(', '.join(python_versions)))
+                for version in python_versions:
+                    result = pkg_instance.remove_interpreter(version, force=args.force)
+                    if result != 0:
+                        safe_print(_('⚠️  Warning: Failed to remove Python {}').format(version))
+            
+            # Uninstall regular packages
+            if regular_packages:
+                return pkg_instance.smart_uninstall(regular_packages, force=args.force)
+            
+            return 0  # Only Python removals
         elif args.command == 'revert':
             return pkg_instance.revert_to_last_known_good(force=args.yes)
         elif args.command == 'info':
@@ -855,7 +961,13 @@ def main():
         elif args.command == 'reset-config':
             return pkg_instance.reset_configuration(force=args.force)
         elif args.command == 'run':
-            return execute_run_command(args.script_and_args, cm, verbose=args.verbose)
+            # ✅ Fix: Pass the pkg_instance we already initialized!
+            return execute_run_command(
+                args.script_and_args, 
+                cm, 
+                verbose=args.verbose, 
+                omnipkg_core=pkg_instance
+            )
         elif args.command == 'upgrade':
             package_name = args.package_name[0] if args.package_name else 'omnipkg'
 

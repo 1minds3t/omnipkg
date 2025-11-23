@@ -20,6 +20,10 @@ def safe_print(*args, **kwargs):
     UTF-8 encoding if the default console encoding fails.
     This version is self-contained and does not depend on i18n to avoid circular imports.
     """
+    # FORCE FLUSH - Add this to kwargs if not present
+    if 'flush' not in kwargs:
+        kwargs['flush'] = True
+    
     try:
         # Try to use the normal, built-in print
         _builtin_print(*args, **kwargs)
@@ -35,11 +39,11 @@ def safe_print(*args, **kwargs):
                 else:
                     safe_args.append(arg)
             
-            # Use the built-in print with the sanitized arguments
+            # Use the built-in print with the sanitized arguments (flush is already in kwargs)
             _builtin_print(*safe_args, **kwargs)
         except Exception:
             # Final, ultra-safe fallback. Hardcoded English string.
-            _builtin_print("[omnipkg: A message could not be displayed due to an encoding error.]")
+            _builtin_print("[omnipkg: A message could not be displayed due to an encoding error.]", flush=True)
 
 def run_command(command_list, check=True):
     """
