@@ -1,0 +1,46 @@
+name: "Direct Flask Auto-Healing Test"
+
+on:
+  push:
+    branches: [ development, main ]
+  workflow_dispatch:
+
+jobs:
+  direct-run:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    name: "Run on ${{ matrix.os }}"
+    
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.11' }
+      
+      - name: Install omnipkg
+        run: |
+          pip install --upgrade pip
+          pip install -e .
+      
+      - name: 🧨 SABOTAGE: Uninstall Flask
+        run: |
+          echo "Explicitly removing Flask..."
+          pip uninstall -y flask werkzeug blinker click itsdangerous jinja2 markupsafe || true
+        shell: bash
+
+      - name: Run Test Directly (Auto-Heal)
+        run: |
+          echo "🚀 Running test via omnipkg run (bypassing demo menu)..."
+          
+          # This should:
+          # 1. Start the test
+          # 2. Crash because Flask is gone
+          # 3. omnipkg catches crash
+          # 4. omnipkg installs Flask
+          # 5. omnipkg re-runs test -> Success
+          
+          python -m omnipkg.cli run tests/test_flask_port_finder.py
+        env:
+          PYTHONUTF8: "1"
