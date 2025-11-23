@@ -59,17 +59,17 @@ jobs:
         run: |
           Write-Host "Starting Flask server in background..."
           
+          # Critical: Don't redirect stdout/stderr - this kills the server on Windows!
           $proc = Start-Process python `
             -ArgumentList "flask_app.py" `
             -PassThru `
-            -RedirectStandardOutput "server.log" `
             -WindowStyle Hidden
           
           Write-Host "[OK] Server started with PID: $($proc.Id)"
           
           # Wait for server to be ready
           Write-Host "[INFO] Waiting for server to initialize..."
-          Start-Sleep -Seconds 5
+          Start-Sleep -Seconds 8
           
           # Verify process is still running
           $running = Get-Process -Id $proc.Id -ErrorAction SilentlyContinue
@@ -80,8 +80,8 @@ jobs:
             exit 1
           }
           
-          # Save PID for cleanup
-          $proc.Id | Out-File -FilePath "server.pid" -Encoding ascii
+          # Save PID for cleanup (use different variable name, not $pid)
+          $proc.Id | Out-File -FilePath "server_pid.txt" -Encoding ascii
         shell: pwsh
       
       - name: Test Server Endpoints
@@ -143,13 +143,19 @@ jobs:
         run: |
           Write-Host ""
           Write-Host "=========================================="
-          Write-Host "SERVER LOGS"
+          Write-Host "SERVER STATUS"
           Write-Host "=========================================="
           
-          if (Test-Path "server.log") {
-            Get-Content "server.log"
-          } else {
-            Write-Host "(No log file found)"
+          if (Test-Path "server_pid.txt") {
+            $serverId = Get-Content "server_pid.txt"
+            $process = Get-Process -Id $serverId -ErrorAction SilentlyContinue
+            if ($process) {
+              Write-Host "[OK] Server still running (PID: $serverId)"
+              Write-Host "Process info:"
+              $process | Format-Table Id, ProcessName, StartTime, @{Name="CPU(s)";Expression={$_.CPU}}
+            } else {
+              Write-Host "[INFO] Server process no longer running"
+            }
           }
         shell: pwsh
       
@@ -209,11 +215,11 @@ jobs:
           Write-Host ""
           Write-Host "Cleaning up..."
           
-          if (Test-Path "server.pid") {
-            $pid = Get-Content "server.pid"
+          if (Test-Path "server_pid.txt") {
+            $serverId = Get-Content "server_pid.txt"
             try {
-              Stop-Process -Id $pid -Force -ErrorAction SilentlyContinue
-              Write-Host "[OK] Stopped server process $pid"
+              Stop-Process -Id $serverId -Force -ErrorAction SilentlyContinue
+              Write-Host "[OK] Stopped server process $serverId"
             } catch {
               Write-Host "[INFO] Process already stopped"
             }
