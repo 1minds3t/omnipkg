@@ -217,8 +217,14 @@ class FlaskAppManager:
             safe_print(f"🔍 Validating Flask app on port {self.port}...")
             return validate_flask_app(self.code, self.port)
         
-        # Escape the code properly for insertion into wrapper
-        escaped_code = self.code.replace('\\', '\\\\').replace('"', '\\"').replace('\n', '\\n')
+        # Remove any if __name__ == '__main__': blocks to prevent premature app.run()
+        import re
+        cleaned_code = re.sub(
+            r"if\s+__name__\s*==\s*['\"]__main__['\"]:\s*\n((?:\s+.*\n)*)",
+            "",
+            self.code,
+            flags=re.MULTILINE
+        )
         
         wrapper_code = f'''
 import signal
@@ -248,31 +254,27 @@ def periodic_check():
         check_shutdown_signal()
 
 threading.Thread(target=periodic_check, daemon=True).start()
-print("[DEBUG] About to exec Flask code", flush=True)
+print("[DEBUG] About to run user Flask code", flush=True)
 
-# User's code directly embedded (not via exec)
-{self.code}
+# User's code (with __main__ block removed)
+{cleaned_code}
 
-# CRITICAL: Ensure app.run() is called
+# Now WE control app.run() with the correct parameters
 print("[DEBUG] Looking for Flask app instance", flush=True)
-try:
-    if 'app' in dir():
-        print("[DEBUG] Found app, calling run()", flush=True)
-        app.run(host='127.0.0.1', port={self.port}, debug=False, use_reloader=False)
-    else:
-        print("[ERROR] No app found in namespace!", flush=True)
-        sys.exit(1)
-except NameError:
-    print("[ERROR] NameError - app not defined!", flush=True)
+if 'app' in dir():
+    print("[DEBUG] Found app, calling run() with our parameters", flush=True)
+    app.run(host='127.0.0.1', port={self.port}, debug=False, use_reloader=False)
+else:
+    print("[ERROR] No app found in namespace!", flush=True)
+    print(f"[DEBUG] Available names: {{list(dir())}}", flush=True)
     sys.exit(1)
 '''
-    
+        
         try:
             with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as f:
                 f.write(wrapper_code)
                 temp_file = f.name
             
-            # CAPTURE OUTPUT SO WE CAN DEBUG
             log_file = Path(tempfile.gettempdir()) / f"flask_{self.port}.log"
             log_handle = open(log_file, 'w')
             
