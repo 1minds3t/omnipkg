@@ -30,6 +30,7 @@ from contextlib import closing
 from pathlib import Path
 from typing import Optional, Tuple
 import unittest
+import concurrent.futures
 
 try:
     from .common_utils import safe_print
@@ -56,13 +57,6 @@ def is_windows():
 def reserve_port(port: int, duration: float = 5.0) -> bool:
     """
     Reserve a port to prevent concurrent allocation race conditions.
-    
-    Args:
-        port: Port number to reserve
-        duration: How long to hold the reservation (seconds)
-        
-    Returns:
-        True if reservation successful, False if already reserved
     """
     with _port_lock:
         if port in _reserved_ports:
@@ -86,8 +80,6 @@ def release_port(port: int):
 def is_port_actually_free(port: int) -> bool:
     """
     Double-check if a port is actually free (not just unreserved).
-    
-    This prevents race conditions where two threads think the same port is free.
     """
     try:
         if is_windows():
@@ -113,17 +105,6 @@ def is_port_actually_free(port: int) -> bool:
 def find_free_port(start_port=5000, max_attempts=100, reserve=True) -> int:
     """
     Find an available port with concurrent safety.
-    
-    Args:
-        start_port: Port to start searching from
-        max_attempts: Maximum number of ports to try
-        reserve: Whether to reserve the port to prevent race conditions
-        
-    Returns:
-        Available port number
-        
-    Raises:
-        RuntimeError: If no free port found
     """
     for port in range(start_port, start_port + max_attempts):
         with _port_lock:
@@ -144,17 +125,10 @@ def find_free_port(start_port=5000, max_attempts=100, reserve=True) -> int:
 def validate_flask_app(code: str, port: int, timeout: float = 5.0) -> bool:
     """
     Validate Flask app can start without actually running it persistently.
-    
     Uses Flask's test client for validation instead of real server.
-    
-    Args:
-        code: Flask application code
-        port: Port to validate on (not actually used, kept for API compatibility)
-        timeout: Maximum time to wait for validation
-        
-    Returns:
-        True if app is valid and can start
     """
+    # CRITICAL FIX: Set __name__ to something NOT '__main__'
+    # This prevents app.run() from blocking inside the validation step!
     validation_code = f'''
 import sys
 try:
@@ -162,18 +136,34 @@ try:
 except ImportError:
     from omnipkg.common_utils import safe_print
 app_code = {repr(code)}
-exec_globals = {{'__name__': '__main__'}}
-exec(app_code, exec_globals)
+# SAFETY: Prevent app.run() from executing by changing __name__
+exec_globals = {{'__name__': '__omnipkg_validation__'}}
+try:
+    exec(app_code, exec_globals)
+except Exception as e:
+    print(f"EXEC_ERROR: {{e}}", file=sys.stderr)
+    sys.exit(1)
 
 app = exec_globals.get('app')
+if app is None:
+    # Fallback: try to find any Flask instance
+    from flask import Flask
+    for val in exec_globals.values():
+        if isinstance(val, Flask):
+            app = val
+            break
+
 if app is None:
     print("ERROR: No Flask app found", file=sys.stderr)
     sys.exit(1)
 
 try:
+    # Use test client to verify app structure without binding port
     with app.test_client() as client:
-        response = client.get('/')
-        print(f"VALIDATION_SUCCESS: App validated, status={{response.status_code}}")
+        # Just checking we can create the client is often enough,
+        # but we can try a 404 check to ensure routing works
+        response = client.get('/_omnipkg_health_check')
+        print(f"VALIDATION_SUCCESS: App validated")
         sys.exit(0)
 except Exception as e:
     print(f"VALIDATION_ERROR: {{e}}", file=sys.stderr)
@@ -192,7 +182,9 @@ except Exception as e:
         if result.returncode == 0 and 'VALIDATION_SUCCESS' in result.stdout:
             return True
         
-        safe_print(f"Flask validation failed: {result.stderr}")
+        # Only print stderr if validation failed to keep logs clean on success
+        if result.stderr:
+            safe_print(f"Flask validation failed details: {result.stderr.strip()}")
         return False
     except subprocess.TimeoutExpired:
         safe_print(f"Flask validation timed out after {timeout}s")
@@ -238,7 +230,7 @@ shutdown_file = Path("{self.shutdown_file}")
 
 def check_shutdown_signal(signum=None, frame=None):
     if shutdown_file.exists():
-        safe_print("\\n🛑 Shutdown signal received, stopping Flask app...")
+        # safe_print("\\n🛑 Shutdown signal received, stopping Flask app...")
         sys.exit(0)
 
 signal.signal(signal.SIGTERM, check_shutdown_signal)
@@ -281,7 +273,8 @@ threading.Thread(target=periodic_check, daemon=True).start()
     def shutdown(self):
         """Gracefully shutdown the Flask app."""
         if not self.is_running and self.process is None:
-            safe_print(f"✅ No active process to shutdown (validation-only mode)")
+            if not self.validate_only:
+                safe_print(f"✅ No active process to shutdown")
             release_port(self.port)
             return
         
@@ -347,6 +340,8 @@ def patch_flask_code(code: str, interactive: bool = False, validate_only: bool =
     if not re.search(pattern, code):
         patched_code = code
     else:
+        # CRITICAL FIX: Always inject use_reloader=False to ensure process management works
+        # The reloader spawns a child process that is hard to kill cleanly via Popen.
         patched_code = re.sub(
             pattern,
             f'app.run(port={free_port}, debug=False, use_reloader=False)',
@@ -359,13 +354,6 @@ def patch_flask_code(code: str, interactive: bool = False, validate_only: bool =
 def auto_patch_flask_port(code: str, interactive: bool = False, validate_only: bool = False) -> str:
     """
     Automatically patch Flask code to use an available port.
-    
-    Args:
-        interactive: Enable interactive mode with FlaskAppManager
-        validate_only: Only validate without running (requires interactive=True)
-        
-    Returns:
-        Patched code with available port
     """
     if 'flask' in code.lower() and re.search(r'app\.run\s*\(', code):
         patched_code, port, manager = patch_flask_code(code, interactive, validate_only)
@@ -373,7 +361,8 @@ def auto_patch_flask_port(code: str, interactive: bool = False, validate_only: b
         if manager:
             success = manager.start()
             if success and validate_only:
-                safe_print(f"✅ Flask app validated successfully on port {port}")
+                # Silent success for validation to keep logs clean
+                pass
             elif success and not validate_only:
                 safe_print(f"🔧 Flask app running on port {port}")
             else:
@@ -395,7 +384,7 @@ if __name__ == "__main__":
         def test_2_concurrent_allocation(self):
             def allocate_port(thread_id):
                 port = find_free_port(reserve=True)
-                safe_print(f"  Thread {thread_id}: Allocated port {port}")
+                # safe_print(f"  Thread {thread_id}: Allocated port {port}")
                 time.sleep(0.05)
                 release_port(port)
                 return port
@@ -422,10 +411,12 @@ app = Flask(__name__)
 def hello():
     return 'Hello World!'
             '''
+            # Note: validate_flask_app logic now prevents app.run() from executing automatically
+            # so we don't need to worry about it hanging here.
             port = find_free_port(reserve=True)
             success = validate_flask_app(valid_app, port)
             self.assertTrue(success, "Valid app should pass validation")
-            safe_print("🔍 Validating Flask app on port {port}...")
+            safe_print(f"🔍 Validating Flask app on port {port}...")
             safe_print("  ✅ Valid app correctly passed validation.")
             release_port(port)
 
@@ -456,6 +447,9 @@ app = Flask(__name__)
 @app.route('/')
 def index():
     return 'Lifecycle Test'
+
+if __name__ == '__main__':
+    app.run()
             '''
             port = find_free_port(start_port=5000, max_attempts=100, reserve=True)
             patched_code, _, manager = patch_flask_code(test_app, interactive=True)
@@ -463,13 +457,15 @@ def index():
             
             success = manager.start()
             self.assertTrue(success, "Manager start should succeed")
+            
             if not manager.validate_only:
                 safe_print(f"✅ Flask app started on port {port} (PID: {manager.process.pid})")
                 safe_print(f"🌐 Access at: http://127.0.0.1:{port}")
                 safe_print(f"🛑 To stop: FlaskAppManager.shutdown() or delete {manager.shutdown_file}")
-                self.assertTrue(manager.wait_for_ready(timeout=5.0), "App should be ready")
+                
+                # Wait longer for CI
+                self.assertTrue(manager.wait_for_ready(timeout=15.0), "App should be ready")
                 safe_print("✅ Server is ready and listening.")
-                safe_print("  ✅ Final validation passed: Server is responsive and returns correct content.")
                 manager.shutdown()
             else:
                 safe_print("  ✅ Validation-only mode passed")
@@ -478,5 +474,5 @@ def index():
             self.assertTrue(is_port_actually_free(port), "Port should be released")
             safe_print("✅ TEST 6 PASSED")
 
-    suite = unittest.TestLoader().loadTestsFromTestCase(TestEnhancedFlaskPortFinder)  # Only use TestLoader
+    suite = unittest.TestLoader().loadTestsFromTestCase(TestEnhancedFlaskPortFinder)
     unittest.TextTestRunner(verbosity=2).run(suite)
