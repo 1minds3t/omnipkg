@@ -29,37 +29,39 @@ jobs:
       
       - name: Create Simple Flask App
         run: |
-          @"
-from flask import Flask
-import sys
-import os
-
-print('[FLASK] Script starting...', file=sys.stderr, flush=True)
-print(f'[FLASK] Python: {sys.version}', file=sys.stderr, flush=True)
-print(f'[FLASK] Executable: {sys.executable}', file=sys.stderr, flush=True)
-print(f'[FLASK] CWD: {os.getcwd()}', file=sys.stderr, flush=True)
-
-app = Flask(__name__)
-
-print('[FLASK] Flask app created', file=sys.stderr, flush=True)
-
-@app.route('/')
-def hello():
-    return 'Windows Flask Success!'
-
-print('[FLASK] Route registered', file=sys.stderr, flush=True)
-
-if __name__ == '__main__':
-    print('[FLASK] About to call app.run()...', file=sys.stderr, flush=True)
-    print('[FLASK] Attempting to bind to 0.0.0.0:5000', file=sys.stderr, flush=True)
-    try:
-        app.run(host='0.0.0.0', port=5000, use_reloader=False, debug=False)
-    except Exception as e:
-        print(f'[FLASK] ERROR: {e}', file=sys.stderr, flush=True)
-        import traceback
-        traceback.print_exc()
-        sys.exit(1)
-"@ | Out-File -FilePath flask_app.py -Encoding utf8
+          $content = @'
+          from flask import Flask
+          import sys
+          import os
+          
+          print('[FLASK] Script starting...', file=sys.stderr, flush=True)
+          print(f'[FLASK] Python: {sys.version}', file=sys.stderr, flush=True)
+          print(f'[FLASK] Executable: {sys.executable}', file=sys.stderr, flush=True)
+          print(f'[FLASK] CWD: {os.getcwd()}', file=sys.stderr, flush=True)
+          
+          app = Flask(__name__)
+          
+          print('[FLASK] Flask app created', file=sys.stderr, flush=True)
+          
+          @app.route('/')
+          def hello():
+              return 'Windows Flask Success!'
+          
+          print('[FLASK] Route registered', file=sys.stderr, flush=True)
+          
+          if __name__ == '__main__':
+              print('[FLASK] About to call app.run()...', file=sys.stderr, flush=True)
+              print('[FLASK] Attempting to bind to 0.0.0.0:5000', file=sys.stderr, flush=True)
+              try:
+                  app.run(host='0.0.0.0', port=5000, use_reloader=False, debug=False)
+              except Exception as e:
+                  print(f'[FLASK] ERROR: {e}', file=sys.stderr, flush=True)
+                  import traceback
+                  traceback.print_exc()
+                  sys.exit(1)
+          '@
+          
+          $content | Out-File -FilePath flask_app.py -Encoding utf8
           
           Write-Host "[OK] Flask app created"
           Write-Host ""
