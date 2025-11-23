@@ -4,43 +4,97 @@ site_url: https://1minds3t.github.io/omnipkg/
 repo_url: https://github.com/1minds3t/omnipkg
 repo_name: 1minds3t/omnipkg
 
-# This is the magic that creates the tabs!
-# The text on the left is the tab name, the file on the right is the content.
+# Navigation with tabs
 nav:
-  - 'Home': 'index.md'
-  - 'CLI Commands': 'cli_commands_reference.md'
-  - 'Advanced Features':
-    - 'Overview': 'advanced_management.md'
-    - 'Python Hot-Swapping': 'python_hot_swapping.md'
-    - 'Runtime Switching': 'runtime_switching.md'
-    - 'System Libs (LibResolver)': 'LIBRESOLVER.md'
-  - 'Roadmap': 'future_roadmap.md'
+  - Home: index.md
+  - Getting Started: getting_started.md
+  - CLI Commands: cli_commands_reference.md
+  - Advanced Features:
+      - Overview: advanced_management.md
+      - Python Hot-Swapping: python_hot_swapping.md
+      - Runtime Switching: runtime_switching.md
+      - System Libs (LibResolver): LIBRESOLVER.md
+  - Roadmap: future_roadmap.md
 
-# This adds the beautiful theme and features
+# Material theme configuration
 theme:
   name: material
+  logo: assets/logo.png  # Add if you have a logo
+  favicon: assets/favicon.ico  # Add if you have a favicon
   palette:
     # Light mode
     - scheme: default
-      primary: 'indigo'
-      accent: 'indigo'
+      primary: indigo
+      accent: indigo
       toggle:
         icon: material/brightness-7
         name: Switch to dark mode
     # Dark mode
     - scheme: slate
-      primary: 'black'
-      accent: 'indigo'
+      primary: black
+      accent: indigo
       toggle:
         icon: material/brightness-4
         name: Switch to light mode
   features:
     - navigation.tabs
+    - navigation.tabs.sticky
+    - navigation.sections
     - navigation.top
+    - navigation.tracking
     - search.suggest
     - search.highlight
+    - search.share
     - content.code.copy
     - content.code.annotate
+    - content.tabs.link
+  icon:
+    repo: fontawesome/brands/github
 
-# This tells MkDocs where your documentation files are
-docs_dir: 'docs'
+# Extensions
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+  - admonition
+  - pymdownx.details
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - attr_list
+  - md_in_html
+  - tables
+  - footnotes
+
+# Plugins
+plugins:
+  - search
+  - git-revision-date-localized:
+      enable_creation_date: true
+
+# Extra
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/1minds3t/omnipkg
+    - icon: fontawesome/brands/python
+      link: https://pypi.org/project/omnipkg/
+  version:
+    provider: mike
+
+# Documentation directory
+docs_dir: docs
+
+# Extra CSS (optional)
+extra_css:
+  - stylesheets/extra.css
