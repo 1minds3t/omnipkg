@@ -225,22 +225,17 @@ class FlaskAppManager:
             self.code,
             flags=re.MULTILINE
         )
-        
+    
         wrapper_code = f'''
 import signal
 import sys
 import time
 from pathlib import Path
 
-print("[DEBUG] Starting Flask wrapper on port {self.port}", flush=True)
-print(f"[DEBUG] Python: {{sys.version}}", flush=True)
-print(f"[DEBUG] Executable: {{sys.executable}}", flush=True)
-
 shutdown_file = Path("{self.shutdown_file}")
 
 def check_shutdown_signal(signum=None, frame=None):
     if shutdown_file.exists():
-        print("[DEBUG] Shutdown signal received", flush=True)
         sys.exit(0)
 
 signal.signal(signal.SIGTERM, check_shutdown_signal)
@@ -254,41 +249,30 @@ def periodic_check():
         check_shutdown_signal()
 
 threading.Thread(target=periodic_check, daemon=True).start()
-print("[DEBUG] About to run user Flask code", flush=True)
 
 # User's code (with __main__ block removed)
 {cleaned_code}
 
 # Now WE control app.run() with the correct parameters
-print("[DEBUG] Looking for Flask app instance", flush=True)
 if 'app' in dir():
-    print("[DEBUG] Found app, calling run() with our parameters", flush=True)
     app.run(host='127.0.0.1', port={self.port}, debug=False, use_reloader=False)
 else:
-    print("[ERROR] No app found in namespace!", flush=True)
-    print(f"[DEBUG] Available names: {{list(dir())}}", flush=True)
     sys.exit(1)
 '''
-        
+    
         try:
             with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as f:
                 f.write(wrapper_code)
                 temp_file = f.name
             
-            log_file = Path(tempfile.gettempdir()) / f"flask_{self.port}.log"
-            log_handle = open(log_file, 'w')
-            
+            # CRITICAL: Don't redirect stdout/stderr - breaks Flask on macOS/Windows!
             self.process = subprocess.Popen(
-                [sys.executable, temp_file],
-                stdout=log_handle,
-                stderr=subprocess.STDOUT,
-                bufsize=0
+                [sys.executable, temp_file]
             )
             
             self.is_running = True
             safe_print(f"✅ Flask app started on port {self.port} (PID: {self.process.pid})")
             safe_print(f"🌐 Access at: http://127.0.0.1:{self.port}")
-            safe_print(f"📋 Logs at: {log_file}")
             safe_print(f"🛑 To stop: FlaskAppManager.shutdown() or delete {self.shutdown_file}")
             
             return True
