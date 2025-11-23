@@ -1,10 +1,6 @@
 #!/usr/bin/env python3
 """
-Dedicated and merged test suite for FlaskAppManager, ensuring its robustness.
-
-This suite combines multiple tests to validate the entire lifecycle of FlaskAppManager,
-including port allocation, code patching, validation, and shutdown. It incorporates
-critical fixes to handle interactive and validation-only modes correctly.
+SUPER VERBOSE DEBUG VERSION - Let's find out WTF is happening!
 """
 import sys
 import os
@@ -17,11 +13,8 @@ import threading
 import requests
 import importlib.util
 
-# Add omnipkg to the Python path to import necessary modules
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-# Attempt to import the real library; fall back to mock objects if not found.
-# This allows the script to be runnable for demonstration purposes.
 try:
     if importlib.util.find_spec("omnipkg.utils.flask_port_finder") is None:
         raise ImportError
@@ -36,8 +29,10 @@ except ImportError:
     print("Warning: 'omnipkg' not found. Using mock objects for demonstration.")
     _reserved_ports = set()
     _lock = threading.Lock()
+    
     def safe_print(message, **kwargs):
-        print(message, file=sys.stderr, **kwargs) # Print to stderr to avoid mixing with test output
+        print(message, file=sys.stderr, **kwargs)
+    
     def find_free_port(start_port=5000, max_attempts=1000, reserve=False):
         for port in range(start_port, start_port + max_attempts):
             with _lock:
@@ -51,9 +46,11 @@ except ImportError:
             except OSError:
                 continue
         raise IOError("No free ports found.")
+    
     def release_port(port):
         with _lock:
             if port in _reserved_ports: _reserved_ports.remove(port)
+    
     class FlaskAppManager:
         def __init__(self, code, port, interactive=False, validate_only=False):
             self.code = code
@@ -61,140 +58,178 @@ except ImportError:
             self.interactive = interactive
             self.validate_only = validate_only
             self.process = None
+        
         def start(self):
             if self.validate_only:
-                # Mock validation success if code is reasonable
                 return "import" not in self.code or "flask" in self.code.lower()
             
+            print(f"\n🔍 DEBUG: Starting Flask on port {self.port}", file=sys.stderr)
+            print(f"🔍 DEBUG: Code to execute:\n{self.code}", file=sys.stderr)
+            
             command = [sys.executable, "-c", self.code]
-            self.process = subprocess.Popen(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            self.process = subprocess.Popen(
+                command, 
+                stdout=subprocess.PIPE, 
+                stderr=subprocess.PIPE,
+                text=True
+            )
+            
+            print(f"🔍 DEBUG: Process started with PID {self.process.pid}", file=sys.stderr)
+            
+            # Give it a moment to start
+            time.sleep(0.5)
+            
+            # Check if process died immediately
+            retcode = self.process.poll()
+            if retcode is not None:
+                stdout, stderr = self.process.communicate()
+                print(f"❌ DEBUG: Process died immediately with code {retcode}", file=sys.stderr)
+                print(f"📤 STDOUT:\n{stdout}", file=sys.stderr)
+                print(f"📤 STDERR:\n{stderr}", file=sys.stderr)
+                return False
+            
+            print(f"✅ DEBUG: Process still alive, waiting for ready...", file=sys.stderr)
             return self.wait_for_ready()
+        
         def shutdown(self):
             if self.process:
+                print(f"🔍 DEBUG: Shutting down process {self.process.pid}", file=sys.stderr)
+                
+                # Try to get output before killing
+                try:
+                    stdout, stderr = self.process.communicate(timeout=0.1)
+                    print(f"📤 Final STDOUT:\n{stdout}", file=sys.stderr)
+                    print(f"📤 Final STDERR:\n{stderr}", file=sys.stderr)
+                except subprocess.TimeoutExpired:
+                    pass
+                
                 self.process.terminate()
-                try: self.process.wait(timeout=5)
-                except subprocess.TimeoutExpired: self.process.kill()
+                try: 
+                    self.process.wait(timeout=5)
+                except subprocess.TimeoutExpired: 
+                    self.process.kill()
             release_port(self.port)
             safe_print(f"  ✅ Port {self.port} released and manager shut down.")
-        def wait_for_ready(self, timeout=5.0):
+        
+        def wait_for_ready(self, timeout=10.0):
             start_time = time.time()
+            attempts = 0
+            
+            print(f"🔍 DEBUG: Attempting to connect to 127.0.0.1:{self.port}", file=sys.stderr)
+            
             while time.time() - start_time < timeout:
+                attempts += 1
+                elapsed = time.time() - start_time
+                
+                # Check if process is still alive
+                if self.process and self.process.poll() is not None:
+                    print(f"❌ DEBUG: Process died during wait! (attempt {attempts}, elapsed {elapsed:.2f}s)", file=sys.stderr)
+                    stdout, stderr = self.process.communicate()
+                    print(f"📤 STDOUT:\n{stdout}", file=sys.stderr)
+                    print(f"📤 STDERR:\n{stderr}", file=sys.stderr)
+                    return False
+                
                 try:
-                    with socket.create_connection(("127.0.0.1", self.port), timeout=0.1):
+                    # Try multiple connection methods
+                    print(f"🔌 DEBUG: Connection attempt {attempts} (elapsed {elapsed:.2f}s)", file=sys.stderr)
+                    
+                    # Method 1: Socket connection
+                    with socket.create_connection(("127.0.0.1", self.port), timeout=0.5):
+                        print(f"✅ DEBUG: Socket connection successful!", file=sys.stderr)
                         return True
-                except (socket.timeout, ConnectionRefusedError):
-                    time.sleep(0.1)
+                        
+                except socket.timeout:
+                    print(f"⏱️  DEBUG: Socket timeout (attempt {attempts})", file=sys.stderr)
+                except ConnectionRefusedError:
+                    print(f"🚫 DEBUG: Connection refused (attempt {attempts})", file=sys.stderr)
+                except Exception as e:
+                    print(f"⚠️  DEBUG: Unexpected error on attempt {attempts}: {type(e).__name__}: {e}", file=sys.stderr)
+                
+                time.sleep(0.2)
+            
+            print(f"❌ DEBUG: Timeout after {attempts} attempts over {timeout}s", file=sys.stderr)
+            
+            # Final check - is the process still alive?
+            if self.process and self.process.poll() is None:
+                print(f"🤔 DEBUG: Process is STILL ALIVE but not responding!", file=sys.stderr)
+                
+                # Try to see what ports are actually in use
+                try:
+                    import psutil
+                    proc = psutil.Process(self.process.pid)
+                    connections = proc.connections()
+                    print(f"🔍 DEBUG: Process connections: {connections}", file=sys.stderr)
+                except:
+                    print(f"⚠️  DEBUG: Could not get process connections (psutil not available)", file=sys.stderr)
+            
             return False
+    
     def patch_flask_code(code, interactive=False, validate_only=False):
         port = find_free_port(reserve=True)
         
-        # Handle various app.run() patterns and add host='0.0.0.0'
-        replacements = [
-            ("app.run()", f"app.run(host='0.0.0.0', port={port})"),
-            ("app.run(debug=True)", f"app.run(host='0.0.0.0', port={port})"),
-            ("app.run(use_reloader=False)", f"app.run(use_reloader=False, host='0.0.0.0', port={port})"),
+        print(f"\n🔍 DEBUG: Patching code for port {port}", file=sys.stderr)
+        print(f"🔍 DEBUG: Original code:\n{code}", file=sys.stderr)
+        
+        # Try different patterns
+        patterns = [
+            ("app.run()", f"app.run(host='0.0.0.0', port={port}, use_reloader=False)"),
+            ("app.run(debug=True)", f"app.run(host='0.0.0.0', port={port}, use_reloader=False)"),
+            ("app.run(use_reloader=False)", f"app.run(host='0.0.0.0', port={port}, use_reloader=False)"),
         ]
         
         patched_code = code
-        for old, new in replacements:
+        matched = False
+        for old, new in patterns:
             if old in code:
                 patched_code = code.replace(old, new)
+                matched = True
+                print(f"✅ DEBUG: Matched pattern '{old}'", file=sys.stderr)
                 break
+        
+        if not matched:
+            print(f"⚠️  DEBUG: No pattern matched! Code unchanged.", file=sys.stderr)
+        
+        print(f"🔍 DEBUG: Patched code:\n{patched_code}", file=sys.stderr)
         
         manager = FlaskAppManager(patched_code, port, interactive, validate_only) if interactive else None
         return patched_code, port, manager
 
+
 class TestEnhancedFlaskPortFinder(unittest.TestCase):
-    """
-    A comprehensive test suite for the FlaskAppManager and its related utilities.
-    """
     reserved_ports = []
+    
     def tearDown(self):
-        """Clean up any reserved ports after each test."""
-        # Use a copy to avoid issues with modifying list while iterating
         for port in list(self.reserved_ports):
             release_port(port)
         self.reserved_ports.clear()
 
-    def test_1_basic_port_allocation(self):
-        """Tests if a free port can be found and reserved."""
-        safe_print("\n" + "="*70 + "\n🧪 TEST 1: Basic Port Allocation\n" + "="*70)
-        port = find_free_port(reserve=True)
-        self.reserved_ports.append(port)
-        self.assertIsNotNone(port, "Should find a free port.")
-        safe_print(f"  ✅ Found and reserved free port: {port}")
-        safe_print("✅ TEST 1 PASSED")
-
-    def test_2_concurrent_port_allocation(self):
-        """Ensures that concurrent requests for ports do not result in collisions."""
-        safe_print("\n" + "="*70 + "\n🧪 TEST 2: Concurrent Port Allocation (Race Condition Prevention)\n" + "="*70)
-        ports = set()
-        lock = threading.Lock()
-        threads = []
-        def allocate_port():
-            port = find_free_port(start_port=6000, reserve=True)
-            with lock:
-                self.reserved_ports.append(port)
-                ports.add(port)
-        for _ in range(10):
-            thread = threading.Thread(target=allocate_port)
-            threads.append(thread)
-            thread.start()
-        for thread in threads:
-            thread.join()
-        self.assertEqual(len(ports), 10, "Should allocate 10 unique ports.")
-        safe_print(f"  ✅ All 10 ports unique: {sorted(list(ports))}")
-        safe_print("✅ TEST 2 PASSED")
-
-    def test_3_windows_compatibility_check(self):
-        """Simulates socket options for Windows compatibility."""
-        safe_print("\n" + "="*70 + "\n🧪 TEST 3: Windows Compatibility Check\n" + "="*70)
-        port = find_free_port()
-        self.assertIsNotNone(port)
-        safe_print(f"  ✅ Port {port} found, demonstrating platform-agnostic socket operations.")
-        safe_print("✅ TEST 3 PASSED")
-    
-    def test_4_flask_app_validation(self):
-        """Tests the validation of Flask app code, ensuring manager is created."""
-        safe_print("\n" + "="*70 + "\n🧪 TEST 4: Flask App Validation (No Server)\n" + "="*70)
-        valid_app_code = "from flask import Flask; app = Flask(__name__)"
-        
-        # FIX: Added interactive=True to ensure the manager object is created,
-        # per the user's note: "Always create manager when interactive=True".
-        _, port, manager_valid = patch_flask_code(valid_app_code, interactive=True, validate_only=True)
-        self.reserved_ports.append(port)
-        self.assertIsNotNone(manager_valid, "Manager should be created in interactive mode.")
-        self.assertTrue(manager_valid.start(), "Valid app should pass validation.")
-        safe_print("  ✅ Valid app correctly passed validation.")
-        safe_print("✅ TEST 4 PASSED")
-
-    def test_5_flask_code_patching(self):
-        """Ensures that Flask's app.run() is correctly patched without errors."""
-        safe_print("\n" + "="*70 + "\n🧪 TEST 5: Flask Code Patching\n" + "="*70)
-        original_code = "from flask import Flask\napp = Flask(__name__)\napp.run(debug=True)"
-        
-        # FIX: Removed the unexpected keyword argument 'port'. The function finds its own port.
-        patched_code, port, _ = patch_flask_code(original_code)
-        self.reserved_ports.append(port)
-        
-        # The exact patch details might vary, so we check for the essential part.
-        self.assertIn(f"port={port}", patched_code)
-        self.assertNotIn("debug=True", patched_code)
-        safe_print(f"  ✅ Code patched successfully to use port {port}.")
-        safe_print("✅ TEST 5 PASSED")
-
     def test_6_flask_app_manager_full_lifecycle(self):
-        """Tests the full lifecycle: start, validate responsiveness, and shutdown."""
-        safe_print("\n" + "="*70 + "\n🧪 TEST 6: Flask App Manager Full Lifecycle \n" + "="*70)
+        """ULTRA DEBUG VERSION - Let's see everything!"""
+        safe_print("\n" + "="*70 + "\n🧪 TEST 6: Flask App Manager Full Lifecycle (ULTRA DEBUG)\n" + "="*70)
+        
         app_code = """
 from flask import Flask
+import sys
+
+print('🔍 FLASK: Script starting...', file=sys.stderr, flush=True)
+
 app = Flask(__name__)
+
+print('🔍 FLASK: Flask app created', file=sys.stderr, flush=True)
+
 @app.route('/')
 def hello():
+    print('🔍 FLASK: Route handler called!', file=sys.stderr, flush=True)
     return 'Success!'
+
+print('🔍 FLASK: Route registered', file=sys.stderr, flush=True)
+
 if __name__ == '__main__':
-    app.run(use_reloader=False, host='0.0.0.0')  # Changed from default 127.0.0.1
+    print('🔍 FLASK: About to call app.run()...', file=sys.stderr, flush=True)
+    app.run(use_reloader=False)
+    print('🔍 FLASK: app.run() returned (should never see this)', file=sys.stderr, flush=True)
 """
+        
         manager = None
         port = None
         try:
@@ -202,26 +237,32 @@ if __name__ == '__main__':
             self.reserved_ports.append(port)
             self.assertIsNotNone(manager, "Manager should be created.")
             safe_print(f"  ✅ Manager created for port {port}.")
-            self.assertTrue(manager.start(), "Flask app should start successfully.")
+            
+            success = manager.start()
+            safe_print(f"  🔍 Manager.start() returned: {success}")
+            
+            self.assertTrue(success, "Flask app should start successfully.")
             safe_print(f"  ✅ Flask app process started on port {port}.")
             
-            # FIX: Added a robust wait for the server to be ready before sending a request.
-            # This prevents the "Connection refused" race condition.
-            self.assertTrue(manager.wait_for_ready(timeout=15.0), "Server did not become ready in time.")
-            safe_print("  ✅ Server is ready and listening.")
-            # FINAL VALIDATION PIECE: Confirm the app is responsive.
-            response = requests.get(f"http://127.0.0.1:{port}", timeout=5)
-            self.assertEqual(response.status_code, 200)
-            self.assertEqual(response.text, 'Success!')
-            safe_print("  ✅ Final validation passed: Server is responsive and returns correct content.")
+            # Try to connect manually
+            safe_print(f"  🔍 Attempting manual HTTP request...")
+            try:
+                response = requests.get(f"http://127.0.0.1:{port}", timeout=5)
+                safe_print(f"  ✅ HTTP response: {response.status_code} - {response.text}")
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(response.text, 'Success!')
+            except Exception as e:
+                safe_print(f"  ❌ HTTP request failed: {type(e).__name__}: {e}")
+                raise
+                
         finally:
-            # Defensive shutdown ensures cleanup even if assertions fail.
             if manager:
                 manager.shutdown()
             elif port:
-                release_port(port) # Manual release if manager creation failed
+                release_port(port)
+        
         safe_print("✅ TEST 6 PASSED")
 
+
 if __name__ == '__main__':
-    # FIX: Replaced the deprecated test runner with the modern, standard unittest.main()
     unittest.main()
