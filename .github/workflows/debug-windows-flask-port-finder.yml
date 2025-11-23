@@ -246,11 +246,83 @@ jobs:
           python -c $socketTest
         shell: pwsh
       
-      - name: Try HTTP Request
+      - name: Method 4 - Start-Process WITHOUT stderr redirect
         run: |
           Write-Host ""
           Write-Host "=========================================="
-          Write-Host "HTTP REQUEST TEST"
+          Write-Host "METHOD 4: Start-Process WITHOUT stderr redirect"
+          Write-Host "=========================================="
+          
+          # Kill previous
+          Get-Process | Where-Object {$_.ProcessName -eq "python"} | Stop-Process -Force -ErrorAction SilentlyContinue
+          Start-Sleep -Seconds 2
+          
+          # Start WITHOUT redirecting stderr (the key fix!)
+          $proc = Start-Process python `
+            -ArgumentList "flask_app.py" `
+            -PassThru `
+            -RedirectStandardOutput "flask_stdout2.log" `
+            -NoNewWindow
+          
+          Write-Host "[OK] Process started: PID $($proc.Id)"
+          Write-Host "[INFO] Waiting 10 seconds for Flask to start..."
+          Start-Sleep -Seconds 10
+          
+          # Check if process is still alive
+          $isRunning = Get-Process -Id $proc.Id -ErrorAction SilentlyContinue
+          if ($isRunning) {
+            Write-Host "[OK] Process still running"
+          } else {
+            Write-Host "[FAIL] Process died!"
+          }
+          
+          $proc.Id | Out-File -FilePath "flask2.pid" -Encoding ascii
+        shell: pwsh
+      
+      - name: Check Port 5000 (Method 4)
+        run: |
+          Write-Host ""
+          Write-Host "=========================================="
+          Write-Host "PORT 5000 STATUS (Method 4 - No stderr redirect)"
+          Write-Host "=========================================="
+          
+          Write-Host ""
+          Write-Host "netstat -ano:"
+          netstat -ano | Select-String "5000"
+          
+          Write-Host ""
+          Write-Host "Get-NetTCPConnection:"
+          try {
+            Get-NetTCPConnection -LocalPort 5000 -ErrorAction SilentlyContinue | Format-Table
+          } catch {
+            Write-Host "(No connections)"
+          }
+          
+          Write-Host ""
+          Write-Host "Socket test:"
+          $env:PYTHONIOENCODING = "utf-8"
+          $socketTest = @'
+          import socket
+          try:
+              sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+              sock.settimeout(2)
+              result = sock.connect_ex(('127.0.0.1', 5000))
+              if result == 0:
+                  print('[OK] Port 5000 is OPEN!')
+              else:
+                  print(f'[FAIL] Port 5000 closed (error {result})')
+              sock.close()
+          except Exception as e:
+              print(f'[ERROR] {e}')
+          '@
+          python -c $socketTest
+        shell: pwsh
+      
+      - name: Try HTTP Request (Method 4)
+        run: |
+          Write-Host ""
+          Write-Host "=========================================="
+          Write-Host "HTTP REQUEST TEST (Method 4)"
           Write-Host "=========================================="
           
           $env:PYTHONIOENCODING = "utf-8"
@@ -303,13 +375,8 @@ jobs:
           Write-Host ""
           Write-Host "Cleaning up..."
           
-          # Kill processes
-          if (Test-Path "flask.pid") {
-            $pid = Get-Content "flask.pid"
-            try {
-              Stop-Process -Id $pid -Force -ErrorAction SilentlyContinue
-            } catch {}
-          }
+          # Kill all python processes
+          Get-Process | Where-Object {$_.ProcessName -eq "python"} | Stop-Process -Force -ErrorAction SilentlyContinue
           
           # Kill jobs
           Get-Job | Stop-Job -ErrorAction SilentlyContinue
