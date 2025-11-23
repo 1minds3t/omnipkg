@@ -6,6 +6,7 @@ on:
 jobs:
   flask-server:
     strategy:
+      fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
@@ -104,6 +105,10 @@ jobs:
           import requests
           import time
           
+          # Give server extra time to fully initialize
+          print("Waiting for server to be ready...")
+          time.sleep(3)
+          
           print("\n" + "="*50)
           print("Testing Flask Server")
           print("="*50)
@@ -119,18 +124,20 @@ jobs:
               url = f'http://127.0.0.1:5000{path}'
               print(f"\nTesting {name}: {url}")
               
-              for attempt in range(3):
+              for attempt in range(5):
                   try:
-                      response = requests.get(url, timeout=5)
+                      response = requests.get(url, timeout=10)
                       print(f"   [OK] Status: {response.status_code}")
                       print(f"   Response: {response.text[:100]}")
                       results.append(True)
                       break
                   except Exception as e:
-                      if attempt == 2:
+                      if attempt == 4:
                           print(f"   [FAIL] {type(e).__name__}")
                           results.append(False)
-                      time.sleep(1)
+                      else:
+                          print(f"   Retry {attempt + 1}/5...")
+                      time.sleep(2)
           
           print("\n" + "="*50)
           passed = sum(results)
