@@ -225,7 +225,7 @@ class FlaskAppManager:
             self.code,
             flags=re.MULTILINE
         )
-    
+        
         wrapper_code = f'''
 import signal
 import sys
@@ -253,31 +253,34 @@ threading.Thread(target=periodic_check, daemon=True).start()
 # User's code (with __main__ block removed)
 {cleaned_code}
 
-# Now WE control app.run() with the correct parameters
+# Use waitress instead of Flask's built-in server for better subprocess compatibility
 try:
     if 'app' in dir():
-        print("DEBUG: About to call app.run()", flush=True)
-        app.run(host='127.0.0.1', port={self.port}, debug=False, use_reloader=False, threaded=True)
-        print("DEBUG: app.run() returned (should never see this)", flush=True)
+        print("DEBUG: Starting with waitress", flush=True)
+        from waitress import serve
+        print("DEBUG: Serving on 127.0.0.1:{self.port}", flush=True)
+        serve(app, host='127.0.0.1', port={self.port}, threads=4)
     else:
         print("ERROR: No app found!", flush=True)
         sys.exit(1)
+except ImportError:
+    print("DEBUG: Waitress not available, falling back to Flask dev server", flush=True)
+    if 'app' in dir():
+        app.run(host='127.0.0.1', port={self.port}, debug=False, use_reloader=False, threaded=True)
+    else:
+        sys.exit(1)
 except Exception as e:
-    print(f"ERROR calling app.run(): {{e}}", flush=True)
+    print(f"ERROR: {{e}}", flush=True)
     import traceback
     traceback.print_exc()
     sys.exit(1)
 '''
-        
+    
         try:
             with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as f:
                 f.write(wrapper_code)
                 temp_file = f.name
             
-            # Save temp file path for debugging
-            safe_print(f"📄 Temp file: {temp_file}")
-            
-            # Don't redirect - breaks Flask
             self.process = subprocess.Popen(
                 [sys.executable, temp_file]
             )
