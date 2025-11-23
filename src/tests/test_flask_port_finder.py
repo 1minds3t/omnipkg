@@ -87,11 +87,19 @@ except ImportError:
             return False
     def patch_flask_code(code, interactive=False, validate_only=False):
         port = find_free_port(reserve=True)
-        patched_code = code.replace("app.run()", f"app.run(port={port})")
-        patched_code = patched_code.replace("app.run(debug=True)", f"app.run(port={port})")
-        # Handle case where use_reloader is passed manually in test
-        if "use_reloader=False" in code and "port=" not in patched_code:
-             patched_code = code.replace("app.run(use_reloader=False)", f"app.run(use_reloader=False, port={port})")
+        
+        # Handle various app.run() patterns and add host='0.0.0.0'
+        replacements = [
+            ("app.run()", f"app.run(host='0.0.0.0', port={port})"),
+            ("app.run(debug=True)", f"app.run(host='0.0.0.0', port={port})"),
+            ("app.run(use_reloader=False)", f"app.run(use_reloader=False, host='0.0.0.0', port={port})"),
+        ]
+        
+        patched_code = code
+        for old, new in replacements:
+            if old in code:
+                patched_code = code.replace(old, new)
+                break
         
         manager = FlaskAppManager(patched_code, port, interactive, validate_only) if interactive else None
         return patched_code, port, manager
