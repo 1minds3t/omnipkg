@@ -223,8 +223,7 @@ import sys
 import time
 from pathlib import Path
 
-# ENABLE DEBUG OUTPUT
-print(f"[DEBUG] Starting Flask wrapper on port {self.port}", flush=True)
+print("[DEBUG] Starting Flask wrapper on port {self.port}", flush=True)
 print(f"[DEBUG] Python: {{sys.version}}", flush=True)
 print(f"[DEBUG] Executable: {{sys.executable}}", flush=True)
 
@@ -248,9 +247,19 @@ def periodic_check():
 threading.Thread(target=periodic_check, daemon=True).start()
 print("[DEBUG] About to exec Flask code", flush=True)
 
+# Execute the user's Flask code
+exec("""
 {self.code}
+""")
 
-print("[DEBUG] Flask code finished (should never see this)", flush=True)
+# CRITICAL: Force app.run() to execute even if __name__ != '__main__'
+print("[DEBUG] Looking for Flask app instance", flush=True)
+if 'app' in locals():
+    print("[DEBUG] Found 'app', calling run()", flush=True)
+    app.run(host='127.0.0.1', port={self.port}, debug=False, use_reloader=False)
+else:
+    print("[ERROR] No Flask app instance named 'app' found!", flush=True)
+    sys.exit(1)
 '''
     
         try:
