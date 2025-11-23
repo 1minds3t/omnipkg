@@ -254,18 +254,30 @@ threading.Thread(target=periodic_check, daemon=True).start()
 {cleaned_code}
 
 # Now WE control app.run() with the correct parameters
-if 'app' in dir():
-    app.run(host='127.0.0.1', port={self.port}, debug=False, use_reloader=False)
-else:
+try:
+    if 'app' in dir():
+        print("DEBUG: About to call app.run()", flush=True)
+        app.run(host='127.0.0.1', port={self.port}, debug=False, use_reloader=False, threaded=True)
+        print("DEBUG: app.run() returned (should never see this)", flush=True)
+    else:
+        print("ERROR: No app found!", flush=True)
+        sys.exit(1)
+except Exception as e:
+    print(f"ERROR calling app.run(): {{e}}", flush=True)
+    import traceback
+    traceback.print_exc()
     sys.exit(1)
 '''
-    
+        
         try:
             with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as f:
                 f.write(wrapper_code)
                 temp_file = f.name
             
-            # CRITICAL: Don't redirect stdout/stderr - breaks Flask on macOS/Windows!
+            # Save temp file path for debugging
+            safe_print(f"📄 Temp file: {temp_file}")
+            
+            # Don't redirect - breaks Flask
             self.process = subprocess.Popen(
                 [sys.executable, temp_file]
             )
@@ -317,7 +329,6 @@ else:
     def wait_for_ready(self, timeout: float = 10.0) -> bool:
         """Wait for Flask app to be ready to accept connections."""
         start_time = time.time()
-        log_file = Path(tempfile.gettempdir()) / f"flask_{self.port}.log"
         
         while time.time() - start_time < timeout:
             try:
@@ -332,16 +343,8 @@ else:
             time.sleep(0.2)
         
         safe_print(f"⚠️ Flask app did not become ready within {timeout}s")
-        safe_print(f"\n{'='*70}")
-        safe_print(f"📋 FLASK SERVER LOG (port {self.port}):")
-        safe_print(f"{'='*70}")
-        if log_file.exists():
-            with open(log_file, 'r') as f:
-                safe_print(f.read())
-        else:
-            safe_print("⚠️ No log file found!")
-        safe_print(f"{'='*70}\n")
         return False
+
 
 def patch_flask_code(code: str, interactive: bool = False, validate_only: bool = False) -> Tuple[str, int, Optional[FlaskAppManager]]:
     """
