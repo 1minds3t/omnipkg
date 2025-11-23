@@ -19,8 +19,8 @@ nav:
 # Material theme configuration
 theme:
   name: material
-  logo: assets/logo.svg  # Add this line!
-  favicon: assets/logo.svg  # Optional: use as favicon too
+  logo: assets/logo.svg
+  favicon: assets/favicon.png  # Add this line!
   palette:
     # Light mode
     - scheme: default
