@@ -85,6 +85,7 @@ except ImportError:
                 except (socket.timeout, ConnectionRefusedError):
                     time.sleep(0.1)
             return False
+        
     def patch_flask_code(code, interactive=False, validate_only=False):
         port = find_free_port(reserve=True)
         
