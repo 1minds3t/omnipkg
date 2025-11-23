@@ -223,14 +223,20 @@ import sys
 import time
 from pathlib import Path
 
+# ENABLE DEBUG OUTPUT
+print(f"[DEBUG] Starting Flask wrapper on port {self.port}", flush=True)
+print(f"[DEBUG] Python: {{sys.version}}", flush=True)
+print(f"[DEBUG] Executable: {{sys.executable}}", flush=True)
+
 shutdown_file = Path("{self.shutdown_file}")
 
 def check_shutdown_signal(signum=None, frame=None):
     if shutdown_file.exists():
+        print("[DEBUG] Shutdown signal received", flush=True)
         sys.exit(0)
 
 signal.signal(signal.SIGTERM, check_shutdown_signal)
-if hasattr(signal, 'SIGBREAK'):  # Windows
+if hasattr(signal, 'SIGBREAK'):
     signal.signal(signal.SIGBREAK, check_shutdown_signal)
 
 import threading
@@ -240,22 +246,33 @@ def periodic_check():
         check_shutdown_signal()
 
 threading.Thread(target=periodic_check, daemon=True).start()
+print("[DEBUG] About to exec Flask code", flush=True)
 
 {self.code}
+
+print("[DEBUG] Flask code finished (should never see this)", flush=True)
 '''
+    
         try:
             with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as f:
                 f.write(wrapper_code)
                 temp_file = f.name
             
-            # CRITICAL FIX: Don't redirect stdout/stderr - this breaks Flask on Windows/macOS!
+            # CAPTURE OUTPUT SO WE CAN DEBUG
+            log_file = Path(tempfile.gettempdir()) / f"flask_{self.port}.log"
+            log_handle = open(log_file, 'w')
+            
             self.process = subprocess.Popen(
-                [sys.executable, temp_file]
+                [sys.executable, temp_file],
+                stdout=log_handle,
+                stderr=subprocess.STDOUT,  # Merge stderr into stdout
+                bufsize=0  # Unbuffered
             )
             
             self.is_running = True
             safe_print(f"✅ Flask app started on port {self.port} (PID: {self.process.pid})")
             safe_print(f"🌐 Access at: http://127.0.0.1:{self.port}")
+            safe_print(f"📋 Logs at: {log_file}")
             safe_print(f"🛑 To stop: FlaskAppManager.shutdown() or delete {self.shutdown_file}")
             
             return True
@@ -300,6 +317,8 @@ threading.Thread(target=periodic_check, daemon=True).start()
     def wait_for_ready(self, timeout: float = 10.0) -> bool:
         """Wait for Flask app to be ready to accept connections."""
         start_time = time.time()
+        log_file = Path(tempfile.gettempdir()) / f"flask_{self.port}.log"
+        
         while time.time() - start_time < timeout:
             try:
                 with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
@@ -312,7 +331,16 @@ threading.Thread(target=periodic_check, daemon=True).start()
                 pass
             time.sleep(0.2)
         
-        safe_print(f"⚠️  Flask app did not become ready within {timeout}s")
+        safe_print(f"⚠️ Flask app did not become ready within {timeout}s")
+        safe_print(f"\n{'='*70}")
+        safe_print(f"📋 FLASK SERVER LOG (port {self.port}):")
+        safe_print(f"{'='*70}")
+        if log_file.exists():
+            with open(log_file, 'r') as f:
+                safe_print(f.read())
+        else:
+            safe_print("⚠️ No log file found!")
+        safe_print(f"{'='*70}\n")
         return False
 
 def patch_flask_code(code: str, interactive: bool = False, validate_only: bool = False) -> Tuple[str, int, Optional[FlaskAppManager]]:
