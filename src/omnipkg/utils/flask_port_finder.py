@@ -222,15 +222,11 @@ import signal
 import sys
 import time
 from pathlib import Path
-try:
-    from .common_utils import safe_print
-except ImportError:
-    from omnipkg.common_utils import safe_print
+
 shutdown_file = Path("{self.shutdown_file}")
 
 def check_shutdown_signal(signum=None, frame=None):
     if shutdown_file.exists():
-        # safe_print("\\n🛑 Shutdown signal received, stopping Flask app...")
         sys.exit(0)
 
 signal.signal(signal.SIGTERM, check_shutdown_signal)
@@ -247,17 +243,14 @@ threading.Thread(target=periodic_check, daemon=True).start()
 
 {self.code}
 '''
-        
         try:
             with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as f:
                 f.write(wrapper_code)
                 temp_file = f.name
             
+            # CRITICAL FIX: Don't redirect stdout/stderr - this breaks Flask on Windows/macOS!
             self.process = subprocess.Popen(
-                [sys.executable, temp_file],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True
+                [sys.executable, temp_file]
             )
             
             self.is_running = True
