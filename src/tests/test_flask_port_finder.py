@@ -16,7 +16,6 @@ import unittest
 import threading
 import requests
 import importlib.util
-import platform
 
 # Add omnipkg to the Python path to import necessary modules
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -77,7 +76,7 @@ except ImportError:
                 except subprocess.TimeoutExpired: self.process.kill()
             release_port(self.port)
             safe_print(f"  ✅ Port {self.port} released and manager shut down.")
-        def wait_for_ready(self, timeout=30.0):
+        def wait_for_ready(self, timeout=5.0):
             start_time = time.time()
             while time.time() - start_time < timeout:
                 try:
@@ -88,11 +87,19 @@ except ImportError:
             return False
     def patch_flask_code(code, interactive=False, validate_only=False):
         port = find_free_port(reserve=True)
-        patched_code = code.replace("app.run()", f"app.run(port={port})")
-        patched_code = patched_code.replace("app.run(debug=True)", f"app.run(port={port})")
-        # Handle case where use_reloader is passed manually in test
-        if "use_reloader=False" in code and "port=" not in patched_code:
-             patched_code = code.replace("app.run(use_reloader=False)", f"app.run(use_reloader=False, port={port})")
+        
+        # Handle various app.run() patterns and add host='0.0.0.0'
+        replacements = [
+            ("app.run()", f"app.run(host='0.0.0.0', port={port})"),
+            ("app.run(debug=True)", f"app.run(host='0.0.0.0', port={port})"),
+            ("app.run(use_reloader=False)", f"app.run(use_reloader=False, host='0.0.0.0', port={port})"),
+        ]
+        
+        patched_code = code
+        for old, new in replacements:
+            if old in code:
+                patched_code = code.replace(old, new)
+                break
         
         manager = FlaskAppManager(patched_code, port, interactive, validate_only) if interactive else None
         return patched_code, port, manager
@@ -157,7 +164,6 @@ class TestEnhancedFlaskPortFinder(unittest.TestCase):
         _, port, manager_valid = patch_flask_code(valid_app_code, interactive=True, validate_only=True)
         self.reserved_ports.append(port)
         self.assertIsNotNone(manager_valid, "Manager should be created in interactive mode.")
-        safe_print(f"🔍 Validating Flask app on port {port}...")
         self.assertTrue(manager_valid.start(), "Valid app should pass validation.")
         safe_print("  ✅ Valid app correctly passed validation.")
         safe_print("✅ TEST 4 PASSED")
@@ -173,13 +179,13 @@ class TestEnhancedFlaskPortFinder(unittest.TestCase):
         
         # The exact patch details might vary, so we check for the essential part.
         self.assertIn(f"port={port}", patched_code)
+        self.assertNotIn("debug=True", patched_code)
         safe_print(f"  ✅ Code patched successfully to use port {port}.")
         safe_print("✅ TEST 5 PASSED")
 
     def test_6_flask_app_manager_full_lifecycle(self):
         """Tests the full lifecycle: start, validate responsiveness, and shutdown."""
-        safe_print("\n" + "="*70 + "\n🧪 TEST 6: Flask App Manager Full Lifecycle (with Fixes)\n" + "="*70)
-        # FIX: Explicitly disable reloader to ensure Process Management works reliably in tests
+        safe_print("\n" + "="*70 + "\n🧪 TEST 6: Flask App Manager Full Lifecycle \n" + "="*70)
         app_code = """
 from flask import Flask
 app = Flask(__name__)
@@ -187,7 +193,7 @@ app = Flask(__name__)
 def hello():
     return 'Success!'
 if __name__ == '__main__':
-    app.run(use_reloader=False)
+    app.run(use_reloader=False, host='0.0.0.0')  # Changed from default 127.0.0.1
 """
         manager = None
         port = None
@@ -199,11 +205,10 @@ if __name__ == '__main__':
             self.assertTrue(manager.start(), "Flask app should start successfully.")
             safe_print(f"  ✅ Flask app process started on port {port}.")
             
-            # FIX: Use longer timeout for Windows/macOS which are slower in CI
-            timeout = 30.0 if platform.system() in ['Windows', 'Darwin'] else 15.0
-            self.assertTrue(manager.wait_for_ready(timeout=timeout), "Server did not become ready in time.")
+            # FIX: Added a robust wait for the server to be ready before sending a request.
+            # This prevents the "Connection refused" race condition.
+            self.assertTrue(manager.wait_for_ready(timeout=15.0), "Server did not become ready in time.")
             safe_print("  ✅ Server is ready and listening.")
-            
             # FINAL VALIDATION PIECE: Confirm the app is responsive.
             response = requests.get(f"http://127.0.0.1:{port}", timeout=5)
             self.assertEqual(response.status_code, 200)
