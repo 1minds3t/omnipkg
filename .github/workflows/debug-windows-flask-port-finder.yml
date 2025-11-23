@@ -1,12 +1,12 @@
-name: "🪟 Windows Flask Debug Deep Dive"
+name: "🪟 Windows Flask - Self-Test Approach"
 
 on:
   workflow_dispatch:
 
 jobs:
-  windows-flask-parallel:
+  windows-flask-test:
     runs-on: windows-latest
-    name: "Flask Debug Investigation"
+    name: "Flask Self-Test"
     
     steps:
       - name: Set up Python 3.11
@@ -21,379 +21,350 @@ jobs:
           Write-Host "[OK] Dependencies installed"
         shell: pwsh
       
-      - name: Create Flask Apps with Debug Logging
+      - name: Test 1 - Flask with Self-Test Client
         run: |
-          # Method 1: Standard Flask with DEBUG MODE (Port 5001)
-          $app1 = @'
+          Write-Host "=========================================="
+          Write-Host "TEST 1: Flask with built-in test client"
+          Write-Host "=========================================="
+          
+          $app = @'
           from flask import Flask
           import sys
-          import logging
-          import socket
-          
-          logging.basicConfig(level=logging.DEBUG)
-          logger = logging.getLogger(__name__)
-          
-          print('[M1] Script starting...', file=sys.stderr, flush=True)
-          print(f'[M1] Python: {sys.version}', file=sys.stderr, flush=True)
+          import time
+          from threading import Thread
+          import requests
           
           app = Flask(__name__)
-          app.config['DEBUG'] = True
           
           @app.route('/')
           def hello():
-              return 'Method 1: Flask DEBUG on 5001'
+              return 'Flask Self-Test Success!'
           
-          # Test socket binding BEFORE Flask
-          print('[M1] Testing raw socket binding...', file=sys.stderr, flush=True)
-          try:
-              test_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-              test_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-              test_sock.bind(('0.0.0.0', 5001))
-              test_sock.listen(1)
-              print('[M1] ✓ Raw socket bind successful on 0.0.0.0:5001', file=sys.stderr, flush=True)
-              test_sock.close()
-          except Exception as e:
-              print(f'[M1] ✗ Raw socket bind FAILED: {e}', file=sys.stderr, flush=True)
-              sys.exit(1)
+          def test_client():
+              print('[TEST] Waiting 5 seconds for server startup...', flush=True)
+              time.sleep(5)
+              
+              print('[TEST] Attempting to connect to server...', flush=True)
+              for i in range(10):
+                  try:
+                      response = requests.get('http://127.0.0.1:5001', timeout=2)
+                      print(f'[SUCCESS] Got response: {response.status_code}', flush=True)
+                      print(f'[SUCCESS] Content: {response.text}', flush=True)
+                      return
+                  except Exception as e:
+                      print(f'[TEST] Attempt {i+1} failed: {type(e).__name__}', flush=True)
+                      time.sleep(1)
+              
+              print('[FAIL] All test attempts failed', flush=True)
           
           if __name__ == '__main__':
-              print('[M1] Starting Flask with debug=True...', file=sys.stderr, flush=True)
-              app.run(host='0.0.0.0', port=5001, debug=True, use_reloader=False, threaded=True)
+              # Start test client in background
+              test_thread = Thread(target=test_client, daemon=True)
+              test_thread.start()
+              
+              print('[SERVER] Starting Flask on 127.0.0.1:5001...', flush=True)
+              
+              # Run server for 20 seconds then exit
+              import signal
+              def timeout_handler(signum, frame):
+                  print('[SERVER] Timeout reached, exiting...', flush=True)
+                  sys.exit(0)
+              
+              try:
+                  signal.signal(signal.SIGALRM, timeout_handler)
+                  signal.alarm(20)
+              except:
+                  pass  # Windows doesn't have SIGALRM
+              
+              app.run(host='127.0.0.1', port=5001, debug=False, use_reloader=False)
           '@
           
-          # Method 2: Manual socket server (Port 5002)
-          $app2 = @'
+          $app | Out-File -FilePath self_test.py -Encoding utf8
+          
+          $env:PYTHONIOENCODING = "utf-8"
+          python self_test.py
+        shell: pwsh
+        timeout-minutes: 1
+        continue-on-error: true
+      
+      - name: Test 2 - Server in Background, Test in Foreground
+        run: |
+          Write-Host ""
+          Write-Host "=========================================="
+          Write-Host "TEST 2: Background server, foreground test"
+          Write-Host "=========================================="
+          
+          $server = @'
+          from flask import Flask
+          import sys
+          
+          app = Flask(__name__)
+          
+          @app.route('/')
+          def hello():
+              return 'Background Flask Success!'
+          
+          if __name__ == '__main__':
+              print('[SERVER] Starting on 127.0.0.1:5002...', file=sys.stderr, flush=True)
+              app.run(host='127.0.0.1', port=5002, debug=False, use_reloader=False)
+          '@
+          
+          $server | Out-File -FilePath bg_server.py -Encoding utf8
+          
+          # Start server as background process (not job)
+          $proc = Start-Process python `
+            -ArgumentList "bg_server.py" `
+            -PassThru `
+            -WindowStyle Hidden
+          
+          Write-Host "[OK] Server started as PID $($proc.Id)"
+          Write-Host "[INFO] Waiting 10 seconds..."
+          Start-Sleep -Seconds 10
+          
+          # Check if it's still running
+          $stillRunning = Get-Process -Id $proc.Id -ErrorAction SilentlyContinue
+          if ($stillRunning) {
+            Write-Host "[OK] Process still alive"
+          } else {
+            Write-Host "[FAIL] Process died"
+          }
+          
+          # Test from same PowerShell session
+          Write-Host "[TEST] Testing connection..."
+          $env:PYTHONIOENCODING = "utf-8"
+          python -c @"
+          import requests
+          import time
+          
+          for i in range(5):
+              try:
+                  r = requests.get('http://127.0.0.1:5002', timeout=3)
+                  print(f'[SUCCESS] Status: {r.status_code}, Content: {r.text}')
+                  break
+              except Exception as e:
+                  print(f'[FAIL] Attempt {i+1}: {type(e).__name__}: {e}')
+                  time.sleep(2)
+          "@
+          
+          # Cleanup
+          Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
+        shell: pwsh
+      
+      - name: Test 3 - Simple Socket Server + Telnet-style Test
+        run: |
+          Write-Host ""
+          Write-Host "=========================================="
+          Write-Host "TEST 3: Raw socket with manual connection"
+          Write-Host "=========================================="
+          
+          $combo = @'
           import socket
           import sys
+          import time
           from threading import Thread
           
-          print('[M2] Creating manual socket server...', file=sys.stderr, flush=True)
-          
-          def handle_client(conn, addr):
+          def run_server():
               try:
-                  data = conn.recv(1024)
-                  response = b"HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n\r\nMethod 2: Manual Socket Server"
-                  conn.sendall(response)
-              except Exception as e:
-                  print(f'[M2] Error handling client: {e}', file=sys.stderr, flush=True)
-              finally:
-                  conn.close()
-          
-          try:
-              server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-              server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-              server.bind(('0.0.0.0', 5002))
-              server.listen(5)
-              print('[M2] ✓ Successfully bound to 0.0.0.0:5002', file=sys.stderr, flush=True)
-              print('[M2] Listening for connections...', file=sys.stderr, flush=True)
-              
-              while True:
+                  server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                  server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                  server.bind(('127.0.0.1', 5003))
+                  server.listen(1)
+                  print('[SERVER] Listening on 127.0.0.1:5003', flush=True)
+                  
+                  server.settimeout(15)  # Timeout after 15 seconds
                   conn, addr = server.accept()
-                  print(f'[M2] Connection from {addr}', file=sys.stderr, flush=True)
-                  Thread(target=handle_client, args=(conn, addr)).start()
-          except Exception as e:
-              print(f'[M2] ✗ Server error: {e}', file=sys.stderr, flush=True)
-              import traceback
-              traceback.print_exc()
-              sys.exit(1)
-          '@
-          
-          # Method 3: Waitress with logging (Port 5003)
-          $app3 = @'
-          from flask import Flask
-          from waitress import serve
-          import sys
-          import logging
-          
-          logging.basicConfig(level=logging.DEBUG)
-          
-          print('[M3] Creating Waitress app...', file=sys.stderr, flush=True)
-          
-          app = Flask(__name__)
-          
-          @app.route('/')
-          def hello():
-              return 'Method 3: Waitress WSGI'
-          
-          if __name__ == '__main__':
-              print('[M3] Starting Waitress server on 0.0.0.0:5003...', file=sys.stderr, flush=True)
-              try:
-                  serve(app, host='0.0.0.0', port=5003, threads=4)
+                  print(f'[SERVER] Connection from {addr}!', flush=True)
+                  
+                  data = conn.recv(1024)
+                  print(f'[SERVER] Received: {data[:50]}', flush=True)
+                  
+                  response = b'HTTP/1.1 200 OK\r\nContent-Length: 21\r\n\r\nRaw Socket Success!!!'
+                  conn.sendall(response)
+                  print('[SERVER] Sent response', flush=True)
+                  
+                  conn.close()
+                  server.close()
               except Exception as e:
-                  print(f'[M3] ✗ Waitress error: {e}', file=sys.stderr, flush=True)
+                  print(f'[SERVER] Error: {e}', flush=True)
                   import traceback
                   traceback.print_exc()
-                  sys.exit(1)
+          
+          def run_client():
+              print('[CLIENT] Waiting 3 seconds...', flush=True)
+              time.sleep(3)
+              
+              for i in range(10):
+                  try:
+                      print(f'[CLIENT] Attempt {i+1}: Connecting to 127.0.0.1:5003...', flush=True)
+                      sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                      sock.settimeout(2)
+                      sock.connect(('127.0.0.1', 5003))
+                      print('[CLIENT] Connected!', flush=True)
+                      
+                      request = b'GET / HTTP/1.1\r\nHost: localhost\r\n\r\n'
+                      sock.sendall(request)
+                      print('[CLIENT] Sent request', flush=True)
+                      
+                      response = sock.recv(1024)
+                      print(f'[CLIENT] Received: {response}', flush=True)
+                      
+                      sock.close()
+                      print('[SUCCESS] Raw socket communication worked!', flush=True)
+                      return
+                  except Exception as e:
+                      print(f'[CLIENT] Attempt {i+1} failed: {type(e).__name__}: {e}', flush=True)
+                      time.sleep(1)
+              
+              print('[FAIL] All client attempts failed', flush=True)
+          
+          if __name__ == '__main__':
+              server_thread = Thread(target=run_server)
+              server_thread.start()
+              
+              run_client()
+              
+              server_thread.join(timeout=5)
+              print('[DONE]', flush=True)
           '@
           
-          # Method 4: http.server built-in (Port 5004)
-          $app4 = @'
-          from http.server import HTTPServer, BaseHTTPRequestHandler
-          import sys
+          $combo | Out-File -FilePath socket_test.py -Encoding utf8
+          $env:PYTHONIOENCODING = "utf-8"
+          python socket_test.py
+        shell: pwsh
+      
+      - name: Test 4 - HTTP Server with Direct Test
+        run: |
+          Write-Host ""
+          Write-Host "=========================================="
+          Write-Host "TEST 4: http.server with urllib test"
+          Write-Host "=========================================="
           
-          print('[M4] Creating http.server...', file=sys.stderr, flush=True)
+          $combo = @'
+          from http.server import HTTPServer, BaseHTTPRequestHandler
+          import urllib.request
+          import sys
+          import time
+          from threading import Thread
           
           class Handler(BaseHTTPRequestHandler):
               def do_GET(self):
                   self.send_response(200)
                   self.send_header('Content-type', 'text/plain')
                   self.end_headers()
-                  self.wfile.write(b'Method 4: Python http.server')
+                  self.wfile.write(b'HTTP.Server Success!')
               
               def log_message(self, format, *args):
-                  print(f'[M4] {format % args}', file=sys.stderr, flush=True)
+                  print(f'[SERVER] {format % args}', flush=True)
           
-          try:
-              server = HTTPServer(('0.0.0.0', 5004), Handler)
-              print('[M4] ✓ Server bound to 0.0.0.0:5004', file=sys.stderr, flush=True)
-              print('[M4] Serving requests...', file=sys.stderr, flush=True)
-              server.serve_forever()
-          except Exception as e:
-              print(f'[M4] ✗ Server error: {e}', file=sys.stderr, flush=True)
-              import traceback
-              traceback.print_exc()
-              sys.exit(1)
-          '@
+          def run_server():
+              try:
+                  server = HTTPServer(('127.0.0.1', 5004), Handler)
+                  print('[SERVER] Listening on 127.0.0.1:5004', flush=True)
+                  
+                  # Handle one request then stop
+                  server.handle_request()
+                  print('[SERVER] Handled request, shutting down', flush=True)
+              except Exception as e:
+                  print(f'[SERVER] Error: {e}', flush=True)
           
-          # Method 5: Simple blocking socket (Port 5005)
-          $app5 = @'
-          import socket
-          import sys
-          
-          print('[M5] Creating simple blocking socket...', file=sys.stderr, flush=True)
-          
-          try:
-              sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-              sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-              sock.bind(('0.0.0.0', 5005))
-              sock.listen(5)
-              print('[M5] ✓ Socket bound and listening on 0.0.0.0:5005', file=sys.stderr, flush=True)
+          def run_client():
+              print('[CLIENT] Waiting 3 seconds...', flush=True)
+              time.sleep(3)
               
-              while True:
-                  conn, addr = sock.accept()
-                  print(f'[M5] Connection from {addr}', file=sys.stderr, flush=True)
+              for i in range(5):
                   try:
-                      data = conn.recv(1024)
-                      response = b"HTTP/1.1 200 OK\r\nContent-Length: 23\r\n\r\nMethod 5: Simple Socket"
-                      conn.sendall(response)
-                      print(f'[M5] Responded to {addr}', file=sys.stderr, flush=True)
-                  finally:
-                      conn.close()
-          except Exception as e:
-              print(f'[M5] ✗ Socket error: {e}', file=sys.stderr, flush=True)
-              import traceback
-              traceback.print_exc()
-              sys.exit(1)
-          '@
-          
-          $app1 | Out-File -FilePath flask_app1.py -Encoding utf8
-          $app2 | Out-File -FilePath flask_app2.py -Encoding utf8
-          $app3 | Out-File -FilePath flask_app3.py -Encoding utf8
-          $app4 | Out-File -FilePath flask_app4.py -Encoding utf8
-          $app5 | Out-File -FilePath flask_app5.py -Encoding utf8
-          
-          Write-Host "[OK] All 5 Flask apps created with debug logging"
-        shell: pwsh
-      
-      - name: Launch All Methods WITHOUT Redirects
-        run: |
-          Write-Host "=========================================="
-          Write-Host "LAUNCHING ALL 5 METHODS"
-          Write-Host "=========================================="
-          
-          # Launch without ANY redirects to see all output
-          $jobs = @()
-          
-          1..5 | ForEach-Object {
-            $job = Start-Job -ScriptBlock {
-              param($appNum, $workDir)
-              Set-Location $workDir
-              $env:PYTHONIOENCODING = "utf-8"
-              python "flask_app$appNum.py" 2>&1
-            } -ArgumentList $_, $PWD
-            
-            $jobs += $job
-            Write-Host "[OK] Method $_ started as job $($job.Id)"
-          }
-          
-          Write-Host ""
-          Write-Host "[INFO] Waiting 20 seconds for all servers to initialize..."
-          Start-Sleep -Seconds 20
-          
-          # Check job status
-          Write-Host ""
-          Write-Host "=== JOB STATUS ==="
-          $jobs | ForEach-Object {
-            $jobNum = $jobs.IndexOf($_) + 1
-            Write-Host "Method ${jobNum}: State=$($_.State)"
-          }
-          
-          # Show output from each job
-          Write-Host ""
-          Write-Host "=== JOB OUTPUT (First 20 seconds) ==="
-          $jobs | ForEach-Object {
-            $jobNum = $jobs.IndexOf($_) + 1
-            Write-Host ""
-            Write-Host "--- Method $jobNum ---"
-            Receive-Job -Job $_ | Select-Object -First 50
-          }
-          
-          # Save job IDs
-          $jobs | ForEach-Object { $_.Id } | Out-File -FilePath "jobs.txt" -Encoding ascii
-        shell: pwsh
-      
-      - name: Immediate Port Check
-        run: |
-          Write-Host ""
-          Write-Host "=========================================="
-          Write-Host "PORT CHECK (Right after launch)"
-          Write-Host "=========================================="
-          
-          Write-Host ""
-          Write-Host "=== ALL LISTENING PORTS ==="
-          Get-NetTCPConnection -State Listen | 
-            Where-Object {$_.LocalPort -ge 5000 -and $_.LocalPort -le 5010} | 
-            Format-Table LocalAddress, LocalPort, OwningProcess, State -AutoSize
-          
-          Write-Host ""
-          Write-Host "=== NETSTAT FILTERED ==="
-          netstat -ano | Select-String "500[0-9]"
-          
-          Write-Host ""
-          Write-Host "=== SOCKET CONNECTION TESTS ==="
-          $socketTest = @'
-          import socket
-          import time
-          
-          for port in [5001, 5002, 5003, 5004, 5005]:
-              sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-              sock.settimeout(2)
-              result = sock.connect_ex(('127.0.0.1', port))
-              status = "OPEN ✓" if result == 0 else f"CLOSED (error {result})"
-              print(f'Port {port}: {status}')
-              sock.close()
-              time.sleep(0.2)
-          '@
-          python -c $socketTest
-        shell: pwsh
-      
-      - name: HTTP Tests with Retries
-        run: |
-          Write-Host ""
-          Write-Host "=========================================="
-          Write-Host "HTTP REQUEST TESTS"
-          Write-Host "=========================================="
-          
-          $httpTest = @'
-          import requests
-          import time
-          import socket
-          
-          def test_port(port, max_attempts=5):
-              print(f'\n=== Testing Port {port} ===')
-              
-              # First check if port is open
-              sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-              sock.settimeout(1)
-              result = sock.connect_ex(('127.0.0.1', port))
-              sock.close()
-              
-              if result != 0:
-                  print(f'[SKIP] Port {port} not listening (error {result})')
-                  return False
-              
-              print(f'[INFO] Port {port} is listening, attempting HTTP...')
-              
-              for attempt in range(max_attempts):
-                  try:
-                      response = requests.get(f'http://127.0.0.1:{port}', timeout=3)
-                      print(f'[SUCCESS] Status: {response.status_code}')
-                      print(f'[SUCCESS] Response: {response.text[:100]}')
-                      return True
-                  except requests.exceptions.ConnectionError as e:
-                      print(f'[FAIL] Attempt {attempt+1}: ConnectionError - {e}')
+                      print(f'[CLIENT] Attempt {i+1}...', flush=True)
+                      response = urllib.request.urlopen('http://127.0.0.1:5004', timeout=3)
+                      content = response.read().decode()
+                      print(f'[SUCCESS] Got: {content}', flush=True)
+                      return
                   except Exception as e:
-                      print(f'[FAIL] Attempt {attempt+1}: {type(e).__name__} - {e}')
-                  time.sleep(1)
+                      print(f'[CLIENT] Failed: {type(e).__name__}: {e}', flush=True)
+                      time.sleep(1)
               
-              return False
+              print('[FAIL] All attempts failed', flush=True)
           
-          results = {}
-          for port in [5001, 5002, 5003, 5004, 5005]:
-              results[port] = test_port(port)
-          
-          print('\n=== SUMMARY ===')
-          for port, success in results.items():
-              status = '✓ SUCCESS' if success else '✗ FAILED'
-              print(f'Port {port}: {status}')
+          if __name__ == '__main__':
+              server_thread = Thread(target=run_server)
+              server_thread.start()
+              
+              run_client()
+              
+              server_thread.join(timeout=5)
           '@
-          python -c $httpTest
+          
+          $combo | Out-File -FilePath http_test.py -Encoding utf8
+          $env:PYTHONIOENCODING = "utf-8"
+          python http_test.py
         shell: pwsh
       
-      - name: Show All Job Output
-        if: always()
+      - name: Test 5 - Check What Netstat Actually Shows
         run: |
           Write-Host ""
           Write-Host "=========================================="
-          Write-Host "COMPLETE JOB OUTPUT"
+          Write-Host "TEST 5: Start server and check netstat IMMEDIATELY"
           Write-Host "=========================================="
           
-          if (Test-Path "jobs.txt") {
-            $jobIds = Get-Content "jobs.txt"
-            $jobIds | ForEach-Object {
-              $jobId = [int]$_
-              $jobNum = $jobIds.IndexOf($_) + 1
-              
-              Write-Host ""
-              Write-Host "=== METHOD $jobNum (Job ID: $jobId) ==="
-              try {
-                $job = Get-Job -Id $jobId -ErrorAction SilentlyContinue
-                if ($job) {
-                  Write-Host "State: $($job.State)"
-                  Write-Host ""
-                  Receive-Job -Id $jobId
-                } else {
-                  Write-Host "(Job no longer exists)"
-                }
-              } catch {
-                Write-Host "Error getting job: $_"
-              }
-            }
+          $server = @'
+          import socket
+          import time
+          
+          sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+          sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+          sock.bind(('127.0.0.1', 5005))
+          sock.listen(5)
+          print('BOUND', flush=True)
+          
+          # Keep alive for 30 seconds
+          time.sleep(30)
+          '@
+          
+          $server | Out-File -FilePath netstat_test.py -Encoding utf8
+          
+          # Start in background
+          $proc = Start-Process python `
+            -ArgumentList "netstat_test.py" `
+            -PassThru `
+            -RedirectStandardOutput "netstat_out.txt" `
+            -WindowStyle Hidden
+          
+          Write-Host "[OK] Started PID $($proc.Id)"
+          
+          # Wait for "BOUND" message
+          Start-Sleep -Seconds 2
+          
+          if (Test-Path "netstat_out.txt") {
+            $output = Get-Content "netstat_out.txt"
+            Write-Host "[INFO] Server output: $output"
           }
-        shell: pwsh
-      
-      - name: Windows Network Stack Debug
-        run: |
-          Write-Host ""
-          Write-Host "=========================================="
-          Write-Host "WINDOWS NETWORK DEBUG"
-          Write-Host "=========================================="
           
           Write-Host ""
-          Write-Host "=== IPv4 Status ==="
-          Get-NetIPAddress -AddressFamily IPv4 | 
-            Where-Object {$_.InterfaceAlias -notlike "*Loopback*"} |
-            Format-Table IPAddress, InterfaceAlias, PrefixLength
+          Write-Host "=== NETSTAT (immediately after bind) ==="
+          netstat -ano | Select-String "5005"
           
           Write-Host ""
-          Write-Host "=== Loopback Status ==="
-          Get-NetIPAddress -AddressFamily IPv4 | 
-            Where-Object {$_.InterfaceAlias -like "*Loopback*"} |
-            Format-Table IPAddress, InterfaceAlias
+          Write-Host "=== Get-NetTCPConnection ==="
+          Get-NetTCPConnection -LocalPort 5005 -ErrorAction SilentlyContinue | Format-Table
           
           Write-Host ""
-          Write-Host "=== All Python Processes ==="
-          Get-Process python -ErrorAction SilentlyContinue | 
-            Format-Table Id, ProcessName, StartTime, @{Name="Handles";Expression={$_.HandleCount}}
-        shell: pwsh
-      
-      - name: Cleanup
-        if: always()
-        run: |
+          Write-Host "=== Process info ==="
+          Get-Process -Id $proc.Id -ErrorAction SilentlyContinue | Format-Table Id, ProcessName, @{Name="Handles";Expression={$_.HandleCount}}
+          
           Write-Host ""
-          Write-Host "Cleaning up..."
-          Get-Job | Stop-Job -ErrorAction SilentlyContinue
-          Get-Job | Remove-Job -Force -ErrorAction SilentlyContinue
-          Get-Process python -ErrorAction SilentlyContinue | Stop-Process -Force
-          Write-Host "[OK] Cleanup complete"
+          Write-Host "=== Python socket test ==="
+          python -c @"
+          import socket
+          sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+          sock.settimeout(2)
+          result = sock.connect_ex(('127.0.0.1', 5005))
+          print(f'Connect result: {result}')
+          if result == 0:
+              print('SUCCESS: Port is listening!')
+          else:
+              print(f'FAIL: Port not listening (error {result})')
+          sock.close()
+          "@
+          
+          # Cleanup
+          Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
         shell: pwsh
