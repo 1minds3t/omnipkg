@@ -178,7 +178,6 @@ class TestEnhancedFlaskPortFinder(unittest.TestCase):
     def test_6_flask_app_manager_full_lifecycle(self):
         """Tests the full lifecycle: start, validate responsiveness, and shutdown."""
         safe_print("\n" + "="*70 + "\n🧪 TEST 6: Flask App Manager Full Lifecycle \n" + "="*70)
-        # FIX: Explicitly disable reloader to ensure Process Management works reliably in tests
         app_code = """
 from flask import Flask
 app = Flask(__name__)
@@ -186,7 +185,7 @@ app = Flask(__name__)
 def hello():
     return 'Success!'
 if __name__ == '__main__':
-    app.run(use_reloader=False)
+    app.run(use_reloader=False, host='0.0.0.0')  # Changed from default 127.0.0.1
 """
         manager = None
         port = None
