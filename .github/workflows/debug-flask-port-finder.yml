@@ -53,24 +53,11 @@ jobs:
       - name: Start Flask in Background
         run: |
           Write-Host "🚀 Starting Flask app in background..."
-          $job = Start-Job -ScriptBlock {
-            python flask_app.py 2>&1 | Tee-Object -FilePath flask_output.log
-          }
           
-          Write-Host "✅ Flask started with Job ID: $($job.Id)"
-          Write-Host "⏳ Waiting 5 seconds for Flask to start..."
-          Start-Sleep -Seconds 5
+          # Use Start-Process instead of Start-Job for better control
+          $proc = Start-Process python -ArgumentList "flask_app.py" -PassThru -RedirectStandardOutput "flask_stdout.log" -RedirectStandardError "flask_stderr.log" -NoNewWindow
           
-          # Check if job is still running
-          $jobState = (Get-Job -Id $job.Id).State
-          Write-Host "📊 Job State: $jobState"
           
-          if ($jobState -ne "Running") {
-            Write-Host "❌ Flask job is not running!"
-            Write-Host "📤 Job output:"
-            Receive-Job -Id $job.Id
-          }
-        shell: pwsh
       
       - name: Check What's Listening on Port 5000
         run: |
@@ -168,29 +155,29 @@ jobs:
           
           python -c @"
           import psutil
-          import os
           
           print('\n📊 All Python processes:')
           print('-' * 70)
           
-          for proc in psutil.process_iter(['pid', 'name', 'cmdline', 'connections']):
+          for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
               try:
                   if 'python' in proc.info['name'].lower():
                       print(f'\nPID: {proc.info["pid"]}')
                       print(f'Name: {proc.info["name"]}')
                       print(f'Command: {" ".join(proc.info["cmdline"])}')
                       
-                      # Check connections
+                      # Check network connections using the correct method
                       try:
-                          connections = proc.connections()
+                          p = psutil.Process(proc.info['pid'])
+                          connections = p.net_connections()
                           if connections:
-                              print(f'Connections:')
+                              print(f'Network connections:')
                               for conn in connections:
                                   print(f'  - {conn}')
                           else:
                               print('  No network connections')
-                      except:
-                          print('  Could not get connections')
+                      except (psutil.AccessDenied, psutil.NoSuchProcess):
+                          print('  Could not get connections (access denied)')
               except (psutil.NoSuchProcess, psutil.AccessDenied):
                   pass
           "@
@@ -377,24 +364,25 @@ jobs:
           print('\n📊 All Python processes:')
           print('-' * 70)
           
-          for proc in psutil.process_iter(['pid', 'name', 'cmdline', 'connections']):
+          for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
               try:
                   if 'python' in proc.info['name'].lower():
                       print(f'\nPID: {proc.info[\"pid\"]}')
                       print(f'Name: {proc.info[\"name\"]}')
                       print(f'Command: {\" \".join(proc.info[\"cmdline\"])}')
                       
-                      # Check connections
+                      # Check network connections using the correct method
                       try:
-                          connections = proc.connections()
+                          p = psutil.Process(proc.info['pid'])
+                          connections = p.net_connections()
                           if connections:
-                              print(f'Connections:')
+                              print(f'Network connections:')
                               for conn in connections:
                                   print(f'  - {conn}')
                           else:
                               print('  No network connections')
-                      except:
-                          print('  Could not get connections')
+                      except (psutil.AccessDenied, psutil.NoSuchProcess):
+                          print('  Could not get connections (access denied)')
               except (psutil.NoSuchProcess, psutil.AccessDenied):
                   pass
           "
