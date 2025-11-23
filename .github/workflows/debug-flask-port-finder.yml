@@ -1,0 +1,421 @@
+name: "🔬 Flask Port Diagnostic"
+
+on:
+  workflow_dispatch:
+
+jobs:
+  diagnose-windows:
+    runs-on: windows-latest
+    name: "Diagnose Windows Flask Issue"
+    
+    steps:
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: Install Flask
+        run: |
+          python -m pip install --upgrade pip
+          pip install flask requests psutil
+          Write-Host "✅ Flask installed"
+        shell: pwsh
+      
+      - name: Create Flask Test App
+        run: |
+          @"
+          from flask import Flask
+          import sys
+          
+          print('🔍 FLASK: Script starting...', file=sys.stderr, flush=True)
+          
+          app = Flask(__name__)
+          
+          print('🔍 FLASK: Flask app created', file=sys.stderr, flush=True)
+          
+          @app.route('/')
+          def hello():
+              print('🔍 FLASK: Route handler called!', file=sys.stderr, flush=True)
+              return 'Success!'
+          
+          print('🔍 FLASK: Route registered', file=sys.stderr, flush=True)
+          
+          if __name__ == '__main__':
+              print('🔍 FLASK: About to call app.run()...', file=sys.stderr, flush=True)
+              app.run(host='0.0.0.0', port=5000, use_reloader=False, debug=False)
+              print('🔍 FLASK: app.run() returned (should never see this)', file=sys.stderr, flush=True)
+          "@ | Out-File -FilePath flask_app.py -Encoding utf8
+          
+          Write-Host "✅ Flask app created at flask_app.py"
+          Get-Content flask_app.py
+        shell: pwsh
+      
+      - name: Start Flask in Background
+        run: |
+          Write-Host "🚀 Starting Flask app in background..."
+          $job = Start-Job -ScriptBlock {
+            python flask_app.py 2>&1 | Tee-Object -FilePath flask_output.log
+          }
+          
+          Write-Host "✅ Flask started with Job ID: $($job.Id)"
+          Write-Host "⏳ Waiting 5 seconds for Flask to start..."
+          Start-Sleep -Seconds 5
+          
+          # Check if job is still running
+          $jobState = (Get-Job -Id $job.Id).State
+          Write-Host "📊 Job State: $jobState"
+          
+          if ($jobState -ne "Running") {
+            Write-Host "❌ Flask job is not running!"
+            Write-Host "📤 Job output:"
+            Receive-Job -Id $job.Id
+          }
+        shell: pwsh
+      
+      - name: Check What's Listening on Port 5000
+        run: |
+          Write-Host ""
+          Write-Host "="*70
+          Write-Host "🔍 DIAGNOSTIC: What's on port 5000?"
+          Write-Host "="*70
+          
+          # Method 1: netstat
+          Write-Host ""
+          Write-Host "📡 Method 1: netstat"
+          Write-Host "-"*70
+          netstat -ano | Select-String "5000" | ForEach-Object {
+            Write-Host $_
+          }
+          
+          # Method 2: Get-NetTCPConnection (PowerShell native)
+          Write-Host ""
+          Write-Host "📡 Method 2: Get-NetTCPConnection"
+          Write-Host "-"*70
+          try {
+            Get-NetTCPConnection -LocalPort 5000 -ErrorAction SilentlyContinue | Format-List *
+          } catch {
+            Write-Host "⚠️  No connections found on port 5000"
+          }
+          
+          # Method 3: Test socket connection
+          Write-Host ""
+          Write-Host "📡 Method 3: Test-NetConnection"
+          Write-Host "-"*70
+          Test-NetConnection -ComputerName 127.0.0.1 -Port 5000 -InformationLevel Detailed
+          
+          # Method 4: Try to connect with Python
+          Write-Host ""
+          Write-Host "📡 Method 4: Python socket test"
+          Write-Host "-"*70
+          python -c @"
+          import socket
+          import sys
+          
+          print('Attempting to connect to 127.0.0.1:5000...')
+          
+          try:
+              sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+              sock.settimeout(2)
+              result = sock.connect_ex(('127.0.0.1', 5000))
+              
+              if result == 0:
+                  print('✅ Port 5000 is OPEN and accepting connections')
+              else:
+                  print(f'❌ Connection failed with error code: {result}')
+              
+              sock.close()
+          except Exception as e:
+              print(f'❌ Exception: {e}')
+          "@
+        shell: pwsh
+      
+      - name: Try HTTP Request
+        run: |
+          Write-Host ""
+          Write-Host "="*70
+          Write-Host "🌐 HTTP Request Test"
+          Write-Host "="*70
+          
+          python -c @"
+          import requests
+          import socket
+          
+          urls = [
+              'http://127.0.0.1:5000',
+              'http://localhost:5000',
+              'http://0.0.0.0:5000'
+          ]
+          
+          for url in urls:
+              print(f'\n🔗 Trying {url}...')
+              try:
+                  response = requests.get(url, timeout=5)
+                  print(f'   ✅ Status: {response.status_code}')
+                  print(f'   📝 Content: {response.text}')
+              except requests.exceptions.ConnectionError as e:
+                  print(f'   ❌ Connection Error: {e}')
+              except Exception as e:
+                  print(f'   ❌ Error: {type(e).__name__}: {e}')
+          "@
+        shell: pwsh
+      
+      - name: Check Flask Process Details
+        run: |
+          Write-Host ""
+          Write-Host "="*70
+          Write-Host "🔍 Flask Process Details"
+          Write-Host "="*70
+          
+          python -c @"
+          import psutil
+          import os
+          
+          print('\n📊 All Python processes:')
+          print('-' * 70)
+          
+          for proc in psutil.process_iter(['pid', 'name', 'cmdline', 'connections']):
+              try:
+                  if 'python' in proc.info['name'].lower():
+                      print(f'\nPID: {proc.info["pid"]}')
+                      print(f'Name: {proc.info["name"]}')
+                      print(f'Command: {" ".join(proc.info["cmdline"])}')
+                      
+                      # Check connections
+                      try:
+                          connections = proc.connections()
+                          if connections:
+                              print(f'Connections:')
+                              for conn in connections:
+                                  print(f'  - {conn}')
+                          else:
+                              print('  No network connections')
+                      except:
+                          print('  Could not get connections')
+              except (psutil.NoSuchProcess, psutil.AccessDenied):
+                  pass
+          "@
+        shell: pwsh
+      
+      - name: Show Flask Output Log
+        run: |
+          Write-Host ""
+          Write-Host "="*70
+          Write-Host "📤 Flask Output Log"
+          Write-Host "="*70
+          
+          if (Test-Path flask_output.log) {
+            Get-Content flask_output.log
+          } else {
+            Write-Host "⚠️  No log file found"
+          }
+        shell: pwsh
+      
+      - name: Cleanup
+        if: always()
+        run: |
+          Write-Host "🧹 Cleaning up..."
+          Get-Job | Stop-Job
+          Get-Job | Remove-Job
+        shell: pwsh
+
+  diagnose-macos:
+    runs-on: macos-latest
+    name: "Diagnose macOS Flask Issue"
+    
+    steps:
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: Install Flask
+        run: |
+          python -m pip install --upgrade pip
+          pip install flask requests psutil
+          echo "✅ Flask installed"
+      
+      - name: Create Flask Test App
+        run: |
+          cat > flask_app.py << 'EOF'
+          from flask import Flask
+          import sys
+          
+          print('🔍 FLASK: Script starting...', file=sys.stderr, flush=True)
+          
+          app = Flask(__name__)
+          
+          print('🔍 FLASK: Flask app created', file=sys.stderr, flush=True)
+          
+          @app.route('/')
+          def hello():
+              print('🔍 FLASK: Route handler called!', file=sys.stderr, flush=True)
+              return 'Success!'
+          
+          print('🔍 FLASK: Route registered', file=sys.stderr, flush=True)
+          
+          if __name__ == '__main__':
+              print('🔍 FLASK: About to call app.run()...', file=sys.stderr, flush=True)
+              app.run(host='0.0.0.0', port=5000, use_reloader=False, debug=False)
+              print('🔍 FLASK: app.run() returned (should never see this)', file=sys.stderr, flush=True)
+          EOF
+          
+          echo "✅ Flask app created"
+          cat flask_app.py
+      
+      - name: Start Flask in Background
+        run: |
+          echo "🚀 Starting Flask app in background..."
+          python flask_app.py > flask_output.log 2>&1 &
+          FLASK_PID=$!
+          echo "✅ Flask started with PID: $FLASK_PID"
+          echo $FLASK_PID > flask.pid
+          
+          echo "⏳ Waiting 5 seconds for Flask to start..."
+          sleep 5
+          
+          # Check if process is still running
+          if ps -p $FLASK_PID > /dev/null; then
+            echo "✅ Flask process is still running"
+          else
+            echo "❌ Flask process died!"
+            echo "📤 Output:"
+            cat flask_output.log
+          fi
+      
+      - name: Check What's Listening on Port 5000
+        run: |
+          echo ""
+          echo "======================================================================"
+          echo "🔍 DIAGNOSTIC: What's on port 5000?"
+          echo "======================================================================"
+          
+          # Method 1: lsof
+          echo ""
+          echo "📡 Method 1: lsof"
+          echo "----------------------------------------------------------------------"
+          lsof -i :5000 || echo "⚠️  No process found on port 5000"
+          
+          # Method 2: netstat
+          echo ""
+          echo "📡 Method 2: netstat"
+          echo "----------------------------------------------------------------------"
+          netstat -an | grep 5000 || echo "⚠️  Port 5000 not in netstat output"
+          
+          # Method 3: Test socket connection
+          echo ""
+          echo "📡 Method 3: nc (netcat) test"
+          echo "----------------------------------------------------------------------"
+          if nc -z 127.0.0.1 5000; then
+            echo "✅ Port 5000 is OPEN"
+          else
+            echo "❌ Port 5000 is CLOSED"
+          fi
+          
+          # Method 4: Try to connect with Python
+          echo ""
+          echo "📡 Method 4: Python socket test"
+          echo "----------------------------------------------------------------------"
+          python -c "
+          import socket
+          import sys
+          
+          print('Attempting to connect to 127.0.0.1:5000...')
+          
+          try:
+              sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+              sock.settimeout(2)
+              result = sock.connect_ex(('127.0.0.1', 5000))
+              
+              if result == 0:
+                  print('✅ Port 5000 is OPEN and accepting connections')
+              else:
+                  print(f'❌ Connection failed with error code: {result}')
+              
+              sock.close()
+          except Exception as e:
+              print(f'❌ Exception: {e}')
+          "
+      
+      - name: Try HTTP Request
+        run: |
+          echo ""
+          echo "======================================================================"
+          echo "🌐 HTTP Request Test"
+          echo "======================================================================"
+          
+          python -c "
+          import requests
+          
+          urls = [
+              'http://127.0.0.1:5000',
+              'http://localhost:5000',
+              'http://0.0.0.0:5000'
+          ]
+          
+          for url in urls:
+              print(f'\n🔗 Trying {url}...')
+              try:
+                  response = requests.get(url, timeout=5)
+                  print(f'   ✅ Status: {response.status_code}')
+                  print(f'   📝 Content: {response.text}')
+              except requests.exceptions.ConnectionError as e:
+                  print(f'   ❌ Connection Error: {e}')
+              except Exception as e:
+                  print(f'   ❌ Error: {type(e).__name__}: {e}')
+          "
+      
+      - name: Check Flask Process Details
+        run: |
+          echo ""
+          echo "======================================================================"
+          echo "🔍 Flask Process Details"
+          echo "======================================================================"
+          
+          python -c "
+          import psutil
+          
+          print('\n📊 All Python processes:')
+          print('-' * 70)
+          
+          for proc in psutil.process_iter(['pid', 'name', 'cmdline', 'connections']):
+              try:
+                  if 'python' in proc.info['name'].lower():
+                      print(f'\nPID: {proc.info[\"pid\"]}')
+                      print(f'Name: {proc.info[\"name\"]}')
+                      print(f'Command: {\" \".join(proc.info[\"cmdline\"])}')
+                      
+                      # Check connections
+                      try:
+                          connections = proc.connections()
+                          if connections:
+                              print(f'Connections:')
+                              for conn in connections:
+                                  print(f'  - {conn}')
+                          else:
+                              print('  No network connections')
+                      except:
+                          print('  Could not get connections')
+              except (psutil.NoSuchProcess, psutil.AccessDenied):
+                  pass
+          "
+      
+      - name: Show Flask Output Log
+        run: |
+          echo ""
+          echo "======================================================================"
+          echo "📤 Flask Output Log"
+          echo "======================================================================"
+          
+          if [ -f flask_output.log ]; then
+            cat flask_output.log
+          else
+            echo "⚠️  No log file found"
+          fi
+      
+      - name: Cleanup
+        if: always()
+        run: |
+          echo "🧹 Cleaning up..."
+          if [ -f flask.pid ]; then
+            kill $(cat flask.pid) 2>/dev/null || true
+          fi
