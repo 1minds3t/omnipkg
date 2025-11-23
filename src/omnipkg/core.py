@@ -4140,21 +4140,6 @@ class omnipkg:
             # simply build the cache on its first run as before.
             pass
 
-    def get_package_for_command(self, command: str) -> Optional[str]:
-        """
-        Finds which package owns a specific CLI command using the O(1) Knowledge Base index.
-        """
-        if not self.cache_client:
-            return None
-        
-        # This matches the key format we just verified in SQLite
-        # Key: omnipkg:env_...:entrypoint:lollama -> Value: lollama
-        key = f"{self.redis_env_prefix}entrypoint:{command}"
-        
-        # Instant lookup
-        pkg_name = self.cache_client.get(key)
-        return pkg_name if pkg_name else None
-
     def _self_heal_omnipkg_installation(self):
         """
         (V25 - FILE-BASED CACHE) Ultra-fast version checking with persistent cache.
@@ -4834,7 +4819,6 @@ class omnipkg:
             self._cache_connection_status = 'failed_all'
             return False
 
-
     def _disable_redis_in_config(self, reason: str):
         """
         Updates the config file to disable Redis and record why.
@@ -5260,7 +5244,82 @@ class omnipkg:
             # 7. Execute all registrations in a single transaction.
             pipe.execute()
 
-     
+    def get_package_for_command(self, command: str) -> Optional[str]:
+        """
+        Finds which package owns a specific CLI command using the O(1) Knowledge Base index.
+        """
+        if not self.cache_client:
+            return None
+        
+        # This matches the key format we just verified in SQLite
+        # Key: omnipkg:env_...:entrypoint:lollama -> Value: lollama
+        key = f"{self.redis_env_prefix}entrypoint:{command}"
+        
+        # Instant lookup
+        pkg_name = self.cache_client.get(key)
+        return pkg_name if pkg_name else None
+
+    def get_active_version(self, package_name: str) -> Optional[str]:
+        """
+        Retrieves the currently installed version of a package from the Knowledge Base.
+        """
+        if not self.cache_client:
+            return None
+            
+        # Key: omnipkg:env_ID:pkg:lollama
+        key = f"{self.redis_key_prefix}{package_name}"
+        version = self.cache_client.hget(key, 'active_version')
+        return version if version else None
+
+    def get_any_available_version(self, package_name: str, prefer_bubble: bool = False) -> Optional[str]:
+        """
+        Gets any available version of a package.
+        If prefer_bubble=True, prioritizes finding a bubble version.
+        Falls back to main/active version if no bubble is found.
+        """
+        if not self.cache_client:
+            return None
+        
+        # Single query for all instances to ensure we see everything (main, bubble, nested)
+        pattern = f"{self.redis_env_prefix}inst:{package_name}:*"
+        keys = self.cache_client.keys(pattern)
+        
+        if not keys:
+            return None
+            
+        fallback_version = None
+        
+        for key in keys:
+            # Key format: omnipkg:env_ID:py3.11:inst:pkg_name:VERSION:hash
+            parts = key.split(':')
+            if len(parts) < 6:
+                continue
+            
+            # Extract version from the key structure
+            version = parts[5]
+            
+            # Check the installation type (main vs bubble vs nested)
+            install_type = self.cache_client.hget(key, 'install_type')
+            
+            # Priority 1: Bubble (if preferred)
+            # If we want a bubble and find one, return immediately.
+            if prefer_bubble and install_type == 'bubble':
+                return version
+            
+            # Priority 2: Main environment (Strong fallback)
+            # If we find the main env version, save it as the best fallback.
+            if install_type == 'main':
+                fallback_version = version
+            
+            # Priority 3: Any other version (Weak fallback)
+            # If we have no fallback yet, take whatever we found (e.g. nested in another bubble)
+            elif fallback_version is None:
+                fallback_version = version
+                
+        # If we finished the loop and didn't return a preferred bubble,
+        # return the best fallback we found (Main > Nested).
+        return fallback_version
+
     def _synchronize_knowledge_base_with_reality(self, verbose: bool = False) -> List[importlib.metadata.Distribution]:
         """
         (UPGRADED - THE REPAIR BOT v7) Now uses resolved paths consistently
