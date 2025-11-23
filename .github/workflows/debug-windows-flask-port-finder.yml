@@ -1,0 +1,314 @@
+name: "🪟 Windows Flask Deep Dive"
+
+on:
+  workflow_dispatch:
+
+jobs:
+  windows-flask-debug:
+    runs-on: windows-latest
+    name: "Windows Flask Debugging"
+    
+    steps:
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: Configure UTF-8 (Critical for Windows)
+        run: |
+          echo "PYTHONIOENCODING=utf-8" >> $env:GITHUB_ENV
+          echo "PYTHONUTF8=1" >> $env:GITHUB_ENV
+        shell: pwsh
+      
+      - name: Install Flask
+        run: |
+          python -m pip install --upgrade pip
+          pip install flask requests psutil
+          Write-Host "[OK] Flask installed"
+        shell: pwsh
+      
+      - name: Create Simple Flask App
+        run: |
+          @"
+from flask import Flask
+import sys
+import os
+
+print('[FLASK] Script starting...', file=sys.stderr, flush=True)
+print(f'[FLASK] Python: {sys.version}', file=sys.stderr, flush=True)
+print(f'[FLASK] Executable: {sys.executable}', file=sys.stderr, flush=True)
+print(f'[FLASK] CWD: {os.getcwd()}', file=sys.stderr, flush=True)
+
+app = Flask(__name__)
+
+print('[FLASK] Flask app created', file=sys.stderr, flush=True)
+
+@app.route('/')
+def hello():
+    return 'Windows Flask Success!'
+
+print('[FLASK] Route registered', file=sys.stderr, flush=True)
+
+if __name__ == '__main__':
+    print('[FLASK] About to call app.run()...', file=sys.stderr, flush=True)
+    print('[FLASK] Attempting to bind to 0.0.0.0:5000', file=sys.stderr, flush=True)
+    try:
+        app.run(host='0.0.0.0', port=5000, use_reloader=False, debug=False)
+    except Exception as e:
+        print(f'[FLASK] ERROR: {e}', file=sys.stderr, flush=True)
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
+"@ | Out-File -FilePath flask_app.py -Encoding utf8
+          
+          Write-Host "[OK] Flask app created"
+          Write-Host ""
+          Write-Host "=== FILE CONTENTS ==="
+          Get-Content flask_app.py
+          Write-Host "=== END FILE ==="
+        shell: pwsh
+      
+      - name: Method 1 - Direct Python Execution (Blocking)
+        continue-on-error: true
+        timeout-minutes: 1
+        run: |
+          Write-Host ""
+          Write-Host "=========================================="
+          Write-Host "METHOD 1: Direct python execution"
+          Write-Host "=========================================="
+          
+          python flask_app.py
+        shell: pwsh
+      
+      - name: Method 2 - Start-Process with Logs
+        run: |
+          Write-Host ""
+          Write-Host "=========================================="
+          Write-Host "METHOD 2: Start-Process with logging"
+          Write-Host "=========================================="
+          
+          # Create log files
+          New-Item -ItemType File -Force -Path "flask_stdout.log" | Out-Null
+          New-Item -ItemType File -Force -Path "flask_stderr.log" | Out-Null
+          
+          $proc = Start-Process python `
+            -ArgumentList "flask_app.py" `
+            -PassThru `
+            -RedirectStandardOutput "flask_stdout.log" `
+            -RedirectStandardError "flask_stderr.log" `
+            -NoNewWindow
+          
+          Write-Host "[OK] Process started: PID $($proc.Id)"
+          Write-Host "[INFO] Waiting 10 seconds for Flask to start..."
+          Start-Sleep -Seconds 10
+          
+          # Check if process is still alive
+          $isRunning = Get-Process -Id $proc.Id -ErrorAction SilentlyContinue
+          if ($isRunning) {
+            Write-Host "[OK] Process still running"
+          } else {
+            Write-Host "[FAIL] Process died!"
+          }
+          
+          Write-Host ""
+          Write-Host "=== STDOUT ==="
+          if (Test-Path "flask_stdout.log") {
+            Get-Content "flask_stdout.log"
+          } else {
+            Write-Host "(empty)"
+          }
+          
+          Write-Host ""
+          Write-Host "=== STDERR ==="
+          if (Test-Path "flask_stderr.log") {
+            Get-Content "flask_stderr.log"
+          } else {
+            Write-Host "(empty)"
+          }
+          
+          # Save PID for later
+          $proc.Id | Out-File -FilePath "flask.pid" -Encoding ascii
+        shell: pwsh
+      
+      - name: Check Port 5000
+        run: |
+          Write-Host ""
+          Write-Host "=========================================="
+          Write-Host "PORT 5000 STATUS"
+          Write-Host "=========================================="
+          
+          Write-Host ""
+          Write-Host "netstat -ano:"
+          netstat -ano | Select-String "5000"
+          
+          Write-Host ""
+          Write-Host "Get-NetTCPConnection:"
+          try {
+            Get-NetTCPConnection -LocalPort 5000 -ErrorAction SilentlyContinue | Format-Table
+          } catch {
+            Write-Host "(No connections on port 5000)"
+          }
+          
+          Write-Host ""
+          Write-Host "Socket test:"
+          $env:PYTHONIOENCODING = "utf-8"
+          python -c @"
+import socket
+try:
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.settimeout(2)
+    result = sock.connect_ex(('127.0.0.1', 5000))
+    if result == 0:
+        print('[OK] Port 5000 is open')
+    else:
+        print(f'[FAIL] Port 5000 closed (error {result})')
+    sock.close()
+except Exception as e:
+    print(f'[ERROR] {e}')
+"@
+        shell: pwsh
+      
+      - name: Method 3 - Start-Job (PowerShell Background Job)
+        run: |
+          Write-Host ""
+          Write-Host "=========================================="
+          Write-Host "METHOD 3: Start-Job (PowerShell job)"
+          Write-Host "=========================================="
+          
+          # Kill previous process
+          if (Test-Path "flask.pid") {
+            $oldPid = Get-Content "flask.pid"
+            try {
+              Stop-Process -Id $oldPid -Force -ErrorAction SilentlyContinue
+              Write-Host "[OK] Killed old process $oldPid"
+            } catch {}
+          }
+          
+          Start-Sleep -Seconds 2
+          
+          $job = Start-Job -ScriptBlock {
+            Set-Location $using:PWD
+            $env:PYTHONIOENCODING = "utf-8"
+            python flask_app.py 2>&1
+          }
+          
+          Write-Host "[OK] Job started: ID $($job.Id)"
+          Write-Host "[INFO] Waiting 10 seconds..."
+          Start-Sleep -Seconds 10
+          
+          $jobState = (Get-Job -Id $job.Id).State
+          Write-Host "[INFO] Job state: $jobState"
+          
+          if ($jobState -eq "Running") {
+            Write-Host "[OK] Job still running"
+          } else {
+            Write-Host "[FAIL] Job not running"
+            Write-Host ""
+            Write-Host "=== JOB OUTPUT ==="
+            Receive-Job -Id $job.Id
+          }
+          
+          # Save job ID
+          $job.Id | Out-File -FilePath "flask.jobid" -Encoding ascii
+        shell: pwsh
+      
+      - name: Check Port 5000 Again
+        run: |
+          Write-Host ""
+          Write-Host "=========================================="
+          Write-Host "PORT 5000 STATUS (After Start-Job)"
+          Write-Host "=========================================="
+          
+          Write-Host ""
+          Write-Host "netstat -ano:"
+          netstat -ano | Select-String "5000"
+          
+          Write-Host ""
+          Write-Host "Socket test:"
+          $env:PYTHONIOENCODING = "utf-8"
+          python -c @"
+import socket
+try:
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.settimeout(2)
+    result = sock.connect_ex(('127.0.0.1', 5000))
+    if result == 0:
+        print('[OK] Port 5000 is open')
+    else:
+        print(f'[FAIL] Port 5000 closed (error {result})')
+    sock.close()
+except Exception as e:
+    print(f'[ERROR] {e}')
+"@
+        shell: pwsh
+      
+      - name: Try HTTP Request
+        run: |
+          Write-Host ""
+          Write-Host "=========================================="
+          Write-Host "HTTP REQUEST TEST"
+          Write-Host "=========================================="
+          
+          $env:PYTHONIOENCODING = "utf-8"
+          python -c @"
+import requests
+import time
+
+for i in range(3):
+    try:
+        response = requests.get('http://127.0.0.1:5000', timeout=5)
+        print(f'[OK] Status: {response.status_code}')
+        print(f'[OK] Content: {response.text}')
+        break
+    except Exception as e:
+        print(f'[FAIL] Attempt {i+1}: {type(e).__name__}')
+        time.sleep(2)
+"@
+        shell: pwsh
+      
+      - name: Show Job Output
+        if: always()
+        run: |
+          Write-Host ""
+          Write-Host "=========================================="
+          Write-Host "FINAL JOB OUTPUT"
+          Write-Host "=========================================="
+          
+          if (Test-Path "flask.jobid") {
+            $jobId = Get-Content "flask.jobid"
+            try {
+              $job = Get-Job -Id $jobId -ErrorAction SilentlyContinue
+              if ($job) {
+                Write-Host "Job State: $($job.State)"
+                Write-Host ""
+                Write-Host "=== OUTPUT ==="
+                Receive-Job -Id $jobId
+              } else {
+                Write-Host "[INFO] Job no longer exists"
+              }
+            } catch {
+              Write-Host "[ERROR] Could not get job: $_"
+            }
+          }
+        shell: pwsh
+      
+      - name: Cleanup
+        if: always()
+        run: |
+          Write-Host ""
+          Write-Host "Cleaning up..."
+          
+          # Kill processes
+          if (Test-Path "flask.pid") {
+            $pid = Get-Content "flask.pid"
+            try {
+              Stop-Process -Id $pid -Force -ErrorAction SilentlyContinue
+            } catch {}
+          }
+          
+          # Kill jobs
+          Get-Job | Stop-Job -ErrorAction SilentlyContinue
+          Get-Job | Remove-Job -ErrorAction SilentlyContinue
+          
+          Write-Host "[OK] Cleanup complete"
+        shell: pwsh
