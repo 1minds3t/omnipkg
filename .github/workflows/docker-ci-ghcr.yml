@@ -1,47 +1,51 @@
-# Start from a Python base image
-FROM python:3.10-slim
+name: Build and Push to GHCR
 
-# Set environment variables
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONUNBUFFERED=1
+on:
+  push:
+    branches: [ main, master ]
+    tags: [ 'v*.*.*' ]
+  pull_request:
+    branches: [ main, master ]
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
-    redis-server \
-    libmagic1 \
-    curl \
-    && rm -rf /var/lib/apt/lists/*
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
 
-# Create a non-root user and group
-RUN addgroup --system omnipkg && adduser --system --ingroup omnipkg omnipkg
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-# Set the working directory
-WORKDIR /home/omnipkg
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
-# Copy project files (including src/) BEFORE installing
-COPY --chown=omnipkg:omnipkg pyproject.toml poetry.lock* ./
-COPY --chown=omnipkg:omnipkg src/ ./src/
-COPY --chown=omnipkg:omnipkg README.md ./
+      - name: Login to GHCR
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-# Install Python dependencies
-RUN pip install --no-cache-dir .
+      - name: Extract metadata (tags, labels)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=sha
 
-# Copy the entrypoint script
-COPY --chown=omnipkg:omnipkg docker-entrypoint.sh ./
-RUN chmod +x /home/omnipkg/docker-entrypoint.sh
-
-# Create directories for omnipkg data BEFORE switching user
-RUN mkdir -p /home/omnipkg/.omnipkg && \
-    chown -R omnipkg:omnipkg /home/omnipkg
-
-# NOW switch to non-root user
-USER omnipkg
-
-# Expose Redis port (in case external access needed)
-EXPOSE 6379
-
-# Expose the application port
-EXPOSE 8000
-
-# Specify the entrypoint script
-ENTRYPOINT ["/home/omnipkg/docker-entrypoint.sh"]
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
