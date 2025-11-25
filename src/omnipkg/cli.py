@@ -179,13 +179,25 @@ def run_demo_with_enforced_context(
         # Always clean up the temporary file
         temp_script_path.unlink(missing_ok=True)
 
-def handle_python_requirement(required_version_str: str, pkg_instance: OmnipkgCore, parser_prog: str) -> bool:
+def handle_python_requirement(required_version_str: str, pkg_instance: OmnipkgCore, parser_prog: str, package_name: str = None, package_version: str = None) -> bool:
     """
     Checks if the current Python context matches the requirement.
     If not, it automatically finds, adopts (or downloads), and swaps to it.
     """
+    # Add validation
+    if not required_version_str or required_version_str == "unknown":
+        safe_print(_('   - ❌ Cannot determine required Python version.'))
+        if package_name and package_version:
+            safe_print(_(f'   - Package: {package_name}=={package_version}'))
+            safe_print(_('   - Suggestion: This package may not support your Python version.'))
+        return False
+    
     actual_version_tuple = get_actual_python_version()
-    required_version_tuple = tuple(map(int, required_version_str.split('.')))
+    try:
+        required_version_tuple = tuple(map(int, required_version_str.split('.')))
+    except (ValueError, AttributeError):
+        safe_print(_(f'   - ❌ Invalid Python version format: {required_version_str}'))
+        return False
 
     if actual_version_tuple == required_version_tuple:
         return True # We are already in the correct context.
