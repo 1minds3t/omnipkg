@@ -48,6 +48,8 @@ dist/
 # Documentation
 docs/_build/
 
-# Other
+# Other - exclude markdown files EXCEPT README.md
 *.md
+!README.md
+
 LICENSE

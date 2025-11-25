@@ -1,6 +1,5 @@
 {% set name = "omnipkg" %}
-{% set version = "1.0.17" %}
-{% set python_min = "3.10" %}
+{% set version = "1.6.2" %}
 
 package:
   name: {{ name|lower }}
@@ -8,37 +7,36 @@ package:
 
 source:
   url: https://pypi.org/packages/source/{{ name[0] }}/{{ name }}/{{ name }}-{{ version }}.tar.gz
-  sha256: 29dd153d522a02c28d50afa7346547f8cbc01aa709b426b082a003710566af04
-
+  sha256: a87e55ba5a0119a9c56a3add004b8f45ddfa9c678ec4c69b32a4f387807f14d0
+  
 build:
   number: 0
-  script: "{{ PYTHON }} -m pip install . --no-deps --ignore-installed -vv"
+  noarch: python
+  script: "python -m pip install . --no-deps --no-build-isolation -vv"
   entry_points:
     - omnipkg = omnipkg.cli:main
+    - 8pkg = omnipkg.cli:main
 
 requirements:
   host:
-    - python
+    - python >=3.7,<3.15
     - pip
-    - setuptools
+    - setuptools >=61.0
   run:
-    - python
-    - redis-py >=4.0.0
-    - requests >=2.32.5
-    - filelock >=3.19.1
-    - packaging >=25.0
-    - tqdm >=4.67.1
-    - tomli >=2.2.1
-    - aiohttp >=3.12.0
-    - aiohappyeyeballs >=2.5.0
-    - aiosignal >=1.4.0
-    - attrs >=17.3.0
-    - frozenlist >=1.1.1
-    - multidict >=4.5,<7.0
-    - propcache >=0.2.0
-    - yarl >=1.17.0,<2.0
-    - python-magic >=0.4.27  # [not win]
-    - libmagic  # [not win]
+    - python >=3.7,<3.15
+    # Conditional logic for packaging based on Python version
+    - packaging >=23.0  # [py>=310]
+    - packaging >=21.0,<22.0  # [py<310]
+    - requests >=2.20
+    - authlib >=1.6.5
+    - filelock >=3.9
+    - tomli  # [py<311]
+    # Conditional logic for safety
+    - safety >=3.0  # [py>=310 and py<314]
+    - aiohttp >=3.13.1
+    # Conditional logic for pip-audit
+    - pip-audit >=2.6.0  # [py>=314]
+    - uv >=0.9.5
 
 test:
   imports:
@@ -51,11 +49,44 @@ about:
   license: AGPL-3.0-only
   license_family: AGPL
   license_file: LICENSE
-  summary: 'The Ultimate Python Dependency Resolver'
+  summary: 'The Ultimate Python Dependency Resolver. One environment. Infinite packages. Zero conflicts.'
   description: |
-    omnipkg simplifies Python dependency management by enabling mid-script version switching and conflict isolation.
-    Requires a running Redis server (v4.0.0+), which must be installed and started separately by the user.
-    Tested on Windows, macOS, Linux, and Raspberry Pi.
+    omnipkg is not just a package manager; it's an intelligent, self-healing runtime
+    orchestrator that breaks the fundamental laws of Python environments. It allows
+    multiple versions of any package—and even multiple Python interpreters—to
+    coexist and hot-swap in a single environment.
+    
+    This version introduces "Quantum Healing," an AI-driven feature that makes
+    the tool self-aware of Python version incompatibilities.
+    
+    Key Features:
+      • **NEW - Quantum Healing:** Automatically detects if a package is incompatible
+        with your current Python version. It will then find a compatible Python
+        version, adopt it, switch the environment context, and complete the
+        installation—all in a single, seamless command.
+      
+      • **Cross-Interpreter Adoption & Management:** omnipkg can discover, adopt,
+        and manage multiple Python interpreters (e.g., 3.9, 3.10, 3.11+) within one
+        unified environment, enabling true cross-version testing and development.
+        
+      • **Live Hot-Swapping:** Dynamically switch between conflicting C-extensions
+        (like NumPy/SciPy) or entire Python interpreters mid-script, without
+        restarting or using virtualenvs.
+        
+      • **Auto-Healing & Environment Repair:** Proactively finds and removes corrupted
+        installations left by other tools. The `omnipkg run` command detects and
+        fixes `ModuleNotFoundError` and version conflicts on the fly.
+        
+      • **Concurrent Operations:** A high-performance core allows omnipkg to run
+        operations across multiple Python versions concurrently, drastically
+        accelerating CI/CD pipelines and complex test suites.
+    
+    omnipkg eliminates the need for managing countless virtualenvs or Docker images,
+    providing a single, unified, and intelligent environment for developers and
+    data scientists who demand maximum flexibility and speed.
+    
+  doc_url: https://omnipkg.readthedocs.io/en/latest/
+  dev_url: https://github.com/1minds3t/omnipkg
 
 extra:
   recipe-maintainers:
