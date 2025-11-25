@@ -14,7 +14,6 @@ jobs:
   # First job: Wait for PyPI to have the package
   wait-for-pypi:
     runs-on: ubuntu-latest
-    # Add a timeout to this specific job
     timeout-minutes: 25 
     outputs:
       version: ${{ steps.get-version.outputs.version }}
@@ -25,19 +24,17 @@ jobs:
       run: |
         if [ "${{ github.event_name }}" == "release" ]; then
           VERSION="${{ github.event.release.tag_name }}"
-          # Remove 'v' prefix if it exists
           VERSION="${VERSION#v}"
         else
           VERSION="${{ github.event.inputs.version }}"
         fi
         echo "version=$VERSION" >> $GITHUB_OUTPUT
         echo "Waiting for version: $VERSION"
-
+        
     - name: Wait for PyPI package availability
       id: wait-pypi
       run: |
         VERSION="${{ steps.get-version.outputs.version }}"
-        # Increased attempts and sleep time for a total wait of up to 20 minutes
         MAX_ATTEMPTS=40
         SLEEP_TIME=30
         
@@ -46,20 +43,17 @@ jobs:
         for i in $(seq 1 $MAX_ATTEMPTS); do
           echo "Attempt $i/$MAX_ATTEMPTS..."
           
-          # Check PyPI JSON API first (most reliable)
           HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
             "https://pypi.org/pypi/omnipkg/$VERSION/json")
           
           if [ "$HTTP_CODE" = "200" ]; then
             echo "✓ Package version found on PyPI API!"
             
-            # Also verify the tar.gz file is downloadable from the CDN
             DOWNLOAD_URL="https://files.pythonhosted.org/packages/source/o/omnipkg/omnipkg-$VERSION.tar.gz"
             DOWNLOAD_CODE=$(curl -s -o /dev/null -w "%{http_code}" -I "$DOWNLOAD_URL")
             
             if [ "$DOWNLOAD_CODE" = "200" ] || [ "$DOWNLOAD_CODE" = "302" ]; then
               echo "✓ Package file is downloadable! Proceeding."
-              # Give it a few extra seconds just in case
               sleep 5
               break
             else
@@ -78,7 +72,7 @@ jobs:
           echo "Waiting ${SLEEP_TIME}s before next attempt..."
           sleep $SLEEP_TIME
         done
-
+        
     - name: Download and calculate SHA256
       id: get-sha
       run: |
@@ -109,11 +103,9 @@ jobs:
   update-feedstock:
     needs: wait-for-pypi
     runs-on: ubuntu-latest
-    # Add a timeout to this specific job
     timeout-minutes: 20 
     if: github.event_name == 'release'
     steps:
-    # ... (steps for this job remain the same) ...
     - name: Checkout your feedstock fork
       uses: actions/checkout@v4
       with:
@@ -139,7 +131,7 @@ jobs:
         
         echo "=== Updated meta.yaml (first 30 lines) ==="
         head -30 recipe/meta.yaml
-
+        
     - name: Commit and push to fork
       run: |
         cd feedstock
@@ -156,7 +148,7 @@ jobs:
           git push
           echo "✓ Changes pushed to fork"
         fi
-
+        
     - name: Create Pull Request to conda-forge
       uses: peter-evans/create-pull-request@v5
       with:
@@ -175,12 +167,10 @@ jobs:
         base: main
         push-to-fork: 1minds3t/omnipkg-feedstock
 
-
   # Third job: Build conda packages for your own channel
   build-and-upload:
     needs: wait-for-pypi
     runs-on: ${{ matrix.os }}
-    # Add a timeout to this job, which applies to each matrix instance
     timeout-minutes: 45
     strategy:
       matrix:
@@ -188,7 +178,6 @@ jobs:
         python-version: ['3.10', '3.11', '3.12']
 
     steps:
-    # ... (steps for this job remain the same) ...
     - name: Checkout code
       uses: actions/checkout@v4
 
@@ -204,7 +193,7 @@ jobs:
       shell: bash -l {0}
       run: |
         conda install conda-build anaconda-client -y
-
+        
     - name: Update meta.yaml version and hash
       shell: bash -l {0}
       run: |
@@ -213,23 +202,24 @@ jobs:
         
         echo "Using version $VERSION with SHA256: $SHA256"
         
+        # Fixed path: src/omnipkg/conda-recipe/meta.yaml
         if [[ "$RUNNER_OS" == "macOS" ]]; then
-          sed -i '' "s/{% set version = \".*\" %}/{% set version = \"$VERSION\" %}/" omnipkg/conda-recipe/meta.yaml
-          sed -i '' "s/sha256: .*/sha256: $SHA256/" omnipkg/conda-recipe/meta.yaml
+          sed -i '' "s/{% set version = \".*\" %}/{% set version = \"$VERSION\" %}/" src/omnipkg/conda-recipe/meta.yaml
+          sed -i '' "s/sha256: .*/sha256: $SHA256/" src/omnipkg/conda-recipe/meta.yaml
         else
-          sed -i "s/{% set version = \".*\" %}/{% set version = \"$VERSION\" %}/" omnipkg/conda-recipe/meta.yaml
-          sed -i "s/sha256: .*/sha256: $SHA256/" omnipkg/conda-recipe/meta.yaml
+          sed -i "s/{% set version = \".*\" %}/{% set version = \"$VERSION\" %}/" src/omnipkg/conda-recipe/meta.yaml
+          sed -i "s/sha256: .*/sha256: $SHA256/" src/omnipkg/conda-recipe/meta.yaml
         fi
         
         echo "Updated meta.yaml:"
-        head -15 omnipkg/conda-recipe/meta.yaml
-
+        head -30 src/omnipkg/conda-recipe/meta.yaml
+        
     - name: Build conda package
       shell: bash -l {0}
       run: |
         export PYTHONIOENCODING=UTF-8
-        conda build omnipkg/conda-recipe --output-folder ./conda-dist
-
+        conda build src/omnipkg/conda-recipe --output-folder ./conda-dist
+        
     - name: Upload to Anaconda Cloud
       shell: bash -l {0}
       run: |
