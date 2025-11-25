@@ -2,8 +2,8 @@
 FROM python:3.10-slim
 
 # Set environment variables
-ENV PYTHONDONTWRITEBYTECODE 1
-ENV PYTHONUNBUFFERED 1
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
@@ -18,18 +18,22 @@ RUN addgroup --system omnipkg && adduser --system --ingroup omnipkg omnipkg
 # Set the working directory
 WORKDIR /home/omnipkg
 
-# Copy requirements and install Python dependencies
-# Copy first to leverage Docker layer caching
+# Copy project files (including src/) BEFORE installing
 COPY --chown=omnipkg:omnipkg pyproject.toml poetry.lock* ./
-RUN pip install .
+COPY --chown=omnipkg:omnipkg src/ ./src/
+COPY --chown=omnipkg:omnipkg README.md ./
 
-# Copy the rest of the application code
-COPY --chown=omnipkg:omnipkg . .
+# Install Python dependencies
+RUN pip install --no-cache-dir .
 
-# Create directories for omnipkg data as the correct user
-# Switched the order: chown the directory, then switch user, then create subdir
-RUN chown -R omnipkg:omnipkg /home/omnipkg
+# Copy the rest of the application code (entrypoint script, etc.)
+COPY --chown=omnipkg:omnipkg docker-entrypoint.sh ./
+RUN chmod +x /home/omnipkg/docker-entrypoint.sh
+
+# Switch to non-root user
 USER omnipkg
+
+# Create directories for omnipkg data
 RUN mkdir -p /home/omnipkg/.omnipkg
 
 # Expose Redis port (in case external access needed)
