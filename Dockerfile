@@ -13,34 +13,34 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Create a non-root user and group
-RUN addgroup --system omnipkg && adduser --system --ingroup omnipkg omnipkg
+RUN addgroup --system omnipkg && \
+    adduser --system --ingroup omnipkg --no-create-home omnipkg
 
-# Set the working directory
+# Set the working directory and create it with correct ownership
 WORKDIR /home/omnipkg
+RUN chown omnipkg:omnipkg /home/omnipkg
 
-# Copy project files (including src/) BEFORE installing
+# Copy project files with ownership
 COPY --chown=omnipkg:omnipkg pyproject.toml poetry.lock* ./
 COPY --chown=omnipkg:omnipkg src/ ./src/
 COPY --chown=omnipkg:omnipkg README.md ./
 
-# Install Python dependencies
+# Install Python dependencies AS ROOT (needed for pip)
 RUN pip install --no-cache-dir .
 
-# Copy the rest of the application code (entrypoint script, etc.)
+# Copy the entrypoint script
 COPY --chown=omnipkg:omnipkg docker-entrypoint.sh ./
-RUN chmod +x /home/omnipkg/docker-entrypoint.sh
+RUN chmod +x docker-entrypoint.sh
 
-# Switch to non-root user
+# Create data directory and set proper ownership — MUST be done as root before switching user
+RUN mkdir -p /home/omnipkg/.omnipkg && \
+    chown -R omnipkg:omnipkg /home/omnipkg
+
+# NOW switch to non-root user
 USER omnipkg
 
-# Create directories for omnipkg data
-RUN mkdir -p /home/omnipkg/.omnipkg
+# Expose ports
+EXPOSE 6379 8000
 
-# Expose Redis port (in case external access needed)
-EXPOSE 6379
-
-# Expose the application port
-EXPOSE 8000
-
-# Specify the entrypoint script
+# Entry point
 ENTRYPOINT ["/home/omnipkg/docker-entrypoint.sh"]
