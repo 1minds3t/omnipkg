@@ -1,6 +1,8 @@
 name: Build and Push to Docker Hub
 
 on:
+  release:
+    types: [published]
   workflow_dispatch:
     inputs:
       tag:
@@ -25,12 +27,22 @@ jobs:
           username: 1minds3t
           password: ${{ secrets.DOCKERHUB_TOKEN }}
       
+      - name: Extract version from release
+        id: get_version
+        run: |
+          if [ "${{ github.event_name }}" = "release" ]; then
+            VERSION=${GITHUB_REF#refs/tags/}
+            echo "tag=${VERSION}" >> $GITHUB_OUTPUT
+          else
+            echo "tag=${{ inputs.tag }}" >> $GITHUB_OUTPUT
+          fi
+      
       - name: Build and push
         uses: docker/build-push-action@v5
         with:
           context: .
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64,linux/arm64,linux/arm/v7,linux/arm64/v8,linux/ppc64le,linux/s390x
           push: true
-          tags: 1minds3t/omnipkg:${{ inputs.tag }}
+          tags: 1minds3t/omnipkg:${{ steps.get_version.outputs.tag }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
