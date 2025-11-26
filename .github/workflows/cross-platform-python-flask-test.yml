@@ -24,6 +24,8 @@ jobs:
         run: |
           pip install --upgrade pip
           pip install flask requests
+          # This installs the omnipkg project itself so tests can import it
+          pip install -e .
           echo "✅ Dependencies installed"
       
       - name: Run Test Directly
