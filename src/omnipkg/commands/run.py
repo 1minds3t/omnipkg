@@ -2490,6 +2490,9 @@ except ImportError:
     def safe_print(msg, **kwargs): print(msg, **kwargs)
 
 try:
+    # CRITICAL: Export current sys.path to PYTHONPATH so subprocesses (like Flask) inherit it
+    os.environ['PYTHONPATH'] = os.pathsep.join(sys.path)
+    
     from omnipkg.loader import omnipkgLoader
     from omnipkg.i18n import _
 except ImportError as e:
