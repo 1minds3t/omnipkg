@@ -126,6 +126,7 @@ def fix_conda_corruption():
     else:
         safe_print(_('✅ No corruption found in protected files.'))
         return False
+    
 if __name__ == '__main__':
     fix_conda_corruption()
     safe_print('\n' + '=' * 50 + '\n')

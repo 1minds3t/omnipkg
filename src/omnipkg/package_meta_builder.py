@@ -285,31 +285,54 @@ class omnipkgMetadataGatherer:
         if verbose:
             safe_print(f'      -> Strategy 3: Searching nested directories...')
         
-        for variant in name_variants:
-            if version:
-                patterns = [f'{variant}-{version}', f"{variant.replace('.', '_')}-{version}"]
-            else:
-                patterns = [f'{variant}-*', f"{variant.replace('.', '_')}-*"]
+        # FIX: Deduplicate variants to reduce IO ops
+        unique_variants = set(name_variants)
+        
+        for variant in unique_variants:
+            # FIX: Always use wildcard patterns for directory discovery.
+            # We rely on the internal metadata check to filter by version.
+            # This handles cases where directory naming (underscores) doesn't match 
+            # standard normalization (dashes), or if suffixes exist.
+            patterns = [f'{variant}-*', f"{variant.replace('.', '_')}-*"]
             
             for pattern in patterns:
                 matching_dirs = list(base_path.glob(pattern))
                 for nested_dir in matching_dirs:
                     if not nested_dir.is_dir():
                         continue
+                    
+                    # Optimization: If we have a specific version, check if directory name
+                    # strongly suggests a mismatch before parsing metadata (saves IO)
+                    if version and f"-{version}" not in nested_dir.name and f"_{version}" not in nested_dir.name:
+                        # Directory doesn't contain the version string? 
+                        # Only skip if we are fairly sure (e.g., standard bubble naming)
+                        # But be careful not to skip valid loose matches.
+                        pass 
+
                     for dist_info_path in nested_dir.glob('*.dist-info'):
                         if not dist_info_path.is_dir():
                             continue
                         try:
-                            dist = importlib.metadata.Distribution.at(dist_info_path)
+                            # Must use PathDistribution for paths outside sys.path
+                            from importlib.metadata import PathDistribution
+                            dist = PathDistribution(dist_info_path)
+                            
                             dist_name = dist.metadata.get('Name', '')
+                            
+                            # Authoritative check
                             name_matches = any((
                                 canonicalize_name(dist_name) == canonicalize_name(v) 
                                 for v in name_variants
                             ))
-                            if name_matches and (version is None or dist.version == version):
-                                results.append((dist, dist_info_path.resolve()))
-                                if verbose:  # Only print in verbose mode
-                                    safe_print(f'✅ Found nested {dist_name} v{dist.version} at {dist_info_path}')
+                            
+                            if name_matches:
+                                if version is None or dist.version == version:
+                                    results.append((dist, dist_info_path.resolve()))
+                                    if verbose:  # Only print in verbose mode
+                                        safe_print(f'✅ Found nested {dist_name} v{dist.version} at {dist_info_path}')
+                                elif verbose and version:
+                                    safe_print(f'         Found {dist_name} in nested dir, but version mismatch ({dist.version} != {version})')
+
                         except Exception:
                             continue
         return results
@@ -384,6 +407,55 @@ class omnipkgMetadataGatherer:
 
         return results
     
+    def _run_strategy_6(self, base_path: Path, name_variants: List[str], version: Optional[str], verbose: bool) -> List[Tuple[importlib.metadata.Distribution, Path]]:
+        """
+        Strategy 6: Recursive Exact Match (Surgical Strike).
+        Specifically looks for 'package-version.dist-info' anywhere in the tree.
+        Crucial for deep nesting (e.g. bubbles with full venv structures).
+        """
+        results = []
+        if not version:
+            return results # This strategy requires a version to be efficient
+            
+        if verbose:
+            safe_print(f'      -> Strategy 6: Recursive exact match for v{version}...')
+        
+        unique_variants = set(name_variants)
+        for variant in unique_variants:
+            # Generate the exact folder names we expect
+            candidates = [
+                f'{variant}-{version}.dist-info',
+                f"{variant.replace('.', '_')}-{version}.dist-info",
+                f"{variant.replace('-', '_')}-{version}.dist-info"
+            ]
+            
+            for candidate in candidates:
+                try:
+                    # rglob is efficient when looking for a specific name
+                    matches = list(base_path.rglob(candidate))
+                    for dist_info_path in matches:
+                        if not dist_info_path.is_dir():
+                            continue
+                        
+                        try:
+                            # Use PathDistribution for isolation
+                            from importlib.metadata import PathDistribution
+                            dist = PathDistribution(dist_info_path)
+                            
+                            dist_name = dist.metadata.get('Name', '')
+                            # Verify name matches (ignore case/normalization)
+                            if canonicalize_name(dist_name) == canonicalize_name(variant):
+                                if dist.version == version:
+                                    results.append((dist, dist_info_path.resolve()))
+                                    if verbose:
+                                        safe_print(f'✅ Found DEEP NESTED {dist_name} v{dist.version} at {dist_info_path}')
+                        except Exception:
+                            continue
+                except Exception:
+                    continue
+                    
+        return results
+    
     def _discover_distributions(self, targeted_packages: Optional[List[str]], verbose: bool=False, search_path_override: Optional[str] = None, skip_existing_checksums: bool = False) -> List[importlib.metadata.Distribution]:
         """
         (V15 - SMART FILTERING) Discovers distributions by running all search strategies
@@ -404,6 +476,16 @@ class omnipkgMetadataGatherer:
             main_site_packages = Path(self.config.get('site_packages_path')).resolve()
             multiversion_base = Path(self.config.get('multiversion_base')).resolve()
             search_paths = [p for p in [main_site_packages, multiversion_base] if p.exists()]
+            if verbose:
+                safe_print(f"   📂 Search paths determined:")
+                for sp in search_paths:
+                    safe_print(f"      - {sp}")
+                    # Check if typing_extensions bubble exists
+                    te_bubble = sp / "typing_extensions-4.5.0"
+                    if te_bubble.exists():
+                        safe_print(f"        ✅ Found typing_extensions-4.5.0 bubble here!")
+                        te_dist_info = list(te_bubble.glob("*.dist-info"))
+                        safe_print(f"        📦 Dist-info folders: {te_dist_info}")
 
         if not search_paths:
             safe_print("   - ❌ ERROR: No valid search paths determined. Aborting discovery.")
@@ -458,10 +540,11 @@ class omnipkgMetadataGatherer:
                             future_s3 = executor.submit(self._run_strategy_3, base_path, name_variants, version, verbose)
                             future_s4 = executor.submit(self._run_strategy_4, base_path, name_variants, version, verbose)
                             future_s5 = executor.submit(self._run_strategy_5, name, version, verbose, search_paths)
+                            future_s6 = executor.submit(self._run_strategy_6, base_path, name_variants, version, verbose) # NEW
 
                             
                            #Collect all results as they complete
-                            futures = [future_s1, future_s2, future_s3, future_s4, future_s5]
+                            futures = [future_s1, future_s2, future_s3, future_s4, future_s5, future_s6]
                             for future in concurrent.futures.as_completed(futures):
                                 try:
                                     strategy_results = future.result()
@@ -493,6 +576,10 @@ class omnipkgMetadataGatherer:
                         if skip_existing_checksums and skipped_count > 0:
                             msg += f' (skipped {skipped_count} already registered)'
                         safe_print(msg)
+                        if verbose:
+                            safe_print(f"   🔍 Concurrently searching for '{spec}' with variants: {name_variants}")
+                            safe_print(f"   📋 DEBUG - Parsed name: '{name}', version: '{version}'")
+                            safe_print(f"   📋 DEBUG - Name variants generated: {name_variants}")
                     elif skip_existing_checksums and skipped_count > 0:
                         safe_print(f'   -> All {skipped_count} instance(s) of {spec} already registered, skipping')
                     elif version:

@@ -51,7 +51,7 @@ class CLIExecutor:
                                 'module': ep.value.split(':')[0]
                             }
         except Exception as e:
-            print(f"⚠️  Error scanning entry points: {e}", file=sys.stderr)
+            safe_print(f"⚠️  Error scanning entry points: {e}", file=sys.stderr)
         return None
     
     def detect_cli_conflicts(self, cli_name: str, package_info: Dict) -> List[Tuple[str, str, str]]:
@@ -76,7 +76,7 @@ class CLIExecutor:
                         except:
                             pass
         except Exception as e:
-            print(f"⚠️  Error checking dependencies: {e}", file=sys.stderr)
+            safe_print(f"⚠️  Error checking dependencies: {e}", file=sys.stderr)
             
         return conflicts
     
@@ -85,7 +85,7 @@ class CLIExecutor:
         
         # Check if it's a script file
         if os.path.exists(command) and command.endswith('.py'):
-            print(f"🐍 Detected Python script: {command}", file=sys.stderr)
+            safe_print(f"🐍 Detected Python script: {command}", file=sys.stderr)
             return self._execute_script(command, args)
         
         # Check if it's an installed CLI tool
@@ -94,41 +94,41 @@ class CLIExecutor:
             # Try to find it in PATH
             cli_path = shutil.which(command)
             if not cli_path:
-                print(f"❌ Error: Command not found: {command}", file=sys.stderr)
+                safe_print(f"❌ Error: Command not found: {command}", file=sys.stderr)
                 return 1
         
-        print(f"🔧 Detected CLI command: {command}", file=sys.stderr)
+        safe_print(f"🔧 Detected CLI command: {command}", file=sys.stderr)
         
         # Get package info
         package_info = self.get_cli_package_info(command)
         if not package_info:
-            print(f"⚠️  Could not determine package for {command}, running without healing", file=sys.stderr)
+            safe_print(f"⚠️  Could not determine package for {command}, running without healing", file=sys.stderr)
             return subprocess.call([command] + args)
         
-        print(f"📦 CLI provided by: {package_info['package']}=={package_info['version']}", file=sys.stderr)
+        safe_print(f"📦 CLI provided by: {package_info['package']}=={package_info['version']}", file=sys.stderr)
         
         # Detect conflicts
         conflicts = self.detect_cli_conflicts(command, package_info)
         
         if conflicts:
-            print(f"🔍 Detected {len(conflicts)} dependency conflicts:", file=sys.stderr)
+            safe_print(f"🔍 Detected {len(conflicts)} dependency conflicts:", file=sys.stderr)
             for pkg, needed, found in conflicts:
                 print(f"   - {pkg}: need {needed}, found {found}", file=sys.stderr)
             
             # Auto-heal the conflicts
             return self._execute_with_bubbles(command, args, conflicts)
         else:
-            print(f"✅ No conflicts detected, running normally", file=sys.stderr)
+            safe_print(f"✅ No conflicts detected, running normally", file=sys.stderr)
             return subprocess.call([command] + args)
     
     def _execute_with_bubbles(self, command: str, args: List[str], conflicts: List[Tuple[str, str, str]]) -> int:
         """Execute command with bubbled dependencies"""
         from omnipkgLoader import omnipkgLoader
         
-        print(f"🌀 Activating bubbles for conflict resolution...", file=sys.stderr)
+        safe_print(f"🌀 Activating bubbles for conflict resolution...", file=sys.stderr)
         
         # Create a wrapper script that activates bubbles then runs the CLI
-        wrapper_code = f"""
+        wrapper_code = """
 import sys
 import os
 from omnipkgLoader import omnipkgLoader
@@ -140,10 +140,10 @@ loader = omnipkgLoader(None, auto_detect=False)
 conflicts = {conflicts}
 for pkg_name, needed_version, _ in conflicts:
     try:
-        print(f"🔄 Activating {{pkg_name}}=={{needed_version}}", file=sys.stderr)
+        safe_print(f"🔄 Activating {{pkg_name}}=={{needed_version}}", file=sys.stderr)
         loader.activate(pkg_name, needed_version)
     except Exception as e:
-        print(f"⚠️  Could not activate {{pkg_name}}=={{needed_version}}: {{e}}", file=sys.stderr)
+        safe_print(f"⚠️  Could not activate {{pkg_name}}=={{needed_version}}: {{e}}", file=sys.stderr)
 
 # Now run the actual CLI command
 import subprocess
@@ -152,7 +152,7 @@ result = subprocess.call({[command] + args})
 # Cleanup
 loader.deactivate_all()
 sys.exit(result)
-"""
+\ntry:\n    from .common_utils import safe_print\nexcept ImportError:\n    from omnipkg.common_utils import safe_print"""
         
         # Write wrapper to temp file
         import tempfile
@@ -174,7 +174,7 @@ sys.exit(result)
     def _execute_script(self, script: str, args: List[str]) -> int:
         """Execute a Python script (existing functionality)"""
         # Delegate to existing script runner
-        print(f"🐍 Executing Python script: {script}", file=sys.stderr)
+        safe_print(f"🐍 Executing Python script: {script}", file=sys.stderr)
         # ... existing script execution logic ...
         return subprocess.call([sys.executable, script] + args)
 

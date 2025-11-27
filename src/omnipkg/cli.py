@@ -9,6 +9,7 @@ import argparse
 from pathlib import Path
 import os
 import subprocess
+import re
 import tempfile
 import json
 import requests as http_requests
@@ -100,35 +101,34 @@ def temporary_install_strategy(core: OmnipkgCore, strategy: str):
 
 def separate_python_from_packages(packages):
     """
-    Separates python version specs from regular packages.
-    
-    Returns:
-        tuple: (regular_packages, python_versions)
-        
-    Examples:
-        ['numpy', 'python==3.12', 'requests'] -> (['numpy', 'requests'], ['3.12'])
-        ['python==3.10', 'python==3.11'] -> ([], ['3.10', '3.11'])
+    Separates python interpreter requests from regular packages.
+    Fixes the bug where packages like 'python-dateutil' were mistaken 
+    for interpreter requests.
     """
     regular_packages = []
     python_versions = []
     
+    # Regex matches EXACTLY 'python' optionally followed by version operators
+    # Matches: python, python==3.11, python>=3.9
+    # Does NOT match: python-dateutil, python_dotenv
+    python_interpreter_pattern = re.compile(r'^python(?:[<>=!~].*)?$', re.IGNORECASE)
+    
     for pkg in packages:
-        pkg_lower = pkg.lower()
-        
-        # Check if it's a python spec (supports python==3.12, python>=3.10, etc.)
-        if pkg_lower.startswith('python'):
-            # Extract version - handle ==, >=, <=, >, <
-            version_part = pkg[6:].strip()  # Remove 'python'
+        pkg = pkg.strip()
+        if not pkg:
+            continue
             
-            # Strip comparison operators
+        if python_interpreter_pattern.match(pkg):
+            # It IS an interpreter request (e.g. 'python==3.11')
+            version_part = pkg[6:].strip() # Remove 'python'
             for op in ['==', '>=', '<=', '>', '<', '~=']:
                 if version_part.startswith(op):
                     version_part = version_part[len(op):].strip()
                     break
-            
             if version_part:
                 python_versions.append(version_part)
         else:
+            # It IS a regular package (e.g. 'python-dateutil')
             regular_packages.append(pkg)
     
     return regular_packages, python_versions
