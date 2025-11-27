@@ -203,8 +203,9 @@ class omnipkgMetadataGatherer:
                 # We must use PathDistribution directly for paths outside the standard sys.path
                 from importlib.metadata import PathDistribution
                 dist = PathDistribution(dist_info_path)
-                # Basic validation: ensure it has a name.
-                if dist.metadata.get('Name'):
+                # Basic validation: ensure it has a valid name string.
+                name = dist.metadata.get('Name')
+                if name and isinstance(name, str):
                     return dist
             except Exception:
                 # Silently ignore corrupted or unreadable metadata
@@ -1232,7 +1233,7 @@ class omnipkgMetadataGatherer:
         """
         try:
             raw_name = dist.metadata.get('Name')
-            if not raw_name:
+            if not raw_name or not isinstance(raw_name, str):
                 return False # Silently skip corrupted metadata
 
             # --- FIX: REMOVED THE LOGIC THAT SKIPPED VENDORED PACKAGES ---
