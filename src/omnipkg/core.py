@@ -7078,75 +7078,84 @@ class omnipkg:
             
             dest_path = real_venv_path / '.omnipkg' / 'interpreters' / f'cpython-{full_version}'
             
-            safe_print(_('   - Target installation path: {}').format(dest_path))
+            # Create a lock to prevent concurrent downloads/installs of the same version
+            dest_path.parent.mkdir(parents=True, exist_ok=True)
+            lock_path = dest_path.parent / f"cpython-{full_version}.lock"
             
-            if dest_path.exists():
-                safe_print(_('   - Found existing directory for Python {}. Verifying integrity...').format(full_version))
-                if self._is_interpreter_directory_valid(dest_path):
-                    safe_print(_('   - ✅ Integrity check passed. Installation is valid and complete.'))
+            from filelock import FileLock
+            
+            # Wait up to 5 minutes for other processes to finish installing
+            with FileLock(lock_path, timeout=300):
+                safe_print(_('   - Target installation path: {}').format(dest_path))
+                
+                # RE-CHECK existence inside the lock!
+                if dest_path.exists():
+                    safe_print(_('   - Found existing directory for Python {}. Verifying integrity...').format(full_version))
+                    if self._is_interpreter_directory_valid(dest_path):
+                        safe_print(_('   - ✅ Integrity check passed. Installation is valid and complete.'))
+                        return 0
+                    else:
+                        safe_print(_('   - ⚠️  Integrity check failed: Incomplete installation detected (missing or broken executable).'))
+                        
+                        # Safety check: don't delete the currently active interpreter
+                        try:
+                            active_interpreter_root = Path(sys.executable).resolve().parents[1]
+                            if dest_path.resolve() == active_interpreter_root:
+                                safe_print(_('   - ❌ CRITICAL ERROR: The broken interpreter is the currently active one!'))
+                                safe_print(_('   - Aborting to prevent self-destruction. Please fix the environment manually.'))
+                                return 1
+                        except (IndexError, OSError):
+                            pass
+                        
+                        safe_print(_('   - Preparing to clean up broken directory...'))
+                        try:
+                            shutil.rmtree(dest_path)
+                            safe_print(_('   - ✅ Removed broken directory successfully.'))
+                        except Exception as e:
+                            safe_print(_('   - ❌ FATAL: Failed to remove existing broken directory: {}').format(e))
+                            return 1
+                
+                safe_print(_('   - Starting fresh download and installation...'))
+                download_success = False
+                
+                # Try Python 3.13 alternative download method
+                if version == '3.13':
+                    safe_print(_('   - Using python-build-standalone for Python 3.13...'))
+                    download_success = self._download_python_313_alternative(dest_path, full_version)
+                
+                # Fallback to other download methods
+                if not download_success:
+                    if hasattr(self.config_manager, '_install_managed_python'):
+                        try:
+                            self.config_manager._install_managed_python(real_venv_path, full_version, omnipkg_instance=self)
+                            download_success = True
+                        except Exception as e:
+                            safe_print(_('   - Warning: _install_managed_python failed: {}').format(e))
+                    elif hasattr(self.config_manager, 'install_managed_python'):
+                        try:
+                            self.config_manager.install_managed_python(real_venv_path, full_version)
+                            download_success = True
+                        except Exception as e:
+                            safe_print(_('   - Warning: install_managed_python failed: {}').format(e))
+                    elif hasattr(self.config_manager, 'download_python'):
+                        try:
+                            self.config_manager.download_python(full_version)
+                            download_success = True
+                        except Exception as e:
+                            safe_print(_('   - Warning: download_python failed: {}').format(e))
+                
+                if not download_success:
+                    safe_print(_('❌ Error: All download methods failed for Python {}').format(full_version))
+                    return 1
+                
+                # Verify installation
+                if dest_path.exists() and self._is_interpreter_directory_valid(dest_path):
+                    safe_print(_('   - ✅ Download and installation completed successfully.'))
+                    self.config_manager._set_rebuild_flag_for_version(version)
                     return 0
                 else:
-                    safe_print(_('   - ⚠️  Integrity check failed: Incomplete installation detected (missing or broken executable).'))
-                    
-                    # Safety check: don't delete the currently active interpreter
-                    try:
-                        active_interpreter_root = Path(sys.executable).resolve().parents[1]
-                        if dest_path.resolve() == active_interpreter_root:
-                            safe_print(_('   - ❌ CRITICAL ERROR: The broken interpreter is the currently active one!'))
-                            safe_print(_('   - Aborting to prevent self-destruction. Please fix the environment manually.'))
-                            return 1
-                    except (IndexError, OSError):
-                        pass
-                    
-                    safe_print(_('   - Preparing to clean up broken directory...'))
-                    try:
-                        shutil.rmtree(dest_path)
-                        safe_print(_('   - ✅ Removed broken directory successfully.'))
-                    except Exception as e:
-                        safe_print(_('   - ❌ FATAL: Failed to remove existing broken directory: {}').format(e))
-                        return 1
-            
-            safe_print(_('   - Starting fresh download and installation...'))
-            download_success = False
-            
-            # Try Python 3.13 alternative download method
-            if version == '3.13':
-                safe_print(_('   - Using python-build-standalone for Python 3.13...'))
-                download_success = self._download_python_313_alternative(dest_path, full_version)
-            
-            # Fallback to other download methods
-            if not download_success:
-                if hasattr(self.config_manager, '_install_managed_python'):
-                    try:
-                        self.config_manager._install_managed_python(real_venv_path, full_version, omnipkg_instance=self)
-                        download_success = True
-                    except Exception as e:
-                        safe_print(_('   - Warning: _install_managed_python failed: {}').format(e))
-                elif hasattr(self.config_manager, 'install_managed_python'):
-                    try:
-                        self.config_manager.install_managed_python(real_venv_path, full_version)
-                        download_success = True
-                    except Exception as e:
-                        safe_print(_('   - Warning: install_managed_python failed: {}').format(e))
-                elif hasattr(self.config_manager, 'download_python'):
-                    try:
-                        self.config_manager.download_python(full_version)
-                        download_success = True
-                    except Exception as e:
-                        safe_print(_('   - Warning: download_python failed: {}').format(e))
-            
-            if not download_success:
-                safe_print(_('❌ Error: All download methods failed for Python {}').format(full_version))
-                return 1
-            
-            # Verify installation
-            if dest_path.exists() and self._is_interpreter_directory_valid(dest_path):
-                safe_print(_('   - ✅ Download and installation completed successfully.'))
-                self.config_manager._set_rebuild_flag_for_version(version)
-                return 0
-            else:
-                safe_print(_('   - ❌ Installation completed but integrity check still fails.'))
-                return 1
+                    safe_print(_('   - ❌ Installation completed but integrity check still fails.'))
+                    return 1
                 
         except Exception as e:
             safe_print(_('❌ Download and installation process failed: {}').format(e))
