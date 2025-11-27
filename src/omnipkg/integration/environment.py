@@ -28,7 +28,7 @@ class OmnipkgEnvironment:
         self.bin_dir.mkdir(exist_ok=True)
         self.wrappers_dir.mkdir(exist_ok=True)
         
-        print(f"✅ Created omnipkg environment at: {self.env_dir}")
+        safe_print(f"✅ Created omnipkg environment at: {self.env_dir}")
     
     def discover_cli_tools(self) -> Set[str]:
         """Find all CLI tools installed in the current environment"""
@@ -55,7 +55,7 @@ class OmnipkgEnvironment:
     def create_wrapper(self, cli_name: str):
         """Create a wrapper script for a CLI tool that auto-heals conflicts"""
         
-        wrapper_script = textwrap.dedent(f'''#!/usr/bin/env python3
+        wrapper_script = textwrap.dedent('''#!/usr/bin/env python3
 """
 Omnipkg auto-healing wrapper for: {cli_name}
 This wrapper automatically resolves version conflicts before executing the CLI
@@ -79,6 +79,10 @@ if True:
         # Fallback: just run the command normally if omnipkg not available
         import subprocess
         import shutil
+try:
+    from .common_utils import safe_print
+except ImportError:
+    from omnipkg.common_utils import safe_print
         
         # Find real executable (skip our wrapper)
         real_bin = shutil.which("{cli_name}", path=os.environ.get("OMNIPKG_REAL_PATH"))
@@ -105,21 +109,21 @@ if True:
                 shell = 'bash'
         
         # Discover all CLI tools
-        print("🔍 Discovering installed CLI tools...")
+        safe_print("🔍 Discovering installed CLI tools...")
         cli_tools = self.discover_cli_tools()
-        print(f"📦 Found {len(cli_tools)} CLI tools")
+        safe_print(f"📦 Found {len(cli_tools)} CLI tools")
         
         # Create wrappers for all tools
-        print("🔧 Creating auto-healing wrappers...")
+        safe_print("🔧 Creating auto-healing wrappers...")
         created = 0
         for cli_name in cli_tools:
             try:
                 self.create_wrapper(cli_name)
                 created += 1
             except Exception as e:
-                print(f"⚠️  Could not create wrapper for {cli_name}: {e}", file=sys.stderr)
+                safe_print(f"⚠️  Could not create wrapper for {cli_name}: {e}", file=sys.stderr)
         
-        print(f"✅ Created {created} wrappers")
+        safe_print(f"✅ Created {created} wrappers")
         
         # Generate activation script
         activation_script = self._generate_activation_script(shell)
@@ -129,7 +133,7 @@ if True:
         activate_file.write_text(activation_script)
         
         print(f"\n{'='*60}")
-        print(f"🎉 Omnipkg environment ready!")
+        safe_print(f"🎉 Omnipkg environment ready!")
         print(f"{'='*60}")
         print(f"\nTo activate, run:")
         print(f"  source {activate_file}")
@@ -190,10 +194,10 @@ deactivate() {{
     
     def deactivate(self):
         """Clean up the environment"""
-        print("🧹 Cleaning up omnipkg environment...")
+        safe_print("🧹 Cleaning up omnipkg environment...")
         if self.env_dir.exists():
             shutil.rmtree(self.env_dir)
-        print("✅ Omnipkg environment removed")
+        safe_print("✅ Omnipkg environment removed")
 
 
 def cmd_activate(args):

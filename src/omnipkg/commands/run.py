@@ -17,6 +17,7 @@ import importlib.metadata
 from pathlib import Path
 import os
 import select # We can import it, but we check the OS before using it
+from contextlib import contextmanager
 
 # THE FIX: HAS_SELECT is only True on non-Windows (POSIX) systems.
 HAS_SELECT = (os.name == 'posix')
@@ -35,8 +36,142 @@ from omnipkg.core import ConfigManager, omnipkg as OmnipkgCore
 from omnipkg.common_utils import sync_context_to_runtime
 from omnipkg.utils.ai_import_healer import heal_code_string
 # Global variable to store initial run timing for comparison
-_initial_run_time_ns = None
+@contextmanager
+def temporary_install_strategy(omnipkg_instance, strategy):
+    """
+    Temporarily switches the install strategy (e.g., to 'stable-main') 
+    to prevent breaking the main environment during auto-healing operations.
+    """
+    # Save original state
+    original_strategy = omnipkg_instance.config.get('install_strategy')
+    
+    # Apply temporary strategy if different
+    if original_strategy != strategy:
+        omnipkg_instance.config['install_strategy'] = strategy
+        
+    try:
+        yield
+    finally:
+        # Restore original state
+        omnipkg_instance.config['install_strategy'] = original_strategy
+        initial_run_time_ns = None
 
+# CRITICAL FIXES FOR JAX/JAXLIB PAIRING AND LOADER HINT DETECTION
+
+# Fix 1: Enhanced loader hint detection (supports multiple specs)
+def detect_loader_hints(stderr: str, healing_plan: set):
+    """Detect and add all loader hint specs to healing plan"""
+    # Match both single-quoted and potential multi-spec hints
+    loader_hint_matches = re.findall(r"Hint: Install with 'omnipkg install ([^']+)'", stderr)
+    if loader_hint_matches:
+        for hint_line in loader_hint_matches:
+            # Split by spaces to handle multiple specs in one hint
+            specs = hint_line.strip().split()
+            for missing_spec in specs:
+                missing_spec = missing_spec.strip()
+                if missing_spec and missing_spec not in healing_plan:
+                    safe_print(f"\n🔍 omnipkgLoader requested missing dependency: {missing_spec}")
+                    healing_plan.add(missing_spec)
+    return healing_plan
+
+
+# Fix 2: Comprehensive JAX/JAXlib pairing logic
+def ensure_jax_jaxlib_pairing(stderr: str, healing_plan: set):
+    """
+    Ensures JAX and JAXlib are always paired with matching versions.
+    Strategy:
+    1. If user specified jax version -> use it as master, ensure jaxlib matches
+    2. If user only specified jaxlib -> use it as master, ensure jax matches
+    3. If runtime mismatch detected -> use requested jax version as master
+    4. Always add BOTH to healing plan with matching versions
+    """
+    MIN_AVAILABLE_JAX_VER = '0.4.6'
+    
+    # First, check for runtime mismatch errors
+    jax_mismatch = re.search(r"jaxlib version ([\d]+(?:\.\d+)*) is .*? jax version ([\d]+(?:\.\d+)*)", stderr)
+    if jax_mismatch:
+        jaxlib_env_ver = jax_mismatch.group(1)  # What's in main env (wrong)
+        jax_requested_ver = jax_mismatch.group(2)  # What loader is trying to load
+        
+        safe_print(f"\n🔍 JAX/JAXlib Version Mismatch Detected.")
+        safe_print(f"   - Main environment has: jaxlib=={jaxlib_env_ver}")
+        safe_print(f"   - Loader attempting: jax=={jax_requested_ver}")
+        safe_print(f"   - ⚠️  These versions are incompatible!")
+        
+        # Check if requested version is available
+        try:
+            from pkg_resources import parse_version
+        except ImportError:
+            def parse_version(v): return tuple(map(int, v.split('.')))
+        
+        if parse_version(jax_requested_ver) < parse_version(MIN_AVAILABLE_JAX_VER):
+            # Requested version too old, force upgrade both
+            target_ver = MIN_AVAILABLE_JAX_VER
+            safe_print(f"   - 🛑 jax=={jax_requested_ver} unavailable on PyPI (yanked)")
+            safe_print(f"   - 🛡️  Force upgrading to minimum available: {target_ver}")
+        else:
+            # Use the requested version
+            target_ver = jax_requested_ver
+            safe_print(f"   - 🛡️  Solution: Load BOTH jax and jaxlib as paired bubbles")
+        
+        # Add BOTH packages as a matched pair
+        healing_plan.add(f"jax=={target_ver}")
+        healing_plan.add(f"jaxlib=={target_ver}")
+        safe_print(f"   - 📦 Added to healing plan: jax=={target_ver}, jaxlib=={target_ver}")
+    
+    # CRITICAL: Check what user actually requested in healing_plan and ensure pairing
+    # Extract any jax/jaxlib specs already in plan
+    jax_specs_in_plan = [s for s in healing_plan if s.startswith('jax==') or s.startswith('jax<') or s.startswith('jax>')]
+    jaxlib_specs_in_plan = [s for s in healing_plan if s.startswith('jaxlib==') or s.startswith('jaxlib<') or s.startswith('jaxlib>')]
+    
+    if jax_specs_in_plan or jaxlib_specs_in_plan:
+        safe_print(f"\n🔍 JAX/JAXlib pairing check...")
+        
+        # Determine master version
+        master_version = None
+        master_source = None
+        
+        if jax_specs_in_plan:
+            # JAX is master (priority)
+            jax_spec = jax_specs_in_plan[0]
+            if '==' in jax_spec:
+                master_version = jax_spec.split('==')[1]
+                master_source = 'jax'
+                safe_print(f"   - Using jax=={master_version} as master version")
+        
+        if not master_version and jaxlib_specs_in_plan:
+            # JAXlib is master (only if jax not specified)
+            jaxlib_spec = jaxlib_specs_in_plan[0]
+            if '==' in jaxlib_spec:
+                master_version = jaxlib_spec.split('==')[1]
+                master_source = 'jaxlib'
+                safe_print(f"   - Using jaxlib=={master_version} as master version")
+        
+        if master_version:
+            # Ensure BOTH are in healing plan with matching versions
+            paired_jax = f"jax=={master_version}"
+            paired_jaxlib = f"jaxlib=={master_version}"
+            
+            # Remove any old specs
+            healing_plan -= set(jax_specs_in_plan)
+            healing_plan -= set(jaxlib_specs_in_plan)
+            
+            # Add matched pair
+            healing_plan.add(paired_jax)
+            healing_plan.add(paired_jaxlib)
+            
+            safe_print(f"   - ✅ Ensured matched pair: {paired_jax}, {paired_jaxlib}")
+            safe_print(f"   - 🎯 Master source: {master_source}")
+        else:
+            safe_print(f"   - ⚠️  Could not extract explicit version from specs")
+            safe_print(f"   - Found: {jax_specs_in_plan + jaxlib_specs_in_plan}")
+    
+    return healing_plan
+    
+    # ============================================================================
+    # EXECUTE HEALING PLAN (with JAX/JAXlib awareness)
+    # ============================================================================
+    
 def analyze_runtime_failure_and_heal(stderr: str, cmd_args: list, original_script_path_for_analysis: Path, 
                                     config_manager: ConfigManager, is_context_aware_run: bool, 
                                     cli_owner_spec: str = None, omnipkg_instance=None, verbose=False, 
@@ -72,58 +207,16 @@ def analyze_runtime_failure_and_heal(stderr: str, cmd_args: list, original_scrip
     # ============================================================================
     
     # --- [NEW LISTENER 1] OMNIPKG LOADER HINTS ---
-    loader_hint_match = re.search(r"Hint: Install with 'omnipkg install ([\w\-\.=<>=]+)'", stderr)
-    if loader_hint_match:
-        missing_spec = loader_hint_match.group(1)
-        safe_print(f"\n🔍 omnipkgLoader requested missing dependency: {missing_spec}")
-        healing_plan.add(missing_spec)
+    # NEW PRIORITY LISTENERS - Check omnipkg-specific issues first
+    # ============================================================================
     
-        # --- [NEW LISTENER 2] JAX/JAXLIB VERSION MISMATCH ---
-    # NOTE: PyPI no longer hosts jaxlib versions < 0.4.6.
-    # If a jax version < 0.4.6 is requested, we must force-upgrade both packages
-    # to the earliest available compatible version (0.4.6).
+    # --- [LISTENER 1] OMNIPKG LOADER HINTS ---
+    healing_plan = detect_loader_hints(stderr, healing_plan)
     
-    MIN_AVAILABLE_JAX_VER = '0.4.6'
-    MIN_AVAILABLE_JAXLIB_VER = '0.4.6'
+    # --- [LISTENER 2] JAX/JAXLIB VERSION PAIRING ---
+    healing_plan = ensure_jax_jaxlib_pairing(stderr, healing_plan)
     
-    jax_match = re.search(r"jaxlib version ([\d]+(?:\.\d+)*) is .*? jax version ([\d]+(?:\.\d+)*)", stderr)
-    if jax_match:
-        jaxlib_current_ver = jax_match.group(1) # The version currently installed
-        jax_target_ver = jax_match.group(2)    # The version the user's script requested/crashed on
-    
-        # Check if the requested version is too old (e.g., 0.3.0)
-        # We use pkg_resources.parse_version for reliable version comparison
-        try:
-            from pkg_resources import parse_version
-        except ImportError:
-            # Fallback if pkg_resources isn't available (less reliable)
-            def parse_version(v): return tuple(map(int, (v.split('.'))))
-    
-        if parse_version(jax_target_ver) < parse_version(MIN_AVAILABLE_JAX_VER):
-            # The requested version (e.g., 0.3.0) is unavailable. FORCE UPGRADE.
-            jax_healing_ver = MIN_AVAILABLE_JAX_VER
-            jaxlib_healing_ver = MIN_AVAILABLE_JAXLIB_VER
-            
-            safe_print(f"\n🔍 JAX Version Mismatch & Availability Issue Detected.")
-            safe_print(f"   - Requested: jax=={jax_target_ver}")
-            safe_print(f"   - 🛑 **FATAL ERROR:** All jaxlib versions < {MIN_AVAILABLE_JAXLIB_VER} are yanked/unavailable.")
-            safe_print(f"   - 🛡️  Enforcing Upgrade: Healing by installing **jax=={jax_healing_ver}** and **jaxlib=={jaxlib_healing_ver}**.")
-    
-        else:
-            # Normal healing (match the requested version exactly, as it is available)
-            jax_healing_ver = jax_target_ver
-            jaxlib_healing_ver = jax_target_ver
-    
-            safe_print(f"\n🔍 JAX Version Mismatch Detected.")
-            safe_print(f"   - Current: jaxlib=={jaxlib_current_ver}, jax=={jax_target_ver}")
-            safe_print(f"   - 🛡️  Enforcing JAX as master: Aligning backend to jaxlib=={jaxlib_healing_ver}")
-            
-        # Add the determined versions to the plan
-        healing_plan.add(f"jax=={jax_healing_ver}")
-        healing_plan.add(f"jaxlib=={jaxlib_healing_ver}")
-
-
-    # --- [NEW LISTENER 3] GENERIC BUBBLE NOT FOUND ---
+    # --- [LISTENER 3] GENERIC BUBBLE NOT FOUND ---
     bubble_miss_match = re.search(r"Bubble not found: .*?/([\w\-\.]+)-([\d\.]+)", stderr)
     if bubble_miss_match:
         pkg = bubble_miss_match.group(1)
@@ -132,8 +225,7 @@ def analyze_runtime_failure_and_heal(stderr: str, cmd_args: list, original_scrip
         spec = f"{pkg}=={ver}"
         if spec not in healing_plan:
             safe_print(f"\n🔍 Loader reported missing bubble: {spec}")
-            healing_plan.add(spec)
-    
+            healing_plan.add(spec) 
     # ============================================================================
     # ORIGINAL ROBUST PATTERN MATCHING - ALL PRESERVED
     # ============================================================================
@@ -247,13 +339,12 @@ def analyze_runtime_failure_and_heal(stderr: str, cmd_args: list, original_scrip
                 safe_print(f"   This indicates a code error, not a missing package.")
                 return 1, None
 
-            safe_print(f"\n🔍 Dependency conflict detected (AttributeError). Using fallback.")
-            safe_print(f"   - The package '{pkg_name_to_upgrade}' may be outdated.")
-            safe_print(_("🚀 Auto-healing by attempting to upgrade the package..."))
             return heal_with_missing_package(
                 pkg_name_to_upgrade, Path(cmd_args[0]), cmd_args[1:], 
                 original_script_path_for_analysis, config_manager, 
-                is_context_aware_run, omnipkg_instance=omnipkg_instance
+                is_context_aware_run, omnipkg_instance=omnipkg_instance,
+                attempted_fixes=attempted_fixes,
+                error_context=stderr  # <--- PASS STDERR HERE
             )
 
     # Pattern 4: Handle missing modules
@@ -291,7 +382,8 @@ def analyze_runtime_failure_and_heal(stderr: str, cmd_args: list, original_scrip
                     original_script_path_for_analysis=original_script_path_for_analysis,
                     heal_type='local_context_run',
                     is_context_aware_run=True,
-                    omnipkg_instance=omnipkg_instance
+                    omnipkg_instance=omnipkg_instance,
+                    attempted_fixes=attempted_fixes
                 )
             
             # Check if it's a local installable project
@@ -310,7 +402,72 @@ def analyze_runtime_failure_and_heal(stderr: str, cmd_args: list, original_scrip
             # It's a missing PyPI package
             safe_print(f"\n🔍 {description} detected. Auto-healing by installing missing package...")
             pkg_name = convert_module_to_package_name(top_level_module)
-            return heal_with_missing_package(pkg_name, Path(cmd_args[0]), cmd_args[1:], original_script_path_for_analysis, config_manager, is_context_aware_run, omnipkg_instance=omnipkg_instance)
+
+
+            # --- GHOST PACKAGE DETECTION ---
+
+            if is_package_corrupted(pkg_name, top_level_module):
+
+                safe_print(f"\n👻 Ghost package detected: '{pkg_name}' metadata exists, but '{top_level_module}' is missing.")
+
+                safe_print(f"   - Action: Force reinstalling '{pkg_name}' to fix corruption.")
+
+                
+
+                if not omnipkg_instance:
+
+                    omnipkg_instance = OmnipkgCore(config_manager)
+
+                
+
+                # Loop prevention
+
+                ghost_key = f"ghost_fix_{pkg_name}"
+
+                if attempted_fixes is not None:
+
+                    if ghost_key in attempted_fixes:
+
+                        safe_print("❌ Corruption persists after reinstall. Aborting to prevent loop.")
+
+                        return 1, None
+
+                    attempted_fixes.add(ghost_key)
+
+
+                # Force reinstall using stable-main (fix the environment)
+
+                with temporary_install_strategy(omnipkg_instance, 'stable-main'):
+
+                    ret = omnipkg_instance.smart_install([pkg_name], force_reinstall=True)
+
+                
+
+                if ret == 0:
+
+                    safe_print(f"✅ Reinstall successful. Restarting script...")
+
+                    return heal_with_missing_package(
+                pkg_name, Path(cmd_args[0]), cmd_args[1:], 
+                original_script_path_for_analysis, config_manager, 
+                is_context_aware_run, omnipkg_instance=omnipkg_instance,
+                attempted_fixes=attempted_fixes,
+                error_context=stderr  # <--- PASS STDERR HERE
+            )
+
+            # -------------------------------
+
+
+            return heal_with_missing_package(
+                pkg_name, 
+                Path(cmd_args[0]), 
+                cmd_args[1:], 
+                original_script_path_for_analysis, 
+                config_manager, 
+                is_context_aware_run, 
+                omnipkg_instance=omnipkg_instance,
+                attempted_fixes=attempted_fixes
+            )
 
     # Pattern 5: Handle missing required packages
     missing_package_patterns = [
@@ -352,7 +509,7 @@ def analyze_runtime_failure_and_heal(stderr: str, cmd_args: list, original_scrip
     # ============================================================================
     
     if healing_plan:
-        # Clean up conflicting specs
+        # Clean up conflicting specs (BUT PRESERVE JAX/JAXLIB PAIRS!)
         versioned_pkgs = set()
         for spec in healing_plan:
             if '==' in spec or '<' in spec or '>' in spec:
@@ -363,10 +520,30 @@ def analyze_runtime_failure_and_heal(stderr: str, cmd_args: list, original_scrip
         for spec in healing_plan:
             is_generic = not any(op in spec for op in ['==', '<', '>', '!', '~'])
             if is_generic:
-                if spec in versioned_pkgs:
+                # Skip generic if versioned exists, UNLESS it's jax/jaxlib (always keep pairs)
+                pkg_name = spec.split('==')[0] if '==' in spec else spec
+                if pkg_name in versioned_pkgs and pkg_name not in ['jax', 'jaxlib']:
                     continue
             cleaned_plan.add(spec)
-            
+        
+        # FINAL JAX/JAXLIB VALIDATION
+        jax_in_plan = any('jax==' in s for s in cleaned_plan)
+        jaxlib_in_plan = any('jaxlib==' in s for s in cleaned_plan)
+        
+        if jax_in_plan and not jaxlib_in_plan:
+            # Extract jax version and add matching jaxlib
+            jax_spec = [s for s in cleaned_plan if 'jax==' in s][0]
+            jax_ver = jax_spec.split('==')[1]
+            cleaned_plan.add(f"jaxlib=={jax_ver}")
+            safe_print(f"   🔧 Auto-added jaxlib=={jax_ver} to match jax")
+        
+        if jaxlib_in_plan and not jax_in_plan:
+            # Extract jaxlib version and add matching jax
+            jaxlib_spec = [s for s in cleaned_plan if 'jaxlib==' in s][0]
+            jaxlib_ver = jaxlib_spec.split('==')[1]
+            cleaned_plan.add(f"jax=={jaxlib_ver}")
+            safe_print(f"   🔧 Auto-added jax=={jaxlib_ver} to match jaxlib")
+        
         specs_to_heal = sorted(list(cleaned_plan))
         safe_print(f"\n🔍 Comprehensive Healing Plan Compiled (Attempt {retry_count + 1}): {specs_to_heal}")
         
@@ -559,6 +736,32 @@ def is_stdlib_module(module_name: str) -> bool:
     
     return base_name in COMMON_STDLIBS
 
+
+def is_package_corrupted(pkg_name, missing_module_name):
+    """
+    Checks if a package is 'Ghosted' (metadata exists so pip thinks it's installed, 
+    but the actual module cannot be imported).
+    """
+    import importlib.util
+    import importlib.metadata
+    
+    # 1. Is it installed according to metadata?
+    try:
+        importlib.metadata.distribution(pkg_name)
+    except importlib.metadata.PackageNotFoundError:
+        return False  # Not installed -> Not corrupted (just missing)
+
+    # 2. Can we actually find the module spec?
+    try:
+        # If find_spec returns None, the python files are missing
+        if importlib.util.find_spec(missing_module_name) is None:
+            return True
+    except (ImportError, ValueError, AttributeError):
+        return True # Import system choked on it -> Corrupted
+        
+    return False
+
+
 def convert_module_to_package_name(module_name: str, error_message: str = None) -> str:
     """
     Convert a module name to its likely PyPI package name.
@@ -740,6 +943,7 @@ def convert_module_to_package_name(module_name: str, error_message: str = None) 
         'pick': 'pick',
         'halo': 'halo',
         'yaspin': 'yaspin',
+        'grpc': 'grpcio',
         'alive_progress': 'alive-progress',
         'progress': 'progress',
         'enlighten': 'enlighten',
@@ -989,33 +1193,58 @@ def convert_module_to_package_name(module_name: str, error_message: str = None) 
     safe_print(f"INFO: No specific rule matched. Falling back to module name '{module_name}' as the package name.")
     return module_name
 
-def heal_with_missing_package(pkg_name: str, temp_script_path: Path, temp_script_args: list, original_script_path_for_analysis: Path, config_manager, is_context_aware_run: bool, omnipkg_instance=None, attempted_fixes=None):
+def heal_with_missing_package(pkg_name: str, temp_script_path: Path, temp_script_args: list, original_script_path_for_analysis: Path, config_manager, is_context_aware_run: bool, omnipkg_instance=None, attempted_fixes=None, error_context=None):
     """Installs/upgrades a package. Escalates to force_reinstall if needed, then aborts to prevent loops."""
     
     if attempted_fixes is None:
         attempted_fixes = set()
     
-    # Generate a unique key for this specific action
+    # Generate a unique key for this specific package action
     action_key = f"install_{pkg_name}"
     
     force = False
+    
+    # --- ESCALATION LOGIC ---
     if action_key in attempted_fixes:
-        # We tried this once, let's try FORCE reinstalling
+        # We have already tried a standard install.
+        
         if f"{action_key}_forced" in attempted_fixes:
-            safe_print(f"\n❌ Loop detected: '{pkg_name}' was forced-reinstalled but is still failing.")
+            # We have ALREADY tried a force reinstall. This is Strike 3 -> STOP.
+            safe_print(f"\n❌ Auto-healing failed for '{pkg_name}'.")
+            safe_print(f"   1️⃣  Attempt 1 (Standard Install): Completed, but script still failed.")
+            safe_print(f"   2️⃣  Attempt 2 (Force Reinstall): Completed, but script still failed.")
+            safe_print(f"   🛑  Giving up to prevent infinite loop.")
+            
+            # Add generic, helpful context
+            safe_print(f"\n   💡 Troubleshooting Insights:")
+            safe_print(f"      • Version Mismatch: The package may be incompatible with Python {sys.version_info.major}.{sys.version_info.minor}.")
+            safe_print(f"      • System Dependencies: Missing external libraries (e.g., C++ runtimes, libGL, CUDA).")
+            safe_print(f"      • Ghost Package: The package claims to be installed but is empty or corrupted.")
+            safe_print(f"      • Import Name: The PyPI package name might differ from the import name.")
+            
+            if error_context:
+                safe_print(f"\n📄 LAST ERROR OUTPUT:")
+                print(error_context)
+            
             return 1, None # STOP THE LOOP
         
-        safe_print(f"⚠️  Standard install didn't fix it. Attempting FORCE REINSTALL of '{pkg_name}'...")
+        # This is Strike 2. Escalate to Force Reinstall.
+        safe_print(f"\n⚠️  Attempt 1 (Standard Install) verified the package is present, but the issue persists.")
+        safe_print(f"🚀 Attempt 2: FORCE REINSTALLING '{pkg_name}' to fix potential binary corruption...")
         force = True
         attempted_fixes.add(f"{action_key}_forced")
+        
     else:
-        safe_print(_("🚀 Auto-installing/upgrading missing package: {}").format(pkg_name))
+        # This is Strike 1. Standard Install.
+        safe_print(_("🚀 Attempt 1: Auto-installing missing package: {}").format(pkg_name))
         attempted_fixes.add(action_key)
+    # -------------------------------
 
     if not omnipkg_instance:
         omnipkg_instance = OmnipkgCore(config_manager)
 
     # Use stable-main strategy to protect the environment during this repair
+    # We pass force_reinstall=force to the core installer
     with temporary_install_strategy(omnipkg_instance, 'stable-main'):
         return_code = omnipkg_instance.smart_install([pkg_name], force_reinstall=force)
     
@@ -1035,187 +1264,14 @@ def heal_with_missing_package(pkg_name: str, temp_script_path: Path, temp_script
         attempted_fixes=attempted_fixes
     )
 
-def _run_script_with_healing(script_path, script_args, config_manager, original_script_path_for_analysis, heal_type='execution', is_context_aware_run=False, omnipkg_instance=None, attempted_fixes=None):
-    """
-    Common function to run a script and automatically heal any failures.
-    Can inject the original script's directory into PYTHONPATH for local imports.
-    """
-    if attempted_fixes is None:
-        attempted_fixes = set()
-    
-    python_exe = config_manager.config.get('python_executable', sys.executable)
-    run_cmd = [python_exe] + [str(script_path)] + script_args
-
-    # --- CONTEXT INJECTION LOGIC ---
-    # Create a copy of the current environment to modify for the subprocess
-    env = os.environ.copy()
-    if is_context_aware_run:
-        project_dir = original_script_path_for_analysis.parent
-        if heal_type == 'local_context_run':
-            safe_print(_("   - Injecting project directory into PYTHONPATH: {}").format(project_dir))
-        
-        # Prepend the project path to ensure it's checked first by Python
-        current_python_path = env.get('PYTHONPATH', '')
-        env['PYTHONPATH'] = f"{project_dir}{os.pathsep}{current_python_path}"
-
-    start_time_ns = time.perf_counter_ns()
-
-    # PHASE 1: Quick test run to detect if script is interactive or has errors
-    safe_print("🔍 Testing script for interactivity and errors...")
-    
-    test_process = subprocess.Popen(
-        run_cmd,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        stdin=subprocess.PIPE,
-        text=True,
-        encoding='utf-8',
-        cwd=Path.cwd(),
-        env=env
-    )
-
-    # Give the script a brief moment to start and show any immediate output
-    try:
-        output, _stderr = test_process.communicate(timeout=2)
-        test_return_code = test_process.returncode
-    except subprocess.TimeoutExpired:
-        # Script is likely interactive or long-running
-        test_process.terminate()
-        try:
-            test_process.wait(timeout=1)
-        except subprocess.TimeoutExpired:
-            test_process.kill()
-            test_process.wait()
-        
-        safe_print("📱 Interactive script detected - switching to direct mode...")
-        
-        # PHASE 2: Run interactively for interactive scripts
-        try:
-            interactive_process = subprocess.Popen(
-                run_cmd,
-                stdin=None,  # Use parent's stdin directly
-                stdout=None,  # Use parent's stdout directly  
-                stderr=None,  # Use parent's stderr directly
-                cwd=Path.cwd(),
-                env=env
-            )
-            
-            return_code = interactive_process.wait()
-            
-            # ✅ FIX: Handle interactive script failures
-            if return_code != 0:
-                safe_print(f"\n❌ Interactive script crashed (Exit Code {return_code}).")
-                safe_print("🔍 Re-running in capture mode to analyze the error for healing...")
-                
-                # Re-run purely to capture the error (user won't see this run, it's for the healer)
-                capture_process = subprocess.Popen(
-                    run_cmd, 
-                    stdout=subprocess.PIPE, 
-                    stderr=subprocess.STDOUT, 
-                    stdin=subprocess.PIPE, 
-                    text=True, 
-                    encoding='utf-8', 
-                    cwd=Path.cwd(), 
-                    env=env
-                )
-                
-                try:
-                    full_output, _stderr = capture_process.communicate(timeout=30)
-                except subprocess.TimeoutExpired:
-                    capture_process.kill()
-                    full_output = "Error: Could not capture output (timeout)"
-                
-                # Send the captured error to the healer
-                return analyze_runtime_failure_and_heal(
-                    full_output, 
-                    [str(script_path)] + script_args, 
-                    original_script_path_for_analysis, 
-                    config_manager, 
-                    is_context_aware_run, 
-                    omnipkg_instance=omnipkg_instance,
-                    attempted_fixes=attempted_fixes
-                )
-            
-            # Interactive script succeeded
-            end_time_ns = time.perf_counter_ns()
-            
-            heal_stats = {
-                'total_swap_time_ns': end_time_ns - start_time_ns,
-                'activation_time_ns': 0,
-                'deactivation_time_ns': 0,
-                'type': heal_type
-            }
-            
-            # Show success message for interactive scripts
-            if _initial_run_time_ns:
-                safe_print("\n" + "🎯 " + "="*60)
-                safe_print("🚀 SUCCESS! Auto-healing completed.")
-                _print_performance_comparison(_initial_run_time_ns, heal_stats)
-                safe_print("🎮 Interactive script completed successfully...")
-                safe_print("="*68 + "\n")
-            
-            return return_code, heal_stats
-            
-        except KeyboardInterrupt:
-            safe_print("\n🛑 Interactive process interrupted by user")
-            interactive_process.terminate()
-            interactive_process.wait()
-            return 130, None
-    
-    # PHASE 3: Handle non-interactive scripts or scripts with errors
-    if test_return_code != 0:
-        # Script failed, analyze the error
-        safe_print(f"❌ Script failed with return code {test_return_code}")
-        exit_code, heal_stats = analyze_runtime_failure_and_heal(
-            output, 
-            [str(script_path)] + script_args, 
-            original_script_path_for_analysis, 
-            config_manager, 
-            is_context_aware_run, 
-            omnipkg_instance=omnipkg_instance,
-            attempted_fixes=attempted_fixes
-        )
-        
-        # ✅ FIX: If healing failed, show the error output
-        if exit_code != 0:
-            safe_print("\n📄 SCRIPT ERROR OUTPUT:")
-            safe_print(output)
-        
-        return exit_code, heal_stats
-    
-    # Script completed successfully and non-interactively
-    end_time_ns = time.perf_counter_ns()
-    heal_stats = {
-        'total_swap_time_ns': end_time_ns - start_time_ns,
-        'activation_time_ns': 0,
-        'deactivation_time_ns': 0,
-        'type': heal_type
-    }
-
-    # Show any output that was captured
-    if output:
-        safe_print(output, end='')
-
-    if _initial_run_time_ns:
-        safe_print("\n" + "🎯 " + "="*60)
-        safe_print("🚀 SUCCESS! Auto-healing completed.")
-        _print_performance_comparison(_initial_run_time_ns, heal_stats)
-        safe_print("✅ Script executed successfully...")
-        safe_print("="*68 + "\n")
-    else:
-        safe_print("\n" + "="*60)
-        safe_print("✅ Script executed successfully after auto-healing.")
-        safe_print("="*60)
-
-    return test_return_code, heal_stats
-
-
 def heal_with_bubble(required_specs, original_script_path, original_script_args, config_manager, 
                      omnipkg_instance=None, verbose=False, retry_count=0, attempted_fixes=None, 
                      force_reinstall=False):
     """
     Creates ISOLATED bubbles for the requested specs and re-runs the script.
-    Includes smart dependency detection and cache optimization.
+    
+    CRITICAL FIX: Healing plan specs have ABSOLUTE PRIORITY.
+    Script analysis only finds ADDITIONAL dependencies.
     """
     if not omnipkg_instance:
         omnipkg_instance = OmnipkgCore(config_manager)
@@ -1230,7 +1286,19 @@ def heal_with_bubble(required_specs, original_script_path, original_script_args,
     version_tuple = config_manager._verify_python_version(current_python_exe)
     python_context = f"{version_tuple[0]}.{version_tuple[1]}" if version_tuple else f"{sys.version_info.major}.{sys.version_info.minor}"
     
-    # === STEP 1: Process Requested Specs ===
+    # ═══════════════════════════════════════════════════════════
+    # STEP 0: Build healing plan lookup (HIGHEST PRIORITY)
+    # ═══════════════════════════════════════════════════════════
+    healing_plan_versions = {}
+    for spec in required_specs:
+        if '==' in spec:
+            pkg_name, pkg_version = spec.split('==', 1)
+            healing_plan_versions[pkg_name.lower()] = pkg_version
+            safe_print(f"🎯 LOCKED (healing plan): {pkg_name} -> {pkg_version}")
+    
+    # ═══════════════════════════════════════════════════════════
+    # STEP 1: Process Healing Plan Specs
+    # ═══════════════════════════════════════════════════════════
     for spec in required_specs:
         safe_print(f"🛠️  Resolving isolation strategy for: {spec}")
         
@@ -1248,18 +1316,23 @@ def heal_with_bubble(required_specs, original_script_path, original_script_args,
                 return 1, None
             
             safe_print(f"   🎯 Resolved {pkg_name} -> {pkg_version}")
+            # Add to healing plan lookup
+            healing_plan_versions[pkg_name.lower()] = pkg_version
         
         bubble_name = f"{pkg_name.lower().replace('-', '_')}-{pkg_version}"
         bubble_path = omnipkg_instance.multiversion_base / bubble_name
-        # STEP 1: Check if main env already has exact version
+        
+        # Check if main env already has exact version
         active_ver = omnipkg_instance.get_active_version(pkg_name)
         
         if active_ver == pkg_version:
             safe_print(f"   ✅ Main env has {pkg_name}=={pkg_version} (exact match)")
             safe_print(f"   💡 Skipping bubble - loader will use main env version")
-            # DON'T add to final_specs - no bubble needed!
+            # Still add to final_specs - loader needs to know about it
+            final_specs.append(f"{pkg_name}=={pkg_version}")
             continue
-        # Smart Cache Check (from original)
+        
+        # Smart Cache Check
         if bubble_path.exists() and not force_reinstall:
             safe_print(f"   🚀 CACHE HIT: Bubble exists for {pkg_name}=={pkg_version}")
         else:
@@ -1286,10 +1359,19 @@ def heal_with_bubble(required_specs, original_script_path, original_script_args,
         
         final_specs.append(f"{pkg_name}=={pkg_version}")
     
-    # === STEP 2: Smart Dependency Analysis (from original) ===
+    # ═══════════════════════════════════════════════════════════
+    # STEP 2: Smart Dependency Analysis (SKIP packages in healing plan!)
+    # ═══════════════════════════════════════════════════════════
     safe_print(_("\n🔍 Analyzing script for additional dependencies..."))
     additional_packages = set()
-    already_handled = {spec.split('==')[0].lower() for spec in final_specs}
+    
+    # CRITICAL: Track ALL packages already handled (healing plan + their normalized names)
+    already_handled = set()
+    for spec in final_specs:
+        pkg_name = spec.split('==')[0]
+        already_handled.add(pkg_name.lower())
+        already_handled.add(pkg_name.lower().replace('-', '_'))
+        already_handled.add(pkg_name.lower().replace('_', '-'))
 
     try:
         if original_script_path.exists():
@@ -1299,10 +1381,30 @@ def heal_with_bubble(required_specs, original_script_path, original_script_args,
             for imp in imports:
                 if is_stdlib_module(imp): 
                     continue
+                
                 try:
                     pkg_name_found = convert_module_to_package_name(imp)
-                    if pkg_name_found and pkg_name_found.lower() not in already_handled:
-                        additional_packages.add(pkg_name_found)
+                    if not pkg_name_found:
+                        continue
+                    
+                    # CRITICAL: Check if this package is in healing plan
+                    pkg_normalized = pkg_name_found.lower()
+                    
+                    if pkg_normalized in already_handled:
+                        safe_print(f"   ⏭️  Skipping {pkg_name_found} (already in healing plan)")
+                        continue
+                    
+                    # Check with alternate normalization
+                    pkg_alt1 = pkg_normalized.replace('-', '_')
+                    pkg_alt2 = pkg_normalized.replace('_', '-')
+                    
+                    if pkg_alt1 in already_handled or pkg_alt2 in already_handled:
+                        safe_print(f"   ⏭️  Skipping {pkg_name_found} (already in healing plan as {pkg_alt1 or pkg_alt2})")
+                        continue
+                    
+                    # Not in healing plan - add it
+                    additional_packages.add(pkg_name_found)
+                    
                 except Exception:
                     pass
             
@@ -1315,22 +1417,60 @@ def heal_with_bubble(required_specs, original_script_path, original_script_args,
                 
                 # Recursively create bubbles for additional dependencies
                 for dep in additional_list:
+                    safe_print(f" -> Finding latest COMPATIBLE version for '{dep}' using background caching...")
                     dep_version = omnipkg_instance._get_latest_version_from_pypi(dep)
+                    
                     if dep_version:
+                        safe_print(f"   💫 Quick compatibility check for {dep}")
                         dep_bubble = f"{dep.lower().replace('-', '_')}-{dep_version}"
                         dep_path = omnipkg_instance.multiversion_base / dep_bubble
                         
                         if not dep_path.exists():
                             safe_print(f"   📦 Creating bubble for dependency: {dep}=={dep_version}")
-                            omnipkg_instance.bubble_manager.create_isolated_bubble(
+                            success = omnipkg_instance.bubble_manager.create_isolated_bubble(
                                 dep, dep_version, python_context
                             )
+                            
+                            if not success:
+                                safe_print(f"   ⚠️  Failed to create bubble for {dep}=={dep_version}, continuing anyway...")
+                                continue
                         
                         final_specs.append(f"{dep}=={dep_version}")
+            else:
+                safe_print("   ✅ No additional dependencies needed")
+                
     except Exception as e:
         safe_print(f"⚠️  Dependency analysis warning: {e}")
     
-    # === STEP 3: Execute with Bubbles ===
+    # ═══════════════════════════════════════════════════════════
+    # STEP 3: Final Validation - Remove Duplicates (keep healing plan version)
+    # ═══════════════════════════════════════════════════════════
+    # Build final spec list with healing plan taking priority
+    final_spec_map = {}
+    
+    # First pass: Add all specs
+    for spec in final_specs:
+        pkg_name = spec.split('==')[0].lower()
+        pkg_version = spec.split('==')[1] if '==' in spec else None
+        
+        if pkg_name in final_spec_map:
+            # Duplicate! Check if it's from healing plan
+            if pkg_name in healing_plan_versions:
+                # Keep healing plan version
+                final_spec_map[pkg_name] = f"{pkg_name}=={healing_plan_versions[pkg_name]}"
+                safe_print(f"   ⚠️  Duplicate detected: {pkg_name} - using healing plan version {healing_plan_versions[pkg_name]}")
+            else:
+                # Keep first occurrence
+                safe_print(f"   ⚠️  Duplicate detected: {pkg_name} - keeping first occurrence")
+        else:
+            final_spec_map[pkg_name] = spec
+    
+    # Rebuild final_specs from map
+    final_specs = list(final_spec_map.values())
+    
+    # ═══════════════════════════════════════════════════════════
+    # STEP 4: Execute with Bubbles
+    # ═══════════════════════════════════════════════════════════
     safe_print(_("\n✅ Bubbles ready. Activating: {}").format(final_specs))
     
     return run_with_healing_wrapper(
@@ -1344,83 +1484,7 @@ def heal_with_bubble(required_specs, original_script_path, original_script_args,
 # -------------------------------------------------------------------
 # NEW: Dispatcher and CLI Handling Logic
 # ------------------------------------------------------------------------------
-def execute_run_command(cmd_args: list, config_manager: ConfigManager, verbose: bool = False, omnipkg_core=None):
-    from omnipkg.i18n import _
-    
-    if not cmd_args:
-        safe_print(_('❌ Error: No script or command specified to run.'))
-        return 1
-    
-    # 1. Reuse provided Core or Initialize if missing
-    if omnipkg_core is None:
-        omnipkg_core = OmnipkgCore(config_manager)
 
-    target = cmd_args[0]
-    target_path = Path(target)
-
-    # BRANCH 0: Python Inline Command
-    if target in ['python', 'python3', 'python.exe'] and '-c' in cmd_args:
-        try:
-            c_index = cmd_args.index('-c')
-            if c_index + 1 < len(cmd_args):
-                code_string = cmd_args[c_index + 1]
-                script_args = cmd_args[c_index + 2:] 
-                safe_print("✨ Detected inline Python code. Converting to virtual script...")
-                with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False, encoding='utf-8') as f:
-                    f.write(code_string)
-                    temp_source_path = Path(f.name)
-                try:
-                    # ✅ Pass omnipkg_core to logic
-                    return _run_script_logic(temp_source_path, script_args, config_manager, verbose, omnipkg_core=omnipkg_core)
-                finally:
-                    if temp_source_path.exists():
-                        temp_source_path.unlink()
-        except ValueError:
-            pass
-
-    # --- BRANCH 0.5: Python stdin mode (python < script or python <<EOF) ---
-    # NEW BRANCH TO ADD!
-    elif target in ['python', 'python3', 'python.exe'] and len(cmd_args) == 1:
-        # Stdin mode - capture input and write to temp file
-        safe_print("🐍 Detected Python stdin mode. Reading from stdin...")
-        
-        # Read ALL stdin content
-        stdin_content = sys.stdin.read()
-        
-        if not stdin_content.strip():
-            safe_print("❌ No input provided via stdin")
-            return 1
-        
-        # Write to temp file
-        temp_script_path = None
-        try:
-            with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False, encoding='utf-8') as f:
-                f.write(stdin_content)
-                temp_script_path = Path(f.name)
-            
-            safe_print(f"📝 Saved stdin to temporary script: {temp_script_path}")
-            
-            # Now delegate to script logic (which handles healing properly)
-            return _run_script_logic(temp_script_path, [], config_manager, verbose)
-            
-        finally:
-            if temp_script_path and temp_script_path.exists():
-                temp_script_path.unlink()
-
-
-    # BRANCH 1: Python Script
-    if (target_path.exists() and target_path.is_file()) or target.endswith('.py'):
-        # ✅ Pass omnipkg_core to logic
-        return _run_script_logic(target_path.resolve(), cmd_args[1:], config_manager, verbose, omnipkg_core=omnipkg_core)
-    
-    # BRANCH 2: CLI Command
-    elif shutil.which(target) or omnipkg_core.get_package_for_command(target):
-        # ✅ Pass omnipkg_core to logic
-        return _handle_cli_execution(target, cmd_args[1:], config_manager, omnipkg_core)
-    
-    else:
-        safe_print(_("❌ Error: Target '{}' is neither a valid script file nor a recognized command.").format(target))
-        return 1
         
 def _auto_inject_stdlibs(code: str) -> str:
     """
@@ -1619,279 +1683,206 @@ def _handle_cli_execution(command, args, config_manager, omnipkg_core):
         safe_print(f"❌ Command failed but no error output to analyze.")
         return 1
 
-def _run_script_logic(source_script_path: Path, script_args: list, config_manager: ConfigManager, verbose: bool = False, omnipkg_core=None):
-    """Main script execution logic with output streaming."""
-    if not omnipkg_core:
-        omnipkg_core = OmnipkgCore(config_manager)
+_initial_run_time_ns = None
 
-    if not source_script_path.exists():
-        safe_print(_("❌ Error: Script not found at '{}'").format(source_script_path))
-        return 1
+def _run_script_with_healing(script_path, script_args, config_manager, original_script_path_for_analysis,
+                            heal_type='execution', is_context_aware_run=False, omnipkg_instance=None,
+                            attempted_fixes=None):
+    """
+    Common function to run a script and automatically heal any failures.
+    Can inject the original script's directory into PYTHONPATH for local imports.
 
-    temp_script_path = None
+    CRITICAL FIXES:
+    1. Always passes [script_path, ...args] to healer (never the interpreter)
+    2. Properly handles interactive script failures
+    3. Shows error output when healing fails
+    4. Correctly defines and uses _initial_run_time_ns for performance stats.
+    """
+    # Reference the module-level variable to ensure we are modifying the same
+    # instance throughout the healing process.
+    global _initial_run_time_ns
+
+    if attempted_fixes is None:
+        attempted_fixes = set()
+
+    python_exe = config_manager.config.get('python_executable', sys.executable)
+    run_cmd = [python_exe, str(script_path)] + script_args
+
+    # --- CONTEXT INJECTION LOGIC ---
+    env = os.environ.copy()
+    if is_context_aware_run:
+        project_dir = original_script_path_for_analysis.parent
+        if heal_type == 'local_context_run':
+            safe_print(_("   - Injecting project directory into PYTHONPATH: {}").format(project_dir))
+
+        current_python_path = env.get('PYTHONPATH', '')
+        env['PYTHONPATH'] = f"{project_dir}{os.pathsep}{current_python_path}"
+
+    start_time_ns = time.perf_counter_ns()
+
+    # PHASE 1: Quick test run to detect if script is interactive or has errors
+    safe_print("🔍 Testing script for interactivity and errors...")
+
+    test_process = subprocess.Popen(
+        run_cmd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        stdin=subprocess.PIPE,
+        text=True,
+        encoding='utf-8',
+        cwd=Path.cwd(),
+        env=env
+    )
+
+    # Give the script a brief moment to start and show any immediate output
     try:
-        # 1. Read the original code
-        code_str = source_script_path.read_text(encoding='utf-8')
-        
-        # --- NEW STEP: Auto-inject missing standard library imports ---
-        # This fixes "NameError: name 'sys' is not defined" in quick scripts
-        code_str = _auto_inject_stdlibs(code_str)
-        # --------------------------------------------------------------
-        
-        # 2. Heal it for AI import hallucinations (existing logic)
-        healed_code = heal_code_string(code_str, verbose=verbose)
-        
-        # 3. Patch for Flask (existing logic)
-        if auto_patch_flask_port:
-            final_code = auto_patch_flask_port(healed_code)
-        else:
-            final_code = healed_code
-
-        # 4. Write to temp file
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False, encoding='utf-8') as temp_script:
-            temp_script_path = Path(temp_script.name)
-            temp_script.write(final_code)
-        
-        # These are the arguments for EXECUTION, using the temp script
-        safe_cmd_args = [str(temp_script_path)] + script_args
-        safe_print(_("🔄 Syncing omnipkg context..."))
-        sync_context_to_runtime()
-        safe_print(_("✅ Context synchronized."))
-        
-        python_exe = config_manager.config.get('python_executable', sys.executable)
-        safe_print(_("🚀 Running script with uv, forcing use of current environment (this may take a moment)..."), flush=True)
-        
-        # Set environment to suppress warnings
-        env = os.environ.copy()
-        env['PYTHONWARNINGS'] = 'ignore::DeprecationWarning:pkg_resources,ignore::UserWarning:pkg_resources'
-        
-        initial_cmd = ['uv', 'run', '--no-project', '--python', python_exe, '--'] + safe_cmd_args
-        start_time_ns = time.perf_counter_ns()
-        
-        # First attempt: Try with output capture for error detection
-        process = subprocess.Popen(
-            initial_cmd, 
-            stdout=subprocess.PIPE, 
-            stderr=subprocess.STDOUT, 
-            stdin=subprocess.PIPE,
-            text=True, 
-            encoding='utf-8', 
-            cwd=Path.cwd(), 
-            bufsize=0,
-            universal_newlines=True,
-            env=env
-        )
-        
-        output_lines = []
-        interactive_detected = False
-        current_line = ""  # ADD THIS to accumulate characters into a line
-
+        output, _stderr = test_process.communicate(timeout=2)
+        test_return_code = test_process.returncode
+    except subprocess.TimeoutExpired:
+        # Script is likely interactive or long-running
+        test_process.terminate()
         try:
-            while True:
-                # Check if process has terminated
-                if process.poll() is not None:
-                    # Process finished, read remaining output
-                    remaining = process.stdout.read()
-                    if remaining:
-                        safe_print(remaining, end='', flush=True)
-                        output_lines.append(remaining)
-                    break
-                
-                # Use select to check if there's data available (Unix-like systems)
-                if HAS_SELECT:
-                    ready, _unused1, _unused2 = select.select([process.stdout], [], [], 0.1)
-                    if ready:
-                        char = process.stdout.read(1)  # Read 1 character at a time
-                        if char:
-                            safe_print(char, end='', flush=True)
-                            current_line += char  # Accumulate into current line
-                            
-                            # Check for newline - complete line
-                            if char == '\n':
-                                output_lines.append(current_line)
-                                
-                                # Detect interactive prompts on complete lines
-                                if any(prompt in current_line.lower() for prompt in [
-                                    'enter your choice:', 'please choose', 'select an option',
-                                    'type a number:', 'input:', '(y/n)', 'continue?'
-                                ]):
-                                    interactive_detected = True
-                                    break
-                                
-                                current_line = ""  # Reset for next line
-                        else:
-                            break
-                    else:
-                        time.sleep(0.01)
-                else:
-                    # Fallback for systems without select
-                    try:
-                        char = process.stdout.read(1)
-                        if char:
-                            safe_print(char, end='', flush=True)
-                            current_line += char
-                            
-                            if char == '\n':
-                                output_lines.append(current_line)
-                                
-                                if any(prompt in current_line.lower() for prompt in [
-                                    'enter your choice:', 'please choose', 'select an option',
-                                    'type a number:', 'input:', '(y/n)', 'continue?'
-                                ]):
-                                    interactive_detected = True
-                                    break
-                                
-                                current_line = ""
-                        else:
-                            break
-                    except:
-                        break
-            
-            if interactive_detected:
-                safe_print(_("\n🎮 Interactive script detected! Switching to direct mode..."))
-                # Terminate the captured process
-                process.terminate()
-                process.wait()
-                
-                # Re-run with direct stdin/stdout for interactive mode
-                safe_print(_("🚀 Re-launching script with full interactive support..."))
-                direct_process = subprocess.Popen(
-                    initial_cmd,
-                    stdin=sys.stdin,
-                    stdout=sys.stdout, 
-                    stderr=sys.stderr,
+            test_process.wait(timeout=1)
+        except subprocess.TimeoutExpired:
+            test_process.kill()
+            test_process.wait()
+
+        safe_print("📱 Interactive script detected - switching to direct mode...")
+
+        # PHASE 2: Run interactively for interactive scripts
+        try:
+            interactive_process = subprocess.Popen(
+                run_cmd,
+                stdin=None,  # Use parent's stdin directly
+                stdout=None, # Use parent's stdout directly
+                stderr=None, # Use parent's stderr directly
+                cwd=Path.cwd(),
+                env=env
+            )
+
+            return_code = interactive_process.wait()
+
+            # ✅ FIX: Handle interactive script failures
+            if return_code != 0:
+                safe_print(f"\n❌ Interactive script crashed (Exit Code {return_code}).")
+
+                # Capture the runtime of this FIRST failure, if not already captured.
+                if _initial_run_time_ns is None:
+                    _initial_run_time_ns = time.perf_counter_ns() - start_time_ns
+
+                safe_print("🔍 Re-running in capture mode to analyze the error for healing...")
+
+                # Re-run purely to capture the error (user won't see this run, it's for the healer)
+                capture_process = subprocess.Popen(
+                    run_cmd,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    stdin=subprocess.PIPE,
+                    text=True,
+                    encoding='utf-8',
                     cwd=Path.cwd(),
                     env=env
                 )
-                
+
                 try:
-                    return_code = direct_process.wait()
-                    end_time_ns = time.perf_counter_ns()
-                    
-                    # ✅ FIX: Don't return immediately - check for errors and heal!
-                    if return_code != 0:
-                        safe_print(f"\n❌ Interactive script exited with code: {return_code}")
-                        safe_print("🤖 [AI-INFO] Script execution failed. Attempting to heal...")
-                        
-                        # Since we can't capture output in interactive mode, we need to re-run
-                        # in capture mode to get the error output for healing
-                        safe_print(_("🔍 Re-running in capture mode to analyze errors..."))
-                        capture_process = subprocess.Popen(
-                            initial_cmd,
-                            stdout=subprocess.PIPE,
-                            stderr=subprocess.STDOUT,
-                            stdin=subprocess.PIPE,
-                            text=True,
-                            encoding='utf-8',
-                            cwd=Path.cwd(),
-                            env=env
-                        )
-                        full_output, _stderr = capture_process.communicate()
-                        
-                        # Analyze and heal
-                        exit_code, heal_stats = analyze_runtime_failure_and_heal(
-                            full_output, safe_cmd_args, source_script_path, config_manager, 
-                            is_context_aware_run=False)
-                        
-                        if heal_stats:
-                            _print_performance_comparison(end_time_ns - start_time_ns, heal_stats)
-                        
-                        return exit_code
-                    else:
-                        # Success in interactive mode
-                        safe_print("\n✅ Interactive script completed successfully via uv.")
-                        safe_print("🤖 [AI-INFO] Script executed successfully without errors.")
-                        return 0
-                        
-                except KeyboardInterrupt:
-                    safe_print("\n🛑 Process interrupted by user")
-                    direct_process.terminate()
-                    direct_process.wait()
-                    return 130
-            else:
-                # Non-interactive, continue with normal flow
-                return_code = process.wait()
-                end_time_ns = time.perf_counter_ns()
-                full_output = "".join(output_lines)
-                
+                    full_output, _stderr = capture_process.communicate(timeout=30)
+                except subprocess.TimeoutExpired:
+                    capture_process.kill()
+                    full_output = "Error: Could not capture output (timeout)"
+
+                # ✅ CRITICAL FIX: Pass script_path as first arg, NOT the interpreter
+                return analyze_runtime_failure_and_heal(
+                    full_output,
+                    [str(script_path)] + script_args,  # ✅ Script path first, not interpreter
+                    original_script_path_for_analysis,
+                    config_manager,
+                    is_context_aware_run,
+                    omnipkg_instance=omnipkg_instance,
+                    attempted_fixes=attempted_fixes
+                )
+
+            # Interactive script succeeded
+            end_time_ns = time.perf_counter_ns()
+
+            heal_stats = {
+                'total_swap_time_ns': end_time_ns - start_time_ns,
+                'activation_time_ns': 0,
+                'deactivation_time_ns': 0,
+                'type': heal_type
+            }
+
+            # Show success message for interactive scripts
+            # This check now works because _initial_run_time_ns is defined.
+            if _initial_run_time_ns:
+                safe_print("\n" + "🎯 " + "="*60)
+                safe_print("🚀 SUCCESS! Auto-healing completed.")
+                _print_performance_comparison(_initial_run_time_ns, heal_stats)
+                safe_print("🎮 Interactive script completed successfully...")
+                safe_print("="*68 + "\n")
+
+            return return_code, heal_stats
+
         except KeyboardInterrupt:
-            safe_print("\n🛑 Process interrupted by user")
-            process.terminate()
-            process.wait()
-            return 130
-        
-        # Filter out pkg_resources warnings from output
-        filtered_lines = []
-        skip_next = False
-        for line in full_output.split('\n'):
-            if 'pkg_resources' in line or 'UserWarning' in line:
-                skip_next = True
-                continue
-            if skip_next and line.strip().startswith('from pkg_resources'):
-                skip_next = False
-                continue
-            skip_next = False
-            filtered_lines.append(line)
-        full_output = '\n'.join(filtered_lines)
-        
-        # Check for pytest failures - CRITICAL for AI agents to know they need to fix code
-        has_pytest_failure = False
-        if "FAILED" in full_output and ("test session starts" in full_output or "short test summary info" in full_output):
-            has_pytest_failure = True
-            # Force non-zero exit code if pytest detected failures but process returned 0
-            if return_code == 0:
-                return_code = 1
-                safe_print("\n🔍 Pytest failure detected in output. Setting failure status for AI agents.")
-        
-        # Check for healable errors
-        has_healable_error = any(re.search(pattern, full_output, re.MULTILINE) for pattern in [
-            r"A module that was compiled using NumPy 1\.x cannot be run in[\s\S]*?NumPy 2\.0",
-            r"numpy\.dtype size changed, may indicate binary incompatibility"
-        ])
-        
-        if return_code == 0 and not has_healable_error:
-            # Success case - provide clear message for AI and user
-            if "test session starts" in full_output and "passed" in full_output.lower():
-                # Silent pytest success
-                passed_match = re.search(r'(\d+) passed', full_output)
-                if passed_match:
-                    num_passed = passed_match.group(1)
-                    safe_print(f"\n✅ All tests passed! ({num_passed} test(s) successful)")
-                    safe_print("🤖 [AI-INFO] Script executed successfully with all tests passing.")
-                else:
-                    safe_print("\n✅ All tests passed!")
-                    safe_print("🤖 [AI-INFO] Script executed successfully with all tests passing.")
-            else:
-                safe_print("\n✅ Script executed successfully via uv.")
-                safe_print("🤖 [AI-INFO] Script executed successfully without errors.")
-            
-            return 0
-        
-        if has_pytest_failure:
-            safe_print("\n❌ Tests FAILED - AI agents should debug and fix the code!")
-            safe_print("🤖 [AI-INFO] Script execution resulted in test failures. Code needs debugging.")
-        
-        if return_code == 0:
-            safe_print("\n🔍 UV succeeded but detected healable errors in output...")
-        else:
-            safe_print("⏱️  UV run failed in: {:.3f} ms ({:,} ns)".format(
-                (end_time_ns - start_time_ns) / 1_000_000, end_time_ns - start_time_ns))
-            safe_print("🤖 [AI-INFO] Script execution failed with errors. Attempting to heal...")
-        
-        # CHANGED: Pass the safe_cmd_args for re-execution, but the SOURCE script path for analysis.
+            safe_print("\n🛑 Interactive process interrupted by user")
+            interactive_process.terminate()
+            interactive_process.wait()
+            return 130, None
+
+    # PHASE 3: Handle non-interactive scripts or scripts with errors
+    if test_return_code != 0:
+        # Script failed, analyze the error
+        safe_print(f"❌ Script failed with return code {test_return_code}")
+
+        # Capture the runtime of this FIRST failure, if not already captured.
+        if _initial_run_time_ns is None:
+            _initial_run_time_ns = time.perf_counter_ns() - start_time_ns
+
+        # ✅ CRITICAL FIX: Pass script_path as first arg, NOT the interpreter
         exit_code, heal_stats = analyze_runtime_failure_and_heal(
-            full_output, safe_cmd_args, source_script_path, config_manager, 
-            is_context_aware_run=False, omnipkg_instance=omnipkg_core
+            output,
+            [str(script_path)] + script_args,  # ✅ Script path first, not interpreter
+            original_script_path_for_analysis,
+            config_manager,
+            is_context_aware_run,
+            omnipkg_instance=omnipkg_instance,
+            attempted_fixes=attempted_fixes
         )
-        
-        if heal_stats:
-            _print_performance_comparison(end_time_ns - start_time_ns, heal_stats)
-        
-        return exit_code
-        
-    finally:
-        if temp_script_path and temp_script_path.exists():
-            temp_script_path.unlink()
+
+        # ✅ FIX: If healing failed, show the error output
+        if exit_code != 0:
+            safe_print("\n📄 SCRIPT ERROR OUTPUT:")
+            safe_print(output)
+
+        return exit_code, heal_stats
+
+    # Script completed successfully and non-interactively
+    end_time_ns = time.perf_counter_ns()
+    heal_stats = {
+        'total_swap_time_ns': end_time_ns - start_time_ns,
+        'activation_time_ns': 0,
+        'deactivation_time_ns': 0,
+        'type': heal_type
+    }
+
+    # Show any output that was captured
+    if output:
+        safe_print(output, end='')
+
+    # Show success stats if this was a healed run
+    # This check now works correctly.
+    if _initial_run_time_ns:
+        safe_print("\n" + "🎯 " + "="*60)
+        safe_print("🚀 SUCCESS! Auto-healing completed.")
+        _print_performance_comparison(_initial_run_time_ns, heal_stats)
+        safe_print("✅ Script executed successfully...")
+        safe_print("="*68 + "\n")
+    else:
+        # This branch handles the case where the script succeeded on the very first try.
+        safe_print("\n" + "="*60)
+        safe_print("✅ Script executed successfully on the first attempt.")
+        safe_print("="*60)
+
+    return test_return_code, heal_stats
 
 def _print_performance_comparison(initial_ns, heal_stats, runner_name="UV"):
     """Prints the final performance summary comparing Runner failure time to omnipkg execution time."""
@@ -2071,9 +2062,7 @@ def run_with_healing_wrapper(required_specs, original_script_path, original_scri
     for spec in required_specs:
         pkg_name = re.sub(r'[^a-zA-Z0-9_]', '_', spec.split('==')[0])
         nested_loaders_str += f"{indentation}with omnipkgLoader('{spec}', config=config, isolation_mode='{isolation_mode}', force_activation=True) as loader_{pkg_name}:\n"
-        # --- ADD THIS LINE ---
         nested_loaders_str += f"{indentation}    loader_instances.append(loader_{pkg_name})\n" 
-        # ---------------------
         indentation += "    "
     
     # The code that runs at the deepest nesting level
@@ -2093,8 +2082,8 @@ runpy.run_path({str(original_script_path)!r}, run_name="__main__")
     full_loader_block = nested_loaders_str + run_script_code
 
     # Enhanced wrapper content with comprehensive debugging
-    wrapper_content = textwrap.dedent(f"""\
-
+    # NOTE: Using .format() at the END to inject the full_loader_block
+    wrapper_template = """\
 import sys, os, runpy, json, re
 from pathlib import Path
 try:
@@ -2103,7 +2092,7 @@ except ImportError:
     from omnipkg.common_utils import safe_print
 
 # --- VERBOSITY CONTROL ---
-VERBOSE_MODE = {str(verbose)}
+VERBOSE_MODE = {verbose_flag}
 
 def vprint(msg):
     '''Only print if verbose mode is enabled'''
@@ -2124,7 +2113,7 @@ if VERBOSE_MODE:
         vprint(f"   ... and {{len(sys.path) - 5}} more entries")
 
 # --- COMPLETE SYS.PATH INJECTION ---
-project_root_path = r"{project_root}"
+project_root_path = r"{project_root_path}"
 main_site_packages = r"{site_packages_path}"
 
 vprint(f"\\n   🔧 Adding project root: {{project_root_path}}")
@@ -2142,7 +2131,7 @@ else:
     vprint(f"      ⚠️  Already in sys.path or None")
 
 # Add all potential site-packages paths
-additional_paths = {repr(site_packages_paths)}
+additional_paths = {additional_paths_repr}
 vprint(f"   🔧 Adding {{len(additional_paths)}} additional paths...")
 for add_path in additional_paths:
     if add_path and os.path.exists(add_path) and add_path not in sys.path:
@@ -2208,14 +2197,14 @@ except ImportError as e:
 lang_from_env = os.environ.get('OMNIPKG_LANG')
 if lang_from_env: _.set_language(lang_from_env)
 
-config = json.loads(r'''{json.dumps(config_manager.config)}''')
+config = json.loads(r'''{config_json}''')
 loader_instances = []
 
-safe_print(f"\\n🌀 omnipkg auto-heal: Wrapping script with loaders for {required_specs!r}...")
+safe_print(f"\\n🌀 omnipkg auto-heal: Wrapping script with loaders for {required_specs_repr}...")
 safe_print('-' * 60)
 
 try:
-{full_loader_block}
+{FULL_LOADER_BLOCK_PLACEHOLDER}
 except Exception:
     import traceback
 
@@ -2241,7 +2230,18 @@ finally:
 
 safe_print('-' * 60)
 safe_print(_("✅ Script completed successfully inside omnipkg bubble."))
-""")
+"""
+
+    # Now inject all the variables using .format()
+    wrapper_content = wrapper_template.format(
+        verbose_flag=str(verbose),
+        project_root_path=project_root,
+        site_packages_path=site_packages_path,
+        additional_paths_repr=repr(site_packages_paths),
+        config_json=json.dumps(config_manager.config),
+        required_specs_repr=repr(required_specs),
+        FULL_LOADER_BLOCK_PLACEHOLDER=full_loader_block
+    )
 
     temp_script_path = None
     try:
@@ -2279,6 +2279,117 @@ safe_print(_("✅ Script completed successfully inside omnipkg bubble."))
     finally:
         if temp_script_path and os.path.exists(temp_script_path):
             os.unlink(temp_script_path)
+
+def execute_run_command(cmd_args: list, config_manager: ConfigManager, verbose: bool = False, omnipkg_core=None):
+    """
+    Enhanced to properly handle Python stdin mode and ensure healing works correctly.
+    """
+    from omnipkg.i18n import _
+    
+    if not cmd_args:
+        safe_print(_('❌ Error: No script or command specified to run.'))
+        return 1
+    
+    # 1. Reuse provided Core or Initialize if missing
+    if omnipkg_core is None:
+        omnipkg_core = OmnipkgCore(config_manager)
+    
+    target = cmd_args[0]
+    target_path = Path(target)
+    
+    # BRANCH 0: Python Inline Command (-c flag)
+    if target in ['python', 'python3', 'python.exe'] and '-c' in cmd_args:
+        try:
+            c_index = cmd_args.index('-c')
+            if c_index + 1 < len(cmd_args):
+                code_string = cmd_args[c_index + 1]
+                script_args = cmd_args[c_index + 2:] 
+                safe_print("✨ Detected inline Python code. Converting to virtual script...")
+                with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False, encoding='utf-8') as f:
+                    f.write(code_string)
+                    temp_source_path = Path(f.name)
+                try:
+                    return _run_script_logic(temp_source_path, script_args, config_manager, verbose, omnipkg_core=omnipkg_core)
+                finally:
+                    if temp_source_path.exists():
+                        temp_source_path.unlink()
+        except ValueError:
+            pass
+    
+    # BRANCH 0.5: Python stdin mode (python - << 'EOF' or echo "code" | python -)
+    # CRITICAL: Check for '-' argument OR if target is python with single arg AND stdin is not a TTY
+    elif target in ['python', 'python3', 'python.exe']:
+        is_stdin_mode = False
+        script_args = []
+        
+        # Check if '-' is explicitly passed
+        if len(cmd_args) > 1 and cmd_args[1] == '-':
+            is_stdin_mode = True
+            script_args = cmd_args[2:]  # Everything after '-'
+        # Check if only 'python' with no other args and stdin has data
+        elif len(cmd_args) == 1 and not sys.stdin.isatty():
+            is_stdin_mode = True
+            script_args = []
+        
+        if is_stdin_mode:
+            safe_print("🐍 Detected Python stdin mode. Reading from stdin...")
+            
+            # Read ALL stdin content
+            try:
+                stdin_content = sys.stdin.read()
+            except Exception as e:
+                safe_print(f"❌ Failed to read stdin: {e}")
+                return 1
+            
+            if not stdin_content.strip():
+                safe_print("❌ No input provided via stdin")
+                return 1
+            
+            # Write to temp file with a stable name for error tracking
+            temp_script_path = None
+            try:
+                # Use a more stable temp file that can be referenced in errors
+                temp_dir = Path(tempfile.gettempdir()) / 'omnipkg_stdin'
+                temp_dir.mkdir(exist_ok=True)
+                
+                # Create unique but trackable filename
+                timestamp = int(time.time() * 1000)
+                temp_script_path = temp_dir / f"stdin_script_{timestamp}.py"
+                
+                with open(temp_script_path, 'w', encoding='utf-8') as f:
+                    f.write(stdin_content)
+                
+                safe_print(f"📝 Saved stdin to temporary script: {temp_script_path}")
+                
+                # CRITICAL: Run with _run_script_logic which has proper healing support
+                # Pass script_args (everything after '-' if present)
+                return _run_script_logic(
+                    temp_script_path, 
+                    script_args, 
+                    config_manager, 
+                    verbose, 
+                    omnipkg_core=omnipkg_core
+                )
+                
+            finally:
+                # Clean up temp file after execution
+                if temp_script_path and temp_script_path.exists():
+                    try:
+                        temp_script_path.unlink()
+                    except:
+                        pass  # Ignore cleanup errors
+    
+    # BRANCH 1: Python Script (.py file)
+    if (target_path.exists() and target_path.is_file()) or target.endswith('.py'):
+        return _run_script_logic(target_path.resolve(), cmd_args[1:], config_manager, verbose, omnipkg_core=omnipkg_core)
+    
+    # BRANCH 2: CLI Command (executables in PATH or registered with omnipkg)
+    elif shutil.which(target) or omnipkg_core.get_package_for_command(target):
+        return _handle_cli_execution(target, cmd_args[1:], config_manager, omnipkg_core)
+    
+    else:
+        safe_print(_("❌ Error: Target '{}' is neither a valid script file nor a recognized command.").format(target))
+        return 1
 
 def run_cli_with_healing_wrapper(required_specs, command, command_args, config_manager):
     """
@@ -2320,12 +2431,10 @@ def run_cli_with_healing_wrapper(required_specs, command, command_args, config_m
     for spec in required_specs:
         pkg_name = re.sub(r'[^a-zA-Z0-9_]', '_', spec.split('==')[0])
         nested_loaders_str += f"{indentation}with omnipkgLoader('{spec}', config=config, isolation_mode='overlay', force_activation=True) as loader_{pkg_name}:\n"
-        # --- ADD THIS LINE ---
         nested_loaders_str += f"{indentation}    loader_instances.append(loader_{pkg_name})\n"
-        # ---------------------
         indentation += "    "
     
-    # THE KEY DIFFERENCE: Instead of runpy.run_path, we exec the CLI command
+    # FIX 1: Added 'f' prefix to interpolate command/args and escape inner braces
     run_cli_code = textwrap.indent(f"""\
 try:
     from omnipkg.common_utils import safe_print
@@ -2353,11 +2462,10 @@ except Exception as e:
     sys.exit(1)
 """, prefix=indentation)
 
-    # SAME wrapper content structure as your script version
     full_loader_block = nested_loaders_str + run_cli_code
-    indented_loader_block = textwrap.indent(full_loader_block, '    ')  # ← Do this FIRST
+    indented_loader_block = textwrap.indent(full_loader_block, '    ') 
 
-    # SAME wrapper content structure as your script version
+    # FIX 2: Added 'f' prefix to interpolate variables like {indented_loader_block}
     wrapper_content = f"""\
 import sys, os, subprocess, shutil, json, re
 from pathlib import Path
@@ -2452,3 +2560,187 @@ safe_print("✅ CLI command completed successfully inside omnipkg bubble.")
     finally:
         if temp_script_path and os.path.exists(temp_script_path):
             os.unlink(temp_script_path)
+            
+def _run_script_logic(source_script_path: Path, script_args: list, config_manager: ConfigManager, verbose: bool = False, omnipkg_core=None):
+    """Main script execution logic with robust interactive handling."""
+    if not omnipkg_core:
+        omnipkg_core = OmnipkgCore(config_manager)
+
+    if not source_script_path.exists():
+        safe_print(_("❌ Error: Script not found at '{}'").format(source_script_path))
+        return 1
+
+    temp_script_path = None
+    try:
+        # 1. Read the original code
+        code_str = source_script_path.read_text(encoding='utf-8')
+        
+        # Auto-inject missing standard library imports
+        code_str = _auto_inject_stdlibs(code_str)
+        
+        # Heal AI hallucinations
+        healed_code = heal_code_string(code_str, verbose=verbose)
+        
+        # Patch Flask
+        if auto_patch_flask_port:
+            final_code = auto_patch_flask_port(healed_code)
+        else:
+            final_code = healed_code
+
+        # Write to temp file
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False, encoding='utf-8') as temp_script:
+            temp_script_path = Path(temp_script.name)
+            temp_script.write(final_code)
+        
+        safe_cmd_args = [str(temp_script_path)] + script_args
+        safe_print(_("🔄 Syncing omnipkg context..."))
+        sync_context_to_runtime()
+        safe_print(_("✅ Context synchronized."))
+        
+        python_exe = config_manager.config.get('python_executable', sys.executable)
+        safe_print(_("🚀 Running script with uv (forcing current env)..."), flush=True)
+        
+        # Set environment
+        env = os.environ.copy()
+        env['PYTHONWARNINGS'] = 'ignore::DeprecationWarning:pkg_resources,ignore::UserWarning:pkg_resources'
+        
+        initial_cmd = ['uv', 'run', '--no-project', '--python', python_exe, '--'] + safe_cmd_args
+        start_time_ns = time.perf_counter_ns()
+        
+        # =========================================================================
+        # PHASE 1: THE PROBE (Detect Errors vs Interactivity)
+        # =========================================================================
+        
+        probe_process = subprocess.Popen(
+            initial_cmd, 
+            stdout=subprocess.PIPE, 
+            stderr=subprocess.STDOUT, 
+            stdin=subprocess.PIPE, 
+            text=True, 
+            encoding='utf-8', 
+            cwd=Path.cwd(), 
+            env=env
+        )
+        
+        full_output = ""
+        return_code = 0
+        is_interactive_switch = False
+
+        try:
+            # FIX: Use _ignored instead of _ to avoid shadowing global translation function
+            full_output, _ignored = probe_process.communicate(timeout=2.0)
+            return_code = probe_process.returncode
+            
+        except subprocess.TimeoutExpired:
+            # IT TIMED OUT -> Assume Interactive or Long-Running
+            is_interactive_switch = True
+            probe_process.kill()
+            probe_process.wait()
+            
+            safe_print(_("\n🎮 Interactive/Long-running script detected! Switching to direct mode..."))
+            
+            # =========================================================================
+            # PHASE 2: DIRECT INTERACTIVE MODE
+            # =========================================================================
+            direct_process = subprocess.Popen(
+                initial_cmd,
+                stdin=sys.stdin,
+                stdout=sys.stdout, 
+                stderr=sys.stderr,
+                cwd=Path.cwd(),
+                env=env
+            )
+            
+            try:
+                return_code = direct_process.wait()
+                end_time_ns = time.perf_counter_ns()
+                
+                # If it failed interactively, we need to get the logs for the AI healer
+                if return_code != 0:
+                    safe_print(f"\n❌ Script exited with code: {return_code}")
+                    safe_print("🤖 [AI-INFO] Attempting to capture error log for healing...")
+                    
+                    # PHASE 3: POST-MORTEM CAPTURE
+                    capture_process = subprocess.Popen(
+                        initial_cmd,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.STDOUT,
+                        stdin=subprocess.PIPE,
+                        text=True,
+                        encoding='utf-8',
+                        cwd=Path.cwd(),
+                        env=env
+                    )
+                    try:
+                        # FIX: Use _ignored instead of _
+                        full_output, _ignored = capture_process.communicate(timeout=30)
+                    except subprocess.TimeoutExpired:
+                        capture_process.kill()
+                        full_output = "Error: Script crashed interactively but timed out during error capture."
+                        
+            except KeyboardInterrupt:
+                safe_print("\n🛑 Process interrupted by user")
+                direct_process.terminate()
+                direct_process.wait()
+                return 130
+
+        # =========================================================================
+        # PHASE 4: ANALYSIS & HEALING (Common path)
+        # =========================================================================
+        
+        if not is_interactive_switch:
+             end_time_ns = time.perf_counter_ns()
+             if full_output:
+                 print(full_output, end='') 
+
+        # Cleanup output for analysis
+        filtered_lines = []
+        skip_next = False
+        for line in full_output.split('\n'):
+            if 'pkg_resources' in line or 'UserWarning' in line:
+                skip_next = True
+                continue
+            if skip_next and line.strip().startswith('from pkg_resources'):
+                skip_next = False
+                continue
+            skip_next = False
+            filtered_lines.append(line)
+        cleaned_output = '\n'.join(filtered_lines)
+
+        # Pytest Detection
+        has_pytest_failure = False
+        if "FAILED" in cleaned_output and ("test session starts" in cleaned_output or "short test summary info" in cleaned_output):
+            has_pytest_failure = True
+            if return_code == 0: return_code = 1 
+
+        # Healable Error Detection
+        has_healable_error = any(re.search(pattern, cleaned_output, re.MULTILINE) for pattern in [
+            r"A module that was compiled using NumPy 1\.x cannot be run in[\s\S]*?NumPy 2\.0",
+            r"numpy\.dtype size changed, may indicate binary incompatibility"
+        ])
+        
+        if return_code == 0 and not has_healable_error:
+            if "test session starts" in cleaned_output and "passed" in cleaned_output.lower():
+                safe_print("\n✅ All tests passed!")
+            else:
+                safe_print("\n✅ Script executed successfully.")
+            return 0
+        
+        safe_print("🤖 [AI-INFO] Script execution failed. Analyzing for auto-healing...")
+        
+        exit_code, heal_stats = analyze_runtime_failure_and_heal(
+            cleaned_output, safe_cmd_args, source_script_path, config_manager, 
+            is_context_aware_run=False, omnipkg_instance=omnipkg_core
+        )
+        
+        if heal_stats:
+            _print_performance_comparison(end_time_ns - start_time_ns, heal_stats)
+        
+        return exit_code
+        
+    finally:
+        if temp_script_path and temp_script_path.exists():
+            try:
+                temp_script_path.unlink()
+            except OSError:
+                pass

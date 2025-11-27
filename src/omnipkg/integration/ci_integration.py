@@ -60,6 +60,10 @@ def deactivate():
     Deactivate and clean up omnipkg environment
     """
     import sys
+try:
+    from .common_utils import safe_print
+except ImportError:
+    from omnipkg.common_utils import safe_print
     sys.exit(cmd_deactivate([]))
 
 
@@ -74,7 +78,7 @@ def status():
     env_dir = Path.home() / ".omnipkg" / "active_env"
     
     if is_active:
-        print("✅ Omnipkg environment is ACTIVE")
+        safe_print("✅ Omnipkg environment is ACTIVE")
         print(f"   Wrappers directory: {env_dir / 'bin'}")
         
         # Count wrappers
@@ -83,7 +87,7 @@ def status():
             wrapper_count = len(list(bin_dir.iterdir()))
             print(f"   Active wrappers: {wrapper_count}")
     else:
-        print("⏹️  Omnipkg environment is NOT active")
+        safe_print("⏹️  Omnipkg environment is NOT active")
         
         if env_dir.exists():
             print(f"   (Environment exists at {env_dir})")

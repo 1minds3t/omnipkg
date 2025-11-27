@@ -70,6 +70,12 @@ def run_command(command_list, check=True):
             error_message += '\nSubprocess Output:\n' + '\n'.join(output_lines)
         raise RuntimeError(error_message)
     return retcode
+class ProcessCorruptedException(Exception):
+    """
+    Raised when omnipkg detects that the current process memory is corrupted
+    by a C++ state collision and cannot be recovered without a full restart.
+    """
+    pass
 
 class UVFailureDetector:
     """Detects UV dependency resolution failures."""

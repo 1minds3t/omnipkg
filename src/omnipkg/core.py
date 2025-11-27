@@ -2487,9 +2487,10 @@ class BubbleIsolationManager:
             install_ok = (return_code == 0)
             import_test_passed = False
             if install_ok:
-                # --- NEW VERIFICATION STEP ---
+                # Pass the bubble manager instance so it can access _get_import_candidates_for_bubble
                 import_test_passed = self.parent_omnipkg._run_post_install_import_test(
-                    package_name, install_dir_override=temp_path
+                    package_name, 
+                    install_dir_override=temp_path
                 )
                 if not import_test_passed:
                     safe_print(f"❌ Post-install import test failed. The package is likely broken.")
@@ -3269,7 +3270,6 @@ class BubbleIsolationManager:
                 'attempted_modules': import_candidates
             }
 
-    # Replace your _get_import_candidates_for_bubble with this improved version:
 
     def _get_import_candidates_for_bubble(self, pkg_name: str, pkg_info: Dict, temp_install_path: Path) -> List[str]:
         """
@@ -6385,6 +6385,42 @@ class omnipkg:
         # Step 4: Execute the reconciled plan
         safe_print("\n🔥 Applying treatment...")
         return self.smart_install(reconciled_plan)
+    
+    def _get_import_candidates_for_install_test(self, package_name: str, install_dir: Optional[Path] = None) -> List[str]:
+        """
+        Gets import candidates, reading from top_level.txt if install_dir is provided.
+        """
+        if not install_dir:
+            # Use existing logic for main env
+            return self._get_import_candidates(package_name)
+        
+        # Read from isolated directory
+        from packaging.utils import canonicalize_name
+        
+        canonical = canonicalize_name(package_name)
+        possible_names = {
+            package_name,
+            package_name.lower(),
+            package_name.replace('-', '_'),
+            package_name.replace('_', '-'),
+            canonical,
+        }
+        
+        # Find the .dist-info directory
+        for name_variant in possible_names:
+            found = list(install_dir.glob(f"{name_variant}-*.dist-info"))
+            if found:
+                top_level_file = found[0] / 'top_level.txt'
+                if top_level_file.exists():
+                    try:
+                        content = top_level_file.read_text(encoding='utf-8').strip()
+                        if content:
+                            return [line.strip() for line in content.split('\n') if line.strip()]
+                    except Exception:
+                        pass
+        
+        # Fallback to name transformations
+        return [package_name.replace('-', '_'), package_name.lower().replace('-', '_')]
 
     def _update_hash_index_for_delta(self, before: Dict, after: Dict):
         """Surgically updates the cached hash index in Redis after an install."""
@@ -7777,12 +7813,15 @@ class omnipkg:
                 pkg_name, version = self._parse_package_spec(pkg_spec)
                 
                 # Step 1: Get the version (either from spec or from cache/PyPI)
-                if version:
-                    # Already has explicit version (e.g., numpy==1.26.4)
+                # FIX: Check if the specifier is "complex" (contains <, >, ~, !, ,)
+                is_complex_spec = any(op in pkg_spec for op in complex_spec_chars)
+
+                if version and not is_complex_spec:
+                    # Already has explicit, simple version (e.g., numpy==1.26.4)
                     resolved_spec = pkg_spec
                 else:
-                    # Check if it's a complex specifier BEFORE calling _get_latest_version_from_pypi
-                    is_complex_spec = any(op in pkg_spec for op in complex_spec_chars)
+                    # It's either complex (pandas>=1.2) or unversioned (pandas)
+                    # We must resolve it to a concrete version.
                     
                     if is_complex_spec:
                         safe_print(f"   🔍 Detected complex specifier: '{pkg_spec}'")
@@ -7790,10 +7829,12 @@ class omnipkg:
                         
                         try:
                             # Use _find_best_version_for_spec to respect the constraint
-                            resolved_spec = self._find_best_version_for_spec(pkg_spec)
+                            resolved_spec_str = self._find_best_version_for_spec(pkg_spec)
                             
-                            if resolved_spec:
-                                # Successfully resolved (e.g., "numpy<2" -> "numpy==1.26.4")
+                            if resolved_spec_str:
+                                # Successfully resolved (e.g., "pandas>=1.2" -> "pandas==2.2.2")
+                                resolved_spec = resolved_spec_str
+                                # Update pkg_name and version variables for the next check
                                 pkg_name, version = self._parse_package_spec(resolved_spec)
                                 safe_print(f"   ✅ Resolved '{pkg_spec}' to '{resolved_spec}'")
                             else:
@@ -10309,8 +10350,6 @@ print(json.dumps(results))
         candidates = {package_name.replace('-', '_'), package_name.lower()}
         return sorted(list(candidates))
 
-    # In omnipkg/core.py, inside the omnipkg class
-
     def _run_post_install_import_test(self, package_name: str, install_dir_override: Optional[Path] = None) -> bool:
         """
         Runs a simple 'import' test in a subprocess to verify an installation.
@@ -10320,7 +10359,8 @@ print(json.dumps(results))
         safe_print(f"   🧪 Verifying installation with import test for: {package_name} {target_desc}")
         
         try:
-            import_names = self._get_import_candidates(package_name)
+            # Use the new unified method that handles both cases
+            import_names = self._get_import_candidates_for_install_test(package_name, install_dir_override)
             python_exe = self.config.get('python_executable', sys.executable)
             
             for import_name in import_names:
@@ -10346,17 +10386,29 @@ print(json.dumps(results))
 
     def _run_historical_install_fallback(self, target_pkg, target_ver, target_directory_override: Optional[Path] = None):
         """
-        --- [MODIFIED] ---
         Orchestrator for the Dependency Time Machine logic, run as an automatic fallback.
-        This method now accepts a target_directory_override to ensure installations are isolated.
+        Only activates for TRULY OLD packages (pre-2020).
         """
-        safe_print(f"   - Attempting to rebuild {target_pkg}=={target_ver} from the past...")
-        
+        # Get release date first
         release_date = self._get_historical_release_date(target_pkg, target_ver)
         if not release_date:
             safe_print('   - ❌ Failed to get release date. Time Machine cannot proceed.')
             return False
-
+        
+        # Parse the release year
+        from datetime import datetime
+        release_datetime = datetime.fromisoformat(release_date.replace('Z', '+00:00'))
+        release_year = release_datetime.year
+        
+        # CRITICAL: Only use Time Machine for packages released before 2020
+        # Modern packages (2020+) should not need ancient setuptools
+        if release_year >= 2020:
+            safe_print(f'   - ℹ️  Package released in {release_year} - too modern for Time Machine.')
+            safe_print(f'   - 💡 This is likely a dependency issue, not a build tool issue.')
+            return False
+        
+        safe_print(f"   - Attempting to rebuild {target_pkg}=={target_ver} (released {release_year}) from the past...")
+        
         dep_names = self._get_historical_dependency_names(target_pkg, target_ver)
         if dep_names is None: # Explicitly check for None in case of error
             safe_print('   - ❌ Failed to determine dependencies. Time Machine cannot proceed.')
@@ -10704,7 +10756,7 @@ print(json.dumps(results))
             upload_time = data['urls'][0]['upload_time_iso_8601']
             safe_print(f"      - ✓ Found release date: {upload_time}")
             return upload_time
-        except (requests.exceptions.RequestException, KeyError, IndexError) as e:
+        except (http_requests.exceptions.RequestException, KeyError, IndexError) as e:
             safe_print(f'      - ❌ Error fetching release date from PyPI: {e}')
             return None
 
