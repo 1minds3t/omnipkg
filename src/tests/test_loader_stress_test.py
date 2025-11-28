@@ -48,7 +48,11 @@ os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
 
 # HELPER: Check verbosity
 def is_verbose_mode():
-    return "--verbose" in sys.argv or "-v" in sys.argv
+    return (
+        "--verbose" in sys.argv or 
+        "-v" in sys.argv or 
+        os.environ.get('OMNIPKG_VERBOSE') == '1'
+    )
 
 # ASCII art madness
 CHAOS_HEADER = """

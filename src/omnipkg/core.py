@@ -2479,9 +2479,12 @@ class BubbleIsolationManager:
             
             # --- STAGE 1: Attempt a modern, but potentially broken, installation ---
             safe_print(f"   - Attempting modern install for {package_name}=={version} into temp directory...")
+            # FIX: Force reinstall and disable cache to ensure we get the actual files
             return_code, captured_output = self.parent_omnipkg._run_pip_install(
                 [f"{package_name}=={version}"],
-                target_directory=temp_path
+                target_directory=temp_path,
+                force_reinstall=True,
+                extra_flags=['--no-cache-dir']
             )
 
             install_ok = (return_code == 0)
@@ -2494,7 +2497,7 @@ class BubbleIsolationManager:
                 )
                 if not import_test_passed:
                     safe_print(f"❌ Post-install import test failed. The package is likely broken.")
-
+            
             # --- STAGE 2: If install failed OR import test failed, engage the Time Machine ---
             if not install_ok or not import_test_passed:
                 error_output = captured_output.get("stderr", "").lower()
@@ -2505,7 +2508,7 @@ class BubbleIsolationManager:
                     print_header(f"TIME MACHINE FALLBACK: Detected legacy build failure for {package_name}=={version}")
                 elif not import_test_passed:
                     print_header(f"TIME MACHINE FALLBACK: Detected broken install for {package_name}=={version}")
-
+                
                 # Call the Time Machine, telling it to install into our SAFE temp directory
                 time_machine_succeeded = self.parent_omnipkg._run_historical_install_fallback(
                     package_name, version, target_directory_override=temp_path
@@ -2524,15 +2527,25 @@ class BubbleIsolationManager:
             
             safe_print(f"   - Moving verified package to final destination: {destination_path}")
             if destination_path.exists():
-                shutil.rmtree(destination_path)
-
+                # Robust cleanup to handle 'Directory not empty' race conditions
+                import time
+                for i in range(5):
+                    try:
+                        shutil.rmtree(destination_path)
+                        break
+                    except OSError:
+                        time.sleep(0.1)
+                        if i == 4:
+                            # Final attempt, let it crash if it fails so we know
+                            shutil.rmtree(destination_path)
+            
             return self._create_deduplicated_bubble(
                 installed_tree, 
                 destination_path,
                 temp_path, 
                 python_context_version=python_context_version
             )
-
+            
     def create_bubble_for_package(self, package_name: str, version: str, python_context_version: str) -> bool:
         """
         Creates a complete, isolated bubble for a package, including all its dependencies.
@@ -8492,6 +8505,14 @@ class omnipkg:
                                 self.hook_manager.refresh_bubble_map(fix['package'], fix['new_version'], bubble_path_str)
                                 self.hook_manager.validate_bubble(fix['package'], fix['new_version'])
                                 # Restore the original version without resolving dependencies again
+                                                                # FIX: Must explicitly uninstall the 'new' version first to prevent duplicate dist-info
+                                safe_print(f"   🧹 Cleaning up ephemeral version {fix['new_version']} before restoring stable...")
+                                uninstall_cmd = [
+                                    self.config['python_executable'], '-m', 'pip', 'uninstall', '-y',
+                                    fix['package']
+                                ]
+                                subprocess.run(uninstall_cmd, capture_output=True, text=True)
+
                                 restore_cmd = [
                                     self.config['python_executable'], '-m', 'pip', 'install', 
                                     '--quiet', '--no-deps', '--ignore-installed',
@@ -8914,7 +8935,18 @@ class omnipkg:
                 if bubble_path.exists() and bubble_path.is_dir():
                     safe_print(f"   - Found redundant bubble for active package: {pkg_name}=={active_version}")
                     try:
-                        shutil.rmtree(bubble_path)
+                        # Robust cleanup to handle 'Directory not empty' race conditions
+                        import time
+                        for i in range(3):
+                            try:
+                                shutil.rmtree(bubble_path)
+                                break
+                            except OSError:
+                                time.sleep(0.1)
+                        
+                        if bubble_path.exists():
+                             shutil.rmtree(bubble_path)
+
                         cleaned_count += 1
                         safe_print(f"   - ✅ Removed redundant bubble directory.")
                     except Exception as e:
@@ -12070,4 +12102,3 @@ class PyPIVersionCache:
         
         
         # Redis entries expire automatically due to TTL
-

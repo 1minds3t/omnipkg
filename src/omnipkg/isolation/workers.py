@@ -8,10 +8,10 @@ from pathlib import Path
 
 class PersistentWorker:
     """
-    A persistent subprocess that acts as a dedicated worker for a specific package environment.
-    It keeps the environment loaded in memory for ultra-fast execution.
+    A persistent subprocess that acts as a specific package environment.
+    Provides REAL-TIME output streaming.
     """
-    def __init__(self, package_spec: str, verbose: bool = True):
+    def __init__(self, package_spec: str, verbose: bool = False):
         self.package_spec = package_spec
         self.verbose = verbose
         self.process = None
@@ -20,39 +20,44 @@ class PersistentWorker:
         self._start_worker()
 
     def _start_worker(self):
-        # Calculate root path to ensure worker can find omnipkg
+        # Calculate root path
         current_file = Path(__file__).resolve()
         src_root = str(current_file.parent.parent.parent)
 
-        # The Worker Script
-        # We redirect sys.stdout to sys.stderr so that 'print()' calls don't break our JSON pipe.
-        # We use a duplicate file descriptor (ipc_pipe) specifically for data.
+        # The Worker Script - CORRECTED VERSION
         worker_code = f"""
 import sys
 import os
 import json
 import traceback
 import io
-import contextlib
+
+# CRITICAL: Disable buffering on stderr for real-time output
+sys.stderr = open(sys.stderr.fileno(), 'w', buffering=1, closefd=False)
 
 # 1. SETUP COMM CHANNEL
 try:
-    # Duplicate stdout to keep a clean channel for JSON
-    ipc_fd = os.dup(sys.stdout.fileno())
-    ipc_pipe = os.fdopen(ipc_fd, 'w')
+    # Duplicate stdout for clean JSON channel
+    ifd = os.dup(sys.stdout.fileno())
+    ipc_pipe = os.fdopen(ifd, 'w', buffering=1)
     
-    # Redirect all future print() calls to stderr (which the parent logs)
+    # Redirect print() to stderr
     sys.stdout = sys.stderr
 except Exception as e:
     sys.stderr.write(f"FATAL SETUP ERROR: {{e}}\\n")
+    sys.stderr.flush()
     sys.exit(1)
+
+def log(msg):
+    sys.stderr.write(msg + "\\n")
+    sys.stderr.flush()
 
 def send_ipc(data):
     try:
         ipc_pipe.write(json.dumps(data) + "\\n")
         ipc_pipe.flush()
     except Exception as e:
-        sys.stderr.write(f"IPC ERROR: {{e}}\\n")
+        log(f"IPC ERROR: {{e}}")
 
 # 2. ADD OMNIPKG TO PATH
 try:
@@ -63,13 +68,12 @@ except ImportError:
 from omnipkg.loader import omnipkgLoader
 
 try:
-    print(f"🐍 Worker initializing environment: {self.package_spec}...")
+    log(f"🐚 Worker initializing environment: {self.package_spec}...")
     loader = omnipkgLoader("{self.package_spec}", quiet=True)
     loader.__enter__()
     
-    # Prove we are ready
     send_ipc({{"status": "ready"}})
-    print(f"✅ Worker ready: {self.package_spec}")
+    log(f"✅ Worker ready: {self.package_spec}")
     
 except Exception as e:
     send_ipc({{"status": "error", "message": str(e)}})
@@ -86,21 +90,43 @@ while True:
         
         if cmd['type'] == 'execute':
             try:
-                # Capture stdout so we can return it
+                # Capture stdout for return value
                 f = io.StringIO()
-                with contextlib.redirect_stdout(f):
-                    # We use a dict for locals to capture variables
+                
+                # Create a custom stdout that duplicates to both buffer and stderr
+                class TeeOutput:
+                    def __init__(self, buffer, stream):
+                        self.buffer = buffer
+                        self.stream = stream
+                    
+                    def write(self, text):
+                        self.buffer.write(text)
+                        self.stream.write(text)
+                        self.stream.flush()
+                    
+                    def flush(self):
+                        self.buffer.flush()
+                        self.stream.flush()
+                
+                old_stdout = sys.stdout
+                
+                # Tee stdout to both buffer and stderr
+                sys.stdout = TeeOutput(f, sys.stderr)
+                
+                try:
                     loc = {{}}
                     exec(cmd['code'], globals(), loc)
+                finally:
+                    sys.stdout = old_stdout
                 
                 output = f.getvalue()
                 send_ipc({{"success": True, "stdout": output, "locals": str(loc.keys())}})
             except Exception as e:
-                traceback.print_exc() # Print trace to logs
+                log(f"EXECUTION ERROR: {{e}}")
+                traceback.print_exc()
                 send_ipc({{"success": False, "error": str(e)}})
                 
         elif cmd['type'] == 'get_version':
-            # Specific helper to prove version switching
             try:
                 pkg_name = cmd['package']
                 mod = __import__(pkg_name)
@@ -112,7 +138,7 @@ while True:
             break
             
     except Exception as e:
-        sys.stderr.write(f"LOOP ERROR: {{e}}\\n")
+        log(f"LOOP ERROR: {{e}}")
         break
 
 try:
@@ -121,16 +147,17 @@ except:
     pass
 """
 
+        # CRITICAL: Disable buffering in subprocess
         self.process = subprocess.Popen(
-            [sys.executable, "-c", worker_code],
+            [sys.executable, "-u", "-c", worker_code],
             stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,  # This is the JSON data pipe
-            stderr=subprocess.PIPE,  # This is the Log pipe
-            text=True,
-            bufsize=1
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            bufsize=0,
+            text=True
         )
 
-        # Start a background thread to print logs from the worker
+        # Start logging thread
         self._log_thread = threading.Thread(target=self._stream_logs, daemon=True)
         self._log_thread.start()
 
@@ -143,29 +170,29 @@ except:
             if data.get('status') != 'ready':
                 raise RuntimeError(f"Worker initialization failed: {data}")
         except Exception as e:
-            # Wait a moment for the log thread to maybe catch the traceback
             self._stop_logging.set()
-            raise RuntimeError(f"Worker handshake failed: {e}")
+            raise RuntimeError(f"Handshake failed: {e}")
 
     def _stream_logs(self):
-        """Reads stderr from the worker and prints it to the main console."""
+        """Streams stderr from worker to console in real-time."""
         prefix = f"[{self.package_spec}] "
         try:
-            for line in iter(self.process.stderr.readline, ''):
-                if self._stop_logging.is_set(): break
+            while not self._stop_logging.is_set():
+                line = self.process.stderr.readline()
+                if not line:
+                    break
                 if self.verbose:
-                    # Print raw worker logs to our stdout
-                    sys.stdout.write(f"{prefix} {line}")
+                    sys.stdout.write(f"{prefix}{line}")
                     sys.stdout.flush()
-        except ValueError:
-            pass # File closed
+        except (ValueError, OSError):
+            pass
 
     def execute(self, code: str) -> dict:
-        """Run arbitrary Python code in the worker."""
+        """Run Python code in the worker."""
         return self._send({"type": "execute", "code": code})
 
     def get_version(self, package_name: str) -> dict:
-        """Ask the worker what version of a package it has loaded."""
+        """Query the worker for a package version."""
         return self._send({"type": "get_version", "package": package_name})
 
     def _send(self, payload: dict) -> dict:
@@ -181,7 +208,7 @@ except:
                 return {"success": False, "error": "No response"}
             return json.loads(response)
         except Exception as e:
-            return {"success": False, "error": str(e)}
+            return {"errors": False, "error": str(e)}
 
     def shutdown(self):
         self._stop_logging.set()
