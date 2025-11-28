@@ -1123,12 +1123,25 @@ class omnipkgMetadataGatherer:
             safe_print(_('✅ No packages found for the current context to process.'))
             return []
 
+        # --- FIX: Filter out corrupt distributions with no Name ---
+        valid_distributions = []
+        for dist in distributions_to_process:
+            if dist.metadata.get('Name'):
+                valid_distributions.append(dist)
+            else:
+                safe_print(f"⚠️  Skipping corrupt distribution with missing Name at: {dist._path}")
+        distributions_to_process = valid_distributions
+        # ----------------------------------------------------------
+
         active_packages_to_scan = {
             canonicalize_name(dist.metadata['Name']): dist.version
-            for dist in distributions_to_process if self._get_install_context(dist)['install_type'] == 'active'
+            for dist in distributions_to_process 
+            if self._get_install_context(dist)['install_type'] == 'active'
         }
+
         all_packages_to_scan = {}
         for dist in distributions_to_process:
+            # Now safe because we filtered None names above
             c_name = canonicalize_name(dist.metadata['Name'])
             if c_name not in all_packages_to_scan:
                 all_packages_to_scan[c_name] = set()

@@ -2284,6 +2284,10 @@ def execute_run_command(cmd_args: list, config_manager: ConfigManager, verbose: 
     """
     Enhanced to properly handle Python stdin mode and ensure healing works correctly.
     """
+    # ADD THIS LINE - Propagate verbose flag to subprocesses
+    if verbose:
+        os.environ['OMNIPKG_VERBOSE'] = '1'
+    
     from omnipkg.i18n import _
     
     if not cmd_args:

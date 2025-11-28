@@ -447,6 +447,21 @@ class omnipkgLoader:
         
         return found_deps
 
+    def _ensure_main_site_packages_in_path(self):
+            """
+            If we decide to use a package from the main environment, we must ensure
+            the main site-packages directory is actually in sys.path. 
+            This is critical when running inside nested isolated workers that 
+            may have stripped it out.
+            """
+            main_path = str(self.site_packages_root)
+            if main_path not in sys.path:
+                if not self.quiet:
+                    safe_print(f"   🔌 Re-connecting main site-packages for {self._current_package_spec}")
+                # Append to end to keep bubble isolation priority, 
+                # but ensure visibility for this package.
+                sys.path.append(main_path)
+
     def _ensure_omnipkg_access_in_bubble(self, bubble_path_str: str):
         """
         Ensure omnipkg's version-compatible dependencies remain accessible when bubble is active.
@@ -928,6 +943,11 @@ class omnipkgLoader:
             if current_system_version == requested_version and not self.force_activation:
                 if not self.quiet:
                     safe_print(_('✅ System version already matches requested version ({}). No bubble needed.').format(current_system_version))
+                
+                # --- ADD THIS LINE ---
+                self._ensure_main_site_packages_in_path() 
+                # ---------------------
+                
                 self._activation_successful = True
                 self._activation_end_time = time.perf_counter_ns()
                 self._total_activation_time_ns = self._activation_end_time - self._activation_start_time
@@ -1003,6 +1023,11 @@ class omnipkgLoader:
                 if found_ver_after == requested_version:
                     if not self.quiet:
                         safe_print(f"   🔄 Installer restored {pkg_name} in main env. Switching strategy.")
+                    
+                    # --- ADD THIS LINE ---
+                    self._ensure_main_site_packages_in_path()
+                    # ---------------------
+                    
                     self._using_main_env = True
                     
                     # Register protection since we are using main env now
@@ -1023,7 +1048,13 @@ class omnipkgLoader:
                 # Found in main env, not cloaked
                 if not self.quiet:
                     safe_print(f"   ✅ Found in main environment")
+                
+                # --- ADD THIS LINE ---
+                self._ensure_main_site_packages_in_path()
+                # ---------------------
+                
                 self._using_main_env = True
+      
                 
                 # Register protection
                 pkg_canonical = pkg_name.lower().replace('-', '_')
