@@ -20,6 +20,13 @@ from .core import ConfigManager
 from .common_utils import print_header, run_script_in_omnipkg_env, UVFailureDetector
 from .commands.run import execute_run_command
 from .common_utils import sync_context_to_runtime
+from omnipkg.isolation.worker_daemon import (
+    WorkerPoolDaemon, 
+    DaemonClient, 
+    cli_start, 
+    cli_stop, 
+    cli_status
+)
 project_root = Path(__file__).resolve().parent.parent
 TESTS_DIR = Path(__file__).parent.parent / 'tests'
 DEMO_DIR = Path(__file__).parent
@@ -537,6 +544,11 @@ def create_parser():
     )
     run_parser = subparsers.add_parser('run', help=_('Run a script with auto-healing for version conflicts'))
     run_parser.add_argument('script_and_args', nargs=argparse.REMAINDER, help=_('The script to run, followed by its arguments'))
+    daemon_parser = subparsers.add_parser('daemon', help=_('Manage the persistent worker daemon'))
+    daemon_subparsers = daemon_parser.add_subparsers(dest='daemon_command', required=True)
+    daemon_start = daemon_subparsers.add_parser('start', help=_('Start the background daemon'))
+    daemon_stop = daemon_subparsers.add_parser('stop', help=_('Stop the daemon'))
+    daemon_status = daemon_subparsers.add_parser('status', help=_('Check daemon status and memory usage'))
     prune_parser = subparsers.add_parser('prune', help=_('Clean up old, bubbled package versions'))
     prune_parser.add_argument('package', help=_('Package whose bubbles to prune'))
     prune_parser.add_argument('--keep-latest', type=int, metavar='N', help=_('Keep N most recent bubbled versions'))
@@ -785,9 +797,10 @@ def main():
                 safe_print(_('8. 🌠 Quantum Multiverse Warp (Concurrent Python Installations)'))
                 safe_print(_('9. Flask Port Finder Test (auto-healing with Flask)'))
                 safe_print(_('10. CLI Healing Test (omnipkg run shell commands)'))
+                safe_print(_('11. 🌀 Chaos Theory Stress Test (Loader torture test)'))
                 
                 try:
-                    response = input(_('Enter your choice (1-10): ')).strip()
+                    response = input(_('Enter your choice (1-11): ')).strip()
                 except EOFError:
                     response = ''
                 
@@ -802,10 +815,11 @@ def main():
                     '8': ('Quantum Multiverse Warp', TESTS_DIR / 'test_concurrent_install.py', '3.11'),
                     '9': ('Flask Port Finder', TESTS_DIR / 'test_flask_port_finder.py', None),
                     '10': ('CLI Healing Test', TESTS_DIR / 'test_cli_healing.py', None),
+                    '11': ('Chaos Theory Stress Test', TESTS_DIR / 'test_loader_stress_test.py', None),
                 }
 
                 if response not in demo_map:
-                    safe_print(_('❌ Invalid choice. Please select 1 through 10.'))
+                    safe_print(_('❌ Invalid choice. Please select 1 through 11.'))
                     return 1
 
                 demo_name, test_file, required_version = demo_map[response]
@@ -824,7 +838,16 @@ def main():
 
                 safe_print(_('🚀 This demo uses "omnipkg run" to showcase its auto-healing capabilities.'))
                 
-                cmd = [configured_python_exe, '-m', 'omnipkg.cli', 'run', str(test_file)]
+                # Special handling for interactive tests like the chaos test
+                if response == '11':
+                    safe_print(_('\n⚠️  The Chaos Theory test is interactive - you\'ll be prompted to select scenarios.'))
+                    safe_print(_('💡 Tip: Choose "0" to run all tests for the full experience!\n'))
+                
+                # FIX: Pass the --verbose flag to the subprocess if it was set in the main process
+                cmd = [configured_python_exe, '-m', 'omnipkg.cli']
+                if args.verbose:
+                    cmd.append('--verbose')
+                cmd.extend(['run', str(test_file)])
                 
                 process = subprocess.Popen(cmd, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, encoding='utf-8', errors='replace')
                 for line in process.stdout:
@@ -848,7 +871,7 @@ def main():
                 if original_python_str != current_version_after_demo_str:
                     print_header(f"Restoring original Python {original_python_str} context")
                     pkg_instance.switch_active_python(original_python_str)
-                    
+                            
         elif args.command == 'stress-test':
             if stress_test_command():
                 run_actual_stress_test()
@@ -960,6 +983,14 @@ def main():
             return 0
         elif args.command == 'reset-config':
             return pkg_instance.reset_configuration(force=args.force)
+        elif args.command == 'daemon':
+            if args.daemon_command == 'start':
+                cli_start() # Imported from worker_daemon.py
+            elif args.daemon_command == 'stop':
+                cli_stop()
+            elif args.daemon_command == 'status':
+                cli_status()
+            return 
         elif args.command == 'run':
             # ✅ Fix: Pass the pkg_instance we already initialized!
             return execute_run_command(
