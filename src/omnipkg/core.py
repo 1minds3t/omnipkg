@@ -8504,21 +8504,7 @@ class omnipkg:
                                 bubble_path_str = str(self.multiversion_base / f"{fix['package']}-{fix['new_version']}")
                                 self.hook_manager.refresh_bubble_map(fix['package'], fix['new_version'], bubble_path_str)
                                 self.hook_manager.validate_bubble(fix['package'], fix['new_version'])
-                                # Restore the original version without resolving dependencies again
-                                                                # FIX: Must explicitly uninstall the 'new' version first to prevent duplicate dist-info
-                                safe_print(f"   🧹 Cleaning up ephemeral version {fix['new_version']} before restoring stable...")
-                                uninstall_cmd = [
-                                    self.config['python_executable'], '-m', 'pip', 'uninstall', '-y',
-                                    fix['package']
-                                ]
-                                subprocess.run(uninstall_cmd, capture_output=True, text=True)
-
-                                restore_cmd = [
-                                    self.config['python_executable'], '-m', 'pip', 'install', 
-                                    '--quiet', '--no-deps', '--ignore-installed',
-                                    f"{fix['package']}=={fix['old_version']}"
-                                ]
-                                restore_result = subprocess.run(restore_cmd, capture_output=True, text=True)
+                                restore_result = subprocess.run([self.config["python_executable"], "-m", "pip", "install", "--quiet", f"{fix['package']}=={fix['old_version']}"], capture_output=True, text=True)
                                 
                                 if restore_result.returncode == 0:
                                     main_env_kb_updates[fix['package']] = fix['old_version']

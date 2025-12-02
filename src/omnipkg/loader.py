@@ -1,41 +1,5 @@
 from __future__ import annotations  # Python 3.6+ compatibility
 
-try:
-    from .common_utils import safe_print
-except ImportError:
-    from omnipkg.common_utils import safe_print
-import sys
-try:
-    # --- ADD THIS LINE ---
-    from .common_utils import safe_print, UVFailureDetector
-except ImportError:
-    # --- AND ADD THIS LINE ---
-    from omnipkg.common_utils import safe_print, UVFailureDetector
-try:
-    # Add this line
-    from .common_utils import ProcessCorruptedException
-except ImportError:
-    # And this line for robustness
-    from omnipkg.common_utils import ProcessCorruptedException
-_builtin_print = print
-def safe_print(*args, **kwargs):
-    """
-    A self-contained, robust print function for the omnipkgLoader.
-    It handles UnicodeEncodeError and is immune to sys.path changes
-    made by the loader itself.
-    """
-    try:
-        _builtin_print(*args, **kwargs)
-    except UnicodeEncodeError:
-        try:
-            encoding = sys.stdout.encoding or 'utf-8'
-            safe_args = [
-                str(arg).encode(encoding, 'replace').decode(encoding)
-                for arg in args
-            ]
-            _builtin_print(*safe_args, **kwargs)
-        except Exception:
-            _builtin_print("[omnipkgLoader: A message could not be displayed due to an encoding error.]")
 import sys
 import importlib
 import shutil
@@ -45,7 +9,7 @@ from pathlib import Path
 import os
 import subprocess
 import re
-import filelock  # Already in your CRITICAL_DEPS!
+import filelock
 import textwrap
 import warnings
 import tempfile
@@ -56,9 +20,18 @@ import site
 import concurrent.futures
 from concurrent.futures import ThreadPoolExecutor
 from importlib.metadata import version as get_version, PackageNotFoundError
-from omnipkg.i18n import _
 import signal
 from contextlib import contextmanager
+import io  # <-- ADD THIS, needed for execute() method
+
+# Import safe_print and custom exceptions
+try:
+    from .common_utils import safe_print, UVFailureDetector, ProcessCorruptedException
+except ImportError:
+    from omnipkg.common_utils import safe_print, UVFailureDetector, ProcessCorruptedException
+
+# Import i18n
+from omnipkg.i18n import _
 
 # ═══════════════════════════════════════════════════════════
 # 🧠 INSTALL TENSORFLOW PATCHER AT MODULE LOAD (ONCE ONLY)
@@ -68,23 +41,44 @@ try:
     smart_tf_patcher()
 except ImportError:
     pass  # Patcher not available
-# ═══════════════════════════════════════════════════════════
 
-# Then your imports and class definition...
-from omnipkg.i18n import _
-import signal
-from contextlib import contextmanager
+# ═══════════════════════════════════════════════════════════
+# Import Daemon Components (NEW)
+# ═══════════════════════════════════════════════════════════
+try:
+    from omnipkg.isolation.worker_daemon import DaemonClient, DaemonProxy
+    DAEMON_AVAILABLE = True
+except ImportError:
+    DAEMON_AVAILABLE = False
+    class DaemonClient:
+        pass
+    class DaemonProxy:
+        pass
+
+# ═══════════════════════════════════════════════════════════
+# Legacy Worker Support (DEPRECATED - use daemon instead)
+# ═══════════════════════════════════════════════════════════
+try:
+    from omnipkg.isolation.workers import PersistentWorker
+    WORKER_AVAILABLE = True
+except ImportError:
+    WORKER_AVAILABLE = False
+    class PersistentWorker:
+        def __init__(self, *args, **kwargs):
+            raise ImportError("PersistentWorker not available")  # <-- FIXED: Added closing parenthesis
+
+
 class omnipkgLoader:
     """
-    Activates isolated package environments (bubbles) created by omnipkg.
-    Now with strict Python version isolation to prevent cross-version contamination.
-    
-    Key improvements:
-    - Detects and enforces Python version boundaries
-    - Prevents 3.11 paths from contaminating 3.9 environments
-    - Maintains clean version-specific site-packages isolation
-    - Enhanced path validation and cleanup
+    Activates isolated package environments with optional persistent worker pool.
     """
+    
+    # ═══════════════════════════════════════════════════════════
+    # CLASS-LEVEL WORKER POOL (Shared across all loader instances)
+    # ═══════════════════════════════════════════════════════════
+    _worker_pool = {}  # {package_spec: PersistentWorker}
+    _worker_pool_lock = threading.RLock()
+    _worker_pool_enabled = True  # Global toggle
     _cloak_locks: Dict[str, filelock.FileLock] = {}
     _install_locks: Dict[str, filelock.FileLock] = {} # <-- NEW: Add install locks
     _locks_dir: Optional[Path] = None
@@ -113,10 +107,24 @@ class omnipkgLoader:
         'redis',
     }
 
-    def __init__(self, package_spec: str=None, config: dict=None, quiet: bool=False, force_activation: bool=False, isolation_mode: str='strict'):
+    def __init__(self, package_spec: str=None, config: dict=None, quiet: bool=False, 
+                 force_activation: bool=False, use_worker_pool: bool = True, 
+                 worker_fallback: bool = True, isolation_mode: str='strict'):
         """
         Initializes the loader with enhanced Python version awareness.
-        """        
+        """  
+        self._true_site_packages = None
+        
+        # Try to find the real site-packages via the omnipkg module location
+        try:
+            import omnipkg
+            # Usually .../site-packages/omnipkg
+            omnipkg_loc = Path(omnipkg.__file__).parent.parent
+            if omnipkg_loc.name == 'site-packages':
+                self._true_site_packages = omnipkg_loc
+        except ImportError:
+            pass
+      
         if config is None:
             # If no config is passed, become self-sufficient and load it.
             # Lazy import to prevent circular dependencies.
@@ -131,10 +139,15 @@ class omnipkgLoader:
                 self.config = {}
         else:
             self.config = config
-        self.quiet = quiet
+        if os.environ.get("OMNIPKG_IS_DAEMON_WORKER"):
+            self.quiet = True
+        else:
+            self.quiet = quiet
+
         self.python_version = f'{sys.version_info.major}.{sys.version_info.minor}'
         self.python_version_nodot = f'{sys.version_info.major}{sys.version_info.minor}'
         self.force_activation = force_activation
+        
         if not self.quiet:
             safe_print(_('🐍 [omnipkg loader] Running in Python {} context').format(self.python_version))
         self._initialize_version_aware_paths()
@@ -147,9 +160,14 @@ class omnipkgLoader:
         self._activation_start_time = None
         self._activation_end_time = None
         self._deactivation_start_time = None
+        self._worker_from_pool = False   
+        self._worker_fallback_enabled = worker_fallback
+        self._active_worker = None
+        self._worker_mode = False
         self._packages_we_cloaked = set()  # Only packages WE cloaked
         self._using_main_env = False  # Track if we're using main env directly
         self._my_main_env_package = None 
+        self._use_worker_pool = use_worker_pool
         self._cloaked_main_modules = []
         self._deactivation_end_time = None
         self._total_activation_time_ns = None
@@ -161,6 +179,135 @@ class omnipkgLoader:
                 omnipkgLoader._locks_dir = self.multiversion_base / '.locks'
                 omnipkgLoader._locks_dir.mkdir(parents=True, exist_ok=True)
     
+    # ═══════════════════════════════════════════════════════════
+    # WORKER POOL MANAGEMENT
+    # ═══════════════════════════════════════════════════════════
+    
+    @classmethod
+    def _get_or_create_worker(cls, package_spec: str, verbose: bool = False):
+        """
+        Get a worker from the pool, or create one if it doesn't exist.
+        
+        This is the KEY to performance - workers stay alive between activations!
+        """
+        with cls._worker_pool_lock:
+            # Check if worker already exists and is healthy
+            if package_spec in cls._worker_pool:
+                worker = cls._worker_pool[package_spec]
+                
+                # Health check
+                if worker.process and worker.process.poll() is None:
+                    return worker, True  # (worker, from_pool)
+                else:
+                    # Worker died, remove it
+                    if verbose:
+                        safe_print(f"   ♻️  Restarting dead worker for {package_spec}")
+                    try:
+                        worker.shutdown()
+                    except:
+                        pass
+                    del cls._worker_pool[package_spec]
+            
+            # Create new worker
+            try:
+                if verbose:
+                    safe_print(f"   🔄 Creating new worker for {package_spec}...")
+                
+                worker = PersistentWorker(
+                    package_spec=package_spec,
+                    verbose=verbose
+                )
+                
+                cls._worker_pool[package_spec] = worker
+                
+                if verbose:
+                    safe_print(f"   ✅ Worker created and added to pool")
+                
+                return worker, False  # (worker, from_pool)
+            except Exception as e:
+                if verbose:
+                    safe_print(f"   ❌ Worker creation failed: {e}")
+                return None, False
+    
+    @classmethod
+    def shutdown_worker_pool(cls, verbose: bool = True):
+        """
+        Shutdown ALL workers in the pool.
+        
+        Call this at program exit or when you're done with version swapping.
+        """
+        with cls._worker_pool_lock:
+            if not cls._worker_pool:
+                if verbose:
+                    safe_print("   ℹ️  Worker pool is already empty")
+                return
+            
+            if verbose:
+                safe_print(f"   🛑 Shutting down worker pool ({len(cls._worker_pool)} workers)...")
+            
+            for spec, worker in list(cls._worker_pool.items()):
+                try:
+                    worker.shutdown()
+                    if verbose:
+                        safe_print(f"      ✅ Shutdown: {spec}")
+                except Exception as e:
+                    if verbose:
+                        safe_print(f"      ⚠️  Failed to shutdown {spec}: {e}")
+            
+            cls._worker_pool.clear()
+            
+            if verbose:
+                safe_print(f"   ✅ Worker pool shutdown complete")
+    
+    @classmethod
+    def get_worker_pool_stats(cls) -> dict:
+        """Get statistics about the current worker pool."""
+        with cls._worker_pool_lock:
+            active_workers = []
+            dead_workers = []
+            
+            for spec, worker in cls._worker_pool.items():
+                if worker.process and worker.process.poll() is None:
+                    active_workers.append(spec)
+                else:
+                    dead_workers.append(spec)
+            
+            return {
+                'total': len(cls._worker_pool),
+                'active': len(active_workers),
+                'dead': len(dead_workers),
+                'active_specs': active_workers,
+                'dead_specs': dead_workers
+            }
+
+    def _create_worker_for_spec(self, package_spec: str):
+        """
+        Connects to the daemon to handle this package spec.
+        """
+        if not self._use_worker_pool:
+            return None
+    
+        # Don't use daemon if we ARE the daemon worker (prevent recursion)
+        if os.environ.get("OMNIPKG_IS_DAEMON_WORKER"):
+            return None
+    
+        try:
+            # Get the client (auto-starts if needed)
+            client = self._get_daemon_client()
+            
+            # Return proxy that looks like a worker but talks to daemon
+            proxy = DaemonProxy(client, package_spec)
+            
+            if not self.quiet:
+                safe_print(f"   ⚡ Connected to Daemon for {package_spec}")
+                
+            return proxy
+            
+        except Exception as e:
+            if not self.quiet:
+                safe_print(f"   ⚠️  Daemon connection failed: {e}. Falling back to local.")
+            return None
+            
     def _get_cloak_lock(self, pkg_name: str) -> filelock.FileLock:
         """
         Get or create a file lock for a specific package's cloak operations.
@@ -921,242 +1068,81 @@ class omnipkgLoader:
 
         if restored_any and not self.quiet:
             safe_print(f"      ✅ Restored cloaked '{pkg_name}' in main environment")
-
-    def __enter__(self):
-        """Enhanced activation with install-locking to prevent race conditions."""
-        self._activation_start_time = time.perf_counter_ns()
-        
-        if not self._current_package_spec:
-            raise ValueError("omnipkgLoader must be instantiated with a package_spec.")
-
-        try:
-            pkg_name, requested_version = self._current_package_spec.split('==')
-        except ValueError:
-            raise ValueError(f"Invalid package_spec format: '{self._current_package_spec}'")
-
-        # ═══════════════════════════════════════════════════════════
-        # STEP 0: Quick check - is main env already perfect?
-        # ═══════════════════════════════════════════════════════════
-        try:
-            current_system_version = get_version(pkg_name)
-            
-            if current_system_version == requested_version and not self.force_activation:
-                if not self.quiet:
-                    safe_print(_('✅ System version already matches requested version ({}). No bubble needed.').format(current_system_version))
-                
-                # --- ADD THIS LINE ---
-                self._ensure_main_site_packages_in_path() 
-                # ---------------------
-                
-                self._activation_successful = True
-                self._activation_end_time = time.perf_counter_ns()
-                self._total_activation_time_ns = self._activation_end_time - self._activation_start_time
-                return self
-        except PackageNotFoundError:
-            # Not in main env - will continue to bubble/install logic
-            pass
-
-        if not self.quiet:
-            safe_print(_('🚀 Fast-activating {} ...').format(self._current_package_spec))
-        
-        bubble_path = self.multiversion_base / f'{pkg_name}-{requested_version}'
-        
-        if not self.quiet:
-            safe_print(f"   📂 Searching for bubble: {bubble_path}")
-        
-        # --- NUMPY ABI TRACKING (not prevention yet, just tracking) ---
-        is_numpy_involved = 'numpy' in self._current_package_spec.lower()
-        
-        # PRIORITY 1: Try BUBBLE first
-        if bubble_path.is_dir():
-            if not self.quiet:
-                safe_print(f"   ✅ Bubble found: {bubble_path}")
-            self._using_main_env = False
-            
-            # Track numpy version if this is numpy
-            if is_numpy_involved:
-                with omnipkgLoader._numpy_lock:
-                    omnipkgLoader._numpy_version_history.append(requested_version)
-            
-            return self._activate_bubble(bubble_path, pkg_name)
-        
-        # PRIORITY 2: Try MAIN ENV (with aggressive cloak detection)
-        if not self.quiet:
-            safe_print(f"   ⚠️  Bubble not found. Checking main environment...")
-        
-        found_ver, cloaked_path = self._get_version_from_original_env(pkg_name, requested_version)
-        
-        if found_ver == requested_version:
-            # -----------------------------------------------------------
-            # 👻 GHOST CHECK START (The Fix for Circular Hell)
-            # -----------------------------------------------------------
-            # If we found metadata (found_ver) but no specific cloak path was returned by strategy 0,
-            # we MUST verify the actual code directory exists.
-            if not cloaked_path:
-                # Calculate expected path (e.g., .../site-packages/numpy)
-                expected_import_name = pkg_name.lower().replace('-', '_')
-                physical_code_path = self.site_packages_root / expected_import_name
-                
-                if not physical_code_path.exists():
-                    if not self.quiet:
-                        safe_print(f"   👻 GHOST DETECTED: Metadata says {found_ver} is here, but code folder is missing!")
-                        safe_print(f"   🧹 Triggering emergency cloak search for {pkg_name}...")
-                    
-                    # Force a deep scan and restore. This handles cases where metadata 
-                    # wasn't cloaked but the code was (split brain).
-                    self._cleanup_all_cloaks_for_package(pkg_name)
-                    
-                    # Re-check logic is handled by the block below because we just restored it.
-            # -----------------------------------------------------------
-            # 👻 GHOST CHECK END
-            # -----------------------------------------------------------
-
-            if cloaked_path:
-                # Restore the cloaked version
-                if not self.quiet:
-                    safe_print(f"   🔓 Found CLOAKED version, restoring to main env...")
-                self._uncloak_main_package_if_needed(pkg_name, cloaked_path)
-
-                # Re-check if restoration worked
-                found_ver_after, cloaked_path_after = self._get_version_from_original_env(pkg_name, requested_version)
-
-                if found_ver_after == requested_version:
-                    if not self.quiet:
-                        safe_print(f"   🔄 Installer restored {pkg_name} in main env. Switching strategy.")
-                    
-                    # --- ADD THIS LINE ---
-                    self._ensure_main_site_packages_in_path()
-                    # ---------------------
-                    
-                    self._using_main_env = True
-                    
-                    # Register protection since we are using main env now
-                    pkg_canonical = pkg_name.lower().replace('-', '_')
-                    omnipkgLoader._active_main_env_packages.add(pkg_canonical)
-                    self._my_main_env_package = pkg_canonical
-                    
-                    # Track numpy version if this is numpy
-                    if is_numpy_involved:
-                        with omnipkgLoader._numpy_lock:
-                            omnipkgLoader._numpy_version_history.append(requested_version)
-                    
-                    self._activation_successful = True
-                    self._activation_end_time = time.perf_counter_ns()
-                    self._total_activation_time_ns = self._activation_end_time - self._activation_start_time
-                    return self
-            else:
-                # Found in main env, not cloaked
-                if not self.quiet:
-                    safe_print(f"   ✅ Found in main environment")
-                
-                # --- ADD THIS LINE ---
-                self._ensure_main_site_packages_in_path()
-                # ---------------------
-                
-                self._using_main_env = True
-      
-                
-                # Register protection
-                pkg_canonical = pkg_name.lower().replace('-', '_')
-                omnipkgLoader._active_main_env_packages.add(pkg_canonical)
-                self._my_main_env_package = pkg_canonical
-                
-                # Track numpy version if this is numpy
-                if is_numpy_involved:
-                    with omnipkgLoader._numpy_lock:
-                        omnipkgLoader._numpy_version_history.append(requested_version)
-                
-                self._activation_successful = True
-                self._activation_end_time = time.perf_counter_ns()
-                self._total_activation_time_ns = self._activation_end_time - self._activation_start_time
-                return self
-
-        # PRIORITY 3: AUTO-INSTALL BUBBLE (now with thread safety)
-        install_lock = self._get_install_lock(self._current_package_spec)
-
-        if not self.quiet:
-            safe_print(f"   - 🛡️  Acquiring install lock for {self._current_package_spec}...")
-            
-        with install_lock:
-            if not self.quiet:
-                safe_print(f"   - ✅ Install lock acquired.")
-            
-            # CRITICAL DOUBLE-CHECK: Another thread might have installed the bubble
-            # while we were waiting for the lock. We must check again.
-            if bubble_path.is_dir():
-                if not self.quiet:
-                    safe_print(f"   - 🏁 Another thread finished the install. Proceeding to activate.")
-                self._using_main_env = False
-                
-                if is_numpy_involved:
-                    with omnipkgLoader._numpy_lock:
-                        omnipkgLoader._numpy_version_history.append(requested_version)
-                
-                return self._activate_bubble(bubble_path, pkg_name)
-
-            # If we are here, we are the one and only designated installer.
-            if not self.quiet:
-                safe_print(f"   - 🔧 I am the installer. Auto-creating bubble for: {self._current_package_spec}")
-            
-            install_success = self._install_bubble_inline(self._current_package_spec)
-            
-            if not install_success:
-                raise RuntimeError(f"Failed to install {self._current_package_spec}")
-
-            # ═══════════════════════════════════════════════════════════
-            # POST-INSTALL CHECK: Where did it actually land?
-            # ═══════════════════════════════════════════════════════════
-            if bubble_path.is_dir():
-                # Success: Bubble was created as expected
-                if not self.quiet:
-                    safe_print(f"   - ✅ Bubble created successfully at: {bubble_path}")
-                self._using_main_env = False
-                
-                if is_numpy_involved:
-                    with omnipkgLoader._numpy_lock:
-                        omnipkgLoader._numpy_version_history.append(requested_version)
-                
-                return self._activate_bubble(bubble_path, pkg_name)
-            else:
-                # Package landed in main environment instead
-                if not self.quiet:
-                    safe_print(f"   - ⚠️  Bubble not created. Package installed to main environment.")
-                
-                # Verify it's actually in main env now
-                found_ver, cloaked_path = self._get_version_from_original_env(pkg_name, requested_version)
-                
-                if found_ver == requested_version:
-                    if not self.quiet:
-                        safe_print(f"   - ✅ Confirmed {pkg_name}=={requested_version} in main environment")
-                    
-                    self._using_main_env = True
-                    
-                    # Register protection
-                    pkg_canonical = pkg_name.lower().replace('-', '_')
-                    omnipkgLoader._active_main_env_packages.add(pkg_canonical)
-                    self._my_main_env_package = pkg_canonical
-                    
-                    if is_numpy_involved:
-                        with omnipkgLoader._numpy_lock:
-                            omnipkgLoader._numpy_version_history.append(requested_version)
-                    
-                    self._activation_successful = True
-                    self._activation_end_time = time.perf_counter_ns()
-                    self._total_activation_time_ns = self._activation_end_time - self._activation_start_time
-                    return self
-                else:
-                    # Neither bubble nor main env has it - installation truly failed
-                    raise RuntimeError(
-                        f"Installation reported success but {pkg_name}=={requested_version} "
-                        f"not found in bubble or main environment. Found version: {found_ver}"
-                    )
     
+    def _should_use_worker_proactively(self, pkg_name: str) -> bool:
+        """
+        Decide if we should proactively use worker mode for this package.
+        """
+        # 1. Check if C++ backend already loaded in memory (Existing logic)
+        cpp_indicators = {
+            'torch': 'torch._C',
+            'numpy': 'numpy.core._multiarray_umath',
+            'tensorflow': 'tensorflow.python.pywrap_tensorflow',
+            'scipy': 'scipy.linalg._fblas',
+        }
+        
+        for pkg, indicator in cpp_indicators.items():
+            if pkg in pkg_name.lower() and indicator in sys.modules:
+                if not self.quiet:
+                    safe_print(f"   🧠 Proactive worker mode: {indicator} already loaded")
+                return True
+        
+        # 2. FORCE WORKER for these packages to ensure Daemon usage
+        #    (Add numpy and scipy here to force isolation testing)
+        force_daemon_packages = ['tensorflow', 'numpy', 'scipy', 'pandas']
+        
+        for force_pkg in force_daemon_packages:
+            if force_pkg in pkg_name.lower():
+                if not self.quiet:
+                    safe_print(f"   🧠 Proactive worker mode: Force-enabling Daemon for {force_pkg}")
+                return True
+        
+        return False
+     
+    def _get_daemon_client(self):
+        """
+        Attempts to connect to the daemon. If not running, starts it.
+        """
+        if not DAEMON_AVAILABLE:
+            raise RuntimeError("Worker Daemon code missing (omnipkg.isolation.worker_daemon)")
+
+        client = DaemonClient()
+        
+        # 1. Try simple status check to see if it's alive
+        status = client.status()
+        if status.get('success'):
+            return client
+            
+        # 2. Daemon not running? Start it!
+        if not self.quiet:
+            safe_print("   ⚙️  Worker Daemon not running. Auto-starting background service...")
+
+        # Launch independent process using the CLI command
+        subprocess.Popen(
+            [sys.executable, "-m", "omnipkg.isolation.worker_daemon", "start"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            close_fds=True
+        )
+        
+        # 3. Wait for warmup (up to 3 seconds)
+        for i in range(30):
+            time.sleep(0.1)
+            status = client.status()
+            if status.get('success'):
+                if not self.quiet:
+                    safe_print("   ✅ Daemon warmed up and ready.")
+                return client
+                
+        raise RuntimeError("Failed to auto-start Worker Daemon")
+
     def _activate_bubble(self, bubble_path, pkg_name):
         """
         Activate a bubble with proper tracking of what we cloak.
         CRITICAL: Only cloak packages that CONFLICT, not all dependencies.
         """
         try:
+            
             bubble_deps = self._get_bubble_dependencies(bubble_path)
             
             # ═══════════════════════════════════════════════════════════
@@ -1176,7 +1162,7 @@ class omnipkgLoader:
                 try:
                     current_torch_ver = sys.modules['torch'].__version__
                     bubble_torch_ver = bubble_deps['torch']
-
+    
                     if current_torch_ver != bubble_torch_ver:
                         if not self.quiet:
                             safe_print(f"   ⚠️  PyTorch C++ backend already loaded!")
@@ -1211,14 +1197,14 @@ class omnipkgLoader:
                         packages_to_cloak.append(pkg)
                         if not self.quiet:
                             safe_print(f"   ⚠️ Version conflict: {pkg} (main: {main_version} vs bubble: {bubble_version})")
-
+    
             if not self.quiet:
                 safe_print(f"   📊 Bubble has {len(bubble_deps)} packages, {len(packages_to_cloak)} conflict with main env")
-
+    
             # Aggressively exorcise the conflicting modules from memory *before* cloaking
             for pkg in packages_to_cloak:
                 self._aggressive_module_cleanup(pkg)
-
+    
             self._packages_we_cloaked.update(packages_to_cloak)
             cloaked_count = self._batch_cloak_packages(packages_to_cloak)
             
@@ -1227,89 +1213,333 @@ class omnipkgLoader:
             
             # Setup paths
             bubble_path_str = str(bubble_path)
-            bubble_bin_path = bubble_path / 'bin'
-            if bubble_bin_path.is_dir():
-                os.environ['PATH'] = f'{str(bubble_bin_path)}{os.pathsep}{self.original_path_env}'
-
-            # sys.path setup
             if self.isolation_mode == 'overlay':
                 if not self.quiet:
                     safe_print("   - 🧬 Activating in OVERLAY mode (merging with main env)")
+                
+                # 🧠 SMART FIX: AUTO-RESTORE MAIN ENV
+                # If we are in a worker that stripped the path, but we requested overlay,
+                # we need to put the main site-packages back so we can see tools like scipy.
+                if self._true_site_packages:
+                    true_site_str = str(self._true_site_packages)
+                    if true_site_str not in sys.path:
+                        if not self.quiet:
+                            safe_print(f"   🔧 Auto-restoring main site-packages visibility: {self._true_site_packages}")
+                        sys.path.append(true_site_str)
+
                 sys.path.insert(0, bubble_path_str)
             else:
-                if not self.quiet:
-                    safe_print("   - 🔒 Activating in STRICT mode (isolating from main env)")
-                new_sys_path = [bubble_path_str] + [p for p in self.original_sys_path 
-                                                    if not self._is_main_site_packages(p)]
-                sys.path[:] = new_sys_path
-
-            self._ensure_omnipkg_access_in_bubble(bubble_path_str)
-            self._activated_bubble_path = bubble_path_str
-            self._activation_end_time = time.perf_counter_ns()
-            self._total_activation_time_ns = self._activation_end_time - self._activation_start_time
-            
-            if not self.quiet:
-                safe_print(f"   ⚡ HEALED in {self._total_activation_time_ns / 1000:,.1f} μs")
-            
-            # ═══════════════════════════════════════════════════════════
-            # CRITICAL: TensorFlow MUST be validated in subprocess only
-            # ═══════════════════════════════════════════════════════════
-            if pkg_name == 'tensorflow':
-                if not self.quiet:
-                    safe_print(f"   ⚠️  TensorFlow detected - skipping in-process validation")
-                    safe_print(f"   ℹ️  Will validate in clean subprocess only")
-                
-                if self._is_bubble_healthy_in_subprocess(pkg_name, bubble_path_str):
+                bubble_bin_path = bubble_path / 'bin'
+                if bubble_bin_path.is_dir():
+                    os.environ['PATH'] = f'{str(bubble_bin_path)}{os.pathsep}{self.original_path_env}'
+        
+                # sys.path setup
+                if self.isolation_mode == 'overlay':
                     if not self.quiet:
-                        safe_print(f"   ✅ TensorFlow validated successfully in clean process")
-                    self._activation_successful = True
-                    return self
+                        safe_print("   - 🧬 Activating in OVERLAY mode (merging with main env)")
+                    sys.path.insert(0, bubble_path_str)
                 else:
                     if not self.quiet:
-                        safe_print(f"   ❌ TensorFlow validation failed in subprocess")
-                    self._panic_restore_cloaks()
-                    raise RuntimeError(f"TensorFlow bubble failed subprocess validation")
-            
-            # ═══════════════════════════════════════════════════════════
-            # CRITICAL: PyTorch C++ reload handling
-            # ═══════════════════════════════════════════════════════════
-            if skip_torch_validation or (pkg_name == 'torch' and 'torch._C' in sys.modules):
+                        safe_print("   - 🔒 Activating in STRICT mode (isolating from main env)")
+                    new_sys_path = [bubble_path_str] + [p for p in self.original_sys_path                                                    if not self._is_main_site_packages(p)]
+                    sys.path[:] = new_sys_path
+        
+                self._ensure_omnipkg_access_in_bubble(bubble_path_str)
+                self._activated_bubble_path = bubble_path_str
+                self._activation_end_time = time.perf_counter_ns()
+                self._total_activation_time_ns = self._activation_end_time - self._activation_start_time
+                
                 if not self.quiet:
-                    safe_print(f"   ⚠️  PyTorch C++ reload limitation detected (non-fatal)")
-                    safe_print(f"   ℹ️  Bubble is functional, validation skipped")
+                    safe_print(f"   ⚡ HEALED in {self._total_activation_time_ns / 1000:,.1f} μs")
+                
+                # ═══════════════════════════════════════════════════════════
+                # CRITICAL: TensorFlow MUST be validated in subprocess only
+                # ═══════════════════════════════════════════════════════════
+                if pkg_name == 'tensorflow':
+                    if not self.quiet:
+                        safe_print(f"   ⚠️  TensorFlow detected - skipping in-process validation")
+                        safe_print(f"   ℹ️  Will validate in clean subprocess only")
+                    
+                    if self._is_bubble_healthy_in_subprocess(pkg_name, bubble_path_str):
+                        if not self.quiet:
+                            safe_print(f"   ✅ TensorFlow validated successfully in clean process")
+                        self._activation_successful = True
+                        return self
+                    else:
+                        if not self.quiet:
+                            safe_print(f"   ❌ TensorFlow validation failed in subprocess")
+                        self._panic_restore_cloaks()
+                        raise RuntimeError(f"TensorFlow bubble failed subprocess validation")
+                
+                # ═══════════════════════════════════════════════════════════
+                # CRITICAL: PyTorch C++ reload handling
+                # ═══════════════════════════════════════════════════════════
+                if skip_torch_validation or (pkg_name == 'torch' and 'torch._C' in sys.modules):
+                    if not self.quiet:
+                        safe_print(f"   ⚠️  PyTorch C++ reload limitation detected (non-fatal)")
+                        safe_print(f"   ℹ️  Bubble is functional, validation skipped")
+                    self._activation_successful = True
+                    return self
+                
+                # ═══════════════════════════════════════════════════════════
+                # Normal validation for other packages
+                # ═══════════════════════════════════════════════════════════
+                import_ok = self._validate_import(pkg_name, max_retries=3)
+                
+                if not import_ok:
+                    if self._is_bubble_healthy_in_subprocess(pkg_name, bubble_path_str):
+                        if not self.quiet:
+                            safe_print(f"   🧪 DIAGNOSIS: Bubble is HEALTHY in a clean process.")
+                        raise ProcessCorruptedException(
+                            f"Memory corrupted by C++ collision while activating {pkg_name}"
+                        )
+                    
+                    if not self.quiet:
+                        safe_print(f"   🏥 Last resort: Force-reinstalling bubble...")
+                    
+                    healed = self._auto_heal_broken_bubble(pkg_name, bubble_path)
+                    
+                    if not healed:
+                        self._panic_restore_cloaks()
+                        raise RuntimeError(f"Bubble activation failed validation: {pkg_name} import broken")
+                
                 self._activation_successful = True
                 return self
-            
-            # ═══════════════════════════════════════════════════════════
-            # Normal validation for other packages
-            # ═══════════════════════════════════════════════════════════
-            import_ok = self._validate_import(pkg_name, max_retries=3)
-            
-            if not import_ok:
-                if self._is_bubble_healthy_in_subprocess(pkg_name, bubble_path_str):
-                    if not self.quiet:
-                        safe_print(f"   🧪 DIAGNOSIS: Bubble is HEALTHY in a clean process.")
-                    raise ProcessCorruptedException(
-                        f"Memory corrupted by C++ collision while activating {pkg_name}"
-                    )
-                
-                if not self.quiet:
-                    safe_print(f"   🏥 Last resort: Force-reinstalling bubble...")
-                
-                healed = self._auto_heal_broken_bubble(pkg_name, bubble_path)
-                
-                if not healed:
-                    self._panic_restore_cloaks()
-                    raise RuntimeError(f"Bubble activation failed validation: {pkg_name} import broken")
-            
-            self._activation_successful = True
-            return self
-
+        
         except Exception as e:
             safe_print(_('   ❌ Activation failed: {}').format(str(e)))
             self._panic_restore_cloaks()
             raise
 
+    def __enter__(self):
+        """
+        Enhanced activation with automatic worker fallback.
+        
+        Three-tier strategy:
+        1. Try in-process activation (existing logic) - DEFAULT
+        2. Reactive worker fallback on ProcessCorruptedException
+        3. Proactive worker mode (ONLY if explicitly requested)
+        """
+        self._activation_start_time = time.perf_counter_ns()
+        
+        if not self._current_package_spec:
+            raise ValueError("omnipkgLoader must be instantiated with a package_spec.")
+        
+        try:
+            pkg_name, requested_version = self._current_package_spec.split('==')
+        except ValueError:
+            raise ValueError(f"Invalid package_spec format: '{self._current_package_spec}'")
+        
+        # ═══════════════════════════════════════════════════════════
+        # TIER 1: Try In-Process Activation (Your Existing Logic)
+        # ═══════════════════════════════════════════════════════════
+        try:
+            # Check if system version matches
+            try:
+                current_system_version = get_version(pkg_name)
+                
+                if current_system_version == requested_version and not self.force_activation:
+                    if not self.quiet:
+                        safe_print(_('✅ System version already matches requested version ({}). No bubble needed.').format(current_system_version))
+                    
+                    self._ensure_main_site_packages_in_path() 
+                    
+                    self._activation_successful = True
+                    self._activation_end_time = time.perf_counter_ns()
+                    self._total_activation_time_ns = self._activation_end_time - self._activation_start_time
+                    return self
+            except PackageNotFoundError:
+                pass
+
+            if not self.quiet:
+                safe_print(_('🚀 Fast-activating {} ...').format(self._current_package_spec))
+            
+            bubble_path = self.multiversion_base / f'{pkg_name}-{requested_version}'
+            
+            if not self.quiet:
+                safe_print(f"   📂 Searching for bubble: {bubble_path}")
+            
+            # Track numpy version if applicable
+            is_numpy_involved = 'numpy' in self._current_package_spec.lower()
+            
+            # PRIORITY 1: Try BUBBLE first
+            if bubble_path.is_dir():
+                if not self.quiet:
+                    safe_print(f"   ✅ Bubble found: {bubble_path}")
+                self._using_main_env = False
+                
+                if is_numpy_involved:
+                    with omnipkgLoader._numpy_lock:
+                        omnipkgLoader._numpy_version_history.append(requested_version)
+                
+                return self._activate_bubble(bubble_path, pkg_name)
+            
+            # PRIORITY 2: Try MAIN ENV
+            if not self.quiet:
+                safe_print(f"   ⚠️  Bubble not found. Checking main environment...")
+            
+            found_ver, cloaked_path = self._get_version_from_original_env(pkg_name, requested_version)
+            
+            if found_ver == requested_version:
+                # Handle cloaked versions or use main env directly
+                if cloaked_path:
+                    if not self.quiet:
+                        safe_print(f"   🔓 Found CLOAKED version, restoring to main env...")
+                    self._uncloak_main_package_if_needed(pkg_name, cloaked_path)
+
+                    found_ver_after, cloaked_path_after = self._get_version_from_original_env(pkg_name, requested_version)
+
+                    if found_ver_after == requested_version:
+                        if not self.quiet:
+                            safe_print(f"   🔄 Installer restored {pkg_name} in main env. Switching strategy.")
+                        
+                        self._ensure_main_site_packages_in_path()
+                        self._using_main_env = True
+                        
+                        pkg_canonical = pkg_name.lower().replace('-', '_')
+                        omnipkgLoader._active_main_env_packages.add(pkg_canonical)
+                        self._my_main_env_package = pkg_canonical
+                        
+                        if is_numpy_involved:
+                            with omnipkgLoader._numpy_lock:
+                                omnipkgLoader._numpy_version_history.append(requested_version)
+                        
+                        self._activation_successful = True
+                        self._activation_end_time = time.perf_counter_ns()
+                        self._total_activation_time_ns = self._activation_end_time - self._activation_start_time
+                        return self
+                else:
+                    # Found in main env, not cloaked
+                    if not self.quiet:
+                        safe_print(f"   ✅ Found in main environment")
+                    
+                    self._ensure_main_site_packages_in_path()
+                    self._using_main_env = True
+                    
+                    pkg_canonical = pkg_name.lower().replace('-', '_')
+                    omnipkgLoader._active_main_env_packages.add(pkg_canonical)
+                    self._my_main_env_package = pkg_canonical
+                    
+                    if is_numpy_involved:
+                        with omnipkgLoader._numpy_lock:
+                            omnipkgLoader._numpy_version_history.append(requested_version)
+                    
+                    self._activation_successful = True
+                    self._activation_end_time = time.perf_counter_ns()
+                    self._total_activation_time_ns = self._activation_end_time - self._activation_start_time
+                    return self
+
+            # PRIORITY 3: AUTO-INSTALL BUBBLE
+            install_lock = self._get_install_lock(self._current_package_spec)
+
+            if not self.quiet:
+                safe_print(f"   - 🛡️  Acquiring install lock for {self._current_package_spec}...")
+                
+            with install_lock:
+                if not self.quiet:
+                    safe_print(f"   - ✅ Install lock acquired.")
+                
+                # Double-check another thread didn't install it
+                if bubble_path.is_dir():
+                    if not self.quiet:
+                        safe_print(f"   - 🏁 Another thread finished the install. Proceeding to activate.")
+                    self._using_main_env = False
+                    
+                    if is_numpy_involved:
+                        with omnipkgLoader._numpy_lock:
+                            omnipkgLoader._numpy_version_history.append(requested_version)
+                    
+                    return self._activate_bubble(bubble_path, pkg_name)
+
+                if not self.quiet:
+                    safe_print(f"   - 🔧 I am the installer. Auto-creating bubble for: {self._current_package_spec}")
+                
+                install_success = self._install_bubble_inline(self._current_package_spec)
+                
+                if not install_success:
+                    raise RuntimeError(f"Failed to install {self._current_package_spec}")
+
+                # Post-install check
+                if bubble_path.is_dir():
+                    if not self.quiet:
+                        safe_print(f"   - ✅ Bubble created successfully at: {bubble_path}")
+                    self._using_main_env = False
+                    
+                    if is_numpy_involved:
+                        with omnipkgLoader._numpy_lock:
+                            omnipkgLoader._numpy_version_history.append(requested_version)
+                    
+                    return self._activate_bubble(bubble_path, pkg_name)
+                else:
+                    # Package landed in main environment
+                    if not self.quiet:
+                        safe_print(f"   - ⚠️  Bubble not created. Package installed to main environment.")
+                    
+                    found_ver, cloaked_path = self._get_version_from_original_env(pkg_name, requested_version)
+                    
+                    if found_ver == requested_version:
+                        if not self.quiet:
+                            safe_print(f"   - ✅ Confirmed {pkg_name}=={requested_version} in main environment")
+                        
+                        self._using_main_env = True
+                        
+                        pkg_canonical = pkg_name.lower().replace('-', '_')
+                        omnipkgLoader._active_main_env_packages.add(pkg_canonical)
+                        self._my_main_env_package = pkg_canonical
+                        
+                        if is_numpy_involved:
+                            with omnipkgLoader._numpy_lock:
+                                omnipkgLoader._numpy_version_history.append(requested_version)
+                        
+                        self._activation_successful = True
+                        self._activation_end_time = time.perf_counter_ns()
+                        self._total_activation_time_ns = self._activation_end_time - self._activation_start_time
+                        return self
+                    else:
+                        raise RuntimeError(
+                            f"Installation reported success but {pkg_name}=={requested_version} "
+                            f"not found in bubble or main environment. Found version: {found_ver}"
+                        )
+        
+        except ProcessCorruptedException as e:
+            # ═══════════════════════════════════════════════════════════
+            # TIER 2: Reactive Worker Fallback (ONLY on crash)
+            # ═══════════════════════════════════════════════════════════
+            if not self._worker_fallback_enabled:
+                raise  # Re-raise if worker fallback disabled
+            
+            if not self.quiet:
+                safe_print(f"   🔄 C++ collision detected! Recovering with worker mode...")
+                safe_print(f"      Details: {str(e)}")
+            
+            # Clean up partial activation
+            try:
+                self._panic_restore_cloaks()
+            except Exception:
+                pass  # Best-effort cleanup
+            
+            # Create worker as fallback
+            self._active_worker = self._create_worker_for_spec(self._current_package_spec)
+            
+            if not self._active_worker:
+                raise RuntimeError(
+                    f"Both in-process and worker activation failed for "
+                    f"{self._current_package_spec}. Original error: {e}"
+                )
+            
+            self._worker_mode = True
+            self._activation_successful = True
+            self._activation_end_time = time.perf_counter_ns()
+            self._total_activation_time_ns = (self._activation_end_time - 
+                                            self._activation_start_time)
+            
+            if not self.quiet:
+                safe_print(f"   ✅ Successfully recovered using worker mode!")
+                safe_print(f"   ⚡ Total recovery time: "
+                        f"{self._total_activation_time_ns / 1000000:.1f} ms")
+            
+            return self
+        
     def _panic_restore_cloaks(self):
         """Emergency cloak restoration when activation fails."""
         if not self.quiet:
@@ -1374,9 +1604,29 @@ class omnipkgLoader:
             return False
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        """
-        Fixed deactivation with global protection tracking.
-        """
+        """Enhanced deactivation with worker pool awareness."""
+        
+        # Worker cleanup path
+        if self._worker_mode and self._active_worker:
+            if self._worker_from_pool:
+                # DON'T shutdown pooled workers - keep them alive!
+                if not self.quiet:
+                    safe_print(f"   ♻️  Releasing pooled worker (keeping alive)")
+                self._active_worker = None
+            else:
+                # Shutdown temporary workers
+                if not self.quiet:
+                    safe_print(f"   🛑 Shutting down temporary worker...")
+                try:
+                    self._active_worker.shutdown()
+                except Exception as e:
+                    if not self.quiet:
+                        safe_print(f"   ⚠️  Worker shutdown warning: {e}")
+                finally:
+                    self._active_worker = None
+            
+            self._worker_mode = False
+            return  # Early exit
         self._deactivation_start_time = time.perf_counter_ns()
         
         if not self.quiet:
@@ -2206,5 +2456,345 @@ class omnipkgLoader:
             if not self.quiet:
                 safe_print(f"      ❌ Auto-heal failed: {e}")
             return False
+            
+    def execute(self, code: str) -> dict:
+        """
+        Execute Python code in the activated environment.
+        
+        Works transparently in both worker and in-process modes.
+        
+        Args:
+            code: Python code string to execute
+            
+        Returns:
+            dict with keys:
+                - success (bool): Whether execution succeeded
+                - stdout (str): Captured output (if success)
+                - error (str): Error message (if failure)
+                - locals (str): Local variable names (if success)
+        """
+        if self._worker_mode and self._active_worker:
+            # Worker mode: delegate to subprocess
+            return self._active_worker.execute(code)
+        else:
+            # In-process mode: direct execution
+            try:
+                f = io.StringIO()
+                old_stdout = sys.stdout
+                sys.stdout = f
+                
+                try:
+                    loc = {}
+                    exec(code, globals(), loc)
+                finally:
+                    sys.stdout = old_stdout
+                
+                output = f.getvalue()
+                return {
+                    "success": True,
+                    "stdout": output,
+                    "locals": str(list(loc.keys()))
+                }
+            except Exception as e:
+                import traceback
+                return {
+                    "success": False,
+                    "error": str(e),
+                    "traceback": traceback.format_exc()
+                }
+            
+    def get_version(self, package_name):
+        # Execute code to get version and path
+        # The worker extracts the local variable named 'result' and merges it into the response
+        code = f"import importlib.metadata; result = {{'version': importlib.metadata.version('{package_name}'), 'path': __import__('{package_name}').__file__}}"
+        res = self.execute(code)
+        
+        if res.get('success'):
+            return {
+                'success': True,
+                'version': res.get('version', 'unknown'),
+                'path': res.get('path', 'daemon_managed')
+            }
+        return {'success': False, 'error': res.get('error', 'Unknown error')}
         
     
+"""
+Enhanced omnipkgLoader with automatic worker fallback for C++ extension conflicts.
+
+This patch adds intelligent detection and automatic subprocess delegation when
+the in-process loader encounters memory corruption from C++ extensions.
+
+INTEGRATION: Add this to your loader.py
+"""
+
+class WorkerDelegationMixin:
+    def __init__(self, *args, worker_fallback=True, **kwargs):
+        super().__init__(*args, **kwargs)
+        
+        # CRITICAL FIX: Disable worker fallback if we are already inside a worker
+        if os.environ.get("OMNIPKG_IS_WORKER_PROCESS") == "1":
+            self._worker_fallback_enabled = False
+        else:
+            self._worker_fallback_enabled = worker_fallback
+            
+        self._active_worker = None
+        self._worker_mode = False
+
+        
+    def _should_use_worker_mode(self, pkg_name: str) -> bool:
+        # Double check: If we are in a worker, NEVER spawn another one
+        if os.environ.get("OMNIPKG_IS_WORKER_PROCESS") == "1":
+            return False
+        # Packages with known C++ collision issues
+        problematic_packages = {
+            'flask', 'werkzeug', 'jinja2', 'markupsafe',
+            'scipy', 'pandas', 'numpy',
+            'tensorflow', 'tensorflow-gpu',
+            'torch', 'torchvision',
+            'pillow', 'opencv-python', 'cv2',
+            'lxml', 'cryptography'
+        }
+        
+        pkg_lower = pkg_name.lower().replace('-', '_')
+        
+        # Check if package or any of its known dependencies are problematic
+        if pkg_lower in problematic_packages:
+            return True
+        
+        # Check if bubble dependencies include problematic packages
+        if self._activated_bubble_path:
+            bubble_path = Path(self._activated_bubble_path)
+            bubble_deps = self._get_bubble_dependencies(bubble_path)
+            
+            for dep in bubble_deps.keys():
+                if dep.lower().replace('-', '_') in problematic_packages:
+                    return True
+        
+        return False
+    
+    def _detect_cpp_collision_risk(self, pkg_name: str, bubble_deps: dict) -> bool:
+        """
+        Analyze if activating this bubble would cause C++ extension conflicts.
+        Returns True if collision is likely.
+        """
+        # Check if any problematic modules are already loaded in memory
+        problematic_modules = [
+            'werkzeug._internal', 'jinja2.ext', 'markupsafe._speedups',
+            'numpy.core', 'scipy.linalg', 'torch._C',
+            'tensorflow.python', 'cv2'
+        ]
+        
+        for mod_pattern in problematic_modules:
+            # Check exact match
+            if mod_pattern in sys.modules:
+                if not self.quiet:
+                    safe_print(f"   🚨 C++ collision risk: {mod_pattern} already loaded")
+                return True
+            
+            # Check prefix match (e.g., 'torch._C' matches 'torch._C._something')
+            for loaded_mod in sys.modules:
+                if loaded_mod.startswith(mod_pattern):
+                    if not self.quiet:
+                        safe_print(f"   🚨 C++ collision risk: {loaded_mod} detected")
+                    return True
+        
+        # Check for version conflicts in C++-heavy packages
+        main_env_versions = {}
+        for pkg in bubble_deps.keys():
+            try:
+                main_version = get_version(pkg)
+                bubble_version = bubble_deps[pkg]
+                
+                if main_version != bubble_version:
+                    # If this is a known C++ package, flag it
+                    if pkg.lower() in {'numpy', 'scipy', 'torch', 'tensorflow', 
+                                      'werkzeug', 'jinja2', 'markupsafe'}:
+                        if not self.quiet:
+                            safe_print(f"   🚨 C++ version conflict: {pkg} "
+                                     f"({main_version} vs {bubble_version})")
+                        return True
+            except PackageNotFoundError:
+                continue
+        
+        return False
+    
+    def _create_worker_for_spec(self, package_spec: str):
+        """
+        Connects to the daemon to handle this package spec.
+        """
+        if not self._use_worker_pool:
+            return None
+    
+        # Don't use daemon if we ARE the daemon worker (prevent recursion)
+        if os.environ.get("OMNIPKG_IS_DAEMON_WORKER"):
+            return None
+    
+        try:
+            # Get the client (auto-starts if needed)
+            client = self._get_daemon_client()
+            
+            # Return proxy that looks like a worker but talks to daemon
+            proxy = DaemonProxy(client, package_spec)
+            
+            if not self.quiet:
+                safe_print(f"   ⚡ Connected to Daemon for {package_spec}")
+                
+            return proxy
+            
+        except Exception as e:
+            if not self.quiet:
+                safe_print(f"   ⚠️  Daemon connection failed: {e}. Falling back to local.")
+            return None
+    
+    def __enter__(self):
+        self._activation_start_time = time.perf_counter_ns()
+        if not self._current_package_spec: raise ValueError("Package spec required")
+        
+        try:
+            pkg_name, requested_version = self._current_package_spec.split('==')
+        except ValueError:
+            raise ValueError(f"Invalid package_spec format: '{self._current_package_spec}'")
+
+        # 1. Proactive Worker Mode (Daemon)
+        if self._worker_fallback_enabled and self._should_use_worker_proactively(pkg_name):
+            self._active_worker = self._create_worker_for_spec(self._current_package_spec)
+            if self._active_worker:
+                self._worker_mode = True
+                self._activation_successful = True
+                self._activation_end_time = time.perf_counter_ns()
+                self._total_activation_time_ns = self._activation_end_time - self._activation_start_time
+                return self
+
+        # Store original activation start time
+        self._activation_start_time = time.perf_counter_ns()
+        
+        if not self._current_package_spec:
+            raise ValueError("omnipkgLoader must be instantiated with a package_spec.")
+        
+        try:
+            pkg_name, requested_version = self._current_package_spec.split('==')
+        except ValueError:
+            raise ValueError(f"Invalid package_spec format: '{self._current_package_spec}'")
+        
+        # STRATEGY 1: Proactive Worker Mode for Known Problematic Packages
+        if self._worker_fallback_enabled and self._should_use_worker_mode(pkg_name):
+            if not self.quiet:
+                safe_print(f"   🧠 Smart Decision: Using worker mode for {pkg_name} "
+                          f"(known C++ collision risk)")
+            
+            self._active_worker = self._create_worker_for_spec(self._current_package_spec)
+            if self._active_worker:
+                self._worker_mode = True
+                self._activation_successful = True
+                self._activation_end_time = time.perf_counter_ns()
+                self._total_activation_time_ns = (self._activation_end_time - 
+                                                 self._activation_start_time)
+                return self
+            else:
+                if not self.quiet:
+                    safe_print(f"   ⚠️  Worker creation failed, falling back to in-process")
+        
+        # STRATEGY 2: Try In-Process Activation (Original Logic)
+        try:
+            # Call the original __enter__ logic
+            return super().__enter__()
+            
+        except ProcessCorruptedException as e:
+            # STRATEGY 3: Reactive Worker Fallback on C++ Collision
+            if not self._worker_fallback_enabled:
+                raise  # Re-raise if worker fallback is disabled
+            
+            if not self.quiet:
+                safe_print(f"   🔄 C++ collision detected, switching to worker mode...")
+                safe_print(f"      Original error: {str(e)}")
+            
+            # Clean up any partial activation state
+            self._panic_restore_cloaks()
+            
+            # Create worker as fallback
+            self._active_worker = self._create_worker_for_spec(self._current_package_spec)
+            
+            if not self._active_worker:
+                if not self.quiet:
+                    safe_print(f"   ❌ Worker fallback failed")
+                raise RuntimeError(f"Both in-process and worker activation failed for "
+                                 f"{self._current_package_spec}")
+            
+            self._worker_mode = True
+            self._activation_successful = True
+            self._activation_end_time = time.perf_counter_ns()
+            self._total_activation_time_ns = (self._activation_end_time - 
+                                             self._activation_start_time)
+            
+            if not self.quiet:
+                safe_print(f"   ✅ Successfully recovered using worker mode")
+            
+            return self
+    
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Enhanced deactivation with worker cleanup."""
+        if self._worker_mode and self._active_worker:
+            if not self.quiet:
+                safe_print(f"   🛑 Shutting down worker for {self._current_package_spec}...")
+            
+            try:
+                self._active_worker.shutdown()
+            except Exception as e:
+                if not self.quiet:
+                    safe_print(f"   ⚠️  Worker shutdown warning: {e}")
+            finally:
+                self._active_worker = None
+                self._worker_mode = False
+        else:
+            # Call original deactivation
+            super().__exit__(exc_type, exc_val, exc_tb)
+    
+    def execute(self, code: str) -> dict:
+        """
+        Execute code either in worker or in-process depending on mode.
+        This provides a unified interface regardless of activation strategy.
+        """
+        if self._worker_mode and self._active_worker:
+            return self._active_worker.execute(code)
+        else:
+            # In-process execution
+            try:
+                f = io.StringIO()
+                sys.stdout = f
+                try:
+                    loc = {}
+                    exec(code, globals(), loc)
+                finally:
+                    sys.stdout = sys.__stdout__
+                
+                output = f.getvalue()
+                return {
+                    "success": True,
+                    "stdout": output,
+                    "locals": str(loc.keys())
+                }
+            except Exception as e:
+                return {
+                    "success": False,
+                    "error": str(e)
+                }
+    
+    def get_version(self, package_name: str) -> dict:
+        """Get package version, works in both worker and in-process mode."""
+        if self._worker_mode and self._active_worker:
+            return self._active_worker.get_version(package_name)
+        else:
+            try:
+                from importlib.metadata import version
+                ver = version(package_name)
+                mod = __import__(package_name)
+                return {
+                    "success": True,
+                    "version": ver,
+                    "path": mod.__file__ if hasattr(mod, '__file__') else None
+                }
+            except Exception as e:
+                return {
+                    "success": False,
+                    "error": str(e)
+                }

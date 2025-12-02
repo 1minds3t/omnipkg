@@ -20,11 +20,14 @@ class PersistentWorker:
         self._start_worker()
 
     def _start_worker(self):
-        # Calculate root path
+        # Calculate root path FIRST
         current_file = Path(__file__).resolve()
         src_root = str(current_file.parent.parent.parent)
-
-        # The Worker Script - CORRECTED VERSION
+        
+        # Store package_spec in local variable for f-string
+        package_spec = self.package_spec
+        
+        # Build worker code WITH all variables available
         worker_code = f"""
 import sys
 import os
@@ -68,12 +71,12 @@ except ImportError:
 from omnipkg.loader import omnipkgLoader
 
 try:
-    log(f"🐚 Worker initializing environment: {self.package_spec}...")
-    loader = omnipkgLoader("{self.package_spec}", quiet=True)
+    log(f"🐚 Worker initializing environment: {package_spec}...")
+    loader = omnipkgLoader("{package_spec}", quiet=True, worker_fallback=False)
     loader.__enter__()
     
     send_ipc({{"status": "ready"}})
-    log(f"✅ Worker ready: {self.package_spec}")
+    log(f"✅ Worker ready: {package_spec}")
     
 except Exception as e:
     send_ipc({{"status": "error", "message": str(e)}})
@@ -120,7 +123,7 @@ while True:
                     sys.stdout = old_stdout
                 
                 output = f.getvalue()
-                send_ipc({{"success": True, "stdout": output, "locals": str(loc.keys())}})
+                send_ipc({{"success": True, "stdout": output, "locals": str(list(loc.keys()))}})
             except Exception as e:
                 log(f"EXECUTION ERROR: {{e}}")
                 traceback.print_exc()
@@ -147,14 +150,20 @@ except:
     pass
 """
 
+        # Setup environment with worker flag
+        env = os.environ.copy()
+        env["OMNIPKG_IS_WORKER_PROCESS"] = "1"  # Prevent infinite worker recursion
+
         # CRITICAL: Disable buffering in subprocess
+        # NOW worker_code is defined, so we can use it!
         self.process = subprocess.Popen(
             [sys.executable, "-u", "-c", worker_code],
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             bufsize=0,
-            text=True
+            text=True,
+            env=env
         )
 
         # Start logging thread
@@ -208,7 +217,7 @@ except:
                 return {"success": False, "error": "No response"}
             return json.loads(response)
         except Exception as e:
-            return {"errors": False, "error": str(e)}
+            return {"success": False, "error": str(e)}
 
     def shutdown(self):
         self._stop_logging.set()

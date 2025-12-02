@@ -104,7 +104,7 @@ omnipkg = "omnipkg.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
-include = ["omnipkg*", "tests*"]
+include = ["omnipkg*", "omnipkg.*", "tests*"]
 exclude = [
     "build*",
     "dist*",

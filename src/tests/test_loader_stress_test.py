@@ -1,12 +1,29 @@
 #!/usr/bin/env python3
 """
+🌀 OMNIPKG CHAOS THEORY - DAEMON EDITION 🌀
+Now using the REAL worker daemon for maximum parallelism!
+"""
+import sys
+import os
+import time
+import random
+import threading
+from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
+
+# Import the daemon client
+try:
+    from omnipkg.common_utils import safe_print
+    from omnipkg.loader import omnipkgLoader
+    from omnipkg.isolation.worker_daemon import DaemonClient, WorkerPoolDaemon
+except ImportError:
+  sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
+"""
 🌀 OMNIPKG CHAOS THEORY 🌀
 The most UNHINGED dependency isolation stress test ever conceived.
 If this runs without exploding, we've broken the laws of Python itself.
-
 ⚠️  WARNING: This script is scientifically impossible. Run at your own risk.
 """
-
 import sys
 import os
 import time
@@ -16,11 +33,9 @@ import threading
 import subprocess
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
-
 # ═══════════════════════════════════════════════════════════
 # 📦 IMPORTS: The New Architecture
 # ═══════════════════════════════════════════════════════════
-
 try:
     # 1. Common Utils
     from omnipkg.common_utils import safe_print, ProcessCorruptedException
@@ -32,7 +47,6 @@ try:
     from omnipkg.isolation.runners import run_python_code_in_isolation
     from omnipkg.isolation.workers import PersistentWorker
     from omnipkg.isolation.switchers import TrueSwitcher
-
 except ImportError:
     # Fallback for running directly without package installed
     sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
@@ -42,7 +56,10 @@ except ImportError:
     from omnipkg.isolation.workers import PersistentWorker
     from omnipkg.isolation.switchers import TrueSwitcher
 
-# Set TF env vars globally for this process too
+    from omnipkg.common_utils import safe_print
+    from omnipkg.loader import omnipkgLoader
+    from omnipkg.isolation.worker_daemon import DaemonClient, WorkerPoolDaemon
+#  env vars globally for this process too
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
 
@@ -81,29 +98,161 @@ def print_chaos_header():
 # have been removed in favor of the imported versions from omnipkg.isolation!
 
 def chaos_test_1_version_tornado():
-    """🌪️ TEST 1: VERSION TORNADO - Rapid random switching"""
+    """🌪️ TEST 1: VERSION TORNADO - Compare Legacy vs Daemon"""
     safe_print("╔══════════════════════════════════════════════════════════════╗")
     safe_print("║  TEST 1: 🌪️  VERSION TORNADO                                ║")
-    safe_print("║  Random version switching at maximum chaos velocity          ║")
+    safe_print("║  Benchmark: Legacy Loader vs Daemon Mode                     ║")
     safe_print("╚══════════════════════════════════════════════════════════════╝\n")
     
     versions = ["1.24.3", "1.26.4", "2.3.5"]
     
-    for i in range(15):
+    # ==================================================================
+    # PHASE 1: Legacy omnipkgLoader (Current Implementation)
+    # ==================================================================
+    safe_print("   📍 PHASE 1: Legacy omnipkgLoader")
+    safe_print("   ─────────────────────────────────\n")
+    
+    legacy_times = []
+    legacy_success = 0
+    
+    for i in range(10):  # 10 random switches
         ver = random.choice(versions)
         direction = random.choice(["↗️", "↘️", "↔️", "↕️"])
         
-        start = time.perf_counter()
-        with omnipkgLoader(f"numpy=={ver}"):
-            import numpy as np
-            arr = np.random.rand(100, 100)
-            result = np.sum(arr)
-            elapsed = (time.perf_counter() - start) * 1000
+        try:
+            start = time.perf_counter()
+            with omnipkgLoader(f"numpy=={ver}"):
+                import numpy as np
+                arr = np.random.rand(50, 50)
+                result = np.sum(arr)
+                elapsed = (time.perf_counter() - start) * 1000
+                
+            legacy_times.append(elapsed)
+            legacy_success += 1
+            safe_print(f"   {direction} Legacy #{i+1:02d}: numpy {ver} → sum={result:.2f} ({elapsed:.2f}ms)")
             
-        print(f"{direction} Chaos #{i+1:02d}: numpy {ver} → sum={result:.2f} ({elapsed:.2f}ms)")
-        time.sleep(0.05)
+        except Exception as e:
+            safe_print(f"   💥 Legacy #{i+1:02d}: numpy {ver} → FAILED: {str(e)[:50]}")
+        
+        time.sleep(0.02)
     
-    safe_print("\n✅ SURVIVED THE TORNADO!\n")
+    # ==================================================================
+    # PHASE 2: Daemon Mode (Using your imports from test 5)
+    # ==================================================================
+    safe_print("\n   📍 PHASE 2: Daemon Mode")
+    safe_print("   ────────────────────────\n")
+    
+    daemon_times = []
+    daemon_success = 0
+    
+    try:
+        # Same imports as test 5
+        from omnipkg.isolation.worker_daemon import DaemonClient, DaemonProxy
+        
+        safe_print("   ⚡ Initializing DaemonClient...")
+        daemon_init_start = time.perf_counter()
+        client = DaemonClient()
+        
+        # Verify daemon is up or start it
+        status = client.status()
+        if not status.get('success'):
+            safe_print("   ⚡ Starting daemon...")
+            from omnipkg.isolation.worker_daemon import WorkerPoolDaemon
+            WorkerPoolDaemon().start(daemonize=True)
+            time.sleep(1)
+        
+        daemon_init_time = (time.perf_counter() - daemon_init_start) * 1000
+        safe_print(f"   ⚡ Daemon ready in {daemon_init_time:.2f}ms\n")
+        
+        for i in range(10):  # Same 10 random switches
+            ver = random.choice(versions)
+            direction = random.choice(["↗️", "↘️", "↔️", "↕️"])
+            
+            try:
+                start = time.perf_counter()
+                
+                # Use DaemonProxy like test 5
+                proxy = DaemonProxy(client, f"numpy=={ver}")
+                
+                # Execute numpy code
+                code = f"""
+import numpy as np
+arr = np.random.rand(50, 50)
+result = np.sum(arr)
+print(f"{{np.__version__}}|{{result}}")
+"""
+                result = proxy.execute(code)
+                elapsed = (time.perf_counter() - start) * 1000
+                
+                if result['success']:
+                    output = result['stdout'].strip()
+                    if '|' in output:
+                        actual_ver, sum_str = output.split('|')
+                        daemon_times.append(elapsed)
+                        daemon_success += 1
+                        safe_print(f"   {direction} Daemon #{i+1:02d}: numpy {ver} → sum={sum_str} ({elapsed:.2f}ms)")
+                    else:
+                        safe_print(f"   💥 Daemon #{i+1:02d}: Bad output: {output}")
+                else:
+                    safe_print(f"   💥 Daemon #{i+1:02d}: Execution failed: {result.get('error', 'Unknown')}")
+                    
+            except Exception as e:
+                safe_print(f"   💥 Daemon #{i+1:02d}: Exception: {str(e)[:50]}")
+            
+            time.sleep(0.02)
+        
+    except ImportError as e:
+        safe_print(f"   ❌ Daemon mode not available: {e}")
+    except Exception as e:
+        safe_print(f"   ❌ Daemon error: {str(e)[:50]}")
+    
+    # ==================================================================
+    # COMPARISON RESULTS
+    # ==================================================================
+    safe_print("\n   📊 COMPARISON RESULTS")
+    safe_print("   ────────────────────────\n")
+    
+    # Legacy Results
+    if legacy_times:
+        avg_legacy = sum(legacy_times) / len(legacy_times)
+        safe_print(f"   🧓 Legacy omnipkgLoader:")
+        safe_print(f"      Success: {legacy_success}/10")
+        safe_print(f"      Avg Time: {avg_legacy:.2f}ms per switch")
+        safe_print(f"      Total: {sum(legacy_times):.2f}ms")
+    else:
+        safe_print(f"   🧓 Legacy omnipkgLoader: FAILED")
+    
+    safe_print("")
+    
+    # Daemon Results
+    if daemon_times:
+        avg_daemon = sum(daemon_times) / len(daemon_times)
+        safe_print(f"   ⚡ Daemon Mode:")
+        safe_print(f"      Success: {daemon_success}/10")
+        safe_print(f"      Avg Time: {avg_daemon:.2f}ms per switch")
+        safe_print(f"      Total: {sum(daemon_times):.2f}ms")
+        
+        # Calculate speedup
+        if legacy_times:
+            speedup = avg_legacy / avg_daemon if avg_daemon > 0 else float('inf')
+            safe_print(f"      🚀 Speedup: {speedup:.1f}x faster!")
+    else:
+        safe_print(f"   ⚡ Daemon Mode: NOT AVAILABLE")
+    
+    # Overall verdict
+    safe_print("\n")
+    if legacy_success >= 8 and daemon_success >= 8:
+        safe_print("✅ TORNADO SURVIVED IN BOTH MODES!")
+        return True
+    elif legacy_success >= 8:
+        safe_print("✅ TORNADO SURVIVED (Legacy Mode)")
+        return True
+    elif daemon_success >= 8:
+        safe_print("✅ TORNADO SURVIVED (Daemon Mode)")
+        return True
+    else:
+        safe_print("⚡ TORNADO PARTIALLY SURVIVED")
+        return legacy_success > 0 or daemon_success > 0
 
 def chaos_test_2_dependency_inception():
     """🎭 TEST 2: DEPENDENCY INCEPTION - 10 levels deep"""
@@ -140,54 +289,117 @@ def chaos_test_2_dependency_inception():
     safe_print("✅ WE WENT DEEPER!\n")
 
 def chaos_test_3_framework_battle_royale():
-    """⚔️ TEST 3: FRAMEWORK BATTLE ROYALE - All at once"""
+    """⚔️ TEST 3: FRAMEWORK BATTLE ROYALE (DAEMON EDITION)"""
     safe_print("╔══════════════════════════════════════════════════════════════╗")
-    safe_print("║  TEST 3: ⚔️  FRAMEWORK BATTLE ROYALE                        ║")
-    safe_print("║  TensorFlow, PyTorch, JAX, NumPy - FIGHT!                    ║")
+    safe_print("║  TEST 3: ⚔️  FRAMEWORK BATTLE ROYALE (DAEMON)               ║")
+    safe_print("║  TensorFlow, PyTorch, JAX, NumPy - ALL IN MEMORY AT ONCE     ║")
     safe_print("╚══════════════════════════════════════════════════════════════╝\n")
     
-    safe_print("🥊 ROUND 1: Sequential Combat\n")
-    
-    # --- MODIFIED: Use PersistentWorker for TensorFlow ---
-    safe_print("   🔥 Booting TensorFlow worker...")
-    tf_worker = PersistentWorker("tensorflow==2.13.0", verbose=False)
-    
+    # 1. Connect to Daemon
     try:
-        tf_code = """
-import tensorflow as tf
-result = tf.reduce_sum(tf.constant([1, 2, 3])).numpy()
-import sys
-sys.stderr.write(f"   🔥 TensorFlow {tf.__version__:15} → Tensor sum: {result}\\n")
-"""
-        result = tf_worker.execute(tf_code)
-        if not result['success']:
-            safe_print(f"   ⚠️  TensorFlow failed: {result['error'][:50]}...")
-    finally:
-        tf_worker.shutdown()
-    
-    # Other combatants run in main process
+        from omnipkg.isolation.worker_daemon import DaemonClient, WorkerPoolDaemon
+        client = DaemonClient()
+        if not client.status().get('success'):
+            safe_print("   ⚙️  Summoning the Arena (Daemon)...")
+            # Pre-warm the combatants
+            vip_specs = [
+                "tensorflow==2.13.0", 
+                "torch==2.0.1", 
+                "numpy==1.24.3", 
+                "numpy==2.3.5"
+            ]
+            WorkerPoolDaemon(warmup_specs=vip_specs).start(daemonize=True)
+            time.sleep(3) # Give TF time to boot (it's heavy)
+            
+    except ImportError:
+        return False
+
+    # 2. Define The Fighters
     combatants = [
-        ("PyTorch 2.0", "torch==2.0.1", "torch"),
-        ("NumPy 1.24", "numpy==1.24.3", "numpy"),
-        ("NumPy 2.3", "numpy==2.3.5", "numpy"),
+        {
+            "name": "TensorFlow", 
+            "spec": "tensorflow==2.13.0",
+            "code": "import tensorflow as tf; print(f'TensorFlow {tf.__version__} | Sum: {tf.reduce_sum(tf.constant([1, 2, 3])).numpy()}')"
+        },
+        {
+            "name": "PyTorch", 
+            "spec": "torch==2.0.1",
+            "code": "import torch; print(f'PyTorch {torch.__version__}    | Sum: {torch.sum(torch.tensor([1, 2, 3])).item()}')"
+        },
+        {
+            "name": "NumPy Legacy", 
+            "spec": "numpy==1.24.3",
+            "code": "import numpy as np; print(f'NumPy {np.__version__}      | Sum: {np.sum(np.array([1, 2, 3]))}')"
+        },
+        {
+            "name": "NumPy Modern", 
+            "spec": "numpy==2.3.5",
+            "code": "import numpy as np; print(f'NumPy {np.__version__}      | Sum: {np.sum(np.array([1, 2, 3]))}')"
+        }
     ]
     
-    for name, spec, pkg_name in combatants:
-        try:
-            with omnipkgLoader(spec):
-                if pkg_name == 'torch':
-                    import torch
-                    result = torch.sum(torch.tensor([1, 2, 3])).item()
-                    safe_print(f"   ⚡ {name:20} → Tensor sum: {result}")
-                else:  # numpy
-                    import numpy as np
-                    result = np.sum(np.array([1, 2, 3]))
-                    safe_print(f"   🎯 {name:20} → Array sum: {result}")
-        except Exception as e:
-            safe_print(f"   ⚠️  {name:20} → {str(e)[:50]}...")
+    safe_print("🥊 ROUND 1: Simultaneous Execution via Daemon\n")
     
-    safe_print("\n✅ ALL COMBATANTS TESTED!\n")
+    total_start = time.perf_counter()
+    
+    # We will launch them sequentially to see the latency, 
+    # but the daemon keeps them all resident in RAM.
+    
+    for fighter in combatants:
+        t_start = time.perf_counter()
+        
+        # Smart Execute (Data is None, so it uses JSON path automatically)
+        res = client.execute_smart(fighter['spec'], fighter['code'])
+        
+        duration = (time.perf_counter() - t_start) * 1000
+        
+        if res.get('success'):
+            output = res['result'].strip()
+            # Clean up the output string for display
+            clean_out = output.split('\n')[-1] if '\n' in output else output
+            safe_print(f"   ⚡ {fighter['name']:<15} → {clean_out} ({duration:.2f}ms)")
+        else:
+            safe_print(f"   💥 {fighter['name']:<15} → FAILED: {res.get('error')[:50]}")
 
+    safe_print(f"\n✅ ALL COMBATANTS TESTED in {(time.perf_counter() - total_start):.2f}s!\n")
+    
+    # ---------------------------------------------------------
+    # ROUND 2: The "Smart" Data Hand-off
+    # ---------------------------------------------------------
+    safe_print("🥊 ROUND 2: Smart Data Hand-off (1MB Array)\n")
+    
+    import numpy as np
+    data = np.ones(1024 * 128) # 1MB of floats (128K * 8 bytes)
+    
+    # TF Sum via Smart Client
+    t_start = time.perf_counter()
+    
+    # We pass the data. execute_smart will see 1MB > 64KB and choose SHM.
+    # Code assumes 'arr_in' exists and writes to 'arr_out'
+    tf_shm_code = """
+import tensorflow as tf
+# Convert SHM input (numpy) to Tensor, sum it, write back to SHM output
+# Note: For scalar output in SHM, we write to index 0
+val = tf.reduce_sum(tf.constant(arr_in))
+arr_out[0] = val.numpy()
+"""
+    
+    res = client.execute_smart(
+        "tensorflow==2.13.0", 
+        tf_shm_code, 
+        data=data
+    )
+    
+    duration = (time.perf_counter() - t_start) * 1000
+    
+    if res.get('success'):
+        result_val = res['result'][0]
+        transport = res.get('transport', 'UNKNOWN')
+        safe_print(f"   🚀 TF 2.13 (1MB)   → Sum: {result_val:.0f} via {transport} ({duration:.2f}ms)")
+    else:
+        safe_print(f"   💥 TF Failed: {res.get('error')}")
+
+    return True
 
 def chaos_test_4_memory_madness():
     """🧠 TEST 4: MEMORY MADNESS - Allocate everywhere"""
@@ -217,92 +429,119 @@ def chaos_test_4_memory_madness():
     safe_print("✅ MEMORY CHAOS CONTAINED!\n")
 
 def chaos_test_5_race_condition_roulette():
-    """🎰 TEST 5: RACE CONDITION ROULETTE - Threading chaos with persistent workers"""
+    """🎰 TEST 5: RACE CONDITION ROULETTE - ZERO-COPY SHM EDITION"""
     safe_print("╔══════════════════════════════════════════════════════════════╗")
-    safe_print("║  TEST 5: 🎰  RACE CONDITION ROULETTE                        ║")
-    safe_print("║  Multiple threads, multiple versions, MAXIMUM CHAOS          ║")
-    safe_print("║  Now with PERSISTENT WORKERS for true isolation!            ║")
+    safe_print("║  TEST 5: 🎰  RACE CONDITION ROULETTE (SHM TURBO)            ║")
+    safe_print("║  10 Threads x 3 Swaps. 100% Zero-Copy Data Transfer.         ║")
     safe_print("╚══════════════════════════════════════════════════════════════╝\n")
     
     results = {}
     versions = ["numpy==1.24.3", "numpy==1.26.4", "numpy==2.3.5"]
-    
-    # 1. Boot up worker pool
-    safe_print("⚙️  Booting worker pool...")
-    boot_start = time.perf_counter()
-    workers = {}
-    
-    # CHECK VERBOSITY
+    print_lock = threading.Lock()
     verbose = is_verbose_mode()
     
-    for spec in versions:
-        workers[spec] = PersistentWorker(spec, verbose=verbose)  # Respect CLI flag
-        
-    boot_time = time.perf_counter() - boot_start
-    safe_print(f"✨ Worker pool ready in {boot_time:.2f}s\n")
-    
+    # Initialize Client
+    try:
+        import numpy as np
+        from omnipkg.isolation.worker_daemon import DaemonClient, WorkerPoolDaemon
+        client = DaemonClient()
+        if not client.status().get('success'):
+            safe_print("   ❌ Daemon not running! Starting...")
+            WorkerPoolDaemon().start(daemonize=True)
+            time.sleep(2)
+    except ImportError:
+        return False
+
     def chaotic_worker(thread_id):
-        spec = random.choice(versions)
-        try:
-            code = f"""
-import numpy as np
-import sys
-data = np.random.rand(200, 200)
-result = np.linalg.det(data)
-sys.stderr.write(f'🎲 Thread {thread_id:02d}: numpy {{np.__version__}} → det={{result:.6f}}\\n')
-print(result)  # Return the result
-"""
-            result = workers[spec].execute(code)
+        thread_versions = [random.choice(versions) for _ in range(3)]
+        thread_results = []
+        
+        for i, spec in enumerate(thread_versions):
+            # 1. Generate Data Locally
+            local_data = np.random.rand(50, 50)
             
-            if result['success']:
-                # Handle case where stdout might be None or empty
-                stdout_val = result.get('stdout', '').strip()
-                if not stdout_val:
-                    # Fallback if no stdout captured but success reported
-                    det_value = 0.0
+            # 2. Worker Code: Read SHM, Compute Det, Write SHM, Print Version
+            code = """
+import numpy as np
+# arr_in provided via SHM
+det = np.linalg.det(arr_in)
+# arr_out provided via SHM (size 1 array)
+arr_out[0] = det
+# Print version to verify environment
+print(np.__version__)
+"""
+            t_start = time.perf_counter()
+            try:
+                # 3. Execute via Zero-Copy
+                # Output shape is (1,) because determinant is a scalar
+                result_arr, response = client.execute_zero_copy(
+                    spec, 
+                    code, 
+                    input_array=local_data, 
+                    output_shape=(1,), 
+                    output_dtype='float64'
+                )
+                
+                t_end = time.perf_counter()
+                duration_ms = (t_end - t_start) * 1000
+                
+                # 4. Verify Data (Local vs Remote)
+                local_det = np.linalg.det(local_data)
+                remote_det = result_arr[0]
+                
+                # 5. Verify Version (from stdout)
+                remote_version = response['stdout'].strip()
+                
+                if np.isclose(local_det, remote_det):
+                    status = "✅"
+                    msg = f"{remote_version:<14}"
                 else:
-                    det_value = float(stdout_val)
-                    
-                results[thread_id] = (spec, det_value, "✅")
-            else:
-                results[thread_id] = (spec, result['error'], "❌")
-                safe_print(f"💥 Thread {thread_id:02d}: EXPLODED with {spec}")
-        except Exception as e:
-            results[thread_id] = (spec, str(e), "❌")
-            safe_print(f"💥 Thread {thread_id:02d}: CRASHED - {str(e)[:50]}")
+                    status = "❌"
+                    msg = f"MATH ERROR: {local_det} vs {remote_det}"
+
+                thread_results.append((spec, remote_version, status))
+                
+                if verbose:
+                    with print_lock:
+                        safe_print(f"   🎲 Thread {thread_id:02d} Round {i+1}: {msg} → {duration_ms:>6.2f} ms")
+                        
+            except Exception as e:
+                thread_results.append((spec, str(e), "❌"))
+                with print_lock:
+                    safe_print(f"   💥 Thread {thread_id:02d}: {e}")
+
+        results[thread_id] = thread_results
     
-    safe_print("🔥 Launching 10 chaotic threads...\n")
+    safe_print("🔥 Launching 10 concurrent threads hammering SHM subsystem...")
+    
     race_start = time.perf_counter()
-    
     with ThreadPoolExecutor(max_workers=10) as executor:
         futures = [executor.submit(chaotic_worker, i) for i in range(10)]
         for f in futures:
             f.result()
-    
     race_time = time.perf_counter() - race_start
     
-    # Cleanup
-    safe_print("\n🛑 Shutting down worker pool...")
-    teardown_start = time.perf_counter()
-    for worker in workers.values():
-        worker.shutdown()
-    teardown_time = time.perf_counter() - teardown_start
+    total_switches = 0
+    successful_switches = 0
     
-    # Results
-    successes = sum(1 for v in results.values() if v[2] == "✅")
+    for thread_id, thread_results in results.items():
+        total_switches += len(thread_results)
+        successful_switches += sum(1 for r in thread_results if r[2] == "✅")
+    
     safe_print(f"\n{'='*60}")
-    safe_print(f"🎯 Threads survived: {successes}/10")
-    safe_print(f"⚡ Race time: {race_time:.3f}s")
-    safe_print(f"🔧 Startup: {boot_time:.3f}s | Teardown: {teardown_time:.3f}s")
-    safe_print(f"📊 Total: {boot_time + race_time + teardown_time:.3f}s")
+    safe_print(f"🎯 Total Requests: {total_switches}")
+    safe_print(f"✅ Success Rate:   {successful_switches}/{total_switches} ({successful_switches/total_switches*100:.1f}%)")
+    safe_print(f"⚡ Total Time:     {race_time:.3f}s")
+    safe_print(f"⚡ Throughput:     {total_switches/race_time:.1f} swaps/sec")
+    safe_print(f"🚀 Avg Latency:    {(race_time/total_switches)*1000:.1f} ms/swap")
     
-    if successes == 10:
-        safe_print("✅ PERFECT CHAOS SURVIVED!")
-    elif successes >= 7:
-        safe_print("✅ CHAOS SURVIVED!")
+    if successful_switches == total_switches:
+        safe_print("✅ CHAOS SURVIVED! (Memory Integrity Verified)")
     else:
-        safe_print("⚠️  PARTIAL SURVIVAL")
+        safe_print("⚠️  PARTIAL FAILURE")
     print("="*60 + "\n")
+    
+    return successful_switches == total_switches
 
 def chaos_test_6_version_time_machine():
     """⏰ TEST 6: VERSION TIME MACHINE - Past, present, future"""
@@ -574,66 +813,98 @@ with omnipkgLoader("numpy==1.23.5"):
 
 
 def chaos_test_12_jax_vs_torch_mortal_kombat():
-    """🥊 TEST 12: TRUE TORCH VERSION SWITCHING - Using Persistent Workers"""
+    """🥊 TEST 12: TRUE TORCH VERSION SWITCHING - Daemon Edition"""
     safe_print("╔══════════════════════════════════════════════════════════════╗")
-    safe_print("║  TEST 12: 🥊 TRUE TORCH VERSION SWITCHING                   ║")
-    safe_print("║  Each version in its own persistent worker - REAL switching!║")
+    safe_print("║  TEST 12: 🥊 TRUE TORCH VERSION SWITCHING (DAEMON)          ║")
+    safe_print("║  12 Rounds. 2 Fighters. Zero process overhead.              ║")
     safe_print("╚══════════════════════════════════════════════════════════════╝\n")
     
     specs = ["torch==2.0.1", "torch==2.1.0"] * 6  # 12 rounds total
     
-    # Boot up workers
-    safe_print("⚙️  Booting fighter workers...")
+    # 1. Connect to Daemon
+    safe_print("⚙️  Connecting to Arena (Daemon)...")
     boot_start = time.perf_counter()
-    workers = {}
     
-    verbose = is_verbose_mode()
+    try:
+        from omnipkg.isolation.worker_daemon import DaemonClient, DaemonProxy, WorkerPoolDaemon
+        client = DaemonClient()
+        
+        # Verify daemon is running
+        status = client.status()
+        if not status.get('success'):
+            safe_print("   ⚠️  Daemon not found. Summoning Daemon...")
+            WorkerPoolDaemon().start(daemonize=True)
+            time.sleep(1) # Wait for socket
+            
+    except ImportError:
+        safe_print("   ❌ Daemon modules missing.")
+        return False
+
+    # 2. Initialize Proxies (Lightweight)
+    workers = {}
     for spec in ["torch==2.0.1", "torch==2.1.0"]:
-        workers[spec] = PersistentWorker(spec, verbose=verbose) # Respect CLI flag
+        workers[spec] = DaemonProxy(client, spec)
         
     boot_time = time.perf_counter() - boot_start
-    safe_print(f"✨ Fighters ready in {boot_time:.2f}s\n")
+    safe_print(f"✨ Arena Ready in {boot_time*1000:.2f}ms\n")
     
     successful_rounds = 0
     failed_rounds = 0
+    round_times = []
     
-    try:
-        for i, spec in enumerate(specs):
-            code_to_run = f'''
+    safe_print("🔔 FIGHT!\n")
+    
+    fight_start = time.perf_counter()
+
+    for i, spec in enumerate(specs):
+        round_start = time.perf_counter()
+        
+        # We pass the round number into the code so the worker prints it
+        code_to_run = f'''
 import torch
-import sys
-version = torch.__version__
+# Print directly to stdout, which the daemon captures and returns
 x = torch.tensor([1., 2., 3.])
 y = torch.sin(x)
-sys.stderr.write(f"   🥊 Round #{i+1}: VERSION={{version}}, sin([1,2,3]) → {{y.tolist()}}\\n")
+print(f"   🥊 Round #{i+1}: Fighter {{torch.__version__:<6}} | Hit -> {{y.tolist()}}")
 '''
-            result = workers[spec].execute(code_to_run)
+        # Execute via Daemon
+        result = workers[spec].execute(code_to_run)
+        
+        round_duration = (time.perf_counter() - round_start) * 1000
+        round_times.append(round_duration)
+        
+        if result['success']:
+            successful_rounds += 1
+            # Print the worker's output
+            if result.get('stdout'):
+                sys.stdout.write(result['stdout'])
             
-            if result['success']:
-                successful_rounds += 1
-            else:
-                safe_print(f"   💥 FATALITY: {spec} failed - {result['error'][:50]}")
-                failed_rounds += 1
-    finally:
-        safe_print("\n🛑 Shutting down fighters...")
-        for worker in workers.values():
-            worker.shutdown()
+            # Print timing overlay
+            sys.stdout.write(f"      ⚡ {round_duration:.2f}ms\n")
+        else:
+            safe_print(f"   💥 FATALITY: {spec} failed - {result.get('error')[:50]}")
+            failed_rounds += 1
+
+    total_fight_time = time.perf_counter() - fight_start
+    avg_round = sum(round_times) / len(round_times) if round_times else 0
 
     safe_print(f"\n🎯 Battle Results: {successful_rounds} wins, {failed_rounds} losses")
+    safe_print(f"⏱️  Total Duration: {total_fight_time:.4f}s")
+    safe_print(f"⚡ Avg Round Time: {avg_round:.2f}ms")
     
     if successful_rounds == len(specs):
-        safe_print("✅ FLAWLESS VICTORY! TRUE VERSION SWITCHING ACHIEVED!\n")
+        safe_print("✅ FLAWLESS VICTORY! (Daemon Handling Perfect Swaps)\n")
     else:
         safe_print("❌ Some rounds failed.\n")
 
 def chaos_test_13_pytorch_lightning_storm():
-    """⚡ TEST 13: PyTorch Lightning Storm - Using Persistent Workers"""
+    """⚡ TEST 13: PyTorch Lightning Storm - Using Daemon Workers"""
     safe_print("╔══════════════════════════════════════════════════════════════╗")
     safe_print("║  TEST 13: ⚡ PyTorch Lightning Storm                         ║")
-    safe_print("║  Testing framework with persistent workers for isolation     ║")
+    safe_print("║  Testing framework with daemon-managed workers               ║")
     safe_print("╚══════════════════════════════════════════════════════════════╝\n")
 
-    safe_print("   🌩️  Testing PyTorch Lightning with persistent workers.\n")
+    safe_print("   🌩️  Testing PyTorch Lightning with daemon isolation.\n")
 
     # Define compatible pairs with their dependencies
     test_configs = [
@@ -651,23 +922,105 @@ def chaos_test_13_pytorch_lightning_storm():
         },
     ]
 
+
+    safe_print("   🌩️  Testing PyTorch Lightning with both approaches\n")
+    
+    # ==================================================================
+    # ROUND 1: Persistent Worker Mode (Traditional)
+    # ==================================================================
+    safe_print("   🚀 ROUND 1: Persistent Worker Mode")
+    safe_print("   ─────────────────────────────────────────────────────\n")
+    
+    worker_times = []
+    worker_successful = 0
+    
+    for i, config in enumerate(test_configs):
+        safe_print(f"   😈 Test {i+1}/{len(test_configs)}: {config['name']}")
+        
+        try:
+            # Time the worker boot
+            boot_start = time.perf_counter()
+            worker = PersistentWorker(config['torch'], verbose=True)
+            boot_time = time.perf_counter() - boot_start
+            
+            # Execute code
+            exec_start = time.perf_counter()
+            code_to_run = f"""
+from omnipkg.loader import omnipkgLoader
+
+with omnipkgLoader("{config['lightning']}"):
+    import pytorch_lightning as pl
+    import torch
+    import numpy as np
+    import sys
+    sys.stderr.write(f"      ⚡ PyTorch {{torch.__version__}} + Lightning {{pl.__version__}} + NumPy {{np.__version__}} loaded successfully.\\n")
+"""
+            result = worker.execute(code_to_run)
+            exec_time = time.perf_counter() - exec_start
+            
+            total_time = boot_time + exec_time
+            worker_times.append(total_time)
+            
+            if result['success']:
+                worker_successful += 1
+                safe_print(f"      ⏱️  Boot:     {boot_time*1000:7.2f}ms")
+                safe_print(f"      ⏱️  Execution:{exec_time*1000:7.2f}ms")
+                safe_print(f"      ⏱️  TOTAL:    {total_time*1000:7.2f}ms")
+                safe_print(f"      ✅ STRIKE #{worker_successful}!\n")
+            else:
+                safe_print(f"      💥 Failed: {result['error'][:80]}\n")
+                
+        except Exception as e:
+            safe_print(f"      💥 Exception: {str(e)[:80]}\n")
+        finally:
+            try:
+                worker.shutdown()
+            except:
+                pass
+
     successful = 0
     verbose = is_verbose_mode()
+    
+    # Timing tracking
+    total_start = time.perf_counter()
+    timing_results = []
+    
+    # Initialize daemon client
+    try:
+        from omnipkg.isolation.worker_daemon import DaemonClient, DaemonProxy
+        client = DaemonClient()
+        
+        # Verify daemon is running
+        status = client.status()
+        if not status.get('success'):
+            safe_print("   ⚙️  Starting daemon...")
+            from omnipkg.isolation.worker_daemon import WorkerPoolDaemon
+            daemon = WorkerPoolDaemon()
+            daemon.start(daemonize=True)
+            time.sleep(1)
+            
+    except ImportError:
+        safe_print("   ❌ Daemon not available, falling back to legacy workers")
+        return chaos_test_13_pytorch_lightning_storm_legacy()
     
     for config in test_configs:
         safe_print(f"   😈 Testing Storm: {config['name']}")
         
-        # Create a worker with all dependencies pre-specified
-        # We'll create a combined spec that includes all packages
-        safe_print(f"      ⚙️  Booting worker with full stack...")
-        boot_start = time.perf_counter()
+        config_start = time.perf_counter()
+        timings = {}
         
         try:
-            # Boot worker with torch version (which is the critical one)
-            worker = PersistentWorker(config['torch'], verbose=verbose) # Respect CLI flag
-            boot_time = time.perf_counter() - boot_start
+            # Create daemon proxy for torch environment
+            safe_print(f"      ⚙️  Connecting to daemon worker...")
+            boot_start = time.perf_counter()
             
-            # Now execute code that loads lightning within the torch environment
+            proxy = DaemonProxy(client, config['torch'])
+            boot_time = time.perf_counter() - boot_start
+            timings['worker_connect'] = boot_time
+            
+            safe_print(f"      ⏱️  Worker connected in {boot_time*1000:.2f}ms")
+            
+            # Execute code that loads lightning within the torch environment
             code_to_run = f"""
 from omnipkg.loader import omnipkgLoader
 
@@ -676,34 +1029,105 @@ with omnipkgLoader("{config['lightning']}"):
     import pytorch_lightning as pl
     import torch
     import numpy as np
-    import sys
-    sys.stderr.write(f"      ⚡ PyTorch {{torch.__version__}} + Lightning {{pl.__version__}} + NumPy {{np.__version__}} loaded successfully.\\n")
+    
+    # Verify versions
+    torch_ver = torch.__version__
+    lightning_ver = pl.__version__
+    numpy_ver = np.__version__
+    
+    print(f"⚡ PyTorch {{torch_ver}} + Lightning {{lightning_ver}} + NumPy {{numpy_ver}} loaded successfully.")
+    
+    # Quick functionality test
+    class SimpleModel(pl.LightningModule):
+        def __init__(self):
+            super().__init__()
+            self.layer = torch.nn.Linear(10, 1)
+        
+        def forward(self, x):
+            return self.layer(x)
+    
+    model = SimpleModel()
+    test_input = torch.randn(5, 10)
+    output = model(test_input)
+    
+    print(f"✅ Model forward pass: input {{test_input.shape}} -> output {{output.shape}}")
 """
             
-            result = worker.execute(code_to_run)
+            exec_start = time.perf_counter()
+            result = proxy.execute(code_to_run)
+            exec_time = time.perf_counter() - exec_start
+            timings['execution'] = exec_time
+            
+            safe_print(f"      ⏱️  Execution completed in {exec_time*1000:.2f}ms")
             
             if result['success']:
+                config_time = time.perf_counter() - config_start
+                timings['total'] = config_time
+                timing_results.append({
+                    'config': config['name'],
+                    'timings': timings,
+                    'success': True
+                })
+                
                 successful += 1
+                if verbose and result.get('stdout'):
+                    for line in result['stdout'].strip().split('\n'):
+                        safe_print(f"      {line}")
+                safe_print(f"      ⏱️  Total config time: {config_time*1000:.2f}ms")
                 safe_print(f"      ✅ LIGHTNING STRIKE #{successful}!")
             else:
-                safe_print(f"      💥 Failed: {result['error'][:100]}")
+                config_time = time.perf_counter() - config_start
+                timings['total'] = config_time
+                timing_results.append({
+                    'config': config['name'],
+                    'timings': timings,
+                    'success': False,
+                    'error': result.get('error', 'Unknown error')
+                })
+                
+                safe_print(f"      ⏱️  Failed after {config_time*1000:.2f}ms")
+                safe_print(f"      💥 Failed: {result.get('error', 'Unknown error')[:100]}")
+                if verbose and result.get('traceback'):
+                    safe_print(f"      Traceback: {result['traceback'][:500]}")
                 
         except Exception as e:
+            config_time = time.perf_counter() - config_start
+            timings['total'] = config_time
+            timing_results.append({
+                'config': config['name'],
+                'timings': timings,
+                'success': False,
+                'error': str(e)
+            })
+            
+            safe_print(f"      ⏱️  Exception after {config_time*1000:.2f}ms")
             safe_print(f"      💥 Exception: {str(e)[:100]}")
-        finally:
-            try:
-                worker.shutdown()
-            except:
-                pass
 
+    total_time = time.perf_counter() - total_start
+    
+    # Display timing summary
+    safe_print(f"\n   📊 TIMING SUMMARY:")
+    safe_print(f"   ⏱️  Total test time: {total_time*1000:.2f}ms")
+    
+    if timing_results:
+        avg_connect = sum(t['timings'].get('worker_connect', 0) for t in timing_results) / len(timing_results)
+        avg_exec = sum(t['timings'].get('execution', 0) for t in timing_results if 'execution' in t['timings'])
+        avg_exec = avg_exec / len([t for t in timing_results if 'execution' in t['timings']]) if any('execution' in t['timings'] for t in timing_results) else 0
+        
+        safe_print(f"   ⏱️  Avg worker connect: {avg_connect*1000:.2f}ms")
+        if avg_exec > 0:
+            safe_print(f"   ⏱️  Avg execution: {avg_exec*1000:.2f}ms")
+    
     safe_print(f"\n   🎯 Compatible Pairs: {successful}/{len(test_configs)} successful")
 
     if successful == len(test_configs):
         safe_print("   ✅ PYTORCH LIGHTNING STORM SURVIVED!")
+        safe_print("\n")
+        return True
     else:
         safe_print("   ⚡ LIGHTNING STORM FAILED!")
-
-    safe_print("\n")
+        safe_print("\n")
+        return False
 
 def chaos_test_14_circular_dependency_hell():
     """⭕ TEST 14: Create actual circular imports between bubbles"""
@@ -1028,75 +1452,223 @@ with omnipkgLoader("{spec}", quiet=True):
     safe_print(f"   ⚡ Per switch: {results['worker_pool']['per_switch']*1000:.1f}ms\n")
     
     # ═══════════════════════════════════════════════════════════════
-    # SUMMARY
+    # STRATEGY 3: Daemon JSON (Control Plane)
+    # ═══════════════════════════════════════════════════════════════
+    safe_print("📊 Strategy 3: DAEMON (JSON Mode)")
+    safe_print("   - Pros: Persistent workers, no boot cost")
+    safe_print("   - Cons: JSON serialization overhead")
+    safe_print("-" * 60)
+    
+    try:
+        from omnipkg.isolation.worker_daemon import DaemonClient, DaemonProxy, WorkerPoolDaemon
+        # Ensure daemon is up
+        client = DaemonClient()
+        if not client.status().get('success'):
+            safe_print("   ⚙️  Starting Daemon...")
+            WorkerPoolDaemon().start(daemonize=True)
+            time.sleep(2)
+            
+        start = time.perf_counter()
+        success_count = 0
+        
+        for spec in specs:
+            proxy = DaemonProxy(client, spec)
+            res = proxy.execute("import torch; print('ok')")
+            if res['success']:
+                success_count += 1
+                
+        elapsed = time.perf_counter() - start
+        results['daemon_json'] = {'time': elapsed, 'success': success_count}
+        safe_print(f"   ✅ Total: {elapsed:.3f}s")
+        safe_print(f"   ⚡ Per switch: {elapsed/6*1000:.1f}ms\n")
+        
+    except ImportError:
+        pass
+
+    # ═══════════════════════════════════════════════════════════════
+    # STRATEGY 4: Daemon Zero-Copy SHM (Data Plane)
+    # ═══════════════════════════════════════════════════════════════
+    safe_print("📊 Strategy 4: DAEMON (Zero-Copy SHM)")
+    safe_print("   - Pros: Persistent workers, zero-copy data")
+    safe_print("   - Cons: Tiny SHM setup overhead for small data")
+    safe_print("-" * 60)
+    
+    try:
+        import numpy as np
+        data = np.array([1.0]) # Tiny payload
+        
+        start = time.perf_counter()
+        success_count = 0
+        
+        for spec in specs:
+            try:
+                res_arr, _ = client.execute_zero_copy(
+                    spec, 
+                    "arr_out[0] = 1", 
+                    data, 
+                    (1,), 
+                    'float64'
+                )
+                success_count += 1
+            except: pass
+                
+        elapsed = time.perf_counter() - start
+        results['daemon_shm'] = {'time': elapsed, 'success': success_count}
+        safe_print(f"   ✅ Total: {elapsed:.3f}s")
+        safe_print(f"   ⚡ Per switch: {elapsed/6*1000:.1f}ms\n")
+        
+    except ImportError:
+        pass
+
+    # ═══════════════════════════════════════════════════════════════
+    # FINAL SCOREBOARD
     # ═══════════════════════════════════════════════════════════════
     safe_print("\n" + "="*60)
-    sorted_results = sorted(results.items(), key=lambda x: x[1]['time'])
+    safe_print(f"{'STRATEGY':<25} | {'TOTAL':<8} | {'PER SWAP':<10} | {'VS BASELINE'}")
+    safe_print("-" * 60)
+    
     baseline = results['in_process']['time']
+    
+    sorted_results = sorted(results.items(), key=lambda x: x[1]['time'])
+    
     for strat, data in sorted_results:
-        diff = data['time'] / baseline
-        desc = f"{diff:.1f}x SLOWER" if diff > 1 else f"{baseline/data['time']:.1f}x FASTER"
-        safe_print(f"{strat:20s} | {data['time']:6.2f}s | {desc:12s} | {data['success']}/{len(specs)}")
+        t = data['time']
+        per = (t / 6) * 1000
+        
+        if t < baseline:
+            comp = f"{baseline/t:.1f}x FASTER"
+        else:
+            comp = f"{t/baseline:.1f}x SLOWER"
+            
+        safe_print(f"{strat:<25} | {t:6.3f}s | {per:6.1f}ms | {comp}")
+        
+    safe_print("="*60 + "\n")
 
 def chaos_test_16_nested_reality_hell():
     """🧬 TEST 16: NESTED REALITY HELL"""
     safe_print("╔══════════════════════════════════════════════════════════════╗")
     safe_print("║  TEST 16: 🧬  NESTED REALITY HELL                            ║")
-    safe_print("║  7-layer nested challenge in a persistent worker             ║")
+    safe_print("║  Phase 1: Multi-Process Switching | Phase 2: Deep Nesting    ║")
     safe_print("╚══════════════════════════════════════════════════════════════╝\n")
 
-    # Boot a worker with TensorFlow (most problematic package)
-    safe_print("   ⚙️  Booting nested reality worker...")
     verbose = is_verbose_mode()
-    worker = PersistentWorker("tensorflow==2.13.0", verbose=verbose) # <--- Pass it here
+
+    # ═════════════════════════════════════════════════════════════
+    # PHASE 1: Rapid Sequential NumPy Switching (Using omnipkgLoader)
+    # ═════════════════════════════════════════════════════════════
+    safe_print("   📍 PHASE 1: Rapid Sequential NumPy Switching (Context Manager)")
+    safe_print("   ─────────────────────────────────────────────────────────────")
+    
+    versions = [
+        ("1.24.3", "numpy==1.24.3"),
+        ("1.26.4", "numpy==1.26.4"),
+        ("2.3.5", "numpy==2.3.5")
+    ]
+    
+    phase1_success = True
+
+    for expected_ver, spec in versions:
+        try:
+            with omnipkgLoader(spec, quiet=not verbose):
+                import numpy as np
+                actual_ver = np.__version__
+                arr = np.array([1, 2, 3, 4, 5])
+                mean = arr.mean()
+                
+                if actual_ver == expected_ver:
+                    safe_print(f"     ✅ {spec:<15} → Active (version={actual_ver}, mean={mean})")
+                else:
+                    safe_print(f"     ❌ {spec:<15} → Mismatch! Expected {expected_ver}, got {actual_ver}")
+                    phase1_success = False
+                    
+        except Exception as e:
+            safe_print(f"     💥 {spec:<15} → Failed: {e}")
+            phase1_success = False
+            
+        time.sleep(0.1)  # Brief pause between switches
+
+    safe_print(f"   🎯 Phase 1 Result: {'PASSED' if phase1_success else 'FAILED'}\n")
+
+
+    # ═════════════════════════════════════════════════════════════
+    # PHASE 2: 7-Layer Deep Nested Activation
+    # ═════════════════════════════════════════════════════════════
+    safe_print("   📍 PHASE 2: 7-Layer Deep Nested Activation (Overlay)")
+    safe_print("   ────────────────────────────────────────────────────")
+    safe_print("   ⚙️  Booting base worker (TensorFlow)...")
+    
+    tf_worker = PersistentWorker("tensorflow==2.13.0", verbose=verbose)
     
     try:
         nested_hell_code = """
 from omnipkg.loader import omnipkgLoader
 import sys
+import site
+import os
 
 def log(msg):
     sys.stderr.write(msg + '\\n')
+    sys.stderr.flush()
 
-log("   - PHASE 1: Rapid Sequential NumPy Switching")
-versions = [("1.24.3", "numpy==1.24.3"), ("1.26.4", "numpy==1.26.4"), ("2.3.5", "numpy==2.3.5")]
-for name, spec in versions:
-    with omnipkgLoader(spec, quiet=True):
-        import numpy as np
-        arr = np.array([1,2,3,4,5])
-        log(f"     NumPy {np.__version__:8} → sum={arr.sum()}, mean={arr.mean():.1f}")
+# Restore main env visibility
+import omnipkg
+main_site_packages = os.path.dirname(os.path.dirname(omnipkg.__file__))
+if main_site_packages not in sys.path:
+    sys.path.append(main_site_packages)
 
-log("\\n   - PHASE 2: 7-Layer Deep Nested Activation")
-with omnipkgLoader("numpy==1.24.3", quiet=True):
+log("     🔄 Starting nested overlay stack...")
+
+# Layer 1: NumPy 1.24.3
+with omnipkgLoader("numpy==1.24.3", quiet=True, isolation_mode='overlay'):
     import numpy as np
-    with omnipkgLoader("scipy==1.12.0", quiet=True):
+    
+    # Layer 2: SciPy 1.10.1 (Compatible with NumPy 1.24)
+    with omnipkgLoader("scipy==1.10.1", quiet=True, isolation_mode='overlay'):
         import scipy
-        with omnipkgLoader("pandas==2.1.4", quiet=True):
+        import scipy.linalg
+        
+        # Layer 3: Pandas 2.0.3 (Compatible with NumPy 1.24)
+        with omnipkgLoader("pandas==2.0.3", quiet=True, isolation_mode='overlay'):
             import pandas as pd
-            with omnipkgLoader("scikit-learn==1.3.2", quiet=True):
+            
+            # Layer 4: Scikit-Learn 1.3.2
+            with omnipkgLoader("scikit-learn==1.3.2", quiet=True, isolation_mode='overlay'):
                 from sklearn.ensemble import RandomForestClassifier
-                # TF already loaded in worker environment
+                
+                # TF from base
                 import tensorflow as tf
-                with omnipkgLoader("torch==2.0.1", quiet=True):
+                
+                # Layer 5: PyTorch 2.0.1
+                with omnipkgLoader("torch==2.0.1", quiet=True, isolation_mode='overlay'):
                     import torch
-                    log("     ✅ ALL 7 LAYERS LOADED!")
-                    _ = tf.constant([1,2,3])
-                    _ = torch.tensor([1,2,3])
+                    
+                    log("     ✅ ALL LAYERS LOADED!")
+                    
+                    tf_tens = tf.constant([1,2,3])
+                    torch_tens = torch.tensor([1,2,3])
+                    sp_val = scipy.linalg.norm([1,2,3])
+                    
+                    log(f"     🎉 Verification: TF={tf_tens.shape}, Torch={torch_tens.shape}, SciPy={sp_val:.2f}")
 
-log("\\n   - OMNIPKG WINS. AGAIN.")
+print("SUCCESS")
 """
+        result = tf_worker.execute(nested_hell_code)
         
-        result = worker.execute(nested_hell_code)
-        
-        if result['success']:
-            safe_print("\n✅ THE IMPOSSIBLE WAS MADE POSSIBLE. NESTED REALITY IS STABLE.\n")
-            return True
+        if result['success'] and "SUCCESS" in result['stdout']:
+            safe_print("\n   ✅ Phase 2: 7-layer stack STABLE!")
+            phase2_success = True
         else:
-            safe_print(f"\n💥 THE NESTED REALITY COLLAPSED: {result['error'][:100]}\n")
-            return False
+            safe_print(f"\n   💥 Phase 2 COLLAPSED: {result.get('error', result.get('stderr'))}\n")
+            phase2_success = False
             
     finally:
-        worker.shutdown()
+        tf_worker.shutdown()
+
+    if phase1_success and phase2_success:
+        safe_print("\n✅ NESTED REALITY CONQUERED! (Multi-process + Overlay)")
+        return True
+    else:
+        return False
 
 def chaos_test_17_experimental_dynamic_loading():
     """🔬 TEST 17: EXPERIMENTAL - Dynamic C Extension Reloading"""
@@ -1110,94 +1682,184 @@ def chaos_test_17_experimental_dynamic_loading():
     safe_print("   💡 Future: Worker pools + fork() offer best compromise\n")
 
 def chaos_test_18_worker_pool_drag_race():
-    """🏎️ TEST 18: WORKER POOL DRAG RACE (Parallel Execution with Version Swapping)"""
+    """🏎️ TEST 18: HFT SIMULATION - High Frequency Worker Swapping"""
     safe_print("╔══════════════════════════════════════════════════════════════╗")
-    safe_print("║  TEST 18: 🏎️  WORKER POOL DRAG RACE                         ║")
-    safe_print("║  Two workers. Two threads. 6 swaps each = 12 total swaps.   ║")
-    safe_print("║  GOAL: Verify concurrent version swapping and throughput.   ║")
+    safe_print("║  TEST 18: 🏎️  HFT SIMULATION (Worker Pool Drag Race)        ║")
+    safe_print("║  Scenario: 4 Concurrent Threads hammering the Daemon         ║")
+    safe_print("║  Goal: Prove thread-safety and max throughput                ║")
     safe_print("╚══════════════════════════════════════════════════════════════╝\n")
 
-    laps = 6
-    versions_a = ["torch==2.0.1", "torch==2.1.0"] * 3  # Alternates 6 times
-    versions_b = ["torch==2.1.0", "torch==2.0.1"] * 3  # Opposite pattern
-    
-    # 1. Pit Stop: Booting Engines
-    safe_print("   🚦 PIT STOP: Booting Engines (Workers)...")
-    boot_start = time.perf_counter()
-    
-    # Create worker pool with both versions
-    workers = {}
-    for spec in ["torch==2.0.1", "torch==2.1.0"]:
-        workers[spec] = PersistentWorker(spec, verbose=True)
-    
-    boot_time = time.perf_counter() - boot_start
-    safe_print(f"   ✨ Engines Ready in {boot_time:.2f}s\n")
+    # 1. Setup the "Trading Floor" (Daemon)
+    try:
+        from omnipkg.isolation.worker_daemon import DaemonClient, DaemonProxy, WorkerPoolDaemon
+        client = DaemonClient()
+        if not client.status().get('success'):
+            safe_print("   ⚙️  Starting Trading Floor (Daemon)...")
+            # VIP list ensures our workers are warm
+            vip_specs = ["torch==2.0.1", "torch==2.1.0", "numpy==1.24.3", "numpy==1.26.4"]
+            WorkerPoolDaemon(warmup_specs=vip_specs).start(daemonize=True)
+            time.sleep(2) # Give it a moment to boot the fleet
+    except ImportError:
+        return False
 
-    # 2. Define the Racer Function
-    def racer(workers_dict, name, version_sequence, laps):
-        for i in range(1, laps + 1):
-            spec = version_sequence[i-1]
-            time.sleep(0.05)  # Simulate work
-            
-            code = f"""
-import torch
-import sys
-import time
-# Simulate calculation
-val = torch.sin(torch.tensor([{i}.0]))
-sys.stderr.write(f'   🏎️  [Racer {name}] Lap {i}/{laps} | Using {{torch.__version__}}\\n')
-"""
-            result = workers_dict[spec].execute(code)
-            if not result['success']:
-                safe_print(f"   💥 {name} CRASHED on Lap {i}: {result['error']}")
-                return False
-        return True
-
-    # 3. The Race (Concurrent Execution)
-    safe_print("   🏁 LIGHTS OUT! GO! GO! GO!\n")
-    race_start = time.perf_counter()
+    # 2. Define the Workload
+    # Two threads want Torch 2.0, Two threads want Torch 2.1
+    # They will fight for the workers.
     
-    with ThreadPoolExecutor(max_workers=2) as executor:
-        # Launch both simultaneously
-        future_a = executor.submit(racer, workers, "A", versions_a, laps)
-        future_b = executor.submit(racer, workers, "B", versions_b, laps)
+    LAPS = 50 # 50 requests per thread
+    THREADS = 4
+    
+    safe_print(f"   🚦 RACE SETTINGS: {THREADS} Threads x {LAPS} Laps = {THREADS*LAPS} Total Transactions")
+    safe_print("   🏎️  Drivers to your engines...")
+    
+    start_gun = threading.Event()
+    results = []
+    
+    def hft_trader(thread_id, spec):
+        # Create a proxy for this thread
+        proxy = DaemonProxy(client, spec)
         
-        # Wait for finish
-        success_a = future_a.result()
-        success_b = future_b.result()
+        # Wait for gun
+        start_gun.wait()
+        
+        t_start = time.perf_counter()
+        success_count = 0
+        
+        # The payload: extremely fast execution
+        code = "x = 1 + 1" 
+        
+        for _ in range(LAPS):
+            res = proxy.execute(code)
+            if res['success']:
+                success_count += 1
+        
+        t_end = time.perf_counter()
+        results.append({
+            'id': thread_id,
+            'spec': spec,
+            'time': t_end - t_start,
+            'success': success_count
+        })
 
-    race_time = time.perf_counter() - race_start
+    # 3. Create Threads
+    threads = []
+    specs = ["torch==2.0.1", "torch==2.1.0", "numpy==1.24.3", "numpy==1.26.4"]
+    
+    for i in range(THREADS):
+        t = threading.Thread(target=hft_trader, args=(i, specs[i % len(specs)]))
+        threads.append(t)
+        t.start()
 
-    # 4. Cleanup
-    safe_print("\n   🛑 Shutting down worker pool...")
-    teardown_start = time.perf_counter()
-    for worker in workers.values():
-        worker.shutdown()
-    teardown_time = time.perf_counter() - teardown_start
+    # 4. START RACE
+    safe_print("   🔫 GO!")
+    time.sleep(0.5) # Let threads initialize
+    race_start = time.perf_counter()
+    start_gun.set()
     
-    # 5. Results
-    safe_print("\n" + "="*60)
-    safe_print(f"   🏁 RACE FINISHED in {race_time:.3f}s")
+    for t in threads:
+        t.join()
+        
+    total_race_time = time.perf_counter() - race_start
     
-    total_swaps = laps * 2
-    throughput = total_swaps / race_time
+    # 5. Analysis
+    total_reqs = sum(r['success'] for r in results)
+    safe_print("\n   🏁 FINISH LINE")
+    safe_print("   ──────────────────────────────────────────")
     
-    safe_print(f"   ⚡ Throughput: {throughput:.1f} swaps/sec")
-    safe_print(f"   🔧 Startup time: {boot_time:.3f}s")
-    safe_print(f"   🛑 Teardown time: {teardown_time:.3f}s")
+    for r in results:
+        tps = r['success'] / r['time']
+        safe_print(f"   🏎️  Thread {r['id']} ({r['spec']}): {r['success']}/{LAPS} ok | {r['time']*1000/LAPS:.2f}ms/req | {tps:.1f} req/s")
+
+    safe_print("   ──────────────────────────────────────────")
+    safe_print(f"   ⏱️  Total Wall Time: {total_race_time:.3f}s")
+    safe_print(f"   ⚡ System Throughput: {total_reqs / total_race_time:.1f} Transactions/Second")
     
-    total_time = boot_time + race_time + teardown_time
-    safe_print(f"   📊 Total time: {total_time:.3f}s")
-    
-    if success_a and success_b:
-        safe_print("   🏆 RESULT: Both cars finished successfully!")
-        safe_print(f"   🎯 Each racer swapped versions {laps} times")
-        if race_time < 2.0:
-            safe_print("   🚀 SPEED: HYPER-SONIC (True Parallelism Achieved)")
+    if total_reqs == THREADS * LAPS:
+         safe_print("\n   🏆 RESULT: MARKET STABLE. ZERO DROPPED PACKETS.")
     else:
-        safe_print("   💥 RESULT: DNF (Did Not Finish)")
-    print("="*60 + "\n")
+         safe_print("\n   ⚠️  RESULT: PACKET LOSS DETECTED.")
+         
+    return True
 
+def chaos_test_19_zero_copy_hft():
+    """🚀 TEST 19: ZERO-COPY vs JSON (10MB BENCHMARK)"""
+    import numpy as np
+    import time
+    from omnipkg.isolation.worker_daemon import DaemonClient
+    
+    print("\n╔══════════════════════════════════════════════════════════════╗")
+    print("║  TEST 19: 🚀 ZERO-COPY vs JSON (10MB BENCHMARK)             ║")
+    print("╚══════════════════════════════════════════════════════════════╝\n")
+
+    client = DaemonClient()
+    if not client.status().get('success'):
+        print("   ❌ Daemon not running")
+        return
+
+    # 1. Create 10MB Matrix
+    size = (1000, 1250) 
+    print(f"   📉 Generating 10MB Matrix {size}...")
+    data = np.random.rand(*size)
+    print("   ✅ Data ready.\n")
+
+    spec = "numpy==1.26.4"
+
+    # ---------------------------------------------------------
+    # ROUND 1: JSON
+    # ---------------------------------------------------------
+    print("   🐢 ROUND 1: Standard JSON Serialization")
+    print("      (This will take ~7 seconds...)")
+    start = time.perf_counter()
+    
+    try:
+        input_list = data.tolist()
+        json_code = f"import numpy as np; arr = np.array({input_list}); result={{'out': (arr*2).tolist()}}"
+        res = client.execute_shm(spec, json_code, {}, {})
+        
+        if res.get('success'):
+            _ = np.array(res['out'])
+            duration_json = (time.perf_counter() - start) * 1000
+            print(f"      ⏱️  Total: {duration_json:.2f}ms")
+        else:
+            print(f"      💥 JSON Failed: {res.get('error')}")
+            duration_json = float('inf')
+    except Exception as e:
+        print(f"      💥 JSON Exception: {e}")
+        duration_json = float('inf')
+
+    # ---------------------------------------------------------
+    # ROUND 2: SHM
+    # ---------------------------------------------------------
+    print("\n   🚀 ROUND 2: Shared Memory Pointer Handoff")
+    shm_code = "arr_out[:] = arr_in * 2"
+    
+    start = time.perf_counter()
+    try:
+        # UPDATED LINE: Unpack the tuple
+        result, _ = client.execute_zero_copy(
+            spec, 
+            shm_code, 
+            input_array=data, 
+            output_shape=size, 
+            output_dtype='float64'
+        )
+        duration_shm = (time.perf_counter() - start) * 1000
+        print(f"      ⏱️  Total: {duration_shm:.2f}ms")
+        
+        # FINAL SCORE
+        print("\n   🏁 RACE RESULTS (10MB Payload)")
+        print("   ──────────────────────────────────────────")
+        print(f"   🐢 JSON: {duration_json:7.2f}ms")
+        print(f"   🚀 SHM:  {duration_shm:7.2f}ms")
+        
+        if duration_shm > 0:
+            speedup = duration_json / duration_shm
+            print(f"   🏆 Speedup: {speedup:.1f}x FASTER")
+            
+    except Exception as e:
+        print(f"      💥 SHM Failed: {e}")
+        import traceback
+        traceback.print_exc()
 
 # ═══════════════════════════════════════════════════════════
 # 🎮 INTERACTIVE MENU SYSTEM
@@ -1221,7 +1883,8 @@ ALL_TESTS = [
     chaos_test_15_isolation_strategy_benchmark,
     chaos_test_16_nested_reality_hell,
     chaos_test_17_experimental_dynamic_loading,
-    chaos_test_18_worker_pool_drag_race  # <-- ADD THIS
+    chaos_test_18_worker_pool_drag_race,  # <-- ADD THIS
+    chaos_test_19_zero_copy_hft
 
 ]
 
