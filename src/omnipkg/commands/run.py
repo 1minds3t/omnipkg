@@ -2618,78 +2618,57 @@ def _run_script_logic(source_script_path: Path, script_args: list, config_manage
         # PHASE 1: THE PROBE (Detect Errors vs Interactivity)
         # =========================================================================
         
-        probe_process = subprocess.Popen(
-            initial_cmd, 
-            stdout=subprocess.PIPE, 
-            stderr=subprocess.STDOUT, 
-            stdin=subprocess.PIPE, 
-            text=True, 
-            encoding='utf-8', 
-            cwd=Path.cwd(), 
-            env=env
-        )
-        
+        # Force the logic to assume interactive/direct mode immediately
+        is_interactive_switch = True
+        test_return_code = 0 
         full_output = ""
-        return_code = 0
-        is_interactive_switch = False
-
-        try:
-            # FIX: Use _ignored instead of _ to avoid shadowing global translation function
-            full_output, _ignored = probe_process.communicate(timeout=2.0)
-            return_code = probe_process.returncode
-            
-        except subprocess.TimeoutExpired:
-            # IT TIMED OUT -> Assume Interactive or Long-Running
-            is_interactive_switch = True
-            probe_process.kill()
-            probe_process.wait()
-            
-            safe_print(_("\n🎮 Interactive/Long-running script detected! Switching to direct mode..."))
+        
+        safe_print(_("🚀 Executing script directly..."))
             
             # =========================================================================
             # PHASE 2: DIRECT INTERACTIVE MODE
             # =========================================================================
-            direct_process = subprocess.Popen(
-                initial_cmd,
-                stdin=sys.stdin,
-                stdout=sys.stdout, 
-                stderr=sys.stderr,
-                cwd=Path.cwd(),
-                env=env
-            )
+        direct_process = subprocess.Popen(
+            initial_cmd,
+            stdin=sys.stdin,
+            stdout=sys.stdout, 
+            stderr=sys.stderr,
+            cwd=Path.cwd(),
+            env=env
+        )
+        
+        try:
+            return_code = direct_process.wait()
+            end_time_ns = time.perf_counter_ns()
             
-            try:
-                return_code = direct_process.wait()
-                end_time_ns = time.perf_counter_ns()
+            # If it failed interactively, we need to get the logs for the AI healer
+            if return_code != 0:
+                safe_print(f"\n❌ Script exited with code: {return_code}")
+                safe_print("🤖 [AI-INFO] Attempting to capture error log for healing...")
                 
-                # If it failed interactively, we need to get the logs for the AI healer
-                if return_code != 0:
-                    safe_print(f"\n❌ Script exited with code: {return_code}")
-                    safe_print("🤖 [AI-INFO] Attempting to capture error log for healing...")
+                # PHASE 3: POST-MORTEM CAPTURE
+                capture_process = subprocess.Popen(
+                    initial_cmd,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    stdin=subprocess.PIPE,
+                    text=True,
+                    encoding='utf-8',
+                    cwd=Path.cwd(),
+                    env=env
+                )
+                try:
+                    # FIX: Use _ignored instead of _
+                    full_output, _ignored = capture_process.communicate(timeout=30)
+                except subprocess.TimeoutExpired:
+                    capture_process.kill()
+                    full_output = "Error: Script crashed interactively but timed out during error capture."
                     
-                    # PHASE 3: POST-MORTEM CAPTURE
-                    capture_process = subprocess.Popen(
-                        initial_cmd,
-                        stdout=subprocess.PIPE,
-                        stderr=subprocess.STDOUT,
-                        stdin=subprocess.PIPE,
-                        text=True,
-                        encoding='utf-8',
-                        cwd=Path.cwd(),
-                        env=env
-                    )
-                    try:
-                        # FIX: Use _ignored instead of _
-                        full_output, _ignored = capture_process.communicate(timeout=30)
-                    except subprocess.TimeoutExpired:
-                        capture_process.kill()
-                        full_output = "Error: Script crashed interactively but timed out during error capture."
-                        
-            except KeyboardInterrupt:
-                safe_print("\n🛑 Process interrupted by user")
-                direct_process.terminate()
-                direct_process.wait()
-                return 130
+        except KeyboardInterrupt:
+            safe_print("\n🛑 Process interrupted by user")
+            direct_process.terminate()
+            direct_process.wait()
+            return 130
 
         # =========================================================================
         # PHASE 4: ANALYSIS & HEALING (Common path)
