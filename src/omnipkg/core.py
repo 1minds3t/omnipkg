@@ -239,6 +239,8 @@ class ConfigManager:
                     safe_print(_('   - Step 1: Registering the native Python interpreter...'))
                 native_version_str = f'{sys.version_info.major}.{sys.version_info.minor}'
                 self._register_and_link_existing_interpreter(Path(sys.executable), native_version_str)
+                # [NEW] Force KB build on first use for this native version
+                self._set_rebuild_flag_for_version(native_version_str)
                 if sys.version_info[:2] != self._preferred_version:
                     if not suppress_init_messages:
                         safe_print(_('\n   - Step 2: Setting up the required Python 3.11 control plane...'))
@@ -2471,80 +2473,192 @@ class BubbleIsolationManager:
 
     def install_and_verify(self, package_name: str, version: str, python_context_version: str, destination_path: Path):
         """
-        The one true installation function. Installs to a temp directory, verifies with an
-        import test, and then moves the result. Contains the Time Machine fallback.
+        The one true installation function. 
+        REFACTORED: Installs DIRECTLY to the final destination to prevent metadata corruption 
+        during copy operations. Deduplication is disabled for maximum reliability.
         """
-        with tempfile.TemporaryDirectory() as temp_dir:
-            temp_path = Path(temp_dir)
-            
-            # --- STAGE 1: Attempt a modern, but potentially broken, installation ---
-            safe_print(f"   - Attempting modern install for {package_name}=={version} into temp directory...")
-            # FIX: Force reinstall and disable cache to ensure we get the actual files
-            return_code, captured_output = self.parent_omnipkg._run_pip_install(
-                [f"{package_name}=={version}"],
-                target_directory=temp_path,
-                force_reinstall=True,
-                extra_flags=['--no-cache-dir']
-            )
+        # Ensure destination is clean start
+        if destination_path.exists():
+            try:
+                shutil.rmtree(destination_path)
+            except Exception as e:
+                safe_print(f"   ⚠️  Warning: Could not clean target {destination_path}: {e}")
+        
+        destination_path.mkdir(parents=True, exist_ok=True)
+        
+        # --- STAGE 1: Attempt Direct Install ---
+        safe_print(f"   - Installing {package_name}=={version} directly to bubble: {destination_path}")
+        
+        return_code, captured_output = self.parent_omnipkg._run_pip_install(
+            [f"{package_name}=={version}"],
+            target_directory=destination_path,
+            force_reinstall=True,
+            extra_flags=['--no-cache-dir'] 
+        )
 
-            install_ok = (return_code == 0)
-            import_test_passed = False
-            if install_ok:
-                # Pass the bubble manager instance so it can access _get_import_candidates_for_bubble
-                import_test_passed = self.parent_omnipkg._run_post_install_import_test(
-                    package_name, 
-                    install_dir_override=temp_path
-                )
-                if not import_test_passed:
-                    safe_print(f"❌ Post-install import test failed. The package is likely broken.")
+        # DEFINE install_ok HERE - RIGHT AFTER _run_pip_install
+        install_ok = (return_code == 0)
+        
+        # ========== HEALING CODE ==========
+        if install_ok:
+            safe_print("   🔧 Performing post-install metadata validation...")
+            self._heal_corrupt_metadata(destination_path, package_name)
             
-            # --- STAGE 2: If install failed OR import test failed, engage the Time Machine ---
-            if not install_ok or not import_test_passed:
-                error_output = captured_output.get("stderr", "").lower()
-                build_failure_indicators = ['metadata-generation-failed', 'failed building wheel', 'setup.py egg_info']
-                
-                # Trigger on explicit build failure OR a failed import test
-                if any(indicator in error_output for indicator in build_failure_indicators):
-                    print_header(f"TIME MACHINE FALLBACK: Detected legacy build failure for {package_name}=={version}")
-                elif not import_test_passed:
-                    print_header(f"TIME MACHINE FALLBACK: Detected broken install for {package_name}=={version}")
-                
-                # Call the Time Machine, telling it to install into our SAFE temp directory
-                time_machine_succeeded = self.parent_omnipkg._run_historical_install_fallback(
-                    package_name, version, target_directory_override=temp_path
-                )
-                
-                if not time_machine_succeeded:
-                    safe_print(f"❌ Time Machine failed. The installation for {package_name}=={version} is unrecoverable.")
-                    return False
-                else:
-                    safe_print(f"✅ Time Machine successfully healed the installation of {package_name}=={version}.")
-            
-            # --- STAGE 3: Analyze and create the final installation/bubble ---
-            # At this point, temp_path contains either a working modern install or a healed historical one.
-            safe_print("   - Analyzing final installation...")
-            installed_tree = self._analyze_installed_tree(temp_path)
-            
-            safe_print(f"   - Moving verified package to final destination: {destination_path}")
-            if destination_path.exists():
-                # Robust cleanup to handle 'Directory not empty' race conditions
-                import time
-                for i in range(5):
-                    try:
-                        shutil.rmtree(destination_path)
-                        break
-                    except OSError:
-                        time.sleep(0.1)
-                        if i == 4:
-                            # Final attempt, let it crash if it fails so we know
-                            shutil.rmtree(destination_path)
-            
-            return self._create_deduplicated_bubble(
-                installed_tree, 
-                destination_path,
-                temp_path, 
-                python_context_version=python_context_version
+            # CRITICAL: Give filesystem time to sync
+            import time
+            time.sleep(0.1)
+        # ===================================
+        
+        import_test_passed = False
+        
+        if install_ok:
+            import_test_passed = self.parent_omnipkg._run_post_install_import_test(
+                package_name, 
+                install_dir_override=destination_path
             )
+            if not import_test_passed:
+                safe_print(f"❌ Post-install import test failed. The package is likely broken.")
+            
+        # --- STAGE 2: Time Machine Fallback (Direct to Bubble) ---
+        if not install_ok or not import_test_passed:
+            error_output = captured_output.get("stderr", "").lower()
+            build_failure_indicators = ['metadata-generation-failed', 'failed building wheel', 'setup.py egg_info']
+            
+            if any(indicator in error_output for indicator in build_failure_indicators):
+                print_header(f"TIME MACHINE FALLBACK: Detected legacy build failure for {package_name}=={version}")
+            elif not import_test_passed:
+                print_header(f"TIME MACHINE FALLBACK: Detected broken install for {package_name}=={version}")
+            
+            # Clean up the failed attempt
+            if destination_path.exists():
+                shutil.rmtree(destination_path)
+            destination_path.mkdir(parents=True, exist_ok=True)
+
+            # Call the Time Machine, installing DIRECTLY to the final path
+            time_machine_succeeded = self.parent_omnipkg._run_historical_install_fallback(
+                package_name, version, target_directory_override=destination_path
+            )
+            
+            if not time_machine_succeeded:
+                safe_print(f"❌ Time Machine failed. The installation for {package_name}=={version} is unrecoverable.")
+                # Cleanup failed bubble
+                if destination_path.exists():
+                    shutil.rmtree(destination_path)
+                return False
+            else:
+                safe_print(f"✅ Time Machine successfully healed the installation of {package_name}=={version}.")
+                # HEAL AGAIN AFTER TIME MACHINE
+                self._heal_corrupt_metadata(destination_path, package_name)
+        
+        # --- STAGE 3: Finalize (Generate Manifest) ---
+        safe_print("   - Finalizing bubble (generating manifest)...")
+        
+        installed_tree = self._analyze_installed_tree(destination_path)
+        
+        # Calculate stats manually since we skipped _create_deduplicated_bubble
+        stats = {
+            'total_files': 0, 
+            'copied_files': 0,
+            'deduplicated_files': 0,
+            'c_extensions': [], 
+            'binaries': [], 
+            'python_files': 0
+        }
+        
+        for pkg, info in installed_tree.items():
+            for fpath in info.get('files', []):
+                stats['total_files'] += 1
+                stats['copied_files'] += 1
+                
+                if fpath.suffix in ['.so', '.pyd']:
+                    stats['c_extensions'].append(fpath.name)
+                elif self._is_binary(fpath):
+                    stats['binaries'].append(fpath.name)
+                elif fpath.suffix == '.py':
+                    stats['python_files'] += 1
+        
+        self._create_bubble_manifest(
+            destination_path,
+            installed_tree, 
+            stats, 
+            python_context_version=python_context_version
+        )
+        
+        # FINAL HEAL RIGHT BEFORE RETURNING SUCCESS
+        self._heal_corrupt_metadata(destination_path, package_name)
+        
+        # ONE MORE SYNC DELAY
+        import time
+        time.sleep(0.2)
+        
+        safe_print(f"   ✅ Bubble successfully created at {destination_path}")
+        return True
+
+    def _heal_corrupt_metadata(self, install_path: Path, expected_package_name: str):
+        """
+        NUCLEAR HEALING with file locking to prevent race conditions
+        """
+        import fcntl
+        healed_count = 0
+        
+        for dist_info in install_path.glob('*.dist-info'):
+            metadata_file = dist_info / 'METADATA'
+            
+            if not metadata_file.exists():
+                continue
+            
+            # CRITICAL: Lock the file during read/write
+            lock_file = metadata_file.with_suffix('.lock')
+            
+            try:
+                with open(lock_file, 'w') as lock_fd:
+                    # Acquire exclusive lock
+                    fcntl.flock(lock_fd.fileno(), fcntl.LOCK_EX)
+                    
+                    try:
+                        content = metadata_file.read_text(encoding='utf-8', errors='ignore')
+                        
+                        header = content[:500]
+                        
+                        if 'Name:' not in header and 'name:' not in header.lower():
+                            folder_name = dist_info.name
+                            if folder_name.endswith('.dist-info'):
+                                folder_name = folder_name[:-10]
+                            
+                            parts = folder_name.rsplit('-', 1)
+                            if len(parts) == 2:
+                                pkg_name, pkg_version = parts
+                            else:
+                                pkg_name = expected_package_name
+                            
+                            # Atomic write
+                            fixed_content = f"Name: {pkg_name}\n{content}"
+                            temp_file = metadata_file.with_suffix('.tmp')
+                            temp_file.write_text(fixed_content, encoding='utf-8')
+                            temp_file.replace(metadata_file)  # Atomic rename
+                            
+                            safe_print(f"   🔧 AUTO-HEALED: Injected 'Name: {pkg_name}' into {dist_info.name}/METADATA")
+                            healed_count += 1
+                    
+                    finally:
+                        # Release lock
+                        fcntl.flock(lock_fd.fileno(), fcntl.LOCK_UN)
+            
+            except Exception as e:
+                safe_print(f"   ⚠️  Failed to heal {dist_info.name}: {e}")
+                continue
+            finally:
+                # Clean up lock file
+                if lock_file.exists():
+                    try:
+                        lock_file.unlink()
+                    except:
+                        pass
+        
+        if healed_count > 0:
+            safe_print(f"   ✅ Healed {healed_count} corrupt metadata file(s)")
+        
+        return healed_count
             
     def create_bubble_for_package(self, package_name: str, version: str, python_context_version: str) -> bool:
         """
@@ -2898,24 +3012,48 @@ class BubbleIsolationManager:
 
     def _analyze_installed_tree(self, temp_path: Path) -> Dict[str, Dict]:
         """
-        Analyzes the temporary installation, now EXPLICITLY finding executables
-        and summarizing file registry warnings instead of printing each one.
+        Analyzes the temporary installation with AGGRESSIVE metadata healing.
         """
         installed = {}
         unregistered_file_count = 0
+        
         for dist_info in temp_path.glob('*.dist-info'):
             try:
+                # ========== PRE-ANALYSIS HEALING ==========
+                metadata_file = dist_info / 'METADATA'
+                if metadata_file.exists():
+                    content = metadata_file.read_text(encoding='utf-8', errors='ignore')
+                    if 'Name:' not in content[:500]:
+                        folder_name = dist_info.name.replace('.dist-info', '')
+                        pkg_name = folder_name.rsplit('-', 1)[0]
+                        fixed_content = f"Name: {pkg_name}\n{content}"
+                        metadata_file.write_text(fixed_content, encoding='utf-8')
+                        safe_print(f"   🔧 Healed missing Name in {dist_info.name}")
+                # ==========================================
+                
                 dist = importlib.metadata.Distribution.at(dist_info)
                 if not dist:
                     continue
-                pkg_files = []
+                
+                pkg_files = set()  # Use set to avoid duplicates
+                
+                # 1. Add files from RECORD
                 if dist.files:
                     for file_entry in dist.files:
                         if file_entry.parts and file_entry.parts[0] == 'bin':
                             continue
                         abs_path = Path(dist_info.parent) / file_entry
                         if abs_path.exists():
-                            pkg_files.append(abs_path)
+                            pkg_files.add(abs_path)
+                
+                # 2. CRITICAL FIX: Force-include all metadata files
+                # Some packages don't list METADATA/INSTALLER/etc in RECORD
+                if dist_info.exists():
+                    for meta_file in dist_info.iterdir():
+                        if meta_file.is_file():
+                            pkg_files.add(meta_file)
+
+                # 3. Handle executables
                 executables = []
                 entry_points = dist.entry_points
                 console_scripts = [ep for ep in entry_points if ep.group == 'console_scripts']
@@ -2926,13 +3064,24 @@ class BubbleIsolationManager:
                             exe_path = temp_bin_path / script.name
                             if exe_path.is_file():
                                 executables.append(exe_path)
+                                pkg_files.add(exe_path)
+
                 pkg_name = dist.metadata['Name'].lower().replace('_', '-')
                 version = dist.metadata['Version']
-                installed[dist.metadata['Name']] = {'version': version, 'files': [p for p in pkg_files if p.exists()], 'executables': executables, 'type': self._classify_package_type(pkg_files)}
+                
+                final_files_list = list(pkg_files)
+                
+                installed[dist.metadata['Name']] = {
+                    'version': version, 
+                    'files': final_files_list, 
+                    'executables': executables, 
+                    'type': self._classify_package_type(final_files_list)
+                }
+                
                 redis_key = _('{}bubble:{}:{}:file_paths').format(self.parent_omnipkg.redis_key_prefix, pkg_name, version)
                 existing_paths = set(self.parent_omnipkg.cache_client.smembers(redis_key)) if self.parent_omnipkg.cache_client.exists(redis_key) else set()
-                all_package_files_for_check = pkg_files + executables
-                for file_path in all_package_files_for_check:
+                
+                for file_path in final_files_list:
                     if str(file_path) not in existing_paths:
                         unregistered_file_count += 1
             except Exception as e:
@@ -3093,7 +3242,25 @@ class BubbleIsolationManager:
             safe_print(_('    ⚠️  Found {} file(s) not listed in package metadata.').format(len(missed_files)))
             missed_by_package = {}
             for source_path in missed_files:
-                owner_pkg = self._find_owner_package(source_path, temp_install_path, installed_tree)
+                # NEW: Special handling for dist-info files
+                if '.dist-info' in str(source_path):
+                    # Extract package name from dist-info path
+                    # e.g., /tmp/xxx/rich-13.5.3.dist-info/INSTALLER -> rich
+                    dist_info_parent = None
+                    for part in source_path.parts:
+                        if '.dist-info' in part:
+                            dist_info_parent = part
+                            break
+                    
+                    if dist_info_parent:
+                        # Extract package name (e.g., "rich-13.5.3.dist-info" -> "rich")
+                        pkg_from_dist = dist_info_parent.split('-')[0]
+                        owner_pkg = pkg_from_dist
+                    else:
+                        owner_pkg = self._find_owner_package(source_path, temp_install_path, installed_tree)
+                else:
+                    owner_pkg = self._find_owner_package(source_path, temp_install_path, installed_tree)
+                
                 if owner_pkg not in missed_by_package:
                     missed_by_package[owner_pkg] = []
                 missed_by_package[owner_pkg].append(source_path)
@@ -3494,17 +3661,35 @@ class BubbleIsolationManager:
             pass
         return None
 
-    def _copy_file_to_bubble(self, source_path: Path, bubble_path: Path, temp_install_path: Path, make_executable: bool=False):
-        """Helper method to copy a file to the bubble with proper error handling."""
+    def _copy_file_to_bubble(self, source_path: Path, bubble_path: Path, temp_install_path: Path, preserve_binary: bool = False):
         try:
-            rel_path = source_path.relative_to(temp_install_path)
-            dest_path = bubble_path / rel_path
-            dest_path.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(source_path, dest_path)
-            if make_executable:
-                os.chmod(dest_path, 493)
+            relative_path = source_path.relative_to(temp_install_path)
+            target_path = bubble_path / relative_path
+            target_path.parent.mkdir(parents=True, exist_ok=True)
+            
+            # CRITICAL: Special handling for metadata files
+            if '.dist-info' in str(source_path) and source_path.name in ('METADATA', 'RECORD', 'WHEEL'):
+                # Ensure file is fully written and closed before copying
+                import time
+                time.sleep(0.01)  # Brief pause to ensure file handle is released
+                
+                # Verify source file is readable and non-empty
+                if not source_path.exists() or source_path.stat().st_size == 0:
+                    raise IOError(f"Source metadata file is empty or missing: {source_path}")
+            
+            if preserve_binary:
+                shutil.copy2(source_path, target_path)
+            else:
+                shutil.copy(source_path, target_path)
+                
+            # CRITICAL: Verify the copy was successful for metadata files
+            if '.dist-info' in str(source_path) and source_path.name == 'METADATA':
+                if not target_path.exists() or target_path.stat().st_size != source_path.stat().st_size:
+                    raise IOError(f"METADATA file copy verification failed: {target_path}")
+                    
         except Exception as e:
-            safe_print(_('    ⚠️ Warning: Failed to copy {}: {}').format(source_path.name, e))
+            safe_print(f"    ❌ Failed to copy {source_path.name}: {e}")
+            raise
 
     def _get_or_build_main_env_hash_index(self) -> Set[str]:
         """
@@ -4020,6 +4205,7 @@ class omnipkg:
         self.cache_client = None
         self._cache_connection_status = None
         self.initialize_pypi_cache()
+        self._check_and_run_pending_rebuild()
         self._info_cache = {}
         self._prime_loader_cache()
         self._installed_packages_cache = None
@@ -6528,6 +6714,19 @@ class omnipkg:
             # --- END FIX ---
 
             if changed_specs:
+                # WAIT for bubbles to be fully written
+                import time
+                for spec in changed_specs:
+                    if '==' in spec:
+                        name, ver = spec.split('==')
+                        bubble_path = self.multiversion_base / f'{name}-{ver}'
+                        manifest = bubble_path / '.omnipkg_manifest.json'
+                        
+                        # Poll for manifest (max 5 seconds)
+                        for i in range(50):
+                            if manifest.exists():
+                                break
+                            time.sleep(0.1)
                 safe_print(_('   -> Processing {} changed/new package(s) for Python {} context...').format(len(changed_specs), current_python_version))
                 # --- PASS THE CONTEXT TO THE GATHERER ---
                 gatherer = omnipkgMetadataGatherer(
@@ -8238,6 +8437,8 @@ class omnipkg:
 
         # --- MAIN INSTALLATION LOGIC STARTS HERE ---
         # Continue with the rest of your installation logic...
+        protected_from_cleanup = set()
+
         configured_exe = self.config.get('python_executable', sys.executable)
         version_tuple = self.config_manager._verify_python_version(configured_exe)
         python_context_version = f'{version_tuple[0]}.{version_tuple[1]}' if version_tuple else 'unknown'
@@ -8505,7 +8706,7 @@ class omnipkg:
                                 self.hook_manager.refresh_bubble_map(fix['package'], fix['new_version'], bubble_path_str)
                                 self.hook_manager.validate_bubble(fix['package'], fix['new_version'])
                                 restore_result = subprocess.run([self.config["python_executable"], "-m", "pip", "install", "--quiet", f"{fix['package']}=={fix['old_version']}"], capture_output=True, text=True)
-                                
+                                protected_from_cleanup.add(canonicalize_name(fix['package']))
                                 if restore_result.returncode == 0:
                                     main_env_kb_updates[fix['package']] = fix['old_version']
                                     safe_print('   ✅ Bubbled {} v{}, restored stable v{}'.format(fix['package'], fix['new_version'], fix['old_version']))
@@ -8579,7 +8780,7 @@ class omnipkg:
                 safe_print(f"\n❌ Aborting installation: {e}")
                 return 1
         if not force_reinstall:
-           self._cleanup_redundant_bubbles()
+           self._cleanup_redundant_bubbles(protected_packages=protected_from_cleanup)
         # Knowledge base update and cleanup logic remains the same...
         safe_print(_('\n🧠 Updating knowledge base (consolidated)...'))
         all_changed_specs = set()
@@ -8893,27 +9094,39 @@ class omnipkg:
             safe_print(f"   - ⚠️  Error during compatibility check: {e}")
             return "unknown"
 
-    def _cleanup_redundant_bubbles(self):
+    def _cleanup_redundant_bubbles(self, protected_packages: Set[str] = None):
         """
         Scans for and REMOVES any bubbles from the filesystem that are identical
-        to the currently active version of a package. Now ignores protected tool bubbles.
+        to the currently active version of a package.
+        
+        NOW ACCEPTS 'protected_packages': A set of package names to SKIP cleaning,
+        even if they appear redundant. This is critical for stability protection flows
+        where we bubble a version and then immediately restore an older one.
         """
         safe_print(_('\n🧹 Cleaning redundant bubbles...'))
+        if protected_packages is None:
+            protected_packages = set()
+            
         try:
-            # --- START OF FIX ---
-            # Define a set of package names that should never be cleaned up.
-            # These are internal tools managed by omnipkg itself.
-            PROTECTED_TOOL_PACKAGES = {'safety'}
-            # --- END OF FIX ---
-
+            # Internal protected tools
+            INTERNAL_PROTECTED_PACKAGES = {'safety'}
+            
             final_active_packages = self.get_installed_packages(live=True)
             cleaned_count = 0
+            
             for pkg_name, active_version in final_active_packages.items():
-                # --- ADD THIS CHECK ---
-                if canonicalize_name(pkg_name) in PROTECTED_TOOL_PACKAGES:
+                c_name = canonicalize_name(pkg_name)
+                
+                # 1. Skip internal tools
+                if c_name in INTERNAL_PROTECTED_PACKAGES:
                     safe_print(f"   - 🛡️  Skipping cleanup for protected tool: {pkg_name}")
                     continue
-                # --- END OF CHECK ---
+                
+                # 2. CRITICAL FIX: Skip packages explicitly protected by the caller
+                # (e.g. packages we just bubbled for stability)
+                if c_name in protected_packages:
+                    safe_print(f"   - 🛡️  Skipping cleanup for recently bubbled package: {pkg_name}")
+                    continue
 
                 # Construct the path to a potentially redundant bubble
                 bubble_path = self.multiversion_base / f'{pkg_name}-{active_version}'
@@ -9457,21 +9670,21 @@ class omnipkg:
             # --- END OF FIX ---
             
             search_path = search_path_override
-            if not search_path and any(self.multiversion_base / f'{self._parse_package_spec(p)[0]}-{self._parse_package_spec(p)[1]}' for p in packages if '==' in p):
-                 search_path = str(self.multiversion_base)
-                 safe_print(f"   -> Targeting KB build to bubble directory: {search_path}")
+            # if not search_path and ...  <-- DELETED THIS BLOCK
+            
+            # --- FIX END ---
 
             gatherer = omnipkgMetadataGatherer(
                 config=self.config, 
                 env_id=self.env_id, 
                 force_refresh=force, 
                 omnipkg_instance=self, 
-                target_context_version=final_target_version # Use the guaranteed version
+                target_context_version=final_target_version 
             )
             
             found_distributions = gatherer.run(
                 targeted_packages=packages, 
-                search_path_override=search_path
+                search_path_override=search_path # Now None unless caller specified
             )
             
             if found_distributions is None:
