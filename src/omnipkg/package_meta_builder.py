@@ -198,19 +198,57 @@ class omnipkgMetadataGatherer:
         return False
     
     def _parse_distribution_worker(self, dist_info_path: Path) -> Optional[importlib.metadata.Distribution]:
-            """Worker function for parallel discovery. Parses a single dist-info path."""
-            try:
-                # We must use PathDistribution directly for paths outside the standard sys.path
-                from importlib.metadata import PathDistribution
-                dist = PathDistribution(dist_info_path)
-                # Basic validation: ensure it has a valid name string.
-                name = dist.metadata.get('Name')
-                if name and isinstance(name, str):
-                    return dist
-            except Exception:
-                # Silently ignore corrupted or unreadable metadata
-                pass
-            return None
+        """
+        Worker function for parallel discovery with AUTO-HEALING.
+        If metadata is corrupt, attempts emergency repair before giving up.
+        """
+        try:
+            from importlib.metadata import PathDistribution
+            dist = PathDistribution(dist_info_path)
+            
+            # Basic validation: ensure it has a valid name string
+            name = dist.metadata.get('Name')
+            if name and isinstance(name, str):
+                return dist
+            
+            # CORRUPTION DETECTED - ATTEMPT EMERGENCY HEAL
+            metadata_file = dist_info_path / 'METADATA'
+            if metadata_file.exists():
+                try:
+                    content = metadata_file.read_text(encoding='utf-8', errors='ignore')
+                    
+                    # Check if Name is really missing
+                    if 'Name:' not in content[:500]:
+                        # Extract package name from folder
+                        folder_name = dist_info_path.name
+                        if folder_name.endswith('.dist-info'):
+                            folder_name = folder_name[:-10]
+                        
+                        # Parse name-version format
+                        parts = folder_name.rsplit('-', 1)
+                        if len(parts) >= 1:
+                            pkg_name = parts[0]
+                            
+                            # Inject Name field
+                            fixed_content = f"Name: {pkg_name}\n{content}"
+                            
+                            # Atomic write
+                            temp_file = metadata_file.with_suffix('.tmp')
+                            temp_file.write_text(fixed_content, encoding='utf-8')
+                            temp_file.replace(metadata_file)
+                            
+                            # Reload and try again
+                            dist = PathDistribution(dist_info_path)
+                            name = dist.metadata.get('Name')
+                            if name and isinstance(name, str):
+                                return dist
+                except Exception:
+                    pass  # Healing failed, continue to return None
+                    
+        except Exception:
+            pass  # Unreadable metadata
+        
+        return None
     
     def _run_strategy_1(self, base_path: Path, name_variants: List[str], version: Optional[str], verbose: bool) -> List[Tuple[importlib.metadata.Distribution, Path]]:
         """Strategy 1: Check for vendored packages (SILENT except in verbose mode)"""
@@ -1055,25 +1093,90 @@ class omnipkgMetadataGatherer:
                     "fixed_in": vuln.get('fixed_in', []),
                 })
         return report
+    
+    def _emergency_heal_metadata(self, dist_info_path: Path) -> bool:
+        """
+        Emergency on-the-spot metadata healing when corruption is detected during KB scan.
+        Returns True if healing succeeded, False otherwise.
+        """
+        try:
+            metadata_file = dist_info_path / 'METADATA'
+            
+            if not metadata_file.exists():
+                safe_print(f"      -> No METADATA file found")
+                return False
+            
+            # Read current content
+            content = metadata_file.read_text(encoding='utf-8', errors='ignore')
+            
+            # Check if Name is actually missing
+            if 'Name:' in content[:500]:
+                safe_print(f"      -> Name field exists, corruption is elsewhere")
+                return False
+            
+            # Extract package name from folder
+            folder_name = dist_info_path.name
+            if folder_name.endswith('.dist-info'):
+                folder_name = folder_name[:-10]
+            
+            # Parse name-version format
+            parts = folder_name.rsplit('-', 1)
+            if len(parts) == 2:
+                pkg_name, pkg_version = parts
+            else:
+                safe_print(f"      -> Could not parse package name from: {folder_name}")
+                return False
+            
+            # Create fixed content
+            fixed_content = f"Name: {pkg_name}\n{content}"
+            
+            # Atomic write with backup
+            backup_file = metadata_file.with_suffix('.backup')
+            temp_file = metadata_file.with_suffix('.tmp')
+            
+            try:
+                # Backup original
+                import shutil
+                shutil.copy2(metadata_file, backup_file)
+                
+                # Write fixed version to temp
+                temp_file.write_text(fixed_content, encoding='utf-8')
+                
+                # Atomic replace
+                temp_file.replace(metadata_file)
+                
+                safe_print(f"      -> Injected 'Name: {pkg_name}' into METADATA")
+                
+                # Clean up backup after success
+                if backup_file.exists():
+                    backup_file.unlink()
+                
+                return True
+                
+            except Exception as e:
+                safe_print(f"      -> Write failed: {e}")
+                # Restore from backup if it exists
+                if backup_file.exists():
+                    shutil.copy2(backup_file, metadata_file)
+                return False
+        
+        except Exception as e:
+            safe_print(f"      -> Emergency healing failed: {e}")
+            return False
 
     def run(self, targeted_packages: Optional[List[str]]=None, search_path_override: Optional[str] = None, skip_existing_checksums: bool = False, pre_discovered_distributions: Optional[List[importlib.metadata.Distribution]] = None):
         """
-        (V5.3 - Robust Path Fix) The main execution loop. Now uses robust logic
-        to locate the bubble root and correctly determine context compatibility.
+        (V5.4 - ON-THE-SPOT HEALING) The main execution loop with immediate corruption repair.
         """
         if not self.cache_client:
             safe_print(_('❌ Cache client not available to the builder. Aborting.'))
             return
 
-        # --- THIS IS THE FIX ---
-        # If we are given a list of distributions directly, use them and skip discovery.
         if pre_discovered_distributions is not None:
             safe_print("   -> Using pre-discovered distributions for surgical KB update...")
             all_discovered_dists = pre_discovered_distributions
         else:
-            # Otherwise, run the normal discovery process.
             all_discovered_dists = self._discover_distributions(targeted_packages, search_path_override=search_path_override, skip_existing_checksums=skip_existing_checksums)
-        # --- END OF FIX ---
         
         distributions_to_process = []
         safe_print(f"   -> Filtering {len(all_discovered_dists)} discovered packages for current Python {self.target_context_version} context...")
@@ -1090,9 +1193,7 @@ class omnipkgMetadataGatherer:
                 is_compatible = False
                 multiversion_base_path = Path(self.config.get('multiversion_base', '/dev/null'))
                 
-                # --- THIS IS THE ROBUST FIX ---
                 try:
-                    # Directly calculate the bubble root path instead of traversing.
                     relative_to_base = dist._path.relative_to(multiversion_base_path)
                     bubble_root_name = relative_to_base.parts[0]
                     bubble_root_path = multiversion_base_path / bubble_root_name
@@ -1106,13 +1207,11 @@ class omnipkgMetadataGatherer:
                             if bubble_py_ver == self.target_context_version:
                                 is_compatible = True
                         except Exception:
-                            is_compatible = True # Assume compatible if manifest is corrupt
+                            is_compatible = True
                     else:
-                        is_compatible = True # Assume compatible if no manifest exists (legacy)
+                        is_compatible = True
                 except ValueError:
-                    # Should not happen if type is bubble/nested, but a safeguard.
                     is_compatible = True
-                # --- END FIX ---
 
                 if is_compatible:
                     distributions_to_process.append(dist)
@@ -1123,13 +1222,37 @@ class omnipkgMetadataGatherer:
             safe_print(_('✅ No packages found for the current context to process.'))
             return []
 
-        # --- FIX: Filter out corrupt distributions with no Name ---
+        # --- MODIFIED: HEAL INSTEAD OF SKIP ---
         valid_distributions = []
+        healed_count = 0
+        
         for dist in distributions_to_process:
             if dist.metadata.get('Name'):
                 valid_distributions.append(dist)
             else:
-                safe_print(f"⚠️  Skipping corrupt distribution with missing Name at: {dist._path}")
+                # ATTEMPT ON-THE-SPOT HEALING
+                safe_print(f"🔧 Detected corrupt metadata at: {dist._path}")
+                safe_print(f"   -> Attempting emergency repair...")
+                
+                if self._emergency_heal_metadata(dist._path):
+                    # Reload the distribution after healing
+                    try:
+                        from importlib.metadata import PathDistribution
+                        healed_dist = PathDistribution(dist._path)
+                        if healed_dist.metadata.get('Name'):
+                            valid_distributions.append(healed_dist)
+                            healed_count += 1
+                            safe_print(f"   ✅ Successfully healed and reloaded distribution")
+                        else:
+                            safe_print(f"   ⚠️  Healing failed - still no Name field")
+                    except Exception as e:
+                        safe_print(f"   ⚠️  Could not reload after healing: {e}")
+                else:
+                    safe_print(f"   ⚠️  Emergency healing failed, skipping this distribution")
+        
+        if healed_count > 0:
+            safe_print(f"🎉 Emergency healed {healed_count} corrupt distribution(s)")
+        
         distributions_to_process = valid_distributions
         # ----------------------------------------------------------
 
