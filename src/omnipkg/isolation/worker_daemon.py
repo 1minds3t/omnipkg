@@ -135,7 +135,6 @@ shm_registry = SHMRegistry()
 # ═══════════════════════════════════════════════════════════════
 
 
-
 _DAEMON_SCRIPT = r"""#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 import os
@@ -151,7 +150,6 @@ sys.stdin.reconfigure(line_buffering=True)
 sys.stderr.reconfigure(line_buffering=True)
 
 # CRITICAL FIX: Redirect stdout to /dev/null BEFORE omnipkg imports
-# This suppresses ALL diagnostic output from module initialization
 import io
 _original_stdout = sys.stdout
 _devnull = open(os.devnull, 'w')
@@ -201,18 +199,45 @@ try:
 except ImportError as e:
     fatal_error('Failed to import omnipkgLoader', e)
 
-# Activate the bubble environment (stdout still suppressed)
+# ═══════════════════════════════════════════════════════════════════
+# CRITICAL FIX: Activate bubble with STRICT validation
+# ═══════════════════════════════════════════════════════════════════
 try:
     # Support multiple packages separated by comma
     specs = [s.strip() for s in PKG_SPEC.split(',')]
     loaders = []
-    for s in specs:
-        l = omnipkgLoader(s, quiet=True)
-        l.__enter__()
-        loaders.append(l)
+    
+    for spec in specs:
+        # Parse package name and version
+        pkg_name, expected_version = spec.split('==')
         
+        # Create loader with STRICT isolation mode
+        loader = omnipkgLoader(
+            spec, 
+            quiet=True,
+            isolation_mode='strict',  # Force strict isolation
+            force_activation=True     # Always activate bubble
+        )
+        loader.__enter__()
+        loaders.append(loader)
+        
+        # CRITICAL: Verify the correct version is actually loaded
+        try:
+            from importlib.metadata import version
+            actual_version = version(pkg_name)
+            
+            if actual_version != expected_version:
+                fatal_error(
+                    f'Bubble activation failed: Expected {pkg_name}=={expected_version}, '
+                    f'but got {actual_version}. This indicates the main environment '
+                    f'was used instead of the bubble.'
+                )
+        except Exception as e:
+            fatal_error(f'Failed to verify {pkg_name} version after activation', e)
+    
     # Keep reference to loaders so they don't exit
     globals()['_omnipkg_loaders'] = loaders
+    
 except Exception as e:
     fatal_error(f'Failed to activate {PKG_SPEC}', e)
 
@@ -338,10 +363,55 @@ while True:
 
 # Cleanup on exit
 try:
-    loader.__exit__(None, None, None)
+    for loader in loaders:
+        loader.__exit__(None, None, None)
 except:
     pass
 """
+
+# Additional diagnostic helper for debugging
+def diagnose_worker_issue(package_spec: str):
+    """
+    Run this to diagnose why a worker might return the wrong version.
+    """
+    print(f"\n🔍 Diagnosing worker issue for: {package_spec}")
+    print("=" * 70)
+    
+    pkg_name, expected_version = package_spec.split('==')
+    
+    # Check what's in sys.path
+    print("\n1. Current sys.path:")
+    import sys
+    for i, path in enumerate(sys.path):
+        print(f"   [{i}] {path}")
+    
+    # Check what version is importable
+    print(f"\n2. Attempting to import {pkg_name}:")
+    try:
+        from importlib.metadata import version
+        actual_version = version(pkg_name)
+        print(f"   ✅ Found version: {actual_version}")
+        
+        if actual_version != expected_version:
+            print(f"   ❌ VERSION MISMATCH!")
+            print(f"      Expected: {expected_version}")
+            print(f"      Got: {actual_version}")
+    except Exception as e:
+        print(f"   ❌ Import failed: {e}")
+    
+    # Check for bubble
+    from pathlib import Path
+    site_packages = Path(sys.prefix) / 'lib' / f'python{sys.version_info.major}.{sys.version_info.minor}' / 'site-packages'
+    bubble_path = site_packages / '.omnipkg_versions' / f'{pkg_name}-{expected_version}'
+    
+    print(f"\n3. Bubble check:")
+    print(f"   Path: {bubble_path}")
+    print(f"   Exists: {bubble_path.exists()}")
+    
+    if bubble_path.exists():
+        print(f"   Contents: {list(bubble_path.glob('*'))[:5]}")
+    
+    print("\n" + "=" * 70)
 
 # ═══════════════════════════════════════════════════════════════
 # 2. WORKER ORCHESTRATOR

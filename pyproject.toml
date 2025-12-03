@@ -39,6 +39,9 @@ classifiers = [
 dependencies = [
     "requests>=2.20",
     "filelock>=3.9",
+    "psutil>=5.9.0",
+    "typer>=0.4.0",
+    "rich>=10.0.0",
     
     # Python 3.7-3.9: Need older packaging + backports
     "packaging>=20.0,<21.0; python_version < '3.8'",

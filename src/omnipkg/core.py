@@ -5519,6 +5519,67 @@ class omnipkg:
         # return the best fallback we found (Main > Nested).
         return fallback_version
 
+    def _scan_and_heal_distributions(self, search_paths: List[Path]) -> List[importlib.metadata.Distribution]:
+        """
+        Scans paths for distributions and performs ON-THE-SPOT healing
+        if metadata is corrupt (missing Name field).
+        """
+        valid_dists = []
+        from importlib.metadata import PathDistribution
+
+        for path in search_paths:
+            if not path.exists():
+                continue
+                
+            # Manually glob for .dist-info folders to catch corrupt ones
+            # that standard importlib.metadata.distributions() would ignore
+            for dist_info in path.glob('*.dist-info'):
+                try:
+                    # 1. Try to load it normally
+                    dist = PathDistribution(dist_info)
+                    
+                    # 2. Check for Corruption (Missing Name)
+                    if not dist.metadata.get('Name'):
+                        raise ValueError("Missing Name field")
+                        
+                    valid_dists.append(dist)
+                    
+                except Exception:
+                    # 🚑 EMERGENCY HEALING 🚑
+                    try:
+                        metadata_file = dist_info / 'METADATA'
+                        if metadata_file.exists():
+                            # Infer name from folder: "rich-13.4.2.dist-info" -> "rich"
+                            folder_name = dist_info.name
+                            if folder_name.endswith('.dist-info'):
+                                folder_name = folder_name[:-10]
+                            
+                            parts = folder_name.rsplit('-', 1)
+                            if len(parts) >= 1:
+                                inferred_name = parts[0]
+                                
+                                # Read corrupted content
+                                content = metadata_file.read_text(encoding='utf-8', errors='ignore')
+                                
+                                # Inject Name if missing
+                                if 'Name:' not in content[:500]:
+                                    safe_print(f"   🔧 HEALING corrupt metadata: {dist_info.name}")
+                                    fixed_content = f"Name: {inferred_name}\n{content}"
+                                    
+                                    # Atomic Write
+                                    temp_file = metadata_file.with_suffix('.tmp')
+                                    temp_file.write_text(fixed_content, encoding='utf-8')
+                                    temp_file.replace(metadata_file)
+                                    
+                                    # Retry Load
+                                    dist = PathDistribution(dist_info)
+                                    if dist.metadata.get('Name'):
+                                        valid_dists.append(dist)
+                    except Exception as e:
+                        # If healing fails, we just skip it to prevent crashing the whole app
+                        pass
+        return valid_dists
+
     def _synchronize_knowledge_base_with_reality(self, verbose: bool = False) -> List[importlib.metadata.Distribution]:
         """
         (UPGRADED - THE REPAIR BOT v7) Now uses resolved paths consistently
@@ -5559,8 +5620,11 @@ class omnipkg:
         
         active_dists_on_disk = {
             canonicalize_name(dist.metadata['Name']): dist.version
+                
             for dist in all_discovered_dists
-            if gatherer._get_install_context(dist)['install_type'] == 'active'
+
+            
+            if dist.metadata.get('Name')  # <--- CRITICAL FIX: Skip if Name is None
         }
         
         # ========================================================================
@@ -5672,7 +5736,7 @@ class omnipkg:
             self._installed_packages_cache = None
 
         # Final verification: Check for any remaining ghost entries at the package level
-        disk_specs = {f"{canonicalize_name(dist.metadata['Name'])}=={dist.version}" for dist in all_discovered_dists}
+        disk_specs = {f"{canonicalize_name(dist.metadata['Name'])}=={dist.version}" for dist in all_discovered_dists if dist.metadata.get('Name')}
         kb_specs = set()
         for pkg_name in all_kb_packages:
             versions = self.cache_client.smembers(f"{self.redis_key_prefix}{pkg_name}:installed_versions")
