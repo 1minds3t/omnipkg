@@ -49,6 +49,20 @@ def smart_tf_patcher():
         """
         A single import hook that understands both TensorFlow and PyTorch.
         """
+        # --- THIS IS THE FIX: Apply warning filters for the entire function scope ---
+        with warnings.catch_warnings():
+            # Filter for the "NumPy module was reloaded" warning
+            warnings.filterwarnings(
+                "ignore",
+                message="The NumPy module was reloaded",
+                category=UserWarning
+            )
+            # Filter for the NumPy 1.x vs 2.x compatibility warning
+            warnings.filterwarnings(
+                "ignore",
+                message="A module that was compiled using NumPy 1.x cannot be run in NumPy 2.+",
+                category=UserWarning
+            )
         # ═══════════════════════════════════════════════════════════
         # torch/numpy SPECIFIC LOGIC (Warning Suppression)
         # ═══════════════════════════════════════════════════════════
@@ -88,7 +102,9 @@ def smart_tf_patcher():
         # ═══════════════════════════════════════════════════════════
         # THE ACTUAL IMPORT
         # ═══════════════════════════════════════════════════════════
-        module = _original_import_func(name, globals, locals, fromlist, level)
+        with warnings.catch_warnings():
+            warnings.filterwarnings('ignore', message='.*NumPy module was reloaded.*')
+            module = _original_import_func(name, globals, locals, fromlist, level)
 
         if is_tf_import and module:
             if not hasattr(builtins, '__omnipkg_tf_loaded_once__'):
@@ -119,14 +135,14 @@ def _create_stable_dtype_mappings():
         import numpy as np
         stable_mappings = {
             'float32': np.float32,
-            'float64': np.float64, 
+            'float64': np.float64,
             'int32': np.int32,
             'int64': np.int64,
             'bool': np.bool_,
         }
         safe_print("   📊 Stable dtype mappings anchored")
     except ImportError:
-        pass
+        safe_print("   - [OMNIPKG-UNIFIED] NumPy not found. Skipping reality anchor for dtypes.")
     return stable_mappings
 
 def _create_memory_layout_guides():
