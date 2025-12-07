@@ -46,18 +46,21 @@ def smart_tf_patcher():
     _install_cpp_reality_anchors()
 
     def genius_import(name, globals=None, locals=None, fromlist=(), level=0):
-        """
-        A single import hook that understands both TensorFlow and PyTorch.
-        """
-        # --- THIS IS THE FIX: Apply warning filters for the entire function scope ---
+    """A patched import function to handle dynamic package isolation."""
+    # RECURSION GUARD: If the hook is already running on this thread,
+    # use the original import function immediately to prevent an infinite loop.
+    if getattr(_genius_import_running, 'now', False):
+        return _original_import_func(name, globals, locals, fromlist, level)
+
+    _genius_import_running.now = True
+    try:
+        # The existing logic for suppressing warnings will now work safely.
         with warnings.catch_warnings():
-            # Filter for the "NumPy module was reloaded" warning
             warnings.filterwarnings(
                 "ignore",
                 message="The NumPy module was reloaded",
                 category=UserWarning
             )
-            # Filter for the NumPy 1.x vs 2.x compatibility warning
             warnings.filterwarnings(
                 "ignore",
                 message="A module that was compiled using NumPy 1.x cannot be run in NumPy 2.+",

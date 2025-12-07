@@ -3093,190 +3093,194 @@ def chaos_test_21_gpu_resident_pipeline():
     print("║  PyTorch 1.13.1 with NATIVE CUDA IPC (True Zero-Copy!)     ║")
     print(f"{'═'*66}\n")
     
-    try:
+    from omnipkg.loader import omnipkgLoader
+    
+    print("📍 PHASE 1: Configuration")
+    print("─" * 60)
+    
+    TORCH_VERSION = "torch==1.13.1+cu116"
+    
+    print(f"   PyTorch Version: {TORCH_VERSION}")
+    print(f"   🔥 Loading client in {TORCH_VERSION} context...")
+    
+    # ═══════════════════════════════════════════════════════════
+    # CRITICAL FIX: Keep entire test inside loader context!
+    # ═══════════════════════════════════════════════════════════
+    with omnipkgLoader(TORCH_VERSION, isolation_mode='overlay'):
         import torch
-    except ImportError:
-        print("❌ PyTorch not available - skipping test")
-        return {'success': False, 'reason': 'No PyTorch'}
-    
-    if not torch.cuda.is_available():
-        print("❌ CUDA not available - skipping test")
-        return {'success': False, 'reason': 'No CUDA'}
-    
-    from omnipkg.isolation.worker_daemon import DaemonClient
-    
-    # ═══════════════════════════════════════════════════════════
-    # PHASE 1: Prioritize PyTorch 1.13 for Native IPC
-    # ═══════════════════════════════════════════════════════════
-    
-    print("📍 PHASE 1: Checking PyTorch Versions")
-    print("─" * 60)
-    
-    # Check available versions
-    try:
-        from omnipkg.core import OmnipkgCore
-        core = OmnipkgCore()
         
-        torch_versions = []
-        for pkg_name, versions in core.kb.packages.items():
-            if pkg_name == 'torch':
-                for ver_str in versions.keys():
-                    torch_versions.append(ver_str)
+        if not torch.cuda.is_available():
+            print("❌ CUDA not available - skipping test")
+            return {'success': False, 'reason': 'No CUDA'}
         
-        print(f"Found {len(torch_versions)} PyTorch versions:")
-        for v in torch_versions:
-            marker = " 🔥" if v.startswith('1.13') else ""
-            print(f"   - torch=={v}{marker}")
-    except Exception as e:
-        print(f"   ⚠️  Could not query knowledge base: {e}")
-        torch_versions = ['1.13.1+cu116', '2.0.1+cu118', '2.2.0+cu121']
-    
-    # ═══════════════════════════════════════════════════════════
-    # PHASE 2: Configure Pipeline with PyTorch 1.13 First
-    # ═══════════════════════════════════════════════════════════
-    
-    print(f"\n📍 PHASE 2: Configuring Pipeline")
-    print("─" * 60)
-    
-    # PRIORITIZE PyTorch 1.13 for stage 1 (native IPC!)
-    stage_specs = []
-    
-    # Find PyTorch 1.13 for native IPC
-    torch_1x = next((v for v in torch_versions if v.startswith('1.13')), None)
-    
-    if torch_1x:
-        stage_specs.append(('🔥 Stage 1 (ReLU)', f'torch=={torch_1x}', 'relu', 'NATIVE IPC'))
-        print(f"   ✅ Using torch=={torch_1x} (NATIVE CUDA IPC!)")
-    else:
-        stage_specs.append(('🔴 Stage 1 (ReLU)', 'torch==2.2.0+cu121', 'relu', 'HYBRID'))
-        print(f"   ⚠️  PyTorch 1.13 not available, using hybrid mode")
-    
-    # Add other stages
-    if len(torch_versions) >= 2:
-        other_versions = [v for v in torch_versions if not v.startswith('1.13')][:2]
-        stage_specs.append(('🟢 Stage 2 (Sigmoid)', f'torch=={other_versions[0]}', 'sigmoid', 'HYBRID'))
-        if len(other_versions) > 1:
-            stage_specs.append(('🔵 Stage 3 (Tanh)', f'torch=={other_versions[1]}', 'tanh', 'HYBRID'))
-    
-    print(f"\n   Pipeline Configuration:")
-    for name, spec, op, mode in stage_specs:
-        print(f"   {name}: {spec} ({mode})")
-    
-    # ═══════════════════════════════════════════════════════════
-    # PHASE 3: Execute with True Zero-Copy on Stage 1
-    # ═══════════════════════════════════════════════════════════
-    
-    print(f"\n📍 PHASE 3: Executing GPU Pipeline")
-    print("─" * 60)
-    
-    client = DaemonClient()
-    
-    # Create test tensor
-    device = torch.device("cuda:0")
-    pipeline_data = torch.randn(500, 250, device=device, dtype=torch.float32)
-    
-    print(f"\n📦 Input: {pipeline_data.shape} tensor on {device}")
-    print(f"📊 Size: {pipeline_data.numel() * 4 / 1024 / 1024:.2f} MB")
-    print(f"🔢 Checksum: {pipeline_data.sum().item():.2f}")
-    
-    stage_codes = {
-        'relu': "tensor_out[:] = torch.relu(tensor_in)",
-        'sigmoid': "tensor_out[:] = torch.sigmoid(tensor_in)",
-        'tanh': "tensor_out[:] = torch.tanh(tensor_in)"
-    }
-    
-    stage_times = []
-    current_tensor = pipeline_data
-    native_ipc_used = False
-    
-    for i, (name, spec, operation, mode) in enumerate(stage_specs):
-        print(f"\n{name}: Processing...")
-        print(f"   PyTorch: {spec}")
-        print(f"   Mode: {mode}")
+        print(f"   ✅ Client PyTorch: {torch.__version__}")
         
-        stage_start = time.perf_counter()
+        from omnipkg.isolation.worker_daemon import DaemonClient
+        
+        # ═══════════════════════════════════════════════════════════
+        # Check available versions
+        # ═══════════════════════════════════════════════════════════
+        
+        print("\n📍 PHASE 1: Checking PyTorch Versions")
+        print("─" * 60)
         
         try:
-            result_tensor, response = client.execute_cuda_ipc(
-                spec,
-                stage_codes[operation],
-                input_tensor=current_tensor,
-                output_shape=current_tensor.shape,
-                output_dtype='float32',
-                python_exe=sys.executable
-            )
+            from omnipkg.core import OmnipkgCore
+            core = OmnipkgCore()
             
-            stage_time = (time.perf_counter() - stage_start) * 1000
-            stage_times.append(stage_time)
+            torch_versions = []
+            for pkg_name, versions in core.kb.packages.items():
+                if pkg_name == 'torch':
+                    for ver_str in versions.keys():
+                        torch_versions.append(ver_str)
             
-            # Check if native IPC was actually used
-            if 'output_ipc' in response and response['output_ipc'].get('method') == 'native_1x':
-                native_ipc_used = True
-                print(f"✅ {name} complete: {stage_time:.3f}ms (NATIVE CUDA IPC! 🔥)")
-            else:
-                print(f"✅ {name} complete: {stage_time:.3f}ms (hybrid)")
-            
-            print(f"   Checksum: {result_tensor.sum().item():.2f}")
-            current_tensor = result_tensor
-            
+            print(f"Found {len(torch_versions)} PyTorch versions:")
+            for v in torch_versions:
+                marker = " 🔥" if v.startswith('1.13') else ""
+                print(f"   - torch=={v}{marker}")
         except Exception as e:
-            print(f"❌ {name} failed: {e}")
-            import traceback
-            traceback.print_exc()
-            return {'success': False, 'error': str(e)}
-    
-    # ═══════════════════════════════════════════════════════════
-    # RESULTS
-    # ═══════════════════════════════════════════════════════════
-    
-    total_time = sum(stage_times)
-    avg_time = total_time / len(stage_times)
-    
-    print(f"\n{'═'*66}")
-    print("📊 GPU-RESIDENT PIPELINE RESULTS")
-    print(f"{'═'*66}\n")
-    
-    for i, (name, spec, _, mode) in enumerate(stage_specs):
-        icon = "🔥" if mode == "NATIVE IPC" else "🔄"
-        print(f"{icon} {name:<40} {stage_times[i]:>8.3f}ms")
-        print(f"  └─ {spec:<38}")
-    
-    print("─" * 66)
-    print(f"{'Total Pipeline:':<40} {total_time:>8.3f}ms")
-    print(f"{'Per-Stage Average:':<40} {avg_time:>8.3f}ms")
-    
-    print(f"\n✅ Output tensor still on GPU: {current_tensor.device}")
-    print(f"🔢 Final checksum: {current_tensor.sum().item():.2f}")
-    
-    if native_ipc_used:
-        print(f"\n🏆 NATIVE CUDA IPC USED! TRUE ZERO-COPY ACHIEVED!")
-        print(f"   📊 Stage 1 had ZERO PCIe transfers")
-        print(f"   💡 Expected speedup: 5-10x on stage 1 vs hybrid")
-    else:
-        print(f"\n⚠️  Native CUDA IPC not available")
-        print(f"   💡 Install torch==1.13.1+cu116 for true zero-copy")
-    
-    print(f"\n💡 PERFORMANCE:")
-    print(f"   CPU SHM Pipeline (Test 17): ~17ms")
-    print(f"   GPU Hybrid (Test 20): ~13ms")
-    print(f"   This test: {total_time:.1f}ms")
-    
-    if native_ipc_used and total_time < 10:
-        speedup = 17 / total_time
-        print(f"   🚀 {speedup:.1f}x FASTER than CPU!")
-    
-    return {
-        'success': True,
-        'total_time_ms': total_time,
-        'native_ipc_used': native_ipc_used,
-        'avg_stage_ms': avg_time
-    }
+            print(f"   ⚠️  Could not query knowledge base: {e}")
+            torch_versions = ['1.13.1+cu116', '2.0.1+cu118', '2.2.0+cu121']
+        
+        # ═══════════════════════════════════════════════════════════
+        # PHASE 2: Configure Pipeline
+        # ═══════════════════════════════════════════════════════════
+        
+        print(f"\n📍 PHASE 2: Configuring Pipeline")
+        print("─" * 60)
+        print(f"📍 CLIENT PyTorch version: {torch.__version__}")
+        
+        stage_specs = []
+        
+        # Find PyTorch 1.13 for native IPC
+        torch_1x = next((v for v in torch_versions if v.startswith('1.13')), None)
+        
+        if torch_1x:
+            stage_specs.append(('🔥 Stage 1 (ReLU)', f'torch=={torch_1x}', 'relu', 'NATIVE IPC'))
+            print(f"   ✅ Using torch=={torch_1x} (NATIVE CUDA IPC!)")
+        else:
+            stage_specs.append(('🔴 Stage 1 (ReLU)', 'torch==2.2.0+cu121', 'relu', 'HYBRID'))
+            print(f"   ⚠️  PyTorch 1.13 not available, using hybrid mode")
+        
+        # Add other stages
+        if len(torch_versions) >= 2:
+            other_versions = [v for v in torch_versions if not v.startswith('1.13')][:2]
+            stage_specs.append(('🟢 Stage 2 (Sigmoid)', f'torch=={other_versions[0]}', 'sigmoid', 'HYBRID'))
+            if len(other_versions) > 1:
+                stage_specs.append(('🔵 Stage 3 (Tanh)', f'torch=={other_versions[1]}', 'tanh', 'HYBRID'))
+        
+        print(f"\n   Pipeline Configuration:")
+        for name, spec, op, mode in stage_specs:
+            print(f"   {name}: {spec} ({mode})")
+        
+        # ═══════════════════════════════════════════════════════════
+        # PHASE 3: Execute Pipeline
+        # ═══════════════════════════════════════════════════════════
+        
+        print(f"\n📍 PHASE 3: Executing GPU Pipeline")
+        print("─" * 60)
+        
+        client = DaemonClient()
+        
+        # Create test tensor
+        device = torch.device("cuda:0")
+        pipeline_data = torch.randn(500, 250, device=device, dtype=torch.float32)
+        
+        print(f"\n📦 Input: {pipeline_data.shape} tensor on {device}")
+        print(f"📊 Size: {pipeline_data.numel() * 4 / 1024 / 1024:.2f} MB")
+        print(f"🔢 Checksum: {pipeline_data.sum().item():.2f}")
+        
+        stage_codes = {
+            'relu': "tensor_out[:] = torch.relu(tensor_in)",
+            'sigmoid': "tensor_out[:] = torch.sigmoid(tensor_in)",
+            'tanh': "tensor_out[:] = torch.tanh(tensor_in)"
+        }
+        
+        stage_times = []
+        current_tensor = pipeline_data
+        native_ipc_used = False
+        
+        for i, (name, spec, operation, mode) in enumerate(stage_specs):
+            print(f"\n{name}: Processing...")
+            print(f"   PyTorch: {spec}")
+            print(f"   Mode: {mode}")
+            
+            stage_start = time.perf_counter()
+            
+            try:
+                result_tensor, response = client.execute_cuda_ipc(
+                    spec,
+                    stage_codes[operation],
+                    input_tensor=current_tensor,
+                    output_shape=current_tensor.shape,
+                    output_dtype='float32',
+                    python_exe=sys.executable
+                )
+                
+                stage_time = (time.perf_counter() - stage_start) * 1000
+                stage_times.append(stage_time)
+                
+                actual_method = response.get('cuda_method', 'unknown')
+                if actual_method == 'native_ipc':
+                    native_ipc_used = True
+                    print(f"✅ {name} complete: {stage_time:.3f}ms (NATIVE CUDA IPC! 🔥)")
+                else:
+                    print(f"✅ {name} complete: {stage_time:.3f}ms (hybrid)")
+                
+                print(f"   Checksum: {result_tensor.sum().item():.2f}")
+                current_tensor = result_tensor
+                
+            except Exception as e:
+                print(f"❌ {name} failed: {e}")
+                import traceback
+                traceback.print_exc()
+                return {'success': False, 'error': str(e)}
+        
+        # ═══════════════════════════════════════════════════════════
+        # RESULTS (still inside loader context)
+        # ═══════════════════════════════════════════════════════════
+        
+        total_time = sum(stage_times)
+        avg_time = total_time / len(stage_times)
+        
+        print(f"\n{'═'*66}")
+        print("📊 GPU-RESIDENT PIPELINE RESULTS")
+        print(f"{'═'*66}\n")
+        
+        for i, (name, spec, _, mode) in enumerate(stage_specs):
+            icon = "🔥" if mode == "NATIVE IPC" else "🔄"
+            print(f"{icon} {name:<40} {stage_times[i]:>8.3f}ms")
+            print(f"  └─ {spec:<38}")
+        
+        print("─" * 66)
+        print(f"{'Total Pipeline:':<40} {total_time:>8.3f}ms")
+        print(f"{'Per-Stage Average:':<40} {avg_time:>8.3f}ms")
+        
+        print(f"\n✅ Output tensor still on GPU: {current_tensor.device}")
+        print(f"🔢 Final checksum: {current_tensor.sum().item():.2f}")
+        
+        if native_ipc_used:
+            print(f"\n🏆 NATIVE CUDA IPC USED! TRUE ZERO-COPY ACHIEVED!")
+            print(f"   📊 Stage 1 had ZERO PCIe transfers")
+        else:
+            print(f"\n⚠️  Native CUDA IPC not available")
+            print(f"   💡 Install torch==1.13.1+cu116 for true zero-copy")
+        
+        print(f"\n💡 PERFORMANCE:")
+        print(f"   CPU SHM Pipeline (Test 17): ~17ms")
+        print(f"   GPU Hybrid (Test 20): ~13ms")
+        print(f"   This test: {total_time:.1f}ms")
+        
+        return {
+            'success': True,
+            'total_time_ms': total_time,
+            'native_ipc_used': native_ipc_used,
+            'avg_stage_ms': avg_time
+        }
 
 def chaos_test_22_triple_native_ipc():
     """
     TEST 22: 🔥 TRIPLE PYTORCH 1.13 NATIVE IPC PIPELINE
-    Pass tensor between 3 DIFFERENT WORKERS of the SAME PyTorch version.
-    This isolates pure IPC performance without version-switching overhead.
     """
     import time
     import sys
@@ -3286,17 +3290,32 @@ def chaos_test_22_triple_native_ipc():
     print("║  3 Workers × Same Version × True Zero-Copy = MAX SPEED!   ║")
     print(f"{'═'*66}\n")
     
-    try:
+    # ═══════════════════════════════════════════════════════════
+    # CRITICAL: Run client in PyTorch 1.13.1 context!
+    # ═══════════════════════════════════════════════════════════
+    from omnipkg.loader import omnipkgLoader
+    
+    print("📍 PHASE 1: Configuration")
+    print("─" * 60)
+    
+    TORCH_VERSION = "torch==1.13.1+cu116"
+    
+    print(f"   PyTorch Version: {TORCH_VERSION}")
+    print(f"   Pipeline: 3 workers × same version")
+    print(f"   Expected: TRUE zero-copy (no version overhead)")
+    print(f"   🔥 Loading client in {TORCH_VERSION} context...")
+    
+    # Load PyTorch 1.13.1 in the CLIENT so it can create native IPC handles
+    with omnipkgLoader(TORCH_VERSION, isolation_mode='overlay'):
         import torch
-    except ImportError:
-        print("❌ PyTorch not available - skipping test")
-        return {'success': False, 'reason': 'No PyTorch'}
-    
-    if not torch.cuda.is_available():
-        print("❌ CUDA not available - skipping test")
-        return {'success': False, 'reason': 'No CUDA'}
-    
-    from omnipkg.isolation.worker_daemon import DaemonClient
+        
+        if not torch.cuda.is_available():
+            print("❌ CUDA not available - skipping test")
+            return {'success': False, 'reason': 'No CUDA'}
+        
+        print(f"   ✅ Client PyTorch: {torch.__version__}")
+        
+        from omnipkg.isolation.worker_daemon import DaemonClient
     
     # ═══════════════════════════════════════════════════════════
     # CONFIGURATION: Use PyTorch 1.13.1 for all 3 stages
@@ -3377,6 +3396,7 @@ def chaos_test_22_triple_native_ipc():
     
     print(f"\n🚀 Executing HOT pipeline...")
     
+    # PHASE 3: Remove the .clone()
     for i, (name, spec, operation) in enumerate(stage_specs):
         stage_start = time.perf_counter()
         
@@ -3393,15 +3413,15 @@ def chaos_test_22_triple_native_ipc():
             stage_time = (time.perf_counter() - stage_start) * 1000
             stage_times.append(stage_time)
             
-            # Track IPC method
             method = response.get('cuda_method', 'unknown')
             ipc_method_used.append(method)
             
-            if method == 'native_1x':
+            if method == 'native_ipc':
                 print(f"   🔥 {name}: {stage_time:.3f}ms (NATIVE IPC)")
             else:
                 print(f"   🔄 {name}: {stage_time:.3f}ms (hybrid)")
             
+            # DON'T CLONE - just pass the result directly
             current_tensor = result_tensor
             
         except Exception as e:
@@ -3419,7 +3439,7 @@ def chaos_test_22_triple_native_ipc():
     
     for run in range(10):
         run_start = time.perf_counter()
-        current_tensor = pipeline_data
+        current_tensor = pipeline_data  # DON'T CLONE - use original
         
         for i, (name, spec, operation) in enumerate(stage_specs):
             try:
@@ -3431,7 +3451,7 @@ def chaos_test_22_triple_native_ipc():
                     output_dtype='float32',
                     python_exe=sys.executable
                 )
-                current_tensor = result_tensor
+                current_tensor = result_tensor  # DON'T CLONE
             except:
                 break
         
@@ -3456,7 +3476,7 @@ def chaos_test_22_triple_native_ipc():
     
     print("🔥 FIRST RUN (with warmup):")
     for i, (name, spec, _) in enumerate(stage_specs):
-        method_icon = "🔥" if ipc_method_used[i] == "native_1x" else "🔄"
+        method_icon = "🔥" if ipc_method_used[i] == "native_ipc" else "🔄"
         print(f"{method_icon} {name:<40} {stage_times[i]:>8.3f}ms")
     
     print("─" * 66)
@@ -3473,7 +3493,7 @@ def chaos_test_22_triple_native_ipc():
     print(f"🔢 Checksum: {current_tensor.sum().item():.2f}")
     
     # Check if native IPC was actually used
-    native_count = sum(1 for m in ipc_method_used if m == 'native_1x')
+    native_count = sum(1 for m in ipc_method_used if m == 'native_ipc')
     
     if native_count == 3:
         print(f"\n🏆 PERFECT! ALL 3 STAGES USED NATIVE CUDA IPC!")
