@@ -25,7 +25,8 @@ from omnipkg.isolation.worker_daemon import (
     DaemonClient, 
     cli_start, 
     cli_stop, 
-    cli_status
+    cli_status,
+        cli_logs  # <--- NEW IMPORT
 )
 project_root = Path(__file__).resolve().parent.parent
 TESTS_DIR = Path(__file__).parent.parent / 'tests'
@@ -464,6 +465,8 @@ def create_parser():
     install_parser.add_argument('-r', '--requirement', help=_('Install from requirements file'), metavar='FILE')
     install_parser.add_argument('--force', '--force-reinstall', dest='force_reinstall', action='store_true', 
                             help=_('Force reinstall even if already satisfied'))
+    install_parser.add_argument('--index-url', help=_('Base URL of the Python Package Index'))
+    install_parser.add_argument('--extra-index-url', help=_('Extra URLs of package indexes to use'))
     install_with_deps_parser = subparsers.add_parser('install-with-deps', help=_('Install a package with specific dependency versions'))
     install_with_deps_parser.add_argument('package', help=_('Package to install (e.g., "tensorflow==2.13.0")'))
     install_with_deps_parser.add_argument('--dependency', action='append', help=_('Dependency with version (e.g., "numpy==1.24.3")'), default=[])
@@ -549,6 +552,11 @@ def create_parser():
     daemon_start = daemon_subparsers.add_parser('start', help=_('Start the background daemon'))
     daemon_stop = daemon_subparsers.add_parser('stop', help=_('Stop the daemon'))
     daemon_status = daemon_subparsers.add_parser('status', help=_('Check daemon status and memory usage'))
+    
+    # --- ADD THIS BLOCK ---
+    daemon_logs = daemon_subparsers.add_parser('logs', help=_('View or follow daemon logs'))
+    daemon_logs.add_argument('-f', '--follow', action='store_true', help=_('Output appended data as the file grows'))
+    daemon_logs.add_argument('-n', '--lines', type=int, default=50, help=_('Output the last N lines'))
     prune_parser = subparsers.add_parser('prune', help=_('Clean up old, bubbled package versions'))
     prune_parser.add_argument('package', help=_('Package whose bubbles to prune'))
     prune_parser.add_argument('--keep-latest', type=int, metavar='N', help=_('Keep N most recent bubbled versions'))
@@ -912,7 +920,10 @@ def main():
                 if regular_packages:
                     exit_code = pkg_instance.smart_install(
                         regular_packages,
-                        force_reinstall=args.force_reinstall
+                        force_reinstall=args.force_reinstall,
+                        # PASS THE NEW FLAGS HERE
+                        index_url=args.index_url,
+                        extra_index_url=args.extra_index_url
                     )
                 else:
                     exit_code = 0  # Only Python installs, and they succeeded
@@ -990,6 +1001,8 @@ def main():
                 cli_stop()
             elif args.daemon_command == 'status':
                 cli_status()
+            elif args.daemon_command == 'logs':
+                cli_logs(follow=args.follow, tail_lines=args.lines)
             return 
         elif args.command == 'run':
             # ✅ Fix: Pass the pkg_instance we already initialized!
