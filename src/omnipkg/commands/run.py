@@ -175,7 +175,7 @@ def ensure_jax_jaxlib_pairing(stderr: str, healing_plan: set):
 def analyze_runtime_failure_and_heal(stderr: str, cmd_args: list, original_script_path_for_analysis: Path, 
                                     config_manager: ConfigManager, is_context_aware_run: bool, 
                                     cli_owner_spec: str = None, omnipkg_instance=None, verbose=False, 
-                                    retry_count=0, attempted_fixes=None):
+                                    retry_count=0, attempted_fixes=None, initial_failure_duration_ns=0):
     """
     Analyzes runtime failures and attempts to heal them automatically.
     Tracks attempted fixes to prevent infinite loops.
@@ -193,14 +193,18 @@ def analyze_runtime_failure_and_heal(stderr: str, cmd_args: list, original_scrip
         return 1, None
     
     healing_plan = set()
+    final_specs = []  # FIX: Initialize here to ensure it's always bound.
     
     # Fix 3: Use passed instance
     if not omnipkg_instance:
         omnipkg_instance = OmnipkgCore(config_manager)
 
     if cli_owner_spec:
-        healing_plan.add(cli_owner_spec)
-        safe_print(f"   📦 Added CLI owner package: {cli_owner_spec}")
+            command = cmd_args[0] if cmd_args else None
+            if command and final_specs:
+                safe_print(f"♻️  Loading: {final_specs}")
+                return run_cli_with_healing_wrapper(final_specs, command, cmd_args[1:], config_manager,
+                                                    initial_failure_duration_ns=initial_failure_duration_ns)
     
     # ============================================================================
     # NEW PRIORITY LISTENERS - Check omnipkg-specific issues first
@@ -557,7 +561,7 @@ def analyze_runtime_failure_and_heal(stderr: str, cmd_args: list, original_scrip
         
         attempted_fixes.add(specs_tuple)
         
-        final_specs = []
+        # REMOVED: final_specs = [] -> This is now initialized at the function top.
         original_strategy = omnipkg_instance.config.get('install_strategy')
         omnipkg_instance.config['install_strategy'] = 'stable-main'
         
@@ -1473,11 +1477,14 @@ def heal_with_bubble(required_specs, original_script_path, original_script_args,
     # ═══════════════════════════════════════════════════════════
     safe_print(_("\n✅ Bubbles ready. Activating: {}").format(final_specs))
     
+    global _initial_run_time_ns
+
     return run_with_healing_wrapper(
         final_specs, 
         original_script_path, 
         original_script_args, 
         config_manager, 
+        initial_failure_duration_ns=_initial_run_time_ns or 0, # Pass it here
         isolation_mode='overlay', 
         verbose=verbose
     )
@@ -1663,7 +1670,8 @@ def _handle_cli_execution(command, args, config_manager, omnipkg_core):
             cli_owner_spec=owner_spec,
             omnipkg_instance=omnipkg_core,  # ✅ Pass the omnipkg instance
             verbose=False,
-            attempted_fixes=set()  # ✅ Initialize with empty set
+            attempted_fixes=set(),  # ✅ Initialize with empty set
+            initial_failure_duration_ns=initial_failure_duration_ns
         )
         
         # ✅ FIX: If healing failed, show the user the error output
@@ -1886,10 +1894,15 @@ def _run_script_with_healing(script_path, script_args, config_manager, original_
 
 def _print_performance_comparison(initial_ns, heal_stats, runner_name="UV"):
     """Prints the final performance summary comparing Runner failure time to omnipkg execution time."""
-    if not initial_ns or not heal_stats:
+    if not heal_stats:
         return
+
+    initial_ns_from_stats = heal_stats.get('initial_failure_duration_ns', initial_ns)
+    if not initial_ns_from_stats:
+        return
+
+    failure_time_ms = initial_ns_from_stats / 1_000_000
         
-    failure_time_ms = initial_ns / 1_000_000
     
     # Use 'activation_time_ns' for bubbles.
     if heal_stats.get('type') == 'package_install':
@@ -1973,7 +1986,8 @@ def _detect_shell_name():
         
     return "System"
  
-def run_with_healing_wrapper(required_specs, original_script_path, original_script_args, config_manager, isolation_mode='strict', verbose=False):
+def run_with_healing_wrapper(required_specs, original_script_path, original_script_args, config_manager, 
+                             initial_failure_duration_ns, isolation_mode='strict', verbose=False):
     """
     Generates and executes the temporary wrapper script. This version creates a
     robust sys.path in the subprocess, enabling it to find both the omnipkg
@@ -2217,16 +2231,19 @@ finally:
         last_stats = None
         
         for loader in loader_instances:
+            if loader is None:
+                continue
+            
             stats = loader.get_performance_stats()
             if stats:
-                # Sum up the setup costs of every layer
                 total_activation_ns += stats.get('activation_time_ns', 0)
                 last_stats = stats
         
         if last_stats:
-            # Report the cumulative time to the parent process
             last_stats['activation_time_ns'] = total_activation_ns
-            safe_print(f"OMNIPKG_STATS_JSON:{{json.dumps(last_stats)}}", flush=True)
+            # ADD THE INITIAL FAILURE TIME TO THE STATS
+            last_stats['initial_failure_duration_ns'] = {initial_failure_duration_ns}
+            print(f"OMNIPKG_STATS_JSON:{{json.dumps(last_stats)}}", flush=True)
 
 safe_print('-' * 60)
 safe_print(_("✅ Script completed successfully inside omnipkg bubble."))
@@ -2240,7 +2257,8 @@ safe_print(_("✅ Script completed successfully inside omnipkg bubble."))
         additional_paths_repr=repr(site_packages_paths),
         config_json=json.dumps(config_manager.config),
         required_specs_repr=repr(required_specs),
-        FULL_LOADER_BLOCK_PLACEHOLDER=full_loader_block
+        FULL_LOADER_BLOCK_PLACEHOLDER=full_loader_block,
+        initial_failure_duration_ns=initial_failure_duration_ns
     )
 
     temp_script_path = None
@@ -2395,7 +2413,7 @@ def execute_run_command(cmd_args: list, config_manager: ConfigManager, verbose: 
         safe_print(_("❌ Error: Target '{}' is neither a valid script file nor a recognized command.").format(target))
         return 1
 
-def run_cli_with_healing_wrapper(required_specs, command, command_args, config_manager):
+def run_cli_with_healing_wrapper(required_specs, command, command_args, config_manager, initial_failure_duration_ns=0):
     """
     Like run_with_healing_wrapper, but for CLI binaries instead of Python scripts.
     Uses the SAME robust nested loader logic.
@@ -2521,6 +2539,8 @@ finally:
         last_stats = None
         
         for loader in loader_instances:
+            if loader is None:
+                continue
             stats = loader.get_performance_stats()
             if stats:
                 total_activation_ns += stats.get('activation_time_ns', 0)
@@ -2528,6 +2548,7 @@ finally:
         
         if last_stats:
             last_stats['activation_time_ns'] = total_activation_ns
+            last_stats['initial_failure_duration_ns'] = {initial_failure_duration_ns}
             safe_print(f"OMNIPKG_STATS_JSON:{{json.dumps(last_stats)}}", flush=True)
 
 safe_print('-' * 60)
@@ -2568,6 +2589,8 @@ safe_print("✅ CLI command completed successfully inside omnipkg bubble.")
         if temp_script_path and os.path.exists(temp_script_path):
             os.unlink(temp_script_path)
             
+    
+    
 def _run_script_logic(source_script_path: Path, script_args: list, config_manager: ConfigManager, verbose: bool = False, omnipkg_core=None):
     """Main script execution logic with robust interactive handling."""
     if not omnipkg_core:
@@ -2600,34 +2623,27 @@ def _run_script_logic(source_script_path: Path, script_args: list, config_manage
             temp_script.write(final_code)
         
         safe_cmd_args = [str(temp_script_path)] + script_args
+        
+        # Using _() here works now because we don't assign to _ later in the function
         safe_print(_("🔄 Syncing omnipkg context..."))
         sync_context_to_runtime()
         safe_print(_("✅ Context synchronized."))
         
         python_exe = config_manager.config.get('python_executable', sys.executable)
-        safe_print(_("🚀 Running script with uv (forcing current env)..."), flush=True)
         
         # Set environment
         env = os.environ.copy()
         env['PYTHONWARNINGS'] = 'ignore::DeprecationWarning:pkg_resources,ignore::UserWarning:pkg_resources'
         
         initial_cmd = ['uv', 'run', '--no-project', '--python', python_exe, '--'] + safe_cmd_args
+        
+        # =========================================================================
+        # DIRECT EXECUTION (Interactive Friendly)
+        # =========================================================================
+        safe_print(_("🚀 Executing script directly..."))
         start_time_ns = time.perf_counter_ns()
         
-        # =========================================================================
-        # PHASE 1: THE PROBE (Detect Errors vs Interactivity)
-        # =========================================================================
-        
-        # Force the logic to assume interactive/direct mode immediately
-        is_interactive_switch = True
-        test_return_code = 0 
-        full_output = ""
-        
-        safe_print(_("🚀 Executing script directly..."))
-            
-            # =========================================================================
-            # PHASE 2: DIRECT INTERACTIVE MODE
-            # =========================================================================
+        # 1. Run interactively attached to terminal
         direct_process = subprocess.Popen(
             initial_cmd,
             stdin=sys.stdin,
@@ -2640,30 +2656,32 @@ def _run_script_logic(source_script_path: Path, script_args: list, config_manage
         try:
             return_code = direct_process.wait()
             end_time_ns = time.perf_counter_ns()
+            failure_duration_ns = end_time_ns - start_time_ns
             
-            # If it failed interactively, we need to get the logs for the AI healer
+            full_output = ""
+            
+            # 2. If failed, re-run in capture mode (Silent) to get error for Healer
             if return_code != 0:
                 safe_print(f"\n❌ Script exited with code: {return_code}")
                 safe_print("🤖 [AI-INFO] Attempting to capture error log for healing...")
                 
-                # PHASE 3: POST-MORTEM CAPTURE
                 capture_process = subprocess.Popen(
                     initial_cmd,
                     stdout=subprocess.PIPE,
                     stderr=subprocess.STDOUT,
-                    stdin=subprocess.PIPE,
+                    stdin=subprocess.PIPE, # Pipe empty stdin to prevent hangs
                     text=True,
                     encoding='utf-8',
                     cwd=Path.cwd(),
                     env=env
                 )
                 try:
-                    # FIX: Use _ignored instead of _
+                    # FIX: Use _ignored instead of _ to avoid shadowing the global translation function
                     full_output, _ignored = capture_process.communicate(timeout=30)
                 except subprocess.TimeoutExpired:
                     capture_process.kill()
                     full_output = "Error: Script crashed interactively but timed out during error capture."
-                    
+            
         except KeyboardInterrupt:
             safe_print("\n🛑 Process interrupted by user")
             direct_process.terminate()
@@ -2671,14 +2689,9 @@ def _run_script_logic(source_script_path: Path, script_args: list, config_manage
             return 130
 
         # =========================================================================
-        # PHASE 4: ANALYSIS & HEALING (Common path)
+        # ANALYSIS & HEALING
         # =========================================================================
         
-        if not is_interactive_switch:
-             end_time_ns = time.perf_counter_ns()
-             if full_output:
-                 print(full_output, end='') 
-
         # Cleanup output for analysis
         filtered_lines = []
         skip_next = False
@@ -2693,34 +2706,25 @@ def _run_script_logic(source_script_path: Path, script_args: list, config_manage
             filtered_lines.append(line)
         cleaned_output = '\n'.join(filtered_lines)
 
-        # Pytest Detection
-        has_pytest_failure = False
-        if "FAILED" in cleaned_output and ("test session starts" in cleaned_output or "short test summary info" in cleaned_output):
-            has_pytest_failure = True
-            if return_code == 0: return_code = 1 
-
-        # Healable Error Detection
-        has_healable_error = any(re.search(pattern, cleaned_output, re.MULTILINE) for pattern in [
-            r"A module that was compiled using NumPy 1\.x cannot be run in[\s\S]*?NumPy 2\.0",
-            r"numpy\.dtype size changed, may indicate binary incompatibility"
-        ])
-        
-        if return_code == 0 and not has_healable_error:
-            if "test session starts" in cleaned_output and "passed" in cleaned_output.lower():
-                safe_print("\n✅ All tests passed!")
-            else:
-                safe_print("\n✅ Script executed successfully.")
+        # Basic Success Check
+        if return_code == 0:
+            safe_print("\n✅ Script executed successfully.")
             return 0
         
         safe_print("🤖 [AI-INFO] Script execution failed. Analyzing for auto-healing...")
         
+        # Pass the failure duration to the healer so it can display the stats if it succeeds
+        global _initial_run_time_ns
+        _initial_run_time_ns = failure_duration_ns
+
         exit_code, heal_stats = analyze_runtime_failure_and_heal(
             cleaned_output, safe_cmd_args, source_script_path, config_manager, 
             is_context_aware_run=False, omnipkg_instance=omnipkg_core
         )
         
+        # The printing logic is now correctly placed here
         if heal_stats:
-            _print_performance_comparison(end_time_ns - start_time_ns, heal_stats)
+            _print_performance_comparison(_initial_run_time_ns, heal_stats)
         
         return exit_code
         
@@ -2730,3 +2734,5 @@ def _run_script_logic(source_script_path: Path, script_args: list, config_manage
                 temp_script_path.unlink()
             except OSError:
                 pass
+
+  
