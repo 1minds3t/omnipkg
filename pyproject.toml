@@ -104,6 +104,8 @@ Docs = "https://github.com/1minds3t/omnipkg/tree/main/docs"
 [project.scripts]
 omnipkg = "omnipkg.cli:main"
 8pkg = "omnipkg.cli:main"
+OMNIPKG = "omnipkg.cli:main"
+8PKG = "omnipkg.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
