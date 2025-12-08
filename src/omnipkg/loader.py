@@ -37,7 +37,7 @@ from omnipkg.i18n import _
 # 🧠 INSTALL TENSORFLOW PATCHER AT MODULE LOAD (ONCE ONLY)
 # ═══════════════════════════════════════════════════════════
 try:
-    from omnipkg.tf_patcher import smart_tf_patcher
+    from omnipkg.isolation.patchers import smart_tf_patcher
     smart_tf_patcher()
 except ImportError:
     pass  # Patcher not available
@@ -68,6 +68,9 @@ except ImportError:
             raise ImportError("PersistentWorker not available")  # <-- FIXED: Added closing parenthesis
 
 
+import time
+from collections import defaultdict
+
 class omnipkgLoader:
     """
     Activates isolated package environments with optional persistent worker pool.
@@ -86,6 +89,8 @@ class omnipkgLoader:
     _active_cloaks: Dict[str, int] = {} 
     _global_cloaking_lock = threading.RLock()  # Re-entrant lock
     _nesting_depth = 0
+    _profiling_enabled = True
+    _profile_data = defaultdict(list)
     _nesting_lock = threading.Lock()
     _active_cloaks_lock = threading.RLock() # <-- ADD THIS LINE
     _numpy_lock = threading.Lock() # Protects the history list
@@ -112,7 +117,7 @@ class omnipkgLoader:
     }
 
     def __init__(self, package_spec: str=None, config: dict=None, quiet: bool=False, 
-                 force_activation: bool=False, use_worker_pool: bool = True, 
+                 force_activation: bool=False, use_worker_pool: bool = True, enable_profiling=True,
                  worker_fallback: bool = True, isolation_mode: str='strict'):
         """
         Initializes the loader with enhanced Python version awareness.
@@ -175,6 +180,8 @@ class omnipkgLoader:
         self._my_main_env_package = None 
         self._use_worker_pool = use_worker_pool
         self._cloaked_main_modules = []
+        self._profiling_enabled = enable_profiling or omnipkgLoader._profiling_enabled
+        self._profile_times = {}  # Instance-level timing data
         self._deactivation_end_time = None
         self._total_activation_time_ns = None
         self._total_deactivation_time_ns = None
@@ -184,11 +191,82 @@ class omnipkgLoader:
         if omnipkgLoader._locks_dir is None:
                 omnipkgLoader._locks_dir = self.multiversion_base / '.locks'
                 omnipkgLoader._locks_dir.mkdir(parents=True, exist_ok=True)
+            
+    def _profile_start(self, label):
+        """Start timing a profiled section"""
+        if self._profiling_enabled:
+            self._profile_times[label] = time.perf_counter_ns()
     
+    def _profile_end(self, label, print_now=False):
+        """End timing and optionally print"""
+        if not self._profiling_enabled:
+            return 0
+        
+        if label not in self._profile_times:
+            return 0
+        
+        elapsed_ns = time.perf_counter_ns() - self._profile_times[label]
+        elapsed_ms = elapsed_ns / 1_000_000
+        
+        # Store in class-level data
+        omnipkgLoader._profile_data[label].append(elapsed_ns)
+        
+        if print_now and not self.quiet:
+            safe_print(f"      ⏱️  {label}: {elapsed_ms:.3f}ms")
+        
+        return elapsed_ns
+    
+    @classmethod
+    def enable_profiling(cls):
+        """Enable profiling for all loaders"""
+        cls._profiling_enabled = True
+        cls._profile_data.clear()
+    
+    @classmethod
+    def disable_profiling(cls):
+        """Disable profiling"""
+        cls._profiling_enabled = False
+    
+    @classmethod
+    def print_profile_report(cls):
+        """Print aggregated profiling data"""
+        if not cls._profile_data:
+            print("No profiling data collected")
+            return
+        
+        print("\n" + "="*70)
+        print("📊 OMNIPKG LOADER PROFILING REPORT")
+        print("="*70)
+        
+        # Sort by total time
+        sorted_data = sorted(
+            cls._profile_data.items(),
+            key=lambda x: sum(x[1]),
+            reverse=True
+        )
+        
+        total_time_ns = sum(sum(times) for times in cls._profile_data.values())
+        
+        print(f"\n{'Operation':<35} {'Count':>6} {'Total':>10} {'Avg':>10} {'%':>6}")
+        print("-"*70)
+        
+        for label, times in sorted_data:
+            count = len(times)
+            total_ms = sum(times) / 1_000_000
+            avg_ms = total_ms / count if count > 0 else 0
+            percent = (sum(times) / total_time_ns * 100) if total_time_ns > 0 else 0
+            
+            print(f"{label:<35} {count:>6} {total_ms:>9.2f}ms {avg_ms:>9.2f}ms {percent:>5.1f}%")
+        
+        print("-"*70)
+        print(f"{'TOTAL':<35} {sum(len(t) for t in cls._profile_data.values()):>6} "
+            f"{total_time_ns/1_000_000:>9.2f}ms")
+        print("="*70 + "\n")
+
     # ═══════════════════════════════════════════════════════════
     # WORKER POOL MANAGEMENT
     # ═══════════════════════════════════════════════════════════
-    
+
     @classmethod
     def _get_or_create_worker(cls, package_spec: str, verbose: bool = False):
         """
@@ -316,31 +394,34 @@ class omnipkgLoader:
 
     def stabilize_daemon_state(self):
         """
-        DAEMON HELPER: Immediately uncloaks files using a separate process
-        to ensure the daemon can continue running while releasing filesystem locks.
+        DAEMON HELPER: Immediately uncloaks files using a separate process.
+        CRITICAL: This MUST be part of the locked phase!
         """
+        self._profile_start('daemon_uncloak')
+        
         if not self._cloaked_main_modules and not self._cloaked_bubbles:
+            self._profile_end('daemon_uncloak', print_now=True)
             return
 
         moves = []
-        # Handle Main Env Cloaks: list of (original, cloak, success)
+        # Handle Main Env Cloaks
         for orig, cloak, success in self._cloaked_main_modules:
             if success and cloak.exists():
                 moves.append((str(cloak), str(orig)))
         
-        # Handle Bubble Cloaks: list of (cloak, original)
+        # Handle Bubble Cloaks
         for cloak, orig in self._cloaked_bubbles:
             if cloak.exists():
                 moves.append((str(cloak), str(orig)))
 
         if not moves:
+            self._profile_end('daemon_uncloak', print_now=True)
             return
 
         # Spawn external cleanup process
         try:
             import subprocess
             
-            # Robust one-liner script to move files back
             script = (
                 "import shutil, sys, json, os; "
                 "moves = json.loads(sys.argv[1]); "
@@ -353,21 +434,27 @@ class omnipkgLoader:
                 "  except: pass"
             )
             
+            # CRITICAL: This runs synchronously but in separate process
+            # Prevents daemon from seeing cloaked state
             subprocess.run(
                 [sys.executable, "-c", script, json.dumps(moves)],
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
-                check=False
+                check=False,
+                timeout=5  # Add timeout for safety
             )
             
-            # Clear internal tracking so __exit__ doesn't try to restore them
+            # Clear internal tracking
             self._cloaked_main_modules.clear()
             self._cloaked_bubbles.clear()
             
+            self._profile_end('daemon_uncloak', print_now=True)
+            
             if not self.quiet:
-                safe_print("   👻 Daemon stabilized: Filesystem uncloaked externally.")
+                safe_print(f"   👻 Daemon stabilized: {len(moves)} items uncloaked")
             
         except Exception as e:
+            self._profile_end('daemon_uncloak', print_now=True)
             if not self.quiet:
                 safe_print(f"   ⚠️  Daemon stabilization warning: {e}")
             
@@ -894,6 +981,11 @@ class omnipkgLoader:
                         successful_cloaks.append((original_path, cloak_path, False))
 
             self._cloaked_main_modules.extend(successful_cloaks)
+        
+            # NEW: Signal daemon immediately after cloaking
+            if self._is_daemon_worker() and successful_cloaks:
+                self._signal_daemon_lock_released()
+            
             return len([c for c in successful_cloaks if c[2]])
         
     def nuke_all_cloaks_for_package(self, pkg_name: str):
@@ -1234,7 +1326,30 @@ class omnipkgLoader:
                 return True
         
         return False
-     
+    
+    def _is_daemon_worker(self):
+        """Check if we're running inside a daemon worker"""
+        return os.environ.get("OMNIPKG_IS_DAEMON_WORKER") == "1"
+    
+    def _signal_daemon_lock_released(self):
+        """
+        Signal that filesystem mutations are complete.
+        Daemon can now release the lock and serve other requests.
+        """
+        if not self._is_daemon_worker():
+            return
+        
+        # Write status to stdout (daemon reads this)
+        status = {
+            "event": "LOCK_RELEASED",
+            "package": self._current_package_spec,
+            "pid": os.getpid(),
+            "timestamp": time.time()
+        }
+        
+        # Daemon worker reads stdout for status updates
+        print(f"OMNIPKG_EVENT:{json.dumps(status)}", flush=True)
+
     def _get_daemon_client(self):
         """
         Attempts to connect to the daemon. If not running, starts it.
@@ -1315,15 +1430,42 @@ class omnipkgLoader:
             
             # NOW set the dependencies (after torch removal)
             self._activated_bubble_dependencies = list(bubble_deps.keys())
+
+            # ═══════════════════════════════════════════════════════════
+            # COMPOSITE BUBBLE INJECTION (NVIDIA/CUDA Support)
+            # ═══════════════════════════════════════════════════════════
+            dependency_bubbles = []
+            
+            # Scan dependencies for binary packages that might have their own bubbles
+            for dep_name, dep_version in bubble_deps.items():
+                # Focus on NVIDIA libs, Triton, and critical binary deps
+                if dep_name.startswith('nvidia_') or dep_name in ['triton', 'lit']:
+                    dep_bubble_name = f"{dep_name.replace('_', '-')}-{dep_version}"
+                    dep_bubble_path = self.multiversion_base / dep_bubble_name
+                    
+                    if dep_bubble_path.exists() and dep_bubble_path.is_dir():
+                        dependency_bubbles.append(str(dep_bubble_path))
+                        if not self.quiet:
+                            safe_print(f"      🔗 Found dependency bubble: {dep_bubble_name}")
+            
+            if dependency_bubbles and not self.quiet:
+                safe_print(f"   📦 Activating {len(dependency_bubbles)} dependency bubbles (CUDA/NVIDIA libs)...")
+
             
             # Determine which packages actually conflict
             main_env_versions = {}
             for pkg in self._activated_bubble_dependencies:
-                try:
-                    main_version = get_version(pkg)
-                    main_env_versions[pkg] = main_version
-                except PackageNotFoundError:
-                    pass
+                # Check filesystem directly, not importlib cache
+                pkg_canonical = pkg.lower().replace('-', '_')
+                
+                # Look for ANY version on disk (even if cloaked parent exists)
+                for dist_info in self.site_packages_root.glob(f'{pkg_canonical}-*.dist-info'):
+                    if '_omnipkg_cloaked' not in str(dist_info):
+                        # Extract version from dist-info name
+                        version_match = re.search(rf'{pkg_canonical}-(.+?)\.dist-info', dist_info.name)
+                        if version_match:
+                            main_env_versions[pkg] = version_match.group(1)
+                            break
             
             packages_to_cloak = []
             for pkg, bubble_version in bubble_deps.items():
@@ -1364,6 +1506,8 @@ class omnipkgLoader:
                         sys.path.append(true_site_str)
 
                 sys.path.insert(0, bubble_path_str)
+                for dep_bubble in reversed(dependency_bubbles):
+                    sys.path.insert(1, dep_bubble)
             else:
                 bubble_bin_path = bubble_path / 'bin'
                 if bubble_bin_path.is_dir():
@@ -1377,7 +1521,7 @@ class omnipkgLoader:
                 else:
                     if not self.quiet:
                         safe_print("   - 🔒 Activating in STRICT mode (isolating from main env)")
-                    new_sys_path = [bubble_path_str] + [p for p in self.original_sys_path                                                    if not self._is_main_site_packages(p)]
+                    new_sys_path = [bubble_path_str] + dependency_bubbles + [p for p in self.original_sys_path                                                    if not self._is_main_site_packages(p)]
                     sys.path[:] = new_sys_path
         
                 self._ensure_omnipkg_access_in_bubble(bubble_path_str)
@@ -1420,26 +1564,15 @@ class omnipkgLoader:
                 # ═══════════════════════════════════════════════════════════
                 # Normal validation for other packages
                 # ═══════════════════════════════════════════════════════════
-                import_ok = self._validate_import(pkg_name, max_retries=3)
-                
-                if not import_ok:
-                    if self._is_bubble_healthy_in_subprocess(pkg_name, bubble_path_str):
-                        if not self.quiet:
-                            safe_print(f"   🧪 DIAGNOSIS: Bubble is HEALTHY in a clean process.")
-                        raise ProcessCorruptedException(
-                            f"Memory corrupted by C++ collision while activating {pkg_name}"
-                        )
-                    
-                    if not self.quiet:
-                        safe_print(f"   🏥 Last resort: Force-reinstalling bubble...")
-                    
-                    healed = self._auto_heal_broken_bubble(pkg_name, bubble_path)
-                    
-                    if not healed:
-                        self._panic_restore_cloaks()
-                        raise RuntimeError(f"Bubble activation failed validation: {pkg_name} import broken")
-                
+                if not self.quiet:
+                    safe_print(f"   ✅ Bubble activated (validation skipped for speed)")
+
                 self._activation_successful = True
+
+                # Daemon: Trigger background cleanup NOW (while lock is released)
+                if self._is_daemon_worker():
+                    self.stabilize_daemon_state()
+
                 return self
         
         except Exception as e:
@@ -1448,14 +1581,8 @@ class omnipkgLoader:
             raise
 
     def __enter__(self):
-        """
-        Enhanced activation with automatic worker fallback.
-        
-        Three-tier strategy:
-        1. Try in-process activation (existing logic) - DEFAULT
-        2. Reactive worker fallback on ProcessCorruptedException
-        3. Proactive worker mode (ONLY if explicitly requested)
-        """
+        """Enhanced activation with detailed profiling."""
+        self._profile_start('TOTAL_ACTIVATION')
         self._activation_start_time = time.perf_counter_ns()
         
         if not self._current_package_spec:
@@ -1465,247 +1592,452 @@ class omnipkgLoader:
             pkg_name, requested_version = self._current_package_spec.split('==')
         except ValueError:
             raise ValueError(f"Invalid package_spec format: '{self._current_package_spec}'")
+        
+        # Profile: Nesting check
+        self._profile_start('nesting_check')
         with omnipkgLoader._nesting_lock:
             omnipkgLoader._nesting_depth += 1
             current_depth = omnipkgLoader._nesting_depth
             self._is_nested = (current_depth > 1)
+        self._profile_end('nesting_check')
         
         if not self.quiet and self._is_nested:
             safe_print(f"   🔗 Nested activation (depth={current_depth})")
-        # ═══════════════════════════════════════════════════════════
-        # TIER 1: Try In-Process Activation
-        # ═══════════════════════════════════════════════════════════
+        
+        # Profile: Check system version
+        self._profile_start('check_system_version')
         try:
-            # Check if system version matches
-            try:
-                current_system_version = get_version(pkg_name)
+            current_system_version = get_version(pkg_name)
+            
+            # Check if we're in a bubble
+            is_in_bubble = False
+            if sys.path:
+                first_path = Path(sys.path[0]).resolve()
+                base_resolved = self.multiversion_base.resolve()
+                if str(base_resolved) in str(first_path):
+                    is_in_bubble = True
+            
+            self._profile_end('check_system_version')
+            
+            if current_system_version == requested_version and not self.force_activation:
+                # CASE A: Nested in valid bubble
+                if is_in_bubble:
+                    if not self.quiet:
+                        safe_print(f"   ✅ Nested context detected (v{current_system_version}). Reusing existing bubble.")
+                    
+                    self._activation_successful = True
+                    self._using_main_env = False 
+                    self._activated_bubble_path = sys.path[0]
+                    self._cloaked_bubbles = [] 
+                    self._cloaked_main_modules = []
+                    self._activated_bubble_dependencies = []
+                    
+                    self._activation_end_time = time.perf_counter_ns()
+                    self._total_activation_time_ns = self._activation_end_time - self._activation_start_time
+                    self._profile_end('TOTAL_ACTIVATION')
+                    return self
                 
-                # CRITICAL FIX: Detect if we are effectively running inside a bubble
-                multiversion_base_str = str(self.multiversion_base)
-                is_in_bubble = False
-                if sys.path:
-                    # Check first path entry or if .omnipkg_versions is in path[0]
-                    first_path = Path(sys.path[0]).resolve()
-                    base_resolved = self.multiversion_base.resolve()
-                    if str(base_resolved) in str(first_path):
-                        is_in_bubble = True
+                # CASE B: Main env matches - need isolation
+                if not self.quiet:
+                    safe_print(f"   ✅ Found in main environment. Starting aggressive isolation...")
+                
+                # Profile: Memory purge
+                self._profile_start('memory_purge')
+                self._aggressive_module_cleanup(pkg_name)
+                gc.collect()
+                importlib.invalidate_caches()
+                self._profile_end('memory_purge', print_now=True)
+                
+                # DEBUG
+                safe_print(f"DEBUG sys.path: {sys.path[:3]}")  # First 3 entries
 
-                if current_system_version == requested_version and not self.force_activation:
+                
+                # Profile: Path sanitization
+                self._profile_start('path_sanitization')
+                self._scrub_sys_path_of_bubbles()
+                self._profile_end('path_sanitization', print_now=True)
+                
+                # Profile: Bubble cloaking
+                self._profile_start('bubble_cloaking')
+                conflicting_bubbles = []
+                for item in self.multiversion_base.glob(f'{pkg_name}-*'):
+                    if item.is_dir() and '_omnipkg_cloaked' not in item.name:
+                        conflicting_bubbles.append(item)
+                
+                if conflicting_bubbles:
+                    timestamp = int(time.time() * 1000000)
+                    loader_id = id(self)
+                    cloak_suffix = f".{timestamp}_{loader_id}_omnipkg_cloaked"
                     
-                    # CASE A: We are nested inside a valid bubble. REUSE IT.
-                    if is_in_bubble:
-                        if not self.quiet:
-                            safe_print(f"   ✅ Nested context detected (v{current_system_version}). Reusing existing bubble.")
-                        
-                        self._activation_successful = True
-                        self._using_main_env = False 
-                        self._activated_bubble_path = sys.path[0]
-                        self._cloaked_bubbles = [] 
-                        self._cloaked_main_modules = []
-                        self._activated_bubble_dependencies = []
-                        
-                        self._activation_end_time = time.perf_counter_ns()
-                        self._total_activation_time_ns = self._activation_end_time - self._activation_start_time
-                        return self
-
-                    # CASE B: We are in Main Env (or random env). ISOLATE IT.
-                    if not self.quiet:
-                        safe_print(f"   ✅ Found in main environment. Starting aggressive isolation...")
-
-                    # ---------------------------------------------------------------------
-                    # PRONG 1: TOTAL MEMORY PURGE
-                    # ---------------------------------------------------------------------
-                    if not self.quiet:
-                        safe_print("      - 👻 Step 1: Purging all potentially loaded modules for this package.")
-                    self._aggressive_module_cleanup(pkg_name)
-                    gc.collect()
-                    importlib.invalidate_caches()
-
-                    # ---------------------------------------------------------------------
-                    # PRONG 2: SYSTEMATIC PATH SANITIZATION
-                    # ---------------------------------------------------------------------
-                    self._scrub_sys_path_of_bubbles()
-
-                    # ---------------------------------------------------------------------
-                    # PRONG 3: HARD FILESYSTEM ISOLATION (CLOAK CONFLICTING BUBBLES)
-                    # ---------------------------------------------------------------------
-                    conflicting_bubbles = []
-                    for item in self.multiversion_base.glob(f'{pkg_name}-*'):
-                        if item.is_dir() and '_omnipkg_cloaked' not in item.name:
-                            conflicting_bubbles.append(item)
-
-                    if conflicting_bubbles:
-                        if not self.quiet:
-                            safe_print(f"      - 🔒 Step 3: Cloaking {len(conflicting_bubbles)} conflicting bubble(s) on filesystem.")
-                        
-                        timestamp = int(time.time() * 1000000)
-                        loader_id = id(self)
-                        cloak_suffix = f".{timestamp}_{loader_id}_omnipkg_cloaked"
-                        
-                        for bubble_path in conflicting_bubbles:
-                            try:
-                                cloak_path = bubble_path.with_name(bubble_path.name + cloak_suffix)
-                                shutil.move(str(bubble_path), str(cloak_path))
-                                self._cloaked_bubbles.append((cloak_path, bubble_path))
-                                if not self.quiet:
-                                    safe_print(f"         - Cloaked: {bubble_path.name}")
-                            except Exception as e:
-                                if not self.quiet:
-                                    safe_print(f"         - ⚠️ Failed to cloak {bubble_path.name}: {e}")
-
-                    # ---------------------------------------------------------------------
-                    # FINALIZATION
-                    # ---------------------------------------------------------------------
-                    self._ensure_main_site_packages_in_path()
-                    self._using_main_env = True
-                    self._aggressive_module_cleanup(pkg_name)
-                    
-                    # 🚨 NUCLEAR VERIFICATION 🚨
-                    try:
-                        importlib.invalidate_caches()
-                        new_ver = get_version(pkg_name)
-                        if new_ver != requested_version:
+                    for bubble_path in conflicting_bubbles:
+                        try:
+                            cloak_path = bubble_path.with_name(bubble_path.name + cloak_suffix)
+                            shutil.move(str(bubble_path), str(cloak_path))
+                            self._cloaked_bubbles.append((cloak_path, bubble_path))
+                        except Exception as e:
                             if not self.quiet:
-                                safe_print(f"      ⚠️  Verification Mismatch! Expected {requested_version} got {new_ver}. Retrying...")
-                            self._aggressive_module_cleanup(pkg_name)
-                            if pkg_name in sys.modules: del sys.modules[pkg_name]
-                    except Exception:
-                        pass
-
+                                safe_print(f"         - ⚠️ Failed to cloak {bubble_path.name}: {e}")
+                
+                self._profile_end('bubble_cloaking', print_now=True)
+                
+                self._ensure_main_site_packages_in_path()
+                self._using_main_env = True
+                
+                pkg_canonical = pkg_name.lower().replace('-', '_')
+                omnipkgLoader._active_main_env_packages.add(pkg_canonical)
+                self._my_main_env_package = pkg_canonical
+                
+                self._activation_successful = True
+                self._activation_end_time = time.perf_counter_ns()
+                self._total_activation_time_ns = self._activation_end_time - self._activation_start_time
+                self._profile_end('TOTAL_ACTIVATION', print_now=True)
+                return self
+                
+        except PackageNotFoundError:
+            self._profile_end('check_system_version')
+            pass
+        
+        if not self.quiet:
+            safe_print(_('🚀 Fast-activating {} ...').format(self._current_package_spec))
+        
+        # Profile: Find bubble
+        self._profile_start('find_bubble')
+        bubble_path = self.multiversion_base / f'{pkg_name}-{requested_version}'
+        
+        # Check for cloaked bubbles
+        if not bubble_path.exists():
+            cloaked_bubbles = list(self.multiversion_base.glob(f'{pkg_name}-{requested_version}.*_omnipkg_cloaked'))
+            if cloaked_bubbles:
+                target = sorted(cloaked_bubbles, key=lambda p: str(p), reverse=True)[0]
+                if not self.quiet:
+                    safe_print(f"   🔓 Found CLOAKED bubble {target.name}, restoring...")
+                try:
+                    shutil.move(str(target), str(bubble_path))
+                except Exception as e:
+                    if not self.quiet:
+                        safe_print(f"      ⚠️ Failed to restore cloaked bubble: {e}")
+        
+        self._profile_end('find_bubble', print_now=True)
+        
+        if not self.quiet:
+            safe_print(f"   📂 Searching for bubble: {bubble_path}")
+        
+        # Track numpy version if applicable
+        is_numpy_involved = 'numpy' in self._current_package_spec.lower()
+        
+        # PRIORITY 1: Try BUBBLE first
+        if bubble_path.is_dir():
+            self._profile_start('activate_bubble')
+            if not self.quiet:
+                safe_print(f"   ✅ Bubble found: {bubble_path}")
+            self._using_main_env = False
+            
+            if is_numpy_involved:
+                with omnipkgLoader._numpy_lock:
+                    omnipkgLoader._numpy_version_history.append(requested_version)
+            
+            result = self._activate_bubble(bubble_path, pkg_name)
+            self._profile_end('activate_bubble', print_now=True)
+            self._profile_end('TOTAL_ACTIVATION', print_now=True)
+            return result
+        
+        # PRIORITY 2: Try MAIN ENV
+        self._profile_start('check_main_env')
+        if not self.quiet:
+            safe_print(f"   ⚠️  Bubble not found. Checking main environment...")
+        
+        found_ver, cloaked_path = self._get_version_from_original_env(pkg_name, requested_version)
+        self._profile_end('check_main_env', print_now=True)
+        
+        if found_ver == requested_version:
+            # PATH A: Found CLOAKED version
+            if cloaked_path:
+                self._profile_start('uncloak_main_package')
+                if not self.quiet:
+                    safe_print(f"   🔓 Found CLOAKED version, restoring to main env...")
+                self._uncloak_main_package_if_needed(pkg_name, cloaked_path)
+                
+                found_ver_after, _path_unused = self._get_version_from_original_env(pkg_name, requested_version)
+                self._profile_end('uncloak_main_package', print_now=True)
+                
+                if found_ver_after == requested_version:
+                    if not self.quiet:
+                        safe_print(f"   🔄 Package restored in main env.")
+                    
+                    self._profile_start('cleanup_after_uncloak')
+                    self._aggressive_module_cleanup(pkg_name)
+                    self._scrub_sys_path_of_bubbles()
+                    self._ensure_main_site_packages_in_path()
+                    importlib.invalidate_caches()
+                    self._profile_end('cleanup_after_uncloak', print_now=True)
+                    
+                    self._using_main_env = True
+                    
                     pkg_canonical = pkg_name.lower().replace('-', '_')
                     omnipkgLoader._active_main_env_packages.add(pkg_canonical)
                     self._my_main_env_package = pkg_canonical
-
+                    
+                    if is_numpy_involved:
+                        with omnipkgLoader._numpy_lock:
+                            omnipkgLoader._numpy_version_history.append(requested_version)
+                    
                     self._activation_successful = True
                     self._activation_end_time = time.perf_counter_ns()
                     self._total_activation_time_ns = self._activation_end_time - self._activation_start_time
-                    if not self.quiet:
-                        safe_print(f"   ⚡ Main environment activated in {self._total_activation_time_ns / 1000:,.1f} μs")
-
+                    self._profile_end('TOTAL_ACTIVATION', print_now=True)
                     return self
-            except PackageNotFoundError:
-                pass
-
-            if not self.quiet:
-                safe_print(_('🚀 Fast-activating {} ...').format(self._current_package_spec))
             
-            bubble_path = self.multiversion_base / f'{pkg_name}-{requested_version}'
-            
-            # ═══════════════════════════════════════════════════════════
-            # CRITICAL FIX: CHECK FOR CLOAKED BUBBLES
-            # ═══════════════════════════════════════════════════════════
-            if not bubble_path.exists():
-                # Scan for cloaked versions of this specific bubble
-                cloaked_bubbles = list(self.multiversion_base.glob(f'{pkg_name}-{requested_version}.*_omnipkg_cloaked'))
-                if cloaked_bubbles:
-                    # Restore the most recent cloak
-                    target = sorted(cloaked_bubbles, key=lambda p: str(p), reverse=True)[0]
-                    if not self.quiet:
-                        safe_print(f"   🔓 Found CLOAKED bubble {target.name}, restoring...")
-                    try:
-                        shutil.move(str(target), str(bubble_path))
-                        # We do NOT track this in _cloaked_bubbles because we didn't cloak it.
-                        # The parent loader that cloaked it will skip restoration when it sees it's gone.
-                    except Exception as e:
-                        if not self.quiet:
-                            safe_print(f"      ⚠️ Failed to restore cloaked bubble: {e}")
-
-            if not self.quiet:
-                safe_print(f"   📂 Searching for bubble: {bubble_path}")
-            
-            # Track numpy version if applicable
-            is_numpy_involved = 'numpy' in self._current_package_spec.lower()
-            
-            # PRIORITY 1: Try BUBBLE first
-            if bubble_path.is_dir():
+            # PATH B: Found DIRECTLY in Main Env
+            else:
+                self._profile_start('isolate_main_env')
                 if not self.quiet:
-                    safe_print(f"   ✅ Bubble found: {bubble_path}")
-                self._using_main_env = False
+                    safe_print(f"   ✅ Found in main environment. Enforcing isolation...")
                 
-                if 'numpy' in pkg_name.lower():
-                     with omnipkgLoader._numpy_lock:
+                # Cloak conflicting bubbles
+                conflicting_bubbles = []
+                for item in self.multiversion_base.glob(f'{pkg_name}-*'):
+                    # Skip items that are already cloaked!
+                    if item.is_dir() and '_omnipkg_cloaked' not in item.name:
+                        conflicting_bubbles.append(item)
+                
+                if conflicting_bubbles:
+                    if not self.quiet:
+                        safe_print(f"      - 🔒 Cloaking {len(conflicting_bubbles)} conflicting bubble(s).")
+                    
+                    timestamp = int(time.time() * 1000000)
+                    loader_id = id(self)
+                    cloak_suffix = f".{timestamp}_{loader_id}_omnipkg_cloaked"
+                    
+                    for bubble_path_item in conflicting_bubbles:
+                        try:
+                            cloak_path = bubble_path_item.with_name(bubble_path_item.name + cloak_suffix)
+                            shutil.move(str(bubble_path_item), str(cloak_path))
+                            self._cloaked_bubbles.append((cloak_path, bubble_path_item))
+                            if not self.quiet:
+                                safe_print(f"         - Cloaked: {bubble_path_item.name}")
+                        except Exception as e:
+                            if not self.quiet:
+                                safe_print(f"         - ⚠️ Failed to cloak {bubble_path_item.name}: {e}")
+                
+                # Cleanup
+                if not self.quiet:
+                    safe_print("      - 🧹 Scrubbing sys.path...")
+
+                if not self._is_nested:
+                    self._scrub_sys_path_of_bubbles()
+                else:
+                    safe_print("      - ⏭️  Preserving parent bubble paths")
+
+                # ALWAYS purge the target package (not packages_to_cloak which doesn't exist)
+                if not self.quiet:
+                    safe_print(f"      - 🧹 Purging modules for '{pkg_name}'...")
+                self._aggressive_module_cleanup(pkg_name)
+                
+                # CRITICAL FIX: In nested contexts, only add main env if not already present
+                # This handles both STRICT (needs reconnect) and OVERLAY (already has it) modes
+                main_site_str = str(self.site_packages_root)
+                
+                if main_site_str not in sys.path:
+                    # Main env not in path - need to add it (parent was STRICT mode)
+                    sys.path.append(main_site_str)
+                    if not self.quiet:
+                        safe_print(f"   🔌 Adding main site-packages for {self._current_package_spec}")
+                else:
+                    # Main env already in path - parent was OVERLAY mode or already added it
+                    if not self.quiet:
+                        safe_print(f"   ✅ Main site-packages already accessible")
+                
+                importlib.invalidate_caches()
+                
+                self._profile_end('isolate_main_env', print_now=True)
+                
+                self._using_main_env = True
+                
+                pkg_canonical = pkg_name.lower().replace('-', '_')
+                omnipkgLoader._active_main_env_packages.add(pkg_canonical)
+                self._my_main_env_package = pkg_canonical
+                
+                if is_numpy_involved:
+                    with omnipkgLoader._numpy_lock:
                         omnipkgLoader._numpy_version_history.append(requested_version)
                 
-                return self._activate_bubble(bubble_path, pkg_name)
-            
-            # PRIORITY 2: Try MAIN ENV
+                self._activation_successful = True
+                self._activation_end_time = time.perf_counter_ns()
+                self._total_activation_time_ns = self._activation_end_time - self._activation_start_time
+                self._profile_end('TOTAL_ACTIVATION', print_now=True)
+                return self
+        
+        # PRIORITY 3: AUTO-INSTALL BUBBLE
+        self._profile_start('install_bubble')
+        install_lock = self._get_install_lock(self._current_package_spec)
+        
+        if not self.quiet:
+            safe_print(f"   - 🛡️  Acquiring install lock...")
+        
+        with install_lock:
             if not self.quiet:
-                safe_print(f"   ⚠️  Bubble not found. Checking main environment...")
+                safe_print(f"   - ✅ Install lock acquired.")
             
-            found_ver, cloaked_path = self._get_version_from_original_env(pkg_name, requested_version)
+            # NEW: Release cloak locks during install (they're separate concerns)
+            # This allows other packages to activate while we install
+            if hasattr(self, '_held_cloak_locks'):
+                for lock in self._held_cloak_locks:
+                    try:
+                        lock.release()
+                    except:
+                        pass
             
-            if found_ver == requested_version:
-                # PATH A: Found CLOAKED version
-                if cloaked_path:
-                    if not self.quiet:
-                        safe_print(f"   🔓 Found CLOAKED version, restoring to main env...")
-                    self._uncloak_main_package_if_needed(pkg_name, cloaked_path)
+            # Double-check another thread didn't install it
+            if bubble_path.is_dir():
+                if not self.quiet:
+                    safe_print(f"   - 🏁 Another thread finished the install.")
+                self._using_main_env = False
+                
+                if is_numpy_involved:
+                    with omnipkgLoader._numpy_lock:
+                        omnipkgLoader._numpy_version_history.append(requested_version)
+                
+                self._profile_end('install_bubble', print_now=True)
+                result = self._activate_bubble(bubble_path, pkg_name)
+                self._profile_end('TOTAL_ACTIVATION', print_now=True)
+                return result
+            
+            if not self.quiet:
+                safe_print(f"   - 🔧 Auto-creating bubble for: {self._current_package_spec}")
+            
+            install_success = self._install_bubble_inline(self._current_package_spec)
+            
+            if not install_success:
+                raise RuntimeError(f"Failed to install {self._current_package_spec}")
+            
+            # Post-install check
+            if bubble_path.is_dir():
+                if not self.quiet:
+                    safe_print(f"   - ✅ Bubble created successfully.")
+                self._using_main_env = False
 
-                    found_ver_after, _path_unused = self._get_version_from_original_env(pkg_name, requested_version)
+                if is_numpy_involved:
+                    with omnipkgLoader._numpy_lock:
+                        omnipkgLoader._numpy_version_history.append(requested_version)
 
-                    if found_ver_after == requested_version:
-                        if not self.quiet:
-                            safe_print(f"   🔄 Installer restored {pkg_name} in main env. Switching strategy.")
-                        
-                        # CLEANUP (This was already correct in previous fix)
-                        self._aggressive_module_cleanup(pkg_name)
-                        self._scrub_sys_path_of_bubbles()
-                        self._ensure_main_site_packages_in_path()
-                        importlib.invalidate_caches()
+                # ═══════════════════════════════════════════════════════════
+                # PHASE 1: LOCKED OPERATIONS (Critical section ~1-2ms)
+                # ═══════════════════════════════════════════════════════════
+                self._profile_start('locked_activation')
 
-                        self._using_main_env = True
-                        
-                        pkg_canonical = pkg_name.lower().replace('-', '_')
-                        omnipkgLoader._active_main_env_packages.add(pkg_canonical)
-                        self._my_main_env_package = pkg_canonical
-                        
-                        if is_numpy_involved:
-                            with omnipkgLoader._numpy_lock:
-                                omnipkgLoader._numpy_version_history.append(requested_version)
-                        
-                        self._activation_successful = True
-                        self._activation_end_time = time.perf_counter_ns()
-                        self._total_activation_time_ns = self._activation_end_time - self._activation_start_time
-                        return self
+                # 1A. Analyze dependencies
+                bubble_deps = self._get_bubble_dependencies(bubble_path)
+                self._activated_bubble_dependencies = list(bubble_deps.keys())
+
+            # ═══════════════════════════════════════════════════════════
+            # COMPOSITE BUBBLE INJECTION (NVIDIA/CUDA Support)
+            # ═══════════════════════════════════════════════════════════
+            dependency_bubbles = []
+            
+            # Scan dependencies for binary packages that might have their own bubbles
+            for dep_name, dep_version in bubble_deps.items():
+                # Focus on NVIDIA libs, Triton, and critical binary deps
+                if dep_name.startswith('nvidia_') or dep_name in ['triton', 'lit']:
+                    dep_bubble_name = f"{dep_name.replace('_', '-')}-{dep_version}"
+                    dep_bubble_path = self.multiversion_base / dep_bubble_name
                     
-                # PATH B: Found DIRECTLY in Main Env (The Missing Fix)
+                    if dep_bubble_path.exists() and dep_bubble_path.is_dir():
+                        dependency_bubbles.append(str(dep_bubble_path))
+                        if not self.quiet:
+                            safe_print(f"      🔗 Found dependency bubble: {dep_bubble_name}")
+            
+            if dependency_bubbles and not self.quiet:
+                safe_print(f"   📦 Activating {len(dependency_bubbles)} dependency bubbles (CUDA/NVIDIA libs)...")
+
+                
+                # 1B. Determine conflicts
+                main_env_versions = {}
+                for pkg in self._activated_bubble_dependencies:
+                    try:
+                        main_version = get_version(pkg)
+                        main_env_versions[pkg] = main_version
+                    except PackageNotFoundError:
+                        pass
+
+                packages_to_cloak = []
+                for pkg, bubble_version in bubble_deps.items():
+                    if pkg in main_env_versions:
+                        main_version = main_env_versions[pkg]
+                        if main_version != bubble_version:
+                            packages_to_cloak.append(pkg)
+
+                # 1C. Cloak conflicts (LOCKED: ~0.5ms)
+                if packages_to_cloak:
+                    self._packages_we_cloaked.update(packages_to_cloak)
+                    cloaked_count = self._batch_cloak_packages(packages_to_cloak)
+                    if not self.quiet and cloaked_count > 0:
+                        safe_print(f"   🔒 Cloaked {cloaked_count} conflicting packages")
+
+                # 1D. Setup sys.path (LOCKED: ~0.1ms)
+                bubble_path_str = str(bubble_path)
+                if self.isolation_mode == 'overlay':
+                    sys.path.insert(0, bubble_path_str)
+                else:
+                    new_sys_path = [bubble_path_str] + [p for p in self.original_sys_path 
+                                                        if not self._is_main_site_packages(p)]
+                    sys.path[:] = new_sys_path
+
+                self._ensure_omnipkg_access_in_bubble(bubble_path_str)
+                self._activated_bubble_path = bubble_path_str
+
+                # 1E. DAEMON ONLY: Uncloak immediately (LOCKED: ~0.5ms)
+                # This MUST happen before lock release!
+                if self._is_daemon_worker():
+                    if not self.quiet:
+                        safe_print(f"   🔄 Daemon: Performing atomic uncloak...")
+                    self.stabilize_daemon_state()  # BLOCKS until uncloak complete
+
+                self._profile_end('locked_activation', print_now=True)
+
+                # NOW we can signal lock release
+                if self._is_daemon_worker():
+                    self._signal_daemon_lock_released()
+
+                # ═══════════════════════════════════════════════════════════
+                # PHASE 2: UNLOCKED OPERATIONS (Background work ~40-60ms)
+                # Lock is released, other workers can proceed!
+                # ═══════════════════════════════════════════════════════════
+                self._profile_start('unlocked_activation')
+
+                # Memory cleanup (doesn't need filesystem lock)
+                if not self._is_nested:
+                    for pkg in packages_to_cloak:
+                        self._aggressive_module_cleanup(pkg)
+                    gc.collect()
                 else:
                     if not self.quiet:
-                        safe_print(f"   ✅ Found in main environment. Enforcing isolation...")
+                        safe_print(f"      - ⏭️  Skipping module purge (nested, depth={omnipkgLoader._nesting_depth})")
+                
+                importlib.invalidate_caches()
 
-                    # 1. Cloak conflicts
-                    conflicting_bubbles = []
-                    for item in self.multiversion_base.glob(f'{pkg_name}-*'):
-                        if item.is_dir():
-                            conflicting_bubbles.append(item)
-                    
-                    if conflicting_bubbles:
-                        if not self.quiet:
-                            safe_print(f"      - 🔒 Cloaking {len(conflicting_bubbles)} conflicting bubble(s) on filesystem.")
-                        
-                        timestamp = int(time.time() * 1000000)
-                        loader_id = id(self)
-                        cloak_suffix = f".{timestamp}_{loader_id}_omnipkg_cloaked"
-                        
-                        for bubble_path in conflicting_bubbles:
-                            try:
-                                cloak_path = bubble_path.with_name(bubble_path.name + cloak_suffix)
-                                shutil.move(str(bubble_path), str(cloak_path))
-                                self._cloaked_bubbles.append((cloak_path, bubble_path))
-                                if not self.quiet:
-                                    safe_print(f"         - Cloaked: {bubble_path.name}")
-                            except Exception as e:
-                                if not self.quiet:
-                                    safe_print(f"         - ⚠️ Failed to cloak {bubble_path.name}: {e}")
+                self._profile_end('unlocked_activation', print_now=True)
 
-                    # 2. Cleanup (CRITICAL FIX ADDED HERE)
+                self._activation_successful = True
+                self._activation_end_time = time.perf_counter_ns()
+                self._total_activation_time_ns = self._activation_end_time - self._activation_start_time
+
+                self._profile_end('activate_bubble', print_now=True)
+                self._profile_end('TOTAL_ACTIVATION', print_now=True)
+
+                if not self.quiet:
+                    safe_print(f"   ⚡ Activated in {self._total_activation_time_ns / 1000:,.1f} μs")
+
+                return self
+            else:
+                # Package landed in main environment
+                if not self.quiet:
+                    safe_print(f"   - ⚠️  Bubble not created. Package in main environment.")
+                
+                found_ver, cloaked_path = self._get_version_from_original_env(pkg_name, requested_version)
+                
+                if found_ver == requested_version:
                     if not self.quiet:
-                        safe_print("      - 🧹 Scrubbing sys.path and purging modules...")
-                        
-                    self._aggressive_module_cleanup(pkg_name)
-                    self._scrub_sys_path_of_bubbles()  # <--- ADDED THIS LINE
-                    self._ensure_main_site_packages_in_path()
-                    importlib.invalidate_caches() # <--- AND THIS FOR SAFETY
+                        safe_print(f"   - ✅ Confirmed {pkg_name}=={requested_version} in main environment")
                     
                     self._using_main_env = True
                     
@@ -1720,119 +2052,15 @@ class omnipkgLoader:
                     self._activation_successful = True
                     self._activation_end_time = time.perf_counter_ns()
                     self._total_activation_time_ns = self._activation_end_time - self._activation_start_time
+                    self._profile_end('install_bubble', print_now=True)
+                    self._profile_end('TOTAL_ACTIVATION', print_now=True)
                     return self
-
-            # PRIORITY 3: AUTO-INSTALL BUBBLE
-            install_lock = self._get_install_lock(self._current_package_spec)
-
-            if not self.quiet:
-                safe_print(f"   - 🛡️  Acquiring install lock for {self._current_package_spec}...")
-                
-            with install_lock:
-                if not self.quiet:
-                    safe_print(f"   - ✅ Install lock acquired.")
-                
-                # Double-check another thread didn't install it
-                if bubble_path.is_dir():
-                    if not self.quiet:
-                        safe_print(f"   - 🏁 Another thread finished the install. Proceeding to activate.")
-                    self._using_main_env = False
-                    
-                    if is_numpy_involved:
-                        with omnipkgLoader._numpy_lock:
-                            omnipkgLoader._numpy_version_history.append(requested_version)
-                    
-                    return self._activate_bubble(bubble_path, pkg_name)
-
-                if not self.quiet:
-                    safe_print(f"   - 🔧 I am the installer. Auto-creating bubble for: {self._current_package_spec}")
-                
-                install_success = self._install_bubble_inline(self._current_package_spec)
-                
-                if not install_success:
-                    raise RuntimeError(f"Failed to install {self._current_package_spec}")
-
-                # Post-install check
-                if bubble_path.is_dir():
-                    if not self.quiet:
-                        safe_print(f"   - ✅ Bubble created successfully at: {bubble_path}")
-                    self._using_main_env = False
-                    
-                    if is_numpy_involved:
-                        with omnipkgLoader._numpy_lock:
-                            omnipkgLoader._numpy_version_history.append(requested_version)
-                    
-                    return self._activate_bubble(bubble_path, pkg_name)
                 else:
-                    # Package landed in main environment
-                    if not self.quiet:
-                        safe_print(f"   - ⚠️  Bubble not created. Package installed to main environment.")
-                    
-                    found_ver, cloaked_path = self._get_version_from_original_env(pkg_name, requested_version)
-                    
-                    if found_ver == requested_version:
-                        if not self.quiet:
-                            safe_print(f"   - ✅ Confirmed {pkg_name}=={requested_version} in main environment")
-                        
-                        self._using_main_env = True
-                        
-                        pkg_canonical = pkg_name.lower().replace('-', '_')
-                        omnipkgLoader._active_main_env_packages.add(pkg_canonical)
-                        self._my_main_env_package = pkg_canonical
-                        
-                        if is_numpy_involved:
-                            with omnipkgLoader._numpy_lock:
-                                omnipkgLoader._numpy_version_history.append(requested_version)
-                        
-                        self._activation_successful = True
-                        self._activation_end_time = time.perf_counter_ns()
-                        self._total_activation_time_ns = self._activation_end_time - self._activation_start_time
-                        return self
-                    else:
-                        raise RuntimeError(
-                            f"Installation reported success but {pkg_name}=={requested_version} "
-                            f"not found in bubble or main environment. Found version: {found_ver}"
-                        )
-        
-        except ProcessCorruptedException as e:
-            # ═══════════════════════════════════════════════════════════
-            # TIER 2: Reactive Worker Fallback (ONLY on crash)
-            # ═══════════════════════════════════════════════════════════
-            if not self._worker_fallback_enabled:
-                raise  # Re-raise if worker fallback disabled
+                    raise RuntimeError(
+                        f"Installation reported success but {pkg_name}=={requested_version} "
+                        f"not found. Found version: {found_ver}"
+                    )
             
-            if not self.quiet:
-                safe_print(f"   🔄 C++ collision detected! Recovering with worker mode...")
-                safe_print(f"      Details: {str(e)}")
-            
-            # Clean up partial activation
-            try:
-                self._panic_restore_cloaks()
-            except Exception:
-                pass  # Best-effort cleanup
-            
-            # Create worker as fallback
-            self._active_worker = self._create_worker_for_spec(self._current_package_spec)
-            
-            if not self._active_worker:
-                raise RuntimeError(
-                    f"Both in-process and worker activation failed for "
-                    f"{self._current_package_spec}. Original error: {e}"
-                )
-            
-            self._worker_mode = True
-            self._activation_successful = True
-            self._activation_end_time = time.perf_counter_ns()
-            self._total_activation_time_ns = (self._activation_end_time - 
-                                            self._activation_start_time)
-            
-            if not self.quiet:
-                safe_print(f"   ✅ Successfully recovered using worker mode!")
-                safe_print(f"   ⚡ Total recovery time: "
-                        f"{self._total_activation_time_ns / 1000000:.1f} ms")
-            
-            return self
-        
     def _panic_restore_cloaks(self):
         """Emergency cloak restoration - always cleanup since this is an error path."""
         if not self.quiet:
@@ -1909,14 +2137,17 @@ class omnipkgLoader:
             return False
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        """Enhanced deactivation with SMART nested cleanup."""
+        """Enhanced deactivation with detailed profiling."""
+        self._profile_start('TOTAL_DEACTIVATION')
         
-        # Determine if we should cleanup BEFORE decrementing
+        # Profile: Nesting management
+        self._profile_start('nesting_management')
         should_cleanup = False
         with omnipkgLoader._nesting_lock:
             current_depth = omnipkgLoader._nesting_depth
-            should_cleanup = (current_depth == 1)  # Only cleanup if we're the top level
+            should_cleanup = (current_depth == 1)
             omnipkgLoader._nesting_depth -= 1
+        self._profile_end('nesting_management')
         
         # Worker cleanup path
         if self._worker_mode and self._active_worker:
@@ -1936,68 +2167,81 @@ class omnipkgLoader:
                     self._active_worker = None
             
             self._worker_mode = False
-            
-            # CRITICAL: Only cleanup at top level
-            if should_cleanup:
-                if not self.quiet:
-                    safe_print("   🧹 Top-level cleanup (worker mode)...")
-                   #self._cleanup_all_cloaks_globally()
-            elif not self.quiet:
-                safe_print(f"   ⏭️  Skipping cleanup (nested depth={current_depth})")
-            
+            self._profile_end('TOTAL_DEACTIVATION', print_now=True)
             return
         
         self._deactivation_start_time = time.perf_counter_ns()
-        
+    
         if not self.quiet:
             depth_marker = f" [depth={current_depth}]" if self._is_nested else ""
             safe_print(f'🌀 omnipkg loader: Deactivating {self._current_package_spec}{depth_marker}...')
         
         if not self._activation_successful:
-            # CRITICAL: Cleanup even on failed activations, but only at top level
             if should_cleanup:
                 self._cleanup_all_cloaks_globally()
+            self._profile_end('TOTAL_DEACTIVATION')
             return
         
         pkg_name = self._current_package_spec.split('==')[0] if self._current_package_spec else None
         
-        # Step 1: Unregister main env package protection
+        # Profile: Unregister protection
+        self._profile_start('unregister_protection')
         if self._my_main_env_package:
             omnipkgLoader._active_main_env_packages.discard(self._my_main_env_package)
-            if not self.quiet:
-                safe_print(f"   - 🔓 Released protection for {self._my_main_env_package}")
+        self._profile_end('unregister_protection')
         
-        # Step 2: Restore cloaked modules (only if we used a bubble)
-        if not self._using_main_env:
-            if self._cloaked_main_modules:
-                if not self.quiet:
-                    safe_print(f"   - 🔓 Restoring {len(self._cloaked_main_modules)} cloaked packages...")
-                self._restore_cloaked_modules()
-        else:
+        # Profile: Restore main cloaks
+        self._profile_start('restore_main_cloaks')
+        restored_count = 0
+        if self._cloaked_main_modules:
             if not self.quiet:
-                safe_print(f"   - ℹ️  Used main env directly - skipping module restoration.")
-
-            # Restore any bubbles we cloaked
-            if self._cloaked_bubbles:
-                if not self.quiet:
-                    safe_print(f"   - 🔓 Restoring {len(self._cloaked_bubbles)} cloaked bubble(s)...")
+                safe_print(f"   - 🔓 Restoring {len(self._cloaked_main_modules)} cloaked main env package(s)...")
+            
+            for original_path, cloak_path, was_successful in reversed(self._cloaked_main_modules):
+                if not was_successful:
+                    continue
                 
-                for cloak_path, original_path in reversed(self._cloaked_bubbles):
-                    try:
-                        if cloak_path.exists():
-                            if original_path.exists():
-                                shutil.rmtree(original_path)
-                            shutil.move(str(cloak_path), str(original_path))
-                            if not self.quiet:
-                                safe_print(f"      - Restored: {original_path.name}")
-                    except Exception as e:
-                        if not self.quiet:
-                            safe_print(f"      - ⚠️ Failed to restore {original_path.name}: {e}")
-
-            self._cloaked_bubbles.clear()
+                if not cloak_path.exists():
+                    continue
+                
+                try:
+                    if original_path.exists():
+                        if original_path.is_dir():
+                            shutil.rmtree(original_path, ignore_errors=True)
+                        else:
+                            try:
+                                original_path.unlink()
+                            except OSError:
+                                pass
+                    
+                    shutil.move(str(cloak_path), str(original_path))
+                    restored_count += 1
+                    
+                except Exception as e:
+                    pass
+            
             self._cloaked_main_modules.clear()
         
-        # Step 3: Restore environment
+        self._profile_end('restore_main_cloaks', print_now=True)
+        
+        # Profile: Restore bubble cloaks
+        self._profile_start('restore_bubble_cloaks')
+        if self._cloaked_bubbles:
+            for cloak_path, original_path in reversed(self._cloaked_bubbles):
+                try:
+                    if cloak_path.exists():
+                        if original_path.exists():
+                            shutil.rmtree(original_path)
+                        shutil.move(str(cloak_path), str(original_path))
+                        restored_count += 1
+                except Exception:
+                    pass
+            self._cloaked_bubbles.clear()
+        
+        self._profile_end('restore_bubble_cloaks', print_now=True)
+        
+        # Profile: Restore environment
+        self._profile_start('restore_environment')
         if self.isolation_mode == 'overlay' and self._activated_bubble_path:
             try:
                 sys.path.remove(self._activated_bubble_path)
@@ -2006,56 +2250,193 @@ class omnipkgLoader:
         else:
             os.environ['PATH'] = self.original_path_env
             sys.path[:] = self.original_sys_path
+        self._profile_end('restore_environment')
         
-        # Step 4: Purge bubble modules (only if we used a bubble)
+        # Profile: Module purging
+        self._profile_start('module_purging')
         if not self._using_main_env and self._activated_bubble_dependencies:
-            if not self.quiet:
-                safe_print(f"   - 👻 Exorcising {len(self._activated_bubble_dependencies)} bubble modules...")
-            
             for pkg_name_dep in self._activated_bubble_dependencies:
                 self._aggressive_module_cleanup(pkg_name_dep)
             
             if pkg_name:
                 self._aggressive_module_cleanup(pkg_name)
+        self._profile_end('module_purging', print_now=True)
         
-        # Step 5: Force cache invalidation
+        # Profile: Cache invalidation
+        self._profile_start('cache_invalidation')
         if hasattr(importlib, 'invalidate_caches'):
             importlib.invalidate_caches()
-        
         gc.collect()
+        self._profile_end('cache_invalidation')
         
-        # ═══════════════════════════════════════════════════════════
-        # CRITICAL FIX: ONLY cleanup at TOP LEVEL
-        # ═══════════════════════════════════════════════════════════
+        # Profile: Global cleanup
         if should_cleanup:
-            if not self.quiet:
-                safe_print("   🧹 Running top-level global cloak cleanup...")
-            
-               #cleaned = self._cleanup_all_cloaks_globally()
-            
-               #if cleaned > 0 and not self.quiet:
-               #safe_print(f"   ✅ Global cleanup removed {cleaned} orphaned cloaks")
-        else:
-            if not self.quiet:
-                safe_print(f"   ⏭️  Skipping cleanup (nested, will cleanup at top level)")
+            self._profile_start('global_cleanup')
+            orphan_count = self._simple_restore_all_cloaks()
+            self._profile_end('global_cleanup', print_now=True)
         
         self._deactivation_end_time = time.perf_counter_ns()
         self._total_deactivation_time_ns = self._deactivation_end_time - self._deactivation_start_time
+
+        # Calculate total swap time
         total_swap_time_ns = self._total_activation_time_ns + self._total_deactivation_time_ns
-        
+
+        self._profile_end('TOTAL_DEACTIVATION', print_now=True)
+
         if not self.quiet:
             safe_print(f'   ✅ Environment restored.')
             safe_print(f'   ⏱️  Swap Time: {total_swap_time_ns / 1000:,.3f} μs')
-            
-            # Only verify at top level
+                    
+            # Final verification
             if should_cleanup and pkg_name:
                 final_cloaks = self._scan_for_cloaked_versions(pkg_name)
                 if not final_cloaks:
-                    safe_print(f'   ✅ Verified: No orphaned cloaks')
+                    safe_print(f'   ✅ Verified: No orphaned cloaks for {pkg_name}')
                 else:
-                    safe_print(f'   ⚠️  WARNING: {len(final_cloaks)} cloaks remaining!')
-                    safe_print(f'   🔧 Running emergency cleanup...')
-                    self._cleanup_all_cloaks_for_package(pkg_name)
+                    safe_print(f'   ⚠️  WARNING: {len(final_cloaks)} cloaks still remaining for {pkg_name}!')
+
+    # NEW HELPER METHOD: Simple unconditional restoration
+    def _simple_restore_all_cloaks(self):
+        """
+        OPTIMIZED: Only scan where we know cloaks exist.
+        """
+        self._profile_start('cleanup_scan')
+        
+        if not self.quiet:
+            safe_print(f"      🔍 Scanning for remaining cloaks...")
+        
+        restored = 0
+        cloak_pattern = '*_omnipkg_cloaked*'
+        
+        # Scan main env (fast - only top level)
+        main_cloaks = list(self.site_packages_root.glob(cloak_pattern))
+        self._profile_end('cleanup_scan', print_now=True)
+        
+        self._profile_start('cleanup_restore')
+        for cloak_path in main_cloaks:
+            if not cloak_path.exists():
+                continue
+            
+            # Extract original name
+            original_name = re.sub(r'\.\d+_\d+_omnipkg_cloaked.*$', '', cloak_path.name)
+            
+            # Fallback for legacy format
+            if original_name == cloak_path.name:
+                original_name = re.sub(r'\.\d+_omnipkg_cloaked.*$', '', cloak_path.name)
+            
+            # Skip if we couldn't parse the name
+            if '_omnipkg_cloaked' in original_name:
+                if not self.quiet:
+                    safe_print(f"         ⚠️  Can't parse cloak name: {cloak_path.name}")
+                continue
+            
+            original_path = cloak_path.parent / original_name
+            
+            try:
+                # If original exists, delete it (the cloak is newer)
+                if original_path.exists():
+                    if original_path.is_dir():
+                        shutil.rmtree(original_path, ignore_errors=True)
+                    else:
+                        try:
+                            original_path.unlink()
+                        except:
+                            pass
+                
+                # Move cloak back
+                shutil.move(str(cloak_path), str(original_path))
+                restored += 1
+                
+                if not self.quiet:
+                    safe_print(f"         ✅ {original_name}")
+                
+            except Exception as e:
+                if not self.quiet:
+                    safe_print(f"         ❌ Failed: {cloak_path.name}: {e}")
+        
+        self._profile_end('cleanup_restore', print_now=True)
+    
+        # OPTIMIZATION: Skip bubble scan entirely if we didn't cloak any bubbles
+        if not self._cloaked_bubbles:
+            if not self.quiet:
+                safe_print(f"      ⏭️  No bubbles cloaked, skipping bubble scan")
+            return restored
+        
+        # Only scan specific bubble directories we cloaked
+        self._profile_start('cleanup_bubble_restore')
+        for cloak_path, original_path in self._cloaked_bubbles:
+            if cloak_path.exists():
+                try:
+                    if original_path.exists():
+                        if original_path.is_dir():
+                            shutil.rmtree(original_path)
+                        else:
+                            original_path.unlink()
+                    
+                    shutil.move(str(cloak_path), str(original_path))
+                    restored += 1
+                except Exception:
+                    pass
+        
+        self._profile_end('cleanup_bubble_restore', print_now=True)
+        
+        return restored
+
+    def _force_restore_owned_cloaks(self):
+        """
+        Safety net: Restore ANY cloak registered to this loader instance,
+        guaranteeing cleanup even if local tracking lists desynchronize.
+        """
+        my_id = id(self)
+        cloaks_to_restore = []
+        
+        # Identify owned cloaks from global registry
+        if hasattr(omnipkgLoader, '_active_cloaks') and hasattr(omnipkgLoader, '_active_cloaks_lock'):
+            with omnipkgLoader._active_cloaks_lock:
+                for cloak_path_str, owner_id in list(omnipkgLoader._active_cloaks.items()):
+                    if owner_id == my_id:
+                        cloak_path = Path(cloak_path_str)
+                        # Derive original name from cloak name
+                        # Format: name.timestamp_loaderid_omnipkg_cloaked
+                        original_name = re.sub(r'\.\d+_\d+_omnipkg_cloaked.*$', '', cloak_path.name)
+                        # Fallback for legacy names
+                        if original_name == cloak_path.name:
+                            original_name = cloak_path.name.split('_omnipkg_cloaked')[0]
+                            # Remove trailing timestamp if present (legacy format)
+                            original_name = re.sub(r'\.\d+$', '', original_name)
+                        
+                        original_path = cloak_path.parent / original_name
+                        cloaks_to_restore.append((original_path, cloak_path))
+        
+        if not cloaks_to_restore:
+            return
+
+        if not self.quiet:
+            safe_print(f"   🧹 Force-restoring {len(cloaks_to_restore)} owned cloaks...")
+
+        for original_path, cloak_path in cloaks_to_restore:
+            try:
+                # Remove destination if it exists (e.g. partial restore or conflict)
+                if original_path.exists():
+                    if original_path.is_dir():
+                        shutil.rmtree(original_path, ignore_errors=True)
+                    else:
+                        try: original_path.unlink()
+                        except: pass
+                
+                # Move cloak back
+                if cloak_path.exists():
+                    shutil.move(str(cloak_path), str(original_path))
+                    if not self.quiet:
+                        safe_print(f"      ✅ Restored: {original_path.name}")
+                
+                # Unregister
+                with omnipkgLoader._active_cloaks_lock:
+                    omnipkgLoader._active_cloaks.pop(str(cloak_path), None)
+                    
+            except Exception as e:
+                if not self.quiet:
+                    safe_print(f"      ⚠️ Failed to force-restore {original_path.name}: {e}")
 
     def _restore_cloaked_modules(self):
         """
@@ -2228,7 +2609,9 @@ class omnipkgLoader:
         """
         Removes specified package's modules from sys.modules.
         Special handling for torch which cannot be fully cleaned.
+        NEW: Skip cleanup in nested contexts to preserve parent dependencies.
         """
+        
         # Phase 0: Pre-invalidate
         if hasattr(importlib, 'invalidate_caches'):
             importlib.invalidate_caches()
@@ -2239,19 +2622,14 @@ class omnipkgLoader:
         # SPECIAL: Surgical torch cleanup when C++ backend is loaded
         # ═══════════════════════════════════════════════════════════
         if pkg_name == 'torch' and 'torch._C' in sys.modules:
-            # ... (Existing Torch Logic remains unchanged) ...
             if not self.quiet:
                 safe_print(f"      ℹ️  Preserving torch._C (C++ backend cannot be unloaded)")
-            
-            # (Keep existing torch cleanup logic here)
-            # ...
             return
 
         # ═══════════════════════════════════════════════════════════
         # SPECIAL: TensorFlow cleanup prevention (C++ backend sticky)
         # ═══════════════════════════════════════════════════════════
         if pkg_name == 'tensorflow':
-            # Check for standard or patched C++ backend modules
             if any(m in sys.modules for m in ['tensorflow.python.pywrap_tensorflow', 
                                             'tensorflow.python._pywrap_tensorflow_internal']):
                 if not self.quiet:
@@ -2277,7 +2655,7 @@ class omnipkgLoader:
                     try:
                         del sys.modules[mod_name]
                     except KeyError:
-                        pass # Gone concurrently
+                        pass
 
         gc.collect()
         if hasattr(importlib, 'invalidate_caches'):
@@ -3267,3 +3645,41 @@ class WorkerDelegationMixin:
                     "success": False,
                     "error": str(e)
                 }
+
+# ═══════════════════════════════════════════════════════════
+# GLOBAL CLEANUP & SILENCER
+# Automatically handles C++ shutdown noise for all users
+# ═══════════════════════════════════════════════════════════
+import atexit
+import os
+import sys
+
+def _omnipkg_global_shutdown():
+    """
+    Runs at process exit to ensure clean termination of CUDA/C++ components.
+    """
+    # 1. Polite Cleanup: Try to sync CUDA if loaded
+    # This prevents "Producer process terminated" errors by syncing IPC
+    if 'torch' in sys.modules:
+        try:
+            import torch
+            if torch.cuda.is_available():
+                # Force a sync to flush pending IPC operations
+                torch.cuda.synchronize()
+                # Release memory to avoid driver conflicts
+                torch.cuda.empty_cache()
+        except Exception:
+            pass
+
+    # 2. The Silencer: Redirect stderr to /dev/null
+    # This eats the unavoidable "driver shutting down" C++ warnings
+    # that occur during the final milliseconds of interpreter death.
+    try:
+        sys.stderr.flush()
+        with open(os.devnull, 'w') as devnull:
+            os.dup2(devnull.fileno(), sys.stderr.fileno())
+    except Exception:
+        pass
+
+# Register immediately when module is imported
+atexit.register(_omnipkg_global_shutdown)

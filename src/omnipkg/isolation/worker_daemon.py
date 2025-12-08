@@ -8,6 +8,7 @@ import socket
 import signal
 import psutil
 import threading
+import glob
 import subprocess
 import select
 from pathlib import Path
@@ -17,6 +18,7 @@ from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeout
 import traceback
 from collections import deque
 import ctypes
+import base64  # <--- ENSURE THIS IS HERE
 
 # ═══════════════════════════════════════════════════════════════
 # 0. CONSTANTS & UTILITIES
@@ -85,6 +87,166 @@ def recv_json(sock: socket.socket, timeout: float = 30.0) -> dict:
         data_buffer.extend(chunk)
     return json.loads(data_buffer.decode('utf-8'))
 
+import ctypes
+import glob
+import os
+
+class UniversalGpuIpc:
+    """
+    Pure CUDA IPC using ctypes - works WITHOUT PyTorch!
+    This is the secret sauce for true zero-copy.
+    """
+    _lib = None
+    
+    @classmethod
+    def get_lib(cls):
+        """Find and load libcudart.so from various locations."""
+        if cls._lib: 
+            return cls._lib
+        
+        candidates = []
+        
+        # Try PyTorch's lib directory (if torch is installed)
+        try:
+            import torch
+            torch_lib = os.path.join(os.path.dirname(torch.__file__), 'lib')
+            candidates.extend(glob.glob(os.path.join(torch_lib, 'libcudart.so*')))
+        except: 
+            pass
+        
+        # Try conda environment
+        if 'CONDA_PREFIX' in os.environ:
+            candidates.extend(glob.glob(
+                os.path.join(os.environ['CONDA_PREFIX'], 'lib', 'libcudart.so*')
+            ))
+        
+        # Try system libraries
+        candidates.extend(['libcudart.so.12', 'libcudart.so.11.0', 'libcudart.so'])
+        
+        for lib in candidates:
+            try:
+                cls._lib = ctypes.CDLL(lib)
+                return cls._lib
+            except: 
+                continue
+        
+        raise RuntimeError("Could not load libcudart.so - CUDA not available")
+    
+    @staticmethod
+    def share(tensor):
+        """
+        Share a PyTorch CUDA tensor via CUDA IPC handle.
+        Returns serializable metadata that can be sent over socket.
+        """
+        import base64
+        
+        lib = UniversalGpuIpc.get_lib()
+        ptr = tensor.data_ptr()
+        
+        # Define CUDA structures
+        class cudaPointerAttributes(ctypes.Structure):
+            _fields_ = [
+                ("type", ctypes.c_int), 
+                ("device", ctypes.c_int), 
+                ("devicePointer", ctypes.c_void_p), 
+                ("hostPointer", ctypes.c_void_p)
+            ]
+        
+        class cudaIpcMemHandle_t(ctypes.Structure):
+            _fields_ = [("reserved", ctypes.c_char * 64)]
+        
+        # Set function signatures
+        lib.cudaPointerGetAttributes.argtypes = [
+            ctypes.POINTER(cudaPointerAttributes), 
+            ctypes.c_void_p
+        ]
+        lib.cudaIpcGetMemHandle.argtypes = [
+            ctypes.POINTER(cudaIpcMemHandle_t), 
+            ctypes.c_void_p
+        ]
+        
+        # Get base pointer and offset
+        attrs = cudaPointerAttributes()
+        if lib.cudaPointerGetAttributes(ctypes.byref(attrs), ctypes.c_void_p(ptr)) == 0:
+            base_ptr = attrs.devicePointer or ptr
+            offset = ptr - base_ptr
+        else:
+            base_ptr = ptr
+            offset = 0
+        
+        # Get IPC handle
+        handle = cudaIpcMemHandle_t()
+        err = lib.cudaIpcGetMemHandle(ctypes.byref(handle), ctypes.c_void_p(base_ptr))
+        
+        if err != 0:
+            raise RuntimeError(f"cudaIpcGetMemHandle failed with code {err}")
+        
+        # Return JSON-serializable metadata (base64-encode bytes!)
+        handle_bytes = ctypes.string_at(ctypes.byref(handle), 64)
+        return {
+            "handle": base64.b64encode(handle_bytes).decode('ascii'),  # JSON-safe!
+            "offset": offset,
+            "shape": tuple(tensor.shape),
+            "typestr": "<f4",
+            "device": tensor.device.index or 0
+        }
+    
+    @staticmethod
+    def load(data):
+        """
+        Load a CUDA tensor from IPC metadata.
+        Returns PyTorch tensor pointing to shared GPU memory.
+        """
+        import base64
+        
+        lib = UniversalGpuIpc.get_lib()
+        
+        class cudaIpcMemHandle_t(ctypes.Structure):
+            _fields_ = [("reserved", ctypes.c_char * 64)]
+        
+        lib.cudaIpcOpenMemHandle.argtypes = [
+            ctypes.POINTER(ctypes.c_void_p), 
+            cudaIpcMemHandle_t, 
+            ctypes.c_uint
+        ]
+        
+        # Reconstruct handle (decode from base64)
+        handle = cudaIpcMemHandle_t()
+        handle_bytes = base64.b64decode(data["handle"])
+        ctypes.memmove(ctypes.byref(handle), handle_bytes, 64)
+        
+        # Open IPC handle
+        dev_ptr = ctypes.c_void_p()
+        err = lib.cudaIpcOpenMemHandle(ctypes.byref(dev_ptr), handle, 1)
+        
+        if err == 201:  # cudaErrorAlreadyMapped
+            return None  # Same process - can't IPC to yourself
+        
+        if err != 0:
+            raise RuntimeError(f"cudaIpcOpenMemHandle failed with code {err}")
+        
+        # Calculate final pointer with offset
+        final_ptr = dev_ptr.value + data["offset"]
+        
+        # Create PyTorch tensor from raw pointer
+        import torch
+        
+        class CUDABuffer:
+            """Dummy buffer that exposes __cuda_array_interface__."""
+            def __init__(self, ptr, shape, typestr):
+                self.__cuda_array_interface__ = {
+                    "data": (ptr, False),
+                    "shape": shape,
+                    "typestr": typestr,
+                    "version": 3
+                }
+        
+        # PyTorch can consume __cuda_array_interface__
+        return torch.as_tensor(
+            CUDABuffer(final_ptr, data["shape"], data["typestr"]), 
+            device=f"cuda:{data['device']}"
+        )
+
 class SHMRegistry:
     """Track and cleanup orphaned shared memory blocks."""
     def __init__(self):
@@ -145,6 +307,38 @@ shm_registry = SHMRegistry()
 _DAEMON_SCRIPT = """#!/usr/bin/env python3
 import os
 import sys
+from pathlib import Path
+
+# ═══════════════════════════════════════════════════════════
+# 🔥 CUDA PRE-INJECTION (BEFORE ANY IMPORTS)
+# ═══════════════════════════════════════════════════════════
+try:
+    import site
+    site_packages = Path(site.getsitepackages()[0])
+    multiversion_base = site_packages / '.omnipkg_versions'
+    
+    cuda_lib_paths = []
+    for nvidia_bubble in multiversion_base.glob('nvidia-*-cu12-*'):
+        if nvidia_bubble.is_dir():
+            nvidia_dir = nvidia_bubble / 'nvidia'
+            if nvidia_dir.exists():
+                for module_dir in nvidia_dir.iterdir():
+                    if module_dir.is_dir():
+                        lib_dir = module_dir / 'lib'
+                        if lib_dir.exists():
+                            cuda_lib_paths.append(str(lib_dir))
+    
+    if cuda_lib_paths:
+        current_ld = os.environ.get('LD_LIBRARY_PATH', '')
+        new_ld = os.pathsep.join(cuda_lib_paths) + (os.pathsep + current_ld if current_ld else '')
+        os.environ['LD_LIBRARY_PATH'] = new_ld
+        sys.stderr.write(f'🔧 [PRE-INIT] Set LD_LIBRARY_PATH with {len(cuda_lib_paths)} CUDA paths\\n')
+        sys.stderr.flush()
+except Exception as e:
+    sys.stderr.write(f'⚠️  [PRE-INIT] CUDA setup failed: {e}\\n')
+    sys.stderr.flush()
+
+# NOW proceed with normal imports
 import json
 import shutil
 from pathlib import Path
@@ -199,11 +393,64 @@ if hasattr(omnipkgLoader, '_nesting_depth'):
 try:
     specs = [s.strip() for s in PKG_SPEC.split(',')]
     loaders = []
+    
     for s in specs:
         l = omnipkgLoader(s, isolation_mode='overlay')
         l.__enter__()
         loaders.append(l)
+
+    # ═══════════════════════════════════════════════════════════
+    # 🔥 CUDA LIBRARY PATH INJECTION (CORRECT PATTERN)
+    # ═══════════════════════════════════════════════════════════
+    cuda_lib_paths = []
     
+    if loaders and hasattr(loaders[0], 'multiversion_base'):
+        from pathlib import Path
+        multiversion_base = Path(loaders[0].multiversion_base)
+        
+        # Pattern: nvidia-{name}-cu12-{version}/nvidia/{module}/lib/
+        for nvidia_bubble in multiversion_base.glob('nvidia-*-cu12-*'):
+            if nvidia_bubble.is_dir() and '_omnipkg_cloaked' not in nvidia_bubble.name:
+                nvidia_dir = nvidia_bubble / 'nvidia'
+                if nvidia_dir.exists():
+                    for module_dir in nvidia_dir.iterdir():
+                        if module_dir.is_dir():
+                            lib_dir = module_dir / 'lib'
+                            if lib_dir.exists() and list(lib_dir.glob('*.so*')):
+                                cuda_lib_paths.append(str(lib_dir))
+    
+    if cuda_lib_paths:
+        current_ld = os.environ.get('LD_LIBRARY_PATH', '')
+        new_ld = os.pathsep.join(cuda_lib_paths)
+        if current_ld:
+            new_ld = new_ld + os.pathsep + current_ld
+        os.environ['LD_LIBRARY_PATH'] = new_ld
+        
+        sys.stderr.write(f'🔧 [DAEMON] Injected {len(cuda_lib_paths)} CUDA library paths\\n')
+        sys.stderr.flush()
+        
+        for path in cuda_lib_paths[:5]:
+            sys.stderr.write(f'   - {path}\\n')
+            sys.stderr.flush()
+        
+        # Pre-load libcudart
+        import ctypes
+        for lib_path in cuda_lib_paths:
+            cudart = Path(lib_path) / 'libcudart.so.12'
+            if cudart.exists():
+                try:
+                    ctypes.CDLL(str(cudart))
+                    sys.stderr.write(f'   ✅ Pre-loaded: {cudart.name}\\n')
+                    sys.stderr.flush()
+                    break
+                except:
+                    pass
+    else:
+        sys.stderr.write('ℹ️  [DAEMON] No CUDA libraries found\\n')
+        sys.stderr.flush()
+    
+    ### POST LD PATH INJECTION ###
+
     globals()['_omnipkg_loaders'] = loaders
     
     sys.stderr.write('🧹 [DAEMON] Starting immediate post-activation cleanup...\\n')
@@ -289,6 +536,164 @@ _devnull.close()
 sys.stdout = _original_stdout
 sys.stdout.reconfigure(line_buffering=True)
 
+import ctypes
+import glob
+import os
+
+class UniversalGpuIpc:
+    _lib = None
+    
+    @classmethod
+    def get_lib(cls):
+        if cls._lib: 
+            return cls._lib
+        
+        candidates = []
+        
+        # Try PyTorch's lib directory (if torch is installed)
+        try:
+            import torch
+            torch_lib = os.path.join(os.path.dirname(torch.__file__), 'lib')
+            candidates.extend(glob.glob(os.path.join(torch_lib, 'libcudart.so*')))
+        except: 
+            pass
+        
+        # Try conda environment
+        if 'CONDA_PREFIX' in os.environ:
+            candidates.extend(glob.glob(
+                os.path.join(os.environ['CONDA_PREFIX'], 'lib', 'libcudart.so*')
+            ))
+        
+        # Try system libraries
+        candidates.extend(['libcudart.so.12', 'libcudart.so.11.0', 'libcudart.so'])
+        
+        for lib in candidates:
+            try:
+                cls._lib = ctypes.CDLL(lib)
+                return cls._lib
+            except: 
+                continue
+        
+        raise RuntimeError("Could not load libcudart.so - CUDA not available")
+    
+    @staticmethod
+    def share(tensor):
+        import base64
+        
+        lib = UniversalGpuIpc.get_lib()
+        ptr = tensor.data_ptr()
+        
+        # Define CUDA structures
+        class cudaPointerAttributes(ctypes.Structure):
+            _fields_ = [
+                ("type", ctypes.c_int), 
+                ("device", ctypes.c_int), 
+                ("devicePointer", ctypes.c_void_p), 
+                ("hostPointer", ctypes.c_void_p)
+            ]
+        
+        class cudaIpcMemHandle_t(ctypes.Structure):
+            _fields_ = [("reserved", ctypes.c_char * 64)]
+        
+        # Set function signatures
+        lib.cudaPointerGetAttributes.argtypes = [
+            ctypes.POINTER(cudaPointerAttributes), 
+            ctypes.c_void_p
+        ]
+        lib.cudaIpcGetMemHandle.argtypes = [
+            ctypes.POINTER(cudaIpcMemHandle_t), 
+            ctypes.c_void_p
+        ]
+        
+        # Get base pointer and offset
+        attrs = cudaPointerAttributes()
+        if lib.cudaPointerGetAttributes(ctypes.byref(attrs), ctypes.c_void_p(ptr)) == 0:
+            base_ptr = attrs.devicePointer or ptr
+            offset = ptr - base_ptr
+        else:
+            base_ptr = ptr
+            offset = 0
+        
+        # Get IPC handle
+        handle = cudaIpcMemHandle_t()
+        err = lib.cudaIpcGetMemHandle(ctypes.byref(handle), ctypes.c_void_p(base_ptr))
+        
+        if err != 0:
+            raise RuntimeError(f"cudaIpcGetMemHandle failed with code {err}")
+        
+        # Return JSON-serializable metadata (base64-encode bytes!)
+        handle_bytes = ctypes.string_at(ctypes.byref(handle), 64)
+        return {
+            "handle": base64.b64encode(handle_bytes).decode('ascii'),
+            "offset": offset,
+            "shape": tuple(tensor.shape),
+            "typestr": "<f4",
+            "device": tensor.device.index or 0
+        }
+    
+    @staticmethod
+    def load(data):
+        import base64
+        
+        lib = UniversalGpuIpc.get_lib()
+        
+        class cudaIpcMemHandle_t(ctypes.Structure):
+            _fields_ = [("reserved", ctypes.c_char * 64)]
+        
+        lib.cudaIpcOpenMemHandle.argtypes = [
+            ctypes.POINTER(ctypes.c_void_p), 
+            cudaIpcMemHandle_t, 
+            ctypes.c_uint
+        ]
+        
+        # Reconstruct handle (decode from base64)
+        handle = cudaIpcMemHandle_t()
+        handle_bytes = base64.b64decode(data["handle"])
+        ctypes.memmove(ctypes.byref(handle), handle_bytes, 64)
+        
+        # Open IPC handle
+        dev_ptr = ctypes.c_void_p()
+        err = lib.cudaIpcOpenMemHandle(ctypes.byref(dev_ptr), handle, 1)
+        
+        if err == 201:  # cudaErrorAlreadyMapped
+            return None  # Same process - can't IPC to yourself
+        
+        if err != 0:
+            raise RuntimeError(f"cudaIpcOpenMemHandle failed with code {err}")
+        
+        # Calculate final pointer with offset
+        final_ptr = dev_ptr.value + data["offset"]
+        
+        # Create PyTorch tensor from raw pointer
+        import torch
+        
+        class CUDABuffer:
+            def __init__(self, ptr, shape, typestr):
+                self.__cuda_array_interface__ = {
+                    "data": (ptr, False),
+                    "shape": shape,
+                    "typestr": typestr,
+                    "version": 3
+                }
+        
+        # PyTorch can consume __cuda_array_interface__
+        return torch.as_tensor(
+            CUDABuffer(final_ptr, data["shape"], data["typestr"]), 
+            device=f"cuda:{data['device']}"
+        )
+
+_universal_gpu_ipc_available = False
+
+try:
+    # Test if we can load CUDA runtime
+    UniversalGpuIpc.get_lib()
+    _universal_gpu_ipc_available = True
+    sys.stderr.write('🔥🔥🔥 [DAEMON] UNIVERSAL CUDA IPC ENABLED (ctypes - NO PYTORCH NEEDED)\\n')
+    sys.stderr.flush()
+except Exception as e:
+    sys.stderr.write(f'⚠️  [DAEMON] Universal CUDA IPC unavailable: {e}\\n')
+    sys.stderr.flush()
+
 # ═══════════════════════════════════════════════════════════════
 # NOW CHECK GPU IPC AFTER LOADER ACTIVATION (SEES BUBBLE TORCH)
 # ═══════════════════════════════════════════════════════════════
@@ -302,6 +707,17 @@ _gpu_ipc_available = False
 _torch_available = False
 _cuda_available = False
 _native_ipc_mode = False
+
+try:
+    import tensorflow as tf
+    # Prevent TensorFlow from hogging all VRAM
+    gpus = tf.config.list_physical_devices('GPU')
+    if gpus:
+        for gpu in gpus:
+            tf.config.experimental.set_memory_growth(gpu, True)
+        sys.stderr.write('✅ [DAEMON] TensorFlow GPU memory growth enabled\\n')
+except Exception as e:
+    pass
 
 try:
     import torch
@@ -406,66 +822,77 @@ while True:
         actual_cuda_method = 'hybrid'
         
         # ═══════════════════════════════════════════════════════════
-        # INPUT HANDLING - NATIVE IPC IF AVAILABLE
+        # INPUT HANDLING - UNIVERSAL IPC FIRST!
         # ═══════════════════════════════════════════════════════════
-        if in_meta and is_cuda_request and _native_ipc_mode and 'ipc_data' in in_meta:
+        if in_meta and is_cuda_request and _universal_gpu_ipc_available and 'universal_ipc' in in_meta:
             try:
-                from torch.multiprocessing.reductions import rebuild_cuda_tensor
+                # Load tensor using universal IPC
+                tensor = UniversalGpuIpc.load(in_meta['universal_ipc'])
                 
-                ipc_data = in_meta['ipc_data']  # ← FIX: Extract the dictionary first!
-                
-                # Deserialize byte strings
-                storage_handle = base64.b64decode(ipc_data['storage_handle'])
-                ref_counter_handle = base64.b64decode(ipc_data['ref_counter_handle'])
-                event_handle = base64.b64decode(ipc_data['event_handle']) if ipc_data['event_handle'] else b''
-                
-                # Convert storage class name string to actual class
-                storage_cls_name = ipc_data['storage_cls']
-                storage_cls = getattr(torch, storage_cls_name)
-
-                # FIX: Convert dtype string to actual torch dtype object
-                dtype_str = ipc_data['dtype']
-                dtype_map = {
-                    'float32': torch.float32,
-                    'float64': torch.float64,
-                    'float16': torch.float16,
-                    'int32': torch.int32,
-                    'int64': torch.int64,
-                }
-                torch_dtype = dtype_map.get(dtype_str, torch.float32)
-
-                # Rebuild tensor
-                tensor = rebuild_cuda_tensor(
-                    torch.Tensor,
-                    tuple(ipc_data['tensor_size']),
-                    ipc_data['tensor_stride'],
-                    ipc_data['tensor_offset'],
-                    storage_cls,
-                    torch_dtype,  # ← Use the actual dtype object, not the string
-                    ipc_data['storage_device'],
-                    storage_handle,
-                    ipc_data['storage_size_bytes'],
-                    ipc_data['storage_offset_bytes'],
-                    False,
-                    ref_counter_handle,
-                    ipc_data['ref_counter_offset'],
-                    event_handle,
-                    ipc_data['event_sync_required']
-                )
+                if tensor is None:
+                    raise RuntimeError("Same process - cannot IPC to self")
                 
                 exec_scope['tensor_in'] = tensor
-                actual_cuda_method = 'native_ipc'
+                actual_cuda_method = 'universal_ipc'
                 
-                sys.stderr.write(f'🔥 [TASK {task_id}] NATIVE IPC input (TRUE ZERO-COPY)\\n')
+                sys.stderr.write(f'🔥 [TASK {task_id}] UNIVERSAL IPC input (TRUE ZERO-COPY)\\n')
                 sys.stderr.flush()
                 
             except Exception as e:
                 import traceback
-                sys.stderr.write(f'⚠️  [TASK {task_id}] Native IPC failed: {e}\\n')
+                sys.stderr.write(f'⚠️  [TASK {task_id}] Universal IPC failed: {e}\\n')
                 sys.stderr.write(traceback.format_exc())
                 sys.stderr.flush()
-                in_meta.pop('ipc_data', None)
+                in_meta.pop('universal_ipc', None)
         
+        # NATIVE PYTORCH IPC (1.x)
+        if in_meta and is_cuda_request and _native_ipc_mode and 'ipc_data' in in_meta and 'tensor_in' not in exec_scope:
+            try:
+                import base64
+                data = in_meta['ipc_data']
+                device = torch.device(f"cuda:{in_meta['device']}")
+                
+                storage_cls_name = data['storage_cls']
+                # Fix for PyTorch 1.13+ TypedStorage issue
+                if storage_cls_name == 'TypedStorage':
+                    dtype_to_storage = {
+                        'float32': 'FloatStorage', 'float64': 'DoubleStorage', 'float16': 'HalfStorage',
+                        'int32': 'IntStorage', 'int64': 'LongStorage', 'int8': 'CharStorage', 
+                        'uint8': 'ByteStorage', 'bool': 'BoolStorage', 'bfloat16': 'BFloat16Storage'
+                    }
+                    storage_cls_name = dtype_to_storage.get(data['dtype'], 'FloatStorage')
+                
+                storage_cls = getattr(torch, storage_cls_name, torch.FloatStorage)
+                handle = base64.b64decode(data['storage_handle'])
+                
+                # Reconstruct storage from handle
+                # Reconstruct storage from full IPC data (PyTorch 1.13+ compatible)
+                storage = storage_cls._new_shared_cuda(
+                    data['storage_device'],
+                    handle,
+                    data['storage_size_bytes'],
+                    data['storage_offset_bytes'],
+                    base64.b64decode(data['ref_counter_handle']),
+                    data['ref_counter_offset'],
+                    base64.b64decode(data['event_handle']) if data['event_handle'] else b'',
+                    data['event_sync_required']
+                )
+
+                # Create tensor view
+                tensor = torch.tensor([], dtype=getattr(torch, data['dtype']), device=device)
+                tensor.set_(storage, data['tensor_offset'], tuple(data['tensor_size']), tuple(data['tensor_stride']))
+                
+                exec_scope['tensor_in'] = tensor
+                actual_cuda_method = 'native_ipc'
+                
+                sys.stderr.write(f'🔥 [TASK {task_id}] NATIVE IPC input (PyTorch 1.x)\\n')
+                sys.stderr.flush()
+            except Exception as e:
+                import traceback
+                sys.stderr.write(f'⚠️  [TASK {task_id}] Native IPC input failed: {e}\\n')
+                sys.stderr.write(traceback.format_exc())
+                sys.stderr.flush()
+
         # HYBRID PATH (SHM + GPU copy)
         if in_meta and 'tensor_in' not in exec_scope:
             shm_name = in_meta.get('shm_name') or in_meta.get('name')
@@ -485,70 +912,84 @@ while True:
                 sys.stderr.flush()
             else:
                 exec_scope['tensor_in'] = arr_in
+                exec_scope['arr_in'] = arr_in
         
-        # ═══════════════════════════════════════════════════════════════
-        # OUTPUT HANDLING - NATIVE IPC IF AVAILABLE
-        # ═══════════════════════════════════════════════════════════════
+        # ═══════════════════════════════════════════════════════════
+        # OUTPUT HANDLING
+        # ═══════════════════════════════════════════════════════════
         arr_out = None
-        if out_meta and is_cuda_request and _native_ipc_mode and 'ipc_data' in out_meta:
+        
+        # UNIVERSAL IPC OUTPUT
+        if out_meta and is_cuda_request and _universal_gpu_ipc_available and 'universal_ipc' in out_meta:
             try:
-                from torch.multiprocessing.reductions import rebuild_cuda_tensor
+                # Load tensor using universal IPC
+                tensor = UniversalGpuIpc.load(out_meta['universal_ipc'])
                 
-                ipc_data = out_meta['ipc_data']  # ← FIX: Extract the dictionary first!
-                
-                # Deserialize byte strings
-                storage_handle = base64.b64decode(ipc_data['storage_handle'])
-                ref_counter_handle = base64.b64decode(ipc_data['ref_counter_handle'])
-                event_handle = base64.b64decode(ipc_data['event_handle']) if ipc_data['event_handle'] else b''
-                
-                # Convert storage class name string to actual class
-                storage_cls_name = ipc_data['storage_cls']
-                storage_cls = getattr(torch, storage_cls_name)
-
-                # FIX: Convert dtype string to actual torch dtype object
-                dtype_str = ipc_data['dtype']
-                dtype_map = {
-                    'float32': torch.float32,
-                    'float64': torch.float64,
-                    'float16': torch.float16,
-                    'int32': torch.int32,
-                    'int64': torch.int64,
-                }
-                torch_dtype = dtype_map.get(dtype_str, torch.float32)
-
-                # Rebuild tensor
-                tensor = rebuild_cuda_tensor(
-                    torch.Tensor,
-                    tuple(ipc_data['tensor_size']),
-                    ipc_data['tensor_stride'],
-                    ipc_data['tensor_offset'],
-                    storage_cls,
-                    torch_dtype,  # ← Use the actual dtype object, not the string
-                    ipc_data['storage_device'],
-                    storage_handle,
-                    ipc_data['storage_size_bytes'],
-                    ipc_data['storage_offset_bytes'],
-                    False,
-                    ref_counter_handle,
-                    ipc_data['ref_counter_offset'],
-                    event_handle,
-                    ipc_data['event_sync_required']
-                )
+                if tensor is None:
+                    raise RuntimeError("Same process - cannot IPC to self")
                 
                 exec_scope['tensor_out'] = tensor
-                actual_cuda_method = 'native_ipc'
+                actual_cuda_method = 'universal_ipc'
                 
-                sys.stderr.write(f'🔥 [TASK {task_id}] NATIVE IPC output (TRUE ZERO-COPY)\\n')
+                sys.stderr.write(f'🔥 [TASK {task_id}] UNIVERSAL IPC output (TRUE ZERO-COPY)\\n')
                 sys.stderr.flush()
                 
+            except Exception as e:
+                import traceback
+                sys.stderr.write(f'⚠️  [TASK {task_id}] Universal IPC output failed: {e}\\n')
+                sys.stderr.write(traceback.format_exc())
+                sys.stderr.flush()
+                out_meta.pop('universal_ipc', None)
+        
+        # NATIVE PYTORCH IPC (1.x) OUTPUT
+        if out_meta and is_cuda_request and _native_ipc_mode and 'ipc_data' in out_meta and 'tensor_out' not in exec_scope:
+            try:
+                import base64
+                data = out_meta['ipc_data']
+                device = torch.device(f"cuda:{out_meta['device']}")
+                
+                storage_cls_name = data['storage_cls']
+                # Fix for PyTorch 1.13+ TypedStorage issue
+                if storage_cls_name == 'TypedStorage':
+                    dtype_to_storage = {
+                        'float32': 'FloatStorage', 'float64': 'DoubleStorage', 'float16': 'HalfStorage',
+                        'int32': 'IntStorage', 'int64': 'LongStorage', 'int8': 'CharStorage', 
+                        'uint8': 'ByteStorage', 'bool': 'BoolStorage', 'bfloat16': 'BFloat16Storage'
+                    }
+                    storage_cls_name = dtype_to_storage.get(data['dtype'], 'FloatStorage')
+                
+                storage_cls = getattr(torch, storage_cls_name, torch.FloatStorage)
+                handle = base64.b64decode(data['storage_handle'])
+                
+                # Reconstruct storage from handle
+                # Reconstruct storage from full IPC data (PyTorch 1.13+ compatible)
+                storage = storage_cls._new_shared_cuda(
+                    data['storage_device'],
+                    handle,
+                    data['storage_size_bytes'],
+                    data['storage_offset_bytes'],
+                    base64.b64decode(data['ref_counter_handle']),
+                    data['ref_counter_offset'],
+                    base64.b64decode(data['event_handle']) if data['event_handle'] else b'',
+                    data['event_sync_required']
+                )
+
+                tensor = torch.tensor([], dtype=getattr(torch, data['dtype']), device=device)
+                tensor.set_(storage, data['tensor_offset'], tuple(data['tensor_size']), tuple(data['tensor_stride']))
+                
+                exec_scope['tensor_out'] = tensor
+                if actual_cuda_method == 'hybrid':
+                    actual_cuda_method = 'native_ipc'
+                
+                sys.stderr.write(f'🔥 [TASK {task_id}] NATIVE IPC output (PyTorch 1.x)\\n')
+                sys.stderr.flush()
             except Exception as e:
                 import traceback
                 sys.stderr.write(f'⚠️  [TASK {task_id}] Native IPC output failed: {e}\\n')
                 sys.stderr.write(traceback.format_exc())
                 sys.stderr.flush()
-                out_meta.pop('ipc_data', None)
-                
-        # HYBRID PATH (SHM + GPU copy)
+
+        # HYBRID PATH (SHM + GPU copy) OUTPUT
         if out_meta and 'tensor_out' not in exec_scope:
             shm_name = out_meta.get('shm_name') or out_meta.get('name')
             shm_out = shared_memory.SharedMemory(name=shm_name)
@@ -571,6 +1012,7 @@ while True:
                 )
             else:
                 exec_scope['tensor_out'] = arr_out
+                exec_scope['arr_out'] = arr_out
         
         # ═══════════════════════════════════════════════════════════
         # EXECUTE USER CODE
@@ -584,7 +1026,7 @@ while True:
         
         try:
             with redirect_stdout(stdout_buffer), redirect_stderr(stderr_buffer):
-                exec(f'{worker_code}\\nworker_result = locals().get("result", None)', exec_scope, exec_scope)
+                exec(worker_code + '\\nworker_result = locals().get("result", None)', exec_scope, exec_scope)
             
             # Copy result back to SHM if hybrid mode
             if is_cuda_request and out_meta and 'tensor_out' in exec_scope and arr_out is not None:
@@ -883,6 +1325,79 @@ class PersistentWorker:
             
             time.sleep(0.1)
 
+    def _discover_cuda_paths(self) -> List[str]:
+        """
+        Discover CUDA library paths for this package spec.
+        Checks bubbles for nvidia-* packages.
+        """
+        from pathlib import Path
+        
+        cuda_paths = []
+        
+        # Parse package name from spec
+        pkg_name = self.package_spec.split('==')[0] if '==' in self.package_spec else self.package_spec
+        
+        # Get the multiversion base (bubble directory)
+        try:
+            # Import here to avoid circular dependency
+            from omnipkg.loader import omnipkgLoader
+            loader = omnipkgLoader(package_spec=self.package_spec, quiet=True)
+            multiversion_base = loader.multiversion_base
+        except Exception:
+            # Fallback: try to find it in sys.path
+            import site
+            site_packages = Path(site.getsitepackages()[0])
+            multiversion_base = site_packages / '.omnipkg_versions'
+        
+        if not multiversion_base.exists():
+            return cuda_paths
+        
+        # Strategy 1: Check the main package bubble for NVIDIA dependencies
+        _, version = self.package_spec.split('==') if '==' in self.package_spec else (pkg_name, None)
+        if version:
+            main_bubble = multiversion_base / f"{pkg_name}-{version}"
+            if main_bubble.exists():
+                # Scan for symlinked or nested nvidia packages
+                for nvidia_dir in main_bubble.glob('nvidia_*'):
+                    if nvidia_dir.is_dir():
+                        # Check for lib subdirectory
+                        lib_dir = nvidia_dir / 'lib'
+                        if lib_dir.exists():
+                            cuda_paths.append(str(lib_dir))
+                        # Also check for .so files directly in package dir
+                        if list(nvidia_dir.glob('*.so*')):
+                            cuda_paths.append(str(nvidia_dir))
+        
+        # Strategy 2: Check for standalone NVIDIA bubbles
+        # These are the separate nvidia-cuda-runtime-cu12-12.1.105 bubbles
+        nvidia_bubble_patterns = [
+            'nvidia-cuda-runtime-cu12-*',
+            'nvidia-cudnn-cu12-*',
+            'nvidia-cublas-cu12-*',
+            'nvidia-cufft-cu12-*',
+            'nvidia-cusolver-cu12-*',
+            'nvidia-cusparse-cu12-*',
+        ]
+        
+        for pattern in nvidia_bubble_patterns:
+            for nvidia_bubble in multiversion_base.glob(pattern):
+                if nvidia_bubble.is_dir() and '_omnipkg_cloaked' not in nvidia_bubble.name:
+                    # Find the package directory inside
+                    pkg_dir_name = nvidia_bubble.name.split('-')[0:3]  # e.g., ['nvidia', 'cuda', 'runtime']
+                    pkg_dir_name = '_'.join(pkg_dir_name)  # 'nvidia_cuda_runtime'
+                    
+                    pkg_dir = nvidia_bubble / pkg_dir_name
+                    if pkg_dir.exists():
+                        # Check for lib subdirectory
+                        lib_dir = pkg_dir / 'lib'
+                        if lib_dir.exists():
+                            cuda_paths.append(str(lib_dir))
+                        # Check for .so files in package dir
+                        if list(pkg_dir.glob('*.so*')):
+                            cuda_paths.append(str(pkg_dir))
+        
+        return cuda_paths
+
     def _start_worker(self):
         """Start worker process with proper error handling."""
         # CRITICAL DEBUG: Check _DAEMON_SCRIPT before writing
@@ -926,6 +1441,21 @@ class PersistentWorker:
         current_pythonpath = env.get('PYTHONPATH', '')
         env['PYTHONPATH'] = f"{os.getcwd()}{os.pathsep}{current_pythonpath}"
         
+        # ═══════════════════════════════════════════════════════════
+        # 🔥 NEW: INJECT CUDA LIBRARY PATHS BEFORE SPAWN
+        # ═══════════════════════════════════════════════════════════
+        cuda_lib_paths = self._discover_cuda_paths()
+        if cuda_lib_paths:
+            current_ld = env.get('LD_LIBRARY_PATH', '')
+            new_ld = os.pathsep.join(cuda_lib_paths)
+            if current_ld:
+                new_ld = new_ld + os.pathsep + current_ld
+            env['LD_LIBRARY_PATH'] = new_ld
+            
+            print(f"🔧 [WORKER] Injecting {len(cuda_lib_paths)} CUDA paths into environment", file=sys.stderr)
+            for path in cuda_lib_paths:
+                print(f"   - {path}", file=sys.stderr)
+        
         # Open daemon log for worker stderr (store as instance variable)
         self.log_file = open(DAEMON_LOG_FILE, 'a', buffering=1)
 
@@ -933,10 +1463,10 @@ class PersistentWorker:
             [self.python_exe, '-u', self.temp_file],
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
-            stderr=self.log_file,  # <-- Worker stderr goes to log file
+            stderr=self.log_file,
             text=True,
             bufsize=0,
-            env=env,
+            env=env,  # ← Use modified env
             preexec_fn=os.setsid
         )
         
@@ -1236,25 +1766,21 @@ class WorkerPoolDaemon:
                 pass
     
     def _execute_code(self, spec: str, code: str, shm_in: dict, shm_out: dict, python_exe: str = None) -> dict:
-        # Default to daemon's own python if not specified
         if not python_exe:
             python_exe = sys.executable
-            
-        # CRITICAL: The key must include the Python path to differentiate environments
+        
         worker_key = f"{spec}::{python_exe}"
         
-        with self.worker_locks[worker_key]: # Use new key for locking
+        with self.worker_locks[worker_key]:
+            # 🔥 FIX: Get worker_info inside the pool_lock
             with self.pool_lock:
                 if worker_key not in self.workers:
-                    # Need to create worker - check capacity
                     if len(self.workers) >= self.max_workers:
-                        # Evict WITHOUT holding pool lock
                         self._evict_oldest_worker_async()
                     
-                    # Create worker
                     try:
-                        worker = PersistentWorker(spec, python_exe=python_exe) # <--- PASS IT
-                        self.workers[worker_key] = { # Store with new key
+                        worker = PersistentWorker(spec, python_exe=python_exe)
+                        self.workers[worker_key] = {
                             'worker': worker,
                             'created': time.time(),
                             'last_used': time.time(),
@@ -1269,9 +1795,10 @@ class WorkerPoolDaemon:
                 else:
                     self.stats['cache_hits'] += 1
                 
-                worker_info = self.workers[worker_key] # Use worker_key
+                # 🔥 FIX: Always get worker_info from dict (works for both branches)
+                worker_info = self.workers[worker_key]
             
-            # Execute outside pool lock (only spec lock held)
+            # Execute outside pool lock
             worker_info['last_used'] = time.time()
             worker_info['request_count'] += 1
             
@@ -1309,7 +1836,9 @@ class WorkerPoolDaemon:
                             'created': time.time(),
                             'last_used': time.time(),
                             'request_count': 0,
-                            'memory_mb': 0.0
+                            'memory_mb': 0.0,
+                            'is_gpu_worker': True,      # 🔥 FIX: Set inside dict creation
+                            'gpu_timeout': 60
                         }
                         self.stats['workers_created'] += 1
                     except Exception as e:
@@ -1318,13 +1847,21 @@ class WorkerPoolDaemon:
                         return {'success': False, 'error': error_msg, 'status': 'ERROR'}
                 else:
                     self.stats['cache_hits'] += 1
+                    # 🔥 FIX: Mark existing worker as GPU worker too
+                    self.workers[worker_key]['is_gpu_worker'] = True
+                    self.workers[worker_key]['gpu_timeout'] = 60
                 
+                # 🔥 FIX: Get worker_info AFTER it's definitely in the dict
                 worker_info = self.workers[worker_key]
             
             # Execute outside pool lock
             worker_info['last_used'] = time.time()
             worker_info['request_count'] += 1
-            
+            # In _execute_cuda_code, after creating worker_info dict:
+            if 'tensorflow' in spec.lower():
+                worker_info['is_gpu_worker'] = True
+                worker_info['gpu_timeout'] = 30  # Even more aggressive for TF (30s)
+                worker_info['tensorflow_worker'] = True
             try:
                 # Send CUDA IPC command
                 command = {
@@ -1405,10 +1942,38 @@ class WorkerPoolDaemon:
                             worker_info['worker'].force_shutdown()
 
     def _memory_manager(self):
-        """CRITICAL FIX: Monitor system memory pressure."""
+        """Enhanced with GPU memory monitoring."""
         while self.running:
             time.sleep(60)
             now = time.time()
+            
+            # 🔥 NEW: Check GPU memory pressure
+            try:
+                import torch
+                if torch.cuda.is_available():
+                    mem_allocated = torch.cuda.memory_allocated(0) / 1024**3  # GB
+                    mem_reserved = torch.cuda.memory_reserved(0) / 1024**3
+                    mem_free = torch.cuda.get_device_properties(0).total_memory / 1024**3 - mem_reserved
+                    
+                    # Aggressive eviction if VRAM < 2GB free
+                    if mem_free < 2.0:
+                        print(f"⚠️  Low VRAM ({mem_free:.1f}GB free), evicting idle workers...")
+                        with self.pool_lock:
+                            to_kill = sorted(
+                                self.workers.items(),
+                                key=lambda x: x[1]['last_used']
+                            )[:max(1, len(self.workers) // 2)]  # Kill half
+                            
+                            for spec, info in to_kill:
+                                del self.workers[spec]
+                                self.stats['workers_killed'] += 1
+                                threading.Thread(
+                                    target=info['worker'].force_shutdown,
+                                    daemon=True
+                                ).start()
+                        continue
+            except:
+                pass
             
             # Memory pressure check
             mem = psutil.virtual_memory()
@@ -1434,7 +1999,8 @@ class WorkerPoolDaemon:
             with self.pool_lock:
                 specs_to_remove = []
                 for spec, info in self.workers.items():
-                    if now - info['last_used'] > self.max_idle_time:
+                    timeout = info.get('gpu_timeout', self.max_idle_time)
+                    if now - info['last_used'] > timeout:
                         specs_to_remove.append(spec)
                 
                 for spec in specs_to_remove:
@@ -1519,6 +2085,7 @@ class WorkerPoolDaemon:
 # ═══════════════════════════════════════════════════════════════
 
 def detect_torch_cuda_ipc_mode():
+    import torch
     """
     Detect which CUDA IPC method is available.
     
@@ -1556,6 +2123,7 @@ def detect_torch_cuda_ipc_mode():
 # ═══════════════════════════════════════════════════════════════
 
 def share_tensor_native_1x(tensor: torch.Tensor) -> dict:
+    import torch
     """
     Share GPU tensor using PyTorch 1.x native CUDA IPC.
     This is the FASTEST method - true zero-copy.
@@ -1578,6 +2146,7 @@ def share_tensor_native_1x(tensor: torch.Tensor) -> dict:
     }
 
 def receive_tensor_native_1x(meta: dict) -> torch.Tensor:
+    import torch
     """Reconstruct tensor from PyTorch 1.x IPC handle."""
     storage = torch.FloatStorage._new_using_cuda_ipc(meta['ipc_handle'])
     
@@ -1601,6 +2170,7 @@ class CUDAIPCHandle(ctypes.Structure):
     _fields_ = [("reserved", ctypes.c_char * 64)]
 
 def share_tensor_custom_cuda(tensor: torch.Tensor) -> dict:
+    import torch
     """
     Share GPU tensor using raw CUDA IPC (ctypes).
     Works with PyTorch 2.x and bypasses PyTorch's broken IPC.
@@ -1634,6 +2204,7 @@ def share_tensor_custom_cuda(tensor: torch.Tensor) -> dict:
     }
 
 def receive_tensor_custom_cuda(meta: dict) -> torch.Tensor:
+    import torch
     """Reconstruct tensor from custom CUDA IPC handle."""
     cuda = ctypes.CDLL('libcuda.so.1')
     
@@ -1672,6 +2243,7 @@ def receive_tensor_custom_cuda(meta: dict) -> torch.Tensor:
 # ═══════════════════════════════════════════════════════════════
 
 def share_tensor_hybrid(tensor: torch.Tensor) -> dict:
+    import torch
     """
     Fallback: Copy to CPU SHM, worker copies to GPU.
     2 PCIe transfers per stage, but still faster than JSON.
@@ -1691,6 +2263,7 @@ def share_tensor_hybrid(tensor: torch.Tensor) -> dict:
     }
 
 def receive_tensor_hybrid(meta: dict) -> torch.Tensor:
+    import torch
     """Reconstruct tensor from CPU SHM."""
     shm = shared_memory.SharedMemory(name=meta['shm_name'])
     
@@ -1744,6 +2317,122 @@ class SmartGPUIPC:
         """Receive a GPU tensor using method specified in metadata."""
         return self.receive(meta)
 
+from enum import Enum
+from typing import Optional, Tuple
+# import torch
+
+class IPCMode(Enum):
+    """Available IPC transfer modes."""
+    AUTO = "auto"              # Smart detection (default)
+    UNIVERSAL = "universal"    # Pure CUDA IPC (ctypes) - FASTEST
+    PYTORCH_NATIVE = "pytorch_native"  # PyTorch 1.x _share_cuda_() - VERY FAST
+    CPU_SHM = "cpu_shm"        # CPU zero-copy SHM - MEDIUM (fallback)
+    HYBRID = "hybrid"          # CPU SHM + GPU copies - SLOW (testing only)
+
+class IPCCapabilities:
+    """Detect available IPC methods on the system."""
+    
+    @staticmethod
+    def has_pytorch_1x_native() -> bool:
+        """Check if PyTorch 1.x native IPC is available."""
+        try:
+            import torch
+            version = torch.__version__.split('+')[0]
+            major = int(version.split('.')[0])
+            
+            if major != 1:
+                return False
+            
+            # Test if _share_cuda_() exists and works
+            if not torch.cuda.is_available():
+                return False
+            
+            test_tensor = torch.zeros(1).cuda()
+            storage = test_tensor.storage()
+            
+            if not hasattr(storage, '_share_cuda_'):
+                return False
+            
+            # Try to get IPC handle
+            ipc_data = storage._share_cuda_()
+            return len(ipc_data) == 8
+            
+        except Exception:
+            return False
+    
+    @staticmethod
+    def has_universal_cuda_ipc() -> bool:
+        """Check if Universal CUDA IPC is available."""
+        try:
+            from omnipkg.isolation.worker_daemon import UniversalGpuIpc
+            UniversalGpuIpc.get_lib()
+            return True
+        except Exception:
+            return False
+    
+    @staticmethod
+    def detect_optimal_mode() -> IPCMode:
+        """
+        Auto-detect the best available IPC mode.
+        
+        Priority order (based on benchmarks):
+        1. Universal IPC - fastest (1.5-2ms), works everywhere
+        2. PyTorch Native - very fast (2-2.5ms), PyTorch 1.x only
+        3. CPU SHM - medium (10-11ms), always available
+        4. Hybrid - slowest (14-15ms), last resort
+        """
+        # Universal IPC is now the default (fastest, most compatible)
+        if IPCCapabilities.has_universal_cuda_ipc():
+            return IPCMode.UNIVERSAL
+        
+        # Fall back to PyTorch native if available (still very fast)
+        if IPCCapabilities.has_pytorch_1x_native():
+            return IPCMode.PYTORCH_NATIVE
+        
+        # CPU SHM is faster than Hybrid (10ms vs 14ms in benchmarks)
+        # Always available as it doesn't need GPU
+        # Hybrid is kept available for testing but not used in auto-fallback
+        return IPCMode.CPU_SHM
+    
+    @staticmethod
+    def validate_mode(requested_mode: IPCMode) -> Tuple[IPCMode, str]:
+        """
+        Validate requested IPC mode and return actual mode + message.
+        
+        Returns:
+            (actual_mode, message)
+        """
+        if requested_mode == IPCMode.AUTO:
+            mode = IPCCapabilities.detect_optimal_mode()
+            return mode, f"Auto-detected: {mode.value}"
+        
+        # Validate specific modes
+        if requested_mode == IPCMode.UNIVERSAL:
+            if IPCCapabilities.has_universal_cuda_ipc():
+                return requested_mode, "Universal CUDA IPC available"
+            else:
+                fallback = IPCCapabilities.detect_optimal_mode()
+                return fallback, f"Universal IPC unavailable, using {fallback.value}"
+        
+        if requested_mode == IPCMode.PYTORCH_NATIVE:
+            if IPCCapabilities.has_pytorch_1x_native():
+                return requested_mode, "PyTorch 1.x native IPC available"
+            else:
+                fallback = IPCCapabilities.detect_optimal_mode()
+                return fallback, f"PyTorch native unavailable, using {fallback.value}"
+        
+        # CPU SHM always works (no GPU needed)
+        if requested_mode == IPCMode.CPU_SHM:
+            return requested_mode, "Using CPU SHM (zero-copy, no GPU)"
+        
+        # Hybrid always works (but slower than CPU SHM)
+        if requested_mode == IPCMode.HYBRID:
+            return requested_mode, "Using hybrid mode (CPU SHM + GPU copies)"
+        
+        # Unknown mode
+        fallback = IPCCapabilities.detect_optimal_mode()
+        return fallback, f"Unknown mode, using {fallback.value}"
+
 # ═══════════════════════════════════════════════════════════════
 # 4. CLIENT & PROXY (With Auto-Resurrection)
 # ═══════════════════════════════════════════════════════════════
@@ -1780,11 +2469,16 @@ class DaemonClient:
     def _spawn_daemon(self):
         import subprocess
         daemon_script = os.path.abspath(__file__)
+        
+        # Optional: Set minimal CUDA paths for daemon itself
+        env = os.environ.copy()
+        
         subprocess.Popen(
             [sys.executable, daemon_script, "start"],
             stdin=subprocess.DEVNULL,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
+            env=env,  # Pass environment
             preexec_fn=os.setsid 
         )
 
@@ -1834,18 +2528,24 @@ class DaemonClient:
                 return {'success': False, 'error': f'Communication error: {e}'}
         return {'success': False, 'error': 'Connection failed after retries'}
 
-    def execute_cuda_ipc(self, spec: str, code: str, input_tensor, 
-                     output_shape: tuple, output_dtype: str, python_exe: str = None):
+    def execute_cuda_ipc(
+        self, 
+        spec: str, 
+        code: str, 
+        input_tensor: torch.Tensor,
+        output_shape: tuple, 
+        output_dtype: str, 
+        python_exe: str = None,
+        ipc_mode: str = 'auto'
+    ):
         """
-        🔥 GPU-RESIDENT MODE: Zero-copy via CUDA IPC (if available).
+        Execute code with GPU IPC using specified mode.
         
-        Uses native PyTorch 1.x IPC if available, otherwise falls back to hybrid mode.
+        Args:
+            ipc_mode: 'auto', 'universal', 'pytorch_native', 'cpu_shm', or 'hybrid'
         """
-        import torch
-        import numpy as np
-        from multiprocessing import shared_memory
-        import base64
         import sys
+        import torch
         
         if not torch.cuda.is_available():
             raise RuntimeError("CUDA not available")
@@ -1853,111 +2553,264 @@ class DaemonClient:
         if not input_tensor.is_cuda:
             raise ValueError("Input tensor must be on GPU")
         
-        # ═══════════════════════════════════════════════════════════════
-        # DETECT IF WE CAN USE NATIVE IPC (PyTorch 1.x ONLY)
-        # This detection happens HERE in the client where we have the actual torch version
-        # ═══════════════════════════════════════════════════════════════
-        torch_version = torch.__version__.split('+')[0]
-        major = int(torch_version.split('.')[0])
+        # Parse IPC mode
+        try:
+            mode_enum = IPCMode(ipc_mode.lower())
+        except ValueError:
+            print(f"⚠️  Invalid IPC mode '{ipc_mode}', using auto")
+            mode_enum = IPCMode.AUTO
         
-        use_native_ipc = False
-        if major == 1:
-            try:
-                # Test if native IPC is available (PyTorch 1.x uses .storage() not .untyped_storage())
-                storage = input_tensor.storage()
-                if hasattr(storage, '_share_cuda_'):
-                    # Try to actually get the IPC handle to make sure it works
-                    ipc_test = storage._share_cuda_()
-                    if len(ipc_test) == 8:
-                        use_native_ipc = True
-                        print(f"   🔥 Using NATIVE IPC (PyTorch 1.x - TRUE ZERO-COPY)")
-            except Exception as e:
-                print(f"   ⚠️  Native IPC test failed: {e}")
+        # Validate and get actual mode
+        actual_mode, mode_msg = IPCCapabilities.validate_mode(mode_enum)
         
-        if use_native_ipc:
-            try:
-                # Share input tensor via native CUDA IPC
-                input_storage = input_tensor.storage()
-                (storage_device, storage_handle, storage_size_bytes, storage_offset_bytes,
-                ref_counter_handle, ref_counter_offset, event_handle, event_sync_required) = input_storage._share_cuda_()
-                
-                cuda_in_meta = {
-                    'ipc_data': {
-                        'tensor_size': list(input_tensor.shape),
-                        'tensor_stride': list(input_tensor.stride()),
-                        'tensor_offset': input_tensor.storage_offset(),
-                        'storage_cls': type(input_storage).__name__,  # ← Just the class name
-                        'dtype': str(input_tensor.dtype).replace('torch.', ''),
-                        'storage_device': storage_device,
-                        'storage_handle': base64.b64encode(storage_handle).decode('ascii'),
-                        'storage_size_bytes': storage_size_bytes,
-                        'storage_offset_bytes': storage_offset_bytes,
-                        'ref_counter_handle': base64.b64encode(ref_counter_handle).decode('ascii'),
-                        'ref_counter_offset': ref_counter_offset,
-                        'event_handle': base64.b64encode(event_handle).decode('ascii') if event_handle else '',
-                        'event_sync_required': event_sync_required
-                    },
-                    'device': input_tensor.device.index
-                }
-                
-                # Create output tensor and share it
-                dtype_map = {'float32': torch.float32, 'float64': torch.float64, 'float16': torch.float16}
-                torch_dtype = dtype_map.get(output_dtype, torch.float32)
-                output_tensor = torch.empty(output_shape, dtype=torch_dtype, device=input_tensor.device)
-                
-                output_storage = output_tensor.storage()
-                (storage_device, storage_handle, storage_size_bytes, storage_offset_bytes,
-                ref_counter_handle, ref_counter_offset, event_handle, event_sync_required) = output_storage._share_cuda_()
-                
-                cuda_out_meta = {
-                    'ipc_data': {
-                        'tensor_size': list(output_tensor.shape),
-                        'tensor_stride': list(output_tensor.stride()),
-                        'tensor_offset': output_tensor.storage_offset(),
-                        'storage_cls': type(output_storage).__name__,
-                        'dtype': str(output_tensor.dtype).replace('torch.', ''),
-                        'storage_device': storage_device,
-                        'storage_handle': base64.b64encode(storage_handle).decode('ascii'),
-                        'storage_size_bytes': storage_size_bytes,
-                        'storage_offset_bytes': storage_offset_bytes,
-                        'ref_counter_handle': base64.b64encode(ref_counter_handle).decode('ascii'),
-                        'ref_counter_offset': ref_counter_offset,
-                        'event_handle': base64.b64encode(event_handle).decode('ascii') if event_handle else '',
-                        'event_sync_required': event_sync_required
-                    },
-                    'device': output_tensor.device.index
-                }
-                
-                response = self._send({
-                    'type': 'execute_cuda',
-                    'spec': spec,
-                    'code': code,
-                    'cuda_in': cuda_in_meta,
-                    'cuda_out': cuda_out_meta,
-                    'python_exe': python_exe or sys.executable
-                })
-                
-                if not response.get('success'):
-                    raise RuntimeError(f"Worker Error: {response.get('error')}")
-                
-                # Check actual method used
-                actual_method = response.get('cuda_method', 'unknown')
-                if actual_method == 'native_ipc':
-                    print(f"   🔥 Worker confirmed NATIVE IPC (true zero-copy)!")
-                else:
-                    print(f"   ⚠️  Worker fell back to {actual_method}")
-                
-                return output_tensor, response
-                
-            except Exception as e:
-                print(f"   ⚠️  Native IPC failed: {e}, falling back to hybrid")
-                import traceback
-                traceback.print_exc()
+        print(f"   🎯 IPC Mode: {mode_msg}")
         
-        # ═══════════════════════════════════════════════════════════════
-        # FALLBACK: HYBRID MODE (SHM + GPU copies)
-        # ═══════════════════════════════════════════════════════════════
-        print(f"   🔄 Using HYBRID mode (2 GPU copies per stage)")
+        # ═══════════════════════════════════════════════════════════
+        # ROUTE 1: UNIVERSAL CUDA IPC (DEFAULT - FASTEST)
+        # ═══════════════════════════════════════════════════════════
+        if actual_mode == IPCMode.UNIVERSAL:
+            return self._execute_universal_ipc(
+                spec, code, input_tensor, output_shape, output_dtype, python_exe
+            )
+        
+        # ═══════════════════════════════════════════════════════════
+        # ROUTE 2: PYTORCH 1.x NATIVE IPC
+        # ═══════════════════════════════════════════════════════════
+        if actual_mode == IPCMode.PYTORCH_NATIVE:
+            return self._execute_pytorch_native_ipc(
+                spec, code, input_tensor, output_shape, output_dtype, python_exe
+            )
+        
+        # ═══════════════════════════════════════════════════════════
+        # ROUTE 3: CPU SHM (ZERO-COPY, NO GPU - MEDIUM SPEED)
+        # ═══════════════════════════════════════════════════════════
+        if actual_mode == IPCMode.CPU_SHM:
+            return self._execute_cpu_shm(
+                spec, code, input_tensor, output_shape, output_dtype, python_exe
+            )
+        
+        # ═══════════════════════════════════════════════════════════
+        # ROUTE 4: HYBRID (CPU SHM + GPU COPIES - SLOWEST)
+        # ═══════════════════════════════════════════════════════════
+        return self._execute_hybrid_ipc(
+            spec, code, input_tensor, output_shape, output_dtype, python_exe
+        )
+    
+    def _execute_cpu_shm(self, spec, code, input_tensor, output_shape, output_dtype, python_exe):
+        """
+        CPU-only mode: Run computation on CPU without any GPU transfers.
+        Uses zero-copy SHM like Test 17.
+        
+        This is faster than Hybrid mode (10ms vs 14ms) because:
+        - No GPU→CPU copy
+        - No CPU→GPU copy  
+        - Just pure CPU compute on shared memory
+        
+        Benchmarks show this is 6.29x slower than Universal IPC,
+        but 1.34x FASTER than Hybrid mode!
+        """
+        from multiprocessing import shared_memory
+        import numpy as np
+        import torch
+        
+        print(f"   💾 Using CPU SHM mode (zero-copy, no GPU transfers)")
+        
+        # Convert tensor to CPU numpy
+        input_cpu = input_tensor.cpu().numpy()
+        
+        # Create output array on CPU
+        dtype_map = {
+            'float32': np.float32,
+            'float64': np.float64,
+            'float16': np.float16,
+            'int32': np.int32,
+            'int64': np.int64,
+        }
+        np_dtype = dtype_map.get(output_dtype, np.float32)
+        
+        try:
+            # Use zero_copy execution (like Test 17)
+            result_cpu, response = self.execute_zero_copy(
+                spec,
+                code,
+                input_array=input_cpu,
+                output_shape=output_shape,
+                output_dtype=np_dtype,
+                python_exe=python_exe or sys.executable
+            )
+            
+            if not response.get('success'):
+                raise RuntimeError(f"Worker Error: {response.get('error')}")
+            
+            print(f"   ✅ CPU SHM mode completed")
+            
+            # Convert result back to GPU tensor
+            output_tensor = torch.from_numpy(result_cpu).to(input_tensor.device)
+            
+            # Add method info to response
+            response['cuda_method'] = 'cpu_shm'
+            
+            return output_tensor, response
+            
+        except Exception as e:
+            print(f"   ⚠️  CPU SHM failed: {e}")
+            raise
+
+    def _execute_universal_ipc(self, spec, code, input_tensor, output_shape, output_dtype, python_exe):
+        """Universal CUDA IPC using ctypes (fastest, most compatible)."""
+        import torch
+        from omnipkg.isolation.worker_daemon import UniversalGpuIpc
+        
+        print(f"   🔥 Using UNIVERSAL CUDA IPC (ctypes - TRUE ZERO-COPY)")
+        
+        try:
+            # Share input tensor using Universal IPC
+            cuda_in_meta = {
+                'universal_ipc': UniversalGpuIpc.share(input_tensor),
+                'device': input_tensor.device.index
+            }
+            
+            # Create output tensor and share it
+            dtype_map = {
+                'float32': torch.float32, 
+                'float64': torch.float64, 
+                'float16': torch.float16,
+                'int32': torch.int32,
+                'int64': torch.int64,
+            }
+            torch_dtype = dtype_map.get(output_dtype, torch.float32)
+            output_tensor = torch.empty(output_shape, dtype=torch_dtype, device=input_tensor.device)
+            
+            cuda_out_meta = {
+                'universal_ipc': UniversalGpuIpc.share(output_tensor),
+                'device': output_tensor.device.index
+            }
+            
+            # Send to daemon
+            response = self._send({
+                'type': 'execute_cuda',
+                'spec': spec,
+                'code': code,
+                'cuda_in': cuda_in_meta,
+                'cuda_out': cuda_out_meta,
+                'python_exe': python_exe or sys.executable
+            })
+            
+            if not response.get('success'):
+                raise RuntimeError(f"Worker Error: {response.get('error')}")
+            
+            actual_method = response.get('cuda_method', 'unknown')
+            if actual_method == 'universal_ipc':
+                print(f"   🔥 Worker confirmed UNIVERSAL IPC (true zero-copy)!")
+            else:
+                print(f"   ⚠️  Worker fell back to {actual_method}")
+            
+            return output_tensor, response
+            
+        except Exception as e:
+            print(f"   ⚠️  Universal IPC failed: {e}")
+            raise
+    
+    def _execute_pytorch_native_ipc(self, spec, code, input_tensor, output_shape, output_dtype, python_exe):
+        """PyTorch 1.x native IPC (framework-managed)."""
+        import torch
+        import base64
+        
+        print(f"   🔥 Using PYTORCH NATIVE IPC (PyTorch 1.x)")
+        
+        try:
+            # Share input tensor via native CUDA IPC
+            input_storage = input_tensor.storage()
+            (storage_device, storage_handle, storage_size_bytes, storage_offset_bytes,
+             ref_counter_handle, ref_counter_offset, event_handle, event_sync_required) = input_storage._share_cuda_()
+            
+            cuda_in_meta = {
+                'ipc_data': {
+                    'tensor_size': list(input_tensor.shape),
+                    'tensor_stride': list(input_tensor.stride()),
+                    'tensor_offset': input_tensor.storage_offset(),
+                    'storage_cls': type(input_storage).__name__,
+                    'dtype': str(input_tensor.dtype).replace('torch.', ''),
+                    'storage_device': storage_device,
+                    'storage_handle': base64.b64encode(storage_handle).decode('ascii'),
+                    'storage_size_bytes': storage_size_bytes,
+                    'storage_offset_bytes': storage_offset_bytes,
+                    'ref_counter_handle': base64.b64encode(ref_counter_handle).decode('ascii'),
+                    'ref_counter_offset': ref_counter_offset,
+                    'event_handle': base64.b64encode(event_handle).decode('ascii') if event_handle else '',
+                    'event_sync_required': event_sync_required
+                },
+                'device': input_tensor.device.index
+            }
+            
+            # Create output tensor and share it
+            dtype_map = {'float32': torch.float32, 'float64': torch.float64, 'float16': torch.float16}
+            torch_dtype = dtype_map.get(output_dtype, torch.float32)
+            output_tensor = torch.empty(output_shape, dtype=torch_dtype, device=input_tensor.device)
+            
+            output_storage = output_tensor.storage()
+            (storage_device, storage_handle, storage_size_bytes, storage_offset_bytes,
+             ref_counter_handle, ref_counter_offset, event_handle, event_sync_required) = output_storage._share_cuda_()
+            
+            cuda_out_meta = {
+                'ipc_data': {
+                    'tensor_size': list(output_tensor.shape),
+                    'tensor_stride': list(output_tensor.stride()),
+                    'tensor_offset': output_tensor.storage_offset(),
+                    'storage_cls': type(output_storage).__name__,
+                    'dtype': str(output_tensor.dtype).replace('torch.', ''),
+                    'storage_device': storage_device,
+                    'storage_handle': base64.b64encode(storage_handle).decode('ascii'),
+                    'storage_size_bytes': storage_size_bytes,
+                    'storage_offset_bytes': storage_offset_bytes,
+                    'ref_counter_handle': base64.b64encode(ref_counter_handle).decode('ascii'),
+                    'ref_counter_offset': ref_counter_offset,
+                    'event_handle': base64.b64encode(event_handle).decode('ascii') if event_handle else '',
+                    'event_sync_required': event_sync_required
+                },
+                'device': output_tensor.device.index
+            }
+            
+            response = self._send({
+                'type': 'execute_cuda',
+                'spec': spec,
+                'code': code,
+                'cuda_in': cuda_in_meta,
+                'cuda_out': cuda_out_meta,
+                'python_exe': python_exe or sys.executable
+            })
+            
+            if not response.get('success'):
+                raise RuntimeError(f"Worker Error: {response.get('error')}")
+            
+            actual_method = response.get('cuda_method', 'unknown')
+            if actual_method == 'native_ipc':
+                print(f"   🔥 Worker confirmed NATIVE IPC (PyTorch managed)!")
+            else:
+                print(f"   ⚠️  Worker fell back to {actual_method}")
+            
+            return output_tensor, response
+            
+        except Exception as e:
+            print(f"   ⚠️  PyTorch native IPC failed: {e}")
+            raise
+    
+    
+    def _execute_hybrid_ipc(self, spec, code, input_tensor, output_shape, output_dtype, python_exe):
+        """
+        Hybrid mode: Copy to CPU SHM, worker copies to GPU.
+        
+        NOTE: Benchmarks show this is the SLOWEST mode (14ms vs 1.5ms Universal).
+        Only use this for testing or when all other modes fail.
+        
+        Prefer CPU_SHM mode over this (10ms vs 14ms) - it's faster!
+        """
+        from multiprocessing import shared_memory
+        import numpy as np
+        import torch
+        
+        print(f"   🔄 Using HYBRID mode (CPU SHM + GPU copies) - SLOWEST MODE")
+        print(f"   💡 Consider using cpu_shm mode instead (1.34x faster)")
         
         # Copy tensor to CPU, share via SHM
         input_cpu = input_tensor.cpu().numpy()
@@ -1997,8 +2850,7 @@ class DaemonClient:
             if not response.get('success'):
                 raise RuntimeError(f"Worker Error: {response.get('error')}")
             
-            actual_method = response.get('cuda_method', 'hybrid')
-            print(f"   ✅ {actual_method.capitalize()} mode (2 GPU copies per stage)")
+            print(f"   ✅ Hybrid mode completed")
             
             # Copy result back to GPU
             shm_out_array = np.ndarray(output_shape, dtype=output_cpu.dtype, buffer=shm_out.buf)

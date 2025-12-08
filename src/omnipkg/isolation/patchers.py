@@ -18,6 +18,9 @@ _tf_smart_initialized = False
 _tf_module_cache = {}
 _original_import_func = builtins.__import__
 
+# Track circular import healing stats
+_circular_import_stats = {}
+
 _tf_circular_deps_known = {
     'module_util': 'tensorflow.python.tools.module_util',
     'lazy_loader': 'tensorflow.python.util.lazy_loader', 
@@ -40,32 +43,14 @@ def smart_tf_patcher():
     if _tf_smart_initialized:
         return
 
-    safe_print("🧠 [OMNIPKG-UNIFIED] Initializing intelligent package resolver...")
-    safe_print("⚡ [OMNIPKG-UNIFIED] Installing C++ reality stabilizers...")
+    safe_print("🧠 [OMNIPKG] Installing import hooks with C++ stabilization")
 
     _install_cpp_reality_anchors()
 
     def genius_import(name, globals=None, locals=None, fromlist=(), level=0):
-    """A patched import function to handle dynamic package isolation."""
-    # RECURSION GUARD: If the hook is already running on this thread,
-    # use the original import function immediately to prevent an infinite loop.
-    if getattr(_genius_import_running, 'now', False):
-        return _original_import_func(name, globals, locals, fromlist, level)
-
-    _genius_import_running.now = True
-    try:
-        # The existing logic for suppressing warnings will now work safely.
-        with warnings.catch_warnings():
-            warnings.filterwarnings(
-                "ignore",
-                message="The NumPy module was reloaded",
-                category=UserWarning
-            )
-            warnings.filterwarnings(
-                "ignore",
-                message="A module that was compiled using NumPy 1.x cannot be run in NumPy 2.+",
-                category=UserWarning
-            )
+        """
+        A single import hook that understands both TensorFlow and PyTorch.
+        """
         # ═══════════════════════════════════════════════════════════
         # torch/numpy SPECIFIC LOGIC (Warning Suppression)
         # ═══════════════════════════════════════════════════════════
@@ -81,7 +66,6 @@ def smart_tf_patcher():
                     message="A module that was compiled using NumPy 1.x cannot be run in NumPy 2.+",
                     category=UserWarning
                 )
-                # Fall through to the main import logic within the warning block
                 pass
 
         # ═══════════════════════════════════════════════════════════
@@ -92,22 +76,28 @@ def smart_tf_patcher():
 
         if is_tf_import:
             if hasattr(builtins, '__omnipkg_tf_loaded_once__') and 'tensorflow' not in sys.modules:
-                safe_print("☢️  [OMNIPKG-UNIFIED] FATAL TENSORFLOW RELOAD DETECTED!")
+                safe_print("☢️  [OMNIPKG] FATAL TENSORFLOW RELOAD DETECTED!")
                 raise ProcessCorruptedException(
                     "Attempted to reload TensorFlow in a process where its C++ libraries were already initialized."
                 )
 
         if is_tf_import or is_tf_submodule:
+            # Check for circular imports first
             if _detect_circular_import_scenario(name, fromlist, globals):
                 return _handle_circular_import(name, fromlist, globals)
-            # ... (keep the other TF helper calls)
+            
+            # Handle partial initialization scenarios
+            if _is_partially_initialized_tf(globals):
+                return _handle_partial_initialization(name, fromlist, globals)
+            
+            # Handle C++/Python boundary crossing
+            if _is_cpp_boundary_import(name, fromlist):
+                return _handle_cpp_boundary_import(name, fromlist, globals)
 
         # ═══════════════════════════════════════════════════════════
         # THE ACTUAL IMPORT
         # ═══════════════════════════════════════════════════════════
-        with warnings.catch_warnings():
-            warnings.filterwarnings('ignore', message='.*NumPy module was reloaded.*')
-            module = _original_import_func(name, globals, locals, fromlist, level)
+        module = _original_import_func(name, globals, locals, fromlist, level)
 
         if is_tf_import and module:
             if not hasattr(builtins, '__omnipkg_tf_loaded_once__'):
@@ -118,11 +108,9 @@ def smart_tf_patcher():
     genius_import.__omnipkg_genius_import__ = True
     builtins.__import__ = genius_import
     _tf_smart_initialized = True
-    safe_print("✅ [OMNIPKG-UNIFIED] Intelligent resolver activated")
 
 def _install_cpp_reality_anchors():
     """Install handles for TensorFlow's C++ psyche to grip during reality shifts."""
-    safe_print("🔧 [OMNIPKG-TF-SMART] Installing C++ reality anchors...")
     
     # Create stable memory anchors for C++ extensions
     _tf_module_cache['cpp_reality_anchor'] = {
@@ -138,14 +126,13 @@ def _create_stable_dtype_mappings():
         import numpy as np
         stable_mappings = {
             'float32': np.float32,
-            'float64': np.float64,
+            'float64': np.float64, 
             'int32': np.int32,
             'int64': np.int64,
             'bool': np.bool_,
         }
-        safe_print("   📊 Stable dtype mappings anchored")
     except ImportError:
-        safe_print("   - [OMNIPKG-UNIFIED] NumPy not found. Skipping reality anchor for dtypes.")
+        pass
     return stable_mappings
 
 def _create_memory_layout_guides():
@@ -182,8 +169,6 @@ def _is_cpp_boundary_import(name, fromlist):
 
 def _handle_cpp_boundary_import(name, fromlist, globals):
     """Handle C++/Python boundary imports."""
-    safe_print(f"🌉 [OMNIPKG-TF-SMART] Crossing C++/Python boundary: {name}")
-    
     _stabilize_cpp_psyche()
     result = _original_import_func(name, globals, None, fromlist, level=0)
     _post_import_cpp_stabilization(name, result)
@@ -192,8 +177,6 @@ def _handle_cpp_boundary_import(name, fromlist, globals):
 
 def _stabilize_cpp_psyche():
     """Stabilize TensorFlow's C++ extensions before they freak out."""
-    safe_print("   🧘‍♂️ [OMNIPKG-TF-SMART] Stabilizing C++ psyche...")
-    
     if 'tensorflow' in sys.modules:
         tf_module = sys.modules['tensorflow']
         if not hasattr(tf_module, '__omnipkg_reality_anchors__'):
@@ -202,7 +185,6 @@ def _stabilize_cpp_psyche():
 def _post_import_cpp_stabilization(name, module):
     """Apply post-import stabilization to C++ modules."""
     if hasattr(module, '__file__') and '.so' in str(module.__file__):
-        safe_print(f"   🔧 [OMNIPKG-TF-SMART] Stabilized C++ extension: {name}")
         module.__omnipkg_cpp_stabilized__ = True
 
 def _tensor_to_numpy_stabilized(tensor):
@@ -213,8 +195,7 @@ def _tensor_to_numpy_stabilized(tensor):
             if hasattr(result, 'flags'):
                 result.flags.writeable = True
             return result
-    except Exception as e:
-        safe_print(f"   ⚠️ [OMNIPKG-TF-SMART] Tensor conversion stabilized: {e}")
+    except Exception:
         return None
 
 def _numpy_to_tensor_stabilized(array):
@@ -222,8 +203,7 @@ def _numpy_to_tensor_stabilized(array):
     try:
         stabilized_array = _stabilize_numpy_array(array)
         return stabilized_array
-    except Exception as e:
-        safe_print(f"   ⚠️ [OMNIPKG-TF-SMART] Array conversion stabilized: {e}")
+    except Exception:
         return array
 
 def _stabilize_numpy_array(array):
@@ -256,7 +236,8 @@ def _detect_circular_import_scenario(name, fromlist, globals):
     
     for pattern_module, pattern_import in circular_patterns:
         if pattern_module in current_module and fromlist and pattern_import in fromlist:
-            safe_print(f"🔄 [OMNIPKG-TF-SMART] Detected circular import: {pattern_import} in {current_module}")
+            # Track stats instead of printing each one
+            _circular_import_stats[pattern_import] = _circular_import_stats.get(pattern_import, 0) + 1
             return True
     
     return False
@@ -280,14 +261,11 @@ def _handle_circular_import(name, fromlist, globals):
                 successfully_imported[import_name] = sys.modules[real_module_path]
             else:
                 try:
-                    safe_print(f"🔧 [OMNIPKG-TF-SMART] Direct import: {real_module_path}")
                     target_module = importlib.import_module(real_module_path)
                     # Ensure it's in sys.modules
                     sys.modules[real_module_path] = target_module
                     successfully_imported[import_name] = target_module
-                except ImportError as e:
-                    safe_print(f"   ⚠️ Direct import failed: {e}")
-                    # Don't continue - we need to handle this gracefully
+                except ImportError:
                     pass
     
     # If we couldn't import the dependencies, don't try to proceed
@@ -299,7 +277,7 @@ def _handle_circular_import(name, fromlist, globals):
     try:
         result = _original_import_func(name, globals, None, fromlist, level=0)
         return result
-    except ImportError as import_error:
+    except ImportError:
         # If the original import still fails, we have two options:
         # 1. If the parent module exists, return it with injected attributes
         # 2. Otherwise, return a namespace with just the imported items
@@ -321,6 +299,12 @@ def _handle_circular_import(name, fromlist, globals):
         
         return CircularImportNamespace(successfully_imported)
 
+def print_circular_import_summary():
+    """Print a summary of circular imports healed (call at end of loading)."""
+    if _circular_import_stats:
+        summary = ", ".join(f"{dep}×{count}" for dep, count in sorted(_circular_import_stats.items()))
+        safe_print(f"🔄 [OMNIPKG] Healed circular imports: {summary}")
+
 def _is_partially_initialized_tf(globals):
     """Check if we're in a partially initialized TensorFlow module."""
     if not globals or '__name__' not in globals:
@@ -339,8 +323,6 @@ def _is_partially_initialized_tf(globals):
 
 def _handle_partial_initialization(name, fromlist, globals):
     """Handle partial initialization."""
-    safe_print(f"🛠️  [OMNIPKG-TF-SMART] Handling partial initialization for {name}")
-    
     parent_module = globals['__name__'] if globals else name
     if parent_module in sys.modules:
         _force_complete_initialization(parent_module)
@@ -363,6 +345,5 @@ def _force_complete_initialization(module_name):
             if submod not in sys.modules:
                 try:
                     importlib.import_module(submod)
-                    safe_print(f"🔧 [OMNIPKG-TF-SMART] Pre-loaded {submod}")
                 except ImportError:
                     continue
