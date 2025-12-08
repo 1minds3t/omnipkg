@@ -6,7 +6,7 @@ import tempfile
 import time
 import socket
 import signal
-import psutil
+# import psutil  # Made lazy
 import threading
 import glob
 import subprocess
@@ -1160,6 +1160,7 @@ class PersistentWorker:
         Raises:
             RuntimeError: If process is idle for too long or crashes
         """
+        import psutil
         start_time = time.time()
         last_activity_time = start_time
         last_cpu_percent = 0.0
@@ -1245,6 +1246,7 @@ class PersistentWorker:
         Returns:
             Response dict from worker
         """
+        import psutil
         import json
         
         try:
@@ -1942,7 +1944,9 @@ class WorkerPoolDaemon:
                             worker_info['worker'].force_shutdown()
 
     def _memory_manager(self):
+
         """Enhanced with GPU memory monitoring."""
+        import psutil
         while self.running:
             time.sleep(60)
             now = time.time()
