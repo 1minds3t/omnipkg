@@ -72,7 +72,7 @@ from omnipkg.loader import omnipkgLoader
 
 try:
     log(f"🐚 Worker initializing environment: {package_spec}...")
-    loader = omnipkgLoader("{package_spec}", quiet=True, worker_fallback=False)
+    loader = omnipkgLoader("{package_spec}", quiet=False, worker_fallback=False)
     loader.__enter__()
     
     send_ipc({{"status": "ready"}})
