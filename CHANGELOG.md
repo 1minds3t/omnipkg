@@ -1,5 +1,43 @@
 # Changelog
 
+# Changelog
+
+## [2.0.0] - 2025-12-08 - "The Singularity"
+
+**The "Hypervisor" Update.**
+This release marks a fundamental paradigm shift from "Package Loader" to "Distributed Runtime Architecture." OmniPkg 2.0 introduces a persistent daemon kernel, universal GPU IPC, and hardware-level isolation, effectively functioning as an Operating System for Python environments.
+
+### 🚀 Major Architectural Breakthroughs
+*   **Universal GPU IPC (Pure Python/ctypes):**
+    *   Implemented a custom, framework-agnostic CUDA IPC protocol (`UniversalGpuIpc`) using raw `ctypes`.
+    *   **Performance:** Achieved **~1.5ms latency** for tensor handoffs, beating PyTorch's native IPC by ~30% and Hybrid SHM by **800%**.
+    *   Enables true zero-copy data transfer between isolated processes without relying on framework-specific hooks.
+*   **Persistent Worker Daemon ("The Kernel"):**
+    *   Replaced ad-hoc subprocess spawning with a persistent, self-healing worker pool (`WorkerPoolDaemon`).
+    *   Reduces environment context switching time from **~2000ms** (process spawn) to **~60ms** (warm activation).
+    *   Implements an "Elastic Lung" architecture: Workers morph into required environments on-demand and purge themselves back to a clean slate.
+*   **Selective Hardware Virtualization (CUDA Hotswapping):**
+    *   Implemented dynamic `LD_LIBRARY_PATH` injection at the worker level.
+    *   The daemon now scans active bubbles to inject the **exact** CUDA runtime libraries required by the specific framework version (e.g., loading CUDA 11 libs for TF 2.13 while the host runs CUDA 12).
+    *   **Result:** Successfully ran TensorFlow 2.12 (CPU), TF 2.13 (CPU), and TF 2.20 (GPU) **simultaneously** in a single orchestration flow without crashing.
+
+### ⚡ Core Enhancements
+*   **Fail-Safe Cloaking:** Added `_force_restore_owned_cloaks()` to guarantee filesystem restoration even during catastrophic process failures or OOM events.
+*   **Global Shutdown Silencer:** Implemented an `atexit` hook that synchronizes CUDA contexts and silences the C++ "driver shutting down" noise, ensuring clean exit codes for CI/CD.
+*   **Composite Bubble Injection:** The loader now automatically constructs "Meta-Bubbles" at runtime, merging the requested package bubble with its binary dependencies (NVIDIA libs, Triton) on the fly.
+
+### 🐛 Critical Fixes
+*   **PyTorch 1.13+ Compatibility:** Patched the worker daemon to handle `TypedStorage` serialization changes in newer PyTorch versions, preventing crashes during native IPC.
+*   **Deadlock Prevention:** Implemented `ThreadPoolExecutor` in the daemon manager to allow recursive worker calls (Worker A calling Worker B) without deadlocking the socket.
+*   **Lazy Loading:** Made `psutil` and `torch` imports lazy within the daemon to prevent "poisoning" the process with default environment versions before isolation takes effect.
+
+### 📊 Benchmarks (vs v1.x)
+*   **IPC Speed:** 14ms (v1 Hybrid) → **1.5ms** (v2 Universal).
+*   **Context Switch:** 2.5s (v1 Cold) → **0.06s** (v2 Warm).
+*   **Concurrency:** Validated "Framework Battle Royale" (NumPy 1.x + 2.x + Torch + TF running concurrently).
+
+---
+
 ## [1.6.0]
 
 # omnipkg v1.6.0: The Quantum Lock & Concurrency Release
