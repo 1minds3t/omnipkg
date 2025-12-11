@@ -36,11 +36,27 @@ from omnipkg.i18n import _
 # ═══════════════════════════════════════════════════════════
 # 🧠 INSTALL TENSORFLOW PATCHER AT MODULE LOAD (ONCE ONLY)
 # ═══════════════════════════════════════════════════════════
+
+_PATCHER_AVAILABLE = False
+_PATCHER_ERROR = None
+
 try:
     from omnipkg.isolation.patchers import smart_tf_patcher
-    smart_tf_patcher()
+    try:
+        smart_tf_patcher()
+        _PATCHER_AVAILABLE = True
+    except Exception as init_error:
+        # Patcher imported but failed to initialize - that's OK!
+        # It will only be needed if someone imports TF/PyTorch/NumPy
+        _PATCHER_ERROR = str(init_error)
+        pass
 except ImportError:
-    pass  # Patcher not available
+    # Patcher module not available - that's OK!
+    pass
+except Exception as e:
+    # Some other unexpected error during import - log it but don't crash
+    _PATCHER_ERROR = f"Unexpected error loading patcher: {str(e)}"
+    pass
 
 # ═══════════════════════════════════════════════════════════
 # Import Daemon Components (NEW)
@@ -393,70 +409,47 @@ class omnipkgLoader:
             return None
 
     def stabilize_daemon_state(self):
-        """
-        DAEMON HELPER: Immediately uncloaks files using a separate process.
-        CRITICAL: This MUST be part of the locked phase!
-        """
+        """Uncloaks files using the Daemon's Idle Pool (Fast Path)."""
         self._profile_start('daemon_uncloak')
         
-        if not self._cloaked_main_modules and not self._cloaked_bubbles:
-            self._profile_end('daemon_uncloak', print_now=True)
-            return
-
+        # 1. Collect Moves
         moves = []
-        # Handle Main Env Cloaks
         for orig, cloak, success in self._cloaked_main_modules:
-            if success and cloak.exists():
-                moves.append((str(cloak), str(orig)))
-        
-        # Handle Bubble Cloaks
+            if success and cloak.exists(): moves.append((str(cloak), str(orig)))
         for cloak, orig in self._cloaked_bubbles:
-            if cloak.exists():
-                moves.append((str(cloak), str(orig)))
+            if cloak.exists(): moves.append((str(cloak), str(orig)))
 
         if not moves:
-            self._profile_end('daemon_uncloak', print_now=True)
+            self._profile_end('daemon_uncloak')
             return
 
-        # Spawn external cleanup process
-        try:
-            import subprocess
-            
-            script = (
-                "import shutil, sys, json, os; "
-                "moves = json.loads(sys.argv[1]); "
-                "for src, dst in moves: "
-                "  try: "
-                "    if os.path.exists(dst): "
-                "      if os.path.isdir(dst): shutil.rmtree(dst, ignore_errors=True) "
-                "      else: os.unlink(dst) "
-                "    shutil.move(src, dst) "
-                "  except: pass"
-            )
-            
-            # CRITICAL: This runs synchronously but in separate process
-            # Prevents daemon from seeing cloaked state
-            subprocess.run(
-                [sys.executable, "-c", script, json.dumps(moves)],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                check=False,
-                timeout=5  # Add timeout for safety
-            )
-            
-            # Clear internal tracking
-            self._cloaked_main_modules.clear()
-            self._cloaked_bubbles.clear()
-            
-            self._profile_end('daemon_uncloak', print_now=True)
-            
-            if not self.quiet:
-                safe_print(f"   👻 Daemon stabilized: {len(moves)} items uncloaked")
-            
-        except Exception as e:
-            self._profile_end('daemon_uncloak', print_now=True)
-            if not self.quiet:
-                safe_print(f"   ⚠️  Daemon stabilization warning: {e}")
+        # 2. Execute via Daemon (Preferred) or Fallback
+        success = False
+        if DAEMON_AVAILABLE:
+            try:
+                client = self._get_daemon_client()
+                res = client.request_maintenance(moves)
+                if res.get('success'):
+                    success = True
+                    if not self.quiet:
+                        safe_print(f"   🔄 Daemon Uncloak: {res.get('count')} items restored")
+            except Exception:
+                pass
+
+        # 3. Fallback (Slow Subprocess)
+        if not success:
+            try:
+                import subprocess
+                script = "import shutil, sys, json, os; moves=json.loads(sys.argv[1]); " \
+                         "for s,d in moves: (shutil.move(s,d) if os.path.exists(s) else None)"
+                subprocess.run([sys.executable, "-c", script, json.dumps(moves)], 
+                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=5)
+            except: pass
+
+        # 4. Clear local tracking
+        self._cloaked_main_modules.clear()
+        self._cloaked_bubbles.clear()
+        self._profile_end('daemon_uncloak', print_now=True)
             
     def _get_cloak_lock(self, pkg_name: str) -> filelock.FileLock:
         """
@@ -871,14 +864,34 @@ class omnipkgLoader:
         dist_infos = list(bubble_path.rglob('*.dist-info'))
 
         # THE FIX: This is the actual implementation that was missing.
+        from importlib.metadata import PathDistribution
+        from packaging.utils import canonicalize_name # <-- BEST PRACTICE: Use this for normalization
+
         for dist_info in dist_infos:
             if dist_info.is_dir():
                 try:
-                    from importlib.metadata import PathDistribution
                     dist = PathDistribution(dist_info)
-                    pkg_name = dist.metadata['Name'].lower().replace('-', '_')
-                    dependencies[pkg_name] = dist.version
-                except Exception:
+                    
+                    # --- THE FIX ---
+                    # 1. Get the name RELIABLY from the metadata dictionary.
+                    #    It can raise a KeyError if the METADATA file is corrupt.
+                    pkg_name_from_meta = dist.metadata['Name']
+                    
+                    # 2. Use a standard utility to normalize the name.
+                    #    This is safer than .lower().replace('-', '_')
+                    pkg_name_canonical = canonicalize_name(pkg_name_from_meta)
+
+                    # 3. Get the version using the convenient property.
+                    pkg_version = dist.version
+
+                    # 4. Store the results.
+                    dependencies[pkg_name_canonical] = pkg_version
+
+                except (KeyError, FileNotFoundError, Exception) as e:
+                    # Be more specific in your error handling. A bare `except Exception`
+                    # can hide real bugs. KeyError means a malformed METADATA file.
+                    # You could add logging here if you want to debug which packages fail.
+                    # safe_print(f"⚠️  Could not parse metadata for {dist_info.name}: {e}")
                     continue
         
         return dependencies
@@ -1647,11 +1660,7 @@ class omnipkgLoader:
                 gc.collect()
                 importlib.invalidate_caches()
                 self._profile_end('memory_purge', print_now=True)
-                
-                # DEBUG
-                safe_print(f"DEBUG sys.path: {sys.path[:3]}")  # First 3 entries
-
-                
+                                
                 # Profile: Path sanitization
                 self._profile_start('path_sanitization')
                 self._scrub_sys_path_of_bubbles()

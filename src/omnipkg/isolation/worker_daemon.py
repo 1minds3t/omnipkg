@@ -6,9 +6,10 @@ import tempfile
 import time
 import socket
 import signal
-# import psutil  # Made lazy
+import psutil
 import threading
 import glob
+import platform
 import subprocess
 import select
 from pathlib import Path
@@ -18,12 +19,12 @@ from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeout
 import traceback
 from collections import deque
 import ctypes
-import base64  # <--- ENSURE THIS IS HERE
+import base64 
 
 # ═══════════════════════════════════════════════════════════════
 # 0. CONSTANTS & UTILITIES
 # ═══════════════════════════════════════════════════════════════
-
+IS_WINDOWS = platform.system() == 'Windows'
 DEFAULT_SOCKET = "/tmp/omnipkg_daemon.sock"
 PID_FILE = "/tmp/omnipkg_daemon.pid"
 SHM_REGISTRY_FILE = "/tmp/omnipkg_shm_registry.json"
@@ -309,35 +310,6 @@ import os
 import sys
 from pathlib import Path
 
-# ═══════════════════════════════════════════════════════════
-# 🔥 CUDA PRE-INJECTION (BEFORE ANY IMPORTS)
-# ═══════════════════════════════════════════════════════════
-try:
-    import site
-    site_packages = Path(site.getsitepackages()[0])
-    multiversion_base = site_packages / '.omnipkg_versions'
-    
-    cuda_lib_paths = []
-    for nvidia_bubble in multiversion_base.glob('nvidia-*-cu12-*'):
-        if nvidia_bubble.is_dir():
-            nvidia_dir = nvidia_bubble / 'nvidia'
-            if nvidia_dir.exists():
-                for module_dir in nvidia_dir.iterdir():
-                    if module_dir.is_dir():
-                        lib_dir = module_dir / 'lib'
-                        if lib_dir.exists():
-                            cuda_lib_paths.append(str(lib_dir))
-    
-    if cuda_lib_paths:
-        current_ld = os.environ.get('LD_LIBRARY_PATH', '')
-        new_ld = os.pathsep.join(cuda_lib_paths) + (os.pathsep + current_ld if current_ld else '')
-        os.environ['LD_LIBRARY_PATH'] = new_ld
-        sys.stderr.write(f'🔧 [PRE-INIT] Set LD_LIBRARY_PATH with {len(cuda_lib_paths)} CUDA paths\\n')
-        sys.stderr.flush()
-except Exception as e:
-    sys.stderr.write(f'⚠️  [PRE-INIT] CUDA setup failed: {e}\\n')
-    sys.stderr.flush()
-
 # NOW proceed with normal imports
 import json
 import shutil
@@ -363,18 +335,47 @@ def fatal_error(msg, error=None):
     sys.stderr.flush()
     sys.exit(1)
 
-try:
-    input_line = sys.stdin.readline()
-    if not input_line:
-        fatal_error('No input received on stdin')
-    
-    setup_data = json.loads(input_line.strip())
-    PKG_SPEC = setup_data.get('package_spec')
-    
-    if not PKG_SPEC:
-        fatal_error('Missing package_spec')
-except Exception as e:
-    fatal_error('Startup configuration failed', e)
+PKG_SPEC = None
+while True:
+    try:
+        input_line = sys.stdin.readline()
+        if not input_line:
+            fatal_error('No input received on stdin')
+        
+        cmd = json.loads(input_line.strip())
+        
+        # TYPE 1: Maintenance (FS Ops) - Stays in Loop
+        if cmd.get('type') == 'maintenance':
+            moves = cmd.get('moves', [])
+            count = 0
+            errors = []
+            for src, dst in moves:
+                try:
+                    if os.path.exists(dst):
+                        if os.path.isdir(dst): shutil.rmtree(dst, ignore_errors=True)
+                        else: os.unlink(dst)
+                    if os.path.exists(src):
+                        shutil.move(src, dst)
+                        count += 1
+                except Exception as e:
+                    errors.append(f"{src}->{dst}: {e}")
+            
+            # Respond to daemon (briefly restore stdout)
+            sys.stdout = _original_stdout
+            print(json.dumps({'status': 'MAINTENANCE_OK', 'count': count, 'errors': errors}), flush=True)
+            sys.stdout = _devnull
+            continue
+
+        # TYPE 2: Initialization - Breaks Loop
+        if 'package_spec' in cmd:
+            PKG_SPEC = cmd.get('package_spec')
+            break
+            
+    except Exception as e:
+        fatal_error('Startup loop failed', e)
+
+if not PKG_SPEC:
+    fatal_error('Missing package_spec')
 
 try:
     from omnipkg.loader import omnipkgLoader
@@ -394,105 +395,83 @@ try:
     specs = [s.strip() for s in PKG_SPEC.split(',')]
     loaders = []
     
-    for s in specs:
-        l = omnipkgLoader(s, isolation_mode='overlay')
-        l.__enter__()
-        loaders.append(l)
+    if PKG_SPEC != "__idle__":
+        # Normal worker - activate immediately
+        for s in specs:
+            l = omnipkgLoader(s, isolation_mode='overlay')
+            l.__enter__()
+            loaders.append(l)
 
-    # ═══════════════════════════════════════════════════════════
-    # 🔥 CUDA LIBRARY PATH INJECTION (CORRECT PATTERN)
-    # ═══════════════════════════════════════════════════════════
-    cuda_lib_paths = []
-    
-    if loaders and hasattr(loaders[0], 'multiversion_base'):
-        from pathlib import Path
-        multiversion_base = Path(loaders[0].multiversion_base)
+        # ═══════════════════════════════════════════════════════════
+        # 🔥 CUDA LIBRARY PATH INJECTION (CORRECT PATTERN)
+        # ═══════════════════════════════════════════════════════════
+        cuda_lib_paths = []
         
-        # Pattern: nvidia-{name}-cu12-{version}/nvidia/{module}/lib/
-        for nvidia_bubble in multiversion_base.glob('nvidia-*-cu12-*'):
-            if nvidia_bubble.is_dir() and '_omnipkg_cloaked' not in nvidia_bubble.name:
-                nvidia_dir = nvidia_bubble / 'nvidia'
-                if nvidia_dir.exists():
-                    for module_dir in nvidia_dir.iterdir():
-                        if module_dir.is_dir():
-                            lib_dir = module_dir / 'lib'
-                            if lib_dir.exists() and list(lib_dir.glob('*.so*')):
-                                cuda_lib_paths.append(str(lib_dir))
-    
-    if cuda_lib_paths:
-        current_ld = os.environ.get('LD_LIBRARY_PATH', '')
-        new_ld = os.pathsep.join(cuda_lib_paths)
-        if current_ld:
-            new_ld = new_ld + os.pathsep + current_ld
-        os.environ['LD_LIBRARY_PATH'] = new_ld
+        if loaders and hasattr(loaders[0], 'multiversion_base'):
+            from pathlib import Path
+            multiversion_base = Path(loaders[0].multiversion_base)
+            
+            # Pattern: nvidia-{name}-cu12-{version}/nvidia/{module}/lib/
+            for nvidia_bubble in multiversion_base.glob('nvidia-*-cu12-*'):
+                if nvidia_bubble.is_dir() and '_omnipkg_cloaked' not in nvidia_bubble.name:
+                    nvidia_dir = nvidia_bubble / 'nvidia'
+                    if nvidia_dir.exists():
+                        for module_dir in nvidia_dir.iterdir():
+                            if module_dir.is_dir():
+                                lib_dir = module_dir / 'lib'
+                                if lib_dir.exists() and list(lib_dir.glob('*.so*')):
+                                    cuda_lib_paths.append(str(lib_dir))
         
-        sys.stderr.write(f'🔧 [DAEMON] Injected {len(cuda_lib_paths)} CUDA library paths\\n')
-        sys.stderr.flush()
-        
-        for path in cuda_lib_paths[:5]:
-            sys.stderr.write(f'   - {path}\\n')
-            sys.stderr.flush()
-        
-        # Pre-load libcudart
-        import ctypes
-        for lib_path in cuda_lib_paths:
-            cudart = Path(lib_path) / 'libcudart.so.12'
-            if cudart.exists():
-                try:
-                    ctypes.CDLL(str(cudart))
-                    sys.stderr.write(f'   ✅ Pre-loaded: {cudart.name}\\n')
-                    sys.stderr.flush()
-                    break
-                except:
-                    pass
-    else:
-        sys.stderr.write('ℹ️  [DAEMON] No CUDA libraries found\\n')
-        sys.stderr.flush()
-    
-    ### POST LD PATH INJECTION ###
-
-    globals()['_omnipkg_loaders'] = loaders
-    
-    sys.stderr.write('🧹 [DAEMON] Starting immediate post-activation cleanup...\\n')
-    sys.stderr.flush()
-    
-    cleanup_count = 0
-    
-    for loader in loaders:
-        # Restore main env cloaks
-        if hasattr(loader, '_cloaked_main_modules') and loader._cloaked_main_modules:
-            sys.stderr.write(f'   🔓 Restoring {len(loader._cloaked_main_modules)} main env cloaks...\\n')
+        if cuda_lib_paths:
+            current_ld = os.environ.get('LD_LIBRARY_PATH', '')
+            new_ld = os.pathsep.join(cuda_lib_paths)
+            if current_ld:
+                new_ld = new_ld + os.pathsep + current_ld
+            os.environ['LD_LIBRARY_PATH'] = new_ld
+            
+            sys.stderr.write(f'🔧 [DAEMON] Injected {len(cuda_lib_paths)} CUDA library paths\\n')
             sys.stderr.flush()
             
-            for original_path, cloak_path, was_successful in reversed(loader._cloaked_main_modules):
-                if not was_successful or not cloak_path.exists():
-                    continue
+            for path in cuda_lib_paths[:5]:
+                sys.stderr.write(f'   - {path}\\n')
+                sys.stderr.flush()
+            
+            # Pre-load libcudart
+            import ctypes
+            for lib_path in cuda_lib_paths:
+                cudart = Path(lib_path) / 'libcudart.so.12'
+                if cudart.exists():
+                    try:
+                        ctypes.CDLL(str(cudart))
+                        sys.stderr.write(f'   ✅ Pre-loaded: {cudart.name}\\n')
+                        sys.stderr.flush()
+                        break
+                    except:
+                        pass
+        else:
+            sys.stderr.write('ℹ️  [DAEMON] No CUDA libraries found\\n')
+            sys.stderr.flush()
+        
+        ### POST LD PATH INJECTION ###
+
+        globals()['_omnipkg_loaders'] = loaders
+    
+        sys.stderr.write('🧹 [DAEMON] Starting immediate post-activation cleanup...\\n')
+        sys.stderr.flush()
+        
+        cleanup_count = 0
+        
+        for loader in loaders:
+            # Restore main env cloaks
+            if hasattr(loader, '_cloaked_main_modules') and loader._cloaked_main_modules:
+                sys.stderr.write(f'   🔓 Restoring {len(loader._cloaked_main_modules)} main env cloaks...\\n')
+                sys.stderr.flush()
                 
-                try:
-                    if original_path.exists():
-                        if original_path.is_dir():
-                            shutil.rmtree(original_path, ignore_errors=True)
-                        else:
-                            original_path.unlink()
+                for original_path, cloak_path, was_successful in reversed(loader._cloaked_main_modules):
+                    if not was_successful or not cloak_path.exists():
+                        continue
                     
-                    shutil.move(str(cloak_path), str(original_path))
-                    cleanup_count += 1
-                    sys.stderr.write(f'      ✅ Restored: {original_path.name}\\n')
-                    sys.stderr.flush()
-                except Exception as e:
-                    sys.stderr.write(f'      ⚠️  Failed: {original_path.name}: {e}\\n')
-                    sys.stderr.flush()
-            
-            loader._cloaked_main_modules.clear()
-        
-        # Restore bubble cloaks
-        if hasattr(loader, '_cloaked_bubbles') and loader._cloaked_bubbles:
-            sys.stderr.write(f'   🔓 Restoring {len(loader._cloaked_bubbles)} bubble cloaks...\\n')
-            sys.stderr.flush()
-            
-            for cloak_path, original_path in reversed(loader._cloaked_bubbles):
-                try:
-                    if cloak_path.exists():
+                    try:
                         if original_path.exists():
                             if original_path.is_dir():
                                 shutil.rmtree(original_path, ignore_errors=True)
@@ -503,32 +482,59 @@ try:
                         cleanup_count += 1
                         sys.stderr.write(f'      ✅ Restored: {original_path.name}\\n')
                         sys.stderr.flush()
-                except Exception as e:
-                    sys.stderr.write(f'      ⚠️  Failed: {original_path.name}: {e}\\n')
-                    sys.stderr.flush()
-            
-            loader._cloaked_bubbles.clear()
-        
-        # Clean up global tracking
-        if hasattr(loader, '_my_main_env_package') and loader._my_main_env_package:
-            if hasattr(omnipkgLoader, '_active_main_env_packages'):
-                omnipkgLoader._active_main_env_packages.discard(loader._my_main_env_package)
-        
-        # Clear global cloak registry
-        if hasattr(omnipkgLoader, '_active_cloaks_lock') and hasattr(omnipkgLoader, '_active_cloaks'):
-            with omnipkgLoader._active_cloaks_lock:
-                loader_id = id(loader)
-                cloaks_to_remove = []
-                for cloak_path_str, owner_id in list(omnipkgLoader._active_cloaks.items()):
-                    if owner_id == loader_id:
-                        cloaks_to_remove.append(cloak_path_str)
+                    except Exception as e:
+                        sys.stderr.write(f'      ⚠️  Failed: {original_path.name}: {e}\\n')
+                        sys.stderr.flush()
                 
-                for cloak_path_str in cloaks_to_remove:
-                    omnipkgLoader._active_cloaks.pop(cloak_path_str, None)
-    
-    sys.stderr.write(f'✅ [DAEMON] Cleanup complete! Restored {cleanup_count} items\\n')
-    sys.stderr.flush()
-    
+                loader._cloaked_main_modules.clear()
+            
+            # Restore bubble cloaks
+            if hasattr(loader, '_cloaked_bubbles') and loader._cloaked_bubbles:
+                sys.stderr.write(f'   🔓 Restoring {len(loader._cloaked_bubbles)} bubble cloaks...\\n')
+                sys.stderr.flush()
+                
+                for cloak_path, original_path in reversed(loader._cloaked_bubbles):
+                    try:
+                        if cloak_path.exists():
+                            if original_path.exists():
+                                if original_path.is_dir():
+                                    shutil.rmtree(original_path, ignore_errors=True)
+                                else:
+                                    original_path.unlink()
+                            
+                            shutil.move(str(cloak_path), str(original_path))
+                            cleanup_count += 1
+                            sys.stderr.write(f'      ✅ Restored: {original_path.name}\\n')
+                            sys.stderr.flush()
+                    except Exception as e:
+                        sys.stderr.write(f'      ⚠️  Failed: {original_path.name}: {e}\\n')
+                        sys.stderr.flush()
+                
+                loader._cloaked_bubbles.clear()
+            
+            # Clean up global tracking
+            if hasattr(loader, '_my_main_env_package') and loader._my_main_env_package:
+                if hasattr(omnipkgLoader, '_active_main_env_packages'):
+                    omnipkgLoader._active_main_env_packages.discard(loader._my_main_env_package)
+            
+            # Clear global cloak registry
+            if hasattr(omnipkgLoader, '_active_cloaks_lock') and hasattr(omnipkgLoader, '_active_cloaks'):
+                with omnipkgLoader._active_cloaks_lock:
+                    loader_id = id(loader)
+                    cloaks_to_remove = []
+                    for cloak_path_str, owner_id in list(omnipkgLoader._active_cloaks.items()):
+                        if owner_id == loader_id:
+                            cloaks_to_remove.append(cloak_path_str)
+                    
+                    for cloak_path_str in cloaks_to_remove:
+                        omnipkgLoader._active_cloaks.pop(cloak_path_str, None)
+        
+        sys.stderr.write(f'✅ [DAEMON] Cleanup complete! Restored {cleanup_count} items\\n')
+        sys.stderr.flush()
+    else:
+        # Idle worker - skip loader activation, just wait
+        sys.stderr.write('⏸️  [DAEMON] Idle worker spawned, waiting for spec...\\n')
+        sys.stderr.flush()
 except Exception as e:
     fatal_error(f'Failed to activate {PKG_SPEC}', e)
 
@@ -700,8 +706,14 @@ except Exception as e:
 from multiprocessing import shared_memory
 from contextlib import redirect_stdout, redirect_stderr
 import io
-import numpy as np
 import base64
+
+# 🔥 SAFE NUMPY IMPORT (Fixes infinite respawn loop)
+try:
+    import numpy as np
+except ImportError:
+    np = None
+    sys.stderr.write('⚠️  [DAEMON] NumPy not found - SHM features disabled\\n')
 
 _gpu_ipc_available = False
 _torch_available = False
@@ -809,6 +821,28 @@ while True:
         
         if command.get('type') == 'shutdown':
             break
+        if command.get('type') == 'reinit':
+            # Handle re-initialization
+            new_spec = command.get('package_spec')
+            if not new_spec or new_spec == "__idle__":
+                continue
+            
+            # NOW activate the loaders
+            PKG_SPEC = new_spec
+            specs = [s.strip() for s in PKG_SPEC.split(',')]
+            loaders = []
+            
+            for s in specs:
+                l = omnipkgLoader(s, isolation_mode='overlay')
+                l.__enter__()
+                loaders.append(l)
+            
+            globals()['_omnipkg_loaders'] = loaders
+            
+            # Send READY
+            ready_msg = {'status': 'READY', 'package': PKG_SPEC}
+            print(json.dumps(ready_msg), flush=True)
+            continue
         
         task_id = command.get('task_id', 'UNKNOWN')
         worker_code = command.get('code', '')
@@ -895,6 +929,9 @@ while True:
 
         # HYBRID PATH (SHM + GPU copy)
         if in_meta and 'tensor_in' not in exec_scope:
+            if np is None:
+                raise RuntimeError("NumPy is required for SHM inputs but is not available")
+
             shm_name = in_meta.get('shm_name') or in_meta.get('name')
             shm_in = shared_memory.SharedMemory(name=shm_name)
             shm_blocks.append(shm_in)
@@ -991,6 +1028,9 @@ while True:
 
         # HYBRID PATH (SHM + GPU copy) OUTPUT
         if out_meta and 'tensor_out' not in exec_scope:
+            if np is None:
+                raise RuntimeError("NumPy is required for SHM outputs but is not available")
+
             shm_name = out_meta.get('shm_name') or out_meta.get('name')
             shm_out = shared_memory.SharedMemory(name=shm_name)
             shm_blocks.append(shm_out)
@@ -1143,7 +1183,74 @@ class PersistentWorker:
         self.lock = threading.RLock()  # Per-worker lock
         self.last_health_check = time.time()
         self.health_check_failures = 0
+        if package_spec != "__idle__":
+            self._start_worker()
         self._start_worker()
+            
+    def perform_maintenance_task(self, moves: List[tuple]) -> dict:
+        """Sends a maintenance command to an IDLE worker sitting in the handshake loop."""
+        if self.package_spec != "__idle__":
+            raise RuntimeError("Cannot perform maintenance on active worker")
+        
+        with self.lock:
+            cmd = json.dumps({'type': 'maintenance', 'moves': moves})
+            self.process.stdin.write(cmd + '\n')
+            self.process.stdin.flush()
+            
+            # Wait for response (short timeout for FS ops)
+            readable, _, _ = select.select([self.process.stdout], [], [], 10.0)
+            if readable:
+                line = self.process.stdout.readline()
+                if line:
+                    return json.loads(line)
+            raise RuntimeError("Maintenance task timed out")
+    
+    def _re_initialize_with_spec(self):
+        """Sends the real package spec to an already-running idle worker process."""
+        if self.package_spec == "__idle__":
+            raise RuntimeError("Cannot re-initialize without setting package_spec first!")
+        
+        try:
+            setup_cmd = json.dumps({
+                'type': 'reinit',
+                'package_spec': self.package_spec
+            })
+            self.process.stdin.write(setup_cmd + '\n')
+            self.process.stdin.flush()
+
+            # ═══════════════════════════════════════════════════════════
+            # CRITICAL FIX: Handle blank lines from worker stderr
+            # ═══════════════════════════════════════════════════════════
+            max_attempts = 5
+            for attempt in range(max_attempts):
+                readable, _, _ = select.select([self.process.stdout], [], [], 10.0)
+                if not readable:
+                    raise RuntimeError(f"Worker timeout on re-init (attempt {attempt+1}/{max_attempts})")
+                
+                ready_line = self.process.stdout.readline().strip()
+                
+                # Skip blank lines (worker stderr leakage)
+                if not ready_line:
+                    continue
+                
+                # Try to parse JSON
+                try:
+                    ready_status = json.loads(ready_line)
+                    if ready_status.get('status') == 'READY':
+                        print(f"✅ Worker re-initialized with {self.package_spec}", file=sys.stderr)
+                        return
+                    else:
+                        raise RuntimeError(f"Worker failed to re-initialize: {ready_status}")
+                except json.JSONDecodeError:
+                    # Not JSON, might be debug output - skip it
+                    print(f"⚠️  Ignoring non-JSON line: {repr(ready_line)}", file=sys.stderr)
+                    continue
+            
+            raise RuntimeError("Worker never sent READY after re-initialization")
+            
+        except Exception as e:
+            self.force_shutdown()
+            raise RuntimeError(f"Worker re-initialization failed: {e}")
 
     def wait_for_ready_with_activity_monitoring(process, timeout_idle_seconds=30.0):
         """
@@ -1604,13 +1711,30 @@ class PersistentWorker:
 # ═══════════════════════════════════════════════════════════════
 
 class WorkerPoolDaemon:
-    def __init__(self, max_workers: int = 10, max_idle_time: int = 300, warmup_specs: list = None):
+    def __init__(self, max_workers: int = 10, max_idle_time: int = 300, warmup_specs: list = None,
+                 min_idle_workers: int = 3, python_exe: str = None):
+        """
+        Args:
+            min_idle_workers: Number of idle workers to maintain (default 3, set to 0 to disable)
+            python_exe: Python interpreter to use for this daemon (default: sys.executable)
+        """
         self.max_workers = max_workers
         self.max_idle_time = max_idle_time
         self.warmup_specs = warmup_specs or []
         self.workers: Dict[str, Dict[str, Any]] = {}
-        self.worker_locks: Dict[str, threading.RLock] = defaultdict(threading.RLock)  # Per-spec locks
-        self.pool_lock = threading.RLock()  # Only for pool modifications
+        self.worker_locks: Dict[str, threading.RLock] = defaultdict(threading.RLock)
+        self.pool_lock = threading.RLock()
+        
+        # Idle worker pool - now Python-version aware
+        self.idle_workers = deque()  # Each entry: {'worker': PersistentWorker, 'python_exe': str}
+        self.idle_pool_lock = threading.Lock()
+        self.min_idle_workers = min_idle_workers  # Configurable!
+        self.spawning_count = 0
+        self.spawning_lock = threading.Lock()
+        
+        # Track which Python this daemon was started with
+        self.daemon_python_exe = python_exe or sys.executable
+        
         self.running = True
         self.socket_path = DEFAULT_SOCKET
         self.stats = {
@@ -1618,39 +1742,179 @@ class WorkerPoolDaemon:
             'cache_hits': 0,
             'workers_created': 0,
             'workers_killed': 0,
-            'errors': 0
+            'errors': 0,
+            'idle_pool_hits': 0,
+            'idle_pool_misses': 0
         }
         self.executor = ThreadPoolExecutor(max_workers=20, thread_name_prefix="daemon-handler")
+        
+        # Windows detection
+        self.is_windows = IS_WINDOWS      
     
     def start(self, daemonize: bool = True):
         if self.is_running():
             return
         
-        if daemonize:
+        # Windows: Use subprocess spawn instead of fork
+        if self.is_windows and daemonize:
+            return self._start_windows_daemon()
+        
+        # Unix: Use traditional fork
+        if daemonize and not self.is_windows:
             self._daemonize()
         
         with open(PID_FILE, 'w') as f:
             f.write(str(os.getpid()))
         
-        # CRITICAL FIX: Only register signals if we're in the main thread
+        # Signal handlers only in main thread
         try:
             import threading
             if threading.current_thread() is threading.main_thread():
                 signal.signal(signal.SIGTERM, self._handle_shutdown)
                 signal.signal(signal.SIGINT, self._handle_shutdown)
-        except ValueError:
-            # We're not in the main thread, skip signal handlers
+        except (ValueError, AttributeError):
+            # ValueError: not in main thread
+            # AttributeError: signal module doesn't have SIGTERM (Windows)
             pass
         
-        # Cleanup orphaned SHM blocks from previous runs
+        # Cleanup orphaned SHM blocks
         shm_registry.cleanup_orphans()
         
         # Start background threads
         threading.Thread(target=self._health_monitor, daemon=True, name="health-monitor").start()
         threading.Thread(target=self._memory_manager, daemon=True, name="memory-manager").start()
+        threading.Thread(target=self._maintain_idle_pool, daemon=True, name="idle-pool-manager").start()
         threading.Thread(target=self._warmup_workers, daemon=True, name="warmup").start()
         
         self._run_socket_server()
+
+    def _start_windows_daemon(self):
+        """Start daemon on Windows using subprocess (no fork)."""
+        import subprocess
+        
+        daemon_script = os.path.abspath(__file__)
+        
+        print("🚀 Starting daemon in background (Windows mode)...", file=sys.stderr)
+        
+        try:
+            # Windows flags for detached process
+            DETACHED_PROCESS = 0x00000008
+            CREATE_NEW_PROCESS_GROUP = 0x00000200
+            
+            # Spawn detached process
+            process = subprocess.Popen(
+                [self.daemon_python_exe, daemon_script, "start", "--no-fork"],
+                creationflags=DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP,
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=open(DAEMON_LOG_FILE, 'a'),
+                close_fds=False  # Can't close_fds with creationflags on Windows
+            )
+            
+            # Wait for initialization
+            time.sleep(2)
+            
+            # Check if it started
+            if self.is_running():
+                print(f"✅ Daemon started successfully (PID: {process.pid})", file=sys.stderr)
+                sys.exit(0)
+            else:
+                print(f"❌ Daemon failed to start (check {DAEMON_LOG_FILE})", file=sys.stderr)
+                sys.exit(1)
+                
+        except Exception as e:
+            print(f"❌ Failed to start daemon: {e}", file=sys.stderr)
+            import traceback
+            traceback.print_exc()
+            sys.exit(1)
+
+    def _spawn_idle_worker(self, python_exe: str = None):
+        """Spawns a generic worker process without a spec and adds to idle pool.
+        
+        Args:
+            python_exe: The Python interpreter to use. If None, uses daemon's Python.
+        """
+        if python_exe is None:
+            python_exe = self.daemon_python_exe
+        
+        with self.spawning_lock:
+            self.spawning_count += 1
+        
+        try:
+            worker = PersistentWorker(package_spec="__idle__", python_exe=python_exe)
+            with self.idle_pool_lock:
+                self.idle_workers.append({
+                    'worker': worker,
+                    'python_exe': python_exe
+                })
+            print(f"✅ Spawned idle worker on {os.path.basename(python_exe)} (total idle: {len(self.idle_workers)})", 
+                  file=sys.stderr)
+        except Exception as e:
+            print(f"❌ Failed to spawn idle worker: {e}", file=sys.stderr)
+        finally:
+            with self.spawning_lock:
+                self.spawning_count -= 1
+
+    def _perform_maintenance(self, moves: List[tuple]) -> dict:
+        """Borrows an idle worker for FS ops, then returns it to the pool."""
+        worker_entry = None
+        try:
+            # 1. Borrow Idle Worker
+            with self.idle_pool_lock:
+                if self.idle_workers:
+                    worker_entry = self.idle_workers.popleft()
+            
+            # If empty, synchronous spawn (blocking but necessary)
+            if not worker_entry:
+                w = PersistentWorker("__idle__", python_exe=self.daemon_python_exe)
+                worker_entry = {'worker': w, 'python_exe': self.daemon_python_exe}
+
+            # 2. Perform Task
+            result = worker_entry['worker'].perform_maintenance_task(moves)
+            
+            # 3. Return to Pool (Worker is still clean)
+            with self.idle_pool_lock:
+                self.idle_workers.append(worker_entry)
+            
+            return {'success': True, 'count': result.get('count', 0)}
+        except Exception as e:
+            # If failed, assume worker died/corrupted
+            if worker_entry: 
+                try: worker_entry['worker'].force_shutdown() 
+                except: pass
+            return {'success': False, 'error': str(e)}
+
+    def _maintain_idle_pool(self):
+        """Background thread to ensure we have idle workers ready.
+        
+        Strategy:
+        - Always maintain min_idle_workers for the daemon's native Python
+        - Track Python version requests and pre-spawn workers for frequent versions
+        """
+        python_request_counts = defaultdict(int)
+        
+        while self.running:
+            # Count idle workers by Python version
+            with self.idle_pool_lock:
+                idle_by_python = defaultdict(int)
+                for entry in self.idle_workers:
+                    idle_by_python[entry['python_exe']] += 1
+                
+                native_idle = idle_by_python[self.daemon_python_exe]
+            
+            with self.spawning_lock:
+                in_flight = self.spawning_count
+            
+            # Ensure we have enough native Python idles
+            native_total = native_idle + in_flight
+            native_needed = max(0, self.min_idle_workers - native_total)
+            
+            if native_needed > 0:
+                # Spawn only what we need
+                for _ in range(native_needed):
+                    self.executor.submit(self._spawn_idle_worker, self.daemon_python_exe)
+            
+            time.sleep(2)
     
     def _daemonize(self):
         """Double-fork daemonization with visual feedback."""
@@ -1748,6 +2012,8 @@ class WorkerPoolDaemon:
                 )
             elif req['type'] == 'status':
                 res = self._get_status()
+            elif req['type'] == 'maintenance':
+                res = self._perform_maintenance(req['moves'])
             elif req['type'] == 'shutdown':
                 self.running = False
                 res = {'success': True}
@@ -1774,14 +2040,39 @@ class WorkerPoolDaemon:
         worker_key = f"{spec}::{python_exe}"
         
         with self.worker_locks[worker_key]:
-            # 🔥 FIX: Get worker_info inside the pool_lock
             with self.pool_lock:
                 if worker_key not in self.workers:
                     if len(self.workers) >= self.max_workers:
                         self._evict_oldest_worker_async()
-                    
+
                     try:
-                        worker = PersistentWorker(spec, python_exe=python_exe)
+                        # ═══════════════════════════════════════════════════
+                        # CRITICAL FIX: Only use idle worker if Python matches
+                        # ═══════════════════════════════════════════════════
+                        matching_idle_worker = None
+                        
+                        with self.idle_pool_lock:
+                            for i, entry in enumerate(self.idle_workers):
+                                if entry['python_exe'] == python_exe:
+                                    # Found a matching idle worker!
+                                    matching_idle_worker = self.idle_workers[i]['worker']
+                                    del self.idle_workers[i]
+                                    self.stats['idle_pool_hits'] += 1
+                                    print(f"✅ Reusing idle worker for {os.path.basename(python_exe)}", file=sys.stderr)
+                                    break
+                            else:
+                                self.stats['idle_pool_misses'] += 1
+                                print(f"⚠️  No matching idle worker for {os.path.basename(python_exe)}, spawning new", file=sys.stderr)
+                        
+                        if matching_idle_worker:
+                            worker = matching_idle_worker
+                            worker.package_spec = spec
+                            worker.python_exe = python_exe
+                            worker._re_initialize_with_spec()
+                        else:
+                            # Spawn fresh worker with correct Python
+                            worker = PersistentWorker(spec, python_exe=python_exe)
+
                         self.workers[worker_key] = {
                             'worker': worker,
                             'created': time.time(),
@@ -1797,7 +2088,6 @@ class WorkerPoolDaemon:
                 else:
                     self.stats['cache_hits'] += 1
                 
-                # 🔥 FIX: Always get worker_info from dict (works for both branches)
                 worker_info = self.workers[worker_key]
             
             # Execute outside pool lock
@@ -1826,21 +2116,29 @@ class WorkerPoolDaemon:
         with self.worker_locks[worker_key]:
             with self.pool_lock:
                 if worker_key not in self.workers:
-                    # Check capacity
                     if len(self.workers) >= self.max_workers:
                         self._evict_oldest_worker_async()
-                    
-                    # Create worker
+
                     try:
-                        worker = PersistentWorker(spec, python_exe=python_exe)
+                        # 1. Get an idle worker from the pool
+                        with self.idle_pool_lock:
+                            if self.idle_workers:
+                                worker = self.idle_workers.popleft()
+                                # 2. Give it its new identity
+                                worker.package_spec = spec
+                                worker.python_exe = python_exe
+                                worker._re_initialize_with_spec() # A new method we will add
+                            else:
+                                # Pool was empty (high concurrency), spawn one just for this request
+                                worker = PersistentWorker(spec, python_exe=python_exe)
+
+                        # 3. Add the now-active worker to the main pool
                         self.workers[worker_key] = {
                             'worker': worker,
                             'created': time.time(),
                             'last_used': time.time(),
                             'request_count': 0,
-                            'memory_mb': 0.0,
-                            'is_gpu_worker': True,      # 🔥 FIX: Set inside dict creation
-                            'gpu_timeout': 60
+                            'memory_mb': 0.0
                         }
                         self.stats['workers_created'] += 1
                     except Exception as e:
@@ -2025,15 +2323,29 @@ class WorkerPoolDaemon:
                     'health_failures': v['worker'].health_check_failures
                 }
             
+            # Show idle workers with Python versions
+            with self.idle_pool_lock:
+                idle_by_python = defaultdict(int)
+                for entry in self.idle_workers:
+                    py_basename = os.path.basename(entry['python_exe'])
+                    idle_by_python[py_basename] += 1
+            
+            with self.spawning_lock:
+                spawning = self.spawning_count
+            
             return {
                 'success': True,
                 'running': self.running,
                 'workers': len(self.workers),
+                'idle_workers': len(self.idle_workers),
+                'idle_by_python': dict(idle_by_python),
+                'spawning_workers': spawning,
                 'stats': self.stats,
                 'worker_details': worker_details,
-                'memory_percent': psutil.virtual_memory().percent
+                'memory_percent': psutil.virtual_memory().percent,
+                'daemon_python': os.path.basename(self.daemon_python_exe)
             }
-
+    
     def _handle_shutdown(self, signum, frame):
         """CRITICAL FIX: Graceful shutdown with timeout."""
         self.running = False
@@ -2446,6 +2758,7 @@ class DaemonClient:
         self.socket_path = socket_path
         self.timeout = timeout
         self.auto_start = auto_start
+        self.fallback_to_persistent_worker = False
 
     def execute_shm(self, spec, code, shm_in, shm_out, python_exe=None):
         if not python_exe:
@@ -2458,6 +2771,9 @@ class DaemonClient:
             'shm_out': shm_out,
             'python_exe': python_exe
         })
+    
+    def request_maintenance(self, moves: List[tuple]):
+        return self._send({'type': 'maintenance', 'moves': moves})
     
     def status(self):
         old_auto = self.auto_start
@@ -3033,24 +3349,26 @@ class DaemonProxy:
 # 5. CLI FUNCTIONS
 # ═══════════════════════════════════════════════════════════════
 
-def cli_start():
-    """Start the daemon with status checks."""
+def cli_start(min_idle: int = 3):
+    """Start the daemon with status checks.
+    
+    Args:
+        min_idle: Minimum idle workers to maintain (default 3, use 0 to disable)
+    """
     if WorkerPoolDaemon.is_running():
         print("⚠️  Daemon is already running.")
-        # Optional: Print info about the running instance
         cli_status()
         return
 
-    print("🚀 Initializing OmniPkg Worker Daemon...", end=" ", flush=True)
+    print(f"🚀 Initializing OmniPkg Worker Daemon (idle pool: {min_idle})...", end=" ", flush=True)
     
-    # Initialize
     daemon = WorkerPoolDaemon(
         max_workers=10,
         max_idle_time=300,
-        warmup_specs=[]
+        warmup_specs=[],
+        min_idle_workers=min_idle  # ← Configurable!
     )
     
-    # Start (The parent process will print "✅" and exit inside this call)
     try:
         daemon.start(daemonize=True)
     except Exception as e:
@@ -3074,10 +3392,8 @@ def cli_status():
     if not WorkerPoolDaemon.is_running():
         print("❌ Daemon not running")
         return
-    
     client = DaemonClient()
     result = client.status()
-    
     if not result.get('success'):
         print(f"❌ Error: {result.get('error', 'Unknown error')}")
         return
@@ -3085,7 +3401,9 @@ def cli_status():
     print("\n" + "="*60)
     print("🔥 OMNIPKG WORKER DAEMON STATUS")
     print("="*60)
-    print(f"  Workers: {result.get('workers', 0)}")
+    print(f"  Active Workers: {result.get('workers', 0)}")
+    print(f"  Idle Workers: {result.get('idle_workers', 0)}")  # ← NEW
+    print(f"  Spawning: {result.get('spawning_workers', 0)}")  # ← NEW
     print(f"  Memory Usage: {result.get('memory_percent', 0):.1f}%")
     print(f"  Total Requests: {result['stats']['total_requests']}")
     print(f"  Cache Hits: {result['stats']['cache_hits']}")
@@ -3097,8 +3415,11 @@ def cli_status():
             idle = time.time() - info['last_used']
             print(f"    - {spec}")
             print(f"      Requests: {info['request_count']}, Idle: {idle:.0f}s, Failures: {info['health_failures']}")
-    
     print("="*60 + "\n")
+    
+    memory_percent = result.get('memory_percent', 0)
+    memory_display = f"{memory_percent:.1f}%" if memory_percent >= 0 else "N/A (psutil not found on daemon)"
+
 
 def cli_logs(follow: bool = False, tail_lines: int = 50):
     """View or follow the daemon logs."""
@@ -3157,18 +3478,50 @@ def cli_logs(follow: bool = False, tail_lines: int = 50):
 # ═══════════════════════════════════════════════════════════════
 
 if __name__ == "__main__":
+    import sys
+    
     if len(sys.argv) < 2:
-        print("Usage: python -m omnipkg.isolation.worker_daemon {start|stop|status}")
+        print("Usage: python -m omnipkg.isolation.worker_daemon {start|stop|status|logs}")
+        print("\nOptions for 'start':")
+        print("  --no-fork           Don't daemonize (Windows internal use)")
+        print("  --min-idle N        Maintain N idle workers (default: 3, 0=disable)")
         sys.exit(1)
     
     cmd = sys.argv[1]
     
     if cmd == "start":
-        cli_start()
+        # Check for --no-fork flag (Windows internal use)
+        no_fork = "--no-fork" in sys.argv
+        
+        # Check for --min-idle flag
+        min_idle = 3  # default
+        if "--min-idle" in sys.argv:
+            try:
+                idx = sys.argv.index("--min-idle")
+                min_idle = int(sys.argv[idx + 1])
+            except (IndexError, ValueError):
+                print("❌ Invalid --min-idle value")
+                sys.exit(1)
+        
+        if no_fork:
+            # Direct start without fork (for Windows subprocess spawn)
+            daemon = WorkerPoolDaemon(
+                max_workers=10,
+                max_idle_time=300,
+                warmup_specs=[],
+                min_idle_workers=min_idle
+            )
+            daemon.start(daemonize=False)
+        else:
+            cli_start(min_idle=min_idle)
+    
     elif cmd == "stop":
         cli_stop()
     elif cmd == "status":
         cli_status()
+    elif cmd == "logs":
+        follow = "-f" in sys.argv or "--follow" in sys.argv
+        cli_logs(follow=follow)
     else:
         print(f"Unknown command: {cmd}")
         sys.exit(1)
