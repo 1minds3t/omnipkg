@@ -1403,191 +1403,72 @@ class omnipkgLoader:
     def _activate_bubble(self, bubble_path, pkg_name):
         """
         Activate a bubble with proper tracking of what we cloak.
-        CRITICAL: Only cloak packages that CONFLICT, not all dependencies.
+        CRITICAL: Cloaks ALL packages that exist in the main environment to ensure bubble priority.
         """
         try:
-            
             bubble_deps = self._get_bubble_dependencies(bubble_path)
-            
-            # ═══════════════════════════════════════════════════════════
-            # CRITICAL FIX: Detect torch conflicts BEFORE setting dependencies
-            # ═══════════════════════════════════════════════════════════
-            skip_torch_validation = False
-            torch_related_packages = ['torch', 'triton', 'nvidia_cudnn_cu12',
-                                    'nvidia_nvtx_cu12', 'nvidia_cusparse_cu12',
-                                    'nvidia_nccl_cu12', 'nvidia_nvjitlink_cu12',
-                                    'nvidia_cuda_nvrtc_cu12', 'nvidia_cuda_runtime_cu12',
-                                    'nvidia_cufft_cu12', 'nvidia_cusolver_cu12',
-                                    'nvidia_cublas_cu12', 'nvidia_cuda_cupti_cu12',
-                                    'nvidia_curand_cu12']
-            
-            # Check if we're activating a bubble with torch when torch is already loaded
-            if 'torch' in bubble_deps and 'torch._C' in sys.modules:
-                try:
-                    current_torch_ver = sys.modules['torch'].__version__
-                    bubble_torch_ver = bubble_deps['torch']
-    
-                    if current_torch_ver != bubble_torch_ver:
-                        if not self.quiet:
-                            safe_print(f"   ⚠️  PyTorch C++ backend already loaded!")
-                            safe_print(f"      Active: torch {current_torch_ver}")
-                            safe_print(f"      Bubble has: torch {bubble_torch_ver}")
-                            safe_print(f"   🔧 Skipping bubble's torch to prevent C++ collision")
-                        
-                        # CRITICAL: Remove torch from bubble_deps BEFORE tracking
-                        bubble_deps = {k: v for k, v in bubble_deps.items()
-                                    if k not in torch_related_packages}
-                        skip_torch_validation = True
-                except (AttributeError, KeyError):
-                    pass
-            
-            # NOW set the dependencies (after torch removal)
             self._activated_bubble_dependencies = list(bubble_deps.keys())
 
-            # ═══════════════════════════════════════════════════════════
-            # COMPOSITE BUBBLE INJECTION (NVIDIA/CUDA Support)
-            # ═══════════════════════════════════════════════════════════
-            dependency_bubbles = []
-            
-            # Scan dependencies for binary packages that might have their own bubbles
-            for dep_name, dep_version in bubble_deps.items():
-                # Focus on NVIDIA libs, Triton, and critical binary deps
-                if dep_name.startswith('nvidia_') or dep_name in ['triton', 'lit']:
-                    dep_bubble_name = f"{dep_name.replace('_', '-')}-{dep_version}"
-                    dep_bubble_path = self.multiversion_base / dep_bubble_name
-                    
-                    if dep_bubble_path.exists() and dep_bubble_path.is_dir():
-                        dependency_bubbles.append(str(dep_bubble_path))
-                        if not self.quiet:
-                            safe_print(f"      🔗 Found dependency bubble: {dep_bubble_name}")
-            
-            if dependency_bubbles and not self.quiet:
-                safe_print(f"   📦 Activating {len(dependency_bubbles)} dependency bubbles (CUDA/NVIDIA libs)...")
-
-            
-            # Determine which packages actually conflict
+            # Determine which packages in the main environment need to be cloaked.
             main_env_versions = {}
-            for pkg in self._activated_bubble_dependencies:
-                # Check filesystem directly, not importlib cache
-                pkg_canonical = pkg.lower().replace('-', '_')
-                
-                # Look for ANY version on disk (even if cloaked parent exists)
-                for dist_info in self.site_packages_root.glob(f'{pkg_canonical}-*.dist-info'):
-                    if '_omnipkg_cloaked' not in str(dist_info):
-                        # Extract version from dist-info name
-                        version_match = re.search(rf'{pkg_canonical}-(.+?)\.dist-info', dist_info.name)
-                        if version_match:
-                            main_env_versions[pkg] = version_match.group(1)
-                            break
-            
+            for pkg in bubble_deps.keys():
+                try:
+                    main_env_versions[pkg] = get_version(pkg)
+                except PackageNotFoundError:
+                    pass
+
             packages_to_cloak = []
-            for pkg, bubble_version in bubble_deps.items():
-                if pkg in main_env_versions:
-                    main_version = main_env_versions[pkg]
-                    if main_version != bubble_version:
-                        packages_to_cloak.append(pkg)
-                        if not self.quiet:
-                            safe_print(f"   ⚠️ Version conflict: {pkg} (main: {main_version} vs bubble: {bubble_version})")
-    
+            for pkg_in_bubble, bubble_version in bubble_deps.items():
+                # THE FIX: If a package with the same name exists in the main environment,
+                # it MUST be cloaked to force Python to use the bubble's version.
+                if pkg_in_bubble in main_env_versions:
+                    packages_to_cloak.append(pkg_in_bubble)
+                    if not self.quiet:
+                        main_version = main_env_versions[pkg_in_bubble]
+                        if main_version != bubble_version:
+                            safe_print(f"   ⚠️ Version conflict: {pkg_in_bubble} (main: {main_version} vs bubble: {bubble_version})")
+                        else:
+                            safe_print(f"   🛡️ Enforcing isolation for: {pkg_in_bubble} (versions match, bubble priority)")
+
             if not self.quiet:
-                safe_print(f"   📊 Bubble has {len(bubble_deps)} packages, {len(packages_to_cloak)} conflict with main env")
-    
+                safe_print(f"   📊 Bubble has {len(bubble_deps)} packages. Cloaking {len(packages_to_cloak)} corresponding main env packages to ensure isolation.")
+
             # Aggressively exorcise the conflicting modules from memory *before* cloaking
             for pkg in packages_to_cloak:
                 self._aggressive_module_cleanup(pkg)
-    
+
             self._packages_we_cloaked.update(packages_to_cloak)
             cloaked_count = self._batch_cloak_packages(packages_to_cloak)
             
             if not self.quiet and cloaked_count > 0:
                 safe_print(f"   🔒 Cloaked {cloaked_count} conflicting packages")
-            
+
             # Setup paths
             bubble_path_str = str(bubble_path)
             if self.isolation_mode == 'overlay':
                 if not self.quiet:
                     safe_print("   - 🧬 Activating in OVERLAY mode (merging with main env)")
-                
-                # 🧠 SMART FIX: AUTO-RESTORE MAIN ENV
-                # If we are in a worker that stripped the path, but we requested overlay,
-                # we need to put the main site-packages back so we can see tools like scipy.
-                if self._true_site_packages:
-                    true_site_str = str(self._true_site_packages)
-                    if true_site_str not in sys.path:
-                        if not self.quiet:
-                            safe_print(f"   🔧 Auto-restoring main site-packages visibility: {self._true_site_packages}")
-                        sys.path.append(true_site_str)
-
                 sys.path.insert(0, bubble_path_str)
-                for dep_bubble in reversed(dependency_bubbles):
-                    sys.path.insert(1, dep_bubble)
             else:
-                bubble_bin_path = bubble_path / 'bin'
-                if bubble_bin_path.is_dir():
-                    os.environ['PATH'] = f'{str(bubble_bin_path)}{os.pathsep}{self.original_path_env}'
-        
-                # sys.path setup
-                if self.isolation_mode == 'overlay':
-                    if not self.quiet:
-                        safe_print("   - 🧬 Activating in OVERLAY mode (merging with main env)")
-                    sys.path.insert(0, bubble_path_str)
-                else:
-                    if not self.quiet:
-                        safe_print("   - 🔒 Activating in STRICT mode (isolating from main env)")
-                    new_sys_path = [bubble_path_str] + dependency_bubbles + [p for p in self.original_sys_path                                                    if not self._is_main_site_packages(p)]
-                    sys.path[:] = new_sys_path
-        
-                self._ensure_omnipkg_access_in_bubble(bubble_path_str)
-                self._activated_bubble_path = bubble_path_str
-                self._activation_end_time = time.perf_counter_ns()
-                self._total_activation_time_ns = self._activation_end_time - self._activation_start_time
-                
                 if not self.quiet:
-                    safe_print(f"   ⚡ HEALED in {self._total_activation_time_ns / 1000:,.1f} μs")
-                
-                # ═══════════════════════════════════════════════════════════
-                # CRITICAL: TensorFlow MUST be validated in subprocess only
-                # ═══════════════════════════════════════════════════════════
-                if pkg_name == 'tensorflow':
-                    if not self.quiet:
-                        safe_print(f"   ⚠️  TensorFlow detected - skipping in-process validation")
-                        safe_print(f"   ℹ️  Will validate in clean subprocess only")
-                    
-                    if self._is_bubble_healthy_in_subprocess(pkg_name, bubble_path_str):
-                        if not self.quiet:
-                            safe_print(f"   ✅ TensorFlow validated successfully in clean process")
-                        self._activation_successful = True
-                        return self
-                    else:
-                        if not self.quiet:
-                            safe_print(f"   ❌ TensorFlow validation failed in subprocess")
-                        self._panic_restore_cloaks()
-                        raise RuntimeError(f"TensorFlow bubble failed subprocess validation")
-                
-                # ═══════════════════════════════════════════════════════════
-                # CRITICAL: PyTorch C++ reload handling
-                # ═══════════════════════════════════════════════════════════
-                if skip_torch_validation or (pkg_name == 'torch' and 'torch._C' in sys.modules):
-                    if not self.quiet:
-                        safe_print(f"   ⚠️  PyTorch C++ reload limitation detected (non-fatal)")
-                        safe_print(f"   ℹ️  Bubble is functional, validation skipped")
-                    self._activation_successful = True
-                    return self
-                
-                # ═══════════════════════════════════════════════════════════
-                # Normal validation for other packages
-                # ═══════════════════════════════════════════════════════════
-                if not self.quiet:
-                    safe_print(f"   ✅ Bubble activated (validation skipped for speed)")
+                    safe_print("   - 🔒 Activating in STRICT mode (isolating from main env)")
+                new_sys_path = [bubble_path_str] + [p for p in self.original_sys_path if not self._is_main_site_packages(p)]
+                sys.path[:] = new_sys_path
 
-                self._activation_successful = True
+            self._ensure_omnipkg_access_in_bubble(bubble_path_str)
+            self._activated_bubble_path = bubble_path_str
+            self._activation_end_time = time.perf_counter_ns()
+            self._total_activation_time_ns = self._activation_end_time - self._activation_start_time
+            
+            if not self.quiet:
+                safe_print(f"   ⚡ HEALED in {self._total_activation_time_ns / 1000:,.1f} μs")
+            
+            if not self.quiet:
+                safe_print(f"   ✅ Bubble activated (validation skipped for speed)")
 
-                # Daemon: Trigger background cleanup NOW (while lock is released)
-                if self._is_daemon_worker():
-                    self.stabilize_daemon_state()
+            self._activation_successful = True
+            return self
 
-                return self
-        
         except Exception as e:
             safe_print(_('   ❌ Activation failed: {}').format(str(e)))
             self._panic_restore_cloaks()
