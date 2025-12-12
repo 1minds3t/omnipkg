@@ -2566,7 +2566,37 @@ class BubbleIsolationManager:
             
             if not import_test_passed:
                 safe_print(f"   ❌ Final import check failed even after healing attempts")
-                safe_print(f"   💡 The package may have complex dependencies or broken metadata")
+                
+                # TRIGGER TIME MACHINE AS LAST RESORT
+                safe_print(f"   🕰️  Attempting Time Machine fallback to fix dependency mismatch...")
+                
+                time_machine_success = self.parent_omnipkg._run_historical_install_fallback(
+                    package_name,
+                    version,
+                    target_directory_override=staging_path,
+                    index_url=index_url,
+                    extra_index_url=extra_index_url
+                )
+                
+                if time_machine_success:
+                    # Re-analyze installed tree after Time Machine
+                    safe_print(f"   - 🔍 Re-analyzing after Time Machine...")
+                    installed_tree = self._analyze_installed_tree(staging_path)
+                    
+                    if not installed_tree:
+                        safe_print(f"   ❌ No packages found after Time Machine")
+                        return False
+                    
+                    # Final import test after Time Machine
+                    safe_print(f"   - 🧪 Final import test after Time Machine...")
+                    import_test_passed = self.parent_omnipkg._run_post_install_import_test(
+                        package_name,
+                        install_dir_override=staging_path,
+                    )
+                
+                if not import_test_passed:
+                    safe_print(f"   ❌ Package still broken after Time Machine - ABORTING BUBBLE CREATION")
+                    safe_print(f"   💡 The package has incompatible dependencies or broken metadata")
                 return False
 
             # SUCCESS - MOVE TO FINAL DESTINATION
@@ -11059,13 +11089,18 @@ print(json.dumps(results))
                         })
 
             # Overall success if at least one import worked
-            if successful_imports:
-                safe_print(f"      ✅ Successfully imported: {', '.join(successful_imports)}")
+            main_import_name = package_name.replace('-', '_')
+            main_package_imported = main_import_name in successful_imports
+
+            if main_package_imported:
+                safe_print(f"      ✅ Successfully imported main package: {main_import_name}")
+                if len(successful_imports) > 1:
+                    safe_print(f"      ✅ Also imported dependencies: {', '.join([x for x in successful_imports if x != main_import_name])}")
                 return True
             else:
-                safe_print(f"      ❌ All import attempts failed for package '{package_name}'")
-                if hasattr(self, '_import_test_failures') and self._import_test_failures:
-                    safe_print(f"      💡 Detected {len(self._import_test_failures)} missing module issues")
+                safe_print(f"      ❌ Main package '{main_import_name}' failed to import")
+                if successful_imports:
+                    safe_print(f"      ⚠️  Some dependencies imported: {', '.join(successful_imports)}")
                 return False
                 
         except Exception as e:
@@ -11271,7 +11306,10 @@ print(json.dumps(results))
         
         return None
 
-    def _execute_historical_install(self, target_pkg, target_ver, historical_versions, target_directory_override: Optional[Path] = None):
+    def _execute_historical_install(self, target_pkg, target_ver, historical_versions, 
+                                target_directory_override: Optional[Path] = None,
+                                index_url: Optional[str] = None,
+                                extra_index_url: Optional[str] = None):
         install_target_desc = f"temporary sandbox ('{target_directory_override}')" if target_directory_override else "main environment"
         # Get platform information once
         platform_info = self._get_platform_tags()
@@ -11650,6 +11688,23 @@ print(json.dumps(results))
         except Exception as e:
             safe_print(_('    ❌ An unexpected error occurred during pip install: {}').format(e))
             return 1, {"stdout": "", "stderr": str(e)}
+
+    def _run_pip_uninstall(self, packages: List[str]) -> int:
+        """Runs `pip uninstall` with LIVE, STREAMING output."""
+        if not packages:
+            return 0
+        try:
+            cmd = [self.config['python_executable'], '-u', '-m', 'pip', 'uninstall', '-y'] + packages
+            process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding='utf-8', errors='replace', bufsize=1, universal_newlines=True)
+            safe_print()
+            for line in iter(process.stdout.readline, ''):
+                safe_print(line, end='')
+            process.stdout.close()
+            return_code = process.wait()
+            return return_code
+        except Exception as e:
+            safe_print(_('    ❌ An unexpected error occurred during pip uninstall: {}').format(e))
+            return 1
 
     def _run_uv_install(self, packages: List[str]) -> int:
         """Runs `uv install` for a list of packages."""
