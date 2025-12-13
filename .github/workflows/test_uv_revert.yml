@@ -3,7 +3,7 @@ name: "🔄 UV Self-Downgrades → Auto-Revert"
 on:
   workflow_dispatch:
   push:
-    branches: ['main', 'test-revert-feature']
+    branches: ['development']
 
 jobs:
   uv-revert-test:
