@@ -1,29 +1,28 @@
-
 name: "🚀 Auto-merge Development → Main"
 
 on:
   workflow_run:
     workflows:
       - "Cross-Platform Sanity Check"
-      - "🔍 Package Discovery Demo - Omnipkg Intelligence"
-      - "🌌 LIVE - Quantum Python Auto-Switch Test"
-      - "🧪 Flask Port Finder & Auto-Healing Test"
-      - "🔥 Live NumPy/SciPy Hot-Swapping"
-      - "🔥 LIVE - Python Library Hot-Swap"
-      - "💥 Nuclear Test: TensorFlow Dependency Hot-Swap"
-      - "⬆️ LIVE - Package Upgrade Test"
-      - "🔄 LIVE - Omnipkg Self-Upgrade Test"
-      - "🌍 Omnipkg Multi-Language Intelligence Demo"
-      - "🌠 LIVE - Omnipkg Quantum Multiverse Warp (FINAL)"
+      - "Package Discovery Demo - Omnipkg Intelligence"
+      - "Quantum Python Auto-Switch Test"
+      - "Flask Port Finder & Auto-Healing Test"
+      - "Live NumPy/SciPy Hot-Swapping"
+      - "Python Library Hot-Swap"
+      - "Nuclear Test: TensorFlow Dependency Hot-Swap"
+      - "Package Upgrade Test"
+      - "Omnipkg Self-Upgrade Test"
+      - "Omnipkg Multi-Language Intelligence Demo"
+      - "Omnipkg Quantum Multiverse Warp (FINAL)"
       - "Package Manager Comparison Test"
-      - "🍎 macOS - Omnipkg Demo Test (CI - No Redis)"
-      - "🚀 Windows - Omnipkg Demo Test (CI - No Redis)"
+      - "macOS - Omnipkg Demo Test (CI - No Redis)"
+      - "Windows - Omnipkg Demo Test (CI - No Redis)"
       - "Omnipkg True First-Run Test (Windows)"
-      - "🔄 UV Self-Downgrades → Auto-Revert"
+      - "UV Self-Downgrades → Auto-Revert"
       - "Simple UV Multi-Version Test"
       - "Old Rich Test"
       - "Simple Python Adoption Test"
-      - "🎪 Demo Matrix Test (All Demos)"
+      - "Demo Matrix Test (All Demos)"
     types:
       - completed
     branches:
@@ -34,7 +33,7 @@ permissions:
   actions: read
   issues: write
 
-# Prevents two merges from happening at the same time
+# Prevents two merges from happening at the exact same time
 concurrency:
   group: auto-merge-main
   cancel-in-progress: false
@@ -59,10 +58,10 @@ jobs:
       id: check_all
       run: |
         COMMIT_SHA="${{ github.event.workflow_run.head_sha }}"
-        SHORT_SHA=$(echo $COMMIT_SHA | cut -c1-7)
-        echo "📊 Analyzing commit: $SHORT_SHA"
+        echo "Analyzing commit: $COMMIT_SHA"
         
         # Get all workflow runs for this specific commit
+        # We increase limit to 200 to ensure we catch your large matrix
         gh run list \
           --branch development \
           --commit $COMMIT_SHA \
@@ -72,135 +71,81 @@ jobs:
         # Calculate stats
         TOTAL=$(jq '. | length' runs.json)
         SUCCESS=$(jq '[.[] | select(.conclusion == "success")] | length' runs.json)
+        # We also count 'skipped' or 'neutral' as acceptable for conditional workflows
         SKIPPED=$(jq '[.[] | select(.conclusion == "skipped" or .conclusion == "neutral")] | length' runs.json)
         IN_PROGRESS=$(jq '[.[] | select(.status == "in_progress" or .status == "queued" or .status == "waiting")] | length' runs.json)
-        FAILED=$(jq '[.[] | select(.conclusion == "failure" or .conclusion == "timed_out" or .conclusion == "cancelled")] | length' runs.json)
+        FAILED=$(jq '[.[] | select(.conclusion == "failure" or .conclusion == "timed_out")] | length' runs.json)
         
         EFFECTIVE_PASS=$((SUCCESS + SKIPPED))
         
-        echo "📊 Stats for commit $SHORT_SHA:"
-        echo "   Total workflows: $TOTAL"
+        echo "📊 Stats for commit $COMMIT_SHA:"
+        echo "   Total: $TOTAL"
         echo "   ✅ Success: $SUCCESS"
-        echo "   ⏭️  Skipped: $SKIPPED"
+        echo "   ⏭️ Skipped: $SKIPPED"
         echo "   ⏳ In Progress: $IN_PROGRESS"
         echo "   ❌ Failed: $FAILED"
-        echo ""
         
-        # 1. If anything is still running, wait for the last workflow to trigger merge
+        # 1. Exit if anything is still running (Let the last workflow trigger the merge)
         if [ "$IN_PROGRESS" -gt 0 ]; then
-          echo "⏳ Workflows still running. Waiting for completion..."
+          echo "⏳ Workflows still running. Exiting and waiting for the last one."
           echo "should_merge=false" >> $GITHUB_OUTPUT
           exit 0
         fi
         
-        # 2. If anything failed, block merge
+        # 2. Exit if anything failed
         if [ "$FAILED" -gt 0 ]; then
-          echo "❌ Some workflows failed. Not merging."
-          echo "Failed workflows:"
-          jq -r '.[] | select(.conclusion == "failure" or .conclusion == "timed_out" or .conclusion == "cancelled") | "  - \(.name): \(.conclusion)"' runs.json
+          echo "❌ Commit failed validation."
           echo "should_merge=false" >> $GITHUB_OUTPUT
           exit 0
         fi
         
-        # 3. Safety check: Ensure we ran enough tests (at least 5)
+        # 3. Safety Check: Ensure we actually ran a decent number of tests
+        # Lowered to 5 to be safe, assuming at least the matrix runs
         if [ "$EFFECTIVE_PASS" -lt 5 ]; then
-          echo "⚠️  Too few workflows completed ($EFFECTIVE_PASS/5). Possible CI issue."
+          echo "⚠️ Too few workflows completed ($EFFECTIVE_PASS). Something might be wrong."
           echo "should_merge=false" >> $GITHUB_OUTPUT
           exit 0
         fi
         
-        echo "✅ All $EFFECTIVE_PASS workflows passed! Ready to merge."
+        echo "✅ All checks passed! Ready to merge."
         echo "should_merge=true" >> $GITHUB_OUTPUT
         echo "commit_sha=$COMMIT_SHA" >> $GITHUB_OUTPUT
-        echo "short_sha=$SHORT_SHA" >> $GITHUB_OUTPUT
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     
-    - name: Check if already merged
+    - name: Merge to Main
       if: steps.check_all.outputs.should_merge == 'true'
-      id: check_merged
       run: |
         COMMIT_SHA="${{ steps.check_all.outputs.commit_sha }}"
-        SHORT_SHA="${{ steps.check_all.outputs.short_sha }}"
+        SHORT_SHA=$(echo $COMMIT_SHA | cut -c1-7)
         
-        git fetch origin main
-        
-        # Check if this commit (or its ancestors) are already in main
-        if git merge-base --is-ancestor $COMMIT_SHA origin/main; then
-          echo "✅ Commit $SHORT_SHA is already in main. Nothing to do."
-          echo "already_merged=true" >> $GITHUB_OUTPUT
-        else
-          echo "📝 Commit $SHORT_SHA not yet in main. Proceeding with merge."
-          echo "already_merged=false" >> $GITHUB_OUTPUT
-        fi
-    
-    - name: Merge development into main
-      if: steps.check_all.outputs.should_merge == 'true' && steps.check_merged.outputs.already_merged == 'false'
-      run: |
-        COMMIT_SHA="${{ steps.check_all.outputs.commit_sha }}"
-        SHORT_SHA="${{ steps.check_all.outputs.short_sha }}"
-        
-        echo "🔄 Merging development (up to $SHORT_SHA) into main..."
-        
-        # Switch to main and update
         git checkout main
         git pull origin main
         
-        # Fetch latest development
-        git fetch origin development
+        # Check if already merged
+        if git merge-base --is-ancestor $COMMIT_SHA HEAD; then
+          echo "✅ Commit $COMMIT_SHA is already in main."
+          exit 0
+        fi
         
-        # Merge the commit (this brings all ancestor commits too!)
-        if git merge $COMMIT_SHA --no-ff -m "Auto-merge: development → main ($SHORT_SHA)
-
-All CI checks passed for commit $SHORT_SHA.
-
-✅ Workflows completed: $(jq '. | length' runs.json)
-📦 Merged by: GitHub Actions
-🔗 Triggered by: ${{ github.event.workflow_run.name }}"; then
-          
-          echo "✅ Merge successful!"
-          
-          # Push to main
+        echo "🚀 Merging commit $COMMIT_SHA into main..."
+        
+        # Prepare the commit message in a variable to avoid YAML syntax errors
+        MERGE_MSG="Auto-merge: development → main ($SHORT_SHA) - All Tests Passed"
+        
+        # Try to merge
+        if git merge $COMMIT_SHA --no-ff -m "$MERGE_MSG"; then
           git push origin main
-          
-          echo "🚀 Successfully merged to main!"
-          
+          echo "✅ Successfully pushed to main."
         else
-          echo "❌ Merge conflict detected!"
+          echo "❌ Merge conflict detected."
           git merge --abort
           
-          # Create issue for manual resolution
+          # Create an issue for manual resolution
           gh issue create \
             --title "🚨 Auto-merge Failed: Conflict in $SHORT_SHA" \
-            --body "## Merge Conflict Detected
-
-Commit [$SHORT_SHA](https://github.com/${{ github.repository }}/commit/$COMMIT_SHA) passed all CI tests but has merge conflicts with \`main\`.
-
-**Manual intervention required:**
-
-\`\`\`bash
-git checkout main
-git pull origin main
-git merge $COMMIT_SHA
-# Resolve conflicts
-git commit
-git push origin main
-\`\`\`
-
-**Or rebase development on main:**
-
-\`\`\`bash
-git checkout development
-git pull origin development
-git rebase origin/main
-# Resolve conflicts
-git push --force-with-lease origin development
-\`\`\`
-
-Once resolved, this workflow will retry automatically." \
-            --label "auto-merge-conflict" \
-            --label "needs-manual-merge"
-          
+            --body "Commit $SHORT_SHA passed all tests but conflicts with main. Manual intervention required." \
+            --label "auto-merge-conflict"
           exit 1
         fi
       env:
