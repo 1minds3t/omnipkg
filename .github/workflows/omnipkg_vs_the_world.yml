@@ -1,11 +1,9 @@
-name: Package Manager Comparison Test
+name: "Package Manager Comparison Test"
 
 on:
   schedule:
-    - cron: '0 * * * *' # Hourly pre-release testing
-  workflow_dispatch:
-  push:
-    branches: [ 'development' ]
+    - cron: '0 */3 * * *' # Run every 3 hours (Save servers & prevent conflicts)
+  workflow_dispatch:      # Allow manual trigger if you really want to check stats
 
 jobs:
   package-manager-comparison:
@@ -29,7 +27,8 @@ jobs:
         uses: actions/checkout@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          fetch-depth: 1
+          ref: main  # Always check out main to update the "official" README
+          fetch-depth: 0
 
       - name: Set up Python 3.11
         uses: actions/setup-python@v5
@@ -227,11 +226,6 @@ jobs:
               with open(README_FILE, 'w', encoding='utf-8') as f:
                   f.write(updated_content)
               print("✓ Documentation updated successfully")
-              
-              # Debug: Print what we generated
-              print("\nGenerated section:")
-              print(compact_section)
-              
           except Exception as e:
               print(f"Documentation update failed: {e}")
               exit(1)
@@ -253,46 +247,12 @@ jobs:
           fi
           
           TIMESTAMP=$(date -u '+%Y-%m-%d %H:%M UTC')
-          git commit -m "docs: update package manager comparison results - $TIMESTAMP" || exit 0
           
-          for attempt in 1 2 3; do
-            if git push origin main; then
-              echo "✅ Successfully pushed changes on attempt $attempt"
-              break
-            else
-              echo "Push failed on attempt $attempt, trying to sync..."
-              git fetch origin main || true
-              
-              if git merge origin/main --no-edit --no-commit; then
-                git commit --no-edit -m "merge: sync with latest changes" || true
-                echo "Merged successfully, retrying push..."
-              else
-                echo "⚠️ Merge conflicts on attempt $attempt"
-                if [ $attempt -eq 3 ]; then
-                  echo "⚠️ All push attempts failed, but tests completed successfully"
-                  echo "📊 Your omnipkg is still winning! Stats preserved."
-                  break
-                fi
-                git reset --hard HEAD~1 || true
-                git pull origin main || true
-                git add README.md || true
-                git commit -m "docs: update package manager comparison results - $TIMESTAMP" || break
-              fi
-            fi
-          done
-
-      - name: Report test results
-        run: |
-          echo "=== PACKAGE MANAGER COMPARISON TEST RESULTS ==="
-          echo "omnipkg multi-version coexistence: $OMNIPKG_COEXIST_RESULT"
-          echo "omnipkg environment restoration: $OMNIPKG_RESTORE_RESULT"
-          echo "pip multi-version coexistence: $PIP_COEXIST_RESULT"
-          echo "uv multi-version coexistence: $UV_COEXIST_RESULT"
-          echo "================================================"
+          # Pull latest main to avoid conflict
+          git pull origin main --rebase || true
           
-          if [[ "$OMNIPKG_COEXIST_RESULT" == "PASS" ]]; then
-            echo "✅ Primary tests passed - omnipkg demonstrates superior multi-version handling"
-          else
-            echo "❌ Primary tests failed - omnipkg multi-version handling needs investigation"
-            exit 1
-          fi
+          # [skip ci] is CRITICAL here
+          git commit -m "docs: update package manager comparison results - $TIMESTAMP [skip ci]" || exit 0
+          
+          # Push strictly to main
+          git push origin main
