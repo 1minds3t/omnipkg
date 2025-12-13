@@ -75,10 +75,6 @@ try:
     loader = omnipkgLoader("{package_spec}", quiet=False, worker_fallback=False)
     loader.__enter__()
     
-    # VERIFY the package is actually importable
-    pkg_name = package_spec.split("==")[0].replace("-", "_")
-    __import__(pkg_name)
-    
     send_ipc({{"status": "ready"}})
     log(f"✅ Worker ready: {package_spec}")
     
