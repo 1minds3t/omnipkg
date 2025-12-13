@@ -4,11 +4,11 @@ on:
   push:
     branches: 
       - development
-      - main
+      - development
   pull_request:
     branches: 
       - development
-      - main
+      - development
   workflow_dispatch:
     inputs:
       branch:
@@ -18,8 +18,7 @@ on:
         type: choice
         options:
           - development
-          - main
-          - staging
+          - development
 
 jobs:
   flask-demo-linux:

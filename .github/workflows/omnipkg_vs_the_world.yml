@@ -5,7 +5,7 @@ on:
     - cron: '0 * * * *' # Hourly pre-release testing
   workflow_dispatch:
   push:
-    branches: [ 'main', 'test-workflows-feature' ]
+    branches: [ 'development' ]
 
 jobs:
   package-manager-comparison:

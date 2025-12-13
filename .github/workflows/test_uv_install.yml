@@ -4,7 +4,7 @@ name: Simple UV Multi-Version Test
 on:
   workflow_dispatch: # Allows manual trigger from GitHub UI
   push:
-    branches: [ 'main', 'test-workflows-feature' ] # Trigger on pushes to main or a specific feature branch
+    branches: [ 'development' ] # Trigger on pushes to main or a specific feature branch
 
 jobs:
   install-uv-versions:
