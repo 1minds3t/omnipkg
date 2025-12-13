@@ -1176,15 +1176,15 @@ def diagnose_worker_issue(package_spec: str):
 class PersistentWorker:
     def __init__(self, package_spec: str, python_exe: str = None, verbose: bool = False):
         self.package_spec = package_spec
-        self.python_exe = python_exe or sys.executable # <--- STORE IT
-        self.package_spec = package_spec
+        self.python_exe = python_exe or sys.executable
         self.process: Optional[subprocess.Popen] = None
         self.temp_file: Optional[str] = None
-        self.lock = threading.RLock()  # Per-worker lock
+        self.lock = threading.RLock()
         self.last_health_check = time.time()
         self.health_check_failures = 0
-        if package_spec != "__idle__":
-            self._start_worker()
+        self.log_file = None
+        
+        # Always start - idle workers need a process too!
         self._start_worker()
             
     def perform_maintenance_task(self, moves: List[tuple]) -> dict:
@@ -2113,33 +2113,55 @@ class WorkerPoolDaemon:
         
         worker_key = f"{spec}::{python_exe}"
         
+        # 🔥 FIX: Identify if this package needs a fresh process (C++ memory collision risk)
+        UNRELOADABLE_PACKAGES = {'torch', 'tensorflow', 'numpy', 'scipy', 'cv2', 'opencv-python'}
+        is_unreloadable = any(pkg in spec.lower() for pkg in UNRELOADABLE_PACKAGES)
+        
         with self.worker_locks[worker_key]:
             with self.pool_lock:
                 if worker_key not in self.workers:
                     if len(self.workers) >= self.max_workers:
                         self._evict_oldest_worker_async()
-
+    
                     try:
-                        # 1. Get an idle worker from the pool
-                        with self.idle_pool_lock:
-                            if self.idle_workers:
-                                worker = self.idle_workers.popleft()
-                                # 2. Give it its new identity
-                                worker.package_spec = spec
-                                worker.python_exe = python_exe
-                                worker._re_initialize_with_spec() # A new method we will add
-                            else:
-                                # Pool was empty (high concurrency), spawn one just for this request
-                                worker = PersistentWorker(spec, python_exe=python_exe)
-
-                        # 3. Add the now-active worker to the main pool
+                        worker = None
+                        
+                        # Only try to reuse idle worker if it's safe (NOT unreloadable)
+                        if not is_unreloadable:
+                            with self.idle_pool_lock:
+                                # Find an idle worker with the correct Python version
+                                for i, entry in enumerate(self.idle_workers):
+                                    if entry['python_exe'] == python_exe:
+                                        worker = entry['worker']
+                                        del self.idle_workers[i]
+                                        self.stats['idle_pool_hits'] += 1
+                                        break
+                                else:
+                                    self.stats['idle_pool_misses'] += 1
+    
+                        if worker:
+                            # Reuse idle worker
+                            worker.package_spec = spec
+                            worker.python_exe = python_exe
+                            worker._re_initialize_with_spec()
+                        else:
+                            # Spawn new worker (either because pool empty or it's unreloadable)
+                            worker = PersistentWorker(spec, python_exe=python_exe)
+    
                         self.workers[worker_key] = {
                             'worker': worker,
                             'created': time.time(),
                             'last_used': time.time(),
                             'request_count': 0,
-                            'memory_mb': 0.0
+                            'memory_mb': 0.0,
+                            'is_gpu_worker': True,
+                            'gpu_timeout': 60
                         }
+                        
+                        if 'tensorflow' in spec.lower():
+                            self.workers[worker_key]['gpu_timeout'] = 30
+                            self.workers[worker_key]['tensorflow_worker'] = True
+                            
                         self.stats['workers_created'] += 1
                     except Exception as e:
                         import traceback
@@ -2147,21 +2169,14 @@ class WorkerPoolDaemon:
                         return {'success': False, 'error': error_msg, 'status': 'ERROR'}
                 else:
                     self.stats['cache_hits'] += 1
-                    # 🔥 FIX: Mark existing worker as GPU worker too
                     self.workers[worker_key]['is_gpu_worker'] = True
-                    self.workers[worker_key]['gpu_timeout'] = 60
                 
-                # 🔥 FIX: Get worker_info AFTER it's definitely in the dict
                 worker_info = self.workers[worker_key]
             
             # Execute outside pool lock
             worker_info['last_used'] = time.time()
             worker_info['request_count'] += 1
-            # In _execute_cuda_code, after creating worker_info dict:
-            if 'tensorflow' in spec.lower():
-                worker_info['is_gpu_worker'] = True
-                worker_info['gpu_timeout'] = 30  # Even more aggressive for TF (30s)
-                worker_info['tensorflow_worker'] = True
+            
             try:
                 # Send CUDA IPC command
                 command = {
