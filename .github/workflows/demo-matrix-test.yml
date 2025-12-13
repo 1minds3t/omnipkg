@@ -1,0 +1,160 @@
+
+
+name: "🎪 Demo Matrix Test (All Demos)"
+
+on:
+  push:
+    branches: [ development ]
+  pull_request:
+    branches: [ development ]
+  workflow_dispatch:
+
+jobs:
+  demo-matrix:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false  # Run all demos even if one fails
+      matrix:
+        demo: [
+          {num: 1, name: "Rich Module Switching"},
+          {num: 2, name: "UV Binary Switching"},
+          {num: 3, name: "NumPy+SciPy C-Extension"},
+          {num: 4, name: "TensorFlow Complex Deps"},
+          {num: 5, name: "Multiverse Healing"},
+          {num: 6, name: "Old Flask Legacy Healing"},
+          {num: 7, name: "Script Healing"},
+          {num: 8, name: "Quantum Multiverse Warp"},
+          {num: 9, name: "Flask Port Finder"},
+          {num: 10, name: "CLI Healing"}
+        ]
+    
+    name: "Demo ${{ matrix.demo.num }}: ${{ matrix.demo.name }}"
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Python 3.11
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    
+    - name: Install omnipkg
+      run: |
+        python -m pip install --upgrade pip
+        pip install -e .
+    
+    - name: Start daemon in background
+      run: |
+        8pkg daemon start
+        sleep 5
+        8pkg daemon status
+    
+    - name: Run Demo ${{ matrix.demo.num }}
+      timeout-minutes: 10
+      run: |
+        echo "${{ matrix.demo.num }}" | 8pkg demo
+      continue-on-error: true
+    
+    - name: Show daemon logs on failure
+      if: failure()
+      run: |
+        echo "=== Daemon Status ==="
+        8pkg daemon status || true
+        echo ""
+        echo "=== Last 100 lines of daemon logs ==="
+        8pkg daemon logs --lines 100 || true
+    
+    - name: Stop daemon
+      if: always()
+      run: |
+        8pkg daemon stop || true
+
+  # Separate job for the Chaos Theory test (runs ALL scenarios)
+  chaos-theory-full:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    name: "Demo 11: Chaos Theory (Full Suite)"
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Python 3.11
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    
+    - name: Install omnipkg
+      run: |
+        pip install -e .
+    
+    - name: Start daemon
+      run: |
+        8pkg daemon start
+        sleep 5
+    
+    - name: Run ALL Chaos Theory scenarios
+      timeout-minutes: 25
+      run: |
+        # Select demo 11, then select option 0 (run all)
+        echo -e "11\n0" | 8pkg demo
+      continue-on-error: true
+    
+    - name: Show results
+      if: always()
+      run: |
+        8pkg daemon status || true
+        8pkg daemon logs --lines 200 || true
+    
+    - name: Stop daemon
+      if: always()
+      run: 8pkg daemon stop || true
+
+  # Individual chaos scenarios (for pinpointing issues)
+  chaos-individual:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        scenario: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23]
+    
+    name: "Chaos Scenario ${{ matrix.scenario }}"
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Python 3.11
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    
+    - name: Install omnipkg
+      run: pip install -e .
+    
+    - name: Start fresh daemon for this scenario
+      run: |
+        8pkg daemon start
+        sleep 3
+    
+    - name: Run Chaos Scenario ${{ matrix.scenario }}
+      timeout-minutes: 8
+      run: |
+        # Select demo 11, then select specific scenario
+        echo -e "11\n${{ matrix.scenario }}" | 8pkg demo
+      continue-on-error: true
+    
+    - name: Daemon status after test
+      if: always()
+      run: |
+        echo "=== Status ==="
+        8pkg daemon status
+        echo "=== Logs (last 50 lines) ==="
+        8pkg daemon logs --lines 50
+    
+    - name: Stop and cleanup
+      if: always()
+      run: |
+        8pkg daemon stop
+        # Clean up any leftover processes
+        pkill -f "omnipkg" || true
