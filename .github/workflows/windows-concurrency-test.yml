@@ -2,9 +2,9 @@ name: "🚀 Windows - Omnipkg Demo Test (CI - No Redis)"
 
 on:
   push:
-    branches: [ main ]
+    branches: [ development ]
   pull_request:
-    branches: [ main ]
+    branches: [ development ]
   workflow_dispatch:
 
 jobs:
