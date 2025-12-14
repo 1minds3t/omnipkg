@@ -303,42 +303,16 @@ shm_registry = SHMRegistry()
 # ═══════════════════════════════════════════════════════════════
 # CRITICAL FIX: Proper string escaping in _DAEMON_SCRIPT
 # The issue: sys.stderr.write() calls need proper escaping of backslash-n
+# ALWAYS USE '\\n' IN PLACE OF '\n' INSIDE THE RAW STRING
+# DO NOT PUT DOCSTRINGS INSIDE THE RAW STRING EITHER, IT BREAKS THE ESCAPES
+
+# ═══════════════════════════════════════════════════════════════
+# 1. PERSISTENT WORKER SCRIPT (FIXED - NO BLIND IMPORTS)
+# ═══════════════════════════════════════════════════════════════
 
 _DAEMON_SCRIPT = """#!/usr/bin/env python3
 import os
 import sys
-from pathlib import Path
-
-# ═══════════════════════════════════════════════════════════
-# 🔥 CUDA PRE-INJECTION (BEFORE ANY IMPORTS)
-# ═══════════════════════════════════════════════════════════
-try:
-    import site
-    site_packages = Path(site.getsitepackages()[0])
-    multiversion_base = site_packages / '.omnipkg_versions'
-    
-    cuda_lib_paths = []
-    for nvidia_bubble in multiversion_base.glob('nvidia-*-cu12-*'):
-        if nvidia_bubble.is_dir():
-            nvidia_dir = nvidia_bubble / 'nvidia'
-            if nvidia_dir.exists():
-                for module_dir in nvidia_dir.iterdir():
-                    if module_dir.is_dir():
-                        lib_dir = module_dir / 'lib'
-                        if lib_dir.exists():
-                            cuda_lib_paths.append(str(lib_dir))
-    
-    if cuda_lib_paths:
-        current_ld = os.environ.get('LD_LIBRARY_PATH', '')
-        new_ld = os.pathsep.join(cuda_lib_paths) + (os.pathsep + current_ld if current_ld else '')
-        os.environ['LD_LIBRARY_PATH'] = new_ld
-        sys.stderr.write(f'🔧 [PRE-INIT] Set LD_LIBRARY_PATH with {len(cuda_lib_paths)} CUDA paths\\n')
-        sys.stderr.flush()
-except Exception as e:
-    sys.stderr.write(f'⚠️  [PRE-INIT] CUDA setup failed: {e}\\n')
-    sys.stderr.flush()
-
-# NOW proceed with normal imports
 import json
 import shutil
 from pathlib import Path
@@ -363,13 +337,14 @@ def fatal_error(msg, error=None):
     sys.stderr.flush()
     sys.exit(1)
 
+# 1. READ CONFIGURATION
 try:
     input_line = sys.stdin.readline()
     if not input_line:
         fatal_error('No input received on stdin')
     
     setup_data = json.loads(input_line.strip())
-    PKG_SPEC = setup_data.get('package_spec')
+    PKG_SPEC = setup_data.get('package_spec', '')
     
     if not PKG_SPEC:
         fatal_error('Missing package_spec')
@@ -381,15 +356,10 @@ try:
 except ImportError as e:
     fatal_error('Failed to import omnipkgLoader', e)
 
-# ═══════════════════════════════════════════════════════════════
-# CRITICAL FIX: Force Non-Nested Context
-# ═══════════════════════════════════════════════════════════════
 if hasattr(omnipkgLoader, '_nesting_depth'):
     omnipkgLoader._nesting_depth = 0
 
-# ═══════════════════════════════════════════════════════════════
-# STARTUP: ONE-TIME ACTIVATION + CLEANUP
-# ═══════════════════════════════════════════════════════════════
+# 2. ACTIVATE PACKAGES
 try:
     specs = [s.strip() for s in PKG_SPEC.split(',')]
     loaders = []
@@ -399,17 +369,20 @@ try:
         l.__enter__()
         loaders.append(l)
 
-    # ═══════════════════════════════════════════════════════════
-    # 🔥 CUDA LIBRARY PATH INJECTION (CORRECT PATTERN)
-    # ═══════════════════════════════════════════════════════════
+    # 🔥 DYNAMIC CUDA INJECTION (STRICT MODE)
     cuda_lib_paths = []
+    target_cuda_ver = None
     
-    if loaders and hasattr(loaders[0], 'multiversion_base'):
+    if '+cu11' in PKG_SPEC or 'cu11' in PKG_SPEC:
+        target_cuda_ver = '11'
+    elif '+cu12' in PKG_SPEC or 'cu12' in PKG_SPEC:
+        target_cuda_ver = '12'
+    
+    if target_cuda_ver and loaders and hasattr(loaders[0], 'multiversion_base'):
         from pathlib import Path
         multiversion_base = Path(loaders[0].multiversion_base)
-        
-        # Pattern: nvidia-{name}-cu12-{version}/nvidia/{module}/lib/
-        for nvidia_bubble in multiversion_base.glob('nvidia-*-cu12-*'):
+        search_pattern = f'nvidia-*-cu{target_cuda_ver}-*'
+        for nvidia_bubble in multiversion_base.glob(search_pattern):
             if nvidia_bubble.is_dir() and '_omnipkg_cloaked' not in nvidia_bubble.name:
                 nvidia_dir = nvidia_bubble / 'nvidia'
                 if nvidia_dir.exists():
@@ -426,31 +399,26 @@ try:
             new_ld = new_ld + os.pathsep + current_ld
         os.environ['LD_LIBRARY_PATH'] = new_ld
         
-        sys.stderr.write(f'🔧 [DAEMON] Injected {len(cuda_lib_paths)} CUDA library paths\\n')
+        sys.stderr.write(f'🔧 [DAEMON] Injected {len(cuda_lib_paths)} CUDA paths (Target: cu{target_cuda_ver})\\n')
         sys.stderr.flush()
         
-        for path in cuda_lib_paths[:5]:
-            sys.stderr.write(f'   - {path}\\n')
-            sys.stderr.flush()
-        
-        # Pre-load libcudart
         import ctypes
+        candidates = [f'libcudart.so.{target_cuda_ver}.0', 'libcudart.so.12', 'libcudart.so.11.0']
         for lib_path in cuda_lib_paths:
-            cudart = Path(lib_path) / 'libcudart.so.12'
-            if cudart.exists():
-                try:
-                    ctypes.CDLL(str(cudart))
-                    sys.stderr.write(f'   ✅ Pre-loaded: {cudart.name}\\n')
-                    sys.stderr.flush()
-                    break
-                except:
-                    pass
-    else:
-        sys.stderr.write('ℹ️  [DAEMON] No CUDA libraries found\\n')
+            for cand in candidates:
+                cudart = Path(lib_path) / cand
+                if cudart.exists():
+                    try:
+                        ctypes.CDLL(str(cudart))
+                        sys.stderr.write(f'   ✅ Pre-loaded: {cudart.name}\\n')
+                        break
+                    except:
+                        pass
+            if 'cudart' in locals() and 'ctypes.CDLL' in locals(): break 
+    elif target_cuda_ver:
+        sys.stderr.write(f'ℹ️  [DAEMON] No CUDA libraries found for requested cu{target_cuda_ver}\\n')
         sys.stderr.flush()
     
-    ### POST LD PATH INJECTION ###
-
     globals()['_omnipkg_loaders'] = loaders
     
     sys.stderr.write('🧹 [DAEMON] Starting immediate post-activation cleanup...\\n')
@@ -459,73 +427,34 @@ try:
     cleanup_count = 0
     
     for loader in loaders:
-        # Restore main env cloaks
         if hasattr(loader, '_cloaked_main_modules') and loader._cloaked_main_modules:
-            sys.stderr.write(f'   🔓 Restoring {len(loader._cloaked_main_modules)} main env cloaks...\\n')
-            sys.stderr.flush()
-            
             for original_path, cloak_path, was_successful in reversed(loader._cloaked_main_modules):
-                if not was_successful or not cloak_path.exists():
-                    continue
-                
+                if not was_successful or not cloak_path.exists(): continue
                 try:
                     if original_path.exists():
-                        if original_path.is_dir():
-                            shutil.rmtree(original_path, ignore_errors=True)
-                        else:
-                            original_path.unlink()
-                    
+                        if original_path.is_dir(): shutil.rmtree(original_path, ignore_errors=True)
+                        else: original_path.unlink()
                     shutil.move(str(cloak_path), str(original_path))
                     cleanup_count += 1
-                    sys.stderr.write(f'      ✅ Restored: {original_path.name}\\n')
-                    sys.stderr.flush()
-                except Exception as e:
-                    sys.stderr.write(f'      ⚠️  Failed: {original_path.name}: {e}\\n')
-                    sys.stderr.flush()
-            
+                except Exception: pass
             loader._cloaked_main_modules.clear()
         
-        # Restore bubble cloaks
         if hasattr(loader, '_cloaked_bubbles') and loader._cloaked_bubbles:
-            sys.stderr.write(f'   🔓 Restoring {len(loader._cloaked_bubbles)} bubble cloaks...\\n')
-            sys.stderr.flush()
-            
             for cloak_path, original_path in reversed(loader._cloaked_bubbles):
                 try:
                     if cloak_path.exists():
                         if original_path.exists():
-                            if original_path.is_dir():
-                                shutil.rmtree(original_path, ignore_errors=True)
-                            else:
-                                original_path.unlink()
-                        
+                            if original_path.is_dir(): shutil.rmtree(original_path, ignore_errors=True)
+                            else: original_path.unlink()
                         shutil.move(str(cloak_path), str(original_path))
                         cleanup_count += 1
-                        sys.stderr.write(f'      ✅ Restored: {original_path.name}\\n')
-                        sys.stderr.flush()
-                except Exception as e:
-                    sys.stderr.write(f'      ⚠️  Failed: {original_path.name}: {e}\\n')
-                    sys.stderr.flush()
-            
+                except Exception: pass
             loader._cloaked_bubbles.clear()
         
-        # Clean up global tracking
         if hasattr(loader, '_my_main_env_package') and loader._my_main_env_package:
             if hasattr(omnipkgLoader, '_active_main_env_packages'):
                 omnipkgLoader._active_main_env_packages.discard(loader._my_main_env_package)
-        
-        # Clear global cloak registry
-        if hasattr(omnipkgLoader, '_active_cloaks_lock') and hasattr(omnipkgLoader, '_active_cloaks'):
-            with omnipkgLoader._active_cloaks_lock:
-                loader_id = id(loader)
-                cloaks_to_remove = []
-                for cloak_path_str, owner_id in list(omnipkgLoader._active_cloaks.items()):
-                    if owner_id == loader_id:
-                        cloaks_to_remove.append(cloak_path_str)
-                
-                for cloak_path_str in cloaks_to_remove:
-                    omnipkgLoader._active_cloaks.pop(cloak_path_str, None)
-    
+
     sys.stderr.write(f'✅ [DAEMON] Cleanup complete! Restored {cleanup_count} items\\n')
     sys.stderr.flush()
     
@@ -542,70 +471,37 @@ import os
 
 class UniversalGpuIpc:
     _lib = None
-    
     @classmethod
     def get_lib(cls):
-        if cls._lib: 
-            return cls._lib
-        
+        if cls._lib: return cls._lib
         candidates = []
-        
-        # Try PyTorch's lib directory (if torch is installed)
         try:
             import torch
             torch_lib = os.path.join(os.path.dirname(torch.__file__), 'lib')
             candidates.extend(glob.glob(os.path.join(torch_lib, 'libcudart.so*')))
-        except: 
-            pass
-        
-        # Try conda environment
+        except: pass
         if 'CONDA_PREFIX' in os.environ:
-            candidates.extend(glob.glob(
-                os.path.join(os.environ['CONDA_PREFIX'], 'lib', 'libcudart.so*')
-            ))
-        
-        # Try system libraries
+            candidates.extend(glob.glob(os.path.join(os.environ['CONDA_PREFIX'], 'lib', 'libcudart.so*')))
         candidates.extend(['libcudart.so.12', 'libcudart.so.11.0', 'libcudart.so'])
-        
         for lib in candidates:
             try:
                 cls._lib = ctypes.CDLL(lib)
                 return cls._lib
-            except: 
-                continue
-        
-        raise RuntimeError("Could not load libcudart.so - CUDA not available")
+            except: continue
+        raise RuntimeError("Could not load libcudart.so")
     
     @staticmethod
     def share(tensor):
         import base64
-        
         lib = UniversalGpuIpc.get_lib()
         ptr = tensor.data_ptr()
-        
-        # Define CUDA structures
         class cudaPointerAttributes(ctypes.Structure):
-            _fields_ = [
-                ("type", ctypes.c_int), 
-                ("device", ctypes.c_int), 
-                ("devicePointer", ctypes.c_void_p), 
-                ("hostPointer", ctypes.c_void_p)
-            ]
-        
+            _fields_ = [("type", ctypes.c_int), ("device", ctypes.c_int), 
+                        ("devicePointer", ctypes.c_void_p), ("hostPointer", ctypes.c_void_p)]
         class cudaIpcMemHandle_t(ctypes.Structure):
             _fields_ = [("reserved", ctypes.c_char * 64)]
-        
-        # Set function signatures
-        lib.cudaPointerGetAttributes.argtypes = [
-            ctypes.POINTER(cudaPointerAttributes), 
-            ctypes.c_void_p
-        ]
-        lib.cudaIpcGetMemHandle.argtypes = [
-            ctypes.POINTER(cudaIpcMemHandle_t), 
-            ctypes.c_void_p
-        ]
-        
-        # Get base pointer and offset
+        lib.cudaPointerGetAttributes.argtypes = [ctypes.POINTER(cudaPointerAttributes), ctypes.c_void_p]
+        lib.cudaIpcGetMemHandle.argtypes = [ctypes.POINTER(cudaIpcMemHandle_t), ctypes.c_void_p]
         attrs = cudaPointerAttributes()
         if lib.cudaPointerGetAttributes(ctypes.byref(attrs), ctypes.c_void_p(ptr)) == 0:
             base_ptr = attrs.devicePointer or ptr
@@ -613,89 +509,44 @@ class UniversalGpuIpc:
         else:
             base_ptr = ptr
             offset = 0
-        
-        # Get IPC handle
         handle = cudaIpcMemHandle_t()
         err = lib.cudaIpcGetMemHandle(ctypes.byref(handle), ctypes.c_void_p(base_ptr))
-        
-        if err != 0:
-            raise RuntimeError(f"cudaIpcGetMemHandle failed with code {err}")
-        
-        # Return JSON-serializable metadata (base64-encode bytes!)
+        if err != 0: raise RuntimeError(f"cudaIpcGetMemHandle failed: {err}")
         handle_bytes = ctypes.string_at(ctypes.byref(handle), 64)
-        return {
-            "handle": base64.b64encode(handle_bytes).decode('ascii'),
-            "offset": offset,
-            "shape": tuple(tensor.shape),
-            "typestr": "<f4",
-            "device": tensor.device.index or 0
-        }
+        return {"handle": base64.b64encode(handle_bytes).decode('ascii'), "offset": offset,
+                "shape": tuple(tensor.shape), "typestr": "<f4", "device": tensor.device.index or 0}
     
     @staticmethod
     def load(data):
         import base64
-        
         lib = UniversalGpuIpc.get_lib()
-        
         class cudaIpcMemHandle_t(ctypes.Structure):
             _fields_ = [("reserved", ctypes.c_char * 64)]
-        
-        lib.cudaIpcOpenMemHandle.argtypes = [
-            ctypes.POINTER(ctypes.c_void_p), 
-            cudaIpcMemHandle_t, 
-            ctypes.c_uint
-        ]
-        
-        # Reconstruct handle (decode from base64)
+        lib.cudaIpcOpenMemHandle.argtypes = [ctypes.POINTER(ctypes.c_void_p), cudaIpcMemHandle_t, ctypes.c_uint]
         handle = cudaIpcMemHandle_t()
         handle_bytes = base64.b64decode(data["handle"])
         ctypes.memmove(ctypes.byref(handle), handle_bytes, 64)
-        
-        # Open IPC handle
         dev_ptr = ctypes.c_void_p()
         err = lib.cudaIpcOpenMemHandle(ctypes.byref(dev_ptr), handle, 1)
-        
-        if err == 201:  # cudaErrorAlreadyMapped
-            return None  # Same process - can't IPC to yourself
-        
-        if err != 0:
-            raise RuntimeError(f"cudaIpcOpenMemHandle failed with code {err}")
-        
-        # Calculate final pointer with offset
+        if err == 201: return None 
+        if err != 0: raise RuntimeError(f"cudaIpcOpenMemHandle failed: {err}")
         final_ptr = dev_ptr.value + data["offset"]
-        
-        # Create PyTorch tensor from raw pointer
         import torch
-        
         class CUDABuffer:
             def __init__(self, ptr, shape, typestr):
-                self.__cuda_array_interface__ = {
-                    "data": (ptr, False),
-                    "shape": shape,
-                    "typestr": typestr,
-                    "version": 3
-                }
-        
-        # PyTorch can consume __cuda_array_interface__
-        return torch.as_tensor(
-            CUDABuffer(final_ptr, data["shape"], data["typestr"]), 
-            device=f"cuda:{data['device']}"
-        )
+                self.__cuda_array_interface__ = { "data": (ptr, False), "shape": shape, "typestr": typestr, "version": 3 }
+        return torch.as_tensor(CUDABuffer(final_ptr, data["shape"], data["typestr"]), device=f"cuda:{data['device']}")
 
 _universal_gpu_ipc_available = False
-
 try:
-    # Test if we can load CUDA runtime
     UniversalGpuIpc.get_lib()
     _universal_gpu_ipc_available = True
     sys.stderr.write('🔥🔥🔥 [DAEMON] UNIVERSAL CUDA IPC ENABLED (ctypes - NO PYTORCH NEEDED)\\n')
     sys.stderr.flush()
-except Exception as e:
-    sys.stderr.write(f'⚠️  [DAEMON] Universal CUDA IPC unavailable: {e}\\n')
-    sys.stderr.flush()
+except Exception: pass
 
 # ═══════════════════════════════════════════════════════════════
-# NOW CHECK GPU IPC AFTER LOADER ACTIVATION (SEES BUBBLE TORCH)
+# 🔥 NO BLIND IMPORTS! ONLY IMPORT WHAT IS IN PKG_SPEC
 # ═══════════════════════════════════════════════════════════════
 from multiprocessing import shared_memory
 from contextlib import redirect_stdout, redirect_stderr
@@ -708,87 +559,53 @@ _torch_available = False
 _cuda_available = False
 _native_ipc_mode = False
 
-try:
-    import tensorflow as tf
-    # Prevent TensorFlow from hogging all VRAM
-    gpus = tf.config.list_physical_devices('GPU')
-    if gpus:
-        for gpu in gpus:
-            tf.config.experimental.set_memory_growth(gpu, True)
-        sys.stderr.write('✅ [DAEMON] TensorFlow GPU memory growth enabled\\n')
-except Exception as e:
-    pass
+# Only check TensorFlow if it's the worker's package
+if 'tensorflow' in PKG_SPEC:
+    try:
+        import tensorflow as tf
+        gpus = tf.config.list_physical_devices('GPU')
+        if gpus:
+            for gpu in gpus:
+                try: tf.config.experimental.set_memory_growth(gpu, True)
+                except: pass
+        sys.stderr.write('✅ [DAEMON] TensorFlow initialized (Memory Growth ON)\\n')
+    except Exception as e:
+        sys.stderr.write(f'⚠️ [DAEMON] TensorFlow import failed: {e}\\n')
 
-try:
-    import torch
-    _torch_available = True
-    _cuda_available = torch.cuda.is_available()
-    
-    sys.stderr.write(f'🔍 [DAEMON] Detected PyTorch version: {torch.__version__}\\n')
-    sys.stderr.flush()
-    
-    if _cuda_available:
-        # Check for PyTorch 1.x native CUDA IPC
-        torch_version = torch.__version__.split('+')[0]
-        major = int(torch_version.split('.')[0])
+# Only check PyTorch if it's the worker's package
+if 'torch' in PKG_SPEC:
+    try:
+        import torch
+        _torch_available = True
+        _cuda_available = torch.cuda.is_available()
+        sys.stderr.write(f'🔍 [DAEMON] PyTorch {torch.__version__} initialized\\n')
         
-        sys.stderr.write(f'🔍 [DAEMON] PyTorch major version: {major}\\n')
-        sys.stderr.flush()
-        
-        if major == 1:
-            sys.stderr.write(f'🔍 [DAEMON] Checking for native CUDA IPC support...\\n')
-            sys.stderr.flush()
-            
-            try:
-                # Test if we can use native CUDA IPC via storage._share_cuda_()
-                test_tensor = torch.zeros(1).cuda()
-                test_storage = test_tensor.storage()
-                
-                if hasattr(test_storage, '_share_cuda_'):
-                    # Try to get IPC handle
-                    ipc_data = test_storage._share_cuda_()
-                    if len(ipc_data) == 8:
+        if _cuda_available:
+            torch_version = torch.__version__.split('+')[0]
+            major = int(torch_version.split('.')[0])
+            if major == 1:
+                try:
+                    test_tensor = torch.zeros(1).cuda()
+                    if hasattr(test_tensor.storage(), '_share_cuda_'):
                         _native_ipc_mode = True
                         _gpu_ipc_available = True
-                        sys.stderr.write('🔥🔥🔥 [DAEMON] NATIVE CUDA IPC ENABLED (PyTorch 1.x - TRUE ZERO-COPY)\\n')
-                        sys.stderr.flush()
-                    else:
-                        sys.stderr.write(f'⚠️  [DAEMON] _share_cuda_() returned unexpected data: {len(ipc_data)} elements\\n')
-                        sys.stderr.flush()
-                else:
-                    _gpu_ipc_available = True
-                    sys.stderr.write('⚠️  [DAEMON] PyTorch 1.x but _share_cuda_() not available\\n')
-                    sys.stderr.flush()
-            except Exception as e:
-                sys.stderr.write(f'⚠️  [DAEMON] CUDA IPC test failed: {e}\\n')
-                sys.stderr.flush()
-        else:
-            # PyTorch 2.x - hybrid mode only
-            sys.stderr.write(f'ℹ️  [DAEMON] PyTorch {major}.x - using hybrid mode\\n')
-            sys.stderr.flush()
-            try:
-                test_tensor = torch.zeros(1).cuda()
-                test_tensor.share_memory_()
+                        sys.stderr.write('🔥🔥🔥 [DAEMON] NATIVE CUDA IPC ENABLED\\n')
+                except: pass
+            else:
                 _gpu_ipc_available = True
-                sys.stderr.write('🚀 [DAEMON] GPU IPC available via PyTorch CUDA (hybrid mode)\\n')
-                sys.stderr.flush()
-            except:
-                sys.stderr.write('⚠️  [DAEMON] PyTorch CUDA detected but IPC unavailable\\n')
-                sys.stderr.flush()
-except ImportError as e:
-    sys.stderr.write(f'⚠️  [DAEMON] Failed to import torch: {e}\\n')
-    sys.stderr.flush()
+                sys.stderr.write('🚀 [DAEMON] GPU IPC available (Hybrid/Universal)\\n')
+    except Exception as e:
+        sys.stderr.write(f'⚠️ [DAEMON] PyTorch import failed: {e}\\n')
 
-if not _gpu_ipc_available:
-    sys.stderr.write('ℹ️  [DAEMON] Running in CPU-only mode (standard SHM)\\n')
-    sys.stderr.flush()
+# If neither is available, Universal IPC might still work via ctypes if libs are present
+if _universal_gpu_ipc_available:
+    _gpu_ipc_available = True
 
 try:
     ready_msg = {'status': 'READY', 'package': PKG_SPEC, 'native_ipc': _native_ipc_mode}
     print(json.dumps(ready_msg), flush=True)
 except Exception as e:
     sys.stderr.write(f"ERROR: Failed to send READY: {e}\\n")
-    sys.stderr.flush()
     sys.exit(1)
 
 # ═══════════════════════════════════════════════════════════════
@@ -1330,23 +1147,30 @@ class PersistentWorker:
     def _discover_cuda_paths(self) -> List[str]:
         """
         Discover CUDA library paths for this package spec.
-        Checks bubbles for nvidia-* packages.
+        Dynamically detects CUDA version requirement (cu11 vs cu12).
         """
         from pathlib import Path
         
         cuda_paths = []
         
-        # Parse package name from spec
+        # 1. Detect required CUDA version from spec
+        # e.g. "torch==2.0.0+cu118" -> target="11"
+        target_cuda = "12" # Default to modern
+        if "+cu11" in self.package_spec or "cu11" in self.package_spec:
+            target_cuda = "11"
+        elif "+cu12" in self.package_spec or "cu12" in self.package_spec:
+            target_cuda = "12"
+        
+        # Parse package name
         pkg_name = self.package_spec.split('==')[0] if '==' in self.package_spec else self.package_spec
         
-        # Get the multiversion base (bubble directory)
+        # Get the multiversion base
         try:
             # Import here to avoid circular dependency
             from omnipkg.loader import omnipkgLoader
             loader = omnipkgLoader(package_spec=self.package_spec, quiet=True)
             multiversion_base = loader.multiversion_base
         except Exception:
-            # Fallback: try to find it in sys.path
             import site
             site_packages = Path(site.getsitepackages()[0])
             multiversion_base = site_packages / '.omnipkg_versions'
@@ -1354,52 +1178,48 @@ class PersistentWorker:
         if not multiversion_base.exists():
             return cuda_paths
         
-        # Strategy 1: Check the main package bubble for NVIDIA dependencies
+        # Strategy 1: Check main bubble
         _, version = self.package_spec.split('==') if '==' in self.package_spec else (pkg_name, None)
         if version:
             main_bubble = multiversion_base / f"{pkg_name}-{version}"
             if main_bubble.exists():
-                # Scan for symlinked or nested nvidia packages
                 for nvidia_dir in main_bubble.glob('nvidia_*'):
                     if nvidia_dir.is_dir():
-                        # Check for lib subdirectory
                         lib_dir = nvidia_dir / 'lib'
                         if lib_dir.exists():
                             cuda_paths.append(str(lib_dir))
-                        # Also check for .so files directly in package dir
                         if list(nvidia_dir.glob('*.so*')):
                             cuda_paths.append(str(nvidia_dir))
         
-        # Strategy 2: Check for standalone NVIDIA bubbles
-        # These are the separate nvidia-cuda-runtime-cu12-12.1.105 bubbles
+        # Strategy 2: Check standalone NVIDIA bubbles using TARGET VERSION
+        # We only look for the version requested in the spec
         nvidia_bubble_patterns = [
-            'nvidia-cuda-runtime-cu12-*',
-            'nvidia-cudnn-cu12-*',
-            'nvidia-cublas-cu12-*',
-            'nvidia-cufft-cu12-*',
-            'nvidia-cusolver-cu12-*',
-            'nvidia-cusparse-cu12-*',
+            f'nvidia-cuda-runtime-cu{target_cuda}-*',
+            f'nvidia-cudnn-cu{target_cuda}-*',
+            f'nvidia-cublas-cu{target_cuda}-*',
+            f'nvidia-cufft-cu{target_cuda}-*',
+            f'nvidia-cusolver-cu{target_cuda}-*',
+            f'nvidia-cusparse-cu{target_cuda}-*',
+            f'nvidia-nccl-cu{target_cuda}-*',
+            f'nvidia-nvtx-cu{target_cuda}-*',
         ]
         
         for pattern in nvidia_bubble_patterns:
             for nvidia_bubble in multiversion_base.glob(pattern):
                 if nvidia_bubble.is_dir() and '_omnipkg_cloaked' not in nvidia_bubble.name:
-                    # Find the package directory inside
-                    pkg_dir_name = nvidia_bubble.name.split('-')[0:3]  # e.g., ['nvidia', 'cuda', 'runtime']
-                    pkg_dir_name = '_'.join(pkg_dir_name)  # 'nvidia_cuda_runtime'
+                    pkg_dir_name = nvidia_bubble.name.split('-')[0:3]
+                    pkg_dir_name = '_'.join(pkg_dir_name)
                     
                     pkg_dir = nvidia_bubble / pkg_dir_name
                     if pkg_dir.exists():
-                        # Check for lib subdirectory
                         lib_dir = pkg_dir / 'lib'
                         if lib_dir.exists():
                             cuda_paths.append(str(lib_dir))
-                        # Check for .so files in package dir
                         if list(pkg_dir.glob('*.so*')):
                             cuda_paths.append(str(pkg_dir))
         
         return cuda_paths
-
+    
     def _start_worker(self):
         """Start worker process with proper error handling."""
         # CRITICAL DEBUG: Check _DAEMON_SCRIPT before writing
