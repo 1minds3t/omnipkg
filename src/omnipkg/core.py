@@ -4296,11 +4296,11 @@ class omnipkg:
         
         Args:
             minimal_mode: If True, skips database/cache initialization for commands
-                         that only need config access (swap, version, etc.)
+                        that only need config access (swap, version, etc.)
         """
         self.config_manager = config_manager
         self.config = config_manager.config
-        self._has_run_cloak_cleanup = False # <-- ADD THIS FLAG
+        self._has_run_cloak_cleanup = False
         
         if not self.config:
             if len(sys.argv) > 1 and sys.argv[1] in ['reset-config', 'doctor']:
@@ -4308,13 +4308,17 @@ class omnipkg:
             else:
                 raise RuntimeError('OmnipkgCore cannot initialize: Configuration is missing or invalid.')
         
+        # 🎯 CRITICAL FIX: Set these IMMEDIATELY like multiversion_base
+        # These are used by check_package_installed_fast during preflight
+        self.env_id = self._get_env_id()
+        self.multiversion_base = Path(self.config['multiversion_base'])
+        self.site_packages_root = Path(self.config['site_packages_path'])  # 🎯 ADD THIS!
+        
         # Minimal initialization for lightweight commands
         if minimal_mode:
-            self.env_id = self._get_env_id()
-            self.multiversion_base = Path(self.config['multiversion_base'])
             self.interpreter_manager = InterpreterManager(self.config_manager)
             safe_print(_('✅ Omnipkg core initialized (minimal mode).'))
-            return  # EXIT EARLY - no cache, no migrations, no hooks
+            return  # EXIT EARLY
         self._self_heal_omnipkg_installation()
         self.env_id = self._get_env_id()
         self.multiversion_base = Path(self.config['multiversion_base'])
@@ -8098,77 +8102,78 @@ class omnipkg:
         safe_print(_('✨ Python {} has been successfully removed from the environment.').format(version))
         return 0
     
-    def check_package_installed_fast(self, python_exe: str, package: str, version: str) -> Tuple[Optional[str], float]:
+    def check_package_installed_fast(self, python_exe: str, package: str, version: str) -> Tuple[Optional[str], int]:
         """
-        (REWRITTEN & ROBUST) Checks if a specific package version is already installed.
-        Uses DIRECT filesystem checks for maximum reliability and speed.
-
-        Returns:
-            A tuple of (status, duration_ms) where status is one of:
-            - 'active': The exact version is installed in the main environment.
-            - 'bubble': The exact version exists as a bubble.
-            - None: The package is not satisfied.
-        """
-        start_time = time.perf_counter()
+        Ultra-fast package check with nanosecond precision timing.
+        - Uses time.perf_counter_ns() for the highest resolution clock.
+        - The 'python_exe' parameter is accepted to match the caller's signature,
+        but is not used in this filesystem-only check.
         
-        # --- Phase 1: Check main environment via direct dist-info inspection ---
+        Returns:
+            ('active', duration_ns) - Exact version in main env
+            ('bubble', duration_ns) - Exact version in bubble  
+            (None, duration_ns)     - Not satisfied
+        """
+        start_time_ns = time.perf_counter_ns()
+        
         try:
-            # Get site-packages directory from the target python_exe
-            cmd = [python_exe, '-c', 'import site; print(site.getsitepackages())']
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=5, check=True)
+            pkg_normalized = package.replace('-', '_').lower()
             
-            import ast
-            site_packages_paths = [Path(p) for p in ast.literal_eval(result.stdout.strip())]
+            # Check main env
+            dist_info_path = self.site_packages_root / f'{pkg_normalized}-{version}.dist-info'
+            if dist_info_path.is_dir():
+                return 'active', (time.perf_counter_ns() - start_time_ns)
             
-            pkg_name_normalized = package.replace('-', '_').lower()
-
-            for site_packages in site_packages_paths:
-                if not site_packages.is_dir():
-                    continue
-
-                # Use glob for case-insensitivity and name variations
-                for dist_info in site_packages.glob(f'{pkg_name_normalized}-{version}.dist-info'):
-                    if dist_info.is_dir():
-                        # We found a potential match. Verify version from METADATA.
-                        metadata_file = dist_info / 'METADATA'
-                        if metadata_file.exists():
-                            try:
-                                with open(metadata_file, 'r', encoding='utf-8') as f:
-                                    for line in f:
-                                        if line.lower().startswith('version:'):
-                                            found_version = line.split(':', 1)[1].strip()
-                                            if found_version == version:
-                                                duration_ms = (time.perf_counter() - start_time) * 1000
-                                                return 'active', duration_ms # ✅ IT'S ACTIVE
-                            except Exception:
-                                pass # Corrupted metadata, treat as not found.
+            # Check bubble
+            bubble_path = self.site_packages_root / '.omnipkg_versions' / f'{package}-{version}'
+            if bubble_path.is_dir():
+                return 'bubble', (time.perf_counter_ns() - start_time_ns)
+            
+            # Fallback: Legacy bubble location
+            legacy_bubble = self.multiversion_base / f'{package}-{version}'
+            if legacy_bubble.is_dir():
+                return 'bubble', (time.perf_counter_ns() - start_time_ns)
+                
         except Exception:
-            # If the subprocess fails for any reason, we can't confirm it's active.
             pass
+        
+        return None, (time.perf_counter_ns() - start_time_ns)
 
-        # --- Phase 2: If not active, check if a valid bubble exists ---
-        bubble_path = self.multiversion_base / f'{package}-{version}'
-        if bubble_path.is_dir():
-            # Check for the existence of the manifest file for a quick, reliable check.
-            if (bubble_path / '.omnipkg_manifest.json').exists():
-                duration_ms = (time.perf_counter() - start_time) * 1000
-                return 'bubble', duration_ms # ✅ IT'S IN A BUBBLE
-
-        # --- Phase 3: Not satisfied ---
-        duration_ms = (time.perf_counter() - start_time) * 1000
-        return None, duration_ms
-    
-    def _check_package_exists_on_pypi(self, package_name: str) -> bool:
+    def _get_site_packages_cached(self, python_exe: str) -> Path:
         """
-        Performs a fast, lightweight check to see if a package exists on PyPI.
-        Returns True if it exists, False otherwise.
+        Disk-cached site-packages lookup - only used as last resort fallback.
         """
+        cache_dir = Path.home() / '.config' / 'omnipkg' / 'site_packages_cache'
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        
+        cache_key = hashlib.md5(python_exe.encode()).hexdigest()
+        cache_file = cache_dir / f"{cache_key}.json"
+        
+        # Try cache
+        if cache_file.exists():
+            try:
+                with open(cache_file, 'r') as f:
+                    cached_data = json.load(f)
+                    cached_path = Path(cached_data['site_packages'])
+                    if cached_path.exists():
+                        return cached_path
+            except Exception:
+                pass
+        
+        # Cache miss - subprocess
+        site_packages_str = subprocess.run(
+            [python_exe, '-c', 'import site; print(site.getsitepackages()[0])'],
+            capture_output=True, text=True, timeout=2, check=True
+        ).stdout.strip()
+        
+        # Save to cache
         try:
-            import requests
-            response = requests.head(f"https://pypi.org/pypi/{package_name}/json", timeout=10)
-            return response.status_code == 200
+            with open(cache_file, 'w') as f:
+                json.dump({'python_exe': python_exe, 'site_packages': site_packages_str}, f)
         except Exception:
-            return False
+            pass
+        
+        return Path(site_packages_str)
     
     def _resolve_spec_with_pip(self, package_spec: str, index_url: Optional[str] = None, 
                            extra_index_url: Optional[str] = None) -> Tuple[Optional[str], str]:
@@ -8394,10 +8399,8 @@ class omnipkg:
             # Normalize "1.0-final" to "1.0"
             return re.sub(r'-\w+$', '', version)
         
-        return None
-
+        return None  
     
-
     def smart_install(self, packages: List[str], dry_run: bool = False, force_reinstall: bool = False, 
                   override_strategy: Optional[str] = None, target_directory: Optional[Path] = None, 
                   preflight_compatibility_cache: Optional[Dict] = None,
@@ -8517,18 +8520,27 @@ class omnipkg:
                             continue
             
                 # Step 2: Check if this version is already installed
-                is_installed, duration_ms = self.check_package_installed_fast(configured_exe, pkg_name, version)
+                # Call the new nanosecond function
+                is_installed, duration_ns = self.check_package_installed_fast(configured_exe, pkg_name, version)
+                
+                # Format duration
+                if duration_ns < 1_000:
+                    duration_str = f"{duration_ns}ns"
+                elif duration_ns < 1_000_000:
+                    duration_str = f"{duration_ns / 1_000:.1f}µs"
+                else:
+                    duration_str = f"{duration_ns / 1_000_000:.3f}ms"
                 
                 if is_installed:
                     bubble_path = self.multiversion_base / f'{pkg_name}-{version}'
                     is_in_bubble = bubble_path.exists() and bubble_path.is_dir()
                     
                     if not is_in_bubble:
-                        safe_print(f'   ✓ {resolved_spec} [satisfied: {duration_ms:.1f}ms - active in main env]')
+                        safe_print(f'   ✓ {resolved_spec} [satisfied: {duration_str} - active in main env]')
                         fully_resolved_specs.append(resolved_spec)
                         continue
                     elif install_strategy == 'stable-main':
-                        safe_print(f'   ✓ {resolved_spec} [satisfied: {duration_ms:.1f}ms - bubble]')
+                        safe_print(f'   ✓ {resolved_spec} [satisfied: {duration_str} - bubble]')
                         fully_resolved_specs.append(resolved_spec)
                         continue
                     else:
@@ -8537,12 +8549,20 @@ class omnipkg:
                         continue
                 else:
                     needs_installation.append(resolved_spec)
-            
+
+            # 🎯 CRITICAL: This MUST be OUTSIDE the for loop!
             # --- Phase 2: If everything satisfied, we're done! ---
             if not needs_installation:
-                total_check_time = (time.perf_counter() - preflight_start) * 1000
-                safe_print(f'⚡ PREFLIGHT SUCCESS: All {len(packages)} package(s) already satisfied! ({total_check_time:.1f}ms)')
-                return 0
+                total_check_time_ns = int((time.perf_counter() - preflight_start) * 1_000_000_000)
+                
+                # Format total time
+                if total_check_time_ns < 1_000_000:
+                    total_time_str = f"{total_check_time_ns / 1_000:.1f}µs"
+                else:
+                    total_time_str = f"{total_check_time_ns / 1_000_000:.3f}ms"
+                
+                safe_print(f'⚡ PREFLIGHT SUCCESS: All {len(packages)} package(s) already satisfied! ({total_time_str})')
+                return 0  # 🎯 EXIT HERE - Don't continue to normal initialization!
             
             # --- Phase 3: Validate unresolved packages with pip (ONLY if needed) ---
             if needs_installation:
