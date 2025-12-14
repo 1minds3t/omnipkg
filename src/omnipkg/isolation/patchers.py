@@ -3,6 +3,7 @@ import sys
 import importlib
 import builtins
 import warnings
+import threading
 from types import ModuleType
 
 try:

@@ -1647,11 +1647,7 @@ class omnipkgLoader:
                 gc.collect()
                 importlib.invalidate_caches()
                 self._profile_end('memory_purge', print_now=True)
-                
-                # DEBUG
-                safe_print(f"DEBUG sys.path: {sys.path[:3]}")  # First 3 entries
-
-                
+                              
                 # Profile: Path sanitization
                 self._profile_start('path_sanitization')
                 self._scrub_sys_path_of_bubbles()

@@ -76,7 +76,7 @@ try:
     loader.__enter__()
     
     # VERIFY the package is actually importable
-    pkg_name = package_spec.split("==")[0].replace("-", "_")
+    pkg_name = "{package_spec}".split("==")[0].replace("-", "_")
     __import__(pkg_name)
     
     send_ipc({{"status": "ready"}})
@@ -170,21 +170,26 @@ except:
             env=env
         )
 
-        # Start logging thread
-        self._log_thread = threading.Thread(target=self._stream_logs, daemon=True)
-        self._log_thread.start()
-
         # Handshake
         try:
             line = self.process.stdout.readline()
             if not line:
-                raise RuntimeError("Worker process died immediately.")
+                stderr_output = self.process.stderr.read()  # READ ALL STDERR
+                raise RuntimeError(f"Worker died.\n{stderr_output}")
             data = json.loads(line)
             if data.get('status') != 'ready':
-                raise RuntimeError(f"Worker initialization failed: {data}")
+                stderr_output = self.process.stderr.read()  # READ ALL STDERR HERE
+                raise RuntimeError(f"Worker init failed: {data}\nSTDERR:\n{stderr_output}")
+        except json.JSONDecodeError as e:
+            stderr_output = self.process.stderr.read()  # AND HERE
+            raise RuntimeError(f"Bad JSON: {line}\nSTDERR:\n{stderr_output}")
         except Exception as e:
             self._stop_logging.set()
-            raise RuntimeError(f"Handshake failed: {e}")
+            raise  # Don't wrap it again, just re-raise
+            
+        # Start logging thread
+        self._log_thread = threading.Thread(target=self._stream_logs, daemon=True)
+        self._log_thread.start()
 
     def _stream_logs(self):
         """Streams stderr from worker to console in real-time."""
