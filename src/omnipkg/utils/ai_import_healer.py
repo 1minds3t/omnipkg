@@ -352,7 +352,7 @@ def heal_code_string(code: str, verbose: bool = True, aggressive: bool = False, 
         healed = heal_code_string(code, silent=True)    # No output
     """
     healer = AIImportHealer(verbose=verbose, aggressive=aggressive, silent=silent)
-    healed_code, _ = healer.heal(code)
+    healed_code, diagnostics = healer.heal(code)
     return healed_code
 
 

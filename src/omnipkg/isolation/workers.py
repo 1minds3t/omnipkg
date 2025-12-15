@@ -34,7 +34,10 @@ import os
 import json
 import traceback
 import io
-
+try:
+    from .common_utils import safe_print
+except ImportError:
+    from omnipkg.common_utils import safe_print
 # CRITICAL: Disable buffering on stderr for real-time output
 sys.stderr = open(sys.stderr.fileno(), 'w', buffering=1, closefd=False)
 

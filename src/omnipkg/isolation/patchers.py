@@ -172,7 +172,6 @@ def smart_tf_patcher():
     builtins.__import__ = genius_import
     _tf_smart_initialized = True
 
-
 # ═══════════════════════════════════════════════════════════
 # LAZY C++ STABILIZATION (only when actually needed)
 # ═══════════════════════════════════════════════════════════
@@ -185,7 +184,6 @@ def _lazy_init_cpp_reality_anchors():
             'memory_layout_guides': _create_memory_layout_guides(),
             'type_conversion_handles': _create_type_conversion_handles(),
         }
-
 
 def _create_stable_dtype_mappings():
     """Create stable dtype mappings (only if numpy is available)."""
@@ -203,7 +201,6 @@ def _create_stable_dtype_mappings():
         pass  # NumPy not available, return empty mappings
     return stable_mappings
 
-
 def _create_memory_layout_guides():
     """Create memory layout consistency guides."""
     return {
@@ -212,14 +209,12 @@ def _create_memory_layout_guides():
         'ANY_CONTIGUOUS': 'A',
     }
 
-
 def _create_type_conversion_handles():
     """Create handles for C++ type conversion functions."""
     return {
         'tensor_to_numpy': _tensor_to_numpy_stabilized,
         'numpy_to_tensor': _numpy_to_tensor_stabilized,
     }
-
 
 def _is_cpp_boundary_import(name, fromlist):
     """Detect imports that cross the C++/Python boundary."""
@@ -238,7 +233,6 @@ def _is_cpp_boundary_import(name, fromlist):
     
     return False
 
-
 def _handle_cpp_boundary_import(name, fromlist, globals):
     """Handle C++/Python boundary imports with lazy initialization."""
     try:
@@ -256,7 +250,6 @@ def _handle_cpp_boundary_import(name, fromlist, globals):
     
     return result
 
-
 def _stabilize_cpp_psyche():
     """Stabilize TensorFlow's C++ extensions (only if TF is loaded)."""
     if 'tensorflow' in sys.modules:
@@ -265,7 +258,6 @@ def _stabilize_cpp_psyche():
             if 'cpp_reality_anchor' in _tf_module_cache:
                 tf_module.__omnipkg_reality_anchors__ = _tf_module_cache['cpp_reality_anchor']
 
-
 def _post_import_cpp_stabilization(name, module):
     """Apply post-import stabilization to C++ modules."""
     try:
@@ -273,7 +265,6 @@ def _post_import_cpp_stabilization(name, module):
             module.__omnipkg_cpp_stabilized__ = True
     except Exception:
         pass
-
 
 def _tensor_to_numpy_stabilized(tensor):
     """Stabilized tensor to numpy conversion (with graceful fallback)."""
@@ -287,7 +278,6 @@ def _tensor_to_numpy_stabilized(tensor):
         pass
     return None
 
-
 def _numpy_to_tensor_stabilized(array):
     """Stabilized numpy to tensor conversion (with graceful fallback)."""
     try:
@@ -296,7 +286,6 @@ def _numpy_to_tensor_stabilized(array):
     except Exception:
         pass
     return array
-
 
 def _stabilize_numpy_array(array):
     """Ensure numpy array is in a stable state (only if numpy is available)."""
@@ -310,7 +299,6 @@ def _stabilize_numpy_array(array):
     except Exception:
         pass
     return array
-
 
 # ═══════════════════════════════════════════════════════════
 # CIRCULAR IMPORT HANDLING (TensorFlow-specific)
@@ -338,7 +326,6 @@ def _detect_circular_import_scenario(name, fromlist, globals):
             return True
     
     return False
-
 
 def _handle_circular_import(name, fromlist, globals):
     """Handle circular imports by pre-loading dependencies."""
@@ -381,13 +368,11 @@ def _handle_circular_import(name, fromlist, globals):
         
         return CircularImportNamespace(successfully_imported)
 
-
 def print_circular_import_summary():
     """Print a summary of circular imports healed."""
     if _circular_import_stats:
         summary = ", ".join(f"{dep}×{count}" for dep, count in sorted(_circular_import_stats.items()))
         safe_print(f"🔄 [OMNIPKG] Healed circular imports: {summary}")
-
 
 def _is_partially_initialized_tf(globals):
     """Check if we're in a partially initialized TensorFlow module."""
@@ -405,7 +390,6 @@ def _is_partially_initialized_tf(globals):
     
     return False
 
-
 def _handle_partial_initialization(name, fromlist, globals):
     """Handle partial initialization."""
     parent_module = globals['__name__'] if globals else name
@@ -416,7 +400,6 @@ def _handle_partial_initialization(name, fromlist, globals):
             pass  # If force initialization fails, continue anyway
     
     return _original_import_func(name, globals, None, fromlist, level=0)
-
 
 def _force_complete_initialization(module_name):
     """Force a module to complete its initialization."""

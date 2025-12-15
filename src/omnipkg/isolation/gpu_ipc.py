@@ -5,6 +5,10 @@ import sys
 import glob
 import time
 import multiprocessing as mp
+try:
+    from .common_utils import safe_print
+except ImportError:
+    from omnipkg.common_utils import safe_print
 
 # ==============================================================================
 # 1. UNIVERSAL IPC LOGIC
@@ -83,7 +87,7 @@ def persistent_worker(in_q, out_q):
         # Pre-load library but DON'T map memory yet
         UniversalGpuIpc.get_lib()
         torch.cuda.init()
-        _ = torch.tensor([1.0], device='cuda:0')
+        unused = torch.tensor([1.0], device='cuda:0')
         out_q.put("READY")
     except Exception as e:
         out_q.put(f"INIT_ERROR: {e}")
@@ -115,7 +119,7 @@ if __name__ == "__main__":
     mp.set_start_method('spawn', force=True)
     
     print("="*60)
-    print("⚖️  HONEST BENCHMARK: 100 Runs (Cold Excluded)")
+    safe_print("⚖️  HONEST BENCHMARK: 100 Runs (Cold Excluded)")
     print("="*60)
     
     in_q = mp.Queue()
@@ -129,20 +133,20 @@ if __name__ == "__main__":
     ipc_payload = UniversalGpuIpc.share(tensor)
     
     latencies = []
-    print(f"🚀 Blasting 100 Requests...")
+    safe_print(f"🚀 Blasting 100 Requests...")
     
     for i in range(100):
         in_q.put(("PROCESS", ipc_payload))
-        status, lat, _ = out_q.get()
+        status, lat, unused = out_q.get()
         if status == "OK": 
             latencies.append(lat)
             if i == 0:
-                print(f"   🥶 Run 1 (Cold Start):  {lat:.4f} ms")
+                safe_print(f"   🥶 Run 1 (Cold Start):  {lat:.4f} ms")
             elif i < 5:
-                print(f"   🔥 Run {i+1} (Warm):       {lat:.4f} ms")
+                safe_print(f"   🔥 Run {i+1} (Warm):       {lat:.4f} ms")
             elif i == 99:
                  print(f"   ... (Runs 6-99 hidden) ...")
-                 print(f"   🔥 Run 100 (Warm):     {lat:.4f} ms")
+                 safe_print(f"   🔥 Run 100 (Warm):     {lat:.4f} ms")
     
     in_q.put(("STOP", None))
     p.join()
@@ -156,7 +160,7 @@ if __name__ == "__main__":
     baseline_native = 6.0 
 
     print("\n" + "="*60)
-    print("📊 TRUTH TABLE (N=100)")
+    safe_print("📊 TRUTH TABLE (N=100)")
     print("="*60)
     print(f"1. COLD START (Run 1 Only):   {first_run:.4f} ms")
     print("-" * 60)

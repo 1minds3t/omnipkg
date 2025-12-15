@@ -2477,202 +2477,83 @@ class BubbleIsolationManager:
         self.parent_omnipkg.hook_manager.validate_bubble(package_name, version)
         
         return True
-
         
-    def install_and_verify(self, package_name: str, version: str, python_context_version: str, 
-                   destination_path: Path, index_url: Optional[str] = None, 
-                   extra_index_url: Optional[str] = None, python_exe_override: Optional[str] = None,
-                   observed_dependencies: Optional[Dict[str, str]] = None):
+    def install_and_verify(self, package_name: str, version: str, python_context_version: str,
+                       destination_path: Path, index_url: Optional[str] = None,
+                       extra_index_url: Optional[str] = None, python_exe_override: Optional[str] = None,
+                       observed_dependencies: Optional[Dict[str, str]] = None):
         """
-        Builds a bubble with DIRECT subprocess verification.
+        (V7 - SMART STRATEGY) Builds a bubble and verifies using smart group-aware testing.
+        
+        This version uses the verification_strategy module to intelligently test
+        packages together when they have interdependencies.
         """
-        python_exe = python_exe_override or self.config.get('python_executable', sys.executable)
-
         if destination_path.exists():
             shutil.rmtree(destination_path, ignore_errors=True)
-        
+
         with tempfile.TemporaryDirectory() as temp_dir:
             staging_path = Path(temp_dir)
             safe_print(f"   - 🏗️  Staging install for {package_name}=={version}...")
 
-            # 1. Install
-            return_code, _ = self.parent_omnipkg._run_pip_install(
+            # 1. Install to staging
+            return_code, stdout = self.parent_omnipkg._run_pip_install(
                 [f"{package_name}=={version}"],
                 target_directory=staging_path,
                 force_reinstall=True,
-                extra_flags=['--no-cache-dir'],
                 index_url=index_url,
                 extra_index_url=extra_index_url,
             )
-
             if return_code != 0:
-                safe_print(f"   ❌ Install failed")
+                safe_print(f"   ❌ Pip install failed in staging area.")
                 return False
 
-            # 2. Analyze
-            safe_print(f"   - 🔍 Analyzing installed tree...")
-            installed_tree = self._analyze_installed_tree(staging_path)
-            if not installed_tree:
-                safe_print("   ❌ Staging directory empty.")
-                return False
-
-            # 3. DIRECT SUBPROCESS VERIFICATION
-            safe_print(f"   - 🧪 Running isolated import verification...")
-
-            # Use helper to get import names from top_level.txt
-            import_candidates = self.parent_omnipkg._get_import_candidates_for_install_test(
-                package_name, 
-                staging_path
+            # 2. Use SMART verification strategy
+            safe_print(f"   - 🧪 Running SMART import verification...")
+            
+            try:
+                # Import the smart strategy
+                from .installation.verification_strategy import verify_bubble_with_smart_strategy
+            except ImportError:
+                from omnipkg.installation.verification_strategy import verify_bubble_with_smart_strategy
+            
+            # Instantiate gatherer
+            try:
+                from .package_meta_builder import omnipkgMetadataGatherer
+            except ImportError:
+                from omnipkg.package_meta_builder import omnipkgMetadataGatherer
+            
+            gatherer = omnipkgMetadataGatherer(
+                config=self.parent_omnipkg.config,
+                env_id=self.parent_omnipkg.env_id,
+                omnipkg_instance=self.parent_omnipkg,
+                target_context_version=python_context_version
             )
-
-            # CRITICAL FIX: If the main package isn't in candidates, ADD IT!
-            main_package_name = package_name.replace('-', '_')
-            if main_package_name not in import_candidates and package_name not in import_candidates:
-                safe_print(f"      ⚠️  Main package '{package_name}' not in top_level.txt, adding fallback")
-                import_candidates.extend([main_package_name, package_name])
-
-            if not import_candidates:
-                import_candidates = [main_package_name]
-
-            safe_print(f"      Found {len(import_candidates)} import candidate(s): {', '.join(import_candidates)}")
-
-            main_package_imported = False
-            failed_submodules = []
-
-            # TEST ALL CANDIDATES
-            for import_name in import_candidates:
-                safe_print(f"      Testing: {import_name}")
-                
-                verify_script = f"""import sys
-sys.path.insert(0, r'{staging_path}')
-import {import_name}
-print('IMPORT_SUCCESS')
-"""
-                
-                verify_cmd = [python_exe, "-c", verify_script]
-                
-                try:
-                    proc = subprocess.run(verify_cmd, capture_output=True, text=True, 
-                                        check=False, timeout=30)
-                    
-                    if proc.returncode == 0 and 'IMPORT_SUCCESS' in proc.stdout:
-                        safe_print(f"         ✅ {import_name} imported successfully")
-                        if import_name in [main_package_name, package_name]:
-                            main_package_imported = True
-                    else:
-                        safe_print(f"         ❌ {import_name} failed to import")
-                        if proc.stderr and len(proc.stderr) < 500:
-                            safe_print(f"            {proc.stderr.strip()[:200]}")
-                        
-                        if import_name not in [main_package_name, package_name]:
-                            failed_submodules.append(import_name)
-                            
-                except subprocess.TimeoutExpired:
-                    safe_print(f"         ⚠️  {import_name} timeout")
-                    if import_name not in [main_package_name, package_name]:
-                        failed_submodules.append(import_name)
-                except Exception as e:
-                    safe_print(f"         ⚠️  {import_name} error: {e}")
-                    if import_name not in [main_package_name, package_name]:
-                        failed_submodules.append(import_name)
-
-            # Report results
-            if failed_submodules:
-                safe_print(f"      ⚠️  Warning: {len(failed_submodules)} sub-dependencies failed: {', '.join(failed_submodules)}")
-                safe_print(f"         (This won't block bubble creation if main package works)")
-
-            # ONLY FAIL if main package failed
-            if main_package_imported:
-                safe_print(f"      ✅ Main package '{package_name}' imports successfully")
-                import_passed = True
-            else:
-                safe_print(f"      ❌ CRITICAL: Main package '{package_name}' failed to import")
-                import_passed = False
-
-            # 4. ABI Healing if needed (NumPy downgrade)
-            if not import_passed and proc and proc.stderr:
-                if "numpy.dtype size changed" in proc.stderr or "binary incompatibility" in proc.stderr:
-                    safe_print(f"   🚨 NumPy ABI mismatch detected")
-                    
-                    numpy_info = installed_tree.get('numpy')
-                    if numpy_info and numpy_info.get('version', '').startswith('2.'):
-                        safe_print(f"   -> Downgrading NumPy to <2.0...")
-                        
-                        heal_code, _ = self.parent_omnipkg._run_pip_install(
-                            [f"{package_name}=={version}", "numpy<2.0"],
-                            target_directory=staging_path,
-                            force_reinstall=True,
-                            extra_flags=['--no-cache-dir'],
-                            index_url=index_url,
-                            extra_index_url=extra_index_url,
-                        )
-                        
-                        if heal_code == 0:
-                            safe_print(f"      Re-testing after NumPy downgrade...")
-                            # Re-run the test for main package only
-                            verify_script = f"""import sys
-sys.path.insert(0, r'{staging_path}')
-import {main_package_name}
-print('IMPORT_SUCCESS')
-"""
-                            verify_cmd = [python_exe, "-c", verify_script]
-                            proc = subprocess.run(verify_cmd, capture_output=True, text=True, 
-                                                check=False, timeout=30)
-                            if proc.returncode == 0 and 'IMPORT_SUCCESS' in proc.stdout:
-                                safe_print("   ✅ NumPy healing successful")
-                                import_passed = True
-                                installed_tree = self._analyze_installed_tree(staging_path)
-
-            # 5. Time Machine fallback
-            if not import_passed:
-                safe_print(f"   ⚠️  Attempting Time Machine fallback...")
-                tm_success = self.parent_omnipkg._run_historical_install_fallback(
-                    package_name, version, 
-                    target_directory_override=staging_path,
-                    index_url=index_url, 
-                    extra_index_url=extra_index_url
-                )
-                
-                if tm_success:
-                    safe_print(f"      Re-testing after Time Machine...")
-                    verify_script = f"""import sys
-sys.path.insert(0, r'{staging_path}')
-import {main_package_name}
-print('IMPORT_SUCCESS')
-"""
-                    verify_cmd = [python_exe, "-c", verify_script]
-                    proc = subprocess.run(verify_cmd, capture_output=True, text=True, 
-                                        check=False, timeout=30)
-                    if proc.returncode == 0 and 'IMPORT_SUCCESS' in proc.stdout:
-                        safe_print("   ✅ Time Machine successful")
-                        import_passed = True
-                        installed_tree = self._analyze_installed_tree(staging_path)
-
-            if not import_passed:
-                safe_print(f"   ❌ Package failed verification. Bubble rejected.")
-                if proc and proc.stderr:
-                    safe_print(f"   📝 Error details: {proc.stderr.strip()[:300]}")
+            
+            # Run smart verification
+            verification_passed = verify_bubble_with_smart_strategy(
+                self.parent_omnipkg,
+                package_name,
+                version,
+                staging_path,
+                gatherer
+            )
+            
+            if not verification_passed:
+                safe_print(f"   ❌ CRITICAL: Smart verification failed for '{package_name}'.")
                 return False
-
-            # 6. Finalize
+            
+            # 3. Analyze and move
+            installed_tree = self._analyze_installed_tree(staging_path)
             safe_print(f"   - 🚚 Moving verified build to bubble: {destination_path}")
-            destination_path.parent.mkdir(parents=True, exist_ok=True)
             shutil.copytree(staging_path, destination_path, dirs_exist_ok=True)
-            
-            stats = {'total_files': 0, 'c_extensions': [], 'binaries': [], 'python_files': 0}
-            for pkg, info in installed_tree.items():
-                for fpath in info.get('files', []):
-                    stats['total_files'] += 1
-                    if fpath.suffix in ['.so', '.pyd']: 
-                        stats['c_extensions'].append(fpath.name)
-                    elif fpath.suffix == '.py': 
-                        stats['python_files'] += 1
-            
+
+            stats = {'total_files': sum(len(info.get('files',[])) for info in installed_tree.values())}
             self._create_bubble_manifest(
-                destination_path, installed_tree, stats, 
+                destination_path, installed_tree, stats,
                 python_context_version=python_context_version,
                 observed_dependencies=observed_dependencies
             )
+            
             return True
             
     def _granular_verify_and_heal(self, staging_path: Path, package_name: str, python_exe: str):
@@ -8442,130 +8323,263 @@ class omnipkg:
             return re.sub(r'-\w+$', '', version)
         
         return None  
+
+    def _create_pre_install_snapshot(self, package_name: str) -> str:
+        """
+        Creates a snapshot before installing a package.
+        Returns the snapshot key for latLiteCacheCliener restoration.
+        """
+        snapshot_key = f"{self.redis_key_prefix}snapshot:pre_install:{package_name}:{int(time.time())}"
+        current_state = self.get_installed_packages(live=True)
+        
+        self.cache_client.setex(
+            snapshot_key,
+            3600,  # Expire after 1 hour
+            json.dumps(current_state)
+        )
+        
+        return snapshot_key
+
+
+    def _restore_from_pre_install_snapshot(self, snapshot_key: str) -> bool:
+        """Restores from a specific pre-install snapshot"""
+        snapshot_data = self.cache_client.get(snapshot_key)
+        
+        if not snapshot_data:
+            safe_print(f"   ❌ Snapshot not found: {snapshot_key}")
+            return False
+        
+        snapshot_state = json.loads(snapshot_data)
+        return self._safe_restore_from_snapshot("restore", snapshot_state, force=True)
+
+
+    def _safe_restore_from_snapshot(self, package_name: str, 
+                                    snapshot_state: Dict[str, str],
+                                    force: bool = False) -> bool:
+        """
+        Safely restores environment state using snapshot data instead of trusting pip.
+        
+        Args:
+            package_name: The package that triggered the restore
+            snapshot_state: The pre-install snapshot to restore to
+            force: Skip confirmation prompt
+        
+        Returns:
+            True if restore successful, False otherwise
+        """
+        safe_print(f"\n🔄 SAFE RESTORE PROTOCOL: Reverting to pre-install state")
+        safe_print(f"   Reason: Failed to bubble {package_name}, must restore stability")
+        
+        # Get current state
+        current_state = self.get_installed_packages(live=True)
+        
+        # Calculate differences
+        to_downgrade = {}
+        to_uninstall = []
+        
+        for pkg, target_version in snapshot_state.items():
+            current_version = current_state.get(pkg)
+            
+            if current_version and current_version != target_version:
+                to_downgrade[pkg] = (current_version, target_version)
+            elif not current_version:
+                # Package was in snapshot but is now gone - very rare
+                pass
+        
+        # Find packages that didn't exist in snapshot
+        for pkg in current_state:
+            if pkg not in snapshot_state:
+                to_uninstall.append(pkg)
+        
+        if not to_downgrade and not to_uninstall:
+            safe_print("   ✅ Environment already matches snapshot")
+            return True
+        
+        # Show what will be restored
+        safe_print(f"\n📋 Restoration Plan:")
+        if to_downgrade:
+            safe_print(f"   Packages to restore to snapshot versions:")
+            for pkg, (current, target) in sorted(to_downgrade.items()):
+                safe_print(f"      • {pkg}: v{current} → v{target}")
+        
+        if to_uninstall:
+            safe_print(f"   Packages to remove (not in snapshot):")
+            for pkg in sorted(to_uninstall):
+                safe_print(f"      • {pkg}")
+        
+        if not force:
+            confirm = input("\n   Proceed with restore? [Y/n]: ").strip().lower()
+            if confirm and confirm != 'y':
+                safe_print("   ❌ Restore cancelled by user")
+                return False
+        
+        # Execute restore using EXACT snapshot versions
+        success = True
+        
+        # First, restore all changed packages to their snapshot versions
+        if to_downgrade:
+            specs_to_restore = [f"{pkg}=={target_ver}" for pkg, (_, target_ver) in to_downgrade.items()]
+            
+            safe_print(f"\n   🔧 Restoring {len(specs_to_restore)} package(s) to snapshot versions...")
+            restore_code, restore_output = self._run_pip_install(
+                specs_to_restore,
+                force_reinstall=True,
+                extra_flags=['--no-deps']  # CRITICAL: Don't let pip change anything else
+            )
+            
+            if restore_code != 0:
+                safe_print(f"   ❌ Restore failed!")
+                safe_print(f"   📄 Pip output:\n{restore_output.get('stderr', 'No error output')}")
+                success = False
+        
+        # Then uninstall packages that shouldn't exist
+        if success and to_uninstall:
+            safe_print(f"\n   🗑️  Removing {len(to_uninstall)} unexpected package(s)...")
+            uninstall_code, uninstall_output = self._run_pip_uninstall(
+                to_uninstall,
+                force=True
+            )
+            
+            if uninstall_code != 0:
+                safe_print(f"   ⚠️  Some removals failed")
+                success = False
+        
+        # Verify restore
+        if success:
+            final_state = self.get_installed_packages(live=True)
+            
+            mismatches = []
+            for pkg, expected_ver in snapshot_state.items():
+                actual_ver = final_state.get(pkg)
+                if actual_ver != expected_ver:
+                    mismatches.append(f"{pkg}: expected v{expected_ver}, got v{actual_ver or 'MISSING'}")
+            
+            if mismatches:
+                safe_print(f"\n   ⚠️  Restore incomplete - {len(mismatches)} mismatches:")
+                for mismatch in mismatches[:5]:  # Show first 5
+                    safe_print(f"      • {mismatch}")
+                success = False
+            else:
+                safe_print(f"\n   ✅ Environment successfully restored to snapshot state")
+        
+        return success
+
+
+    def _detect_all_changes(self, before: Dict[str, str], after: Dict[str, str]) -> Dict:
+        """
+        Comprehensive change detection that catches EVERYTHING pip does.
+        
+        Returns dict with:
+            - downgrades: List of {package, old_version, new_version}
+            - upgrades: List of {package, old_version, new_version}
+            - additions: List of {package, version}
+            - removals: List of {package, version}
+        """
+        changes = {
+            'downgrades': [],
+            'upgrades': [],
+            'additions': [],
+            'removals': []
+        }
+        
+        all_packages = set(before.keys()) | set(after.keys())
+        
+        for pkg in all_packages:
+            old_ver = before.get(pkg)
+            new_ver = after.get(pkg)
+            
+            if old_ver and new_ver:
+                if old_ver != new_ver:
+                    try:
+                        if parse_version(new_ver) < parse_version(old_ver):
+                            changes['downgrades'].append({
+                                'package': pkg,
+                                'old_version': old_ver,
+                                'new_version': new_ver
+                            })
+                        else:
+                            changes['upgrades'].append({
+                                'package': pkg,
+                                'old_version': old_ver,
+                                'new_version': new_ver
+                            })
+                    except Exception:
+                        # If version comparison fails, treat as upgrade
+                        changes['upgrades'].append({
+                            'package': pkg,
+                            'old_version': old_ver,
+                            'new_version': new_ver
+                        })
+            
+            elif new_ver and not old_ver:
+                changes['additions'].append({
+                    'package': pkg,
+                    'version': new_ver
+                })
+            
+            elif old_ver and not new_ver:
+                changes['removals'].append({
+                    'package': pkg,
+                    'version': old_ver
+                })
+        
+        return changes
     
     def smart_install(self, packages: List[str], dry_run: bool = False, force_reinstall: bool = False, 
-                  override_strategy: Optional[str] = None, target_directory: Optional[Path] = None, 
-                  preflight_compatibility_cache: Optional[Dict] = None,
-                  # ADD THESE
-                  index_url: Optional[str] = None, extra_index_url: Optional[str] = None) -> int:
-    
+              override_strategy: Optional[str] = None, target_directory: Optional[Path] = None, 
+              preflight_compatibility_cache: Optional[Dict] = None,
+              index_url: Optional[str] = None, extra_index_url: Optional[str] = None) -> int:
+
         # ====================================================================
         # ULTRA-FAST PREFLIGHT CHECK (Before any heavy initialization)
         # ====================================================================
         if not force_reinstall and packages:
             safe_print('⚡ Running ultra-fast preflight check...')
-        
             preflight_start = time.perf_counter()
             configured_exe = self.config.get('python_executable', sys.executable)
             install_strategy = self.config.get('install_strategy', 'stable-main')
             
             fully_resolved_specs = []
             needs_installation = []
-            
-            # Define complex specifier characters
             complex_spec_chars = ['<', '>', '~', '!', ',']
             
-            # --- Phase 1: Resolve versions and check if already satisfied ---
+            # Phase 1: Resolve versions and check if satisfied
             for pkg_spec in packages:
                 pkg_name, version = self._parse_package_spec(pkg_spec)
-                
-                # Step 1: Get the version (either from spec or from cache/PyPI)
-                # FIX: Check if the specifier is "complex" (contains <, >, ~, !, ,)
                 is_complex_spec = any(op in pkg_spec for op in complex_spec_chars)
 
                 if version and not is_complex_spec:
-                    # Already has explicit, simple version (e.g., numpy==1.26.4)
                     resolved_spec = pkg_spec
                 else:
-                    # It's either complex (pandas>=1.2) or unversioned (pandas)
-                    # We must resolve it to a concrete version.
-                    
                     if is_complex_spec:
                         safe_print(f"   🔍 Detected complex specifier: '{pkg_spec}'")
-                        safe_print(f"   → Resolving to exact version for Python {self.current_python_context}...")
-                        
                         try:
-                            # Use _find_best_version_for_spec to respect the constraint
                             resolved_spec_str = self._find_best_version_for_spec(pkg_spec)
-                            
                             if resolved_spec_str:
-                                # Successfully resolved (e.g., "pandas>=1.2" -> "pandas==2.2.2")
                                 resolved_spec = resolved_spec_str
-                                # Update pkg_name and version variables for the next check
                                 pkg_name, version = self._parse_package_spec(resolved_spec)
                                 safe_print(f"   ✅ Resolved '{pkg_spec}' to '{resolved_spec}'")
                             else:
-                                # Could not resolve - mark for pip validation
-                                safe_print(f"   ⚠️  Could not resolve '{pkg_spec}'. Marked for pip fallback.")
                                 needs_installation.append(pkg_spec)
                                 continue
-                                
                         except NoCompatiblePythonError as e:
-                            # Complex specifier resolution triggered quantum healing
-                            safe_print("\n" + "="*60)
-                            safe_print("🌌 QUANTUM HEALING: Python Incompatibility Detected During Preflight")
-                            safe_print("="*60)
-                            safe_print(f"   - Diagnosis: Cannot resolve '{e.package_name}' v{e.package_version} on Python {e.current_python}.")
-                            safe_print(f"   - Prescription: This package requires Python {e.compatible_python}.")
-                            
-                            from .cli import handle_python_requirement
-                            if not e.compatible_python or e.compatible_python == "unknown":
-                                safe_print(f"❌ Healing failed: Could not determine compatible Python version.")
-                                return 1
-            
-                            if not handle_python_requirement(e.compatible_python, self, "omnipkg"):
-                                safe_print(f"❌ Healing failed: Could not switch to Python {e.compatible_python}.")
-                                return 1
-            
-                            safe_print(f"\n🚀 Retrying in new Python {e.compatible_python} context...")
-                            new_config_manager = ConfigManager()
-                            new_omnipkg_instance = self.__class__(new_config_manager)
-            
-                            # Recursively retry with the ORIGINAL packages list
-                            return new_omnipkg_instance.smart_install(packages, dry_run, force_reinstall, 
-                                                                    override_strategy, target_directory)
+                            # Quantum healing code...
+                            return self._handle_quantum_healing(e, packages, dry_run, force_reinstall, override_strategy, target_directory)
                     else:
-                        # Simple package name without version - get latest compatible
                         try:
                             latest_version = self._get_latest_version_from_pypi(pkg_name)
                         except NoCompatiblePythonError as e:
-                            # 🔥 IMMEDIATE QUANTUM HEALING - NO CACHING!
-                            safe_print("\n" + "="*60)
-                            safe_print("🌌 QUANTUM HEALING: Python Incompatibility Detected During Preflight")
-                            safe_print("="*60)
-                            safe_print(f"   - Diagnosis: Cannot resolve '{e.package_name}' v{e.package_version} on Python {e.current_python}.")
-                            safe_print(f"   - Prescription: This package requires Python {e.compatible_python}.")
-                            
-                            from .cli import handle_python_requirement
-                            if not e.compatible_python or e.compatible_python == "unknown":
-                                safe_print(f"❌ Healing failed: Could not determine compatible Python version.")
-                                return 1
-            
-                            if not handle_python_requirement(e.compatible_python, self, "omnipkg"):
-                                safe_print(f"❌ Healing failed: Could not switch to Python {e.compatible_python}.")
-                                return 1
-            
-                            safe_print(f"\n🚀 Retrying in new Python {e.compatible_python} context...")
-                            new_config_manager = ConfigManager()
-                            new_omnipkg_instance = self.__class__(new_config_manager)
-            
-                            # Recursively retry with the ORIGINAL packages list
-                            return new_omnipkg_instance.smart_install(packages, dry_run, force_reinstall, 
-                                                                    override_strategy, target_directory)
-            
+                            return self._handle_quantum_healing(e, packages, dry_run, force_reinstall, override_strategy, target_directory)
+                        
                         if latest_version:
                             resolved_spec = f"{pkg_name}=={latest_version}"
                             version = latest_version
                         else:
-                            safe_print(f"   ⚠️  Fast checks could not resolve '{pkg_name}'. Marked for pip fallback.")
                             needs_installation.append(pkg_spec)
                             continue
             
-                # Step 2: Check if this version is already installed
-                # Call the new nanosecond function
                 is_installed, duration_ns = self.check_package_installed_fast(configured_exe, pkg_name, version)
                 
-                # Format duration
                 if duration_ns < 1_000:
                     duration_str = f"{duration_ns}ns"
                 elif duration_ns < 1_000_000:
@@ -8586,80 +8600,89 @@ class omnipkg:
                         fully_resolved_specs.append(resolved_spec)
                         continue
                     else:
-                        safe_print(f'   ⚠️  {resolved_spec} found in bubble but needs to be active')
                         needs_installation.append(resolved_spec)
                         continue
                 else:
                     needs_installation.append(resolved_spec)
 
-            # 🎯 CRITICAL: This MUST be OUTSIDE the for loop!
-            # --- Phase 2: If everything satisfied, we're done! ---
+            # Phase 2: If everything satisfied, we're done!
             if not needs_installation:
                 total_check_time_ns = int((time.perf_counter() - preflight_start) * 1_000_000_000)
-                
-                # Format total time
                 if total_check_time_ns < 1_000_000:
                     total_time_str = f"{total_check_time_ns / 1_000:.1f}µs"
                 else:
                     total_time_str = f"{total_check_time_ns / 1_000_000:.3f}ms"
                 
                 safe_print(f'⚡ PREFLIGHT SUCCESS: All {len(packages)} package(s) already satisfied! ({total_time_str})')
-                return 0  # 🎯 EXIT HERE - Don't continue to normal initialization!
+                return 0
             
-            # --- Phase 3: Validate unresolved packages with pip (ONLY if needed) ---
+            # Phase 3: Validate with pip if needed
             if needs_installation:
                 safe_print(f"\n📦 {len(needs_installation)} package(s) need installation/validation")
-                
                 validated_specs = []
-                try:  # <--- ADD TRY BLOCK HERE
+                
+                try:
                     for spec in needs_installation:
                         pkg_name, version = self._parse_package_spec(spec)
-                        
                         if not version:
                             safe_print(f"   🔍 Resolving version for '{pkg_name}' with pip...")
-                            resolved_spec, pip_output = self._resolve_spec_with_pip(spec, index_url=index_url, extra_index_url=extra_index_url)
                         else:
                             safe_print(f"   ⚙️  Validating '{spec}' with pip...")
-                            resolved_spec, pip_output = self._resolve_spec_with_pip(spec, index_url=index_url, extra_index_url=extra_index_url)
+                        
+                        resolved_spec, pip_output = self._resolve_spec_with_pip(spec, index_url=index_url, extra_index_url=extra_index_url)
                         
                         if resolved_spec:
                             safe_print(f"   ✓ Pip validated '{spec}' -> '{resolved_spec}'")
                             validated_specs.append(resolved_spec)
                         else:
                             safe_print(f"\n❌ Could not find the specified version for '{pkg_name}'.")
-                            safe_print("   Pip provided the following information and available versions:")
-                            for line in pip_output.splitlines():
-                                safe_print(f"   | {line}")
                             return 1
-                            
-                except NoCompatiblePythonError as e:  # <--- CATCH THE ERROR HERE
-                    # Quantum healing during preflight!
-                    safe_print("\n" + "="*60)
-                    safe_print("🌌 QUANTUM HEALING: Python Incompatibility Detected During Preflight")
-                    safe_print("="*60)
-                    safe_print(f"   - Diagnosis: Cannot resolve '{e.package_name}' v{e.package_version} on Python {e.current_python}.")
-                    safe_print(f"   - Prescription: This package requires Python {e.compatible_python}.")
-                    
-                    from .cli import handle_python_requirement
-                    if not e.compatible_python or e.compatible_python == "unknown":
-                        safe_print(f"❌ Healing failed: Could not determine compatible Python version.")
-                        return 1
-
-                    if not handle_python_requirement(e.compatible_python, self, "omnipkg"):
-                        safe_print(f"❌ Healing failed: Could not switch to Python {e.compatible_python}.")
-                        return 1
-
-                    safe_print(f"\n🚀 Retrying in new Python {e.compatible_python} context...")
-                    new_config_manager = ConfigManager()
-                    new_omnipkg_instance = self.__class__(new_config_manager)
-
-                    # Recursively retry with the ORIGINAL packages list
-                    return new_omnipkg_instance.smart_install(packages, dry_run, force_reinstall, 
-                                                            override_strategy, target_directory,
-                                                            index_url=index_url, extra_index_url=extra_index_url)
+                except NoCompatiblePythonError as e:
+                    return self._handle_quantum_healing(e, packages, dry_run, force_reinstall, override_strategy, target_directory, index_url, extra_index_url)
                 
                 packages = validated_specs
-    
+        
+        elif force_reinstall and packages:
+            # Force reinstall preflight
+            safe_print('⚡ Running preflight check with --force flag...')
+            preflight_start = time.perf_counter()
+            configured_exe = self.config.get('python_executable', sys.executable)
+            
+            packages_found = []
+            packages_not_found = []
+            
+            for pkg_spec in packages:
+                pkg_name, version = self._parse_package_spec(pkg_spec)
+                if not version:
+                    packages_not_found.append(pkg_spec)
+                    continue
+                    
+                is_installed, duration_ns = self.check_package_installed_fast(configured_exe, pkg_name, version)
+                
+                if duration_ns < 1_000:
+                    duration_str = f"{duration_ns}ns"
+                elif duration_ns < 1_000_000:
+                    duration_str = f"{duration_ns / 1_000:.1f}µs"
+                else:
+                    duration_str = f"{duration_ns / 1_000_000:.3f}ms"
+                
+                if is_installed:
+                    packages_found.append((pkg_spec, duration_str, is_installed))
+                    safe_print(f'   🔧 {pkg_spec} [found: {duration_str} - {is_installed}] → will force reinstall')
+                else:
+                    packages_not_found.append(pkg_spec)
+                    safe_print(f'   ⚠️  {pkg_spec} [not found: {duration_str}] → will install fresh')
+            
+            total_check_time_ns = int((time.perf_counter() - preflight_start) * 1_000_000_000)
+            if total_check_time_ns < 1_000_000:
+                total_time_str = f"{total_check_time_ns / 1_000:.1f}µs"
+            else:
+                total_time_str = f"{total_check_time_ns / 1_000_000:.3f}ms"
+            
+            if packages_found:
+                safe_print(f'\n🔨 FORCE REINSTALL: Triggering repair for {len(packages_found)} existing package(s) ({total_time_str})')
+            if packages_not_found:
+                safe_print(f'📦 Fresh install needed for {len(packages_not_found)} package(s)')
 
         # ====================================================================
         # NORMAL INITIALIZATION (Only runs if packages need work)
@@ -9068,73 +9091,191 @@ class omnipkg:
         kb_deletions = set()
         
         for package_spec in sorted_packages:
-            try:   
+            try:
                 safe_print('\n' + '─' * 60)
-                safe_print('📦 Processing: {}'.format(package_spec))
-                if force_reinstall:
-                    safe_print(_('   - 🛡️  Force reinstall triggered by auto-repair.'))
-                safe_print('─' * 60)
                 
-                if not force_reinstall:
+                # 1. Parse name and create snapshot immediately
+                pkg_name, pkg_version = self._parse_package_spec(package_spec)
+                snapshot_key = self._create_pre_install_snapshot(pkg_name)
+                
+                if force_reinstall:
+                    # Check if package exists
+                    # FIX: Use '_chk_time' instead of '_' to avoid overwriting the translation function
+                    is_installed, _chk_time = self.check_package_installed_fast(
+                        self.config.get('python_executable', sys.executable),
+                        pkg_name, 
+                        pkg_version
+                    )
+                    
+                    if is_installed:
+                        safe_print(f'🔨 Force Reinstalling: {package_spec} (existing {is_installed})')
+                    else:
+                        safe_print(f'📦 Processing: {package_spec}')
+                else:
+                    safe_print(f'📦 Processing: {package_spec}')
+                    safe_print('─' * 60)
+                    safe_print(f"   📸 Pre-install snapshot created")
+                    
                     satisfaction_check = self._check_package_satisfaction([package_spec], strategy=install_strategy)
                     if satisfaction_check['all_satisfied']:
                         safe_print('✅ Requirement already satisfied: {}'.format(package_spec))
                         continue
                 
-                packages_to_install = [package_spec]
+                # 2. SHARED INSTALLATION LOGIC
                 packages_before = self.get_installed_packages(live=True)
-                safe_print('⚙️ Running pip install for: {}...'.format(', '.join(packages_to_install)))
+                safe_print('⚙️ Running pip install for: {}...'.format(package_spec))
+                
                 return_code, pkg_install_output = self._run_pip_install(
-                    packages_to_install, target_directory=target_directory, force_reinstall=force_reinstall,
-                    # PASS THE FLAGS THROUGH
-                    index_url=index_url, extra_index_url=extra_index_url)
+                    [package_spec], 
+                    target_directory=target_directory, 
+                    force_reinstall=force_reinstall,
+                    index_url=index_url, 
+                    extra_index_url=extra_index_url
+                )
                 
                 if return_code != 0:
                     safe_print(f'❌ Pip installation failed for {package_spec}.')
-                    pkg_name, requested_version = self._parse_package_spec(package_spec)
-
-                    # Check if the failure was due to a cached version
-                    py_context = self.current_python_context
-                    cached_version = self.pypi_cache.get_cached_version(pkg_name, py_context)
-
-                    if requested_version and cached_version == requested_version:
-                        # The failed version came from our cache! Invalidate and retry.
-                        self.pypi_cache.invalidate_cache_entry(pkg_name, py_context)
-                        safe_print(f"🔄 Retrying {pkg_name} by re-resolving the latest compatible version...")
-
-                        # Re-run the full resolver to get the truly latest compatible version
-                        new_compatible_version = self._get_latest_version_from_pypi(pkg_name)
-
-                        if new_compatible_version and new_compatible_version != requested_version:
-                            new_spec = f'{pkg_name}=={new_compatible_version}'
-                            safe_print(f"   ✅ Found new compatible version: {new_spec}. Retrying install...")
-                            retry_code, retry_output = self._run_pip_install(
-                                [new_spec], target_directory=target_directory, force_reinstall=force_reinstall)
-                            if retry_code == 0:
-                                safe_print(f"   🎉 Successfully installed {new_spec} on retry!")
-                                return_code = 0 # Mark as successful
-                            else:
-                                safe_print(f"   ❌ Retry also failed for {new_spec}.")
-                        elif new_compatible_version:
-                            safe_print(f"   🤷 Re-resolver found the same version ({new_compatible_version}). Cannot auto-correct further.")
-                        else:
-                            safe_print(f"   ❌ Could not find any compatible version for {pkg_name} on retry.")
-                    else:
-                        safe_print("   -> Failure was not due to a cached version. Continuing...")
-
-                if return_code != 0:
-                    safe_print('❌ Unrecoverable installation failure for {}. Continuing...'.format(package_spec))
-                    any_failures = True  # <--- ADD THIS LINE
-                    continue
                     
+                    # Restore from snapshot on failure
+                    safe_print(f"\n🔄 Restoring environment from pre-install snapshot...")
+                    if self._restore_from_pre_install_snapshot(snapshot_key):
+                        safe_print(f"   ✅ Environment restored to pre-install state")
+                    else:
+                        safe_print(f"   ❌ CRITICAL: Snapshot restore failed!")
+                        safe_print(f"   💡 You may need to run: omnipkg revert")
+                    
+                    any_failures = True
+                    continue
+                
                 any_installations_made = True
                 packages_after = self.get_installed_packages(live=True)
-                replacements = self._detect_version_replacements(packages_before, packages_after)
+                safe_print('⚙️ Running pip install for: {}...'.format(package_spec))
                 
-                if replacements:
-                    for rep in replacements:
-                        kb_deletions.add(rep['package'])
-                        self._cleanup_version_from_kb(rep['package'], rep['old_version'])
+                return_code, pkg_install_output = self._run_pip_install(
+                    [package_spec], 
+                    target_directory=target_directory, 
+                    force_reinstall=force_reinstall,
+                    index_url=index_url, 
+                    extra_index_url=extra_index_url
+                )
+                
+                if return_code != 0:
+                    safe_print(f'❌ Pip installation failed for {package_spec}.')
+                    
+                    # Restore from snapshot on failure
+                    safe_print(f"\n🔄 Restoring environment from pre-install snapshot...")
+                    if self._restore_from_pre_install_snapshot(snapshot_key):
+                        safe_print(f"   ✅ Environment restored to pre-install state")
+                    else:
+                        safe_print(f"   ❌ CRITICAL: Snapshot restore failed!")
+                        safe_print(f"   💡 You may need to run: omnipkg revert")
+                    
+                    any_failures = True
+                    continue
+                
+                any_installations_made = True
+                packages_after = self.get_installed_packages(live=True)
+                
+                # 3. Change Detection
+                all_changes = self._detect_all_changes(packages_before, packages_after)
+                
+                if all_changes['downgrades'] or all_changes['upgrades'] or all_changes['removals']:
+                    safe_print(f"\n⚠️  Detected {len(all_changes['downgrades'] + all_changes['upgrades'] + all_changes['removals'])} dependency changes:")
+                    
+                    for change in all_changes['downgrades']:
+                        safe_print(f"   ⬇️  {change['package']}: v{change['old_version']} → v{change['new_version']} (downgrade)")
+                    
+                    for change in all_changes['upgrades']:
+                        safe_print(f"   ⬆️  {change['package']}: v{change['old_version']} → v{change['new_version']} (upgrade)")
+                    
+                    for change in all_changes['removals']:
+                        safe_print(f"   🗑️  {change['package']}: v{change['version']} (removed)")
+                
+                # Handle stability protection
+                if install_strategy == 'stable-main':
+                    packages_to_bubble = []
+                    packages_to_restore = []
+                    
+                    # Collect ALL changes that need bubbling
+                    for change in all_changes['downgrades'] + all_changes['upgrades']:
+                        packages_to_bubble.append({
+                            'package': change['package'],
+                            'new_version': change['new_version'],
+                            'old_version': change['old_version']
+                        })
+                    
+                    if packages_to_bubble:
+                        safe_print(f'\n🛡️ STABILITY PROTECTION: Processing {len(packages_to_bubble)} changed package(s)')
+                        
+                        # Track which bubbles we successfully created
+                        bubble_tracker = {}  # {pkg_name: bubble_path}
+                        
+                        for item in packages_to_bubble:
+                            safe_print(f"\n   🫧 Creating bubble for {item['package']} v{item['new_version']}...")
+                            
+                            bubble_created = self.bubble_manager.create_isolated_bubble(
+                                item['package'], 
+                                item['new_version'],
+                                python_context_version=python_context_version,
+                                index_url=index_url,
+                                extra_index_url=extra_index_url,
+                                observed_dependencies=packages_after
+                            )
+                            
+                            if bubble_created:
+                                bubble_path = self.multiversion_base / f"{item['package']}-{item['new_version']}"
+                                bubble_tracker[item['package']] = bubble_path
+                                bubbled_kb_updates[item['package']] = item['new_version']
+                                
+                                safe_print(f"   ✅ Bubble created successfully")
+                                
+                                # Add to restore list
+                                packages_to_restore.append(item)
+                            else:
+                                safe_print(f"   ❌ Bubble creation FAILED for {item['package']} v{item['new_version']}")
+                                safe_print(f"   🚨 CRITICAL: Cannot guarantee stability without this bubble!")
+                                
+                                # 🎯 IMPROVEMENT 4: Safe restoration using snapshot
+                                safe_print(f"\n   🔄 Initiating safe restore from snapshot...")
+                                snapshot_data = self.cache_client.get(snapshot_key)
+                                
+                                if snapshot_data:
+                                    snapshot_state = json.loads(snapshot_data)
+                                    if self._safe_restore_from_snapshot(pkg_name, snapshot_state, force=True):
+                                        safe_print(f"   ✅ Environment safely restored to pre-install state")
+                                    else:
+                                        safe_print(f"   ❌ Restore failed - environment may be unstable!")
+                                else:
+                                    safe_print(f"   ❌ Snapshot not available - cannot restore!")
+                                
+                                any_failures = True
+                                break  # Don't continue processing this package
+                        
+                        # Only restore if ALL bubbles succeeded
+                        if len(bubble_tracker) == len(packages_to_bubble):
+                            safe_print(f"\n   ✅ All bubbles created successfully")
+                            safe_print(f"   🔄 Restoring stable versions to main environment...")
+                            
+                            # Restore all at once with --no-deps
+                            restore_specs = [f"{item['package']}=={item['old_version']}" for item in packages_to_restore]
+                            
+                            restore_code, restore_output = self._run_pip_install(
+                                restore_specs,
+                                force_reinstall=True,
+                                extra_flags=['--no-deps']
+                            )
+                            
+                            if restore_code == 0:
+                                safe_print(f"   ✅ All stable versions restored")
+                                for item in packages_to_restore:
+                                    main_env_kb_updates[item['package']] = item['old_version']
+                                    protected_from_cleanup.add(canonicalize_name(item['package']))
+                            else:
+                                safe_print(f"   ❌ Restore failed - using snapshot fallback")
+                                snapshot_data = self.cache_client.get(snapshot_key)
+                                if snapshot_data:
+                                    snapshot_state = json.loads(snapshot_data)
+                                    self._safe_restore_from_snapshot(pkg_name, snapshot_state, force=True)
                 
                 # Handle stability protection based on install strategy
                 if install_strategy == 'stable-main':
@@ -11258,10 +11399,10 @@ print(json.dumps(results))
         
         # Extract tags (handle optional build tag)
         if len(parts) == 5:
-            _, _, python_tag, abi_tag, platform_tag = parts
+            unused, unused, python_tag, abi_tag, platform_tag = parts
         else:
             # Has build tag
-            _, _, _, python_tag, abi_tag, platform_tag = parts
+            unused, unused, unused, python_tag, abi_tag, platform_tag = parts
         
         score = 0
         py_version = platform_info['py_version']
@@ -11727,7 +11868,7 @@ print(json.dumps(results))
             safe_print(_('    ❌ An unexpected error occurred during pip install: {}').format(e))
             return 1, {"stdout": "", "stderr": str(e)}
 
-    def _run_pip_uninstall(self, packages: List[str]) -> int:
+    def _run_pip_uninstall(self, packages: List[str], force: bool = False) -> int:
         """Runs `pip uninstall` with LIVE, STREAMING output."""
         if not packages:
             return 0
