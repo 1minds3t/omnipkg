@@ -895,9 +895,20 @@ class omnipkgMetadataGatherer:
     
     def _perform_security_scan(self, all_packages_in_context: Dict[str, Set[str]]):
         """
-        (V4 - Context Aware) Runs a security check on ALL packages in the current context.
-        Now properly detects compatible safety versions for the target Python context.
+        (V5 - BOOTSTRAP AWARE) Runs a security check on ALL packages.
+        Detects if it's running during initial KB build and uses a safe fallback
+        to prevent recursion and initialization deadlocks.
         """
+        # --- FIX 1: DETECT BOOTSTRAP/INITIALIZATION STATE ---
+        # If the 'bubble_manager' attribute (which holds the BubbleIsolationManager instance)
+        # doesn't exist yet on the main omnipkg object, it means we are in the middle of the
+        # very first KB build. We MUST NOT try to create a bubble here.
+        if not hasattr(self.omnipkg_instance, 'bubble_manager'):
+            safe_print("
+            safe_print("   - Using 'pip audit' as a safe bootstrap fallback.")
+            self._run_pip_audit_fallback({name: list(versions)[0] for name, versions in all_packages_in_context.items()})
+            return
+
         effective_version_str = self.target_context_version or get_python_version()
         
         # Check Python 3.14+ incompatibility
@@ -926,16 +937,8 @@ class omnipkgMetadataGatherer:
 
         safe_print(f'🛡️  Performing security scan for {len(all_packages_in_context)} package(s) using isolated tool...')
 
-        if not self.omnipkg_instance:
-            safe_print(_(' ⚠️ Cannot run security scan: omnipkg_instance not available to builder.'))
-            self.security_report = {}
-            return
-
         try:
             TOOL_NAME = 'safety'
-            
-            # Step 1: Get the latest COMPATIBLE version for THIS Python context
-            # This respects the target Python version and finds what actually works
             latest_compatible = self.omnipkg_instance._get_latest_version_from_pypi(
                 TOOL_NAME,
                 python_context_version=self.target_context_version
@@ -948,30 +951,18 @@ class omnipkgMetadataGatherer:
             
             safe_print(f'   💾 Latest compatible version for Python {effective_version_str}: {latest_compatible}')
             
-            # Step 2: Check if we already have a bubble for this context
             current_version = None
-            current_bubble = None
-            
-            # Look for existing tool bubble that matches our target context
             for bubble in self.omnipkg_instance.multiversion_base.glob(f'{TOOL_NAME}-*'):
-                bubble_version = bubble.name.split('-', 1)[1]
-                # Check if this bubble was created for our Python context
-                # (You might want to store context info in bubble metadata)
-                current_version = bubble_version
-                current_bubble = bubble
+                current_version = bubble.name.split('-', 1)[1]
                 safe_print(f"   -> Found existing 'safety' tool bubble: v{current_version}")
                 break
             
-            # Step 3: Decide if we need to create/upgrade
             should_create_or_upgrade = False
-            
             if not current_version:
-                # No bubble exists at all
                 safe_print(f'   💡 No existing safety bubble for Python {effective_version_str}')
                 should_create_or_upgrade = True
                 tool_version_to_use = latest_compatible
             elif parse_version(current_version) < parse_version(latest_compatible):
-                # Bubble exists but is outdated
                 should_upgrade = self._should_upgrade_safety(current_version, latest_compatible)
                 if should_upgrade:
                     should_create_or_upgrade = True
@@ -979,20 +970,17 @@ class omnipkgMetadataGatherer:
                 else:
                     tool_version_to_use = current_version
             else:
-                # Bubble exists and is up to date
                 tool_version_to_use = current_version
             
             TOOL_SPEC = f'{TOOL_NAME}=={tool_version_to_use}'
             bubble_path = self.omnipkg_instance.multiversion_base / f'{TOOL_NAME}-{tool_version_to_use}'
 
-            # Step 4: Create or upgrade bubble if needed
             if should_create_or_upgrade or not bubble_path.is_dir():
                 if should_create_or_upgrade and current_version:
                     safe_print(f"📦 Upgrading safety tool: v{current_version} → v{tool_version_to_use}")
                 else:
                     safe_print(f"💡 First-time setup: Creating isolated bubble for '{TOOL_SPEC}'...")
                 
-                # Clean up any old versions before creating the new one
                 for old_bubble in self.omnipkg_instance.multiversion_base.glob(f'{TOOL_NAME}-*'):
                     if old_bubble.name != bubble_path.name:
                         safe_print(f"   -> Removing old tool bubble: {old_bubble.name}")
@@ -1006,11 +994,13 @@ class omnipkgMetadataGatherer:
                     safe_print(f'❌ Failed to create tool bubble. Using pip-audit fallback.')
                     self._run_pip_audit_fallback({name: list(versions)[0] for name, versions in all_packages_in_context.items()})
                     return
-                
-                safe_print(f"   -> 🧠 Indexing new '{TOOL_SPEC}' bubble in the Knowledge Base...")
-                self.omnipkg_instance.rebuild_package_kb(packages=[TOOL_SPEC], target_python_version=self.target_context_version)
 
-            # Step 5: Run the scan
+                # --- FIX 2: REMOVE RECURSIVE KB REBUILD ---
+                # The main KB build process that CALLED this function will
+                # automatically discover the new safety bubble. Calling it again here
+                # causes an infinite loop.
+                # self.omnipkg_instance.rebuild_package_kb(...) # <-- DELETED
+
             with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.txt') as reqs_file:
                 reqs_file_path = reqs_file.name
                 for name, versions in all_packages_in_context.items():
