@@ -72,16 +72,45 @@ try:
 except ImportError:
     magic = None
     HAS_MAGIC = False
-
+    
 def _get_dynamic_omnipkg_version():
     """
     Gets the omnipkg version, prioritizing pyproject.toml in developer mode.
+    
+    CRITICAL FIX: Detects if we're in a staging/temporary environment during
+    bubble creation and returns a safe fallback to prevent import system corruption.
     """
+    
+    # ═══════════════════════════════════════════════════════════
+    # CRITICAL SAFEGUARD: Detect staging environment
+    # ═══════════════════════════════════════════════════════════
+    # During bubble creation, pip installs packages to a temporary directory
+    # like /tmp/tmpXXXXXX. If we're being called from within that staging
+    # environment, DO NOT try to use importlib.metadata - it will fail because
+    # the import paths are in a corrupted state.
+    
+    current_file = Path(__file__).resolve()
+    
+    # Check if we're being executed from a temporary staging directory
+    is_in_staging = (
+        '/tmp/tmp' in str(current_file) or 
+        '\\Temp\\tmp' in str(current_file) or
+        'staging' in str(current_file).lower()
+    )
+    
+    if is_in_staging:
+        # We're inside a bubble staging operation - use safe fallback
+        return 'unknown (staging)'
+    
+    # ═══════════════════════════════════════════════════════════
+    # Normal operation - try to get version
+    # ═══════════════════════════════════════════════════════════
+    
     if not HAS_TOMLLIB:
-        # Can't read TOML, skip to metadata fallback
+        # Can't read TOML, try metadata
         try:
             return importlib.metadata.version('omnipkg')
-        except importlib.metadata.PackageNotFoundError:
+        except (importlib.metadata.PackageNotFoundError, Exception):
             return 'unknown'
     
     # Try pyproject.toml first (developer mode)
@@ -93,13 +122,13 @@ def _get_dynamic_omnipkg_version():
             version_from_toml = data.get('project', {}).get('version')
             if version_from_toml:
                 return version_from_toml
-    except Exception as e:
-        safe_print(f"⚠️  Could not read version from pyproject.toml: {e}")
+    except Exception:
+        pass  # Continue to metadata fallback
     
     # Fallback to installed metadata
     try:
         return importlib.metadata.version('omnipkg')
-    except importlib.metadata.PackageNotFoundError:
+    except (importlib.metadata.PackageNotFoundError, Exception):
         pass
     
     return 'unknown'
