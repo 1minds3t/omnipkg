@@ -7344,6 +7344,48 @@ class omnipkg:
         except Exception as e:
             safe_print(_('   ⚠️ Could not save environment snapshot: {}').format(e))
 
+    def _handle_quantum_healing(self, e: NoCompatiblePythonError, packages: List[str], dry_run: bool, force_reinstall: bool,
+                                override_strategy: Optional[str], target_directory: Optional[Path],
+                                index_url: Optional[str] = None, extra_index_url: Optional[str] = None) -> int:
+        """
+        Handles the 'Quantum Healing' process when a package is incompatible with the
+        current Python version. It attempts to switch to a compatible Python and
+        re-runs the original command.
+        """
+        safe_print("\n" + "=" * 60)
+        safe_print("🌌 QUANTUM HEALING: Python Incompatibility Detected")
+        safe_print("=" * 60)
+        safe_print(f"   - Diagnosis: Cannot install '{e.package_name}' on your current Python ({e.current_python}).")
+        safe_print(f"   - Prescription: This package requires Python {e.compatible_python}.")
+
+        try:
+            from .cli import handle_python_requirement
+        except ImportError:
+            from omnipkg.cli import handle_python_requirement
+
+        if not e.compatible_python or e.compatible_python == "unknown":
+            safe_print(f"❌ Healing failed: Could not determine a compatible Python version for '{e.package_name}'.")
+            return 1
+
+        if not handle_python_requirement(e.compatible_python, self, "omnipkg"):
+            safe_print(f"❌ Healing failed: Could not automatically switch to Python {e.compatible_python}.")
+            return 1
+
+        safe_print(f"\n🚀 Retrying original `install` command in the new Python {e.compatible_python} context...")
+
+        new_config_manager = ConfigManager(suppress_init_messages=True)
+        new_omnipkg_instance = self.__class__(new_config_manager)
+
+        return new_omnipkg_instance.smart_install(
+            packages,
+            dry_run=dry_run,
+            force_reinstall=force_reinstall,
+            override_strategy=override_strategy,
+            target_directory=target_directory,
+            index_url=index_url,
+            extra_index_url=extra_index_url
+        )
+
     def _sort_packages_for_install(self, packages: List[str], strategy: str) -> List[str]:
         """
         Sorts packages for installation based on the chosen strategy.
