@@ -2480,31 +2480,23 @@ class BubbleIsolationManager:
 
         
     def install_and_verify(self, package_name: str, version: str, python_context_version: str, 
-                       destination_path: Path, index_url: Optional[str] = None, 
-                       extra_index_url: Optional[str] = None, python_exe_override: Optional[str] = None,
-                       observed_dependencies: Optional[Dict[str, str]] = None):
+                   destination_path: Path, index_url: Optional[str] = None, 
+                   extra_index_url: Optional[str] = None, python_exe_override: Optional[str] = None,
+                   observed_dependencies: Optional[Dict[str, str]] = None):
         """
-        ENHANCED VERSION: Now includes fallback to Time Machine and comprehensive healing.
+        Builds a bubble with DIRECT subprocess verification.
         """
         python_exe = python_exe_override or self.config.get('python_executable', sys.executable)
 
         if destination_path.exists():
-            try: 
-                shutil.rmtree(destination_path)
-            except Exception as e:
-                safe_print(f"   ⚠️  Warning: Could not clean target {destination_path}: {e}")
+            shutil.rmtree(destination_path, ignore_errors=True)
         
         with tempfile.TemporaryDirectory() as temp_dir:
             staging_path = Path(temp_dir)
-            
             safe_print(f"   - 🏗️  Staging install for {package_name}=={version}...")
-            
-            # Clear any previous import test failures
-            if hasattr(self, '_import_test_failures'):
-                delattr(self, '_import_test_failures')
-            
-            # ATTEMPT 1: Modern pip install
-            return_code, captured_output = self.parent_omnipkg._run_pip_install(
+
+            # 1. Install
+            return_code, _ = self.parent_omnipkg._run_pip_install(
                 [f"{package_name}=={version}"],
                 target_directory=staging_path,
                 force_reinstall=True,
@@ -2513,126 +2505,176 @@ class BubbleIsolationManager:
                 extra_index_url=extra_index_url,
             )
 
-            # ATTEMPT 2: If modern install fails, try Time Machine
             if return_code != 0:
-                safe_print(f"   ⚠️  Modern install failed, attempting Time Machine fallback...")
-                
-                time_machine_success = self.parent_omnipkg._run_historical_install_fallback(
-                    package_name, 
-                    version, 
-                    target_directory_override=staging_path,
-                    index_url=index_url,
-                    extra_index_url=extra_index_url
-                )
-                
-                if not time_machine_success:
-                    safe_print(f"   ❌ Both modern install and Time Machine failed")
-                    return False
-                
-                safe_print(f"   ✅ Time Machine install succeeded")
+                safe_print(f"   ❌ Install failed")
+                return False
 
-            # VERIFICATION PHASE
+            # 2. Analyze
             safe_print(f"   - 🔍 Analyzing installed tree...")
             installed_tree = self._analyze_installed_tree(staging_path)
-            
             if not installed_tree:
-                safe_print(f"   ❌ No packages found in staging area")
+                safe_print("   ❌ Staging directory empty.")
                 return False
-            
-            safe_print(f"   - Found {len(installed_tree)} packages in staging area")
-            
-            # COMPREHENSIVE IMPORT TEST
-            safe_print(f"   - 🧪 Running comprehensive import tests...")
-            import_test_passed = self.parent_omnipkg._run_post_install_import_test(
+
+            # 3. DIRECT SUBPROCESS VERIFICATION
+            safe_print(f"   - 🧪 Running isolated import verification...")
+
+            # Use helper to get import names from top_level.txt
+            import_candidates = self.parent_omnipkg._get_import_candidates_for_install_test(
                 package_name, 
-                install_dir_override=staging_path,
+                staging_path
             )
 
-            # HEALING PHASE
-            if not import_test_passed:
-                safe_print(f"   ⚠️  Initial import test failed, attempting to heal...")
+            # CRITICAL FIX: If the main package isn't in candidates, ADD IT!
+            main_package_name = package_name.replace('-', '_')
+            if main_package_name not in import_candidates and package_name not in import_candidates:
+                safe_print(f"      ⚠️  Main package '{package_name}' not in top_level.txt, adding fallback")
+                import_candidates.extend([main_package_name, package_name])
+
+            if not import_candidates:
+                import_candidates = [main_package_name]
+
+            safe_print(f"      Found {len(import_candidates)} import candidate(s): {', '.join(import_candidates)}")
+
+            main_package_imported = False
+            failed_submodules = []
+
+            # TEST ALL CANDIDATES
+            for import_name in import_candidates:
+                safe_print(f"      Testing: {import_name}")
                 
-                # Check if we have detailed failure information
-                if hasattr(self.parent_omnipkg, '_import_test_failures'):
-                    import_failures = self.parent_omnipkg._import_test_failures
-                    self._fix_bubble_import_failures(staging_path, installed_tree, staging_path, import_failures)
+                verify_script = f"""import sys
+sys.path.insert(0, r'{staging_path}')
+import {import_name}
+print('IMPORT_SUCCESS')
+"""
+                
+                verify_cmd = [python_exe, "-c", verify_script]
+                
+                try:
+                    proc = subprocess.run(verify_cmd, capture_output=True, text=True, 
+                                        check=False, timeout=30)
                     
-                    # Re-test after healing
-                    safe_print(f"   - 🧪 Re-testing imports after healing...")
-                    import_test_passed = self.parent_omnipkg._run_post_install_import_test(
-                        package_name, 
-                        install_dir_override=staging_path,
-                    )
-            
-            if not import_test_passed:
-                safe_print(f"   ❌ Final import check failed even after healing attempts")
-                
-                # TRIGGER TIME MACHINE AS LAST RESORT
-                safe_print(f"   🕰️  Attempting Time Machine fallback to fix dependency mismatch...")
-                
-                time_machine_success = self.parent_omnipkg._run_historical_install_fallback(
-                    package_name,
-                    version,
+                    if proc.returncode == 0 and 'IMPORT_SUCCESS' in proc.stdout:
+                        safe_print(f"         ✅ {import_name} imported successfully")
+                        if import_name in [main_package_name, package_name]:
+                            main_package_imported = True
+                    else:
+                        safe_print(f"         ❌ {import_name} failed to import")
+                        if proc.stderr and len(proc.stderr) < 500:
+                            safe_print(f"            {proc.stderr.strip()[:200]}")
+                        
+                        if import_name not in [main_package_name, package_name]:
+                            failed_submodules.append(import_name)
+                            
+                except subprocess.TimeoutExpired:
+                    safe_print(f"         ⚠️  {import_name} timeout")
+                    if import_name not in [main_package_name, package_name]:
+                        failed_submodules.append(import_name)
+                except Exception as e:
+                    safe_print(f"         ⚠️  {import_name} error: {e}")
+                    if import_name not in [main_package_name, package_name]:
+                        failed_submodules.append(import_name)
+
+            # Report results
+            if failed_submodules:
+                safe_print(f"      ⚠️  Warning: {len(failed_submodules)} sub-dependencies failed: {', '.join(failed_submodules)}")
+                safe_print(f"         (This won't block bubble creation if main package works)")
+
+            # ONLY FAIL if main package failed
+            if main_package_imported:
+                safe_print(f"      ✅ Main package '{package_name}' imports successfully")
+                import_passed = True
+            else:
+                safe_print(f"      ❌ CRITICAL: Main package '{package_name}' failed to import")
+                import_passed = False
+
+            # 4. ABI Healing if needed (NumPy downgrade)
+            if not import_passed and proc and proc.stderr:
+                if "numpy.dtype size changed" in proc.stderr or "binary incompatibility" in proc.stderr:
+                    safe_print(f"   🚨 NumPy ABI mismatch detected")
+                    
+                    numpy_info = installed_tree.get('numpy')
+                    if numpy_info and numpy_info.get('version', '').startswith('2.'):
+                        safe_print(f"   -> Downgrading NumPy to <2.0...")
+                        
+                        heal_code, _ = self.parent_omnipkg._run_pip_install(
+                            [f"{package_name}=={version}", "numpy<2.0"],
+                            target_directory=staging_path,
+                            force_reinstall=True,
+                            extra_flags=['--no-cache-dir'],
+                            index_url=index_url,
+                            extra_index_url=extra_index_url,
+                        )
+                        
+                        if heal_code == 0:
+                            safe_print(f"      Re-testing after NumPy downgrade...")
+                            # Re-run the test for main package only
+                            verify_script = f"""import sys
+sys.path.insert(0, r'{staging_path}')
+import {main_package_name}
+print('IMPORT_SUCCESS')
+"""
+                            verify_cmd = [python_exe, "-c", verify_script]
+                            proc = subprocess.run(verify_cmd, capture_output=True, text=True, 
+                                                check=False, timeout=30)
+                            if proc.returncode == 0 and 'IMPORT_SUCCESS' in proc.stdout:
+                                safe_print("   ✅ NumPy healing successful")
+                                import_passed = True
+                                installed_tree = self._analyze_installed_tree(staging_path)
+
+            # 5. Time Machine fallback
+            if not import_passed:
+                safe_print(f"   ⚠️  Attempting Time Machine fallback...")
+                tm_success = self.parent_omnipkg._run_historical_install_fallback(
+                    package_name, version, 
                     target_directory_override=staging_path,
-                    index_url=index_url,
+                    index_url=index_url, 
                     extra_index_url=extra_index_url
                 )
                 
-                if time_machine_success:
-                    # Re-analyze installed tree after Time Machine
-                    safe_print(f"   - 🔍 Re-analyzing after Time Machine...")
-                    installed_tree = self._analyze_installed_tree(staging_path)
-                    
-                    if not installed_tree:
-                        safe_print(f"   ❌ No packages found after Time Machine")
-                        return False
-                    
-                    # Final import test after Time Machine
-                    safe_print(f"   - 🧪 Final import test after Time Machine...")
-                    import_test_passed = self.parent_omnipkg._run_post_install_import_test(
-                        package_name,
-                        install_dir_override=staging_path,
-                    )
-                
-                if not import_test_passed:
-                    safe_print(f"   ❌ Package still broken after Time Machine - ABORTING BUBBLE CREATION")
-                    safe_print(f"   💡 The package has incompatible dependencies or broken metadata")
+                if tm_success:
+                    safe_print(f"      Re-testing after Time Machine...")
+                    verify_script = f"""import sys
+sys.path.insert(0, r'{staging_path}')
+import {main_package_name}
+print('IMPORT_SUCCESS')
+"""
+                    verify_cmd = [python_exe, "-c", verify_script]
+                    proc = subprocess.run(verify_cmd, capture_output=True, text=True, 
+                                        check=False, timeout=30)
+                    if proc.returncode == 0 and 'IMPORT_SUCCESS' in proc.stdout:
+                        safe_print("   ✅ Time Machine successful")
+                        import_passed = True
+                        installed_tree = self._analyze_installed_tree(staging_path)
+
+            if not import_passed:
+                safe_print(f"   ❌ Package failed verification. Bubble rejected.")
+                if proc and proc.stderr:
+                    safe_print(f"   📝 Error details: {proc.stderr.strip()[:300]}")
                 return False
 
-            # SUCCESS - MOVE TO FINAL DESTINATION
+            # 6. Finalize
             safe_print(f"   - 🚚 Moving verified build to bubble: {destination_path}")
             destination_path.parent.mkdir(parents=True, exist_ok=True)
             shutil.copytree(staging_path, destination_path, dirs_exist_ok=True)
-
-            safe_print("   - Finalizing bubble (generating manifest)...")
             
-            stats = {'total_files': 0, 'copied_files': 0, 'deduplicated_files': 0, 
-                    'c_extensions': [], 'binaries': [], 'python_files': 0}
+            stats = {'total_files': 0, 'c_extensions': [], 'binaries': [], 'python_files': 0}
             for pkg, info in installed_tree.items():
                 for fpath in info.get('files', []):
                     stats['total_files'] += 1
-                    stats['copied_files'] += 1
                     if fpath.suffix in ['.so', '.pyd']: 
                         stats['c_extensions'].append(fpath.name)
-                    elif self._is_binary(fpath): 
-                        stats['binaries'].append(fpath.name)
                     elif fpath.suffix == '.py': 
                         stats['python_files'] += 1
             
             self._create_bubble_manifest(
-                destination_path, 
-                installed_tree, 
-                stats, 
+                destination_path, installed_tree, stats, 
                 python_context_version=python_context_version,
                 observed_dependencies=observed_dependencies
             )
+            return True
             
-            import time
-            time.sleep(0.1)
-            
-            safe_print(f"   ✅ Bubble successfully created at {destination_path}")
-            return True  
-
     def _granular_verify_and_heal(self, staging_path: Path, package_name: str, python_exe: str):
         """
         Iterates through every module in the package.
@@ -11032,8 +11074,7 @@ print(json.dumps(results))
 
     def _run_post_install_import_test(self, package_name: str, install_dir_override: Optional[Path] = None) -> bool:
         """
-        ENHANCED: Runs comprehensive import tests for ALL discovered modules.
-        Returns detailed failure information for healing.
+        FIXED: Properly isolates sys.path to ONLY use the staging directory.
         """
         target_desc = f"in sandbox '{install_dir_override}'" if install_dir_override else "in main environment"
         safe_print(f"   🧪 Verifying installation with import test for: {package_name} {target_desc}")
@@ -11046,20 +11087,22 @@ print(json.dumps(results))
             failed_imports = []
             
             for import_name in import_names:
-                script_lines = ["import sys", "import traceback"]
-                if install_dir_override:
-                    script_lines.append(f"sys.path.insert(0, r'{str(install_dir_override)}')")
+                script_lines = ["import sys"]
                 
-                # Try to import and also check for submodules
+                if install_dir_override:
+                    # CRITICAL FIX: Replace sys.path entirely, don't just insert!
+                    script_lines.extend([
+                        "import os",
+                        f"staging_path = r'{str(install_dir_override)}'",
+                        "# Keep only essential system paths + staging",
+                        "sys.path = [staging_path] + [p for p in sys.path if 'site-packages' not in p]",
+                    ])
+                
                 script_lines.extend([
+                    "import traceback",
                     "try:",
                     f"    import {import_name}",
                     f"    print('SUCCESS:{import_name}')",
-                    "    # Try to discover submodules",
-                    f"    if hasattr({import_name}, '__path__'):",
-                    f"        import pkgutil",
-                    f"        for importer, modname, ispkg in pkgutil.walk_packages({import_name}.__path__, {import_name}.__name__ + '.'):",
-                    f"            print(f'SUBMODULE:{{modname}}')",
                     "except ModuleNotFoundError as e:",
                     "    print(f'MISSING_MODULE:{e}')",
                     "except Exception as e:",
@@ -11074,59 +11117,34 @@ print(json.dumps(results))
                 
                 # Parse output
                 output_lines = result.stdout.strip().split('\n')
-                import_succeeded = False
-                missing_modules = []
-                discovered_submodules = []
-                
-                for line in output_lines:
-                    if line.startswith('SUCCESS:'):
-                        import_succeeded = True
-                        successful_imports.append(line.split(':', 1)[1])
-                    elif line.startswith('SUBMODULE:'):
-                        discovered_submodules.append(line.split(':', 1)[1])
-                    elif line.startswith('MISSING_MODULE:'):
-                        missing_module = self._extract_missing_module_name(line.split(':', 1)[1])
-                        if missing_module:
-                            missing_modules.append(missing_module)
-                    elif line.startswith('ERROR:'):
-                        failed_imports.append((import_name, line.split(':', 1)[1]))
+                import_succeeded = any(line.startswith('SUCCESS:') for line in output_lines)
                 
                 if import_succeeded:
+                    successful_imports.append(import_name)
                     safe_print(f"      ✅ Import test passed for '{import_name}'")
-                    if discovered_submodules:
-                        safe_print(f"         📦 Discovered {len(discovered_submodules)} submodules")
                 else:
+                    failed_imports.append(import_name)
                     safe_print(f"      ❌ Import test failed for '{import_name}'")
-                    if missing_modules:
-                        safe_print(f"         ⚠️  Missing modules: {', '.join(missing_modules)}")
-                        # Store this for healing
-                        if not hasattr(self, '_import_test_failures'):
-                            self._import_test_failures = []
-                        self._import_test_failures.append({
-                            'package': package_name,
-                            'import_name': import_name,
-                            'missing_modules': missing_modules
-                        })
+                    # Show error details
+                    for line in output_lines:
+                        if line.startswith('ERROR:') or line.startswith('MISSING_MODULE:'):
+                            safe_print(f"         {line}")
 
-            # Overall success if at least one import worked
+            # Check if main package imported
             main_import_name = package_name.replace('-', '_')
             main_package_imported = main_import_name in successful_imports
 
             if main_package_imported:
                 safe_print(f"      ✅ Successfully imported main package: {main_import_name}")
-                if len(successful_imports) > 1:
-                    safe_print(f"      ✅ Also imported dependencies: {', '.join([x for x in successful_imports if x != main_import_name])}")
                 return True
             else:
                 safe_print(f"      ❌ Main package '{main_import_name}' failed to import")
-                if successful_imports:
-                    safe_print(f"      ⚠️  Some dependencies imported: {', '.join(successful_imports)}")
                 return False
-                
+                    
         except Exception as e:
             safe_print(f"      ❌ An unexpected error occurred during the import test: {e}")
             return False
-
+    
     def _run_historical_install_fallback(self, target_pkg, target_ver, target_directory_override: Optional[Path] = None, index_url: Optional[str] = None, extra_index_url: Optional[str] = None):
         """
         Orchestrator for the Dependency Time Machine logic, run as an automatic fallback.

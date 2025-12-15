@@ -2155,27 +2155,27 @@ if main_site_packages not in sys.path:
 log("     🔄 Starting nested overlay stack...")
 
 # Layer 1: NumPy 1.24.3
-with omnipkgLoader("numpy==1.24.3", quiet=True, isolation_mode='overlay'):
+with omnipkgLoader("numpy==1.24.3", quiet=False, isolation_mode='overlay'):
     import numpy as np
     
     # Layer 2: SciPy 1.10.1 (Compatible with NumPy 1.24)
-    with omnipkgLoader("scipy==1.10.1", quiet=True, isolation_mode='overlay'):
+    with omnipkgLoader("scipy==1.10.1", quiet=False, isolation_mode='overlay'):
         import scipy
         import scipy.linalg
         
         # Layer 3: Pandas 2.0.3 (Compatible with NumPy 1.24)
-        with omnipkgLoader("pandas==2.0.3", quiet=True, isolation_mode='overlay'):
+        with omnipkgLoader("pandas==2.0.3", quiet=False, isolation_mode='overlay'):
             import pandas as pd
             
             # Layer 4: Scikit-Learn 1.3.2
-            with omnipkgLoader("scikit-learn==1.3.2", quiet=True, isolation_mode='overlay'):
+            with omnipkgLoader("scikit-learn==1.3.2", quiet=False, isolation_mode='overlay'):
                 from sklearn.ensemble import RandomForestClassifier
                 
                 # TF from base
                 import tensorflow as tf
                 
                 # Layer 5: PyTorch 2.0.1
-                with omnipkgLoader("torch==2.0.1+cu118", quiet=True, isolation_mode='overlay'):
+                with omnipkgLoader("torch==2.0.1+cu118", quiet=False, isolation_mode='overlay'):
                     import torch
                     
                     log("     ✅ ALL LAYERS LOADED!")
