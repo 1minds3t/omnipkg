@@ -4258,43 +4258,44 @@ class omnipkg:
         if not self.config:
             if len(sys.argv) > 1 and sys.argv[1] in ['reset-config', 'doctor']:
                 pass
-            elif not minimal_mode:
-                 raise RuntimeError('OmnipkgCore cannot initialize: Configuration is missing or invalid.')
+            else:
+                raise RuntimeError('OmnipkgCore cannot initialize: Configuration is missing or invalid.')
 
-        # --- CORE ATTRIBUTES (Needed early) ---
+        # STEP 1: Handle the simple 'minimal_mode' case FIRST and exit immediately.
+        # This is the safe exit path that prevents the loop during re-initialization.
+        if minimal_mode:
+            self.env_id = self._get_env_id()
+            self.multiversion_base = Path(self.config['multiversion_base'])
+            self.interpreter_manager = InterpreterManager(self.config_manager)
+            safe_print(_('✅ Omnipkg core initialized (minimal mode).'))
+            return  # EXIT EARLY - no cache, no migrations, no hooks
+
+        # STEP 2: For a full run, perform the critical setup and healing process.
+        # This function handles the "first-time setup" in a controlled way.
+        self._self_heal_omnipkg_installation()
+
+        # STEP 3: Now that the environment is stable, initialize all other core attributes.
         self.env_id = self._get_env_id()
         self.multiversion_base = Path(self.config['multiversion_base'])
         self.site_packages_root = Path(self.config['site_packages_path'])
+        self.cache_client = None
+        self._cache_connection_status = None
+        self.initialize_pypi_cache()
+        self._check_and_run_pending_rebuild()
         self._info_cache = {}
         self._installed_packages_cache = None
         self.http_session = http_requests.Session()
-        self.cache_client = None
-        self._cache_connection_status = None
-
-        # --- PHASE 1: INITIALIZE MANAGERS ---
-        # These are needed by almost all commands, including minimal ones.
-        self.interpreter_manager = InterpreterManager(self.config_manager)
-
-        # Minimal mode exits here. Commands like 'swap' or 'list python' now have what they need.
-        if minimal_mode:
-            safe_print(_('✅ Omnipkg core initialized (minimal mode).'))
-            return
-
-        # --- PHASE 2: FULL INITIALIZATION FOR HEAVY COMMANDS ---
-        # Connect to the cache (Redis or SQLite)
+        self.multiversion_base.mkdir(parents=True, exist_ok=True)
+        
         if not self._connect_cache():
-            sys.exit(1)
-
-        # Now that we have a cache, initialize other managers that depend on it.
+            safe_print(_('⚠️  Proceeding without cache connection.'))
+        
+        # Initialize managers that depend on a stable environment and cache.
+        self.interpreter_manager = InterpreterManager(self.config_manager)
         self.hook_manager = ImportHookManager(str(self.config.get('multiversion_base')), config=self.config, cache_client=self.cache_client)
-        self.bubble_manager = BubbleIsolationManager(self.config, self) # <-- CRITICAL: Now exists before rebuild
+        self.bubble_manager = BubbleIsolationManager(self.config, self)
 
-        # --- PHASE 3: POST-INITIALIZATION AND SELF-HEALING ---
-        # These tasks may depend on the fully initialized managers.
-        self._self_heal_omnipkg_installation()
-        self.initialize_pypi_cache()
-
-        # Run database migrations
+        # Run database migrations if needed.
         migration_flag_key = f'omnipkg:env_{self.env_id}:migration_v2_env_aware_keys_complete'
         if not self.cache_client.get(migration_flag_key):
             old_keys_iterator = self.cache_client.scan_iter('omnipkg:pkg:*', count=1)
@@ -4303,17 +4304,10 @@ class omnipkg:
             else:
                 self.cache_client.set(migration_flag_key, 'true')
         
-        migration_v3_flag_key = f'{self.redis_env_prefix}migration_v3_install_type_complete'
-        if not self.cache_client.get(migration_v3_flag_key):
-            self._perform_v3_metadata_migration(migration_v3_flag_key)
-
-        # Proactively build the loader cache if needed.
+        # Proactively build the loader cache.
         self._prime_loader_cache()
 
-        # CRITICAL: Run the pending rebuild check LAST, after everything is initialized.
-        self._check_and_run_pending_rebuild()
-
-        # Finally, load the import hooks.
+        # Load the import hooks.
         self.hook_manager.load_version_map()
         self.hook_manager.install_import_hook()
         safe_print(_('✅ Omnipkg core initialized successfully.'))
