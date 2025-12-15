@@ -72,7 +72,7 @@ try:
 except ImportError:
     magic = None
     HAS_MAGIC = False
-    
+
 def _get_dynamic_omnipkg_version():
     """
     Gets the omnipkg version, prioritizing pyproject.toml in developer mode.
@@ -9347,80 +9347,6 @@ class omnipkg:
                                 if snapshot_data:
                                     snapshot_state = json.loads(snapshot_data)
                                     self._safe_restore_from_snapshot(pkg_name, snapshot_state, force=True)
-                
-                # Handle stability protection based on install strategy
-                if install_strategy == 'stable-main':
-                    downgrades_to_fix = self._detect_downgrades(packages_before, packages_after)
-                    upgrades_to_fix = self._detect_upgrades(packages_before, packages_after)
-                    all_changes_to_fix = []
-                    
-                    for fix in downgrades_to_fix:
-                        all_changes_to_fix.append({'package': fix['package'], 'old_version': fix['good_version'], 'new_version': fix['bad_version'], 'change_type': 'downgraded'})
-                    for fix in upgrades_to_fix:
-                        all_changes_to_fix.append({'package': fix['package'], 'old_version': fix['old_version'], 'new_version': fix['new_version'], 'change_type': 'upgraded'})
-                    
-                    if all_changes_to_fix:
-                        safe_print(_('🛡️ STABILITY PROTECTION ACTIVATED!'))
-                        replaced_packages_count = len({fix['package'] for fix in all_changes_to_fix})
-                        safe_print(_('   -> Found {} package(s) changed by pip. Bubbling them to preserve stability...').format(replaced_packages_count))
-                        
-                        for fix in all_changes_to_fix:
-                            bubble_created = self.bubble_manager.create_isolated_bubble(
-                                fix['package'], fix['new_version'], python_context_version=python_context_version,
-                                index_url=index_url,
-                                extra_index_url=extra_index_url,
-                                observed_dependencies=packages_after
-                            )
-
-                            if bubble_created:
-                                bubbled_kb_updates[fix['package']] = fix['new_version']
-                                bubble_path_str = str(self.multiversion_base / f"{fix['package']}-{fix['new_version']}")
-                                self.hook_manager.refresh_bubble_map(fix['package'], fix['new_version'], bubble_path_str)
-
-                                # --- THIS IS THE CRITICAL RESTORATION LOGIC ---
-                                safe_print(f"   🔄 Enforcing stable version: Restoring {fix['package']}=={fix['old_version']}...")
-                                
-                                # Use _run_pip_install to restore the "good" version to the main environment.
-                                # --no-deps is crucial to prevent it from re-installing a dependency tree.
-                                restore_code, restore_output = self._run_pip_install(
-                                    [f"{fix['package']}=={fix['old_version']}"],
-                                    force_reinstall=True,
-                                    extra_flags=['--no-deps']
-                                )
-
-                                protected_from_cleanup.add(canonicalize_name(fix['package']))
-                                
-                                if restore_code == 0:
-                                    main_env_kb_updates[fix['package']] = fix['old_version']
-                                    safe_print(f"   ✅ Bubbled {fix['package']} v{fix['new_version']}, restored stable v{fix['old_version']}")
-                                else:
-                                    safe_print(f"   ❌ RESTORE FAILED for {fix['package']} v{fix['old_version']}!")
-                                    safe_print("   📄 PIP OUTPUT:")
-                                    safe_print(restore_output.get("stderr", "No stderr output."))
-                            else:
-                                safe_print('   ❌ Failed to create bubble for {} v{}'.format(fix['package'], fix['new_version']))
-                                # --- AUTOMATIC ROLLBACK LOGIC ---
-                                safe_print(f"   🔄 AUTO-ROLLBACK: Restoring stable version: {fix['package']}=={fix['old_version']}...")
-                                
-                                    
-                                restore_code, _unused_output = self._run_pip_install(
-                                    [f"{fix['package']}=={fix['old_version']}"],
-                                    force_reinstall=True,
-                                    extra_flags=['--no-deps']
-                                )
-
-                                if restore_code == 0:
-                                    safe_print(f"   ✅ Rollback successful. Main environment is stable.")
-                                    main_env_kb_updates[fix['package']] = fix['old_version']
-                                else:
-                                    safe_print(f"   ❌ CRITICAL: Rollback FAILED. The main environment may be unstable.")
-                                    safe_print(f"   💡 Run 'omnipkg revert' or manually install '{fix['package']}=={fix['old_version']}'.")
-
-                        safe_print(_('   -> Stability protection complete.'))
-                    else:
-                        for pkg_name, version in packages_after.items():
-                            if pkg_name not in packages_before:
-                                main_env_kb_updates[pkg_name] = version
                                 
                 elif install_strategy == 'latest-active':
                     versions_to_bubble = []
