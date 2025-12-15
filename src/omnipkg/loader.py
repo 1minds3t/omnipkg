@@ -300,7 +300,7 @@ class omnipkgLoader:
             return
         
         print("\n" + "="*70)
-        print("📊 OMNIPKG LOADER PROFILING REPORT")
+        safe_print("📊 OMNIPKG LOADER PROFILING REPORT")
         print("="*70)
         
         # Sort by total time
@@ -1226,7 +1226,7 @@ class omnipkgLoader:
         # ═══════════════════════════════════════════════════════════
         cloaked_versions = self._scan_for_cloaked_versions(package_name)
         
-        for cloaked_path, original_name, *_ in cloaked_versions:
+        for cloaked_path, original_name, *unused in cloaked_versions:
             if requested_version in original_name:
                 if not self.quiet:
                     safe_print(f"      [Strategy 0/6] Found CLOAKED version: {cloaked_path.name}")

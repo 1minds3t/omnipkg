@@ -136,7 +136,7 @@ class TestEnhancedFlaskPortFinder(unittest.TestCase):
             with lock:
                 self.reserved_ports.append(port)
                 ports.add(port)
-        for _ in range(10):
+        for unused in range(10):
             thread = threading.Thread(target=allocate_port)
             threads.append(thread)
             thread.start()
@@ -174,7 +174,7 @@ class TestEnhancedFlaskPortFinder(unittest.TestCase):
         original_code = "from flask import Flask\napp = Flask(__name__)\napp.run(debug=True)"
         
         # FIX: Removed the unexpected keyword argument 'port'. The function finds its own port.
-        patched_code, port, _ = patch_flask_code(original_code)
+        patched_code, port, unused = patch_flask_code(original_code)
         self.reserved_ports.append(port)
         
         # The exact patch details might vary, so we check for the essential part.

@@ -20,8 +20,12 @@ def run_python_code_in_isolation(
     import sys
     import os
     import traceback
-    
-    # 1. SETUP PATHS (So we can find omnipkg)
+    try:
+        from .common_utils import safe_print
+    except ImportError:
+        from omnipkg.common_utils import safe_print
+                            
+        # 1. SETUP PATHS (So we can find omnipkg)
     try:
         # Assuming this runs from site-packages or source
         import omnipkg
@@ -77,5 +81,5 @@ def run_python_code_in_isolation(
         return True
         
     except subprocess.TimeoutExpired:
-        print(f"❌ {job_name} timed out after {timeout}s")
+        safe_print(f"❌ {job_name} timed out after {timeout}s")
         return False

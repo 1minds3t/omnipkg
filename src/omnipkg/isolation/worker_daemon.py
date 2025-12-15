@@ -21,7 +21,12 @@ from collections import deque
 import ctypes
 import base64  # <--- ENSURE THIS IS HERE
 import platform
+try:
+    from .common_utils import safe_print
+except ImportError:
+    from omnipkg.common_utils import safe_print
 IS_WINDOWS = platform.system() == 'Windows'
+
 
 # ═══════════════════════════════════════════════════════════════
 # 0. CONSTANTS & UTILITIES
@@ -344,6 +349,10 @@ import sys
 import json
 import shutil
 from pathlib import Path
+try:
+    from .common_utils import safe_print
+except ImportError:
+    from omnipkg.common_utils import safe_print
 
 # CRITICAL: Mark as daemon worker
 os.environ['OMNIPKG_IS_DAEMON_WORKER'] = '1'
@@ -1053,7 +1062,7 @@ def diagnose_worker_issue(package_spec: str):
     """
     Run this to diagnose why a worker might return the wrong version.
     """
-    print(f"\n🔍 Diagnosing worker issue for: {package_spec}")
+    safe_print(f"\n🔍 Diagnosing worker issue for: {package_spec}")
     print("=" * 70)
     
     pkg_name, expected_version = package_spec.split('==')
@@ -1069,14 +1078,14 @@ def diagnose_worker_issue(package_spec: str):
     try:
         from importlib.metadata import version
         actual_version = version(pkg_name)
-        print(f"   ✅ Found version: {actual_version}")
+        safe_print(f"   ✅ Found version: {actual_version}")
         
         if actual_version != expected_version:
-            print(f"   ❌ VERSION MISMATCH!")
+            safe_print(f"   ❌ VERSION MISMATCH!")
             print(f"      Expected: {expected_version}")
             print(f"      Got: {actual_version}")
     except Exception as e:
-        print(f"   ❌ Import failed: {e}")
+        safe_print(f"   ❌ Import failed: {e}")
     
     # Check for bubble
     from pathlib import Path
@@ -1143,14 +1152,14 @@ class PersistentWorker:
                 raise RuntimeError(f"Worker crashed during startup. Stderr: {stderr_output}")
             
             # Check for READY on stdout (non-blocking)
-            ready, _, _ = select.select([process.stdout], [], [], 0.1)
+            ready, unused, unused = select.select([process.stdout], [], [], 0.1)
             if ready:
                 ready_line = process.stdout.readline()
                 if ready_line:
                     return ready_line
             
             # Collect stderr (non-blocking)
-            err_ready, _, _ = select.select([process.stderr], [], [], 0.0)
+            err_ready, unused, unused = select.select([process.stderr], [], [], 0.0)
             if err_ready:
                 line = process.stderr.readline()
                 if line:
@@ -1241,7 +1250,7 @@ class PersistentWorker:
                 raise TimeoutError(f"Task exceeded maximum time limit ({max_total_time}s)")
             
             # Check for response (non-blocking)
-            ready, _, _ = select.select([worker_process.stdout], [], [], 0.1)
+            ready, unused, unused = select.select([worker_process.stdout], [], [], 0.1)
             if ready:
                 response_line = worker_process.stdout.readline()
                 if response_line:
@@ -1369,8 +1378,8 @@ class PersistentWorker:
     def _start_worker(self):
         """Start worker process with proper error handling."""
         # CRITICAL DEBUG: Check _DAEMON_SCRIPT before writing
-        print(f"\n🔍 DEBUG: _DAEMON_SCRIPT length: {len(_DAEMON_SCRIPT)} chars", file=sys.stderr)
-        print(f"🔍 DEBUG: Last 200 chars of _DAEMON_SCRIPT:", file=sys.stderr)
+        safe_print(f"\n🔍 DEBUG: _DAEMON_SCRIPT length: {len(_DAEMON_SCRIPT)} chars", file=sys.stderr)
+        safe_print(f"🔍 DEBUG: Last 200 chars of _DAEMON_SCRIPT:", file=sys.stderr)
         print(f"   '{_DAEMON_SCRIPT[-200:]}'", file=sys.stderr)
         
         # Create temp script file
@@ -1383,20 +1392,20 @@ class PersistentWorker:
             self.temp_file = f.name
         
         # CRITICAL DEBUG: Print the temp file path and validate syntax
-        print(f"\n🔍 DEBUG: Worker script written to: {self.temp_file}", file=sys.stderr)
-        print(f"🔍 DEBUG: File size: {os.path.getsize(self.temp_file)} bytes", file=sys.stderr)
+        safe_print(f"\n🔍 DEBUG: Worker script written to: {self.temp_file}", file=sys.stderr)
+        safe_print(f"🔍 DEBUG: File size: {os.path.getsize(self.temp_file)} bytes", file=sys.stderr)
         
         # Validate syntax before running
         try:
             with open(self.temp_file, 'r') as f:
                 script_content = f.read()
             compile(script_content, self.temp_file, 'exec')
-            print(f"✅ DEBUG: Script syntax is valid", file=sys.stderr)
+            safe_print(f"✅ DEBUG: Script syntax is valid", file=sys.stderr)
         except SyntaxError as e:
-            print(f"\n💥 SYNTAX ERROR IN GENERATED SCRIPT!", file=sys.stderr)
+            safe_print(f"\n💥 SYNTAX ERROR IN GENERATED SCRIPT!", file=sys.stderr)
             print(f"   File: {self.temp_file}", file=sys.stderr)
             print(f"   Line {e.lineno}: {e.msg}", file=sys.stderr)
-            print(f"\n📄 SCRIPT CONTENT (last 50 lines):", file=sys.stderr)
+            safe_print(f"\n📄 SCRIPT CONTENT (last 50 lines):", file=sys.stderr)
             with open(self.temp_file, 'r') as f:
                 lines = f.readlines()
                 start_line = max(0, len(lines) - 50)
@@ -1423,7 +1432,7 @@ class PersistentWorker:
                 new_ld = new_ld + os.pathsep + current_ld
             env['LD_LIBRARY_PATH'] = new_ld
             
-            print(f"🔧 [WORKER] Injecting {len(cuda_lib_paths)} CUDA paths into environment", file=sys.stderr)
+            safe_print(f"🔧 [WORKER] Injecting {len(cuda_lib_paths)} CUDA paths into environment", file=sys.stderr)
             for path in cuda_lib_paths:
                 print(f"   - {path}", file=sys.stderr)
         
@@ -1453,7 +1462,7 @@ class PersistentWorker:
         # Wait for READY with timeout
         try:
             # ONLY check stdout now (stderr is going to log file)
-            readable, _, _ = select.select([self.process.stdout], [], [], 30.0)
+            readable, unused, unused = select.select([self.process.stdout], [], [], 30.0)
             
             ready_line = None
 
@@ -1508,7 +1517,7 @@ class PersistentWorker:
                 self.process.stdin.flush()
                 
                 # Wait for response
-                readable, _, _ = select.select([self.process.stdout], [], [], timeout)
+                readable, unused, unused = select.select([self.process.stdout], [], [], timeout)
                 
                 if not readable:
                     raise TimeoutError(f"Task timed out after {timeout}s")
@@ -1637,7 +1646,7 @@ class WorkerPoolDaemon:
         
         daemon_script = os.path.abspath(__file__)
         
-        print("🚀 Starting daemon in background (Windows mode)...", file=sys.stderr)
+        safe_print("🚀 Starting daemon in background (Windows mode)...", file=sys.stderr)
         
         try:
             # Windows flags for detached process
@@ -1659,14 +1668,14 @@ class WorkerPoolDaemon:
             
             # Check if it started
             if self.is_running():
-                print(f"✅ Daemon started successfully (PID: {process.pid})", file=sys.stderr)
+                safe_print(f"✅ Daemon started successfully (PID: {process.pid})", file=sys.stderr)
                 sys.exit(0)
             else:
-                print(f"❌ Daemon failed to start (check {DAEMON_LOG_FILE})", file=sys.stderr)
+                safe_print(f"❌ Daemon failed to start (check {DAEMON_LOG_FILE})", file=sys.stderr)
                 sys.exit(1)
                 
         except Exception as e:
-            print(f"❌ Failed to start daemon: {e}", file=sys.stderr)
+            safe_print(f"❌ Failed to start daemon: {e}", file=sys.stderr)
             import traceback
             traceback.print_exc()
             sys.exit(1)
@@ -1679,7 +1688,7 @@ class WorkerPoolDaemon:
                 # ---------------------------------------------------------
                 # PARENT PROCESS: Print success and exit
                 # ---------------------------------------------------------
-                print(f"✅ Daemon started successfully (PID: {pid})")
+                safe_print(f"✅ Daemon started successfully (PID: {pid})")
                 sys.exit(0)
         except OSError as e:
             sys.stderr.write(f"fork #1 failed: {e}\n")
@@ -1733,7 +1742,7 @@ class WorkerPoolDaemon:
         while self.running:
             try:
                 sock.settimeout(1.0)
-                conn, _ = sock.accept()
+                conn, unused = sock.accept()
                 # CRITICAL FIX: Use thread pool instead of unbounded threads
                 self.executor.submit(self._handle_client, conn)
             except socket.timeout:
@@ -1919,7 +1928,7 @@ class WorkerPoolDaemon:
                     core.config['install_strategy'] = original_strategy
         
         except Exception as e:
-            print(f"   ❌ [DAEMON] Installation failed: {e}", file=sys.stderr)
+            safe_print(f"   ❌ [DAEMON] Installation failed: {e}", file=sys.stderr)
             return False
 
     def _execute_cuda_code(self, spec: str, code: str, cuda_in: dict, cuda_out: dict, python_exe: str = None) -> dict:
@@ -1954,7 +1963,7 @@ class WorkerPoolDaemon:
                 worker_info['worker'].process.stdin.flush()
                 
                 import select
-                readable, _, _ = select.select([worker_info['worker'].process.stdout], [], [], 60.0)
+                readable, unused, unused = select.select([worker_info['worker'].process.stdout], [], [], 60.0)
                 
                 if not readable:
                     raise TimeoutError("CUDA task timed out after 60s")
@@ -1990,7 +1999,7 @@ class WorkerPoolDaemon:
                         worker_info['worker'].process.stdin.flush()
                         
                         import select
-                        readable, _, _ = select.select([worker_info['worker'].process.stdout], [], [], 60.0)
+                        readable, unused, unused = select.select([worker_info['worker'].process.stdout], [], [], 60.0)
                         
                         if not readable:
                             raise TimeoutError("CUDA task timed out after 60s")
@@ -2046,7 +2055,7 @@ class WorkerPoolDaemon:
             worker_info['worker'].process.stdin.flush()
             
             import select
-            readable, _, _ = select.select([worker_info['worker'].process.stdout], [], [], 60.0)
+            readable, unused, unused = select.select([worker_info['worker'].process.stdout], [], [], 60.0)
             
             if not readable:
                 raise TimeoutError("CUDA task timed out after 60s")
@@ -2450,7 +2459,7 @@ class SmartGPUIPC:
     """
     def __init__(self):
         self.mode = detect_torch_cuda_ipc_mode()
-        print(f"🔥 GPU IPC Mode: {self.mode}")
+        safe_print(f"🔥 GPU IPC Mode: {self.mode}")
        
         if self.mode == 'native_1x':
             self.share = share_tensor_native_1x
@@ -2711,13 +2720,13 @@ class DaemonClient:
         try:
             mode_enum = IPCMode(ipc_mode.lower())
         except ValueError:
-            print(f"⚠️  Invalid IPC mode '{ipc_mode}', using auto")
+            safe_print(f"⚠️  Invalid IPC mode '{ipc_mode}', using auto")
             mode_enum = IPCMode.AUTO
         
         # Validate and get actual mode
         actual_mode, mode_msg = IPCCapabilities.validate_mode(mode_enum)
         
-        print(f"   🎯 IPC Mode: {mode_msg}")
+        safe_print(f"   🎯 IPC Mode: {mode_msg}")
         
         # ═══════════════════════════════════════════════════════════
         # ROUTE 1: UNIVERSAL CUDA IPC (DEFAULT - FASTEST)
@@ -2767,7 +2776,7 @@ class DaemonClient:
         import numpy as np
         import torch
         
-        print(f"   💾 Using CPU SHM mode (zero-copy, no GPU transfers)")
+        safe_print(f"   💾 Using CPU SHM mode (zero-copy, no GPU transfers)")
         
         # Convert tensor to CPU numpy
         input_cpu = input_tensor.cpu().numpy()
@@ -2796,7 +2805,7 @@ class DaemonClient:
             if not response.get('success'):
                 raise RuntimeError(f"Worker Error: {response.get('error')}")
             
-            print(f"   ✅ CPU SHM mode completed")
+            safe_print(f"   ✅ CPU SHM mode completed")
             
             # Convert result back to GPU tensor
             output_tensor = torch.from_numpy(result_cpu).to(input_tensor.device)
@@ -2807,7 +2816,7 @@ class DaemonClient:
             return output_tensor, response
             
         except Exception as e:
-            print(f"   ⚠️  CPU SHM failed: {e}")
+            safe_print(f"   ⚠️  CPU SHM failed: {e}")
             raise
 
     def _execute_universal_ipc(self, spec, code, input_tensor, output_shape, output_dtype, python_exe):
@@ -2815,7 +2824,7 @@ class DaemonClient:
         import torch
         from omnipkg.isolation.worker_daemon import UniversalGpuIpc
         
-        print(f"   🔥 Using UNIVERSAL CUDA IPC (ctypes - TRUE ZERO-COPY)")
+        safe_print(f"   🔥 Using UNIVERSAL CUDA IPC (ctypes - TRUE ZERO-COPY)")
         
         try:
             # Share input tensor using Universal IPC
@@ -2855,14 +2864,14 @@ class DaemonClient:
             
             actual_method = response.get('cuda_method', 'unknown')
             if actual_method == 'universal_ipc':
-                print(f"   🔥 Worker confirmed UNIVERSAL IPC (true zero-copy)!")
+                safe_print(f"   🔥 Worker confirmed UNIVERSAL IPC (true zero-copy)!")
             else:
-                print(f"   ⚠️  Worker fell back to {actual_method}")
+                safe_print(f"   ⚠️  Worker fell back to {actual_method}")
             
             return output_tensor, response
             
         except Exception as e:
-            print(f"   ⚠️  Universal IPC failed: {e}")
+            safe_print(f"   ⚠️  Universal IPC failed: {e}")
             raise
     
     def _execute_pytorch_native_ipc(self, spec, code, input_tensor, output_shape, output_dtype, python_exe):
@@ -2870,7 +2879,7 @@ class DaemonClient:
         import torch
         import base64
         
-        print(f"   🔥 Using PYTORCH NATIVE IPC (PyTorch 1.x)")
+        safe_print(f"   🔥 Using PYTORCH NATIVE IPC (PyTorch 1.x)")
         
         try:
             # Share input tensor via native CUDA IPC
@@ -2939,14 +2948,14 @@ class DaemonClient:
             
             actual_method = response.get('cuda_method', 'unknown')
             if actual_method == 'native_ipc':
-                print(f"   🔥 Worker confirmed NATIVE IPC (PyTorch managed)!")
+                safe_print(f"   🔥 Worker confirmed NATIVE IPC (PyTorch managed)!")
             else:
-                print(f"   ⚠️  Worker fell back to {actual_method}")
+                safe_print(f"   ⚠️  Worker fell back to {actual_method}")
             
             return output_tensor, response
             
         except Exception as e:
-            print(f"   ⚠️  PyTorch native IPC failed: {e}")
+            safe_print(f"   ⚠️  PyTorch native IPC failed: {e}")
             raise
     
     
@@ -2963,8 +2972,8 @@ class DaemonClient:
         import numpy as np
         import torch
         
-        print(f"   🔄 Using HYBRID mode (CPU SHM + GPU copies) - SLOWEST MODE")
-        print(f"   💡 Consider using cpu_shm mode instead (1.34x faster)")
+        safe_print(f"   🔄 Using HYBRID mode (CPU SHM + GPU copies) - SLOWEST MODE")
+        safe_print(f"   💡 Consider using cpu_shm mode instead (1.34x faster)")
         
         # Copy tensor to CPU, share via SHM
         input_cpu = input_tensor.cpu().numpy()
@@ -3004,7 +3013,7 @@ class DaemonClient:
             if not response.get('success'):
                 raise RuntimeError(f"Worker Error: {response.get('error')}")
             
-            print(f"   ✅ Hybrid mode completed")
+            safe_print(f"   ✅ Hybrid mode completed")
             
             # Copy result back to GPU
             shm_out_array = np.ndarray(output_shape, dtype=output_cpu.dtype, buffer=shm_out.buf)
@@ -3081,8 +3090,7 @@ class DaemonClient:
         # GPU FAST PATH - CUDA IPC
         # ═══════════════════════════════════════════════════════
         if data is not None and hasattr(data, 'is_cuda') and data.is_cuda:
-            import torch
-            
+            import torch            
             # Assume code modifies tensor in-place or returns same shape/dtype
             output_shape = data.shape
             output_dtype = str(data.dtype).split('.')[-1]  # "float32"
@@ -3186,12 +3194,12 @@ class DaemonProxy:
 def cli_start():
     """Start the daemon with status checks."""
     if WorkerPoolDaemon.is_running():
-        print("⚠️  Daemon is already running.")
+        safe_print("⚠️  Daemon is already running.")
         # Optional: Print info about the running instance
         cli_status()
         return
 
-    print("🚀 Initializing OmniPkg Worker Daemon...", end=" ", flush=True)
+    safe_print("🚀 Initializing OmniPkg Worker Daemon...", end=" ", flush=True)
     
     # Initialize
     daemon = WorkerPoolDaemon(
@@ -3204,36 +3212,36 @@ def cli_start():
     try:
         daemon.start(daemonize=True)
     except Exception as e:
-        print(f"\n❌ Failed to start: {e}")
+        safe_print(f"\n❌ Failed to start: {e}")
 
 def cli_stop():
     """Stop the daemon."""
     client = DaemonClient()
     result = client.shutdown()
     if result.get('success'):
-        print("✅ Daemon stopped")
+        safe_print("✅ Daemon stopped")
         try:
             os.unlink(PID_FILE)
         except:
             pass
     else:
-        print(f"❌ Failed to stop: {result.get('error', 'Unknown error')}")
+        safe_print(f"❌ Failed to stop: {result.get('error', 'Unknown error')}")
 
 def cli_status():
     """Get daemon status."""
     if not WorkerPoolDaemon.is_running():
-        print("❌ Daemon not running")
+        safe_print("❌ Daemon not running")
         return
     
     client = DaemonClient()
     result = client.status()
     
     if not result.get('success'):
-        print(f"❌ Error: {result.get('error', 'Unknown error')}")
+        safe_print(f"❌ Error: {result.get('error', 'Unknown error')}")
         return
     
     print("\n" + "="*60)
-    print("🔥 OMNIPKG WORKER DAEMON STATUS")
+    safe_print("🔥 OMNIPKG WORKER DAEMON STATUS")
     print("="*60)
     print(f"  Workers: {result.get('workers', 0)}")
     
@@ -3249,7 +3257,7 @@ def cli_status():
     print(f"  Errors: {result['stats']['errors']}")
     
     if result.get('worker_details'):
-        print("\n  📦 Active Workers:")
+        safe_print("\n  📦 Active Workers:")
         for spec, info in result['worker_details'].items():
             idle = time.time() - info['last_used']
             print(f"    - {spec}")
@@ -3263,11 +3271,11 @@ def cli_logs(follow: bool = False, tail_lines: int = 50):
     
     log_path = Path(DAEMON_LOG_FILE)
     if not log_path.exists():
-        print(f"❌ Log file not found at: {log_path}")
+        safe_print(f"❌ Log file not found at: {log_path}")
         print("   (The daemon might not have started yet)")
         return
 
-    print(f"📄 Tailing {log_path} (last {tail_lines} lines)...")
+    safe_print(f"📄 Tailing {log_path} (last {tail_lines} lines)...")
     print("-" * 60)
     
     try:
@@ -3293,7 +3301,7 @@ def cli_logs(follow: bool = False, tail_lines: int = 50):
             # 2. Follow mode (tail -f)
             if follow:
                 print("-" * 60)
-                print("📡 Following logs... (Ctrl+C to stop)")
+                safe_print("📡 Following logs... (Ctrl+C to stop)")
                 
                 f.seek(0, 2)  # Seek to end
                 
@@ -3305,9 +3313,9 @@ def cli_logs(follow: bool = False, tail_lines: int = 50):
                         time.sleep(0.1)
                         
     except KeyboardInterrupt:
-        print("\n🛑 Stopped following logs.")
+        safe_print("\n🛑 Stopped following logs.")
     except Exception as e:
-        print(f"\n❌ Error reading logs: {e}")
+        safe_print(f"\n❌ Error reading logs: {e}")
 
 # ═══════════════════════════════════════════════════════════════
 # CLI ENTRY

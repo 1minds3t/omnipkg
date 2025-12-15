@@ -1040,7 +1040,7 @@ def chaos_test_10_grand_finale():
     omnipkg_config = cm.config
 
     def mini_tornado():
-        for _ in range(3):
+        for unused in range(3):
             with omnipkgLoader(f"numpy=={random.choice(['1.24.3', '2.3.5'])}", config=omnipkg_config):
                 import numpy as np
                 np.random.rand(100, 100).sum()
@@ -1155,7 +1155,7 @@ with omnipkgLoader("tensorflow==2.13.0"):
         subprocess.run(['8pkg', 'daemon', 'start'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         
         client = DaemonClient()
-        for _ in range(10):
+        for unused in range(10):
             time.sleep(0.5)
             if client.status().get('success'):
                 safe_print(f"   ✅ Daemon online\n")
@@ -1398,6 +1398,10 @@ def chaos_test_12_jax_vs_torch_mortal_kombat():
         # We pass the round number into the code so the worker prints it
         code_to_run = f'''
 import torch
+try:
+    from .common_utils import safe_print
+except ImportError:
+    from omnipkg.common_utils import safe_print
 # Print directly to stdout, which the daemon captures and returns
 x = torch.tensor([1., 2., 3.])
 y = torch.sin(x)
@@ -1565,7 +1569,10 @@ with omnipkgLoader("{config['lightning']}"):
     import pytorch_lightning as pl
     import torch
     import numpy as np
-    
+    try:
+        from .common_utils import safe_print
+    except ImportError:
+        from omnipkg.common_utils import safe_print
     # Verify versions
     torch_ver = torch.__version__
     lightning_ver = pl.__version__
@@ -1686,7 +1693,10 @@ def chaos_test_14_circular_dependency_hell():
 from omnipkg.loader import omnipkgLoader
 import numpy as np
 import sys
-
+try:
+    from .common_utils import safe_print
+except ImportError:
+    from omnipkg.common_utils import safe_print
 sys.stderr.write(f"      NumPy 1.24.3 loaded: {np.__version__}\\n")
 
 # Now try to load pandas that depends on different numpy
@@ -1813,7 +1823,7 @@ def chaos_test_15_isolation_strategy_benchmark():
         try:
             with omnipkgLoader(spec, quiet=True): # Quiet to keep benchmark readable
                 import torch
-                _ = torch.sin(torch.tensor([1.0]))
+                unused = torch.sin(torch.tensor([1.0]))
                 success_count += 1
                 sys.stdout.write(".")
                 sys.stdout.flush()
@@ -1924,7 +1934,7 @@ with omnipkgLoader("{spec}", quiet=True):
                 try:
                     with omnipkgLoader(spec, quiet=True):
                         import torch
-                        _ = torch.sin(torch.tensor([1.0]))
+                        unused = torch.sin(torch.tensor([1.0]))
                         print(f"   [Fork] {spec} done")
                     sys.exit(0)
                 except Exception:
@@ -2038,7 +2048,7 @@ with omnipkgLoader("{spec}", quiet=True):
         
         for spec in specs:
             try:
-                res_arr, _ = client.execute_zero_copy(
+                res_arr, unused = client.execute_zero_copy(
                     spec, 
                     "arr_out[0] = 1", 
                     data, 
@@ -2141,7 +2151,10 @@ from omnipkg.loader import omnipkgLoader
 import sys
 import site
 import os
-
+try:
+    from .common_utils import safe_print
+except ImportError:
+    from omnipkg.common_utils import safe_print
 def log(msg):
     sys.stderr.write(msg + '\\n')
     sys.stderr.flush()
@@ -2369,7 +2382,10 @@ def chaos_test_17_triple_python_multiverse():
         code = f"""
 import sys
 import os
-
+try:
+    from .common_utils import safe_print
+except ImportError:
+    from omnipkg.common_utils import safe_print
 # DIAGNOSTIC: Print what Python we're actually using
 sys.stderr.write(f"\\n   🔍 DIAGNOSTIC: Running in Python {{sys.version}}\\n")
 sys.stderr.write(f"   🔍 Executable: {{sys.executable}}\\n")
@@ -2453,6 +2469,10 @@ with omnipkgLoader("{u['torch_spec']}", quiet=False):  # quiet=False for visibil
             
             code = f"""
 import sys
+try:
+    from .common_utils import safe_print
+except ImportError:
+    from omnipkg.common_utils import safe_print
 sys.stderr.write(f"\\n   🔍 [{u_name}] Python: {{sys.version}}\\n")
 sys.stderr.write(f"   🔍 [{u_name}] Executable: {{sys.executable}}\\n")
 
@@ -2552,7 +2572,10 @@ with omnipkgLoader("{universe['torch_spec']}", quiet=False):
     stage1_code = """
 import torch
 import sys
-
+try:
+    from .common_utils import safe_print
+except ImportError:
+    from omnipkg.common_utils import safe_print
 sys.stderr.write(f"   🔍 [Stage 1] PyTorch: {torch.__version__} from {torch.__file__}\\n")
 
 # arr_in comes from SHM
@@ -2563,7 +2586,7 @@ arr_out[:] = result.numpy()
 """
     
     try:
-        stage1_out, _ = client.execute_zero_copy(
+        stage1_out, unused = client.execute_zero_copy(
             universes[0]['torch_spec'],
             stage1_code,
             input_array=pipeline_data,
@@ -2587,7 +2610,10 @@ arr_out[:] = result.numpy()
         stage2_code = """
 import torch
 import sys
-
+try:
+    from .common_utils import safe_print
+except ImportError:
+    from omnipkg.common_utils import safe_print
 sys.stderr.write(f"   🔍 [Stage 2] PyTorch: {torch.__version__} from {torch.__file__}\\n")
 
 torch_tensor = torch.from_numpy(arr_in.copy())
@@ -2595,7 +2621,7 @@ result = torch.sigmoid(torch_tensor)
 arr_out[:] = result.numpy()
 """
         
-        stage2_out, _ = client.execute_zero_copy(
+        stage2_out, unused = client.execute_zero_copy(
             universes[1]['torch_spec'],
             stage2_code,
             input_array=stage1_out,
@@ -2614,7 +2640,10 @@ arr_out[:] = result.numpy()
         stage3_code = """
 import torch
 import sys
-
+try:
+    from .common_utils import safe_print
+except ImportError:
+    from omnipkg.common_utils import safe_print
 sys.stderr.write(f"   🔍 [Stage 3] PyTorch: {torch.__version__} from {torch.__file__}\\n")
 
 torch_tensor = torch.from_numpy(arr_in.copy())
@@ -2622,7 +2651,7 @@ result = torch.tanh(torch_tensor)
 arr_out[:] = result.numpy()
 """
         
-        stage3_out, _ = client.execute_zero_copy(
+        stage3_out, unused = client.execute_zero_copy(
             universes[2]['torch_spec'],
             stage3_code,
             input_array=stage2_out,
@@ -2734,7 +2763,7 @@ def chaos_test_18_worker_pool_drag_race():
         # The payload: extremely fast execution
         code = "x = 1 + 1" 
         
-        for _ in range(LAPS):
+        for unused in range(LAPS):
             res = proxy.execute(code)
             if res['success']:
                 success_count += 1
@@ -2793,27 +2822,27 @@ def chaos_test_19_zero_copy_hft():
     import time
     from omnipkg.isolation.worker_daemon import DaemonClient
     
-    print("\n╔══════════════════════════════════════════════════════════════╗")
-    print("║  TEST 19: 🚀 ZERO-COPY vs JSON (10MB BENCHMARK)             ║")
-    print("╚══════════════════════════════════════════════════════════════╝\n")
+    safe_print("\n╔══════════════════════════════════════════════════════════════╗")
+    safe_print("║  TEST 19: 🚀 ZERO-COPY vs JSON (10MB BENCHMARK)             ║")
+    safe_print("╚══════════════════════════════════════════════════════════════╝\n")
 
     client = DaemonClient()
     if not client.status().get('success'):
-        print("   ❌ Daemon not running")
+        safe_print("   ❌ Daemon not running")
         return
 
     # 1. Create 10MB Matrix
     size = (1000, 1250) 
-    print(f"   📉 Generating 10MB Matrix {size}...")
+    safe_print(f"   📉 Generating 10MB Matrix {size}...")
     data = np.random.rand(*size)
-    print("   ✅ Data ready.\n")
+    safe_print("   ✅ Data ready.\n")
 
     spec = "numpy==1.26.4"
 
     # ---------------------------------------------------------
     # ROUND 1: JSON
     # ---------------------------------------------------------
-    print("   🐢 ROUND 1: Standard JSON Serialization")
+    safe_print("   🐢 ROUND 1: Standard JSON Serialization")
     print("      (This will take ~7 seconds...)")
     start = time.perf_counter()
     
@@ -2823,26 +2852,26 @@ def chaos_test_19_zero_copy_hft():
         res = client.execute_shm(spec, json_code, {}, {})
         
         if res.get('success'):
-            _ = np.array(res['out'])
+            unused = np.array(res['out'])
             duration_json = (time.perf_counter() - start) * 1000
-            print(f"      ⏱️  Total: {duration_json:.2f}ms")
+            safe_print(f"      ⏱️  Total: {duration_json:.2f}ms")
         else:
-            print(f"      💥 JSON Failed: {res.get('error')}")
+            safe_print(f"      💥 JSON Failed: {res.get('error')}")
             duration_json = float('inf')
     except Exception as e:
-        print(f"      💥 JSON Exception: {e}")
+        safe_print(f"      💥 JSON Exception: {e}")
         duration_json = float('inf')
 
     # ---------------------------------------------------------
     # ROUND 2: SHM
     # ---------------------------------------------------------
-    print("\n   🚀 ROUND 2: Shared Memory Pointer Handoff")
+    safe_print("\n   🚀 ROUND 2: Shared Memory Pointer Handoff")
     shm_code = "arr_out[:] = arr_in * 2"
     
     start = time.perf_counter()
     try:
         # UPDATED LINE: Unpack the tuple
-        result, _ = client.execute_zero_copy(
+        result, unused = client.execute_zero_copy(
             spec, 
             shm_code, 
             input_array=data, 
@@ -2850,20 +2879,20 @@ def chaos_test_19_zero_copy_hft():
             output_dtype='float64'
         )
         duration_shm = (time.perf_counter() - start) * 1000
-        print(f"      ⏱️  Total: {duration_shm:.2f}ms")
+        safe_print(f"      ⏱️  Total: {duration_shm:.2f}ms")
         
         # FINAL SCORE
-        print("\n   🏁 RACE RESULTS (10MB Payload)")
-        print("   ──────────────────────────────────────────")
-        print(f"   🐢 JSON: {duration_json:7.2f}ms")
-        print(f"   🚀 SHM:  {duration_shm:7.2f}ms")
+        safe_print("\n   🏁 RACE RESULTS (10MB Payload)")
+        safe_print("   ──────────────────────────────────────────")
+        safe_print(f"   🐢 JSON: {duration_json:7.2f}ms")
+        safe_print(f"   🚀 SHM:  {duration_shm:7.2f}ms")
         
         if duration_shm > 0:
             speedup = duration_json / duration_shm
-            print(f"   🏆 Speedup: {speedup:.1f}x FASTER")
+            safe_print(f"   🏆 Speedup: {speedup:.1f}x FASTER")
             
     except Exception as e:
-        print(f"      💥 SHM Failed: {e}")
+        safe_print(f"      💥 SHM Failed: {e}")
         import traceback
         traceback.print_exc()
 
@@ -3057,20 +3086,20 @@ def chaos_test_21_gpu_resident_pipeline():
     import time
     import sys
     
-    print(f"\n{'═'*66}")
-    print("║  TEST 21: 🔥 GPU-RESIDENT MULTI-VERSION PIPELINE           ║")
-    print("║  PyTorch 1.13.1 with NATIVE CUDA IPC (True Zero-Copy!)     ║")
-    print(f"{'═'*66}\n")
+    safe_print(f"\n{'═'*66}")
+    safe_print("║  TEST 21: 🔥 GPU-RESIDENT MULTI-VERSION PIPELINE           ║")
+    safe_print("║  PyTorch 1.13.1 with NATIVE CUDA IPC (True Zero-Copy!)     ║")
+    safe_print(f"{'═'*66}\n")
     
     from omnipkg.loader import omnipkgLoader
     
-    print("📍 PHASE 1: Configuration")
-    print("─" * 60)
+    safe_print("📍 PHASE 1: Configuration")
+    safe_print("─" * 60)
     
     TORCH_VERSION = "torch==1.13.1+cu116"
     
     print(f"   PyTorch Version: {TORCH_VERSION}")
-    print(f"   🔥 Loading client in {TORCH_VERSION} context...")
+    safe_print(f"   🔥 Loading client in {TORCH_VERSION} context...")
     
     # ═══════════════════════════════════════════════════════════
     # CRITICAL FIX: Keep entire test inside loader context!
@@ -3079,10 +3108,10 @@ def chaos_test_21_gpu_resident_pipeline():
         import torch
         
         if not torch.cuda.is_available():
-            print("❌ CUDA not available - skipping test")
+            safe_print("❌ CUDA not available - skipping test")
             return {'success': False, 'reason': 'No CUDA'}
         
-        print(f"   ✅ Client PyTorch: {torch.__version__}")
+        safe_print(f"   ✅ Client PyTorch: {torch.__version__}")
         
         from omnipkg.isolation.worker_daemon import DaemonClient
         
@@ -3090,8 +3119,8 @@ def chaos_test_21_gpu_resident_pipeline():
         # Check available versions
         # ═══════════════════════════════════════════════════════════
         
-        print("\n📍 PHASE 1: Checking PyTorch Versions")
-        print("─" * 60)
+        safe_print("\n📍 PHASE 1: Checking PyTorch Versions")
+        safe_print("─" * 60)
         
         try:
             from omnipkg.core import OmnipkgCore
@@ -3108,16 +3137,16 @@ def chaos_test_21_gpu_resident_pipeline():
                 marker = " 🔥" if v.startswith('1.13') else ""
                 print(f"   - torch=={v}{marker}")
         except Exception as e:
-            print(f"   ⚠️  Could not query knowledge base: {e}")
+            safe_print(f"   ⚠️  Could not query knowledge base: {e}")
             torch_versions = ['1.13.1+cu116', '2.0.1+cu118', '2.2.0+cu121']
         
         # ═══════════════════════════════════════════════════════════
         # PHASE 2: Configure Pipeline
         # ═══════════════════════════════════════════════════════════
         
-        print(f"\n📍 PHASE 2: Configuring Pipeline")
-        print("─" * 60)
-        print(f"📍 CLIENT PyTorch version: {torch.__version__}")
+        safe_print(f"\n📍 PHASE 2: Configuring Pipeline")
+        safe_print("─" * 60)
+        safe_print(f"📍 CLIENT PyTorch version: {torch.__version__}")
         
         stage_specs = []
         
@@ -3126,10 +3155,10 @@ def chaos_test_21_gpu_resident_pipeline():
         
         if torch_1x:
             stage_specs.append(('🔥 Stage 1 (ReLU)', f'torch=={torch_1x}', 'relu', 'NATIVE IPC'))
-            print(f"   ✅ Using torch=={torch_1x} (NATIVE CUDA IPC!)")
+            safe_print(f"   ✅ Using torch=={torch_1x} (NATIVE CUDA IPC!)")
         else:
             stage_specs.append(('🔴 Stage 1 (ReLU)', 'torch==2.2.0+cu121', 'relu', 'HYBRID'))
-            print(f"   ⚠️  PyTorch 1.13 not available, using hybrid mode")
+            safe_print(f"   ⚠️  PyTorch 1.13 not available, using hybrid mode")
         
         # Add other stages
         if len(torch_versions) >= 2:
@@ -3146,8 +3175,8 @@ def chaos_test_21_gpu_resident_pipeline():
         # PHASE 3: Execute Pipeline
         # ═══════════════════════════════════════════════════════════
         
-        print(f"\n📍 PHASE 3: Executing GPU Pipeline")
-        print("─" * 60)
+        safe_print(f"\n📍 PHASE 3: Executing GPU Pipeline")
+        safe_print("─" * 60)
         
         client = DaemonClient()
         
@@ -3155,9 +3184,9 @@ def chaos_test_21_gpu_resident_pipeline():
         device = torch.device("cuda:0")
         pipeline_data = torch.randn(500, 250, device=device, dtype=torch.float32)
         
-        print(f"\n📦 Input: {pipeline_data.shape} tensor on {device}")
-        print(f"📊 Size: {pipeline_data.numel() * 4 / 1024 / 1024:.2f} MB")
-        print(f"🔢 Checksum: {pipeline_data.sum().item():.2f}")
+        safe_print(f"\n📦 Input: {pipeline_data.shape} tensor on {device}")
+        safe_print(f"📊 Size: {pipeline_data.numel() * 4 / 1024 / 1024:.2f} MB")
+        safe_print(f"🔢 Checksum: {pipeline_data.sum().item():.2f}")
         
         stage_codes = {
             'relu': "tensor_out[:] = torch.relu(tensor_in)",
@@ -3196,15 +3225,15 @@ def chaos_test_21_gpu_resident_pipeline():
                 actual_method = response.get('cuda_method', 'unknown')
                 if actual_method == 'native_ipc':
                     native_ipc_used = True
-                    print(f"✅ {name} complete: {stage_time:.3f}ms (NATIVE CUDA IPC! 🔥)")
+                    safe_print(f"✅ {name} complete: {stage_time:.3f}ms (NATIVE CUDA IPC! 🔥)")
                 else:
-                    print(f"✅ {name} complete: {stage_time:.3f}ms (hybrid)")
+                    safe_print(f"✅ {name} complete: {stage_time:.3f}ms (hybrid)")
                 
                 print(f"   Checksum: {result_tensor.sum().item():.2f}")
                 current_tensor = result_tensor
                 
             except Exception as e:
-                print(f"❌ {name} failed: {e}")
+                safe_print(f"❌ {name} failed: {e}")
                 import traceback
                 traceback.print_exc()
                 return {'success': False, 'error': str(e)}
@@ -3216,30 +3245,30 @@ def chaos_test_21_gpu_resident_pipeline():
         total_time = sum(stage_times)
         avg_time = total_time / len(stage_times)
         
-        print(f"\n{'═'*66}")
-        print("📊 GPU-RESIDENT PIPELINE RESULTS")
-        print(f"{'═'*66}\n")
+        safe_print(f"\n{'═'*66}")
+        safe_print("📊 GPU-RESIDENT PIPELINE RESULTS")
+        safe_print(f"{'═'*66}\n")
         
-        for i, (name, spec, _, mode) in enumerate(stage_specs):
+        for i, (name, spec, unused, mode) in enumerate(stage_specs):
             icon = "🔥" if mode == "NATIVE IPC" else "🔄"
             print(f"{icon} {name:<40} {stage_times[i]:>8.3f}ms")
-            print(f"  └─ {spec:<38}")
+            safe_print(f"  └─ {spec:<38}")
         
-        print("─" * 66)
+        safe_print("─" * 66)
         print(f"{'Total Pipeline:':<40} {total_time:>8.3f}ms")
         print(f"{'Per-Stage Average:':<40} {avg_time:>8.3f}ms")
         
-        print(f"\n✅ Output tensor still on GPU: {current_tensor.device}")
-        print(f"🔢 Final checksum: {current_tensor.sum().item():.2f}")
+        safe_print(f"\n✅ Output tensor still on GPU: {current_tensor.device}")
+        safe_print(f"🔢 Final checksum: {current_tensor.sum().item():.2f}")
         
         if native_ipc_used:
-            print(f"\n🏆 NATIVE CUDA IPC USED! TRUE ZERO-COPY ACHIEVED!")
-            print(f"   📊 Stage 1 had ZERO PCIe transfers")
+            safe_print(f"\n🏆 NATIVE CUDA IPC USED! TRUE ZERO-COPY ACHIEVED!")
+            safe_print(f"   📊 Stage 1 had ZERO PCIe transfers")
         else:
-            print(f"\n⚠️  Native CUDA IPC not available")
-            print(f"   💡 Install torch==1.13.1+cu116 for true zero-copy")
+            safe_print(f"\n⚠️  Native CUDA IPC not available")
+            safe_print(f"   💡 Install torch==1.13.1+cu116 for true zero-copy")
         
-        print(f"\n💡 PERFORMANCE:")
+        safe_print(f"\n💡 PERFORMANCE:")
         print(f"   CPU SHM Pipeline (Test 17): ~17ms")
         print(f"   GPU Hybrid (Test 20): ~13ms")
         print(f"   This test: {total_time:.1f}ms")
@@ -3267,10 +3296,10 @@ def chaos_test_22_complete_ipc_benchmark():
     import time
     import numpy as np
     
-    print(f"\n{'═'*66}")
-    print("║  TEST 22: 🔥 COMPLETE IPC MODE BENCHMARK              ║")
-    print("║  Same Pipeline × 4 Different Execution Modes          ║")
-    print(f"{'═'*66}\n")
+    safe_print(f"\n{'═'*66}")
+    safe_print("║  TEST 22: 🔥 COMPLETE IPC MODE BENCHMARK              ║")
+    safe_print("║  Same Pipeline × 4 Different Execution Modes          ║")
+    safe_print(f"{'═'*66}\n")
     
     # ═══════════════════════════════════════════════════════════
     # SETUP: Load PyTorch 1.13.1 for client + workers
@@ -3279,8 +3308,8 @@ def chaos_test_22_complete_ipc_benchmark():
     
     TORCH_VERSION = "torch==1.13.1+cu116"
     
-    print("📍 CONFIGURATION")
-    print("─" * 60)
+    safe_print("📍 CONFIGURATION")
+    safe_print("─" * 60)
     print(f"   PyTorch Version: {TORCH_VERSION}")
     print(f"   Pipeline: 3 stages (ReLU → Sigmoid → Tanh)")
     print(f"   Testing 4 execution modes\n")
@@ -3289,10 +3318,10 @@ def chaos_test_22_complete_ipc_benchmark():
         import torch
         
         if not torch.cuda.is_available():
-            print("❌ CUDA not available - skipping test")
+            safe_print("❌ CUDA not available - skipping test")
             return {'success': False, 'reason': 'No CUDA'}
         
-        print(f"   ✅ Client PyTorch: {torch.__version__}")
+        safe_print(f"   ✅ Client PyTorch: {torch.__version__}")
         
         from omnipkg.isolation.worker_daemon import DaemonClient
         
@@ -3302,8 +3331,8 @@ def chaos_test_22_complete_ipc_benchmark():
         # Create test data: 1000x500 = 2MB float32 tensor
         pipeline_data = torch.randn(1000, 500, device=device, dtype=torch.float32)
         
-        print(f"   📦 Input: {pipeline_data.shape} tensor on {device}")
-        print(f"   📊 Size: {pipeline_data.numel() * 4 / 1024 / 1024:.2f} MB\n")
+        safe_print(f"   📦 Input: {pipeline_data.shape} tensor on {device}")
+        safe_print(f"   📊 Size: {pipeline_data.numel() * 4 / 1024 / 1024:.2f} MB\n")
         
         # Define 3-stage pipeline
         stage_specs = [
@@ -3365,8 +3394,8 @@ def chaos_test_22_complete_ipc_benchmark():
         # ═══════════════════════════════════════════════════════════
         # WARMUP PHASE (5 iterations each mode)
         # ═══════════════════════════════════════════════════════════
-        print("📍 WARMUP PHASE (5 iterations per mode)")
-        print("─" * 60)
+        safe_print("📍 WARMUP PHASE (5 iterations per mode)")
+        safe_print("─" * 60)
         
         for mode in modes:
             print(f"\n{mode['icon']} Warming up: {mode['name']}")
@@ -3378,8 +3407,8 @@ def chaos_test_22_complete_ipc_benchmark():
                     
                     for i in range(5):
                         curr_data = cpu_data
-                        for _, spec, op in stage_specs:
-                            curr_data, _ = client.execute_zero_copy(
+                        for unused, spec, op in stage_specs:
+                            curr_data, unused = client.execute_zero_copy(
                                 spec,
                                 cpu_stage_codes[op],
                                 input_array=curr_data,
@@ -3391,8 +3420,8 @@ def chaos_test_22_complete_ipc_benchmark():
                     # GPU mode warmup
                     for i in range(5):
                         curr = pipeline_data
-                        for _, spec, op in stage_specs:
-                            curr, _ = client.execute_cuda_ipc(
+                        for unused, spec, op in stage_specs:
+                            curr, unused = client.execute_cuda_ipc(
                                 spec,
                                 gpu_stage_codes[op],
                                 input_tensor=curr,
@@ -3402,18 +3431,18 @@ def chaos_test_22_complete_ipc_benchmark():
                                 ipc_mode=mode['key']
                             )
                 
-                print(f"   ✅ Warmup complete")
+                safe_print(f"   ✅ Warmup complete")
                 
             except Exception as e:
-                print(f"   ❌ Warmup failed: {e}")
+                safe_print(f"   ❌ Warmup failed: {e}")
                 results[mode['key']] = {'error': str(e), 'skipped': True}
         
         # ═══════════════════════════════════════════════════════════
         # BENCHMARK PHASE (20 iterations each mode)
         # ═══════════════════════════════════════════════════════════
-        print(f"\n\n{'═'*66}")
-        print("📍 BENCHMARK PHASE (20 iterations per mode)")
-        print("═"*66)
+        safe_print(f"\n\n{'═'*66}")
+        safe_print("📍 BENCHMARK PHASE (20 iterations per mode)")
+        safe_print("═"*66)
         
         for mode in modes:
             if mode['key'] in results and results[mode['key']].get('skipped'):
@@ -3421,7 +3450,7 @@ def chaos_test_22_complete_ipc_benchmark():
             
             print(f"\n{mode['icon']} Testing: {mode['name']}")
             print(f"   {mode['desc']}")
-            print("   " + "─" * 60)
+            safe_print("   " + "─" * 60)
             
             run_times = []
             
@@ -3434,8 +3463,8 @@ def chaos_test_22_complete_ipc_benchmark():
                         run_start = time.perf_counter()
                         curr_data = cpu_data
                         
-                        for _, spec, op in stage_specs:
-                            curr_data, _ = client.execute_zero_copy(
+                        for unused, spec, op in stage_specs:
+                            curr_data, unused = client.execute_zero_copy(
                                 spec,
                                 cpu_stage_codes[op],
                                 input_array=curr_data,
@@ -3452,8 +3481,8 @@ def chaos_test_22_complete_ipc_benchmark():
                         run_start = time.perf_counter()
                         curr = pipeline_data
                         
-                        for _, spec, op in stage_specs:
-                            curr, _ = client.execute_cuda_ipc(
+                        for unused, spec, op in stage_specs:
+                            curr, unused = client.execute_cuda_ipc(
                                 spec,
                                 gpu_stage_codes[op],
                                 input_tensor=curr,
@@ -3488,29 +3517,29 @@ def chaos_test_22_complete_ipc_benchmark():
                         'type': mode['type']
                     }
                     
-                    print(f"\n   📊 Statistics:")
+                    safe_print(f"\n   📊 Statistics:")
                     print(f"      Average: {avg:.3f}ms")
                     print(f"      Best:    {min_time:.3f}ms")
                     print(f"      Worst:   {max_time:.3f}ms")
                     print(f"      Stddev:  {stddev:.3f}ms")
                 
             except Exception as e:
-                print(f"   ❌ Benchmark failed: {e}")
+                safe_print(f"   ❌ Benchmark failed: {e}")
                 results[mode['key']] = {'error': str(e)}
         
         # ═══════════════════════════════════════════════════════════
         # FINAL COMPARISON
         # ═══════════════════════════════════════════════════════════
-        print(f"\n\n{'═'*66}")
-        print("📊 FINAL RESULTS - IPC MODE COMPARISON")
-        print(f"{'═'*66}\n")
+        safe_print(f"\n\n{'═'*66}")
+        safe_print("📊 FINAL RESULTS - IPC MODE COMPARISON")
+        safe_print(f"{'═'*66}\n")
         
         # Filter valid results
         valid_results = {k: v for k, v in results.items() 
                         if 'times' in v}
         
         if not valid_results:
-            print("❌ No valid results to compare")
+            safe_print("❌ No valid results to compare")
             return {'success': False, 'error': 'All modes failed'}
         
         # Sort by best time
@@ -3518,8 +3547,8 @@ def chaos_test_22_complete_ipc_benchmark():
                             key=lambda x: x[1]['min'])
         
         # Show ranking
-        print("🏆 RANKING (by best time):")
-        print("─" * 60)
+        safe_print("🏆 RANKING (by best time):")
+        safe_print("─" * 60)
         
         medals = ["🥇", "🥈", "🥉", "  "]
         
@@ -3530,8 +3559,8 @@ def chaos_test_22_complete_ipc_benchmark():
         
         # Show speedup comparisons
         if len(sorted_modes) > 1:
-            print("\n💡 SPEEDUP vs FASTEST:")
-            print("─" * 60)
+            safe_print("\n💡 SPEEDUP vs FASTEST:")
+            safe_print("─" * 60)
             
             fastest_time = sorted_modes[0][1]['min']
             fastest_name = sorted_modes[0][1]['name']
@@ -3546,71 +3575,71 @@ def chaos_test_22_complete_ipc_benchmark():
         winner_key = sorted_modes[0][0]
         winner = sorted_modes[0][1]
         
-        print(f"\n{'═'*66}")
-        print(f"🏆 WINNER: {winner['name'].upper()}")
-        print(f"{'═'*66}")
+        safe_print(f"\n{'═'*66}")
+        safe_print(f"🏆 WINNER: {winner['name'].upper()}")
+        safe_print(f"{'═'*66}")
         print(f"   Best time: {winner['min']:.3f}ms")
         print(f"   Average:   {winner['avg']:.3f}ms")
         print(f"   Stddev:    {winner['stddev']:.3f}ms")
         
         # Technical analysis
-        print(f"\n💡 TECHNICAL ANALYSIS:")
-        print("─" * 60)
+        safe_print(f"\n💡 TECHNICAL ANALYSIS:")
+        safe_print("─" * 60)
         
         if winner_key == 'universal':
-            print("   ✅ Universal IPC is fastest - pure CUDA IPC wins!")
-            print("   🚀 Zero-copy GPU transfers via ctypes")
-            print("   📌 No PyTorch dependency for IPC layer")
-            print("   💡 This is the DEFAULT mode (optimal choice)")
+            safe_print("   ✅ Universal IPC is fastest - pure CUDA IPC wins!")
+            safe_print("   🚀 Zero-copy GPU transfers via ctypes")
+            safe_print("   📌 No PyTorch dependency for IPC layer")
+            safe_print("   💡 This is the DEFAULT mode (optimal choice)")
         
         elif winner_key == 'pytorch_native':
-            print("   🐍 PyTorch Native IPC is fastest!")
-            print("   🚀 Framework-managed zero-copy transfers")
-            print("   📌 Uses PyTorch 1.x _share_cuda_() API")
-            print("   💡 Consider setting ipc_mode='pytorch_native' as default")
+            safe_print("   🐍 PyTorch Native IPC is fastest!")
+            safe_print("   🚀 Framework-managed zero-copy transfers")
+            safe_print("   📌 Uses PyTorch 1.x _share_cuda_() API")
+            safe_print("   💡 Consider setting ipc_mode='pytorch_native' as default")
         
         elif winner_key == 'hybrid':
-            print("   🔄 Hybrid mode is fastest - surprising!")
-            print("   📊 This means: PCIe transfer < GPU IPC setup overhead")
-            print("   💡 For this workload, copying data is faster than IPC")
-            print("   ⚠️  Might indicate GPU IPC driver issues")
+            safe_print("   🔄 Hybrid mode is fastest - surprising!")
+            safe_print("   📊 This means: PCIe transfer < GPU IPC setup overhead")
+            safe_print("   💡 For this workload, copying data is faster than IPC")
+            safe_print("   ⚠️  Might indicate GPU IPC driver issues")
         
         elif winner_key == 'cpu_shm':
-            print("   💾 CPU-only is fastest - GPU overhead too high!")
-            print("   📊 For this workload size, CPU is more efficient")
-            print("   💡 GPU transfers + kernel launches exceed CPU compute time")
-            print("   ⚠️  Consider larger workloads to amortize GPU overhead")
+            safe_print("   💾 CPU-only is fastest - GPU overhead too high!")
+            safe_print("   📊 For this workload size, CPU is more efficient")
+            safe_print("   💡 GPU transfers + kernel launches exceed CPU compute time")
+            safe_print("   ⚠️  Consider larger workloads to amortize GPU overhead")
         
         # Method explanations
-        print(f"\n📚 METHOD EXPLANATIONS:")
-        print("─" * 60)
-        print("   🔥 Universal IPC:     Pure CUDA IPC (ctypes), works with any PyTorch")
-        print("   🐍 PyTorch Native:    Framework-managed, PyTorch 1.x only")
-        print("   🔄 Hybrid:            CPU SHM + 2 GPU copies per stage")
-        print("   💾 CPU SHM:           Pure CPU compute, zero-copy (baseline)")
+        safe_print(f"\n📚 METHOD EXPLANATIONS:")
+        safe_print("─" * 60)
+        safe_print("   🔥 Universal IPC:     Pure CUDA IPC (ctypes), works with any PyTorch")
+        safe_print("   🐍 PyTorch Native:    Framework-managed, PyTorch 1.x only")
+        safe_print("   🔄 Hybrid:            CPU SHM + 2 GPU copies per stage")
+        safe_print("   💾 CPU SHM:           Pure CPU compute, zero-copy (baseline)")
         
         # Performance summary
         gpu_modes = {k: v for k, v in valid_results.items() if v['type'] == 'gpu'}
         cpu_modes = {k: v for k, v in valid_results.items() if v['type'] == 'cpu'}
         
         if gpu_modes and cpu_modes:
-            print(f"\n🎯 GPU vs CPU COMPARISON:")
-            print("─" * 60)
+            safe_print(f"\n🎯 GPU vs CPU COMPARISON:")
+            safe_print("─" * 60)
             
             best_gpu = min(gpu_modes.values(), key=lambda x: x['min'])
             best_cpu = min(cpu_modes.values(), key=lambda x: x['min'])
             
             if best_gpu['min'] < best_cpu['min']:
                 speedup = best_cpu['min'] / best_gpu['min']
-                print(f"   🚀 Best GPU ({best_gpu['name']}) is {speedup:.2f}x faster than CPU")
+                safe_print(f"   🚀 Best GPU ({best_gpu['name']}) is {speedup:.2f}x faster than CPU")
                 print(f"      GPU: {best_gpu['min']:.3f}ms")
                 print(f"      CPU: {best_cpu['min']:.3f}ms")
             else:
                 ratio = best_gpu['min'] / best_cpu['min']
-                print(f"   ⚠️  CPU is {ratio:.2f}x faster than best GPU mode!")
+                safe_print(f"   ⚠️  CPU is {ratio:.2f}x faster than best GPU mode!")
                 print(f"      CPU: {best_cpu['min']:.3f}ms")
                 print(f"      GPU: {best_gpu['min']:.3f}ms")
-                print(f"   💡 Workload too small to benefit from GPU")
+                safe_print(f"   💡 Workload too small to benefit from GPU")
         
         print("="*66 + "\n")
         
@@ -3797,7 +3826,7 @@ with omnipkgLoader("{stage['spec']}", quiet=True):
         curr = input_cpu
         
         for stage in STAGES:
-            curr, _ = client.execute_zero_copy(
+            curr, unused = client.execute_zero_copy(
                 stage['spec'],
                 cpu_code_map[stage['op']],
                 input_array=curr,
@@ -3930,14 +3959,14 @@ def get_test_name(func):
 
 def select_tests_interactively():
     print_chaos_header()
-    print("📝 AVAILABLE CHAOS SCENARIOS:")
+    safe_print("📝 AVAILABLE CHAOS SCENARIOS:")
     print("=" * 60)
-    print(f"   [0] 🔥 RUN ALL TESTS (The Full Experience)")
+    safe_print(f"   [0] 🔥 RUN ALL TESTS (The Full Experience)")
     print("-" * 60)
     for i, test_func in enumerate(ALL_TESTS, 1):
         print(f"   [{i}] {get_test_name(test_func)}")
     print("=" * 60)
-    print("\n💡 Tip: Type numbers separated by spaces (e.g. '1 3 5').")
+    safe_print("\n💡 Tip: Type numbers separated by spaces (e.g. '1 3 5').")
     
     try:
         sys.stdout.flush()

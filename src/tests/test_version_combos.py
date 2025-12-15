@@ -53,7 +53,7 @@ def omnipkg_install_baseline():
     """Use omnipkg to install baseline versions."""
     print_with_flush(('   📦 Using omnipkg to install baseline numpy==1.26.4 and scipy==1.16.1...'))
     packages = ['numpy==1.26.4', 'scipy==1.16.1']
-    success, _, stderr = run_subprocess_with_output(['omnipkg', 'install'] + packages, 'Installing baseline packages', timeout_hint=60)
+    success, unused, stderr = run_subprocess_with_output(['omnipkg', 'install'] + packages, 'Installing baseline packages', timeout_hint=60)
     if success:
         print_with_flush(('   ✅ omnipkg install baseline packages completed successfully'))
         return True
@@ -324,7 +324,7 @@ def run():
             packages_to_bubble = ['numpy==1.24.3', 'scipy==1.12.0']
             for pkg in packages_to_bubble:
                 print_with_flush(f'\n--- Creating bubble for {pkg} ---')
-                success, _, _ = run_subprocess_with_output(['omnipkg', 'install', pkg], f'Creating bubble for {pkg}', timeout_hint=60)
+                success, unused, unused = run_subprocess_with_output(['omnipkg', 'install', pkg], f'Creating bubble for {pkg}', timeout_hint=60)
                 if not success:
                     print_with_flush(f'   ❌ Critical error: Failed to create bubble for {pkg}. Aborting test.')
                     return False
