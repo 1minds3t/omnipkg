@@ -4241,12 +4241,13 @@ class NoCompatiblePythonError(Exception):
         }
 
 class omnipkg:
-
+    
     def __init__(self, config_manager: ConfigManager, minimal_mode: bool = False):
         """
         Initializes Omnipkg with optional minimal mode for lightweight commands.
         
         Args:
+            config_manager: The configuration manager instance.
             minimal_mode: If True, skips database/cache initialization for commands
                         that only need config access (swap, version, etc.)
         """
@@ -4257,53 +4258,43 @@ class omnipkg:
         if not self.config:
             if len(sys.argv) > 1 and sys.argv[1] in ['reset-config', 'doctor']:
                 pass
-            else:
-                raise RuntimeError('OmnipkgCore cannot initialize: Configuration is missing or invalid.')
-        
-        # 🎯 CRITICAL FIX: Set these IMMEDIATELY like multiversion_base
-        # These are used by check_package_installed_fast during preflight
+            elif not minimal_mode:
+                 raise RuntimeError('OmnipkgCore cannot initialize: Configuration is missing or invalid.')
+
+        # --- CORE ATTRIBUTES (Needed early) ---
         self.env_id = self._get_env_id()
         self.multiversion_base = Path(self.config['multiversion_base'])
-        self.site_packages_root = Path(self.config['site_packages_path'])  # 🎯 ADD THIS!
-        
-        # Minimal initialization for lightweight commands
-        if minimal_mode:
-            self.interpreter_manager = InterpreterManager(self.config_manager)
-            safe_print(_('✅ Omnipkg core initialized (minimal mode).'))
-            return  # EXIT EARLY
-        self._self_heal_omnipkg_installation()
-        self.env_id = self._get_env_id()
-        self.multiversion_base = Path(self.config['multiversion_base'])
-        self.cache_client = None
-        self._cache_connection_status = None
-        self.initialize_pypi_cache()
-        self._check_and_run_pending_rebuild()
+        self.site_packages_root = Path(self.config['site_packages_path'])
         self._info_cache = {}
-        self._prime_loader_cache()
         self._installed_packages_cache = None
         self.http_session = http_requests.Session()
-        self.multiversion_base.mkdir(parents=True, exist_ok=True)
+        self.cache_client = None
+        self._cache_connection_status = None
+
+        # --- PHASE 1: INITIALIZE MANAGERS ---
+        # These are needed by almost all commands, including minimal ones.
+        self.interpreter_manager = InterpreterManager(self.config_manager)
+
+        # Minimal mode exits here. Commands like 'swap' or 'list python' now have what they need.
+        if minimal_mode:
+            safe_print(_('✅ Omnipkg core initialized (minimal mode).'))
+            return
+
+        # --- PHASE 2: FULL INITIALIZATION FOR HEAVY COMMANDS ---
+        # Connect to the cache (Redis or SQLite)
         if not self._connect_cache():
             sys.exit(1)
-        # --- ADD THE MIGRATION LOGIC HERE ---
-        # V2 MIGRATION: Automatically upgrade legacy global keys to be environment-aware.
-        migration_flag_key = f'omnipkg:env_{self.env_id}:migration_v2_env_aware_keys_complete'
-        
-        # We check the flag *before* the expensive scan.
-        if not self.cache_client.get(migration_flag_key):
-            # Check if there are any old keys that *need* migrating.
-            # We use scan_iter for performance, only needing to find one key.
-            old_keys_iterator = self.cache_client.scan_iter('omnipkg:pkg:*', count=1)
-            if next(old_keys_iterator, None):
-                 self._perform_redis_key_migration(migration_flag_key)
-            else:
-                 # No old keys found, so we can just set the flag.
-                 self.cache_client.set(migration_flag_key, 'true')
-        # --- END MIGRATION LOGIC ---
-        self.interpreter_manager = InterpreterManager(self.config_manager)
-        self.hook_manager = ImportHookManager(str(self.config.get('multiversion_base')), config=self.config, cache_client=None)
-        self.bubble_manager = BubbleIsolationManager(self.config, self)
 
+        # Now that we have a cache, initialize other managers that depend on it.
+        self.hook_manager = ImportHookManager(str(self.config.get('multiversion_base')), config=self.config, cache_client=self.cache_client)
+        self.bubble_manager = BubbleIsolationManager(self.config, self) # <-- CRITICAL: Now exists before rebuild
+
+        # --- PHASE 3: POST-INITIALIZATION AND SELF-HEALING ---
+        # These tasks may depend on the fully initialized managers.
+        self._self_heal_omnipkg_installation()
+        self.initialize_pypi_cache()
+
+        # Run database migrations
         migration_flag_key = f'omnipkg:env_{self.env_id}:migration_v2_env_aware_keys_complete'
         if not self.cache_client.get(migration_flag_key):
             old_keys_iterator = self.cache_client.scan_iter('omnipkg:pkg:*', count=1)
@@ -4311,10 +4302,18 @@ class omnipkg:
                 self._perform_redis_key_migration(migration_flag_key)
             else:
                 self.cache_client.set(migration_flag_key, 'true')
+        
         migration_v3_flag_key = f'{self.redis_env_prefix}migration_v3_install_type_complete'
         if not self.cache_client.get(migration_v3_flag_key):
             self._perform_v3_metadata_migration(migration_v3_flag_key)
 
+        # Proactively build the loader cache if needed.
+        self._prime_loader_cache()
+
+        # CRITICAL: Run the pending rebuild check LAST, after everything is initialized.
+        self._check_and_run_pending_rebuild()
+
+        # Finally, load the import hooks.
         self.hook_manager.load_version_map()
         self.hook_manager.install_import_hook()
         safe_print(_('✅ Omnipkg core initialized successfully.'))
