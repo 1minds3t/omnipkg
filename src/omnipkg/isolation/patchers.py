@@ -95,7 +95,34 @@ def smart_tf_patcher():
     def genius_import(name, globals=None, locals=None, fromlist=(), level=0):
         """
         Lazy import hook that only handles TF/PyTorch/NumPy when encountered.
+        NOW WITH STANDARD LIBRARY SAFEGUARD to prevent interference with packaging operations.
         """
+        
+        # ═══════════════════════════════════════════════════════════
+        # CRITICAL SAFEGUARD: Never intercept standard library imports
+        # ═══════════════════════════════════════════════════════════
+        STDLIB_WHITELIST = {
+            'importlib', 'importlib.metadata', 'importlib_metadata',
+            'pkg_resources', 'setuptools', 'pip', 'distutils',
+            '_distutils_hack', 'packaging', 'wheel'
+        }
+        
+        # Check if this is a standard library import that we should ignore
+        if name:
+            # Direct match or submodule of whitelisted packages
+            if name in STDLIB_WHITELIST or any(name.startswith(f"{pkg}.") for pkg in STDLIB_WHITELIST):
+                return _original_import_func(name, globals, locals, fromlist, level)
+        
+        # Also check fromlist for whitelisted packages
+        if fromlist:
+            for item in fromlist:
+                item_str = str(item)
+                if any(pkg in item_str for pkg in STDLIB_WHITELIST):
+                    return _original_import_func(name, globals, locals, fromlist, level)
+        
+        # ═══════════════════════════════════════════════════════════
+        # Continue with existing special handling logic
+        # ═══════════════════════════════════════════════════════════
         is_torch_or_numpy = name and ('torch' in name or 'numpy' in name)
         is_tf_import = name and (name == 'tensorflow' or name.startswith('tensorflow.'))
         is_tf_submodule = fromlist and any('tensorflow' in str(f) for f in fromlist) if fromlist else False
@@ -105,9 +132,9 @@ def smart_tf_patcher():
         if not needs_special_handling:
             return _original_import_func(name, globals, locals, fromlist, level)
 
-        # *** ADD THIS: Patch numpy BEFORE TensorFlow imports it ***
+        # Patch numpy BEFORE TensorFlow imports it
         if is_tf_import and 'tensorflow' not in sys.modules:
-            _patch_numpy_for_tf_recursion()  # <--- MOVE THIS HERE
+            _patch_numpy_for_tf_recursion()
 
         # ═══════════════════════════════════════════════════════════
         # torch/numpy SPECIFIC LOGIC (Warning Suppression)
