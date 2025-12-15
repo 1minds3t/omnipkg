@@ -1466,19 +1466,32 @@ class omnipkgLoader:
             # CRITICAL: ALWAYS purge modules BEFORE cloaking
             # This ensures old versions are ejected from memory
             # ═══════════════════════════════════════════════════════════
-            modules_to_purge = packages_to_cloak if packages_to_cloak else list(bubble_deps.keys())
+            # ═══════════════════════════════════════════════════════════
+            # CRITICAL: Purge modules BEFORE cloaking, BUT...
+            # EXCEPTION: In nested OVERLAY contexts, skip purging to preserve parent layers
+            # ═══════════════════════════════════════════════════════════
             
-            if not self.quiet:
-                safe_print(f"   🧹 Purging {len(modules_to_purge)} module(s) from memory...")
+            # Determine if we should purge
+            should_purge = True
+            if self._is_nested and self.isolation_mode == 'overlay':
+                should_purge = False
+                if not self.quiet:
+                    safe_print(f"   ⏭️  Skipping module purge (nested overlay, depth={omnipkgLoader._nesting_depth})")
             
-            for pkg in modules_to_purge:
-                self._aggressive_module_cleanup(pkg)
-            
-            # Also purge the target package itself
-            self._aggressive_module_cleanup(pkg_name)
-            
-            gc.collect()
-            importlib.invalidate_caches()
+            if should_purge:
+                modules_to_purge = packages_to_cloak if packages_to_cloak else list(bubble_deps.keys())
+                
+                if not self.quiet:
+                    safe_print(f"   🧹 Purging {len(modules_to_purge)} module(s) from memory...")
+                
+                for pkg in modules_to_purge:
+                    self._aggressive_module_cleanup(pkg)
+                
+                # Also purge the target package itself
+                self._aggressive_module_cleanup(pkg_name)
+                
+                gc.collect()
+                importlib.invalidate_caches()
 
             # Now cloak conflicting packages
             self._packages_we_cloaked.update(packages_to_cloak)
