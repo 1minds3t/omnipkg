@@ -904,8 +904,8 @@ class omnipkgMetadataGatherer:
         # doesn't exist yet on the main omnipkg object, it means we are in the middle of the
         # very first KB build. We MUST NOT try to create a bubble here.
         if not hasattr(self.omnipkg_instance, 'bubble_manager'):
-            safe_print("
-            safe_print("   - Using 'pip audit' as a safe bootstrap fallback.")
+            safe_print("🛡️  Initial KB build detected. Security scan will use a safe fallback.")
+            safe_print("   - Using 'pip audit' to prevent initialization deadlock.")
             self._run_pip_audit_fallback({name: list(versions)[0] for name, versions in all_packages_in_context.items()})
             return
 
