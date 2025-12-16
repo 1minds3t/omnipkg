@@ -1515,6 +1515,16 @@ class omnipkgLoader:
                 ]
                 sys.path[:] = new_sys_path
 
+            # ═══════════════════════════════════════════════════════════
+            # NEW: Handle binary executables by modifying os.environ['PATH']
+            # ═══════════════════════════════════════════════════════════
+            bin_path = bubble_path / 'bin'
+            if bin_path.is_dir():
+                if not self.quiet:
+                    safe_print(f"   - 🔩 Activating binary path: {bin_path}")
+                # Note: self.original_path_env is already saved in __init__
+                os.environ['PATH'] = str(bin_path) + os.pathsep + self.original_path_env
+
             self._ensure_omnipkg_access_in_bubble(bubble_path_str)
             self._activated_bubble_path = bubble_path_str
             self._activation_end_time = time.perf_counter_ns()
