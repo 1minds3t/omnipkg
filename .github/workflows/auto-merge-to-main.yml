@@ -31,6 +31,7 @@ on:
 permissions:
   contents: write
   actions: read
+  pull-requests: write
 
 concurrency:
   group: auto-merge-main
@@ -53,45 +54,116 @@ jobs:
         git config user.name "github-actions[bot]"
         git config user.email "github-actions[bot]@users.noreply.github.com"
     
-    - name: Check All Workflows Passed
+    - name: Check Clean Commit History
       id: check
       run: |
         COMMIT_SHA="${{ github.event.workflow_run.head_sha }}"
+        SHORT_SHA=$(echo $COMMIT_SHA | cut -c1-7)
         
-        gh run list \
-          --branch development \
-          --commit $COMMIT_SHA \
-          --json conclusion,status \
-          --limit 100 > runs.json
+        echo "Checking commit $SHORT_SHA"
         
-        TOTAL=$(jq 'length' runs.json)
-        SUCCESS=$(jq '[.[] | select(.conclusion == "success" or .conclusion == "skipped")] | length' runs.json)
-        IN_PROGRESS=$(jq '[.[] | select(.status == "in_progress" or .status == "queued")] | length' runs.json)
-        FAILED=$(jq '[.[] | select(.conclusion == "failure")] | length' runs.json)
+        # Get the last commit that's in main
+        git fetch origin main
+        LAST_MAIN_COMMIT=$(git rev-parse origin/main)
         
-        echo "Total: $TOTAL, Success: $SUCCESS, In Progress: $IN_PROGRESS, Failed: $FAILED"
+        echo "Last commit in main: $(echo $LAST_MAIN_COMMIT | cut -c1-7)"
         
-        if [ "$IN_PROGRESS" -gt 0 ]; then
-          echo "Workflows still running, skipping merge"
-          echo "should_merge=false" >> $GITHUB_OUTPUT
+        # Get all commits between main and this commit
+        COMMITS_BETWEEN=$(git rev-list $LAST_MAIN_COMMIT..$COMMIT_SHA --count)
+        
+        echo "Commits between main and current: $COMMITS_BETWEEN"
+        
+        # If only 1 commit, check if all its workflows passed
+        if [ "$COMMITS_BETWEEN" -eq 1 ]; then
+          echo "Single commit - checking if all workflows passed"
+          
+          gh run list \
+            --branch development \
+            --commit $COMMIT_SHA \
+            --json conclusion,status \
+            --limit 100 > runs.json
+          
+          TOTAL=$(jq 'length' runs.json)
+          SUCCESS=$(jq '[.[] | select(.conclusion == "success" or .conclusion == "skipped")] | length' runs.json)
+          IN_PROGRESS=$(jq '[.[] | select(.status == "in_progress" or .status == "queued")] | length' runs.json)
+          FAILED=$(jq '[.[] | select(.conclusion == "failure")] | length' runs.json)
+          
+          echo "Workflows: Total=$TOTAL, Success=$SUCCESS, InProgress=$IN_PROGRESS, Failed=$FAILED"
+          
+          if [ "$IN_PROGRESS" -gt 0 ]; then
+            echo "Workflows still running"
+            echo "should_merge=false" >> $GITHUB_OUTPUT
+            echo "reason=workflows_pending" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
+          if [ "$FAILED" -gt 0 ]; then
+            echo "Some workflows failed"
+            echo "should_merge=false" >> $GITHUB_OUTPUT
+            echo "reason=workflows_failed" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
+          if [ "$SUCCESS" -lt 5 ]; then
+            echo "Not enough workflows"
+            echo "should_merge=false" >> $GITHUB_OUTPUT
+            echo "reason=not_enough_workflows" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
+          echo "Single clean commit, all workflows passed - auto-merge OK"
+          echo "should_merge=true" >> $GITHUB_OUTPUT
+          echo "merge_type=auto" >> $GITHUB_OUTPUT
+          echo "commit_sha=$COMMIT_SHA" >> $GITHUB_OUTPUT
+          echo "short_sha=$SHORT_SHA" >> $GITHUB_OUTPUT
           exit 0
         fi
         
-        if [ "$FAILED" -gt 0 ]; then
-          echo "Some workflows failed, skipping merge"
-          echo "should_merge=false" >> $GITHUB_OUTPUT
-          exit 0
-        fi
+        # Multiple commits - check if ALL of them passed CI
+        echo "Multiple commits ($COMMITS_BETWEEN) - checking for clean streak"
         
-        if [ "$SUCCESS" -lt 5 ]; then
-          echo "Not enough workflows passed, skipping merge"
-          echo "should_merge=false" >> $GITHUB_OUTPUT
-          exit 0
-        fi
+        # Get list of all commits
+        git rev-list $LAST_MAIN_COMMIT..$COMMIT_SHA > commits.txt
         
-        echo "All workflows passed"
-        echo "should_merge=true" >> $GITHUB_OUTPUT
-        echo "commit_sha=$COMMIT_SHA" >> $GITHUB_OUTPUT
+        ALL_CLEAN=true
+        FAILED_COMMITS=""
+        
+        while read commit; do
+          commit_short=$(echo $commit | cut -c1-7)
+          echo "Checking commit $commit_short"
+          
+          # Check if this commit has any failed workflows
+          gh run list \
+            --branch development \
+            --commit $commit \
+            --json conclusion \
+            --limit 100 > commit_runs.json
+          
+          FAILED_COUNT=$(jq '[.[] | select(.conclusion == "failure")] | length' commit_runs.json)
+          
+          if [ "$FAILED_COUNT" -gt 0 ]; then
+            echo "Commit $commit_short had $FAILED_COUNT failed workflows"
+            ALL_CLEAN=false
+            FAILED_COMMITS="$FAILED_COMMITS $commit_short"
+          fi
+        done < commits.txt
+        
+        if [ "$ALL_CLEAN" = true ]; then
+          echo "All $COMMITS_BETWEEN commits have clean CI - auto-merge OK"
+          echo "should_merge=true" >> $GITHUB_OUTPUT
+          echo "merge_type=auto" >> $GITHUB_OUTPUT
+          echo "commit_sha=$COMMIT_SHA" >> $GITHUB_OUTPUT
+          echo "short_sha=$SHORT_SHA" >> $GITHUB_OUTPUT
+          echo "commit_count=$COMMITS_BETWEEN" >> $GITHUB_OUTPUT
+        else
+          echo "Found failed commits in history - preparing for manual merge"
+          echo "should_merge=true" >> $GITHUB_OUTPUT
+          echo "merge_type=manual" >> $GITHUB_OUTPUT
+          echo "commit_sha=$COMMIT_SHA" >> $GITHUB_OUTPUT
+          echo "short_sha=$SHORT_SHA" >> $GITHUB_OUTPUT
+          echo "commit_count=$COMMITS_BETWEEN" >> $GITHUB_OUTPUT
+          echo "failed_commits=$FAILED_COMMITS" >> $GITHUB_OUTPUT
+        fi
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     
@@ -103,24 +175,208 @@ jobs:
         git fetch origin main
         
         if git merge-base --is-ancestor $COMMIT_SHA origin/main; then
-          echo "Commit already in main"
           echo "already_merged=true" >> $GITHUB_OUTPUT
         else
-          echo "Commit not yet merged"
           echo "already_merged=false" >> $GITHUB_OUTPUT
         fi
     
-    - name: Merge to Main
-      if: steps.check.outputs.should_merge == 'true' && steps.check_merged.outputs.already_merged == 'false'
+    - name: Auto-Merge to Main
+      if: |
+        steps.check.outputs.should_merge == 'true' && 
+        steps.check_merged.outputs.already_merged == 'false' &&
+        steps.check.outputs.merge_type == 'auto'
       run: |
         COMMIT_SHA="${{ steps.check.outputs.commit_sha }}"
-        SHORT_SHA=$(echo $COMMIT_SHA | cut -c1-7)
+        SHORT_SHA="${{ steps.check.outputs.short_sha }}"
+        COMMIT_COUNT="${{ steps.check.outputs.commit_count }}"
         
         git checkout main
         git pull origin main
         git fetch origin development
         
-        git merge $COMMIT_SHA --no-ff -m "Auto-merge development to main ($SHORT_SHA)" -m "All CI checks passed"
+        if [ -n "$COMMIT_COUNT" ] && [ "$COMMIT_COUNT" -gt 1 ]; then
+          MESSAGE="Auto-merge: $COMMIT_COUNT clean commits from development ($SHORT_SHA)"
+        else
+          MESSAGE="Auto-merge: development to main ($SHORT_SHA)"
+        fi
+        
+        git merge $COMMIT_SHA --no-ff -m "$MESSAGE" -m "All CI checks passed"
         git push origin main
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: Prepare Manual Merge PR
+      if: |
+        steps.check.outputs.should_merge == 'true' && 
+        steps.check_merged.outputs.already_merged == 'false' &&
+        steps.check.outputs.merge_type == 'manual'
+      run: |
+        COMMIT_SHA="${{ steps.check.outputs.commit_sha }}"
+        SHORT_SHA="${{ steps.check.outputs.short_sha }}"
+        COMMIT_COUNT="${{ steps.check.outputs.commit_count }}"
+        FAILED_COMMITS="${{ steps.check.outputs.failed_commits }}"
+        
+        # Create a unique branch name for this merge preparation
+        MERGE_BRANCH="auto-merge/main-from-dev-$SHORT_SHA"
+        
+        git fetch origin main development
+        
+        # First, try to rebase development onto main to bring in any new changes
+        echo "Attempting to rebase development onto main..."
+        git checkout -b $MERGE_BRANCH origin/development
+        
+        # Try the rebase
+        if git rebase origin/main; then
+          echo "✅ Rebase successful - no conflicts with main's latest changes"
+          echo "REBASE_SUCCESS=true" >> $GITHUB_ENV
+          
+          # Push the rebased branch
+          git push -f origin $MERGE_BRANCH
+          
+          # Now checkout main and prepare the merge
+          git checkout main
+          git pull origin main
+          git checkout $MERGE_BRANCH
+          
+        else
+          echo "❌ Rebase conflicts detected - manual intervention required"
+          echo "REBASE_SUCCESS=false" >> $GITHUB_ENV
+          
+          # Abort the rebase
+          git rebase --abort
+          
+          # Get conflict info
+          git checkout main
+          git pull origin main
+          git checkout -b $MERGE_BRANCH-conflict-check origin/development
+          git rebase origin/main || true
+          CONFLICT_FILES=$(git diff --name-only --diff-filter=U | tr '\n' ', ' | sed 's/,$//')
+          git rebase --abort
+          
+          echo "CONFLICT_FILES=$CONFLICT_FILES" >> $GITHUB_ENV
+          
+          # Create notification issue instead of PR
+          cat > conflict_notice.md << 'EOFNOTICE'
+        ## 🛑 Rebase Conflicts Detected - Manual Merge Required
+        
+        Attempted to prepare an automatic merge from development to main, but conflicts were detected during rebase.
+        
+        ### Summary
+        - **Commits to merge**: $COMMIT_COUNT
+        - **Development HEAD**: `$SHORT_SHA`
+        - **Failed commits in history**: $FAILED_COMMITS
+        - **Conflicting files**: $CONFLICT_FILES
+        
+        ### What This Means
+        The `main` branch has changes that conflict with development. Automatic merge preparation cannot proceed.
+        
+        ### Manual Steps Required
+        ```bash
+        git checkout development
+        git pull
+        git checkout main
+        git pull
+        git checkout -b manual-merge-$SHORT_SHA
+        git merge development --no-ff
+        # Resolve conflicts
+        git commit
+        git push origin manual-merge-$SHORT_SHA
+        # Create PR manually
+        ```
+        
+        Or use rebase:
+        ```bash
+        git checkout development
+        git pull
+        git rebase main
+        # Resolve conflicts
+        git rebase --continue
+        git push -f origin development
+        ```
+        EOFNOTICE
+          
+          sed -i "s/\$COMMIT_COUNT/$COMMIT_COUNT/g" conflict_notice.md
+          sed -i "s/\$SHORT_SHA/$SHORT_SHA/g" conflict_notice.md
+          sed -i "s/\$FAILED_COMMITS/$FAILED_COMMITS/g" conflict_notice.md
+          sed -i "s/\$CONFLICT_FILES/$CONFLICT_FILES/g" conflict_notice.md
+          
+          gh issue create \
+            --title "🛑 Manual Merge Required: Rebase Conflicts ($SHORT_SHA)" \
+            --body-file conflict_notice.md \
+            --label "merge-conflict" \
+            --label "requires-manual-action"
+          
+          echo "Issue created to notify about rebase conflicts"
+          exit 0
+        fi
+        
+        # If we get here, rebase was successful - now prepare the merge
+        git checkout main
+        git pull origin main
+        
+        # Perform the merge but don't commit yet
+        git merge $MERGE_BRANCH --no-commit --no-ff || true
+        
+        # Check if there are merge conflicts (shouldn't happen after successful rebase, but check anyway)
+        if git diff --name-only --diff-filter=U | grep -q .; then
+          echo "MERGE_CONFLICTS=true" >> $GITHUB_ENV
+          MERGE_CONFLICT_FILES=$(git diff --name-only --diff-filter=U | tr '\n' ', ')
+          echo "MERGE_CONFLICT_FILES=$MERGE_CONFLICT_FILES" >> $GITHUB_ENV
+        else
+          echo "MERGE_CONFLICTS=false" >> $GITHUB_ENV
+          # Stage all changes
+          git add -A
+        fi
+        
+        # Push the merge branch
+        git push -f origin $MERGE_BRANCH
+        
+        # Create PR body
+        cat > pr_body.md << 'EOF'
+        ## ⚠️ Manual Review Required
+        
+        This merge was prepared automatically but requires manual review due to failed commits in the history.
+        
+        ### Summary
+        - **Commits to merge**: $COMMIT_COUNT
+        - **Development HEAD**: `$SHORT_SHA`
+        - **Failed commits detected**: $FAILED_COMMITS
+        - **Rebase status**: ✅ Successfully rebased onto main (no conflicts with latest changes)
+        
+        ### Instructions
+        1. Review the changes in this PR
+        2. Check the failed commits and ensure issues are resolved
+        3. **Edit the merge commit message** to document what was fixed/changed
+        4. Merge when ready
+        
+        ### Merge Status
+        EOF
+        
+        if [ "$MERGE_CONFLICTS" = "true" ]; then
+          echo "🔴 **Unexpected merge conflicts** in: $MERGE_CONFLICT_FILES" >> pr_body.md
+          echo "" >> pr_body.md
+          echo "Please resolve conflicts before merging (this shouldn't happen after successful rebase)." >> pr_body.md
+        else
+          echo "✅ No conflicts - staged and ready to merge after review" >> pr_body.md
+        fi
+        
+        # Substitute variables
+        sed -i "s/\$COMMIT_COUNT/$COMMIT_COUNT/g" pr_body.md
+        sed -i "s/\$SHORT_SHA/$SHORT_SHA/g" pr_body.md
+        sed -i "s/\$FAILED_COMMITS/$FAILED_COMMITS/g" pr_body.md
+        
+        # Create or update PR
+        gh pr create \
+          --title "🔄 Merge development → main ($SHORT_SHA) - Manual Review Required" \
+          --body-file pr_body.md \
+          --base main \
+          --head $MERGE_BRANCH \
+          --label "auto-merge-prepared" \
+          --label "requires-review" || \
+        gh pr edit $MERGE_BRANCH \
+          --title "🔄 Merge development → main ($SHORT_SHA) - Manual Review Required" \
+          --body-file pr_body.md
+        
+        echo "Pull request created/updated for manual review"
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
