@@ -68,47 +68,8 @@ jobs:
       run: |
         8pkg daemon stop || true
 
-  # Separate job for the Chaos Theory test (runs ALL scenarios)
-  chaos-theory-full:
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    name: "Demo 11: Chaos Theory (Full Suite)"
-    
-    steps:
-    - uses: actions/checkout@v3
-    
-    - name: Set up Python 3.11
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.11'
-    
-    - name: Install omnipkg
-      run: |
-        pip install -e .
-    
-    - name: Start daemon
-      run: |
-        8pkg daemon start
-        sleep 5
-    
-    - name: Run ALL Chaos Theory scenarios
-      timeout-minutes: 25
-      run: |
-        # Select demo 11, wait for menu, then select option 0 (run all)
-        (echo "11"; sleep 2; echo "0") | 8pkg demo
-      continue-on-error: true
-    
-    - name: Show results
-      if: always()
-      run: |
-        8pkg daemon status || true
-        8pkg daemon logs --lines 200 || true
-    
-    - name: Stop daemon
-      if: always()
-      run: 8pkg daemon stop || true
-
   # Individual chaos scenarios (for pinpointing issues)
+  # NOTE: Cannot run all 23 scenarios at once - runs out of disk space!
   chaos-individual:
     runs-on: ubuntu-latest
     timeout-minutes: 10
