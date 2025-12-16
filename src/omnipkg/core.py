@@ -4281,7 +4281,13 @@ class omnipkg:
         self.cache_client = None
         self._cache_connection_status = None
         self.initialize_pypi_cache()
-        self._check_and_run_pending_rebuild()
+        # Skip KB rebuild during first-time setup
+        setup_complete = (self.config_manager.venv_path / ".omnipkg" / ".setup_complete").exists()
+        if setup_complete:
+        # Skip KB rebuild during first-time setup (prevents recursion)
+        setup_complete = (self.config_manager.venv_path / '.omnipkg' / '.setup_complete').exists()
+        if setup_complete:
+            self._check_and_run_pending_rebuild()
         self._info_cache = {}
         self._installed_packages_cache = None
         self.http_session = http_requests.Session()
@@ -5786,7 +5792,10 @@ class omnipkg:
         for hash generation to prevent ghost/rebuild loops.
         """
         from .package_meta_builder import omnipkgMetadataGatherer
-        if self._check_and_run_pending_rebuild():
+        # Skip KB rebuild during first-time setup
+        setup_complete = (self.config_manager.venv_path / ".omnipkg" / ".setup_complete").exists()
+        if setup_complete:
+            self._check_and_run_pending_rebuild()
             # If a rebuild was just run, the KB is perfectly in sync.
             # We can return early to avoid redundant work.
             safe_print("   ✅ First-use KB build complete. Synchronization is guaranteed.")
@@ -5796,7 +5805,10 @@ class omnipkg:
     
         self._clean_corrupted_installs()
         self._cleanup_all_cloaks_globally()
-        if self._check_and_run_pending_rebuild():
+        # Skip KB rebuild during first-time setup
+        setup_complete = (self.config_manager.venv_path / ".omnipkg" / ".setup_complete").exists()
+        if setup_complete:
+            self._check_and_run_pending_rebuild()
             pass
 
         safe_print(_('🧠 Checking knowledge base synchronization...'))
