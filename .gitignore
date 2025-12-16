@@ -105,3 +105,6 @@ omnipkg/utils/emoji_print_fixer.py
 dev_tools/
 omnipkg/!src/omnipkg/
 /omnipkg/
+src/build/
+build/
+*.egg-info/
