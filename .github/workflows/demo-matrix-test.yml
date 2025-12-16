@@ -1,5 +1,3 @@
-
-
 name: "🎪 Demo Matrix Test (All Demos)"
 
 on:
@@ -96,8 +94,8 @@ jobs:
     - name: Run ALL Chaos Theory scenarios
       timeout-minutes: 25
       run: |
-        # Select demo 11, then select option 0 (run all)
-        echo -e "11\n0" | 8pkg demo
+        # Select demo 11, wait for menu, then select option 0 (run all)
+        (echo "11"; sleep 2; echo "0") | 8pkg demo
       continue-on-error: true
     
     - name: Show results
@@ -140,8 +138,8 @@ jobs:
     - name: Run Chaos Scenario ${{ matrix.scenario }}
       timeout-minutes: 8
       run: |
-        # Select demo 11, then select specific scenario
-        echo -e "11\n${{ matrix.scenario }}" | 8pkg demo
+        # Select demo 11, wait for menu, then select specific scenario
+        (echo "11"; sleep 2; echo "${{ matrix.scenario }}") | 8pkg demo
       continue-on-error: true
     
     - name: Daemon status after test
