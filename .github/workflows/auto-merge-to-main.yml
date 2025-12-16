@@ -31,6 +31,7 @@ on:
 permissions:
   contents: write
   actions: read
+  pull-requests: write
 
 concurrency:
   group: auto-merge-main
@@ -112,6 +113,7 @@ jobs:
           
           echo "Single clean commit, all workflows passed - auto-merge OK"
           echo "should_merge=true" >> $GITHUB_OUTPUT
+          echo "merge_type=auto" >> $GITHUB_OUTPUT
           echo "commit_sha=$COMMIT_SHA" >> $GITHUB_OUTPUT
           echo "short_sha=$SHORT_SHA" >> $GITHUB_OUTPUT
           exit 0
@@ -124,6 +126,7 @@ jobs:
         git rev-list $LAST_MAIN_COMMIT..$COMMIT_SHA > commits.txt
         
         ALL_CLEAN=true
+        FAILED_COMMITS=""
         
         while read commit; do
           commit_short=$(echo $commit | cut -c1-7)
@@ -141,20 +144,25 @@ jobs:
           if [ "$FAILED_COUNT" -gt 0 ]; then
             echo "Commit $commit_short had $FAILED_COUNT failed workflows"
             ALL_CLEAN=false
-            break
+            FAILED_COMMITS="$FAILED_COMMITS $commit_short"
           fi
         done < commits.txt
         
         if [ "$ALL_CLEAN" = true ]; then
           echo "All $COMMITS_BETWEEN commits have clean CI - auto-merge OK"
           echo "should_merge=true" >> $GITHUB_OUTPUT
+          echo "merge_type=auto" >> $GITHUB_OUTPUT
           echo "commit_sha=$COMMIT_SHA" >> $GITHUB_OUTPUT
           echo "short_sha=$SHORT_SHA" >> $GITHUB_OUTPUT
           echo "commit_count=$COMMITS_BETWEEN" >> $GITHUB_OUTPUT
         else
-          echo "Found failed commits in history - manual merge required"
-          echo "should_merge=false" >> $GITHUB_OUTPUT
-          echo "reason=failed_commits_in_history" >> $GITHUB_OUTPUT
+          echo "Found failed commits in history - preparing for manual merge"
+          echo "should_merge=true" >> $GITHUB_OUTPUT
+          echo "merge_type=manual" >> $GITHUB_OUTPUT
+          echo "commit_sha=$COMMIT_SHA" >> $GITHUB_OUTPUT
+          echo "short_sha=$SHORT_SHA" >> $GITHUB_OUTPUT
+          echo "commit_count=$COMMITS_BETWEEN" >> $GITHUB_OUTPUT
+          echo "failed_commits=$FAILED_COMMITS" >> $GITHUB_OUTPUT
         fi
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -172,8 +180,11 @@ jobs:
           echo "already_merged=false" >> $GITHUB_OUTPUT
         fi
     
-    - name: Merge to Main
-      if: steps.check.outputs.should_merge == 'true' && steps.check_merged.outputs.already_merged == 'false'
+    - name: Auto-Merge to Main
+      if: |
+        steps.check.outputs.should_merge == 'true' && 
+        steps.check_merged.outputs.already_merged == 'false' &&
+        steps.check.outputs.merge_type == 'auto'
       run: |
         COMMIT_SHA="${{ steps.check.outputs.commit_sha }}"
         SHORT_SHA="${{ steps.check.outputs.short_sha }}"
@@ -191,5 +202,88 @@ jobs:
         
         git merge $COMMIT_SHA --no-ff -m "$MESSAGE" -m "All CI checks passed"
         git push origin main
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: Prepare Manual Merge PR
+      if: |
+        steps.check.outputs.should_merge == 'true' && 
+        steps.check_merged.outputs.already_merged == 'false' &&
+        steps.check.outputs.merge_type == 'manual'
+      run: |
+        COMMIT_SHA="${{ steps.check.outputs.commit_sha }}"
+        SHORT_SHA="${{ steps.check.outputs.short_sha }}"
+        COMMIT_COUNT="${{ steps.check.outputs.commit_count }}"
+        FAILED_COMMITS="${{ steps.check.outputs.failed_commits }}"
+        
+        # Create a unique branch name for this merge preparation
+        MERGE_BRANCH="auto-merge/main-from-dev-$SHORT_SHA"
+        
+        git fetch origin main development
+        git checkout -b $MERGE_BRANCH origin/main
+        
+        # Perform the merge but don't commit yet
+        git merge origin/development --no-commit --no-ff || true
+        
+        # Check if there are conflicts
+        if git diff --name-only --diff-filter=U | grep -q .; then
+          echo "CONFLICTS=true" >> $GITHUB_ENV
+          CONFLICT_FILES=$(git diff --name-only --diff-filter=U | tr '\n' ', ')
+          echo "CONFLICT_FILES=$CONFLICT_FILES" >> $GITHUB_ENV
+        else
+          echo "CONFLICTS=false" >> $GITHUB_ENV
+          # Stage all changes
+          git add -A
+        fi
+        
+        # Push the branch
+        git push -f origin $MERGE_BRANCH
+        
+        # Create PR body
+        cat > pr_body.md << 'EOF'
+        ## ⚠️ Manual Review Required
+        
+        This merge was prepared automatically but requires manual review due to failed commits in the history.
+        
+        ### Summary
+        - **Commits to merge**: $COMMIT_COUNT
+        - **Development HEAD**: `$SHORT_SHA`
+        - **Failed commits detected**: $FAILED_COMMITS
+        
+        ### Instructions
+        1. Review the changes in this PR
+        2. Check the failed commits and ensure issues are resolved
+        3. **Edit the merge commit message** to document what was fixed/changed
+        4. Merge when ready
+        
+        ### Conflicts
+        EOF
+        
+        if [ "$CONFLICTS" = "true" ]; then
+          echo "🔴 **Conflicts detected** in: $CONFLICT_FILES" >> pr_body.md
+          echo "" >> pr_body.md
+          echo "Please resolve conflicts before merging." >> pr_body.md
+        else
+          echo "✅ No conflicts detected - ready to merge after review" >> pr_body.md
+        fi
+        
+        # Substitute variables
+        sed -i "s/\$COMMIT_COUNT/$COMMIT_COUNT/g" pr_body.md
+        sed -i "s/\$SHORT_SHA/$SHORT_SHA/g" pr_body.md
+        sed -i "s/\$FAILED_COMMITS/$FAILED_COMMITS/g" pr_body.md
+        
+        # Create or update PR
+        gh pr create \
+          --title "🔄 Merge development → main ($SHORT_SHA) - Manual Review Required" \
+          --body-file pr_body.md \
+          --base main \
+          --head $MERGE_BRANCH \
+          --label "auto-merge-prepared" \
+          --label "requires-review" || \
+        gh pr edit $MERGE_BRANCH \
+          --title "🔄 Merge development → main ($SHORT_SHA) - Manual Review Required" \
+          --body-file pr_body.md
+        
+        echo "Pull request created/updated for manual review"
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
