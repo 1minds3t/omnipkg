@@ -273,7 +273,7 @@ class ConfigManager:
                 if sys.version_info[:2] != self._preferred_version:
                     if not suppress_init_messages:
                         safe_print(_('\n   - Step 2: Setting up the required Python 3.11 control plane...'))
-                    temp_omnipkg = omnipkg(config_manager=self)
+                    temp_omnipkg = omnipkg(config_manager=self, minimal_mode=True)
                     result_code = temp_omnipkg._fallback_to_download('3.11')
                     if result_code != 0:
                         raise RuntimeError('Failed to set up the Python 3.11 control plane.')
