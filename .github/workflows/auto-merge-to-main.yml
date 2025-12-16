@@ -27,6 +27,12 @@ on:
       - completed
     branches:
       - development
+  workflow_dispatch:
+    inputs:
+      commit_sha:
+        description: 'Specific commit SHA to merge (leave empty for latest development)'
+        required: false
+        type: string
 
 permissions:
   contents: write
@@ -40,7 +46,9 @@ concurrency:
 jobs:
   auto-merge:
     runs-on: ubuntu-latest
-    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'development'
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'development')
     
     steps:
     - name: Checkout
@@ -54,11 +62,34 @@ jobs:
         git config user.name "github-actions[bot]"
         git config user.email "github-actions[bot]@users.noreply.github.com"
     
+    - name: Determine Commit to Check
+      id: get_commit
+      run: |
+        if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          # Manual trigger
+          if [ -n "${{ inputs.commit_sha }}" ]; then
+            COMMIT_SHA="${{ inputs.commit_sha }}"
+            echo "Using manually specified commit: $COMMIT_SHA"
+          else
+            # Get latest commit from development
+            git fetch origin development
+            COMMIT_SHA=$(git rev-parse origin/development)
+            echo "Using latest development commit: $COMMIT_SHA"
+          fi
+        else
+          # Automatic trigger from workflow_run
+          COMMIT_SHA="${{ github.event.workflow_run.head_sha }}"
+          echo "Using commit from workflow_run: $COMMIT_SHA"
+        fi
+        
+        echo "commit_sha=$COMMIT_SHA" >> $GITHUB_OUTPUT
+        echo "short_sha=$(echo $COMMIT_SHA | cut -c1-7)" >> $GITHUB_OUTPUT
+    
     - name: Check Clean Commit History
       id: check
       run: |
-        COMMIT_SHA="${{ github.event.workflow_run.head_sha }}"
-        SHORT_SHA=$(echo $COMMIT_SHA | cut -c1-7)
+        COMMIT_SHA="${{ steps.get_commit.outputs.commit_sha }}"
+        SHORT_SHA="${{ steps.get_commit.outputs.short_sha }}"
         
         echo "Checking commit $SHORT_SHA"
         
