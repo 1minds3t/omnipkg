@@ -2116,25 +2116,25 @@ class omnipkgLoader:
                 bubble_deps = self._get_bubble_dependencies(bubble_path)
                 self._activated_bubble_dependencies = list(bubble_deps.keys())
 
-            # ═══════════════════════════════════════════════════════════
-            # COMPOSITE BUBBLE INJECTION (NVIDIA/CUDA Support)
-            # ═══════════════════════════════════════════════════════════
-            dependency_bubbles = []
-            
-            # Scan dependencies for binary packages that might have their own bubbles
-            for dep_name, dep_version in bubble_deps.items():
-                # Focus on NVIDIA libs, Triton, and critical binary deps
-                if dep_name.startswith('nvidia_') or dep_name in ['triton', 'lit']:
-                    dep_bubble_name = f"{dep_name.replace('_', '-')}-{dep_version}"
-                    dep_bubble_path = self.multiversion_base / dep_bubble_name
-                    
-                    if dep_bubble_path.exists() and dep_bubble_path.is_dir():
-                        dependency_bubbles.append(str(dep_bubble_path))
-                        if not self.quiet:
-                            safe_print(f"      🔗 Found dependency bubble: {dep_bubble_name}")
-            
-            if dependency_bubbles and not self.quiet:
-                safe_print(f"   📦 Activating {len(dependency_bubbles)} dependency bubbles (CUDA/NVIDIA libs)...")
+                # ═══════════════════════════════════════════════════════════
+                # COMPOSITE BUBBLE INJECTION (NVIDIA/CUDA Support)
+                # ═══════════════════════════════════════════════════════════
+                dependency_bubbles = []
+                
+                # Scan dependencies for binary packages that might have their own bubbles
+                for dep_name, dep_version in bubble_deps.items():
+                    # Focus on NVIDIA libs, Triton, and critical binary deps
+                    if dep_name.startswith('nvidia_') or dep_name in ['triton', 'lit']:
+                        dep_bubble_name = f"{dep_name.replace('_', '-')}-{dep_version}"
+                        dep_bubble_path = self.multiversion_base / dep_bubble_name
+                        
+                        if dep_bubble_path.exists() and dep_bubble_path.is_dir():
+                            dependency_bubbles.append(str(dep_bubble_path))
+                            if not self.quiet:
+                                safe_print(f"      🔗 Found dependency bubble: {dep_bubble_name}")
+                
+                if dependency_bubbles and not self.quiet:
+                    safe_print(f"   📦 Activating {len(dependency_bubbles)} dependency bubbles (CUDA/NVIDIA libs)...")
 
                 
                 # 1B. Determine conflicts
@@ -2215,6 +2215,7 @@ class omnipkgLoader:
                     safe_print(f"   ⚡ Activated in {self._total_activation_time_ns / 1000:,.1f} μs")
 
                 return self
+            
             else:
                 # Package landed in main environment
                 if not self.quiet:
