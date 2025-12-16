@@ -2598,8 +2598,8 @@ arr_out[:] = result.numpy()
         pipeline_times.append(stage1_time)
         
         # Print diagnostic output if available
-        if 'stderr' in _ and _['stderr']:
-            safe_print(f"      Diagnostic: {_['stderr'][:200]}")
+        if 'stderr' in unused and unused['stderr']:
+            safe_print(f"      Diagnostic: {unused['stderr'][:200]}")
         
         safe_print(f"   ✅ Stage 1 complete: {stage1_time:.2f}ms (zero-copy SHM)")
         
