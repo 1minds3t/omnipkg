@@ -147,7 +147,7 @@ class ConcurrentSpawnController:
             # PHASE 1: FILESYSTEM OPERATIONS (LOCKED)
             # ═══════════════════════════════════════════════════════
             with self._fs_lock:
-                print(f"🔒 [SPAWN] Acquired FS lock for {package_spec}")
+                safe_print(f"🔒 [SPAWN] Acquired FS lock for {package_spec}")
                 
                 # Spawn process
                 process = self._create_daemon_process(package_spec)
@@ -163,7 +163,7 @@ class ConcurrentSpawnController:
                 worker.fs_ready_time = time.perf_counter()
                 
                 fs_duration = (worker.fs_ready_time - start_time) * 1000
-                print(f"✅ [SPAWN] Phase 1 done: {package_spec} ({fs_duration:.0f}ms)")
+                safe_print(f"✅ [SPAWN] Phase 1 done: {package_spec} ({fs_duration:.0f}ms)")
             
             # ═══════════════════════════════════════════════════════
             # LOCK RELEASED - NEXT WORKER CAN START CLOAKING
@@ -176,7 +176,7 @@ class ConcurrentSpawnController:
             # ═══════════════════════════════════════════════════════
             # PHASE 2: MEMORY OPERATIONS (ASYNC, NO LOCK)
             # ═══════════════════════════════════════════════════════
-            print(f"🧠 [SPAWN] Phase 2 starting for {package_spec} (non-blocking)...")
+            safe_print(f"🧠 [SPAWN] Phase 2 starting for {package_spec} (non-blocking)...")
             
             # Wait for final READY signal (doesn't block other spawns)
             full_ready = self._wait_for_phase(process, WorkerPhase.READY, timeout=10.0)
@@ -188,17 +188,17 @@ class ConcurrentSpawnController:
                 total_duration = (worker.full_ready_time - start_time) * 1000
                 phase2_duration = (worker.full_ready_time - worker.fs_ready_time) * 1000
                 
-                print(f"✅ [SPAWN] Phase 2 done: {package_spec} "
+                safe_print(f"✅ [SPAWN] Phase 2 done: {package_spec} "
                       f"(total: {total_duration:.0f}ms, phase2: {phase2_duration:.0f}ms)")
             else:
-                print(f"⚠️  [SPAWN] Phase 2 timeout: {package_spec} (worker functional but slower)")
+                safe_print(f"⚠️  [SPAWN] Phase 2 timeout: {package_spec} (worker functional but slower)")
             
         except Exception as e:
             worker.phase = WorkerPhase.FAILED
             worker.error = str(e)
             request['result'] = worker
             ready_event.set()
-            print(f"❌ [SPAWN] Failed: {package_spec} - {e}")
+            safe_print(f"❌ [SPAWN] Failed: {package_spec} - {e}")
     
     def _create_daemon_process(self, package_spec: str):
         """Create the actual daemon process (placeholder)."""
@@ -206,6 +206,10 @@ class ConcurrentSpawnController:
         # For now, simulating with a mock
         import subprocess
         import sys
+try:
+    from .common_utils import safe_print
+except ImportError:
+    from omnipkg.common_utils import safe_print
         
         # In real code, this would be:
         # from omnipkg.isolation.worker_daemon import DaemonClient, DaemonProxy
@@ -276,9 +280,9 @@ def demo_concurrent_spawning():
     """
     Demonstrate concurrent worker spawning with surgical locking.
     """
-    print("╔══════════════════════════════════════════════════════════════╗")
-    print("║  🧪 CONCURRENT SPAWN STRESS TEST                            ║")
-    print("╚══════════════════════════════════════════════════════════════╝\n")
+    safe_print("╔══════════════════════════════════════════════════════════════╗")
+    safe_print("║  🧪 CONCURRENT SPAWN STRESS TEST                            ║")
+    safe_print("╚══════════════════════════════════════════════════════════════╝\n")
     
     controller = ConcurrentSpawnController()
     
@@ -297,10 +301,10 @@ def demo_concurrent_spawning():
         try:
             worker = controller.spawn_worker(pkg)
             elapsed = (time.perf_counter() - worker_start) * 1000
-            print(f"   ✅ Spawned {pkg} in {elapsed:.0f}ms (Phase 1)")
+            safe_print(f"   ✅ Spawned {pkg} in {elapsed:.0f}ms (Phase 1)")
             return worker
         except Exception as e:
-            print(f"   ❌ Failed to spawn {pkg}: {e}")
+            safe_print(f"   ❌ Failed to spawn {pkg}: {e}")
             return None
     
     # Launch all spawns in parallel
@@ -316,15 +320,15 @@ def demo_concurrent_spawning():
     
     elapsed = (time.perf_counter() - start_time) * 1000
     
-    print(f"\n📊 All workers Phase 1 complete in {elapsed:.0f}ms")
-    print("\n📈 Statistics:")
+    safe_print(f"\n📊 All workers Phase 1 complete in {elapsed:.0f}ms")
+    safe_print("\n📈 Statistics:")
     
     stats = controller.get_stats()
     print(f"   - Total workers: {stats['total_workers']}")
     print(f"   - Average FS time: {stats['average_fs_time_ms']:.0f}ms")
     print(f"   - Average total time: {stats['average_total_time_ms']:.0f}ms")
     
-    print("\n🎯 Key Insight:")
+    safe_print("\n🎯 Key Insight:")
     print(f"   - Sequential FS time would be: {stats['average_fs_time_ms'] * 3:.0f}ms")
     print(f"   - Actual parallel time: {elapsed:.0f}ms")
     print(f"   - Speedup: {(stats['average_fs_time_ms'] * 3 / elapsed):.1f}x")

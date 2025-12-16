@@ -51,7 +51,7 @@ jobs:
     - name: Run Demo ${{ matrix.demo.num }}
       timeout-minutes: 10
       run: |
-        echo "${{ matrix.demo.num }}" | 8pkg demo --verbose
+        echo "${{ matrix.demo.num }}" | 8pkg demo
       continue-on-error: true
     
     - name: Show daemon logs on failure
@@ -100,7 +100,7 @@ jobs:
       timeout-minutes: 8
       run: |
         # Select demo 11, wait for menu, then select specific scenario
-        (echo "11"; sleep 2; echo "${{ matrix.scenario }}") | 8pkg demo --verbose
+        (echo "11"; sleep 2; echo "${{ matrix.scenario }}") | 8pkg demo
       continue-on-error: true
     
     - name: Daemon status after test

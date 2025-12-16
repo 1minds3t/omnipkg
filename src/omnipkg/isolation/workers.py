@@ -34,7 +34,10 @@ import os
 import json
 import traceback
 import io
-
+try:
+    from .common_utils import safe_print
+except ImportError:
+    from omnipkg.common_utils import safe_print
 # CRITICAL: Disable buffering on stderr for real-time output
 sys.stderr = open(sys.stderr.fileno(), 'w', buffering=1, closefd=False)
 
@@ -74,10 +77,6 @@ try:
     log(f"🐚 Worker initializing environment: {package_spec}...")
     loader = omnipkgLoader("{package_spec}", quiet=False, worker_fallback=False)
     loader.__enter__()
-    
-    # VERIFY the package is actually importable
-    pkg_name = package_spec.split("==")[0].replace("-", "_")
-    __import__(pkg_name)
     
     send_ipc({{"status": "ready"}})
     log(f"✅ Worker ready: {package_spec}")

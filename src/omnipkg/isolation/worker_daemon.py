@@ -11,6 +11,7 @@ import threading
 import glob
 import subprocess
 import select
+import filelock
 from pathlib import Path
 from typing import Dict, Optional, Any, Set
 from collections import defaultdict
@@ -19,6 +20,13 @@ import traceback
 from collections import deque
 import ctypes
 import base64  # <--- ENSURE THIS IS HERE
+import platform
+try:
+    from .common_utils import safe_print
+except ImportError:
+    from omnipkg.common_utils import safe_print
+IS_WINDOWS = platform.system() == 'Windows'
+
 
 # ═══════════════════════════════════════════════════════════════
 # 0. CONSTANTS & UTILITIES
@@ -32,6 +40,7 @@ DAEMON_LOG_FILE = "/tmp/omnipkg_daemon.log"
 # ═══════════════════════════════════════════════════════════════
 # HFT OPTIMIZATION: Silence Resource Tracker
 # ═══════════════════════════════════════════════════════════════
+
 try:
     from multiprocessing import resource_tracker
     
@@ -303,45 +312,47 @@ shm_registry = SHMRegistry()
 # ═══════════════════════════════════════════════════════════════
 # CRITICAL FIX: Proper string escaping in _DAEMON_SCRIPT
 # The issue: sys.stderr.write() calls need proper escaping of backslash-n
+# ALWAYS USE '\\n' IN PLACE OF '\n' INSIDE THE RAW STRING
+# DO NOT PUT DOCSTRINGS INSIDE THE RAW STRING EITHER, IT BREAKS THE ESCAPES
+
+# ═══════════════════════════════════════════════════════════════
+# 1. PERSISTENT WORKER SCRIPT (FIXED - NO BLIND IMPORTS)
+# ═══════════════════════════════════════════════════════════════
+
+"""
+CRITICAL FIX: Correct Import Order in _DAEMON_SCRIPT
+
+The Problem:
+------------
+The script was trying to import tensorflow/torch BEFORE activating the bubble.
+This caused "No module named 'tensorflow'" errors because the bubble paths
+weren't in sys.path yet.
+
+The Solution:
+------------
+Move ALL framework imports to AFTER the bubble activation and cleanup.
+
+Correct Order:
+1. Read PKG_SPEC from stdin
+2. Import omnipkgLoader
+3. Activate bubble (adds paths to sys.path)
+4. Cleanup cloaks
+5. Restore stdout
+6. NOW import torch/tensorflow (they're in sys.path now!)
+7. Send READY signal
+8. Enter execution loop
+"""
 
 _DAEMON_SCRIPT = """#!/usr/bin/env python3
 import os
 import sys
-from pathlib import Path
-
-# ═══════════════════════════════════════════════════════════
-# 🔥 CUDA PRE-INJECTION (BEFORE ANY IMPORTS)
-# ═══════════════════════════════════════════════════════════
-try:
-    import site
-    site_packages = Path(site.getsitepackages()[0])
-    multiversion_base = site_packages / '.omnipkg_versions'
-    
-    cuda_lib_paths = []
-    for nvidia_bubble in multiversion_base.glob('nvidia-*-cu12-*'):
-        if nvidia_bubble.is_dir():
-            nvidia_dir = nvidia_bubble / 'nvidia'
-            if nvidia_dir.exists():
-                for module_dir in nvidia_dir.iterdir():
-                    if module_dir.is_dir():
-                        lib_dir = module_dir / 'lib'
-                        if lib_dir.exists():
-                            cuda_lib_paths.append(str(lib_dir))
-    
-    if cuda_lib_paths:
-        current_ld = os.environ.get('LD_LIBRARY_PATH', '')
-        new_ld = os.pathsep.join(cuda_lib_paths) + (os.pathsep + current_ld if current_ld else '')
-        os.environ['LD_LIBRARY_PATH'] = new_ld
-        sys.stderr.write(f'🔧 [PRE-INIT] Set LD_LIBRARY_PATH with {len(cuda_lib_paths)} CUDA paths\\n')
-        sys.stderr.flush()
-except Exception as e:
-    sys.stderr.write(f'⚠️  [PRE-INIT] CUDA setup failed: {e}\\n')
-    sys.stderr.flush()
-
-# NOW proceed with normal imports
 import json
 import shutil
 from pathlib import Path
+try:
+    from .common_utils import safe_print
+except ImportError:
+    from omnipkg.common_utils import safe_print
 
 # CRITICAL: Mark as daemon worker
 os.environ['OMNIPKG_IS_DAEMON_WORKER'] = '1'
@@ -363,32 +374,35 @@ def fatal_error(msg, error=None):
     sys.stderr.flush()
     sys.exit(1)
 
+# ═══════════════════════════════════════════════════════════════
+# STEP 1: READ PKG_SPEC (MUST BE FIRST)
+# ═══════════════════════════════════════════════════════════════
 try:
     input_line = sys.stdin.readline()
     if not input_line:
         fatal_error('No input received on stdin')
     
     setup_data = json.loads(input_line.strip())
-    PKG_SPEC = setup_data.get('package_spec')
+    PKG_SPEC = setup_data.get('package_spec', '')
     
     if not PKG_SPEC:
         fatal_error('Missing package_spec')
 except Exception as e:
     fatal_error('Startup configuration failed', e)
 
+# ═══════════════════════════════════════════════════════════════
+# STEP 2: IMPORT OMNIPKG LOADER
+# ═══════════════════════════════════════════════════════════════
 try:
     from omnipkg.loader import omnipkgLoader
 except ImportError as e:
     fatal_error('Failed to import omnipkgLoader', e)
 
-# ═══════════════════════════════════════════════════════════════
-# CRITICAL FIX: Force Non-Nested Context
-# ═══════════════════════════════════════════════════════════════
 if hasattr(omnipkgLoader, '_nesting_depth'):
     omnipkgLoader._nesting_depth = 0
 
 # ═══════════════════════════════════════════════════════════════
-# STARTUP: ONE-TIME ACTIVATION + CLEANUP
+# STEP 3: ACTIVATE BUBBLE (Adds paths to sys.path)
 # ═══════════════════════════════════════════════════════════════
 try:
     specs = [s.strip() for s in PKG_SPEC.split(',')]
@@ -399,17 +413,20 @@ try:
         l.__enter__()
         loaders.append(l)
 
-    # ═══════════════════════════════════════════════════════════
-    # 🔥 CUDA LIBRARY PATH INJECTION (CORRECT PATTERN)
-    # ═══════════════════════════════════════════════════════════
+    # CUDA injection (your existing code is correct here)
     cuda_lib_paths = []
+    target_cuda_ver = None
     
-    if loaders and hasattr(loaders[0], 'multiversion_base'):
+    if '+cu11' in PKG_SPEC or 'cu11' in PKG_SPEC:
+        target_cuda_ver = '11'
+    elif '+cu12' in PKG_SPEC or 'cu12' in PKG_SPEC:
+        target_cuda_ver = '12'
+    
+    if target_cuda_ver and loaders and hasattr(loaders[0], 'multiversion_base'):
         from pathlib import Path
         multiversion_base = Path(loaders[0].multiversion_base)
-        
-        # Pattern: nvidia-{name}-cu12-{version}/nvidia/{module}/lib/
-        for nvidia_bubble in multiversion_base.glob('nvidia-*-cu12-*'):
+        search_pattern = f'nvidia-*-cu{target_cuda_ver}-*'
+        for nvidia_bubble in multiversion_base.glob(search_pattern):
             if nvidia_bubble.is_dir() and '_omnipkg_cloaked' not in nvidia_bubble.name:
                 nvidia_dir = nvidia_bubble / 'nvidia'
                 if nvidia_dir.exists():
@@ -426,281 +443,253 @@ try:
             new_ld = new_ld + os.pathsep + current_ld
         os.environ['LD_LIBRARY_PATH'] = new_ld
         
-        sys.stderr.write(f'🔧 [DAEMON] Injected {len(cuda_lib_paths)} CUDA library paths\\n')
+        sys.stderr.write(f'🔧 [DAEMON] Injected {len(cuda_lib_paths)} CUDA paths (Target: cu{target_cuda_ver})\\n')
         sys.stderr.flush()
         
-        for path in cuda_lib_paths[:5]:
-            sys.stderr.write(f'   - {path}\\n')
-            sys.stderr.flush()
-        
-        # Pre-load libcudart
         import ctypes
+        candidates = [f'libcudart.so.{target_cuda_ver}.0', 'libcudart.so.12', 'libcudart.so.11.0']
         for lib_path in cuda_lib_paths:
-            cudart = Path(lib_path) / 'libcudart.so.12'
-            if cudart.exists():
-                try:
-                    ctypes.CDLL(str(cudart))
-                    sys.stderr.write(f'   ✅ Pre-loaded: {cudart.name}\\n')
-                    sys.stderr.flush()
-                    break
-                except:
-                    pass
-    else:
-        sys.stderr.write('ℹ️  [DAEMON] No CUDA libraries found\\n')
+            for cand in candidates:
+                cudart = Path(lib_path) / cand
+                if cudart.exists():
+                    try:
+                        ctypes.CDLL(str(cudart))
+                        sys.stderr.write(f'   ✅ Pre-loaded: {cudart.name}\\n')
+                        sys.stderr.flush()
+                        break
+                    except:
+                        pass
+            if 'cudart' in locals() and 'ctypes.CDLL' in locals(): 
+                break 
+    elif target_cuda_ver:
+        sys.stderr.write(f'ℹ️  [DAEMON] No CUDA libraries found for requested cu{target_cuda_ver}\\n')
         sys.stderr.flush()
     
-    ### POST LD PATH INJECTION ###
-
     globals()['_omnipkg_loaders'] = loaders
     
+    # ═══════════════════════════════════════════════════════════════
+    # STEP 4: CLEANUP CLOAKS (Critical - must happen before imports)
+    # ═══════════════════════════════════════════════════════════════
     sys.stderr.write('🧹 [DAEMON] Starting immediate post-activation cleanup...\\n')
     sys.stderr.flush()
     
     cleanup_count = 0
     
     for loader in loaders:
-        # Restore main env cloaks
         if hasattr(loader, '_cloaked_main_modules') and loader._cloaked_main_modules:
-            sys.stderr.write(f'   🔓 Restoring {len(loader._cloaked_main_modules)} main env cloaks...\\n')
-            sys.stderr.flush()
-            
             for original_path, cloak_path, was_successful in reversed(loader._cloaked_main_modules):
-                if not was_successful or not cloak_path.exists():
+                if not was_successful or not cloak_path.exists(): 
                     continue
-                
                 try:
                     if original_path.exists():
-                        if original_path.is_dir():
+                        if original_path.is_dir(): 
                             shutil.rmtree(original_path, ignore_errors=True)
-                        else:
+                        else: 
                             original_path.unlink()
-                    
                     shutil.move(str(cloak_path), str(original_path))
                     cleanup_count += 1
-                    sys.stderr.write(f'      ✅ Restored: {original_path.name}\\n')
-                    sys.stderr.flush()
-                except Exception as e:
-                    sys.stderr.write(f'      ⚠️  Failed: {original_path.name}: {e}\\n')
-                    sys.stderr.flush()
-            
+                except Exception: 
+                    pass
             loader._cloaked_main_modules.clear()
         
-        # Restore bubble cloaks
         if hasattr(loader, '_cloaked_bubbles') and loader._cloaked_bubbles:
-            sys.stderr.write(f'   🔓 Restoring {len(loader._cloaked_bubbles)} bubble cloaks...\\n')
-            sys.stderr.flush()
-            
             for cloak_path, original_path in reversed(loader._cloaked_bubbles):
                 try:
                     if cloak_path.exists():
                         if original_path.exists():
-                            if original_path.is_dir():
+                            if original_path.is_dir(): 
                                 shutil.rmtree(original_path, ignore_errors=True)
-                            else:
+                            else: 
                                 original_path.unlink()
-                        
                         shutil.move(str(cloak_path), str(original_path))
                         cleanup_count += 1
-                        sys.stderr.write(f'      ✅ Restored: {original_path.name}\\n')
-                        sys.stderr.flush()
-                except Exception as e:
-                    sys.stderr.write(f'      ⚠️  Failed: {original_path.name}: {e}\\n')
-                    sys.stderr.flush()
-            
+                except Exception: 
+                    pass
             loader._cloaked_bubbles.clear()
         
-        # Clean up global tracking
         if hasattr(loader, '_my_main_env_package') and loader._my_main_env_package:
             if hasattr(omnipkgLoader, '_active_main_env_packages'):
                 omnipkgLoader._active_main_env_packages.discard(loader._my_main_env_package)
-        
-        # Clear global cloak registry
-        if hasattr(omnipkgLoader, '_active_cloaks_lock') and hasattr(omnipkgLoader, '_active_cloaks'):
-            with omnipkgLoader._active_cloaks_lock:
-                loader_id = id(loader)
-                cloaks_to_remove = []
-                for cloak_path_str, owner_id in list(omnipkgLoader._active_cloaks.items()):
-                    if owner_id == loader_id:
-                        cloaks_to_remove.append(cloak_path_str)
-                
-                for cloak_path_str in cloaks_to_remove:
-                    omnipkgLoader._active_cloaks.pop(cloak_path_str, None)
-    
+
     sys.stderr.write(f'✅ [DAEMON] Cleanup complete! Restored {cleanup_count} items\\n')
     sys.stderr.flush()
     
 except Exception as e:
     fatal_error(f'Failed to activate {PKG_SPEC}', e)
 
+# ═══════════════════════════════════════════════════════════════
+# STEP 5: RESTORE STDOUT
+# ═══════════════════════════════════════════════════════════════
 _devnull.close()
 sys.stdout = _original_stdout
 sys.stdout.reconfigure(line_buffering=True)
 
-import ctypes
-import glob
-import os
+# ═══════════════════════════════════════════════════════════
+# STEP 6: NOW IMPORT FRAMEWORKS (Paths are in sys.path now!)
+# ═══════════════════════════════════════════════════════════
 
-class UniversalGpuIpc:
-    _lib = None
-    
-    @classmethod
-    def get_lib(cls):
-        if cls._lib: 
-            return cls._lib
-        
-        candidates = []
-        
-        # Try PyTorch's lib directory (if torch is installed)
-        try:
-            import torch
-            torch_lib = os.path.join(os.path.dirname(torch.__file__), 'lib')
-            candidates.extend(glob.glob(os.path.join(torch_lib, 'libcudart.so*')))
-        except: 
-            pass
-        
-        # Try conda environment
-        if 'CONDA_PREFIX' in os.environ:
-            candidates.extend(glob.glob(
-                os.path.join(os.environ['CONDA_PREFIX'], 'lib', 'libcudart.so*')
-            ))
-        
-        # Try system libraries
-        candidates.extend(['libcudart.so.12', 'libcudart.so.11.0', 'libcudart.so'])
-        
-        for lib in candidates:
-            try:
-                cls._lib = ctypes.CDLL(lib)
-                return cls._lib
-            except: 
-                continue
-        
-        raise RuntimeError("Could not load libcudart.so - CUDA not available")
-    
-    @staticmethod
-    def share(tensor):
-        import base64
-        
-        lib = UniversalGpuIpc.get_lib()
-        ptr = tensor.data_ptr()
-        
-        # Define CUDA structures
-        class cudaPointerAttributes(ctypes.Structure):
-            _fields_ = [
-                ("type", ctypes.c_int), 
-                ("device", ctypes.c_int), 
-                ("devicePointer", ctypes.c_void_p), 
-                ("hostPointer", ctypes.c_void_p)
-            ]
-        
-        class cudaIpcMemHandle_t(ctypes.Structure):
-            _fields_ = [("reserved", ctypes.c_char * 64)]
-        
-        # Set function signatures
-        lib.cudaPointerGetAttributes.argtypes = [
-            ctypes.POINTER(cudaPointerAttributes), 
-            ctypes.c_void_p
-        ]
-        lib.cudaIpcGetMemHandle.argtypes = [
-            ctypes.POINTER(cudaIpcMemHandle_t), 
-            ctypes.c_void_p
-        ]
-        
-        # Get base pointer and offset
-        attrs = cudaPointerAttributes()
-        if lib.cudaPointerGetAttributes(ctypes.byref(attrs), ctypes.c_void_p(ptr)) == 0:
-            base_ptr = attrs.devicePointer or ptr
-            offset = ptr - base_ptr
-        else:
-            base_ptr = ptr
-            offset = 0
-        
-        # Get IPC handle
-        handle = cudaIpcMemHandle_t()
-        err = lib.cudaIpcGetMemHandle(ctypes.byref(handle), ctypes.c_void_p(base_ptr))
-        
-        if err != 0:
-            raise RuntimeError(f"cudaIpcGetMemHandle failed with code {err}")
-        
-        # Return JSON-serializable metadata (base64-encode bytes!)
-        handle_bytes = ctypes.string_at(ctypes.byref(handle), 64)
-        return {
-            "handle": base64.b64encode(handle_bytes).decode('ascii'),
-            "offset": offset,
-            "shape": tuple(tensor.shape),
-            "typestr": "<f4",
-            "device": tensor.device.index or 0
-        }
-    
-    @staticmethod
-    def load(data):
-        import base64
-        
-        lib = UniversalGpuIpc.get_lib()
-        
-        class cudaIpcMemHandle_t(ctypes.Structure):
-            _fields_ = [("reserved", ctypes.c_char * 64)]
-        
-        lib.cudaIpcOpenMemHandle.argtypes = [
-            ctypes.POINTER(ctypes.c_void_p), 
-            cudaIpcMemHandle_t, 
-            ctypes.c_uint
-        ]
-        
-        # Reconstruct handle (decode from base64)
-        handle = cudaIpcMemHandle_t()
-        handle_bytes = base64.b64decode(data["handle"])
-        ctypes.memmove(ctypes.byref(handle), handle_bytes, 64)
-        
-        # Open IPC handle
-        dev_ptr = ctypes.c_void_p()
-        err = lib.cudaIpcOpenMemHandle(ctypes.byref(dev_ptr), handle, 1)
-        
-        if err == 201:  # cudaErrorAlreadyMapped
-            return None  # Same process - can't IPC to yourself
-        
-        if err != 0:
-            raise RuntimeError(f"cudaIpcOpenMemHandle failed with code {err}")
-        
-        # Calculate final pointer with offset
-        final_ptr = dev_ptr.value + data["offset"]
-        
-        # Create PyTorch tensor from raw pointer
-        import torch
-        
-        class CUDABuffer:
-            def __init__(self, ptr, shape, typestr):
-                self.__cuda_array_interface__ = {
-                    "data": (ptr, False),
-                    "shape": shape,
-                    "typestr": typestr,
-                    "version": 3
-                }
-        
-        # PyTorch can consume __cuda_array_interface__
-        return torch.as_tensor(
-            CUDABuffer(final_ptr, data["shape"], data["typestr"]), 
-            device=f"cuda:{data['device']}"
-        )
-
-_universal_gpu_ipc_available = False
+# 🔥 CRITICAL FIX: Capture stdout during imports
+# TensorFlow's NumPy patcher writes to stdout, breaking JSON protocol
+import io
+_capture_stdout = io.StringIO()
+_temp_stdout = sys.stdout
+sys.stdout = _capture_stdout
 
 try:
-    # Test if we can load CUDA runtime
-    UniversalGpuIpc.get_lib()
-    _universal_gpu_ipc_available = True
-    sys.stderr.write('🔥🔥🔥 [DAEMON] UNIVERSAL CUDA IPC ENABLED (ctypes - NO PYTORCH NEEDED)\\n')
-    sys.stderr.flush()
-except Exception as e:
-    sys.stderr.write(f'⚠️  [DAEMON] Universal CUDA IPC unavailable: {e}\\n')
-    sys.stderr.flush()
+    import ctypes
+    import glob
+
+    # Lazy import numpy (always safe to try)
+    try:
+        import numpy as np
+    except ImportError:
+        np = None
+        sys.stderr.write('⚠️  [DAEMON] NumPy not found - SHM features disabled\\n')
+        sys.stderr.flush()
+
+    # UniversalGpuIpc class (keep your existing code here - don't change it)
+    class UniversalGpuIpc:
+        _lib = None
+        @classmethod
+        def get_lib(cls):
+            if cls._lib: return cls._lib
+            candidates = []
+            try:
+                import torch
+                torch_lib = os.path.join(os.path.dirname(torch.__file__), 'lib')
+                candidates.extend(glob.glob(os.path.join(torch_lib, 'libcudart.so*')))
+            except: pass
+            if 'CONDA_PREFIX' in os.environ:
+                candidates.extend(glob.glob(os.path.join(os.environ['CONDA_PREFIX'], 'lib', 'libcudart.so*')))
+            candidates.extend(['libcudart.so.12', 'libcudart.so.11.0', 'libcudart.so'])
+            for lib in candidates:
+                try:
+                    cls._lib = ctypes.CDLL(lib)
+                    return cls._lib
+                except: continue
+            raise RuntimeError("Could not load libcudart.so")
+        
+        @staticmethod
+        def share(tensor):
+            import base64
+            lib = UniversalGpuIpc.get_lib()
+            ptr = tensor.data_ptr()
+            class cudaPointerAttributes(ctypes.Structure):
+                _fields_ = [("type", ctypes.c_int), ("device", ctypes.c_int), 
+                            ("devicePointer", ctypes.c_void_p), ("hostPointer", ctypes.c_void_p)]
+            class cudaIpcMemHandle_t(ctypes.Structure):
+                _fields_ = [("reserved", ctypes.c_char * 64)]
+            lib.cudaPointerGetAttributes.argtypes = [ctypes.POINTER(cudaPointerAttributes), ctypes.c_void_p]
+            lib.cudaIpcGetMemHandle.argtypes = [ctypes.POINTER(cudaIpcMemHandle_t), ctypes.c_void_p]
+            attrs = cudaPointerAttributes()
+            if lib.cudaPointerGetAttributes(ctypes.byref(attrs), ctypes.c_void_p(ptr)) == 0:
+                base_ptr = attrs.devicePointer or ptr
+                offset = ptr - base_ptr
+            else:
+                base_ptr = ptr
+                offset = 0
+            handle = cudaIpcMemHandle_t()
+            err = lib.cudaIpcGetMemHandle(ctypes.byref(handle), ctypes.c_void_p(base_ptr))
+            if err != 0: raise RuntimeError(f"cudaIpcGetMemHandle failed: {err}")
+            handle_bytes = ctypes.string_at(ctypes.byref(handle), 64)
+            return {"handle": base64.b64encode(handle_bytes).decode('ascii'), "offset": offset,
+                    "shape": tuple(tensor.shape), "typestr": "<f4", "device": tensor.device.index or 0}
+        
+        @staticmethod
+        def load(data):
+            import base64
+            lib = UniversalGpuIpc.get_lib()
+            class cudaIpcMemHandle_t(ctypes.Structure):
+                _fields_ = [("reserved", ctypes.c_char * 64)]
+            lib.cudaIpcOpenMemHandle.argtypes = [ctypes.POINTER(ctypes.c_void_p), cudaIpcMemHandle_t, ctypes.c_uint]
+            handle = cudaIpcMemHandle_t()
+            handle_bytes = base64.b64decode(data["handle"])
+            ctypes.memmove(ctypes.byref(handle), handle_bytes, 64)
+            dev_ptr = ctypes.c_void_p()
+            err = lib.cudaIpcOpenMemHandle(ctypes.byref(dev_ptr), handle, 1)
+            if err == 201: return None 
+            if err != 0: raise RuntimeError(f"cudaIpcOpenMemHandle failed: {err}")
+            final_ptr = dev_ptr.value + data["offset"]
+            import torch
+            class CUDABuffer:
+                def __init__(self, ptr, shape, typestr):
+                    self.__cuda_array_interface__ = { "data": (ptr, False), "shape": shape, "typestr": typestr, "version": 3 }
+            return torch.as_tensor(CUDABuffer(final_ptr, data["shape"], data["typestr"]), device=f"cuda:{data['device']}")
+
+    _universal_gpu_ipc_available = False
+    try:
+        UniversalGpuIpc.get_lib()
+        _universal_gpu_ipc_available = True
+        sys.stderr.write('🔥🔥🔥 [DAEMON] UNIVERSAL CUDA IPC ENABLED (ctypes - NO PYTORCH NEEDED)\\n')
+        sys.stderr.flush()
+    except Exception: 
+        pass
+
+    # Import TensorFlow if in spec
+    if 'tensorflow' in PKG_SPEC:
+        try:
+            import tensorflow as tf
+            gpus = tf.config.list_physical_devices('GPU')
+            if gpus:
+                for gpu in gpus:
+                    try: 
+                        tf.config.experimental.set_memory_growth(gpu, True)
+                    except: 
+                        pass
+            sys.stderr.write('✅ [DAEMON] TensorFlow initialized (Memory Growth ON)\\n')
+            sys.stderr.flush()
+        except Exception as e:
+            sys.stderr.write(f'⚠️  [DAEMON] TensorFlow import failed: {e}\\n')
+            sys.stderr.flush()
+
+    # Import PyTorch if in spec
+    if 'torch' in PKG_SPEC:
+        try:
+            import torch
+            _torch_available = True
+            _cuda_available = torch.cuda.is_available()
+            sys.stderr.write(f'🔍 [DAEMON] PyTorch {torch.__version__} initialized\\n')
+            sys.stderr.flush()
+            
+            if _cuda_available:
+                torch_version = torch.__version__.split('+')[0]
+                major = int(torch_version.split('.')[0])
+                if major == 1:
+                    try:
+                        test_tensor = torch.zeros(1).cuda()
+                        if hasattr(test_tensor.storage(), '_share_cuda_'):
+                            _native_ipc_mode = True
+                            _gpu_ipc_available = True
+                            sys.stderr.write('🔥🔥🔥 [DAEMON] NATIVE CUDA IPC ENABLED\\n')
+                            sys.stderr.flush()
+                    except: 
+                        pass
+                else:
+                    _gpu_ipc_available = True
+                    sys.stderr.write('🚀 [DAEMON] GPU IPC available (Hybrid/Universal)\\n')
+                    sys.stderr.flush()
+        except Exception as e:
+            sys.stderr.write(f'⚠️  [DAEMON] PyTorch import failed: {e}\\n')
+            sys.stderr.flush()
+
+    # If neither is available, Universal IPC might still work via ctypes
+    if _universal_gpu_ipc_available:
+        _gpu_ipc_available = True
+
+finally:
+    # 🔥 RESTORE STDOUT and log any captured output to stderr
+    sys.stdout = _temp_stdout
+    _captured = _capture_stdout.getvalue()
+    if _captured:
+        sys.stderr.write(f'📝 [DAEMON] Captured stdout during imports:\\n{_captured}')
+        sys.stderr.flush()
 
 # ═══════════════════════════════════════════════════════════════
-# NOW CHECK GPU IPC AFTER LOADER ACTIVATION (SEES BUBBLE TORCH)
+# 🔥 CRITICAL FIX: Import torch/tensorflow AFTER activation
 # ═══════════════════════════════════════════════════════════════
 from multiprocessing import shared_memory
 from contextlib import redirect_stdout, redirect_stderr
 import io
-import numpy as np
 import base64
 
 _gpu_ipc_available = False
@@ -708,81 +697,60 @@ _torch_available = False
 _cuda_available = False
 _native_ipc_mode = False
 
-try:
-    import tensorflow as tf
-    # Prevent TensorFlow from hogging all VRAM
-    gpus = tf.config.list_physical_devices('GPU')
-    if gpus:
-        for gpu in gpus:
-            tf.config.experimental.set_memory_growth(gpu, True)
-        sys.stderr.write('✅ [DAEMON] TensorFlow GPU memory growth enabled\\n')
-except Exception as e:
-    pass
+# Only check TensorFlow if it's in the spec
+if 'tensorflow' in PKG_SPEC:
+    try:
+        import tensorflow as tf
+        gpus = tf.config.list_physical_devices('GPU')
+        if gpus:
+            for gpu in gpus:
+                try: 
+                    tf.config.experimental.set_memory_growth(gpu, True)
+                except: 
+                    pass
+        sys.stderr.write('✅ [DAEMON] TensorFlow initialized (Memory Growth ON)\\n')
+        sys.stderr.flush()
+    except Exception as e:
+        sys.stderr.write(f'⚠️  [DAEMON] TensorFlow import failed: {e}\\n')
+        sys.stderr.flush()
 
-try:
-    import torch
-    _torch_available = True
-    _cuda_available = torch.cuda.is_available()
-    
-    sys.stderr.write(f'🔍 [DAEMON] Detected PyTorch version: {torch.__version__}\\n')
-    sys.stderr.flush()
-    
-    if _cuda_available:
-        # Check for PyTorch 1.x native CUDA IPC
-        torch_version = torch.__version__.split('+')[0]
-        major = int(torch_version.split('.')[0])
-        
-        sys.stderr.write(f'🔍 [DAEMON] PyTorch major version: {major}\\n')
+# Only check PyTorch if it's in the spec
+if 'torch' in PKG_SPEC:
+    try:
+        import torch
+        _torch_available = True
+        _cuda_available = torch.cuda.is_available()
+        sys.stderr.write(f'🔍 [DAEMON] PyTorch {torch.__version__} initialized\\n')
         sys.stderr.flush()
         
-        if major == 1:
-            sys.stderr.write(f'🔍 [DAEMON] Checking for native CUDA IPC support...\\n')
-            sys.stderr.flush()
-            
-            try:
-                # Test if we can use native CUDA IPC via storage._share_cuda_()
-                test_tensor = torch.zeros(1).cuda()
-                test_storage = test_tensor.storage()
-                
-                if hasattr(test_storage, '_share_cuda_'):
-                    # Try to get IPC handle
-                    ipc_data = test_storage._share_cuda_()
-                    if len(ipc_data) == 8:
+        if _cuda_available:
+            torch_version = torch.__version__.split('+')[0]
+            major = int(torch_version.split('.')[0])
+            if major == 1:
+                try:
+                    test_tensor = torch.zeros(1).cuda()
+                    if hasattr(test_tensor.storage(), '_share_cuda_'):
                         _native_ipc_mode = True
                         _gpu_ipc_available = True
-                        sys.stderr.write('🔥🔥🔥 [DAEMON] NATIVE CUDA IPC ENABLED (PyTorch 1.x - TRUE ZERO-COPY)\\n')
+                        sys.stderr.write('🔥🔥🔥 [DAEMON] NATIVE CUDA IPC ENABLED\\n')
                         sys.stderr.flush()
-                    else:
-                        sys.stderr.write(f'⚠️  [DAEMON] _share_cuda_() returned unexpected data: {len(ipc_data)} elements\\n')
-                        sys.stderr.flush()
-                else:
-                    _gpu_ipc_available = True
-                    sys.stderr.write('⚠️  [DAEMON] PyTorch 1.x but _share_cuda_() not available\\n')
-                    sys.stderr.flush()
-            except Exception as e:
-                sys.stderr.write(f'⚠️  [DAEMON] CUDA IPC test failed: {e}\\n')
-                sys.stderr.flush()
-        else:
-            # PyTorch 2.x - hybrid mode only
-            sys.stderr.write(f'ℹ️  [DAEMON] PyTorch {major}.x - using hybrid mode\\n')
-            sys.stderr.flush()
-            try:
-                test_tensor = torch.zeros(1).cuda()
-                test_tensor.share_memory_()
+                except: 
+                    pass
+            else:
                 _gpu_ipc_available = True
-                sys.stderr.write('🚀 [DAEMON] GPU IPC available via PyTorch CUDA (hybrid mode)\\n')
+                sys.stderr.write('🚀 [DAEMON] GPU IPC available (Hybrid/Universal)\\n')
                 sys.stderr.flush()
-            except:
-                sys.stderr.write('⚠️  [DAEMON] PyTorch CUDA detected but IPC unavailable\\n')
-                sys.stderr.flush()
-except ImportError as e:
-    sys.stderr.write(f'⚠️  [DAEMON] Failed to import torch: {e}\\n')
-    sys.stderr.flush()
+    except Exception as e:
+        sys.stderr.write(f'⚠️  [DAEMON] PyTorch import failed: {e}\\n')
+        sys.stderr.flush()
 
-if not _gpu_ipc_available:
-    sys.stderr.write('ℹ️  [DAEMON] Running in CPU-only mode (standard SHM)\\n')
-    sys.stderr.flush()
+# If neither is available, Universal IPC might still work via ctypes
+if _universal_gpu_ipc_available:
+    _gpu_ipc_available = True
 
+# ═══════════════════════════════════════════════════════════════
+# STEP 7: SEND READY SIGNAL
+# ═══════════════════════════════════════════════════════════════
 try:
     ready_msg = {'status': 'READY', 'package': PKG_SPEC, 'native_ipc': _native_ipc_mode}
     print(json.dumps(ready_msg), flush=True)
@@ -895,6 +863,8 @@ while True:
 
         # HYBRID PATH (SHM + GPU copy)
         if in_meta and 'tensor_in' not in exec_scope:
+            if np is None:
+                raise RuntimeError("NumPy is required for SHM inputs but is not available")
             shm_name = in_meta.get('shm_name') or in_meta.get('name')
             shm_in = shared_memory.SharedMemory(name=shm_name)
             shm_blocks.append(shm_in)
@@ -991,6 +961,8 @@ while True:
 
         # HYBRID PATH (SHM + GPU copy) OUTPUT
         if out_meta and 'tensor_out' not in exec_scope:
+            if np is None:
+                raise RuntimeError("NumPy is required for SHM outputs but is not available")
             shm_name = out_meta.get('shm_name') or out_meta.get('name')
             shm_out = shared_memory.SharedMemory(name=shm_name)
             shm_blocks.append(shm_out)
@@ -1090,7 +1062,7 @@ def diagnose_worker_issue(package_spec: str):
     """
     Run this to diagnose why a worker might return the wrong version.
     """
-    print(f"\n🔍 Diagnosing worker issue for: {package_spec}")
+    safe_print(f"\n🔍 Diagnosing worker issue for: {package_spec}")
     print("=" * 70)
     
     pkg_name, expected_version = package_spec.split('==')
@@ -1106,14 +1078,14 @@ def diagnose_worker_issue(package_spec: str):
     try:
         from importlib.metadata import version
         actual_version = version(pkg_name)
-        print(f"   ✅ Found version: {actual_version}")
+        safe_print(f"   ✅ Found version: {actual_version}")
         
         if actual_version != expected_version:
-            print(f"   ❌ VERSION MISMATCH!")
+            safe_print(f"   ❌ VERSION MISMATCH!")
             print(f"      Expected: {expected_version}")
             print(f"      Got: {actual_version}")
     except Exception as e:
-        print(f"   ❌ Import failed: {e}")
+        safe_print(f"   ❌ Import failed: {e}")
     
     # Check for bubble
     from pathlib import Path
@@ -1180,14 +1152,14 @@ class PersistentWorker:
                 raise RuntimeError(f"Worker crashed during startup. Stderr: {stderr_output}")
             
             # Check for READY on stdout (non-blocking)
-            ready, _, _ = select.select([process.stdout], [], [], 0.1)
+            ready, unused, unused = select.select([process.stdout], [], [], 0.1)
             if ready:
                 ready_line = process.stdout.readline()
                 if ready_line:
                     return ready_line
             
             # Collect stderr (non-blocking)
-            err_ready, _, _ = select.select([process.stderr], [], [], 0.0)
+            err_ready, unused, unused = select.select([process.stderr], [], [], 0.0)
             if err_ready:
                 line = process.stderr.readline()
                 if line:
@@ -1278,7 +1250,7 @@ class PersistentWorker:
                 raise TimeoutError(f"Task exceeded maximum time limit ({max_total_time}s)")
             
             # Check for response (non-blocking)
-            ready, _, _ = select.select([worker_process.stdout], [], [], 0.1)
+            ready, unused, unused = select.select([worker_process.stdout], [], [], 0.1)
             if ready:
                 response_line = worker_process.stdout.readline()
                 if response_line:
@@ -1330,23 +1302,30 @@ class PersistentWorker:
     def _discover_cuda_paths(self) -> List[str]:
         """
         Discover CUDA library paths for this package spec.
-        Checks bubbles for nvidia-* packages.
+        Dynamically detects CUDA version requirement (cu11 vs cu12).
         """
         from pathlib import Path
         
         cuda_paths = []
         
-        # Parse package name from spec
+        # 1. Detect required CUDA version from spec
+        # e.g. "torch==2.0.0+cu118" -> target="11"
+        target_cuda = "12" # Default to modern
+        if "+cu11" in self.package_spec or "cu11" in self.package_spec:
+            target_cuda = "11"
+        elif "+cu12" in self.package_spec or "cu12" in self.package_spec:
+            target_cuda = "12"
+        
+        # Parse package name
         pkg_name = self.package_spec.split('==')[0] if '==' in self.package_spec else self.package_spec
         
-        # Get the multiversion base (bubble directory)
+        # Get the multiversion base
         try:
             # Import here to avoid circular dependency
             from omnipkg.loader import omnipkgLoader
             loader = omnipkgLoader(package_spec=self.package_spec, quiet=True)
             multiversion_base = loader.multiversion_base
         except Exception:
-            # Fallback: try to find it in sys.path
             import site
             site_packages = Path(site.getsitepackages()[0])
             multiversion_base = site_packages / '.omnipkg_versions'
@@ -1354,57 +1333,53 @@ class PersistentWorker:
         if not multiversion_base.exists():
             return cuda_paths
         
-        # Strategy 1: Check the main package bubble for NVIDIA dependencies
+        # Strategy 1: Check main bubble
         _, version = self.package_spec.split('==') if '==' in self.package_spec else (pkg_name, None)
         if version:
             main_bubble = multiversion_base / f"{pkg_name}-{version}"
             if main_bubble.exists():
-                # Scan for symlinked or nested nvidia packages
                 for nvidia_dir in main_bubble.glob('nvidia_*'):
                     if nvidia_dir.is_dir():
-                        # Check for lib subdirectory
                         lib_dir = nvidia_dir / 'lib'
                         if lib_dir.exists():
                             cuda_paths.append(str(lib_dir))
-                        # Also check for .so files directly in package dir
                         if list(nvidia_dir.glob('*.so*')):
                             cuda_paths.append(str(nvidia_dir))
         
-        # Strategy 2: Check for standalone NVIDIA bubbles
-        # These are the separate nvidia-cuda-runtime-cu12-12.1.105 bubbles
+        # Strategy 2: Check standalone NVIDIA bubbles using TARGET VERSION
+        # We only look for the version requested in the spec
         nvidia_bubble_patterns = [
-            'nvidia-cuda-runtime-cu12-*',
-            'nvidia-cudnn-cu12-*',
-            'nvidia-cublas-cu12-*',
-            'nvidia-cufft-cu12-*',
-            'nvidia-cusolver-cu12-*',
-            'nvidia-cusparse-cu12-*',
+            f'nvidia-cuda-runtime-cu{target_cuda}-*',
+            f'nvidia-cudnn-cu{target_cuda}-*',
+            f'nvidia-cublas-cu{target_cuda}-*',
+            f'nvidia-cufft-cu{target_cuda}-*',
+            f'nvidia-cusolver-cu{target_cuda}-*',
+            f'nvidia-cusparse-cu{target_cuda}-*',
+            f'nvidia-nccl-cu{target_cuda}-*',
+            f'nvidia-nvtx-cu{target_cuda}-*',
         ]
         
         for pattern in nvidia_bubble_patterns:
             for nvidia_bubble in multiversion_base.glob(pattern):
                 if nvidia_bubble.is_dir() and '_omnipkg_cloaked' not in nvidia_bubble.name:
-                    # Find the package directory inside
-                    pkg_dir_name = nvidia_bubble.name.split('-')[0:3]  # e.g., ['nvidia', 'cuda', 'runtime']
-                    pkg_dir_name = '_'.join(pkg_dir_name)  # 'nvidia_cuda_runtime'
+                    pkg_dir_name = nvidia_bubble.name.split('-')[0:3]
+                    pkg_dir_name = '_'.join(pkg_dir_name)
                     
                     pkg_dir = nvidia_bubble / pkg_dir_name
                     if pkg_dir.exists():
-                        # Check for lib subdirectory
                         lib_dir = pkg_dir / 'lib'
                         if lib_dir.exists():
                             cuda_paths.append(str(lib_dir))
-                        # Check for .so files in package dir
                         if list(pkg_dir.glob('*.so*')):
                             cuda_paths.append(str(pkg_dir))
         
         return cuda_paths
-
+    
     def _start_worker(self):
         """Start worker process with proper error handling."""
         # CRITICAL DEBUG: Check _DAEMON_SCRIPT before writing
-        print(f"\n🔍 DEBUG: _DAEMON_SCRIPT length: {len(_DAEMON_SCRIPT)} chars", file=sys.stderr)
-        print(f"🔍 DEBUG: Last 200 chars of _DAEMON_SCRIPT:", file=sys.stderr)
+        safe_print(f"\n🔍 DEBUG: _DAEMON_SCRIPT length: {len(_DAEMON_SCRIPT)} chars", file=sys.stderr)
+        safe_print(f"🔍 DEBUG: Last 200 chars of _DAEMON_SCRIPT:", file=sys.stderr)
         print(f"   '{_DAEMON_SCRIPT[-200:]}'", file=sys.stderr)
         
         # Create temp script file
@@ -1417,20 +1392,20 @@ class PersistentWorker:
             self.temp_file = f.name
         
         # CRITICAL DEBUG: Print the temp file path and validate syntax
-        print(f"\n🔍 DEBUG: Worker script written to: {self.temp_file}", file=sys.stderr)
-        print(f"🔍 DEBUG: File size: {os.path.getsize(self.temp_file)} bytes", file=sys.stderr)
+        safe_print(f"\n🔍 DEBUG: Worker script written to: {self.temp_file}", file=sys.stderr)
+        safe_print(f"🔍 DEBUG: File size: {os.path.getsize(self.temp_file)} bytes", file=sys.stderr)
         
         # Validate syntax before running
         try:
             with open(self.temp_file, 'r') as f:
                 script_content = f.read()
             compile(script_content, self.temp_file, 'exec')
-            print(f"✅ DEBUG: Script syntax is valid", file=sys.stderr)
+            safe_print(f"✅ DEBUG: Script syntax is valid", file=sys.stderr)
         except SyntaxError as e:
-            print(f"\n💥 SYNTAX ERROR IN GENERATED SCRIPT!", file=sys.stderr)
+            safe_print(f"\n💥 SYNTAX ERROR IN GENERATED SCRIPT!", file=sys.stderr)
             print(f"   File: {self.temp_file}", file=sys.stderr)
             print(f"   Line {e.lineno}: {e.msg}", file=sys.stderr)
-            print(f"\n📄 SCRIPT CONTENT (last 50 lines):", file=sys.stderr)
+            safe_print(f"\n📄 SCRIPT CONTENT (last 50 lines):", file=sys.stderr)
             with open(self.temp_file, 'r') as f:
                 lines = f.readlines()
                 start_line = max(0, len(lines) - 50)
@@ -1443,6 +1418,9 @@ class PersistentWorker:
         current_pythonpath = env.get('PYTHONPATH', '')
         env['PYTHONPATH'] = f"{os.getcwd()}{os.pathsep}{current_pythonpath}"
         
+        # 🔥 FIX: Open daemon log for worker stderr (store as instance variable)
+        self.log_file = open(DAEMON_LOG_FILE, 'a', buffering=1)  # Line buffering
+        
         # ═══════════════════════════════════════════════════════════
         # 🔥 NEW: INJECT CUDA LIBRARY PATHS BEFORE SPAWN
         # ═══════════════════════════════════════════════════════════
@@ -1454,7 +1432,7 @@ class PersistentWorker:
                 new_ld = new_ld + os.pathsep + current_ld
             env['LD_LIBRARY_PATH'] = new_ld
             
-            print(f"🔧 [WORKER] Injecting {len(cuda_lib_paths)} CUDA paths into environment", file=sys.stderr)
+            safe_print(f"🔧 [WORKER] Injecting {len(cuda_lib_paths)} CUDA paths into environment", file=sys.stderr)
             for path in cuda_lib_paths:
                 print(f"   - {path}", file=sys.stderr)
         
@@ -1465,11 +1443,11 @@ class PersistentWorker:
             [self.python_exe, '-u', self.temp_file],
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
-            stderr=self.log_file,
+            stderr=self.log_file,  # ✅ Log to file instead of /dev/null
             text=True,
             bufsize=0,
-            env=env,  # ← Use modified env
-            preexec_fn=os.setsid
+            env=env,
+            preexec_fn=os.setsid if not IS_WINDOWS else None  # 🔥 Windows fix
         )
         
         # Send setup command
@@ -1484,7 +1462,7 @@ class PersistentWorker:
         # Wait for READY with timeout
         try:
             # ONLY check stdout now (stderr is going to log file)
-            readable, _, _ = select.select([self.process.stdout], [], [], 30.0)
+            readable, unused, unused = select.select([self.process.stdout], [], [], 30.0)
             
             ready_line = None
 
@@ -1539,7 +1517,7 @@ class PersistentWorker:
                 self.process.stdin.flush()
                 
                 # Wait for response
-                readable, _, _ = select.select([self.process.stdout], [], [], timeout)
+                readable, unused, unused = select.select([self.process.stdout], [], [], timeout)
                 
                 if not readable:
                     raise TimeoutError(f"Task timed out after {timeout}s")
@@ -1580,13 +1558,16 @@ class PersistentWorker:
                     self.process.wait(timeout=2)
                 except Exception:
                     try:
-                        os.killpg(os.getpgid(self.process.pid), signal.SIGKILL)
+                        if not IS_WINDOWS:
+                            os.killpg(os.getpgid(self.process.pid), signal.SIGKILL)
+                        else:
+                            self.process.terminate()
                     except Exception:
                         pass
                 finally:
                     self.process = None
             
-            # Close log file
+            # 🔥 FIX: Close log file handle
             if hasattr(self, 'log_file') and self.log_file:
                 try:
                     self.log_file.close()
@@ -1609,8 +1590,8 @@ class WorkerPoolDaemon:
         self.max_idle_time = max_idle_time
         self.warmup_specs = warmup_specs or []
         self.workers: Dict[str, Dict[str, Any]] = {}
-        self.worker_locks: Dict[str, threading.RLock] = defaultdict(threading.RLock)  # Per-spec locks
-        self.pool_lock = threading.RLock()  # Only for pool modifications
+        self.worker_locks: Dict[str, threading.RLock] = defaultdict(threading.RLock)
+        self.pool_lock = threading.RLock()
         self.running = True
         self.socket_path = DEFAULT_SOCKET
         self.stats = {
@@ -1626,20 +1607,27 @@ class WorkerPoolDaemon:
         if self.is_running():
             return
         
-        if daemonize:
+        # 🔥 FIX: Windows: Use subprocess spawn instead of fork
+        if IS_WINDOWS and daemonize:
+            return self._start_windows_daemon()
+        
+        # Unix: Use traditional fork
+        if daemonize and not IS_WINDOWS:
             self._daemonize()
         
         with open(PID_FILE, 'w') as f:
             f.write(str(os.getpid()))
         
-        # CRITICAL FIX: Only register signals if we're in the main thread
+        # 🔥 FIX: Signal handlers only in main thread AND not on Windows
         try:
             import threading
             if threading.current_thread() is threading.main_thread():
-                signal.signal(signal.SIGTERM, self._handle_shutdown)
-                signal.signal(signal.SIGINT, self._handle_shutdown)
-        except ValueError:
-            # We're not in the main thread, skip signal handlers
+                if not IS_WINDOWS:  # Windows doesn't have SIGTERM
+                    signal.signal(signal.SIGTERM, self._handle_shutdown)
+                    signal.signal(signal.SIGINT, self._handle_shutdown)
+        except (ValueError, AttributeError):
+            # ValueError: not in main thread
+            # AttributeError: signal module doesn't have SIGTERM (Windows)
             pass
         
         # Cleanup orphaned SHM blocks from previous runs
@@ -1651,6 +1639,46 @@ class WorkerPoolDaemon:
         threading.Thread(target=self._warmup_workers, daemon=True, name="warmup").start()
         
         self._run_socket_server()
+
+    def _start_windows_daemon(self):
+        """Start daemon on Windows using subprocess (no fork)."""
+        import subprocess
+        
+        daemon_script = os.path.abspath(__file__)
+        
+        safe_print("🚀 Starting daemon in background (Windows mode)...", file=sys.stderr)
+        
+        try:
+            # Windows flags for detached process
+            DETACHED_PROCESS = 0x00000008
+            CREATE_NEW_PROCESS_GROUP = 0x00000200
+            
+            # Spawn detached process
+            process = subprocess.Popen(
+                [sys.executable, daemon_script, "start", "--no-fork"],
+                creationflags=DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP,
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=open(DAEMON_LOG_FILE, 'a'),
+                close_fds=False  # Can't close_fds with creationflags on Windows
+            )
+            
+            # Wait for initialization
+            time.sleep(2)
+            
+            # Check if it started
+            if self.is_running():
+                safe_print(f"✅ Daemon started successfully (PID: {process.pid})", file=sys.stderr)
+                sys.exit(0)
+            else:
+                safe_print(f"❌ Daemon failed to start (check {DAEMON_LOG_FILE})", file=sys.stderr)
+                sys.exit(1)
+                
+        except Exception as e:
+            safe_print(f"❌ Failed to start daemon: {e}", file=sys.stderr)
+            import traceback
+            traceback.print_exc()
+            sys.exit(1)
     
     def _daemonize(self):
         """Double-fork daemonization with visual feedback."""
@@ -1660,7 +1688,7 @@ class WorkerPoolDaemon:
                 # ---------------------------------------------------------
                 # PARENT PROCESS: Print success and exit
                 # ---------------------------------------------------------
-                print(f"✅ Daemon started successfully (PID: {pid})")
+                safe_print(f"✅ Daemon started successfully (PID: {pid})")
                 sys.exit(0)
         except OSError as e:
             sys.stderr.write(f"fork #1 failed: {e}\n")
@@ -1714,7 +1742,7 @@ class WorkerPoolDaemon:
         while self.running:
             try:
                 sock.settimeout(1.0)
-                conn, _ = sock.accept()
+                conn, unused = sock.accept()
                 # CRITICAL FIX: Use thread pool instead of unbounded threads
                 self.executor.submit(self._handle_client, conn)
             except socket.timeout:
@@ -1768,53 +1796,140 @@ class WorkerPoolDaemon:
                 pass
     
     def _execute_code(self, spec: str, code: str, shm_in: dict, shm_out: dict, python_exe: str = None) -> dict:
+        """
+        SIMPLIFIED: Just pass through to worker, let loader handle ALL locking.
+        Daemon only blocks on worker creation (fast), not on filesystem ops.
+        """
         if not python_exe:
             python_exe = sys.executable
         
         worker_key = f"{spec}::{python_exe}"
         
-        with self.worker_locks[worker_key]:
-            # 🔥 FIX: Get worker_info inside the pool_lock
-            with self.pool_lock:
-                if worker_key not in self.workers:
-                    if len(self.workers) >= self.max_workers:
-                        self._evict_oldest_worker_async()
-                    
-                    try:
-                        worker = PersistentWorker(spec, python_exe=python_exe)
-                        self.workers[worker_key] = {
-                            'worker': worker,
-                            'created': time.time(),
-                            'last_used': time.time(),
-                            'request_count': 0,
-                            'memory_mb': 0.0
-                        }
-                        self.stats['workers_created'] += 1
-                    except Exception as e:
-                        import traceback
-                        error_msg = f'Worker creation failed: {e}\n{traceback.format_exc()}'
-                        return {'success': False, 'error': error_msg, 'status': 'ERROR'}
-                else:
-                    self.stats['cache_hits'] += 1
-                
-                # 🔥 FIX: Always get worker_info from dict (works for both branches)
+        # ═══════════════════════════════════════════════════════════════
+        # FAST PATH: Worker exists, execute immediately
+        # ═══════════════════════════════════════════════════════════════
+        with self.pool_lock:
+            if worker_key in self.workers:
+                self.stats['cache_hits'] += 1
                 worker_info = self.workers[worker_key]
-            
-            # Execute outside pool lock
+        
+        if worker_key in self.workers:
             worker_info['last_used'] = time.time()
             worker_info['request_count'] += 1
             
             try:
                 result = worker_info['worker'].execute_shm_task(
                     f"{spec}-{self.stats['total_requests']}",
-                    code,
-                    shm_in,
-                    shm_out,
-                    timeout=60.0
+                    code, shm_in, shm_out, timeout=60.0
                 )
                 return result
             except Exception as e:
                 return {'success': False, 'error': str(e)}
+        
+        # ═══════════════════════════════════════════════════════════════
+        # SLOW PATH: Create worker (loader handles all locking internally)
+        # ═══════════════════════════════════════════════════════════════
+        with self.worker_locks[worker_key]:  # Only prevents duplicate worker creation
+            # Double-check after acquiring lock
+            with self.pool_lock:
+                if worker_key in self.workers:
+                    self.stats['cache_hits'] += 1
+                    worker_info = self.workers[worker_key]
+                    
+                    worker_info['last_used'] = time.time()
+                    worker_info['request_count'] += 1
+                    
+                    try:
+                        result = worker_info['worker'].execute_shm_task(
+                            f"{spec}-{self.stats['total_requests']}",
+                            code, shm_in, shm_out, timeout=60.0
+                        )
+                        return result
+                    except Exception as e:
+                        return {'success': False, 'error': str(e)}
+            
+            # Check capacity
+            with self.pool_lock:
+                if len(self.workers) >= self.max_workers:
+                    self._evict_oldest_worker_async()
+            
+            # Create worker - loader's __enter__ handles ALL the locking
+            try:
+                worker = PersistentWorker(spec, python_exe=python_exe)
+                
+                with self.pool_lock:
+                    self.workers[worker_key] = {
+                        'worker': worker,
+                        'created': time.time(),
+                        'last_used': time.time(),
+                        'request_count': 0,
+                        'memory_mb': 0.0
+                    }
+                    self.stats['workers_created'] += 1
+                    worker_info = self.workers[worker_key]
+            
+            except Exception as e:
+                import traceback
+                error_msg = f'Worker creation failed: {e}\n{traceback.format_exc()}'
+                return {'success': False, 'error': error_msg, 'status': 'ERROR'}
+        
+        # Execute (outside all locks)
+        worker_info['last_used'] = time.time()
+        worker_info['request_count'] += 1
+        
+        try:
+            result = worker_info['worker'].execute_shm_task(
+                f"{spec}-{self.stats['total_requests']}",
+                code, shm_in, shm_out, timeout=60.0
+            )
+            return result
+        except Exception as e:
+            return {'success': False, 'error': str(e)}
+
+    def _get_install_lock_for_daemon(self, spec: str) -> filelock.FileLock:
+        """
+        Separate install lock (prevents duplicate installations).
+        This is DIFFERENT from worker_locks (which protect worker creation).
+        """
+        lock_name = f"daemon-install-{spec.replace('==', '-')}"
+        
+        if not hasattr(self, '_install_locks'):
+            self._install_locks = {}
+        
+        if lock_name not in self._install_locks:
+            lock_file = Path('/tmp') / f"{lock_name}.lock"
+            self._install_locks[lock_name] = filelock.FileLock(
+                str(lock_file),
+                timeout=300  # 5 minute max for installation
+            )
+        
+        return self._install_locks[lock_name]
+
+    def _install_bubble_for_worker(self, spec: str) -> bool:
+        """
+        Install a bubble directly (called by daemon during worker creation).
+        Returns True if successful.
+        """
+        try:
+            from omnipkg.core import omnipkg as OmnipkgCore
+            from omnipkg.core import ConfigManager
+            
+            cm = ConfigManager(suppress_init_messages=True)
+            core = OmnipkgCore(cm)
+            
+            original_strategy = core.config.get('install_strategy')
+            core.config['install_strategy'] = 'stable-main'
+            
+            try:
+                result = core.smart_install([spec])
+                return result == 0
+            finally:
+                if original_strategy:
+                    core.config['install_strategy'] = original_strategy
+        
+        except Exception as e:
+            safe_print(f"   ❌ [DAEMON] Installation failed: {e}", file=sys.stderr)
+            return False
 
     def _execute_cuda_code(self, spec: str, code: str, cuda_in: dict, cuda_out: dict, python_exe: str = None) -> dict:
         """Execute code with CUDA IPC tensors."""
@@ -1823,49 +1938,19 @@ class WorkerPoolDaemon:
         
         worker_key = f"{spec}::{python_exe}"
         
-        with self.worker_locks[worker_key]:
-            with self.pool_lock:
-                if worker_key not in self.workers:
-                    # Check capacity
-                    if len(self.workers) >= self.max_workers:
-                        self._evict_oldest_worker_async()
-                    
-                    # Create worker
-                    try:
-                        worker = PersistentWorker(spec, python_exe=python_exe)
-                        self.workers[worker_key] = {
-                            'worker': worker,
-                            'created': time.time(),
-                            'last_used': time.time(),
-                            'request_count': 0,
-                            'memory_mb': 0.0,
-                            'is_gpu_worker': True,      # 🔥 FIX: Set inside dict creation
-                            'gpu_timeout': 60
-                        }
-                        self.stats['workers_created'] += 1
-                    except Exception as e:
-                        import traceback
-                        error_msg = f'Worker creation failed: {e}\n{traceback.format_exc()}'
-                        return {'success': False, 'error': error_msg, 'status': 'ERROR'}
-                else:
-                    self.stats['cache_hits'] += 1
-                    # 🔥 FIX: Mark existing worker as GPU worker too
-                    self.workers[worker_key]['is_gpu_worker'] = True
-                    self.workers[worker_key]['gpu_timeout'] = 60
-                
-                # 🔥 FIX: Get worker_info AFTER it's definitely in the dict
+        # FAST PATH
+        with self.pool_lock:
+            if worker_key in self.workers:
+                self.stats['cache_hits'] += 1
                 worker_info = self.workers[worker_key]
-            
-            # Execute outside pool lock
+        
+        if worker_key in self.workers:
             worker_info['last_used'] = time.time()
             worker_info['request_count'] += 1
-            # In _execute_cuda_code, after creating worker_info dict:
-            if 'tensorflow' in spec.lower():
-                worker_info['is_gpu_worker'] = True
-                worker_info['gpu_timeout'] = 30  # Even more aggressive for TF (30s)
-                worker_info['tensorflow_worker'] = True
+            worker_info['is_gpu_worker'] = True
+            worker_info['gpu_timeout'] = 60
+            
             try:
-                # Send CUDA IPC command
                 command = {
                     'type': 'execute_cuda',
                     'task_id': f"{spec}-{self.stats['total_requests']}",
@@ -1877,9 +1962,8 @@ class WorkerPoolDaemon:
                 worker_info['worker'].process.stdin.write(json.dumps(command) + '\n')
                 worker_info['worker'].process.stdin.flush()
                 
-                # Wait for response with timeout
                 import select
-                readable, _, _ = select.select([worker_info['worker'].process.stdout], [], [], 60.0)
+                readable, unused, unused = select.select([worker_info['worker'].process.stdout], [], [], 60.0)
                 
                 if not readable:
                     raise TimeoutError("CUDA task timed out after 60s")
@@ -1892,6 +1976,98 @@ class WorkerPoolDaemon:
                 
             except Exception as e:
                 return {'success': False, 'error': str(e)}
+        
+        # SLOW PATH (same as above, no extra locking)
+        with self.worker_locks[worker_key]:
+            with self.pool_lock:
+                if worker_key in self.workers:
+                    worker_info['last_used'] = time.time()
+                    worker_info['request_count'] += 1
+                    worker_info['is_gpu_worker'] = True
+                    worker_info['gpu_timeout'] = 60
+                    
+                    try:
+                        command = {
+                            'type': 'execute_cuda',
+                            'task_id': f"{spec}-{self.stats['total_requests']}",
+                            'code': code,
+                            'cuda_in': cuda_in,
+                            'cuda_out': cuda_out
+                        }
+                        
+                        worker_info['worker'].process.stdin.write(json.dumps(command) + '\n')
+                        worker_info['worker'].process.stdin.flush()
+                        
+                        import select
+                        readable, unused, unused = select.select([worker_info['worker'].process.stdout], [], [], 60.0)
+                        
+                        if not readable:
+                            raise TimeoutError("CUDA task timed out after 60s")
+                        
+                        response_line = worker_info['worker'].process.stdout.readline()
+                        if not response_line:
+                            raise RuntimeError("Worker closed connection")
+                        
+                        return json.loads(response_line.strip())
+                        
+                    except Exception as e:
+                        return {'success': False, 'error': str(e)}
+            
+            with self.pool_lock:
+                if len(self.workers) >= self.max_workers:
+                    self._evict_oldest_worker_async()
+            
+            try:
+                worker = PersistentWorker(spec, python_exe=python_exe)
+                
+                with self.pool_lock:
+                    self.workers[worker_key] = {
+                        'worker': worker,
+                        'created': time.time(),
+                        'last_used': time.time(),
+                        'request_count': 0,
+                        'memory_mb': 0.0,
+                        'is_gpu_worker': True,
+                        'gpu_timeout': 60
+                    }
+                    self.stats['workers_created'] += 1
+                    worker_info = self.workers[worker_key]
+            
+            except Exception as e:
+                import traceback
+                error_msg = f'Worker creation failed: {e}\n{traceback.format_exc()}'
+                return {'success': False, 'error': error_msg, 'status': 'ERROR'}
+        
+        # Execute (outside locks)
+        worker_info['last_used'] = time.time()
+        worker_info['request_count'] += 1
+        
+        try:
+            command = {
+                'type': 'execute_cuda',
+                'task_id': f"{spec}-{self.stats['total_requests']}",
+                'code': code,
+                'cuda_in': cuda_in,
+                'cuda_out': cuda_out
+            }
+            
+            worker_info['worker'].process.stdin.write(json.dumps(command) + '\n')
+            worker_info['worker'].process.stdin.flush()
+            
+            import select
+            readable, unused, unused = select.select([worker_info['worker'].process.stdout], [], [], 60.0)
+            
+            if not readable:
+                raise TimeoutError("CUDA task timed out after 60s")
+            
+            response_line = worker_info['worker'].process.stdout.readline()
+            if not response_line:
+                raise RuntimeError("Worker closed connection")
+            
+            return json.loads(response_line.strip())
+            
+        except Exception as e:
+            return {'success': False, 'error': str(e)}
 
     def _evict_oldest_worker_async(self):
         """CRITICAL FIX: Evict worker without blocking on shutdown."""
@@ -1944,62 +2120,37 @@ class WorkerPoolDaemon:
                             worker_info['worker'].force_shutdown()
 
     def _memory_manager(self):
-
-        """Enhanced with GPU memory monitoring."""
-        import psutil
+        """Enhanced with optional psutil monitoring."""
         while self.running:
             time.sleep(60)
             now = time.time()
             
-            # 🔥 NEW: Check GPU memory pressure
+            # 🔥 FIX: Safe psutil import - won't crash if missing
             try:
-                import torch
-                if torch.cuda.is_available():
-                    mem_allocated = torch.cuda.memory_allocated(0) / 1024**3  # GB
-                    mem_reserved = torch.cuda.memory_reserved(0) / 1024**3
-                    mem_free = torch.cuda.get_device_properties(0).total_memory / 1024**3 - mem_reserved
-                    
-                    # Aggressive eviction if VRAM < 2GB free
-                    if mem_free < 2.0:
-                        print(f"⚠️  Low VRAM ({mem_free:.1f}GB free), evicting idle workers...")
-                        with self.pool_lock:
-                            to_kill = sorted(
-                                self.workers.items(),
-                                key=lambda x: x[1]['last_used']
-                            )[:max(1, len(self.workers) // 2)]  # Kill half
-                            
-                            for spec, info in to_kill:
-                                del self.workers[spec]
-                                self.stats['workers_killed'] += 1
-                                threading.Thread(
-                                    target=info['worker'].force_shutdown,
-                                    daemon=True
-                                ).start()
-                        continue
-            except:
+                import psutil
+                mem = psutil.virtual_memory()
+                
+                if mem.percent > 85:
+                    # Aggressive eviction
+                    with self.pool_lock:
+                        to_kill = sorted(
+                            self.workers.items(),
+                            key=lambda x: x[1]['last_used']
+                        )[:len(self.workers) // 2]
+                        
+                        for spec, info in to_kill:
+                            del self.workers[spec]
+                            self.stats['workers_killed'] += 1
+                            threading.Thread(
+                                target=info['worker'].force_shutdown,
+                                daemon=True
+                            ).start()
+                    continue
+            except ImportError:
+                # psutil not available - use basic timeout-based eviction only
                 pass
             
-            # Memory pressure check
-            mem = psutil.virtual_memory()
-            
-            if mem.percent > 85:
-                # Aggressive eviction
-                with self.pool_lock:
-                    to_kill = sorted(
-                        self.workers.items(),
-                        key=lambda x: x[1]['last_used']
-                    )[:len(self.workers) // 2]
-                    
-                    for spec, info in to_kill:
-                        del self.workers[spec]
-                        self.stats['workers_killed'] += 1
-                        threading.Thread(
-                            target=info['worker'].force_shutdown,
-                            daemon=True
-                        ).start()
-                continue
-            
-            # Normal idle timeout
+            # Normal idle timeout (always runs, even without psutil)
             with self.pool_lock:
                 specs_to_remove = []
                 for spec, info in self.workers.items():
@@ -2025,13 +2176,21 @@ class WorkerPoolDaemon:
                     'health_failures': v['worker'].health_check_failures
                 }
             
+            # 🔥 FIX: Safe psutil memory check
+            memory_percent = -1  # Sentinel value
+            try:
+                import psutil
+                memory_percent = psutil.virtual_memory().percent
+            except ImportError:
+                pass  # Will show as -1 in status output
+            
             return {
                 'success': True,
                 'running': self.running,
                 'workers': len(self.workers),
                 'stats': self.stats,
                 'worker_details': worker_details,
-                'memory_percent': psutil.virtual_memory().percent
+                'memory_percent': memory_percent
             }
 
     def _handle_shutdown(self, signum, frame):
@@ -2300,7 +2459,7 @@ class SmartGPUIPC:
     """
     def __init__(self):
         self.mode = detect_torch_cuda_ipc_mode()
-        print(f"🔥 GPU IPC Mode: {self.mode}")
+        safe_print(f"🔥 GPU IPC Mode: {self.mode}")
        
         if self.mode == 'native_1x':
             self.share = share_tensor_native_1x
@@ -2561,13 +2720,13 @@ class DaemonClient:
         try:
             mode_enum = IPCMode(ipc_mode.lower())
         except ValueError:
-            print(f"⚠️  Invalid IPC mode '{ipc_mode}', using auto")
+            safe_print(f"⚠️  Invalid IPC mode '{ipc_mode}', using auto")
             mode_enum = IPCMode.AUTO
         
         # Validate and get actual mode
         actual_mode, mode_msg = IPCCapabilities.validate_mode(mode_enum)
         
-        print(f"   🎯 IPC Mode: {mode_msg}")
+        safe_print(f"   🎯 IPC Mode: {mode_msg}")
         
         # ═══════════════════════════════════════════════════════════
         # ROUTE 1: UNIVERSAL CUDA IPC (DEFAULT - FASTEST)
@@ -2617,7 +2776,7 @@ class DaemonClient:
         import numpy as np
         import torch
         
-        print(f"   💾 Using CPU SHM mode (zero-copy, no GPU transfers)")
+        safe_print(f"   💾 Using CPU SHM mode (zero-copy, no GPU transfers)")
         
         # Convert tensor to CPU numpy
         input_cpu = input_tensor.cpu().numpy()
@@ -2646,7 +2805,7 @@ class DaemonClient:
             if not response.get('success'):
                 raise RuntimeError(f"Worker Error: {response.get('error')}")
             
-            print(f"   ✅ CPU SHM mode completed")
+            safe_print(f"   ✅ CPU SHM mode completed")
             
             # Convert result back to GPU tensor
             output_tensor = torch.from_numpy(result_cpu).to(input_tensor.device)
@@ -2657,7 +2816,7 @@ class DaemonClient:
             return output_tensor, response
             
         except Exception as e:
-            print(f"   ⚠️  CPU SHM failed: {e}")
+            safe_print(f"   ⚠️  CPU SHM failed: {e}")
             raise
 
     def _execute_universal_ipc(self, spec, code, input_tensor, output_shape, output_dtype, python_exe):
@@ -2665,7 +2824,7 @@ class DaemonClient:
         import torch
         from omnipkg.isolation.worker_daemon import UniversalGpuIpc
         
-        print(f"   🔥 Using UNIVERSAL CUDA IPC (ctypes - TRUE ZERO-COPY)")
+        safe_print(f"   🔥 Using UNIVERSAL CUDA IPC (ctypes - TRUE ZERO-COPY)")
         
         try:
             # Share input tensor using Universal IPC
@@ -2705,14 +2864,14 @@ class DaemonClient:
             
             actual_method = response.get('cuda_method', 'unknown')
             if actual_method == 'universal_ipc':
-                print(f"   🔥 Worker confirmed UNIVERSAL IPC (true zero-copy)!")
+                safe_print(f"   🔥 Worker confirmed UNIVERSAL IPC (true zero-copy)!")
             else:
-                print(f"   ⚠️  Worker fell back to {actual_method}")
+                safe_print(f"   ⚠️  Worker fell back to {actual_method}")
             
             return output_tensor, response
             
         except Exception as e:
-            print(f"   ⚠️  Universal IPC failed: {e}")
+            safe_print(f"   ⚠️  Universal IPC failed: {e}")
             raise
     
     def _execute_pytorch_native_ipc(self, spec, code, input_tensor, output_shape, output_dtype, python_exe):
@@ -2720,7 +2879,7 @@ class DaemonClient:
         import torch
         import base64
         
-        print(f"   🔥 Using PYTORCH NATIVE IPC (PyTorch 1.x)")
+        safe_print(f"   🔥 Using PYTORCH NATIVE IPC (PyTorch 1.x)")
         
         try:
             # Share input tensor via native CUDA IPC
@@ -2789,14 +2948,14 @@ class DaemonClient:
             
             actual_method = response.get('cuda_method', 'unknown')
             if actual_method == 'native_ipc':
-                print(f"   🔥 Worker confirmed NATIVE IPC (PyTorch managed)!")
+                safe_print(f"   🔥 Worker confirmed NATIVE IPC (PyTorch managed)!")
             else:
-                print(f"   ⚠️  Worker fell back to {actual_method}")
+                safe_print(f"   ⚠️  Worker fell back to {actual_method}")
             
             return output_tensor, response
             
         except Exception as e:
-            print(f"   ⚠️  PyTorch native IPC failed: {e}")
+            safe_print(f"   ⚠️  PyTorch native IPC failed: {e}")
             raise
     
     
@@ -2813,8 +2972,8 @@ class DaemonClient:
         import numpy as np
         import torch
         
-        print(f"   🔄 Using HYBRID mode (CPU SHM + GPU copies) - SLOWEST MODE")
-        print(f"   💡 Consider using cpu_shm mode instead (1.34x faster)")
+        safe_print(f"   🔄 Using HYBRID mode (CPU SHM + GPU copies) - SLOWEST MODE")
+        safe_print(f"   💡 Consider using cpu_shm mode instead (1.34x faster)")
         
         # Copy tensor to CPU, share via SHM
         input_cpu = input_tensor.cpu().numpy()
@@ -2854,7 +3013,7 @@ class DaemonClient:
             if not response.get('success'):
                 raise RuntimeError(f"Worker Error: {response.get('error')}")
             
-            print(f"   ✅ Hybrid mode completed")
+            safe_print(f"   ✅ Hybrid mode completed")
             
             # Copy result back to GPU
             shm_out_array = np.ndarray(output_shape, dtype=output_cpu.dtype, buffer=shm_out.buf)
@@ -2931,8 +3090,7 @@ class DaemonClient:
         # GPU FAST PATH - CUDA IPC
         # ═══════════════════════════════════════════════════════
         if data is not None and hasattr(data, 'is_cuda') and data.is_cuda:
-            import torch
-            
+            import torch            
             # Assume code modifies tensor in-place or returns same shape/dtype
             output_shape = data.shape
             output_dtype = str(data.dtype).split('.')[-1]  # "float32"
@@ -3036,12 +3194,12 @@ class DaemonProxy:
 def cli_start():
     """Start the daemon with status checks."""
     if WorkerPoolDaemon.is_running():
-        print("⚠️  Daemon is already running.")
+        safe_print("⚠️  Daemon is already running.")
         # Optional: Print info about the running instance
         cli_status()
         return
 
-    print("🚀 Initializing OmniPkg Worker Daemon...", end=" ", flush=True)
+    safe_print("🚀 Initializing OmniPkg Worker Daemon...", end=" ", flush=True)
     
     # Initialize
     daemon = WorkerPoolDaemon(
@@ -3054,45 +3212,52 @@ def cli_start():
     try:
         daemon.start(daemonize=True)
     except Exception as e:
-        print(f"\n❌ Failed to start: {e}")
+        safe_print(f"\n❌ Failed to start: {e}")
 
 def cli_stop():
     """Stop the daemon."""
     client = DaemonClient()
     result = client.shutdown()
     if result.get('success'):
-        print("✅ Daemon stopped")
+        safe_print("✅ Daemon stopped")
         try:
             os.unlink(PID_FILE)
         except:
             pass
     else:
-        print(f"❌ Failed to stop: {result.get('error', 'Unknown error')}")
+        safe_print(f"❌ Failed to stop: {result.get('error', 'Unknown error')}")
 
 def cli_status():
     """Get daemon status."""
     if not WorkerPoolDaemon.is_running():
-        print("❌ Daemon not running")
+        safe_print("❌ Daemon not running")
         return
     
     client = DaemonClient()
     result = client.status()
     
     if not result.get('success'):
-        print(f"❌ Error: {result.get('error', 'Unknown error')}")
+        safe_print(f"❌ Error: {result.get('error', 'Unknown error')}")
         return
     
     print("\n" + "="*60)
-    print("🔥 OMNIPKG WORKER DAEMON STATUS")
+    safe_print("🔥 OMNIPKG WORKER DAEMON STATUS")
     print("="*60)
     print(f"  Workers: {result.get('workers', 0)}")
-    print(f"  Memory Usage: {result.get('memory_percent', 0):.1f}%")
+    
+    # 🔥 FIX: Handle missing psutil gracefully
+    memory_percent = result.get('memory_percent', -1)
+    if memory_percent >= 0:
+        print(f"  Memory Usage: {memory_percent:.1f}%")
+    else:
+        print(f"  Memory Usage: N/A (psutil not installed)")
+    
     print(f"  Total Requests: {result['stats']['total_requests']}")
     print(f"  Cache Hits: {result['stats']['cache_hits']}")
     print(f"  Errors: {result['stats']['errors']}")
     
     if result.get('worker_details'):
-        print("\n  📦 Active Workers:")
+        safe_print("\n  📦 Active Workers:")
         for spec, info in result['worker_details'].items():
             idle = time.time() - info['last_used']
             print(f"    - {spec}")
@@ -3102,13 +3267,15 @@ def cli_status():
 
 def cli_logs(follow: bool = False, tail_lines: int = 50):
     """View or follow the daemon logs."""
+    from pathlib import Path
+    
     log_path = Path(DAEMON_LOG_FILE)
     if not log_path.exists():
-        print(f"❌ Log file not found at: {log_path}")
+        safe_print(f"❌ Log file not found at: {log_path}")
         print("   (The daemon might not have started yet)")
         return
 
-    print(f"📄 Tailing {log_path} (last {tail_lines} lines)...")
+    safe_print(f"📄 Tailing {log_path} (last {tail_lines} lines)...")
     print("-" * 60)
     
     try:
@@ -3117,13 +3284,12 @@ def cli_logs(follow: bool = False, tail_lines: int = 50):
             f.seek(0, 2)
             file_size = f.tell()
             
-            # Heuristic: average line ~150 bytes. Read enough blocks to cover it.
+            # Heuristic: average line ~150 bytes
             block_size = max(4096, tail_lines * 200)
             
             if file_size > block_size:
                 f.seek(file_size - block_size)
-                # Discard potential partial line at start of block
-                f.readline()
+                f.readline()  # Discard potential partial line
             else:
                 f.seek(0)
             
@@ -3135,10 +3301,9 @@ def cli_logs(follow: bool = False, tail_lines: int = 50):
             # 2. Follow mode (tail -f)
             if follow:
                 print("-" * 60)
-                print("📡 Following logs... (Ctrl+C to stop)")
+                safe_print("📡 Following logs... (Ctrl+C to stop)")
                 
-                # Seek to end just in case
-                f.seek(0, 2)
+                f.seek(0, 2)  # Seek to end
                 
                 while True:
                     line = f.readline()
@@ -3148,27 +3313,45 @@ def cli_logs(follow: bool = False, tail_lines: int = 50):
                         time.sleep(0.1)
                         
     except KeyboardInterrupt:
-        print("\n🛑 Stopped following logs.")
+        safe_print("\n🛑 Stopped following logs.")
     except Exception as e:
-        print(f"\n❌ Error reading logs: {e}")
+        safe_print(f"\n❌ Error reading logs: {e}")
 
 # ═══════════════════════════════════════════════════════════════
 # CLI ENTRY
 # ═══════════════════════════════════════════════════════════════
 
 if __name__ == "__main__":
+    import sys
+    
     if len(sys.argv) < 2:
-        print("Usage: python -m omnipkg.isolation.worker_daemon {start|stop|status}")
+        print("Usage: python -m omnipkg.isolation.worker_daemon {start|stop|status|logs}")
         sys.exit(1)
     
     cmd = sys.argv[1]
     
     if cmd == "start":
-        cli_start()
+        # 🔥 FIX: Check for --no-fork flag (Windows internal use)
+        no_fork = "--no-fork" in sys.argv
+        
+        if no_fork:
+            # Direct start without fork (for Windows subprocess spawn)
+            daemon = WorkerPoolDaemon(
+                max_workers=10,
+                max_idle_time=300,
+                warmup_specs=[]
+            )
+            daemon.start(daemonize=False)
+        else:
+            cli_start()
+    
     elif cmd == "stop":
         cli_stop()
     elif cmd == "status":
         cli_status()
+    elif cmd == "logs":
+        follow = "-f" in sys.argv or "--follow" in sys.argv
+        cli_logs(follow=follow)
     else:
         print(f"Unknown command: {cmd}")
         sys.exit(1)

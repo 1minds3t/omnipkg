@@ -159,7 +159,7 @@ def test_dimension(config: tuple, thread_id: int) -> dict:
             safe_print(f"{prefix} 🔒 LOCK ACQUIRED")
             
             safe_print(f"{prefix} 🔄 Swapping to Python {py_version}")
-            swap_code, _, swap_stderr, swap_time = run_omnipkg_cli(
+            swap_code, unused, swap_stderr, swap_time = run_omnipkg_cli(
                 sys.executable, ['swap', 'python', py_version], thread_id
             )
             if swap_code != 0:
@@ -312,7 +312,7 @@ def main():
     test_configs = [('3.9', '13.4.2'), ('3.10', '13.6.0'), ('3.11', '13.7.1')]
     
     safe_print("\n📥 Phase 1: Adopting interpreters (sequential for safety)...")
-    for version, _ in test_configs:
+    for version, unused in test_configs:
         if not adopt_if_needed(version, 0):
             safe_print(f"❌ Failed to adopt Python {version}")
             sys.exit(1)

@@ -76,12 +76,41 @@ except ImportError:
 def _get_dynamic_omnipkg_version():
     """
     Gets the omnipkg version, prioritizing pyproject.toml in developer mode.
+    
+    CRITICAL FIX: Detects if we're in a staging/temporary environment during
+    bubble creation and returns a safe fallback to prevent import system corruption.
     """
+    
+    # ═══════════════════════════════════════════════════════════
+    # CRITICAL SAFEGUARD: Detect staging environment
+    # ═══════════════════════════════════════════════════════════
+    # During bubble creation, pip installs packages to a temporary directory
+    # like /tmp/tmpXXXXXX. If we're being called from within that staging
+    # environment, DO NOT try to use importlib.metadata - it will fail because
+    # the import paths are in a corrupted state.
+    
+    current_file = Path(__file__).resolve()
+    
+    # Check if we're being executed from a temporary staging directory
+    is_in_staging = (
+        '/tmp/tmp' in str(current_file) or 
+        '\\Temp\\tmp' in str(current_file) or
+        'staging' in str(current_file).lower()
+    )
+    
+    if is_in_staging:
+        # We're inside a bubble staging operation - use safe fallback
+        return 'unknown (staging)'
+    
+    # ═══════════════════════════════════════════════════════════
+    # Normal operation - try to get version
+    # ═══════════════════════════════════════════════════════════
+    
     if not HAS_TOMLLIB:
-        # Can't read TOML, skip to metadata fallback
+        # Can't read TOML, try metadata
         try:
             return importlib.metadata.version('omnipkg')
-        except importlib.metadata.PackageNotFoundError:
+        except (importlib.metadata.PackageNotFoundError, Exception):
             return 'unknown'
     
     # Try pyproject.toml first (developer mode)
@@ -93,13 +122,13 @@ def _get_dynamic_omnipkg_version():
             version_from_toml = data.get('project', {}).get('version')
             if version_from_toml:
                 return version_from_toml
-    except Exception as e:
-        safe_print(f"⚠️  Could not read version from pyproject.toml: {e}")
+    except Exception:
+        pass  # Continue to metadata fallback
     
     # Fallback to installed metadata
     try:
         return importlib.metadata.version('omnipkg')
-    except importlib.metadata.PackageNotFoundError:
+    except (importlib.metadata.PackageNotFoundError, Exception):
         pass
     
     return 'unknown'
@@ -244,7 +273,7 @@ class ConfigManager:
                 if sys.version_info[:2] != self._preferred_version:
                     if not suppress_init_messages:
                         safe_print(_('\n   - Step 2: Setting up the required Python 3.11 control plane...'))
-                    temp_omnipkg = omnipkg(config_manager=self)
+                    temp_omnipkg = omnipkg(config_manager=self, minimal_mode=True)
                     result_code = temp_omnipkg._fallback_to_download('3.11')
                     if result_code != 0:
                         raise RuntimeError('Failed to set up the Python 3.11 control plane.')
@@ -2477,86 +2506,85 @@ class BubbleIsolationManager:
         self.parent_omnipkg.hook_manager.validate_bubble(package_name, version)
         
         return True
-
         
-    def install_and_verify(self, package_name: str, version: str, python_context_version: str, 
-                           destination_path: Path, index_url: Optional[str] = None, 
-                           extra_index_url: Optional[str] = None, python_exe_override: Optional[str] = None,
-                           observed_dependencies: Optional[Dict[str, str]] = None):
+    def install_and_verify(self, package_name: str, version: str, python_context_version: str,
+                       destination_path: Path, index_url: Optional[str] = None,
+                       extra_index_url: Optional[str] = None, python_exe_override: Optional[str] = None,
+                       observed_dependencies: Optional[Dict[str, str]] = None):
         """
-        Streamlined installation function.
-        1. Installs to a temporary staging area.
-        2. Performs a high-level import test to verify integrity.
-        3. Moves the result to the final bubble path on success.
+        (V7 - SMART STRATEGY) Builds a bubble and verifies using smart group-aware testing.
+        
+        This version uses the verification_strategy module to intelligently test
+        packages together when they have interdependencies.
         """
-        python_exe = python_exe_override or self.config.get('python_executable', sys.executable)
-
         if destination_path.exists():
-            try: shutil.rmtree(destination_path)
-            except Exception as e:
-                safe_print(f"   ⚠️  Warning: Could not clean target {destination_path}: {e}")
-        
+            shutil.rmtree(destination_path, ignore_errors=True)
+
         with tempfile.TemporaryDirectory() as temp_dir:
             staging_path = Path(temp_dir)
-            
             safe_print(f"   - 🏗️  Staging install for {package_name}=={version}...")
-            
-            return_code, captured_output = self.parent_omnipkg._run_pip_install(
+
+            # 1. Install to staging
+            return_code, stdout = self.parent_omnipkg._run_pip_install(
                 [f"{package_name}=={version}"],
                 target_directory=staging_path,
                 force_reinstall=True,
-                extra_flags=['--no-cache-dir'],
                 index_url=index_url,
                 extra_index_url=extra_index_url,
             )
-
             if return_code != 0:
-                 safe_print(f"❌ Install failed. Output:\n{captured_output.get('stderr', '')[:500]}")
-                 return False
-
-            # REPLACED: Granular verification is gone. Now we use a simple, effective import test.
-            import_test_passed = self.parent_omnipkg._run_post_install_import_test(
-                package_name, 
-                install_dir_override=staging_path,
-            )
-
-            if not import_test_passed:
-                safe_print(f"❌ Final import check failed. Bubble creation aborted.")
+                safe_print(f"   ❌ Pip install failed in staging area.")
                 return False
 
+            # 2. Use SMART verification strategy
+            safe_print(f"   - 🧪 Running SMART import verification...")
+            
+            try:
+                # Import the smart strategy
+                from .installation.verification_strategy import verify_bubble_with_smart_strategy
+            except ImportError:
+                from omnipkg.installation.verification_strategy import verify_bubble_with_smart_strategy
+            
+            # Instantiate gatherer
+            try:
+                from .package_meta_builder import omnipkgMetadataGatherer
+            except ImportError:
+                from omnipkg.package_meta_builder import omnipkgMetadataGatherer
+            
+            gatherer = omnipkgMetadataGatherer(
+                config=self.parent_omnipkg.config,
+                env_id=self.parent_omnipkg.env_id,
+                omnipkg_instance=self.parent_omnipkg,
+                target_context_version=python_context_version
+            )
+            
+            # Run smart verification
+            verification_passed = verify_bubble_with_smart_strategy(
+                self.parent_omnipkg,
+                package_name,
+                version,
+                staging_path,
+                gatherer
+            )
+            
+            if not verification_passed:
+                safe_print(f"   ❌ CRITICAL: Smart verification failed for '{package_name}'.")
+                return False
+            
+            # 3. Analyze and move
+            installed_tree = self._analyze_installed_tree(staging_path)
             safe_print(f"   - 🚚 Moving verified build to bubble: {destination_path}")
-            destination_path.parent.mkdir(parents=True, exist_ok=True)
             shutil.copytree(staging_path, destination_path, dirs_exist_ok=True)
 
-            safe_print("   - Finalizing bubble (generating manifest)...")
-            installed_tree = self._analyze_installed_tree(destination_path)
-            
-            stats = {'total_files': 0, 'copied_files': 0, 'deduplicated_files': 0, 'c_extensions': [], 'binaries': [], 'python_files': 0}
-            for pkg, info in installed_tree.items():
-                for fpath in info.get('files', []):
-                    stats['total_files'] += 1
-                    stats['copied_files'] += 1
-                    if fpath.suffix in ['.so', '.pyd']: stats['c_extensions'].append(fpath.name)
-                    elif self._is_binary(fpath): stats['binaries'].append(fpath.name)
-                    elif fpath.suffix == '.py': stats['python_files'] += 1
-            
-            # This call will now succeed with the fix from step 1
+            stats = {'total_files': sum(len(info.get('files',[])) for info in installed_tree.values())}
             self._create_bubble_manifest(
-                destination_path, 
-                installed_tree, 
-                stats, 
+                destination_path, installed_tree, stats,
                 python_context_version=python_context_version,
                 observed_dependencies=observed_dependencies
             )
             
-            import time
-            time.sleep(0.1)
-            
-            safe_print(f"   ✅ Bubble successfully created at {destination_path}")
             return True
-
-  
-
+            
     def _granular_verify_and_heal(self, staging_path: Path, package_name: str, python_exe: str):
         """
         Iterates through every module in the package.
@@ -3581,35 +3609,36 @@ class BubbleIsolationManager:
     
     def _fix_bubble_import_failures(self, bubble_path: Path, installed_tree: Dict, temp_install_path: Path, import_failures: List[Dict]) -> None:
         """
-        Attempt to fix import failures by copying missing files or entire package structures.
-        NOW WITH SCAVENGING CAPABILITY.
+        CRITICAL HEALING LOGIC: Fixes import failures by copying missing modules.
+        This is what was missing from the streamlined version.
         """
-        safe_print(_('    🔧 Analyzing and fixing import failures...'))
+        safe_print("   🔧 Attempting to heal import failures...")
         
         for failure in import_failures:
             pkg_name = failure['package']
-            error_msg = failure['error']
+            missing_modules = failure.get('attempted_modules', [])
             
-            safe_print(_('    🔍 Fixing {}: {}').format(pkg_name, error_msg))
+            safe_print(f"   🔍 Healing {pkg_name}...")
             
-            # Strategy 1: Copy from temp install (Existing)
-            if 'No module named' in error_msg or 'ModuleNotFoundError' in error_msg:
-                missing_module = self._extract_missing_module_name(error_msg)
+            # Strategy 1: Copy ALL Python files from the temp install for this package
+            if pkg_name in installed_tree:
+                safe_print(f"      📦 Copying all Python files for {pkg_name}...")
+                self._copy_all_python_files_for_package(pkg_name, bubble_path, temp_install_path, installed_tree)
+            
+            # Strategy 2: Look for specific missing modules
+            for missing_module in missing_modules:
                 if missing_module:
-                    self._copy_missing_module_structure(
-                        missing_module, pkg_name, bubble_path, temp_install_path, installed_tree
-                    )
+                    safe_print(f"      🔍 Looking for missing module: {missing_module}")
+                    self._copy_missing_module_structure(missing_module, pkg_name, bubble_path, temp_install_path, installed_tree)
             
-            # Strategy 2: Copy ALL files from temp install (Existing)
-            elif 'ImportError' in error_msg:
-                self._copy_all_python_files_for_package(
-                    pkg_name, bubble_path, temp_install_path, installed_tree
-                )
-
-            # --- NEW STRATEGY 3: Scavenge from Neighbors ---
-            # If the above didn't fix it (or we want to be extra sure), look in neighbor bubbles.
-            # This helps when the temp install itself is incomplete but another version has the file.
-            self._scavenge_from_neighbors(pkg_name, bubble_path)
+            # Strategy 3: Verify the fix worked
+            safe_print(f"      🧪 Re-testing imports for {pkg_name}...")
+            import_success = self._test_bubble_imports(pkg_name, bubble_path, installed_tree.get(pkg_name, {}), temp_install_path)
+            
+            if import_success['importable']:
+                safe_print(f"      ✅ Successfully healed {pkg_name}")
+            else:
+                safe_print(f"      ⚠️  {pkg_name} still has issues after healing")
 
     def _extract_missing_module_name(self, error_msg: str) -> str:
         """Extract the specific missing module name from error messages."""
@@ -4212,65 +4241,64 @@ class NoCompatiblePythonError(Exception):
         }
 
 class omnipkg:
-
+    
     def __init__(self, config_manager: ConfigManager, minimal_mode: bool = False):
         """
         Initializes Omnipkg with optional minimal mode for lightweight commands.
         
         Args:
+            config_manager: The configuration manager instance.
             minimal_mode: If True, skips database/cache initialization for commands
-                         that only need config access (swap, version, etc.)
+                        that only need config access (swap, version, etc.)
         """
         self.config_manager = config_manager
         self.config = config_manager.config
-        self._has_run_cloak_cleanup = False # <-- ADD THIS FLAG
+        self._has_run_cloak_cleanup = False
         
         if not self.config:
             if len(sys.argv) > 1 and sys.argv[1] in ['reset-config', 'doctor']:
                 pass
             else:
                 raise RuntimeError('OmnipkgCore cannot initialize: Configuration is missing or invalid.')
-        
-        # Minimal initialization for lightweight commands
+
+        # STEP 1: Handle the simple 'minimal_mode' case FIRST and exit immediately.
+        # This is the safe exit path that prevents the loop during re-initialization.
         if minimal_mode:
             self.env_id = self._get_env_id()
             self.multiversion_base = Path(self.config['multiversion_base'])
             self.interpreter_manager = InterpreterManager(self.config_manager)
             safe_print(_('✅ Omnipkg core initialized (minimal mode).'))
             return  # EXIT EARLY - no cache, no migrations, no hooks
+
+        # STEP 2: For a full run, perform the critical setup and healing process.
+        # This function handles the "first-time setup" in a controlled way.
         self._self_heal_omnipkg_installation()
+
+        # STEP 3: Now that the environment is stable, initialize all other core attributes.
         self.env_id = self._get_env_id()
         self.multiversion_base = Path(self.config['multiversion_base'])
+        self.site_packages_root = Path(self.config['site_packages_path'])
         self.cache_client = None
         self._cache_connection_status = None
         self.initialize_pypi_cache()
-        self._check_and_run_pending_rebuild()
+        # Skip KB rebuild during first-time setup (prevents recursion)
+        setup_complete = (self.config_manager.venv_path / '.omnipkg' / '.setup_complete').exists()
+        if setup_complete:
+            self._check_and_run_pending_rebuild()
         self._info_cache = {}
-        self._prime_loader_cache()
         self._installed_packages_cache = None
         self.http_session = http_requests.Session()
         self.multiversion_base.mkdir(parents=True, exist_ok=True)
-        if not self._connect_cache():
-            sys.exit(1)
-        # --- ADD THE MIGRATION LOGIC HERE ---
-        # V2 MIGRATION: Automatically upgrade legacy global keys to be environment-aware.
-        migration_flag_key = f'omnipkg:env_{self.env_id}:migration_v2_env_aware_keys_complete'
         
-        # We check the flag *before* the expensive scan.
-        if not self.cache_client.get(migration_flag_key):
-            # Check if there are any old keys that *need* migrating.
-            # We use scan_iter for performance, only needing to find one key.
-            old_keys_iterator = self.cache_client.scan_iter('omnipkg:pkg:*', count=1)
-            if next(old_keys_iterator, None):
-                 self._perform_redis_key_migration(migration_flag_key)
-            else:
-                 # No old keys found, so we can just set the flag.
-                 self.cache_client.set(migration_flag_key, 'true')
-        # --- END MIGRATION LOGIC ---
+        if not self._connect_cache():
+            safe_print(_('⚠️  Proceeding without cache connection.'))
+        
+        # Initialize managers that depend on a stable environment and cache.
         self.interpreter_manager = InterpreterManager(self.config_manager)
-        self.hook_manager = ImportHookManager(str(self.config.get('multiversion_base')), config=self.config, cache_client=None)
+        self.hook_manager = ImportHookManager(str(self.config.get('multiversion_base')), config=self.config, cache_client=self.cache_client)
         self.bubble_manager = BubbleIsolationManager(self.config, self)
 
+        # Run database migrations if needed.
         migration_flag_key = f'omnipkg:env_{self.env_id}:migration_v2_env_aware_keys_complete'
         if not self.cache_client.get(migration_flag_key):
             old_keys_iterator = self.cache_client.scan_iter('omnipkg:pkg:*', count=1)
@@ -4278,10 +4306,11 @@ class omnipkg:
                 self._perform_redis_key_migration(migration_flag_key)
             else:
                 self.cache_client.set(migration_flag_key, 'true')
-        migration_v3_flag_key = f'{self.redis_env_prefix}migration_v3_install_type_complete'
-        if not self.cache_client.get(migration_v3_flag_key):
-            self._perform_v3_metadata_migration(migration_v3_flag_key)
+        
+        # Proactively build the loader cache.
+        self._prime_loader_cache()
 
+        # Load the import hooks.
         self.hook_manager.load_version_map()
         self.hook_manager.install_import_hook()
         safe_print(_('✅ Omnipkg core initialized successfully.'))
@@ -5328,7 +5357,10 @@ class omnipkg:
         except Exception as e:
             safe_print(_('   ❌ Failed to clear knowledge base: {}').format(e))
             return 1
-        self._info_cache.clear()
+        if hasattr(self, '_info_cache'):
+            self._info_cache.clear()
+        else:
+            self._info_cache = {}
         self._installed_packages_cache = None
 
         # --- START OF THE CORRECTED LOGIC ---
@@ -5373,7 +5405,10 @@ class omnipkg:
             gatherer = omnipkgMetadataGatherer(config=self.config, env_id=self.env_id, force_refresh=force, omnipkg_instance=self, target_context_version=current_python_version)
             gatherer.cache_client = self.cache_client
             gatherer.run()
-            self._info_cache.clear()
+            if hasattr(self, '_info_cache'):
+                self._info_cache.clear()
+            else:
+                self._info_cache = {}
             self._installed_packages_cache = None
             safe_print(_('✅ Knowledge base rebuilt successfully.'))
             return 0
@@ -6818,41 +6853,40 @@ class omnipkg:
         safe_print("\n🔥 Applying treatment...")
         return self.smart_install(reconciled_plan)
     
-    def _get_import_candidates_for_install_test(self, package_name: str, install_dir: Optional[Path] = None) -> List[str]:
+    def _get_import_candidates_for_install_test(self, package_name: str, install_dir_override: Optional[Path] = None) -> List[str]:
         """
-        Gets import candidates, reading from top_level.txt if install_dir is provided.
+        Gets import candidates, with special handling for bubbles vs main env.
         """
-        if not install_dir:
-            # Use existing logic for main env
-            return self._get_import_candidates(package_name)
-        
-        # Read from isolated directory
-        from packaging.utils import canonicalize_name
-        
-        canonical = canonicalize_name(package_name)
-        possible_names = {
-            package_name,
-            package_name.lower(),
-            package_name.replace('-', '_'),
-            package_name.replace('_', '-'),
-            canonical,
-        }
-        
-        # Find the .dist-info directory
-        for name_variant in possible_names:
-            found = list(install_dir.glob(f"{name_variant}-*.dist-info"))
-            if found:
-                top_level_file = found[0] / 'top_level.txt'
+        if install_dir_override:
+            # For bubbles, scan the directory structure
+            candidates = set()
+            
+            # Look for .dist-info directories
+            for dist_info in install_dir_override.glob('*.dist-info'):
+                top_level_file = dist_info / 'top_level.txt'
                 if top_level_file.exists():
                     try:
                         content = top_level_file.read_text(encoding='utf-8').strip()
                         if content:
-                            return [line.strip() for line in content.split('\n') if line.strip()]
+                            candidates.update([line.strip() for line in content.split('\n') if line.strip()])
                     except Exception:
                         pass
-        
-        # Fallback to name transformations
-        return [package_name.replace('-', '_'), package_name.lower().replace('-', '_')]
+            
+            # Fallback: look for importable directories
+            if not candidates:
+                for item in install_dir_override.iterdir():
+                    if item.is_dir() and not item.name.startswith('.') and not item.name.endswith('.dist-info'):
+                        if (item / '__init__.py').exists():
+                            candidates.add(item.name)
+            
+            # Final fallback
+            if not candidates:
+                candidates.add(package_name.replace('-', '_'))
+            
+            return sorted(list(candidates))
+        else:
+            # For main env, use the standard method
+            return self._get_import_candidates(package_name)
 
     def _update_hash_index_for_delta(self, before: Dict, after: Dict):
         """Surgically updates the cached hash index in Redis after an install."""
@@ -6985,7 +7019,10 @@ class omnipkg:
                         pipe.hdel(main_key, f'bubble_version:{uninstalled_version}')
                     pipe.execute()
 
-            self._info_cache.clear()
+            if hasattr(self, '_info_cache'):
+                self._info_cache.clear()
+            else:
+                self._info_cache = {}
             self._installed_packages_cache = None
             safe_print(_('✅ Knowledge base updated successfully.'))
         except Exception as e:
@@ -7331,6 +7368,48 @@ class omnipkg:
             safe_print(_('   ✅ Snapshot saved.'))
         except Exception as e:
             safe_print(_('   ⚠️ Could not save environment snapshot: {}').format(e))
+
+    def _handle_quantum_healing(self, e: NoCompatiblePythonError, packages: List[str], dry_run: bool, force_reinstall: bool,
+                                override_strategy: Optional[str], target_directory: Optional[Path],
+                                index_url: Optional[str] = None, extra_index_url: Optional[str] = None) -> int:
+        """
+        Handles the 'Quantum Healing' process when a package is incompatible with the
+        current Python version. It attempts to switch to a compatible Python and
+        re-runs the original command.
+        """
+        safe_print("\n" + "=" * 60)
+        safe_print("🌌 QUANTUM HEALING: Python Incompatibility Detected")
+        safe_print("=" * 60)
+        safe_print(f"   - Diagnosis: Cannot install '{e.package_name}' on your current Python ({e.current_python}).")
+        safe_print(f"   - Prescription: This package requires Python {e.compatible_python}.")
+
+        try:
+            from .cli import handle_python_requirement
+        except ImportError:
+            from omnipkg.cli import handle_python_requirement
+
+        if not e.compatible_python or e.compatible_python == "unknown":
+            safe_print(f"❌ Healing failed: Could not determine a compatible Python version for '{e.package_name}'.")
+            return 1
+
+        if not handle_python_requirement(e.compatible_python, self, "omnipkg"):
+            safe_print(f"❌ Healing failed: Could not automatically switch to Python {e.compatible_python}.")
+            return 1
+
+        safe_print(f"\n🚀 Retrying original `install` command in the new Python {e.compatible_python} context...")
+
+        new_config_manager = ConfigManager(suppress_init_messages=True)
+        new_omnipkg_instance = self.__class__(new_config_manager)
+
+        return new_omnipkg_instance.smart_install(
+            packages,
+            dry_run=dry_run,
+            force_reinstall=force_reinstall,
+            override_strategy=override_strategy,
+            target_directory=target_directory,
+            index_url=index_url,
+            extra_index_url=extra_index_url
+        )
 
     def _sort_packages_for_install(self, packages: List[str], strategy: str) -> List[str]:
         """
@@ -8013,91 +8092,121 @@ class omnipkg:
         safe_print(_('✨ Python {} has been successfully removed from the environment.').format(version))
         return 0
     
-    def check_package_installed_fast(self, python_exe: str, package: str, version: str) -> Tuple[Optional[str], float]:
+    def check_package_installed_fast(self, python_exe: str, package: str, version: str) -> Tuple[Optional[str], int]:
         """
-        (REWRITTEN & ROBUST) Checks if a specific package version is already installed.
-        Uses DIRECT filesystem checks for maximum reliability and speed.
-
-        Returns:
-            A tuple of (status, duration_ms) where status is one of:
-            - 'active': The exact version is installed in the main environment.
-            - 'bubble': The exact version exists as a bubble.
-            - None: The package is not satisfied.
-        """
-        start_time = time.perf_counter()
+        Ultra-fast package check with nanosecond precision timing.
+        - Uses time.perf_counter_ns() for the highest resolution clock.
+        - The 'python_exe' parameter is accepted to match the caller's signature,
+        but is not used in this filesystem-only check.
         
-        # --- Phase 1: Check main environment via direct dist-info inspection ---
+        Returns:
+            ('active', duration_ns) - Exact version in main env
+            ('bubble', duration_ns) - Exact version in bubble  
+            (None, duration_ns)     - Not satisfied
+        """
+        start_time_ns = time.perf_counter_ns()
+        
         try:
-            # Get site-packages directory from the target python_exe
-            cmd = [python_exe, '-c', 'import site; print(site.getsitepackages())']
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=5, check=True)
+            pkg_normalized = package.replace('-', '_').lower()
             
-            import ast
-            site_packages_paths = [Path(p) for p in ast.literal_eval(result.stdout.strip())]
+            # Check main env
+            dist_info_path = self.site_packages_root / f'{pkg_normalized}-{version}.dist-info'
+            if dist_info_path.is_dir():
+                return 'active', (time.perf_counter_ns() - start_time_ns)
             
-            pkg_name_normalized = package.replace('-', '_').lower()
-
-            for site_packages in site_packages_paths:
-                if not site_packages.is_dir():
-                    continue
-
-                # Use glob for case-insensitivity and name variations
-                for dist_info in site_packages.glob(f'{pkg_name_normalized}-{version}.dist-info'):
-                    if dist_info.is_dir():
-                        # We found a potential match. Verify version from METADATA.
-                        metadata_file = dist_info / 'METADATA'
-                        if metadata_file.exists():
-                            try:
-                                with open(metadata_file, 'r', encoding='utf-8') as f:
-                                    for line in f:
-                                        if line.lower().startswith('version:'):
-                                            found_version = line.split(':', 1)[1].strip()
-                                            if found_version == version:
-                                                duration_ms = (time.perf_counter() - start_time) * 1000
-                                                return 'active', duration_ms # ✅ IT'S ACTIVE
-                            except Exception:
-                                pass # Corrupted metadata, treat as not found.
+            # Check bubble
+            bubble_path = self.site_packages_root / '.omnipkg_versions' / f'{package}-{version}'
+            if bubble_path.is_dir():
+                return 'bubble', (time.perf_counter_ns() - start_time_ns)
+            
+            # Fallback: Legacy bubble location
+            legacy_bubble = self.multiversion_base / f'{package}-{version}'
+            if legacy_bubble.is_dir():
+                return 'bubble', (time.perf_counter_ns() - start_time_ns)
+                
         except Exception:
-            # If the subprocess fails for any reason, we can't confirm it's active.
             pass
+        
+        return None, (time.perf_counter_ns() - start_time_ns)
 
-        # --- Phase 2: If not active, check if a valid bubble exists ---
-        bubble_path = self.multiversion_base / f'{package}-{version}'
-        if bubble_path.is_dir():
-            # Check for the existence of the manifest file for a quick, reliable check.
-            if (bubble_path / '.omnipkg_manifest.json').exists():
-                duration_ms = (time.perf_counter() - start_time) * 1000
-                return 'bubble', duration_ms # ✅ IT'S IN A BUBBLE
-
-        # --- Phase 3: Not satisfied ---
-        duration_ms = (time.perf_counter() - start_time) * 1000
-        return None, duration_ms
-    
-    def _check_package_exists_on_pypi(self, package_name: str) -> bool:
+    def _get_site_packages_cached(self, python_exe: str) -> Path:
         """
-        Performs a fast, lightweight check to see if a package exists on PyPI.
-        Returns True if it exists, False otherwise.
+        Disk-cached site-packages lookup - only used as last resort fallback.
         """
+        cache_dir = Path.home() / '.config' / 'omnipkg' / 'site_packages_cache'
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        
+        cache_key = hashlib.md5(python_exe.encode()).hexdigest()
+        cache_file = cache_dir / f"{cache_key}.json"
+        
+        # Try cache
+        if cache_file.exists():
+            try:
+                with open(cache_file, 'r') as f:
+                    cached_data = json.load(f)
+                    cached_path = Path(cached_data['site_packages'])
+                    if cached_path.exists():
+                        return cached_path
+            except Exception:
+                pass
+        
+        # Cache miss - subprocess
+        site_packages_str = subprocess.run(
+            [python_exe, '-c', 'import site; print(site.getsitepackages()[0])'],
+            capture_output=True, text=True, timeout=2, check=True
+        ).stdout.strip()
+        
+        # Save to cache
         try:
-            import requests
-            response = requests.head(f"https://pypi.org/pypi/{package_name}/json", timeout=10)
-            return response.status_code == 200
+            with open(cache_file, 'w') as f:
+                json.dump({'python_exe': python_exe, 'site_packages': site_packages_str}, f)
         except Exception:
-            return False
+            pass
+        
+        return Path(site_packages_str)
     
-    def _resolve_spec_with_pip(self, package_spec: str, index_url: Optional[str] = None, extra_index_url: Optional[str] = None) -> Tuple[Optional[str], str]:
+    def _resolve_spec_with_pip(self, package_spec: str, index_url: Optional[str] = None, 
+                           extra_index_url: Optional[str] = None) -> Tuple[Optional[str], str]:
         """
-        (V5 - UNIVERSAL PIP COMPATIBILITY) Works with pip from the Stone Age to modern times.
-        Detects ancient pip and falls back to `pip download` which has existed forever.
+        (V6 - AUTO INDEX DETECTION) Automatically detects special index URLs for packages
+        like PyTorch CUDA variants, then validates with pip.
         """
         try:
+            # ✨ AUTO-DETECT INDEX URL if not explicitly provided
+            if not index_url and not extra_index_url:
+                # Lazy-load the registry (only initialize once per instance)
+                if not hasattr(self, 'package_index_registry'):
+                    from .installation.package_index_registry import PackageIndexRegistry
+                    config_base = self.multiversion_base.parent
+                    self.package_index_registry = PackageIndexRegistry(config_base)
+                                    
+                # Parse the spec to get package name and version
+                pkg_name, version = self._parse_package_spec(package_spec)
+                
+                # Ask the registry for the index URL
+                detected_index_url, detected_extra_index_url = self.package_index_registry.detect_index_url(pkg_name, version)
+                
+                # Use detected URLs if found
+                if detected_index_url:
+                    safe_print(f"   🔍 Auto-detected special variant for {pkg_name}")
+                    safe_print(f"   🎯 Using index: {detected_index_url}")
+                    index_url = detected_index_url
+                if detected_extra_index_url:
+                    safe_print(f"   🔍 Auto-detected extra index: {detected_extra_index_url}")
+                    extra_index_url = detected_extra_index_url
+
+            # --- REST OF YOUR EXISTING CODE CONTINUES UNCHANGED ---
+            
             # First try modern approach with --dry-run --report
-            cmd = [self.config['python_executable'], '-m', 'pip', 'install', '--dry-run', '--ignore-installed', '--no-deps', '--report', '-', package_spec]
+            cmd = [self.config['python_executable'], '-m', 'pip', 'install', '--dry-run', 
+                '--ignore-installed', '--no-deps', '--report', '-', package_spec]
             if index_url:
                 cmd.extend(['--index-url', index_url])
             if extra_index_url:
                 cmd.extend(['--extra-index-url', extra_index_url])
-            result = subprocess.run(cmd, capture_output=True, text=True, check=False, timeout=60, env=dict(os.environ, PYTHONIOENCODING='utf-8'))
+            
+            result = subprocess.run(cmd, capture_output=True, text=True, check=False, 
+                                timeout=60, env=dict(os.environ, PYTHONIOENCODING='utf-8'))
             
             pip_report_str = result.stdout.strip()
             pip_user_error_output = result.stderr.strip()
@@ -8107,20 +8216,22 @@ class omnipkg:
             
             if is_ancient_pip:
                 safe_print(f"   ⏳ Ancient pip detected - falling back to `pip download` method...")
-                # This call can now RAISE the error, which will be caught below
-                return self._resolve_spec_with_ancient_pip(package_spec)
+                return self._resolve_spec_with_ancient_pip(package_spec, index_url=index_url, extra_index_url=extra_index_url)
             
             if result.returncode == 0 and pip_report_str:
                 json_start = pip_report_str.find('{')
-                if json_start == -1: return None, pip_user_error_output
+                if json_start == -1: 
+                    return None, pip_user_error_output
                 json_end = pip_report_str.rfind('}')
-                if json_end == -1 or json_end < json_start: return None, pip_user_error_output
+                if json_end == -1 or json_end < json_start: 
+                    return None, pip_user_error_output
                 json_str = pip_report_str[json_start:json_end + 1]
                 
                 try:
                     report = json.loads(json_str)
                     install_plan = report.get('install', [])
-                    if not install_plan: return None, pip_user_error_output
+                    if not install_plan: 
+                        return None, pip_user_error_output
                     req_name = self._parse_package_spec(package_spec)[0]
                     
                     for item in install_plan:
@@ -8136,7 +8247,8 @@ class omnipkg:
                     safe_print(f"   ⚠️  Extracted JSON (first 500 chars): {json_str[:500]}")
                     return None, pip_user_error_output
 
-            is_no_match_error = "Could not find a version" in pip_user_error_output or "No matching distribution" in pip_user_error_output
+            is_no_match_error = "Could not find a version" in pip_user_error_output or \
+                            "No matching distribution" in pip_user_error_output
         
             if is_no_match_error:
                 pkg_name_to_check, requested_version = self._parse_package_spec(package_spec)
@@ -8161,8 +8273,6 @@ class omnipkg:
             return None, pip_user_error_output
 
         except NoCompatiblePythonError:
-            # CATCH AND RE-RAISE the specific error to prevent it from being swallowed.
-            # This is the crucial fix.
             raise
         except Exception as e:
             return None, f"An unexpected error occurred during pip resolution: {e}"
@@ -8172,55 +8282,86 @@ class omnipkg:
         (AUTHORITATIVE FIX) Fallback for ancient pip. When `pip download` fails,
         it intelligently parses the error and RAISES NoCompatiblePythonError if
         the package exists but is incompatible.
+        
+        (V6 - AUTO INDEX DETECTION) Now also auto-detects special index URLs for packages
+        like PyTorch CUDA variants.
         """
-        temp_dir = tempfile.mkdtemp()
         try:
-            cmd = [
-                self.config['python_executable'], '-m', 'pip', 'download',
-                '--no-deps', '--no-cache-dir', '--dest', temp_dir, package_spec
-            ]
-            if index_url:
-                cmd.extend(['--index-url', index_url])
-            if extra_index_url:
-                cmd.extend(['--extra-index-url', extra_index_url])
-            result = subprocess.run(cmd, capture_output=True, text=True, check=False, timeout=60)
-
-            # --- Success Path ---
-            if result.returncode == 0:
-                downloaded_files = list(Path(temp_dir).glob('*'))
-                if downloaded_files:
-                    version = self._extract_version_from_filename(downloaded_files[0].name, package_spec)
-                    if version:
-                        return f"{self._parse_package_spec(package_spec)[0]}=={version}", ""
-
-            # --- FAILURE PATH: THIS IS THE FIX ---
-            pip_output = result.stderr.strip()
-            is_no_match_error = "could not find a version" in pip_output.lower() or \
-                                "no matching distribution" in pip_output.lower()
-
-            if is_no_match_error:
-                pkg_name, requested_version = self._parse_package_spec(package_spec)
+            # ✨ AUTO-DETECT INDEX URL if not explicitly provided
+            if not index_url and not extra_index_url:
+                # Lazy-load the registry (only initialize once per instance)
+                if not hasattr(self, 'package_index_registry'):
+                    from .installation.package_index_registry import PackageIndexRegistry
+                    config_base = self.multiversion_base.parent
+                    self.package_index_registry = PackageIndexRegistry(config_base)
+                                    
+                # Parse the spec to get package name and version
+                pkg_name, version = self._parse_package_spec(package_spec)
                 
-                # Check if the package *exists* on PyPI. If so, it's an incompatibility.
-                if self._check_package_exists_on_pypi(pkg_name):
-                    # It exists. Find out what Python it needs.
-                    compatible_py = self._find_compatible_python_version(pkg_name, target_package_version=requested_version)
-                    
-                    # RAISE THE EXCEPTION to be caught by smart_install.
-                    raise NoCompatiblePythonError(
-                        package_name=pkg_name,
-                        package_version=requested_version,
-                        current_python=self.current_python_context.replace('py',''),
-                        compatible_python=compatible_py
-                    )
+                # Ask the registry for the index URL
+                detected_index_url, detected_extra_index_url = self.package_index_registry.detect_index_url(pkg_name, version)
+                
+                # Use detected URLs if found
+                if detected_index_url:
+                    safe_print(f"   🔍 Auto-detected special variant for {pkg_name}")
+                    safe_print(f"   🎯 Using index: {detected_index_url}")
+                    index_url = detected_index_url
+                if detected_extra_index_url:
+                    safe_print(f"   🔍 Auto-detected extra index: {detected_extra_index_url}")
+                    extra_index_url = detected_extra_index_url
 
-            # If we get here, it was a real failure (e.g., package doesn't exist), not an incompatibility.
-            return None, pip_output
-            
+            # --- REST OF EXISTING CODE CONTINUES ---
+            temp_dir = tempfile.mkdtemp()
+            try:
+                cmd = [
+                    self.config['python_executable'], '-m', 'pip', 'download',
+                    '--no-deps', '--no-cache-dir', '--dest', temp_dir, package_spec
+                ]
+                if index_url:
+                    cmd.extend(['--index-url', index_url])
+                if extra_index_url:
+                    cmd.extend(['--extra-index-url', extra_index_url])
+                result = subprocess.run(cmd, capture_output=True, text=True, check=False, timeout=60)
+
+                # --- Success Path ---
+                if result.returncode == 0:
+                    downloaded_files = list(Path(temp_dir).glob('*'))
+                    if downloaded_files:
+                        version = self._extract_version_from_filename(downloaded_files[0].name, package_spec)
+                        if version:
+                            return f"{self._parse_package_spec(package_spec)[0]}=={version}", ""
+
+                # --- FAILURE PATH: THIS IS THE FIX ---
+                pip_output = result.stderr.strip()
+                is_no_match_error = "could not find a version" in pip_output.lower() or \
+                                    "no matching distribution" in pip_output.lower()
+
+                if is_no_match_error:
+                    pkg_name, requested_version = self._parse_package_spec(package_spec)
+                    
+                    # Check if the package *exists* on PyPI. If so, it's an incompatibility.
+                    if self._check_package_exists_on_pypi(pkg_name):
+                        # It exists. Find out what Python it needs.
+                        compatible_py = self._find_compatible_python_version(pkg_name, target_package_version=requested_version)
+                        
+                        # RAISE THE EXCEPTION to be caught by smart_install.
+                        raise NoCompatiblePythonError(
+                            package_name=pkg_name,
+                            package_version=requested_version,
+                            current_python=self.current_python_context.replace('py',''),
+                            compatible_python=compatible_py
+                        )
+
+                # If we get here, it was a real failure (e.g., package doesn't exist), not an incompatibility.
+                return None, pip_output
+                
+            except NoCompatiblePythonError:
+                raise # Let smart_install catch this.
+            finally:
+                shutil.rmtree(temp_dir, ignore_errors=True)
+        
         except NoCompatiblePythonError:
-            raise # Let smart_install catch this.
-        finally:
-            shutil.rmtree(temp_dir, ignore_errors=True)
+            raise
             
     def _extract_version_from_filename(self, filename: str, package_spec: str) -> Optional[str]:
         """
@@ -8248,208 +8389,367 @@ class omnipkg:
             # Normalize "1.0-final" to "1.0"
             return re.sub(r'-\w+$', '', version)
         
-        return None
+        return None  
 
-    def smart_install(self, packages: List[str], dry_run: bool = False, force_reinstall: bool = False, 
-                  override_strategy: Optional[str] = None, target_directory: Optional[Path] = None, 
-                  preflight_compatibility_cache: Optional[Dict] = None,
-                  # ADD THESE
-                  index_url: Optional[str] = None, extra_index_url: Optional[str] = None) -> int:
+    def _create_pre_install_snapshot(self, package_name: str) -> str:
+        """
+        Creates a snapshot before installing a package.
+        Returns the snapshot key for latLiteCacheCliener restoration.
+        """
+        snapshot_key = f"{self.redis_key_prefix}snapshot:pre_install:{package_name}:{int(time.time())}"
+        current_state = self.get_installed_packages(live=True)
+        
+        self.cache_client.setex(
+            snapshot_key,
+            3600,  # Expire after 1 hour
+            json.dumps(current_state)
+        )
+        
+        return snapshot_key
+
+
+    def _restore_from_pre_install_snapshot(self, snapshot_key: str) -> bool:
+        """Restores from a specific pre-install snapshot"""
+        snapshot_data = self.cache_client.get(snapshot_key)
+        
+        if not snapshot_data:
+            safe_print(f"   ❌ Snapshot not found: {snapshot_key}")
+            return False
+        
+        snapshot_state = json.loads(snapshot_data)
+        return self._safe_restore_from_snapshot("restore", snapshot_state, force=True)
+
+
+    def _safe_restore_from_snapshot(self, package_name: str, 
+                                    snapshot_state: Dict[str, str],
+                                    force: bool = False) -> bool:
+        """
+        Safely restores environment state using snapshot data instead of trusting pip.
+        
+        Args:
+            package_name: The package that triggered the restore
+            snapshot_state: The pre-install snapshot to restore to
+            force: Skip confirmation prompt
+        
+        Returns:
+            True if restore successful, False otherwise
+        """
+        safe_print(f"\n🔄 SAFE RESTORE PROTOCOL: Reverting to pre-install state")
+        safe_print(f"   Reason: Failed to bubble {package_name}, must restore stability")
+        
+        # Get current state
+        current_state = self.get_installed_packages(live=True)
+        
+        # Calculate differences
+        to_downgrade = {}
+        to_uninstall = []
+        
+        for pkg, target_version in snapshot_state.items():
+            current_version = current_state.get(pkg)
+            
+            if current_version and current_version != target_version:
+                to_downgrade[pkg] = (current_version, target_version)
+            elif not current_version:
+                # Package was in snapshot but is now gone - very rare
+                pass
+        
+        # Find packages that didn't exist in snapshot
+        for pkg in current_state:
+            if pkg not in snapshot_state:
+                to_uninstall.append(pkg)
+        
+        if not to_downgrade and not to_uninstall:
+            safe_print("   ✅ Environment already matches snapshot")
+            return True
+        
+        # Show what will be restored
+        safe_print(f"\n📋 Restoration Plan:")
+        if to_downgrade:
+            safe_print(f"   Packages to restore to snapshot versions:")
+            for pkg, (current, target) in sorted(to_downgrade.items()):
+                safe_print(f"      • {pkg}: v{current} → v{target}")
+        
+        if to_uninstall:
+            safe_print(f"   Packages to remove (not in snapshot):")
+            for pkg in sorted(to_uninstall):
+                safe_print(f"      • {pkg}")
+        
+        if not force:
+            confirm = input("\n   Proceed with restore? [Y/n]: ").strip().lower()
+            if confirm and confirm != 'y':
+                safe_print("   ❌ Restore cancelled by user")
+                return False
+        
+        # Execute restore using EXACT snapshot versions
+        success = True
+        
+        # First, restore all changed packages to their snapshot versions
+        if to_downgrade:
+            specs_to_restore = [f"{pkg}=={target_ver}" for pkg, (_, target_ver) in to_downgrade.items()]
+            
+            safe_print(f"\n   🔧 Restoring {len(specs_to_restore)} package(s) to snapshot versions...")
+            restore_code, restore_output = self._run_pip_install(
+                specs_to_restore,
+                force_reinstall=True,
+                extra_flags=['--no-deps']  # CRITICAL: Don't let pip change anything else
+            )
+            
+            if restore_code != 0:
+                safe_print(f"   ❌ Restore failed!")
+                safe_print(f"   📄 Pip output:\n{restore_output.get('stderr', 'No error output')}")
+                success = False
+        
+        # Then uninstall packages that shouldn't exist
+        if success and to_uninstall:
+            safe_print(f"\n   🗑️  Removing {len(to_uninstall)} unexpected package(s)...")
+            uninstall_code, uninstall_output = self._run_pip_uninstall(
+                to_uninstall,
+                force=True
+            )
+            
+            if uninstall_code != 0:
+                safe_print(f"   ⚠️  Some removals failed")
+                success = False
+        
+        # Verify restore
+        if success:
+            final_state = self.get_installed_packages(live=True)
+            
+            mismatches = []
+            for pkg, expected_ver in snapshot_state.items():
+                actual_ver = final_state.get(pkg)
+                if actual_ver != expected_ver:
+                    mismatches.append(f"{pkg}: expected v{expected_ver}, got v{actual_ver or 'MISSING'}")
+            
+            if mismatches:
+                safe_print(f"\n   ⚠️  Restore incomplete - {len(mismatches)} mismatches:")
+                for mismatch in mismatches[:5]:  # Show first 5
+                    safe_print(f"      • {mismatch}")
+                success = False
+            else:
+                safe_print(f"\n   ✅ Environment successfully restored to snapshot state")
+        
+        return success
+
+
+    def _detect_all_changes(self, before: Dict[str, str], after: Dict[str, str]) -> Dict:
+        """
+        Comprehensive change detection that catches EVERYTHING pip does.
+        
+        Returns dict with:
+            - downgrades: List of {package, old_version, new_version}
+            - upgrades: List of {package, old_version, new_version}
+            - additions: List of {package, version}
+            - removals: List of {package, version}
+        """
+        changes = {
+            'downgrades': [],
+            'upgrades': [],
+            'additions': [],
+            'removals': []
+        }
+        
+        all_packages = set(before.keys()) | set(after.keys())
+        
+        for pkg in all_packages:
+            old_ver = before.get(pkg)
+            new_ver = after.get(pkg)
+            
+            if old_ver and new_ver:
+                if old_ver != new_ver:
+                    try:
+                        if parse_version(new_ver) < parse_version(old_ver):
+                            changes['downgrades'].append({
+                                'package': pkg,
+                                'old_version': old_ver,
+                                'new_version': new_ver
+                            })
+                        else:
+                            changes['upgrades'].append({
+                                'package': pkg,
+                                'old_version': old_ver,
+                                'new_version': new_ver
+                            })
+                    except Exception:
+                        # If version comparison fails, treat as upgrade
+                        changes['upgrades'].append({
+                            'package': pkg,
+                            'old_version': old_ver,
+                            'new_version': new_ver
+                        })
+            
+            elif new_ver and not old_ver:
+                changes['additions'].append({
+                    'package': pkg,
+                    'version': new_ver
+                })
+            
+            elif old_ver and not new_ver:
+                changes['removals'].append({
+                    'package': pkg,
+                    'version': old_ver
+                })
+        
+        return changes
     
+    def smart_install(self, packages: List[str], dry_run: bool = False, force_reinstall: bool = False, 
+              override_strategy: Optional[str] = None, target_directory: Optional[Path] = None, 
+              preflight_compatibility_cache: Optional[Dict] = None,
+              index_url: Optional[str] = None, extra_index_url: Optional[str] = None) -> int:
+
         # ====================================================================
         # ULTRA-FAST PREFLIGHT CHECK (Before any heavy initialization)
         # ====================================================================
         if not force_reinstall and packages:
             safe_print('⚡ Running ultra-fast preflight check...')
-        
             preflight_start = time.perf_counter()
             configured_exe = self.config.get('python_executable', sys.executable)
             install_strategy = self.config.get('install_strategy', 'stable-main')
             
             fully_resolved_specs = []
             needs_installation = []
-            
-            # Define complex specifier characters
             complex_spec_chars = ['<', '>', '~', '!', ',']
             
-            # --- Phase 1: Resolve versions and check if already satisfied ---
+            # Phase 1: Resolve versions and check if satisfied
             for pkg_spec in packages:
                 pkg_name, version = self._parse_package_spec(pkg_spec)
-                
-                # Step 1: Get the version (either from spec or from cache/PyPI)
-                # FIX: Check if the specifier is "complex" (contains <, >, ~, !, ,)
                 is_complex_spec = any(op in pkg_spec for op in complex_spec_chars)
 
                 if version and not is_complex_spec:
-                    # Already has explicit, simple version (e.g., numpy==1.26.4)
                     resolved_spec = pkg_spec
                 else:
-                    # It's either complex (pandas>=1.2) or unversioned (pandas)
-                    # We must resolve it to a concrete version.
-                    
                     if is_complex_spec:
                         safe_print(f"   🔍 Detected complex specifier: '{pkg_spec}'")
-                        safe_print(f"   → Resolving to exact version for Python {self.current_python_context}...")
-                        
                         try:
-                            # Use _find_best_version_for_spec to respect the constraint
                             resolved_spec_str = self._find_best_version_for_spec(pkg_spec)
-                            
                             if resolved_spec_str:
-                                # Successfully resolved (e.g., "pandas>=1.2" -> "pandas==2.2.2")
                                 resolved_spec = resolved_spec_str
-                                # Update pkg_name and version variables for the next check
                                 pkg_name, version = self._parse_package_spec(resolved_spec)
                                 safe_print(f"   ✅ Resolved '{pkg_spec}' to '{resolved_spec}'")
                             else:
-                                # Could not resolve - mark for pip validation
-                                safe_print(f"   ⚠️  Could not resolve '{pkg_spec}'. Marked for pip fallback.")
                                 needs_installation.append(pkg_spec)
                                 continue
-                                
                         except NoCompatiblePythonError as e:
-                            # Complex specifier resolution triggered quantum healing
-                            safe_print("\n" + "="*60)
-                            safe_print("🌌 QUANTUM HEALING: Python Incompatibility Detected During Preflight")
-                            safe_print("="*60)
-                            safe_print(f"   - Diagnosis: Cannot resolve '{e.package_name}' v{e.package_version} on Python {e.current_python}.")
-                            safe_print(f"   - Prescription: This package requires Python {e.compatible_python}.")
-                            
-                            from .cli import handle_python_requirement
-                            if not e.compatible_python or e.compatible_python == "unknown":
-                                safe_print(f"❌ Healing failed: Could not determine compatible Python version.")
-                                return 1
-            
-                            if not handle_python_requirement(e.compatible_python, self, "omnipkg"):
-                                safe_print(f"❌ Healing failed: Could not switch to Python {e.compatible_python}.")
-                                return 1
-            
-                            safe_print(f"\n🚀 Retrying in new Python {e.compatible_python} context...")
-                            new_config_manager = ConfigManager()
-                            new_omnipkg_instance = self.__class__(new_config_manager)
-            
-                            # Recursively retry with the ORIGINAL packages list
-                            return new_omnipkg_instance.smart_install(packages, dry_run, force_reinstall, 
-                                                                    override_strategy, target_directory)
+                            # Quantum healing code...
+                            return self._handle_quantum_healing(e, packages, dry_run, force_reinstall, override_strategy, target_directory)
                     else:
-                        # Simple package name without version - get latest compatible
                         try:
                             latest_version = self._get_latest_version_from_pypi(pkg_name)
                         except NoCompatiblePythonError as e:
-                            # 🔥 IMMEDIATE QUANTUM HEALING - NO CACHING!
-                            safe_print("\n" + "="*60)
-                            safe_print("🌌 QUANTUM HEALING: Python Incompatibility Detected During Preflight")
-                            safe_print("="*60)
-                            safe_print(f"   - Diagnosis: Cannot resolve '{e.package_name}' v{e.package_version} on Python {e.current_python}.")
-                            safe_print(f"   - Prescription: This package requires Python {e.compatible_python}.")
-                            
-                            from .cli import handle_python_requirement
-                            if not e.compatible_python or e.compatible_python == "unknown":
-                                safe_print(f"❌ Healing failed: Could not determine compatible Python version.")
-                                return 1
-            
-                            if not handle_python_requirement(e.compatible_python, self, "omnipkg"):
-                                safe_print(f"❌ Healing failed: Could not switch to Python {e.compatible_python}.")
-                                return 1
-            
-                            safe_print(f"\n🚀 Retrying in new Python {e.compatible_python} context...")
-                            new_config_manager = ConfigManager()
-                            new_omnipkg_instance = self.__class__(new_config_manager)
-            
-                            # Recursively retry with the ORIGINAL packages list
-                            return new_omnipkg_instance.smart_install(packages, dry_run, force_reinstall, 
-                                                                    override_strategy, target_directory)
-            
+                            return self._handle_quantum_healing(e, packages, dry_run, force_reinstall, override_strategy, target_directory)
+                        
                         if latest_version:
                             resolved_spec = f"{pkg_name}=={latest_version}"
                             version = latest_version
                         else:
-                            safe_print(f"   ⚠️  Fast checks could not resolve '{pkg_name}'. Marked for pip fallback.")
                             needs_installation.append(pkg_spec)
                             continue
             
-                # Step 2: Check if this version is already installed
-                is_installed, duration_ms = self.check_package_installed_fast(configured_exe, pkg_name, version)
+                is_installed, duration_ns = self.check_package_installed_fast(configured_exe, pkg_name, version)
+                
+                if duration_ns < 1_000:
+                    duration_str = f"{duration_ns}ns"
+                elif duration_ns < 1_000_000:
+                    duration_str = f"{duration_ns / 1_000:.1f}µs"
+                else:
+                    duration_str = f"{duration_ns / 1_000_000:.3f}ms"
                 
                 if is_installed:
                     bubble_path = self.multiversion_base / f'{pkg_name}-{version}'
                     is_in_bubble = bubble_path.exists() and bubble_path.is_dir()
                     
                     if not is_in_bubble:
-                        safe_print(f'   ✓ {resolved_spec} [satisfied: {duration_ms:.1f}ms - active in main env]')
+                        safe_print(f'   ✓ {resolved_spec} [satisfied: {duration_str} - active in main env]')
                         fully_resolved_specs.append(resolved_spec)
                         continue
                     elif install_strategy == 'stable-main':
-                        safe_print(f'   ✓ {resolved_spec} [satisfied: {duration_ms:.1f}ms - bubble]')
+                        safe_print(f'   ✓ {resolved_spec} [satisfied: {duration_str} - bubble]')
                         fully_resolved_specs.append(resolved_spec)
                         continue
                     else:
-                        safe_print(f'   ⚠️  {resolved_spec} found in bubble but needs to be active')
                         needs_installation.append(resolved_spec)
                         continue
                 else:
                     needs_installation.append(resolved_spec)
-            
-            # --- Phase 2: If everything satisfied, we're done! ---
+
+            # Phase 2: If everything satisfied, we're done!
             if not needs_installation:
-                total_check_time = (time.perf_counter() - preflight_start) * 1000
-                safe_print(f'⚡ PREFLIGHT SUCCESS: All {len(packages)} package(s) already satisfied! ({total_check_time:.1f}ms)')
+                total_check_time_ns = int((time.perf_counter() - preflight_start) * 1_000_000_000)
+                if total_check_time_ns < 1_000_000:
+                    total_time_str = f"{total_check_time_ns / 1_000:.1f}µs"
+                else:
+                    total_time_str = f"{total_check_time_ns / 1_000_000:.3f}ms"
+                
+                safe_print(f'⚡ PREFLIGHT SUCCESS: All {len(packages)} package(s) already satisfied! ({total_time_str})')
                 return 0
             
-            # --- Phase 3: Validate unresolved packages with pip (ONLY if needed) ---
+            # Phase 3: Validate with pip if needed
             if needs_installation:
                 safe_print(f"\n📦 {len(needs_installation)} package(s) need installation/validation")
-                
                 validated_specs = []
-                try:  # <--- ADD TRY BLOCK HERE
+                
+                try:
                     for spec in needs_installation:
                         pkg_name, version = self._parse_package_spec(spec)
-                        
                         if not version:
                             safe_print(f"   🔍 Resolving version for '{pkg_name}' with pip...")
-                            resolved_spec, pip_output = self._resolve_spec_with_pip(spec, index_url=index_url, extra_index_url=extra_index_url)
                         else:
                             safe_print(f"   ⚙️  Validating '{spec}' with pip...")
-                            resolved_spec, pip_output = self._resolve_spec_with_pip(spec, index_url=index_url, extra_index_url=extra_index_url)
+                        
+                        resolved_spec, pip_output = self._resolve_spec_with_pip(spec, index_url=index_url, extra_index_url=extra_index_url)
                         
                         if resolved_spec:
                             safe_print(f"   ✓ Pip validated '{spec}' -> '{resolved_spec}'")
                             validated_specs.append(resolved_spec)
                         else:
                             safe_print(f"\n❌ Could not find the specified version for '{pkg_name}'.")
-                            safe_print("   Pip provided the following information and available versions:")
-                            for line in pip_output.splitlines():
-                                safe_print(f"   | {line}")
                             return 1
-                            
-                except NoCompatiblePythonError as e:  # <--- CATCH THE ERROR HERE
-                    # Quantum healing during preflight!
-                    safe_print("\n" + "="*60)
-                    safe_print("🌌 QUANTUM HEALING: Python Incompatibility Detected During Preflight")
-                    safe_print("="*60)
-                    safe_print(f"   - Diagnosis: Cannot resolve '{e.package_name}' v{e.package_version} on Python {e.current_python}.")
-                    safe_print(f"   - Prescription: This package requires Python {e.compatible_python}.")
-                    
-                    from .cli import handle_python_requirement
-                    if not e.compatible_python or e.compatible_python == "unknown":
-                        safe_print(f"❌ Healing failed: Could not determine compatible Python version.")
-                        return 1
-
-                    if not handle_python_requirement(e.compatible_python, self, "omnipkg"):
-                        safe_print(f"❌ Healing failed: Could not switch to Python {e.compatible_python}.")
-                        return 1
-
-                    safe_print(f"\n🚀 Retrying in new Python {e.compatible_python} context...")
-                    new_config_manager = ConfigManager()
-                    new_omnipkg_instance = self.__class__(new_config_manager)
-
-                    # Recursively retry with the ORIGINAL packages list
-                    return new_omnipkg_instance.smart_install(packages, dry_run, force_reinstall, 
-                                                            override_strategy, target_directory,
-                                                            index_url=index_url, extra_index_url=extra_index_url)
+                except NoCompatiblePythonError as e:
+                    return self._handle_quantum_healing(e, packages, dry_run, force_reinstall, override_strategy, target_directory, index_url, extra_index_url)
                 
                 packages = validated_specs
-    
+        
+        elif force_reinstall and packages:
+            # Force reinstall preflight
+            safe_print('⚡ Running preflight check with --force flag...')
+            preflight_start = time.perf_counter()
+            configured_exe = self.config.get('python_executable', sys.executable)
+            
+            packages_found = []
+            packages_not_found = []
+            
+            for pkg_spec in packages:
+                pkg_name, version = self._parse_package_spec(pkg_spec)
+                if not version:
+                    packages_not_found.append(pkg_spec)
+                    continue
+                    
+                is_installed, duration_ns = self.check_package_installed_fast(configured_exe, pkg_name, version)
+                
+                if duration_ns < 1_000:
+                    duration_str = f"{duration_ns}ns"
+                elif duration_ns < 1_000_000:
+                    duration_str = f"{duration_ns / 1_000:.1f}µs"
+                else:
+                    duration_str = f"{duration_ns / 1_000_000:.3f}ms"
+                
+                if is_installed:
+                    packages_found.append((pkg_spec, duration_str, is_installed))
+                    safe_print(f'   🔧 {pkg_spec} [found: {duration_str} - {is_installed}] → will force reinstall')
+                else:
+                    packages_not_found.append(pkg_spec)
+                    safe_print(f'   ⚠️  {pkg_spec} [not found: {duration_str}] → will install fresh')
+            
+            total_check_time_ns = int((time.perf_counter() - preflight_start) * 1_000_000_000)
+            if total_check_time_ns < 1_000_000:
+                total_time_str = f"{total_check_time_ns / 1_000:.1f}µs"
+            else:
+                total_time_str = f"{total_check_time_ns / 1_000_000:.3f}ms"
+            
+            if packages_found:
+                safe_print(f'\n🔨 FORCE REINSTALL: Triggering repair for {len(packages_found)} existing package(s) ({total_time_str})')
+            if packages_not_found:
+                safe_print(f'📦 Fresh install needed for {len(packages_not_found)} package(s)')
 
         # ====================================================================
         # NORMAL INITIALIZATION (Only runs if packages need work)
@@ -8858,147 +9158,191 @@ class omnipkg:
         kb_deletions = set()
         
         for package_spec in sorted_packages:
-            try:   
+            try:
                 safe_print('\n' + '─' * 60)
-                safe_print('📦 Processing: {}'.format(package_spec))
-                if force_reinstall:
-                    safe_print(_('   - 🛡️  Force reinstall triggered by auto-repair.'))
-                safe_print('─' * 60)
                 
-                if not force_reinstall:
+                # 1. Parse name and create snapshot immediately
+                pkg_name, pkg_version = self._parse_package_spec(package_spec)
+                snapshot_key = self._create_pre_install_snapshot(pkg_name)
+                
+                if force_reinstall:
+                    # Check if package exists
+                    # FIX: Use '_chk_time' instead of '_' to avoid overwriting the translation function
+                    is_installed, _chk_time = self.check_package_installed_fast(
+                        self.config.get('python_executable', sys.executable),
+                        pkg_name, 
+                        pkg_version
+                    )
+                    
+                    if is_installed:
+                        safe_print(f'🔨 Force Reinstalling: {package_spec} (existing {is_installed})')
+                    else:
+                        safe_print(f'📦 Processing: {package_spec}')
+                else:
+                    safe_print(f'📦 Processing: {package_spec}')
+                    safe_print('─' * 60)
+                    safe_print(f"   📸 Pre-install snapshot created")
+                    
                     satisfaction_check = self._check_package_satisfaction([package_spec], strategy=install_strategy)
                     if satisfaction_check['all_satisfied']:
                         safe_print('✅ Requirement already satisfied: {}'.format(package_spec))
                         continue
                 
-                packages_to_install = [package_spec]
+                # 2. SHARED INSTALLATION LOGIC
                 packages_before = self.get_installed_packages(live=True)
-                safe_print('⚙️ Running pip install for: {}...'.format(', '.join(packages_to_install)))
+                safe_print('⚙️ Running pip install for: {}...'.format(package_spec))
+                
                 return_code, pkg_install_output = self._run_pip_install(
-                    packages_to_install, target_directory=target_directory, force_reinstall=force_reinstall,
-                    # PASS THE FLAGS THROUGH
-                    index_url=index_url, extra_index_url=extra_index_url)
+                    [package_spec], 
+                    target_directory=target_directory, 
+                    force_reinstall=force_reinstall,
+                    index_url=index_url, 
+                    extra_index_url=extra_index_url
+                )
                 
                 if return_code != 0:
                     safe_print(f'❌ Pip installation failed for {package_spec}.')
-                    pkg_name, requested_version = self._parse_package_spec(package_spec)
-
-                    # Check if the failure was due to a cached version
-                    py_context = self.current_python_context
-                    cached_version = self.pypi_cache.get_cached_version(pkg_name, py_context)
-
-                    if requested_version and cached_version == requested_version:
-                        # The failed version came from our cache! Invalidate and retry.
-                        self.pypi_cache.invalidate_cache_entry(pkg_name, py_context)
-                        safe_print(f"🔄 Retrying {pkg_name} by re-resolving the latest compatible version...")
-
-                        # Re-run the full resolver to get the truly latest compatible version
-                        new_compatible_version = self._get_latest_version_from_pypi(pkg_name)
-
-                        if new_compatible_version and new_compatible_version != requested_version:
-                            new_spec = f'{pkg_name}=={new_compatible_version}'
-                            safe_print(f"   ✅ Found new compatible version: {new_spec}. Retrying install...")
-                            retry_code, retry_output = self._run_pip_install(
-                                [new_spec], target_directory=target_directory, force_reinstall=force_reinstall)
-                            if retry_code == 0:
-                                safe_print(f"   🎉 Successfully installed {new_spec} on retry!")
-                                return_code = 0 # Mark as successful
-                            else:
-                                safe_print(f"   ❌ Retry also failed for {new_spec}.")
-                        elif new_compatible_version:
-                            safe_print(f"   🤷 Re-resolver found the same version ({new_compatible_version}). Cannot auto-correct further.")
-                        else:
-                            safe_print(f"   ❌ Could not find any compatible version for {pkg_name} on retry.")
-                    else:
-                        safe_print("   -> Failure was not due to a cached version. Continuing...")
-
-                if return_code != 0:
-                    safe_print('❌ Unrecoverable installation failure for {}. Continuing...'.format(package_spec))
-                    any_failures = True  # <--- ADD THIS LINE
-                    continue
                     
+                    # Restore from snapshot on failure
+                    safe_print(f"\n🔄 Restoring environment from pre-install snapshot...")
+                    if self._restore_from_pre_install_snapshot(snapshot_key):
+                        safe_print(f"   ✅ Environment restored to pre-install state")
+                    else:
+                        safe_print(f"   ❌ CRITICAL: Snapshot restore failed!")
+                        safe_print(f"   💡 You may need to run: omnipkg revert")
+                    
+                    any_failures = True
+                    continue
+                
                 any_installations_made = True
                 packages_after = self.get_installed_packages(live=True)
-                replacements = self._detect_version_replacements(packages_before, packages_after)
+                safe_print('⚙️ Running pip install for: {}...'.format(package_spec))
                 
-                if replacements:
-                    for rep in replacements:
-                        kb_deletions.add(rep['package'])
-                        self._cleanup_version_from_kb(rep['package'], rep['old_version'])
+                return_code, pkg_install_output = self._run_pip_install(
+                    [package_spec], 
+                    target_directory=target_directory, 
+                    force_reinstall=force_reinstall,
+                    index_url=index_url, 
+                    extra_index_url=extra_index_url
+                )
                 
-                # Handle stability protection based on install strategy
+                if return_code != 0:
+                    safe_print(f'❌ Pip installation failed for {package_spec}.')
+                    
+                    # Restore from snapshot on failure
+                    safe_print(f"\n🔄 Restoring environment from pre-install snapshot...")
+                    if self._restore_from_pre_install_snapshot(snapshot_key):
+                        safe_print(f"   ✅ Environment restored to pre-install state")
+                    else:
+                        safe_print(f"   ❌ CRITICAL: Snapshot restore failed!")
+                        safe_print(f"   💡 You may need to run: omnipkg revert")
+                    
+                    any_failures = True
+                    continue
+                
+                any_installations_made = True
+                packages_after = self.get_installed_packages(live=True)
+                
+                # 3. Change Detection
+                all_changes = self._detect_all_changes(packages_before, packages_after)
+                
+                if all_changes['downgrades'] or all_changes['upgrades'] or all_changes['removals']:
+                    safe_print(f"\n⚠️  Detected {len(all_changes['downgrades'] + all_changes['upgrades'] + all_changes['removals'])} dependency changes:")
+                    
+                    for change in all_changes['downgrades']:
+                        safe_print(f"   ⬇️  {change['package']}: v{change['old_version']} → v{change['new_version']} (downgrade)")
+                    
+                    for change in all_changes['upgrades']:
+                        safe_print(f"   ⬆️  {change['package']}: v{change['old_version']} → v{change['new_version']} (upgrade)")
+                    
+                    for change in all_changes['removals']:
+                        safe_print(f"   🗑️  {change['package']}: v{change['version']} (removed)")
+                
+                # Handle stability protection
                 if install_strategy == 'stable-main':
-                    downgrades_to_fix = self._detect_downgrades(packages_before, packages_after)
-                    upgrades_to_fix = self._detect_upgrades(packages_before, packages_after)
-                    all_changes_to_fix = []
+                    packages_to_bubble = []
+                    packages_to_restore = []
                     
-                    for fix in downgrades_to_fix:
-                        all_changes_to_fix.append({'package': fix['package'], 'old_version': fix['good_version'], 'new_version': fix['bad_version'], 'change_type': 'downgraded'})
-                    for fix in upgrades_to_fix:
-                        all_changes_to_fix.append({'package': fix['package'], 'old_version': fix['old_version'], 'new_version': fix['new_version'], 'change_type': 'upgraded'})
+                    # Collect ALL changes that need bubbling
+                    for change in all_changes['downgrades'] + all_changes['upgrades']:
+                        packages_to_bubble.append({
+                            'package': change['package'],
+                            'new_version': change['new_version'],
+                            'old_version': change['old_version']
+                        })
                     
-                    if all_changes_to_fix:
-                        safe_print(_('🛡️ STABILITY PROTECTION ACTIVATED!'))
-                        replaced_packages_count = len({fix['package'] for fix in all_changes_to_fix})
-                        safe_print(_('   -> Found {} package(s) changed by pip. Bubbling them to preserve stability...').format(replaced_packages_count))
+                    if packages_to_bubble:
+                        safe_print(f'\n🛡️ STABILITY PROTECTION: Processing {len(packages_to_bubble)} changed package(s)')
                         
-                        for fix in all_changes_to_fix:
+                        # Track which bubbles we successfully created
+                        bubble_tracker = {}  # {pkg_name: bubble_path}
+                        
+                        for item in packages_to_bubble:
+                            safe_print(f"\n   🫧 Creating bubble for {item['package']} v{item['new_version']}...")
+                            
                             bubble_created = self.bubble_manager.create_isolated_bubble(
-                                fix['package'], fix['new_version'], python_context_version=python_context_version,
+                                item['package'], 
+                                item['new_version'],
+                                python_context_version=python_context_version,
                                 index_url=index_url,
                                 extra_index_url=extra_index_url,
                                 observed_dependencies=packages_after
                             )
-
+                            
                             if bubble_created:
-                                bubbled_kb_updates[fix['package']] = fix['new_version']
-                                bubble_path_str = str(self.multiversion_base / f"{fix['package']}-{fix['new_version']}")
-                                self.hook_manager.refresh_bubble_map(fix['package'], fix['new_version'], bubble_path_str)
-
-                                # --- THIS IS THE CRITICAL RESTORATION LOGIC ---
-                                safe_print(f"   🔄 Enforcing stable version: Restoring {fix['package']}=={fix['old_version']}...")
+                                bubble_path = self.multiversion_base / f"{item['package']}-{item['new_version']}"
+                                bubble_tracker[item['package']] = bubble_path
+                                bubbled_kb_updates[item['package']] = item['new_version']
                                 
-                                # Use _run_pip_install to restore the "good" version to the main environment.
-                                # --no-deps is crucial to prevent it from re-installing a dependency tree.
-                                restore_code, restore_output = self._run_pip_install(
-                                    [f"{fix['package']}=={fix['old_version']}"],
-                                    force_reinstall=True,
-                                    extra_flags=['--no-deps']
-                                )
-
-                                protected_from_cleanup.add(canonicalize_name(fix['package']))
+                                safe_print(f"   ✅ Bubble created successfully")
                                 
-                                if restore_code == 0:
-                                    main_env_kb_updates[fix['package']] = fix['old_version']
-                                    safe_print(f"   ✅ Bubbled {fix['package']} v{fix['new_version']}, restored stable v{fix['old_version']}")
-                                else:
-                                    safe_print(f"   ❌ RESTORE FAILED for {fix['package']} v{fix['old_version']}!")
-                                    safe_print("   📄 PIP OUTPUT:")
-                                    safe_print(restore_output.get("stderr", "No stderr output."))
+                                # Add to restore list
+                                packages_to_restore.append(item)
                             else:
-                                safe_print('   ❌ Failed to create bubble for {} v{}'.format(fix['package'], fix['new_version']))
-                                # --- AUTOMATIC ROLLBACK LOGIC ---
-                                safe_print(f"   🔄 AUTO-ROLLBACK: Restoring stable version: {fix['package']}=={fix['old_version']}...")
+                                safe_print(f"   ❌ Bubble creation FAILED for {item['package']} v{item['new_version']}")
+                                safe_print(f"   🚨 CRITICAL: Cannot guarantee stability without this bubble!")
                                 
-                                    
-                                restore_code, _unused_output = self._run_pip_install(
-                                    [f"{fix['package']}=={fix['old_version']}"],
-                                    force_reinstall=True,
-                                    extra_flags=['--no-deps']
-                                )
-
-                                if restore_code == 0:
-                                    safe_print(f"   ✅ Rollback successful. Main environment is stable.")
-                                    main_env_kb_updates[fix['package']] = fix['old_version']
+                                # 🎯 IMPROVEMENT 4: Safe restoration using snapshot
+                                safe_print(f"\n   🔄 Initiating safe restore from snapshot...")
+                                snapshot_data = self.cache_client.get(snapshot_key)
+                                
+                                if snapshot_data:
+                                    snapshot_state = json.loads(snapshot_data)
+                                    if self._safe_restore_from_snapshot(pkg_name, snapshot_state, force=True):
+                                        safe_print(f"   ✅ Environment safely restored to pre-install state")
+                                    else:
+                                        safe_print(f"   ❌ Restore failed - environment may be unstable!")
                                 else:
-                                    safe_print(f"   ❌ CRITICAL: Rollback FAILED. The main environment may be unstable.")
-                                    safe_print(f"   💡 Run 'omnipkg revert' or manually install '{fix['package']}=={fix['old_version']}'.")
-
-                        safe_print(_('   -> Stability protection complete.'))
-                    else:
-                        for pkg_name, version in packages_after.items():
-                            if pkg_name not in packages_before:
-                                main_env_kb_updates[pkg_name] = version
+                                    safe_print(f"   ❌ Snapshot not available - cannot restore!")
+                                
+                                any_failures = True
+                                break  # Don't continue processing this package
+                        
+                        # Only restore if ALL bubbles succeeded
+                        if len(bubble_tracker) == len(packages_to_bubble):
+                            safe_print(f"\n   ✅ All bubbles created successfully")
+                            safe_print(f"   🔄 Restoring stable versions to main environment...")
+                            
+                            # Restore all at once with --no-deps
+                            restore_specs = [f"{item['package']}=={item['old_version']}" for item in packages_to_restore]
+                            
+                            restore_code, restore_output = self._run_pip_install(
+                                restore_specs,
+                                force_reinstall=True,
+                                extra_flags=['--no-deps']
+                            )
+                            
+                            if restore_code == 0:
+                                safe_print(f"   ✅ All stable versions restored")
+                                for item in packages_to_restore:
+                                    main_env_kb_updates[item['package']] = item['old_version']
+                                    protected_from_cleanup.add(canonicalize_name(item['package']))
+                            else:
+                                safe_print(f"   ❌ Restore failed - using snapshot fallback")
+                                snapshot_data = self.cache_client.get(snapshot_key)
+                                if snapshot_data:
+                                    snapshot_state = json.loads(snapshot_data)
+                                    self._safe_restore_from_snapshot(pkg_name, snapshot_state, force=True)
                                 
                 elif install_strategy == 'latest-active':
                     versions_to_bubble = []
@@ -9082,7 +9426,10 @@ class omnipkg:
                 gatherer = omnipkgMetadataGatherer(config=self.config, env_id=self.env_id, target_context_version=python_context_version, force_refresh=True, omnipkg_instance=self)
                 gatherer.cache_client = self.cache_client
                 gatherer.run(targeted_packages=list(all_changed_specs))
-                self._info_cache.clear()
+                if hasattr(self, '_info_cache'):
+                    self._info_cache.clear()
+                else:
+                    self._info_cache = {}
                 self._installed_packages_cache = None
                 self._update_hash_index_for_delta(initial_packages_before, final_main_state)
                 safe_print(_('    ✅ Knowledge base updated successfully.'))
@@ -9981,7 +10328,10 @@ class omnipkg:
                     original_spec = original_spec_map.get(canonical_spec, canonical_spec)
                     self._exorcise_ghost_entry(original_spec)
 
-            self._info_cache.clear()
+            if hasattr(self, '_info_cache'):
+                self._info_cache.clear()
+            else:
+                self._info_cache = {}
             self._installed_packages_cache = None
             safe_print(f'   ✅ Knowledge base for {len(found_specs_canonical)} package(s) successfully rebuilt.')
             if ghost_specs_canonical:
@@ -10858,38 +11208,77 @@ print(json.dumps(results))
 
     def _run_post_install_import_test(self, package_name: str, install_dir_override: Optional[Path] = None) -> bool:
         """
-        Runs a simple 'import' test in a subprocess to verify an installation.
-        Can now target a specific installation directory.
+        FIXED: Properly isolates sys.path to ONLY use the staging directory.
         """
         target_desc = f"in sandbox '{install_dir_override}'" if install_dir_override else "in main environment"
         safe_print(f"   🧪 Verifying installation with import test for: {package_name} {target_desc}")
         
         try:
-            # Use the new unified method that handles both cases
             import_names = self._get_import_candidates_for_install_test(package_name, install_dir_override)
             python_exe = self.config.get('python_executable', sys.executable)
             
+            successful_imports = []
+            failed_imports = []
+            
             for import_name in import_names:
                 script_lines = ["import sys"]
+                
                 if install_dir_override:
-                    script_lines.append(f"sys.path.insert(0, r'{str(install_dir_override)}')")
-                script_lines.append(f"import {import_name}")
+                    # CRITICAL FIX: Replace sys.path entirely, don't just insert!
+                    script_lines.extend([
+                        "import os",
+                        f"staging_path = r'{str(install_dir_override)}'",
+                        "# Keep only essential system paths + staging",
+                        "sys.path = [staging_path] + [p for p in sys.path if 'site-packages' not in p]",
+                    ])
+                
+                script_lines.extend([
+                    "import traceback",
+                    "try:",
+                    f"    import {import_name}",
+                    f"    print('SUCCESS:{import_name}')",
+                    "except ModuleNotFoundError as e:",
+                    "    print(f'MISSING_MODULE:{e}')",
+                    "except Exception as e:",
+                    "    print(f'ERROR:{e}')",
+                    "    traceback.print_exc()"
+                ])
 
-                script = "; ".join(script_lines)
+                script = "\n".join(script_lines)
                 cmd = [python_exe, "-c", script]
 
                 result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
                 
-                if result.returncode == 0:
+                # Parse output
+                output_lines = result.stdout.strip().split('\n')
+                import_succeeded = any(line.startswith('SUCCESS:') for line in output_lines)
+                
+                if import_succeeded:
+                    successful_imports.append(import_name)
                     safe_print(f"      ✅ Import test passed for '{import_name}'")
-                    return True
+                else:
+                    failed_imports.append(import_name)
+                    safe_print(f"      ❌ Import test failed for '{import_name}'")
+                    # Show error details
+                    for line in output_lines:
+                        if line.startswith('ERROR:') or line.startswith('MISSING_MODULE:'):
+                            safe_print(f"         {line}")
 
-            safe_print(f"      ❌ All import attempts failed for package '{package_name}'. The package is likely broken.")
-            return False
+            # Check if main package imported
+            main_import_name = package_name.replace('-', '_')
+            main_package_imported = main_import_name in successful_imports
+
+            if main_package_imported:
+                safe_print(f"      ✅ Successfully imported main package: {main_import_name}")
+                return True
+            else:
+                safe_print(f"      ❌ Main package '{main_import_name}' failed to import")
+                return False
+                    
         except Exception as e:
             safe_print(f"      ❌ An unexpected error occurred during the import test: {e}")
             return False
-
+    
     def _run_historical_install_fallback(self, target_pkg, target_ver, target_directory_override: Optional[Path] = None, index_url: Optional[str] = None, extra_index_url: Optional[str] = None):
         """
         Orchestrator for the Dependency Time Machine logic, run as an automatic fallback.
@@ -11003,10 +11392,10 @@ print(json.dumps(results))
         
         # Extract tags (handle optional build tag)
         if len(parts) == 5:
-            _, _, python_tag, abi_tag, platform_tag = parts
+            unused, unused, python_tag, abi_tag, platform_tag = parts
         else:
             # Has build tag
-            _, _, _, python_tag, abi_tag, platform_tag = parts
+            unused, unused, unused, python_tag, abi_tag, platform_tag = parts
         
         score = 0
         py_version = platform_info['py_version']
@@ -11089,7 +11478,10 @@ print(json.dumps(results))
         
         return None
 
-    def _execute_historical_install(self, target_pkg, target_ver, historical_versions, target_directory_override: Optional[Path] = None):
+    def _execute_historical_install(self, target_pkg, target_ver, historical_versions, 
+                                target_directory_override: Optional[Path] = None,
+                                index_url: Optional[str] = None,
+                                extra_index_url: Optional[str] = None):
         install_target_desc = f"temporary sandbox ('{target_directory_override}')" if target_directory_override else "main environment"
         # Get platform information once
         platform_info = self._get_platform_tags()
@@ -11338,21 +11730,46 @@ print(json.dumps(results))
         safe_print(f"      - ✓ Resolved historical versions: {historical_versions}")
         return historical_versions
 
-    def _run_pip_install(self, packages: List[str], force_reinstall: bool=False, target_directory: Optional[Path]=None, extra_flags: Optional[List[str]]=None, index_url: Optional[str] = None, extra_index_url: Optional[str] = None) -> Tuple[int, Dict[str, str]]:
+    def _run_pip_install(self, packages: List[str], force_reinstall: bool=False, 
+                     target_directory: Optional[Path]=None, extra_flags: Optional[List[str]]=None, 
+                     index_url: Optional[str] = None, extra_index_url: Optional[str] = None) -> Tuple[int, Dict[str, str]]:
         """
-        Runs `pip install` with LIVE, STREAMING output and automatic recovery
-        from corrupted 'no RECORD file' errors. Can now target a specific directory.
-        Returns: (return_code, captured_output_dict)
+        Runs `pip install` with LIVE, STREAMING output and automatic recovery.
+        NOW WITH AUTO INDEX URL DETECTION for special package variants!
         """
         if not packages:
             return 0, {"stdout": "", "stderr": ""}
         
+        # ✨ AUTO-DETECT INDEX URL if not explicitly provided
+        if not index_url and not extra_index_url and packages:
+            # Lazy-load the registry (only initialize once per instance)
+            if not hasattr(self, 'package_index_registry'):
+                from .installation.package_index_registry import PackageIndexRegistry
+                config_base = self.multiversion_base.parent
+                self.package_index_registry = PackageIndexRegistry(config_base)
+                            
+            # Parse first package to detect variant
+            pkg_name, version = self._parse_package_spec(packages[0])
+            
+            # Ask registry for index URL
+            detected_index_url, detected_extra_index_url = self.package_index_registry.detect_index_url(pkg_name, version)
+            
+            if detected_index_url:
+                safe_print(f"   🔍 Auto-detected special variant for {pkg_name}")
+                safe_print(f"   🎯 Using index: {detected_index_url}")
+                index_url = detected_index_url
+            if detected_extra_index_url:
+                safe_print(f"   🔍 Auto-detected extra index: {detected_extra_index_url}")
+                extra_index_url = detected_extra_index_url
+        
         cmd = [self.config['python_executable'], '-u', '-m', 'pip', 'install']
+        
+        # Add index URLs if present
         if index_url:
             cmd.extend(['--index-url', index_url])
         if extra_index_url:
             cmd.extend(['--extra-index-url', extra_index_url])
-        # END OF NEW BLOCK
+        
         if extra_flags:
             cmd.extend(extra_flags)
         if force_reinstall:
@@ -11363,11 +11780,13 @@ print(json.dumps(results))
         cmd.extend(packages)
         
         try:
-            process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding='utf-8', errors='replace', bufsize=1, universal_newlines=True)
+            process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, 
+                                    text=True, encoding='utf-8', errors='replace', 
+                                    bufsize=1, universal_newlines=True)
             
             stdout_lines, stderr_lines = [], []
             
-            # This logic streams output live while capturing it
+            # Stream output live while capturing
             for line in process.stdout:
                 safe_print(line, end='')
                 stdout_lines.append(line)
@@ -11388,29 +11807,27 @@ print(json.dumps(results))
             self._auto_heal_invalid_distributions(full_output, cleanup_path)
             
             if return_code != 0:
-                # Check for the specific "no compatible version" error
+                # Check for "no compatible version" error
                 no_dist_found = "no matching distribution found" in full_output.lower() or \
                                 "could not find a version that satisfies" in full_output.lower()
 
                 if no_dist_found:
-                    # Extract the actual package name, not the error message
-                    package_spec = packages[0]  # e.g., "rich==13.6.9"
+                    package_spec = packages[0]
                     package_name = package_spec.split('==')[0].split('>=')[0].split('<=')[0].split('>')[0].split('<')[0].strip()
                     
-                    # Check if this is a version that doesn't exist vs package incompatibility
                     if '==' in package_spec:
-                        # User specified exact version that doesn't exist
-                        safe_print(f"\n❌ The specified version does not exist on PyPI")
+                        safe_print(f"\n❌ The specified version does not exist")
                         safe_print(f"💡 Package: {package_name}")
-                        safe_print(f"💡 Requested version: {package_spec}")
+                        safe_print(f"💡 Requested: {package_spec}")
+                        if index_url:
+                            safe_print(f"💡 Searched in: {index_url}")
                         safe_print(f"💡 Check pip output above for available versions")
-                        return 1, captured_output  # FIXED: Return tuple
+                        return 1, captured_output
                     else:
-                        # No version works - might be Python incompatibility
                         raise NoCompatiblePythonError(
                             package_name=package_name,
                             current_python=self.current_python_context,
-                            message=f"No compatible version of '{package_name}' found for Python {self.current_python_context}"
+                            message=f"No compatible version found for Python {self.current_python_context}"
                         )
                 
                 # Check for 'no RECORD file' corruption
@@ -11426,25 +11843,25 @@ print(json.dumps(results))
                         if retry_process.returncode == 0:
                             safe_print(retry_process.stdout)
                             safe_print(_('   - ✅ Recovery successful!'))
-                            return 0, {"stdout": retry_process.stdout, "stderr": retry_process.stderr}  # FIXED: Return tuple
+                            return 0, {"stdout": retry_process.stdout, "stderr": retry_process.stderr}
                         else:
                             safe_print(_('   - ❌ Recovery failed. Pip error after cleanup:'))
                             safe_print(retry_process.stderr)
-                            return 1, {"stdout": retry_process.stdout, "stderr": retry_process.stderr}  # FIXED: Return tuple
+                            return 1, {"stdout": retry_process.stdout, "stderr": retry_process.stderr}
                     else:
-                        return 1, captured_output  # FIXED: Return tuple
+                        return 1, captured_output
                 
-                return return_code, captured_output  # FIXED: Return tuple
+                return return_code, captured_output
                 
-            return 0, captured_output  # FIXED: Return tuple
+            return 0, captured_output
             
         except NoCompatiblePythonError:
-            raise  # Re-raise for smart_install to handle
+            raise
         except Exception as e:
             safe_print(_('    ❌ An unexpected error occurred during pip install: {}').format(e))
-            return 1, {"stdout": "", "stderr": str(e)}  # FIXED: Return tuple
+            return 1, {"stdout": "", "stderr": str(e)}
 
-    def _run_pip_uninstall(self, packages: List[str]) -> int:
+    def _run_pip_uninstall(self, packages: List[str], force: bool = False) -> int:
         """Runs `pip uninstall` with LIVE, STREAMING output."""
         if not packages:
             return 0
