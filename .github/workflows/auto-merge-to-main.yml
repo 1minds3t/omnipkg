@@ -285,6 +285,18 @@ jobs:
             git add .github/workflows/auto-merge-to-main.yml
             echo "HAS_CONFLICTS=false" >> $GITHUB_ENV
             echo "AUTO_RESOLVED=true" >> $GITHUB_ENV
+          elif [ "$CONFLICT_COUNT" -le 2 ] && [ "$WORKFLOW_CONFLICT" -eq 1 ]; then
+            # Check if other conflict is demo-matrix-test.yml
+            DEMO_CONFLICT=$(git diff --name-only --diff-filter=U | grep -c "demo-matrix-test.yml" || echo "0")
+            if [ "$DEMO_CONFLICT" -eq 1 ]; then
+              echo "🤖 Conflicts are only in workflow files - auto-resolving with development's versions"
+              git checkout --theirs .github/workflows/auto-merge-to-main.yml
+              git checkout --theirs .github/workflows/demo-matrix-test.yml
+              git add .github/workflows/
+              echo "HAS_CONFLICTS=false" >> $GITHUB_ENV
+              echo "AUTO_RESOLVED=true" >> $GITHUB_ENV
+              echo "AUTO_RESOLVED_FILES=auto-merge-to-main.yml, demo-matrix-test.yml" >> $GITHUB_ENV
+            fi
           fi
         fi
         
@@ -313,7 +325,11 @@ jobs:
         EOF
         
         if [ "${AUTO_RESOLVED:-false}" = "true" ]; then
-          echo "🤖 **Auto-resolved**: Workflow file conflict resolved automatically (kept development's version)" >> pr_body.md
+          if [ -n "${AUTO_RESOLVED_FILES:-}" ]; then
+            echo "🤖 **Auto-resolved**: Workflow file conflicts resolved automatically: $AUTO_RESOLVED_FILES (kept development's versions)" >> pr_body.md
+          else
+            echo "🤖 **Auto-resolved**: Workflow file conflict resolved automatically (kept development's version)" >> pr_body.md
+          fi
           echo "" >> pr_body.md
         fi
         
@@ -336,11 +352,15 @@ jobs:
           --body-file pr_body.md \
           --base main \
           --head $MERGE_BRANCH \
-          --label "auto-merge-prepared" \
-          --label "requires-review" || \
+          2>&1 || \
         gh pr edit $MERGE_BRANCH \
           --title "🔄 Merge development → main ($SHORT_SHA) - Manual Review Required" \
-          --body-file pr_body.md
+          --body-file pr_body.md \
+          2>&1 || echo "PR creation/edit had issues but continuing..."
+        
+        # Try to add labels (don't fail if labels don't exist)
+        gh pr edit $MERGE_BRANCH --add-label "auto-merge-prepared" 2>&1 || echo "Label 'auto-merge-prepared' not found, skipping"
+        gh pr edit $MERGE_BRANCH --add-label "requires-review" 2>&1 || echo "Label 'requires-review' not found, skipping"
         
         echo "Pull request created/updated for manual review"
       env:
