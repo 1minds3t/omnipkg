@@ -98,6 +98,14 @@ def smart_tf_patcher():
         NOW WITH STANDARD LIBRARY SAFEGUARD to prevent interference with packaging operations.
         """
         
+        # CRITICAL FIX: Ensure globals always has __name__
+        # ═══════════════════════════════════════════════════════════
+        if globals is None:
+            globals = {'__name__': '__main__', '__package__': None}
+        elif '__name__' not in globals:
+            globals['__name__'] = '__main__'
+    
+        
         # ═══════════════════════════════════════════════════════════
         # CRITICAL SAFEGUARD: Never intercept standard library imports
         # ═══════════════════════════════════════════════════════════
