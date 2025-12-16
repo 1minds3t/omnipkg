@@ -277,7 +277,7 @@ jobs:
           
           # Check if it's ONLY the workflow file
           CONFLICT_COUNT=$(git diff --name-only --diff-filter=U | wc -l)
-          WORKFLOW_CONFLICT=$(git diff --name-only --diff-filter=U | grep -c "auto-merge-to-main.yml" || echo "0")
+          WORKFLOW_CONFLICT=$(git diff --name-only --diff-filter=U | grep "auto-merge-to-main.yml" | wc -l)
           
           if [ "$CONFLICT_COUNT" -eq 1 ] && [ "$WORKFLOW_CONFLICT" -eq 1 ]; then
             echo "🤖 Only conflict is the workflow file itself - auto-resolving with development's version"
@@ -285,13 +285,13 @@ jobs:
             git add .github/workflows/auto-merge-to-main.yml
             echo "HAS_CONFLICTS=false" >> $GITHUB_ENV
             echo "AUTO_RESOLVED=true" >> $GITHUB_ENV
-          elif [ "$CONFLICT_COUNT" -le 2 ] && [ "$WORKFLOW_CONFLICT" -eq 1 ]; then
+          elif [ "$CONFLICT_COUNT" -le 2 ] && [ "$WORKFLOW_CONFLICT" -ge 1 ]; then
             # Check if other conflict is demo-matrix-test.yml
-            DEMO_CONFLICT=$(git diff --name-only --diff-filter=U | grep -c "demo-matrix-test.yml" || echo "0")
-            if [ "$DEMO_CONFLICT" -eq 1 ]; then
+            DEMO_CONFLICT=$(git diff --name-only --diff-filter=U | grep "demo-matrix-test.yml" | wc -l)
+            if [ "$DEMO_CONFLICT" -ge 1 ]; then
               echo "🤖 Conflicts are only in workflow files - auto-resolving with development's versions"
-              git checkout --theirs .github/workflows/auto-merge-to-main.yml
-              git checkout --theirs .github/workflows/demo-matrix-test.yml
+              git checkout --theirs .github/workflows/auto-merge-to-main.yml 2>/dev/null || true
+              git checkout --theirs .github/workflows/demo-matrix-test.yml 2>/dev/null || true
               git add .github/workflows/
               echo "HAS_CONFLICTS=false" >> $GITHUB_ENV
               echo "AUTO_RESOLVED=true" >> $GITHUB_ENV
