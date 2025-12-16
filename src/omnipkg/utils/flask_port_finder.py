@@ -432,7 +432,7 @@ def home():
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0')
             '''
-            patched_code, port, _ = patch_flask_code(original_code, interactive=True)
+            patched_code, port, changes_made = patch_flask_code(original_code, interactive=True)
             self.assertIn(f'port={port}', patched_code)
             self.assertIn('debug=False', patched_code)
             self.assertIn('use_reloader=False', patched_code)
@@ -452,7 +452,7 @@ if __name__ == '__main__':
     app.run()
             '''
             port = find_free_port(start_port=5000, max_attempts=100, reserve=True)
-            patched_code, _, manager = patch_flask_code(test_app, interactive=True)
+            patched_code, port, manager = patch_flask_code(test_app, interactive=True)
             safe_print(f"  ✅ Manager created for port {port}.")
             
             success = manager.start()

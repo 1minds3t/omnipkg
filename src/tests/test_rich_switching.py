@@ -47,7 +47,7 @@ def ensure_daemon_running():
         safe_print("   🚀 Daemon not running. Starting it now...")
         WorkerPoolDaemon().start(daemonize=True)
         # Give it a moment to warm up
-        for _ in range(20):
+        for unused in range(20):
             if client.status().get('success'):
                 break
             time.sleep(0.1)

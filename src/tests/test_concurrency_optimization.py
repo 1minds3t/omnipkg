@@ -15,7 +15,7 @@ def benchmark_comparison(num_threads=3, iterations=10_000_000):
     print("Test 1: Sequential Execution (baseline)")
     print("=" * 60)
     start = time.perf_counter()
-    for _ in range(num_threads):
+    for unused in range(num_threads):
         cpu_bound_work(iterations)
     sequential_time = time.perf_counter() - start
     print(f"Sequential time: {sequential_time:.2f}s")
@@ -26,7 +26,7 @@ def benchmark_comparison(num_threads=3, iterations=10_000_000):
     print("=" * 60)
     start = time.perf_counter()
     threads = []
-    for _ in range(num_threads):
+    for unused in range(num_threads):
         t = threading.Thread(target=cpu_bound_work, args=(iterations,))
         t.start()
         threads.append(t)

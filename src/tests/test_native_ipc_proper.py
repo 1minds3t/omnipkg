@@ -10,30 +10,34 @@ from omnipkg.isolation.worker_daemon import DaemonClient
 import time
 
 print("="*70)
-print("🔥 Testing NATIVE CUDA IPC - Client in Correct Context")
+safe_print("🔥 Testing NATIVE CUDA IPC - Client in Correct Context")
 print("="*70)
 
 # Load PyTorch 1.13.1+cu116 - this is what the worker will also load
 with omnipkgLoader('torch==1.13.1+cu116', isolation_mode='overlay'):
     import torch
     import sys
+try:
+    from .common_utils import safe_print
+except ImportError:
+    from omnipkg.common_utils import safe_print
     
-    print(f"\n📦 Client PyTorch: {torch.__version__}")
+    safe_print(f"\n📦 Client PyTorch: {torch.__version__}")
     print(f"   CUDA available: {torch.cuda.is_available()}")
     
     if not torch.cuda.is_available():
-        print("❌ CUDA not available")
+        safe_print("❌ CUDA not available")
         sys.exit(1)
     
     # Create test tensor
-    print(f"\n🧪 Creating test tensor...")
+    safe_print(f"\n🧪 Creating test tensor...")
     input_tensor = torch.randn(500, 250, device='cuda')
     print(f"   Shape: {input_tensor.shape}")
     print(f"   Device: {input_tensor.device}")
     print(f"   Checksum: {input_tensor.sum().item():.2f}")
     
     # Test native IPC detection in client
-    print(f"\n🔍 Testing native IPC detection in client...")
+    safe_print(f"\n🔍 Testing native IPC detection in client...")
     storage = input_tensor.storage()
     print(f"   Storage type: {type(storage)}")
     print(f"   Has _share_cuda_: {hasattr(storage, '_share_cuda_')}")
@@ -41,17 +45,17 @@ with omnipkgLoader('torch==1.13.1+cu116', isolation_mode='overlay'):
     if hasattr(storage, '_share_cuda_'):
         try:
             ipc_data = storage._share_cuda_()
-            print(f"   ✅ Client can create IPC handles!")
+            safe_print(f"   ✅ Client can create IPC handles!")
             print(f"   IPC data length: {len(ipc_data)}")
         except Exception as e:
-            print(f"   ❌ Failed to create IPC handle: {e}")
+            safe_print(f"   ❌ Failed to create IPC handle: {e}")
             sys.exit(1)
     else:
-        print(f"   ❌ _share_cuda_() not available")
+        safe_print(f"   ❌ _share_cuda_() not available")
         sys.exit(1)
     
     # Now test with daemon client
-    print(f"\n🔥 Testing with daemon client...")
+    safe_print(f"\n🔥 Testing with daemon client...")
     client = DaemonClient(auto_start=True)
     
     # Simple ReLU operation
@@ -70,7 +74,7 @@ result = {'status': 'ok'}
     )
     elapsed = (time.time() - start) * 1000
     
-    print(f"\n📊 Results:")
+    safe_print(f"\n📊 Results:")
     print(f"   Elapsed: {elapsed:.3f}ms")
     print(f"   Method: {response.get('cuda_method', 'unknown')}")
     print(f"   Output shape: {output_tensor.shape}")
@@ -78,8 +82,8 @@ result = {'status': 'ok'}
     print(f"   Output checksum: {output_tensor.sum().item():.2f}")
     
     if response.get('cuda_method') == 'native_ipc':
-        print(f"\n🔥🔥🔥 SUCCESS! NATIVE IPC WORKING!")
+        safe_print(f"\n🔥🔥🔥 SUCCESS! NATIVE IPC WORKING!")
     else:
-        print(f"\n⚠️  Fell back to {response.get('cuda_method')}")
+        safe_print(f"\n⚠️  Fell back to {response.get('cuda_method')}")
 
 print("\n" + "="*70)

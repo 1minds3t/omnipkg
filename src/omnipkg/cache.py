@@ -120,17 +120,63 @@ class SQLiteCacheClient(CacheClient):
             return cursor.rowcount
 
     def get(self, key):
+        import json
+        import time
+        
         cur = self.conn.cursor()
         try:
             cur.execute('SELECT value FROM kv_store WHERE key = ?', (key,))
             row = cur.fetchone()
-            return row[0] if row else None
+            
+            if not row:
+                return None
+            
+            # Check if it's a JSON with expiry
+            try:
+                data = json.loads(row[0])
+                if isinstance(data, dict) and 'expires_at' in data:
+                    if time.time() > data['expires_at']:
+                        # Expired - delete it
+                        self.delete(key)
+                        return None
+                    return data['value']
+            except (json.JSONDecodeError, TypeError):
+                # Not JSON, return as-is
+                pass
+            
+            return row[0]
         finally:
             cur.close()
 
     def set(self, key, value, ex=None):
         with self.conn:
             self.conn.execute('INSERT OR REPLACE INTO kv_store (key, value) VALUES (?, ?)', (key, str(value)))
+        return True
+    
+    def setex(self, key: str, seconds: int, value: str):
+        """
+        Set key to hold the string value and set key to timeout after a given number of seconds.
+        SQLite doesn't have built-in TTL, so we store expiry timestamp and rely on cleanup.
+        """
+        import time
+        
+        expiry_time = int(time.time()) + seconds
+        
+        # Store as JSON with expiry timestamp
+        data = {
+            'value': str(value),
+            'expires_at': expiry_time
+        }
+        
+        import json
+        serialized = json.dumps(data)
+        
+        with self.conn:
+            self.conn.execute(
+                'INSERT OR REPLACE INTO kv_store (key, value) VALUES (?, ?)',
+                (key, serialized)
+            )
+        
         return True
 
     def exists(self, key):
