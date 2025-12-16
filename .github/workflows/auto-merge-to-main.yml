@@ -220,23 +220,115 @@ jobs:
         MERGE_BRANCH="auto-merge/main-from-dev-$SHORT_SHA"
         
         git fetch origin main development
-        git checkout -b $MERGE_BRANCH origin/main
+        
+        # First, try to rebase development onto main to bring in any new changes
+        echo "Attempting to rebase development onto main..."
+        git checkout -b $MERGE_BRANCH origin/development
+        
+        # Try the rebase
+        if git rebase origin/main; then
+          echo "✅ Rebase successful - no conflicts with main's latest changes"
+          echo "REBASE_SUCCESS=true" >> $GITHUB_ENV
+          
+          # Push the rebased branch
+          git push -f origin $MERGE_BRANCH
+          
+          # Now checkout main and prepare the merge
+          git checkout main
+          git pull origin main
+          git checkout $MERGE_BRANCH
+          
+        else
+          echo "❌ Rebase conflicts detected - manual intervention required"
+          echo "REBASE_SUCCESS=false" >> $GITHUB_ENV
+          
+          # Abort the rebase
+          git rebase --abort
+          
+          # Get conflict info
+          git checkout main
+          git pull origin main
+          git checkout -b $MERGE_BRANCH-conflict-check origin/development
+          git rebase origin/main || true
+          CONFLICT_FILES=$(git diff --name-only --diff-filter=U | tr '\n' ', ' | sed 's/,$//')
+          git rebase --abort
+          
+          echo "CONFLICT_FILES=$CONFLICT_FILES" >> $GITHUB_ENV
+          
+          # Create notification issue instead of PR
+          cat > conflict_notice.md << 'EOFNOTICE'
+        ## 🛑 Rebase Conflicts Detected - Manual Merge Required
+        
+        Attempted to prepare an automatic merge from development to main, but conflicts were detected during rebase.
+        
+        ### Summary
+        - **Commits to merge**: $COMMIT_COUNT
+        - **Development HEAD**: `$SHORT_SHA`
+        - **Failed commits in history**: $FAILED_COMMITS
+        - **Conflicting files**: $CONFLICT_FILES
+        
+        ### What This Means
+        The `main` branch has changes that conflict with development. Automatic merge preparation cannot proceed.
+        
+        ### Manual Steps Required
+        ```bash
+        git checkout development
+        git pull
+        git checkout main
+        git pull
+        git checkout -b manual-merge-$SHORT_SHA
+        git merge development --no-ff
+        # Resolve conflicts
+        git commit
+        git push origin manual-merge-$SHORT_SHA
+        # Create PR manually
+        ```
+        
+        Or use rebase:
+        ```bash
+        git checkout development
+        git pull
+        git rebase main
+        # Resolve conflicts
+        git rebase --continue
+        git push -f origin development
+        ```
+        EOFNOTICE
+          
+          sed -i "s/\$COMMIT_COUNT/$COMMIT_COUNT/g" conflict_notice.md
+          sed -i "s/\$SHORT_SHA/$SHORT_SHA/g" conflict_notice.md
+          sed -i "s/\$FAILED_COMMITS/$FAILED_COMMITS/g" conflict_notice.md
+          sed -i "s/\$CONFLICT_FILES/$CONFLICT_FILES/g" conflict_notice.md
+          
+          gh issue create \
+            --title "🛑 Manual Merge Required: Rebase Conflicts ($SHORT_SHA)" \
+            --body-file conflict_notice.md \
+            --label "merge-conflict" \
+            --label "requires-manual-action"
+          
+          echo "Issue created to notify about rebase conflicts"
+          exit 0
+        fi
+        
+        # If we get here, rebase was successful - now prepare the merge
+        git checkout main
+        git pull origin main
         
         # Perform the merge but don't commit yet
-        git merge origin/development --no-commit --no-ff || true
+        git merge $MERGE_BRANCH --no-commit --no-ff || true
         
-        # Check if there are conflicts
+        # Check if there are merge conflicts (shouldn't happen after successful rebase, but check anyway)
         if git diff --name-only --diff-filter=U | grep -q .; then
-          echo "CONFLICTS=true" >> $GITHUB_ENV
-          CONFLICT_FILES=$(git diff --name-only --diff-filter=U | tr '\n' ', ')
-          echo "CONFLICT_FILES=$CONFLICT_FILES" >> $GITHUB_ENV
+          echo "MERGE_CONFLICTS=true" >> $GITHUB_ENV
+          MERGE_CONFLICT_FILES=$(git diff --name-only --diff-filter=U | tr '\n' ', ')
+          echo "MERGE_CONFLICT_FILES=$MERGE_CONFLICT_FILES" >> $GITHUB_ENV
         else
-          echo "CONFLICTS=false" >> $GITHUB_ENV
+          echo "MERGE_CONFLICTS=false" >> $GITHUB_ENV
           # Stage all changes
           git add -A
         fi
         
-        # Push the branch
+        # Push the merge branch
         git push -f origin $MERGE_BRANCH
         
         # Create PR body
@@ -249,6 +341,7 @@ jobs:
         - **Commits to merge**: $COMMIT_COUNT
         - **Development HEAD**: `$SHORT_SHA`
         - **Failed commits detected**: $FAILED_COMMITS
+        - **Rebase status**: ✅ Successfully rebased onto main (no conflicts with latest changes)
         
         ### Instructions
         1. Review the changes in this PR
@@ -256,15 +349,15 @@ jobs:
         3. **Edit the merge commit message** to document what was fixed/changed
         4. Merge when ready
         
-        ### Conflicts
+        ### Merge Status
         EOF
         
-        if [ "$CONFLICTS" = "true" ]; then
-          echo "🔴 **Conflicts detected** in: $CONFLICT_FILES" >> pr_body.md
+        if [ "$MERGE_CONFLICTS" = "true" ]; then
+          echo "🔴 **Unexpected merge conflicts** in: $MERGE_CONFLICT_FILES" >> pr_body.md
           echo "" >> pr_body.md
-          echo "Please resolve conflicts before merging." >> pr_body.md
+          echo "Please resolve conflicts before merging (this shouldn't happen after successful rebase)." >> pr_body.md
         else
-          echo "✅ No conflicts detected - ready to merge after review" >> pr_body.md
+          echo "✅ No conflicts - staged and ready to merge after review" >> pr_body.md
         fi
         
         # Substitute variables
