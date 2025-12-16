@@ -173,7 +173,7 @@ All CI checks passed for commit $SHORT_SHA.
             --title "🚨 Auto-merge Failed: Conflict in $SHORT_SHA" \
             --body "## Merge Conflict Detected
 
-Commit [$SHORT_SHA](https://github.com/${{ github.repository }}/commit/$COMMIT_SHA) passed all CI tests but has merge conflicts with \`main\`.
+Commit [$SHORT_SHA](https://github.com/${{ github.repository }}/commit/$COMMIT_SHA) passed all CI tests but has merge conflicts with main.
 
 **Manual intervention required:**
 
