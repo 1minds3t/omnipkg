@@ -149,11 +149,13 @@ jobs:
         git fetch origin development
         
         # Merge the commit (this brings all ancestor commits too!)
+        WORKFLOW_COUNT=$(jq '. | length' runs.json)
+        
         if git merge $COMMIT_SHA --no-ff -m "Auto-merge: development → main ($SHORT_SHA)
 
 All CI checks passed for commit $SHORT_SHA.
 
-✅ Workflows completed: $(jq '. | length' runs.json)
+✅ Workflows completed: $WORKFLOW_COUNT
 📦 Merged by: GitHub Actions
 🔗 Triggered by: ${{ github.event.workflow_run.name }}"; then
           
