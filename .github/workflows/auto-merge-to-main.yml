@@ -233,16 +233,23 @@ jobs:
         git pull origin main
         git fetch origin development
         
-        if [ -n "$COMMIT_COUNT" ] && [ "$COMMIT_COUNT" -gt 1 ]; then
-          MESSAGE="Auto-merge: $COMMIT_COUNT clean commits from development ($SHORT_SHA)"
+        # Fast-forward merge to preserve individual commit messages
+        # This brings each commit from development into main with its original message
+        if git merge $COMMIT_SHA --ff-only 2>/dev/null; then
+          echo "✅ Fast-forward merge successful - all commits preserved"
         else
-          MESSAGE="Auto-merge: development to main ($SHORT_SHA)"
+          # If fast-forward fails (shouldn't happen but just in case), use rebase
+          echo "Fast-forward not possible, attempting rebase merge..."
+          git merge $COMMIT_SHA --no-ff -m "Merge development to main ($SHORT_SHA)" -m "$COMMIT_COUNT commits with clean CI"
         fi
         
-        git merge $COMMIT_SHA --no-ff -m "$MESSAGE" -m "All CI checks passed"
         git push origin main
         
-        echo "✅ Successfully merged to main"
+        if [ -n "$COMMIT_COUNT" ] && [ "$COMMIT_COUNT" -gt 1 ]; then
+          echo "✅ Successfully merged $COMMIT_COUNT commits to main (each with original message)"
+        else
+          echo "✅ Successfully merged 1 commit to main"
+        fi
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     
