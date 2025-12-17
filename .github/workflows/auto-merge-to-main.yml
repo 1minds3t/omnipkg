@@ -104,6 +104,14 @@ jobs:
         
         echo "Commits between main and current: $COMMITS_BETWEEN"
         
+        # If no commits between, already merged
+        if [ "$COMMITS_BETWEEN" -eq 0 ]; then
+          echo "Already up to date"
+          echo "should_merge=false" >> $GITHUB_OUTPUT
+          echo "reason=already_merged" >> $GITHUB_OUTPUT
+          exit 0
+        fi
+        
         # If only 1 commit, check if all its workflows passed
         if [ "$COMMITS_BETWEEN" -eq 1 ]; then
           echo "Single commit - checking if all workflows passed"
@@ -187,7 +195,7 @@ jobs:
           echo "short_sha=$SHORT_SHA" >> $GITHUB_OUTPUT
           echo "commit_count=$COMMITS_BETWEEN" >> $GITHUB_OUTPUT
         else
-          echo "Found failed commits in history - preparing for manual merge"
+          echo "Found failed commits in history - manual review required"
           echo "should_merge=true" >> $GITHUB_OUTPUT
           echo "merge_type=manual" >> $GITHUB_OUTPUT
           echo "commit_sha=$COMMIT_SHA" >> $GITHUB_OUTPUT
@@ -211,7 +219,7 @@ jobs:
           echo "already_merged=false" >> $GITHUB_OUTPUT
         fi
     
-    - name: Auto-Merge to Main
+    - name: Auto-Merge to Main (Clean History)
       if: |
         steps.check.outputs.should_merge == 'true' && 
         steps.check_merged.outputs.already_merged == 'false' &&
@@ -233,10 +241,12 @@ jobs:
         
         git merge $COMMIT_SHA --no-ff -m "$MESSAGE" -m "All CI checks passed"
         git push origin main
+        
+        echo "✅ Successfully merged to main"
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     
-    - name: Prepare Manual Merge PR
+    - name: Create PR for Manual Review (Failed Commits in History)
       if: |
         steps.check.outputs.should_merge == 'true' && 
         steps.check_merged.outputs.already_merged == 'false' &&
@@ -247,121 +257,89 @@ jobs:
         COMMIT_COUNT="${{ steps.check.outputs.commit_count }}"
         FAILED_COMMITS="${{ steps.check.outputs.failed_commits }}"
         
-        # Create a unique branch name for this merge preparation
-        MERGE_BRANCH="auto-merge/main-from-dev-$SHORT_SHA"
-        
-        git fetch origin main development
-        
-        # Use merge strategy instead of rebase to avoid conflicts with historical edits
-        echo "Preparing merge branch from main..."
-        git checkout -b $MERGE_BRANCH origin/main
-        
-        # Try to merge development into this branch
-        echo "Attempting to merge development..."
-        if git merge origin/development --no-commit --no-ff; then
-          echo "✅ Merge successful - no conflicts"
-          echo "MERGE_SUCCESS=true" >> $GITHUB_ENV
-          echo "HAS_CONFLICTS=false" >> $GITHUB_ENV
-          
-          # Stage all changes
-          git add -A
-          
-        else
-          echo "⚠️ Merge conflicts detected"
-          echo "MERGE_SUCCESS=true" >> $GITHUB_ENV
-          echo "HAS_CONFLICTS=true" >> $GITHUB_ENV
-          
-          # Get list of conflicting files
-          CONFLICT_FILES=$(git diff --name-only --diff-filter=U | tr '\n' ', ' | sed 's/,$//')
-          echo "CONFLICT_FILES=$CONFLICT_FILES" >> $GITHUB_ENV
-          
-          # Check if it's ONLY the workflow file
-          CONFLICT_COUNT=$(git diff --name-only --diff-filter=U | wc -l)
-          WORKFLOW_CONFLICT=$(git diff --name-only --diff-filter=U | grep -c "auto-merge-to-main.yml" || echo "0")
-          
-          if [ "$CONFLICT_COUNT" -eq 1 ] && [ "$WORKFLOW_CONFLICT" -eq 1 ]; then
-            echo "🤖 Only conflict is the workflow file itself - auto-resolving with development's version"
-            git checkout --theirs .github/workflows/auto-merge-to-main.yml
-            git add .github/workflows/auto-merge-to-main.yml
-            echo "HAS_CONFLICTS=false" >> $GITHUB_ENV
-            echo "AUTO_RESOLVED=true" >> $GITHUB_ENV
-          elif [ "$CONFLICT_COUNT" -le 2 ] && [ "$WORKFLOW_CONFLICT" -eq 1 ]; then
-            # Check if other conflict is demo-matrix-test.yml
-            DEMO_CONFLICT=$(git diff --name-only --diff-filter=U | grep -c "demo-matrix-test.yml" || echo "0")
-            if [ "$DEMO_CONFLICT" -eq 1 ]; then
-              echo "🤖 Conflicts are only in workflow files - auto-resolving with development's versions"
-              git checkout --theirs .github/workflows/auto-merge-to-main.yml
-              git checkout --theirs .github/workflows/demo-matrix-test.yml
-              git add .github/workflows/
-              echo "HAS_CONFLICTS=false" >> $GITHUB_ENV
-              echo "AUTO_RESOLVED=true" >> $GITHUB_ENV
-              echo "AUTO_RESOLVED_FILES=auto-merge-to-main.yml, demo-matrix-test.yml" >> $GITHUB_ENV
-            fi
-          fi
-        fi
-        
-        # Push the merge branch
-        git push -f origin $MERGE_BRANCH
-        
-        # Create PR body
+        # Create PR body with pre-filled merge commit message template
         cat > pr_body.md << 'EOF'
         ## ⚠️ Manual Review Required
         
-        This merge was prepared automatically but requires manual review due to failed commits in the history.
+        This PR is ready to merge but requires manual review due to failed commits in the history.
         
         ### Summary
-        - **Commits to merge**: $COMMIT_COUNT
-        - **Development HEAD**: `$SHORT_SHA`
-        - **Failed commits detected**: $FAILED_COMMITS
-        - **Merge strategy**: Direct merge (not rebase)
+        - **Commits to merge**: COMMIT_COUNT_PLACEHOLDER
+        - **Development HEAD**: `SHORT_SHA_PLACEHOLDER`
+        - **Failed commits detected**: FAILED_COMMITS_PLACEHOLDER
+        
+        ### Pre-filled Merge Commit Message
+        
+        When you click "Merge pull request", GitHub will use this default message. **Edit it** to document what was fixed:
+        
+        ```
+        Merge development to main (SHORT_SHA_PLACEHOLDER)
+        
+        COMMIT_COUNT_PLACEHOLDER commits merged after manual review.
+        Some commits had CI failures but issues were resolved: FAILED_COMMITS_PLACEHOLDER
+        
+        Changes:
+        - [Add your summary of key changes here]
+        - [Document what was fixed from failed commits]
+        ```
         
         ### Instructions
-        1. Review the changes in this PR
-        2. Check the failed commits and ensure issues are resolved
-        3. **Edit the merge commit message** to document what was fixed/changed
-        4. Merge when ready
+        1. Click "Files changed" tab to review the diff
+        2. Resolve any conflicts if present (shouldn't be any usually)
+        3. Edit the merge commit message above when merging
+        4. Click "Merge pull request" when ready
         
-        ### Status
         EOF
         
-        if [ "${AUTO_RESOLVED:-false}" = "true" ]; then
-          if [ -n "${AUTO_RESOLVED_FILES:-}" ]; then
-            echo "🤖 **Auto-resolved**: Workflow file conflicts resolved automatically: $AUTO_RESOLVED_FILES (kept development's versions)" >> pr_body.md
-          else
-            echo "🤖 **Auto-resolved**: Workflow file conflict resolved automatically (kept development's version)" >> pr_body.md
-          fi
-          echo "" >> pr_body.md
-        fi
-        
-        if [ "${HAS_CONFLICTS:-false}" = "true" ]; then
-          echo "🔴 **Conflicts detected** in: $CONFLICT_FILES" >> pr_body.md
-          echo "" >> pr_body.md
-          echo "Please resolve conflicts before merging." >> pr_body.md
-        else
-          echo "✅ No conflicts - staged and ready to merge after review" >> pr_body.md
-        fi
-        
         # Substitute variables
-        sed -i "s/\$COMMIT_COUNT/$COMMIT_COUNT/g" pr_body.md
-        sed -i "s/\$SHORT_SHA/$SHORT_SHA/g" pr_body.md
-        sed -i "s/\$FAILED_COMMITS/$FAILED_COMMITS/g" pr_body.md
+        sed -i "s/COMMIT_COUNT_PLACEHOLDER/$COMMIT_COUNT/g" pr_body.md
+        sed -i "s/SHORT_SHA_PLACEHOLDER/$SHORT_SHA/g" pr_body.md
+        sed -i "s/FAILED_COMMITS_PLACEHOLDER/$FAILED_COMMITS/g" pr_body.md
         
-        # Create or update PR
-        gh pr create \
-          --title "🔄 Merge development → main ($SHORT_SHA) - Manual Review Required" \
-          --body-file pr_body.md \
-          --base main \
-          --head $MERGE_BRANCH \
-          2>&1 || \
-        gh pr edit $MERGE_BRANCH \
-          --title "🔄 Merge development → main ($SHORT_SHA) - Manual Review Required" \
-          --body-file pr_body.md \
-          2>&1 || echo "PR creation/edit had issues but continuing..."
+        # Check if PR already exists from development to main
+        EXISTING_PR=$(gh pr list --base main --head development --json number --jq '.[0].number' 2>&1 || echo "")
         
-        # Try to add labels (don't fail if labels don't exist)
-        gh pr edit $MERGE_BRANCH --add-label "auto-merge-prepared" 2>&1 || echo "Label 'auto-merge-prepared' not found, skipping"
-        gh pr edit $MERGE_BRANCH --add-label "requires-review" 2>&1 || echo "Label 'requires-review' not found, skipping"
+        if [ -n "$EXISTING_PR" ] && [ "$EXISTING_PR" != "null" ]; then
+          echo "Updating existing PR #$EXISTING_PR"
+          gh pr edit $EXISTING_PR \
+            --title "🔄 Merge development → main ($SHORT_SHA) - Review Required" \
+            --body-file pr_body.md
+        else
+          echo "Creating new PR from development to main"
+          gh pr create \
+            --title "🔄 Merge development → main ($SHORT_SHA) - Review Required" \
+            --body-file pr_body.md \
+            --base main \
+            --head development
+        fi
         
-        echo "Pull request created/updated for manual review"
+        echo "✅ PR created/updated for manual review"
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: Cleanup Old Auto-Merge Branches
+      if: always()
+      run: |
+        echo "Cleaning up stale auto-merge branches (if any exist)..."
+        
+        # Get all auto-merge branches
+        git fetch origin
+        AUTO_MERGE_BRANCHES=$(git branch -r | grep "origin/auto-merge/main-from-dev-" | sed 's/origin\///' || echo "")
+        
+        if [ -z "$AUTO_MERGE_BRANCHES" ]; then
+          echo "No auto-merge branches to clean up"
+          exit 0
+        fi
+        
+        echo "Found old auto-merge branches to clean:"
+        echo "$AUTO_MERGE_BRANCHES"
+        
+        for branch in $AUTO_MERGE_BRANCHES; do
+          branch_name=$(echo $branch | sed 's/^[[:space:]]*//')
+          echo "Deleting old branch: $branch_name"
+          git push origin --delete $branch_name 2>&1 || echo "Could not delete $branch_name (may not exist)"
+        done
+        
+        echo "✅ Cleanup complete"
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
