@@ -192,7 +192,7 @@ except ImportError:
 sys.path.insert(0, r"{ROOT_DIR}")
 
 # Load config in the subprocess
-subprocess_config = json.loads('{config_json_str}')
+subprocess_config = json.loads(r'{config_json_str}')
 
 def run_combo_test():
     start_time = time.perf_counter()

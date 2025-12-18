@@ -13,6 +13,306 @@ from typing import Optional
 # Keep a reference to the original, built-in print function
 _builtin_print = print
 
+"""
+Add these functions to /home/minds3t/omnipkg/src/omnipkg/common_utils.py
+They provide standardized, bulletproof solutions for subprocess config passing and printing.
+"""
+
+import sys
+import os
+import json
+import tempfile
+import subprocess
+from pathlib import Path
+from typing import Any, Dict, List, Optional
+
+# Keep a reference to the original print
+_builtin_print = print
+
+
+def safe_print(*args, **kwargs):
+    """
+    Ultra-robust print that handles Unicode/emoji gracefully on all platforms.
+    
+    Strategy:
+    1. Try normal print first
+    2. On Windows, detect if emojis are supported
+    3. Fall back to ASCII-safe version with ? replacements
+    4. Always flush by default
+    """
+    if 'flush' not in kwargs:
+        kwargs['flush'] = True
+    
+    try:
+        _builtin_print(*args, **kwargs)
+    except UnicodeEncodeError:
+        # Windows fallback logic
+        try:
+            safe_args = []
+            encoding = sys.stdout.encoding or 'utf-8'
+            
+            for arg in args:
+                if isinstance(arg, str):
+                    # Try to detect if we're on Windows and can't handle emojis
+                    if sys.platform == 'win32' and encoding.lower() in ['cp1252', 'cp437', 'ascii']:
+                        # Strip emojis and replace with ASCII equivalents
+                        import unicodedata
+                        cleaned = ''.join(
+                            c if ord(c) < 128 or unicodedata.category(c)[0] != 'S' 
+                            else '?' 
+                            for c in arg
+                        )
+                        safe_args.append(cleaned)
+                    else:
+                        # Use error replacement
+                        safe_args.append(arg.encode(encoding, 'replace').decode(encoding))
+                else:
+                    safe_args.append(arg)
+            
+            _builtin_print(*safe_args, **kwargs)
+        except Exception:
+            # Final fallback - no emojis, plain text
+            plain_args = []
+            for arg in args:
+                if isinstance(arg, str):
+                    plain_args.append(''.join(c if ord(c) < 128 else '?' for c in str(arg)))
+                else:
+                    plain_args.append(str(arg))
+            _builtin_print(*plain_args, flush=True)
+
+
+def pass_config_to_subprocess(config_dict: Dict[str, Any]) -> str:
+    """
+    Bulletproof way to pass configuration to a subprocess.
+    
+    Creates a temporary JSON file and returns the path.
+    This completely avoids Windows path escaping nightmares.
+    
+    Usage in subprocess script:
+        config_path = sys.argv[1]
+        with open(config_path, 'r') as f:
+            config = json.load(f)
+    
+    Returns:
+        Path to temporary config file (caller should clean up after subprocess completes)
+    """
+    fd, temp_path = tempfile.mkstemp(suffix='.json', prefix='omnipkg_config_')
+    try:
+        with os.fdopen(fd, 'w') as f:
+            json.dump(config_dict, f, indent=2)
+        return temp_path
+    except Exception:
+        # Clean up on error
+        try:
+            os.close(fd)
+        except:
+            pass
+        try:
+            os.unlink(temp_path)
+        except:
+            pass
+        raise
+
+
+def safe_subprocess_call(
+    cmd: List[str],
+    config: Optional[Dict[str, Any]] = None,
+    stream_output: bool = True,
+    timeout: Optional[int] = None
+) -> tuple[int, str, str]:
+    """
+    Standardized subprocess call that handles:
+    - Config passing via temp file (no JSON escaping issues)
+    - Unicode output on Windows
+    - Real-time output streaming
+    - Proper cleanup
+    
+    Args:
+        cmd: Command list (e.g., [sys.executable, 'script.py'])
+        config: Optional config dict to pass via temp file
+        stream_output: If True, print output in real-time
+        timeout: Optional timeout in seconds
+    
+    Returns:
+        (returncode, stdout, stderr)
+    """
+    config_file = None
+    
+    try:
+        # Pass config via temp file if provided
+        if config:
+            config_file = pass_config_to_subprocess(config)
+            cmd = cmd + ['--config-file', config_file]
+        
+        # Set up subprocess with UTF-8 encoding
+        process = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            encoding='utf-8',
+            errors='replace',  # Replace bad chars with ?
+            bufsize=1,
+            universal_newlines=True
+        )
+        
+        stdout_lines = []
+        stderr_lines = []
+        
+        # Stream output if requested
+        if stream_output:
+            for line in process.stdout:
+                line = line.rstrip()
+                if line:
+                    safe_print(f"   {line}")
+                stdout_lines.append(line)
+        else:
+            stdout_lines = process.stdout.readlines()
+        
+        # Wait for completion
+        try:
+            returncode = process.wait(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            returncode = -1
+            safe_print(f"⚠️ Process timed out after {timeout} seconds")
+        
+        # Read stderr
+        stderr_lines = process.stderr.readlines()
+        
+        stdout = '\n'.join(stdout_lines)
+        stderr = '\n'.join(stderr_lines)
+        
+        return returncode, stdout, stderr
+        
+    finally:
+        # Always clean up temp config file
+        if config_file:
+            try:
+                os.unlink(config_file)
+            except:
+                pass
+
+
+def create_subprocess_script_with_config(
+    script_content: str,
+    config_dict: Dict[str, Any],
+    script_name: str = 'temp_script'
+) -> str:
+    """
+    Creates a temporary Python script that loads config from a file.
+    
+    This is the PROPER way to pass config to subprocess scripts - no string escaping issues!
+    
+    Args:
+        script_content: Python code (should start with imports)
+        config_dict: Configuration dictionary
+        script_name: Name for the temp script file
+    
+    Returns:
+        Path to the created script file
+    
+    Example script_content should start with:
+        ```python
+        import sys
+        import json
+        
+        # Load config from file passed as first argument
+        with open(sys.argv[1], 'r') as f:
+            config = json.load(f)
+        
+        # Your code here using config
+        ```
+    """
+    fd, script_path = tempfile.mkstemp(suffix='.py', prefix=f'omnipkg_{script_name}_')
+    
+    try:
+        with os.fdopen(fd, 'w', encoding='utf-8') as f:
+            f.write(script_content)
+        return script_path
+    except Exception:
+        try:
+            os.close(fd)
+        except:
+            pass
+        try:
+            os.unlink(script_path)
+        except:
+            pass
+        raise
+
+
+# Convenience wrapper for the most common use case
+def run_python_script_with_config(
+    script_content: str,
+    config_dict: Dict[str, Any],
+    python_exe: Optional[str] = None,
+    stream_output: bool = True,
+    cleanup: bool = True
+) -> tuple[int, str, str]:
+    """
+    All-in-one: Create script, pass config, run it, clean up.
+    
+    This is what you want for combo tests and similar scenarios.
+    
+    Args:
+        script_content: Python code (will auto-add config loading if needed)
+        config_dict: Configuration to pass
+        python_exe: Python interpreter to use (default: sys.executable)
+        stream_output: Print output in real-time
+        cleanup: Delete temp files after execution
+    
+    Returns:
+        (returncode, stdout, stderr)
+    """
+    python_exe = python_exe or sys.executable
+    config_file = None
+    script_file = None
+    
+    try:
+        # Create config file
+        config_file = pass_config_to_subprocess(config_dict)
+        
+        # Inject config loading at the start of script if not present
+        if 'sys.argv[1]' not in script_content and 'config =' not in script_content:
+            config_loading = f"""
+import sys
+import json
+
+# Auto-injected config loading
+with open(sys.argv[1], 'r') as f:
+    config = json.load(f)
+
+"""
+            script_content = config_loading + script_content
+        
+        # Create script file
+        script_file = create_subprocess_script_with_config(
+            script_content,
+            config_dict,
+            'run_with_config'
+        )
+        
+        # Run it
+        cmd = [python_exe, script_file, config_file]
+        returncode, stdout, stderr = safe_subprocess_call(
+            cmd,
+            config=None,  # Already passed via argv
+            stream_output=stream_output
+        )
+        
+        return returncode, stdout, stderr
+        
+    finally:
+        # Clean up temp files
+        if cleanup:
+            for path in [config_file, script_file]:
+                if path:
+                    try:
+                        os.unlink(path)
+                    except:
+                        pass
+
 def safe_print(*args, **kwargs):
     """
     A robust print function that handles UnicodeEncodeError gracefully.
@@ -391,3 +691,4 @@ class ConfigGuard:
         self.config_manager.config = self.original_config
         self.config_manager.save_config()
         safe_print(_('🛡️ ConfigGuard: Restored original user configuration.'))
+
