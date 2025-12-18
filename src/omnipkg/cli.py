@@ -557,6 +557,8 @@ def create_parser():
     daemon_logs = daemon_subparsers.add_parser('logs', help=_('View or follow daemon logs'))
     daemon_logs.add_argument('-f', '--follow', action='store_true', help=_('Output appended data as the file grows'))
     daemon_logs.add_argument('-n', '--lines', type=int, default=50, help=_('Output the last N lines'))
+    daemon_monitor = daemon_subparsers.add_parser('monitor', help=_('Live resource usage dashboard (TUI)'))
+    daemon_monitor.add_argument('-w', '--watch', action='store_true', help=_('Auto-refresh mode (dashboard style)'))
     prune_parser = subparsers.add_parser('prune', help=_('Clean up old, bubbled package versions'))
     prune_parser.add_argument('package', help=_('Package whose bubbles to prune'))
     prune_parser.add_argument('--keep-latest', type=int, metavar='N', help=_('Keep N most recent bubbled versions'))
@@ -1003,6 +1005,13 @@ def main():
                 cli_status()
             elif args.daemon_command == 'logs':
                 cli_logs(follow=args.follow, tail_lines=args.lines)
+            elif args.daemon_command == 'monitor':
+                try:
+                    from omnipkg.isolation.resource_monitor import start_monitor
+                    start_monitor(watch_mode=args.watch)
+                except ImportError:
+                    safe_print(_("❌ Error: resource_monitor module not found."))
+                    return 1
             return 
         elif args.command == 'run':
             # ✅ Fix: Pass the pkg_instance we already initialized!
