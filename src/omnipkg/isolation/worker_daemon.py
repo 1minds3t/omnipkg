@@ -3351,7 +3351,22 @@ if __name__ == "__main__":
         cli_status()
     elif cmd == "logs":
         follow = "-f" in sys.argv or "--follow" in sys.argv
-        cli_logs(follow=follow)
+        cli_logs(follow=follow)      
+    # vvvvvvv ADD THIS vvvvvvv
+    elif cmd == "monitor":
+        watch = "-w" in sys.argv or "--watch" in sys.argv
+        try:
+            from omnipkg.isolation.resource_monitor import start_monitor
+            start_monitor(watch_mode=watch)
+        except ImportError:
+            # Fallback for direct execution without package context
+            try:
+                from resource_monitor import start_monitor
+                start_monitor(watch_mode=watch)
+            except ImportError:
+                print("❌ resource_monitor module not found.")
+                sys.exit(1)
+    # ^^^^^^^^^^^^^^^^^^^^^^^^ 
     else:
         print(f"Unknown command: {cmd}")
         sys.exit(1)
