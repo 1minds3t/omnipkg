@@ -1,4 +1,7 @@
 from __future__ import annotations  # Python 3.6+ compatibility
+
+from omnipkg.common_utils import safe_print
+
 try:
     from .common_utils import safe_print
 except ImportError:
@@ -6,6 +9,7 @@ except ImportError:
 # In /home/minds3t/omnipkg/omnipkg/__init__.py
 
 from .i18n import _
+
 """
 omnipkg: Universal package manager
 
@@ -28,14 +32,14 @@ along with omnipkg. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing options or general inquiries, contact:
 📧 omnipkg@proton.me
 """
-from pathlib import Path
 import sys
+from pathlib import Path
 
 try:
     # Prefer importlib.metadata (works in installed packages)
-    from importlib.metadata import version, metadata, PackageNotFoundError
+    from importlib.metadata import PackageNotFoundError, metadata, version
 except ImportError:  # Python < 3.8 fallback
-    from importlib_metadata import version, metadata, PackageNotFoundError
+    from importlib_metadata import PackageNotFoundError, metadata, version
 
 # --- THIS IS THE FIX ---
 # This block makes the code compatible with both modern and older Python.
@@ -49,9 +53,8 @@ except ModuleNotFoundError:
     except ImportError:
         # If neither is available, create a dummy that will fail gracefully
         tomllib = None
-# --- END OF FIX ---
 
-__version__ = "0.0.0"   # fallback default
+__version__ = "0.0.0"  # fallback default
 __dependencies__ = {}
 
 _pkg_name = "omnipkg"
