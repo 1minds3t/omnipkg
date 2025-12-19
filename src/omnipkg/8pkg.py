@@ -1,8 +1,13 @@
 from __future__ import annotations  # Python 3.6+ compatibility
+
+from cli import main
+
+from omnipkg.common_utils import safe_print
+
 try:
     from .common_utils import safe_print
 except ImportError:
-    from omnipkg.common_utils import safe_print
+    pass
 #!/usr/bin/env python3
 """
 8pkg - The infinity package manager (alias for omnipkg)
@@ -16,7 +21,6 @@ current_dir = Path(__file__).parent
 sys.path.insert(0, str(current_dir))
 
 # Import and run the main CLI
-from cli import main
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     sys.exit(main())

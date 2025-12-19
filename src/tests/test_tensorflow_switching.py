@@ -1,9 +1,10 @@
-try:
-    from .common_utils import safe_print
-except ImportError:
-    from omnipkg.common_utils import safe_print
+from omnipkg.common_utils import safe_print
+from omnipkg.core import ConfigManager, omnipkg as OmnipkgCore
+from omnipkg.i18n import _
+import traceback
+import shutil
+import subprocess
 import sys
-import os
 from pathlib import Path
 
 # --- PROJECT PATH SETUP ---
@@ -12,19 +13,6 @@ sys.path.insert(0, str(project_root))
 
 # --- BOOTSTRAP SECTION ---
 # --- END BOOTSTRAP ---
-
-import json
-import subprocess
-import shutil
-import tempfile
-import time
-import re
-import importlib
-import traceback
-from importlib.metadata import version as get_pkg_version
-from omnipkg.i18n import _
-from omnipkg.core import ConfigManager, omnipkg as OmnipkgCore
-from omnipkg.i18n import _
 
 
 # This is the full, self-contained `safe_print` function.
@@ -52,115 +40,146 @@ GET_MODULE_VERSION_CODE_SNIPPET = '\ndef get_version_from_module_file(module, pa
 
 
 def print_header(title):
-    safe_print('\\n' + '=' * 80)
-    safe_print(_('  🚀 {}').format(title))
-    safe_print('=' * 80)
+    safe_print("\\n" + "=" * 80)
+    safe_print(_("  🚀 {}").format(title))
+    safe_print("=" * 80)
+
 
 def print_subheader(title):
-    safe_print(_('\\n--- {} ---').format(title))
+    safe_print(_("\\n--- {} ---").format(title))
 
-    
+
 def ensure_tensorflow_bubbles(config_manager: ConfigManager):
     """Ensures we have the necessary TensorFlow bubbles created."""
-    safe_print(_('   📦 Ensuring TensorFlow bubbles exist...'))
+    safe_print(_("   📦 Ensuring TensorFlow bubbles exist..."))
     omnipkg_core = OmnipkgCore(config_manager)
 
     # Determine the correct Python context for the bubbles, just like in smart_install.
-    configured_exe = config_manager.config.get('python_executable', sys.executable)
+    configured_exe = config_manager.config.get("python_executable", sys.executable)
     version_tuple = config_manager._verify_python_version(configured_exe)
-    python_context_version = f'{version_tuple[0]}.{version_tuple[1]}' if version_tuple else 'unknown'
-    if python_context_version == 'unknown':
-        safe_print(_("   ⚠️ CRITICAL: Could not determine Python context for test bubble creation."))
+    python_context_version = (
+        f"{version_tuple[0]}.{version_tuple[1]}" if version_tuple else "unknown"
+    )
+    if python_context_version == "unknown":
+        safe_print(
+            _(
+                "   ⚠️ CRITICAL: Could not determine Python context for test bubble creation."
+            )
+        )
 
         return False  # Early exit if we can't determine Python version
 
-    packages_to_bubble = {'tensorflow': ['2.13.0', '2.12.0'], 'typing_extensions': ['4.14.1', '4.5.0']}
+    packages_to_bubble = {
+        "tensorflow": ["2.13.0", "2.12.0"],
+        "typing_extensions": ["4.14.1", "4.5.0"],
+    }
     for pkg_name, versions in packages_to_bubble.items():
         for version in versions:
-            bubble_name = f'{pkg_name}-{version}'
+            bubble_name = f"{pkg_name}-{version}"
             bubble_path = omnipkg_core.multiversion_base / bubble_name
             if not bubble_path.exists():
-                safe_print(f'   🫧 Force-creating bubble for {pkg_name}=={version}...')
+                safe_print(f"   🫧 Force-creating bubble for {pkg_name}=={version}...")
                 # Pass the context to the bubble creator
-                if omnipkg_core.bubble_manager.create_isolated_bubble(pkg_name, version, python_context_version):
-                    safe_print(_('   ✅ Created {}=={} bubble').format(pkg_name, version))
-                    
+                if omnipkg_core.bubble_manager.create_isolated_bubble(
+                    pkg_name, version, python_context_version
+                ):
+                    safe_print(
+                        _("   ✅ Created {}=={} bubble").format(pkg_name, version)
+                    )
+
                     # ======================================================================
                     # THIS IS THE FINAL, CRITICAL FIX
                     # We MUST pass the context to the KB rebuild command.
                     # ======================================================================
                     omnipkg_core.rebuild_package_kb(
-                        [f'{pkg_name}=={version}'], 
-                        target_python_version=python_context_version
+                        [f"{pkg_name}=={version}"],
+                        target_python_version=python_context_version,
                     )
                     # ======================================================================
 
                 else:
-                    safe_print(f'   ❌ Failed to create bubble for {pkg_name}=={version}')
+                    safe_print(
+                        f"   ❌ Failed to create bubble for {pkg_name}=={version}"
+                    )
             else:
-                safe_print(_('   ✅ {}=={} bubble already exists').format(pkg_name, version))
-    
+                safe_print(
+                    _("   ✅ {}=={} bubble already exists").format(pkg_name, version)
+                )
+
     return True  # Success
 
+
 def setup_environment():
-    print_header('STEP 1: Environment Setup & Bubble Creation')
+    print_header("STEP 1: Environment Setup & Bubble Creation")
     config_manager = ConfigManager()
-    safe_print(_('   🧹 Cleaning up any test artifacts...'))
-    site_packages = Path(config_manager.config['site_packages_path'])
-    for pkg in ['tensorflow', 'tensorflow_estimator', 'keras', 'typing_extensions']:
-        for cloaked in site_packages.glob(f'{pkg}.*_omnipkg_cloaked*'):
+    safe_print(_("   🧹 Cleaning up any test artifacts..."))
+    site_packages = Path(config_manager.config["site_packages_path"])
+    for pkg in ["tensorflow", "tensorflow_estimator", "keras", "typing_extensions"]:
+        for cloaked in site_packages.glob(f"{pkg}.*_omnipkg_cloaked*"):
             shutil.rmtree(cloaked, ignore_errors=True)
-    
+
     # Handle potential failure
     if not ensure_tensorflow_bubbles(config_manager):
-        safe_print('❌ Failed to ensure TensorFlow bubbles exist')
+        safe_print("❌ Failed to ensure TensorFlow bubbles exist")
         return None
-    
-    safe_print(_('✅ Environment prepared'))
+
+    safe_print(_("✅ Environment prepared"))
     return config_manager
+
 
 def run_script_with_loader(code: str, description: str):
     """Run a test script and capture relevant output"""
-    safe_print(_('\\n--- {} ---').format(description))
-    script_path = Path('temp_loader_test.py')
-    script_path.write_text(code, encoding='utf-8')
+    safe_print(_("\\n--- {} ---").format(description))
+    script_path = Path("temp_loader_test.py")
+    script_path.write_text(code, encoding="utf-8")
     try:
-        result = subprocess.run([sys.executable, str(script_path)], capture_output=True, text=True, timeout=120, encoding='utf-8', errors='replace')
-        
+        result = subprocess.run(
+            [sys.executable, str(script_path)],
+            capture_output=True,
+            text=True,
+            timeout=120,
+            encoding="utf-8",
+            errors="replace",
+        )
+
         output = result.stdout
         errors = result.stderr
 
         safe_print("--- Relevant Output ---")
         if output:
             safe_print(output)
-        
+
         if result.returncode != 0:
             safe_print("--- Relevant Errors ---")
             if errors:
                 safe_print(errors)
             safe_print("---------------------")
-            
+
         return result.returncode == 0
     except subprocess.TimeoutExpired:
-        safe_print(_('❌ Test timed out after 120 seconds'))
+        safe_print(_("❌ Test timed out after 120 seconds"))
         return False
     except Exception as e:
-        safe_print(_('❌ Test execution failed: {}').format(e))
+        safe_print(_("❌ Test execution failed: {}").format(e))
         traceback.print_exc()
         return False
     finally:
         script_path.unlink(missing_ok=True)
 
+
 def run_tensorflow_switching_test():
-    print_header('🚨 OMNIPKG TENSORFLOW DEPENDENCY SWITCHING TEST 🚨')
+    print_header("🚨 OMNIPKG TENSORFLOW DEPENDENCY SWITCHING TEST 🚨")
     try:
         config_manager = setup_environment()
-        if config_manager is None: return False
-        
-        OMNIPKG_VERSIONS_DIR = Path(config_manager.config['multiversion_base']).resolve()
-        
-        print_header('STEP 2: Testing TensorFlow Version Switching with omnipkgLoader')
-        
+        if config_manager is None:
+            return False
+
+        OMNIPKG_VERSIONS_DIR = Path(
+            config_manager.config["multiversion_base"]
+        ).resolve()
+
+        print_header("STEP 2: Testing TensorFlow Version Switching with omnipkgLoader")
+
         test1_code = f"""
 import sys, traceback
 from pathlib import Path
@@ -196,7 +215,7 @@ if __name__ == "__main__":
     success = main()
     sys.exit(0 if success else 1)
 """
-        success1 = run_script_with_loader(test1_code, 'TensorFlow 2.13.0 Bubble Test')
+        success1 = run_script_with_loader(test1_code, "TensorFlow 2.13.0 Bubble Test")
 
         test2_code = f"""
 import sys, traceback
@@ -236,7 +255,7 @@ if __name__ == "__main__":
     success = main()
     sys.exit(0 if success else 1)
 """
-        success2 = run_script_with_loader(test2_code, 'Dependency Switching Test')
+        success2 = run_script_with_loader(test2_code, "Dependency Switching Test")
 
         test3_code = f"""
 import sys, traceback
@@ -277,29 +296,36 @@ if __name__ == "__main__":
     success = main()
     sys.exit(0 if success else 1)
 """
-        success3 = run_script_with_loader(test3_code, 'Nested Loader Test')
+        success3 = run_script_with_loader(test3_code, "Nested Loader Test")
 
-        print_header('STEP 3: Test Results Summary')
+        print_header("STEP 3: Test Results Summary")
         passed_tests = sum([success1, success2, success3])
-        safe_print(f"Test 1 (TensorFlow 2.13.0 Bubble): {'✅ PASSED' if success1 else '❌ FAILED'}")
-        safe_print(f"Test 2 (Dependency Switching): {'✅ PASSED' if success2 else '❌ FAILED'}")
-        safe_print(f"Test 3 (Nested Loaders): {'✅ PASSED' if success3 else '❌ FAILED'}")
-        safe_print(f'\\nOverall: {passed_tests}/3 tests passed')
+        safe_print(
+            f"Test 1 (TensorFlow 2.13.0 Bubble): {'✅ PASSED' if success1 else '❌ FAILED'}"
+        )
+        safe_print(
+            f"Test 2 (Dependency Switching): {'✅ PASSED' if success2 else '❌ FAILED'}"
+        )
+        safe_print(
+            f"Test 3 (Nested Loaders): {'✅ PASSED' if success3 else '❌ FAILED'}"
+        )
+        safe_print(f"\\nOverall: {passed_tests}/3 tests passed")
         return passed_tests == 3
-        
+
     except Exception as e:
-        safe_print(_('\\n❌ Critical error during testing: {}').format(e))
+        safe_print(_("\\n❌ Critical error during testing: {}").format(e))
         traceback.print_exc()
         return False
     finally:
-        print_header('STEP 4: Cleanup')
+        print_header("STEP 4: Cleanup")
         # ... your cleanup logic ...
-        safe_print('✅ Cleanup complete')
+        safe_print("✅ Cleanup complete")
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     final_success = run_tensorflow_switching_test()
     if final_success:
-        safe_print('\n🎉 DEMO PASSED! 🎉')
+        safe_print("\n🎉 DEMO PASSED! 🎉")
     else:
-        safe_print('\n❌ Demo failed.')
+        safe_print("\n❌ Demo failed.")
     sys.exit(0 if final_success else 1)
