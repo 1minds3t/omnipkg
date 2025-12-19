@@ -1,31 +1,36 @@
 from __future__ import annotations
-import os
-import sys
+
+import base64  # <--- ENSURE THIS IS HERE
+import ctypes
+import glob
 import json
-import tempfile
-import time
-import socket
+import os
+import platform
+import select
 import signal
+import socket
+import subprocess
+import sys
+import tempfile
+
 # import psutil  # Made lazy
 import threading
-import glob
-import subprocess
-import select
-import filelock
-from pathlib import Path
-from typing import Dict, Optional, Any, Set
+import time
 from collections import defaultdict
-from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
-import traceback
-from collections import deque
-import ctypes
-import base64  # <--- ENSURE THIS IS HERE
-import platform
+from concurrent.futures import ThreadPoolExecutor
+from enum import Enum
+from pathlib import Path
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set, Tuple
+
+import filelock
+
+from omnipkg.common_utils import safe_print
+
 try:
     from .common_utils import safe_print
 except ImportError:
     from omnipkg.common_utils import safe_print
-IS_WINDOWS = platform.system() == 'Windows'
+IS_WINDOWS = platform.system() == "Windows"
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -43,7 +48,7 @@ DAEMON_LOG_FILE = "/tmp/omnipkg_daemon.log"
 
 try:
     from multiprocessing import resource_tracker
-    
+
     def _hft_ignore_shm_tracking():
         """
         Monkey-patch Python's resource_tracker to ignore SharedMemory segments.
@@ -55,12 +60,12 @@ try:
         _orig_unregister = resource_tracker.unregister
 
         def hft_register(name, rtype):
-            if rtype == 'shared_memory':
+            if rtype == "shared_memory":
                 return
             return _orig_register(name, rtype)
 
         def hft_unregister(name, rtype):
-            if rtype == 'shared_memory':
+            if rtype == "shared_memory":
                 return
             return _orig_unregister(name, rtype)
 
@@ -74,12 +79,21 @@ try:
 except ImportError:
     pass
 
+
+if TYPE_CHECKING:
+    from multiprocessing import shared_memory
+
+    import numpy as np
+    import torch
+
+
 def send_json(sock: socket.socket, data: dict, timeout: float = 30.0):
     """Sends a JSON dictionary over a socket with timeout protection."""
     sock.settimeout(timeout)
     json_string = json.dumps(data)
-    length_prefix = len(json_string).to_bytes(8, 'big')
-    sock.sendall(length_prefix + json_string.encode('utf-8'))
+    length_prefix = len(json_string).to_bytes(8, "big")
+    sock.sendall(length_prefix + json_string.encode("utf-8"))
+
 
 def recv_json(sock: socket.socket, timeout: float = 30.0) -> dict:
     """Receives a JSON dictionary over a socket with timeout protection."""
@@ -87,93 +101,91 @@ def recv_json(sock: socket.socket, timeout: float = 30.0) -> dict:
     length_prefix = sock.recv(8)
     if not length_prefix:
         raise ConnectionResetError("Socket closed by peer.")
-    length = int.from_bytes(length_prefix, 'big')
+    length = int.from_bytes(length_prefix, "big")
     data_buffer = bytearray()
     while len(data_buffer) < length:
         chunk = sock.recv(min(length - len(data_buffer), 8192))
         if not chunk:
             raise ConnectionResetError("Socket stream interrupted.")
         data_buffer.extend(chunk)
-    return json.loads(data_buffer.decode('utf-8'))
+    return json.loads(data_buffer.decode("utf-8"))
 
-import ctypes
-import glob
-import os
 
 class UniversalGpuIpc:
     """
     Pure CUDA IPC using ctypes - works WITHOUT PyTorch!
     This is the secret sauce for true zero-copy.
     """
+
     _lib = None
-    
+
     @classmethod
     def get_lib(cls):
         """Find and load libcudart.so from various locations."""
-        if cls._lib: 
+        if cls._lib:
             return cls._lib
-        
+
         candidates = []
-        
+
         # Try PyTorch's lib directory (if torch is installed)
         try:
             import torch
-            torch_lib = os.path.join(os.path.dirname(torch.__file__), 'lib')
-            candidates.extend(glob.glob(os.path.join(torch_lib, 'libcudart.so*')))
-        except: 
+
+            torch_lib = os.path.join(os.path.dirname(torch.__file__), "lib")
+            candidates.extend(glob.glob(os.path.join(torch_lib, "libcudart.so*")))
+        except:
             pass
-        
+
         # Try conda environment
-        if 'CONDA_PREFIX' in os.environ:
-            candidates.extend(glob.glob(
-                os.path.join(os.environ['CONDA_PREFIX'], 'lib', 'libcudart.so*')
-            ))
-        
+        if "CONDA_PREFIX" in os.environ:
+            candidates.extend(
+                glob.glob(os.path.join(os.environ["CONDA_PREFIX"], "lib", "libcudart.so*"))
+            )
+
         # Try system libraries
-        candidates.extend(['libcudart.so.12', 'libcudart.so.11.0', 'libcudart.so'])
-        
+        candidates.extend(["libcudart.so.12", "libcudart.so.11.0", "libcudart.so"])
+
         for lib in candidates:
             try:
                 cls._lib = ctypes.CDLL(lib)
                 return cls._lib
-            except: 
+            except:
                 continue
-        
+
         raise RuntimeError("Could not load libcudart.so - CUDA not available")
-    
+
     @staticmethod
     def share(tensor):
         """
         Share a PyTorch CUDA tensor via CUDA IPC handle.
         Returns serializable metadata that can be sent over socket.
         """
-        import base64
-        
+
         lib = UniversalGpuIpc.get_lib()
         ptr = tensor.data_ptr()
-        
+
         # Define CUDA structures
         class cudaPointerAttributes(ctypes.Structure):
             _fields_ = [
-                ("type", ctypes.c_int), 
-                ("device", ctypes.c_int), 
-                ("devicePointer", ctypes.c_void_p), 
-                ("hostPointer", ctypes.c_void_p)
+                ("type", ctypes.c_int),
+                ("device", ctypes.c_int),
+                ("devicePointer", ctypes.c_void_p),
+                ("hostPointer", ctypes.c_void_p),
             ]
-        
+
         class cudaIpcMemHandle_t(ctypes.Structure):
             _fields_ = [("reserved", ctypes.c_char * 64)]
-        
+
         # Set function signatures
         lib.cudaPointerGetAttributes.argtypes = [
-            ctypes.POINTER(cudaPointerAttributes), 
-            ctypes.c_void_p
+            ctypes.POINTER(cudaPointerAttributes),
+            ctypes.c_void_p,
         ]
         lib.cudaIpcGetMemHandle.argtypes = [
-            ctypes.POINTER(cudaIpcMemHandle_t), 
-            ctypes.c_void_p
+            ctypes.POINTER(cudaIpcMemHandle_t),
+            ctypes.c_void_p,
         ]
-        
+
         # Get base pointer and offset
         attrs = cudaPointerAttributes()
         if lib.cudaPointerGetAttributes(ctypes.byref(attrs), ctypes.c_void_p(ptr)) == 0:
@@ -182,116 +194,120 @@ class UniversalGpuIpc:
         else:
             base_ptr = ptr
             offset = 0
-        
+
         # Get IPC handle
         handle = cudaIpcMemHandle_t()
         err = lib.cudaIpcGetMemHandle(ctypes.byref(handle), ctypes.c_void_p(base_ptr))
-        
+
         if err != 0:
             raise RuntimeError(f"cudaIpcGetMemHandle failed with code {err}")
-        
+
         # Return JSON-serializable metadata (base64-encode bytes!)
         handle_bytes = ctypes.string_at(ctypes.byref(handle), 64)
         return {
-            "handle": base64.b64encode(handle_bytes).decode('ascii'),  # JSON-safe!
+            # JSON-safe!
+            "handle": base64.b64encode(handle_bytes).decode("ascii"),
             "offset": offset,
             "shape": tuple(tensor.shape),
             "typestr": "<f4",
-            "device": tensor.device.index or 0
+            "device": tensor.device.index or 0,
         }
-    
+
     @staticmethod
     def load(data):
         """
         Load a CUDA tensor from IPC metadata.
         Returns PyTorch tensor pointing to shared GPU memory.
         """
-        import base64
-        
+
         lib = UniversalGpuIpc.get_lib()
-        
+
         class cudaIpcMemHandle_t(ctypes.Structure):
             _fields_ = [("reserved", ctypes.c_char * 64)]
-        
+
         lib.cudaIpcOpenMemHandle.argtypes = [
-            ctypes.POINTER(ctypes.c_void_p), 
-            cudaIpcMemHandle_t, 
-            ctypes.c_uint
+            ctypes.POINTER(ctypes.c_void_p),
+            cudaIpcMemHandle_t,
+            ctypes.c_uint,
         ]
-        
+
         # Reconstruct handle (decode from base64)
         handle = cudaIpcMemHandle_t()
         handle_bytes = base64.b64decode(data["handle"])
         ctypes.memmove(ctypes.byref(handle), handle_bytes, 64)
-        
+
         # Open IPC handle
         dev_ptr = ctypes.c_void_p()
         err = lib.cudaIpcOpenMemHandle(ctypes.byref(dev_ptr), handle, 1)
-        
+
         if err == 201:  # cudaErrorAlreadyMapped
             return None  # Same process - can't IPC to yourself
-        
+
         if err != 0:
             raise RuntimeError(f"cudaIpcOpenMemHandle failed with code {err}")
-        
+
         # Calculate final pointer with offset
         final_ptr = dev_ptr.value + data["offset"]
-        
+
         # Create PyTorch tensor from raw pointer
         import torch
-        
+
         class CUDABuffer:
             """Dummy buffer that exposes __cuda_array_interface__."""
+
             def __init__(self, ptr, shape, typestr):
                 self.__cuda_array_interface__ = {
                     "data": (ptr, False),
                     "shape": shape,
                     "typestr": typestr,
-                    "version": 3
+                    "version": 3,
                 }
-        
+
         # PyTorch can consume __cuda_array_interface__
         return torch.as_tensor(
-            CUDABuffer(final_ptr, data["shape"], data["typestr"]), 
-            device=f"cuda:{data['device']}"
+            CUDABuffer(final_ptr, data["shape"], data["typestr"]),
+            device=f"cuda:{data['device']}",
         )
+
 
 class SHMRegistry:
     """Track and cleanup orphaned shared memory blocks."""
+
     def __init__(self):
         self.lock = threading.Lock()
         self.active_blocks: Set[str] = set()
         self._load_registry()
-    
+
     def _load_registry(self):
         try:
             if os.path.exists(SHM_REGISTRY_FILE):
-                with open(SHM_REGISTRY_FILE, 'r') as f:
+                with open(SHM_REGISTRY_FILE, "r") as f:
                     self.active_blocks = set(json.load(f))
         except:
             self.active_blocks = set()
-    
+
     def _save_registry(self):
         try:
-            with open(SHM_REGISTRY_FILE, 'w') as f:
+            with open(SHM_REGISTRY_FILE, "w") as f:
                 json.dump(list(self.active_blocks), f)
         except:
             pass
-    
+
     def register(self, name: str):
         with self.lock:
             self.active_blocks.add(name)
             self._save_registry()
-    
+
     def unregister(self, name: str):
         with self.lock:
             self.active_blocks.discard(name)
             self._save_registry()
-    
+
     def cleanup_orphans(self):
         """Remove orphaned shared memory blocks from /dev/shm/."""
         with self.lock:
             from multiprocessing import shared_memory
+
             for name in list(self.active_blocks):
                 try:
                     shm = shared_memory.SharedMemory(name=name)
@@ -303,6 +319,7 @@ class SHMRegistry:
                 except Exception:
                     pass
             self._save_registry()
+
 
 # Global SHM registry
 shm_registry = SHMRegistry()
@@ -1057,6 +1074,7 @@ while True:
 # Cleanup on exit
 """
 
+
 # Additional diagnostic helper for debugging
 def diagnose_worker_issue(package_spec: str):
     """
@@ -1064,149 +1082,169 @@ def diagnose_worker_issue(package_spec: str):
     """
     safe_print(f"\n🔍 Diagnosing worker issue for: {package_spec}")
     print("=" * 70)
-    
-    pkg_name, expected_version = package_spec.split('==')
-    
+
+    pkg_name, expected_version = package_spec.split("==")
+
     # Check what's in sys.path
     print("\n1. Current sys.path:")
     import sys
+
     for i, path in enumerate(sys.path):
         print(f"   [{i}] {path}")
-    
+
     # Check what version is importable
     print(f"\n2. Attempting to import {pkg_name}:")
     try:
         from importlib.metadata import version
+
         actual_version = version(pkg_name)
         safe_print(f"   ✅ Found version: {actual_version}")
-        
+
         if actual_version != expected_version:
-            safe_print(f"   ❌ VERSION MISMATCH!")
+            safe_print("   ❌ VERSION MISMATCH!")
             print(f"      Expected: {expected_version}")
             print(f"      Got: {actual_version}")
     except Exception as e:
         safe_print(f"   ❌ Import failed: {e}")
-    
+
     # Check for bubble
     from pathlib import Path
-    site_packages = Path(sys.prefix) / 'lib' / f'python{sys.version_info.major}.{sys.version_info.minor}' / 'site-packages'
-    bubble_path = site_packages / '.omnipkg_versions' / f'{pkg_name}-{expected_version}'
-    
-    print(f"\n3. Bubble check:")
+
+    site_packages = (
+        Path(sys.prefix)
+        / "lib"
+        / f"python{sys.version_info.major}.{sys.version_info.minor}"
+        / "site-packages"
+    )
+    bubble_path = site_packages / ".omnipkg_versions" / f"{pkg_name}-{expected_version}"
+
+    print("\n3. Bubble check:")
     print(f"   Path: {bubble_path}")
     print(f"   Exists: {bubble_path.exists()}")
-    
+
     if bubble_path.exists():
         print(f"   Contents: {list(bubble_path.glob('*'))[:5]}")
-    
+
     print("\n" + "=" * 70)
+
 
 # ═══════════════════════════════════════════════════════════════
 # 2. WORKER ORCHESTRATOR
 # ═══════════════════════════════════════════════════════════════
 
+
 class PersistentWorker:
     def __init__(self, package_spec: str, python_exe: str = None, verbose: bool = False):
         self.package_spec = package_spec
-        self.python_exe = python_exe or sys.executable # <--- STORE IT
+        self.python_exe = python_exe or sys.executable  # <--- STORE IT
         self.package_spec = package_spec
         self.process: Optional[subprocess.Popen] = None
         self.temp_file: Optional[str] = None
         self.lock = threading.RLock()  # Per-worker lock
         self.last_health_check = time.time()
         self.health_check_failures = 0
+        self._last_io = None
         self._start_worker()
 
-    def wait_for_ready_with_activity_monitoring(process, timeout_idle_seconds=30.0):
+    def wait_for_ready_with_activity_monitoring(self, process, timeout_idle_seconds=30.0):
         """
         Wait for worker READY signal while monitoring actual process activity.
         Only timeout if the process is ACTUALLY idle (no CPU/memory activity).
-        
+
         Args:
             process: subprocess.Popen instance
             timeout_idle_seconds: How long to wait if process shows NO activity
-        
+
         Returns:
             ready_line: The READY JSON line from stdout
-        
+
         Raises:
             RuntimeError: If process is idle for too long or crashes
         """
         import psutil
+
         start_time = time.time()
         last_activity_time = start_time
         last_cpu_percent = 0.0
         last_memory_mb = 0.0
-        
+
         try:
             ps_process = psutil.Process(process.pid)
         except psutil.NoSuchProcess:
             raise RuntimeError("Worker process died immediately after spawn")
-        
+
         stderr_lines = []
-        
+
         while True:
             # Check if process is still alive
             if process.poll() is not None:
-                stderr_output = ''.join(stderr_lines)
+                stderr_output = "".join(stderr_lines)
                 raise RuntimeError(f"Worker crashed during startup. Stderr: {stderr_output}")
-            
+
             # Check for READY on stdout (non-blocking)
             ready, unused, unused = select.select([process.stdout], [], [], 0.1)
             if ready:
                 ready_line = process.stdout.readline()
                 if ready_line:
                     return ready_line
-            
+
             # Collect stderr (non-blocking)
             err_ready, unused, unused = select.select([process.stderr], [], [], 0.0)
             if err_ready:
                 line = process.stderr.readline()
                 if line:
                     stderr_lines.append(line)
-            
+
             # Monitor process activity
             try:
                 cpu_percent = ps_process.cpu_percent(interval=0.1)
                 memory_mb = ps_process.memory_info().rss / 1024 / 1024
-                
+
                 # Detect activity: CPU usage or memory growth
                 activity_detected = False
-                
+
                 if cpu_percent > 1.0:  # More than 1% CPU usage
                     activity_detected = True
-                
+
                 if memory_mb > last_memory_mb + 1.0:  # Memory grew by >1MB
                     activity_detected = True
-                
+
                 if activity_detected:
                     last_activity_time = time.time()
                     last_cpu_percent = cpu_percent
                     last_memory_mb = memory_mb
-                
+
                 # Check idle timeout
                 idle_duration = time.time() - last_activity_time
-                
+
                 if idle_duration > timeout_idle_seconds:
-                    stderr_output = ''.join(stderr_lines)
+                    stderr_output = "".join(stderr_lines)
                     raise RuntimeError(
                         f"Worker startup timeout: No activity for {idle_duration:.1f}s\n"
                         f"Last CPU: {last_cpu_percent:.1f}%, Last Memory: {last_memory_mb:.1f}MB\n"
                         f"Stderr: {stderr_output if stderr_output else 'empty'}"
                     )
-            
+
             except psutil.NoSuchProcess:
                 raise RuntimeError("Worker process disappeared during startup")
-            
+
             # Small sleep to avoid busy-waiting
             time.sleep(0.1)
-        
-    def execute_with_activity_monitoring(worker_process, task_id, code, shm_in, shm_out, 
-                                        timeout_idle_seconds=30.0, max_total_time=600.0):
+
+    def execute_with_activity_monitoring(
+        self,
+        worker_process,
+        task_id,
+        code,
+        shm_in,
+        shm_out,
+        timeout_idle_seconds=30.0,
+        max_total_time=600.0,
+    ):
         """
         Execute task while monitoring worker activity.
         Only timeout if worker is idle, not if it's actively working.
-        
+
         Args:
             worker_process: The worker subprocess
             task_id: Unique task identifier
@@ -1214,89 +1252,92 @@ class PersistentWorker:
             shm_in/shm_out: Shared memory metadata
             timeout_idle_seconds: Timeout if no CPU/memory activity
             max_total_time: Absolute maximum time (safety limit)
-        
+
         Returns:
             Response dict from worker
         """
-        import psutil
         import json
-        
+
+        import psutil
+
         try:
             ps_process = psutil.Process(worker_process.pid)
         except psutil.NoSuchProcess:
             raise RuntimeError("Worker process not running")
-        
+
         # Send command
         command = {
             "type": "execute",
             "task_id": task_id,
             "code": code,
             "shm_in": shm_in,
-            "shm_out": shm_out
+            "shm_out": shm_out,
         }
-        
-        worker_process.stdin.write(json.dumps(command) + '\n')
+
+        worker_process.stdin.write(json.dumps(command) + "\n")
         worker_process.stdin.flush()
-        
+
         # Monitor execution
         start_time = time.time()
         last_activity_time = start_time
         last_cpu_percent = 0.0
         last_memory_mb = ps_process.memory_info().rss / 1024 / 1024
-        
+
         while True:
             # Check absolute timeout
             if time.time() - start_time > max_total_time:
                 raise TimeoutError(f"Task exceeded maximum time limit ({max_total_time}s)")
-            
+
             # Check for response (non-blocking)
             ready, unused, unused = select.select([worker_process.stdout], [], [], 0.1)
             if ready:
                 response_line = worker_process.stdout.readline()
                 if response_line:
                     return json.loads(response_line.strip())
-            
+
             # Monitor activity
             try:
                 cpu_percent = ps_process.cpu_percent(interval=0.1)
                 memory_mb = ps_process.memory_info().rss / 1024 / 1024
-                
+
                 # Activity detection
                 activity_detected = False
-                
+
                 if cpu_percent > 1.0:  # CPU active
                     activity_detected = True
-                
+
                 if abs(memory_mb - last_memory_mb) > 1.0:  # Memory changing
                     activity_detected = True
-                
+
                 # Check I/O activity (reading/writing data)
                 io_counters = ps_process.io_counters()
-                if hasattr(execute_with_activity_monitoring, '_last_io'):
-                    last_io = execute_with_activity_monitoring._last_io
-                    if (io_counters.read_bytes > last_io.read_bytes or 
-                        io_counters.write_bytes > last_io.write_bytes):
+                if hasattr(self, "_last_io"):
+                    last_io = self._last_io
+                    if (
+                        io_counters.read_bytes > last_io.read_bytes
+                        or io_counters.write_bytes > last_io.write_bytes
+                    ):
                         activity_detected = True
-                execute_with_activity_monitoring._last_io = io_counters
-                
+                self._last_io = io_counters
+
                 if activity_detected:
                     last_activity_time = time.time()
                     last_cpu_percent = cpu_percent
                     last_memory_mb = memory_mb
-                
+
                 # Check idle timeout
                 idle_duration = time.time() - last_activity_time
-                
+
                 if idle_duration > timeout_idle_seconds:
                     raise TimeoutError(
                         f"Task timed out: No activity for {idle_duration:.1f}s\n"
                         f"Last CPU: {last_cpu_percent:.1f}%, Memory: {memory_mb:.1f}MB\n"
                         f"Task may be deadlocked or waiting indefinitely"
                     )
-            
+
             except psutil.NoSuchProcess:
                 raise RuntimeError("Worker process crashed during task execution")
-            
+
             time.sleep(0.1)
 
     def _discover_cuda_paths(self) -> List[str]:
@@ -1305,108 +1346,120 @@ class PersistentWorker:
         Dynamically detects CUDA version requirement (cu11 vs cu12).
         """
         from pathlib import Path
-        
+
         cuda_paths = []
-        
+
         # 1. Detect required CUDA version from spec
         # e.g. "torch==2.0.0+cu118" -> target="11"
-        target_cuda = "12" # Default to modern
+        target_cuda = "12"  # Default to modern
         if "+cu11" in self.package_spec or "cu11" in self.package_spec:
             target_cuda = "11"
         elif "+cu12" in self.package_spec or "cu12" in self.package_spec:
             target_cuda = "12"
-        
+
         # Parse package name
-        pkg_name = self.package_spec.split('==')[0] if '==' in self.package_spec else self.package_spec
-        
+        pkg_name = (
+            self.package_spec.split("==")[0] if "==" in self.package_spec else self.package_spec
+        )
+
         # Get the multiversion base
         try:
             # Import here to avoid circular dependency
             from omnipkg.loader import omnipkgLoader
+
             loader = omnipkgLoader(package_spec=self.package_spec, quiet=True)
             multiversion_base = loader.multiversion_base
         except Exception:
             import site
+
             site_packages = Path(site.getsitepackages()[0])
-            multiversion_base = site_packages / '.omnipkg_versions'
-        
+            multiversion_base = site_packages / ".omnipkg_versions"
+
         if not multiversion_base.exists():
             return cuda_paths
-        
+
         # Strategy 1: Check main bubble
-        _, version = self.package_spec.split('==') if '==' in self.package_spec else (pkg_name, None)
+        _, version = (
+            self.package_spec.split("==") if "==" in self.package_spec else (pkg_name, None)
+        )
         if version:
             main_bubble = multiversion_base / f"{pkg_name}-{version}"
             if main_bubble.exists():
-                for nvidia_dir in main_bubble.glob('nvidia_*'):
+                for nvidia_dir in main_bubble.glob("nvidia_*"):
                     if nvidia_dir.is_dir():
-                        lib_dir = nvidia_dir / 'lib'
+                        lib_dir = nvidia_dir / "lib"
                         if lib_dir.exists():
                             cuda_paths.append(str(lib_dir))
-                        if list(nvidia_dir.glob('*.so*')):
+                        if list(nvidia_dir.glob("*.so*")):
                             cuda_paths.append(str(nvidia_dir))
-        
+
         # Strategy 2: Check standalone NVIDIA bubbles using TARGET VERSION
         # We only look for the version requested in the spec
         nvidia_bubble_patterns = [
-            f'nvidia-cuda-runtime-cu{target_cuda}-*',
-            f'nvidia-cudnn-cu{target_cuda}-*',
-            f'nvidia-cublas-cu{target_cuda}-*',
-            f'nvidia-cufft-cu{target_cuda}-*',
-            f'nvidia-cusolver-cu{target_cuda}-*',
-            f'nvidia-cusparse-cu{target_cuda}-*',
-            f'nvidia-nccl-cu{target_cuda}-*',
-            f'nvidia-nvtx-cu{target_cuda}-*',
+            f"nvidia-cuda-runtime-cu{target_cuda}-*",
+            f"nvidia-cudnn-cu{target_cuda}-*",
+            f"nvidia-cublas-cu{target_cuda}-*",
+            f"nvidia-cufft-cu{target_cuda}-*",
+            f"nvidia-cusolver-cu{target_cuda}-*",
+            f"nvidia-cusparse-cu{target_cuda}-*",
+            f"nvidia-nccl-cu{target_cuda}-*",
+            f"nvidia-nvtx-cu{target_cuda}-*",
         ]
-        
+
         for pattern in nvidia_bubble_patterns:
             for nvidia_bubble in multiversion_base.glob(pattern):
-                if nvidia_bubble.is_dir() and '_omnipkg_cloaked' not in nvidia_bubble.name:
-                    pkg_dir_name = nvidia_bubble.name.split('-')[0:3]
-                    pkg_dir_name = '_'.join(pkg_dir_name)
-                    
+                if nvidia_bubble.is_dir() and "_omnipkg_cloaked" not in nvidia_bubble.name:
+                    pkg_dir_name = nvidia_bubble.name.split("-")[0:3]
+                    pkg_dir_name = "_".join(pkg_dir_name)
+
                     pkg_dir = nvidia_bubble / pkg_dir_name
                     if pkg_dir.exists():
-                        lib_dir = pkg_dir / 'lib'
+                        lib_dir = pkg_dir / "lib"
                         if lib_dir.exists():
                             cuda_paths.append(str(lib_dir))
-                        if list(pkg_dir.glob('*.so*')):
+                        if list(pkg_dir.glob("*.so*")):
                             cuda_paths.append(str(pkg_dir))
-        
+
         return cuda_paths
-    
+
     def _start_worker(self):
         """Start worker process with proper error handling."""
         # CRITICAL DEBUG: Check _DAEMON_SCRIPT before writing
-        safe_print(f"\n🔍 DEBUG: _DAEMON_SCRIPT length: {len(_DAEMON_SCRIPT)} chars", file=sys.stderr)
-        safe_print(f"🔍 DEBUG: Last 200 chars of _DAEMON_SCRIPT:", file=sys.stderr)
+        safe_print(
+            f"\n🔍 DEBUG: _DAEMON_SCRIPT length: {len(_DAEMON_SCRIPT)} chars",
+            file=sys.stderr,
+        )
+        safe_print("🔍 DEBUG: Last 200 chars of _DAEMON_SCRIPT:", file=sys.stderr)
         print(f"   '{_DAEMON_SCRIPT[-200:]}'", file=sys.stderr)
-        
+
         # Create temp script file
         with tempfile.NamedTemporaryFile(
-            mode='w', 
-            delete=False, 
-            suffix=f"_{self.package_spec.replace('=', '_').replace('==', '_')}.py"
+            mode="w",
+            delete=False,
+            suffix=f"_{self.package_spec.replace('=', '_').replace('==', '_')}.py",
         ) as f:
             f.write(_DAEMON_SCRIPT)
             self.temp_file = f.name
-        
+
         # CRITICAL DEBUG: Print the temp file path and validate syntax
         safe_print(f"\n🔍 DEBUG: Worker script written to: {self.temp_file}", file=sys.stderr)
-        safe_print(f"🔍 DEBUG: File size: {os.path.getsize(self.temp_file)} bytes", file=sys.stderr)
-        
+        safe_print(
+            f"🔍 DEBUG: File size: {os.path.getsize(self.temp_file)} bytes",
+            file=sys.stderr,
+        )
+
         # Validate syntax before running
         try:
-            with open(self.temp_file, 'r') as f:
+            with open(self.temp_file, "r") as f:
                 script_content = f.read()
-            compile(script_content, self.temp_file, 'exec')
-            safe_print(f"✅ DEBUG: Script syntax is valid", file=sys.stderr)
+            compile(script_content, self.temp_file, "exec")
+            safe_print("✅ DEBUG: Script syntax is valid", file=sys.stderr)
         except SyntaxError as e:
-            safe_print(f"\n💥 SYNTAX ERROR IN GENERATED SCRIPT!", file=sys.stderr)
+            safe_print("\n💥 SYNTAX ERROR IN GENERATED SCRIPT!", file=sys.stderr)
             print(f"   File: {self.temp_file}", file=sys.stderr)
             print(f"   Line {e.lineno}: {e.msg}", file=sys.stderr)
-            safe_print(f"\n📄 SCRIPT CONTENT (last 50 lines):", file=sys.stderr)
-            with open(self.temp_file, 'r') as f:
+            safe_print("\n📄 SCRIPT CONTENT (last 50 lines):", file=sys.stderr)
+            with open(self.temp_file, "r") as f:
                 lines = f.readlines()
                 start_line = max(0, len(lines) - 50)
                 for i, line in enumerate(lines[start_line:], start=start_line + 1):
@@ -1415,55 +1468,58 @@ class PersistentWorker:
             raise RuntimeError(f"Generated script has syntax error at line {e.lineno}: {e.msg}")
 
         env = os.environ.copy()
-        current_pythonpath = env.get('PYTHONPATH', '')
-        env['PYTHONPATH'] = f"{os.getcwd()}{os.pathsep}{current_pythonpath}"
-        
+        current_pythonpath = env.get("PYTHONPATH", "")
+        env["PYTHONPATH"] = f"{os.getcwd()}{os.pathsep}{current_pythonpath}"
+
         # 🔥 FIX: Open daemon log for worker stderr (store as instance variable)
-        self.log_file = open(DAEMON_LOG_FILE, 'a', buffering=1)  # Line buffering
-        
+        self.log_file = open(DAEMON_LOG_FILE, "a", buffering=1)  # Line buffering
+
         # ═══════════════════════════════════════════════════════════
         # 🔥 NEW: INJECT CUDA LIBRARY PATHS BEFORE SPAWN
         # ═══════════════════════════════════════════════════════════
         cuda_lib_paths = self._discover_cuda_paths()
         if cuda_lib_paths:
-            current_ld = env.get('LD_LIBRARY_PATH', '')
+            current_ld = env.get("LD_LIBRARY_PATH", "")
             new_ld = os.pathsep.join(cuda_lib_paths)
             if current_ld:
                 new_ld = new_ld + os.pathsep + current_ld
-            env['LD_LIBRARY_PATH'] = new_ld
-            
-            safe_print(f"🔧 [WORKER] Injecting {len(cuda_lib_paths)} CUDA paths into environment", file=sys.stderr)
+            env["LD_LIBRARY_PATH"] = new_ld
+
+            safe_print(
+                f"🔧 [WORKER] Injecting {len(cuda_lib_paths)} CUDA paths into environment",
+                file=sys.stderr,
+            )
             for path in cuda_lib_paths:
                 print(f"   - {path}", file=sys.stderr)
-        
+
         # Open daemon log for worker stderr (store as instance variable)
-        self.log_file = open(DAEMON_LOG_FILE, 'a', buffering=1)
+        self.log_file = open(DAEMON_LOG_FILE, "a", buffering=1)
 
         self.process = subprocess.Popen(
-            [self.python_exe, '-u', self.temp_file],
+            [self.python_exe, "-u", self.temp_file],
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=self.log_file,  # ✅ Log to file instead of /dev/null
             text=True,
             bufsize=0,
             env=env,
-            preexec_fn=os.setsid if not IS_WINDOWS else None  # 🔥 Windows fix
+            preexec_fn=os.setsid if not IS_WINDOWS else None,  # 🔥 Windows fix
         )
-        
+
         # Send setup command
         try:
-            setup_cmd = json.dumps({'package_spec': self.package_spec})
-            self.process.stdin.write(setup_cmd + '\n')
+            setup_cmd = json.dumps({"package_spec": self.package_spec})
+            self.process.stdin.write(setup_cmd + "\n")
             self.process.stdin.flush()
         except Exception as e:
             self.force_shutdown()
             raise RuntimeError(f"Failed to send setup: {e}")
-        
+
         # Wait for READY with timeout
         try:
             # ONLY check stdout now (stderr is going to log file)
             readable, unused, unused = select.select([self.process.stdout], [], [], 30.0)
-            
+
             ready_line = None
 
             # Read stdout
@@ -1474,61 +1530,67 @@ class PersistentWorker:
                 # Check if process died
                 if self.process.poll() is not None:
                     raise RuntimeError(f"Worker crashed during startup (check {DAEMON_LOG_FILE})")
-                raise RuntimeError(f"Worker timeout waiting for READY")
-            
+                raise RuntimeError("Worker timeout waiting for READY")
+
             ready_line = ready_line.strip()
-            
+
             if not ready_line:
                 raise RuntimeError("Worker sent blank READY line")
-            
+
             try:
                 ready_status = json.loads(ready_line)
             except json.JSONDecodeError as e:
                 raise RuntimeError(f"Worker sent invalid READY JSON: {repr(ready_line)}: {e}")
-            
-            if ready_status.get('status') != 'READY':
+
+            if ready_status.get("status") != "READY":
                 raise RuntimeError(f"Worker failed to initialize: {ready_status}")
-            
+
             # Success!
             self.last_health_check = time.time()
             self.health_check_failures = 0
-            
+
         except Exception as e:
             self.force_shutdown()
             raise RuntimeError(f"Worker initialization failed: {e}")
 
-    def execute_shm_task(self, task_id: str, code: str, shm_in: Dict[str, Any], 
-                         shm_out: Dict[str, Any], timeout: float = 30.0) -> Dict[str, Any]:
+    def execute_shm_task(
+        self,
+        task_id: str,
+        code: str,
+        shm_in: Dict[str, Any],
+        shm_out: Dict[str, Any],
+        timeout: float = 30.0,
+    ) -> Dict[str, Any]:
         """Execute task with timeout."""
         with self.lock:
             if not self.process or self.process.poll() is not None:
                 raise Exception("Worker not running.")
-            
+
             try:
                 command = {
                     "type": "execute",
                     "task_id": task_id,
                     "code": code,
                     "shm_in": shm_in,
-                    "shm_out": shm_out
+                    "shm_out": shm_out,
                 }
-                
-                self.process.stdin.write(json.dumps(command) + '\n')
+
+                self.process.stdin.write(json.dumps(command) + "\n")
                 self.process.stdin.flush()
-                
+
                 # Wait for response
                 readable, unused, unused = select.select([self.process.stdout], [], [], timeout)
-                
+
                 if not readable:
                     raise TimeoutError(f"Task timed out after {timeout}s")
-                
+
                 response_line = self.process.stdout.readline()
                 if not response_line:
                     raise RuntimeError("Worker closed connection")
-                
+
                 return json.loads(response_line.strip())
-                
-            except Exception as e:
+
+            except Exception:
                 self.health_check_failures += 1
                 raise
 
@@ -1536,14 +1598,11 @@ class PersistentWorker:
         """Check if worker is responsive."""
         try:
             result = self.execute_shm_task(
-                "health_check",
-                "result = {'status': 'ok'}",
-                {}, {},
-                timeout=5.0
+                "health_check", "result = {'status': 'ok'}", {}, {}, timeout=5.0
             )
             self.last_health_check = time.time()
             self.health_check_failures = 0
-            return result.get('status') == 'COMPLETED'
+            return result.get("status") == "COMPLETED"
         except Exception:
             self.health_check_failures += 1
             return False
@@ -1566,23 +1625,25 @@ class PersistentWorker:
                         pass
                 finally:
                     self.process = None
-            
+
             # 🔥 FIX: Close log file handle
-            if hasattr(self, 'log_file') and self.log_file:
+            if hasattr(self, "log_file") and self.log_file:
                 try:
                     self.log_file.close()
                 except Exception:
                     pass
-            
+
             if self.temp_file and os.path.exists(self.temp_file):
                 try:
                     os.unlink(self.temp_file)
                 except Exception:
                     pass
 
+
 # ═══════════════════════════════════════════════════════════════
 # 3. DAEMON MANAGER
 # ═══════════════════════════════════════════════════════════════
+
 
 class WorkerPoolDaemon:
     def __init__(self, max_workers: int = 10, max_idle_time: int = 300, warmup_specs: list = None):
@@ -1595,32 +1656,33 @@ class WorkerPoolDaemon:
         self.running = True
         self.socket_path = DEFAULT_SOCKET
         self.stats = {
-            'total_requests': 0,
-            'cache_hits': 0,
-            'workers_created': 0,
-            'workers_killed': 0,
-            'errors': 0
+            "total_requests": 0,
+            "cache_hits": 0,
+            "workers_created": 0,
+            "workers_killed": 0,
+            "errors": 0,
         }
         self.executor = ThreadPoolExecutor(max_workers=20, thread_name_prefix="daemon-handler")
-    
+
     def start(self, daemonize: bool = True):
         if self.is_running():
             return
-        
+
         # 🔥 FIX: Windows: Use subprocess spawn instead of fork
         if IS_WINDOWS and daemonize:
             return self._start_windows_daemon()
-        
+
         # Unix: Use traditional fork
         if daemonize and not IS_WINDOWS:
             self._daemonize()
-        
-        with open(PID_FILE, 'w') as f:
+
+        with open(PID_FILE, "w") as f:
             f.write(str(os.getpid()))
-        
+
         # 🔥 FIX: Signal handlers only in main thread AND not on Windows
         try:
             import threading
+
             if threading.current_thread() is threading.main_thread():
                 if not IS_WINDOWS:  # Windows doesn't have SIGTERM
                     signal.signal(signal.SIGTERM, self._handle_shutdown)
@@ -1629,57 +1691,64 @@ class WorkerPoolDaemon:
             # ValueError: not in main thread
             # AttributeError: signal module doesn't have SIGTERM (Windows)
             pass
-        
+
         # Cleanup orphaned SHM blocks from previous runs
         shm_registry.cleanup_orphans()
-        
+
         # Start background threads
         threading.Thread(target=self._health_monitor, daemon=True, name="health-monitor").start()
         threading.Thread(target=self._memory_manager, daemon=True, name="memory-manager").start()
         threading.Thread(target=self._warmup_workers, daemon=True, name="warmup").start()
-        
+
         self._run_socket_server()
 
     def _start_windows_daemon(self):
         """Start daemon on Windows using subprocess (no fork)."""
         import subprocess
-        
+
         daemon_script = os.path.abspath(__file__)
-        
+
         safe_print("🚀 Starting daemon in background (Windows mode)...", file=sys.stderr)
-        
+
         try:
             # Windows flags for detached process
             DETACHED_PROCESS = 0x00000008
             CREATE_NEW_PROCESS_GROUP = 0x00000200
-            
+
             # Spawn detached process
             process = subprocess.Popen(
                 [sys.executable, daemon_script, "start", "--no-fork"],
                 creationflags=DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP,
                 stdin=subprocess.DEVNULL,
                 stdout=subprocess.DEVNULL,
-                stderr=open(DAEMON_LOG_FILE, 'a'),
-                close_fds=False  # Can't close_fds with creationflags on Windows
+                stderr=open(DAEMON_LOG_FILE, "a"),
+                close_fds=False,  # Can't close_fds with creationflags on Windows
             )
-            
+
             # Wait for initialization
             time.sleep(2)
-            
+
             # Check if it started
             if self.is_running():
-                safe_print(f"✅ Daemon started successfully (PID: {process.pid})", file=sys.stderr)
+                safe_print(
+                    f"✅ Daemon started successfully (PID: {process.pid})",
+                    file=sys.stderr,
+                )
                 sys.exit(0)
             else:
-                safe_print(f"❌ Daemon failed to start (check {DAEMON_LOG_FILE})", file=sys.stderr)
+                safe_print(
+                    f"❌ Daemon failed to start (check {DAEMON_LOG_FILE})",
+                    file=sys.stderr,
+                )
                 sys.exit(1)
-                
+
         except Exception as e:
             safe_print(f"❌ Failed to start daemon: {e}", file=sys.stderr)
             import traceback
+
             traceback.print_exc()
             sys.exit(1)
-    
+
     def _daemonize(self):
         """Double-fork daemonization with visual feedback."""
         try:
@@ -1710,14 +1779,14 @@ class WorkerPoolDaemon:
         # Flush standard file descriptors
         sys.stdout.flush()
         sys.stderr.flush()
-        
+
         # Redirect standard file descriptors
-        with open('/dev/null', 'r') as f:
+        with open("/dev/null", "r") as f:
             os.dup2(f.fileno(), sys.stdin.fileno())
-        with open(DAEMON_LOG_FILE, 'a+') as f:          # ← CHANGED TO DAEMON_LOG_FILE
+        with open(DAEMON_LOG_FILE, "a+") as f:  # ← CHANGED TO DAEMON_LOG_FILE
             os.dup2(f.fileno(), sys.stdout.fileno())
             os.dup2(f.fileno(), sys.stderr.fileno())
-    
+
     def _warmup_workers(self):
         """Pre-warm popular packages to reduce latency."""
         time.sleep(1)  # Let daemon settle
@@ -1728,17 +1797,18 @@ class WorkerPoolDaemon:
                 self._execute_code(spec, "pass", {}, {})
             except Exception:
                 pass
-    
+
     def _run_socket_server(self):
         try:
             os.unlink(self.socket_path)
         except OSError:
             pass
-        
+
         sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         sock.bind(self.socket_path)
-        sock.listen(128)  # CRITICAL FIX: Increased backlog for high concurrency
-        
+        # CRITICAL FIX: Increased backlog for high concurrency
+        sock.listen(128)
+
         while self.running:
             try:
                 sock.settimeout(1.0)
@@ -1756,37 +1826,37 @@ class WorkerPoolDaemon:
         conn.settimeout(30.0)
         try:
             req = recv_json(conn, timeout=30.0)
-            self.stats['total_requests'] += 1
-            
-            if req['type'] == 'execute':
+            self.stats["total_requests"] += 1
+
+            if req["type"] == "execute":
                 res = self._execute_code(
-                    req['spec'], 
-                    req['code'], 
-                    req.get('shm_in', {}), 
-                    req.get('shm_out', {}),
-                    req.get('python_exe')
+                    req["spec"],
+                    req["code"],
+                    req.get("shm_in", {}),
+                    req.get("shm_out", {}),
+                    req.get("python_exe"),
                 )
-            elif req['type'] == 'execute_cuda':  # ← ADD THIS
+            elif req["type"] == "execute_cuda":  # ← ADD THIS
                 res = self._execute_cuda_code(
-                    req['spec'],
-                    req['code'],
-                    req.get('cuda_in', {}),
-                    req.get('cuda_out', {}),
-                    req.get('python_exe')
+                    req["spec"],
+                    req["code"],
+                    req.get("cuda_in", {}),
+                    req.get("cuda_out", {}),
+                    req.get("python_exe"),
                 )
-            elif req['type'] == 'status':
+            elif req["type"] == "status":
                 res = self._get_status()
-            elif req['type'] == 'shutdown':
+            elif req["type"] == "shutdown":
                 self.running = False
-                res = {'success': True}
+                res = {"success": True}
             else:
-                res = {'success': False, 'error': 'Unknown type'}
-            
+                res = {"success": False, "error": "Unknown type"}
+
             send_json(conn, res, timeout=30.0)
         except Exception as e:
-            self.stats['errors'] += 1
+            self.stats["errors"] += 1
             try:
-                send_json(conn, {'success': False, 'error': str(e)}, timeout=5.0)
+                send_json(conn, {"success": False, "error": str(e)}, timeout=5.0)
             except:
                 pass
         finally:
@@ -1794,97 +1864,110 @@ class WorkerPoolDaemon:
                 conn.close()
             except:
                 pass
-    
-    def _execute_code(self, spec: str, code: str, shm_in: dict, shm_out: dict, python_exe: str = None) -> dict:
+
+    def _execute_code(
+        self, spec: str, code: str, shm_in: dict, shm_out: dict, python_exe: str = None
+    ) -> dict:
         """
         SIMPLIFIED: Just pass through to worker, let loader handle ALL locking.
         Daemon only blocks on worker creation (fast), not on filesystem ops.
         """
         if not python_exe:
             python_exe = sys.executable
-        
+
         worker_key = f"{spec}::{python_exe}"
-        
+
         # ═══════════════════════════════════════════════════════════════
         # FAST PATH: Worker exists, execute immediately
         # ═══════════════════════════════════════════════════════════════
         with self.pool_lock:
             if worker_key in self.workers:
-                self.stats['cache_hits'] += 1
+                self.stats["cache_hits"] += 1
                 worker_info = self.workers[worker_key]
-        
+
         if worker_key in self.workers:
-            worker_info['last_used'] = time.time()
-            worker_info['request_count'] += 1
-            
+            worker_info["last_used"] = time.time()
+            worker_info["request_count"] += 1
+
             try:
-                result = worker_info['worker'].execute_shm_task(
+                result = worker_info["worker"].execute_shm_task(
                     f"{spec}-{self.stats['total_requests']}",
-                    code, shm_in, shm_out, timeout=60.0
+                    code,
+                    shm_in,
+                    shm_out,
+                    timeout=60.0,
                 )
                 return result
             except Exception as e:
-                return {'success': False, 'error': str(e)}
-        
+                return {"success": False, "error": str(e)}
+
         # ═══════════════════════════════════════════════════════════════
         # SLOW PATH: Create worker (loader handles all locking internally)
         # ═══════════════════════════════════════════════════════════════
-        with self.worker_locks[worker_key]:  # Only prevents duplicate worker creation
+        # Only prevents duplicate worker creation
+        with self.worker_locks[worker_key]:
             # Double-check after acquiring lock
             with self.pool_lock:
                 if worker_key in self.workers:
-                    self.stats['cache_hits'] += 1
+                    self.stats["cache_hits"] += 1
                     worker_info = self.workers[worker_key]
-                    
-                    worker_info['last_used'] = time.time()
-                    worker_info['request_count'] += 1
-                    
+
+                    worker_info["last_used"] = time.time()
+                    worker_info["request_count"] += 1
+
                     try:
-                        result = worker_info['worker'].execute_shm_task(
+                        result = worker_info["worker"].execute_shm_task(
                             f"{spec}-{self.stats['total_requests']}",
-                            code, shm_in, shm_out, timeout=60.0
+                            code,
+                            shm_in,
+                            shm_out,
+                            timeout=60.0,
                         )
                         return result
                     except Exception as e:
-                        return {'success': False, 'error': str(e)}
-            
+                        return {"success": False, "error": str(e)}
+
             # Check capacity
             with self.pool_lock:
                 if len(self.workers) >= self.max_workers:
                     self._evict_oldest_worker_async()
-            
+
             # Create worker - loader's __enter__ handles ALL the locking
             try:
                 worker = PersistentWorker(spec, python_exe=python_exe)
-                
+
                 with self.pool_lock:
                     self.workers[worker_key] = {
-                        'worker': worker,
-                        'created': time.time(),
-                        'last_used': time.time(),
-                        'request_count': 0,
-                        'memory_mb': 0.0
+                        "worker": worker,
+                        "created": time.time(),
+                        "last_used": time.time(),
+                        "request_count": 0,
+                        "memory_mb": 0.0,
                     }
-                    self.stats['workers_created'] += 1
+                    self.stats["workers_created"] += 1
                     worker_info = self.workers[worker_key]
-            
+
             except Exception as e:
                 import traceback
-                error_msg = f'Worker creation failed: {e}\n{traceback.format_exc()}'
-                return {'success': False, 'error': error_msg, 'status': 'ERROR'}
-        
+
+                error_msg = f"Worker creation failed: {e}\n{traceback.format_exc()}"
+                return {"success": False, "error": error_msg, "status": "ERROR"}
+
         # Execute (outside all locks)
-        worker_info['last_used'] = time.time()
-        worker_info['request_count'] += 1
-        
+        worker_info["last_used"] = time.time()
+        worker_info["request_count"] += 1
+
         try:
-            result = worker_info['worker'].execute_shm_task(
+            result = worker_info["worker"].execute_shm_task(
                 f"{spec}-{self.stats['total_requests']}",
-                code, shm_in, shm_out, timeout=60.0
+                code,
+                shm_in,
+                shm_out,
+                timeout=60.0,
             )
             return result
         except Exception as e:
-            return {'success': False, 'error': str(e)}
+            return {"success": False, "error": str(e)}
 
     def _get_install_lock_for_daemon(self, spec: str) -> filelock.FileLock:
         """
@@ -1892,17 +1975,16 @@ class WorkerPoolDaemon:
         This is DIFFERENT from worker_locks (which protect worker creation).
         """
         lock_name = f"daemon-install-{spec.replace('==', '-')}"
-        
-        if not hasattr(self, '_install_locks'):
+
+        if not hasattr(self, "_install_locks"):
             self._install_locks = {}
-        
+
         if lock_name not in self._install_locks:
-            lock_file = Path('/tmp') / f"{lock_name}.lock"
+            lock_file = Path("/tmp") / f"{lock_name}.lock"
             self._install_locks[lock_name] = filelock.FileLock(
-                str(lock_file),
-                timeout=300  # 5 minute max for installation
+                str(lock_file), timeout=300  # 5 minute max for installation
             )
-        
+
         return self._install_locks[lock_name]
 
     def _install_bubble_for_worker(self, spec: str) -> bool:
@@ -1911,310 +1993,324 @@ class WorkerPoolDaemon:
         Returns True if successful.
         """
         try:
-            from omnipkg.core import omnipkg as OmnipkgCore
             from omnipkg.core import ConfigManager
-            
+            from omnipkg.core import omnipkg as OmnipkgCore
+
             cm = ConfigManager(suppress_init_messages=True)
             core = OmnipkgCore(cm)
-            
-            original_strategy = core.config.get('install_strategy')
-            core.config['install_strategy'] = 'stable-main'
-            
+
+            original_strategy = core.config.get("install_strategy")
+            core.config["install_strategy"] = "stable-main"
+
             try:
                 result = core.smart_install([spec])
                 return result == 0
             finally:
                 if original_strategy:
-                    core.config['install_strategy'] = original_strategy
-        
+                    core.config["install_strategy"] = original_strategy
+
         except Exception as e:
             safe_print(f"   ❌ [DAEMON] Installation failed: {e}", file=sys.stderr)
             return False
 
-    def _execute_cuda_code(self, spec: str, code: str, cuda_in: dict, cuda_out: dict, python_exe: str = None) -> dict:
+    def _execute_cuda_code(
+        self,
+        spec: str,
+        code: str,
+        cuda_in: dict,
+        cuda_out: dict,
+        python_exe: str = None,
+    ) -> dict:
         """Execute code with CUDA IPC tensors."""
         if not python_exe:
             python_exe = sys.executable
-        
+
         worker_key = f"{spec}::{python_exe}"
-        
+
         # FAST PATH
         with self.pool_lock:
             if worker_key in self.workers:
-                self.stats['cache_hits'] += 1
+                self.stats["cache_hits"] += 1
                 worker_info = self.workers[worker_key]
-        
+
         if worker_key in self.workers:
-            worker_info['last_used'] = time.time()
-            worker_info['request_count'] += 1
-            worker_info['is_gpu_worker'] = True
-            worker_info['gpu_timeout'] = 60
-            
+            worker_info["last_used"] = time.time()
+            worker_info["request_count"] += 1
+            worker_info["is_gpu_worker"] = True
+            worker_info["gpu_timeout"] = 60
+
             try:
                 command = {
-                    'type': 'execute_cuda',
-                    'task_id': f"{spec}-{self.stats['total_requests']}",
-                    'code': code,
-                    'cuda_in': cuda_in,
-                    'cuda_out': cuda_out
+                    "type": "execute_cuda",
+                    "task_id": f"{spec}-{self.stats['total_requests']}",
+                    "code": code,
+                    "cuda_in": cuda_in,
+                    "cuda_out": cuda_out,
                 }
-                
-                worker_info['worker'].process.stdin.write(json.dumps(command) + '\n')
-                worker_info['worker'].process.stdin.flush()
-                
+
+                worker_info["worker"].process.stdin.write(json.dumps(command) + "\n")
+                worker_info["worker"].process.stdin.flush()
+
                 import select
-                readable, unused, unused = select.select([worker_info['worker'].process.stdout], [], [], 60.0)
-                
+
+                readable, unused, unused = select.select(
+                    [worker_info["worker"].process.stdout], [], [], 60.0
+                )
+
                 if not readable:
                     raise TimeoutError("CUDA task timed out after 60s")
-                
-                response_line = worker_info['worker'].process.stdout.readline()
+
+                response_line = worker_info["worker"].process.stdout.readline()
                 if not response_line:
                     raise RuntimeError("Worker closed connection")
-                
+
                 return json.loads(response_line.strip())
-                
+
             except Exception as e:
-                return {'success': False, 'error': str(e)}
-        
+                return {"success": False, "error": str(e)}
+
         # SLOW PATH (same as above, no extra locking)
         with self.worker_locks[worker_key]:
             with self.pool_lock:
                 if worker_key in self.workers:
-                    worker_info['last_used'] = time.time()
-                    worker_info['request_count'] += 1
-                    worker_info['is_gpu_worker'] = True
-                    worker_info['gpu_timeout'] = 60
-                    
+                    worker_info["last_used"] = time.time()
+                    worker_info["request_count"] += 1
+                    worker_info["is_gpu_worker"] = True
+                    worker_info["gpu_timeout"] = 60
+
                     try:
                         command = {
-                            'type': 'execute_cuda',
-                            'task_id': f"{spec}-{self.stats['total_requests']}",
-                            'code': code,
-                            'cuda_in': cuda_in,
-                            'cuda_out': cuda_out
+                            "type": "execute_cuda",
+                            "task_id": f"{spec}-{self.stats['total_requests']}",
+                            "code": code,
+                            "cuda_in": cuda_in,
+                            "cuda_out": cuda_out,
                         }
-                        
-                        worker_info['worker'].process.stdin.write(json.dumps(command) + '\n')
-                        worker_info['worker'].process.stdin.flush()
-                        
+
+                        worker_info["worker"].process.stdin.write(json.dumps(command) + "\n")
+                        worker_info["worker"].process.stdin.flush()
+
                         import select
-                        readable, unused, unused = select.select([worker_info['worker'].process.stdout], [], [], 60.0)
-                        
+
+                        readable, unused, unused = select.select(
+                            [worker_info["worker"].process.stdout], [], [], 60.0
+                        )
+
                         if not readable:
                             raise TimeoutError("CUDA task timed out after 60s")
-                        
-                        response_line = worker_info['worker'].process.stdout.readline()
+
+                        response_line = worker_info["worker"].process.stdout.readline()
                         if not response_line:
                             raise RuntimeError("Worker closed connection")
-                        
+
                         return json.loads(response_line.strip())
-                        
+
                     except Exception as e:
-                        return {'success': False, 'error': str(e)}
-            
+                        return {"success": False, "error": str(e)}
+
             with self.pool_lock:
                 if len(self.workers) >= self.max_workers:
                     self._evict_oldest_worker_async()
-            
+
             try:
                 worker = PersistentWorker(spec, python_exe=python_exe)
-                
+
                 with self.pool_lock:
                     self.workers[worker_key] = {
-                        'worker': worker,
-                        'created': time.time(),
-                        'last_used': time.time(),
-                        'request_count': 0,
-                        'memory_mb': 0.0,
-                        'is_gpu_worker': True,
-                        'gpu_timeout': 60
+                        "worker": worker,
+                        "created": time.time(),
+                        "last_used": time.time(),
+                        "request_count": 0,
+                        "memory_mb": 0.0,
+                        "is_gpu_worker": True,
+                        "gpu_timeout": 60,
                     }
-                    self.stats['workers_created'] += 1
+                    self.stats["workers_created"] += 1
                     worker_info = self.workers[worker_key]
-            
+
             except Exception as e:
                 import traceback
-                error_msg = f'Worker creation failed: {e}\n{traceback.format_exc()}'
-                return {'success': False, 'error': error_msg, 'status': 'ERROR'}
-        
+
+                error_msg = f"Worker creation failed: {e}\n{traceback.format_exc()}"
+                return {"success": False, "error": error_msg, "status": "ERROR"}
+
         # Execute (outside locks)
-        worker_info['last_used'] = time.time()
-        worker_info['request_count'] += 1
-        
+        worker_info["last_used"] = time.time()
+        worker_info["request_count"] += 1
+
         try:
             command = {
-                'type': 'execute_cuda',
-                'task_id': f"{spec}-{self.stats['total_requests']}",
-                'code': code,
-                'cuda_in': cuda_in,
-                'cuda_out': cuda_out
+                "type": "execute_cuda",
+                "task_id": f"{spec}-{self.stats['total_requests']}",
+                "code": code,
+                "cuda_in": cuda_in,
+                "cuda_out": cuda_out,
             }
-            
-            worker_info['worker'].process.stdin.write(json.dumps(command) + '\n')
-            worker_info['worker'].process.stdin.flush()
-            
+
+            worker_info["worker"].process.stdin.write(json.dumps(command) + "\n")
+            worker_info["worker"].process.stdin.flush()
+
             import select
-            readable, unused, unused = select.select([worker_info['worker'].process.stdout], [], [], 60.0)
-            
+
+            readable, unused, unused = select.select(
+                [worker_info["worker"].process.stdout], [], [], 60.0
+            )
+
             if not readable:
                 raise TimeoutError("CUDA task timed out after 60s")
-            
-            response_line = worker_info['worker'].process.stdout.readline()
+
+            response_line = worker_info["worker"].process.stdout.readline()
             if not response_line:
                 raise RuntimeError("Worker closed connection")
-            
+
             return json.loads(response_line.strip())
-            
+
         except Exception as e:
-            return {'success': False, 'error': str(e)}
+            return {"success": False, "error": str(e)}
 
     def _evict_oldest_worker_async(self):
         """CRITICAL FIX: Evict worker without blocking on shutdown."""
         with self.pool_lock:
             if not self.workers:
                 return
-            
-            oldest = min(self.workers.keys(), key=lambda k: self.workers[k]['last_used'])
+
+            oldest = min(self.workers.keys(), key=lambda k: self.workers[k]["last_used"])
             worker_info = self.workers.pop(oldest)  # Remove from pool FIRST
-            self.stats['workers_killed'] += 1
-        
+            self.stats["workers_killed"] += 1
+
         # Shutdown in background thread (don't block)
         def async_shutdown():
             try:
-                worker_info['worker'].force_shutdown()
+                worker_info["worker"].force_shutdown()
             except Exception:
                 pass
-        
+
         threading.Thread(target=async_shutdown, daemon=True).start()
 
     def _health_monitor(self):
         """CRITICAL FIX: Actually test worker responsiveness."""
         while self.running:
             time.sleep(30)
-            
+
             with self.pool_lock:
                 specs_to_check = list(self.workers.keys())
-            
+
             for spec in specs_to_check:
                 with self.worker_locks[spec]:
                     with self.pool_lock:
                         if spec not in self.workers:
                             continue
                         worker_info = self.workers[spec]
-                    
+
                     # Check if process died
-                    if worker_info['worker'].process.poll() is not None:
+                    if worker_info["worker"].process.poll() is not None:
                         with self.pool_lock:
                             if spec in self.workers:
                                 del self.workers[spec]
                         continue
-                    
+
                     # Perform health check
-                    if not worker_info['worker'].health_check():
+                    if not worker_info["worker"].health_check():
                         # 3 strikes and you're out
-                        if worker_info['worker'].health_check_failures >= 3:
+                        if worker_info["worker"].health_check_failures >= 3:
                             with self.pool_lock:
                                 if spec in self.workers:
                                     del self.workers[spec]
-                            worker_info['worker'].force_shutdown()
+                            worker_info["worker"].force_shutdown()
 
     def _memory_manager(self):
         """Enhanced with optional psutil monitoring."""
         while self.running:
             time.sleep(60)
             now = time.time()
-            
+
             # 🔥 FIX: Safe psutil import - won't crash if missing
             try:
                 import psutil
+
                 mem = psutil.virtual_memory()
-                
+
                 if mem.percent > 85:
                     # Aggressive eviction
                     with self.pool_lock:
-                        to_kill = sorted(
-                            self.workers.items(),
-                            key=lambda x: x[1]['last_used']
-                        )[:len(self.workers) // 2]
-                        
+                        to_kill = sorted(self.workers.items(), key=lambda x: x[1]["last_used"])[
+                            : len(self.workers) // 2
+                        ]
+
                         for spec, info in to_kill:
                             del self.workers[spec]
-                            self.stats['workers_killed'] += 1
+                            self.stats["workers_killed"] += 1
                             threading.Thread(
-                                target=info['worker'].force_shutdown,
-                                daemon=True
+                                target=info["worker"].force_shutdown, daemon=True
                             ).start()
                     continue
             except ImportError:
                 # psutil not available - use basic timeout-based eviction only
                 pass
-            
+
             # Normal idle timeout (always runs, even without psutil)
             with self.pool_lock:
                 specs_to_remove = []
                 for spec, info in self.workers.items():
-                    timeout = info.get('gpu_timeout', self.max_idle_time)
-                    if now - info['last_used'] > timeout:
+                    timeout = info.get("gpu_timeout", self.max_idle_time)
+                    if now - info["last_used"] > timeout:
                         specs_to_remove.append(spec)
-                
+
                 for spec in specs_to_remove:
                     info = self.workers.pop(spec)
-                    self.stats['workers_killed'] += 1
-                    threading.Thread(
-                        target=info['worker'].force_shutdown,
-                        daemon=True
-                    ).start()
+                    self.stats["workers_killed"] += 1
+                    threading.Thread(target=info["worker"].force_shutdown, daemon=True).start()
 
     def _get_status(self) -> dict:
         with self.pool_lock:
             worker_details = {}
             for k, v in self.workers.items():
                 worker_details[k] = {
-                    'last_used': v['last_used'],
-                    'request_count': v['request_count'],
-                    'health_failures': v['worker'].health_check_failures
+                    "last_used": v["last_used"],
+                    "request_count": v["request_count"],
+                    "health_failures": v["worker"].health_check_failures,
                 }
-            
+
             # 🔥 FIX: Safe psutil memory check
             memory_percent = -1  # Sentinel value
             try:
                 import psutil
+
                 memory_percent = psutil.virtual_memory().percent
             except ImportError:
                 pass  # Will show as -1 in status output
-            
+
             return {
-                'success': True,
-                'running': self.running,
-                'workers': len(self.workers),
-                'stats': self.stats,
-                'worker_details': worker_details,
-                'memory_percent': memory_percent
+                "success": True,
+                "running": self.running,
+                "workers": len(self.workers),
+                "stats": self.stats,
+                "worker_details": worker_details,
+                "memory_percent": memory_percent,
             }
 
     def _handle_shutdown(self, signum, frame):
         """CRITICAL FIX: Graceful shutdown with timeout."""
         self.running = False
-        
+
         # Shutdown executor first
         self.executor.shutdown(wait=False)
-        
+
         deadline = time.time() + 5.0
-        
+
         with self.pool_lock:
             workers_list = list(self.workers.values())
-        
+
         for info in workers_list:
             remaining = deadline - time.time()
             if remaining <= 0:
-                info['worker'].force_shutdown()
+                info["worker"].force_shutdown()
             else:
                 try:
-                    info['worker'].force_shutdown()
+                    info["worker"].force_shutdown()
                 except Exception:
                     pass
-        
+
         # Cleanup
         shm_registry.cleanup_orphans()
         try:
@@ -2222,7 +2318,7 @@ class WorkerPoolDaemon:
             os.unlink(PID_FILE)
         except:
             pass
-        
+
         sys.exit(0)
 
     @classmethod
@@ -2230,12 +2326,13 @@ class WorkerPoolDaemon:
         if not os.path.exists(PID_FILE):
             return False
         try:
-            with open(PID_FILE, 'r') as f:
+            with open(PID_FILE, "r") as f:
                 pid = int(f.read().strip())
             os.kill(pid, 0)
             return True
         except:
             return False
+
 
 # ═══════════════════════════════════════════════════════════════
 # GPU IPC MULTI-FALLBACK STRATEGY
@@ -2247,8 +2344,10 @@ class WorkerPoolDaemon:
 # 1. CAPABILITY DETECTION
 # ═══════════════════════════════════════════════════════════════
 
+
 def detect_torch_cuda_ipc_mode():
     import torch
+
     """
     Detect which CUDA IPC method is available.
     
@@ -2257,287 +2356,295 @@ def detect_torch_cuda_ipc_mode():
         'custom': Custom CUDA IPC via ctypes (FAST)
         'hybrid': CPU SHM fallback (ACCEPTABLE)
     """
-    torch_version = torch.__version__.split('+')[0]
-    major, minor = map(int, torch_version.split('.')[:2])
-    
+    torch_version = torch.__version__.split("+")[0]
+    major, minor = map(int, torch_version.split(".")[:2])
+
     # Check for PyTorch 1.x native CUDA IPC
     if major == 1:
         try:
             # Test if the method exists
-            if hasattr(torch.FloatStorage, '_new_using_cuda_ipc'):
-                return 'native_1x'
+            if hasattr(torch.FloatStorage, "_new_using_cuda_ipc"):
+                return "native_1x"
         except:
             pass
-    
+
     # Check for custom CUDA IPC capability
     try:
-        cuda = ctypes.CDLL('libcuda.so.1')
+        cuda = ctypes.CDLL("libcuda.so.1")
         # Test basic CUDA driver calls
         cuda.cuInit(0)
-        return 'custom'
+        return "custom"
     except:
         pass
-    
+
     # Fallback to hybrid mode
-    return 'hybrid'
+    return "hybrid"
+
 
 # ═══════════════════════════════════════════════════════════════
 # 2. NATIVE PYTORCH 1.x IPC (TRUE ZERO-COPY)
 # ═══════════════════════════════════════════════════════════════
 
-def share_tensor_native_1x(tensor: torch.Tensor) -> dict:
-    import torch
+
+def share_tensor_native_1x(tensor: "torch.Tensor") -> dict:
     """
     Share GPU tensor using PyTorch 1.x native CUDA IPC.
     This is the FASTEST method - true zero-copy.
     """
     if not tensor.is_cuda:
         raise ValueError("Tensor must be on GPU")
-    
+
     # Share the underlying storage
     tensor.storage().share_cuda_()
-    
+
     # Get IPC handle
     ipc_handle = tensor.storage()._share_cuda_()
-    
+
     return {
-        'ipc_handle': ipc_handle,
-        'shape': tuple(tensor.shape),
-        'dtype': str(tensor.dtype).split('.')[-1],
-        'device': tensor.device.index,
-        'method': 'native_1x'
+        "ipc_handle": ipc_handle,
+        "shape": tuple(tensor.shape),
+        "dtype": str(tensor.dtype).split(".")[-1],
+        "device": tensor.device.index,
+        "method": "native_1x",
     }
 
-def receive_tensor_native_1x(meta: dict) -> torch.Tensor:
+
+def receive_tensor_native_1x(meta: dict) -> "torch.Tensor":
     import torch
+
     """Reconstruct tensor from PyTorch 1.x IPC handle."""
-    storage = torch.FloatStorage._new_using_cuda_ipc(meta['ipc_handle'])
-    
+    storage = torch.FloatStorage._new_using_cuda_ipc(meta["ipc_handle"])
+
     dtype_map = {
-        'float32': torch.float32,
-        'float64': torch.float64,
-        'float16': torch.float16
+        "float32": torch.float32,
+        "float64": torch.float64,
+        "float16": torch.float16,
     }
-    
-    tensor = torch.tensor([], dtype=dtype_map[meta['dtype']], device=f"cuda:{meta['device']}")
-    tensor.set_(storage, 0, meta['shape'])
-    
+
+    tensor = torch.tensor([], dtype=dtype_map[meta["dtype"]], device=f"cuda:{meta['device']}")
+    tensor.set_(storage, 0, meta["shape"])
+
     return tensor
+
 
 # ═══════════════════════════════════════════════════════════════
 # 3. CUSTOM CUDA IPC (CTYPES - WORKS WITH ANY PYTORCH)
 # ═══════════════════════════════════════════════════════════════
 
+
 class CUDAIPCHandle(ctypes.Structure):
     """CUDA IPC memory handle structure."""
+
     _fields_ = [("reserved", ctypes.c_char * 64)]
 
-def share_tensor_custom_cuda(tensor: torch.Tensor) -> dict:
-    import torch
+
+def share_tensor_custom_cuda(tensor: "torch.Tensor") -> dict:
     """
     Share GPU tensor using raw CUDA IPC (ctypes).
     Works with PyTorch 2.x and bypasses PyTorch's broken IPC.
     """
     if not tensor.is_cuda:
         raise ValueError("Tensor must be on GPU")
-    
+
     # Get CUDA context
-    cuda = ctypes.CDLL('libcuda.so.1')
-    
+    cuda = ctypes.CDLL("libcuda.so.1")
+
     # Get device pointer
     data_ptr = tensor.data_ptr()
-    
+
     # Create IPC handle
     ipc_handle = CUDAIPCHandle()
-    result = cuda.cuIpcGetMemHandle(
-        ctypes.byref(ipc_handle),
-        ctypes.c_void_p(data_ptr)
-    )
-    
+    result = cuda.cuIpcGetMemHandle(ctypes.byref(ipc_handle), ctypes.c_void_p(data_ptr))
+
     if result != 0:
         raise RuntimeError(f"cuIpcGetMemHandle failed with code {result}")
-    
+
     return {
-        'ipc_handle': bytes(ipc_handle.reserved),
-        'shape': tuple(tensor.shape),
-        'dtype': str(tensor.dtype).split('.')[-1],
-        'device': tensor.device.index,
-        'size_bytes': tensor.numel() * tensor.element_size(),
-        'method': 'custom'
+        "ipc_handle": bytes(ipc_handle.reserved),
+        "shape": tuple(tensor.shape),
+        "dtype": str(tensor.dtype).split(".")[-1],
+        "device": tensor.device.index,
+        "size_bytes": tensor.numel() * tensor.element_size(),
+        "method": "custom",
     }
 
-def receive_tensor_custom_cuda(meta: dict) -> torch.Tensor:
+
+def receive_tensor_custom_cuda(meta: dict) -> "torch.Tensor":
     import torch
+
     """Reconstruct tensor from custom CUDA IPC handle."""
-    cuda = ctypes.CDLL('libcuda.so.1')
-    
+    cuda = ctypes.CDLL("libcuda.so.1")
+
     # Reconstruct IPC handle
     ipc_handle = CUDAIPCHandle()
-    ipc_handle.reserved = meta['ipc_handle']
-    
+    ipc_handle.reserved = meta["ipc_handle"]
+
     # Open IPC handle
     device_ptr = ctypes.c_void_p()
     result = cuda.cuIpcOpenMemHandle(
+        # CU_IPC_MEM_LAZY_ENABLE_PEER_ACCESS
         ctypes.byref(device_ptr),
         ipc_handle,
-        1  # CU_IPC_MEM_LAZY_ENABLE_PEER_ACCESS
+        1,
     )
-    
+
     if result != 0:
         raise RuntimeError(f"cuIpcOpenMemHandle failed with code {result}")
-    
+
     # Create tensor from device pointer
     dtype_map = {
-        'float32': torch.float32,
-        'float64': torch.float64,
-        'float16': torch.float16
+        "float32": torch.float32,
+        "float64": torch.float64,
+        "float16": torch.float16,
     }
-    
+
     # Use PyTorch's internal method to wrap device pointer
     storage = torch.cuda.FloatStorage._new_with_weak_ptr(device_ptr.value)
-    
-    tensor = torch.tensor([], dtype=dtype_map[meta['dtype']], device=f"cuda:{meta['device']}")
-    tensor.set_(storage, 0, meta['shape'])
-    
+
+    tensor = torch.tensor([], dtype=dtype_map[meta["dtype"]], device=f"cuda:{meta['device']}")
+    tensor.set_(storage, 0, meta["shape"])
+
     return tensor
+
 
 # ═══════════════════════════════════════════════════════════════
 # 4. HYBRID MODE (CPU SHM FALLBACK)
 # ═══════════════════════════════════════════════════════════════
 
-def share_tensor_hybrid(tensor: torch.Tensor) -> dict:
-    import torch
+
+def share_tensor_hybrid(tensor: "torch.Tensor") -> dict:
     """
     Fallback: Copy to CPU SHM, worker copies to GPU.
     2 PCIe transfers per stage, but still faster than JSON.
     """
     input_cpu = tensor.cpu().numpy()
-    
+
     shm = shared_memory.SharedMemory(create=True, size=input_cpu.nbytes)
     shm_array = np.ndarray(input_cpu.shape, dtype=input_cpu.dtype, buffer=shm.buf)
     shm_array[:] = input_cpu[:]
-    
+
     return {
-        'shm_name': shm.name,
-        'shape': tuple(tensor.shape),
-        'dtype': str(tensor.dtype).split('.')[-1],
-        'device': tensor.device.index,
-        'method': 'hybrid'
+        "shm_name": shm.name,
+        "shape": tuple(tensor.shape),
+        "dtype": str(tensor.dtype).split(".")[-1],
+        "device": tensor.device.index,
+        "method": "hybrid",
     }
 
-def receive_tensor_hybrid(meta: dict) -> torch.Tensor:
+
+def receive_tensor_hybrid(meta: dict) -> "torch.Tensor":
     import torch
+
     """Reconstruct tensor from CPU SHM."""
-    shm = shared_memory.SharedMemory(name=meta['shm_name'])
-    
-    dtype_map = {
-        'float32': np.float32,
-        'float64': np.float64,
-        'float16': np.float16
-    }
-    
-    input_cpu = np.ndarray(
-        tuple(meta['shape']),
-        dtype=dtype_map[meta['dtype']],
-        buffer=shm.buf
-    )
-    
+    shm = shared_memory.SharedMemory(name=meta["shm_name"])
+
+    dtype_map = {"float32": np.float32, "float64": np.float64, "float16": np.float16}
+
+    input_cpu = np.ndarray(tuple(meta["shape"]), dtype=dtype_map[meta["dtype"]], buffer=shm.buf)
+
     device = torch.device(f"cuda:{meta['device']}")
     tensor = torch.from_numpy(input_cpu.copy()).to(device)
     shm.close()
-    
+
     return tensor
+
 
 # ═══════════════════════════════════════════════════════════════
 # 5. UNIFIED API
 # ═══════════════════════════════════════════════════════════════
+
 
 class SmartGPUIPC:
     """
     Automatically selects best available GPU IPC method.
     Graceful degradation: native_1x > custom > hybrid
     """
+
     def __init__(self):
         self.mode = detect_torch_cuda_ipc_mode()
         safe_print(f"🔥 GPU IPC Mode: {self.mode}")
-       
-        if self.mode == 'native_1x':
+
+        if self.mode == "native_1x":
             self.share = share_tensor_native_1x
             self.receive = receive_tensor_native_1x
-        elif self.mode == 'custom':
+        elif self.mode == "custom":
             # NEW: Use the custom methods
             self.share = share_tensor_custom_cuda
             self.receive = receive_tensor_custom_cuda
         else:
             self.share = share_tensor_hybrid
             self.receive = receive_tensor_hybrid
-    
-    def share_tensor(self, tensor: torch.Tensor) -> dict:
+
+    def share_tensor(self, tensor: "torch.Tensor") -> dict:
         """Share a GPU tensor using best available method."""
         return self.share(tensor)
-    
-    def receive_tensor(self, meta: dict) -> torch.Tensor:
+
+    def receive_tensor(self, meta: dict) -> "torch.Tensor":
         """Receive a GPU tensor using method specified in metadata."""
         return self.receive(meta)
 
-from enum import Enum
-from typing import Optional, Tuple
+
 # import torch
+
 
 class IPCMode(Enum):
     """Available IPC transfer modes."""
-    AUTO = "auto"              # Smart detection (default)
-    UNIVERSAL = "universal"    # Pure CUDA IPC (ctypes) - FASTEST
+
+    AUTO = "auto"  # Smart detection (default)
+    UNIVERSAL = "universal"  # Pure CUDA IPC (ctypes) - FASTEST
     PYTORCH_NATIVE = "pytorch_native"  # PyTorch 1.x _share_cuda_() - VERY FAST
-    CPU_SHM = "cpu_shm"        # CPU zero-copy SHM - MEDIUM (fallback)
-    HYBRID = "hybrid"          # CPU SHM + GPU copies - SLOW (testing only)
+    CPU_SHM = "cpu_shm"  # CPU zero-copy SHM - MEDIUM (fallback)
+    HYBRID = "hybrid"  # CPU SHM + GPU copies - SLOW (testing only)
+
 
 class IPCCapabilities:
     """Detect available IPC methods on the system."""
-    
+
     @staticmethod
     def has_pytorch_1x_native() -> bool:
         """Check if PyTorch 1.x native IPC is available."""
         try:
             import torch
-            version = torch.__version__.split('+')[0]
-            major = int(version.split('.')[0])
-            
+
+            version = torch.__version__.split("+")[0]
+            major = int(version.split(".")[0])
+
             if major != 1:
                 return False
-            
+
             # Test if _share_cuda_() exists and works
             if not torch.cuda.is_available():
                 return False
-            
+
             test_tensor = torch.zeros(1).cuda()
             storage = test_tensor.storage()
-            
-            if not hasattr(storage, '_share_cuda_'):
+
+            if not hasattr(storage, "_share_cuda_"):
                 return False
-            
+
             # Try to get IPC handle
             ipc_data = storage._share_cuda_()
             return len(ipc_data) == 8
-            
+
         except Exception:
             return False
-    
+
     @staticmethod
     def has_universal_cuda_ipc() -> bool:
         """Check if Universal CUDA IPC is available."""
         try:
             from omnipkg.isolation.worker_daemon import UniversalGpuIpc
+
             UniversalGpuIpc.get_lib()
             return True
         except Exception:
             return False
-    
+
     @staticmethod
     def detect_optimal_mode() -> IPCMode:
         """
         Auto-detect the best available IPC mode.
-        
+
         Priority order (based on benchmarks):
         1. Universal IPC - fastest (1.5-2ms), works everywhere
         2. PyTorch Native - very fast (2-2.5ms), PyTorch 1.x only
@@ -2547,28 +2654,28 @@ class IPCCapabilities:
         # Universal IPC is now the default (fastest, most compatible)
         if IPCCapabilities.has_universal_cuda_ipc():
             return IPCMode.UNIVERSAL
-        
+
         # Fall back to PyTorch native if available (still very fast)
         if IPCCapabilities.has_pytorch_1x_native():
             return IPCMode.PYTORCH_NATIVE
-        
+
         # CPU SHM is faster than Hybrid (10ms vs 14ms in benchmarks)
         # Always available as it doesn't need GPU
         # Hybrid is kept available for testing but not used in auto-fallback
         return IPCMode.CPU_SHM
-    
+
     @staticmethod
     def validate_mode(requested_mode: IPCMode) -> Tuple[IPCMode, str]:
         """
         Validate requested IPC mode and return actual mode + message.
-        
+
         Returns:
             (actual_mode, message)
         """
         if requested_mode == IPCMode.AUTO:
             mode = IPCCapabilities.detect_optimal_mode()
             return mode, f"Auto-detected: {mode.value}"
-        
+
         # Validate specific modes
         if requested_mode == IPCMode.UNIVERSAL:
             if IPCCapabilities.has_universal_cuda_ipc():
@@ -2576,32 +2683,39 @@ class IPCCapabilities:
             else:
                 fallback = IPCCapabilities.detect_optimal_mode()
                 return fallback, f"Universal IPC unavailable, using {fallback.value}"
-        
+
         if requested_mode == IPCMode.PYTORCH_NATIVE:
             if IPCCapabilities.has_pytorch_1x_native():
                 return requested_mode, "PyTorch 1.x native IPC available"
             else:
                 fallback = IPCCapabilities.detect_optimal_mode()
                 return fallback, f"PyTorch native unavailable, using {fallback.value}"
-        
+
         # CPU SHM always works (no GPU needed)
         if requested_mode == IPCMode.CPU_SHM:
             return requested_mode, "Using CPU SHM (zero-copy, no GPU)"
-        
+
         # Hybrid always works (but slower than CPU SHM)
         if requested_mode == IPCMode.HYBRID:
             return requested_mode, "Using hybrid mode (CPU SHM + GPU copies)"
-        
+
         # Unknown mode
         fallback = IPCCapabilities.detect_optimal_mode()
         return fallback, f"Unknown mode, using {fallback.value}"
+
 
 # ═══════════════════════════════════════════════════════════════
 # 4. CLIENT & PROXY (With Auto-Resurrection)
 # ═══════════════════════════════════════════════════════════════
 
+
 class DaemonClient:
-    def __init__(self, socket_path: str = DEFAULT_SOCKET, timeout: float = 30.0, auto_start: bool = True):
+    def __init__(
+        self,
+        socket_path: str = DEFAULT_SOCKET,
+        timeout: float = 30.0,
+        auto_start: bool = True,
+    ):
         self.socket_path = socket_path
         self.timeout = timeout
         self.auto_start = auto_start
@@ -2609,40 +2723,43 @@ class DaemonClient:
     def execute_shm(self, spec, code, shm_in, shm_out, python_exe=None):
         if not python_exe:
             python_exe = sys.executable
-        return self._send({
-            'type': 'execute', 
-            'spec': spec, 
-            'code': code, 
-            'shm_in': shm_in, 
-            'shm_out': shm_out,
-            'python_exe': python_exe
-        })
-    
+        return self._send(
+            {
+                "type": "execute",
+                "spec": spec,
+                "code": code,
+                "shm_in": shm_in,
+                "shm_out": shm_out,
+                "python_exe": python_exe,
+            }
+        )
+
     def status(self):
         old_auto = self.auto_start
         self.auto_start = False
         try:
-            return self._send({'type': 'status'})
+            return self._send({"type": "status"})
         finally:
             self.auto_start = old_auto
-    
+
     def shutdown(self):
-        return self._send({'type': 'shutdown'})
+        return self._send({"type": "shutdown"})
 
     def _spawn_daemon(self):
         import subprocess
+
         daemon_script = os.path.abspath(__file__)
-        
+
         # Optional: Set minimal CUDA paths for daemon itself
         env = os.environ.copy()
-        
+
         subprocess.Popen(
             [sys.executable, daemon_script, "start"],
             stdin=subprocess.DEVNULL,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
             env=env,  # Pass environment
-            preexec_fn=os.setsid 
+            preexec_fn=os.setsid,
         )
 
     def _wait_for_socket(self, timeout=5.0):
@@ -2662,7 +2779,7 @@ class DaemonClient:
 
     def _send(self, req):
         attempts = 0
-        max_attempts = 3 if not self.auto_start else 2 
+        max_attempts = 3 if not self.auto_start else 2
         while attempts < max_attempts:
             attempts += 1
             try:
@@ -2675,59 +2792,64 @@ class DaemonClient:
                 return res
             except (ConnectionRefusedError, FileNotFoundError):
                 if not self.auto_start:
-                    if attempts >= max_attempts: return {'success': False, 'error': 'Daemon not running'}
+                    if attempts >= max_attempts:
+                        return {"success": False, "error": "Daemon not running"}
                     time.sleep(0.2)
                     continue
-                try: os.unlink(self.socket_path)
-                except: pass
+                try:
+                    os.unlink(self.socket_path)
+                except:
+                    pass
                 self._spawn_daemon()
                 if self._wait_for_socket(timeout=5.0):
                     attempts = 0
                     self.auto_start = False
                     continue
                 else:
-                    return {'success': False, 'error': 'Failed to auto-start daemon (timeout)'}
+                    return {
+                        "success": False,
+                        "error": "Failed to auto-start daemon (timeout)",
+                    }
             except Exception as e:
-                return {'success': False, 'error': f'Communication error: {e}'}
-        return {'success': False, 'error': 'Connection failed after retries'}
+                return {"success": False, "error": f"Communication error: {e}"}
+        return {"success": False, "error": "Connection failed after retries"}
 
     def execute_cuda_ipc(
-        self, 
-        spec: str, 
-        code: str, 
-        input_tensor: torch.Tensor,
-        output_shape: tuple, 
-        output_dtype: str, 
+        self,
+        spec: str,
+        code: str,
+        input_tensor: "torch.Tensor",
+        output_shape: tuple,
+        output_dtype: str,
         python_exe: str = None,
-        ipc_mode: str = 'auto'
+        ipc_mode: str = "auto",
     ):
         """
         Execute code with GPU IPC using specified mode.
-        
+
         Args:
             ipc_mode: 'auto', 'universal', 'pytorch_native', 'cpu_shm', or 'hybrid'
         """
-        import sys
         import torch
-        
+
         if not torch.cuda.is_available():
             raise RuntimeError("CUDA not available")
-        
+
         if not input_tensor.is_cuda:
             raise ValueError("Input tensor must be on GPU")
-        
+
         # Parse IPC mode
         try:
             mode_enum = IPCMode(ipc_mode.lower())
         except ValueError:
             safe_print(f"⚠️  Invalid IPC mode '{ipc_mode}', using auto")
             mode_enum = IPCMode.AUTO
-        
+
         # Validate and get actual mode
         actual_mode, mode_msg = IPCCapabilities.validate_mode(mode_enum)
-        
+
         safe_print(f"   🎯 IPC Mode: {mode_msg}")
-        
+
         # ═══════════════════════════════════════════════════════════
         # ROUTE 1: UNIVERSAL CUDA IPC (DEFAULT - FASTEST)
         # ═══════════════════════════════════════════════════════════
@@ -2735,7 +2857,7 @@ class DaemonClient:
             return self._execute_universal_ipc(
                 spec, code, input_tensor, output_shape, output_dtype, python_exe
             )
-        
+
         # ═══════════════════════════════════════════════════════════
         # ROUTE 2: PYTORCH 1.x NATIVE IPC
         # ═══════════════════════════════════════════════════════════
@@ -2743,7 +2865,7 @@ class DaemonClient:
             return self._execute_pytorch_native_ipc(
                 spec, code, input_tensor, output_shape, output_dtype, python_exe
             )
-        
+
         # ═══════════════════════════════════════════════════════════
         # ROUTE 3: CPU SHM (ZERO-COPY, NO GPU - MEDIUM SPEED)
         # ═══════════════════════════════════════════════════════════
@@ -2751,46 +2873,45 @@ class DaemonClient:
             return self._execute_cpu_shm(
                 spec, code, input_tensor, output_shape, output_dtype, python_exe
             )
-        
+
         # ═══════════════════════════════════════════════════════════
         # ROUTE 4: HYBRID (CPU SHM + GPU COPIES - SLOWEST)
         # ═══════════════════════════════════════════════════════════
         return self._execute_hybrid_ipc(
             spec, code, input_tensor, output_shape, output_dtype, python_exe
         )
-    
+
     def _execute_cpu_shm(self, spec, code, input_tensor, output_shape, output_dtype, python_exe):
         """
         CPU-only mode: Run computation on CPU without any GPU transfers.
         Uses zero-copy SHM like Test 17.
-        
+
         This is faster than Hybrid mode (10ms vs 14ms) because:
         - No GPU→CPU copy
-        - No CPU→GPU copy  
+        - No CPU→GPU copy
         - Just pure CPU compute on shared memory
-        
+
         Benchmarks show this is 6.29x slower than Universal IPC,
         but 1.34x FASTER than Hybrid mode!
         """
-        from multiprocessing import shared_memory
         import numpy as np
         import torch
-        
-        safe_print(f"   💾 Using CPU SHM mode (zero-copy, no GPU transfers)")
-        
+
+        safe_print("   💾 Using CPU SHM mode (zero-copy, no GPU transfers)")
+
         # Convert tensor to CPU numpy
         input_cpu = input_tensor.cpu().numpy()
-        
+
         # Create output array on CPU
         dtype_map = {
-            'float32': np.float32,
-            'float64': np.float64,
-            'float16': np.float16,
-            'int32': np.int32,
-            'int64': np.int64,
+            "float32": np.float32,
+            "float64": np.float64,
+            "float16": np.float16,
+            "int32": np.int32,
+            "int64": np.int64,
         }
         np_dtype = dtype_map.get(output_dtype, np.float32)
-        
+
         try:
             # Use zero_copy execution (like Test 17)
             result_cpu, response = self.execute_zero_copy(
@@ -2799,283 +2920,332 @@ class DaemonClient:
                 input_array=input_cpu,
                 output_shape=output_shape,
                 output_dtype=np_dtype,
-                python_exe=python_exe or sys.executable
+                python_exe=python_exe or sys.executable,
             )
-            
-            if not response.get('success'):
+
+            if not response.get("success"):
                 raise RuntimeError(f"Worker Error: {response.get('error')}")
-            
-            safe_print(f"   ✅ CPU SHM mode completed")
-            
+
+            safe_print("   ✅ CPU SHM mode completed")
+
             # Convert result back to GPU tensor
             output_tensor = torch.from_numpy(result_cpu).to(input_tensor.device)
-            
+
             # Add method info to response
-            response['cuda_method'] = 'cpu_shm'
-            
+            response["cuda_method"] = "cpu_shm"
+
             return output_tensor, response
-            
+
         except Exception as e:
             safe_print(f"   ⚠️  CPU SHM failed: {e}")
             raise
 
-    def _execute_universal_ipc(self, spec, code, input_tensor, output_shape, output_dtype, python_exe):
+    def _execute_universal_ipc(
+        self, spec, code, input_tensor, output_shape, output_dtype, python_exe
+    ):
         """Universal CUDA IPC using ctypes (fastest, most compatible)."""
         import torch
+
         from omnipkg.isolation.worker_daemon import UniversalGpuIpc
-        
-        safe_print(f"   🔥 Using UNIVERSAL CUDA IPC (ctypes - TRUE ZERO-COPY)")
-        
+
+        safe_print("   🔥 Using UNIVERSAL CUDA IPC (ctypes - TRUE ZERO-COPY)")
+
         try:
             # Share input tensor using Universal IPC
             cuda_in_meta = {
-                'universal_ipc': UniversalGpuIpc.share(input_tensor),
-                'device': input_tensor.device.index
+                "universal_ipc": UniversalGpuIpc.share(input_tensor),
+                "device": input_tensor.device.index,
             }
-            
+
             # Create output tensor and share it
             dtype_map = {
-                'float32': torch.float32, 
-                'float64': torch.float64, 
-                'float16': torch.float16,
-                'int32': torch.int32,
-                'int64': torch.int64,
+                "float32": torch.float32,
+                "float64": torch.float64,
+                "float16": torch.float16,
+                "int32": torch.int32,
+                "int64": torch.int64,
             }
             torch_dtype = dtype_map.get(output_dtype, torch.float32)
             output_tensor = torch.empty(output_shape, dtype=torch_dtype, device=input_tensor.device)
-            
+
             cuda_out_meta = {
-                'universal_ipc': UniversalGpuIpc.share(output_tensor),
-                'device': output_tensor.device.index
+                "universal_ipc": UniversalGpuIpc.share(output_tensor),
+                "device": output_tensor.device.index,
             }
-            
+
             # Send to daemon
-            response = self._send({
-                'type': 'execute_cuda',
-                'spec': spec,
-                'code': code,
-                'cuda_in': cuda_in_meta,
-                'cuda_out': cuda_out_meta,
-                'python_exe': python_exe or sys.executable
-            })
-            
-            if not response.get('success'):
+            response = self._send(
+                {
+                    "type": "execute_cuda",
+                    "spec": spec,
+                    "code": code,
+                    "cuda_in": cuda_in_meta,
+                    "cuda_out": cuda_out_meta,
+                    "python_exe": python_exe or sys.executable,
+                }
+            )
+
+            if not response.get("success"):
                 raise RuntimeError(f"Worker Error: {response.get('error')}")
-            
-            actual_method = response.get('cuda_method', 'unknown')
-            if actual_method == 'universal_ipc':
-                safe_print(f"   🔥 Worker confirmed UNIVERSAL IPC (true zero-copy)!")
+
+            actual_method = response.get("cuda_method", "unknown")
+            if actual_method == "universal_ipc":
+                safe_print("   🔥 Worker confirmed UNIVERSAL IPC (true zero-copy)!")
             else:
                 safe_print(f"   ⚠️  Worker fell back to {actual_method}")
-            
+
             return output_tensor, response
-            
+
         except Exception as e:
             safe_print(f"   ⚠️  Universal IPC failed: {e}")
             raise
-    
-    def _execute_pytorch_native_ipc(self, spec, code, input_tensor, output_shape, output_dtype, python_exe):
+
+    def _execute_pytorch_native_ipc(
+        self, spec, code, input_tensor, output_shape, output_dtype, python_exe
+    ):
         """PyTorch 1.x native IPC (framework-managed)."""
         import torch
-        import base64
-        
-        safe_print(f"   🔥 Using PYTORCH NATIVE IPC (PyTorch 1.x)")
-        
+
+        safe_print("   🔥 Using PYTORCH NATIVE IPC (PyTorch 1.x)")
+
         try:
             # Share input tensor via native CUDA IPC
             input_storage = input_tensor.storage()
-            (storage_device, storage_handle, storage_size_bytes, storage_offset_bytes,
-             ref_counter_handle, ref_counter_offset, event_handle, event_sync_required) = input_storage._share_cuda_()
-            
+            (
+                storage_device,
+                storage_handle,
+                storage_size_bytes,
+                storage_offset_bytes,
+                ref_counter_handle,
+                ref_counter_offset,
+                event_handle,
+                event_sync_required,
+            ) = input_storage._share_cuda_()
+
             cuda_in_meta = {
-                'ipc_data': {
-                    'tensor_size': list(input_tensor.shape),
-                    'tensor_stride': list(input_tensor.stride()),
-                    'tensor_offset': input_tensor.storage_offset(),
-                    'storage_cls': type(input_storage).__name__,
-                    'dtype': str(input_tensor.dtype).replace('torch.', ''),
-                    'storage_device': storage_device,
-                    'storage_handle': base64.b64encode(storage_handle).decode('ascii'),
-                    'storage_size_bytes': storage_size_bytes,
-                    'storage_offset_bytes': storage_offset_bytes,
-                    'ref_counter_handle': base64.b64encode(ref_counter_handle).decode('ascii'),
-                    'ref_counter_offset': ref_counter_offset,
-                    'event_handle': base64.b64encode(event_handle).decode('ascii') if event_handle else '',
-                    'event_sync_required': event_sync_required
+                "ipc_data": {
+                    "tensor_size": list(input_tensor.shape),
+                    "tensor_stride": list(input_tensor.stride()),
+                    "tensor_offset": input_tensor.storage_offset(),
+                    "storage_cls": type(input_storage).__name__,
+                    "dtype": str(input_tensor.dtype).replace("torch.", ""),
+                    "storage_device": storage_device,
+                    "storage_handle": base64.b64encode(storage_handle).decode("ascii"),
+                    "storage_size_bytes": storage_size_bytes,
+                    "storage_offset_bytes": storage_offset_bytes,
+                    "ref_counter_handle": base64.b64encode(ref_counter_handle).decode("ascii"),
+                    "ref_counter_offset": ref_counter_offset,
+                    "event_handle": (
+                        base64.b64encode(event_handle).decode("ascii") if event_handle else ""
+                    ),
+                    "event_sync_required": event_sync_required,
                 },
-                'device': input_tensor.device.index
+                "device": input_tensor.device.index,
             }
-            
+
             # Create output tensor and share it
-            dtype_map = {'float32': torch.float32, 'float64': torch.float64, 'float16': torch.float16}
+            dtype_map = {
+                "float32": torch.float32,
+                "float64": torch.float64,
+                "float16": torch.float16,
+            }
             torch_dtype = dtype_map.get(output_dtype, torch.float32)
             output_tensor = torch.empty(output_shape, dtype=torch_dtype, device=input_tensor.device)
-            
+
             output_storage = output_tensor.storage()
-            (storage_device, storage_handle, storage_size_bytes, storage_offset_bytes,
-             ref_counter_handle, ref_counter_offset, event_handle, event_sync_required) = output_storage._share_cuda_()
-            
+            (
+                storage_device,
+                storage_handle,
+                storage_size_bytes,
+                storage_offset_bytes,
+                ref_counter_handle,
+                ref_counter_offset,
+                event_handle,
+                event_sync_required,
+            ) = output_storage._share_cuda_()
+
             cuda_out_meta = {
-                'ipc_data': {
-                    'tensor_size': list(output_tensor.shape),
-                    'tensor_stride': list(output_tensor.stride()),
-                    'tensor_offset': output_tensor.storage_offset(),
-                    'storage_cls': type(output_storage).__name__,
-                    'dtype': str(output_tensor.dtype).replace('torch.', ''),
-                    'storage_device': storage_device,
-                    'storage_handle': base64.b64encode(storage_handle).decode('ascii'),
-                    'storage_size_bytes': storage_size_bytes,
-                    'storage_offset_bytes': storage_offset_bytes,
-                    'ref_counter_handle': base64.b64encode(ref_counter_handle).decode('ascii'),
-                    'ref_counter_offset': ref_counter_offset,
-                    'event_handle': base64.b64encode(event_handle).decode('ascii') if event_handle else '',
-                    'event_sync_required': event_sync_required
+                "ipc_data": {
+                    "tensor_size": list(output_tensor.shape),
+                    "tensor_stride": list(output_tensor.stride()),
+                    "tensor_offset": output_tensor.storage_offset(),
+                    "storage_cls": type(output_storage).__name__,
+                    "dtype": str(output_tensor.dtype).replace("torch.", ""),
+                    "storage_device": storage_device,
+                    "storage_handle": base64.b64encode(storage_handle).decode("ascii"),
+                    "storage_size_bytes": storage_size_bytes,
+                    "storage_offset_bytes": storage_offset_bytes,
+                    "ref_counter_handle": base64.b64encode(ref_counter_handle).decode("ascii"),
+                    "ref_counter_offset": ref_counter_offset,
+                    "event_handle": (
+                        base64.b64encode(event_handle).decode("ascii") if event_handle else ""
+                    ),
+                    "event_sync_required": event_sync_required,
                 },
-                'device': output_tensor.device.index
+                "device": output_tensor.device.index,
             }
-            
-            response = self._send({
-                'type': 'execute_cuda',
-                'spec': spec,
-                'code': code,
-                'cuda_in': cuda_in_meta,
-                'cuda_out': cuda_out_meta,
-                'python_exe': python_exe or sys.executable
-            })
-            
-            if not response.get('success'):
+
+            response = self._send(
+                {
+                    "type": "execute_cuda",
+                    "spec": spec,
+                    "code": code,
+                    "cuda_in": cuda_in_meta,
+                    "cuda_out": cuda_out_meta,
+                    "python_exe": python_exe or sys.executable,
+                }
+            )
+
+            if not response.get("success"):
                 raise RuntimeError(f"Worker Error: {response.get('error')}")
-            
-            actual_method = response.get('cuda_method', 'unknown')
-            if actual_method == 'native_ipc':
-                safe_print(f"   🔥 Worker confirmed NATIVE IPC (PyTorch managed)!")
+
+            actual_method = response.get("cuda_method", "unknown")
+            if actual_method == "native_ipc":
+                safe_print("   🔥 Worker confirmed NATIVE IPC (PyTorch managed)!")
             else:
                 safe_print(f"   ⚠️  Worker fell back to {actual_method}")
-            
+
             return output_tensor, response
-            
+
         except Exception as e:
             safe_print(f"   ⚠️  PyTorch native IPC failed: {e}")
             raise
-    
-    
+
     def _execute_hybrid_ipc(self, spec, code, input_tensor, output_shape, output_dtype, python_exe):
         """
         Hybrid mode: Copy to CPU SHM, worker copies to GPU.
-        
+
         NOTE: Benchmarks show this is the SLOWEST mode (14ms vs 1.5ms Universal).
         Only use this for testing or when all other modes fail.
-        
+
         Prefer CPU_SHM mode over this (10ms vs 14ms) - it's faster!
         """
         from multiprocessing import shared_memory
+
         import numpy as np
         import torch
-        
-        safe_print(f"   🔄 Using HYBRID mode (CPU SHM + GPU copies) - SLOWEST MODE")
-        safe_print(f"   💡 Consider using cpu_shm mode instead (1.34x faster)")
-        
+
+        safe_print("   🔄 Using HYBRID mode (CPU SHM + GPU copies) - SLOWEST MODE")
+        safe_print("   💡 Consider using cpu_shm mode instead (1.34x faster)")
+
         # Copy tensor to CPU, share via SHM
         input_cpu = input_tensor.cpu().numpy()
-        
+
         shm_in = shared_memory.SharedMemory(create=True, size=input_cpu.nbytes)
         shm_in_array = np.ndarray(input_cpu.shape, dtype=input_cpu.dtype, buffer=shm_in.buf)
         shm_in_array[:] = input_cpu[:]
-        
+
         # Create output SHM
         output_cpu = np.zeros(output_shape, dtype=getattr(np, output_dtype))
         shm_out = shared_memory.SharedMemory(create=True, size=output_cpu.nbytes)
-        
+
         try:
             cuda_in_meta = {
-                'shm_name': shm_in.name,
-                'shape': tuple(input_tensor.shape),
-                'dtype': output_dtype,
-                'device': input_tensor.device.index
+                "shm_name": shm_in.name,
+                "shape": tuple(input_tensor.shape),
+                "dtype": output_dtype,
+                "device": input_tensor.device.index,
             }
-            
+
             cuda_out_meta = {
-                'shm_name': shm_out.name,
-                'shape': output_shape,
-                'dtype': output_dtype,
-                'device': input_tensor.device.index
+                "shm_name": shm_out.name,
+                "shape": output_shape,
+                "dtype": output_dtype,
+                "device": input_tensor.device.index,
             }
-            
-            response = self._send({
-                'type': 'execute_cuda',
-                'spec': spec,
-                'code': code,
-                'cuda_in': cuda_in_meta,
-                'cuda_out': cuda_out_meta,
-                'python_exe': python_exe or sys.executable
-            })
-            
-            if not response.get('success'):
+
+            response = self._send(
+                {
+                    "type": "execute_cuda",
+                    "spec": spec,
+                    "code": code,
+                    "cuda_in": cuda_in_meta,
+                    "cuda_out": cuda_out_meta,
+                    "python_exe": python_exe or sys.executable,
+                }
+            )
+
+            if not response.get("success"):
                 raise RuntimeError(f"Worker Error: {response.get('error')}")
-            
-            safe_print(f"   ✅ Hybrid mode completed")
-            
+
+            safe_print("   ✅ Hybrid mode completed")
+
             # Copy result back to GPU
             shm_out_array = np.ndarray(output_shape, dtype=output_cpu.dtype, buffer=shm_out.buf)
             output_tensor = torch.from_numpy(shm_out_array.copy()).to(input_tensor.device)
-            
+
             return output_tensor, response
-            
+
         finally:
-            try: 
+            try:
                 shm_in.close()
                 shm_in.unlink()
-            except: 
+            except:
                 pass
-            try: 
+            try:
                 shm_out.close()
                 shm_out.unlink()
-            except: 
+            except:
                 pass
-            
-    def execute_zero_copy(self, spec: str, code: str, input_array, output_shape, output_dtype, python_exe=None):
+
+    def execute_zero_copy(
+        self,
+        spec: str,
+        code: str,
+        input_array,
+        output_shape,
+        output_dtype,
+        python_exe=None,
+    ):
         """
         🚀 HFT MODE: Zero-Copy Tensor Handoff via Shared Memory.
         """
-        import numpy as np
         from multiprocessing import shared_memory
-        
+
+        import numpy as np
+
         shm_in = shared_memory.SharedMemory(create=True, size=input_array.nbytes)
-        
+
         start_shm = np.ndarray(input_array.shape, dtype=input_array.dtype, buffer=shm_in.buf)
-        start_shm[:] = input_array[:] 
-        
+        start_shm[:] = input_array[:]
+
         dummy = np.zeros(1, dtype=output_dtype)
         out_size = int(np.prod(output_shape)) * dummy.itemsize
         shm_out = shared_memory.SharedMemory(create=True, size=out_size)
-        
+
         try:
             in_meta = {
-                'name': shm_in.name,
-                'shape': input_array.shape,
-                'dtype': str(input_array.dtype)
+                "name": shm_in.name,
+                "shape": input_array.shape,
+                "dtype": str(input_array.dtype),
             }
-            
+
             out_meta = {
-                'name': shm_out.name,
-                'shape': output_shape,
-                'dtype': str(output_dtype)
+                "name": shm_out.name,
+                "shape": output_shape,
+                "dtype": str(output_dtype),
             }
-            
+
             # Pass python_exe to execute_shm
             response = self.execute_shm(spec, code, in_meta, out_meta, python_exe=python_exe)
-            
-            if not response.get('success'):
+
+            if not response.get("success"):
                 raise RuntimeError(f"Worker Error: {response.get('error')}")
-            
+
             result_view = np.ndarray(output_shape, dtype=output_dtype, buffer=shm_out.buf)
             return result_view.copy(), response
-            
+
         finally:
-            try: shm_in.close(); shm_in.unlink()
-            except: pass
-            try: shm_out.close(); shm_out.unlink()
-            except: pass
+            try:
+                shm_in.close()
+                shm_in.unlink()
+            except:
+                pass
+            try:
+                shm_out.close()
+                shm_out.unlink()
+            except:
+                pass
 
     def execute_smart(self, spec: str, code: str, data=None, python_exe=None):
         """
@@ -3085,49 +3255,49 @@ class DaemonClient:
         - Small Data → JSON (acceptable, ~10ms)
         """
         import numpy as np
-        
+
         # ═══════════════════════════════════════════════════════
         # GPU FAST PATH - CUDA IPC
         # ═══════════════════════════════════════════════════════
-        if data is not None and hasattr(data, 'is_cuda') and data.is_cuda:
-            import torch            
+        if data is not None and hasattr(data, "is_cuda") and data.is_cuda:
+
             # Assume code modifies tensor in-place or returns same shape/dtype
             output_shape = data.shape
-            output_dtype = str(data.dtype).split('.')[-1]  # "float32"
-            
+            output_dtype = str(data.dtype).split(".")[-1]  # "float32"
+
             result_tensor, meta = self.execute_cuda_ipc(
                 spec, code, data, output_shape, output_dtype, python_exe
             )
-            
+
             return {
-                'success': True,
-                'result': result_tensor,
-                'meta': meta,
-                'transport': 'CUDA_IPC',
-                'latency_us': '<5'  # Sub-microsecond handoff
+                "success": True,
+                "result": result_tensor,
+                "meta": meta,
+                "transport": "CUDA_IPC",
+                "latency_us": "<5",  # Sub-microsecond handoff
             }
-        
+
         # ═══════════════════════════════════════════════════════
         # CPU SHM PATH (Large Arrays)
         # ═══════════════════════════════════════════════════════
         SMART_THRESHOLD = 1024 * 64  # 64KB
-        
+
         if data is not None and isinstance(data, np.ndarray) and data.nbytes >= SMART_THRESHOLD:
             output_shape = data.shape
             output_dtype = data.dtype
-            
+
             result, meta = self.execute_zero_copy(
                 spec, code, data, output_shape, output_dtype, python_exe
             )
-            
+
             return {
-                'success': True,
-                'result': result,
-                'meta': meta,
-                'transport': 'SHM',
-                'latency_ms': '~5'
+                "success": True,
+                "result": result,
+                "meta": meta,
+                "transport": "SHM",
+                "latency_ms": "~5",
             }
-        
+
         # ═══════════════════════════════════════════════════════
         # JSON PATH (Small Data)
         # ═══════════════════════════════════════════════════════
@@ -3137,22 +3307,24 @@ class DaemonClient:
                 prefix = f"import numpy as np\narr_in = np.array({data.tolist()})\n"
             else:
                 prefix = f"arr_in = {json.dumps(data)}\n"
-        
+
         response = self.execute_shm(spec, prefix + code, {}, {}, python_exe=python_exe)
-        
-        if response.get('success'):
+
+        if response.get("success"):
             return {
-                'success': True,
-                'result': response.get('stdout', '').strip(),
-                'meta': response,
-                'transport': 'JSON',
-                'latency_ms': '~10'
+                "success": True,
+                "result": response.get("stdout", "").strip(),
+                "meta": response,
+                "transport": "JSON",
+                "latency_ms": "~10",
             }
-        
+
         return response
+
 
 class DaemonProxy:
     """Proxies calls from Loader to the Daemon via Socket/SHM"""
+
     def __init__(self, client, package_spec, python_exe=None):
         self.client = client
         self.spec = package_spec
@@ -3161,35 +3333,37 @@ class DaemonProxy:
 
     def execute(self, code: str):
         result = self.client.execute_shm(self.spec, code, shm_in={}, shm_out={})
-        
+
         # Transform daemon response to match loader.execute() format
-        if result.get('status') == 'COMPLETED':
+        if result.get("status") == "COMPLETED":
             return {
-                'success': True,
-                'stdout': result.get('stdout', ''),
-                'stderr': result.get('stderr', ''),
-                'locals': result.get('locals', '')
+                "success": True,
+                "stdout": result.get("stdout", ""),
+                "stderr": result.get("stderr", ""),
+                "locals": result.get("locals", ""),
             }
         else:
             return {
-                'success': False,
-                'error': result.get('error', 'Unknown daemon error'),
-                'traceback': result.get('traceback', '')
+                "success": False,
+                "error": result.get("error", "Unknown daemon error"),
+                "traceback": result.get("traceback", ""),
             }
 
     def get_version(self, package_name):
         code = f"import importlib.metadata; result = {{'version': importlib.metadata.version('{package_name}'), 'path': __import__('{package_name}').__file__}}"
         res = self.execute(code)
-        if res.get('success'):
-            return {'success': True, 'version': 'unknown', 'path': 'daemon'}
-        return {'success': False, 'error': res.get('error')}
+        if res.get("success"):
+            return {"success": True, "version": "unknown", "path": "daemon"}
+        return {"success": False, "error": res.get("error")}
 
     def shutdown(self):
         pass
 
+
 # ═══════════════════════════════════════════════════════════════
 # 5. CLI FUNCTIONS
 # ═══════════════════════════════════════════════════════════════
+
 
 def cli_start():
     """Start the daemon with status checks."""
@@ -3200,25 +3374,22 @@ def cli_start():
         return
 
     safe_print("🚀 Initializing OmniPkg Worker Daemon...", end=" ", flush=True)
-    
+
     # Initialize
-    daemon = WorkerPoolDaemon(
-        max_workers=10,
-        max_idle_time=300,
-        warmup_specs=[]
-    )
-    
+    daemon = WorkerPoolDaemon(max_workers=10, max_idle_time=300, warmup_specs=[])
+
     # Start (The parent process will print "✅" and exit inside this call)
     try:
         daemon.start(daemonize=True)
     except Exception as e:
         safe_print(f"\n❌ Failed to start: {e}")
 
+
 def cli_stop():
     """Stop the daemon."""
     client = DaemonClient()
     result = client.shutdown()
-    if result.get('success'):
+    if result.get("success"):
         safe_print("✅ Daemon stopped")
         try:
             os.unlink(PID_FILE)
@@ -3227,48 +3398,52 @@ def cli_stop():
     else:
         safe_print(f"❌ Failed to stop: {result.get('error', 'Unknown error')}")
 
+
 def cli_status():
     """Get daemon status."""
     if not WorkerPoolDaemon.is_running():
         safe_print("❌ Daemon not running")
         return
-    
+
     client = DaemonClient()
     result = client.status()
-    
-    if not result.get('success'):
+
+    if not result.get("success"):
         safe_print(f"❌ Error: {result.get('error', 'Unknown error')}")
         return
-    
-    print("\n" + "="*60)
+
+    print("\n" + "=" * 60)
     safe_print("🔥 OMNIPKG WORKER DAEMON STATUS")
-    print("="*60)
+    print("=" * 60)
     print(f"  Workers: {result.get('workers', 0)}")
-    
+
     # 🔥 FIX: Handle missing psutil gracefully
-    memory_percent = result.get('memory_percent', -1)
+    memory_percent = result.get("memory_percent", -1)
     if memory_percent >= 0:
         print(f"  Memory Usage: {memory_percent:.1f}%")
     else:
-        print(f"  Memory Usage: N/A (psutil not installed)")
-    
+        print("  Memory Usage: N/A (psutil not installed)")
+
     print(f"  Total Requests: {result['stats']['total_requests']}")
     print(f"  Cache Hits: {result['stats']['cache_hits']}")
     print(f"  Errors: {result['stats']['errors']}")
-    
-    if result.get('worker_details'):
+
+    if result.get("worker_details"):
         safe_print("\n  📦 Active Workers:")
-        for spec, info in result['worker_details'].items():
-            idle = time.time() - info['last_used']
+        for spec, info in result["worker_details"].items():
+            idle = time.time() - info["last_used"]
             print(f"    - {spec}")
-            print(f"      Requests: {info['request_count']}, Idle: {idle:.0f}s, Failures: {info['health_failures']}")
-    
-    print("="*60 + "\n")
+            print(
+                f"      Requests: {info['request_count']}, Idle: {idle:.0f}s, Failures: {info['health_failures']}"
+            )
+
+    print("=" * 60 + "\n")
+
 
 def cli_logs(follow: bool = False, tail_lines: int = 50):
     """View or follow the daemon logs."""
     from pathlib import Path
-    
+
     log_path = Path(DAEMON_LOG_FILE)
     if not log_path.exists():
         safe_print(f"❌ Log file not found at: {log_path}")
@@ -3277,45 +3452,46 @@ def cli_logs(follow: bool = False, tail_lines: int = 50):
 
     safe_print(f"📄 Tailing {log_path} (last {tail_lines} lines)...")
     print("-" * 60)
-    
+
     try:
-        with open(log_path, 'r', encoding='utf-8', errors='replace') as f:
+        with open(log_path, "r", encoding="utf-8", errors="replace") as f:
             # 1. Efficiently read last N lines
             f.seek(0, 2)
             file_size = f.tell()
-            
+
             # Heuristic: average line ~150 bytes
             block_size = max(4096, tail_lines * 200)
-            
+
             if file_size > block_size:
                 f.seek(file_size - block_size)
                 f.readline()  # Discard potential partial line
             else:
                 f.seek(0)
-            
+
             # Print the tail
             lines = f.readlines()
             for line in lines[-tail_lines:]:
-                print(line, end='')
-                
+                print(line, end="")
+
             # 2. Follow mode (tail -f)
             if follow:
                 print("-" * 60)
                 safe_print("📡 Following logs... (Ctrl+C to stop)")
-                
+
                 f.seek(0, 2)  # Seek to end
-                
+
                 while True:
                     line = f.readline()
                     if line:
-                        print(line, end='', flush=True)
+                        print(line, end="", flush=True)
                     else:
                         time.sleep(0.1)
-                        
+
     except KeyboardInterrupt:
         safe_print("\n🛑 Stopped following logs.")
     except Exception as e:
         safe_print(f"\n❌ Error reading logs: {e}")
+
 
 # ═══════════════════════════════════════════════════════════════
 # CLI ENTRY
@@ -3323,50 +3499,48 @@ def cli_logs(follow: bool = False, tail_lines: int = 50):
 
 if __name__ == "__main__":
     import sys
-    
+
     if len(sys.argv) < 2:
         print("Usage: python -m omnipkg.isolation.worker_daemon {start|stop|status|logs}")
         sys.exit(1)
-    
+
     cmd = sys.argv[1]
-    
+
     if cmd == "start":
         # 🔥 FIX: Check for --no-fork flag (Windows internal use)
         no_fork = "--no-fork" in sys.argv
-        
+
         if no_fork:
             # Direct start without fork (for Windows subprocess spawn)
-            daemon = WorkerPoolDaemon(
-                max_workers=10,
-                max_idle_time=300,
-                warmup_specs=[]
-            )
+            daemon = WorkerPoolDaemon(max_workers=10, max_idle_time=300, warmup_specs=[])
             daemon.start(daemonize=False)
         else:
             cli_start()
-    
+
     elif cmd == "stop":
         cli_stop()
     elif cmd == "status":
         cli_status()
     elif cmd == "logs":
         follow = "-f" in sys.argv or "--follow" in sys.argv
-        cli_logs(follow=follow)      
+        cli_logs(follow=follow)
     # vvvvvvv ADD THIS vvvvvvv
     elif cmd == "monitor":
         watch = "-w" in sys.argv or "--watch" in sys.argv
         try:
             from omnipkg.isolation.resource_monitor import start_monitor
+
             start_monitor(watch_mode=watch)
         except ImportError:
             # Fallback for direct execution without package context
             try:
                 from resource_monitor import start_monitor
+
                 start_monitor(watch_mode=watch)
             except ImportError:
                 print("❌ resource_monitor module not found.")
                 sys.exit(1)
-    # ^^^^^^^^^^^^^^^^^^^^^^^^ 
+    # ^^^^^^^^^^^^^^^^^^^^^^^^
     else:
         print(f"Unknown command: {cmd}")
         sys.exit(1)

@@ -1,16 +1,18 @@
-import sys
-import os
 import json
-import subprocess
-import threading
+import os
 import queue
+import subprocess
+import sys
+import threading
 from pathlib import Path
+
 
 class PersistentWorker:
     """
     A persistent subprocess that acts as a specific package environment.
     Provides REAL-TIME output streaming.
     """
+
     def __init__(self, package_spec: str, verbose: bool = False):
         self.package_spec = package_spec
         self.verbose = verbose
@@ -23,10 +25,10 @@ class PersistentWorker:
         # Calculate root path FIRST
         current_file = Path(__file__).resolve()
         src_root = str(current_file.parent.parent.parent)
-        
+
         # Store package_spec in local variable for f-string
         package_spec = self.package_spec
-        
+
         # Build worker code WITH all variables available
         worker_code = f"""
 import sys
@@ -155,7 +157,8 @@ except:
 
         # Setup environment with worker flag
         env = os.environ.copy()
-        env["OMNIPKG_IS_WORKER_PROCESS"] = "1"  # Prevent infinite worker recursion
+        # Prevent infinite worker recursion
+        env["OMNIPKG_IS_WORKER_PROCESS"] = "1"
 
         # CRITICAL: Disable buffering in subprocess
         # NOW worker_code is defined, so we can use it!
@@ -166,7 +169,7 @@ except:
             stderr=subprocess.PIPE,
             bufsize=0,
             text=True,
-            env=env
+            env=env,
         )
 
         # Start logging thread
@@ -179,7 +182,7 @@ except:
             if not line:
                 raise RuntimeError("Worker process died immediately.")
             data = json.loads(line)
-            if data.get('status') != 'ready':
+            if data.get("status") != "ready":
                 raise RuntimeError(f"Worker initialization failed: {data}")
         except Exception as e:
             self._stop_logging.set()
@@ -210,11 +213,11 @@ except:
     def _send(self, payload: dict) -> dict:
         if self.process.poll() is not None:
             return {"success": False, "error": "Process is dead"}
-        
+
         try:
             self.process.stdin.write(json.dumps(payload) + "\n")
             self.process.stdin.flush()
-            
+
             response = self.process.stdout.readline()
             if not response:
                 return {"success": False, "error": "No response"}
