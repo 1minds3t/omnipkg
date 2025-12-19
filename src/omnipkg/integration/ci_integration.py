@@ -1,3 +1,14 @@
+from __future__ import annotations
+
+import sys
+from typing import List, Optional
+
+import typer
+
+app = typer.Typer()
+
+from omnipkg.common_utils import safe_print
+
 """
 Integration guide for adding CLI execution support to omnipkg
 
@@ -5,18 +16,19 @@ Add these commands to your main CLI handler (cli.py)
 """
 
 # In your cli.py, add these imports:
-from omnipkg.cli_executor import CLIExecutor, handle_run_command
+from omnipkg.cli_executor import handle_run_command
 from omnipkg.omnipkg_activate import cmd_activate, cmd_deactivate
+
 
 # Then enhance your run command:
 @app.command()
 def run(
     command: str = typer.Argument(..., help="Command or script to run"),
-    args: List[str] = typer.Argument(None, help="Arguments to pass to the command")
+    args: List[str] = typer.Argument(None, help="Arguments to pass to the command"),
 ):
     """
     Run a command or script with automatic conflict resolution
-    
+
     Examples:
         8pkg run script.py --arg1 --arg2
         8pkg run lollama start-mining
@@ -24,7 +36,7 @@ def run(
         8pkg run pytest tests/
     """
     import sys
-    
+
     # Combine command and args for execution
     all_args = [command] + (args or [])
     exit_code = handle_run_command(all_args)
@@ -33,24 +45,23 @@ def run(
 
 # Add activation commands:
 @app.command()
-def activate(
-    shell: Optional[str] = typer.Option(None, help="Shell type (bash, zsh)")
-):
+def activate(shell: Optional[str] = typer.Option(None, help="Shell type (bash, zsh)")):
     """
     Activate omnipkg environment for transparent conflict resolution
-    
+
     Once activated, ALL CLI commands automatically resolve conflicts.
     You never need to prefix commands with '8pkg run' again!
-    
+
     Example:
         8pkg activate
         source ~/.omnipkg/active_env/activate.bash
-        
+
         # Now just use commands normally:
         lollama start-mining  # Auto-heals conflicts!
         black .               # Auto-heals conflicts!
     """
     import sys
+
     sys.exit(cmd_activate([shell] if shell else []))
 
 
@@ -59,11 +70,13 @@ def deactivate():
     """
     Deactivate and clean up omnipkg environment
     """
-    import sys
+
+
 try:
     from .common_utils import safe_print
 except ImportError:
     from omnipkg.common_utils import safe_print
+
     sys.exit(cmd_deactivate([]))
 
 
@@ -73,14 +86,14 @@ def status():
     """Show omnipkg environment status"""
     import os
     from pathlib import Path
-    
-    is_active = os.environ.get('OMNIPKG_ACTIVE') == '1'
+
+    is_active = os.environ.get("OMNIPKG_ACTIVE") == "1"
     env_dir = Path.home() / ".omnipkg" / "active_env"
-    
+
     if is_active:
         safe_print("✅ Omnipkg environment is ACTIVE")
         print(f"   Wrappers directory: {env_dir / 'bin'}")
-        
+
         # Count wrappers
         bin_dir = env_dir / "bin"
         if bin_dir.exists():
@@ -88,12 +101,12 @@ def status():
             print(f"   Active wrappers: {wrapper_count}")
     else:
         safe_print("⏹️  Omnipkg environment is NOT active")
-        
+
         if env_dir.exists():
             print(f"   (Environment exists at {env_dir})")
-            print(f"   Run: 8pkg activate")
+            print("   Run: 8pkg activate")
         else:
-            print(f"   Run: 8pkg activate  # to create environment")
+            print("   Run: 8pkg activate  # to create environment")
 
 
 """
