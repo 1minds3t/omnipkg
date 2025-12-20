@@ -226,12 +226,3 @@ jobs:
           git add platform-support.json arch-support.json
           git diff --staged --quiet || git commit -m "Update platform support badges [skip ci]"
           git push
-```
-
-**Key changes:**
-1. ✅ **Podman on self-hosted** - Won't touch iptables, safe for Tailscale
-2. ✅ **Docker split into 3 jobs on GitHub runners** - Avoids memory/space issues
-3. ✅ **Minimal distros on self-hosted** - Just Debian, Ubuntu, Fedora via Podman
-4. ✅ **Heavy testing on GitHub** - RHEL, Rocky, Alma, Arch, Alpine via Docker
-
-Your self-hosted runner stays safe, GitHub does the heavy lifting!
