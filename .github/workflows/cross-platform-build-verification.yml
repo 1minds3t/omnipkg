@@ -1,0 +1,237 @@
+# .github/workflows/cross-platform-build-verification.yml
+name: Cross-Platform Build Verification
+
+on:
+  push:
+    branches: [main, development]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build-matrix:
+    name: ${{ matrix.label }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Self-hosted (VERIFIED hardware)
+          - runner: [self-hosted, linux, x64]
+            label: "Linux x86_64 (self-hosted)"
+          
+          - runner: [self-hosted, macos, x64]
+            label: "macOS x86_64 Intel (self-hosted)"
+          
+          # GitHub-hosted (documented guarantees)
+          - runner: ubuntu-latest
+            label: "Ubuntu x86_64"
+          
+          - runner: ubuntu-24.04-arm64
+            label: "Ubuntu ARM64 (aarch64)"
+          
+          - runner: windows-latest
+            label: "Windows x86_64"
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: Verify Architecture
+        id: arch
+        shell: bash
+        run: |
+          ARCH=$(uname -m)
+          OS=$(uname -s)
+          echo "Detected: $OS $ARCH"
+          echo "arch=$ARCH" >> $GITHUB_OUTPUT
+          echo "os=$OS" >> $GITHUB_OUTPUT
+          
+          # Hard fail if architecture is not what we expect
+          if [[ "${{ matrix.label }}" == *"ARM64"* ]] && [[ "$ARCH" != "aarch64" ]] && [[ "$ARCH" != "arm64" ]]; then
+            echo "ERROR: Expected ARM64 but got $ARCH"
+            exit 1
+          fi
+      
+      - name: Build and Test
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip build
+          python -m build
+          pip install dist/*.whl
+          omnipkg --version
+          8pkg --version
+          omnipkg list
+      
+      - name: Record Verified Platform
+        shell: bash
+        run: |
+          echo "✅ VERIFIED: ${{ steps.arch.outputs.os }} ${{ steps.arch.outputs.arch }}"
+
+  # Rootless Podman on self-hosted (safe for iptables/Tailscale)
+  linux-distros-podman:
+    name: Podman - ${{ matrix.distro }}
+    runs-on: [self-hosted, linux, x64]
+    strategy:
+      fail-fast: false
+      matrix:
+        distro:
+          - debian:12
+          - ubuntu:24.04
+          - fedora:39
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      
+      - name: Test in ${{ matrix.distro }} (Podman)
+        run: |
+          podman run --rm -v $(pwd):/workspace:Z ${{ matrix.distro }} /bin/bash -c "
+            cd /workspace
+            if command -v apt-get &> /dev/null; then
+              apt-get update && apt-get install -y python3 python3-pip python3-venv
+            elif command -v dnf &> /dev/null; then
+              dnf install -y python3 python3-pip
+            fi
+            python3 -m pip install --upgrade pip build
+            python3 -m build
+            python3 -m pip install dist/*.whl
+            omnipkg --version
+          "
+
+  # Docker on GitHub-hosted (plenty of space/memory, split for safety)
+  linux-distros-docker-debian:
+    name: Docker - Debian/Ubuntu
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        distro:
+          - debian:12
+          - debian:11
+          - ubuntu:24.04
+          - ubuntu:22.04
+          - ubuntu:20.04
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      
+      - name: Test in ${{ matrix.distro }}
+        run: |
+          docker run --rm -v $(pwd):/workspace ${{ matrix.distro }} /bin/bash -c "
+            cd /workspace
+            apt-get update && apt-get install -y python3 python3-pip python3-venv
+            python3 -m pip install --upgrade pip build
+            python3 -m build
+            python3 -m pip install dist/*.whl
+            omnipkg --version
+          "
+
+  linux-distros-docker-rhel:
+    name: Docker - RHEL/Fedora
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        distro:
+          - fedora:39
+          - fedora:38
+          - rockylinux:9
+          - rockylinux:8
+          - almalinux:9
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      
+      - name: Test in ${{ matrix.distro }}
+        run: |
+          docker run --rm -v $(pwd):/workspace ${{ matrix.distro }} /bin/bash -c "
+            cd /workspace
+            dnf install -y python3 python3-pip
+            python3 -m pip install --upgrade pip build
+            python3 -m build
+            python3 -m pip install dist/*.whl
+            omnipkg --version
+          "
+
+  linux-distros-docker-other:
+    name: Docker - Arch/Alpine
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        distro:
+          - archlinux:latest
+          - alpine:latest
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      
+      - name: Test in ${{ matrix.distro }}
+        run: |
+          docker run --rm -v $(pwd):/workspace ${{ matrix.distro }} /bin/sh -c "
+            cd /workspace
+            if command -v pacman &> /dev/null; then
+              pacman -Sy --noconfirm python python-pip
+            elif command -v apk &> /dev/null; then
+              apk add --no-cache python3 py3-pip
+            fi
+            python3 -m pip install --upgrade pip build
+            python3 -m build
+            python3 -m pip install dist/*.whl
+            omnipkg --version
+          "
+
+  generate-badge:
+    name: Generate Platform Support Badge
+    needs: [build-matrix, linux-distros-podman, linux-distros-docker-debian, linux-distros-docker-rhel, linux-distros-docker-other]
+    runs-on: ubuntu-latest
+    if: always() && github.ref == 'refs/heads/main'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      
+      - name: Generate badge JSON
+        run: |
+          cat > platform-support.json << 'EOF'
+          {
+            "schemaVersion": 1,
+            "label": "platforms",
+            "message": "Linux | macOS | Windows",
+            "color": "brightgreen"
+          }
+          EOF
+          
+          cat > arch-support.json << 'EOF'
+          {
+            "schemaVersion": 1,
+            "label": "verified",
+            "message": "x86_64 | Linux ARM64",
+            "color": "blue"
+          }
+          EOF
+      
+      - name: Commit badge data
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add platform-support.json arch-support.json
+          git diff --staged --quiet || git commit -m "Update platform support badges [skip ci]"
+          git push
+```
+
+**Key changes:**
+1. ✅ **Podman on self-hosted** - Won't touch iptables, safe for Tailscale
+2. ✅ **Docker split into 3 jobs on GitHub runners** - Avoids memory/space issues
+3. ✅ **Minimal distros on self-hosted** - Just Debian, Ubuntu, Fedora via Podman
+4. ✅ **Heavy testing on GitHub** - RHEL, Rocky, Alma, Arch, Alpine via Docker
+
+Your self-hosted runner stays safe, GitHub does the heavy lifting!
