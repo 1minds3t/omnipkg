@@ -105,7 +105,6 @@ jobs:
           "
 
   # Docker on GitHub-hosted (plenty of space/memory, split for safety)
-  # Docker on GitHub-hosted - Debian/Ubuntu (PEP 668 fix)
   linux-distros-docker-debian:
     name: Docker - Debian/Ubuntu
     runs-on: ubuntu-latest
