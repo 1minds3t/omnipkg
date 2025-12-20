@@ -1,0 +1,60 @@
+# .github/workflows/sync-main-to-development.yml
+name: Sync Main to Development
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+        token: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: Configure Git
+      run: |
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+    
+    - name: Check if Development Needs Sync
+      id: check
+      run: |
+        git fetch origin development
+        
+        # Check if main has commits that development doesn't
+        COMMITS_AHEAD=$(git rev-list origin/development..origin/main --count)
+        
+        echo "Main is $COMMITS_AHEAD commits ahead of development"
+        
+        if [ "$COMMITS_AHEAD" -eq 0 ]; then
+          echo "needs_sync=false" >> $GITHUB_OUTPUT
+        else
+          echo "needs_sync=true" >> $GITHUB_OUTPUT
+        fi
+    
+    - name: Sync Main to Development
+      if: steps.check.outputs.needs_sync == 'true'
+      run: |
+        git checkout development
+        git pull origin development
+        
+        # Try fast-forward first
+        if git merge origin/main --ff-only 2>/dev/null; then
+          echo "✅ Fast-forward merge successful"
+        else
+          # If fast-forward fails, use regular merge
+          echo "Fast-forward not possible, using regular merge..."
+          git merge origin/main -m "Sync main → development (auto-merge conflict fixes)"
+        fi
+        
+        git push origin development
+        echo "✅ Development synced with main"
