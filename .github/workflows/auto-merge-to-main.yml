@@ -252,6 +252,36 @@ jobs:
         fi
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Sync Main Back to Development
+      if: steps.check.outputs.should_merge == 'true' && steps.check_merged.outputs.already_merged == 'false'
+      run: |
+        echo "Syncing main back to development to prevent future conflicts..."
+        
+        git fetch origin main
+        git checkout development
+        git pull origin development
+        
+        # Check if development needs sync
+        COMMITS_BEHIND=$(git rev-list development..origin/main --count)
+        
+        if [ "$COMMITS_BEHIND" -eq 0 ]; then
+          echo "✅ Development already in sync"
+          exit 0
+        fi
+        
+        echo "Development is $COMMITS_BEHIND commits behind main - syncing..."
+        
+        if git merge origin/main --ff-only 2>/dev/null; then
+          echo "✅ Fast-forward merge successful"
+        else
+          git merge origin/main -m "Sync main → development after auto-merge"
+        fi
+        
+        git push origin development
+        echo "✅ Development synced with main"
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     
     - name: Create PR for Manual Review (Failed Commits in History)
       if: |
