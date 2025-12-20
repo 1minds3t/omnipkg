@@ -105,6 +105,7 @@ jobs:
           "
 
   # Docker on GitHub-hosted (plenty of space/memory, split for safety)
+  # Docker on GitHub-hosted - Debian/Ubuntu (PEP 668 fix)
   linux-distros-docker-debian:
     name: Docker - Debian/Ubuntu
     runs-on: ubuntu-latest
@@ -127,9 +128,12 @@ jobs:
           docker run --rm -v $(pwd):/workspace ${{ matrix.distro }} /bin/bash -c "
             cd /workspace
             apt-get update && apt-get install -y python3 python3-pip python3-venv
-            python3 -m pip install --upgrade pip build
+            
+            # Use --break-system-packages for CI (safe in disposable container)
+            python3 -m pip install --break-system-packages --upgrade pip build
             python3 -m build
-            python3 -m pip install dist/*.whl
+            python3 -m pip install --break-system-packages dist/*.whl
+            
             omnipkg --version
           "
 
@@ -181,15 +185,17 @@ jobs:
             cd /workspace
             if command -v pacman &> /dev/null; then
               pacman -Sy --noconfirm python python-pip
+              python -m pip install --break-system-packages --upgrade pip build
+              python -m build
+              python -m pip install --break-system-packages dist/*.whl
             elif command -v apk &> /dev/null; then
-              apk add --no-cache python3 py3-pip
+              apk add --no-cache python3 py3-pip py3-build
+              python3 -m build
+              python3 -m pip install --break-system-packages dist/*.whl
             fi
-            python3 -m pip install --upgrade pip build
-            python3 -m build
-            python3 -m pip install dist/*.whl
             omnipkg --version
           "
-
+          
   generate-badge:
     name: Generate Platform Support Badge
     needs: [build-matrix, linux-distros-podman, linux-distros-docker-debian, linux-distros-docker-rhel, linux-distros-docker-other]
