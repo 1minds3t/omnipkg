@@ -43,43 +43,43 @@ dependencies = [
     "rich>=10.0.0",
 
     # --- Filelock Security Split (CVE-2025-68146) ---
-    # The fix (3.20.1) requires Python 3.10+. Older Pythons get the latest compatible version.
     "filelock>=3.20.1; python_version >= '3.10'",
     "filelock>=3.13,<3.20.1; python_version >= '3.8' and python_version < '3.10'",
     "filelock>=3.12,<3.13; python_version < '3.8'",
     
-    # Python 3.7-3.9: Need older packaging + backports
+    # Packaging version splits
     "packaging>=20.0,<21.0; python_version < '3.8'",
     "packaging>=21.0,<22.0; python_version >= '3.8' and python_version < '3.10'",
     "packaging>=23.0; python_version >= '3.10'",
     
-    # Python 3.7-3.10 need tomli (tomllib is built-in for 3.11+)
+    # tomli backport for Python < 3.11
     "tomli>=1.0.0; python_version < '3.11'",
     
-    # Python 3.7-3.9: Need typing extensions backports
+    # typing-extensions backport
     "typing-extensions>=4.0.0; python_version < '3.10'",
     
-    # importlib-metadata backport for Python < 3.8
+    # importlib-metadata backport
     "importlib-metadata>=1.0; python_version < '3.8'",
     
-    # dataclasses backport for Python 3.7
+    # dataclasses backport
     "dataclasses>=0.8; python_version == '3.7'",
     
-    # authlib with Python 3.7 compatibility
+    # authlib
     "authlib>=1.2.0; python_version >= '3.7'",
     
-    # aiohttp 3.13+ requires Python 3.8+, use older version for 3.7
+    # aiohttp - FIXED VERSION REQUIREMENTS
     "aiohttp>=3.7.0,<3.9.0; python_version == '3.7'",
-    "aiohttp>=3.13.1; python_version >= '3.8'",
+    "aiohttp>=3.8.0,<3.11.0; python_version == '3.8'",  # <- FIXED: 3.8 can't use 3.13+
+    "aiohttp>=3.13.1; python_version >= '3.9'",         # <- FIXED: 3.13+ needs 3.9+
     
-    # Safety: different versions for different Python versions
+    # Safety
     "safety>=2.0.0,<3.0; python_version < '3.10'",
     "safety>=3.0; python_version >= '3.10' and python_version < '3.14'",
     
     # pip-audit only for 3.14+
     "pip-audit>=2.6.0; python_version >= '3.14'",
     
-    # uv: Check minimum Python version
+    # uv
     "uv>=0.9.6; python_version >= '3.8'",
 ]
 
