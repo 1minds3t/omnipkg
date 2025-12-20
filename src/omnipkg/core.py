@@ -12775,11 +12775,9 @@ class omnipkg:
             final_versions_on_disk = {inst.get("Version") for inst in post_deletion_installations}
             versions_to_check = {item.get("Version") for item in final_to_uninstall}
 
-            for pkg_version in versions_to_check:
-                if pkg_version not in final_versions_on_disk:
-                    safe_print(
-                        f"   -> Last instance of v{version} removed. Updating package version list."
-                    )
+            for version in versions_to_check:
+                if version not in final_versions_on_disk:
+                    safe_print(f"   -> Last instance of v{version} removed. Updating package version list.")
                     main_key = f"{self.redis_key_prefix}{c_name}"
                     versions_set_key = f"{main_key}:installed_versions"
                     self.cache_client.srem(versions_set_key, version)
