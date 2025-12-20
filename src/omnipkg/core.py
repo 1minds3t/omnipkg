@@ -12776,11 +12776,6 @@ class omnipkg:
             for version in versions_to_check:
                 if version not in final_versions_on_disk:
                     safe_print(f"   -> Last instance of v{version} removed. Updating package version list.")
-                if version not in final_versions_on_disk:
-                    safe_print(f"   -> Last instance of v{version} removed. Updating package version list.")
-                    self.cache_client.srem(versions_set_key, version)
-
-            if not post_deletion_installations:
                 safe_print(
                     f"   -> No installations of '{c_name}' remain. Removing package from KB index."
                 )
