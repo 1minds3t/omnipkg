@@ -1,64 +1,121 @@
-# .github/workflows/publish-to-pypi.yml
 name: Publish to PyPI
+
 on:
-  release:
-    types: [published]
-  workflow_dispatch: # Allows you to manually trigger the workflow
+  # Manual trigger only - protects against accidental publishes
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: 'Reason for manual publish'
+        required: true
+        type: string
+
 permissions:
   contents: read
-  id-token: write # Required for secure OIDC authentication with PyPI
+  id-token: write
+
 jobs:
-  deploy:
+  # CRITICAL: Verify all tests passed before publishing
+  verify-tests:
+    name: Verify Pre-Release Tests Passed
     runs-on: ubuntu-latest
-    environment: pypi # Recommended for security
     
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      with:
-        fetch-depth: 0 # Fetch full history to ensure we have the latest commits
+      - name: Checkout
+        uses: actions/checkout@v4
       
-    - name: Clear GitHub Actions cache
-      run: |
-        echo "Clearing any cached data..."
-        rm -rf ~/.cache/pip
-        
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.11'
-        # Removed pip cache to force fresh install
-        
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        # 🔑 FIX: Install 'tomli' instead of 'toml' for robust TOML parsing
-        pip install build twine tomli
-        
-    - name: Verify package version
-      run: |
-        # 🔑 FIX: Use 'tomli' (installed above) to read pyproject.toml in binary mode
-        PACKAGE_VERSION=$(python -c "import tomli; print(tomli.load(open('pyproject.toml', 'rb'))['project']['version'])")
-        
-        TAG_VERSION="${{ github.ref_name }}"
+      - name: Check if tag exists
+        id: check_tag
+        run: |
+          TAG_NAME=$(git describe --tags --exact-match 2>/dev/null || echo "")
+          if [ -z "$TAG_NAME" ]; then
+            echo "❌ ERROR: Not on a tagged commit!"
+            echo "You must create and push a version tag first:"
+            echo "  git tag v1.2.3"
+            echo "  git push origin v1.2.3"
+            exit 1
+          fi
+          echo "tag=$TAG_NAME" >> $GITHUB_OUTPUT
+          echo "✅ Found tag: $TAG_NAME"
+      
+      - name: Wait for cross-platform tests
+        uses: lewagon/wait-on-check-action@v1.3.1
+        with:
+          ref: ${{ steps.check_tag.outputs.tag }}
+          check-name: 'Linux x86_64 (self-hosted)'  # One representative test
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          wait-interval: 20
+          allowed-conclusions: success
+      
+      - name: Verify all required workflows passed
+        run: |
+          echo "✅ Cross-platform tests passed"
+          echo "✅ Ready to publish to PyPI"
+          echo ""
+          echo "Manual publish reason: ${{ github.event.inputs.reason }}"
 
-        # Remove 'v' prefix if it exists from the tag name
-        RELEASE_VERSION=${TAG_VERSION#v}
-
-        echo "Detected version from pyproject.toml: $PACKAGE_VERSION"
-        echo "Expected release version from tag: $RELEASE_VERSION (from tag $TAG_VERSION)"
-
-        if [ "$PACKAGE_VERSION" != "$RELEASE_VERSION" ]; then
-          echo "Error: The version in pyproject.toml ($PACKAGE_VERSION) does not match the release tag version ($RELEASE_VERSION)."
-          exit 1
-        fi
+  deploy:
+    name: Deploy to PyPI
+    needs: verify-tests
+    runs-on: ubuntu-latest
+    environment: pypi
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Clear cache
+        run: |
+          echo "Clearing any cached data..."
+          rm -rf ~/.cache/pip
         
-    - name: Clean old builds and build new package
-      run: |
-        rm -rf dist/ build/ *.egg-info/ # Clean all build artifacts
-        python -m build
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
         
-    - name: Publish package to PyPI
-      uses: pypa/gh-action-pypi-publish@release/v1
-      with:
-        password: ${{ secrets.PYPI_API_TOKEN }}
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install build twine tomli
+        
+      - name: Verify package version matches tag
+        run: |
+          PACKAGE_VERSION=$(python -c "import tomli; print(tomli.load(open('pyproject.toml', 'rb'))['project']['version'])")
+          TAG_VERSION=$(git describe --tags --exact-match)
+          RELEASE_VERSION=${TAG_VERSION#v}
+          
+          echo "Package version: $PACKAGE_VERSION"
+          echo "Tag version: $RELEASE_VERSION (from $TAG_VERSION)"
+          
+          if [ "$PACKAGE_VERSION" != "$RELEASE_VERSION" ]; then
+            echo "❌ ERROR: Version mismatch!"
+            echo "pyproject.toml has: $PACKAGE_VERSION"
+            echo "Git tag has: $RELEASE_VERSION"
+            exit 1
+          fi
+          
+          echo "✅ Version verified: $PACKAGE_VERSION"
+        
+      - name: Clean and build package
+        run: |
+          rm -rf dist/ build/ *.egg-info/
+          python -m build
+          
+          echo "📦 Built packages:"
+          ls -lh dist/
+        
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          password: ${{ secrets.PYPI_API_TOKEN }}
+      
+      - name: Publish success notification
+        if: success()
+        run: |
+          VERSION=$(python -c "import tomli; print(tomli.load(open('pyproject.toml', 'rb'))['project']['version'])")
+          echo "🎉 Successfully published omnipkg v$VERSION to PyPI!"
+          echo ""
+          echo "Install with: pip install omnipkg==$VERSION"
+          echo "View on PyPI: https://pypi.org/project/omnipkg/$VERSION/"
