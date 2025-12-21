@@ -325,6 +325,7 @@ uv 0.8.11
 `omnipkg` works out of the box with **automatic SQLite fallback** when Redis isn't available. Redis is optional for enhanced performance.
 
 Ready to end dependency hell?
+
 ```bash
 uv pip install omnipkg && omnipkg demo
 ```
@@ -466,6 +467,7 @@ This means omnipkg runs on **any** architecture where Python is available:
 <a href="https://github.com/astral-sh/uv">
 <img src="https://img.shields.io/badge/uv-install-blueviolet?logo=uv&logoColor=white" alt="uv Install">
 </a>
+
 ```bash
 uv pip install omnipkg
 ```
@@ -475,6 +477,7 @@ uv pip install omnipkg
 <a href="https://pypi.org/project/omnipkg/">
 <img src="https://img.shields.io/pypi/v/omnipkg?color=blue&logo=pypi" alt="PyPI">
 </a>
+
 ```bash
 pip install omnipkg
 ```
@@ -484,6 +487,7 @@ pip install omnipkg
 <a href="https://anaconda.org/conda-forge/omnipkg">
 <img src="https://anaconda.org/conda-forge/omnipkg/badges/platforms.svg" alt="Platforms / Noarch">
 </a>
+
 ```bash
 conda install -c conda-forge omnipkg
 ```
@@ -493,11 +497,13 @@ conda install -c conda-forge omnipkg
 <a href="https://hub.docker.com/r/1minds3t/omnipkg">
 <img src="https://img.shields.io/docker/pulls/1minds3t/omnipkg?logo=docker" alt="Docker Pulls">
 </a>
+
 ```bash
 docker pull 1minds3t/omnipkg:latest
 ```
 
 #### 🍺 Homebrew
+
 ```bash
 brew tap 1minds3t/omnipkg
 brew install omnipkg
@@ -528,6 +534,7 @@ pip3 install --index-url=https://www.piwheels.org/simple/ omnipkg
 <!-- PIWHEELS_STATS_END -->
 
 #### 🌱 GitHub
+
 ```bash
 git clone https://github.com/1minds3t/omnipkg.git
 cd omnipkg
@@ -537,6 +544,7 @@ pip install -e .
 ---
 
 ### Instant Demo
+
 ```bash
 omnipkg demo
 ```
