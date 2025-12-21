@@ -318,27 +318,23 @@ uv 0.8.11
 **UV is saved, along with any deps!**
 
 ---
-
 ## 🛠️ Get Started in 30 Seconds
 
 ### No Prerequisites Required!
 `omnipkg` works out of the box with **automatic SQLite fallback** when Redis isn't available. Redis is optional for enhanced performance.
 
 Ready to end dependency hell?
-
 ```bash
 uv pip install omnipkg && omnipkg demo
 ```
+See the magic in under 30 seconds.
 
 ---
 
 <!-- PLATFORM_SUPPORT_START -->
 ## 🌐 Verified Platform Support
 
-[![Platforms Verified](https://img.shields.io/badge/platforms-24%20verified-success?logo=linux&logoColor=white)](https://github.com/1minds3t/omnipkg/actions/workflows/cross-platform-build-verification.yml)
-[![Linux](https://img.shields.io/badge/Linux-15+%20distros-FCC624?logo=linux&logoColor=black)](https://github.com/1minds3t/omnipkg/actions/workflows/cross-platform-build-verification.yml)
-[![macOS](https://img.shields.io/badge/macOS-Intel-000000?logo=apple&logoColor=white)](https://github.com/1minds3t/omnipkg/actions/workflows/cross-platform-build-verification.yml)
-[![Windows](https://img.shields.io/badge/Windows-x86__64-0078D4?logo=windows&logoColor=white)](https://github.com/1minds3t/omnipkg/actions/workflows/cross-platform-build-verification.yml)
+[![Platforms Verified](https://img.shields.io/badge/platforms-18%20verified-success?logo=linux&logoColor=white)](https://github.com/1minds3t/omnipkg/actions/workflows/cross-platform-build-verification.yml)
 
 **omnipkg** is a pure Python package (noarch) with **no C-extensions**, ensuring universal compatibility across all platforms and architectures.
 
@@ -383,16 +379,6 @@ uv pip install omnipkg && omnipkg demo
 | Arch Linux | x86_64 | ✅ | `--break-system-packages` required |
 | Alpine Linux | x86_64 | ✅ | Requires build deps (gcc, musl-dev) |
 
-#### ARM64 (aarch64) - QEMU Verified
-| Platform | Architecture | Status | Installation Notes |
-|----------|--------------|--------|-------------------|
-| Debian 12 (Bookworm) | ARM64 | ✅ | QEMU emulation |
-| Ubuntu 24.04 (Noble) | ARM64 | ✅ | QEMU emulation, `--break-system-packages` |
-| Ubuntu 22.04 (Jammy) | ARM64 | ✅ | QEMU emulation |
-| Fedora 39 | ARM64 | ✅ | QEMU emulation |
-| Rocky Linux 9 | ARM64 | ✅ | QEMU emulation |
-| Alpine Linux | ARM64 | ✅ | QEMU emulation, build deps required |
-
 ### 📝 Special Installation Notes
 
 #### Ubuntu 24.04+ / Debian 12+ (PEP 668)
@@ -435,24 +421,22 @@ python3 -m pip install --break-system-packages omnipkg
 ```bash
 # Arch uses --break-system-packages for global installs
 python -m pip install --break-system-packages omnipkg
+
+# Or use pacman if available in AUR (future)
+yay -S python-omnipkg
 ```
 
 ### 🐍 Python Version Support
-
-[![Python Versions](https://img.shields.io/pypi/pyversions/omnipkg?logo=python&logoColor=white)](https://pypi.org/project/omnipkg/)
-[![noarch](https://img.shields.io/badge/architecture-noarch-blue?logo=python&logoColor=white)](https://anaconda.org/conda-forge/omnipkg)
 
 **Supported:** Python 3.7 - 3.14 (including beta/rc releases)
 
 **Architecture:** `noarch` (pure Python, no compiled extensions)
 
 This means omnipkg runs on **any** architecture where Python is available:
-
-#### Verified Architectures
-- ✅ **x86_64** (Intel/AMD) - Verified in CI on 18+ platforms
-- ✅ **ARM32** (armv6/v7) - [Verified on piwheels.org](https://www.piwheels.org/project/omnipkg/)
-- ✅ **ARM64** (aarch64) - Verified via QEMU on 6+ platforms
-- ✅ **RISC-V, POWER, s390x** - Anywhere Python runs!
+- ✅ **x86_64** (Intel/AMD) - verified in CI
+- ✅ **ARM32** (armv6/v7) - [verified on piwheels](https://www.piwheels.org/project/omnipkg/)
+- ✅ **ARM64** (aarch64) - Python native support
+- ✅ **RISC-V, POWER, s390x** - anywhere Python runs!
 
 <!-- PLATFORM_SUPPORT_END -->
 
@@ -460,7 +444,7 @@ This means omnipkg runs on **any** architecture where Python is available:
 
 ### Installation Options
 
-**Available via UV, pip, conda-forge, Docker, brew, GitHub, and piwheels**
+**Available via UV, pip, conda-forge, Docker, brew, Github, and piwheels. Support for Linux, Windows, Mac, and Raspberry Pi.**
 
 #### ⚡ UV (Recommended)
 
@@ -477,47 +461,130 @@ uv pip install omnipkg
 <a href="https://pypi.org/project/omnipkg/">
 <img src="https://img.shields.io/pypi/v/omnipkg?color=blue&logo=pypi" alt="PyPI">
 </a>
-
+  
 ```bash
 pip install omnipkg
 ```
 
-#### 🏠 Official Conda-Forge Channel
+#### 🏠 Conda (Two Channels Available)
 
 <a href="https://anaconda.org/conda-forge/omnipkg">
 <img src="https://anaconda.org/conda-forge/omnipkg/badges/platforms.svg" alt="Platforms / Noarch">
 </a>
+<a href="https://anaconda.org/conda-forge/omnipkg">
+<img src="https://img.shields.io/badge/conda--forge-omnipkg-brightgreen?logo=anaconda&logoColor=white" alt="Conda-forge">
+</a>
+<a href="https://anaconda.org/minds3t/omnipkg">
+<img src="https://img.shields.io/badge/conda--channel-minds3t-blue?logo=anaconda&logoColor=white" alt="Minds3t Conda Channel">
+</a>
 
+**Official conda-forge (Recommended):**
 ```bash
+# Using conda
 conda install -c conda-forge omnipkg
+
+# Using mamba (faster)
+mamba install -c conda-forge omnipkg
 ```
 
-#### 🐋 Docker
+**Personal minds3t channel (Latest features first):**
+```bash
+# Using conda
+conda install -c minds3t omnipkg
+
+# Using mamba
+mamba install -c minds3t omnipkg
+```
+
+#### 🐋 Docker (Multi-Registry)
 
 <a href="https://hub.docker.com/r/1minds3t/omnipkg">
 <img src="https://img.shields.io/docker/pulls/1minds3t/omnipkg?logo=docker" alt="Docker Pulls">
 </a>
+<a href="https://hub.docker.com/r/1minds3t/omnipkg">
+<img src="https://img.shields.io/docker/v/1minds3t/omnipkg?logo=docker&label=Docker%20Hub" alt="Docker Hub Version">
+</a>
+<a href="https://github.com/1minds3t/omnipkg/pkgs/container/omnipkg">
+<img src="https://img.shields.io/badge/GHCR-latest-blue?logo=github" alt="GitHub Container Registry">
+</a>
 
+**Docker Hub (Development + Releases):**
 ```bash
+# Latest release
 docker pull 1minds3t/omnipkg:latest
+
+# Specific version
+docker pull 1minds3t/omnipkg:2.0.3
+
+# Development branch
+docker pull 1minds3t/omnipkg:main
 ```
+
+**GitHub Container Registry (Releases Only):**
+```bash
+# Latest release
+docker pull ghcr.io/1minds3t/omnipkg:latest
+
+# Specific version
+docker pull ghcr.io/1minds3t/omnipkg:2.0.3
+```
+
+**Multi-Architecture Support:**
+- ✅ `linux/amd64` (x86_64)
+- ✅ `linux/arm64` (aarch64)
 
 #### 🍺 Homebrew
 
 ```bash
+# Add the tap first
 brew tap 1minds3t/omnipkg
+
+# Install omnipkg
 brew install omnipkg
 ```
 
-#### 🥧 piwheels (Raspberry Pi)
+#### 🥧 piwheels (for Raspberry Pi)
 
+<!-- PIWHEELS_STATS_START -->
+## 🥧 ARM32 Support (Raspberry Pi)
 
+[![piwheels](https://img.shields.io/badge/piwheels-ARM32%20verified-97BF0D?logo=raspberrypi&logoColor=white)](https://www.piwheels.org/project/omnipkg/)
+
+**Latest Version:** `2.0.3` | **Python:** 3.9, 3.11, 3.13 | [View on piwheels](https://www.piwheels.org/project/omnipkg/)
+
+```bash
+# Install on Raspberry Pi (ARM32)
+pip3 install omnipkg==2.0.3
+```
+
+**Verified Platforms:**
+- 🍓 Raspberry Pi (armv6/armv7)
+  - Bullseye (Debian 11) - Python 3.9
+  - Bookworm (Debian 12) - Python 3.11
+  - Trixie (Debian 13) - Python 3.13
+
+**Optimized wheels built and tested by [piwheels.org](https://www.piwheels.org/project/omnipkg/) on real Raspberry Pi hardware.**
+
+<!-- PIWHEELS_STATS_END -->
+
+<a href="https://www.piwheels.org/project/omnipkg/">
+<img src="https://img.shields.io/badge/piwheels-install-97BF0D?logo=raspberrypi&logoColor=white" alt="piwheels Install">
+</a>
+
+For users on Raspberry Pi, use the optimized wheels from piwheels for faster installation:
+
+```bash
+pip install --index-url=https://www.piwheels.org/simple/ omnipkg
+```
 
 #### 🌱 GitHub
 
 ```bash
+# Clone the repo
 git clone https://github.com/1minds3t/omnipkg.git
 cd omnipkg
+
+# Install in editable mode (optional for dev)
 pip install -e .
 ```
 
@@ -535,11 +602,12 @@ Choose from:
 3. NumPy + SciPy stress test (C-extension switching)
 4. TensorFlow test (complex dependency switching)
 5. 🚀 Multiverse Healing Test (Cross-Python Hot-Swapping Mid-Script)
-Flask test (under construction)
+6. Flask test (under construction)
 7. Auto-healing Test (omnipkg run)
 8. 🌠 Quantum Multiverse Warp (Concurrent Python Installations)
 
 ### Experience Python Hot-Swapping
+
 ```bash
 # Let omnipkg manage your native Python automatically
 omnipkg status
@@ -557,62 +625,26 @@ python --version  # Now Python 3.10.x
 ```
 
 ### Optional: Enhanced Performance with Redis
+
 For maximum performance, install Redis:
 
-*   **Linux (Ubuntu/Debian)**:
-    ```bash
-    sudo apt-get update && sudo apt-get install redis-server
-    sudo systemctl enable redis && sudo systemctl start redis
-    ```
-
-*   **macOS (Homebrew)**:
-    ```bash
-    brew install redis && brew services start redis
-    ```
-
-*   **Windows**: Use WSL2 or Docker:
-    ```bash
-    docker run -d -p 6379:6379 --name redis-omnipkg redis
-    ```
-
-*   Verify Redis: `redis-cli ping` (should return `PONG`)
-
----
-
-## 🔬 How It Works (Simplified Flow)
-
-1.  **Adopt Interpreters**: On first run, `omnipkg` automatically adopts your native Python. Add more with `omnipkg python adopt <version>`.
-2.  **Install Packages**: Use `omnipkg install uv==0.7.13 uv==0.7.14` or `omnipkg install -r req.txt`
-3.  **Conflict Detection**: `omnipkg` spots version clashes and isolates them in bubbles.
-4.  **Dynamic Package Switching**: Use `omnipkgLoader` to switch package versions mid-script.
-5.  **Interpreter Hot-Swapping**: Switch your shell's active Python instantly with `omnipkg swap python <version>`.
-6.  **Intelligence Database**: High-performance knowledge base built for all packages (Redis preferred, SQLite fallback).
-7.  **Auto-healing**: `omnipkg run` automatically fixes compatibility issues in real-time.
-8.  **Atomic Snapshots**: Instant rollback with `omnipkg revert`.
-
-**Example: Safe Flask-Login Downgrade:**
+**Linux (Ubuntu/Debian)**:
 ```bash
-omnipkg install flask-login==0.4.1
-```
-```bash
-📸 Taking LIVE pre-installation snapshot...
-🛡️ DOWNGRADE PROTECTION ACTIVATED!
--> Detected conflict: flask-login v0.6.3 → v0.4.1
-🫧 Creating bubble for flask-login v0.4.1... ✅ Done
-🔄 Restoring flask-login v0.6.3... ✅ Environment secure
+sudo apt-get update && sudo apt-get install redis-server
+sudo systemctl enable redis && sudo systemctl start redis
 ```
 
-Verify:
+**macOS (Homebrew)**:
 ```bash
-omnipkg info flask-login
+brew install redis && brew services start redis
 ```
+
+**Windows**: Use WSL2 or Docker:
 ```bash
-📋 flask-login STATUS:
-🎯 Active: 0.6.3 (main)
-🫧 Available: 0.4.1 (bubble)
-📊 Space Saved: 55.5%
+docker run -d -p 6379:6379 --name redis-omnipkg redis
 ```
-You now have both versions available in one environment, ready for use anytime!
+
+Verify Redis: `redis-cli ping` (should return `PONG`)
 
 ---
 
