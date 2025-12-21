@@ -63,8 +63,12 @@ jobs:
       
       - name: Build and Test
         shell: bash
+        env:
+          PYTHONUNBUFFERED: "1" # Force Python to show logs immediately
         run: |
-          # Use 'python' if 'python3' isn't available (common on Windows)
+          set -x # Debug mode: Print every command as it runs
+          
+          # Use 'python' if 'python3' isn't available
           if command -v python3 &>/dev/null; then PY=python3; else PY=python; fi
           
           # Create venv
@@ -77,11 +81,12 @@ jobs:
             source .venv/Scripts/activate
           fi
           
-          # Now run commands inside the verified venv
+          # Install and build
           python -m pip install --upgrade pip build
           python -m build
           pip install dist/*.whl
           
+          # verify
           omnipkg --version
           8pkg --version
           omnipkg list
