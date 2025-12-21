@@ -3,9 +3,10 @@ name: Cross-Platform Build Verification
 
 on:
   push:
-    branches: [main, development]
-  pull_request:
-    branches: [main]
+    tags:
+      - 'v*'  # Runs on version tags (blocks PyPI publish)
+  release:
+    types: [published]
   workflow_dispatch:
 
 jobs:
