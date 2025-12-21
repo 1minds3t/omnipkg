@@ -64,9 +64,16 @@ jobs:
       - name: Build and Test
         shell: bash
         run: |
+          # Create a fresh virtual environment to avoid permission errors on self-hosted
+          python3 -m venv .venv
+          
+          # Activate venv (Syntax works for Bash on Mac/Linux/Windows git-bash)
+          source .venv/bin/activate
+          
           python -m pip install --upgrade pip build
           python -m build
           pip install dist/*.whl
+          
           omnipkg --version
           8pkg --version
           omnipkg list
