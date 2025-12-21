@@ -72,11 +72,11 @@ dependencies = [
     "aiohttp>=3.8.0,<3.11.0; python_version == '3.8'",  # <- FIXED: 3.8 can't use 3.13+
     "aiohttp>=3.13.1; python_version >= '3.9'",         # <- FIXED: 3.13+ needs 3.9+
     
-    # Safety for 3.9-3.13
+    # Security scanning - safety for supported Python versions
     "safety>=3.7.0; python_version >= '3.9' and python_version < '3.14'",
-
-    # pip-audit for 3.14+
-    "pip-audit>=2.6.0; python_version >= '3.14'",
+    
+    # pip-audit fallback for Python versions safety doesn't support
+    "pip-audit>=2.6.0; python_version < '3.9' or python_version >= '3.14'",
     
     # uv
     "uv>=0.9.6; python_version >= '3.8'",
