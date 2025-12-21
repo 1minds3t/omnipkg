@@ -153,7 +153,10 @@ jobs:
             
             # Try upgrading pip normally first (for older distros like Ubuntu 20.04),
             # then fall back to --break-system-packages (for newer distros like Ubuntu 24.04)
-            python3 -m pip install --upgrade pip build || python3 -m pip install --break-system-packages --upgrade pip build
+            # 1. Try standard upgrade (works on Ubuntu 20.04, upgrades pip to latest)
+            # 2. If fails (Ubuntu 24.04+), install 'build' using the flag, but DO NOT upgrade pip
+            #    (Upgrading system pip on 24.04 causes "RECORD file not found" errors)
+            python3 -m pip install --upgrade pip build || python3 -m pip install --break-system-packages build
             
             # Run build (now that pip/build are installed/upgraded)
             python3 -m build
