@@ -325,102 +325,216 @@ uv 0.8.11
 `omnipkg` works out of the box with **automatic SQLite fallback** when Redis isn't available. Redis is optional for enhanced performance.
 
 Ready to end dependency hell?
-  uv pip install omnipkg && omnipkg demo to see the magic in under 30 seconds.
+```bash
+uv pip install omnipkg && omnipkg demo
+```
+
+---
+
+<!-- PLATFORM_SUPPORT_START -->
+## 🌐 Verified Platform Support
+
+[![Platforms Verified](https://img.shields.io/badge/platforms-24%20verified-success?logo=linux&logoColor=white)](https://github.com/1minds3t/omnipkg/actions/workflows/cross-platform-build-verification.yml)
+[![Linux](https://img.shields.io/badge/Linux-15+%20distros-FCC624?logo=linux&logoColor=black)](https://github.com/1minds3t/omnipkg/actions/workflows/cross-platform-build-verification.yml)
+[![macOS](https://img.shields.io/badge/macOS-Intel-000000?logo=apple&logoColor=white)](https://github.com/1minds3t/omnipkg/actions/workflows/cross-platform-build-verification.yml)
+[![Windows](https://img.shields.io/badge/Windows-x86__64-0078D4?logo=windows&logoColor=white)](https://github.com/1minds3t/omnipkg/actions/workflows/cross-platform-build-verification.yml)
+
+**omnipkg** is a pure Python package (noarch) with **no C-extensions**, ensuring universal compatibility across all platforms and architectures.
+
+### 📊 Platform Matrix
+
+#### Linux (Native)
+| Platform | Architecture | Status | Installation Notes |
+|----------|--------------|--------|-------------------|
+| Linux x86_64 | x86_64 | ✅ | Native installation |
+
+#### macOS (Native)
+| Platform | Architecture | Status | Installation Notes |
+|----------|--------------|--------|-------------------|
+| macOS Intel | x86_64 (Intel) | ✅ | Native installation |
+
+#### Windows (Native)
+| Platform | Architecture | Status | Installation Notes |
+|----------|--------------|--------|-------------------|
+| Windows Server | x86_64 | ✅ | Latest Server |
+
+#### Debian/Ubuntu
+| Platform | Architecture | Status | Installation Notes |
+|----------|--------------|--------|-------------------|
+| Debian 12 (Bookworm) | x86_64 | ✅ | `--break-system-packages` required |
+| Debian 11 (Bullseye) | x86_64 | ✅ | Standard install |
+| Ubuntu 24.04 (Noble) | x86_64 | ✅ | `--break-system-packages` required |
+| Ubuntu 22.04 (Jammy) | x86_64 | ✅ | Standard install |
+| Ubuntu 20.04 (Focal) | x86_64 | ✅ | Standard install |
+
+#### RHEL/Fedora
+| Platform | Architecture | Status | Installation Notes |
+|----------|--------------|--------|-------------------|
+| Fedora 39 | x86_64 | ✅ | Standard install |
+| Fedora 38 | x86_64 | ✅ | Standard install |
+| Rocky Linux 9 | x86_64 | ✅ | Standard install |
+| Rocky Linux 8 | x86_64 | ✅ | Requires Python 3.9+ (default is 3.6) |
+| AlmaLinux 9 | x86_64 | ✅ | Standard install |
+
+#### Other Linux
+| Platform | Architecture | Status | Installation Notes |
+|----------|--------------|--------|-------------------|
+| Arch Linux | x86_64 | ✅ | `--break-system-packages` required |
+| Alpine Linux | x86_64 | ✅ | Requires build deps (gcc, musl-dev) |
+
+#### ARM64 (aarch64) - QEMU Verified
+| Platform | Architecture | Status | Installation Notes |
+|----------|--------------|--------|-------------------|
+| Debian 12 (Bookworm) | ARM64 | ✅ | QEMU emulation |
+| Ubuntu 24.04 (Noble) | ARM64 | ✅ | QEMU emulation, `--break-system-packages` |
+| Ubuntu 22.04 (Jammy) | ARM64 | ✅ | QEMU emulation |
+| Fedora 39 | ARM64 | ✅ | QEMU emulation |
+| Rocky Linux 9 | ARM64 | ✅ | QEMU emulation |
+| Alpine Linux | ARM64 | ✅ | QEMU emulation, build deps required |
+
+### 📝 Special Installation Notes
+
+#### Ubuntu 24.04+ / Debian 12+ (PEP 668)
+Modern Debian/Ubuntu enforce PEP 668 to protect system packages:
+```bash
+# Use --break-system-packages flag
+python3 -m pip install --break-system-packages omnipkg
+
+# Or use a virtual environment (recommended for development)
+python3 -m venv .venv
+source .venv/bin/activate
+pip install omnipkg
+```
+
+#### Rocky/Alma Linux 8 (Python 3.6 → 3.9)
+EL8 ships with Python 3.6, which is too old for modern `pyproject.toml`:
+```bash
+# Install Python 3.9 first
+sudo dnf install -y python39 python39-pip
+
+# Make python3 point to 3.9
+sudo ln -sf /usr/bin/python3.9 /usr/bin/python3
+sudo ln -sf /usr/bin/pip3.9 /usr/bin/pip3
+
+# Now install omnipkg
+python3 -m pip install omnipkg
+```
+
+#### Alpine Linux (Build Dependencies)
+Alpine requires build tools for dependencies like `psutil`:
+```bash
+# Install build tools first
+apk add --no-cache gcc python3-dev musl-dev linux-headers
+
+# Then install omnipkg
+python3 -m pip install --break-system-packages omnipkg
+```
+
+#### Arch Linux
+```bash
+# Arch uses --break-system-packages for global installs
+python -m pip install --break-system-packages omnipkg
+```
+
+### 🐍 Python Version Support
+
+[![Python Versions](https://img.shields.io/pypi/pyversions/omnipkg?logo=python&logoColor=white)](https://pypi.org/project/omnipkg/)
+[![noarch](https://img.shields.io/badge/architecture-noarch-blue?logo=python&logoColor=white)](https://anaconda.org/conda-forge/omnipkg)
+
+**Supported:** Python 3.7 - 3.14 (including beta/rc releases)
+
+**Architecture:** `noarch` (pure Python, no compiled extensions)
+
+This means omnipkg runs on **any** architecture where Python is available:
+
+#### Verified Architectures
+- ✅ **x86_64** (Intel/AMD) - Verified in CI on 18+ platforms
+- ✅ **ARM32** (armv6/v7) - [Verified on piwheels.org](https://www.piwheels.org/project/omnipkg/)
+- ✅ **ARM64** (aarch64) - Verified via QEMU on 6+ platforms
+- ✅ **RISC-V, POWER, s390x** - Anywhere Python runs!
+
+<!-- PLATFORM_SUPPORT_END -->
+
+---
 
 ### Installation Options
 
-**Available via UV, pip, conda-forge, Docker, brew, Github, and piwheels, support for Linux, Windows, Mac, and Rasperry Pi**
+**Available via UV, pip, conda-forge, Docker, brew, GitHub, and piwheels**
 
-#### ⚡ UV 
+#### ⚡ UV (Recommended)
 
 <a href="https://github.com/astral-sh/uv">
 <img src="https://img.shields.io/badge/uv-install-blueviolet?logo=uv&logoColor=white" alt="uv Install">
 </a>
-
 ```bash
 uv pip install omnipkg
 ```
 
-#### 📦 PyPi
+#### 📦 PyPI
 
-  <a href="https://pypi.org/project/omnipkg/">
-    <img src="https://img.shields.io/pypi/v/omnipkg?color=blue&logo=pypi" alt="PyPI">
-  </a>
-  
+<a href="https://pypi.org/project/omnipkg/">
+<img src="https://img.shields.io/pypi/v/omnipkg?color=blue&logo=pypi" alt="PyPI">
+</a>
 ```bash
 pip install omnipkg
 ```
 
 #### 🏠 Official Conda-Forge Channel
 
-  <a href="https://anaconda.org/conda-forge/omnipkg">
-  <img src="https://anaconda.org/conda-forge/omnipkg/badges/platforms.svg" alt="Platforms / Noarch">
+<a href="https://anaconda.org/conda-forge/omnipkg">
+<img src="https://anaconda.org/conda-forge/omnipkg/badges/platforms.svg" alt="Platforms / Noarch">
 </a>
-  <a href="https://anaconda.org/conda-forge/omnipkg">
-  <img src="https://img.shields.io/badge/conda--forge-omnipkg-brightgreen?logo=anaconda&logoColor=white" alt="Conda-forge">
-</a>
-
 ```bash
-# Easiest guaranteed way
 conda install -c conda-forge omnipkg
-
-# Or with mamba if you prefer speed
-mamba install -c conda-forge omnipkg
 ```
 
-<a href="https://anaconda.org/minds3t/omnipkg">
-  <img src="https://img.shields.io/badge/conda--channel-minds3t-blue?logo=anaconda&logoColor=white" alt="Minds3t Conda Channel">
-</a>
+#### 🐋 Docker
 
-
-```bash
-conda install -c minds3t omnipkg
-# Or with mamba
-mamba install -c minds3t omnipkg
-```
-
-#### 🐋 Docker 
 <a href="https://hub.docker.com/r/1minds3t/omnipkg">
-  <img src="https://img.shields.io/docker/pulls/1minds3t/omnipkg?logo=docker" alt="Docker Pulls">
+<img src="https://img.shields.io/docker/pulls/1minds3t/omnipkg?logo=docker" alt="Docker Pulls">
 </a>
-
 ```bash
-# Pull from Docker Hub
 docker pull 1minds3t/omnipkg:latest
-
-# Pull from GitHub Container Registry (GHCR)
-docker pull ghcr.io/1minds3t/omnipkg:latest
 ```
 
 #### 🍺 Homebrew
 ```bash
-# Add the tap first
 brew tap 1minds3t/omnipkg
-# Install omnipkg
 brew install omnipkg
 ```
 
-#### 🥧 piwheels (for Raspberry Pi)
+#### 🥧 piwheels (Raspberry Pi)
 
-<a href="https://www.piwheels.org/project/omnipkg/">
-  <img src="https://img.shields.io/badge/piwheels-install-97BF0D?logo=raspberrypi&logoColor=white" alt="piwheels Install">
-</a>
+<!-- PIWHEELS_STATS_START -->
+[![piwheels](https://img.shields.io/badge/piwheels-ARM32%20verified-97BF0D?logo=raspberrypi&logoColor=white)](https://www.piwheels.org/project/omnipkg/)
 
-For users on Raspberry Pi, you can use the optimized wheels from piwheels for faster installation.
-
+**Latest Version:** `2.0.3` | **Python:** 3.9, 3.11, 3.13 | [View on piwheels](https://www.piwheels.org/project/omnipkg/)
 ```bash
-pip install --index-url=https://www.piwheels.org/simple/ omnipkg
+# Install on Raspberry Pi (ARM32)
+pip3 install omnipkg==2.0.3
+
+# Or use piwheels index directly
+pip3 install --index-url=https://www.piwheels.org/simple/ omnipkg
 ```
 
-### 🌱 GitHub
+**Verified Platforms:**
+- 🍓 Raspberry Pi (armv6/armv7)
+  - Bullseye (Debian 11) - Python 3.9
+  - Bookworm (Debian 12) - Python 3.11
+  - Trixie (Debian 13) - Python 3.13
+
+**Optimized wheels built and tested by [piwheels.org](https://www.piwheels.org/project/omnipkg/) on real Raspberry Pi hardware.**
+
+<!-- PIWHEELS_STATS_END -->
+
+#### 🌱 GitHub
 ```bash
-# Clone the repo
 git clone https://github.com/1minds3t/omnipkg.git
 cd omnipkg
-
-# Install in editable mode (optional for dev)
 pip install -e .
 ```
+
+---
 
 ### Instant Demo
 ```bash
