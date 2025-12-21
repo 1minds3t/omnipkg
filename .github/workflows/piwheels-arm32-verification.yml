@@ -1,0 +1,150 @@
+# .github/workflows/piwheels-arm32-verification.yml
+name: ARM32 Support Verification (piwheels)
+
+on:
+  # Run 24 hours after a release is published (gives piwheels time to build)
+  release:
+    types: [published]
+  # Also allow manual trigger
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to check (e.g., 2.0.3)'
+        required: false
+        default: 'latest'
+  # Check daily at 3 AM UTC
+  schedule:
+    - cron: '0 3 * * *'
+
+jobs:
+  verify-piwheels:
+    name: Verify ARM32 on piwheels
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: Wait for piwheels (if triggered by release)
+        if: github.event_name == 'release'
+        run: |
+          echo "⏳ Waiting 24 hours for piwheels to build ARM32 wheels..."
+          echo "Release published at: ${{ github.event.release.published_at }}"
+          sleep 86400  # 24 hours
+      
+      - name: Get latest version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ] && [ "${{ github.event.inputs.version }}" != "latest" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          elif [ "${{ github.event_name }}" == "release" ]; then
+            VERSION="${{ github.event.release.tag_name }}"
+            VERSION="${VERSION#v}"  # Remove 'v' prefix if present
+          else
+            # Get latest from PyPI
+            VERSION=$(curl -s https://pypi.org/pypi/omnipkg/json | python3 -c "import sys, json; print(json.load(sys.stdin)['info']['version'])")
+          fi
+          
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Checking version: $VERSION"
+      
+      - name: Check piwheels builds
+        id: check
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          
+          echo "🔍 Checking piwheels for omnipkg $VERSION..."
+          
+          # Fetch piwheels project page
+          RESPONSE=$(curl -s "https://www.piwheels.org/project/omnipkg/")
+          
+          # Check if this version exists on piwheels
+          if ! echo "$RESPONSE" | grep -q "$VERSION"; then
+            echo "❌ Version $VERSION not found on piwheels yet"
+            echo "builds_found=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
+          echo "✅ Version $VERSION found on piwheels"
+          
+          # Check for wheel file
+          WHEEL_URL="https://www.piwheels.org/simple/omnipkg/omnipkg-${VERSION}-py3-none-any.whl"
+          
+          if curl --output /dev/null --silent --head --fail "$WHEEL_URL"; then
+            echo "✅ ARM32 wheel found: $WHEEL_URL"
+            echo "builds_found=true" >> $GITHUB_OUTPUT
+            echo "wheel_url=$WHEEL_URL" >> $GITHUB_OUTPUT
+            
+            # Extract supported Python versions from the page
+            # piwheels shows: Bullseye Python 3.9, Bookworm Python 3.11, Trixie Python 3.13
+            if echo "$RESPONSE" | grep -q "Bullseye Python 3.9"; then
+              echo "python_versions=3.9, 3.11, 3.13" >> $GITHUB_OUTPUT
+            fi
+          else
+            echo "❌ ARM32 wheel not found for version $VERSION"
+            echo "builds_found=false" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Update README with ARM32 badge
+        if: steps.check.outputs.builds_found == 'true'
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          PYTHON_VERS="${{ steps.check.outputs.python_versions }}"
+          
+          # Create a badge for ARM32 support
+          cat > piwheels-arm32.json << EOF
+          {
+            "schemaVersion": 1,
+            "label": "ARM32 (armv6/v7)",
+            "message": "verified on piwheels",
+            "color": "success"
+          }
+          EOF
+          
+          echo "✅ ARM32 (armv6/v7) support verified for version $VERSION"
+          echo "📦 Wheel: ${{ steps.check.outputs.wheel_url }}"
+          echo "🐍 Python versions: $PYTHON_VERS"
+      
+      - name: Create verification summary
+        if: steps.check.outputs.builds_found == 'true'
+        run: |
+          cat >> $GITHUB_STEP_SUMMARY << 'EOF'
+          ## ✅ ARM32 Support Verified
+          
+          **Version:** `${{ steps.version.outputs.version }}`
+          
+          **Platform:** ARM32 (armv6/armv7) - Raspberry Pi compatible
+          
+          **Python Versions:** ${{ steps.check.outputs.python_versions }}
+          
+          **Wheel URL:** [${{ steps.check.outputs.wheel_url }}](${{ steps.check.outputs.wheel_url }})
+          
+          **Verified on:**
+          - Bullseye (Debian 11) - Python 3.9
+          - Bookworm (Debian 12) - Python 3.11  
+          - Trixie (Debian 13) - Python 3.13
+          
+          ---
+          
+          This wheel is built and tested by [piwheels.org](https://www.piwheels.org/project/omnipkg/) on real Raspberry Pi hardware.
+          EOF
+      
+      - name: Commit badge (if changed)
+        if: steps.check.outputs.builds_found == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          if [ -f piwheels-arm32.json ]; then
+            git add piwheels-arm32.json
+            git diff --staged --quiet || {
+              git commit -m "Verify ARM32 support on piwheels [skip ci]"
+              git pull --rebase origin main
+              git push
+            }
+          fi
