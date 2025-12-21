@@ -184,7 +184,7 @@ EOF
       - name: Create verification summary
         if: steps.scrape.outputs.builds_found == 'true'
         run: |
-          cat >> $GITHUB_STEP_SUMMARY << 'EOF'
+          cat >> $GITHUB_STEP_SUMMARY << 'SUMMARY_EOF'
           ## ✅ ARM32 Support Verified
           
           **Version:** `${{ steps.version.outputs.version }}`
@@ -208,4 +208,4 @@ EOF
           ---
           
           This wheel is built and tested by [piwheels.org](https://www.piwheels.org/project/omnipkg/) on real Raspberry Pi hardware.
-          EOF
+          SUMMARY_EOF
