@@ -64,12 +64,20 @@ jobs:
       - name: Build and Test
         shell: bash
         run: |
-          # Create a fresh virtual environment to avoid permission errors on self-hosted
-          python3 -m venv .venv
+          # Use 'python' if 'python3' isn't available (common on Windows)
+          if command -v python3 &>/dev/null; then PY=python3; else PY=python; fi
           
-          # Activate venv (Syntax works for Bash on Mac/Linux/Windows git-bash)
-          source .venv/bin/activate
+          # Create venv
+          $PY -m venv .venv
           
+          # Activate venv (Handle Windows 'Scripts' vs Linux/Mac 'bin')
+          if [ -f ".venv/bin/activate" ]; then
+            source .venv/bin/activate
+          else
+            source .venv/Scripts/activate
+          fi
+          
+          # Now run commands inside the verified venv
           python -m pip install --upgrade pip build
           python -m build
           pip install dist/*.whl
