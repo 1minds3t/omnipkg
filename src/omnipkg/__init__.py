@@ -86,3 +86,9 @@ __all__ = [
     "stress_test",
     "common_utils",
 ]
+
+# Vendor patched filelock for Python <3.10 (CVE-2025-68146)
+import sys
+if sys.version_info < (3, 10):
+    from omnipkg._vendor import filelock
+    sys.modules['filelock'] = filelock

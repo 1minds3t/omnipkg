@@ -42,10 +42,10 @@ dependencies = [
     "typer>=0.4.0",
     "rich>=10.0.0",
 
-    # --- Filelock Security Split (CVE-2025-68146) ---
+    # Filelock: vendored for <3.10, external for >=3.10 (CVE-2025-68146)
     "filelock>=3.20.1; python_version >= '3.10'",
-    "filelock>=3.13,<3.20.1; python_version >= '3.8' and python_version < '3.10'",
-    "filelock>=3.12,<3.13; python_version < '3.8'",
+    # Python 3.7-3.9 use vendored patched version 3.12.2
+    # Planned better version support for >3.7  "filelock>=3.13,<3.20.1; python_version >= '3.8' and python_version < '3.10'",
     
     # Packaging version splits
     "packaging>=20.0,<21.0; python_version < '3.8'",
