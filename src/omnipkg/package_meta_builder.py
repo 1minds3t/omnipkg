@@ -1149,7 +1149,7 @@ class omnipkgMetadataGatherer:
         # If the 'bubble_manager' attribute (which holds the BubbleIsolationManager instance)
         # doesn't exist yet on the main omnipkg object, it means we are in the middle of the
         # very first KB build. We MUST NOT try to create a bubble here.
-        if not hasattr(self.omnipkg_instance, "bubble_manager"):
+        if not hasattr(self.omnipkg_instance, "bubble_manager") or self.omnipkg_instance.bubble_manager is None:
             safe_print("🛡️  Initial KB build detected. Security scan will use a safe fallback.")
             safe_print("   - Using 'pip audit' to prevent initialization deadlock.")
             self._run_pip_audit_fallback(
