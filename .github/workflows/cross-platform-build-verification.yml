@@ -188,7 +188,9 @@ jobs:
               python -m build
               python -m pip install --break-system-packages dist/*.whl
             elif command -v apk &> /dev/null; then
-              apk add --no-cache python3 py3-pip py3-build
+              # Install build dependencies required for compiling psutil
+              apk add --no-cache python3 py3-pip py3-build gcc python3-dev musl-dev linux-headers
+              
               python3 -m build
               python3 -m pip install --break-system-packages dist/*.whl
             fi
