@@ -37,7 +37,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
       
+      # Only run setup-python on GitHub-hosted runners (Ubuntu/Windows)
+      # We skip this on self-hosted to use the system/Homebrew python
       - name: Set up Python 3.11
+        if: ${{ !contains(matrix.runner, 'self-hosted') }} 
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
