@@ -128,9 +128,14 @@ jobs:
             cd /workspace
             apt-get update && apt-get install -y python3 python3-pip python3-venv
             
-            # Use --break-system-packages for CI (safe in disposable container)
-            python3 -m pip install --break-system-packages --upgrade pip build
+            # Try upgrading pip normally first (for older distros like Ubuntu 20.04),
+            # then fall back to --break-system-packages (for newer distros like Ubuntu 24.04)
+            python3 -m pip install --upgrade pip build || python3 -m pip install --break-system-packages --upgrade pip build
+            
+            # Run build (now that pip/build are installed/upgraded)
             python3 -m build
+            
+            # Install wheels using the flag (latest pip supports it now)
             python3 -m pip install --break-system-packages dist/*.whl
             
             omnipkg --version
