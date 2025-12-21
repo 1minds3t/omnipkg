@@ -118,25 +118,31 @@ jobs:
           WHEEL_URL="${{ steps.scrape.outputs.wheel_url }}"
           
           # Create the auto-update block for README
-          cat > .github/piwheels-stats.md << EOF
-<!-- PIWHEELS_STATS_START -->
-## 🥧 ARM32 Support (Raspberry Pi)
-
-[![piwheels](https://img.shields.io/badge/piwheels-ARM32%20verified-97BF0D?logo=raspberrypi&logoColor=white)](https://www.piwheels.org/project/omnipkg/)
-
-**Latest Version:** \`${VERSION}\` | **Python:** ${PYTHON_VERS} | [View on piwheels](https://www.piwheels.org/project/omnipkg/)
-
-\`\`\`bash
-# Install on Raspberry Pi (ARM32)
-${INSTALL_CMD}
-\`\`\`
-
-**Verified Platforms:**
-- 🍓 Raspberry Pi (armv6/armv7) - Bullseye (Debian 11), Bookworm (Debian 12), Trixie (Debian 13)
-- 📦 Wheel: [\`${WHEEL_URL}\`](${WHEEL_URL})
-
-<!-- PIWHEELS_STATS_END -->
-EOF
+          cat > .github/piwheels-stats.md <<'PIWHEELS_BLOCK'
+          <!-- PIWHEELS_STATS_START -->
+          ## 🥧 ARM32 Support (Raspberry Pi)
+          
+          [![piwheels](https://img.shields.io/badge/piwheels-ARM32%20verified-97BF0D?logo=raspberrypi&logoColor=white)](https://www.piwheels.org/project/omnipkg/)
+          
+          **Latest Version:** `VERSION_PLACEHOLDER` | **Python:** PYTHON_VERS_PLACEHOLDER | [View on piwheels](https://www.piwheels.org/project/omnipkg/)
+          
+          ```bash
+          # Install on Raspberry Pi (ARM32)
+          INSTALL_CMD_PLACEHOLDER
+          ```
+          
+          **Verified Platforms:**
+          - 🍓 Raspberry Pi (armv6/armv7) - Bullseye (Debian 11), Bookworm (Debian 12), Trixie (Debian 13)
+          - 📦 Wheel: [`WHEEL_URL_PLACEHOLDER`](WHEEL_URL_PLACEHOLDER)
+          
+          <!-- PIWHEELS_STATS_END -->
+          PIWHEELS_BLOCK
+          
+          # Replace placeholders
+          sed -i "s|VERSION_PLACEHOLDER|${VERSION}|g" .github/piwheels-stats.md
+          sed -i "s|PYTHON_VERS_PLACEHOLDER|${PYTHON_VERS}|g" .github/piwheels-stats.md
+          sed -i "s|INSTALL_CMD_PLACEHOLDER|${INSTALL_CMD}|g" .github/piwheels-stats.md
+          sed -i "s|WHEEL_URL_PLACEHOLDER|${WHEEL_URL}|g" .github/piwheels-stats.md
           
           # Update README.md if the markers exist
           if grep -q "<!-- PIWHEELS_STATS_START -->" README.md; then
@@ -151,7 +157,7 @@ EOF
         if: steps.scrape.outputs.builds_found == 'true'
         run: |
           # This will be used to build the comprehensive platform table
-          cat > .github/platform-matrix.json << EOF
+          cat > .github/platform-matrix.json <<MATRIX_JSON
           {
             "arm32": {
               "verified": true,
@@ -161,7 +167,7 @@ EOF
               "platforms": ["Raspberry Pi", "Raspbian Bullseye", "Raspbian Bookworm", "Raspbian Trixie"]
             }
           }
-          EOF
+          MATRIX_JSON
           
           echo "✅ Platform matrix generated"
       
@@ -184,28 +190,28 @@ EOF
       - name: Create verification summary
         if: steps.scrape.outputs.builds_found == 'true'
         run: |
-          cat >> $GITHUB_STEP_SUMMARY << 'SUMMARY_EOF'
-          ## ✅ ARM32 Support Verified
-          
-          **Version:** `${{ steps.version.outputs.version }}`
-          
-          **Architecture:** ARM32 (armv6/armv7) - Raspberry Pi compatible
-          
-          **Python Versions:** ${{ steps.scrape.outputs.python_versions }}
-          
-          **Install Command:**
-          ```bash
-          ${{ steps.scrape.outputs.install_command }}
-          ```
-          
-          **Wheel URL:** [${{ steps.scrape.outputs.wheel_file }}](${{ steps.scrape.outputs.wheel_url }})
-          
-          **Verified on:**
-          - 🍓 Bullseye (Debian 11) - Python 3.9
-          - 🍓 Bookworm (Debian 12) - Python 3.11  
-          - 🍓 Trixie (Debian 13) - Python 3.13
-          
-          ---
-          
-          This wheel is built and tested by [piwheels.org](https://www.piwheels.org/project/omnipkg/) on real Raspberry Pi hardware.
-          SUMMARY_EOF
+          {
+            echo "## ✅ ARM32 Support Verified"
+            echo ""
+            echo "**Version:** \`${{ steps.version.outputs.version }}\`"
+            echo ""
+            echo "**Architecture:** ARM32 (armv6/armv7) - Raspberry Pi compatible"
+            echo ""
+            echo "**Python Versions:** ${{ steps.scrape.outputs.python_versions }}"
+            echo ""
+            echo "**Install Command:**"
+            echo "\`\`\`bash"
+            echo "${{ steps.scrape.outputs.install_command }}"
+            echo "\`\`\`"
+            echo ""
+            echo "**Wheel URL:** [${{ steps.scrape.outputs.wheel_file }}](${{ steps.scrape.outputs.wheel_url }})"
+            echo ""
+            echo "**Verified on:**"
+            echo "- 🍓 Bullseye (Debian 11) - Python 3.9"
+            echo "- 🍓 Bookworm (Debian 12) - Python 3.11"
+            echo "- 🍓 Trixie (Debian 13) - Python 3.13"
+            echo ""
+            echo "---"
+            echo ""
+            echo "This wheel is built and tested by [piwheels.org](https://www.piwheels.org/project/omnipkg/) on real Raspberry Pi hardware."
+          } >> $GITHUB_STEP_SUMMARY
