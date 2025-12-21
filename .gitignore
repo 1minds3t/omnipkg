@@ -108,3 +108,4 @@ omnipkg/!src/omnipkg/
 src/build/
 build/
 *.egg-info/
+vendor/
