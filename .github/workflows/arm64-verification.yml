@@ -4,7 +4,9 @@ on:
   push:
     tags:
       - 'v*'  # Runs on version tags (blocks PyPI publish)
-  workflow_dispatch:  # Manual trigger allowed
+  release:
+    types: [published]
+  workflow_dispatch:
 
 jobs:
   arm64-qemu:
