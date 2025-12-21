@@ -1,0 +1,96 @@
+# .github/workflows/arm64-verification.yml
+name: ARM64 Verification
+
+on:
+  push:
+    branches: [main, development]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+  # Also run weekly to ensure ARM64 keeps working
+  schedule:
+    - cron: '0 3 * * 0'  # 3 AM every Sunday
+
+jobs:
+  build-arm64:
+    name: "Ubuntu ARM64 (aarch64)"
+    runs-on: ubuntu-24.04-arm64
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: Verify Architecture
+        id: arch
+        shell: bash
+        run: |
+          ARCH=$(uname -m)
+          OS=$(uname -s)
+          echo "Detected: $OS $ARCH"
+          echo "arch=$ARCH" >> $GITHUB_OUTPUT
+          echo "os=$OS" >> $GITHUB_OUTPUT
+          
+          # Hard fail if architecture is not ARM64
+          if [[ "$ARCH" != "aarch64" ]] && [[ "$ARCH" != "arm64" ]]; then
+            echo "ERROR: Expected ARM64 but got $ARCH"
+            exit 1
+          fi
+      
+      - name: Build and Test
+        shell: bash
+        env:
+          PYTHONUNBUFFERED: "1"
+        run: |
+          set -x
+          
+          # Create venv
+          python3 -m venv .venv
+          source .venv/bin/activate
+          
+          # Install and build
+          python -m pip install --upgrade pip build
+          python -m build
+          pip install dist/*.whl
+          
+          # verify
+          omnipkg --version
+          8pkg --version
+          omnipkg list
+      
+      - name: Record Verified Platform
+        shell: bash
+        run: |
+          echo "✅ VERIFIED: ${{ steps.arch.outputs.os }} ${{ steps.arch.outputs.arch }}"
+          
+  generate-arm64-badge:
+    name: Generate ARM64 Badge
+    needs: [build-arm64]
+    runs-on: ubuntu-latest
+    if: always() && github.ref == 'refs/heads/main'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      
+      - name: Generate ARM64 badge JSON
+        run: |
+          cat > arm64-support.json << 'EOF'
+          {
+            "schemaVersion": 1,
+            "label": "ARM64",
+            "message": "verified ✓",
+            "color": "success"
+          }
+          EOF
+      
+      - name: Commit badge data
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add arm64-support.json
+          git diff --staged --quiet || git commit -m "Update ARM64 badge [skip ci]"
+          git push
