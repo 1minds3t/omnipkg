@@ -112,15 +112,22 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
       
-      - name: Test in ${{ matrix.distro }} (Podman)
+      - name: Test in ${{ matrix.distro }}
         run: |
-          podman run --rm -v $(pwd):/workspace:Z ${{ matrix.distro }} /bin/bash -c "
+          docker run --rm -v $(pwd):/workspace ${{ matrix.distro }} /bin/bash -c "
             cd /workspace
-            if command -v apt-get &> /dev/null; then
-              apt-get update && apt-get install -y python3 python3-pip python3-venv
-            elif command -v dnf &> /dev/null; then
+            
+            # RHEL/Rocky/Alma 8 ship with Python 3.6 by default (Too old).
+            # We must explicitly install Python 3.9 on these older systems.
+            if grep -q 'release 8' /etc/redhat-release 2>/dev/null; then
+              dnf install -y python39 python39-pip
+              # Force 'python3' to point to the new 3.9 installation
+              ln -sf /usr/bin/python3.9 /usr/bin/python3
+            else
+              # Fedora and RHEL 9+ have compliant Python versions (3.9+) by default
               dnf install -y python3 python3-pip
             fi
+            
             python3 -m pip install --upgrade pip build
             python3 -m build
             python3 -m pip install dist/*.whl
