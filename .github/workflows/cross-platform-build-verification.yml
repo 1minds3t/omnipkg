@@ -121,41 +121,44 @@ jobs:
             platform: linux/arm64
           - distro: alpine:latest
             platform: linux/arm64
-     
+   
     steps:
       - name: Checkout
         uses: actions/checkout@v4
       
       - name: Test in ${{ matrix.distro }} (Podman)
         run: |
-          # STRICTLY PODMAN. 
-          # The :Z is required for read/write permissions on SELinux systems (Fedora/RHEL host).
-          podman run --rm -v $(pwd):/workspace:Z ${{ matrix.distro }} /bin/bash -c "
+          # Detect if Alpine and use /bin/sh, otherwise /bin/bash
+          if [[ "${{ matrix.distro }}" == *"alpine"* ]]; then
+            SHELL="/bin/sh"
+          else
+            SHELL="/bin/bash"
+          fi
+          
+          podman run --rm -v $(pwd):/workspace:Z --platform ${{ matrix.platform }} ${{ matrix.distro }} $SHELL -c "
             cd /workspace
             
             # --- 1. Install System Dependencies ---
             if command -v apt-get &> /dev/null; then
-              # Debian / Ubuntu
               apt-get update && apt-get install -y python3 python3-pip python3-venv
             elif command -v dnf &> /dev/null; then
-              # Fedora
               dnf install -y python3 python3-pip
+            elif command -v apk &> /dev/null; then
+              # Alpine needs build dependencies for psutil
+              apk add --no-cache python3 py3-pip py3-build gcc python3-dev musl-dev linux-headers
             fi
-
-            # --- 2. Install Build Tools (PEP 668 Safe) ---
-            # Try standard install. If it fails (Ubuntu 24/Debian 12), force it.
+  
+            # --- 2. Install Build Tools ---
             python3 -m pip install --upgrade pip build || python3 -m pip install --break-system-packages build
             
             # --- 3. Build Project ---
             python3 -m build
             
-            # --- 4. Install Wheel (PEP 668 Safe) ---
-            # Try standard install. If it fails, force it.
+            # --- 4. Install Wheel ---
             python3 -m pip install dist/*.whl || python3 -m pip install --break-system-packages dist/*.whl
             
             # --- 5. Verify ---
-            omnipkg --version
-          "
+            omnip
 
   # Docker on GitHub-hosted (plenty of space/memory, split for safety)
   linux-distros-docker-debian:
