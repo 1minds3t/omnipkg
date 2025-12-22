@@ -99,11 +99,29 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        distro:
-          - debian:12
-          - ubuntu:24.04
-          - fedora:39
-    
+        include:
+          # x86_64 tests
+          - distro: debian:12
+            platform: linux/amd64
+          - distro: ubuntu:24.04
+            platform: linux/amd64
+          - distro: fedora:39
+            platform: linux/amd64
+          
+          # ARM64 tests (via QEMU)
+          - distro: debian:12
+            platform: linux/arm64
+          - distro: ubuntu:24.04
+            platform: linux/arm64
+          - distro: ubuntu:22.04
+            platform: linux/arm64
+          - distro: fedora:39
+            platform: linux/arm64
+          - distro: rockylinux:9
+            platform: linux/arm64
+          - distro: alpine:latest
+            platform: linux/arm64
+     
     steps:
       - name: Checkout
         uses: actions/checkout@v4
