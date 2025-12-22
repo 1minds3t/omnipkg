@@ -334,7 +334,7 @@ See the magic in under 30 seconds.
 <!-- PLATFORM_SUPPORT_START -->
 ## 🌐 Verified Platform Support
 
-[![Platforms Verified](https://img.shields.io/badge/platforms-18%20verified-success?logo=linux&logoColor=white)](https://github.com/1minds3t/omnipkg/actions/workflows/cross-platform-build-verification.yml)
+[![Platforms Verified](https://img.shields.io/badge/platforms-22%20verified-success?logo=linux&logoColor=white)](https://github.com/1minds3t/omnipkg/actions/workflows/cross-platform-build-verification.yml)
 
 **omnipkg** is a pure Python package (noarch) with **no C-extensions**, ensuring universal compatibility across all platforms and architectures.
 
@@ -349,6 +349,7 @@ See the magic in under 30 seconds.
 | Platform | Architecture | Status | Installation Notes |
 |----------|--------------|--------|-------------------|
 | macOS Intel | x86_64 (Intel) | ✅ | Native installation |
+| macOS ARM64 | ARM64 (Apple Silicon) | ✅ | Native installation |
 
 #### Windows (Native)
 | Platform | Architecture | Status | Installation Notes |
