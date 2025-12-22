@@ -54,37 +54,36 @@ jobs:
         run: |
           set -x
           
-          if [ -f "$HOME/miniconda3/envs/evocoder_env/bin/python3.11" ]; then
-            PY="$HOME/miniconda3/envs/evocoder_env/bin/python3.11"
-            echo "🎯 Using conda env native Python 3.11: $PY"
-          elif [ -f "/usr/bin/python3.11" ]; then
-            PY=/usr/bin/python3.11
-            echo "🎯 Using system Python 3.11: $PY"
-          elif [ -f "/usr/bin/python3.12" ]; then
-            PY=/usr/bin/python3.12
-            echo "🎯 Using system Python 3.12: $PY"
+          # Find system Python (NOT conda)
+          if command -v python3.11 &>/dev/null && [[ "$(which python3.11)" != *"conda"* ]]; then
+            PY=python3.11
+          elif command -v python3.12 &>/dev/null && [[ "$(which python3.12)" != *"conda"* ]]; then
+            PY=python3.12
+          elif command -v python3 &>/dev/null && [[ "$(which python3)" != *"conda"* ]]; then
+            PY=python3
           else
-            echo "❌ No suitable Python found"
+            echo "❌ No system Python found"
             exit 1
           fi
           
+          echo "🎯 Using Python: $PY"
           $PY --version
+          which $PY
           
-          echo "🔥 Installing pip and build"
-          $PY -m pip install --user --upgrade pip build || {
-            echo "❌ Failed. Trying bootstrap..."
-            curl -sS https://bootstrap.pypa.io/get-pip.py | $PY - --user
-            $PY -m pip install --user --upgrade pip build
-          }
+          # Create clean venv
+          $PY -m venv .venv
+          source .venv/bin/activate
           
-          echo "Building package..."
-          $PY -m build
+          # Upgrade pip and install build
+          python -m pip install --upgrade pip build
           
-          echo "Installing package..."
-          $PY -m pip install --user --force-reinstall dist/*.whl
+          # Build
+          python -m build
           
-          echo "Testing installation..."
-          export PATH="$HOME/.local/bin:$PATH"
+          # Install
+          pip install dist/*.whl
+          
+          # Test
           omnipkg --version
           8pkg --version
           omnipkg list
