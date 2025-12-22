@@ -113,112 +113,57 @@ jobs:
           
           echo "✅ Podman cleaned (rootless-safe)"
   
-  update-arm64-stats:
-    name: Update ARM64 Stats
+  update-readme-with-arm64-stats:
+    name: Update README with ARM64 Stats
     needs: arm64-qemu
     runs-on: ubuntu-latest
-    if: always()
-    
+    if: success() # Only run if the arm64-qemu jobs succeed
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      
-      - name: Count ARM64 successes
-        id: count
+
+      - name: Generate ARM64 Results Summary
+        id: summary
         run: |
-          echo "verified=6" >> $GITHUB_OUTPUT
-          echo "total=6" >> $GITHUB_OUTPUT
-      
-      - name: Generate ARM64 badge
+          SUMMARY_CONTENT="""## ✅ ARM64 Support Verified (QEMU)
+
+          **Verified Platforms:** 6/6
+
+          **Tested on:**
+          - Debian 12 (Bookworm)
+          - Ubuntu 24.04 (Noble)
+          - Ubuntu 22.04 (Jammy)
+          - Fedora 39
+          - Rocky Linux 9
+          - Alpine Linux
+
+          *Note: Tests run via QEMU user-mode emulation on a self-hosted x86_64 runner.*
+          """
+          echo "summary_text<<EOF" >> $GITHUB_ENV
+          echo "$SUMMARY_CONTENT" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+
+      - name: Update README.md
         run: |
-          mkdir -p .github
-          cat > .github/arm64-stats.json << EOF
-          {
-            "schemaVersion": 1,
-            "label": "ARM64 (aarch64)",
-            "message": "${{ steps.count.outputs.verified }}/${{ steps.count.outputs.total }} verified",
-            "color": "success"
-          }
-          EOF
-      
-      - name: Update platform results
-        run: |
-          mkdir -p .github
-          if [ -f .github/platform-results.json ]; then
-            python3 << 'PYTHON_SCRIPT'
-          import json
-          
-          try:
-              with open('.github/platform-results.json', 'r') as f:
-                  results = json.load(f)
-          except:
-              results = {}
-          
-          arm64_platforms = {
-              "ARM64 - Debian 12": {
-                  "os": "Debian 12 (Bookworm)",
-                  "arch": "ARM64 (aarch64)",
-                  "type": "qemu",
-                  "status": "success",
-                  "notes": "QEMU emulation"
-              },
-              "ARM64 - Ubuntu 24.04": {
-                  "os": "Ubuntu 24.04 (Noble)",
-                  "arch": "ARM64 (aarch64)",
-                  "type": "qemu",
-                  "status": "success",
-                  "notes": "QEMU emulation"
-              },
-              "ARM64 - Ubuntu 22.04": {
-                  "os": "Ubuntu 22.04 (Jammy)",
-                  "arch": "ARM64 (aarch64)",
-                  "type": "qemu",
-                  "status": "success",
-                  "notes": "QEMU emulation"
-              },
-              "ARM64 - Fedora 39": {
-                  "os": "Fedora 39",
-                  "arch": "ARM64 (aarch64)",
-                  "type": "qemu",
-                  "status": "success",
-                  "notes": "QEMU emulation"
-              },
-              "ARM64 - Rocky Linux 9": {
-                  "os": "Rocky Linux 9",
-                  "arch": "ARM64 (aarch64)",
-                  "type": "qemu",
-                  "status": "success",
-                  "notes": "QEMU emulation"
-              },
-              "ARM64 - Alpine": {
-                  "os": "Alpine Linux",
-                  "arch": "ARM64 (aarch64)",
-                  "type": "qemu",
-                  "status": "success",
-                  "notes": "QEMU emulation"
-              }
-          }
-          
-          results.update(arm64_platforms)
-          
-          with open('.github/platform-results.json', 'w') as f:
-              json.dump(results, f, indent=2)
-          
-          print("✅ Added ARM64 verification results")
-          PYTHON_SCRIPT
-          fi
-      
-      - name: Commit ARM64 stats
+          # This uses sed to replace the content between two markers in the README
+          # First, add these markers to your README.md where you want the table to appear:
+          # <!-- ARM64_STATUS_START -->
+          # <!-- ARM64_STATUS_END -->
+          sed -i '/<!-- ARM64_STATUS_START -->/,/<!-- ARM64_STATUS_END -->/{//!d;}' README.md
+          sed -i '/<!-- ARM64_STATUS_START -->/a\'"$summary_text" README.md
+
+      - name: Commit changes
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          
-          git add .github/arm64-stats.json .github/platform-results.json || true
-          
+          git add README.md
+          # Check if there are changes to commit
           if ! git diff --staged --quiet; then
-            git commit -m "Auto-update ARM64 verification stats [skip ci]"
-            git pull --rebase origin main
+            git commit -m "docs: auto-update ARM64 verification status"
             git push
+          else
+            echo "No changes to README.md needed."
           fi
       
       - name: Generate summary
