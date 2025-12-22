@@ -30,6 +30,10 @@ jobs:
           
           - runner: windows-latest
             label: "Windows x86_64"
+
+            # ADD THIS BLOCK FOR APPLE SILICON
+          - runner: macos-14
+            label: "macOS ARM64 (Apple Silicon)"
     
     steps:
       - name: Checkout
