@@ -563,13 +563,12 @@ brew install omnipkg
 ```
 
 #### 🥧 piwheels (for Raspberry Pi)
-
 <!-- PIWHEELS_STATS_START -->
 ## 🥧 ARM32 Support (Raspberry Pi)
 
 [![piwheels](https://img.shields.io/badge/piwheels-ARM32%20verified-97BF0D?logo=raspberrypi&logoColor=white)](https://www.piwheels.org/project/omnipkg/)
 
-**Latest Version:** `2.0.3` | **Python:** 3.9, 3.11, 3.13 | [View on piwheels](https://www.piwheels.org/project/omnipkg/)
+**Latest Version:** `2.0.3` | **Python:**  | [View on piwheels](https://www.piwheels.org/project/omnipkg/)
 
 ```bash
 # Install on Raspberry Pi (ARM32)
@@ -577,14 +576,12 @@ pip3 install omnipkg==2.0.3
 ```
 
 **Verified Platforms:**
-- 🍓 Raspberry Pi (armv6/armv7)
-  - Bullseye (Debian 11) - Python 3.9
-  - Bookworm (Debian 12) - Python 3.11
-  - Trixie (Debian 13) - Python 3.13
-
-**Optimized wheels built and tested by [piwheels.org](https://www.piwheels.org/project/omnipkg/) on real Raspberry Pi hardware.**
+- 🍓 Raspberry Pi (armv6/armv7) - Bullseye (Debian 11), Bookworm (Debian 12), Trixie (Debian 13)
+- 📦 Wheel: [`https://www.piwheels.org/simple/omnipkg/omnipkg-2.0.3-py3-none-any.whl`](https://www.piwheels.org/simple/omnipkg/omnipkg-2.0.3-py3-none-any.whl)
 
 <!-- PIWHEELS_STATS_END -->
+
+
 
 <a href="https://www.piwheels.org/project/omnipkg/">
 <img src="https://img.shields.io/badge/piwheels-install-97BF0D?logo=raspberrypi&logoColor=white" alt="piwheels Install">
