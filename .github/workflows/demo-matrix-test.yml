@@ -1,5 +1,4 @@
-name: "🎪 Demo Matrix Test (All Demos)"
-
+name: "🎪 Demo Matrix Test (All Demos + Python Versions)"
 on:
   push:
     branches: [ development ]
@@ -8,12 +7,56 @@ on:
   workflow_dispatch:
 
 jobs:
+  # Quick syntax check across ALL Python versions (fast, no demos)
+  syntax-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ['3.7', '3.8', '3.9', '3.10', '3.11', '3.12', '3.13', '3.14']
+    
+    name: "Syntax Check - Python ${{ matrix.python }}"
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Python ${{ matrix.python }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python }}
+        allow-prereleases: true
+    
+    - name: Install omnipkg
+      run: |
+        python -m pip install --upgrade pip
+        pip install -e .
+    
+    - name: Basic imports (catch syntax errors)
+      run: |
+        python -c "import omnipkg"
+        python -c "from omnipkg import cli"
+        omnipkg --version
+        8pkg --version
+    
+    - name: Check for Python 3.8+ syntax in 3.7 code
+      if: matrix.python == '3.7'
+      run: |
+        echo "🔍 Scanning for walrus operator..."
+        ! grep -r " := " src/omnipkg --include="*.py" || {
+          echo "❌ ERROR: Found walrus operator (:=) which breaks Python 3.7"
+          exit 1
+        }
+
+  # Full demo suite on key Python versions
   demo-matrix:
+    needs: syntax-check
     runs-on: ubuntu-latest
     timeout-minutes: 15
     strategy:
-      fail-fast: false  # Run all demos even if one fails
+      fail-fast: false
       matrix:
+        python: ['3.7', '3.11', '3.14']  # Min, stable, bleeding-edge
         demo: [
           {num: 1, name: "Rich Module Switching"},
           {num: 2, name: "UV Binary Switching"},
@@ -27,15 +70,16 @@ jobs:
           {num: 10, name: "CLI Healing"}
         ]
     
-    name: "Demo ${{ matrix.demo.num }}: ${{ matrix.demo.name }}"
+    name: "Demo ${{ matrix.demo.num }} - Py${{ matrix.python }}"
     
     steps:
     - uses: actions/checkout@v3
     
-    - name: Set up Python 3.11
+    - name: Set up Python ${{ matrix.python }}
       uses: actions/setup-python@v4
       with:
-        python-version: '3.11'
+        python-version: ${{ matrix.python }}
+        allow-prereleases: true
     
     - name: Install omnipkg
       run: |
@@ -68,17 +112,18 @@ jobs:
       run: |
         8pkg daemon stop || true
 
-  # Individual chaos scenarios (for pinpointing issues)
-  # NOTE: Cannot run all 23 scenarios at once - runs out of disk space!
+  # Chaos scenarios - only on Python 3.11 (they already cover edge cases)
   chaos-individual:
+    needs: syntax-check
     runs-on: ubuntu-latest
     timeout-minutes: 10
     strategy:
       fail-fast: false
       matrix:
-        scenario: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23]
+        scenario: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23]
+        # REMOVED 13 - runs out of space on GitHub runners
     
-    name: "Chaos Scenario ${{ matrix.scenario }}"
+    name: "Chaos ${{ matrix.scenario }} - Py3.11"
     
     steps:
     - uses: actions/checkout@v3
@@ -99,7 +144,6 @@ jobs:
     - name: Run Chaos Scenario ${{ matrix.scenario }}
       timeout-minutes: 8
       run: |
-        # Select demo 11, wait for menu, then select specific scenario
         (echo "11"; sleep 2; echo "${{ matrix.scenario }}") | 8pkg demo
       continue-on-error: true
     
@@ -115,5 +159,40 @@ jobs:
       if: always()
       run: |
         8pkg daemon stop
-        # Clean up any leftover processes
         pkill -f "omnipkg" || true
+
+  # Test 13 in Podman (self-hosted or workflow_dispatch only)
+  chaos-13-podman:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 15
+    
+    name: "Chaos 13 (Podman - Needs Space)"
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Run in Podman with more space
+      run: |
+        podman run --rm -v $(pwd):/workspace:Z \
+          --platform linux/amd64 \
+          python:3.11-slim /bin/bash -c "
+          cd /workspace
+          pip install -e .
+          8pkg daemon start
+          sleep 3
+          (echo '11'; sleep 2; echo '13') | 8pkg demo
+          8pkg daemon stop
+        "
+
+  # PyPI release gate - requires all demos to pass on key Python versions
+  pypi-gate:
+    name: "✅ PyPI Release Gate"
+    needs: [syntax-check, demo-matrix, chaos-individual]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    steps:
+      - name: All tests passed
+        run: |
+          echo "🎉 All demos passed on Python 3.7, 3.11, 3.14!"
+          echo "✅ Ready for PyPI release"
