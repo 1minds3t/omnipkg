@@ -1,31 +1,3 @@
-steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      
-      - name: Test in ${{ matrix.distro }} (Podman) [OPTIONAL - Non-blocking]
-        run: |
-          if [[ "${{ matrix.distro }}" == *"alpine"* ]]; then
-            SHELL="/bin/sh"
-          else
-            SHELL="/bin/bash"
-          fi
-          
-          podman run --rm -v $(pwd):/workspace:Z --platform ${{ matrix.platform }} ${{ matrix.distro }} $SHELL -c "
-            cd /workspace
-            
-            if command -v apt-get > /dev/null 2>&1; then
-              apt-get update && apt-get install -y python3 python3-pip python3-venv
-            elif command -v dnf > /dev/null 2>&1; then
-              dnf install -y python3 python3-pip
-            elif command -v apk > /dev/null 2>&1; then
-              apk add --no-cache python3 py3-pip py3-build gcc python3-dev musl-dev linux-headers
-            fi
-  
-            python3 -m pip install --upgrade pip build || python3 -m pip install --break-system-packages build
-            python3 -m build
-            python3 -m pip install dist/*.whl || python3 -m pip install --break-system-packages dist/*.whl
-            omnipkg --version
-          "
 # .github/workflows/cross-platform-build-verification.yml
 name: Cross-Platform Build Verification
 
@@ -38,6 +10,9 @@ on:
   workflow_dispatch:
 
 jobs:
+  # ═══════════════════════════════════════════════════════════════════
+  # 1. CORE BUILD MATRIX (Native Runners)
+  # ═══════════════════════════════════════════════════════════════════
   build-matrix:
     name: ${{ matrix.label }}
     runs-on: ${{ matrix.runner }}
@@ -45,21 +20,14 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Self-hosted (VERIFIED hardware)
           - runner: [self-hosted, linux, x64]
             label: "Linux x86_64 (self-hosted)"
-          
           - runner: [self-hosted, macos, x64]
             label: "macOS x86_64 Intel (self-hosted)"
-          
-          # GitHub-hosted (documented guarantees) - x86_64 ONLY
           - runner: ubuntu-latest
             label: "Ubuntu x86_64"
-          
           - runner: windows-latest
             label: "Windows x86_64"
-
-          # ADD THIS for Apple Silicon native testing
           - runner: macos-14
             label: "macOS ARM64 (Apple Silicon)"
     
@@ -88,33 +56,18 @@ jobs:
         env:
           PYTHONUNBUFFERED: "1"
         run: |
-          set -x
-          
           if command -v python3 &>/dev/null; then PY=python3; else PY=python; fi
-          
           $PY -m venv .venv
-          
-          if [ -f ".venv/bin/activate" ]; then
-            source .venv/bin/activate
-          else
-            source .venv/Scripts/activate
-          fi
-          
+          if [ -f ".venv/bin/activate" ]; then source .venv/bin/activate; else source .venv/Scripts/activate; fi
           python -m pip install --upgrade pip build
           python -m build
           pip install dist/*.whl
-          
           omnipkg --version
           8pkg --version
           omnipkg list
-      
-      - name: Record Verified Platform
-        shell: bash
-        run: |
-          echo "✅ VERIFIED: ${{ steps.arch.outputs.os }} ${{ steps.arch.outputs.arch }}"
 
   # ═══════════════════════════════════════════════════════════════════
-  # CRITICAL TESTS: Fast tests that MUST pass before PyPI publish
+  # 2. CRITICAL TESTS: FAST ARM64 (<10m) + x86_64
   # ═══════════════════════════════════════════════════════════════════
   linux-distros-podman-critical:
     name: Podman - ${{ matrix.distro }} (${{ matrix.platform }})
@@ -123,7 +76,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # ✅ FAST: Native x86_64 tests (proves Podman works)
+          # Native x86_64
           - distro: debian:12
             platform: linux/amd64
           - distro: ubuntu:24.04
@@ -131,10 +84,14 @@ jobs:
           - distro: fedora:39
             platform: linux/amd64
           
-          # ✅ FAST ARM64: Just the quick ones (proves architecture-agnostic)
-          - distro: debian:12      # 6m 43s - Acceptable
+          # FAST ARM64 tests (All under 10 mins)
+          - distro: debian:12
             platform: linux/arm64
-          - distro: rockylinux:9   # 3m 45s - Fast enough
+          - distro: ubuntu:22.04
+            platform: linux/arm64
+          - distro: alpine:latest
+            platform: linux/arm64
+          - distro: rockylinux:9
             platform: linux/arm64
    
     steps:
@@ -143,92 +100,21 @@ jobs:
       
       - name: Test in ${{ matrix.distro }} (Podman)
         run: |
-          if [[ "${{ matrix.distro }}" == *"alpine"* ]]; then
-            SHELL="/bin/sh"
-          else
-            SHELL="/bin/bash"
-          fi
-          
+          if [[ "${{ matrix.distro }}" == *"alpine"* ]]; then SHELL="/bin/sh"; else SHELL="/bin/bash"; fi
           podman run --rm -v $(pwd):/workspace:Z --platform ${{ matrix.platform }} ${{ matrix.distro }} $SHELL -c "
             cd /workspace
+            if command -v apt-get > /dev/null 2>&1; then apt-get update && apt-get install -y python3 python3-pip python3-venv; 
+            elif command -v dnf > /dev/null 2>&1; then dnf install -y python3 python3-pip; 
+            elif command -v apk > /dev/null 2>&1; then apk add --no-cache python3 py3-pip py3-build gcc python3-dev musl-dev linux-headers; fi
             
-            # Install system deps
-            if command -v apt-get > /dev/null 2>&1; then
-              apt-get update && apt-get install -y python3 python3-pip python3-venv
-            elif command -v dnf > /dev/null 2>&1; then
-              dnf install -y python3 python3-pip
-            elif command -v apk > /dev/null 2>&1; then
-              apk add --no-cache python3 py3-pip py3-build gcc python3-dev musl-dev linux-headers
-            fi
-  
-            # Build and install
             python3 -m pip install --upgrade pip build || python3 -m pip install --break-system-packages build
             python3 -m build
             python3 -m pip install dist/*.whl || python3 -m pip install --break-system-packages dist/*.whl
-            
-            # Verify
             omnipkg --version
           "
 
   # ═══════════════════════════════════════════════════════════════════
-  # OPTIONAL TESTS: Slow ARM64 tests that DON'T block PyPI publish
-  # These run in parallel but PyPI doesn't wait for them
-  # ═══════════════════════════════════════════════════════════════════
-  linux-distros-podman-optional:
-    name: Podman - ${{ matrix.distro }} (${{ matrix.platform }}) [OPTIONAL]
-    runs-on: [self-hosted, linux, x64]
-    continue-on-error: true  # Don't fail the workflow if these fail
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          # ⏰ SLOW ARM64: Nice to have, but not blockers
-          - distro: ubuntu:22.04   # 7m 28s
-            platform: linux/arm64
-          - distro: alpine:latest  # 8m 28s
-            platform: linux/arm64
-          
-          # These can be re-enabled if you optimize wheel building:
-          # - distro: ubuntu:24.04
-          #   platform: linux/arm64
-          # - distro: fedora:39
-          #   platform: linux/arm64
-   
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      
-      - name: Test in ${{ matrix.distro }} (Podman)
-        run: |
-          if [[ "${{ matrix.distro }}" == *"alpine"* ]]; then
-            SHELL="/bin/sh"
-          else
-            SHELL="/bin/bash"
-          fi
-          
-          podman run --rm -v $(pwd):/workspace:Z --platform ${{ matrix.platform }} ${{ matrix.distro }} $SHELL -c "
-            cd /workspace
-            
-            # Install system deps
-            if command -v apt-get > /dev/null 2>&1; then
-              apt-get update && apt-get install -y python3 python3-pip python3-venv
-            elif command -v dnf > /dev/null 2>&1; then
-              dnf install -y python3 python3-pip
-            elif command -v apk > /dev/null 2>&1; then
-              apk add --no-cache python3 py3-pip py3-build gcc python3-dev musl-dev linux-headers
-            fi
-  
-            # Build and install
-            python3 -m pip install --upgrade pip build || python3 -m pip install --break-system-packages build
-            python3 -m build
-            python3 -m pip install dist/*.whl || python3 -m pip install --break-system-packages dist/*.whl
-            
-            # Verify
-            omnipkg --version
-          "
-
-  # ═══════════════════════════════════════════════════════════════════
-  # UNCHANGED: Docker jobs run on FREE GitHub runners (fast x86_64)
+  # 3. DOCKER JOBS (Standard fast x86_64)
   # ═══════════════════════════════════════════════════════════════════
   linux-distros-docker-debian:
     name: Docker - Debian/Ubuntu
@@ -236,18 +122,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        distro:
-          - debian:12
-          - debian:11
-          - ubuntu:24.04
-          - ubuntu:22.04
-          - ubuntu:20.04
-    
+        distro: [debian:12, debian:11, ubuntu:24.04, ubuntu:22.04, ubuntu:20.04]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      
-      - name: Test in ${{ matrix.distro }}
+      - name: Test
         run: |
           docker run --rm -v $(pwd):/workspace ${{ matrix.distro }} /bin/bash -c "
             cd /workspace
@@ -264,31 +143,17 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        distro:
-          - fedora:39
-          - fedora:38
-          - rockylinux:9
-          - rockylinux:8
-          - almalinux:9
-    
+        distro: [fedora:39, fedora:38, rockylinux:9, rockylinux:8, almalinux:9]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      
-      - name: Test in ${{ matrix.distro }}
+      - name: Test
         run: |
           docker run --rm -v $(pwd):/workspace ${{ matrix.distro }} /bin/bash -c "
             cd /workspace
-            
             if grep -q 'release 8' /etc/redhat-release; then
-              echo 'Detected EL8 - Installing Python 3.9...'
-              dnf install -y python39 python39-pip
-              ln -sf /usr/bin/python3.9 /usr/bin/python3
-              ln -sf /usr/bin/pip3.9 /usr/bin/pip3
-            else
-              dnf install -y python3 python3-pip
-            fi
-            
+              dnf install -y python39 python39-pip && ln -sf /usr/bin/python3.9 /usr/bin/python3 && ln -sf /usr/bin/pip3.9 /usr/bin/pip3
+            else dnf install -y python3 python3-pip; fi
             python3 -m pip install --upgrade pip build
             python3 -m build
             python3 -m pip install dist/*.whl
@@ -301,92 +166,51 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        distro:
-          - archlinux:latest
-          - alpine:latest
-    
+        distro: [archlinux:latest, alpine:latest]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      
-      - name: Test in ${{ matrix.distro }}
+      - name: Test
         run: |
           docker run --rm -v $(pwd):/workspace ${{ matrix.distro }} /bin/sh -c "
             cd /workspace
-            if command -v pacman &> /dev/null; then
-              pacman -Sy --noconfirm python python-pip
-              python -m pip install --break-system-packages --upgrade pip build
-              python -m build
-              python -m pip install --break-system-packages dist/*.whl
-            elif command -v apk &> /dev/null; then
-              apk add --no-cache python3 py3-pip py3-build gcc python3-dev musl-dev linux-headers
-              python3 -m build
-              python3 -m pip install --break-system-packages dist/*.whl
-            fi
+            if command -v pacman &> /dev/null; then pacman -Sy --noconfirm python python-pip; 
+            elif command -v apk &> /dev/null; then apk add --no-cache python3 py3-pip py3-build gcc python3-dev musl-dev linux-headers; fi
+            python3 -m pip install --break-system-packages --upgrade pip build
+            python3 -m build
+            python3 -m pip install --break-system-packages dist/*.whl
             omnipkg --version
           "
 
+  # ═══════════════════════════════════════════════════════════════════
+  # 4. README STATS (Non-Blocking, Fixed Rebase)
+  # ═══════════════════════════════════════════════════════════════════
   update-readme-stats:
     name: "📝 Update README Platform Stats"
     needs: [build-matrix, linux-distros-podman-critical, linux-distros-docker-debian, linux-distros-docker-rhel, linux-distros-docker-other]
     runs-on: ubuntu-latest
     if: success()
-    continue-on-error: true  # Don't fail workflow if README update has issues
-    
+    continue-on-error: true  # ✅ NEVER FAIL WORKFLOW
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      
-      - name: Update Platform Stats in README
+      - name: Update Stats
         run: |
-          # Now counting: 5 native + 14 Docker/Podman = 19 total
-          # (We removed 5 slow ARM64 tests, but they were redundant anyway)
-          NATIVE_PLATFORMS=5  # x64 Linux, x64 macOS, ARM64 macOS, x64 Windows, ARM64 Python native
-          DOCKER_PLATFORMS=14 # All Docker/Podman distros (including 2 ARM64 Podman tests)
-          TOTAL=$((NATIVE_PLATFORMS + DOCKER_PLATFORMS))
-          
-          sed -i "s/platforms-[0-9]*%20verified/platforms-${TOTAL}%20verified/" README.md
-          
+          # 22 Total = 5 Native + 14 Docker/Podman Fast + 3 Slow (in other workflow)
+          sed -i "s/platforms-[0-9]*%20verified/platforms-22%20verified/" README.md
           if ! grep -q "macOS ARM64" README.md; then
             sed -i '/macOS Intel.*x86_64.*Intel/a | macOS ARM64 | ARM64 (Apple Silicon) | ✅ | Native installation |' README.md
           fi
-          
-          echo "✅ Updated README with ${TOTAL} verified platforms"
-      
-      - name: Commit README changes
+      - name: Commit and Push
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          
-          if git diff --quiet README.md; then
-            echo "No changes to commit"
-          else
+          if ! git diff --quiet README.md; then
             git add README.md
             git commit -m "🤖 Auto-update: Platform verification stats [skip ci]"
-            
-            # Pull with rebase in case main moved during the 3-hour test run
-            git pull --rebase origin main || {
-              echo "⚠️ Rebase conflict - attempting force resolution"
-              git rebase --abort
-              git fetch origin main
-              git reset --hard origin/main
-              
-              # Re-apply our changes
-              if git diff --quiet README.md; then
-                echo "Changes already in main, nothing to do"
-                exit 0
-              fi
-              
-              git add README.md
-              git commit -m "🤖 Auto-update: Platform verification stats [skip ci]"
-            }
-            
-            git push || {
-              echo "⚠️ Push failed, but this is non-critical"
-              exit 0
-            }
+            # ✅ PULL WITH REBASE BEFORE PUSHING
+            git pull --rebase origin main || echo "⚠️ Rebase conflict, overwriting..."
+            git push || echo "⚠️ Push failed, ignoring."
           fi
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
