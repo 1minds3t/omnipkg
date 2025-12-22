@@ -440,6 +440,9 @@ This means omnipkg runs on **any** architecture where Python is available:
 
 <!-- PLATFORM_SUPPORT_END -->
 
+<!-- ARM64_STATUS_START -->
+<!-- ARM64_STATUS_END -->
+
 ---
 
 ### Installation Options
