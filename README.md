@@ -441,8 +441,24 @@ This means omnipkg runs on **any** architecture where Python is available:
 <!-- PLATFORM_SUPPORT_END -->
 
 <!-- ARM64_STATUS_START -->
-<!-- ARM64_STATUS_END -->
+### ✅ ARM64 Support Verified (QEMU)
 
+[![ARM64 Verified](https://img.shields.io/badge/ARM64_(aarch64)-6/6%20Verified-success?logo=linux&logoColor=white)](https://github.com/1minds3t/omnipkg/actions/workflows/arm64-verification.yml)
+
+**`omnipkg` is fully verified on ARM64.** This was achieved without needing expensive native hardware by using a powerful QEMU emulation setup on a self-hosted x86_64 runner. This process proves that the package installs and functions correctly on the following ARM64 Linux distributions:
+
+| Platform                 | Architecture    | Status | Notes           |
+|--------------------------|-----------------|:------:|-----------------|
+| Debian 12 (Bookworm)     | ARM64 (aarch64) |   ✅   | QEMU Emulation  |
+| Ubuntu 24.04 (Noble)     | ARM64 (aarch64) |   ✅   | QEMU Emulation  |
+| Ubuntu 22.04 (Jammy)     | ARM64 (aarch64) |   ✅   | QEMU Emulation  |
+| Fedora 39                | ARM64 (aarch64) |   ✅   | QEMU Emulation  |
+| Rocky Linux 9            | ARM64 (aarch64) |   ✅   | QEMU Emulation  |
+| Alpine Linux             | ARM64 (aarch64) |   ✅   | QEMU Emulation  |
+
+This verification acts as a critical pre-release gate, ensuring that any version published to PyPI is confirmed to work for ARM64 users before it's released.
+
+<!-- ARM64_STATUS_END -->
 ---
 
 ### Installation Options
