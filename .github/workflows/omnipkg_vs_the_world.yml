@@ -207,7 +207,7 @@ jobs:
               f"(https://img.shields.io/badge/uv-{uv_failures}%20Failures-red"
               f"?logo=python&logoColor=white)]"
               f"(https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml)\n\n"
-              f"*Multi-version installation tests run hourly. [Live results here.]"
+              f"*Multi-version installation tests run every 3 hours. [Live results here.]"
               f"(https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml)*\n\n"
               f"---\n"
           )
