@@ -258,3 +258,47 @@ jobs:
             fi
             omnipkg --version
           "
+  update-readme-stats:
+    name: "📝 Update README Platform Stats"
+    needs: [build-matrix, linux-distros-podman, linux-distros-docker-debian, linux-distros-docker-rhel, linux-distros-docker-other]
+    runs-on: ubuntu-latest
+    if: success() # Only run if all tests passed
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Need full history for commit
+      
+      - name: Update Platform Stats in README
+        run: |
+          # Count platforms (update these numbers based on your matrix)
+          NATIVE_PLATFORMS=4  # Linux x64, macOS x64, macOS ARM64, Windows x64
+          DOCKER_PLATFORMS=14 # All your Docker/Podman distros
+          TOTAL=$((NATIVE_PLATFORMS + DOCKER_PLATFORMS))
+          
+          # Update the "Platforms Verified" badge
+          sed -i "s/platforms-[0-9]*%20verified/platforms-${TOTAL}%20verified/" README.md
+          
+          # Add macOS ARM64 to the platform table if not already there
+          if ! grep -q "macOS ARM64" README.md; then
+            # Find the macOS Intel line and add ARM64 after it
+            sed -i '/macOS Intel.*x86_64.*Intel/a | macOS ARM64 | ARM64 (Apple Silicon) | ✅ | Native installation |' README.md
+          fi
+          
+          echo "✅ Updated README with ${TOTAL} verified platforms"
+      
+      - name: Commit README changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          if git diff --quiet README.md; then
+            echo "No changes to commit"
+          else
+            git add README.md
+            git commit -m "🤖 Auto-update: Platform verification stats [skip ci]"
+            git push
+          fi
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
