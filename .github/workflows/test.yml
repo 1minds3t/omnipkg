@@ -1,0 +1,48 @@
+- name: Build and Test
+        shell: bash
+        env:
+          PYTHONUNBUFFERED: "1"
+        run: |
+          set -x
+          echo "════════════════════════════════════════════════════════"
+          echo "🔍 DIAGNOSTIC INFO"
+          echo "════════════════════════════════════════════════════════"
+          whoami
+          pwd
+          echo "Python locations:"
+          which python3 || echo "No python3"
+          which python || echo "No python"
+          python3 --version 2>&1 || echo "python3 --version failed"
+          python --version 2>&1 || echo "python --version failed"
+          echo "Pip locations:"
+          which pip3 || echo "No pip3"
+          which pip || echo "No pip"
+          echo "Environment:"
+          env | grep -i python || echo "No PYTHON env vars"
+          echo "════════════════════════════════════════════════════════"
+          
+          if command -v python3 &>/dev/null; then PY=python3; else PY=python; fi
+          echo "Using: $PY ($($PY --version))"
+          
+          # NUCLEAR OPTION: Skip venv entirely on self-hosted
+          if [[ "${{ matrix.runner }}" == *"self-hosted"* ]]; then
+            echo "⚡ Self-hosted detected - installing directly (no venv)"
+            $PY -m pip install --user --upgrade pip build || {
+              echo "pip install failed, trying with curl bootstrap..."
+              curl -sS https://bootstrap.pypa.io/get-pip.py | $PY - --user
+              $PY -m pip install --user --upgrade pip build
+            }
+            $PY -m build
+            $PY -m pip install --user dist/*.whl
+          else
+            echo "📦 GitHub-hosted runner - using venv"
+            $PY -m venv .venv
+            if [ -f ".venv/bin/activate" ]; then source .venv/bin/activate; else source .venv/Scripts/activate; fi
+            python -m pip install --upgrade pip build
+            python -m build
+            pip install dist/*.whl
+          fi
+          
+          omnipkg --version
+          8pkg --version
+          omnipkg list
