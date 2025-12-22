@@ -52,24 +52,60 @@ jobs:
           PYTHONUNBUFFERED: "1"
         run: |
           set -x
-          if command -v python3 &>/dev/null; then PY=python3; else PY=python; fi
           
-          # ROBUST VENV: Bypasses broken system pip on self-hosted runners
-          if ! $PY -m venv .venv; then
-             echo "⚠️ Standard venv failed. Retrying with --without-pip..."
-             $PY -m venv .venv --without-pip
-             curl -sS https://bootstrap.pypa.io/get-pip.py | .venv/bin/python
+          # LINUX SELF-HOSTED: Use working diagnostic approach
+          if [[ "${{ matrix.runner }}" == *"self-hosted"* ]] && [[ "${{ matrix.runner }}" == *"linux"* ]]; then
+            if [ -f "$HOME/miniconda3/envs/evocoder_env/bin/python3.11" ]; then
+              PY="$HOME/miniconda3/envs/evocoder_env/bin/python3.11"
+            elif [ -f "/usr/bin/python3.11" ]; then
+              PY=/usr/bin/python3.11
+            elif [ -f "/usr/bin/python3.12" ]; then
+              PY=/usr/bin/python3.12
+            else
+              echo "❌ No suitable Python found"
+              exit 1
+            fi
+            
+            $PY --version
+            
+            echo "🔥 Installing pip and build"
+            $PY -m pip install --user --upgrade pip build || {
+              curl -sS https://bootstrap.pypa.io/get-pip.py | $PY - --user
+              $PY -m pip install --user --upgrade pip build
+            }
+            
+            echo "Building package..."
+            $PY -m build
+            
+            echo "Installing package..."
+            $PY -m pip install --user --force-reinstall dist/*.whl
+            
+            echo "Testing installation..."
+            export PATH="$HOME/.local/bin:$PATH"
+            omnipkg --version
+            8pkg --version
+            omnipkg list
+          
+          # ALL OTHER PLATFORMS: Use venv approach
+          else
+            if command -v python3 &>/dev/null; then PY=python3; else PY=python; fi
+            
+            if ! $PY -m venv .venv; then
+               echo "⚠️ Standard venv failed. Retrying with --without-pip..."
+               $PY -m venv .venv --without-pip
+               curl -sS https://bootstrap.pypa.io/get-pip.py | .venv/bin/python
+            fi
+            
+            if [ -f ".venv/bin/activate" ]; then source .venv/bin/activate; else source .venv/Scripts/activate; fi
+            
+            python -m pip install --upgrade pip build
+            python -m build
+            pip install dist/*.whl
+            
+            omnipkg --version
+            8pkg --version
+            omnipkg list
           fi
-          
-          if [ -f ".venv/bin/activate" ]; then source .venv/bin/activate; else source .venv/Scripts/activate; fi
-          
-          python -m pip install --upgrade pip build
-          python -m build
-          pip install dist/*.whl
-          
-          omnipkg --version
-          8pkg --version
-          omnipkg list
 
   # ═══════════════════════════════════════════════════════════════════
   # 2. CRITICAL TESTS
