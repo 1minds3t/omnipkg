@@ -1,0 +1,15 @@
+name: Prevent Paid Security Scanners
+
+on: [pull_request]
+
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          forbidden='snyk|veracode|black-duck|synopsys|jfrog|sonarqube|sonarcloud|checkmarx|anchore|sysdig|zscaler'
+          if grep -RiqE "$forbidden" .github/workflows; then
+            echo "❌ Paid security scanner detected"
+            exit 1
+          fi
