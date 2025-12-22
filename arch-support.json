@@ -1,6 +1,0 @@
-{
-  "schemaVersion": 1,
-  "label": "architectures",
-  "message": "x86_64 | ARM64 | aarch64",
-  "color": "blue"
-}
