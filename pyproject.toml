@@ -44,8 +44,6 @@ dependencies = [
 
     # Filelock: vendored for <3.10, external for >=3.10 (CVE-2025-68146)
     "filelock>=3.20.1; python_version >= '3.10'",
-    # Python 3.7-3.9 use vendored patched version 3.12.2
-    # Planned better version support for >3.7  "filelock>=3.13,<3.20.1; python_version >= '3.8' and python_version < '3.10'",
     
     # Packaging version splits
     "packaging>=20.0,<21.0; python_version < '3.8'",
@@ -67,16 +65,20 @@ dependencies = [
     # authlib
     "authlib>=1.2.0; python_version >= '3.7'",
     
-    # aiohttp - FIXED VERSION REQUIREMENTS
+    # aiohttp
     "aiohttp>=3.7.0,<3.9.0; python_version == '3.7'",
-    "aiohttp>=3.8.0,<3.11.0; python_version == '3.8'",  # <- FIXED: 3.8 can't use 3.13+
-    "aiohttp>=3.13.1; python_version >= '3.9'",         # <- FIXED: 3.13+ needs 3.9+
+    "aiohttp>=3.8.0,<3.11.0; python_version == '3.8'",
+    "aiohttp>=3.13.1; python_version >= '3.9'",
     
     # Security scanning - safety for supported Python versions
     "safety>=3.7.0; python_version >= '3.9' and python_version < '3.14'",
     
     # pip-audit fallback for Python versions safety doesn't support
-    "pip-audit>=2.6.0; python_version < '3.9' or python_version >= '3.14'",
+    # FIXED: Split into two lines.
+    # 1. No version constraint for <3.9 (allows downgrade to match old packaging)
+    "pip-audit; python_version < '3.9'",
+    # 2. Strict constraint for >=3.14
+    "pip-audit>=2.6.0; python_version >= '3.14'",
     
     # uv
     "uv>=0.9.6; python_version >= '3.8'",
@@ -86,7 +88,6 @@ dependencies = [
 full = [
     "tqdm>=4.50.0",
     "python-magic>=0.4.18",
-    # Redis 5.0 requires Python 3.8+
     "redis>=4.0.0,<5.0; python_version == '3.7'",
     "redis>=5.0; python_version >= '3.8'",
 ]
