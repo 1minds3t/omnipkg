@@ -3,44 +3,43 @@ name: Publish to PyPI
 on:
   release:
     types: [published]
-  workflow_dispatch: # Allows you to manually trigger the workflow
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to publish (e.g., 2.0.4)'
+        required: true
+        type: string
 
 permissions:
   contents: read
-  id-token: write # Required for secure OIDC authentication with PyPI
+  id-token: write
 
 jobs:
-  # Wait for the consolidated cross-platform build verification to complete
   wait-for-tests:
-    name: Wait for Build Verification
+    name: Wait for ALL Build Tests
     runs-on: ubuntu-latest
     
     steps:
-      - name: Wait for Cross-Platform Build Verification
+      - name: Wait for ENTIRE Cross-Platform Workflow
         uses: fountainhead/action-wait-for-check@v1.1.0
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          checkName: 'Linux x86_64 (self-hosted)'  # Pick any job from the matrix as a proxy
-          ref: ${{ github.event.release.tag_name }}
-          timeoutSeconds: 3600  # 1 hour timeout (adjust as needed)
+          # Wait for the WORKFLOW to complete, not just one job
+          checkName: 'Cross-Platform Build Verification'  # This is the workflow name
+          ref: ${{ github.event.release.tag_name || github.sha }}
+          timeoutSeconds: 3600
           intervalSeconds: 30
-      
-      - name: All tests passed
-        run: |
-          echo "✅ Cross-platform build verification complete!"
-          echo "✅ All required tests passed!"
-          echo "Proceeding to PyPI publish..."
 
   deploy:
     needs: wait-for-tests
     runs-on: ubuntu-latest
-    environment: pypi # Recommended for security
+    environment: pypi
     
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
       with:
-        fetch-depth: 0 # Fetch full history to ensure we have the latest commits
+        ref: ${{ github.event.release.tag_name || github.ref }}
       
     - name: Set up Python
       uses: actions/setup-python@v5
@@ -56,29 +55,32 @@ jobs:
       run: |
         PACKAGE_VERSION=$(python -c "import tomli; print(tomli.load(open('pyproject.toml', 'rb'))['project']['version'])")
         
-        TAG_VERSION="${{ github.ref_name }}"
-        RELEASE_VERSION=${TAG_VERSION#v}
+        # For manual runs, use the input version. For releases, parse the tag.
+        if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+          EXPECTED_VERSION="${{ inputs.version }}"
+        else
+          TAG_VERSION="${{ github.ref_name }}"
+          EXPECTED_VERSION=${TAG_VERSION#v}
+        fi
         
-        echo "Detected version from pyproject.toml: $PACKAGE_VERSION"
-        echo "Expected release version from tag: $RELEASE_VERSION (from tag $TAG_VERSION)"
+        echo "Package version: $PACKAGE_VERSION"
+        echo "Expected version: $EXPECTED_VERSION"
         
-        if [ "$PACKAGE_VERSION" != "$RELEASE_VERSION" ]; then
-          echo "❌ Error: The version in pyproject.toml ($PACKAGE_VERSION) does not match the release tag version ($RELEASE_VERSION)."
+        if [ "$PACKAGE_VERSION" != "$EXPECTED_VERSION" ]; then
+          echo "❌ Version mismatch!"
           exit 1
         fi
         
-    - name: Clean old builds and build new package
+    - name: Clean and build
       run: |
         rm -rf dist/ build/ *.egg-info/
         python -m build
         
-    - name: Publish package to PyPI
+    - name: Publish to PyPI
       uses: pypa/gh-action-pypi-publish@release/v1
       with:
         password: ${{ secrets.PYPI_API_TOKEN }}
     
-    - name: Publish success
+    - name: Success
       if: success()
-      run: |
-        echo "🎉 Successfully published to PyPI!"
-        echo "Version: ${{ github.event.release.tag_name }}"
+      run: echo "🎉 Published version ${{ inputs.version || github.ref_name }}"
