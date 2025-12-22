@@ -56,12 +56,27 @@ jobs:
         env:
           PYTHONUNBUFFERED: "1"
         run: |
+          set -x
+          
           if command -v python3 &>/dev/null; then PY=python3; else PY=python; fi
-          $PY -m venv .venv
-          if [ -f ".venv/bin/activate" ]; then source .venv/bin/activate; else source .venv/Scripts/activate; fi
+          
+          # FIX: Try creating venv normally. If it fails (missing ensurepip), force it without pip and bootstrap manually.
+          if ! $PY -m venv .venv; then
+            echo "⚠️ Standard venv failed. Retrying with --without-pip and manual bootstrapping..."
+            $PY -m venv .venv --without-pip
+            curl -sS https://bootstrap.pypa.io/get-pip.py | .venv/bin/python
+          fi
+          
+          if [ -f ".venv/bin/activate" ]; then
+            source .venv/bin/activate
+          else
+            source .venv/Scripts/activate
+          fi
+          
           python -m pip install --upgrade pip build
           python -m build
           pip install dist/*.whl
+          
           omnipkg --version
           8pkg --version
           omnipkg list
