@@ -13,22 +13,144 @@ on:
 permissions:
   contents: read
   id-token: write
+  actions: write
 
 jobs:
+  ensure-tests-running:
+    name: Ensure Build Tests Are Running
+    runs-on: ubuntu-latest
+    outputs:
+      run_id: ${{ steps.find-or-trigger.outputs.run_id }}
+    
+    steps:
+      - name: Find existing or trigger new build
+        id: find-or-trigger
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const workflow_id = 'cross-platform-build-verification.yml';
+            const ref = context.eventName === 'release' 
+              ? context.payload.release.tag_name 
+              : context.ref;
+            
+            // Check if there's already a running build
+            const runs = await github.rest.actions.listWorkflowRuns({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: workflow_id,
+              status: 'in_progress',
+              per_page: 10
+            });
+            
+            let targetRun = runs.data.workflow_runs.find(run => 
+              run.head_sha === context.sha || run.head_branch === ref
+            );
+            
+            if (targetRun) {
+              console.log(`✅ Found existing running build: ${targetRun.id}`);
+              core.setOutput('run_id', targetRun.id);
+              return;
+            }
+            
+            // If release event, wait for the auto-triggered build to appear
+            if (context.eventName === 'release') {
+              console.log('📦 Release event - waiting for auto-triggered build to appear...');
+              
+              for (let i = 0; i < 12; i++) { // Wait up to 1 minute
+                await new Promise(resolve => setTimeout(resolve, 5000));
+                
+                const refreshRuns = await github.rest.actions.listWorkflowRuns({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  workflow_id: workflow_id,
+                  per_page: 10
+                });
+                
+                targetRun = refreshRuns.data.workflow_runs.find(run => 
+                  run.head_sha === context.sha
+                );
+                
+                if (targetRun) {
+                  console.log(`✅ Found auto-triggered build: ${targetRun.id}`);
+                  core.setOutput('run_id', targetRun.id);
+                  return;
+                }
+              }
+              
+              throw new Error('❌ Release should have auto-triggered build, but none found');
+            }
+            
+            // Manual trigger - create new build
+            console.log('🔧 Manual workflow_dispatch - triggering new build...');
+            
+            await github.rest.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: workflow_id,
+              ref: ref
+            });
+            
+            console.log('Waiting for new build to appear...');
+            
+            // Wait for the triggered build to show up
+            for (let i = 0; i < 24; i++) { // Wait up to 2 minutes
+              await new Promise(resolve => setTimeout(resolve, 5000));
+              
+              const newRuns = await github.rest.actions.listWorkflowRuns({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                workflow_id: workflow_id,
+                per_page: 5
+              });
+              
+              const latestRun = newRuns.data.workflow_runs[0];
+              if (latestRun && latestRun.status !== 'completed') {
+                console.log(`✅ New build started: ${latestRun.id}`);
+                core.setOutput('run_id', latestRun.id);
+                return;
+              }
+            }
+            
+            throw new Error('❌ Failed to find triggered build');
+
   wait-for-tests:
-    name: Wait for ALL Build Tests
+    name: Wait for Build Completion
+    needs: ensure-tests-running
     runs-on: ubuntu-latest
     
     steps:
-      - name: Wait for ENTIRE Cross-Platform Workflow
-        uses: fountainhead/action-wait-for-check@v1.1.0
+      - name: Wait for build workflow
+        uses: actions/github-script@v7
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          # Wait for the WORKFLOW to complete, not just one job
-          checkName: 'Cross-Platform Build Verification'  # This is the workflow name
-          ref: ${{ github.event.release.tag_name || github.sha }}
-          timeoutSeconds: 3600
-          intervalSeconds: 30
+          script: |
+            const run_id = '${{ needs.ensure-tests-running.outputs.run_id }}';
+            const maxAttempts = 120; // 1 hour
+            const intervalMs = 30000;
+            
+            console.log(`Monitoring build run ID: ${run_id}`);
+            
+            for (let i = 0; i < maxAttempts; i++) {
+              const run = await github.rest.actions.getWorkflowRun({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                run_id: run_id
+              });
+              
+              console.log(`Status: ${run.data.status} | Conclusion: ${run.data.conclusion || 'N/A'}`);
+              
+              if (run.data.status === 'completed') {
+                if (run.data.conclusion === 'success') {
+                  console.log('✅ All build tests passed!');
+                  return;
+                } else {
+                  throw new Error(`❌ Build failed with conclusion: ${run.data.conclusion}`);
+                }
+              }
+              
+              await new Promise(resolve => setTimeout(resolve, intervalMs));
+            }
+            
+            throw new Error('❌ Timeout waiting for build');
 
   deploy:
     needs: wait-for-tests
@@ -55,7 +177,6 @@ jobs:
       run: |
         PACKAGE_VERSION=$(python -c "import tomli; print(tomli.load(open('pyproject.toml', 'rb'))['project']['version'])")
         
-        # For manual runs, use the input version. For releases, parse the tag.
         if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
           EXPECTED_VERSION="${{ inputs.version }}"
         else
@@ -82,5 +203,4 @@ jobs:
         password: ${{ secrets.PYPI_API_TOKEN }}
     
     - name: Success
-      if: success()
-      run: echo "🎉 Published version ${{ inputs.version || github.ref_name }}"
+      run: echo "🎉 Published!"
