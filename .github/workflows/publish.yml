@@ -119,24 +119,29 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
-      - name: Wait for build workflow
+      - name: Wait for build workflow (INFINITE - NO TIMEOUT)
         uses: actions/github-script@v7
         with:
           script: |
             const run_id = '${{ needs.ensure-tests-running.outputs.run_id }}';
-            const maxAttempts = 120; // 1 hour
-            const intervalMs = 30000;
+            const intervalMs = 30000; // Check every 30 seconds
             
-            console.log(`Monitoring build run ID: ${run_id}`);
+            console.log(`🔍 Monitoring build run ID: ${run_id}`);
+            console.log(`⏰ Will wait INDEFINITELY until build completes (no timeout)`);
             
-            for (let i = 0; i < maxAttempts; i++) {
+            let iteration = 0;
+            
+            while (true) {
+              iteration++;
+              
               const run = await github.rest.actions.getWorkflowRun({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 run_id: run_id
               });
               
-              console.log(`Status: ${run.data.status} | Conclusion: ${run.data.conclusion || 'N/A'}`);
+              const elapsed = Math.floor((iteration * intervalMs) / 60000);
+              console.log(`[${elapsed}m] Status: ${run.data.status} | Conclusion: ${run.data.conclusion || 'N/A'}`);
               
               if (run.data.status === 'completed') {
                 if (run.data.conclusion === 'success') {
@@ -147,10 +152,15 @@ jobs:
                 }
               }
               
+              // Still running - keep waiting
+              if (run.data.status === 'queued') {
+                console.log('   ⏳ Build is queued, waiting for runner...');
+              } else if (run.data.status === 'in_progress') {
+                console.log('   🏃 Build is running...');
+              }
+              
               await new Promise(resolve => setTimeout(resolve, intervalMs));
             }
-            
-            throw new Error('❌ Timeout waiting for build');
 
   deploy:
     needs: wait-for-tests
