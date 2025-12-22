@@ -1,48 +1,126 @@
-- name: Build and Test
+name: Test Self-Hosted Linux Only
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  test-self-hosted-linux:
+    name: "🔥 Linux x86_64 (self-hosted) - DIAGNOSTIC MODE"
+    runs-on: [self-hosted, linux, x64]
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      
+      - name: Full Diagnostic Dump
+        shell: bash
+        run: |
+          echo "════════════════════════════════════════════════════════"
+          echo "🔍 SYSTEM INFO"
+          echo "════════════════════════════════════════════════════════"
+          uname -a
+          whoami
+          pwd
+          echo ""
+          echo "════════════════════════════════════════════════════════"
+          echo "🐍 PYTHON INFO"
+          echo "════════════════════════════════════════════════════════"
+          echo "Python3 location:"
+          which python3 || echo "❌ No python3 in PATH"
+          python3 --version 2>&1 || echo "❌ python3 --version failed"
+          echo ""
+          echo "Python location:"
+          which python || echo "❌ No python in PATH"
+          python --version 2>&1 || echo "❌ python --version failed"
+          echo ""
+          echo "All python* binaries:"
+          ls -la /usr/bin/python* 2>/dev/null || echo "None in /usr/bin"
+          echo ""
+          echo "════════════════════════════════════════════════════════"
+          echo "📦 PIP INFO"
+          echo "════════════════════════════════════════════════════════"
+          echo "pip3 location:"
+          which pip3 || echo "❌ No pip3 in PATH"
+          pip3 --version 2>&1 || echo "❌ pip3 --version failed"
+          echo ""
+          echo "pip location:"
+          which pip || echo "❌ No pip in PATH"
+          pip --version 2>&1 || echo "❌ pip --version failed"
+          echo ""
+          echo "════════════════════════════════════════════════════════"
+          echo "🔧 PYTHON MODULES"
+          echo "════════════════════════════════════════════════════════"
+          python3 -m pip --version 2>&1 || echo "❌ python3 -m pip failed"
+          python3 -c "import ensurepip; print(f'ensurepip: {ensurepip.version()}')" 2>&1 || echo "❌ ensurepip not available"
+          python3 -c "import venv; print('venv: available')" 2>&1 || echo "❌ venv not available"
+          python3 -c "import distutils; print('distutils: available')" 2>&1 || echo "❌ distutils not available"
+          echo ""
+          echo "════════════════════════════════════════════════════════"
+          echo "🌍 ENVIRONMENT"
+          echo "════════════════════════════════════════════════════════"
+          env | grep -i python | sort || echo "No PYTHON* env vars"
+          echo ""
+          echo "PATH:"
+          echo "$PATH" | tr ':' '\n'
+          echo ""
+          echo "════════════════════════════════════════════════════════"
+          
+      - name: Test Direct Install (No venv)
         shell: bash
         env:
           PYTHONUNBUFFERED: "1"
         run: |
           set -x
-          echo "════════════════════════════════════════════════════════"
-          echo "🔍 DIAGNOSTIC INFO"
-          echo "════════════════════════════════════════════════════════"
-          whoami
-          pwd
-          echo "Python locations:"
-          which python3 || echo "No python3"
-          which python || echo "No python"
-          python3 --version 2>&1 || echo "python3 --version failed"
-          python --version 2>&1 || echo "python --version failed"
-          echo "Pip locations:"
-          which pip3 || echo "No pip3"
-          which pip || echo "No pip"
-          echo "Environment:"
-          env | grep -i python || echo "No PYTHON env vars"
-          echo "════════════════════════════════════════════════════════"
           
           if command -v python3 &>/dev/null; then PY=python3; else PY=python; fi
-          echo "Using: $PY ($($PY --version))"
+          echo "Using: $PY"
           
-          # NUCLEAR OPTION: Skip venv entirely on self-hosted
-          if [[ "${{ matrix.runner }}" == *"self-hosted"* ]]; then
-            echo "⚡ Self-hosted detected - installing directly (no venv)"
-            $PY -m pip install --user --upgrade pip build || {
-              echo "pip install failed, trying with curl bootstrap..."
-              curl -sS https://bootstrap.pypa.io/get-pip.py | $PY - --user
-              $PY -m pip install --user --upgrade pip build
-            }
-            $PY -m build
-            $PY -m pip install --user dist/*.whl
-          else
-            echo "📦 GitHub-hosted runner - using venv"
-            $PY -m venv .venv
-            if [ -f ".venv/bin/activate" ]; then source .venv/bin/activate; else source .venv/Scripts/activate; fi
-            python -m pip install --upgrade pip build
-            python -m build
-            pip install dist/*.whl
-          fi
+          echo "🔥 METHOD 1: Direct pip install --user"
+          $PY -m pip install --user --upgrade pip build || {
+            echo "❌ Failed. Trying bootstrap..."
+            curl -sS https://bootstrap.pypa.io/get-pip.py | $PY - --user
+            $PY -m pip install --user --upgrade pip build
+          }
           
+          echo "Building package..."
+          $PY -m build
+          
+          echo "Installing package..."
+          $PY -m pip install --user --force-reinstall dist/*.whl
+          
+          echo "Testing installation..."
+          $PY -m omnipkg --version
           omnipkg --version
           8pkg --version
           omnipkg list
+          
+      - name: Test venv Creation (Will probably fail)
+        shell: bash
+        continue-on-error: true
+        run: |
+          set -x
+          if command -v python3 &>/dev/null; then PY=python3; else PY=python; fi
+          
+          echo "🧪 Testing venv creation..."
+          $PY -m venv test_venv 2>&1 || {
+            echo "❌ venv creation failed with exit code $?"
+            echo "Trying --without-pip..."
+            $PY -m venv test_venv --without-pip 2>&1 || echo "That also failed"
+          }
+          
+          if [ -d "test_venv" ]; then
+            echo "✅ test_venv directory created"
+            ls -la test_venv/
+            if [ -f "test_venv/bin/activate" ]; then
+              echo "✅ activate script exists"
+              source test_venv/bin/activate
+              python --version
+              which python
+            else
+              echo "❌ No activate script"
+            fi
+          else
+            echo "❌ No test_venv directory created"
+          fi
