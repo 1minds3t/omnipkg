@@ -71,26 +71,40 @@ jobs:
         shell: bash
         env:
           PYTHONUNBUFFERED: "1"
-          PATH: "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
         run: |
           set -x
           
-          # FORCE SYSTEM PYTHON - FUCK CONDA
-          # Conda Python 3.14 is broken, use system Python 3.12
-          if [ -f "/usr/bin/python3.12" ]; then
+          # EXPLICIT PYTHON SELECTION HIERARCHY:
+          # 1. Conda env's native Python 3.11 (best option since it's already there)
+          # 2. System Python 3.11
+          # 3. System Python 3.12
+          # 4. NEVER use Python 3.14 (broken standalone build)
+          
+          if [ -f "$HOME/miniconda3/envs/evocoder_env/bin/python3.11" ]; then
+            PY="$HOME/miniconda3/envs/evocoder_env/bin/python3.11"
+            echo "🎯 Using conda env native Python 3.11: $PY"
+          elif [ -f "/usr/bin/python3.11" ]; then
+            PY=/usr/bin/python3.11
+            echo "🎯 Using system Python 3.11: $PY"
+          elif [ -f "/usr/bin/python3.12" ]; then
             PY=/usr/bin/python3.12
-            echo "🎯 Using system Python: $PY"
-          elif [ -f "/usr/bin/python3" ]; then
-            PY=/usr/bin/python3
-            echo "🎯 Using system Python: $PY"
+            echo "🎯 Using system Python 3.12: $PY"
           else
-            echo "❌ No system Python found"
+            echo "❌ No suitable Python found (need 3.11 or 3.12)"
             exit 1
           fi
           
           $PY --version
+          echo "Real path: $(readlink -f $PY)"
           
-          echo "🔥 Installing pip and build to system Python"
+          # Verify it's not the broken 3.14
+          VERSION=$($PY --version 2>&1 | grep -oP '3\.\d+')
+          if [ "$VERSION" == "3.14" ]; then
+            echo "❌ Detected Python 3.14 (broken), aborting"
+            exit 1
+          fi
+          
+          echo "🔥 Installing pip and build"
           $PY -m pip install --user --upgrade pip build || {
             echo "❌ Failed. Trying bootstrap..."
             curl -sS https://bootstrap.pypa.io/get-pip.py | $PY - --user
