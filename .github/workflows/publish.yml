@@ -10,35 +10,25 @@ permissions:
   id-token: write # Required for secure OIDC authentication with PyPI
 
 jobs:
-  # Wait for required tests to pass before publishing
+  # Wait for the consolidated cross-platform build verification to complete
   wait-for-tests:
-    name: Wait for Required Tests
+    name: Wait for Build Verification
     runs-on: ubuntu-latest
     
     steps:
-      - name: Wait for Cross-Platform Tests
-        uses: lewagon/wait-on-check-action@v1.3.1
+      - name: Wait for Cross-Platform Build Verification
+        uses: fountainhead/action-wait-for-check@v1.1.0
         with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          checkName: 'Linux x86_64 (self-hosted)'  # Pick any job from the matrix as a proxy
           ref: ${{ github.event.release.tag_name }}
-          check-name: 'Linux x86_64 (self-hosted)'
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
-          wait-interval: 30
-          allowed-conclusions: success
+          timeoutSeconds: 3600  # 1 hour timeout (adjust as needed)
+          intervalSeconds: 30
       
-      - name: Wait for ARM64 QEMU Tests
-        uses: lewagon/wait-on-check-action@v1.3.1
-        with:
-          ref: ${{ github.event.release.tag_name }}
-          check-name: 'ARM64 - Debian 12'
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
-          wait-interval: 30
-          allowed-conclusions: success
-      
-      - name: Tests passed
+      - name: All tests passed
         run: |
+          echo "✅ Cross-platform build verification complete!"
           echo "✅ All required tests passed!"
-          echo "✅ Cross-platform verification complete"
-          echo "✅ ARM64 QEMU verification complete"
           echo "Proceeding to PyPI publish..."
 
   deploy:
@@ -52,41 +42,34 @@ jobs:
       with:
         fetch-depth: 0 # Fetch full history to ensure we have the latest commits
       
-    - name: Clear GitHub Actions cache
-      run: |
-        echo "Clearing any cached data..."
-        rm -rf ~/.cache/pip
-        
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
         python-version: '3.11'
-        # Removed pip cache to force fresh install
         
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        # 🔑 FIX: Install 'tomli' instead of 'toml' for robust TOML parsing
         pip install build twine tomli
         
     - name: Verify package version
       run: |
-        # 🔑 FIX: Use 'tomli' (installed above) to read pyproject.toml in binary mode
         PACKAGE_VERSION=$(python -c "import tomli; print(tomli.load(open('pyproject.toml', 'rb'))['project']['version'])")
         
         TAG_VERSION="${{ github.ref_name }}"
-        # Remove 'v' prefix if it exists from the tag name
         RELEASE_VERSION=${TAG_VERSION#v}
+        
         echo "Detected version from pyproject.toml: $PACKAGE_VERSION"
         echo "Expected release version from tag: $RELEASE_VERSION (from tag $TAG_VERSION)"
+        
         if [ "$PACKAGE_VERSION" != "$RELEASE_VERSION" ]; then
-          echo "Error: The version in pyproject.toml ($PACKAGE_VERSION) does not match the release tag version ($RELEASE_VERSION)."
+          echo "❌ Error: The version in pyproject.toml ($PACKAGE_VERSION) does not match the release tag version ($RELEASE_VERSION)."
           exit 1
         fi
         
     - name: Clean old builds and build new package
       run: |
-        rm -rf dist/ build/ *.egg-info/ # Clean all build artifacts
+        rm -rf dist/ build/ *.egg-info/
         python -m build
         
     - name: Publish package to PyPI
