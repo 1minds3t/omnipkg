@@ -33,26 +33,32 @@ jobs:
               ? context.payload.release.tag_name 
               : context.ref;
             
-            // Check if there's already a running build
+            console.log(`🔍 Looking for builds for ref: ${ref} (SHA: ${context.sha})`);
+            
+            // 1. Get ALL recent runs (don't filter by status yet)
             const runs = await github.rest.actions.listWorkflowRuns({
               owner: context.repo.owner,
               repo: context.repo.repo,
               workflow_id: workflow_id,
-              status: 'in_progress',
-              per_page: 10
+              per_page: 20
             });
             
+            // 2. Filter client-side for ANY active status (Queued OR In Progress)
+            const activeStatuses = ['queued', 'in_progress', 'waiting', 'requested', 'pending'];
+            
             let targetRun = runs.data.workflow_runs.find(run => 
-              run.head_sha === context.sha || run.head_branch === ref
+              (run.head_sha === context.sha || run.head_branch === ref) &&
+              activeStatuses.includes(run.status)
             );
             
             if (targetRun) {
-              console.log(`✅ Found existing running build: ${targetRun.id}`);
+              console.log(`✅ Found existing active build: ${targetRun.id}`);
+              console.log(`   Status: ${targetRun.status}`);
               core.setOutput('run_id', targetRun.id);
               return;
             }
             
-            // If release event, wait for the auto-triggered build to appear
+            // 3. If release event, wait loop (checking for Queued as well)
             if (context.eventName === 'release') {
               console.log('📦 Release event - waiting for auto-triggered build to appear...');
               
@@ -63,24 +69,24 @@ jobs:
                   owner: context.repo.owner,
                   repo: context.repo.repo,
                   workflow_id: workflow_id,
-                  per_page: 10
+                  per_page: 20
                 });
                 
                 targetRun = refreshRuns.data.workflow_runs.find(run => 
-                  run.head_sha === context.sha
+                  run.head_sha === context.sha &&
+                  activeStatuses.includes(run.status)
                 );
                 
                 if (targetRun) {
-                  console.log(`✅ Found auto-triggered build: ${targetRun.id}`);
+                  console.log(`✅ Found auto-triggered build: ${targetRun.id} (${targetRun.status})`);
                   core.setOutput('run_id', targetRun.id);
                   return;
                 }
               }
-              
               throw new Error('❌ Release should have auto-triggered build, but none found');
             }
             
-            // Manual trigger - create new build
+            // 4. Manual trigger - create new build
             console.log('🔧 Manual workflow_dispatch - triggering new build...');
             
             await github.rest.actions.createWorkflowDispatch({
@@ -100,19 +106,23 @@ jobs:
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 workflow_id: workflow_id,
-                per_page: 5
+                per_page: 10
               });
               
-              const latestRun = newRuns.data.workflow_runs[0];
-              if (latestRun && latestRun.status !== 'completed') {
-                console.log(`✅ New build started: ${latestRun.id}`);
+              // We look for the one we just triggered (latest non-completed)
+              const latestRun = newRuns.data.workflow_runs.find(run => 
+                activeStatuses.includes(run.status)
+              );
+              
+              if (latestRun) {
+                console.log(`✅ New build started: ${latestRun.id} (${latestRun.status})`);
                 core.setOutput('run_id', latestRun.id);
                 return;
               }
             }
             
             throw new Error('❌ Failed to find triggered build');
-
+            
   wait-for-tests:
     name: Wait for Build Completion
     needs: ensure-tests-running
