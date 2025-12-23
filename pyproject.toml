@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "omnipkg"
-version = "2.0.4"
+version = "2.0.5"
 authors = [
   { name = "1minds3t", email = "1minds3t@proton.me" },
 ]
@@ -42,7 +42,10 @@ dependencies = [
     "typer>=0.4.0",
     "rich>=10.0.0",
 
-    # Filelock: vendored for <3.10, external for >=3.10 (CVE-2025-68146)
+    # Filelock: CVE-2025-68146 patched versions
+    # filelock-lts automatically selects the right version for Python 3.7-3.9
+    "filelock-lts==2025.68146; python_version >= '3.7' and python_version < '3.10'",
+    # Official upstream for Python 3.10+ (includes CVE fix)
     "filelock>=3.20.1; python_version >= '3.10'",
     
     # Packaging version splits
@@ -71,13 +74,15 @@ dependencies = [
     "aiohttp>=3.13.1; python_version >= '3.9'",
     
     # Security scanning - safety for supported Python versions
-    "safety>=3.7.0; python_version >= '3.9' and python_version < '3.14'",
+    # NOTE: safety depends on marshmallow which has CVE-2025-68480
+    # Marshmallow 4.1.2+ (patched) requires Python >= 3.10
+    # TODO: Create marshmallow-lts for Python 3.7-3.9 support
+    # For now, only install safety on Python 3.10+ where patched marshmallow is available
+    "safety>=3.7.0; python_version >= '3.10' and python_version < '3.14'",
     
     # pip-audit fallback for Python versions safety doesn't support
-    # FIXED: Split into two lines.
-    # 1. No version constraint for <3.9 (allows downgrade to match old packaging)
-    "pip-audit; python_version < '3.9'",
-    # 2. Strict constraint for >=3.14
+    # Also serves as fallback for Python 3.7-3.9 until marshmallow-lts is ready
+    "pip-audit; python_version < '3.10'",
     "pip-audit>=2.6.0; python_version >= '3.14'",
     
     # uv
