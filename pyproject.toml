@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "omnipkg"
-version = "2.0.4"
+version = "2.0.5"
 authors = [
   { name = "1minds3t", email = "1minds3t@proton.me" },
 ]
@@ -42,7 +42,10 @@ dependencies = [
     "typer>=0.4.0",
     "rich>=10.0.0",
 
-    # Filelock: vendored for <3.10, external for >=3.10 (CVE-2025-68146)
+    # Filelock: CVE-2025-68146 patched versions
+    # filelock-lts automatically selects the right version for Python 3.7-3.9
+    "filelock-lts==2025.68146; python_version >= '3.7' and python_version < '3.10'",
+    # Official upstream for Python 3.10+ (includes CVE fix)
     "filelock>=3.20.1; python_version >= '3.10'",
     
     # Packaging version splits
@@ -92,19 +95,11 @@ full = [
     "redis>=5.0; python_version >= '3.8'",
 ]
 
-dev = [
-    "pytest>=6.0",
-    "pytest-cov>=2.0",
-    "black>=22.0; python_version >= '3.8'",
-    "ruff>=0.1.0; python_version >= '3.8'",
-]
-
 [project.urls]
 Homepage = "https://github.com/1minds3t/omnipkg"
-"Bug Tracker" = "https://github.com/1minds3t/omnipkg/issues"
 PyPi = "https://pypi.org/project/omnipkg/"
 Conda-Forge = "https://anaconda.org/conda-forge/omnipkg"
-Docs = "https://github.com/1minds3t/omnipkg/tree/main/docs"
+Docs = "https://omnipkg.readthedocs.io/en/latest/"
 
 [project.scripts]
 omnipkg = "omnipkg.cli:main"
