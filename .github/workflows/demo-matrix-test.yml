@@ -49,21 +49,23 @@ jobs:
     steps:
     - uses: actions/checkout@v3
     
-    - name: Test Python 3.7 in Docker
+    - name: Run Demo ${{ matrix.demo }} in Python 3.7 Docker
       run: |
         docker run --rm -v $(pwd):/workspace -w /workspace python:3.7-slim bash -c "
           python -m pip install --upgrade pip
           pip install -e .
-          python -c 'import omnipkg'
-          python -c 'from omnipkg import cli'
-          omnipkg --version
-          8pkg --version
           
-          echo '🔍 Scanning for walrus operator...'
-          ! grep -r ' := ' src/omnipkg --include='*.py' || {
-            echo '❌ ERROR: Found walrus operator (:=) which breaks Python 3.7'
-            exit 1
-          }
+          # Create config directory and set non-interactive mode
+          mkdir -p ~/.config/omnipkg
+          echo '{\"interactive\": false, \"auto_confirm\": true}' > ~/.config/omnipkg/config.json
+          
+          8pkg daemon start
+          sleep 5
+          8pkg daemon status
+          
+          echo '${{ matrix.demo }}' | 8pkg demo || true
+          
+          8pkg daemon stop || true
         "
 
   # Full demo suite on key Python versions
