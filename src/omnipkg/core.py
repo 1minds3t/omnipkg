@@ -15164,24 +15164,27 @@ print(json.dumps(results))
             if "Requirement already satisfied" in output_to_search:
                 safe_print(" -> Package appears to be installed, checking with pip list...")
                 try:
-                    result_list = subprocess.run(
-                        f"{self.config['python_executable']} -m pip list --format=freeze | grep -i '^{package_name}=='",
-                        shell=True,
-                        capture_output=True,
-                        text=True,
-                        timeout=30,
-                    )
+                    cmd = [self.config['python_executable'], '-m', 'pip', 'list', '--format=freeze']
+                    result_list = subprocess.run(cmd, capture_output=True, text=True, timeout=30, check=False)
+
                     if result_list.returncode == 0 and result_list.stdout.strip():
-                        list_match = re.search(
-                            f"^{re.escape(package_name)}==([^\\s]+)",
-                            result_list.stdout,
-                            re.IGNORECASE | re.MULTILINE,
-                        )
-                        if list_match:
-                            version = list_match.group(1).strip()
-                            safe_print(f" ✅ Found installed version via pip list: {version}")
-                            self.pypi_cache.cache_version(package_name, version, py_context)
-                            return version
+                        # Filter in Python instead of using shell grep
+                        matching_lines = [
+                            line for line in result_list.stdout.split('\n')
+                            if line.lower().startswith(f'{package_name.lower()}==')
+                        ]
+                        
+                        if matching_lines:
+                            list_match = re.search(
+                                f"^{re.escape(package_name)}==([^\\s]+)",
+                                matching_lines[0],
+                                re.IGNORECASE
+                            )
+                            if list_match:
+                                version = list_match.group(1).strip()
+                                safe_print(f" ✅ Found installed version via pip list: {version}")
+                                self.pypi_cache.cache_version(package_name, version, py_context)
+                                return version
                 except Exception as e:
                     safe_print(f" -> pip list approach failed: {e}")
 
