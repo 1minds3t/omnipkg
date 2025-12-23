@@ -14,7 +14,7 @@ jobs:
       
       - name: Check for paid security scanners
         run: |
-          FORBIDDEN='snyk|veracode|black.duck|synopsys|jfrog|sonarqube|sonarcloud|checkmarx|anchore|sysdig|zscaler|endorlabs|ethicalcheck|crunch42|contrast|frogbot|mayhem|cloudrail|pysa|pyre|crda|kubesec|xanitizer|soos'
+          FORBIDDEN='snyk|veracode|black.duck|synopsys|jfrog|sonarqube|sonarcloud|checkmarx|anchore|sysdig|zscaler|endorlabs|ethicalcheck|crunch42|contrast|frogbot|mayhem|cloudrail|crda|kubesec|xanitizer|soos'
           
           echo "🔍 Scanning for paid security scanners..."
           
