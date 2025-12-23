@@ -7938,9 +7938,6 @@ class omnipkg:
                 safe_print(f"  - ⚠️  No version found for '{name}'. Skipping.")
                 continue
 
-            # Identify the keeper and the ghosts
-            site_packages / f"{name}-{canonical_version}.dist-info"
-
             try:
                 # Use the packaging library to create a comparable Version object
                 parsed_canonical_version = parse_version(canonical_version)
@@ -13301,7 +13298,6 @@ class omnipkg:
                                             )
 
                             if min_python_from_wheels:
-                                f"{min_python_from_wheels[0]}.{min_python_from_wheels[1]}"
                                 compatible_python_clean = (
                                     min_py.replace("py", "") if min_py.startswith("py") else min_py
                                 )
