@@ -116,7 +116,7 @@ ruamel-yaml==0.18.15
     #   safety-schemas
 ruamel-yaml-clib==0.2.14
     # via ruamel-yaml
-safety==3.7.0 ; python_version >= "3.9" and python_version < "3.14"
+safety==3.7.0 ; python_version >= "3.10" and python_version < "3.14"
     # via omnipkg (pyproject.toml)
 safety-schemas==0.0.16
     # via safety
