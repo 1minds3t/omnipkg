@@ -143,15 +143,22 @@ def _get_dynamic_omnipkg_version():
 
     return "unknown"
 
-
-def _get_core_dependencies() -> set:
+def _get_core_dependencies(target_python_version: str = None) -> set:
     """
-    Reads omnipkg's DIRECT production dependencies from pyproject.toml.
-
-    We ONLY return direct dependencies - pip will automatically handle
-    transitive dependencies and filter out packages incompatible with
-    the target Python version.
+    Reads omnipkg's DIRECT production dependencies from pyproject.toml,
+    filtered for the target Python version.
+    
+    Args:
+        target_python_version: Version string like "3.9" or "3.14"
     """
+    if target_python_version is None:
+        target_python_version = f"{sys.version_info.major}.{sys.version_info.minor}"
+    
+    try:
+        major, minor = map(int, target_python_version.split("."))
+    except (ValueError, AttributeError):
+        major, minor = sys.version_info.major, sys.version_info.minor
+    
     try:
         # Try to find pyproject.toml relative to this file
         pyproject_path = Path(__file__).parent.parent / "pyproject.toml"
@@ -180,9 +187,32 @@ def _get_core_dependencies() -> set:
             # Get ONLY direct dependencies (no optional, no dev)
             deps = pyproject_data.get("project", {}).get("dependencies", [])
 
-            # Extract just the package names (strip version specs)
+            # Extract package names, filtering for target Python version
             core_deps = set()
+            seen_filelock = False  # Track if we've added filelock already
+            
             for dep in deps:
+                dep_lower = dep.lower()
+                
+                # SPECIAL HANDLING: filelock dependencies
+                # Only include ONE filelock package based on Python version
+                if "filelock" in dep_lower and not seen_filelock:
+                    if major == 3 and minor < 10:
+                        # Python 3.7-3.9: use filelock-lts
+                        if "filelock-lts" in dep_lower:
+                            core_deps.add("filelock-lts")
+                            seen_filelock = True
+                    else:
+                        # Python 3.10+: use upstream filelock
+                        if "filelock-lts" not in dep_lower:
+                            core_deps.add("filelock")
+                            seen_filelock = True
+                    continue  # Skip adding both
+                
+                # Skip filelock variants after we've added one
+                if "filelock" in dep_lower:
+                    continue
+                
                 # Match package name before any version specifier
                 match = re.match(r"^([a-zA-Z0-9\-_.]+)", dep)
                 if match:
@@ -190,6 +220,8 @@ def _get_core_dependencies() -> set:
                     core_deps.add(pkg_name)
 
             safe_print(f"   📋 Found {len(core_deps)} direct dependencies in pyproject.toml")
+            safe_print(f"   🐍 Target Python: {target_python_version}")
+            safe_print(f"   📦 Filelock variant: {'filelock-lts' if (major == 3 and minor < 10) else 'filelock'}")
             return core_deps
 
         # If no pyproject.toml found, try to get from installed metadata
@@ -237,7 +269,6 @@ def _get_core_dependencies() -> set:
             minimal_deps.add("tomli")
 
         return minimal_deps
-
 
 class ConfigManager:
     def _get_interpreter_dest_path(self, p):
