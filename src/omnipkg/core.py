@@ -4841,7 +4841,10 @@ class BubbleIsolationManager:
             return self.file_hash_cache[path_str]
         h = hashlib.sha256()
         with open(file_path, "rb") as f:
-            while (chunk := f.read(8192)):
+            chunk = f.read(8192)
+            while chunk:
+                # process chunk
+                chunk = f.read(8192)
                 h.update(chunk)
         file_hash = h.hexdigest()
         self.file_hash_cache[path_str] = file_hash
