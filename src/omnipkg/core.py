@@ -10276,7 +10276,7 @@ class omnipkg:
         # Then uninstall packages that shouldn't exist
         if success and to_uninstall:
             safe_print(f"\n   🗑️  Removing {len(to_uninstall)} unexpected package(s)...")
-            uninstall_code, uninstall_output = self._run_pip_uninstall(to_uninstall, force=True)
+            uninstall_code = self._run_pip_uninstall(to_uninstall, force=True)
 
             if uninstall_code != 0:
                 safe_print("   ⚠️  Some removals failed")
@@ -12804,12 +12804,14 @@ class omnipkg:
             # 4. Update package-level info based on the final ground truth.
             final_versions_on_disk = {inst.get("Version") for inst in post_deletion_installations}
             versions_to_check = {item.get("Version") for item in final_to_uninstall}
+            
             for version in versions_to_check:
                 if version not in final_versions_on_disk:
-                    safe_print(f"   -> Last instance of v{version} removed. Updating package version list.")
-                safe_print(
-                    f"   -> No installations of '{c_name}' remain. Removing package from KB index."
-                )
+                    safe_print(f"   -> Last instance of v{version} removed.")
+
+            # ONLY delete the main package metadata if NO versions remain on disk
+            if not final_versions_on_disk:
+                safe_print(f"   -> No installations of '{c_name}' remain. Removing package from KB index.")
                 main_key = f"{self.redis_key_prefix}{c_name}"
                 self.cache_client.delete(main_key, f"{main_key}:installed_versions")
                 self.cache_client.srem(f"{self.redis_env_prefix}index", c_name)
