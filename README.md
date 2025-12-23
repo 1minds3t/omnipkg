@@ -90,7 +90,7 @@ Born from a real-world nightmare—a forced downgrade that wrecked a production 
 <!-- COMPARISON_STATS_START -->
 ## ⚖️ Multi-Version Support
 
-[![omnipkg](https://img.shields.io/badge/omnipkg-2418%20Wins-brightgreen?logo=python&logoColor=white)](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml) [![pip](https://img.shields.io/badge/pip-2421%20Failures-red?logo=pypi&logoColor=white)](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml) [![uv](https://img.shields.io/badge/uv-2421%20Failures-red?logo=python&logoColor=white)](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml)
+[![omnipkg](https://img.shields.io/badge/omnipkg-2421%20Wins-brightgreen?logo=python&logoColor=white)](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml) [![pip](https://img.shields.io/badge/pip-2424%20Failures-red?logo=pypi&logoColor=white)](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml) [![uv](https://img.shields.io/badge/uv-2424%20Failures-red?logo=python&logoColor=white)](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml)
 
 *Multi-version installation tests run every 3 hours. [Live results here.](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml)*
 
@@ -569,18 +569,19 @@ brew install omnipkg
 
 [![piwheels](https://img.shields.io/badge/piwheels-ARM32%20verified-97BF0D?logo=raspberrypi&logoColor=white)](https://www.piwheels.org/project/omnipkg/)
 
-**Latest Version:** `2.0.3` | **Python:**  | [View on piwheels](https://www.piwheels.org/project/omnipkg/)
+**Latest Version:** `2.0.4` | **Python:**  | [View on piwheels](https://www.piwheels.org/project/omnipkg/)
 
 ```bash
 # Install on Raspberry Pi (ARM32)
-pip3 install omnipkg==2.0.3
+pip3 install omnipkg==2.0.4
 ```
 
 **Verified Platforms:**
 - 🍓 Raspberry Pi (armv6/armv7) - Bullseye (Debian 11), Bookworm (Debian 12), Trixie (Debian 13)
-- 📦 Wheel: [`https://www.piwheels.org/simple/omnipkg/omnipkg-2.0.3-py3-none-any.whl`](https://www.piwheels.org/simple/omnipkg/omnipkg-2.0.3-py3-none-any.whl)
+- 📦 Wheel: [`https://www.piwheels.org/simple/omnipkg/omnipkg-2.0.4-py3-none-any.whl`](https://www.piwheels.org/simple/omnipkg/omnipkg-2.0.4-py3-none-any.whl)
 
 <!-- PIWHEELS_STATS_END -->
+
 
 
 
