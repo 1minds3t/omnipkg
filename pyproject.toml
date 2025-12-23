@@ -79,6 +79,7 @@ dependencies = [
     # TODO: Create marshmallow-lts for Python 3.7-3.9 support
     # For now, only install safety on Python 3.10+ where patched marshmallow is available
     "safety>=3.7.0; python_version >= '3.10' and python_version < '3.14'",
+    "marshmallow>=4.1.2; python_version >= '3.10'",  # CVE-2025-68480 - Override safety's broken transitive dep
     
     # pip-audit fallback for Python versions safety doesn't support
     # Also serves as fallback for Python 3.7-3.9 until marshmallow-lts is ready
