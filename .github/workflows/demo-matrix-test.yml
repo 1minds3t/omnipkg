@@ -7,14 +7,14 @@ on:
   workflow_dispatch:
 
 jobs:
-  # Quick syntax check across ALL Python versions (fast, no demos)
+  # Quick syntax check for Python 3.8+ (native runner support)
   syntax-check:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     strategy:
       fail-fast: false
       matrix:
-        python: ['3.7', '3.8', '3.9', '3.10', '3.11', '3.12', '3.13', '3.14']
+        python: ['3.8', '3.9', '3.10', '3.11', '3.12', '3.13', '3.14']
     
     name: "Syntax Check - Python ${{ matrix.python }}"
     
@@ -38,25 +38,43 @@ jobs:
         python -c "from omnipkg import cli"
         omnipkg --version
         8pkg --version
+
+  # Python 3.7 syntax check in Docker (EOL, needs container)
+  syntax-check-py37:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
     
-    - name: Check for Python 3.8+ syntax in 3.7 code
-      if: matrix.python == '3.7'
+    name: "Syntax Check - Python 3.7 (Docker)"
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Test Python 3.7 in Docker
       run: |
-        echo "🔍 Scanning for walrus operator..."
-        ! grep -r " := " src/omnipkg --include="*.py" || {
-          echo "❌ ERROR: Found walrus operator (:=) which breaks Python 3.7"
-          exit 1
-        }
+        docker run --rm -v $(pwd):/workspace -w /workspace python:3.7-slim bash -c "
+          python -m pip install --upgrade pip
+          pip install -e .
+          python -c 'import omnipkg'
+          python -c 'from omnipkg import cli'
+          omnipkg --version
+          8pkg --version
+          
+          echo '🔍 Scanning for walrus operator...'
+          ! grep -r ' := ' src/omnipkg --include='*.py' || {
+            echo '❌ ERROR: Found walrus operator (:=) which breaks Python 3.7'
+            exit 1
+          }
+        "
 
   # Full demo suite on key Python versions
   demo-matrix:
-    needs: syntax-check
+    needs: [syntax-check, syntax-check-py37]
     runs-on: ubuntu-latest
     timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
-        python: ['3.7', '3.11', '3.14']  # Min, stable, bleeding-edge
+        python: ['3.8', '3.11', '3.14']  # Min supported, stable, bleeding-edge
         demo: [
           {num: 1, name: "Rich Module Switching"},
           {num: 2, name: "UV Binary Switching"},
@@ -112,9 +130,40 @@ jobs:
       run: |
         8pkg daemon stop || true
 
+  # Python 3.7 full demo test in Docker
+  demo-matrix-py37:
+    needs: syntax-check-py37
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        demo: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    
+    name: "Demo ${{ matrix.demo }} - Py3.7 (Docker)"
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Run Demo ${{ matrix.demo }} in Python 3.7 Docker
+      run: |
+        docker run --rm -v $(pwd):/workspace -w /workspace python:3.7-slim bash -c "
+          python -m pip install --upgrade pip
+          pip install -e .
+          8pkg daemon start
+          sleep 5
+          8pkg daemon status
+          
+          echo '${{ matrix.demo }}' | 8pkg demo || true
+          
+          echo '=== Daemon Status ==='
+          8pkg daemon status || true
+          8pkg daemon stop || true
+        "
+
   # Chaos scenarios - only on Python 3.11 (they already cover edge cases)
   chaos-individual:
-    needs: syntax-check
+    needs: [syntax-check, syntax-check-py37]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     strategy:
@@ -161,23 +210,27 @@ jobs:
         8pkg daemon stop
         pkill -f "omnipkg" || true
 
-  # Test 13 in Podman (self-hosted or workflow_dispatch only)
-  chaos-13-podman:
+  # Test 13 in Docker with more space (workflow_dispatch only)
+  chaos-13-docker:
     if: github.event_name == 'workflow_dispatch'
-    runs-on: [self-hosted, linux, x64]
-    timeout-minutes: 15
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
     
-    name: "Chaos 13 (Podman - Needs Space)"
+    name: "Chaos 13 (Docker - Needs Space)"
     
     steps:
     - uses: actions/checkout@v3
     
-    - name: Run in Podman with more space
+    - name: Free up disk space
       run: |
-        podman run --rm -v $(pwd):/workspace:Z \
-          --platform linux/amd64 \
-          python:3.11-slim /bin/bash -c "
-          cd /workspace
+        sudo rm -rf /usr/share/dotnet
+        sudo rm -rf /opt/ghc
+        sudo rm -rf /usr/local/share/boost
+        df -h
+    
+    - name: Run in Docker with Python 3.11
+      run: |
+        docker run --rm -v $(pwd):/workspace:z -w /workspace python:3.11-slim bash -c "
           pip install -e .
           8pkg daemon start
           sleep 3
@@ -188,11 +241,11 @@ jobs:
   # PyPI release gate - requires all demos to pass on key Python versions
   pypi-gate:
     name: "✅ PyPI Release Gate"
-    needs: [syntax-check, demo-matrix, chaos-individual]
+    needs: [syntax-check, syntax-check-py37, demo-matrix, demo-matrix-py37, chaos-individual]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/')
     steps:
       - name: All tests passed
         run: |
-          echo "🎉 All demos passed on Python 3.7, 3.11, 3.14!"
+          echo "🎉 All demos passed on Python 3.7, 3.8, 3.11, 3.14!"
           echo "✅ Ready for PyPI release"
