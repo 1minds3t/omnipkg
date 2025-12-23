@@ -63,7 +63,7 @@ dependencies = [
     "importlib-metadata>=1.0; python_version < '3.8'",
     
     # dataclasses backport
-    "dataclasses>=0.8; python_version == '3.7'",
+    "dataclasses>=0.6; python_version == '3.7'",
     
     # authlib
     "authlib>=1.2.0; python_version >= '3.7'",
