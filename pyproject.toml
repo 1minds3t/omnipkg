@@ -74,13 +74,15 @@ dependencies = [
     "aiohttp>=3.13.1; python_version >= '3.9'",
     
     # Security scanning - safety for supported Python versions
-    "safety>=3.7.0; python_version >= '3.9' and python_version < '3.14'",
+    # NOTE: safety depends on marshmallow which has CVE-2025-68480
+    # Marshmallow 4.1.2+ (patched) requires Python >= 3.10
+    # TODO: Create marshmallow-lts for Python 3.7-3.9 support
+    # For now, only install safety on Python 3.10+ where patched marshmallow is available
+    "safety>=3.7.0; python_version >= '3.10' and python_version < '3.14'",
     
     # pip-audit fallback for Python versions safety doesn't support
-    # FIXED: Split into two lines.
-    # 1. No version constraint for <3.9 (allows downgrade to match old packaging)
-    "pip-audit; python_version < '3.9'",
-    # 2. Strict constraint for >=3.14
+    # Also serves as fallback for Python 3.7-3.9 until marshmallow-lts is ready
+    "pip-audit; python_version < '3.10'",
     "pip-audit>=2.6.0; python_version >= '3.14'",
     
     # uv
@@ -95,11 +97,19 @@ full = [
     "redis>=5.0; python_version >= '3.8'",
 ]
 
+dev = [
+    "pytest>=6.0",
+    "pytest-cov>=2.0",
+    "black>=22.0; python_version >= '3.8'",
+    "ruff>=0.1.0; python_version >= '3.8'",
+]
+
 [project.urls]
 Homepage = "https://github.com/1minds3t/omnipkg"
+"Bug Tracker" = "https://github.com/1minds3t/omnipkg/issues"
 PyPi = "https://pypi.org/project/omnipkg/"
 Conda-Forge = "https://anaconda.org/conda-forge/omnipkg"
-Docs = "https://omnipkg.readthedocs.io/en/latest/"
+Docs = "https://github.com/1minds3t/omnipkg/tree/main/docs"
 
 [project.scripts]
 omnipkg = "omnipkg.cli:main"
