@@ -3791,7 +3791,6 @@ def chaos_test_22_complete_ipc_benchmark():
             safe_print("─" * 60)
 
             fastest_time = sorted_modes[0][1]["min"]
-            sorted_modes[0][1]["name"]
 
             for key, data in sorted_modes[1:]:
                 speedup = data["min"] / fastest_time
