@@ -5,7 +5,10 @@ Enhanced 8pkg run - Support both Python scripts AND CLI executables
 This makes omnipkg actually usable for real development work
 """
 
-import importlib.metadata
+try:
+    import importlib.metadata as importlib_metadata
+except ImportError:
+    import importlib_metadata
 import os
 import shutil
 import subprocess

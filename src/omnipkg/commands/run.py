@@ -945,7 +945,10 @@ def is_package_corrupted(pkg_name, missing_module_name):
     Checks if a package is 'Ghosted' (metadata exists so pip thinks it's installed,
     but the actual module cannot be imported).
     """
-    import importlib.metadata
+    try:
+    import importlib.metadata as importlib_metadata
+except ImportError:
+    import importlib_metadata
     import importlib.util
 
     # 1. Is it installed according to metadata?

@@ -12,7 +12,10 @@ except ImportError:
     from omnipkg.common_utils import safe_print, print_header
 
 import hashlib
-import importlib.metadata
+try:
+    import importlib.metadata as importlib_metadata
+except ImportError:
+    import importlib_metadata
 import io
 import json
 import locale as sys_locale
@@ -13461,7 +13464,10 @@ class omnipkg:
 import sys, json, traceback
 
 try:
-    import importlib.metadata as metadata
+    try:
+        import importlib.metadata as metadata
+    except ImportError:
+        import importlib_metadata as metadata
 except ImportError:
     import importlib_metadata as metadata
 
