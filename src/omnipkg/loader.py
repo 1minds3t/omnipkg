@@ -19,8 +19,8 @@ from dataclasses import dataclass
 try:
     from importlib.metadata import PackageNotFoundError, version as get_version
 except ImportError:
+    # Fallback for Python < 3.8
     from importlib_metadata import PackageNotFoundError, version as get_version
-from importlib.metadata import version as get_version
 from pathlib import Path
 from typing import (  # <-- Make sure Dict is in this import
     Dict,
