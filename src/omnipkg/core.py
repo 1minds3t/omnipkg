@@ -1791,6 +1791,24 @@ class ConfigManager:
             f"https://github.com/astral-sh/python-build-standalone/releases/download/{release_tag}"
         )
 
+        # --- DETECT MUSL (ALPINE) ONCE, FOR ALL BUILD TYPES ---
+        is_musl = False
+        if system == "linux":
+            try:
+                ldd_check = subprocess.run(["ldd", "--version"], capture_output=True, text=True)
+                if "musl" in (ldd_check.stdout + ldd_check.stderr).lower():
+                    is_musl = True
+            except:
+                pass
+            if not is_musl and Path("/etc/alpine-release").exists():
+                is_musl = True
+            
+            if is_musl:
+                safe_print("   🌲 Alpine Linux (musl libc) detected - using musl-compatible build")
+
+        # Select the correct libc variant for Linux
+        libc_variant = "unknown-linux-musl" if is_musl else "unknown-linux-gnu"
+
         # Older releases (pre-2021) used different naming: -pgo instead of -install_only
         # The 20200822/20200823 releases use .tar.zst format with -pgo suffix
         # NOTE: Release 20200822 has files dated 20200823 in their filenames!
@@ -1801,29 +1819,15 @@ class ConfigManager:
             # The 20200822 release has files with 20200823 timestamps
             file_date = "20200823" if release_tag == "20200822" else release_tag
 
-            is_musl = False
-            if system == "linux":
-                try:
-                    ldd_check = subprocess.run(["ldd", "--version"], capture_output=True, text=True)
-                    if "musl" in (ldd_check.stdout + ldd_check.stderr).lower():
-                        is_musl = True
-                except:
-                    pass
-                if not is_musl and Path("/etc/alpine-release").exists():
-                    is_musl = True
-
-            # Select the correct libc variant
-            libc_variant = "unknown-linux-musl" if is_musl else "unknown-linux-gnu"
-
             archive_name_templates = {
-                "linux": f"cpython-{py_ver_plus_tag}-{py_arch}-{libc_variant}-install_only.tar.gz",
-                "darwin": f"cpython-{py_ver_plus_tag}-{py_arch}-apple-darwin-install_only.tar.gz",
-                "windows": f"cpython-{py_ver_plus_tag}-{py_arch}-pc-windows-msvc-install_only.tar.gz",
+                "linux": f"cpython-{full_version}-{py_arch}-{libc_variant}-pgo-{file_date}T0036.tar.zst",
+                "darwin": f"cpython-{full_version}-{py_arch}-apple-darwin-pgo-{file_date}T2228.tar.zst",
+                "windows": f"cpython-{full_version}-{py_arch}-pc-windows-msvc-shared-pgo-{file_date}T0118.tar.zst",
             }
         else:
             # Modern format: cpython-X.Y.Z+TAG-platform-install_only.tar.gz
             archive_name_templates = {
-                "linux": f"cpython-{py_ver_plus_tag}-{py_arch}-unknown-linux-gnu-install_only.tar.gz",
+                "linux": f"cpython-{py_ver_plus_tag}-{py_arch}-{libc_variant}-install_only.tar.gz",
                 "darwin": f"cpython-{py_ver_plus_tag}-{py_arch}-apple-darwin-install_only.tar.gz",
                 "windows": f"cpython-{py_ver_plus_tag}-{py_arch}-pc-windows-msvc-install_only.tar.gz",
             }
