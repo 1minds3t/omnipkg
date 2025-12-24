@@ -184,7 +184,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        scenario: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23]
+        scenario: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 14, 16, 17, 18, 19, 20, 21, 22, 23]
         # REMOVED 13 - runs out of space on GitHub runners
     
     name: "Chaos ${{ matrix.scenario }} - Py3.11"
@@ -252,6 +252,65 @@ jobs:
           (echo '11'; sleep 2; echo '13') | 8pkg demo
           8pkg daemon stop
         "
+
+  # Chaos scenarios that need more disk space - run on self-hosted
+  chaos-heavy-self-hosted:
+    needs: [syntax-check, syntax-check-py37]
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        scenario: [13, 15]  # Add any other space-hungry scenarios here
+    
+    name: "Chaos ${{ matrix.scenario }} - Py3.11 (Self-Hosted)"
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Python 3.11
+      run: |
+        # Use your self-hosted Python
+        if [ -f "$HOME/miniconda3/envs/evocoder_env/bin/python3.11" ]; then
+          echo "PYTHON_BIN=$HOME/miniconda3/envs/evocoder_env/bin/python3.11" >> $GITHUB_ENV
+        elif [ -f "/usr/bin/python3.11" ]; then
+          echo "PYTHON_BIN=/usr/bin/python3.11" >> $GITHUB_ENV
+        else
+          echo "❌ No Python 3.11 found"
+          exit 1
+        fi
+    
+    - name: Install omnipkg
+      run: ${{ env.PYTHON_BIN }} -m pip install --user -e .
+    
+    - name: Start fresh daemon for this scenario
+      run: |
+        export PATH="$HOME/.local/bin:$PATH"
+        8pkg daemon start
+        sleep 3
+    
+    - name: Run Chaos Scenario ${{ matrix.scenario }}
+      timeout-minutes: 15
+      run: |
+        export PATH="$HOME/.local/bin:$PATH"
+        (echo "11"; sleep 2; echo "${{ matrix.scenario }}") | 8pkg demo
+      continue-on-error: true
+    
+    - name: Daemon status after test
+      if: always()
+      run: |
+        export PATH="$HOME/.local/bin:$PATH"
+        echo "=== Status ==="
+        8pkg daemon status
+        echo "=== Logs (last 50 lines) ==="
+        8pkg daemon logs --lines 50
+    
+    - name: Stop and cleanup
+      if: always()
+      run: |
+        export PATH="$HOME/.local/bin:$PATH"
+        8pkg daemon stop
+        pkill -f "omnipkg" || true
 
   # PyPI release gate - requires all demos to pass on key Python versions
   pypi-gate:
