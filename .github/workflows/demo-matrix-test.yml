@@ -261,55 +261,59 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        scenario: [13, 15]  # Add any other space-hungry scenarios here
+        scenario: [13, 15]
     
     name: "Chaos ${{ matrix.scenario }} - Py3.11 (Self-Hosted)"
     
     steps:
     - uses: actions/checkout@v3
     
-    - name: Set up Python 3.11
+    # Use the dedicated GitHub runner environment
+    - name: Use dedicated runner Python environment
       run: |
-        # Use your self-hosted Python
-        if [ -f "$HOME/miniconda3/envs/evocoder_env/bin/python3.11" ]; then
-          echo "PYTHON_BIN=$HOME/miniconda3/envs/evocoder_env/bin/python3.11" >> $GITHUB_ENV
-        elif [ -f "/usr/bin/python3.11" ]; then
-          echo "PYTHON_BIN=/usr/bin/python3.11" >> $GITHUB_ENV
-        else
-          echo "❌ No Python 3.11 found"
-          exit 1
-        fi
+        # Activate the github_runner_env conda environment
+        source $HOME/miniconda3/etc/profile.d/conda.sh
+        conda activate github_runner_env
+        echo "PATH=$PATH" >> $GITHUB_ENV
+        echo "CONDA_PREFIX=$CONDA_PREFIX" >> $GITHUB_ENV
     
     - name: Install omnipkg
-      run: ${{ env.PYTHON_BIN }} -m pip install --user -e .
+      run: |
+        source $HOME/miniconda3/etc/profile.d/conda.sh
+        conda activate github_runner_env
+        python -m pip install -e .
     
     - name: Start fresh daemon for this scenario
       run: |
-        export PATH="$HOME/.local/bin:$PATH"
+        source $HOME/miniconda3/etc/profile.d/conda.sh
+        conda activate github_runner_env
         8pkg daemon start
         sleep 3
     
     - name: Run Chaos Scenario ${{ matrix.scenario }}
       timeout-minutes: 15
       run: |
-        export PATH="$HOME/.local/bin:$PATH"
+        source $HOME/miniconda3/etc/profile.d/conda.sh
+        conda activate github_runner_env
         (echo "11"; sleep 2; echo "${{ matrix.scenario }}") | 8pkg demo
       continue-on-error: true
     
     - name: Daemon status after test
       if: always()
       run: |
-        export PATH="$HOME/.local/bin:$PATH"
+        source $HOME/miniconda3/etc/profile.d/conda.sh
+        conda activate github_runner_env
         echo "=== Status ==="
-        8pkg daemon status
+        8pkg daemon status || true
         echo "=== Logs (last 50 lines) ==="
-        8pkg daemon logs --lines 50
+        8pkg daemon logs --lines 50 || true
     
     - name: Stop and cleanup
       if: always()
       run: |
-        export PATH="$HOME/.local/bin:$PATH"
-        8pkg daemon stop
+        source $HOME/miniconda3/etc/profile.d/conda.sh
+        conda activate github_runner_env
+        8pkg daemon stop || true
         pkill -f "omnipkg" || true
 
   # PyPI release gate - requires all demos to pass on key Python versions
