@@ -2020,12 +2020,19 @@ class ConfigManager:
                             )
 
                 safe_print(_("   - Testing installation..."))
+                safe_print(_("   - Running: {} --version").format(python_exe))
                 result = subprocess.run(
                     [str(python_exe), "--version"],
                     capture_output=True,
                     text=True,
                     timeout=30,
                 )
+                safe_print(_("   - Return code: {}").format(result.returncode))
+                if result.stdout:
+                    safe_print(_("   - STDOUT: {}").format(result.stdout.strip()))
+                if result.stderr:
+                    safe_print(_("   - STDERR: {}").format(result.stderr.strip()))
+
                 if result.returncode != 0:
                     raise OSError(_("Python executable test failed: {}").format(result.stderr))
                 safe_print(_("   - ✅ Python version: {}").format(result.stdout.strip()))
