@@ -13,9 +13,9 @@ except ImportError:
 
 import hashlib
 try:
-    import importlib.metadata as importlib_metadata
-except ImportError:
-    import importlib_metadata
+    import importlib.metadata as importlib_metadata
+except ImportError:
+    import importlib_metadata
 import io
 import json
 import locale as sys_locale
