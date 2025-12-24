@@ -49,7 +49,11 @@ try:
 except ImportError:
     redis = None
     REDIS_AVAILABLE = False
-from importlib.metadata import version
+# Handle importlib.metadata for Python 3.7 compatibility
+try:
+    from importlib.metadata import version
+except ImportError:
+    from importlib_metadata import version
 
 import requests as http_requests
 from filelock import FileLock
