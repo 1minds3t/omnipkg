@@ -1248,7 +1248,8 @@ class ConfigManager:
             run_verbose(ensurepip_cmd, "ensurepip bootstrap failed.")
             safe_print("   ✅ Pip bootstrap complete via ensurepip.")
 
-            core_deps = _get_core_dependencies()
+            core_deps = _get_core_dependencies(target_py_version)
+
             if core_deps:
                 # Filter dependencies based on target Python version
                 filtered_deps = []
@@ -1350,7 +1351,8 @@ class ConfigManager:
                 safe_print(_("   ✅ Pip bootstrap complete via get-pip.py"))
 
                 # Now try installing dependencies again
-                core_deps = _get_core_dependencies()
+                core_deps = _get_core_dependencies(target_py_version)
+
                 if core_deps:
                     # Filter dependencies based on target Python version (same logic as above)
                     filtered_deps = []
