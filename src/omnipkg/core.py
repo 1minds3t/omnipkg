@@ -1719,6 +1719,25 @@ class ConfigManager:
         if not py_arch:
             raise OSError(_("Unsupported architecture: {}").format(arch))
 
+        # === DETECT MUSL EARLY AND UPGRADE VERSION IF NEEDED ===
+        is_musl = False
+        if system == "linux":
+            try:
+                ldd_check = subprocess.run(["ldd", "--version"], capture_output=True, text=True)
+                if "musl" in (ldd_check.stdout + ldd_check.stderr).lower():
+                    is_musl = True
+            except:
+                pass
+            if not is_musl and Path("/etc/alpine-release").exists():
+                is_musl = True
+            
+            if is_musl:
+                safe_print("   🌲 Alpine Linux (musl libc) detected - using musl-compatible build")
+                # Upgrade to musl-compatible version if needed
+                if full_version.startswith("3.11") and full_version != "3.11.14":
+                    safe_print(f"   🌲 Upgrading {full_version} → 3.11.14 (musl-compatible)")
+                    full_version = "3.11.14"
+
         # Base version to release tag mapping
         VERSION_TO_RELEASE_TAG_MAP = {
             "3.8.20": "20241002",
