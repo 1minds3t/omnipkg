@@ -315,7 +315,7 @@ jobs:
   # PyPI release gate - requires all demos to pass on key Python versions
   pypi-gate:
     name: "✅ PyPI Release Gate"
-    needs: [syntax-check, syntax-check-py37, demo-matrix, demo-matrix-py37, chaos-individual]
+    needs: [syntax-check, syntax-check-py37, demo-matrix, demo-matrix-py37, chaos-individual, chaos-heavy-self-hosted]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/')
     steps:
