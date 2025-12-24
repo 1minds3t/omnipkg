@@ -4004,7 +4004,7 @@ class omnipkgLoader:
     def get_version(self, package_name):
         # Execute code to get version and path
         # The worker extracts the local variable named 'result' and merges it into the response
-        code = f"import importlib.metadata; result = {{'version': importlib.metadata.version('{package_name}'), 'path': __import__('{package_name}').__file__}}"
+        code = f"try: import importlib.metadata as meta\nexcept ImportError: import importlib_metadata as meta\nresult = {{'version': meta.version('{package_name}'), 'path': __import__('{package_name}').__file__}}"
         res = self.execute(code)
 
         if res.get("success"):

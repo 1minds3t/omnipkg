@@ -14,7 +14,10 @@ support for robust, side-by-side package management.
 """
 import concurrent.futures
 import hashlib
-import importlib.metadata
+try:
+    import importlib.metadata as importlib_metadata
+except ImportError:
+    import importlib_metadata
 import json
 import os
 import re

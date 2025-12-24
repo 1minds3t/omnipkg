@@ -7,7 +7,10 @@ This creates wrapper executables for ALL installed CLI tools so users never
 have to prefix commands with '8pkg run'
 """
 
-import importlib.metadata
+try:
+    import importlib.metadata as importlib_metadata
+except ImportError:
+    import importlib_metadata
 import os
 import shutil
 import stat
