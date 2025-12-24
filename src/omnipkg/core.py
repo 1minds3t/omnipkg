@@ -13169,7 +13169,15 @@ class omnipkg:
         if not new_paths:
             safe_print(f"❌ Could not determine paths for Python {version}.")
             return 1
-
+        try:
+            # Call the bootstrap helper on the ConfigManager
+            self.config_manager._ensure_omnipkg_bootstrapped(
+                Path(target_interpreter_path), 
+                version
+            )
+        except Exception as e:
+            safe_print("   ⚠️  Bootstrap verification warning: {}".format(e))
+            # Proceed anyway; the check inside _ensure_omnipkg_bootstrapped is robust
         safe_print(_("   🔧 Updating configuration..."))
         self.config_manager.set("python_executable", new_paths["python_executable"])
         self.config_manager.set("site_packages_path", new_paths["site_packages_path"])
