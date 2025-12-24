@@ -49,7 +49,10 @@ try:
 except ImportError:
     redis = None
     REDIS_AVAILABLE = False
-from importlib.metadata import version
+try:
+    from importlib.metadata import version, distributions, distribution
+except ImportError:
+    from importlib_metadata import version, distributions, distribution
 
 import requests as http_requests
 from filelock import FileLock
