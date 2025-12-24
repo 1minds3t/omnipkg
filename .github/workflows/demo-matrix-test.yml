@@ -76,7 +76,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python: ['3.8', '3.11', '3.14']  # Min supported, stable, bleeding-edge
+        python: ['3.8', '3.11', '3.14']
         demo: [
           {num: 1, name: "Rich Module Switching"},
           {num: 2, name: "UV Binary Switching"},
@@ -94,6 +94,22 @@ jobs:
     
     steps:
     - uses: actions/checkout@v3
+    
+    # 💥 AGGRESSIVE CLEANUP STEP 💥
+    - name: 🧨 Nuke Build Artifacts & Previous Cache
+      run: |
+        echo "💥 Nuking local build artifacts..."
+        sudo rm -rf dist/ build/ *.egg-info src/*.egg-info .omnipkg .pytest_cache
+        
+        echo "💥 Nuking user configurations..."
+        rm -rf ~/.local/omnipkg ~/.config/omnipkg
+        
+        echo "💥 Nuking cached omnipkg environments in hostedtoolcache..."
+        # This recursively finds and deletes .omnipkg folders hidden inside the runner's python cache
+        # This guarantees that 'Found existing Python 3.11' ONLY happens if we just built it.
+        sudo find /opt/hostedtoolcache -name ".omnipkg" -type d -exec rm -rf {} + 2>/dev/null || true
+        
+        echo "✅ Environment is 100% sterile."
     
     - name: Set up Python ${{ matrix.python }}
       uses: actions/setup-python@v4
@@ -118,18 +134,10 @@ jobs:
         echo "${{ matrix.demo.num }}" | 8pkg demo
       continue-on-error: true
     
-    - name: Show daemon logs on failure
-      if: failure()
-      run: |
-        echo "=== Daemon Status ==="
-        8pkg daemon status || true
-        echo ""
-        echo "=== Last 100 lines of daemon logs ==="
-        8pkg daemon logs --lines 100 || true
-    
-    - name: Stop daemon
+    - name: Show logs/Stop daemon
       if: always()
       run: |
+        8pkg daemon logs --lines 100 || true
         8pkg daemon stop || true
 
   # Python 3.7 full demo test in Docker
