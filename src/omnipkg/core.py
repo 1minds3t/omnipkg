@@ -2451,7 +2451,26 @@ class ConfigManager:
         """
         Interactive setup that keeps the native Python in its original location
         and only manages additional Python versions.
+        
+        AUTO-DETECTS non-interactive environments (Docker, CI, piped input, etc.)
         """
+        import sys
+        
+        # ============================================================================
+        # CRITICAL: Auto-detect non-interactive environments
+        # ============================================================================
+        is_docker = os.path.exists("/.dockerenv") or os.path.exists("/run/.containerenv")
+        no_tty = not sys.stdin.isatty()
+        forced_noninteractive = os.environ.get("OMNIPKG_NONINTERACTIVE")
+        in_ci = os.environ.get("CI")
+        
+        # If ANY of these conditions are true, force non-interactive mode
+        if interactive and (in_ci or forced_noninteractive or no_tty or is_docker):
+            interactive = False
+            safe_print(_("🤖 Non-interactive environment detected - using defaults"))
+        
+        # ============================================================================
+        
         safe_print(_("💡 Grounding configuration in the current active environment..."))
 
         # Use the ACTUAL active Python executable, not a managed copy
@@ -2606,8 +2625,8 @@ class ConfigManager:
         defaults = self._get_sensible_defaults(managed_python_exe_str)
         final_config = defaults.copy()
 
-        # Interactive prompts (if not in CI)
-        if interactive and (not os.environ.get("CI")):
+        # Interactive prompts (ONLY if truly interactive)
+        if interactive:
             safe_print(_("🌍 Welcome to omnipkg! Let's get you configured."))
             safe_print("-" * 60)
 
@@ -2678,6 +2697,9 @@ class ConfigManager:
                 input(_("Enable Python interpreter hotswapping? (y/n) [y]: ")).strip().lower()
             )
             final_config["enable_python_hotswap"] = hotswap_choice != "n"
+        else:
+            # Non-interactive: use all defaults
+            safe_print(_("   ✅ Using default configuration (non-interactive mode)"))
 
         # Save configuration
         try:
@@ -2694,7 +2716,7 @@ class ConfigManager:
         with open(self.config_path, "w") as f:
             json.dump(full_config, f, indent=4)
 
-        if interactive and (not os.environ.get("CI")):
+        if interactive:
             safe_print(_("\n✅ Configuration saved to {}.").format(self.config_path))
             safe_print(_("   You can edit this file manually later."))
             safe_print(_("🧠 Initializing omnipkg knowledge base..."))
@@ -2710,7 +2732,7 @@ class ConfigManager:
             "-y",
         ]
         try:
-            if interactive and (not os.environ.get("CI")):
+            if interactive:
                 process = subprocess.Popen(
                     rebuild_cmd,
                     stdout=subprocess.PIPE,
@@ -2735,7 +2757,7 @@ class ConfigManager:
             else:
                 subprocess.run(rebuild_cmd, check=True, capture_output=True, text=True)
         except subprocess.CalledProcessError:
-            if interactive and (not os.environ.get("CI")):
+            if interactive:
                 safe_print(_("   ⚠️  Knowledge base will be built on first command usage instead."))
             pass
 
