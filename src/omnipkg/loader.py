@@ -16,8 +16,12 @@ import threading
 import time
 from collections import defaultdict
 from dataclasses import dataclass
-from importlib.metadata import PackageNotFoundError
-from importlib.metadata import version as get_version
+try:
+    from importlib.metadata import PackageNotFoundError
+    from importlib.metadata import version as get_version
+except ImportError:
+    from importlib_metadata import PackageNotFoundError
+    from importlib_metadata import version as get_version
 from pathlib import Path
 from typing import (  # <-- Make sure Dict is in this import
     Dict,
