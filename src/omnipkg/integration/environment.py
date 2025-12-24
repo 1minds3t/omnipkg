@@ -8,9 +8,9 @@ have to prefix commands with '8pkg run'
 """
 
 try:
-    import importlib.metadata as importlib_metadata
-except ImportError:
-    import importlib_metadata
+    import importlib.metadata as importlib_metadata
+except ImportError:
+    import importlib_metadata
 import os
 import shutil
 import stat

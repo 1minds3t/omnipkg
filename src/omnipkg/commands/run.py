@@ -946,9 +946,9 @@ def is_package_corrupted(pkg_name, missing_module_name):
     but the actual module cannot be imported).
     """
     try:
-    import importlib.metadata as importlib_metadata
-except ImportError:
-    import importlib_metadata
+        import importlib.metadata as importlib_metadata
+    except ImportError:
+        import importlib_metadata
     import importlib.util
 
     # 1. Is it installed according to metadata?
