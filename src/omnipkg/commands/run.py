@@ -1,6 +1,7 @@
 from __future__ import annotations  # Python 3.6+ compatibility
 
 from omnipkg.common_utils import safe_print, sync_context_to_runtime
+import importlib
 from omnipkg.core import ConfigManager
 from omnipkg.core import omnipkg as OmnipkgCore
 from omnipkg.i18n import _

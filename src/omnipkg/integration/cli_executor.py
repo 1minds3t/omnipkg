@@ -4,7 +4,7 @@ from omnipkg.common_utils import safe_print
 Enhanced 8pkg run - Support both Python scripts AND CLI executables
 This makes omnipkg actually usable for real development work
 """
-
+import importlib
 try:
     import importlib.metadata as importlib_metadata
 except ImportError:

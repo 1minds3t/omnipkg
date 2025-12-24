@@ -10,6 +10,7 @@ try:
     from .common_utils import print_header, safe_print
 except ImportError:
     from omnipkg.common_utils import safe_print, print_header
+import importlib
 
 import hashlib
 import importlib
