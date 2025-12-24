@@ -1933,6 +1933,15 @@ class ConfigManager:
                             raise OSError(_("Could not find python directory in extracted archive"))
 
                 python_dest = venv_path / ".omnipkg" / "interpreters" / f"cpython-{full_version}"
+                safe_print(_("   - Installing to: {}").format(python_dest))
+                python_dest.parent.mkdir(parents=True, exist_ok=True)
+
+                # CRITICAL FIX: Remove destination if it exists
+                if python_dest.exists():
+                    safe_print(_("   - Removing existing incomplete installation..."))
+                    shutil.rmtree(python_dest)
+
+                shutil.copytree(source_python_dir, python_dest)  # Don't use dirs_exist_ok
                 safe_print(_("   - 🔍 DEBUG: Listing extracted contents..."))
                 all_extracted = list(extract_path.rglob("*"))[:50]  # First 50 items
                 for item in all_extracted:
@@ -1952,6 +1961,16 @@ class ConfigManager:
                         safe_print(f"      - {item.name}")
                 
                 python_dest = venv_path / ".omnipkg" / "interpreters" / f"cpython-{full_version}"
+                python_dest = venv_path / ".omnipkg" / "interpreters" / f"cpython-{full_version}"
+                safe_print(_("   - Installing to: {}").format(python_dest))
+                python_dest.parent.mkdir(parents=True, exist_ok=True)
+
+                # CRITICAL FIX: Remove destination if it exists
+                if python_dest.exists():
+                    safe_print(_("   - Removing existing incomplete installation..."))
+                    shutil.rmtree(python_dest)
+
+                shutil.copytree(source_python_dir, python_dest)  # Don't use dirs_exist_ok
                 safe_print(_("   - Installing to: {}").format(python_dest))
                 python_dest.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copytree(source_python_dir, python_dest, dirs_exist_ok=True)
