@@ -341,33 +341,60 @@ class ConfigManager:
                 # [NEW] Force KB build on first use for this native version
                 self._set_rebuild_flag_for_version(native_version_str)
                 if sys.version_info[:2] != self._preferred_version:
-                    if not suppress_init_messages:
-                        safe_print(
-                            _("\n   - Step 2: Setting up the required Python 3.11 control plane...")
-                        )
-                    temp_omnipkg = omnipkg(config_manager=self, minimal_mode=True)
-                    result_code = temp_omnipkg._fallback_to_download("3.11")
-                    if result_code != 0:
-                        raise RuntimeError("Failed to set up the Python 3.11 control plane.")
-                setup_complete_flag.parent.mkdir(parents=True, exist_ok=True)
-                setup_complete_flag.touch()
-                if not suppress_init_messages:
-                    safe_print("\n" + "=" * 60)
-                    safe_print(_("  ✅ SETUP COMPLETE"))
-                    safe_print("=" * 60)
-                    safe_print(_("Your environment is now fully managed by omnipkg."))
-                    safe_print("=" * 60)
-            except Exception as e:
-                if not suppress_init_messages:
-                    safe_print(
-                        _("❌ A critical error occurred during one-time setup: {}").format(e)
-                    )
-                    import traceback
+                    # Check if we should skip Python 3.11 download
+                    skip_311_download = False
+                    skip_reason = ""
+                    
+                    # Check 1: Alpine Linux (musl libc issues with python-build-standalone)
+                    if self._is_alpine():
+                        if sys.version_info >= (3, 8):
+                            skip_311_download = True
+                            skip_reason = "Alpine Linux detected with Python {}.{} - using system Python instead".format(
+                                sys.version_info.major, sys.version_info.minor)
+                        else:
+                            skip_reason = "Alpine Linux with Python < 3.8 - attempting download anyway"
+                    
+                    # Check 2: QEMU emulation
+                    if self._is_qemu_emulated():
+                        skip_311_download = True
+                        skip_reason = "QEMU emulation detected - skipping download to avoid compatibility issues"
+                    
+                    if skip_311_download:
+                        if not suppress_init_messages:
+                            safe_print(_("\n   - Step 2: Python 3.11 control plane setup"))
+                            safe_print(_("   - ⚠️  {}").format(skip_reason))
+                            safe_print(_("   - You can install additional Python versions later with: 8pkg python adopt <version>"))
+                    else:
+                        if not suppress_init_messages:
+                            safe_print(_("\n   - Step 2: Setting up the required Python 3.11 control plane..."))
+                        
+                        try:
+                            temp_omnipkg = omnipkg(config_manager=self, minimal_mode=True)
+                            result_code = temp_omnipkg._fallback_to_download("3.11")
+                            if result_code != 0:
+                                # If download fails but we have Python 3.8+, continue anyway
+                                if sys.version_info >= (3, 8):
+                                    if not suppress_init_messages:
+                                        safe_print(_("   - ⚠️  Python 3.11 download failed, but continuing with Python {}.{}").format(
+                                            sys.version_info.major, sys.version_info.minor))
+                                else:
+                                    raise RuntimeError("Failed to set up the Python 3.11 control plane.")
+                        except Exception as e:
+                            # Fallback: if we have a working Python 3.8+, don't fail installation
+                            if sys.version_info >= (3, 8):
+                                if not suppress_init_messages:
+                                    safe_print(_("   - ⚠️  Python 3.11 setup failed: {}").format(e))
+                                    safe_print(_("   - Continuing with system Python {}.{}").format(
+                                        sys.version_info.major, sys.version_info.minor))
+                            else:
+                                raise
 
-                    traceback.print_exc()
-                if setup_complete_flag.exists():
-                    setup_complete_flag.unlink(missing_ok=True)
-                sys.exit(1)
+    def _is_alpine():
+        try:
+            with open('/etc/os-release') as f:
+                return 'alpine' in f.read().lower()
+        except:
+            return False
 
     def _set_rebuild_flag_for_version(self, version_str: str):
         """
