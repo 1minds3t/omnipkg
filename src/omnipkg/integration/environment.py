@@ -6,7 +6,7 @@ from omnipkg.common_utils import safe_print
 This creates wrapper executables for ALL installed CLI tools so users never
 have to prefix commands with '8pkg run'
 """
-
+import importlib
 try:
     import importlib.metadata as importlib_metadata
 except ImportError:

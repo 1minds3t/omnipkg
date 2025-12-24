@@ -11,6 +11,7 @@ except ImportError:
 omnipkg_metadata_builder.py - v11 - The "Multi-Version Complete" Edition
 A fully integrated, self-aware metadata gatherer with complete multi-version
 support for robust, side-by-side package management.
+import importlib
 """
 import concurrent.futures
 import hashlib
