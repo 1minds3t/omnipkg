@@ -149,7 +149,7 @@ jobs:
     
     - name: Run Demo ${{ matrix.demo }} in Python 3.7 Docker
       run: |
-        docker run --rm -v $(pwd):/workspace -w /workspace python:3.7-slim bash -c "
+        docker run --rm -e CI=true -v $(pwd):/workspace -w /workspace python:3.7-slim bash -c "
           python -m pip install --upgrade pip
           pip install -e .
           
