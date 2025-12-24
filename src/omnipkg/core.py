@@ -354,11 +354,6 @@ class ConfigManager:
                         else:
                             skip_reason = "Alpine Linux with Python < 3.8 - attempting download anyway"
                     
-                    # Check 2: QEMU emulation
-                    if self._is_qemu_emulated():
-                        skip_311_download = True
-                        skip_reason = "QEMU emulation detected - skipping download to avoid compatibility issues"
-                    
                     if skip_311_download:
                         if not suppress_init_messages:
                             safe_print(_("\n   - Step 2: Python 3.11 control plane setup"))
