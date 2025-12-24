@@ -441,6 +441,8 @@ class ConfigManager:
 
         CRITICAL: When running from a managed interpreter (e.g., inside .omnipkg/interpreters/),
         we must find the ORIGINAL venv root, not create nested structures.
+        
+        NEW: For system Python (no venv), use ~/.local/omnipkg instead of sys.prefix
         """
         override = os.environ.get("OMNIPKG_VENV_ROOT")
         if override:
@@ -502,6 +504,18 @@ class ConfigManager:
                 return search_dir
             search_dir = search_dir.parent
 
+        # ============================================================================
+        # NEW FIX: For system Python (no venv found), use user directory
+        # ============================================================================
+        # Check if we're using system Python (in /usr, /usr/local, etc.)
+        is_system_python = str(current_executable).startswith(('/usr/', '/usr/local/', '/opt/'))
+        
+        if is_system_python:
+            # Use user-local directory instead of sys.prefix
+            safe_user_dir = Path.home() / ".local" / "omnipkg"
+            safe_user_dir.mkdir(parents=True, exist_ok=True)
+            return safe_user_dir
+        
         # Only use sys.prefix as a last resort if all else fails.
         return Path(sys.prefix)
 
