@@ -1131,6 +1131,32 @@ class ConfigManager:
             return True
         self._register_all_interpreters(self.venv_path)
 
+    def _ensure_omnipkg_bootstrapped(self, python_exe: Path, version: str):
+        """
+        Ensures omnipkg and its dependencies are installed in a target interpreter.
+        This is Idempotent: it checks before installing to avoid recursion loops.
+        """
+        # 1. Fast Check: Can we import omnipkg?
+        check_cmd = [str(python_exe), "-c", "import omnipkg; import filelock"]
+        try:
+            # Short timeout because it should be instant if installed
+            result = subprocess.run(check_cmd, capture_output=True, timeout=3)
+            if result.returncode == 0:
+                return True  # Already installed, do nothing
+        except Exception:
+            pass
+        
+        # 2. Not installed: Bootstrap it
+        try:
+            safe_print(f"   PLEASE WAIT: Bootstrapping omnipkg into Python {version}...")
+            # We reuse the existing logic which handles deps first, then the package
+            self._install_essential_packages(python_exe)
+            safe_print(f"   ✅ Successfully bootstrapped Python {version}")
+            return True
+        except Exception as e:
+            safe_print(f"   ⚠️  Bootstrap failed for Python {version}: {e}")
+            return False
+
     def _register_all_interpreters(self, venv_path: Path):
         """
         THREAD-SAFE: Uses InterpreterManager's lock to prevent concurrent registry corruption.
@@ -1340,6 +1366,14 @@ class ConfigManager:
                 for version, path in sorted(all_interpreters.items()):
                     marker = " (native)" if version in native_interpreters else " (managed)"
                     safe_print(_("      - Python {}: {}{}").format(version, path, marker))
+                    
+                    # --- NEW LOGIC START ---
+                    # Ensure every registered interpreter actually has omnipkg installed
+                    # This prevents "ModuleNotFoundError" when swapping later
+                    python_exe = Path(path)
+                    if python_exe.exists():
+                        self._ensure_omnipkg_bootstrapped(python_exe, version)
+                    # --- NEW LOGIC END ---
             else:
                 safe_print(_("   ⚠️  No Python interpreters were found or could be registered."))
 
@@ -3217,8 +3251,7 @@ class InterpreterManager:
                 f"Failed to install {package} with Python {python_version}: {result.stderr}"
             )
         return result
-
-
+    
 class BubbleIsolationManager:
 
     def __init__(self, config: Dict, parent_omnipkg):
