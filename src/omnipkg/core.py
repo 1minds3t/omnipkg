@@ -338,51 +338,24 @@ class ConfigManager:
                 self._register_and_link_existing_interpreter(
                     Path(sys.executable), native_version_str
                 )
-                # [NEW] Force KB build on first use for this native version
+                # Force KB build on first use for this native version
                 self._set_rebuild_flag_for_version(native_version_str)
+                
                 if sys.version_info[:2] != self._preferred_version:
-                    # Check if we should skip Python 3.11 download
-                    skip_311_download = False
-                    skip_reason = ""
+                    if not suppress_init_messages:
+                        safe_print(_("\n   - Step 2: Setting up the required Python 3.11 control plane..."))
                     
-                    # Check 1: Alpine Linux (musl libc issues with python-build-standalone)
-                    if self._is_alpine():
+                    # Try the download/install with validation
+                    success = self._install_python_311_with_validation(suppress_init_messages)
+                    
+                    if not success:
+                        # If we have Python 3.8+, continue anyway
                         if sys.version_info >= (3, 8):
-                            skip_311_download = True
-                            skip_reason = "Alpine Linux detected with Python {}.{} - using system Python instead".format(
-                                sys.version_info.major, sys.version_info.minor)
+                            if not suppress_init_messages:
+                                safe_print(_("   - ⚠️  Python 3.11 setup failed, but continuing with Python {}.{}").format(
+                                    sys.version_info.major, sys.version_info.minor))
                         else:
-                            skip_reason = "Alpine Linux with Python < 3.8 - attempting download anyway"
-                    
-                    if skip_311_download:
-                        if not suppress_init_messages:
-                            safe_print(_("\n   - Step 2: Python 3.11 control plane setup"))
-                            safe_print(_("   - ⚠️  {}").format(skip_reason))
-                            safe_print(_("   - You can install additional Python versions later with: 8pkg python adopt <version>"))
-                    else:
-                        if not suppress_init_messages:
-                            safe_print(_("\n   - Step 2: Setting up the required Python 3.11 control plane..."))
-                        
-                        try:
-                            temp_omnipkg = omnipkg(config_manager=self, minimal_mode=True)
-                            result_code = temp_omnipkg._fallback_to_download("3.11")
-                            if result_code != 0:
-                                # If download fails but we have Python 3.8+, continue anyway
-                                if sys.version_info >= (3, 8):
-                                    if not suppress_init_messages:
-                                        safe_print(_("   - ⚠️  Python 3.11 download failed, but continuing with Python {}.{}").format(
-                                            sys.version_info.major, sys.version_info.minor))
-                                else:
-                                    raise RuntimeError("Failed to set up the Python 3.11 control plane.")
-                        except Exception as e:
-                            # Fallback: if we have a working Python 3.8+, don't fail installation
-                            if sys.version_info >= (3, 8):
-                                if not suppress_init_messages:
-                                    safe_print(_("   - ⚠️  Python 3.11 setup failed: {}").format(e))
-                                    safe_print(_("   - Continuing with system Python {}.{}").format(
-                                        sys.version_info.major, sys.version_info.minor))
-                            else:
-                                raise
+                            raise RuntimeError("Failed to set up the Python 3.11 control plane and current Python < 3.8.")
                 
                 setup_complete_flag.parent.mkdir(parents=True, exist_ok=True)
                 setup_complete_flag.touch()
@@ -400,8 +373,265 @@ class ConfigManager:
                     import traceback
                     traceback.print_exc()
                 if setup_complete_flag.exists():
-                    setup_complete_flag.unlink(missing_ok=True)
+                    setup_complete_flag.unlink()
                 sys.exit(1)
+
+    def _install_python_311_with_validation(self, suppress_init_messages=False) -> bool:
+        """
+        Attempts to install Python 3.11, validates it works, and falls back if needed.
+        Returns True if successful, False if validation failed.
+        """
+        is_alpine = self._is_alpine()
+        
+        # Strategy 1: Try package manager first on Alpine
+        if is_alpine:
+            if not suppress_init_messages:
+                safe_print(_("   - 🏔️  Alpine Linux detected - attempting system package install first..."))
+            
+            if self._try_alpine_package_install("3.11", suppress_init_messages):
+                if not suppress_init_messages:
+                    safe_print(_("   - ✅ Alpine package installation successful!"))
+                return True
+            else:
+                if not suppress_init_messages:
+                    safe_print(_("   - ⚠️  Alpine package install failed or not available, trying download..."))
+        
+        # Strategy 2: Try python-build-standalone download
+        try:
+            temp_omnipkg = omnipkg(config_manager=self, minimal_mode=True)
+            result_code = temp_omnipkg._fallback_to_download("3.11")
+            
+            if result_code == 0:
+                # Download succeeded - now validate it
+                if self._validate_python_installation("3.11", suppress_init_messages):
+                    if not suppress_init_messages:
+                        safe_print(_("   - ✅ Python 3.11 download and validation successful!"))
+                    return True
+                else:
+                    if not suppress_init_messages:
+                        safe_print(_("   - ⚠️  Python 3.11 downloaded but validation failed"))
+                    # Clean up the broken installation
+                    self._cleanup_broken_python_install("3.11")
+                    
+                    # On Alpine, try package manager as fallback
+                    if is_alpine:
+                        if not suppress_init_messages:
+                            safe_print(_("   - 🔄 Retrying with Alpine package manager..."))
+                        if self._try_alpine_package_install("3.11", suppress_init_messages):
+                            return True
+                    
+                    return False
+            else:
+                # Download failed
+                if not suppress_init_messages:
+                    safe_print(_("   - ⚠️  Python 3.11 download failed"))
+                
+                # On Alpine, try package manager as fallback
+                if is_alpine:
+                    if not suppress_init_messages:
+                        safe_print(_("   - 🔄 Trying Alpine package manager..."))
+                    if self._try_alpine_package_install("3.11", suppress_init_messages):
+                        return True
+                
+                return False
+                
+        except Exception as e:
+            if not suppress_init_messages:
+                safe_print(_("   - ⚠️  Python 3.11 setup exception: {}").format(e))
+            
+            # On Alpine, try package manager as last resort
+            if is_alpine:
+                if not suppress_init_messages:
+                    safe_print(_("   - 🔄 Trying Alpine package manager as fallback..."))
+                if self._try_alpine_package_install("3.11", suppress_init_messages):
+                    return True
+            
+            return False
+
+    def _try_alpine_package_install(self, version: str, suppress_init_messages=False) -> bool:
+        """
+        Attempts to install Python via Alpine's apk package manager.
+        Returns True if successful and validated, False otherwise.
+        """
+        import subprocess
+        
+        # Map version to Alpine package name
+        pkg_name = f"python{version}"
+        
+        try:
+            # Check if package is available
+            check_cmd = ["apk", "search", pkg_name]
+            result = subprocess.run(check_cmd, capture_output=True, text=True, timeout=30)
+            
+            if pkg_name not in result.stdout:
+                if not suppress_init_messages:
+                    safe_print(_(f"   - ⚠️  Package {pkg_name} not available in Alpine repositories"))
+                return False
+            
+            # Try to install
+            if not suppress_init_messages:
+                safe_print(_(f"   - 📦 Installing {pkg_name} via apk..."))
+            
+            install_cmd = ["apk", "add", "--no-cache", pkg_name]
+            result = subprocess.run(install_cmd, capture_output=True, text=True, timeout=120)
+            
+            if result.returncode != 0:
+                if not suppress_init_messages:
+                    safe_print(_(f"   - ⚠️  apk install failed: {result.stderr}"))
+                return False
+            
+            # Find the installed Python executable
+            python_exe = self._find_system_python(version)
+            if not python_exe:
+                if not suppress_init_messages:
+                    safe_print(_(f"   - ⚠️  Could not find installed Python {version}"))
+                return False
+            
+            # Register and validate it
+            self._register_and_link_existing_interpreter(python_exe, version)
+            
+            if self._validate_python_installation(version, suppress_init_messages):
+                if not suppress_init_messages:
+                    safe_print(_(f"   - ✅ Alpine Python {version} installed and validated!"))
+                return True
+            else:
+                if not suppress_init_messages:
+                    safe_print(_(f"   - ⚠️  Alpine Python {version} validation failed"))
+                return False
+                
+        except subprocess.TimeoutExpired:
+            if not suppress_init_messages:
+                safe_print(_("   - ⚠️  Alpine package installation timed out"))
+            return False
+        except Exception as e:
+            if not suppress_init_messages:
+                safe_print(_(f"   - ⚠️  Alpine install error: {e}"))
+            return False
+
+    def _validate_python_installation(self, version: str, suppress_init_messages=False) -> bool:
+        """
+        Validates that an installed Python version actually works.
+        Tests: executable exists, runs, has correct version, can import basic modules.
+        """
+        import subprocess
+        
+        # Find the Python executable
+        version_dir = self.multiversion_base / f"cpython-{version}"
+        if not version_dir.exists():
+            version_dir = self.venv_path / ".omnipkg" / "interpreters" / f"cpython-{version}"
+        
+        if platform.system() == "Windows":
+            python_exe = version_dir / "python.exe"
+        else:
+            python_exe = version_dir / "bin" / f"python{version}"
+            if not python_exe.exists():
+                python_exe = version_dir / "bin" / "python3"
+        
+        if not python_exe.exists():
+            if not suppress_init_messages:
+                safe_print(_(f"   - ⚠️  Validation failed: Python executable not found at {python_exe}"))
+            return False
+        
+        try:
+            # Test 1: Can it run and print version?
+            test_code = "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')"
+            result = subprocess.run(
+                [str(python_exe), "-c", test_code],
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            
+            if result.returncode != 0:
+                if not suppress_init_messages:
+                    safe_print(_(f"   - ⚠️  Validation failed: Python won't execute"))
+                return False
+            
+            reported_version = result.stdout.strip()
+            if reported_version != version:
+                if not suppress_init_messages:
+                    safe_print(_(f"   - ⚠️  Validation failed: Expected {version}, got {reported_version}"))
+                return False
+            
+            # Test 2: Can it import critical modules?
+            test_imports = "import sys, os, json, subprocess"
+            result = subprocess.run(
+                [str(python_exe), "-c", test_imports],
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            
+            if result.returncode != 0:
+                if not suppress_init_messages:
+                    safe_print(_(f"   - ⚠️  Validation failed: Cannot import basic modules"))
+                return False
+            
+            # Test 3: Can pip be invoked?
+            result = subprocess.run(
+                [str(python_exe), "-m", "pip", "--version"],
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            
+            if result.returncode != 0:
+                if not suppress_init_messages:
+                    safe_print(_("   - ⚠️  Warning: pip not available, but Python itself is functional"))
+                # This is a warning, not a failure - Python works, pip can be bootstrapped later
+            
+            return True
+            
+        except subprocess.TimeoutExpired:
+            if not suppress_init_messages:
+                safe_print(_("   - ⚠️  Validation failed: Python execution timed out"))
+            return False
+        except Exception as e:
+            if not suppress_init_messages:
+                safe_print(_(f"   - ⚠️  Validation failed: {e}"))
+            return False
+
+    def _cleanup_broken_python_install(self, version: str):
+        """Removes a broken Python installation."""
+        import shutil
+        
+        version_dir = self.multiversion_base / f"cpython-{version}"
+        if not version_dir.exists():
+            version_dir = self.venv_path / ".omnipkg" / "interpreters" / f"cpython-{version}"
+        
+        if version_dir.exists():
+            try:
+                shutil.rmtree(version_dir)
+            except Exception:
+                pass
+
+    def _find_system_python(self, version: str) -> Optional[Path]:
+        """Find system-installed Python of a specific version."""
+        import subprocess
+        
+        candidates = [
+            f"/usr/bin/python{version}",
+            f"/usr/local/bin/python{version}",
+            f"/opt/python{version}/bin/python{version}",
+        ]
+        
+        for candidate in candidates:
+            exe = Path(candidate)
+            if exe.exists():
+                # Verify it's the right version
+                try:
+                    result = subprocess.run(
+                        [str(exe), "-c", "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')"],
+                        capture_output=True,
+                        text=True,
+                        timeout=5
+                    )
+                    if result.returncode == 0 and result.stdout.strip() == version:
+                        return exe
+                except:
+                    continue
+        
+        return None
 
     def _is_alpine(self):
         """Check if running on Alpine Linux"""
@@ -463,7 +693,8 @@ class ConfigManager:
                         with open(flag_file, "w") as f:
                             json.dump(versions_to_rebuild, f)
             except (json.JSONDecodeError, IOError, Exception):
-                flag_file.unlink(missing_ok=True)
+                if flag_file.exists():
+                    flag_file.unlink()
 
     def _peek_config_for_flag(self, flag_name: str) -> bool:
         """
@@ -6179,7 +6410,10 @@ class omnipkg:
                     native_sync_duration = time.perf_counter() - native_sync_start
                     safe_print(f"   ⏱️  Native sync completed in {native_sync_duration:.2f}s")
             finally:
-                Path(sync_script_path).unlink(missing_ok=True)
+                try:
+                    Path(sync_script_path).unlink()
+                except FileNotFoundError:
+                    pass
 
         # === SYNC OTHER INTERPRETERS CONCURRENTLY ===
         if sync_needed:
@@ -6817,7 +7051,8 @@ class omnipkg:
                 with open(flag_file, "r") as f:
                     versions_to_rebuild = json.load(f)
             except (json.JSONDecodeError, IOError):
-                flag_file.unlink(missing_ok=True)
+                if flag_file.exists():
+                    flag_file.unlink()
                 return False
 
             if current_version_str in versions_to_rebuild:
@@ -6831,7 +7066,7 @@ class omnipkg:
                     # since we already hold the lock.
                     versions_to_rebuild.remove(current_version_str)
                     if not versions_to_rebuild:
-                        flag_file.unlink(missing_ok=True)
+                        flag_file.unlink()
                     else:
                         with open(flag_file, "w") as f:
                             json.dump(versions_to_rebuild, f)
