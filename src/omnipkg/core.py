@@ -1733,21 +1733,37 @@ class ConfigManager:
         safe_print(_("   ✅ New omnipkg executable created."))
 
     def _update_default_python_links(self, venv_path: Path, new_python_exe: Path):
-        """Updates the default python/python3 symlinks to point to Python 3.11."""
+        """Updates the default python/python3 symlinks to point to the specified Python."""
         safe_print(_("🔧 Updating default Python links..."))
         bin_dir = venv_path / ("Scripts" if platform.system() == "Windows" else "bin")
+        
+        # CRITICAL FIX: Ensure the bin directory exists
+        try:
+            bin_dir.mkdir(parents=True, exist_ok=True)
+        except Exception as e:
+            safe_print(_("   ⚠️  Could not create bin directory: {}").format(e))
+            safe_print(_("   - Skipping symlink updates"))
+            return
+        
         if platform.system() == "Windows":
             for name in ["python.exe", "python3.exe"]:
                 target = bin_dir / name
-                if target.exists():
-                    target.unlink()
-                shutil.copy2(new_python_exe, target)
+                try:
+                    if target.exists():
+                        target.unlink()
+                    shutil.copy2(new_python_exe, target)
+                except Exception as e:
+                    safe_print(_("   ⚠️  Could not update {}: {}").format(name, e))
         else:
             for name in ["python", "python3"]:
                 target = bin_dir / name
-                if target.exists() or target.is_symlink():
-                    target.unlink()
-                target.symlink_to(new_python_exe)
+                try:
+                    if target.exists() or target.is_symlink():
+                        target.unlink()
+                    target.symlink_to(new_python_exe)
+                except Exception as e:
+                    safe_print(_("   ⚠️  Could not create symlink {}: {}").format(name, e))
+        
         version_tuple = self._verify_python_version(str(new_python_exe))
         version_str = (
             f"{version_tuple[0]}.{version_tuple[1]}" if version_tuple else "the new version"
