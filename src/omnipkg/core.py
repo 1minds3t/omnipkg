@@ -514,22 +514,58 @@ class ConfigManager:
         Tests: executable exists, runs, has correct version, can import basic modules.
         """
         import subprocess
+        import glob
         
-        # Find the Python executable
-        version_dir = self.multiversion_base / f"cpython-{version}"
-        if not version_dir.exists():
-            version_dir = self.venv_path / ".omnipkg" / "interpreters" / f"cpython-{version}"
+        # Find the Python executable - need to handle both cpython-3.11 and cpython-3.11.9 patterns
+        interpreters_dir = self.venv_path / ".omnipkg" / "interpreters"
         
+        # Look for directories matching the version pattern
+        version_dir = None
+        if interpreters_dir.exists():
+            # Try exact match first
+            exact_match = interpreters_dir / f"cpython-{version}"
+            if exact_match.exists():
+                version_dir = exact_match
+            else:
+                # Try glob pattern for versioned directories (e.g., cpython-3.11.9)
+                pattern = str(interpreters_dir / f"cpython-{version}*")
+                matches = glob.glob(pattern)
+                if matches:
+                    version_dir = Path(matches[0])
+        
+        # Fallback to multiversion_base if configured
+        if not version_dir and self.multiversion_base:
+            version_dir = self.multiversion_base / f"cpython-{version}"
+            if not version_dir.exists():
+                pattern = str(self.multiversion_base / f"cpython-{version}*")
+                matches = glob.glob(pattern)
+                if matches:
+                    version_dir = Path(matches[0])
+        
+        if not version_dir or not version_dir.exists():
+            if not suppress_init_messages:
+                safe_print(_(f"   - ⚠️  Validation failed: Python {version} directory not found"))
+            return False
+        
+        # Find the actual executable - try multiple naming patterns
+        python_exe = None
         if platform.system() == "Windows":
             python_exe = version_dir / "python.exe"
         else:
-            python_exe = version_dir / "bin" / f"python{version}"
-            if not python_exe.exists():
-                python_exe = version_dir / "bin" / "python3"
+            # Try versioned names first (python3.11, python3.12, etc.)
+            candidates = [
+                version_dir / "bin" / f"python{version}",
+                version_dir / "bin" / "python3",
+                version_dir / "bin" / "python",
+            ]
+            for candidate in candidates:
+                if candidate.exists():
+                    python_exe = candidate
+                    break
         
-        if not python_exe.exists():
+        if not python_exe or not python_exe.exists():
             if not suppress_init_messages:
-                safe_print(_(f"   - ⚠️  Validation failed: Python executable not found at {python_exe}"))
+                safe_print(_(f"   - ⚠️  Validation failed: Python executable not found in {version_dir}"))
             return False
         
         try:
