@@ -1930,9 +1930,33 @@ class ConfigManager:
                             raise OSError(_("Could not find python directory in extracted archive"))
 
                 python_dest = venv_path / ".omnipkg" / "interpreters" / f"cpython-{full_version}"
+                safe_print(_("   - 🔍 DEBUG: Listing extracted contents..."))
+                all_extracted = list(extract_path.rglob("*"))[:50]  # First 50 items
+                for item in all_extracted:
+                    rel_path = item.relative_to(extract_path)
+                    item_type = "DIR" if item.is_dir() else "FILE"
+                    safe_print(f"      [{item_type}] {rel_path}")
+                
+                if len(all_extracted) >= 50:
+                    safe_print(f"      ... and {len(list(extract_path.rglob('*'))) - 50} more items")
+                safe_print(_("   - Installing to: {}").format(python_dest))
+                python_dest.parent.mkdir(parents=True, exist_ok=True)
+                safe_print(_("   - 🔍 DEBUG: Source directory: {}").format(source_python_dir))
+                if source_python_dir.exists():
+                    source_contents = list(source_python_dir.iterdir())[:20]
+                    safe_print(_("   - 🔍 DEBUG: Source directory contains:"))
+                    for item in source_contents:
+                        safe_print(f"      - {item.name}")
+                
+                python_dest = venv_path / ".omnipkg" / "interpreters" / f"cpython-{full_version}"
                 safe_print(_("   - Installing to: {}").format(python_dest))
                 python_dest.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copytree(source_python_dir, python_dest, dirs_exist_ok=True)
+                safe_print(_("   - 🔍 DEBUG: Destination after copy:"))
+                if python_dest.exists():
+                    dest_contents = list(python_dest.iterdir())[:20]
+                    for item in dest_contents:
+                        safe_print(f"      - {item.name}")
 
                 python_exe_candidates = []
                 if system == "windows":
