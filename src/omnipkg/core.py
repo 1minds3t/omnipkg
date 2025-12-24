@@ -388,8 +388,28 @@ class ConfigManager:
                                         sys.version_info.major, sys.version_info.minor))
                             else:
                                 raise
+                
+                setup_complete_flag.parent.mkdir(parents=True, exist_ok=True)
+                setup_complete_flag.touch()
+                if not suppress_init_messages:
+                    safe_print("\n" + "=" * 60)
+                    safe_print(_("  ✅ SETUP COMPLETE"))
+                    safe_print("=" * 60)
+                    safe_print(_("Your environment is now fully managed by omnipkg."))
+                    safe_print("=" * 60)
+            except Exception as e:
+                if not suppress_init_messages:
+                    safe_print(
+                        _("❌ A critical error occurred during one-time setup: {}").format(e)
+                    )
+                    import traceback
+                    traceback.print_exc()
+                if setup_complete_flag.exists():
+                    setup_complete_flag.unlink(missing_ok=True)
+                sys.exit(1)
 
-    def _is_alpine():
+    def _is_alpine(self):
+        """Check if running on Alpine Linux"""
         try:
             with open('/etc/os-release') as f:
                 return 'alpine' in f.read().lower()
