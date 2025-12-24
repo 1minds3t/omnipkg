@@ -759,30 +759,24 @@ class ConfigManager:
 
     def _register_and_link_existing_interpreter(self, interpreter_path: Path, version: str):
         """
-        Registers the native interpreter WITHOUT symlinking it.
+        Registers the native interpreter. If not in a standard location, symlinks it.
         """
         managed_interpreters_dir = self.venv_path / ".omnipkg" / "interpreters"
         managed_interpreters_dir.mkdir(parents=True, exist_ok=True)
 
-        # Platform-aware native detection
         interpreter_resolved = interpreter_path.resolve()
 
-        # On Windows: check if it's in the main venv directory (not in .omnipkg)
-        # On Unix: check if it's in venv_path/bin
+        # Platform-aware native detection
         if platform.system() == "Windows":
-            # Windows: native if it's in the venv root, not in .omnipkg
             is_native = str(interpreter_resolved).startswith(
                 str(self.venv_path)
             ) and ".omnipkg" not in str(interpreter_resolved)
         else:
-            # Unix: native if it's in venv_path/bin
             is_native = interpreter_resolved.parent == (self.venv_path / "bin")
 
         if is_native:
             safe_print(_("   - Native Python {} - using directly (no symlink)").format(version))
             registry_path = managed_interpreters_dir / "registry.json"
-
-            # Load existing registry
             registry_data = {"interpreters": {}}
             if registry_path.exists():
                 try:
@@ -790,21 +784,17 @@ class ConfigManager:
                         registry_data = json.load(f)
                 except (json.JSONDecodeError, IOError):
                     pass
-
-            # Register the NATIVE path (not a symlink!)
             registry_data["interpreters"][version] = str(interpreter_resolved)
-
             with open(registry_path, "w") as f:
                 json.dump(registry_data, f, indent=4)
-
             safe_print(f"   - ✅ Registered native Python {version} in registry file.")
-            return  # EXIT HERE - don't create symlink!
+            
+            # CRITICAL: Bootstrap native interpreter so it works when swapped
+            self._ensure_omnipkg_bootstrapped(interpreter_resolved, version)
+            return
 
-        # Only create symlink for NON-native interpreters
-        # (This should rarely happen in normal usage)
+        # Non-native logic (Symlink creation)
         safe_print(_("   - WARNING: Non-native interpreter detected, creating symlink..."))
-
-        # For non-native interpreters, create symlink
         safe_print(_("   - Centralizing Python {}...").format(version))
         symlink_dir_name = f"cpython-{version}-managed"
         symlink_path = managed_interpreters_dir / symlink_dir_name
@@ -816,9 +806,7 @@ class ConfigManager:
             try:
                 safe_print(_("   - Attempting to create a symbolic link..."))
                 symlink_path.symlink_to(target_for_link, target_is_directory=True)
-                safe_print(
-                    _("   - ✅ Created symlink: {} -> {}").format(symlink_path, target_for_link)
-                )
+                safe_print(_("   - ✅ Created symlink: {} -> {}").format(symlink_path, target_for_link))
             except (PermissionError, OSError) as e:
                 if platform.system() == "Windows":
                     safe_print(
@@ -863,6 +851,61 @@ class ConfigManager:
                     safe_print(_("   - ❌ Could not adopt the interpreter."))
 
         self._register_all_interpreters(self.venv_path)
+
+    def _find_python_executable(self, version: str) -> Optional[Path]:
+        """
+        Finds the Python executable for a given version.
+        Checks registry first, then standard managed locations.
+        """
+        # Try registry first
+        path = self.get_interpreter_for_version(version)
+        if path and path.exists():
+            return path
+            
+        # Fallback: Check standard managed locations
+        managed_dir = self.venv_path / ".omnipkg" / "interpreters"
+        prefixes = [f"cpython-{version}", f"cpython-{version}-managed"]
+        
+        for prefix in prefixes:
+            dir_path = managed_dir / prefix
+            if platform.system() == "Windows":
+                candidates = [dir_path / "python.exe", dir_path / "Scripts" / "python.exe"]
+            else:
+                candidates = [
+                    dir_path / "bin" / f"python{version}",
+                    dir_path / "bin" / "python3",
+                    dir_path / "bin" / "python"
+                ]
+            
+            for candidate in candidates:
+                if candidate.exists():
+                    return candidate
+        return None
+
+    def _ensure_omnipkg_bootstrapped(self, python_exe: Path, version: str):
+        """
+        Ensures omnipkg is installed in an interpreter. Idempotent.
+        """
+        # 1. Fast Check: Can we import omnipkg?
+        check_cmd = [str(python_exe), "-c", "import omnipkg; import filelock"]
+        try:
+            # Short timeout because it should be instant if installed
+            result = subprocess.run(check_cmd, capture_output=True, timeout=3)
+            if result.returncode == 0:
+                return True  # Already installed, do nothing
+        except Exception:
+            pass
+        
+        # 2. Not installed: Bootstrap it
+        try:
+            safe_print(f"   PLEASE WAIT: Bootstrapping omnipkg into Python {version}...")
+            # We reuse the existing logic which handles deps first, then the package
+            self._install_essential_packages(python_exe)
+            safe_print(f"   ✅ Successfully bootstrapped Python {version}")
+            return True
+        except Exception as e:
+            safe_print(f"   ⚠️  Bootstrap failed for Python {version}: {e}")
+            return False
 
     def _register_all_interpreters(self, venv_path: Path):
         """
@@ -1065,16 +1108,17 @@ class ConfigManager:
                 raise
 
             if all_interpreters:
-                safe_print(
-                    _("   ✅ Registered {} Python interpreters (native + managed).").format(
-                        len(all_interpreters)
-                    )
-                )
+                safe_print(_("   ✅ Registered {} Python interpreters.").format(len(all_interpreters)))
                 for version, path in sorted(all_interpreters.items()):
                     marker = " (native)" if version in native_interpreters else " (managed)"
                     safe_print(_("      - Python {}: {}{}").format(version, path, marker))
+                    
+                    # CRITICAL: Ensure omnipkg is in each registered interpreter
+                    python_exe = Path(path)
+                    if python_exe.exists():
+                        self._ensure_omnipkg_bootstrapped(python_exe, version)
             else:
-                safe_print(_("   ⚠️  No Python interpreters were found or could be registered."))
+                safe_print(_("   ⚠️  No Python interpreters were found."))
 
             safe_print("   🔓 Released registry write lock")
 
@@ -2884,7 +2928,6 @@ class InterpreterManager:
                 f"Failed to install {package} with Python {python_version}: {result.stderr}"
             )
         return result
-
 
 class BubbleIsolationManager:
 
