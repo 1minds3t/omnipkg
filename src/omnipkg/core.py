@@ -367,7 +367,7 @@ class ConfigManager:
 
                     traceback.print_exc()
                 if setup_complete_flag.exists():
-                    setup_complete_flag.unlink(missing_ok=True)
+                    setup_complete_flag.unlink()
                 sys.exit(1)
 
     def _set_rebuild_flag_for_version(self, version_str: str):
@@ -422,7 +422,8 @@ class ConfigManager:
                         with open(flag_file, "w") as f:
                             json.dump(versions_to_rebuild, f)
             except (json.JSONDecodeError, IOError, Exception):
-                flag_file.unlink(missing_ok=True)
+                if flag_file.exists():
+                    flag_file.unlink()
 
     def _peek_config_for_flag(self, flag_name: str) -> bool:
         """
@@ -1987,7 +1988,9 @@ class ConfigManager:
                 python_dest = venv_path / ".omnipkg" / "interpreters" / f"cpython-{full_version}"
                 safe_print(_("   - Installing to: {}").format(python_dest))
                 python_dest.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copytree(source_python_dir, python_dest, dirs_exist_ok=True)
+                if python_dest.exists():
+                    shutil.rmtree(python_dest)
+                shutil.copytree(source_python_dir, python_dest)
 
                 python_exe_candidates = []
                 if system == "windows":
@@ -2015,8 +2018,21 @@ class ConfigManager:
                             [str(c) for c in python_exe_candidates]
                         )
                     )
-
-                if system != "windows":
+                if system == "linux":
+                    try:
+                        ldd_check = subprocess.run(["ldd", "--version"], capture_output=True, text=True)
+                        is_musl = "musl" in (ldd_check.stdout + ldd_check.stderr).lower()
+                    except:
+                        is_musl = False
+                    
+                    if not is_musl and Path("/etc/alpine-release").exists():
+                        is_musl = True
+                    
+                    elif is_musl and full_version.startswith("3.11") and full_version != "3.11.14":
+                        safe_print(f"   🌲 Alpine detected: upgrading {full_version} → 3.11.14 (musl-compatible)")
+                        full_version = "3.11.14"
+                        release_tag = "20251217"
+                elif system != "windows":
                     python_exe.chmod(493)
                     major_minor = ".".join(full_version.split(".")[:2])
                     versioned_symlink = python_exe.parent / f"python{major_minor}"
@@ -3134,7 +3150,10 @@ class BubbleIsolationManager:
 
             try:
                 if item.is_dir():
-                    shutil.copytree(item, final_bubble_path / item.name, dirs_exist_ok=True)
+                    dest = final_bubble_path / item.name
+                    if dest.exists():
+                        shutil.rmtree(dest)
+                    shutil.copytree(item, dest)
                     files_copied += 1
                 elif item.is_file() and (item.suffix == ".pth" or item.suffix == ".py"):
                     shutil.copy2(item, final_bubble_path / item.name)
@@ -3232,7 +3251,10 @@ class BubbleIsolationManager:
             # 3. Analyze and move
             installed_tree = self._analyze_installed_tree(staging_path)
             safe_print(f"   - 🚚 Moving verified build to bubble: {destination_path}")
-            shutil.copytree(staging_path, destination_path, dirs_exist_ok=True)
+            # Python 3.7 compatible: remove destination if it exists, then copy
+            if destination_path.exists():
+                shutil.rmtree(destination_path)
+            shutil.copytree(staging_path, destination_path)
 
             stats = {
                 "total_files": sum(len(info.get("files", [])) for info in installed_tree.values())
@@ -6138,7 +6160,10 @@ class omnipkg:
                     native_sync_duration = time.perf_counter() - native_sync_start
                     safe_print(f"   ⏱️  Native sync completed in {native_sync_duration:.2f}s")
             finally:
-                Path(sync_script_path).unlink(missing_ok=True)
+                try:
+                    Path(sync_script_path).unlink()
+                except FileNotFoundError:
+                    pass
 
         # === SYNC OTHER INTERPRETERS CONCURRENTLY ===
         if sync_needed:
@@ -6752,6 +6777,7 @@ class omnipkg:
         safe_print(_("\n🎉 Pruning complete for '{}'.").format(c_name))
         return 0
 
+
     def _check_and_run_pending_rebuild(self) -> bool:
         """
         Checks for a flag file indicating a new interpreter needs its KB built.
@@ -6776,7 +6802,8 @@ class omnipkg:
                 with open(flag_file, "r") as f:
                     versions_to_rebuild = json.load(f)
             except (json.JSONDecodeError, IOError):
-                flag_file.unlink(missing_ok=True)
+                if flag_file.exists():
+                    flag_file.unlink()
                 return False
 
             if current_version_str in versions_to_rebuild:
@@ -6790,7 +6817,8 @@ class omnipkg:
                     # since we already hold the lock.
                     versions_to_rebuild.remove(current_version_str)
                     if not versions_to_rebuild:
-                        flag_file.unlink(missing_ok=True)
+                        if flag_file.exists():
+                            flag_file.unlink()
                     else:
                         with open(flag_file, "w") as f:
                             json.dump(versions_to_rebuild, f)
@@ -9714,8 +9742,11 @@ class omnipkg:
                 return ignored
 
             safe_print(_("   - Copying {} -> {}").format(source, dest))
+            # Python 3.7 compatible - dirs_exist_ok=False means it should fail if exists anyway
+            if dest.exists():
+                raise FileExistsError(f"Destination {dest} already exists")
             shutil.copytree(
-                source, dest, symlinks=True, ignore=ignore_patterns, dirs_exist_ok=False
+                source, dest, symlinks=True, ignore=ignore_patterns
             )
 
             copied_python = self._find_python_executable_in_dir(dest)

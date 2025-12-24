@@ -58,6 +58,10 @@ def safe_print(*args, **kwargs):
         except Exception:
             _builtin_print("[omnipkg: Encoding Error - Shell might not support UTF-8]", flush=True)
 
+def safe_unlink(path: Path) -> None:
+    """Python 3.7 compatible unlink that ignores missing files."""
+    if path.exists():
+        path.unlink()
 
 def pass_config_to_subprocess(config_dict: Dict[str, Any]) -> str:
     """
