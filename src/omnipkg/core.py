@@ -1733,6 +1733,7 @@ class ConfigManager:
             "3.12.5": "20240726",
             "3.12.4": "20240726",
             "3.12.3": "20240415",
+            "3.11.14": "20251217",  # <-- ADD THIS NEW MUSL-COMPATIBLE VERSION
             "3.11.13": "20250603",
             "3.11.12": "20241211",
             "3.11.10": "20241008",
@@ -1800,10 +1801,24 @@ class ConfigManager:
             # The 20200822 release has files with 20200823 timestamps
             file_date = "20200823" if release_tag == "20200822" else release_tag
 
+            is_musl = False
+            if system == "linux":
+                try:
+                    ldd_check = subprocess.run(["ldd", "--version"], capture_output=True, text=True)
+                    if "musl" in (ldd_check.stdout + ldd_check.stderr).lower():
+                        is_musl = True
+                except:
+                    pass
+                if not is_musl and Path("/etc/alpine-release").exists():
+                    is_musl = True
+
+            # Select the correct libc variant
+            libc_variant = "unknown-linux-musl" if is_musl else "unknown-linux-gnu"
+
             archive_name_templates = {
-                "linux": f"cpython-{full_version}-{py_arch}-unknown-linux-gnu-pgo-{file_date}T0036.tar.zst",
-                "darwin": f"cpython-{full_version}-{py_arch}-apple-darwin-pgo-{file_date}T2228.tar.zst",
-                "windows": f"cpython-{full_version}-{py_arch}-pc-windows-msvc-shared-pgo-{file_date}T0118.tar.zst",
+                "linux": f"cpython-{py_ver_plus_tag}-{py_arch}-{libc_variant}-install_only.tar.gz",
+                "darwin": f"cpython-{py_ver_plus_tag}-{py_arch}-apple-darwin-install_only.tar.gz",
+                "windows": f"cpython-{py_ver_plus_tag}-{py_arch}-pc-windows-msvc-install_only.tar.gz",
             }
         else:
             # Modern format: cpython-X.Y.Z+TAG-platform-install_only.tar.gz
@@ -9416,7 +9431,20 @@ class omnipkg:
                         "cpython-3.13.1+20241205-x86_64-apple-darwin-install_only.tar.gz"
                     )
             elif system == "linux":
-                if "aarch64" in machine or "arm64" in machine:
+                try:
+                    ldd_check = subprocess.run(["ldd", "--version"], capture_output=True, text=True)
+                    is_musl = "musl" in (ldd_check.stdout + ldd_check.stderr).lower()
+                except:
+                    is_musl = False
+                
+                if not is_musl and Path("/etc/alpine-release").exists():
+                    is_musl = True
+                
+                elif is_musl and full_version.startswith("3.11") and full_version != "3.11.14":
+                    safe_print(f"   🌲 Alpine detected: upgrading {full_version} → 3.11.14 (musl-compatible)")
+                    full_version = "3.11.14"
+                    release_tag = "20251217"
+                elif "aarch64" in machine or "arm64" in machine:
                     build_filename = (
                         "cpython-3.13.1+20241205-aarch64-unknown-linux-gnu-install_only.tar.gz"
                     )
