@@ -347,7 +347,13 @@ class ConfigManager:
                     
                     # Try the download/install with validation
                     success = self._install_python_311_with_validation(suppress_init_messages)
-                    
+                    if self._validate_python_installation("3.11", suppress_init_messages):
+                        # NEW: Bootstrap omnipkg into this interpreter
+                        python_exe = self._find_python_executable("3.11")
+                        if python_exe:
+                            safe_print(_("   - Bootstrapping omnipkg into Python 3.11..."))
+                            self._install_essential_packages(python_exe)
+                        return True
                     if not success:
                         # If we have Python 3.8+, continue anyway
                         if sys.version_info >= (3, 8):
@@ -377,135 +383,64 @@ class ConfigManager:
                 sys.exit(1)
 
     def _install_python_311_with_validation(self, suppress_init_messages=False) -> bool:
-        """
-        Attempts to install Python 3.11, validates it works, and falls back if needed.
-        Returns True if successful, False if validation failed.
-        """
+        """Installs Python 3.11 using the best available method."""
+        
         is_alpine = self._is_alpine()
         
-        # Strategy 1: Try package manager first on Alpine
+        # Strategy 1: Try Alpine apk first (if on Alpine)
         if is_alpine:
-            if not suppress_init_messages:
-                safe_print(_("   - 🏔️  Alpine Linux detected - attempting system package install first..."))
-            
-            if self._try_alpine_package_install("3.11", suppress_init_messages):
-                if not suppress_init_messages:
-                    safe_print(_("   - ✅ Alpine package installation successful!"))
+            if self._try_alpine_apk_install("3.11", suppress_init_messages):
                 return True
-            else:
-                if not suppress_init_messages:
-                    safe_print(_("   - ⚠️  Alpine package install failed or not available, trying download..."))
         
-        # Strategy 2: Try python-build-standalone download
+        # Strategy 2: Try download from python-build-standalone
         try:
             temp_omnipkg = omnipkg(config_manager=self, minimal_mode=True)
             result_code = temp_omnipkg._fallback_to_download("3.11")
             
             if result_code == 0:
-                # Download succeeded - now validate it
-                if self._validate_python_installation("3.11", suppress_init_messages):
-                    if not suppress_init_messages:
-                        safe_print(_("   - ✅ Python 3.11 download and validation successful!"))
-                    return True
-                else:
-                    if not suppress_init_messages:
-                        safe_print(_("   - ⚠️  Python 3.11 downloaded but validation failed"))
-                    # Clean up the broken installation
-                    self._cleanup_broken_python_install("3.11")
-                    
-                    # On Alpine, try package manager as fallback
-                    if is_alpine:
-                        if not suppress_init_messages:
-                            safe_print(_("   - 🔄 Retrying with Alpine package manager..."))
-                        if self._try_alpine_package_install("3.11", suppress_init_messages):
-                            return True
-                    
-                    return False
-            else:
-                # Download failed
-                if not suppress_init_messages:
-                    safe_print(_("   - ⚠️  Python 3.11 download failed"))
-                
-                # On Alpine, try package manager as fallback
-                if is_alpine:
-                    if not suppress_init_messages:
-                        safe_print(_("   - 🔄 Trying Alpine package manager..."))
-                    if self._try_alpine_package_install("3.11", suppress_init_messages):
-                        return True
-                
-                return False
-                
-        except Exception as e:
-            if not suppress_init_messages:
-                safe_print(_("   - ⚠️  Python 3.11 setup exception: {}").format(e))
-            
-            # On Alpine, try package manager as last resort
-            if is_alpine:
-                if not suppress_init_messages:
-                    safe_print(_("   - 🔄 Trying Alpine package manager as fallback..."))
-                if self._try_alpine_package_install("3.11", suppress_init_messages):
+                # Bootstrap omnipkg into the new interpreter
+                python_exe = self.get_interpreter_for_version("3.11")
+                if python_exe and python_exe.exists():
+                    safe_print(_("   - Bootstrapping omnipkg..."))
+                    self._install_essential_packages(python_exe)
                     return True
             
             return False
+        except Exception as e:
+            safe_print(_("   - Download failed: {}").format(e))
+            return False
 
-    def _try_alpine_package_install(self, version: str, suppress_init_messages=False) -> bool:
-        """
-        Attempts to install Python via Alpine's apk package manager.
-        Returns True if successful and validated, False otherwise.
-        """
-        import subprocess
-        
-        # Map version to Alpine package name
+    def _try_alpine_apk_install(self, version: str, suppress_init_messages=False) -> bool:
+        """Install Python via apk and bootstrap omnipkg."""
         pkg_name = f"python{version}"
         
         try:
-            # Check if package is available
-            check_cmd = ["apk", "search", pkg_name]
-            result = subprocess.run(check_cmd, capture_output=True, text=True, timeout=30)
-            
-            if pkg_name not in result.stdout:
-                if not suppress_init_messages:
-                    safe_print(_(f"   - ⚠️  Package {pkg_name} not available in Alpine repositories"))
-                return False
-            
-            # Try to install
-            if not suppress_init_messages:
-                safe_print(_(f"   - 📦 Installing {pkg_name} via apk..."))
-            
-            install_cmd = ["apk", "add", "--no-cache", pkg_name]
-            result = subprocess.run(install_cmd, capture_output=True, text=True, timeout=120)
+            # Install via apk
+            result = subprocess.run(
+                ["apk", "add", "--no-cache", pkg_name],
+                capture_output=True, text=True, timeout=120
+            )
             
             if result.returncode != 0:
-                if not suppress_init_messages:
-                    safe_print(_(f"   - ⚠️  apk install failed: {result.stderr}"))
                 return False
             
-            # Find the installed Python executable
+            # Find the installed Python
             python_exe = self._find_system_python(version)
             if not python_exe:
-                if not suppress_init_messages:
-                    safe_print(_(f"   - ⚠️  Could not find installed Python {version}"))
                 return False
             
-            # Register and validate it
+            # Register it
             self._register_and_link_existing_interpreter(python_exe, version)
             
-            if self._validate_python_installation(version, suppress_init_messages):
-                if not suppress_init_messages:
-                    safe_print(_(f"   - ✅ Alpine Python {version} installed and validated!"))
-                return True
-            else:
-                if not suppress_init_messages:
-                    safe_print(_(f"   - ⚠️  Alpine Python {version} validation failed"))
-                return False
-                
-        except subprocess.TimeoutExpired:
-            if not suppress_init_messages:
-                safe_print(_("   - ⚠️  Alpine package installation timed out"))
-            return False
+            # CRITICAL: Bootstrap omnipkg into it
+            safe_print(_("   - Bootstrapping omnipkg into Python {}...").format(version))
+            self._install_essential_packages(python_exe)
+            
+            return True
+            
         except Exception as e:
             if not suppress_init_messages:
-                safe_print(_(f"   - ⚠️  Alpine install error: {e}"))
+                safe_print(_(f"   - apk install failed: {e}"))
             return False
 
     def _validate_python_installation(self, version: str, suppress_init_messages=False) -> bool:
@@ -1187,7 +1122,13 @@ class ConfigManager:
                 else:
                     safe_print(_("   - ❌ Failed to create symlink: {}").format(e))
                     safe_print(_("   - ❌ Could not adopt the interpreter."))
-
+        if self._validate_python_installation("3.11", suppress_init_messages=True):
+            # NEW: Bootstrap omnipkg into this interpreter
+            python_exe = self._find_python_executable("3.11")
+            if python_exe:
+                safe_print(_("   - Bootstrapping omnipkg into Python 3.11..."))
+                self._install_essential_packages(python_exe)
+            return True
         self._register_all_interpreters(self.venv_path)
 
     def _register_all_interpreters(self, venv_path: Path):
