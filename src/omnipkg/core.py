@@ -9383,10 +9383,18 @@ class omnipkg:
                 if not download_success:
                     if hasattr(self.config_manager, "_install_managed_python"):
                         try:
-                            self.config_manager._install_managed_python(
+                            python_exe = self.config_manager._install_managed_python(
                                 real_venv_path, full_version, omnipkg_instance=self
                             )
                             download_success = True
+                            
+                            # CRITICAL FIX: Detect actual installed directory
+                            # The installer may upgrade versions (e.g., 3.11.9 -> 3.11.14 for musl)
+                            actual_install_dir = python_exe.parent.parent
+                            if actual_install_dir.exists():
+                                dest_path = actual_install_dir
+                                safe_print(f"   - ✅ Detected actual installation at: {dest_path}")
+                            
                         except Exception as e:
                             safe_print(
                                 _("   - Warning: _install_managed_python failed: {}").format(e)
