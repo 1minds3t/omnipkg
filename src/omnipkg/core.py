@@ -12,10 +12,12 @@ except ImportError:
     from omnipkg.common_utils import safe_print, print_header
 
 import hashlib
+import importlib
 try:
-    import importlib.metadata as importlib_metadata
+    import importlib.metadata
 except ImportError:
     import importlib_metadata
+    importlib.metadata = importlib_metadata  # Monkey-patch it
 import io
 import json
 import locale as sys_locale
