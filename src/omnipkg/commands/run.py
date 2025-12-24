@@ -2941,7 +2941,6 @@ safe_print("✅ CLI command completed successfully inside omnipkg bubble.")
         if temp_script_path and os.path.exists(temp_script_path):
             os.unlink(temp_script_path)
 
-
 def _run_script_logic(
     source_script_path: Path,
     script_args: list,
@@ -2983,7 +2982,6 @@ def _run_script_logic(
 
         safe_cmd_args = [str(temp_script_path)] + script_args
 
-        # Using _() here works now because we don't assign to _ later in the function
         safe_print(_("🔄 Syncing omnipkg context..."))
         sync_context_to_runtime()
         safe_print(_("✅ Context synchronized."))
@@ -2996,14 +2994,28 @@ def _run_script_logic(
             "ignore::DeprecationWarning:pkg_resources,ignore::UserWarning:pkg_resources"
         )
 
-        initial_cmd = [
-            "uv",
-            "run",
-            "--no-project",
-            "--python",
-            python_exe,
-            "--",
-        ] + safe_cmd_args
+        # === EXECUTION STRATEGY SELECTION ===
+        # Strategy A: Use 'uv run' if on Python 3.8+ (fast, isolated)
+        # Strategy B: Use direct 'python' if on Python < 3.8 (uv not supported)
+        
+        initial_cmd = []
+        
+        if sys.version_info >= (3, 8):
+            # Try using uv if available
+            uv_path = shutil.which("uv")
+            if uv_path:
+                initial_cmd = [
+                    "uv",
+                    "run",
+                    "--no-project",
+                    "--python",
+                    python_exe,
+                    "--",
+                ] + safe_cmd_args
+        
+        # Fallback if uv not used/available
+        if not initial_cmd:
+            initial_cmd = [python_exe] + safe_cmd_args
 
         # =========================================================================
         # DIRECT EXECUTION (Interactive Friendly)
@@ -3012,14 +3024,30 @@ def _run_script_logic(
         start_time_ns = time.perf_counter_ns()
 
         # 1. Run interactively attached to terminal
-        direct_process = subprocess.Popen(
-            initial_cmd,
-            stdin=sys.stdin,
-            stdout=sys.stdout,
-            stderr=sys.stderr,
-            cwd=Path.cwd(),
-            env=env,
-        )
+        try:
+            direct_process = subprocess.Popen(
+                initial_cmd,
+                stdin=sys.stdin,
+                stdout=sys.stdout,
+                stderr=sys.stderr,
+                cwd=Path.cwd(),
+                env=env,
+            )
+        except FileNotFoundError:
+            # Fallback for when 'uv' command fails completely (e.g. not in path)
+            if initial_cmd[0] == "uv":
+                safe_print("⚠️  'uv' not found, falling back to direct python execution...")
+                initial_cmd = [python_exe] + safe_cmd_args
+                direct_process = subprocess.Popen(
+                    initial_cmd,
+                    stdin=sys.stdin,
+                    stdout=sys.stdout,
+                    stderr=sys.stderr,
+                    cwd=Path.cwd(),
+                    env=env,
+                )
+            else:
+                raise
 
         try:
             return_code = direct_process.wait()
@@ -3044,7 +3072,6 @@ def _run_script_logic(
                     env=env,
                 )
                 try:
-                    # FIX: Use _ignored instead of _ to avoid shadowing the global translation function
                     full_output, _ignored = capture_process.communicate(timeout=30)
                 except subprocess.TimeoutExpired:
                     capture_process.kill()
@@ -3083,7 +3110,6 @@ def _run_script_logic(
 
         safe_print("🤖 [AI-INFO] Script execution failed. Analyzing for auto-healing...")
 
-        # Pass the failure duration to the healer so it can display the stats if it succeeds
         global _initial_run_time_ns
         _initial_run_time_ns = failure_duration_ns
 
@@ -3096,7 +3122,6 @@ def _run_script_logic(
             omnipkg_instance=omnipkg_core,
         )
 
-        # The printing logic is now correctly placed here
         if heal_stats:
             _print_performance_comparison(_initial_run_time_ns, heal_stats)
 
