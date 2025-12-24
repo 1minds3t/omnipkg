@@ -9190,8 +9190,11 @@ class omnipkg:
         Checks if a directory contains a valid, runnable Python interpreter structure.
         This is the core of the integrity check.
         """
+        safe_print(f"   🔍 DEBUG: Checking interpreter validity at: {path}")
         if not path.exists():
+            safe_print(f"   ❌ DEBUG: Path does not exist: {path}")
             return False
+        safe_print(f"   ✓ DEBUG: Path exists")
         bin_dir = path / "bin"
         if bin_dir.is_dir():
             for name in [
