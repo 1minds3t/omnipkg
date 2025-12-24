@@ -9272,6 +9272,7 @@ class omnipkg:
         and includes a safety stop to prevent deleting the active interpreter.
 
         CRITICAL FIX: Always uses the REAL venv root, not nested paths.
+        CRITICAL FIX 2: Handles version upgrades (e.g., 3.11.9 -> 3.11.14 for musl)
         """
         safe_print(_("\n--- Running robust download strategy ---"))
         try:
@@ -9293,15 +9294,12 @@ class omnipkg:
                 return 1
 
             # CRITICAL: Force recalculation of venv_path to ensure we're not using a nested path
-            # This prevents installing Python 3.13 inside Python 3.14's directory
             real_venv_path = self.config_manager._get_venv_root()
 
             # Double-check: if the venv_path contains .omnipkg, something is wrong
             if ".omnipkg" in str(real_venv_path):
                 safe_print(_("   - ⚠️  WARNING: Detected nested path in venv_path!"))
                 safe_print(_("   - Current venv_path: {}").format(real_venv_path))
-
-                # Extract the real root by taking everything before first .omnipkg
                 path_str = str(real_venv_path).replace("\\", "/")
                 parts = path_str.split("/.omnipkg/")
                 if len(parts) >= 2:
@@ -9316,27 +9314,20 @@ class omnipkg:
 
             from filelock import FileLock
 
-            # Wait up to 5 minutes for other processes to finish installing
             with FileLock(lock_path, timeout=300):
                 safe_print(_("   - Target installation path: {}").format(dest_path))
 
                 # RE-CHECK existence inside the lock!
                 if dest_path.exists():
                     safe_print(
-                        _(
-                            "   - Found existing directory for Python {}. Verifying integrity..."
-                        ).format(full_version)
+                        _("   - Found existing directory for Python {}. Verifying integrity...").format(full_version)
                     )
                     if self._is_interpreter_directory_valid(dest_path):
-                        safe_print(
-                            _("   - ✅ Integrity check passed. Installation is valid and complete.")
-                        )
+                        safe_print(_("   - ✅ Integrity check passed. Installation is valid and complete."))
                         return 0
                     else:
                         safe_print(
-                            _(
-                                "   - ⚠️  Integrity check failed: Incomplete installation detected (missing or broken executable)."
-                            )
+                            _("   - ⚠️  Integrity check failed: Incomplete installation detected (missing or broken executable).")
                         )
 
                         # Safety check: don't delete the currently active interpreter
@@ -9344,14 +9335,10 @@ class omnipkg:
                             active_interpreter_root = Path(sys.executable).resolve().parents[1]
                             if dest_path.resolve() == active_interpreter_root:
                                 safe_print(
-                                    _(
-                                        "   - ❌ CRITICAL ERROR: The broken interpreter is the currently active one!"
-                                    )
+                                    _("   - ❌ CRITICAL ERROR: The broken interpreter is the currently active one!")
                                 )
                                 safe_print(
-                                    _(
-                                        "   - Aborting to prevent self-destruction. Please fix the environment manually."
-                                    )
+                                    _("   - Aborting to prevent self-destruction. Please fix the environment manually.")
                                 )
                                 return 1
                         except (IndexError, OSError):
@@ -9363,9 +9350,7 @@ class omnipkg:
                             safe_print(_("   - ✅ Removed broken directory successfully."))
                         except Exception as e:
                             safe_print(
-                                _(
-                                    "   - ❌ FATAL: Failed to remove existing broken directory: {}"
-                                ).format(e)
+                                _("   - ❌ FATAL: Failed to remove existing broken directory: {}").format(e)
                             )
                             return 1
 
@@ -9375,9 +9360,7 @@ class omnipkg:
                 # Try Python 3.13 alternative download method
                 if version == "3.13":
                     safe_print(_("   - Using python-build-standalone for Python 3.13..."))
-                    download_success = self._download_python_313_alternative(
-                        dest_path, full_version
-                    )
+                    download_success = self._download_python_313_alternative(dest_path, full_version)
 
                 # Fallback to other download methods
                 if not download_success:
@@ -9390,23 +9373,20 @@ class omnipkg:
                             
                             # CRITICAL FIX: Detect actual installed directory
                             # The installer may upgrade versions (e.g., 3.11.9 -> 3.11.14 for musl)
-                            actual_install_dir = python_exe.parent.parent
-                            if actual_install_dir.exists():
-                                dest_path = actual_install_dir
-                                safe_print(f"   - ✅ Detected actual installation at: {dest_path}")
+                            if python_exe and hasattr(python_exe, 'parent'):
+                                actual_install_dir = python_exe.parent.parent
+                                if actual_install_dir.exists() and actual_install_dir != dest_path:
+                                    safe_print(f"   - 🔄 Version upgraded: {dest_path.name} -> {actual_install_dir.name}")
+                                    dest_path = actual_install_dir
                             
                         except Exception as e:
-                            safe_print(
-                                _("   - Warning: _install_managed_python failed: {}").format(e)
-                            )
+                            safe_print(_("   - Warning: _install_managed_python failed: {}").format(e))
                     elif hasattr(self.config_manager, "install_managed_python"):
                         try:
                             self.config_manager.install_managed_python(real_venv_path, full_version)
                             download_success = True
                         except Exception as e:
-                            safe_print(
-                                _("   - Warning: install_managed_python failed: {}").format(e)
-                            )
+                            safe_print(_("   - Warning: install_managed_python failed: {}").format(e))
                     elif hasattr(self.config_manager, "download_python"):
                         try:
                             self.config_manager.download_python(full_version)
@@ -9415,12 +9395,22 @@ class omnipkg:
                             safe_print(_("   - Warning: download_python failed: {}").format(e))
 
                 if not download_success:
-                    safe_print(
-                        _("❌ Error: All download methods failed for Python {}").format(
-                            full_version
-                        )
-                    )
+                    safe_print(_("❌ Error: All download methods failed for Python {}").format(full_version))
                     return 1
+
+                # FALLBACK: If dest_path doesn't exist, search for upgraded versions
+                if not dest_path.exists():
+                    major_minor = ".".join(full_version.split(".")[:2])  # "3.11"
+                    interpreters_dir = real_venv_path / ".omnipkg" / "interpreters"
+                    
+                    safe_print(f"   - 🔍 Searching for any Python {major_minor}.* installation...")
+                    for candidate in sorted(interpreters_dir.glob(f"cpython-{major_minor}.*"), reverse=True):
+                        if candidate.is_dir():
+                            safe_print(f"   - Found candidate: {candidate}")
+                            if self._is_interpreter_directory_valid(candidate):
+                                dest_path = candidate
+                                safe_print(f"   - ✅ Using upgraded installation at: {dest_path}")
+                                break
 
                 # Verify installation
                 if dest_path.exists() and self._is_interpreter_directory_valid(dest_path):
@@ -9428,16 +9418,17 @@ class omnipkg:
                     self.config_manager._set_rebuild_flag_for_version(version)
                     return 0
                 else:
-                    safe_print(_("   - ❌ Installation completed but integrity check still fails."))
+                    safe_print(f"   - ❌ Installation completed but integrity check still fails.")
+                    safe_print(f"   - Checked path: {dest_path}")
+                    safe_print(f"   - Path exists: {dest_path.exists()}")
                     return 1
 
         except Exception as e:
             safe_print(_("❌ Download and installation process failed: {}").format(e))
             import traceback
-
             traceback.print_exc()
             return 1
-
+    
     # Add this at the START of _download_python_313_alternative,
     # right after the function signature:
 
