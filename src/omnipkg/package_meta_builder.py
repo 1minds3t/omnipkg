@@ -1588,12 +1588,7 @@ class omnipkgMetadataGatherer:
 
         distributions_to_process = valid_distributions
         # ----------------------------------------------------------
-
-        {
-            canonicalize_name(dist.metadata["Name"]): dist.version
-            for dist in distributions_to_process
-            if self._get_install_context(dist)["install_type"] == "active"
-        }
+        # NOTE: Removed orphaned dict comprehension that was causing hangs
 
         all_packages_to_scan = {}
         for dist in distributions_to_process:
