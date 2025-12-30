@@ -9374,8 +9374,16 @@ class omnipkg:
                             # CRITICAL FIX: Detect actual installed directory
                             # The installer may upgrade versions (e.g., 3.11.9 -> 3.11.14 for musl)
                             if python_exe and hasattr(python_exe, 'parent'):
-                                actual_install_dir = python_exe.parent.parent
-                                if actual_install_dir.exists() and actual_install_dir != dest_path:
+                                # Handle platform differences (Unix: bin/python, Windows: python.exe)
+                                if python_exe.parent.name in ["bin", "Scripts"]:
+                                    actual_install_dir = python_exe.parent.parent
+                                else:
+                                    actual_install_dir = python_exe.parent
+                                
+                                # Verify it looks like a version directory (starts with cpython-)
+                                if (actual_install_dir.exists() 
+                                    and actual_install_dir != dest_path 
+                                    and actual_install_dir.name.startswith("cpython-")):
                                     safe_print(f"   - 🔄 Version upgraded: {dest_path.name} -> {actual_install_dir.name}")
                                     dest_path = actual_install_dir
                             
