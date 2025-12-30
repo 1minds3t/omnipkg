@@ -10297,31 +10297,46 @@ class omnipkg:
             raise
 
     def _extract_version_from_filename(self, filename: str, package_spec: str) -> Optional[str]:
-        """
+        """enclave 
         Extract version from various pip download filename formats across pip eras.
+        Handles package name normalization (dashes become underscores in filenames).
         """
         pkg_name = self._parse_package_spec(package_spec)[0]
-
-        # Pattern 1: Modern wheels - rich-13.8.1-py3-none-any.whl
-        wheel_pattern = rf"{re.escape(pkg_name)}-([\d\.]+(?:[a-z]+)?[\d]*)-\w+-\w+-\w+\.whl"
+        
+        # CRITICAL: Normalize package name for filename matching
+        # PyPI normalizes package names: "urllib3-lts" becomes "urllib3_lts" in filenames
+        normalized_name = pkg_name.replace('-', '_').lower()
+        
+        # Pattern 1: Modern wheels - urllib3_lts-2025.66471.3-py3-none-any.whl
+        wheel_pattern = rf"{re.escape(normalized_name)}-([\d\.]+(?:[a-z]+)?[\d]*)-\w+-\w+-\w+\.whl"
         match = re.match(wheel_pattern, filename, re.IGNORECASE)
         if match:
             return match.group(1)
 
-        # Pattern 2: Source distributions - rich-13.8.1.tar.gz
-        sdist_pattern = rf"{re.escape(pkg_name)}-([\d\.]+(?:[a-z]+)?[\d]*)\.(?:tar\.gz|zip)"
+        # Pattern 2: Source distributions - urllib3_lts-2025.66471.3.tar.gz
+        sdist_pattern = rf"{re.escape(normalized_name)}-([\d\.]+(?:[a-z]+)?[\d]*)\.(?:tar\.gz|zip)"
         match = re.match(sdist_pattern, filename, re.IGNORECASE)
         if match:
             return match.group(1)
 
         # Pattern 3: Ancient packages - Django-1.0-final.tar.gz
-        ancient_pattern = rf"{re.escape(pkg_name)}-([\d\.]+(?:-\w+)?)\.(?:tar\.gz|zip)"
+        ancient_pattern = rf"{re.escape(normalized_name)}-([\d\.]+(?:-\w+)?)\.(?:tar\.gz|zip)"
         match = re.match(ancient_pattern, filename, re.IGNORECASE)
         if match:
             version = match.group(1)
             # Normalize "1.0-final" to "1.0"
             return re.sub(r"-\w+$", "", version)
 
+        # Fallback: Try with original name (handles already-normalized names)
+        if normalized_name != pkg_name.lower():
+            for pattern in [
+                rf"{re.escape(pkg_name.lower())}-([\d\.]+(?:[a-z]+)?[\d]*)-\w+-\w+-\w+\.whl",
+                rf"{re.escape(pkg_name.lower())}-([\d\.]+(?:[a-z]+)?[\d]*)\.(?:tar\.gz|zip)",
+            ]:
+                match = re.match(pattern, filename, re.IGNORECASE)
+                if match:
+                    return match.group(1)
+        
         return None
 
     def _create_pre_install_snapshot(self, package_name: str) -> str:
