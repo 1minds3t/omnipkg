@@ -9374,8 +9374,16 @@ class omnipkg:
                             # CRITICAL FIX: Detect actual installed directory
                             # The installer may upgrade versions (e.g., 3.11.9 -> 3.11.14 for musl)
                             if python_exe and hasattr(python_exe, 'parent'):
-                                actual_install_dir = python_exe.parent.parent
-                                if actual_install_dir.exists() and actual_install_dir != dest_path:
+                                # Handle platform differences (Unix: bin/python, Windows: python.exe)
+                                if python_exe.parent.name in ["bin", "Scripts"]:
+                                    actual_install_dir = python_exe.parent.parent
+                                else:
+                                    actual_install_dir = python_exe.parent
+                                
+                                # Verify it looks like a version directory (starts with cpython-)
+                                if (actual_install_dir.exists() 
+                                    and actual_install_dir != dest_path 
+                                    and actual_install_dir.name.startswith("cpython-")):
                                     safe_print(f"   - 🔄 Version upgraded: {dest_path.name} -> {actual_install_dir.name}")
                                     dest_path = actual_install_dir
                             
@@ -10297,31 +10305,46 @@ class omnipkg:
             raise
 
     def _extract_version_from_filename(self, filename: str, package_spec: str) -> Optional[str]:
-        """
+        """enclave 
         Extract version from various pip download filename formats across pip eras.
+        Handles package name normalization (dashes become underscores in filenames).
         """
         pkg_name = self._parse_package_spec(package_spec)[0]
-
-        # Pattern 1: Modern wheels - rich-13.8.1-py3-none-any.whl
-        wheel_pattern = rf"{re.escape(pkg_name)}-([\d\.]+(?:[a-z]+)?[\d]*)-\w+-\w+-\w+\.whl"
+        
+        # CRITICAL: Normalize package name for filename matching
+        # PyPI normalizes package names: "urllib3-lts" becomes "urllib3_lts" in filenames
+        normalized_name = pkg_name.replace('-', '_').lower()
+        
+        # Pattern 1: Modern wheels - urllib3_lts-2025.66471.3-py3-none-any.whl
+        wheel_pattern = rf"{re.escape(normalized_name)}-([\d\.]+(?:[a-z]+)?[\d]*)-\w+-\w+-\w+\.whl"
         match = re.match(wheel_pattern, filename, re.IGNORECASE)
         if match:
             return match.group(1)
 
-        # Pattern 2: Source distributions - rich-13.8.1.tar.gz
-        sdist_pattern = rf"{re.escape(pkg_name)}-([\d\.]+(?:[a-z]+)?[\d]*)\.(?:tar\.gz|zip)"
+        # Pattern 2: Source distributions - urllib3_lts-2025.66471.3.tar.gz
+        sdist_pattern = rf"{re.escape(normalized_name)}-([\d\.]+(?:[a-z]+)?[\d]*)\.(?:tar\.gz|zip)"
         match = re.match(sdist_pattern, filename, re.IGNORECASE)
         if match:
             return match.group(1)
 
         # Pattern 3: Ancient packages - Django-1.0-final.tar.gz
-        ancient_pattern = rf"{re.escape(pkg_name)}-([\d\.]+(?:-\w+)?)\.(?:tar\.gz|zip)"
+        ancient_pattern = rf"{re.escape(normalized_name)}-([\d\.]+(?:-\w+)?)\.(?:tar\.gz|zip)"
         match = re.match(ancient_pattern, filename, re.IGNORECASE)
         if match:
             version = match.group(1)
             # Normalize "1.0-final" to "1.0"
             return re.sub(r"-\w+$", "", version)
 
+        # Fallback: Try with original name (handles already-normalized names)
+        if normalized_name != pkg_name.lower():
+            for pattern in [
+                rf"{re.escape(pkg_name.lower())}-([\d\.]+(?:[a-z]+)?[\d]*)-\w+-\w+-\w+\.whl",
+                rf"{re.escape(pkg_name.lower())}-([\d\.]+(?:[a-z]+)?[\d]*)\.(?:tar\.gz|zip)",
+            ]:
+                match = re.match(pattern, filename, re.IGNORECASE)
+                if match:
+                    return match.group(1)
+        
         return None
 
     def _create_pre_install_snapshot(self, package_name: str) -> str:
