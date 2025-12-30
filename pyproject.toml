@@ -83,6 +83,10 @@ dependencies = [
     
     # uv
     "uv>=0.9.6; python_version >= '3.8'",
+
+    # CVE-safe urllib3
+    "urllib3-lts>=2025.66471.3",
+
 ]
 
 [project.optional-dependencies]
