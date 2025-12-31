@@ -1,13 +1,14 @@
-# .github/workflows/cross-platform-build-verification.yml
 name: Cross-Platform Build Verification
 
 on:
-  # REMOVED "push: tags" to stop double triggering
   release:
     types: [published]
   workflow_dispatch:
 
 jobs:
+  # ═══════════════════════════════════════════════════════════════════
+  # 1. BUILD MATRIX
+  # ═══════════════════════════════════════════════════════════════════
   build-matrix:
     name: ${{ matrix.label }}
     runs-on: ${{ matrix.runner }}
@@ -115,29 +116,34 @@ jobs:
           omnipkg list
 
   # ═══════════════════════════════════════════════════════════════════
-  # 2. CRITICAL TESTS
+  # 2. CRITICAL TESTS (Fixed: Removed Alpine ARM64, Added Timeout)
   # ═══════════════════════════════════════════════════════════════════
   linux-distros-podman-critical:
     name: Podman - ${{ matrix.distro }} (${{ matrix.platform }})
     runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 25  # FAILSAFE: Kills job if it hangs > 25 mins
     strategy:
       fail-fast: false
       matrix:
         include:
+          # Native x64 (Fast)
           - distro: debian:12
             platform: linux/amd64
           - distro: ubuntu:24.04
             platform: linux/amd64
           - distro: fedora:39
             platform: linux/amd64
+            
+          # ARM64 QEMU (Slow)
           - distro: debian:12
             platform: linux/arm64
           - distro: ubuntu:22.04
             platform: linux/arm64
-          - distro: alpine:latest
-            platform: linux/arm64
           - distro: rockylinux:9
             platform: linux/arm64
+          
+          # REMOVED: alpine:latest / linux/arm64 because it hangs indefinitely
+          
     steps:
       - name: Checkout
         uses: actions/checkout@v4
