@@ -1,0 +1,35 @@
+ARG UBUNTU_VERSION=24.04
+FROM ubuntu:${UBUNTU_VERSION} AS builder
+
+RUN apt-get update && apt-get install -y \
+    python3 \
+    python3-pip \
+    python3-venv \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN python3 -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+COPY . /build
+WORKDIR /build
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir .
+
+FROM ubuntu:${UBUNTU_VERSION}
+
+RUN apt-get update && apt-get install -y \
+    python3 \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=builder /opt/venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+WORKDIR /workspace
+
+LABEL org.opencontainers.image.source="https://github.com/1minds3t/omnipkg"
+LABEL org.opencontainers.image.description="OmniPkg - Distributed Python runtime hypervisor (Ubuntu)"
+LABEL org.opencontainers.image.licenses="AGPL-3.0-only"
+
+RUN omnipkg --version
+
+CMD ["omnipkg", "--help"]
