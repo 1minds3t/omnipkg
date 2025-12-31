@@ -5,6 +5,8 @@ FROM fedora:39 AS builder
 RUN dnf install -y \
     python3 \
     python3-pip \
+    python3-devel \
+    gcc \
     && dnf clean all
 
 # Create virtual environment
