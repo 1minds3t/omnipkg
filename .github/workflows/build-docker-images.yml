@@ -1,0 +1,359 @@
+name: Build Multi-Platform Docker Images
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      target_ref:
+        description: 'Git Ref (e.g. v2.0.6)'
+        required: false
+        type: string
+        default: ''
+
+jobs:
+  # ═══════════════════════════════════════════════════════════════════
+  # WAIT FOR PYPI (Optional - if you want to base images on PyPI package)
+  # ═══════════════════════════════════════════════════════════════════
+  wait-for-pypi:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    outputs:
+      version: ${{ steps.get-version.outputs.version }}
+    steps:
+    - name: Get version
+      id: get-version
+      run: |
+        if [ "${{ github.event_name }}" == "release" ]; then
+          VERSION="${{ github.event.release.tag_name }}"
+          VERSION="${VERSION#v}"
+        elif [ -n "${{ inputs.target_ref }}" ]; then
+          VERSION="${{ inputs.target_ref }}"
+          VERSION="${VERSION#v}"
+        else
+          VERSION=$(echo "${{ github.ref }}" | sed 's/refs\/tags\/v//')
+        fi
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+        echo "🔍 Version: $VERSION"
+        
+    - name: Wait for PyPI availability
+      run: |
+        VERSION="${{ steps.get-version.outputs.version }}"
+        MAX_ATTEMPTS=120
+        SLEEP_TIME=30
+        
+        echo "⏳ Waiting for omnipkg $VERSION on PyPI..."
+        
+        for i in $(seq 1 $MAX_ATTEMPTS); do
+          echo "🔄 Attempt $i/$MAX_ATTEMPTS..."
+          
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
+            "https://pypi.org/pypi/omnipkg/$VERSION/json")
+          
+          if [ "$HTTP_CODE" = "200" ]; then
+            echo "✅ Package found on PyPI!"
+            sleep 10
+            break
+          fi
+          
+          if [ $i -eq $MAX_ATTEMPTS ]; then
+            echo "⚠️ Package not found after 1 hour, proceeding anyway..."
+            exit 0
+          fi
+          
+          sleep $SLEEP_TIME
+        done
+
+  # ═══════════════════════════════════════════════════════════════════
+  # BUILD MULTI-PLATFORM IMAGES (DEBIAN BASE)
+  # ═══════════════════════════════════════════════════════════════════
+  build-debian-images:
+    needs: wait-for-pypi
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.target_ref || github.ref }}
+      
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: 1minds3t
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: |
+            1minds3t/omnipkg
+            ghcr.io/${{ github.repository_owner }}/omnipkg
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=debian
+            type=raw,value=debian-{{version}}
+          flavor: |
+            latest=auto
+      
+      - name: Build and push Debian-based multi-platform
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./docker/Dockerfile.debian
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ═══════════════════════════════════════════════════════════════════
+  # BUILD UBUNTU IMAGES
+  # ═══════════════════════════════════════════════════════════════════
+  build-ubuntu-images:
+    needs: wait-for-pypi
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        ubuntu_version: ['20.04', '22.04', '24.04']
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.target_ref || github.ref }}
+      
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: 1minds3t
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: |
+            1minds3t/omnipkg
+            ghcr.io/${{ github.repository_owner }}/omnipkg
+          tags: |
+            type=raw,value=ubuntu-${{ matrix.ubuntu_version }}
+            type=raw,value=ubuntu-${{ matrix.ubuntu_version }}-{{version}}
+      
+      - name: Build and push Ubuntu ${{ matrix.ubuntu_version }}
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./docker/Dockerfile.ubuntu
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            UBUNTU_VERSION=${{ matrix.ubuntu_version }}
+          cache-from: type=gha,scope=ubuntu-${{ matrix.ubuntu_version }}
+          cache-to: type=gha,mode=max,scope=ubuntu-${{ matrix.ubuntu_version }}
+
+  # ═══════════════════════════════════════════════════════════════════
+  # BUILD ALPINE (SMALLEST IMAGE)
+  # ═══════════════════════════════════════════════════════════════════
+  build-alpine-images:
+    needs: wait-for-pypi
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.target_ref || github.ref }}
+      
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: 1minds3t
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: |
+            1minds3t/omnipkg
+            ghcr.io/${{ github.repository_owner }}/omnipkg
+          tags: |
+            type=raw,value=alpine
+            type=raw,value=alpine-{{version}}
+            type=raw,value=slim
+      
+      - name: Build and push Alpine (smallest)
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./docker/Dockerfile.alpine
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=alpine
+          cache-to: type=gha,mode=max,scope=alpine
+
+  # ═══════════════════════════════════════════════════════════════════
+  # BUILD FEDORA/RHEL IMAGES
+  # ═══════════════════════════════════════════════════════════════════
+  build-fedora-images:
+    needs: wait-for-pypi
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.target_ref || github.ref }}
+      
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: 1minds3t
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: |
+            1minds3t/omnipkg
+            ghcr.io/${{ github.repository_owner }}/omnipkg
+          tags: |
+            type=raw,value=fedora
+            type=raw,value=fedora-{{version}}
+      
+      - name: Build and push Fedora
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./docker/Dockerfile.fedora
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=fedora
+          cache-to: type=gha,mode=max,scope=fedora
+
+  # ═══════════════════════════════════════════════════════════════════
+  # UPDATE README WITH DOCKER TAGS
+  # ═══════════════════════════════════════════════════════════════════
+  update-readme-docker:
+    needs: [build-debian-images, build-ubuntu-images, build-alpine-images, build-fedora-images]
+    runs-on: ubuntu-latest
+    if: success()
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          
+      - name: Update Docker section in README
+        run: |
+          cat >> README.md << 'EOF'
+          
+          ## 🐳 Docker Images
+          
+          Multi-platform images available on Docker Hub and GHCR:
+          
+          ```bash
+          # Latest (Debian-based)
+          docker pull 1minds3t/omnipkg:latest
+          docker pull ghcr.io/1minds3t/omnipkg:latest
+          
+          # Ubuntu variants
+          docker pull 1minds3t/omnipkg:ubuntu-24.04
+          docker pull 1minds3t/omnipkg:ubuntu-22.04
+          docker pull 1minds3t/omnipkg:ubuntu-20.04
+          
+          # Alpine (smallest - ~50MB)
+          docker pull 1minds3t/omnipkg:alpine
+          docker pull 1minds3t/omnipkg:slim
+          
+          # Fedora/RHEL
+          docker pull 1minds3t/omnipkg:fedora
+          
+          # Specific version
+          docker pull 1minds3t/omnipkg:2.0.7
+          ```
+          
+          All images support: **linux/amd64** and **linux/arm64**
+          EOF
+          
+      - name: Commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          if ! git diff --quiet README.md; then
+            git add README.md
+            git commit -m "📦 Update Docker images documentation [skip ci]"
+            git push || echo "⚠️ Push failed"
+          fi
