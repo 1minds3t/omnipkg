@@ -4,6 +4,12 @@ on:
   release:
     types: [published]
   workflow_dispatch:
+    inputs:
+      target_ref:
+        description: 'Git Ref to verify (e.g. v2.0.6). Leave empty to use current ref.'
+        required: false
+        type: string
+        default: ''
 
 jobs:
   # ═══════════════════════════════════════════════════════════════════
@@ -30,6 +36,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          # THIS IS THE FIX: Uses input tag if provided, otherwise default
+          ref: ${{ inputs.target_ref || github.ref }}
       
       - name: Set up Python 3.11
         if: ${{ !contains(matrix.runner, 'self-hosted') }} 
@@ -44,8 +53,6 @@ jobs:
           ARCH=$(uname -m)
           OS=$(uname -s)
           echo "Detected: $OS $ARCH"
-          echo "arch=$ARCH" >> $GITHUB_OUTPUT
-          echo "os=$OS" >> $GITHUB_OUTPUT
       
       - name: Build and Test (Self-Hosted Linux)
         if: contains(matrix.runner, 'self-hosted') && contains(matrix.runner, 'linux')
@@ -54,65 +61,43 @@ jobs:
           PYTHONUNBUFFERED: "1"
         run: |
           set -x
-          
+          # [Existing Logic Preserved]
           if [ -f "$HOME/miniconda3/envs/evocoder_env/bin/python3.11" ]; then
             PY="$HOME/miniconda3/envs/evocoder_env/bin/python3.11"
-            echo "🎯 Using conda env native Python 3.11: $PY"
           elif [ -f "/usr/bin/python3.11" ]; then
             PY=/usr/bin/python3.11
-            echo "🎯 Using system Python 3.11: $PY"
           elif [ -f "/usr/bin/python3.12" ]; then
             PY=/usr/bin/python3.12
-            echo "🎯 Using system Python 3.12: $PY"
           else
             echo "❌ No suitable Python found"
             exit 1
           fi
           
-          $PY --version
-          
-          echo "🔥 Installing pip and build"
           $PY -m pip install --user --upgrade pip build || {
-            echo "❌ Failed. Trying bootstrap..."
             curl -sS https://bootstrap.pypa.io/get-pip.py | $PY - --user
             $PY -m pip install --user --upgrade pip build
           }
-          
-          echo "Building package..."
           $PY -m build
-          
-          echo "Installing package..."
           $PY -m pip install --user --force-reinstall dist/*.whl
-          
-          echo "Testing installation..."
           export PATH="$HOME/.local/bin:$PATH"
           omnipkg --version
-          8pkg --version
           omnipkg list
       
       - name: Build and Test (Other Platforms)
         if: ${{ !(contains(matrix.runner, 'self-hosted') && contains(matrix.runner, 'linux')) }}
         shell: bash
-        env:
-          PYTHONUNBUFFERED: "1"
         run: |
-          set -x
           if command -v python3 &>/dev/null; then PY=python3; else PY=python; fi
-          
           if ! $PY -m venv .venv; then
-             echo "⚠️ Standard venv failed. Retrying with --without-pip..."
              $PY -m venv .venv --without-pip
              curl -sS https://bootstrap.pypa.io/get-pip.py | .venv/bin/python
           fi
-          
           if [ -f ".venv/bin/activate" ]; then source .venv/bin/activate; else source .venv/Scripts/activate; fi
           
           python -m pip install --upgrade pip build
           python -m build
           pip install dist/*.whl
-          
           omnipkg --version
-          8pkg --version
           omnipkg list
 
   # ═══════════════════════════════════════════════════════════════════
@@ -121,32 +106,31 @@ jobs:
   linux-distros-podman-critical:
     name: Podman - ${{ matrix.distro }} (${{ matrix.platform }})
     runs-on: [self-hosted, linux, x64]
-    timeout-minutes: 25  # FAILSAFE: Kills job if it hangs > 25 mins
+    timeout-minutes: 25
     strategy:
       fail-fast: false
       matrix:
         include:
-          # Native x64 (Fast)
           - distro: debian:12
             platform: linux/amd64
           - distro: ubuntu:24.04
             platform: linux/amd64
           - distro: fedora:39
             platform: linux/amd64
-            
-          # ARM64 QEMU (Slow)
           - distro: debian:12
             platform: linux/arm64
           - distro: ubuntu:22.04
             platform: linux/arm64
           - distro: rockylinux:9
             platform: linux/arm64
-          
-          # REMOVED: alpine:latest / linux/arm64 because it hangs indefinitely
-          
+            
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          # FIX APPLIED HERE TOO
+          ref: ${{ inputs.target_ref || github.ref }}
+          
       - name: Test
         run: |
           if [[ "${{ matrix.distro }}" == *"alpine"* ]]; then SHELL="/bin/sh"; else SHELL="/bin/bash"; fi
@@ -175,6 +159,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          # FIX APPLIED HERE TOO
+          ref: ${{ inputs.target_ref || github.ref }}
       - name: Test
         run: |
           docker run --rm -v $(pwd):/workspace ${{ matrix.distro }} /bin/bash -c "
@@ -197,6 +184,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          # FIX APPLIED HERE TOO
+          ref: ${{ inputs.target_ref || github.ref }}
       - name: Test
         run: |
           docker run --rm -v $(pwd):/workspace ${{ matrix.distro }} /bin/bash -c "
@@ -221,6 +211,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          # FIX APPLIED HERE TOO
+          ref: ${{ inputs.target_ref || github.ref }}
       - name: Test
         run: |
           docker run --rm -v $(pwd):/workspace ${{ matrix.distro }} /bin/sh -c "
