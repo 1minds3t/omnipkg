@@ -1,8 +1,12 @@
-name: Build and Upload Conda Package
+name: Build and Upload Conda Packages (Noarch + Platform)
 
 on:
-  release:
-    types: [published]
+  # Trigger from your publish.yml workflow
+  workflow_run:
+    workflows: ["Publish to PyPI"]  # Name of your publish workflow
+    types:
+      - completed
+  # Manual trigger
   workflow_dispatch:
     inputs:
       version:
@@ -11,65 +15,77 @@ on:
         type: string
 
 jobs:
-  # First job: Wait for PyPI to have the package
+  # Job 1: Wait for PyPI availability (extended timeout)
   wait-for-pypi:
     runs-on: ubuntu-latest
-    timeout-minutes: 25 
+    timeout-minutes: 300  # 5 hours max wait
     outputs:
       version: ${{ steps.get-version.outputs.version }}
       sha256: ${{ steps.get-sha.outputs.sha256 }}
     steps:
-    - name: Get version
+    - name: Get version from workflow or input
       id: get-version
       run: |
-        if [ "${{ github.event_name }}" == "release" ]; then
-          VERSION="${{ github.event.release.tag_name }}"
-          VERSION="${VERSION#v}"
+        if [ "${{ github.event_name }}" == "workflow_run" ]; then
+          # Extract version from the triggering workflow's tag
+          VERSION=$(echo "${{ github.event.workflow_run.head_branch }}" | sed 's/^v//')
+          # Fallback: try to get from release tag
+          if [ -z "$VERSION" ]; then
+            VERSION=$(gh api repos/${{ github.repository }}/releases/latest --jq '.tag_name' | sed 's/^v/')
+          fi
         else
           VERSION="${{ github.event.inputs.version }}"
         fi
         echo "version=$VERSION" >> $GITHUB_OUTPUT
-        echo "Waiting for version: $VERSION"
+        echo "🔍 Waiting for version: $VERSION"
+      env:
+        GH_TOKEN: ${{ github.token }}
         
-    - name: Wait for PyPI package availability
+    - name: Wait for PyPI package availability (extended)
       id: wait-pypi
       run: |
         VERSION="${{ steps.get-version.outputs.version }}"
-        MAX_ATTEMPTS=40
+        MAX_ATTEMPTS=600  # 5 hours: 600 attempts * 30 seconds
         SLEEP_TIME=30
         
-        echo "Checking for omnipkg version $VERSION on PyPI (will try for up to 20 minutes)..."
+        echo "⏳ Checking for omnipkg version $VERSION on PyPI (will try for up to 5 hours)..."
         
         for i in $(seq 1 $MAX_ATTEMPTS); do
-          echo "Attempt $i/$MAX_ATTEMPTS..."
+          ELAPSED=$((i * SLEEP_TIME / 60))
+          echo "🔄 Attempt $i/$MAX_ATTEMPTS (${ELAPSED} minutes elapsed)..."
           
           HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
             "https://pypi.org/pypi/omnipkg/$VERSION/json")
           
           if [ "$HTTP_CODE" = "200" ]; then
-            echo "✓ Package version found on PyPI API!"
+            echo "✅ Package version found on PyPI API!"
             
             DOWNLOAD_URL="https://files.pythonhosted.org/packages/source/o/omnipkg/omnipkg-$VERSION.tar.gz"
             DOWNLOAD_CODE=$(curl -s -o /dev/null -w "%{http_code}" -I "$DOWNLOAD_URL")
             
             if [ "$DOWNLOAD_CODE" = "200" ] || [ "$DOWNLOAD_CODE" = "302" ]; then
-              echo "✓ Package file is downloadable! Proceeding."
-              sleep 5
+              echo "✅ Package file is downloadable! Proceeding."
+              sleep 10  # Extra buffer for CDN propagation
               break
             else
-              echo "⚠ Package found in API but file not yet available on CDN (HTTP $DOWNLOAD_CODE)"
+              echo "⚠️  Package found in API but file not yet available on CDN (HTTP $DOWNLOAD_CODE)"
             fi
           else
-            echo "Package not yet available on API (HTTP $HTTP_CODE)"
+            echo "⏳ Package not yet available on API (HTTP $HTTP_CODE)"
           fi
           
           if [ $i -eq $MAX_ATTEMPTS ]; then
-            echo "✗ Package not found after $MAX_ATTEMPTS attempts"
-            echo "Check: https://pypi.org/project/omnipkg/$VERSION/"
+            echo "❌ Package not found after 5 hours ($MAX_ATTEMPTS attempts)"
+            echo "📍 Check: https://pypi.org/project/omnipkg/$VERSION/"
             exit 1
           fi
           
-          echo "Waiting ${SLEEP_TIME}s before next attempt..."
+          # Progressive backoff: increase wait time after 30 minutes
+          if [ $i -gt 60 ]; then
+            SLEEP_TIME=60  # Increase to 1 minute intervals
+          fi
+          
+          echo "💤 Waiting ${SLEEP_TIME}s before next attempt..."
           sleep $SLEEP_TIME
         done
         
@@ -78,61 +94,163 @@ jobs:
       run: |
         VERSION="${{ steps.get-version.outputs.version }}"
         
-        echo "Downloading package from PyPI..."
+        echo "📦 Downloading package from PyPI..."
         if ! curl -L -f -o "omnipkg-$VERSION.tar.gz" \
           "https://files.pythonhosted.org/packages/source/o/omnipkg/omnipkg-$VERSION.tar.gz"; then
-          echo "CDN failed, trying pypi.org fallback..."
+          echo "⚠️  CDN failed, trying pypi.org fallback..."
           curl -L -f -o "omnipkg-$VERSION.tar.gz" \
             "https://pypi.org/packages/source/o/omnipkg/omnipkg-$VERSION.tar.gz"
         fi
         
         FILE_SIZE=$(wc -c < "omnipkg-$VERSION.tar.gz")
-        echo "File size: $FILE_SIZE bytes"
+        echo "📊 File size: $FILE_SIZE bytes"
         if [ "$FILE_SIZE" -lt 10000 ]; then
-          echo "Error: Downloaded file is too small ($FILE_SIZE bytes), which is suspicious."
+          echo "❌ Error: Downloaded file is too small ($FILE_SIZE bytes)"
           exit 1
         fi
         
-        echo "Calculating SHA256..."
+        echo "🔐 Calculating SHA256..."
         SHA256=$(sha256sum "omnipkg-$VERSION.tar.gz" | cut -d' ' -f1)
         
         echo "sha256=$SHA256" >> $GITHUB_OUTPUT
-        echo "SHA256: $SHA256"
+        echo "✅ SHA256: $SHA256"
 
-  # Second job: Update conda-forge feedstock
-  update-feedstock:
+  # Job 2: Update local meta.yaml templates
+  update-local-metas:
     needs: wait-for-pypi
     runs-on: ubuntu-latest
-    timeout-minutes: 20 
-    if: github.event_name == 'release'
+    steps:
+    - name: Checkout omnipkg repo
+      uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        
+    - name: Update meta-noarch.yaml
+      run: |
+        VERSION="${{ needs.wait-for-pypi.outputs.version }}"
+        SHA256="${{ needs.wait-for-pypi.outputs.sha256 }}"
+        
+        echo "📝 Updating src/omnipkg/conda-recipe/meta-noarch.yaml"
+        
+        sed -i "s/{% set version = \".*\" %}/{% set version = \"$VERSION\" %}/" src/omnipkg/conda-recipe/meta-noarch.yaml
+        sed -i "s/sha256: .*/sha256: $SHA256/" src/omnipkg/conda-recipe/meta-noarch.yaml
+        
+        echo "✅ Updated meta-noarch.yaml (first 30 lines):"
+        head -30 src/omnipkg/conda-recipe/meta-noarch.yaml
+        
+    - name: Update meta-platform.yaml
+      run: |
+        VERSION="${{ needs.wait-for-pypi.outputs.version }}"
+        SHA256="${{ needs.wait-for-pypi.outputs.sha256 }}"
+        
+        echo "📝 Updating src/omnipkg/conda-recipe/meta-platform.yaml"
+        
+        sed -i "s/{% set version = \".*\" %}/{% set version = \"$VERSION\" %}/" src/omnipkg/conda-recipe/meta-platform.yaml
+        sed -i "s/sha256: .*/sha256: $SHA256/" src/omnipkg/conda-recipe/meta-platform.yaml
+        # Update build number to 1 for platform builds
+        sed -i "s/number: 0/number: 1/" src/omnipkg/conda-recipe/meta-platform.yaml
+        
+        echo "✅ Updated meta-platform.yaml (first 30 lines):"
+        head -30 src/omnipkg/conda-recipe/meta-platform.yaml
+        
+    - name: Commit and push updates
+      run: |
+        VERSION="${{ needs.wait-for-pypi.outputs.version }}"
+        
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        git add src/omnipkg/conda-recipe/meta-noarch.yaml src/omnipkg/conda-recipe/meta-platform.yaml
+        
+        if git diff --staged --quiet; then
+          echo "ℹ️  No changes to commit"
+        else
+          git commit -m "chore: update conda meta files to version $VERSION"
+          git push
+          echo "✅ Changes pushed to omnipkg repo"
+        fi
+
+  # Job 3: Build noarch package for your channel
+  build-noarch:
+    needs: [wait-for-pypi, update-local-metas]
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        ref: main  # Get latest with updated meta files
+
+    - name: Setup Miniconda
+      uses: conda-incubator/setup-miniconda@v3
+      with:
+        auto-update-conda: true
+        python-version: '3.11'
+        channels: conda-forge,defaults
+        channel-priority: strict
+
+    - name: Install conda-build and anaconda-client
+      shell: bash -l {0}
+      run: conda install conda-build anaconda-client -y
+        
+    - name: Copy meta-noarch.yaml to meta.yaml
+      shell: bash -l {0}
+      run: |
+        cp src/omnipkg/conda-recipe/meta-noarch.yaml src/omnipkg/conda-recipe/meta.yaml
+        echo "📋 Using noarch configuration:"
+        head -30 src/omnipkg/conda-recipe/meta.yaml
+        
+    - name: Build noarch conda package
+      shell: bash -l {0}
+      run: |
+        export PYTHONIOENCODING=UTF-8
+        conda build src/omnipkg/conda-recipe --output-folder ./conda-dist
+        echo "✅ Noarch package built"
+        
+    - name: Upload noarch to your Anaconda channel
+      shell: bash -l {0}
+      run: |
+        find ./conda-dist -name "*.conda" -o -name "*.tar.bz2" | while read file; do
+          echo "📤 Uploading $file to your channel"
+          anaconda -t ${{ secrets.ANACONDA_TOKEN }} upload "$file" --force
+        done
+        echo "✅ Noarch package uploaded"
+      env:
+        ANACONDA_TOKEN: ${{ secrets.ANACONDA_TOKEN }}
+
+  # Job 4: Update conda-forge feedstock with noarch (build 0)
+  update-feedstock-noarch:
+    needs: [wait-for-pypi, build-noarch]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
     - name: Checkout your feedstock fork
       uses: actions/checkout@v4
       with:
         repository: 1minds3t/omnipkg-feedstock
-        token: ${{ secrets.GITHUB_TOKEN }}
+        token: ${{ secrets.FEEDSTOCK_TOKEN }}
         path: feedstock
 
-    - name: Setup Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.11'
-
-    - name: Update feedstock meta.yaml
+    - name: Update feedstock with noarch meta
       run: |
         cd feedstock
         VERSION="${{ needs.wait-for-pypi.outputs.version }}"
         SHA256="${{ needs.wait-for-pypi.outputs.sha256 }}"
         
-        echo "Updating recipe/meta.yaml to version $VERSION with SHA256: $SHA256"
+        echo "📝 Updating recipe/meta.yaml to noarch version $VERSION (build 0)"
         
         sed -i "s/{% set version = \".*\" %}/{% set version = \"$VERSION\" %}/" recipe/meta.yaml
         sed -i "s/sha256: .*/sha256: $SHA256/" recipe/meta.yaml
+        sed -i "s/number: .*/number: 0/" recipe/meta.yaml
         
-        echo "=== Updated meta.yaml (first 30 lines) ==="
-        head -30 recipe/meta.yaml
+        # Ensure noarch: python is present
+        if ! grep -q "noarch: python" recipe/meta.yaml; then
+          sed -i "/^build:/a\\  noarch: python" recipe/meta.yaml
+        fi
         
-    - name: Commit and push to fork
+        echo "✅ Updated meta.yaml (noarch, build 0):"
+        head -40 recipe/meta.yaml
+        
+    - name: Commit and push noarch to fork
       run: |
         cd feedstock
         VERSION="${{ needs.wait-for-pypi.outputs.version }}"
@@ -142,34 +260,38 @@ jobs:
         git add recipe/meta.yaml
         
         if git diff --staged --quiet; then
-          echo "No changes to commit"
+          echo "ℹ️  No changes to commit"
         else
-          git commit -m "Update omnipkg to version $VERSION"
-          git push
-          echo "✓ Changes pushed to fork"
+          git commit -m "Update omnipkg to version $VERSION (noarch)"
+          git push origin main
+          echo "✅ Noarch changes pushed to fork"
         fi
+      env:
+        GITHUB_TOKEN: ${{ secrets.FEEDSTOCK_TOKEN }}
         
-    - name: Create Pull Request to conda-forge
+    - name: Create PR to conda-forge (noarch)
       uses: peter-evans/create-pull-request@v5
       with:
         token: ${{ secrets.FEEDSTOCK_TOKEN }}
         path: feedstock
-        commit-message: "Update omnipkg to version ${{ needs.wait-for-pypi.outputs.version }}"
-        title: "Update omnipkg to version ${{ needs.wait-for-pypi.outputs.version }}"
+        commit-message: "Update omnipkg to version ${{ needs.wait-for-pypi.outputs.version }} (noarch)"
+        title: "Update omnipkg to version ${{ needs.wait-for-pypi.outputs.version }} (noarch)"
         body: |
-          Automated update to omnipkg version ${{ needs.wait-for-pypi.outputs.version }}
+          🤖 Automated noarch update to omnipkg version ${{ needs.wait-for-pypi.outputs.version }}
           
-          - Updated version in meta.yaml
-          - Updated SHA256 hash: ${{ needs.wait-for-pypi.outputs.sha256 }}
+          - ✅ Updated version in meta.yaml
+          - ✅ Updated SHA256: ${{ needs.wait-for-pypi.outputs.sha256 }}
+          - ✅ Build number: 0 (noarch)
+          - 📦 Package type: noarch python
           
-          Changes were automatically generated by GitHub Actions after PyPI release.
-        branch: "update-v${{ needs.wait-for-pypi.outputs.version }}"
+          This is the noarch build. A platform-specific build (build 1) will follow.
+        branch: "noarch-v${{ needs.wait-for-pypi.outputs.version }}"
         base: main
-        push-to-fork: 1minds3t/omnipkg-feedstock
+        delete-branch: true
 
-  # Third job: Build conda packages for your own channel
-  build-and-upload:
-    needs: wait-for-pypi
+  # Job 5: Build platform-specific packages for your channel
+  build-platform:
+    needs: [wait-for-pypi, update-feedstock-noarch]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
     strategy:
@@ -180,6 +302,8 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
+      with:
+        ref: main
 
     - name: Setup Miniconda
       uses: conda-incubator/setup-miniconda@v3
@@ -191,41 +315,99 @@ jobs:
 
     - name: Install conda-build and anaconda-client
       shell: bash -l {0}
-      run: |
-        conda install conda-build anaconda-client -y
+      run: conda install conda-build anaconda-client -y
         
-    - name: Update meta.yaml version and hash
+    - name: Copy meta-platform.yaml to meta.yaml
       shell: bash -l {0}
       run: |
-        VERSION="${{ needs.wait-for-pypi.outputs.version }}"
-        SHA256="${{ needs.wait-for-pypi.outputs.sha256 }}"
-        
-        echo "Using version $VERSION with SHA256: $SHA256"
-        
-        # Fixed path: src/omnipkg/conda-recipe/meta.yaml
-        if [[ "$RUNNER_OS" == "macOS" ]]; then
-          sed -i '' "s/{% set version = \".*\" %}/{% set version = \"$VERSION\" %}/" src/omnipkg/conda-recipe/meta.yaml
-          sed -i '' "s/sha256: .*/sha256: $SHA256/" src/omnipkg/conda-recipe/meta.yaml
-        else
-          sed -i "s/{% set version = \".*\" %}/{% set version = \"$VERSION\" %}/" src/omnipkg/conda-recipe/meta.yaml
-          sed -i "s/sha256: .*/sha256: $SHA256/" src/omnipkg/conda-recipe/meta.yaml
-        fi
-        
-        echo "Updated meta.yaml:"
+        cp src/omnipkg/conda-recipe/meta-platform.yaml src/omnipkg/conda-recipe/meta.yaml
+        echo "📋 Using platform-specific configuration:"
         head -30 src/omnipkg/conda-recipe/meta.yaml
         
-    - name: Build conda package
+    - name: Build platform-specific conda package
       shell: bash -l {0}
       run: |
         export PYTHONIOENCODING=UTF-8
         conda build src/omnipkg/conda-recipe --output-folder ./conda-dist
+        echo "✅ Platform package built for ${{ matrix.os }}"
         
-    - name: Upload to Anaconda Cloud
+    - name: Upload platform package to your Anaconda channel
       shell: bash -l {0}
       run: |
         find ./conda-dist -name "*.conda" -o -name "*.tar.bz2" | while read file; do
-          echo "Uploading $file"
+          echo "📤 Uploading $file to your channel"
           anaconda -t ${{ secrets.ANACONDA_TOKEN }} upload "$file" --force
         done
+        echo "✅ Platform package uploaded"
       env:
         ANACONDA_TOKEN: ${{ secrets.ANACONDA_TOKEN }}
+
+  # Job 6: Update conda-forge feedstock with platform build (build 1)
+  update-feedstock-platform:
+    needs: [wait-for-pypi, build-platform]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+    - name: Checkout your feedstock fork
+      uses: actions/checkout@v4
+      with:
+        repository: 1minds3t/omnipkg-feedstock
+        token: ${{ secrets.FEEDSTOCK_TOKEN }}
+        path: feedstock
+
+    - name: Update feedstock with platform meta
+      run: |
+        cd feedstock
+        VERSION="${{ needs.wait-for-pypi.outputs.version }}"
+        SHA256="${{ needs.wait-for-pypi.outputs.sha256 }}"
+        
+        echo "📝 Updating recipe/meta.yaml to platform version $VERSION (build 1)"
+        
+        sed -i "s/{% set version = \".*\" %}/{% set version = \"$VERSION\" %}/" recipe/meta.yaml
+        sed -i "s/sha256: .*/sha256: $SHA256/" recipe/meta.yaml
+        sed -i "s/number: .*/number: 1/" recipe/meta.yaml
+        
+        # Remove noarch: python line for platform builds
+        sed -i "/noarch: python/d" recipe/meta.yaml
+        
+        echo "✅ Updated meta.yaml (platform, build 1):"
+        head -40 recipe/meta.yaml
+        
+    - name: Commit and push platform to fork
+      run: |
+        cd feedstock
+        VERSION="${{ needs.wait-for-pypi.outputs.version }}"
+        
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        git add recipe/meta.yaml
+        
+        if git diff --staged --quiet; then
+          echo "ℹ️  No changes to commit"
+        else
+          git commit -m "Update omnipkg to version $VERSION (platform-specific)"
+          git push origin main
+          echo "✅ Platform changes pushed to fork"
+        fi
+      env:
+        GITHUB_TOKEN: ${{ secrets.FEEDSTOCK_TOKEN }}
+        
+    - name: Create PR to conda-forge (platform)
+      uses: peter-evans/create-pull-request@v5
+      with:
+        token: ${{ secrets.FEEDSTOCK_TOKEN }}
+        path: feedstock
+        commit-message: "Update omnipkg to version ${{ needs.wait-for-pypi.outputs.version }} (platform)"
+        title: "Update omnipkg to version ${{ needs.wait-for-pypi.outputs.version }} (platform-specific)"
+        body: |
+          🤖 Automated platform-specific update to omnipkg version ${{ needs.wait-for-pypi.outputs.version }}
+          
+          - ✅ Updated version in meta.yaml
+          - ✅ Updated SHA256: ${{ needs.wait-for-pypi.outputs.sha256 }}
+          - ✅ Build number: 1 (platform-specific)
+          - 🖥️  Package type: platform-specific (Linux, macOS, Windows)
+          
+          This is the platform-specific build (build 1), following the noarch build (build 0).
+        branch: "platform-v${{ needs.wait-for-pypi.outputs.version }}"
+        base: main
+        delete-branch: true
