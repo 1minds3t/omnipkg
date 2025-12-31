@@ -1,0 +1,47 @@
+# Multi-stage build for Debian-based image
+FROM debian:12-slim AS builder
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y \
+    python3 \
+    python3-pip \
+    python3-venv \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create virtual environment
+RUN python3 -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+# Upgrade pip
+RUN pip install --no-cache-dir --upgrade pip
+
+# Copy and install omnipkg
+COPY . /build
+WORKDIR /build
+RUN pip install --no-cache-dir .
+
+# Runtime stage
+FROM debian:12-slim
+
+# Install runtime dependencies only
+RUN apt-get update && apt-get install -y \
+    python3 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy virtual environment from builder
+COPY --from=builder /opt/venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+# Set working directory
+WORKDIR /workspace
+
+# Add labels
+LABEL org.opencontainers.image.source="https://github.com/1minds3t/omnipkg"
+LABEL org.opencontainers.image.description="OmniPkg - Distributed Python runtime hypervisor"
+LABEL org.opencontainers.image.licenses="AGPL-3.0-only"
+
+# Verify installation
+RUN omnipkg --version
+
+# Default command
+CMD ["omnipkg", "--help"]
