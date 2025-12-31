@@ -1,6 +1,6 @@
 FROM python:3.11-alpine AS builder
 
-RUN apk add --no-cache gcc musl-dev linux-headers
+RUN apk add --no-cache gcc musl-dev linux-headers python3-dev
 
 RUN python3 -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
