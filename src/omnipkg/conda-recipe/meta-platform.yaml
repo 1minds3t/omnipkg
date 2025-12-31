@@ -1,0 +1,89 @@
+{% set name = "omnipkg" %}
+{% set version = "2.0.7" %}
+
+package:
+  name: {{ name|lower }}
+  version: {{ version }}
+
+source:
+  url: https://pypi.org/packages/source/{{ name[0] }}/{{ name }}/{{ name }}-{{ version }}.tar.gz
+  sha256: f07d3bd32e786e5de143b6e07558b1fe5ee1ab08ac701af3f98b8eb05bd8490b
+
+build:
+  number: 1  # Platform builds use build number 1
+  script: "python -m pip install . --no-deps --no-build-isolation -vv"
+  entry_points:
+    - omnipkg = omnipkg.cli:main
+    - 8pkg = omnipkg.cli:main
+    - 8PKG = omnipkg.cli:main
+    - OMNIPKG = omnipkg.cli:main
+
+requirements:
+  host:
+    - python >=3.7,<3.15
+    - pip
+    - setuptools >=61.0
+  run:
+    - python >=3.7,<3.15
+    - packaging >=23.0  # [py>=310]
+    - packaging >=21.0,<22.0  # [py<310]
+    - requests >=2.20
+    - authlib >=1.6.5
+    - filelock >=3.9
+    - psutil >=5.9.0
+    - tomli  # [py<311]
+    - safety >=3.0  # [py>=310 and py<314]
+    - aiohttp >=3.13.1
+    - pip-audit >=2.6.0  # [py>=314]
+    - uv >=0.9.5
+
+test:
+  imports:
+    - omnipkg
+  commands:
+    - omnipkg --version
+
+about:
+  home: https://github.com/1minds3t/omnipkg
+  license: AGPL-3.0-only
+  license_family: AGPL
+  license_file: LICENSE
+  summary: 'Distributed Python runtime hypervisor - Linux, macOS, Windows (x86_64, ARM64, aarch64)'
+  description: |
+    OmniPkg is a local Hypervisor for Python enabling concurrent, zero-copy 
+    multi-framework orchestration. It allows conflicting AI frameworks and 
+    hardware drivers to run simultaneously in the same workflow with near-zero latency.
+    
+    Platform Support (Runtime Verified):
+    - Linux: x86_64, aarch64/ARM64, ppc64le
+    - macOS: x86_64 (Intel), arm64 (Apple Silicon)
+    - Windows: x86_64, ARM64
+    - FreeBSD: x86_64 (experimental)
+    - Red Hat Enterprise Linux, Debian, Ubuntu, Arch Linux
+    
+    Key Features:
+    - Microsecond package activation (~50μs)
+    - Cross-platform daemon with native fork/no-fork modes
+    - Concurrent multi-version package loading
+    - Zero-copy multi-framework orchestration
+    - Smart dependency resolution with snapshot restoration
+    - Live daemon monitoring dashboard
+  doc_url: https://omnipkg.readthedocs.io/en/latest/
+  dev_url: https://github.com/1minds3t
+
+extra:
+  recipe-maintainers:
+    - 1minds3t
+  keywords:
+    - linux
+    - windows
+    - macos
+    - freebsd
+    - x86_64
+    - arm64
+    - aarch64
+    - apple-silicon
+    - cross-platform
+    - hypervisor
+    - package-manager
+    - dependency-management
