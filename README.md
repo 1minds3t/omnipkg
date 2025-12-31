@@ -23,7 +23,9 @@
   <a href="https://anaconda.org/minds3t/omnipkg">
   <img src="https://img.shields.io/conda/dn/minds3t/omnipkg?logo=anaconda" alt="Conda Downloads (minds3t)">
 </a>
-</a>
+  <a href="https://github.com/1minds3t/omnipkg/pkgs/container/omnipkg">
+    <img src="https://ghcr-badge.egpl.dev/1minds3t/omnipkg/downloads?color=blue&tag=latest&label=ghcr%20pulls&trim=" alt="GHCR Pulls">
+  </a>
 <a href="https://pepy.tech/projects/omnipkg">
   <img src="https://static.pepy.tech/personalized-badge/omnipkg?period=total&units=INTERNATIONAL_SYSTEM&left_color=gray&right_color=blue&left_text=downloads" alt="PyPI Downloads">
 </a>
