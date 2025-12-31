@@ -181,7 +181,7 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
       with:
-        ref: ${{ github.event.release.tag_name || github.ref }}
+        ref: ${{ github.event.release.tag_name || (github.event_name == 'workflow_dispatch' && format('v{0}', inputs.version)) || github.ref }}
       
     - name: Set up Python
       uses: actions/setup-python@v5
