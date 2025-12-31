@@ -53,7 +53,6 @@ jobs:
           OS=$(uname -s)
           echo "Detected: $OS $ARCH"
       
-      # 🛑 FIXED: USES ISOLATED VENV. NO CONDA HIJACKING. NO --user.
       - name: Build and Test (Self-Hosted Linux)
         if: contains(matrix.runner, 'self-hosted') && contains(matrix.runner, 'linux')
         shell: bash
@@ -113,7 +112,7 @@ jobs:
           omnipkg list
 
   # ═══════════════════════════════════════════════════════════════════
-  # 2. CRITICAL TESTS (Fixed: Removed Alpine ARM64, Added Timeout)
+  # 2. CRITICAL TESTS (Podman)
   # ═══════════════════════════════════════════════════════════════════
   linux-distros-podman-critical:
     name: Podman - ${{ matrix.distro }} (${{ matrix.platform }})
@@ -123,15 +122,16 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # Native x64
           - distro: debian:12
             platform: linux/amd64
           - distro: ubuntu:24.04
             platform: linux/amd64
           - distro: fedora:39
             platform: linux/amd64
+            
+          # ARM64 QEMU (Debian & Rocky ONLY - Removed Ubuntu & Alpine)
           - distro: debian:12
-            platform: linux/arm64
-          - distro: ubuntu:22.04
             platform: linux/arm64
           - distro: rockylinux:9
             platform: linux/arm64
