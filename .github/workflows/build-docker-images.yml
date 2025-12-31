@@ -68,7 +68,6 @@ jobs:
   # BUILD MULTI-PLATFORM IMAGES (DEBIAN BASE)
   # ═══════════════════════════════════════════════════════════════════
   build-debian-images:
-    needs: wait-for-pypi
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -130,7 +129,6 @@ jobs:
   # BUILD UBUNTU IMAGES
   # ═══════════════════════════════════════════════════════════════════
   build-ubuntu-images:
-    needs: wait-for-pypi
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -192,7 +190,6 @@ jobs:
   # BUILD ALPINE (SMALLEST IMAGE)
   # ═══════════════════════════════════════════════════════════════════
   build-alpine-images:
-    needs: wait-for-pypi
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -250,7 +247,6 @@ jobs:
   # BUILD FEDORA/RHEL IMAGES
   # ═══════════════════════════════════════════════════════════════════
   build-fedora-images:
-    needs: wait-for-pypi
     runs-on: ubuntu-latest
     permissions:
       contents: read
