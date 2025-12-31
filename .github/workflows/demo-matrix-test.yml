@@ -63,7 +63,7 @@ jobs:
           sleep 5
           8pkg daemon status
           
-          echo '${{ matrix.demo }}' | 8pkg demo || true
+          echo '${{ matrix.demo }}' | 8pkg demo --verbose || true
           
           8pkg daemon stop || true
         "
@@ -131,7 +131,7 @@ jobs:
     - name: Run Demo ${{ matrix.demo.num }}
       timeout-minutes: 10
       run: |
-        echo "${{ matrix.demo.num }}" | 8pkg demo
+        echo "${{ matrix.demo.num }}" | 8pkg demo --verbose
       continue-on-error: true
     
     - name: Show logs/Stop daemon
@@ -169,7 +169,7 @@ jobs:
           sleep 5
           8pkg daemon status
           
-          echo '${{ matrix.demo }}' | 8pkg demo || true
+          echo '${{ matrix.demo }}' | 8pkg demo --verbose || true
           
           echo '=== Daemon Status ==='
           8pkg daemon status || true
@@ -208,7 +208,7 @@ jobs:
     - name: Run Chaos Scenario ${{ matrix.scenario }}
       timeout-minutes: 8
       run: |
-        (echo "11"; sleep 2; echo "${{ matrix.scenario }}") | 8pkg demo
+        (echo "11"; sleep 2; echo "${{ matrix.scenario }}") | 8pkg demo --verbose
       continue-on-error: true
     
     - name: Daemon status after test
@@ -249,7 +249,7 @@ jobs:
           pip install -e .
           8pkg daemon start
           sleep 3
-          (echo '11'; sleep 2; echo '13') | 8pkg demo
+          (echo '11'; sleep 2; echo '13') | 8pkg demo --verbose
           8pkg daemon stop
         "
 
@@ -295,7 +295,7 @@ jobs:
       run: |
         source $HOME/miniconda3/etc/profile.d/conda.sh
         conda activate github_runner_env
-        (echo "11"; sleep 2; echo "${{ matrix.scenario }}") | 8pkg demo
+        (echo "11"; sleep 2; echo "${{ matrix.scenario }}") | 8pkg demo --verbose
       continue-on-error: true
     
     - name: Daemon status after test
