@@ -37,7 +37,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          # THIS IS THE FIX: Uses input tag if provided, otherwise default
           ref: ${{ inputs.target_ref || github.ref }}
       
       - name: Set up Python 3.11
@@ -54,6 +53,7 @@ jobs:
           OS=$(uname -s)
           echo "Detected: $OS $ARCH"
       
+      # 🛑 FIXED: USES ISOLATED VENV. NO CONDA HIJACKING. NO --user.
       - name: Build and Test (Self-Hosted Linux)
         if: contains(matrix.runner, 'self-hosted') && contains(matrix.runner, 'linux')
         shell: bash
@@ -61,25 +61,37 @@ jobs:
           PYTHONUNBUFFERED: "1"
         run: |
           set -x
-          # [Existing Logic Preserved]
+          
+          # 1. Find a Python to bootstrap (Conda or System)
           if [ -f "$HOME/miniconda3/envs/evocoder_env/bin/python3.11" ]; then
-            PY="$HOME/miniconda3/envs/evocoder_env/bin/python3.11"
-          elif [ -f "/usr/bin/python3.11" ]; then
-            PY=/usr/bin/python3.11
-          elif [ -f "/usr/bin/python3.12" ]; then
-            PY=/usr/bin/python3.12
+            BASE_PY="$HOME/miniconda3/envs/evocoder_env/bin/python3.11"
+            echo "🔧 Bootstrapping from: $BASE_PY"
+          elif command -v python3.11 >/dev/null 2>&1; then
+            BASE_PY=python3.11
           else
-            echo "❌ No suitable Python found"
-            exit 1
+            BASE_PY=python3
           fi
           
-          $PY -m pip install --user --upgrade pip build || {
-            curl -sS https://bootstrap.pypa.io/get-pip.py | $PY - --user
-            $PY -m pip install --user --upgrade pip build
-          }
-          $PY -m build
-          $PY -m pip install --user --force-reinstall dist/*.whl
-          export PATH="$HOME/.local/bin:$PATH"
+          # 2. Create ISOLATED venv (Protects your lollama/tensorflow env)
+          echo "🛡️ Creating fresh .venv..."
+          rm -rf .venv
+          $BASE_PY -m venv .venv
+          
+          # 3. Activate venv
+          source .venv/bin/activate
+          
+          # 4. Install & Build INSIDE venv
+          echo "🔥 Installing build tools..."
+          python -m pip install --upgrade pip build
+          
+          echo "📦 Building package..."
+          python -m build
+          
+          echo "💿 Installing package (Isolated)..."
+          python -m pip install dist/*.whl
+          
+          # 5. Test
+          echo "🧪 Testing..."
           omnipkg --version
           omnipkg list
       
@@ -128,7 +140,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          # FIX APPLIED HERE TOO
           ref: ${{ inputs.target_ref || github.ref }}
           
       - name: Test
@@ -160,7 +171,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          # FIX APPLIED HERE TOO
           ref: ${{ inputs.target_ref || github.ref }}
       - name: Test
         run: |
@@ -185,7 +195,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          # FIX APPLIED HERE TOO
           ref: ${{ inputs.target_ref || github.ref }}
       - name: Test
         run: |
@@ -212,7 +221,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          # FIX APPLIED HERE TOO
           ref: ${{ inputs.target_ref || github.ref }}
       - name: Test
         run: |
@@ -241,6 +249,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          ref: ${{ inputs.target_ref || github.ref }}
       - name: Update Stats
         run: |
           sed -i "s/platforms-[0-9]*%20verified/platforms-22%20verified/" README.md
