@@ -26,6 +26,12 @@
   <a href="https://github.com/1minds3t/omnipkg/pkgs/container/omnipkg">
 <img src="https://img.shields.io/badge/ghcr-omnipkg-blue?logo=github" alt="GHCR">
   </a>
+  <p align="center">
+  <!-- Supported Platforms -->
+  <a href="https://anaconda.org/conda-forge/omnipkg/files">
+    <img src="https://img.shields.io/badge/platforms-win--64|macOS--64|linux--64|linux--aarch64|linux--ppc64le|noarch-blue?logo=anaconda" alt="Supported Platforms">
+  </a>
+</p>
 <a href="https://pepy.tech/projects/omnipkg">
   <img src="https://static.pepy.tech/personalized-badge/omnipkg?period=total&units=INTERNATIONAL_SYSTEM&left_color=gray&right_color=blue&left_text=downloads" alt="PyPI Downloads">
 </a>
@@ -466,6 +472,8 @@ This means omnipkg runs on **any** architecture where Python is available:
 This verification acts as a critical pre-release gate, ensuring that any version published to PyPI is confirmed to work for ARM64 users before it's released.
 
 <!-- ARM64_STATUS_END -->
+
+
 
 Current build status
 ====================
