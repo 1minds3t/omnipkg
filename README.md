@@ -27,10 +27,6 @@
 <img src="https://img.shields.io/badge/ghcr-omnipkg-blue?logo=github" alt="GHCR">
   </a>
   <p align="center">
-  <!-- Supported Platforms -->
-  <a href="https://anaconda.org/conda-forge/omnipkg/files">
-    <img src="https://img.shields.io/badge/platforms-win--64|macOS--64|linux--64|linux--aarch64|linux--ppc64le|noarch-blue?logo=anaconda" alt="Supported Platforms">
-  </a>
 </p>
 <a href="https://pepy.tech/projects/omnipkg">
   <img src="https://static.pepy.tech/personalized-badge/omnipkg?period=total&units=INTERNATIONAL_SYSTEM&left_color=gray&right_color=blue&left_text=downloads" alt="PyPI Downloads">
@@ -45,6 +41,9 @@
   <a href="https://pypi.org/project/omnipkg/">
   <img src="https://img.shields.io/pypi/pyversions/omnipkg?logo=python&logoColor=white" alt="Python Versions">
 </a>
+  <a href="https://anaconda.org/conda-forge/omnipkg/files">
+    <img src="https://img.shields.io/badge/platforms-win--64|macOS--64|linux--64|linux--aarch64|linux--ppc64le|noarch-blue?logo=anaconda" alt="Supported Platforms">
+  </a>
 </p>
 
 
