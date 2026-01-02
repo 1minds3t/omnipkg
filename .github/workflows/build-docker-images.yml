@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       target_ref:
-        description: 'Git Ref (e.g. v2.0.6)'
+        description: 'Git Ref (e.g. v2.0.8)'
         required: false
         type: string
         default: ''
@@ -45,6 +45,10 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       
+      - name: Extract version
+        id: version
+        run: echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+      
       - name: Extract metadata
         id: meta
         uses: docker/metadata-action@v5
@@ -57,6 +61,7 @@ jobs:
             type=semver,pattern={{major}}.{{minor}}
             type=raw,value=latest
             type=raw,value=debian
+            type=raw,value=${{ steps.version.outputs.version }}-debian
       
       - name: Build and push
         uses: docker/build-push-action@v5
@@ -103,6 +108,10 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       
+      - name: Extract version
+        id: version
+        run: echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+      
       - name: Extract metadata
         id: meta
         uses: docker/metadata-action@v5
@@ -113,6 +122,7 @@ jobs:
           tags: |
             type=raw,value=alpine
             type=raw,value=slim
+            type=raw,value=${{ steps.version.outputs.version }}-alpine
       
       - name: Build and push
         uses: docker/build-push-action@v5
@@ -162,6 +172,10 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       
+      - name: Extract version
+        id: version
+        run: echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+      
       - name: Extract metadata
         id: meta
         uses: docker/metadata-action@v5
@@ -171,6 +185,7 @@ jobs:
             ghcr.io/1minds3t/omnipkg
           tags: |
             type=raw,value=ubuntu-${{ matrix.ubuntu_version }}
+            type=raw,value=${{ steps.version.outputs.version }}-ubuntu-${{ matrix.ubuntu_version }}
       
       - name: Build and push
         uses: docker/build-push-action@v5
@@ -219,6 +234,10 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       
+      - name: Extract version
+        id: version
+        run: echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+      
       - name: Extract metadata
         id: meta
         uses: docker/metadata-action@v5
@@ -228,6 +247,7 @@ jobs:
             ghcr.io/1minds3t/omnipkg
           tags: |
             type=raw,value=fedora
+            type=raw,value=${{ steps.version.outputs.version }}-fedora
       
       - name: Build and push
         uses: docker/build-push-action@v5
@@ -274,6 +294,10 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       
+      - name: Extract version
+        id: version
+        run: echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+      
       - name: Create CUDA Dockerfile
         run: |
           mkdir -p docker
@@ -304,7 +328,7 @@ jobs:
           RUN mkdir -p $OMNIPKG_HOME/.omnipkg && \
               chown -R omnipkg:omnipkg $OMNIPKG_HOME
           
-          COPY --chown=omnipkg:omnipkg docker/docker-entrypoint.sh ./
+          COPY --chown=omnipkg:omnipkg docker-entrypoint.sh ./
           RUN chmod +x docker-entrypoint.sh
           
           USER omnipkg
@@ -322,6 +346,7 @@ jobs:
           tags: |
             type=raw,value=cuda
             type=raw,value=gpu
+            type=raw,value=${{ steps.version.outputs.version }}-cuda
       
       - name: Build and push
         uses: docker/build-push-action@v5
@@ -368,6 +393,10 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       
+      - name: Extract version
+        id: version
+        run: echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+      
       - name: Create Dev Dockerfile
         run: |
           mkdir -p docker
@@ -379,15 +408,10 @@ jobs:
               OMNIPKG_HOME=/home/omnipkg
           
           RUN apt-get update && apt-get install -y --no-install-recommends \
-              # Dev tools
               vim nano git curl wget htop tmux \
-              # Build tools
               build-essential gcc g++ make cmake ninja-build \
-              # Compression
               zstd xz-utils \
-              # Libraries
               libmagic1 libssl-dev libffi-dev \
-              # Language tools
               shellcheck ripgrep fd-find \
               && rm -rf /var/lib/apt/lists/*
           
@@ -405,7 +429,7 @@ jobs:
           RUN mkdir -p $OMNIPKG_HOME/.omnipkg && \
               chown -R omnipkg:omnipkg $OMNIPKG_HOME
           
-          COPY --chown=omnipkg:omnipkg docker/docker-entrypoint.sh ./
+          COPY --chown=omnipkg:omnipkg docker-entrypoint.sh ./
           RUN chmod +x docker-entrypoint.sh
           
           USER omnipkg
@@ -422,6 +446,7 @@ jobs:
             ghcr.io/1minds3t/omnipkg
           tags: |
             type=raw,value=dev
+            type=raw,value=${{ steps.version.outputs.version }}-dev
       
       - name: Build and push
         uses: docker/build-push-action@v5
