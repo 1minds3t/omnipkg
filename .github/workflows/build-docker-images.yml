@@ -59,11 +59,11 @@ jobs:
             1minds3t/omnipkg
             ghcr.io/1minds3t/omnipkg
           tags: |
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=raw,value=latest
+            type=semver,pattern={{version}},enable=${{ startsWith(github.ref, 'refs/tags/') }}
+            type=semver,pattern={{major}}.{{minor}},enable=${{ startsWith(github.ref, 'refs/tags/') }}
+            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/') }}
             type=raw,value=debian
-            type=raw,value=${{ steps.version.outputs.version }}-debian
+            type=raw,value=${{ steps.version.outputs.version }}-debian,enable=${{ startsWith(github.ref, 'refs/tags/') }}
       
       - name: Build and push
         uses: docker/build-push-action@v5
@@ -126,7 +126,7 @@ jobs:
           tags: |
             type=raw,value=alpine
             type=raw,value=slim
-            type=raw,value=${{ steps.version.outputs.version }}-alpine
+            type=raw,value=${{ steps.version.outputs.version }}-alpine,enable=${{ startsWith(github.ref, 'refs/tags/') }}
       
       - name: Build and push
         uses: docker/build-push-action@v5
@@ -191,7 +191,7 @@ jobs:
             ghcr.io/1minds3t/omnipkg
           tags: |
             type=raw,value=ubuntu-${{ matrix.ubuntu_version }}
-            type=raw,value=${{ steps.version.outputs.version }}-ubuntu-${{ matrix.ubuntu_version }}
+            type=raw,value=${{ steps.version.outputs.version }}-ubuntu-${{ matrix.ubuntu_version }},enable=${{ startsWith(github.ref, 'refs/tags/') }}
       
       - name: Build and push
         uses: docker/build-push-action@v5
@@ -255,7 +255,7 @@ jobs:
             ghcr.io/1minds3t/omnipkg
           tags: |
             type=raw,value=fedora
-            type=raw,value=${{ steps.version.outputs.version }}-fedora
+            type=raw,value=${{ steps.version.outputs.version }}-fedora,enable=${{ startsWith(github.ref, 'refs/tags/') }}
       
       - name: Build and push
         uses: docker/build-push-action@v5
@@ -318,7 +318,7 @@ jobs:
           tags: |
             type=raw,value=cuda
             type=raw,value=gpu
-            type=raw,value=${{ steps.version.outputs.version }}-cuda
+            type=raw,value=${{ steps.version.outputs.version }}-cuda,enable=${{ startsWith(github.ref, 'refs/tags/') }}
       
       - name: Build and push
         uses: docker/build-push-action@v5
@@ -380,7 +380,7 @@ jobs:
             ghcr.io/1minds3t/omnipkg
           tags: |
             type=raw,value=dev
-            type=raw,value=${{ steps.version.outputs.version }}-dev
+            type=raw,value=${{ steps.version.outputs.version }}-dev,enable=${{ startsWith(github.ref, 'refs/tags/') }}
       
       - name: Build and push
         uses: docker/build-push-action@v5
