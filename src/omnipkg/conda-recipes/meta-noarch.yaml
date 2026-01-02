@@ -1,0 +1,83 @@
+{% set name = "omnipkg" %}
+{% set version = "2.0.7" %}
+
+package:
+  name: {{ name|lower }}
+  version: {{ version }}
+
+source:
+  url: https://pypi.org/packages/source/{{ name[0] }}/{{ name }}/{{ name }}-{{ version }}.tar.gz
+  sha256: f07d3bd32e786e5de143b6e07558b1fe5ee1ab08ac701af3f98b8eb05bd8490b
+
+build:
+  number: 0
+  noarch: python
+  # Noarch doesn't need the complex [unix] vs [win] script logic
+  script: python -m pip install . --no-deps --no-build-isolation -vv
+  entry_points:
+    - omnipkg = omnipkg.cli:main
+    - 8pkg = omnipkg.cli:main
+    - 8PKG = omnipkg.cli:main
+    - OMNIPKG = omnipkg.cli:main
+
+requirements:
+  host:
+    - python >=3.10  # Aligned with your platform builds
+    - pip
+    - setuptools >=61.0
+  run:
+    # --- SYNCED WITH PLATFORM BUILD ---
+    - python >=3.10
+    - requests >=2.20
+    - psutil >=5.9.0
+    - typer >=0.4.0
+    - rich >=10.0.0
+    - filelock >=3.20.1
+    - packaging >=23.0
+    - tomli            # [py<311]
+    - authlib >=1.6.5
+    - aiohttp >=3.13.1
+    - safety >=3.7.0   # [py<314]
+    - marshmallow >=4.1.2
+    - pip-audit >=2.6.0 # [py>=314]
+    # Note: uv is binary, so noarch might warn about arch-specific deps, 
+    # but the solver handles it.
+    - uv >=0.9.6       # [not ppc64le] 
+    - urllib3 >=1.26.19
+    - tqdm >=4.67.1
+    - typing-extensions >=4.0.0
+
+test:
+  imports:
+    - omnipkg
+  commands:
+    - omnipkg --version
+
+about:
+  home: https://github.com/1minds3t/omnipkg
+  license: AGPL-3.0-only
+  license_family: AGPL
+  license_file: LICENSE
+  summary: 'The Ultimate Python Dependency Resolver. One environment. Infinite packages. Zero conflicts.'
+  description: |
+    OmniPkg is a distributed Python runtime hypervisor enabling concurrent, 
+    zero-copy multi-framework orchestration.
+    
+    Platform Support:
+    - Linux: x86_64, aarch64/ARM64, ppc64le
+    - macOS: x86_64 (Intel), arm64 (Apple Silicon)
+    - Windows: x86_64, ARM64
+    
+    Key Features:
+    - Microsecond package activation (~50μs)
+    - Cross-platform daemon with native fork/no-fork modes
+    - Concurrent multi-version package loading
+    - Zero-copy multi-framework orchestration
+    - Smart dependency resolution with snapshot restoration
+    - Live daemon monitoring dashboard
+  doc_url: https://omnipkg.readthedocs.io/en/latest/
+  dev_url: https://github.com/1minds3t/omnipkg
+
+extra:
+  recipe-maintainers:
+    - 1minds3t
