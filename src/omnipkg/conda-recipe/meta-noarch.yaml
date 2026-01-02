@@ -75,7 +75,7 @@ about:
     - Zero-copy multi-framework orchestration
     - Smart dependency resolution with snapshot restoration
     - Live daemon monitoring dashboard
-  doc_url: https://github.com/1minds3t/omnipkg/tree/main/docs
+  doc_url: https://omnipkg.readthedocs.io/en/latest/
   dev_url: https://github.com/1minds3t/omnipkg
 
 extra:
