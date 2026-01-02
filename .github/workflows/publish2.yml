@@ -106,12 +106,12 @@ jobs:
       run: |
         set -e
         
-        # Install Python 3.11 to bootstrap OmniPkg
+        # Install Python 3.12 to bootstrap OmniPkg (default on Ubuntu 24.04)
         sudo apt-get update
-        sudo apt-get install -y python3.11 python3.11-venv
+        sudo apt-get install -y python3.12 python3.12-venv python3-pip
         
         # Create bootstrap venv and install OmniPkg
-        python3.11 -m venv .bootstrap
+        python3.12 -m venv .bootstrap
         source .bootstrap/bin/activate
         pip install --upgrade pip wheel
         pip install -e .
@@ -259,11 +259,11 @@ jobs:
         
         echo "🎯 Building for macOS with deployment target: $MACOSX_DEPLOYMENT_TARGET"
         
-        # Install Python 3.11 via Homebrew for bootstrap
-        brew install python@3.11 || true
+        # Install Python 3.12 via Homebrew for bootstrap
+        brew install python@3.12 || true
         
         # Create bootstrap venv
-        python3.11 -m venv .bootstrap
+        python3.12 -m venv .bootstrap
         source .bootstrap/bin/activate
         pip install --upgrade pip build wheel
         pip install -e .
@@ -313,12 +313,12 @@ jobs:
       if: matrix.os_type == 'windows'
       shell: pwsh
       run: |
-        # Install Python 3.11 via Chocolatey for bootstrap
-        choco install python311 -y
+        # Install Python 3.12 via Chocolatey for bootstrap
+        choco install python312 -y
         refreshenv
         
         # Create bootstrap venv
-        python3.11 -m venv .bootstrap
+        python3.12 -m venv .bootstrap
         .\.bootstrap\Scripts\Activate.ps1
         pip install --upgrade pip build wheel
         pip install -e .
