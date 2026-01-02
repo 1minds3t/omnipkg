@@ -11,8 +11,9 @@ source:
 
 build:
   number: 0
-  noarch: python  # Pure Python - runtime portable across all platforms
-  script: "python -m pip install . --no-deps --no-build-isolation -vv"
+  noarch: python
+  # Noarch doesn't need the complex [unix] vs [win] script logic
+  script: python -m pip install . --no-deps --no-build-isolation -vv
   entry_points:
     - omnipkg = omnipkg.cli:main
     - 8pkg = omnipkg.cli:main
@@ -21,22 +22,30 @@ build:
 
 requirements:
   host:
-    - python >=3.7,<3.15
+    - python >=3.10  # Aligned with your platform builds
     - pip
     - setuptools >=61.0
   run:
-    - python >=3.7,<3.15
-    - packaging >=23.0  # [py>=310]
-    - packaging >=21.0,<22.0  # [py<310]
+    # --- SYNCED WITH PLATFORM BUILD ---
+    - python >=3.10
     - requests >=2.20
-    - authlib >=1.6.5
-    - filelock >=3.9
     - psutil >=5.9.0
-    - tomli  # [py<311]
-    - safety >=3.0  # [py>=310 and py<314]
+    - typer >=0.4.0
+    - rich >=10.0.0
+    - filelock >=3.20.1
+    - packaging >=23.0
+    - tomli            # [py<311]
+    - authlib >=1.6.5
     - aiohttp >=3.13.1
-    - pip-audit >=2.6.0  # [py>=314]
-    - uv >=0.9.5
+    - safety >=3.7.0   # [py<314]
+    - marshmallow >=4.1.2
+    - pip-audit >=2.6.0 # [py>=314]
+    # Note: uv is binary, so noarch might warn about arch-specific deps, 
+    # but the solver handles it.
+    - uv >=0.9.6       # [not ppc64le] 
+    - urllib3 >=1.26.19
+    - tqdm >=4.67.1
+    - typing-extensions >=4.0.0
 
 test:
   imports:
@@ -49,18 +58,15 @@ about:
   license: AGPL-3.0-only
   license_family: AGPL
   license_file: LICENSE
-  summary: 'Distributed Python runtime hypervisor - Linux, macOS, Windows (x86_64, ARM64, aarch64)'
+  summary: 'The Ultimate Python Dependency Resolver. One environment. Infinite packages. Zero conflicts.'
   description: |
-    OmniPkg is a local Hypervisor for Python enabling concurrent, zero-copy 
-    multi-framework orchestration. It allows conflicting AI frameworks and 
-    hardware drivers to run simultaneously in the same workflow with near-zero latency.
+    OmniPkg is a distributed Python runtime hypervisor enabling concurrent, 
+    zero-copy multi-framework orchestration.
     
-    Platform Support (Runtime Verified):
+    Platform Support:
     - Linux: x86_64, aarch64/ARM64, ppc64le
     - macOS: x86_64 (Intel), arm64 (Apple Silicon)
     - Windows: x86_64, ARM64
-    - FreeBSD: x86_64 (experimental)
-    - Red Hat Enterprise Linux, Debian, Ubuntu, Arch Linux
     
     Key Features:
     - Microsecond package activation (~50μs)
@@ -69,22 +75,9 @@ about:
     - Zero-copy multi-framework orchestration
     - Smart dependency resolution with snapshot restoration
     - Live daemon monitoring dashboard
-  doc_url: https://omnipkg.readthedocs.io/en/latest/
-  dev_url: https://github.com/1minds3t
+  doc_url: https://github.com/1minds3t/omnipkg/tree/main/docs
+  dev_url: https://github.com/1minds3t/omnipkg
 
 extra:
   recipe-maintainers:
     - 1minds3t
-  keywords:
-    - linux
-    - windows
-    - macos
-    - freebsd
-    - x86_64
-    - arm64
-    - aarch64
-    - apple-silicon
-    - cross-platform
-    - hypervisor
-    - package-manager
-    - dependency-management
