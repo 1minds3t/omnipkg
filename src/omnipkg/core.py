@@ -5430,6 +5430,11 @@ class omnipkg:
         self.config_manager = config_manager
         self.config = config_manager.config
         self._has_run_cloak_cleanup = False
+        # Initialize cache attributes ALWAYS (prevents AttributeError)
+        self._cache_connection_status = None
+        self.cache_client = None
+        self._info_cache = {}
+        self._installed_packages_cache = None
 
         if not self.config:
             if len(sys.argv) > 1 and sys.argv[1] in ["reset-config", "doctor"]:
@@ -5445,6 +5450,7 @@ class omnipkg:
             self.env_id = self._get_env_id()
             self.multiversion_base = Path(self.config["multiversion_base"])
             self.interpreter_manager = InterpreterManager(self.config_manager)
+            self._cache_connection_status = None
             safe_print(_("✅ Omnipkg core initialized (minimal mode)."))
             return  # EXIT EARLY - no cache, no migrations, no hooks
 
@@ -6403,7 +6409,9 @@ class omnipkg:
         Establishes a cache connection. Auto-corrects misconfigurations gracefully.
         """
         # Fast Path: If a connection is already established, we're done.
-        if self._cache_connection_status in ["redis_ok", "sqlite_ok"]:
+        # ✅ Safe: Check if attribute exists
+        if hasattr(self, '_cache_connection_status') and \
+        self._cache_connection_status in ["redis_ok", "sqlite_ok"]:
             return True
 
         # Check if the user wants to use Redis.
@@ -8831,7 +8839,10 @@ class omnipkg:
                 )
             )
             return
-
+        # ✅ Safe: Check if attribute exists
+        if hasattr(self, '_cache_connection_status') and \
+        self._cache_connection_status in ["redis_ok", "sqlite_ok"]:
+            return True
         is_using_redis = self._cache_connection_status == "redis_ok"
 
         if is_using_redis:
