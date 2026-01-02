@@ -187,7 +187,7 @@ jobs:
       uses: conda-incubator/setup-miniconda@v3
       with:
         auto-update-conda: true
-        python-version: '3.11'
+        python-version: ${{ matrix.python }}
         channels: conda-forge,defaults
         channel-priority: strict
 
@@ -225,13 +225,14 @@ jobs:
   # JOB 4: Build ALL PLATFORM packages (build 1) for custom channel
   # ═══════════════════════════════════════════════════════════════════
   build-platforms:
-    name: "Build ${{ matrix.label }} (build 1)"
+    name: "Build ${{ matrix.label }} - Python ${{ matrix.python }}"
     needs: [wait-for-pypi, build-noarch]
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
+        python: ['3.10', '3.11', '3.12', '3.13']
         include:
           # ─────────────────────────────────────────────────────────
           # Linux x86_64 (native on ubuntu-latest)
@@ -331,7 +332,7 @@ jobs:
       run: |
         export PYTHONIOENCODING=UTF-8
         
-        echo "🏗️  Building for ${{ matrix.label }}..."
+        echo "🏗️  Building for ${{ matrix.label }} - Python ${{ matrix.python }}..."
         
         if [ "${{ matrix.cross_compile }}" = "true" ]; then
           echo "🔀 Cross-compiling for ${{ matrix.conda_subdir }}"
@@ -340,16 +341,17 @@ jobs:
           
           conda build src/omnipkg/conda-recipe \
             --output-folder ./conda-dist \
+            --python=${{ matrix.python }} \
             -m .ci_support/${{ matrix.conda_subdir }}_.yaml || {
               echo "⚠️  Cross-compilation config not found, trying without..."
-              conda build src/omnipkg/conda-recipe --output-folder ./conda-dist
+              conda build src/omnipkg/conda-recipe --output-folder ./conda-dist --python=${{ matrix.python }}
             }
         else
           echo "🔨 Native build for ${{ matrix.conda_subdir }}"
-          conda build src/omnipkg/conda-recipe --output-folder ./conda-dist
+          conda build src/omnipkg/conda-recipe --output-folder ./conda-dist --python=${{ matrix.python }}
         fi
         
-        echo "✅ Platform package built for ${{ matrix.label }}"
+        echo "✅ Platform package built for ${{ matrix.label }} - Python ${{ matrix.python }}"
         echo "📦 Package contents:"
         find ./conda-dist -name "*.conda" -o -name "*.tar.bz2"
         
@@ -363,7 +365,7 @@ jobs:
           echo "📤 Uploading $file to anaconda.org/minds3t"
           anaconda -t ${{ secrets.ANACONDA_TOKEN }} upload "$file" --force --user minds3t
         done
-        echo "✅ Platform package uploaded to custom channel for ${{ matrix.label }}"
+        echo "✅ Platform package uploaded to custom channel for ${{ matrix.label }} - Python ${{ matrix.python }}"
       env:
         ANACONDA_TOKEN: ${{ secrets.ANACONDA_TOKEN }}
 
@@ -389,12 +391,12 @@ jobs:
         echo ""
         echo "Supported platforms:"
         echo "  - noarch (Python-only, build 0)"
-        echo "  - linux-64 (x86_64, build 1)"
-        echo "  - linux-aarch64 (ARM64, build 1)"
-        echo "  - linux-ppc64le (PowerPC, build 1)"
-        echo "  - osx-64 (Intel Mac, build 1)"
-        echo "  - osx-arm64 (Apple Silicon, build 1)"
-        echo "  - win-64 (Windows x64, build 1)"
+        echo "  - linux-64 (x86_64, Python 3.10-3.13, build 1)"
+        echo "  - linux-aarch64 (ARM64, Python 3.10-3.13, build 1)"
+        echo "  - linux-ppc64le (PowerPC, Python 3.10-3.13, build 1)"
+        echo "  - osx-64 (Intel Mac, Python 3.10-3.13, build 1)"
+        echo "  - osx-arm64 (Apple Silicon, Python 3.10-3.13, build 1)"
+        echo "  - win-64 (Windows x64, Python 3.10-3.13, build 1)"
         echo ""
         echo "Install with: conda install -c minds3t omnipkg"
         echo "═══════════════════════════════════════════════════════"
