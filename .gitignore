@@ -109,3 +109,6 @@ src/build/
 build/
 *.egg-info/
 vendor/
+
+# VS Code Dev Container (Streamlit)
+.devcontainer/
