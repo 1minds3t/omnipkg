@@ -1,0 +1,433 @@
+name: Build Platform-Specific Wheels for Existing Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Release tag to build wheels for (e.g., v2.0.7)'
+        required: true
+        type: string
+      python_versions:
+        description: 'Python versions (space-separated, e.g., "3.10 3.11 3.12 3.13")'
+        required: false
+        default: '3.10 3.11 3.12 3.13'
+        type: string
+      upload_to_pypi:
+        description: 'Upload wheels to PyPI?'
+        required: false
+        default: true
+        type: boolean
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  # ═══════════════════════════════════════════════════════════════════
+  # JOB 1: Build wheels for all platforms
+  # ═══════════════════════════════════════════════════════════════════
+  build-wheels:
+    name: "Build ${{ matrix.platform }} wheels"
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # ─────────────────────────────────────────────────────────
+          # Linux x86_64 - Use OmniPkg OUTSIDE containers
+          # ─────────────────────────────────────────────────────────
+          - runner: ubuntu-latest
+            platform: manylinux_2_17_x86_64
+            os_type: linux
+            
+          # ─────────────────────────────────────────────────────────
+          # Linux ARM64 (aarch64) - Use QEMU + manylinux
+          # ─────────────────────────────────────────────────────────
+          - runner: ubuntu-latest
+            platform: manylinux_2_17_aarch64
+            os_type: linux
+            arch: aarch64
+            use_qemu: true
+            
+          # ─────────────────────────────────────────────────────────
+          # Linux ppc64le - Use QEMU + manylinux
+          # ─────────────────────────────────────────────────────────
+          - runner: ubuntu-latest
+            platform: manylinux_2_17_ppc64le
+            os_type: linux
+            arch: ppc64le
+            use_qemu: true
+            
+          # ─────────────────────────────────────────────────────────
+          # macOS Intel x86_64
+          # ─────────────────────────────────────────────────────────
+          - runner: macos-13  # Intel runner
+            platform: macosx_10_13_x86_64
+            os_type: macos
+            deployment_target: "10.13"
+            
+          # ─────────────────────────────────────────────────────────
+          # macOS Apple Silicon ARM64
+          # ─────────────────────────────────────────────────────────
+          - runner: macos-latest  # ARM64 runner
+            platform: macosx_11_0_arm64
+            os_type: macos
+            deployment_target: "11.0"
+            
+          # ─────────────────────────────────────────────────────────
+          # Windows x86_64
+          # ─────────────────────────────────────────────────────────
+          - runner: windows-latest
+            platform: win_amd64
+            os_type: windows
+
+    steps:
+    - name: Checkout at specific release tag
+      uses: actions/checkout@v4
+      with:
+        ref: ${{ inputs.release_tag }}
+        
+    # ─────────────────────────────────────────────────────────────────
+    # QEMU Setup for ARM/PPC cross-compilation
+    # ─────────────────────────────────────────────────────────────────
+    - name: Set up QEMU
+      if: matrix.use_qemu == true
+      uses: docker/setup-qemu-action@v3
+      with:
+        platforms: ${{ matrix.arch }}
+        
+    # ─────────────────────────────────────────────────────────────────
+    # Linux x86_64: Use OmniPkg on HOST, then build in manylinux
+    # ─────────────────────────────────────────────────────────────────
+    - name: Build wheels (Linux x86_64)
+      if: matrix.os_type == 'linux' && matrix.use_qemu != true
+      shell: bash
+      run: |
+        set -e
+        
+        # Install Python 3.11 to bootstrap OmniPkg
+        sudo apt-get update
+        sudo apt-get install -y python3.11 python3.11-venv
+        
+        # Create bootstrap venv and install OmniPkg
+        python3.11 -m venv .bootstrap
+        source .bootstrap/bin/activate
+        pip install --upgrade pip wheel
+        pip install -e .
+        
+        echo "🎯 OmniPkg installed! Version:"
+        omnipkg --version
+        
+        # Use OmniPkg to download Python versions to cache
+        IFS=' ' read -ra PY_VERSIONS <<< "${{ inputs.python_versions }}"
+        for PY_VER in "${PY_VERSIONS[@]}"; do
+          echo "📥 Pre-downloading Python $PY_VER..."
+          omnipkg python install "$PY_VER" || true
+        done
+        
+        # Now build wheels in manylinux container using container's Pythons
+        docker run --rm \
+          -v $(pwd):/workspace \
+          -w /workspace \
+          quay.io/pypa/manylinux2014_x86_64 \
+          /bin/bash -c '
+            set -e
+            
+            # Map requested versions to manylinux Python paths
+            declare -A PY_MAP=(
+              ["3.10"]="/opt/python/cp310-cp310"
+              ["3.11"]="/opt/python/cp311-cp311"
+              ["3.12"]="/opt/python/cp312-cp312"
+              ["3.13"]="/opt/python/cp313-cp313"
+            )
+            
+            mkdir -p dist
+            
+            # Build with each manylinux-certified Python
+            for PY_VER in ${{ inputs.python_versions }}; do
+              PYBIN="${PY_MAP[$PY_VER]}/bin"
+              
+              if [ ! -d "$PYBIN" ]; then
+                echo "⚠️  Python $PY_VER not available in manylinux container"
+                continue
+              fi
+              
+              echo ""
+              echo "════════════════════════════════════════════════════"
+              echo "🐍 Building wheel for Python $PY_VER"
+              echo "════════════════════════════════════════════════════"
+              echo "Using: $PYBIN/python"
+              
+              $PYBIN/python --version
+              
+              # Install build tools in this Python
+              $PYBIN/python -m pip install --upgrade pip build wheel
+              
+              # Build the wheel
+              $PYBIN/python -m build --wheel --outdir dist/
+              
+              echo "✅ Wheel built for Python $PY_VER"
+            done
+            
+            # Repair wheels with auditwheel
+            echo ""
+            echo "🔧 Repairing wheels with auditwheel..."
+            for whl in dist/*.whl; do
+              auditwheel repair "$whl" -w dist/
+              rm "$whl"  # Remove unrepaired wheel
+            done
+            
+            echo ""
+            echo "📦 Final manylinux wheels:"
+            ls -lh dist/*.whl
+            
+            # Fix permissions
+            chmod -R 777 dist/
+          '
+        
+    # ─────────────────────────────────────────────────────────────────
+    # Linux ARM64/PPC: Use manylinux container's Pythons directly
+    # ─────────────────────────────────────────────────────────────────
+    - name: Build wheels (Linux ARM64/PPC with QEMU)
+      if: matrix.os_type == 'linux' && matrix.use_qemu == true
+      shell: bash
+      run: |
+        set -e
+        
+        docker run --rm --platform linux/${{ matrix.arch }} \
+          -v $(pwd):/workspace \
+          -w /workspace \
+          quay.io/pypa/manylinux2014_${{ matrix.arch }} \
+          /bin/bash -c '
+            set -e
+            
+            # Map requested versions to manylinux Python paths
+            declare -A PY_MAP=(
+              ["3.10"]="/opt/python/cp310-cp310"
+              ["3.11"]="/opt/python/cp311-cp311"
+              ["3.12"]="/opt/python/cp312-cp312"
+              ["3.13"]="/opt/python/cp313-cp313"
+            )
+            
+            mkdir -p dist
+            
+            for PY_VER in ${{ inputs.python_versions }}; do
+              PYBIN="${PY_MAP[$PY_VER]}/bin"
+              
+              if [ ! -d "$PYBIN" ]; then
+                echo "⚠️  Python $PY_VER not available in manylinux container"
+                continue
+              fi
+              
+              echo ""
+              echo "════════════════════════════════════════════════════"
+              echo "🐍 Building wheel for Python $PY_VER on ${{ matrix.platform }}"
+              echo "════════════════════════════════════════════════════"
+              
+              $PYBIN/python --version
+              $PYBIN/python -m pip install --upgrade pip build wheel
+              $PYBIN/python -m build --wheel --outdir dist/
+              
+              echo "✅ Wheel built for Python $PY_VER"
+            done
+            
+            # Repair wheels
+            echo ""
+            echo "🔧 Repairing wheels with auditwheel..."
+            for whl in dist/*.whl; do
+              auditwheel repair "$whl" -w dist/
+              rm "$whl"
+            done
+            
+            echo "📦 Final manylinux wheels:"
+            ls -lh dist/*.whl
+            
+            chmod -R 777 dist/
+          '
+        
+    # ─────────────────────────────────────────────────────────────────
+    # macOS: OmniPkg with EXPLICIT deployment targets
+    # ─────────────────────────────────────────────────────────────────
+    - name: Build wheels (macOS)
+      if: matrix.os_type == 'macos'
+      shell: bash
+      env:
+        MACOSX_DEPLOYMENT_TARGET: ${{ matrix.deployment_target }}
+      run: |
+        set -e
+        
+        echo "🎯 Building for macOS with deployment target: $MACOSX_DEPLOYMENT_TARGET"
+        
+        # Install Python 3.11 via Homebrew for bootstrap
+        brew install python@3.11 || true
+        
+        # Create bootstrap venv
+        python3.11 -m venv .bootstrap
+        source .bootstrap/bin/activate
+        pip install --upgrade pip build wheel
+        pip install -e .
+        
+        echo "🎯 OmniPkg installed!"
+        omnipkg --version
+        
+        IFS=' ' read -ra PY_VERSIONS <<< "${{ inputs.python_versions }}"
+        mkdir -p dist
+        
+        for PY_VER in "${PY_VERSIONS[@]}"; do
+          echo ""
+          echo "════════════════════════════════════════════════════"
+          echo "🐍 Building wheel for Python $PY_VER on ${{ matrix.platform }}"
+          echo "════════════════════════════════════════════════════"
+          
+          omnipkg python adopt "$PY_VER" || omnipkg python install "$PY_VER"
+          omnipkg swap python "$PY_VER"
+          
+          python --version
+          
+          # Verify deployment target is set
+          echo "📋 MACOSX_DEPLOYMENT_TARGET=$MACOSX_DEPLOYMENT_TARGET"
+          
+          python -m pip install --upgrade pip build wheel
+          python -m build --wheel --outdir dist/
+          
+          echo "✅ Wheel built for Python $PY_VER"
+        done
+        
+        echo ""
+        echo "📦 All wheels built:"
+        ls -lh dist/*.whl
+        
+        # Verify wheel tags match deployment target
+        echo ""
+        echo "🔍 Verifying wheel tags..."
+        for whl in dist/*.whl; do
+          echo "  $whl"
+          unzip -q -c "$whl" "*.dist-info/WHEEL" | grep "^Tag:" || true
+        done
+        
+    # ─────────────────────────────────────────────────────────────────
+    # Windows: OmniPkg works fine here
+    # ─────────────────────────────────────────────────────────────────
+    - name: Build wheels (Windows)
+      if: matrix.os_type == 'windows'
+      shell: pwsh
+      run: |
+        # Install Python 3.11 via Chocolatey for bootstrap
+        choco install python311 -y
+        refreshenv
+        
+        # Create bootstrap venv
+        python3.11 -m venv .bootstrap
+        .\.bootstrap\Scripts\Activate.ps1
+        pip install --upgrade pip build wheel
+        pip install -e .
+        
+        Write-Host "🎯 OmniPkg installed!"
+        omnipkg --version
+        
+        $pyVersions = "${{ inputs.python_versions }}" -split ' '
+        New-Item -ItemType Directory -Force -Path dist
+        
+        foreach ($pyVer in $pyVersions) {
+          Write-Host ""
+          Write-Host "════════════════════════════════════════════════════"
+          Write-Host "🐍 Building wheel for Python $pyVer on ${{ matrix.platform }}"
+          Write-Host "════════════════════════════════════════════════════"
+          
+          omnipkg python adopt $pyVer
+          if ($LASTEXITCODE -ne 0) {
+            omnipkg python install $pyVer
+          }
+          
+          omnipkg swap python $pyVer
+          
+          python --version
+          
+          python -m pip install --upgrade pip build wheel
+          python -m build --wheel --outdir dist/
+          
+          Write-Host "✅ Wheel built for Python $pyVer"
+        }
+        
+        Write-Host ""
+        Write-Host "📦 All wheels built:"
+        Get-ChildItem dist/*.whl
+        
+    # ─────────────────────────────────────────────────────────────────
+    # Upload wheels as artifacts
+    # ─────────────────────────────────────────────────────────────────
+    - name: Upload wheels as artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: wheels-${{ matrix.platform }}
+        path: dist/*.whl
+        retention-days: 7
+
+  # ═══════════════════════════════════════════════════════════════════
+  # JOB 2: Collect all wheels and optionally upload to PyPI
+  # ═══════════════════════════════════════════════════════════════════
+  publish-wheels:
+    name: "Publish wheels to PyPI"
+    needs: build-wheels
+    runs-on: ubuntu-latest
+    if: inputs.upload_to_pypi == true
+    environment: pypi
+    
+    steps:
+    - name: Download all wheel artifacts
+      uses: actions/download-artifact@v4
+      with:
+        pattern: wheels-*
+        path: all-wheels
+        merge-multiple: true
+        
+    - name: List all wheels
+      run: |
+        echo "📦 All platform-specific wheels built:"
+        ls -lh all-wheels/*.whl
+        echo ""
+        echo "Total wheels: $(ls -1 all-wheels/*.whl | wc -l)"
+        
+    - name: Publish to PyPI
+      uses: pypa/gh-action-pypi-publish@release/v1
+      with:
+        password: ${{ secrets.PYPI_API_TOKEN }}
+        packages-dir: all-wheels/
+        skip-existing: true
+        
+    - name: Success
+      run: |
+        echo "🎉 All platform-specific wheels published to PyPI!"
+        echo "Users can now install with: pip install omnipkg"
+        echo "And get optimized wheels for their platform!"
+
+  # ═══════════════════════════════════════════════════════════════════
+  # JOB 3: Update GitHub Release with wheels
+  # ═══════════════════════════════════════════════════════════════════
+  update-release:
+    name: "Attach wheels to GitHub Release"
+    needs: build-wheels
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Download all wheel artifacts
+      uses: actions/download-artifact@v4
+      with:
+        pattern: wheels-*
+        path: all-wheels
+        merge-multiple: true
+        
+    - name: Upload wheels to GitHub Release
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: ${{ inputs.release_tag }}
+        files: all-wheels/*.whl
+        fail_on_unmatched_files: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        
+    - name: Success
+      run: |
+        echo "✅ Wheels attached to release: ${{ inputs.release_tag }}"
+        echo "Users can download platform-specific wheels directly from GitHub!"
