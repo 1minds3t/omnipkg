@@ -310,7 +310,7 @@ jobs:
               DEBIAN_FRONTEND=noninteractive
           
           RUN apt-get update && apt-get install -y --no-install-recommends \
-              python3 python3-pip python3-venv \
+              python3 python3-pip python3-venv python3-dev \
               curl git build-essential libmagic1 zstd xz-utils \
               && rm -rf /var/lib/apt/lists/* \
               && ln -sf /usr/bin/python3 /usr/bin/python
@@ -322,7 +322,8 @@ jobs:
           COPY --chown=omnipkg:omnipkg pyproject.toml README.md ./
           COPY --chown=omnipkg:omnipkg src/ ./src/
           
-          RUN pip3 install --no-cache-dir --upgrade pip && \
+          # Security fix: Upgrade pip to >=25.3 (CVE-2025-8869)
+          RUN pip3 install --no-cache-dir --upgrade pip>=25.3 && \
               pip3 install --no-cache-dir .
           
           RUN mkdir -p $OMNIPKG_HOME/.omnipkg && \
@@ -422,7 +423,8 @@ jobs:
           COPY --chown=omnipkg:omnipkg pyproject.toml README.md ./
           COPY --chown=omnipkg:omnipkg src/ ./src/
           
-          RUN pip install --no-cache-dir --upgrade pip && \
+          # Security fix: Upgrade pip to >=25.3 (CVE-2025-8869)
+          RUN pip install --no-cache-dir --upgrade pip>=25.3 && \
               pip install --no-cache-dir . && \
               pip install --no-cache-dir ipython pytest black ruff mypy
           
