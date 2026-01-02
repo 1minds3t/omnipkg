@@ -89,6 +89,34 @@ jobs:
         ref: ${{ inputs.release_tag }}
         
     # ─────────────────────────────────────────────────────────────────
+    # Validate Python versions for manylinux
+    # ─────────────────────────────────────────────────────────────────
+    - name: Validate Python versions
+      if: matrix.os_type == 'linux'
+      shell: bash
+      run: |
+        SUPPORTED_VERSIONS="3.10 3.11 3.12 3.13"
+        UNSUPPORTED=""
+        
+        for version in ${{ inputs.python_versions }}; do
+          if [[ ! " $SUPPORTED_VERSIONS " =~ " $version " ]]; then
+            UNSUPPORTED="$UNSUPPORTED $version"
+          fi
+        done
+        
+        if [ ! -z "$UNSUPPORTED" ]; then
+          echo "⚠️  WARNING: The following Python versions are not available in manylinux2014:"
+          echo "   $UNSUPPORTED"
+          echo ""
+          echo "Available versions: $SUPPORTED_VERSIONS"
+          echo "Note: Python 3.7, 3.8, 3.9 reached EOL and are not in modern manylinux images"
+          echo ""
+          echo "These versions will be skipped for Linux builds."
+        else
+          echo "✅ All requested Python versions are supported"
+        fi
+        
+    # ─────────────────────────────────────────────────────────────────
     # Setup Python 3.12 for bootstrapping OmniPkg (all platforms)
     # ─────────────────────────────────────────────────────────────────
     - name: Set up Python 3.12 for bootstrap
@@ -151,8 +179,15 @@ jobs:
             
             # Build with each manylinux-certified Python
             for PY_VER in ${{ inputs.python_versions }}; do
+              # Check if version is mapped
+              if [ -z "${PY_MAP[$PY_VER]}" ]; then
+                echo "❌ Python $PY_VER not mapped - skipping"
+                continue
+              fi
+              
               PYBIN="${PY_MAP[$PY_VER]}/bin"
               
+              # Check if the Python installation exists
               if [ ! -d "$PYBIN" ]; then
                 echo "⚠️  Python $PY_VER not available in manylinux container"
                 continue
@@ -218,8 +253,15 @@ jobs:
             mkdir -p dist
             
             for PY_VER in ${{ inputs.python_versions }}; do
+              # Check if version is mapped
+              if [ -z "${PY_MAP[$PY_VER]}" ]; then
+                echo "❌ Python $PY_VER not mapped - skipping"
+                continue
+              fi
+              
               PYBIN="${PY_MAP[$PY_VER]}/bin"
               
+              # Check if the Python installation exists
               if [ ! -d "$PYBIN" ]; then
                 echo "⚠️  Python $PY_VER not available in manylinux container"
                 continue
