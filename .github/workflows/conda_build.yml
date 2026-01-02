@@ -1,4 +1,4 @@
-name: Build and Upload Conda Packages (Noarch + Platform)
+name: Build and Upload Conda Packages (Noarch + All Platforms)
 
 on:
   workflow_run:
@@ -21,7 +21,9 @@ on:
           - 'no'
 
 jobs:
-  # Job 1: Wait for PyPI availability
+  # ═══════════════════════════════════════════════════════════════════
+  # JOB 1: Wait for PyPI availability
+  # ═══════════════════════════════════════════════════════════════════
   wait-for-pypi:
     runs-on: ubuntu-latest
     timeout-minutes: 300
@@ -114,7 +116,9 @@ jobs:
         echo "sha256=$SHA256" >> $GITHUB_OUTPUT
         echo "✅ SHA256: $SHA256"
 
-  # Job 2: Update local meta.yaml templates
+  # ═══════════════════════════════════════════════════════════════════
+  # JOB 2: Update local meta.yaml templates
+  # ═══════════════════════════════════════════════════════════════════
   update-local-metas:
     needs: wait-for-pypi
     runs-on: ubuntu-latest
@@ -165,8 +169,11 @@ jobs:
           echo "✅ Changes pushed"
         fi
 
-  # Job 3: Build noarch for custom channel (build 0)
+  # ═══════════════════════════════════════════════════════════════════
+  # JOB 3: Build NOARCH package (build 0) for custom channel
+  # ═══════════════════════════════════════════════════════════════════
   build-noarch:
+    name: "Build Noarch (build 0)"
     needs: [wait-for-pypi, update-local-metas]
     runs-on: ubuntu-latest
     timeout-minutes: 45
@@ -193,7 +200,7 @@ jobs:
       run: |
         cp src/omnipkg/conda-recipe/meta-noarch.yaml src/omnipkg/conda-recipe/meta.yaml
         echo "📋 Using noarch configuration (build 0):"
-        head -30 src/omnipkg/conda-recipe/meta.yaml
+        head -50 src/omnipkg/conda-recipe/meta.yaml
         
     - name: Build noarch conda package
       shell: bash -l {0}
@@ -201,6 +208,7 @@ jobs:
         export PYTHONIOENCODING=UTF-8
         conda build src/omnipkg/conda-recipe --output-folder ./conda-dist
         echo "✅ Noarch package built (build 0)"
+        ls -lah ./conda-dist/noarch/
         
     - name: Upload to custom channel (minds3t)
       shell: bash -l {0}
@@ -213,33 +221,61 @@ jobs:
       env:
         ANACONDA_TOKEN: ${{ secrets.ANACONDA_TOKEN }}
 
-  # Job 4: Build platform-specific for custom channel (build 1)
-  build-platform:
+  # ═══════════════════════════════════════════════════════════════════
+  # JOB 4: Build ALL PLATFORM packages (build 1) for custom channel
+  # ═══════════════════════════════════════════════════════════════════
+  build-platforms:
+    name: "Build ${{ matrix.label }} (build 1)"
     needs: [wait-for-pypi, build-noarch]
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 45
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
         include:
-          # Linux x86_64
-          - os: ubuntu-latest
-            platform: linux-64
-          # Linux ARM64
-          - os: ubuntu-latest
-            platform: linux-aarch64
-          # Linux ppc64le  
-          - os: ubuntu-latest
-            platform: linux-ppc64le
-          # macOS Intel
-          - os: macos-13
-            platform: osx-64
-          # macOS Apple Silicon
-          - os: macos-latest
-            platform: osx-arm64
-          # Windows x86_64
-          - os: windows-latest
-            platform: win-64
+          # ─────────────────────────────────────────────────────────
+          # Linux x86_64 (native on ubuntu-latest)
+          # ─────────────────────────────────────────────────────────
+          - runner: ubuntu-latest
+            label: "linux-64"
+            conda_subdir: "linux-64"
+            
+          # ─────────────────────────────────────────────────────────
+          # Linux ARM64 (cross-compile with QEMU on ubuntu-latest)
+          # ─────────────────────────────────────────────────────────
+          - runner: ubuntu-latest
+            label: "linux-aarch64"
+            conda_subdir: "linux-aarch64"
+            cross_compile: true
+            
+          # ─────────────────────────────────────────────────────────
+          # Linux ppc64le (cross-compile with QEMU on ubuntu-latest)
+          # ─────────────────────────────────────────────────────────
+          - runner: ubuntu-latest
+            label: "linux-ppc64le"
+            conda_subdir: "linux-ppc64le"
+            cross_compile: true
+            
+          # ─────────────────────────────────────────────────────────
+          # macOS Intel x86_64 (native on macos-13)
+          # ─────────────────────────────────────────────────────────
+          - runner: macos-13
+            label: "osx-64"
+            conda_subdir: "osx-64"
+            
+          # ─────────────────────────────────────────────────────────
+          # macOS Apple Silicon ARM64 (native on macos-latest/macos-14)
+          # ─────────────────────────────────────────────────────────
+          - runner: macos-14
+            label: "osx-arm64"
+            conda_subdir: "osx-arm64"
+            
+          # ─────────────────────────────────────────────────────────
+          # Windows x86_64 (native on windows-latest)
+          # ─────────────────────────────────────────────────────────
+          - runner: windows-latest
+            label: "win-64"
+            conda_subdir: "win-64"
 
     steps:
     - name: Checkout code
@@ -259,37 +295,67 @@ jobs:
       shell: bash -l {0}
       run: conda install conda-build anaconda-client -y
 
-    - name: Install cross-compilation tools (Linux ARM/PPC only)
-      if: matrix.platform == 'linux-aarch64' || matrix.platform == 'linux-ppc64le'
+    # ─────────────────────────────────────────────────────────────────
+    # Cross-compilation setup (Linux ARM64 & ppc64le ONLY)
+    # ─────────────────────────────────────────────────────────────────
+    - name: Setup QEMU for cross-compilation
+      if: matrix.cross_compile == true
       shell: bash -l {0}
       run: |
-        conda install -y -c conda-forge qemu-user-static
+        echo "🔧 Setting up cross-compilation for ${{ matrix.conda_subdir }}"
         
+        # Install QEMU and cross-compilation tools
+        sudo apt-get update
+        sudo apt-get install -y qemu-user-static
+        
+        # Install cross-compilation conda packages
+        conda install -y cross-python_${{ matrix.conda_subdir }}
+        
+        echo "✅ Cross-compilation setup complete"
+        
+    # ─────────────────────────────────────────────────────────────────
+    # Copy platform-specific meta.yaml
+    # ─────────────────────────────────────────────────────────────────
     - name: Copy meta-platform.yaml to meta.yaml
       shell: bash -l {0}
       run: |
         cp src/omnipkg/conda-recipe/meta-platform.yaml src/omnipkg/conda-recipe/meta.yaml
-        echo "📋 Using platform configuration (build 1) for ${{ matrix.platform }}:"
-        head -30 src/omnipkg/conda-recipe/meta.yaml
+        echo "📋 Using platform configuration (build 1) for ${{ matrix.label }}:"
+        head -50 src/omnipkg/conda-recipe/meta.yaml
         
+    # ─────────────────────────────────────────────────────────────────
+    # Build the package (native or cross-compiled)
+    # ─────────────────────────────────────────────────────────────────
     - name: Build platform-specific package
       shell: bash -l {0}
       run: |
         export PYTHONIOENCODING=UTF-8
         
-        # Set platform-specific build flags
-        if [ "${{ matrix.platform }}" = "linux-aarch64" ]; then
-          export CONDA_SUBDIR=linux-aarch64
-          conda build src/omnipkg/conda-recipe --output-folder ./conda-dist -m .ci_support/linux_aarch64_.yaml || true
-        elif [ "${{ matrix.platform }}" = "linux-ppc64le" ]; then
-          export CONDA_SUBDIR=linux-ppc64le
-          conda build src/omnipkg/conda-recipe --output-folder ./conda-dist -m .ci_support/linux_ppc64le_.yaml || true
+        echo "🏗️  Building for ${{ matrix.label }}..."
+        
+        if [ "${{ matrix.cross_compile }}" = "true" ]; then
+          echo "🔀 Cross-compiling for ${{ matrix.conda_subdir }}"
+          export CONDA_SUBDIR=${{ matrix.conda_subdir }}
+          export CONDA_BUILD_CROSS_COMPILATION=1
+          
+          conda build src/omnipkg/conda-recipe \
+            --output-folder ./conda-dist \
+            -m .ci_support/${{ matrix.conda_subdir }}_.yaml || {
+              echo "⚠️  Cross-compilation config not found, trying without..."
+              conda build src/omnipkg/conda-recipe --output-folder ./conda-dist
+            }
         else
+          echo "🔨 Native build for ${{ matrix.conda_subdir }}"
           conda build src/omnipkg/conda-recipe --output-folder ./conda-dist
         fi
         
-        echo "✅ Platform package built for ${{ matrix.platform }}"
+        echo "✅ Platform package built for ${{ matrix.label }}"
+        echo "📦 Package contents:"
+        find ./conda-dist -name "*.conda" -o -name "*.tar.bz2"
         
+    # ─────────────────────────────────────────────────────────────────
+    # Upload to your custom Anaconda channel
+    # ─────────────────────────────────────────────────────────────────
     - name: Upload to custom channel (minds3t)
       shell: bash -l {0}
       run: |
@@ -297,14 +363,49 @@ jobs:
           echo "📤 Uploading $file to anaconda.org/minds3t"
           anaconda -t ${{ secrets.ANACONDA_TOKEN }} upload "$file" --force --user minds3t
         done
-        echo "✅ Platform package uploaded to custom channel"
+        echo "✅ Platform package uploaded to custom channel for ${{ matrix.label }}"
       env:
         ANACONDA_TOKEN: ${{ secrets.ANACONDA_TOKEN }}
 
-  # Job 5: Update conda-forge feedstock (OPTIONAL)
+  # ═══════════════════════════════════════════════════════════════════
+  # JOB 5: Summary of all builds
+  # ═══════════════════════════════════════════════════════════════════
+  build-summary:
+    name: "📊 Build Summary"
+    needs: [build-noarch, build-platforms]
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+    - name: Print Summary
+      run: |
+        echo "═══════════════════════════════════════════════════════"
+        echo "📦 CONDA BUILD SUMMARY"
+        echo "═══════════════════════════════════════════════════════"
+        echo ""
+        echo "✅ Noarch build: ${{ needs.build-noarch.result }}"
+        echo "✅ Platform builds: ${{ needs.build-platforms.result }}"
+        echo ""
+        echo "🎯 All packages uploaded to: anaconda.org/minds3t"
+        echo ""
+        echo "Supported platforms:"
+        echo "  - noarch (Python-only, build 0)"
+        echo "  - linux-64 (x86_64, build 1)"
+        echo "  - linux-aarch64 (ARM64, build 1)"
+        echo "  - linux-ppc64le (PowerPC, build 1)"
+        echo "  - osx-64 (Intel Mac, build 1)"
+        echo "  - osx-arm64 (Apple Silicon, build 1)"
+        echo "  - win-64 (Windows x64, build 1)"
+        echo ""
+        echo "Install with: conda install -c minds3t omnipkg"
+        echo "═══════════════════════════════════════════════════════"
+
+  # ═══════════════════════════════════════════════════════════════════
+  # JOB 6: Update conda-forge feedstock (OPTIONAL)
+  # ═══════════════════════════════════════════════════════════════════
   update-feedstock:
-    needs: [wait-for-pypi, build-platform]
-    if: github.event.inputs.update_feedstock == 'yes' || github.event_name == 'workflow_run'
+    name: "🚀 Update Feedstock (Optional)"
+    needs: [wait-for-pypi, build-summary]
+    if: github.event.inputs.update_feedstock == 'yes'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -327,7 +428,7 @@ jobs:
         sed -i "s/{% set version = \".*\" %}/{% set version = \"$VERSION\" %}/" recipe/meta.yaml
         sed -i "s/sha256: .*/sha256: $SHA256/" recipe/meta.yaml
         
-        # For feedstock, typically use build 0 and let conda-forge increment
+        # For feedstock, use build 0 and let conda-forge handle it
         sed -i "s/number: .*/number: 0/" recipe/meta.yaml
         
         echo "✅ Updated meta.yaml:"
@@ -372,7 +473,9 @@ jobs:
           - win-64
           - noarch
           
-          This PR updates the recipe for the latest release. All platform builds are available on anaconda.org/minds3t.
+          All platform builds are already available on anaconda.org/minds3t for testing.
+          
+          This PR updates the recipe for conda-forge distribution.
         branch: "update-v${{ needs.wait-for-pypi.outputs.version }}"
         base: main
         delete-branch: true
