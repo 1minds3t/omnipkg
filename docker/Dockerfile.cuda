@@ -1,4 +1,4 @@
-FROM nvidia/cuda:12.3.1-runtime-ubuntu22.04
+FROM nvidia/cuda:12.6.3-runtime-ubuntu24.04
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -19,7 +19,7 @@ COPY --chown=omnipkg:omnipkg pyproject.toml README.md ./
 COPY --chown=omnipkg:omnipkg src/ ./src/
 
 # Security fix: Upgrade pip to >=25.3 (CVE-2025-8869)
-RUN pip3 install --no-cache-dir --upgrade pip>=25.3 && \
+RUN pip3 install --no-cache-dir --upgrade "pip>=25.3" && \
     pip3 install --no-cache-dir .
 
 RUN mkdir -p $OMNIPKG_HOME/.omnipkg && \
