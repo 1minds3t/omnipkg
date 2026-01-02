@@ -1,5 +1,5 @@
-# Use newer Alpine version to fix BusyBox CVE-2025-60876
-FROM python:3.11-alpine3.20 AS builder
+# Use newest Alpine with Python 3.14 to minimize CVEs
+FROM python:3.14-alpine AS builder
 
 # Install build dependencies
 RUN apk add --no-cache gcc musl-dev linux-headers python3-dev
@@ -9,15 +9,15 @@ RUN python3 -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
 # Upgrade pip to fix CVE-2025-8869 (requires pip >=25.3)
-RUN pip install --no-cache-dir --upgrade pip>=25.3
+RUN pip install --no-cache-dir --upgrade "pip>=25.3"
 
 # Copy and install omnipkg
 COPY . /build
 WORKDIR /build
 RUN pip install --no-cache-dir .
 
-# Runtime stage - also use newer Alpine
-FROM python:3.11-alpine3.20
+# Runtime stage - use same base for consistency
+FROM python:3.14-alpine
 
 # Install runtime dependencies and apply security updates
 RUN apk add --no-cache python3 && \
