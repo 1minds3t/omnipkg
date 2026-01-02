@@ -257,16 +257,16 @@ jobs:
             cross_compile: true
             
           # ─────────────────────────────────────────────────────────
-          # macOS Intel x86_64 (native on macos-13)
+          # macOS Intel x86_64 (native on macos-15-intel)
           # ─────────────────────────────────────────────────────────
-          - runner: macos-13
+          - runner: macos-15-intel
             label: "osx-64"
             conda_subdir: "osx-64"
             
           # ─────────────────────────────────────────────────────────
-          # macOS Apple Silicon ARM64 (native on macos-latest/macos-14)
+          # macOS Apple Silicon ARM64 (native on macos-latest/macos-15)
           # ─────────────────────────────────────────────────────────
-          - runner: macos-14
+          - runner: macos-latest
             label: "osx-arm64"
             conda_subdir: "osx-arm64"
             
