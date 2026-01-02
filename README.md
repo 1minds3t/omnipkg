@@ -7,7 +7,7 @@
 <p align="center">
   <p align="center">
     <p align="center">
-  <strong><strong>One environment. Run infinite Python packages and interpreters concurrently with zero conflicts.</strong>
+  <strong><strong>Run infinite Python packages and interpreters concurrently in one environment with zero conflicts.</strong>
     
 <p align="center">
   <!-- Core Project Info -->
