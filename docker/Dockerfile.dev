@@ -1,26 +1,25 @@
-FROM python:3.12-bookworm
+FROM python:3.14-alpine
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     OMNIPKG_HOME=/home/omnipkg
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN apk add --no-cache \
     vim nano git curl wget htop tmux \
-    build-essential gcc g++ make cmake ninja-build \
-    zstd xz-utils \
-    libmagic1 libssl-dev libffi-dev \
-    shellcheck ripgrep fd-find \
-    && rm -rf /var/lib/apt/lists/*
+    build-base gcc g++ make cmake ninja \
+    zstd xz \
+    libmagic openssl-dev libffi-dev \
+    shellcheck ripgrep fd
 
-RUN groupadd --system --gid 1000 omnipkg && \
-    useradd --system --uid 1000 --gid omnipkg --create-home --home-dir $OMNIPKG_HOME omnipkg
+RUN addgroup -g 1000 -S omnipkg && \
+    adduser -u 1000 -S omnipkg -G omnipkg -h $OMNIPKG_HOME
 
 WORKDIR $OMNIPKG_HOME
 COPY --chown=omnipkg:omnipkg pyproject.toml README.md ./
 COPY --chown=omnipkg:omnipkg src/ ./src/
 
 # Security fix: Upgrade pip to >=25.3 (CVE-2025-8869)
-RUN pip install --no-cache-dir --upgrade pip>=25.3 && \
+RUN pip install --no-cache-dir --upgrade "pip>=25.3" && \
     pip install --no-cache-dir . && \
     pip install --no-cache-dir ipython pytest black ruff mypy
 
@@ -32,4 +31,4 @@ RUN chmod +x docker-entrypoint.sh
 
 USER omnipkg
 ENTRYPOINT ["./docker-entrypoint.sh"]
-CMD ["/bin/bash"]
+CMD ["/bin/sh"]
