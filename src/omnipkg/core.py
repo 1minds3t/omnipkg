@@ -8822,11 +8822,20 @@ class omnipkg:
         versions.extend(bubble_versions)
         return sorted(versions, key=lambda v: v)
 
+    def _save_last_known_good_snapshot(self):
+        """Saves the current environment state to Redis."""
+        safe_print(_("📸 Saving snapshot of the current environment as 'last known good'..."))
+        try:
+            current_state = self.get_installed_packages(live=True)
+            snapshot_key = f"{self.redis_key_prefix}snapshot:last_known_good"
+            self.cache_client.set(snapshot_key, json.dumps(current_state))
+            safe_print(_("   ✅ Snapshot saved."))
+        except Exception as e:
+            safe_print(_("   ⚠️ Could not save environment snapshot: {}").format(e))
+
     def _show_version_details(self, data: Dict):
         """
-        (FIXED) Displays detailed information from a pre-loaded dictionary of package
-        instance data, hiding the 'Owner' field if it's None and providing an
-        interactive prompt to display raw data.
+        (FIXED) Displays detailed information from a pre-loaded dictionary...
         """
         package_name = data.get("Name")
         version = data.get("Version")
@@ -8839,11 +8848,11 @@ class omnipkg:
                 )
             )
             return
-        # ✅ Safe: Check if attribute exists
-        if hasattr(self, '_cache_connection_status') and \
-        self._cache_connection_status in ["redis_ok", "sqlite_ok"]:
-            return True
-        is_using_redis = self._cache_connection_status == "redis_ok"
+
+        # --- CORRECT FIX HERE ---
+        connection_status = getattr(self, '_cache_connection_status', None)
+        is_using_redis = (connection_status == "redis_ok")
+        # ------------------------
 
         if is_using_redis:
             safe_print(_("The data is from Redis key: {}").format(cache_key))
@@ -8874,10 +8883,13 @@ class omnipkg:
                 if field_name == "owner_package" and (not value or str(value).lower() == "none"):
                     continue  # Skip printing this line entirely
 
+                # FIXED: Changed from 'if' to 'elif' to maintain proper chain
                 if field_name == "License" and value and len(value) > 100:
                     value = value.split("\n")[0] + "... (truncated)"
+                    safe_print(_("{}: {}").format(display_name.ljust(18), value))
                 elif field_name == "Description" and value and len(value) > 200:
                     value = value[:200].replace("\n", " ") + "... (truncated)"
+                    safe_print(_("{}: {}").format(display_name.ljust(18), value))
                 elif field_name in ["dependencies", "Requires-Dist"] and value:
                     try:
                         dep_list = json.loads(value)
@@ -9002,17 +9014,6 @@ class omnipkg:
 
         except (KeyboardInterrupt, EOFError):
             safe_print(_("\n   Skipping raw data view."))
-
-    def _save_last_known_good_snapshot(self):
-        """Saves the current environment state to Redis."""
-        safe_print(_("📸 Saving snapshot of the current environment as 'last known good'..."))
-        try:
-            current_state = self.get_installed_packages(live=True)
-            snapshot_key = f"{self.redis_key_prefix}snapshot:last_known_good"
-            self.cache_client.set(snapshot_key, json.dumps(current_state))
-            safe_print(_("   ✅ Snapshot saved."))
-        except Exception as e:
-            safe_print(_("   ⚠️ Could not save environment snapshot: {}").format(e))
 
     def _handle_quantum_healing(
         self,
