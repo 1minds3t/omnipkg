@@ -1,19 +1,29 @@
-FROM python:3.11-alpine AS builder
+# Use newer Alpine version to fix BusyBox CVE-2025-60876
+FROM python:3.11-alpine3.20 AS builder
 
+# Install build dependencies
 RUN apk add --no-cache gcc musl-dev linux-headers python3-dev
 
+# Create venv
 RUN python3 -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
+# Upgrade pip to fix CVE-2025-8869 (requires pip >=25.3)
+RUN pip install --no-cache-dir --upgrade pip>=25.3
+
+# Copy and install omnipkg
 COPY . /build
 WORKDIR /build
-RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir .
+RUN pip install --no-cache-dir .
 
-FROM python:3.11-alpine
+# Runtime stage - also use newer Alpine
+FROM python:3.11-alpine3.20
 
-RUN apk add --no-cache python3
+# Install runtime dependencies and apply security updates
+RUN apk add --no-cache python3 && \
+    apk upgrade --no-cache
 
+# Copy venv from builder
 COPY --from=builder /opt/venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
@@ -23,6 +33,7 @@ LABEL org.opencontainers.image.source="https://github.com/1minds3t/omnipkg"
 LABEL org.opencontainers.image.description="OmniPkg - Distributed Python runtime hypervisor (Alpine)"
 LABEL org.opencontainers.image.licenses="AGPL-3.0-only"
 
+# Verify installation
 RUN omnipkg --version
 
 CMD ["omnipkg", "--help"]
