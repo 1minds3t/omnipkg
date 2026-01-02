@@ -13,60 +13,9 @@ on:
 
 jobs:
   # ═══════════════════════════════════════════════════════════════════
-  # WAIT FOR PYPI (Optional - if you want to base images on PyPI package)
+  # BUILD DEBIAN BASE (Most compatible)
   # ═══════════════════════════════════════════════════════════════════
-  wait-for-pypi:
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
-    outputs:
-      version: ${{ steps.get-version.outputs.version }}
-    steps:
-    - name: Get version
-      id: get-version
-      run: |
-        if [ "${{ github.event_name }}" == "release" ]; then
-          VERSION="${{ github.event.release.tag_name }}"
-          VERSION="${VERSION#v}"
-        elif [ -n "${{ inputs.target_ref }}" ]; then
-          VERSION="${{ inputs.target_ref }}"
-          VERSION="${VERSION#v}"
-        else
-          VERSION=$(echo "${{ github.ref }}" | sed 's/refs\/tags\/v//')
-        fi
-        echo "version=$VERSION" >> $GITHUB_OUTPUT
-        echo "🔍 Version: $VERSION"
-        
-    - name: Wait for PyPI availability
-      run: |
-        VERSION="${{ steps.get-version.outputs.version }}"
-        MAX_ATTEMPTS=120
-        SLEEP_TIME=30
-        
-        echo "⏳ Waiting for omnipkg $VERSION on PyPI..."
-        
-        for i in $(seq 1 $MAX_ATTEMPTS); do
-          echo "🔄 Attempt $i/$MAX_ATTEMPTS..."
-          
-          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
-            "https://pypi.org/pypi/omnipkg/$VERSION/json")
-          
-          if [ "$HTTP_CODE" = "200" ]; then
-            echo "✅ Package found on PyPI!"
-            sleep 10
-            break
-          fi
-          
-          if [ $i -eq $MAX_ATTEMPTS ]; then
-            echo "⚠️ Package not found after 1 hour, proceeding anyway..."
-            exit 0
-          fi
-          
-          sleep $SLEEP_TIME
-        done
-  # ═══════════════════════════════════════════════════════════════════
-  # BUILD MULTI-PLATFORM IMAGES (DEBIAN BASE)
-  # ═══════════════════════════════════════════════════════════════════
-  build-debian-images:
+  build-debian:
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -89,7 +38,7 @@ jobs:
           username: 1minds3t
           password: ${{ secrets.DOCKERHUB_TOKEN }}
       
-      - name: Login to GitHub Container Registry
+      - name: Login to GHCR
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
@@ -102,17 +51,14 @@ jobs:
         with:
           images: |
             1minds3t/omnipkg
-            ghcr.io/${{ github.repository_owner }}/omnipkg
+            ghcr.io/1minds3t/omnipkg
           tags: |
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
-            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=latest
             type=raw,value=debian
-            type=raw,value=debian-{{version}}
-          flavor: |
-            latest=auto
       
-      - name: Build and push Debian-based multi-platform
+      - name: Build and push
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -125,9 +71,65 @@ jobs:
           cache-to: type=gha,mode=max
 
   # ═══════════════════════════════════════════════════════════════════
-  # BUILD UBUNTU IMAGES
+  # BUILD ALPINE (Smallest - ~50MB)
   # ═══════════════════════════════════════════════════════════════════
-  build-ubuntu-images:
+  build-alpine:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.target_ref || github.ref }}
+      
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: 1minds3t
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: |
+            1minds3t/omnipkg
+            ghcr.io/1minds3t/omnipkg
+          tags: |
+            type=raw,value=alpine
+            type=raw,value=slim
+      
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./docker/Dockerfile.alpine
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=alpine
+          cache-to: type=gha,mode=max,scope=alpine
+
+  # ═══════════════════════════════════════════════════════════════════
+  # BUILD UBUNTU VARIANTS (20.04, 22.04, 24.04)
+  # ═══════════════════════════════════════════════════════════════════
+  build-ubuntu:
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -153,7 +155,7 @@ jobs:
           username: 1minds3t
           password: ${{ secrets.DOCKERHUB_TOKEN }}
       
-      - name: Login to GitHub Container Registry
+      - name: Login to GHCR
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
@@ -166,12 +168,11 @@ jobs:
         with:
           images: |
             1minds3t/omnipkg
-            ghcr.io/${{ github.repository_owner }}/omnipkg
+            ghcr.io/1minds3t/omnipkg
           tags: |
             type=raw,value=ubuntu-${{ matrix.ubuntu_version }}
-            type=raw,value=ubuntu-${{ matrix.ubuntu_version }}-{{version}}
       
-      - name: Build and push Ubuntu ${{ matrix.ubuntu_version }}
+      - name: Build and push
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -186,9 +187,9 @@ jobs:
           cache-to: type=gha,mode=max,scope=ubuntu-${{ matrix.ubuntu_version }}
 
   # ═══════════════════════════════════════════════════════════════════
-  # BUILD ALPINE (SMALLEST IMAGE)
+  # BUILD FEDORA/RHEL
   # ═══════════════════════════════════════════════════════════════════
-  build-alpine-images:
+  build-fedora:
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -211,7 +212,7 @@ jobs:
           username: 1minds3t
           password: ${{ secrets.DOCKERHUB_TOKEN }}
       
-      - name: Login to GitHub Container Registry
+      - name: Login to GHCR
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
@@ -224,69 +225,11 @@ jobs:
         with:
           images: |
             1minds3t/omnipkg
-            ghcr.io/${{ github.repository_owner }}/omnipkg
-          tags: |
-            type=raw,value=alpine
-            type=raw,value=alpine-{{version}}
-            type=raw,value=slim
-      
-      - name: Build and push Alpine (smallest)
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ./docker/Dockerfile.alpine
-          platforms: linux/amd64,linux/arm64
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha,scope=alpine
-          cache-to: type=gha,mode=max,scope=alpine
-
-  # ═══════════════════════════════════════════════════════════════════
-  # BUILD FEDORA/RHEL IMAGES
-  # ═══════════════════════════════════════════════════════════════════
-  build-fedora-images:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ inputs.target_ref || github.ref }}
-      
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-      
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-      
-      - name: Login to Docker Hub
-        uses: docker/login-action@v3
-        with:
-          username: 1minds3t
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-      
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      
-      - name: Extract metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: |
-            1minds3t/omnipkg
-            ghcr.io/${{ github.repository_owner }}/omnipkg
+            ghcr.io/1minds3t/omnipkg
           tags: |
             type=raw,value=fedora
-            type=raw,value=fedora-{{version}}
       
-      - name: Build and push Fedora
+      - name: Build and push
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -299,56 +242,195 @@ jobs:
           cache-to: type=gha,mode=max,scope=fedora
 
   # ═══════════════════════════════════════════════════════════════════
-  # UPDATE README WITH DOCKER TAGS
+  # BUILD CUDA IMAGE (NVIDIA GPU Support)
   # ═══════════════════════════════════════════════════════════════════
-  update-readme-docker:
-    needs: [build-debian-images, build-ubuntu-images, build-alpine-images, build-fedora-images]
+  build-cuda:
     runs-on: ubuntu-latest
-    if: success()
+    permissions:
+      contents: read
+      packages: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
-          
-      - name: Update Docker section in README
+          ref: ${{ inputs.target_ref || github.ref }}
+      
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: 1minds3t
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Create CUDA Dockerfile
         run: |
-          cat >> README.md << 'EOF'
+          mkdir -p docker
+          cat > docker/Dockerfile.cuda << 'EOF'
+          FROM nvidia/cuda:12.3.1-runtime-ubuntu22.04
           
-          ## 🐳 Docker Images
+          ENV PYTHONDONTWRITEBYTECODE=1 \
+              PYTHONUNBUFFERED=1 \
+              OMNIPKG_HOME=/home/omnipkg \
+              DEBIAN_FRONTEND=noninteractive
           
-          Multi-platform images available on Docker Hub and GHCR:
+          RUN apt-get update && apt-get install -y --no-install-recommends \
+              python3 python3-pip python3-venv \
+              curl git build-essential libmagic1 zstd xz-utils \
+              && rm -rf /var/lib/apt/lists/* \
+              && ln -sf /usr/bin/python3 /usr/bin/python
           
-          ```bash
-          # Latest (Debian-based)
-          docker pull 1minds3t/omnipkg:latest
-          docker pull ghcr.io/1minds3t/omnipkg:latest
+          RUN groupadd --system --gid 1000 omnipkg && \
+              useradd --system --uid 1000 --gid omnipkg --create-home --home-dir $OMNIPKG_HOME omnipkg
           
-          # Ubuntu variants
-          docker pull 1minds3t/omnipkg:ubuntu-24.04
-          docker pull 1minds3t/omnipkg:ubuntu-22.04
-          docker pull 1minds3t/omnipkg:ubuntu-20.04
+          WORKDIR $OMNIPKG_HOME
+          COPY --chown=omnipkg:omnipkg pyproject.toml README.md ./
+          COPY --chown=omnipkg:omnipkg src/ ./src/
           
-          # Alpine (smallest - ~50MB)
-          docker pull 1minds3t/omnipkg:alpine
-          docker pull 1minds3t/omnipkg:slim
+          RUN pip3 install --no-cache-dir --upgrade pip && \
+              pip3 install --no-cache-dir .
           
-          # Fedora/RHEL
-          docker pull 1minds3t/omnipkg:fedora
+          RUN mkdir -p $OMNIPKG_HOME/.omnipkg && \
+              chown -R omnipkg:omnipkg $OMNIPKG_HOME
           
-          # Specific version
-          docker pull 1minds3t/omnipkg:2.0.7
-          ```
+          COPY --chown=omnipkg:omnipkg docker/docker-entrypoint.sh ./
+          RUN chmod +x docker-entrypoint.sh
           
-          All images support: **linux/amd64** and **linux/arm64**
+          USER omnipkg
+          ENTRYPOINT ["./docker-entrypoint.sh"]
+          CMD ["/bin/bash"]
           EOF
-          
-      - name: Commit
+      
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: |
+            1minds3t/omnipkg
+            ghcr.io/1minds3t/omnipkg
+          tags: |
+            type=raw,value=cuda
+            type=raw,value=gpu
+      
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./docker/Dockerfile.cuda
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=cuda
+          cache-to: type=gha,mode=max,scope=cuda
+
+  # ═══════════════════════════════════════════════════════════════════
+  # BUILD DEV IMAGE (with extra dev tools)
+  # ═══════════════════════════════════════════════════════════════════
+  build-dev:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.target_ref || github.ref }}
+      
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: 1minds3t
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Create Dev Dockerfile
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          if ! git diff --quiet README.md; then
-            git add README.md
-            git commit -m "📦 Update Docker images documentation [skip ci]"
-            git push || echo "⚠️ Push failed"
-          fi
+          mkdir -p docker
+          cat > docker/Dockerfile.dev << 'EOF'
+          FROM python:3.12-bookworm
+          
+          ENV PYTHONDONTWRITEBYTECODE=1 \
+              PYTHONUNBUFFERED=1 \
+              OMNIPKG_HOME=/home/omnipkg
+          
+          RUN apt-get update && apt-get install -y --no-install-recommends \
+              # Dev tools
+              vim nano git curl wget htop tmux \
+              # Build tools
+              build-essential gcc g++ make cmake ninja-build \
+              # Compression
+              zstd xz-utils \
+              # Libraries
+              libmagic1 libssl-dev libffi-dev \
+              # Language tools
+              shellcheck ripgrep fd-find \
+              && rm -rf /var/lib/apt/lists/*
+          
+          RUN groupadd --system --gid 1000 omnipkg && \
+              useradd --system --uid 1000 --gid omnipkg --create-home --home-dir $OMNIPKG_HOME omnipkg
+          
+          WORKDIR $OMNIPKG_HOME
+          COPY --chown=omnipkg:omnipkg pyproject.toml README.md ./
+          COPY --chown=omnipkg:omnipkg src/ ./src/
+          
+          RUN pip install --no-cache-dir --upgrade pip && \
+              pip install --no-cache-dir . && \
+              pip install --no-cache-dir ipython pytest black ruff mypy
+          
+          RUN mkdir -p $OMNIPKG_HOME/.omnipkg && \
+              chown -R omnipkg:omnipkg $OMNIPKG_HOME
+          
+          COPY --chown=omnipkg:omnipkg docker/docker-entrypoint.sh ./
+          RUN chmod +x docker-entrypoint.sh
+          
+          USER omnipkg
+          ENTRYPOINT ["./docker-entrypoint.sh"]
+          CMD ["/bin/bash"]
+          EOF
+      
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: |
+            1minds3t/omnipkg
+            ghcr.io/1minds3t/omnipkg
+          tags: |
+            type=raw,value=dev
+      
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./docker/Dockerfile.dev
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=dev
+          cache-to: type=gha,mode=max,scope=dev
