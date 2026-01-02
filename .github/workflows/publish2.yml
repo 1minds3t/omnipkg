@@ -62,7 +62,7 @@ jobs:
           # ─────────────────────────────────────────────────────────
           # macOS Intel x86_64
           # ─────────────────────────────────────────────────────────
-          - runner: macos-13  # Intel runner
+          - runner: macos-15-intel  # Intel runner (macOS 15)
             platform: macosx_10_13_x86_64
             os_type: macos
             deployment_target: "10.13"
