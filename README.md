@@ -31,7 +31,7 @@
 </a>
   <a href="https://anaconda.org/conda-forge/omnipkg">
 <a href="https://clickpy.clickhouse.com/dashboard/omnipkg">
-  <img src="https://img.shields.io/badge/global_reach-75+_countries-228B22?logo=globe" alt="Global Reach Badge">
+  <img src="https://img.shields.io/badge/global_reach-80+_countries-228B22?logo=globe" alt="Global Reach Badge">
   <p align="center">
 </a>
   <a href="https://pypi.org/project/omnipkg/">
