@@ -1,9 +1,9 @@
 {
   "arm32": {
     "verified": true,
-    "version": "2.0.7",
+    "version": "2.0.8.1",
     "python_versions": "",
-    "install_command": "pip3 install omnipkg==2.0.7",
+    "install_command": "pip3 install omnipkg==2.0.8.1",
     "platforms": ["Raspberry Pi", "Raspbian Bullseye", "Raspbian Bookworm", "Raspbian Trixie"]
   }
 }
