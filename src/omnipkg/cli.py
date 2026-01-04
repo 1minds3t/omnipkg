@@ -325,7 +325,7 @@ def get_version():
 VERSION = get_version()
 
 
-def stress_test_command():
+def stress_test_command(force=False):
     """Handle stress test command - BLOCK if not Python 3.11."""
     actual_version = get_actual_python_version()
     if actual_version != (3, 11):
@@ -361,10 +361,15 @@ def stress_test_command():
     safe_print()
     safe_print(_("✨ omnipkg does this LIVE, in the same Python process!"))
     safe_print(_("📊 Expected downloads: ~500MB | Duration: 30 seconds - 3 minutes"))
+    if force:
+        safe_print(_("⚡ Non-interactive mode detected: Starting immediately..."))
+        return True
+
     try:
         response = input(_("🚀 Ready to witness the impossible? (y/n): ")).lower().strip()
     except EOFError:
         response = "n"
+    
     if response == "y":
         return True
     else:
@@ -661,8 +666,18 @@ def create_parser():
         "-y", "--yes", action="store_true", help="Do not ask for confirmation."
     )
     subparsers.add_parser("status", help=_("Environment health dashboard"))
-    subparsers.add_parser("demo", help=_("Interactive demo for version switching"))
-    subparsers.add_parser("stress-test", help=_("Ultimate demonstration with heavy packages"))
+    demo_parser = subparsers.add_parser("demo", help=_("Interactive demo for version switching"))
+    demo_parser.add_argument(
+        "demo_id", 
+        nargs="?", 
+        help=_("Run a specific demo by number (e.g., 'omnipkg demo 1') to skip interactive menu")
+    )
+    stress_parser = subparsers.add_parser("stress-test", help=_("Ultimate demonstration with heavy packages"))
+    stress_parser.add_argument(
+        "--yes", "-y", 
+        action="store_true", 
+        help=_("Skip confirmation prompt")
+    )
     reset_parser = subparsers.add_parser("reset", help=_("Rebuild the omnipkg knowledge base"))
     reset_parser.add_argument(
         "--yes", "-y", dest="force", action="store_true", help=_("Skip confirmation")

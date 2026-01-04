@@ -20,18 +20,98 @@ except ImportError:
 try:
     from omnipkg.utils.flask_port_finder import find_free_port
 except ImportError:
+    # Fallback if your internal util isn't available in this context
     def find_free_port(start_port=5000, **kwargs): return start_port
 
 ALLOWED_ORIGIN = "https://omnipkg.1minds3t.workers.dev"
 PID_FILE = Path.home() / ".omnipkg" / "web_bridge.pid"
 
-# --- FLASK APP LOGIC (Same as before) ---
+# --- SECURITY: COMMAND VALIDATION ---
+
+# 1. ALLOWED: Management, Swapping, Viewing, Syncing
+WEB_ALLOWED_COMMANDS = {
+    # Info & Status
+    'list', 'info', 'status', 'doctor', 'config', 'check',
+    
+    # Environment Management
+    'swap', 'python', 'revert', 'rebuild-kb',
+    
+    # Sync & Repair (Safe metadata operations)
+    'reset',         # Allowed: Rebuilds DB/Cache (Non-destructive to packages)
+    'heal',          # Allowed: Fixes broken environments
+    
+    # Installation
+    'install', 'install-with-deps',
+    
+    # Demos
+    'demo', 'stress-test'
+}
+
+# 2. BLOCKED: Destructive / Arbitrary Execution / Resource Heavy
+WEB_BLOCKED_COMMANDS = {
+    'run',           # CRITICAL: Arbitrary script execution (RCE)
+    'shell',         # CRITICAL: Shell access
+    'exec',          # CRITICAL: Command execution
+    'uninstall',     # Safety: Prevent accidental deletion of packages
+    'prune',         # Safety: Bulk deletion of environments
+    'upgrade',       # Safety: Can break Omnipkg itself or the environment
+    'reset-config'   # Safety: Wipes user preferences/config file
+}
+
+def validate_command(cmd_str):
+    """
+    Validates command against the security whitelist.
+    Returns: (is_valid, error_message_or_cleaned_cmd)
+    """
+    if not cmd_str or not cmd_str.strip():
+        return False, "Empty command."
+    
+    # Split safely
+    parts = shlex.split(cmd_str)
+    
+    # Filter out flags (starting with -) to find the real command keyword
+    clean_parts = [p for p in parts if not p.startswith('-')]
+    
+    if not clean_parts:
+        return False, "No command found."
+
+    primary_command = clean_parts[0].lower()
+
+    # --- SPECIAL HANDLING: DAEMON ---
+    # Allow monitoring, block control (start/stop)
+    if primary_command == 'daemon':
+        if len(clean_parts) < 2:
+            return False, "⚠️ Please specify a daemon command (status, monitor, logs)."
+        
+        sub_command = clean_parts[1].lower()
+        
+        # Safe read-only daemon commands
+        if sub_command in ['status', 'monitor', 'logs']:
+            return True, ""
+            
+        # Dangerous control commands
+        if sub_command in ['start', 'stop', 'restart']:
+            return False, f"⛔ Security: Daemon lifecycle '{sub_command}' is blocked via Web Bridge.\nPlease manage the daemon process directly from your terminal."
+        
+        return False, f"⚠️ Unknown daemon subcommand '{sub_command}'."
+
+    # --- STANDARD HANDLING ---
+    if primary_command in WEB_BLOCKED_COMMANDS:
+        return False, f"⛔ Security: The command '{primary_command}' is disabled in the Web Interface.\nPlease run this directly in your terminal."
+        
+    if primary_command in WEB_ALLOWED_COMMANDS:
+        return True, ""
+
+    return False, f"⚠️ Unknown command '{primary_command}'."
+
+# --- FLASK APP LOGIC ---
 
 def build_cors_preflight_response():
     response = make_response()
     response.headers.add("Access-Control-Allow-Origin", ALLOWED_ORIGIN)
     response.headers.add("Access-Control-Allow-Headers", "Content-Type, Private-Network-Access-Request")
     response.headers.add("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+    # CRITICAL for Chrome 130+ Localhost access
     response.headers.add("Access-Control-Allow-Private-Network", "true")
     return response
 
@@ -41,12 +121,18 @@ def corsify_actual_response(response):
     return response
 
 def execute_omnipkg_command(cmd_str):
+    # 1. Validate Security First
+    is_valid, msg = validate_command(cmd_str)
+    if not is_valid:
+        return msg
+
+    # 2. Execute if valid
     try:
         args = shlex.split(cmd_str)
-        # Security: Allow only specific commands if needed, or leave open for dev
+        # Use sys.executable to ensure we use the same python env
         full_command = [sys.executable, "-m", "omnipkg"] + args
         
-        # Windows: specific flags to prevent popping up new CMD windows
+        # Windows: prevent popping up new CMD windows
         startupinfo = None
         if os.name == 'nt':
             startupinfo = subprocess.STARTUPINFO()
@@ -56,13 +142,16 @@ def execute_omnipkg_command(cmd_str):
             full_command,
             capture_output=True,
             text=True,
-            timeout=60,
+            timeout=120, # Increased timeout for heavy ops like 'reset'
             env=os.environ.copy(),
             startupinfo=startupinfo
         )
         if result.returncode == 0:
-            return result.stdout
+            return result.stdout or "(Command completed successfully)"
+            
         return f"Error ({result.returncode}):\n{result.stderr}\n{result.stdout}"
+    except subprocess.TimeoutExpired:
+        return "⏱️ Command timed out (120s limit for web requests)."
     except Exception as e:
         return f"System Error: {str(e)}"
 
@@ -81,7 +170,9 @@ def create_app(port):
         if request.method == "OPTIONS": return build_cors_preflight_response()
         data = request.json
         cmd = data.get('command', '')
+        
         print(f"⚡ Web Request: omnipkg {cmd}")
+        
         output = execute_omnipkg_command(cmd)
         return corsify_actual_response(jsonify({"output": output}))
     return app
@@ -130,9 +221,6 @@ def start_daemon():
 
     save_pid(process.pid)
     print(f"🚀 OmniPkg Web Bridge started in background (PID: {process.pid})")
-    
-    # We can't know the port immediately in daemon mode easily without a complex handshake, 
-    # so we assume it finds one shortly.
     print(f"🌍 Dashboard: {ALLOWED_ORIGIN}")
     webbrowser.open(ALLOWED_ORIGIN)
 
@@ -156,17 +244,19 @@ def stop_daemon():
 def run_server_blocking():
     """The actual server logic (what runs inside the daemon)."""
     if not HAS_WEB_DEPS:
-        return # Can't log, we are detached
+        return 
 
     try:
-        port = find_free_port(start_port=5000, max_attempts=50, reserve=True)
+        # Try to find a port, fallback to 5000 if utility fails
+        try:
+            port = find_free_port(start_port=5000, max_attempts=50, reserve=True)
+        except:
+            port = 5000
+            
         app = create_app(port)
-        
-        # Optional: Write port to file if you want the CLI to read it later
-        
         app.run(port=port, threaded=True)
     except Exception as e:
-        pass # Logging to file recommended here for debugging daemons
+        pass 
 
 if __name__ == "__main__":
     if "--server-mode" in sys.argv:

@@ -1,0 +1,7 @@
+name = "omnipkg-controller"
+main = "worker.js"
+compatibility_date = "2024-01-01"
+
+# This ensures it doesn't try to upload your whole python repo
+[site]
+bucket = "./public"

@@ -1,5 +1,6 @@
 {% set name = "omnipkg" %}
-{% set version = "2.0.7" %}
+{% set version = "2.0.9" %}
+{% set python_min = "3.10" %}
 
 package:
   name: {{ name|lower }}
@@ -7,12 +8,11 @@ package:
 
 source:
   url: https://pypi.org/packages/source/{{ name[0] }}/{{ name }}/{{ name }}-{{ version }}.tar.gz
-  sha256: f07d3bd32e786e5de143b6e07558b1fe5ee1ab08ac701af3f98b8eb05bd8490b
+  sha256: UPDATE_THIS_HASH_FOR_2.0.9
 
 build:
-  number: 0
+  number: 0  # ← Noarch is now the fallback (lower priority)
   noarch: python
-  # Noarch doesn't need the complex [unix] vs [win] script logic
   script: python -m pip install . --no-deps --no-build-isolation -vv
   entry_points:
     - omnipkg = omnipkg.cli:main
@@ -22,32 +22,31 @@ build:
 
 requirements:
   host:
-    - python >=3.10  # Aligned with your platform builds
+    - python {{ python_min }}
     - pip
     - setuptools >=61.0
   run:
-    # --- SYNCED WITH PLATFORM BUILD ---
-    - python >=3.10
+    - python >={{ python_min }}
     - requests >=2.20
     - psutil >=5.9.0
     - typer >=0.4.0
     - rich >=10.0.0
     - filelock >=3.20.1
     - packaging >=23.0
-    - tomli            # [py<311]
+    - tomli
     - authlib >=1.6.5
     - aiohttp >=3.13.1
-    - safety >=3.7.0   # [py<314]
+    - safety >=3.7.0
     - marshmallow >=4.1.2
-    - pip-audit >=2.6.0 # [py>=314]
-    # Note: uv is binary, so noarch might warn about arch-specific deps, 
-    # but the solver handles it.
-    - uv >=0.9.6       # [not ppc64le] 
+    - pip-audit >=2.6.0
     - urllib3 >=1.26.19
     - tqdm >=4.67.1
     - typing-extensions >=4.0.0
+    # NO uv - optional performance enhancement, installed separately
 
 test:
+  requires:
+    - python {{ python_min }}
   imports:
     - omnipkg
   commands:
@@ -75,6 +74,10 @@ about:
     - Zero-copy multi-framework orchestration
     - Smart dependency resolution with snapshot restoration
     - Live daemon monitoring dashboard
+    
+    Performance Note:
+    - Install 'uv' separately for 6x faster script execution with '8pkg run'
+    - Core functionality works with standard pip (already included)
   doc_url: https://omnipkg.readthedocs.io/en/latest/
   dev_url: https://github.com/1minds3t/omnipkg
 
