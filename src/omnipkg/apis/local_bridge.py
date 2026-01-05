@@ -259,39 +259,34 @@ class WebBridgeManager:
             return 1
     
     def stop(self):
-        """Stop the web bridge."""
+        """Stop the web bridge safely across platforms."""
         if not self.is_running():
             print("⚠️  Web bridge is not running")
             return 0
         
-        pid = int(self.pid_file.read_text())
-        
         try:
+            pid = int(self.pid_file.read_text())
             print(f"🛑 Stopping web bridge (PID: {pid})...")
-            os.kill(pid, signal.SIGTERM)
             
-            # Wait for graceful shutdown
-            for _ in range(10):
-                if not self.is_running():
-                    break
-                time.sleep(0.5)
-            
-            # Force kill if needed
-            if self.is_running():
-                os.kill(pid, signal.SIGKILL)
-            
-            if self.pid_file.exists():
-                self.pid_file.unlink()
-            
+            # --- START OF FIX ---
+            if os.name == 'nt':
+                # Windows: Force kill tree
+                subprocess.run(["taskkill", "/PID", str(pid), "/T", "/F"], 
+                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
+            else:
+                # Linux/Mac: Standard kill
+                os.kill(pid, signal.SIGTERM)
+                time.sleep(1)
+                if self.is_running():
+                    os.kill(pid, signal.SIGKILL)
+            # --- END OF FIX ---
+
+            if self.pid_file.exists(): self.pid_file.unlink()
             print("✅ Web bridge stopped")
             return 0
-        except ProcessLookupError:
-            if self.pid_file.exists(): 
-                self.pid_file.unlink()
-            print("✅ Web bridge stopped (process was already dead)")
-            return 0
         except Exception as e:
-            print(f"❌ Error stopping web bridge: {e}")
+            print(f"❌ Error stopping: {e}")
+            if self.pid_file.exists(): self.pid_file.unlink()
             return 1
     
     def restart(self):
