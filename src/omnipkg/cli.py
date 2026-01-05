@@ -23,6 +23,10 @@ from omnipkg.isolation.worker_daemon import (
     cli_status,
     cli_stop,
 )
+try:
+    from omnipkg.apis.local_bridge import run_bridge_logic
+except ImportError:
+    run_bridge_logic = None
 
 from .commands.run import execute_run_command
 from .common_utils import print_header
@@ -792,6 +796,25 @@ def create_parser():
         action="store_true",
         help=_("Auto-refresh mode (dashboard style)"),
     )
+    web_parser = subparsers.add_parser("web", help=_("Manage the local web bridge"))
+    web_subparsers = web_parser.add_subparsers(dest="web_command", required=True)
+    web_subparsers.add_parser("start", help=_("Start the web bridge in background"))
+    web_subparsers.add_parser("stop", help=_("Stop the web bridge"))
+    web_subparsers.add_parser("status", help=_("Check web bridge status"))
+    web_subparsers.add_parser("restart", help=_("Restart the web bridge"))
+
+    web_logs = web_subparsers.add_parser("logs", help=_("View web bridge logs"))
+    web_logs.add_argument(
+        "-f", "--follow",
+        action="store_true",
+        help=_("Follow log output in real-time")
+    )
+    web_logs.add_argument(
+        "-n", "--lines",
+        type=int,
+        default=50,
+        help=_("Number of lines to show (default: 50)")
+    )
     prune_parser = subparsers.add_parser("prune", help=_("Clean up old, bubbled package versions"))
     prune_parser.add_argument("package", help=_("Package whose bubbles to prune"))
     prune_parser.add_argument(
@@ -1372,6 +1395,22 @@ def main():
                     safe_print(_("❌ Error: resource_monitor module not found."))
                     return 1
             return
+        elif args.command == "web":
+            from omnipkg.apis.local_bridge import WebBridgeManager
+            manager = WebBridgeManager()
+            
+            if args.web_command == "start":
+                return manager.start()
+            elif args.web_command == "stop":
+                return manager.stop()
+            elif args.web_command == "status":
+                return manager.status()
+            elif args.web_command == "restart":
+                manager.stop()
+                time.sleep(1)
+                return manager.start()
+            elif args.web_command == "logs":
+                return manager.show_logs(follow=args.follow, lines=args.lines)
         elif args.command == "run":
             # ✅ Fix: Pass the pkg_instance we already initialized!
             return execute_run_command(
