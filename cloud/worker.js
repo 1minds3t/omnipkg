@@ -1,4 +1,4 @@
-// Cloudflare Worker with Analytics - Updated worker.js
+// Cloudflare Worker - Production Ready with Security & Pagination
 
 export default {
   async fetch(request, env, ctx) {
@@ -7,7 +7,9 @@ export default {
     // CORS Configuration
     const ALLOWED_ORIGINS = [
       'https://1minds3t.echo-universe.ts.net',
+      'https://omnipkg.pages.dev',
       'http://localhost:8085',
+      'http://localhost:8000',
     ];
     
     const origin = request.headers.get('Origin');
@@ -43,7 +45,15 @@ export default {
         }
 
         const response = await fetch(targetUrl, fetchOptions);
-        const result = await response.json();
+        
+        // Handle non-JSON responses safely
+        let result;
+        const contentType = response.headers.get('content-type') || '';
+        if (contentType.includes('application/json')) {
+          result = await response.json();
+        } else {
+          result = { output: await response.text() };
+        }
 
         // 📊 ANALYTICS: Log command usage (privacy-safe)
         if (endpoint === '/run' && data?.command) {
@@ -64,6 +74,12 @@ export default {
     if (url.pathname === '/analytics/track') {
       try {
         const body = await request.json();
+        
+        // Validate input
+        if (!body || typeof body !== 'object') {
+          return jsonResponse({ error: 'Invalid payload' }, 400, origin, isAllowedOrigin);
+        }
+        
         await logFrontendEvent(env, body);
         return jsonResponse({ success: true }, 200, origin, isAllowedOrigin);
       } catch (error) {
@@ -71,7 +87,7 @@ export default {
       }
     }
 
-    // Route: /analytics/stats - Get usage statistics (for you to view)
+    // Route: /analytics/stats - Get usage statistics
     if (url.pathname === '/analytics/stats') {
       try {
         const stats = await getAnalyticsStats(env);
@@ -102,11 +118,11 @@ async function logCommandUsage(env, commandString) {
     // Extract just the command name (not full arguments - privacy!)
     const cmdName = commandString.trim().split(' ')[0].toLowerCase();
     
-    // Generate session hash (not storing IPs or identifiable info)
-    const timestamp = Date.now();
     const dateKey = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
     
-    // Store in KV with counter pattern
+    // NOTE: This is a get-then-put pattern which has a race condition.
+    // Under high concurrency, some increments may be lost.
+    // For accurate counting, use Durable Objects instead.
     const kvKey = `cmd:${dateKey}:${cmdName}`;
     
     if (env.ANALYTICS) {
@@ -115,7 +131,6 @@ async function logCommandUsage(env, commandString) {
       await env.ANALYTICS.put(kvKey, (count + 1).toString());
     }
     
-    // Also log to console for debugging
     console.log(`Command: ${cmdName} | Date: ${dateKey}`);
     
   } catch (error) {
@@ -169,8 +184,6 @@ async function getAnalyticsStats(env) {
       return { error: 'Analytics not configured' };
     }
     
-    // Get all keys and aggregate
-    const list = await env.ANALYTICS.list();
     const stats = {
       commands: {},
       buttons: {},
@@ -180,23 +193,36 @@ async function getAnalyticsStats(env) {
       total_page_views: 0,
     };
     
-    for (const key of list.keys) {
-      const value = await env.ANALYTICS.get(key.name);
-      const count = parseInt(value) || 0;
+    // Handle pagination for KV list() - max 1000 keys per call
+    let cursor;
+    let listComplete = false;
+    
+    while (!listComplete) {
+      const listOptions = cursor ? { cursor } : {};
+      const list = await env.ANALYTICS.list(listOptions);
       
-      if (key.name.startsWith('cmd:')) {
-        const cmdName = key.name.split(':')[2];
-        stats.commands[cmdName] = (stats.commands[cmdName] || 0) + count;
-        stats.total_commands += count;
-      } else if (key.name.startsWith('btn:')) {
-        const btnName = key.name.split(':')[2];
-        stats.buttons[btnName] = (stats.buttons[btnName] || 0) + count;
-        stats.total_button_clicks += count;
-      } else if (key.name.startsWith('page:')) {
-        const pageName = key.name.split(':')[2];
-        stats.pages[pageName] = (stats.pages[pageName] || 0) + count;
-        stats.total_page_views += count;
+      // Process this batch of keys
+      for (const key of list.keys) {
+        const value = await env.ANALYTICS.get(key.name);
+        const count = parseInt(value) || 0;
+        
+        if (key.name.startsWith('cmd:')) {
+          const cmdName = key.name.split(':')[2];
+          stats.commands[cmdName] = (stats.commands[cmdName] || 0) + count;
+          stats.total_commands += count;
+        } else if (key.name.startsWith('btn:')) {
+          const btnName = key.name.split(':')[2];
+          stats.buttons[btnName] = (stats.buttons[btnName] || 0) + count;
+          stats.total_button_clicks += count;
+        } else if (key.name.startsWith('page:')) {
+          const pageName = key.name.split(':')[2];
+          stats.pages[pageName] = (stats.pages[pageName] || 0) + count;
+          stats.total_page_views += count;
+        }
       }
+      
+      listComplete = list.list_complete;
+      cursor = list.cursor;
     }
     
     return stats;
@@ -212,7 +238,7 @@ async function getAnalyticsStats(env) {
 function corsResponse(body, origin, isAllowed) {
   return new Response(body, {
     headers: {
-      'Access-Control-Allow-Origin': isAllowed ? origin : 'https://1minds3t.echo-universe.ts.net',
+      'Access-Control-Allow-Origin': isAllowed ? origin : 'https://omnipkg.pages.dev',
       'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
       'Access-Control-Allow-Headers': 'Content-Type',
       'Access-Control-Max-Age': '86400',
@@ -225,7 +251,7 @@ function jsonResponse(data, status = 200, origin, isAllowed) {
     status,
     headers: {
       'Content-Type': 'application/json',
-      'Access-Control-Allow-Origin': isAllowed ? origin : 'https://1minds3t.echo-universe.ts.net',
+      'Access-Control-Allow-Origin': isAllowed ? origin : 'https://omnipkg.pages.dev',
       'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
       'Access-Control-Allow-Headers': 'Content-Type',
     },
@@ -282,7 +308,7 @@ function getInfoPage() {
 </head>
 <body>
     <div class="container">
-        <h1>🔐 OmniPkg API Bridge</h1>
+        <h1>📦 OmniPkg API Bridge</h1>
         <div class="subtitle">Secure Proxy for Local Command Execution</div>
         
         <div class="feature">
@@ -302,7 +328,7 @@ function getInfoPage() {
         
         <div class="note">
             <strong>For Users:</strong> Access the docs at 
-            <a href="https://1minds3t.echo-universe.ts.net/omnipkg">1minds3t.echo-universe.ts.net/omnipkg</a>
+            <a href="https://omnipkg.pages.dev">omnipkg.pages.dev</a>
         </div>
     </div>
 </body>

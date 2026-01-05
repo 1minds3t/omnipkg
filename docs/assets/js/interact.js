@@ -1,9 +1,16 @@
-/* docs/assets/js/interact.js - Interactive Documentation with Cloud Bridge */
+/* docs/assets/js/interact.js - Secure Interactive Documentation */
 
 const WORKER_URL = 'https://omnipkg.1minds3t.workers.dev';
 let PORT = 5000;
 let isConnected = false;
 let checkInterval = null;
+
+// XSS Protection: Escape HTML
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
 
 document.addEventListener("DOMContentLoaded", function() {
     
@@ -32,16 +39,30 @@ document.addEventListener("DOMContentLoaded", function() {
 function createStatusBanner() {
     const banner = document.createElement('div');
     banner.id = 'omnipkg-status-banner';
-    banner.innerHTML = `
-        <div class="status-content">
-            <span class="status-dot" id="status-dot"></span>
-            <span id="status-text">Checking connection...</span>
-            <button id="reconnect-btn" style="display:none;">Retry</button>
-        </div>
-    `;
-    document.body.appendChild(banner);
+    banner.className = 'omnipkg-status-banner';
     
-    document.getElementById('reconnect-btn').onclick = () => checkHealth();
+    const content = document.createElement('div');
+    content.className = 'status-content';
+    
+    const dot = document.createElement('span');
+    dot.className = 'status-dot';
+    dot.id = 'status-dot';
+    
+    const text = document.createElement('span');
+    text.id = 'status-text';
+    text.textContent = 'Checking connection...';
+    
+    const btn = document.createElement('button');
+    btn.id = 'reconnect-btn';
+    btn.textContent = 'Retry';
+    btn.style.display = 'none';
+    btn.onclick = () => checkHealth();
+    
+    content.appendChild(dot);
+    content.appendChild(text);
+    content.appendChild(btn);
+    banner.appendChild(content);
+    document.body.appendChild(banner);
 }
 
 // ==========================================
@@ -76,19 +97,21 @@ function updateStatus(connected, message) {
     const text = document.getElementById('status-text');
     const btn = document.getElementById('reconnect-btn');
     
-    dot.className = connected ? 'status-dot connected' : 'status-dot';
-    text.textContent = message;
-    btn.style.display = connected ? 'none' : 'inline-block';
-    
-    // Enable/disable all run buttons
-    document.querySelectorAll('.omni-run-btn').forEach(btn => {
-        btn.disabled = !connected;
-    });
+    if (dot && text && btn) {
+        dot.className = connected ? 'status-dot connected' : 'status-dot';
+        text.textContent = message;
+        btn.style.display = connected ? 'none' : 'inline-block';
+        
+        // Enable/disable all run buttons
+        document.querySelectorAll('.omni-run-btn').forEach(btn => {
+            btn.disabled = !connected;
+        });
+    }
 }
 
 function startHealthCheck() {
     checkHealth();
-    checkInterval = setInterval(checkHealth, 5000); // Check every 5 seconds
+    checkInterval = setInterval(checkHealth, 5000);
 }
 
 // ==========================================
@@ -106,18 +129,28 @@ function injectRunButtons() {
             button.className = "omni-run-btn";
             button.disabled = !isConnected;
             
-            // Create button content with icon
-            button.innerHTML = `
-                <svg class="btn-icon" viewBox="0 0 24 24" width="16" height="16">
-                    <path fill="currentColor" d="M8 5v14l11-7z"/>
-                </svg>
-                <span>Run Command</span>
-            `;
+            const icon = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+            icon.setAttribute("class", "btn-icon");
+            icon.setAttribute("viewBox", "0 0 24 24");
+            icon.setAttribute("width", "16");
+            icon.setAttribute("height", "16");
             
+            const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+            path.setAttribute("fill", "currentColor");
+            path.setAttribute("d", "M8 5v14l11-7z");
+            icon.appendChild(path);
+            
+            const span = document.createElement("span");
+            span.textContent = "Run Command";
+            
+            button.appendChild(icon);
+            button.appendChild(span);
             button.onclick = () => runCommand(text, button);
             
             const preBlock = block.parentElement;
-            preBlock.parentElement.insertBefore(button, preBlock.nextSibling);
+            if (preBlock && preBlock.parentElement) {
+                preBlock.parentElement.insertBefore(button, preBlock.nextSibling);
+            }
         }
     });
 }
@@ -131,13 +164,24 @@ async function runCommand(cmd, btnElement) {
         return;
     }
     
-    const originalHTML = btnElement.innerHTML;
-    btnElement.innerHTML = `
-        <svg class="btn-icon spin" viewBox="0 0 24 24" width="16" height="16">
-            <path fill="currentColor" d="M12,4V2A10,10 0 0,0 2,12H4A8,8 0 0,1 12,4Z" />
-        </svg>
-        <span>Running...</span>
-    `;
+    // Store original content
+    const originalContent = Array.from(btnElement.childNodes);
+    
+    // Update button to loading state
+    btnElement.innerHTML = '';
+    const spinIcon = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    spinIcon.setAttribute("class", "btn-icon spin");
+    spinIcon.setAttribute("viewBox", "0 0 24 24");
+    spinIcon.setAttribute("width", "16");
+    spinIcon.setAttribute("height", "16");
+    const spinPath = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    spinPath.setAttribute("fill", "currentColor");
+    spinPath.setAttribute("d", "M12,4V2A10,10 0 0,0 2,12H4A8,8 0 0,1 12,4Z");
+    spinIcon.appendChild(spinPath);
+    const loadingText = document.createElement("span");
+    loadingText.textContent = "Running...";
+    btnElement.appendChild(spinIcon);
+    btnElement.appendChild(loadingText);
     btnElement.disabled = true;
 
     sendTelemetry("command_exec", { command: cmd.split(' ')[0] });
@@ -154,59 +198,125 @@ async function runCommand(cmd, btnElement) {
             })
         });
         
-        const data = await res.json();
-        showOutput(cmd, data.output);
+        const contentType = res.headers.get('content-type') || '';
+        let data;
+        if (contentType.includes('application/json')) {
+            data = await res.json();
+        } else {
+            data = { output: await res.text() };
+        }
         
-        btnElement.innerHTML = `
-            <svg class="btn-icon" viewBox="0 0 24 24" width="16" height="16">
-                <path fill="currentColor" d="M9,20.42L2.79,14.21L5.62,11.38L9,14.77L18.88,4.88L21.71,7.71L9,20.42Z" />
-            </svg>
-            <span>Success</span>
-        `;
+        showOutput(cmd, data.output || 'No output');
+        
+        // Success state
+        btnElement.innerHTML = '';
+        const checkIcon = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+        checkIcon.setAttribute("class", "btn-icon");
+        checkIcon.setAttribute("viewBox", "0 0 24 24");
+        checkIcon.setAttribute("width", "16");
+        checkIcon.setAttribute("height", "16");
+        const checkPath = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        checkPath.setAttribute("fill", "currentColor");
+        checkPath.setAttribute("d", "M9,20.42L2.79,14.21L5.62,11.38L9,14.77L18.88,4.88L21.71,7.71L9,20.42Z");
+        checkIcon.appendChild(checkPath);
+        const successText = document.createElement("span");
+        successText.textContent = "Success";
+        btnElement.appendChild(checkIcon);
+        btnElement.appendChild(successText);
         
         setTimeout(() => {
-            btnElement.innerHTML = originalHTML;
+            btnElement.innerHTML = '';
+            originalContent.forEach(node => btnElement.appendChild(node.cloneNode(true)));
             btnElement.disabled = false;
         }, 2000);
     } catch (e) {
         showOutput(cmd, `Error: ${e.message}`);
-        btnElement.innerHTML = `
-            <svg class="btn-icon" viewBox="0 0 24 24" width="16" height="16">
-                <path fill="currentColor" d="M13,13H11V7H13M13,17H11V15H13M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2Z" />
-            </svg>
-            <span>Failed</span>
-        `;
+        
+        // Error state
+        btnElement.innerHTML = '';
+        const errorIcon = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+        errorIcon.setAttribute("class", "btn-icon");
+        errorIcon.setAttribute("viewBox", "0 0 24 24");
+        errorIcon.setAttribute("width", "16");
+        errorIcon.setAttribute("height", "16");
+        const errorPath = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        errorPath.setAttribute("fill", "currentColor");
+        errorPath.setAttribute("d", "M13,13H11V7H13M13,17H11V15H13M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2Z");
+        errorIcon.appendChild(errorPath);
+        const errorText = document.createElement("span");
+        errorText.textContent = "Failed";
+        btnElement.appendChild(errorIcon);
+        btnElement.appendChild(errorText);
         btnElement.disabled = false;
     }
 }
 
 // ==========================================
-// Output Modal
+// Output Modal (XSS-Safe)
 // ==========================================
 function showOutput(cmd, output) {
     // Remove existing modal if any
     const existing = document.getElementById('omni-output-modal');
     if (existing) existing.remove();
     
+    // Create modal structure with DOM methods (no innerHTML)
     const modal = document.createElement('div');
     modal.id = 'omni-output-modal';
-    modal.innerHTML = `
-        <div class="omni-modal-backdrop" onclick="this.parentElement.remove()"></div>
-        <div class="omni-modal-content">
-            <div class="omni-modal-header">
-                <h3>Command Output</h3>
-                <button class="omni-modal-close" onclick="this.closest('.omni-output-modal').remove()">×</button>
-            </div>
-            <div class="omni-modal-body">
-                <div class="omni-command">$ ${cmd}</div>
-                <pre class="omni-output">${output}</pre>
-            </div>
-            <div class="omni-modal-footer">
-                <button onclick="navigator.clipboard.writeText('${output.replace(/'/g, "\\'")}')">Copy Output</button>
-                <button onclick="this.closest('#omni-output-modal').remove()">Close</button>
-            </div>
-        </div>
-    `;
+    
+    const backdrop = document.createElement('div');
+    backdrop.className = 'omni-modal-backdrop';
+    backdrop.onclick = () => modal.remove();
+    
+    const content = document.createElement('div');
+    content.className = 'omni-modal-content';
+    
+    // Header
+    const header = document.createElement('div');
+    header.className = 'omni-modal-header';
+    const title = document.createElement('h3');
+    title.textContent = 'Command Output';
+    const closeBtn = document.createElement('button');
+    closeBtn.className = 'omni-modal-close';
+    closeBtn.textContent = '×';
+    closeBtn.onclick = () => modal.remove();
+    header.appendChild(title);
+    header.appendChild(closeBtn);
+    
+    // Body
+    const body = document.createElement('div');
+    body.className = 'omni-modal-body';
+    const cmdDiv = document.createElement('div');
+    cmdDiv.className = 'omni-command';
+    cmdDiv.textContent = `$ ${cmd}`;  // Safe: textContent escapes HTML
+    const outputPre = document.createElement('pre');
+    outputPre.className = 'omni-output';
+    outputPre.textContent = output;  // Safe: textContent escapes HTML
+    body.appendChild(cmdDiv);
+    body.appendChild(outputPre);
+    
+    // Footer
+    const footer = document.createElement('div');
+    footer.className = 'omni-modal-footer';
+    const copyBtn = document.createElement('button');
+    copyBtn.textContent = 'Copy Output';
+    copyBtn.onclick = () => {
+        navigator.clipboard.writeText(output).then(() => {
+            copyBtn.textContent = 'Copied!';
+            setTimeout(() => copyBtn.textContent = 'Copy Output', 2000);
+        });
+    };
+    const closeBtn2 = document.createElement('button');
+    closeBtn2.textContent = 'Close';
+    closeBtn2.onclick = () => modal.remove();
+    footer.appendChild(copyBtn);
+    footer.appendChild(closeBtn2);
+    
+    // Assemble
+    content.appendChild(header);
+    content.appendChild(body);
+    content.appendChild(footer);
+    modal.appendChild(backdrop);
+    modal.appendChild(content);
     document.body.appendChild(modal);
 }
 
@@ -214,6 +324,11 @@ function showOutput(cmd, output) {
 // Telemetry (Privacy-Safe)
 // ==========================================
 function sendTelemetry(eventType, details) {
+    // Validate input before sending
+    if (typeof eventType !== 'string' || !details || typeof details !== 'object') {
+        return;
+    }
+    
     fetch(`${WORKER_URL}/analytics/track`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
