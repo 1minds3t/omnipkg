@@ -1,332 +1,310 @@
+// Cloudflare Worker with Analytics - Updated worker.js
+
 export default {
-  async fetch(request) {
-    const html = `
-<!DOCTYPE html>
+  async fetch(request, env, ctx) {
+    const url = new URL(request.url);
+    
+    // CORS Configuration
+    const ALLOWED_ORIGINS = [
+      'https://1minds3t.echo-universe.ts.net',
+      'http://localhost:8085',
+    ];
+    
+    const origin = request.headers.get('Origin');
+    const isAllowedOrigin = ALLOWED_ORIGINS.includes(origin);
+
+    // Handle CORS preflight
+    if (request.method === 'OPTIONS') {
+      return corsResponse(null, origin, isAllowedOrigin);
+    }
+
+    // Route: /proxy - Forward to localhost + collect analytics
+    if (url.pathname === '/proxy') {
+      try {
+        const body = await request.json();
+        const { port, endpoint, method = 'GET', data } = body;
+
+        // Validate port
+        if (!port || port < 1024 || port > 65535) {
+          return jsonResponse({ error: 'Invalid port' }, 400, origin, isAllowedOrigin);
+        }
+
+        // Construct localhost URL
+        const targetUrl = `http://127.0.0.1:${port}${endpoint}`;
+        
+        // Forward the request
+        const fetchOptions = {
+          method: method,
+          headers: { 'Content-Type': 'application/json' },
+        };
+
+        if (data && (method === 'POST' || method === 'PUT')) {
+          fetchOptions.body = JSON.stringify(data);
+        }
+
+        const response = await fetch(targetUrl, fetchOptions);
+        const result = await response.json();
+
+        // 📊 ANALYTICS: Log command usage (privacy-safe)
+        if (endpoint === '/run' && data?.command) {
+          await logCommandUsage(env, data.command);
+        }
+
+        return jsonResponse(result, response.status, origin, isAllowedOrigin);
+
+      } catch (error) {
+        return jsonResponse({ 
+          error: 'Proxy failed', 
+          details: error.message 
+        }, 500, origin, isAllowedOrigin);
+      }
+    }
+
+    // Route: /analytics/track - Frontend events (button clicks, page views)
+    if (url.pathname === '/analytics/track') {
+      try {
+        const body = await request.json();
+        await logFrontendEvent(env, body);
+        return jsonResponse({ success: true }, 200, origin, isAllowedOrigin);
+      } catch (error) {
+        return jsonResponse({ error: 'Tracking failed' }, 500, origin, isAllowedOrigin);
+      }
+    }
+
+    // Route: /analytics/stats - Get usage statistics (for you to view)
+    if (url.pathname === '/analytics/stats') {
+      try {
+        const stats = await getAnalyticsStats(env);
+        return jsonResponse(stats, 200, origin, isAllowedOrigin);
+      } catch (error) {
+        return jsonResponse({ error: 'Failed to fetch stats' }, 500, origin, isAllowedOrigin);
+      }
+    }
+
+    // Route: /info - Display bridge information
+    if (url.pathname === '/info' || url.pathname === '/') {
+      return new Response(getInfoPage(), {
+        headers: {
+          'Content-Type': 'text/html;charset=UTF-8',
+          'Access-Control-Allow-Origin': isAllowedOrigin ? origin : ALLOWED_ORIGINS[0],
+        },
+      });
+    }
+
+    return jsonResponse({ error: 'Not found' }, 404, origin, isAllowedOrigin);
+  },
+};
+
+// 📊 Analytics Functions (Privacy-Safe)
+
+async function logCommandUsage(env, commandString) {
+  try {
+    // Extract just the command name (not full arguments - privacy!)
+    const cmdName = commandString.trim().split(' ')[0].toLowerCase();
+    
+    // Generate session hash (not storing IPs or identifiable info)
+    const timestamp = Date.now();
+    const dateKey = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+    
+    // Store in KV with counter pattern
+    const kvKey = `cmd:${dateKey}:${cmdName}`;
+    
+    if (env.ANALYTICS) {
+      const current = await env.ANALYTICS.get(kvKey);
+      const count = current ? parseInt(current) : 0;
+      await env.ANALYTICS.put(kvKey, (count + 1).toString());
+    }
+    
+    // Also log to console for debugging
+    console.log(`Command: ${cmdName} | Date: ${dateKey}`);
+    
+  } catch (error) {
+    console.error('Analytics error:', error);
+    // Never fail the actual request due to analytics
+  }
+}
+
+async function logFrontendEvent(env, eventData) {
+  try {
+    const { event_type, event_name, page, metadata } = eventData;
+    const dateKey = new Date().toISOString().split('T')[0];
+    
+    // Track different event types
+    if (event_type === 'button_click') {
+      const kvKey = `btn:${dateKey}:${event_name}`;
+      if (env.ANALYTICS) {
+        const current = await env.ANALYTICS.get(kvKey);
+        const count = current ? parseInt(current) : 0;
+        await env.ANALYTICS.put(kvKey, (count + 1).toString());
+      }
+    } else if (event_type === 'page_view') {
+      const kvKey = `page:${dateKey}:${page}`;
+      if (env.ANALYTICS) {
+        const current = await env.ANALYTICS.get(kvKey);
+        const count = current ? parseInt(current) : 0;
+        await env.ANALYTICS.put(kvKey, (count + 1).toString());
+      }
+    } else if (event_type === 'feedback') {
+      // Store feedback in a separate namespace
+      const feedbackKey = `feedback:${Date.now()}`;
+      if (env.ANALYTICS) {
+        await env.ANALYTICS.put(feedbackKey, JSON.stringify({
+          message: metadata?.message,
+          rating: metadata?.rating,
+          date: dateKey,
+        }));
+      }
+    }
+    
+    console.log(`Event: ${event_type} - ${event_name}`);
+    
+  } catch (error) {
+    console.error('Event tracking error:', error);
+  }
+}
+
+async function getAnalyticsStats(env) {
+  try {
+    if (!env.ANALYTICS) {
+      return { error: 'Analytics not configured' };
+    }
+    
+    // Get all keys and aggregate
+    const list = await env.ANALYTICS.list();
+    const stats = {
+      commands: {},
+      buttons: {},
+      pages: {},
+      total_commands: 0,
+      total_button_clicks: 0,
+      total_page_views: 0,
+    };
+    
+    for (const key of list.keys) {
+      const value = await env.ANALYTICS.get(key.name);
+      const count = parseInt(value) || 0;
+      
+      if (key.name.startsWith('cmd:')) {
+        const cmdName = key.name.split(':')[2];
+        stats.commands[cmdName] = (stats.commands[cmdName] || 0) + count;
+        stats.total_commands += count;
+      } else if (key.name.startsWith('btn:')) {
+        const btnName = key.name.split(':')[2];
+        stats.buttons[btnName] = (stats.buttons[btnName] || 0) + count;
+        stats.total_button_clicks += count;
+      } else if (key.name.startsWith('page:')) {
+        const pageName = key.name.split(':')[2];
+        stats.pages[pageName] = (stats.pages[pageName] || 0) + count;
+        stats.total_page_views += count;
+      }
+    }
+    
+    return stats;
+    
+  } catch (error) {
+    console.error('Stats fetch error:', error);
+    return { error: error.message };
+  }
+}
+
+// Helper Functions
+
+function corsResponse(body, origin, isAllowed) {
+  return new Response(body, {
+    headers: {
+      'Access-Control-Allow-Origin': isAllowed ? origin : 'https://1minds3t.echo-universe.ts.net',
+      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type',
+      'Access-Control-Max-Age': '86400',
+    },
+  });
+}
+
+function jsonResponse(data, status = 200, origin, isAllowed) {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: {
+      'Content-Type': 'application/json',
+      'Access-Control-Allow-Origin': isAllowed ? origin : 'https://1minds3t.echo-universe.ts.net',
+      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type',
+    },
+  });
+}
+
+function getInfoPage() {
+  return `<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>OmniPkg | Cloud Controller</title>
+    <title>OmniPkg API Bridge</title>
     <style>
-        :root {
-            --bg: #0d1117;
-            --card: #161b22;
-            --border: #30363d;
-            --text: #c9d1d9;
-            --accent: #58a6ff;
-            --success: #2ea043;
-            --error: #da3633;
-            --dim: #8b949e;
-        }
-        * { box-sizing: border-box; }
         body {
-            font-family: 'SF Mono', 'Segoe UI Mono', 'Roboto Mono', Menlo, Courier, monospace;
-            background-color: var(--bg);
-            color: var(--text);
-            margin: 0;
-            padding: 20px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
             display: flex;
-            flex-direction: column;
+            justify-content: center;
             align-items: center;
             min-height: 100vh;
+            margin: 0;
+            padding: 20px;
         }
         .container {
-            width: 100%;
-            max-width: 900px;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 16px;
+            padding: 40px;
+            max-width: 600px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
         }
-        header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 20px;
-            border-bottom: 1px solid var(--border);
-            padding-bottom: 20px;
-        }
-        h1 { margin: 0; font-size: 1.5rem; color: #fff; }
-        .tag {
-            font-size: 0.8rem;
-            padding: 4px 8px;
-            border-radius: 4px;
-            background: var(--card);
-            border: 1px solid var(--border);
-            color: var(--dim);
-        }
-
-        /* Status Indicator */
-        .status-bar {
-            background: var(--card);
-            border: 1px solid var(--border);
-            border-radius: 6px;
+        h1 { margin: 0 0 10px 0; font-size: 2rem; }
+        .subtitle { opacity: 0.9; margin-bottom: 30px; font-size: 1.1rem; }
+        .feature {
+            background: rgba(255, 255, 255, 0.1);
             padding: 15px;
-            margin-bottom: 20px;
-            display: flex;
-            align-items: center;
-            gap: 15px;
+            border-radius: 8px;
+            margin: 10px 0;
+            border-left: 4px solid #4CAF50;
         }
-        .indicator {
-            height: 12px;
-            width: 12px;
-            border-radius: 50%;
-            background: var(--dim);
-            box-shadow: 0 0 5px var(--dim);
-            transition: all 0.3s ease;
-        }
-        .indicator.connected { background: var(--success); box-shadow: 0 0 8px var(--success); }
-        .indicator.disconnected { background: var(--error); box-shadow: 0 0 8px var(--error); }
-        
-        .status-text { font-weight: bold; font-size: 0.9rem; }
-        .port-info { font-size: 0.8rem; color: var(--dim); margin-left: auto; }
-
-        /* Terminal Window */
-        .terminal-window {
-            background: #000;
-            border: 1px solid var(--border);
-            border-radius: 6px;
-            overflow: hidden;
-            display: flex;
-            flex-direction: column;
-            height: 500px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-        }
-        .terminal-header {
-            background: var(--card);
-            padding: 8px 15px;
-            border-bottom: 1px solid var(--border);
-            font-size: 0.8rem;
-            color: var(--dim);
-            display: flex;
-            gap: 6px;
-        }
-        .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--border); }
-        .dot.red { background: #ff5f56; }
-        .dot.yellow { background: #ffbd2e; }
-        .dot.green { background: #27c93f; }
-
-        .output-area {
-            flex-grow: 1;
+        .feature-title { font-weight: bold; margin-bottom: 5px; }
+        .note {
+            margin-top: 30px;
             padding: 15px;
-            overflow-y: auto;
-            white-space: pre-wrap;
-            font-size: 0.9rem;
-            line-height: 1.5;
-            color: #fff;
+            background: rgba(255, 193, 7, 0.2);
+            border-radius: 8px;
+            border-left: 4px solid #FFC107;
         }
-        .cmd-line { color: var(--dim); }
-        .response { color: var(--text); margin-bottom: 10px; }
-        .error-msg { color: var(--error); }
-
-        /* Input Area */
-        .input-area {
-            display: flex;
-            border-top: 1px solid var(--border);
-            background: var(--card);
-        }
-        .prompt {
-            padding: 15px 0 15px 15px;
-            color: var(--accent);
-            font-weight: bold;
-        }
-        input {
-            flex-grow: 1;
-            background: transparent;
-            border: none;
-            color: #fff;
-            font-family: inherit;
-            font-size: 1rem;
-            padding: 15px;
-            outline: none;
-        }
-        button {
-            background: var(--accent);
-            color: #000;
-            border: none;
-            padding: 0 25px;
-            font-weight: bold;
-            font-family: inherit;
-            cursor: pointer;
-            transition: opacity 0.2s;
-        }
-        button:hover { opacity: 0.9; }
-        button:disabled { background: var(--border); color: var(--dim); cursor: not-allowed; }
-
+        a { color: #FFD700; text-decoration: none; font-weight: bold; }
+        a:hover { text-decoration: underline; }
     </style>
 </head>
 <body>
-
-<div class="container">
-    <header>
-        <h1>OmniPkg Cloud Controller</h1>
-        <div class="tag">v2.0.8</div>
-    </header>
-
-    <div class="status-bar">
-        <div id="indicator" class="indicator disconnected"></div>
-        <div id="statusText" class="status-text">Connecting to Local Bridge...</div>
-        <div id="portInfo" class="port-info">Target: localhost:----</div>
-    </div>
-
-    <div class="terminal-window">
-        <div class="terminal-header">
-            <div class="dot red"></div>
-            <div class="dot yellow"></div>
-            <div class="dot green"></div>
-            <span style="margin-left: 10px; opacity: 0.6;">local_bridge.py</span>
-        </div>
-        <div id="output" class="output-area"></div>
+    <div class="container">
+        <h1>🔐 OmniPkg API Bridge</h1>
+        <div class="subtitle">Secure Proxy for Local Command Execution</div>
         
-        <div class="input-area">
-            <span class="prompt">omnipkg $</span>
-            <input type="text" id="cmdInput" placeholder="Waiting for connection..." disabled autocomplete="off">
-            <button id="runBtn" disabled>RUN</button>
+        <div class="feature">
+            <div class="feature-title">🛡️ Privacy-First Analytics</div>
+            <div>We only track command names and button clicks. No IPs, no personal data, no tracking across sites.</div>
+        </div>
+        
+        <div class="feature">
+            <div class="feature-title">🔄 Transparent Proxy</div>
+            <div>Commands pass through securely between your UI and localhost.</div>
+        </div>
+        
+        <div class="feature">
+            <div class="feature-title">⚡ Always Online</div>
+            <div>Cloudflare's edge network ensures 24/7 availability.</div>
+        </div>
+        
+        <div class="note">
+            <strong>For Users:</strong> Access the docs at 
+            <a href="https://1minds3t.echo-universe.ts.net/omnipkg">1minds3t.echo-universe.ts.net/omnipkg</a>
         </div>
     </div>
-</div>
-
-<script>
-    // --- 1. Dynamic Port Logic ---
-    let PORT = 5000; // Default
-    
-    // Read the hash from URL (e.g. #5003)
-    if (window.location.hash) {
-        const hashVal = parseInt(window.location.hash.substring(1));
-        if (!isNaN(hashVal) && hashVal > 1024) {
-            PORT = hashVal;
-        }
-    }
-    
-    const API_URL = "http://127.0.0.1:" + PORT;
-    const outputDiv = document.getElementById('output');
-    const statusText = document.getElementById('statusText');
-    const indicator = document.getElementById('indicator');
-    const portInfo = document.getElementById('portInfo');
-    const input = document.getElementById('cmdInput');
-    const btn = document.getElementById('runBtn');
-
-    // Update UI with target port
-    portInfo.textContent = "Target: localhost:" + PORT;
-    
-    function log(text, type='normal') {
-        const line = document.createElement('div');
-        if (type === 'cmd') {
-            line.className = 'cmd-line';
-            line.textContent = '> omnipkg ' + text;
-        } else if (type === 'error') {
-            line.className = 'response error-msg';
-            line.textContent = text;
-        } else {
-            line.className = 'response';
-            line.textContent = text;
-        }
-        outputDiv.appendChild(line);
-        outputDiv.scrollTop = outputDiv.scrollHeight;
-    }
-
-    log("Initializing Cloud Bridge...");
-    log("Targeting local port: " + PORT);
-
-    // --- 2. Connection Health Check ---
-    let isConnected = false;
-
-    async function checkHealth() {
-        try {
-            // We use a simple GET request to check if the python script is there
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 2000); // 2s timeout
-            
-            const res = await fetch(API_URL + "/health", { signal: controller.signal });
-            clearTimeout(timeoutId);
-
-            if (res.ok) {
-                if (!isConnected) {
-                    // State Change: Disconnected -> Connected
-                    isConnected = true;
-                    const data = await res.json();
-                    
-                    indicator.className = "indicator connected";
-                    statusText.textContent = "Local Bridge Connected";
-                    statusText.style.color = "#2ea043";
-                    
-                    input.disabled = false;
-                    btn.disabled = false;
-                    input.placeholder = "Enter command (e.g. version, list)";
-                    input.focus();
-                    
-                    log("✅ Connection established with " + (data.version || "OmniPkg"));
-                }
-            } else {
-                throw new Error("Health check failed");
-            }
-        } catch (e) {
-            if (isConnected) {
-                // State Change: Connected -> Disconnected
-                isConnected = false;
-                indicator.className = "indicator disconnected";
-                statusText.textContent = "Local Bridge Disconnected";
-                statusText.style.color = "#da3633";
-                
-                input.disabled = true;
-                btn.disabled = true;
-                input.placeholder = "Waiting for connection...";
-                
-                log("❌ Connection lost. Is 'omnipkg launch-web' running?", "error");
-            }
-        }
-    }
-
-    // --- 3. Command Execution ---
-    async function runCommand() {
-        const cmd = input.value.trim();
-        if (!cmd) return;
-
-        log(cmd, 'cmd');
-        input.value = '';
-        input.disabled = true; // Prevent double submit
-
-        try {
-            const res = await fetch(API_URL + "/run", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json"
-                },
-                body: JSON.stringify({ command: cmd })
-            });
-
-            const data = await res.json();
-            
-            // Handle output lines
-            if (data.output) {
-                log(data.output);
-            } else {
-                log("(No output returned)");
-            }
-
-        } catch (e) {
-            log("Error sending command: " + e.message, "error");
-        } finally {
-            input.disabled = false;
-            input.focus();
-        }
-    }
-
-    // Event Listeners
-    btn.addEventListener('click', runCommand);
-    input.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') runCommand();
-    });
-
-    // Start Polling
-    checkHealth(); // Check immediately
-    setInterval(checkHealth, 3000); // Check every 3 seconds
-
-</script>
 </body>
-</html>
-    `;
-
-    return new Response(html, {
-      headers: {
-        'content-type': 'text/html;charset=UTF-8',
-      },
-    });
-  },
-};
+</html>`;
+}

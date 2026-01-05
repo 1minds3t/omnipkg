@@ -1,6 +1,6 @@
 site_name: omnipkg
 site_description: 'The Ultimate Python Dependency Resolver. One environment. Infinite packages. Zero conflicts.'
-site_url: https://omnipkg.readthedocs.io/
+site_url: https://1minds3t.echo-universe.ts.net/omnipkg
 repo_url: https://github.com/1minds3t/omnipkg
 repo_name: 1minds3t/omnipkg
 
@@ -22,14 +22,12 @@ theme:
   logo: assets/logo.svg
   favicon: assets/favicon.png
   palette:
-    # Light mode
     - scheme: default
       primary: indigo
       accent: indigo
       toggle:
         icon: material/brightness-7
         name: Switch to dark mode
-    # Dark mode
     - scheme: slate
       primary: black
       accent: indigo
@@ -50,17 +48,8 @@ theme:
 # Documentation directory
 docs_dir: docs
 
-# --- INTERACTIVITY & TELEMETRY INJECTION ---
+# Add custom CSS and JS for interactivity
 extra_css:
   - assets/css/interact.css
-
 extra_javascript:
   - assets/js/interact.js
-
-# Required for code block manipulation
-markdown_extensions:
-  - pymdownx.highlight:
-      anchor_linenums: true
-  - pymdownx.inlinehilite
-  - pymdownx.snippets
-  - pymdownx.superfences

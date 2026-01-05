@@ -1,0 +1,239 @@
+/* docs/assets/css/interact.css - Interactive Documentation Styles */
+
+/* ==========================================
+   Status Banner (Top of page)
+   ========================================== */
+#omnipkg-status-banner {
+    position: fixed;
+    top: 64px; /* Below MkDocs header */
+    right: 20px;
+    background: var(--md-default-bg-color);
+    border: 1px solid var(--md-default-fg-color--lightest);
+    border-radius: 8px;
+    padding: 10px 16px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    z-index: 1000;
+    font-size: 0.85em;
+}
+
+.status-content {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.status-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #dc3545;
+    box-shadow: 0 0 8px #dc3545;
+    animation: pulse-red 2s infinite;
+}
+
+.status-dot.connected {
+    background: #28a745;
+    box-shadow: 0 0 8px #28a745;
+    animation: pulse-green 2s infinite;
+}
+
+@keyframes pulse-red {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+@keyframes pulse-green {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+}
+
+#reconnect-btn {
+    padding: 4px 12px;
+    background: var(--md-primary-fg-color);
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.9em;
+}
+
+/* ==========================================
+   Run Buttons
+   ========================================== */
+.omni-run-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin: 8px 0 16px 0;
+    padding: 8px 16px;
+    background: var(--md-primary-fg-color);
+    color: var(--md-primary-bg-color);
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.9em;
+    font-weight: 600;
+    transition: all 0.2s;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+.omni-run-btn:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+}
+
+.omni-run-btn:disabled {
+    background: #6c757d;
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+.omni-run-btn .btn-icon {
+    flex-shrink: 0;
+}
+
+.omni-run-btn .spin {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    100% { transform: rotate(360deg); }
+}
+
+/* ==========================================
+   Output Modal
+   ========================================== */
+#omni-output-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 2000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.omni-modal-backdrop {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(4px);
+}
+
+.omni-modal-content {
+    position: relative;
+    background: var(--md-default-bg-color);
+    border-radius: 12px;
+    max-width: 800px;
+    width: 90%;
+    max-height: 80vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+}
+
+.omni-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--md-default-fg-color--lightest);
+}
+
+.omni-modal-header h3 {
+    margin: 0;
+    font-size: 1.2em;
+}
+
+.omni-modal-close {
+    background: none;
+    border: none;
+    font-size: 2em;
+    cursor: pointer;
+    color: var(--md-default-fg-color);
+    line-height: 1;
+    padding: 0;
+    width: 32px;
+    height: 32px;
+}
+
+.omni-modal-body {
+    padding: 20px;
+    overflow-y: auto;
+    flex: 1;
+}
+
+.omni-command {
+    font-family: 'Roboto Mono', monospace;
+    background: var(--md-code-bg-color);
+    padding: 12px;
+    border-radius: 6px;
+    margin-bottom: 12px;
+    color: var(--md-code-fg-color);
+}
+
+.omni-output {
+    font-family: 'Roboto Mono', monospace;
+    background: #000;
+    color: #0f0;
+    padding: 16px;
+    border-radius: 6px;
+    overflow-x: auto;
+    font-size: 0.9em;
+    line-height: 1.5;
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.omni-modal-footer {
+    padding: 16px 20px;
+    border-top: 1px solid var(--md-default-fg-color--lightest);
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+}
+
+.omni-modal-footer button {
+    padding: 8px 16px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 600;
+}
+
+.omni-modal-footer button:first-child {
+    background: var(--md-primary-fg-color);
+    color: white;
+}
+
+.omni-modal-footer button:last-child {
+    background: #6c757d;
+    color: white;
+}
+
+/* ==========================================
+   Info Boxes (Optional - for connection help)
+   ========================================== */
+.omni-info-box {
+    background: var(--md-admonition-bg-color);
+    border-left: 4px solid var(--md-primary-fg-color);
+    padding: 16px;
+    margin: 20px 0;
+    border-radius: 4px;
+}
+
+.omni-info-box h4 {
+    margin-top: 0;
+    color: var(--md-primary-fg-color);
+}
+
+.omni-info-box code {
+    background: var(--md-code-bg-color);
+    padding: 2px 6px;
+    border-radius: 3px;
+}
