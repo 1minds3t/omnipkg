@@ -347,15 +347,31 @@ class WebBridgeManager:
         if follow:
             print(f"📝 Following logs (Ctrl+C to stop)...\n")
             try:
-                subprocess.run(["tail", "-f", str(self.log_file)])
+                # Try using tail if available (Unix/Mac)
+                subprocess.run(["tail", "-f", str(self.log_file)], check=True)
+            except (FileNotFoundError, subprocess.CalledProcessError):
+                # Windows/No-tail fallback: Python polling
+                try:
+                    with open(self.log_file, "r") as f:
+                        # Move to end of file
+                        f.seek(0, 2)
+                        while True:
+                            line = f.readline()
+                            if line:
+                                print(line, end='')
+                            else:
+                                time.sleep(0.5)
+                except KeyboardInterrupt:
+                    pass
             except KeyboardInterrupt:
-                print("\n✅ Stopped following logs")
+                pass
+            print("\n✅ Stopped following logs")
             return 0
         else:
             try:
                 # Try using tail if available (Unix)
-                subprocess.run(["tail", "-n", str(lines), str(self.log_file)])
-            except FileNotFoundError:
+                subprocess.run(["tail", "-n", str(lines), str(self.log_file)], check=True)
+            except (FileNotFoundError, subprocess.CalledProcessError):
                 # Fallback for Windows or missing tail
                 with open(self.log_file) as f:
                     all_lines = f.readlines()
