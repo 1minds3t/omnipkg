@@ -20,7 +20,7 @@ nav:
 theme:
   name: material
   logo: assets/logo.svg
-  favicon: assets/favicon.png  # Add this line!
+  favicon: assets/favicon.png
   palette:
     # Light mode
     - scheme: default
@@ -49,3 +49,18 @@ theme:
 
 # Documentation directory
 docs_dir: docs
+
+# --- INTERACTIVITY & TELEMETRY INJECTION ---
+extra_css:
+  - assets/css/interact.css
+
+extra_javascript:
+  - assets/js/interact.js
+
+# Required for code block manipulation
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences
