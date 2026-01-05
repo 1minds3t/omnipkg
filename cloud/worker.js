@@ -130,37 +130,27 @@ async function logCommandUsage(env, commandString) {
   }
 }
 
+async function logCommandUsage(env, commandString) {
+  // We do nothing here. The Local Bridge logs the command execution automatically
+  // when the /run endpoint is hit.
+}
+
 async function logFrontendEvent(env, eventData) {
   try {
-    const { event_type, event_name, page, metadata } = eventData;
-    const dateKey = new Date().toISOString().split('T')[0];
+    // 1. Define your Tailscale Bridge URL
+    const BRIDGE_BASE = 'https://1minds3t.echo-universe.ts.net/omnipkg-api';
     
-    if (event_type === 'button_click') {
-      const kvKey = `btn:${dateKey}:${event_name}`;
-      if (env.ANALYTICS) {
-        const current = await env.ANALYTICS.get(kvKey);
-        const count = current ? parseInt(current) : 0;
-        await env.ANALYTICS.put(kvKey, (count + 1).toString());
-      }
-    } else if (event_type === 'page_view') {
-      const kvKey = `page:${dateKey}:${page}`;
-      if (env.ANALYTICS) {
-        const current = await env.ANALYTICS.get(kvKey);
-        const count = current ? parseInt(current) : 0;
-        await env.ANALYTICS.put(kvKey, (count + 1).toString());
-      }
-    } else if (event_type === 'feedback') {
-      const feedbackKey = `feedback:${Date.now()}`;
-      if (env.ANALYTICS) {
-        await env.ANALYTICS.put(feedbackKey, JSON.stringify({
-          message: metadata?.message,
-          rating: metadata?.rating,
-          date: dateKey,
-        }));
-      }
-    }
-    
-    console.log(`Event: ${event_type} - ${event_name}`);
+    // 2. Forward the data to your home computer
+    // "Fire and forget" - we don't await the result so the user's page stays fast.
+    fetch(`${BRIDGE_BASE}/telemetry`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(eventData)
+    }).catch(err => {
+      // If your computer is off or Tailscale is down, this fails silently.
+      // We log to console just for debugging the worker.
+      console.log("Bridge offline, telemetry dropped"); 
+    });
     
   } catch (error) {
     console.error('Event tracking error:', error);
@@ -168,56 +158,8 @@ async function logFrontendEvent(env, eventData) {
 }
 
 async function getAnalyticsStats(env) {
-  try {
-    if (!env.ANALYTICS) {
-      return { error: 'Analytics not configured' };
-    }
-    
-    const stats = {
-      commands: {},
-      buttons: {},
-      pages: {},
-      total_commands: 0,
-      total_button_clicks: 0,
-      total_page_views: 0,
-    };
-    
-    let cursor;
-    let listComplete = false;
-    
-    while (!listComplete) {
-      const listOptions = cursor ? { cursor } : {};
-      const list = await env.ANALYTICS.list(listOptions);
-      
-      for (const key of list.keys) {
-        const value = await env.ANALYTICS.get(key.name);
-        const count = parseInt(value) || 0;
-        
-        if (key.name.startsWith('cmd:')) {
-          const cmdName = key.name.split(':')[2];
-          stats.commands[cmdName] = (stats.commands[cmdName] || 0) + count;
-          stats.total_commands += count;
-        } else if (key.name.startsWith('btn:')) {
-          const btnName = key.name.split(':')[2];
-          stats.buttons[btnName] = (stats.buttons[btnName] || 0) + count;
-          stats.total_button_clicks += count;
-        } else if (key.name.startsWith('page:')) {
-          const pageName = key.name.split(':')[2];
-          stats.pages[pageName] = (stats.pages[pageName] || 0) + count;
-          stats.total_page_views += count;
-        }
-      }
-      
-      listComplete = list.list_complete;
-      cursor = list.cursor;
-    }
-    
-    return stats;
-    
-  } catch (error) {
-    console.error('Stats fetch error:', error);
-    return { error: error.message };
-  }
+    // Since we aren't using KV, we tell the frontend that data is local.
+    return { status: "Data is being stored locally in ~/.omnipkg/telemetry.db" };
 }
 
 // Helper Functions
