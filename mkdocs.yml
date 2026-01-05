@@ -1,6 +1,6 @@
 site_name: omnipkg
 site_description: 'The Ultimate Python Dependency Resolver. One environment. Infinite packages. Zero conflicts.'
-site_url: https://1minds3t.echo-universe.ts.net/omnipkg
+site_url: https://omnipkg.pages.dev/
 repo_url: https://github.com/1minds3t/omnipkg
 repo_name: 1minds3t/omnipkg
 
@@ -48,8 +48,9 @@ theme:
 # Documentation directory
 docs_dir: docs
 
-# Add custom CSS and JS for interactivity
+# CRITICAL: Add custom CSS and JS for interactivity
 extra_css:
   - assets/css/interact.css
+  
 extra_javascript:
-  - assets/js/interact.js
+  - assets/js/interact.js  # <-- THIS WAS MISSING!
