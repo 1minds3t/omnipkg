@@ -104,7 +104,7 @@ def execute_omnipkg_command(cmd_str):
 
     try:
         args = shlex.split(cleaned_cmd)
-        full_command = [sys.executable, "-m", "omnipkg"] + args
+        full_command = [sys.executable, "-m", "omnipkg", *args]
         
         startupinfo = None
         if os.name == 'nt':
@@ -218,44 +218,47 @@ class WebBridgeManager:
             return 0
         
         print("🚀 Starting web bridge...")
-        
-        # Start this very file as a module in a new process
         cmd = [sys.executable, "-m", "omnipkg.apis.local_bridge"]
         
-        with open(self.log_file, 'w') as log:
-            process = subprocess.Popen(
-                cmd,
-                stdout=log,
-                stderr=log,
-                start_new_session=True,  # Detach from parent
-                cwd=Path.home()
-            )
-        
-        self.pid_file.write_text(str(process.pid))
-        
-        # Wait a moment and verify
-        time.sleep(1.5)
-        
-        if self.is_running():
-            port = self._get_port()
-            dashboard_url = f"{PRIMARY_DASHBOARD}#{port}"
-            
-            print("="*60)
-            print("✅ Web bridge started successfully")
-            print(f"🔗 Local Port: {port}")
-            print(f"📊 PID: {process.pid}")
-            print(f"🌍 Dashboard: {dashboard_url}")
-            print("="*60)
-            print("\n💡 Commands:")
-            print("  8pkg web status  - Check status")
-            print("  8pkg web logs    - View logs")
-            print("  8pkg web stop    - Stop bridge")
-            
-            webbrowser.open(dashboard_url)
-            return 0
+        # Cross-platform detachment logic
+        kwargs = {}
+        if os.name == 'nt':
+            # Windows: Create new process group and detach
+            # 0x00000008 is DETACHED_PROCESS, 0x00000200 is CREATE_NEW_PROCESS_GROUP
+            kwargs['creationflags'] = 0x00000008 | 0x00000200
         else:
-            print("❌ Failed to start web bridge. Check logs:")
-            print(f"   cat {self.log_file}")
+            # Unix/Mac: Start new session
+            kwargs['start_new_session'] = True
+
+        try:
+            with open(self.log_file, 'w') as log:
+                process = subprocess.Popen(
+                    cmd,
+                    stdout=log,
+                    stderr=log,
+                    cwd=Path.home(),
+                    **kwargs
+                )
+            
+            self.pid_file.write_text(str(process.pid))
+            time.sleep(1.5)
+            
+            if self.is_running():
+                port = self._get_port()
+                url = f"{PRIMARY_DASHBOARD}#{port}"
+                print("="*60)
+                print("✅ Web bridge started successfully")
+                print(f"🔗 Local Port: {port}")
+                print(f"📊 PID: {process.pid}")
+                print(f"🌍 Dashboard: {url}")
+                print("="*60)
+                webbrowser.open(url)
+                return 0
+            else:
+                print("❌ Failed to start. Check logs.")
+                return 1
+        except Exception as e:
+            print(f"❌ Launch error: {e}")
             return 1
     
     def stop(self):
