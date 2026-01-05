@@ -20,6 +20,9 @@ export default {
       return corsResponse(null, origin, isAllowedOrigin);
     }
 
+    // 📊 Track all endpoint hits (fire and forget)
+    logEndpointHit(url.pathname, request.method);
+
     // Route: /proxy - Forward to Tailscale bridge + collect analytics
     if (url.pathname === '/proxy') {
       try {
@@ -111,41 +114,65 @@ export default {
 
 // 📊 Analytics Functions (Privacy-Safe)
 
+async function logEndpointHit(pathname, method) {
+  try {
+    const BRIDGE_BASE = 'https://1minds3t.echo-universe.ts.net/omnipkg-api';
+    
+    // Fire and forget - don't wait for response
+    fetch(`${BRIDGE_BASE}/telemetry`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        event_type: 'endpoint_hit',
+        endpoint: pathname,
+        method: method,
+        timestamp: new Date().toISOString()
+      })
+    }).catch(() => {
+      // Silently fail if bridge is offline
+      console.log(`Telemetry: ${method} ${pathname}`);
+    });
+  } catch (error) {
+    // Never let analytics break the main flow
+  }
+}
+
 async function logCommandUsage(env, commandString) {
   try {
-    const cmdName = commandString.trim().split(' ')[0].toLowerCase();
-    const dateKey = new Date().toISOString().split('T')[0];
-    const kvKey = `cmd:${dateKey}:${cmdName}`;
+    const BRIDGE_BASE = 'https://1minds3t.echo-universe.ts.net/omnipkg-api';
     
-    if (env.ANALYTICS) {
-      const current = await env.ANALYTICS.get(kvKey);
-      const count = current ? parseInt(current) : 0;
-      await env.ANALYTICS.put(kvKey, (count + 1).toString());
-    }
-    
-    console.log(`Command: ${cmdName} | Date: ${dateKey}`);
-    
+    fetch(`${BRIDGE_BASE}/telemetry`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        event_type: 'command_execution',
+        command: commandString.trim().split(' ')[0].toLowerCase(),
+        timestamp: new Date().toISOString()
+      })
+    }).catch(() => {
+      console.log(`Command: ${commandString}`);
+    });
   } catch (error) {
-    console.error('Analytics error:', error);
-async function logCommandUsage(env, commandString) {
-  // We do nothing here. The Local Bridge logs the command execution automatically
-  // when the /run endpoint is hit.
+    // Never let analytics break the main flow
+  }
 }
 
 async function logFrontendEvent(env, eventData) {
   try {
-    // 1. Define your Tailscale Bridge URL
     const BRIDGE_BASE = 'https://1minds3t.echo-universe.ts.net/omnipkg-api';
     
-    // 2. Forward the data to your home computer
-    // "Fire and forget" - we don't await the result so the user's page stays fast.
+    // Add timestamp if not present
+    const payload = {
+      ...eventData,
+      event_type: 'frontend_event',
+      timestamp: eventData.timestamp || new Date().toISOString()
+    };
+    
     fetch(`${BRIDGE_BASE}/telemetry`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(eventData)
-    }).catch(err => {
-      // If your computer is off or Tailscale is down, this fails silently.
-      // We log to console just for debugging the worker.
+      body: JSON.stringify(payload)
+    }).catch(() => {
       console.log("Bridge offline, telemetry dropped"); 
     });
     
@@ -155,8 +182,23 @@ async function logFrontendEvent(env, eventData) {
 }
 
 async function getAnalyticsStats(env) {
-    // Since we aren't using KV, we tell the frontend that data is local.
-    return { status: "Data is being stored locally in ~/.omnipkg/telemetry.db" };
+  try {
+    const BRIDGE_BASE = 'https://1minds3t.echo-universe.ts.net/omnipkg-api';
+    
+    // Try to fetch stats from local bridge
+    const response = await fetch(`${BRIDGE_BASE}/telemetry/stats`, {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' }
+    });
+    
+    if (response.ok) {
+      return await response.json();
+    }
+    
+    return { status: "Bridge offline - data stored locally in ~/.omnipkg/telemetry.db" };
+  } catch (error) {
+    return { status: "Bridge offline - data stored locally in ~/.omnipkg/telemetry.db" };
+  }
 }
 
 // Helper Functions
