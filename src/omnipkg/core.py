@@ -92,7 +92,6 @@ except ImportError:
     magic = None
     HAS_MAGIC = False
 
-
 def _get_dynamic_omnipkg_version():
     """
     Gets the omnipkg version, prioritizing pyproject.toml in developer mode.
