@@ -55,4 +55,9 @@ extra_css:
   
 extra_javascript:
   - assets/js/interact.js
+
+extra_javascript:
+  - assets/javascripts/trailing-slash.js
+
+extra_javascript:
   - assets/javascripts/trailing-slash.js

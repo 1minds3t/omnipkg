@@ -27,7 +27,7 @@ except ImportError:
     HAS_WEB_DEPS = False
 
 # --- Configuration ---
-PRIMARY_DASHBOARD = "https://1minds3t.echo-universe.ts.net/omnipkg"
+PRIMARY_DASHBOARD = "https://1minds3t.echo-universe.ts.net/omnipkg/"
 ALLOWED_ORIGINS = {
     "https://1minds3t.echo-universe.ts.net",
     "https://omnipkg.1minds3t.workers.dev",
