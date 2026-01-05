@@ -112,3 +112,4 @@ vendor/
 
 # VS Code Dev Container (Streamlit)
 .devcontainer/
+site/

@@ -12,18 +12,6 @@ from contextlib import closing
 import logging
 import sys
 
-# Configure logging to both file and stdout
-LOG_FILE = OMNIPKG_DIR / "web_bridge.log"
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s [%(levelname)s] %(message)s',
-    handlers=[
-        logging.FileHandler(LOG_FILE),
-        logging.StreamHandler(sys.stdout)
-    ]
-)
-logger = logging.getLogger(__name__)
-
 # --- Dependency Checks ---
 try:
     import psutil
@@ -159,7 +147,11 @@ def corsify_response(response, origin):
     return response
 
 def create_app(port):
-    """Creates the Flask application."""
+    """Creates the Flask application with SQLite Telemetry."""
+    import sqlite3
+    import json
+    from datetime import datetime
+    
     app = Flask(__name__)
     CORS(app, origins=list(ALLOWED_ORIGINS))
     
@@ -167,10 +159,30 @@ def create_app(port):
     log = logging.getLogger('werkzeug')
     log.setLevel(logging.ERROR)
     
+    # Init DB
+    DB_FILE = OMNIPKG_DIR / "telemetry.db"
+    def init_db():
+        with sqlite3.connect(DB_FILE) as conn:
+            conn.execute('''
+                CREATE TABLE IF NOT EXISTS telemetry (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    timestamp TEXT,
+                    event_type TEXT,
+                    event_name TEXT,
+                    page TEXT,
+                    meta TEXT
+                )
+            ''')
+    try:
+        init_db()
+        logger.info(f"📊 Telemetry DB initialized at {DB_FILE}")
+    except Exception as e:
+        logger.error(f"Failed to init DB: {e}")
+
     @app.route('/health', methods=['GET', 'OPTIONS'])
     def health():
         origin = request.headers.get('Origin')
-        logger.info(f"Health check from origin: {origin}")
+        # logger.info(f"Health check from origin: {origin}") # Commented out to reduce log noise
         if request.method == "OPTIONS": 
             return corsify_response(make_response(), origin)
         return corsify_response(jsonify({
@@ -182,7 +194,6 @@ def create_app(port):
     @app.route('/run', methods=['POST', 'OPTIONS'])
     def run_command():
         origin = request.headers.get('Origin')
-        logger.info(f"Run command from origin: {origin}")
         if request.method == "OPTIONS": 
             return corsify_response(make_response(), origin)
         
@@ -190,8 +201,44 @@ def create_app(port):
         cmd = data.get('command', '')
         logger.info(f"⚡ Executing: {cmd}")
         output = execute_omnipkg_command(cmd)
-        logger.info(f"✅ Command completed")
+        
+        # Auto-log commands to DB
+        try:
+            with sqlite3.connect(DB_FILE) as conn:
+                conn.execute(
+                    "INSERT INTO telemetry (timestamp, event_type, event_name, page, meta) VALUES (?, ?, ?, ?, ?)",
+                    (datetime.utcnow().isoformat(), "command_exec", cmd.split()[0], "local_bridge", json.dumps({"full_cmd": cmd}))
+                )
+        except Exception as e:
+            logger.error(f"DB Error: {e}")
+
         return corsify_response(jsonify({"output": output}), origin)
+
+    # 🚨 NEW ENDPOINT FOR CLOUDFLARE TO SEND DATA TO
+    @app.route('/telemetry', methods=['POST', 'OPTIONS'])
+    def telemetry():
+        origin = request.headers.get('Origin')
+        if request.method == "OPTIONS": 
+            return corsify_response(make_response(), origin)
+            
+        try:
+            data = request.json
+            event_type = data.get('event_type', 'unknown')
+            event_name = data.get('event_name', 'unknown')
+            page = data.get('page', 'unknown')
+            meta = json.dumps(data.get('metadata', {}))
+            
+            with sqlite3.connect(DB_FILE) as conn:
+                conn.execute(
+                    "INSERT INTO telemetry (timestamp, event_type, event_name, page, meta) VALUES (?, ?, ?, ?, ?)",
+                    (datetime.utcnow().isoformat(), event_type, event_name, page, meta)
+                )
+            
+            logger.info(f"📡 TELEMETRY: [{event_type}] {event_name}")
+            return corsify_response(jsonify({"status": "saved"}), origin)
+        except Exception as e:
+            logger.error(f"Telemetry save failed: {e}")
+            return corsify_response(jsonify({"error": str(e)}), origin)
     
     return app
 
@@ -424,6 +471,20 @@ class WebBridgeManager:
         m, s = divmod(seconds, 60)
         h, m = divmod(m, 60)
         return f"{int(h)}h {int(m)}m {int(s)}s"
+
+# logging
+
+# Configure logging to both file and stdout
+LOG_FILE = OMNIPKG_DIR / "web_bridge.log"
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s [%(levelname)s] %(message)s',
+    handlers=[
+        logging.FileHandler(LOG_FILE),
+        logging.StreamHandler(sys.stdout)
+    ]
+)
+logger = logging.getLogger(__name__)
 
 # ==========================================
 # PART 3: Main Execution
