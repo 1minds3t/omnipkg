@@ -127,9 +127,6 @@ async function logCommandUsage(env, commandString) {
     
   } catch (error) {
     console.error('Analytics error:', error);
-  }
-}
-
 async function logCommandUsage(env, commandString) {
   // We do nothing here. The Local Bridge logs the command execution automatically
   // when the /run endpoint is hit.
