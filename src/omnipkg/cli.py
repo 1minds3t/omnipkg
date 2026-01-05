@@ -25,7 +25,7 @@ from omnipkg.isolation.worker_daemon import (
     cli_stop,
 )
 try:
-    from omnipkg.apis.local_bridge import run_bridge_logic
+    from omnipkg.apis.local_bridge import WebBridgeManager
 except ImportError:
     run_bridge_logic = None
 

@@ -104,7 +104,7 @@ def execute_omnipkg_command(cmd_str):
 
     try:
         args = shlex.split(cleaned_cmd)
-        full_command = [sys.executable, "-m", "omnipkg"] + args
+        full_command = [sys.executable, "-m", "omnipkg", *args]
         
         startupinfo = None
         if os.name == 'nt':
@@ -218,80 +218,78 @@ class WebBridgeManager:
             return 0
         
         print("🚀 Starting web bridge...")
-        
-        # Start this very file as a module in a new process
         cmd = [sys.executable, "-m", "omnipkg.apis.local_bridge"]
         
-        with open(self.log_file, 'w') as log:
-            process = subprocess.Popen(
-                cmd,
-                stdout=log,
-                stderr=log,
-                start_new_session=True,  # Detach from parent
-                cwd=Path.home()
-            )
-        
-        self.pid_file.write_text(str(process.pid))
-        
-        # Wait a moment and verify
-        time.sleep(1.5)
-        
-        if self.is_running():
-            port = self._get_port()
-            dashboard_url = f"{PRIMARY_DASHBOARD}#{port}"
-            
-            print("="*60)
-            print("✅ Web bridge started successfully")
-            print(f"🔗 Local Port: {port}")
-            print(f"📊 PID: {process.pid}")
-            print(f"🌍 Dashboard: {dashboard_url}")
-            print("="*60)
-            print("\n💡 Commands:")
-            print("  8pkg web status  - Check status")
-            print("  8pkg web logs    - View logs")
-            print("  8pkg web stop    - Stop bridge")
-            
-            webbrowser.open(dashboard_url)
-            return 0
+        # Cross-platform detachment logic
+        kwargs = {}
+        if os.name == 'nt':
+            # Windows: Create new process group and detach
+            # 0x00000008 is DETACHED_PROCESS, 0x00000200 is CREATE_NEW_PROCESS_GROUP
+            kwargs['creationflags'] = 0x00000008 | 0x00000200
         else:
-            print("❌ Failed to start web bridge. Check logs:")
-            print(f"   cat {self.log_file}")
+            # Unix/Mac: Start new session
+            kwargs['start_new_session'] = True
+
+        try:
+            with open(self.log_file, 'w') as log:
+                process = subprocess.Popen(
+                    cmd,
+                    stdout=log,
+                    stderr=log,
+                    cwd=Path.home(),
+                    **kwargs
+                )
+            
+            self.pid_file.write_text(str(process.pid))
+            time.sleep(1.5)
+            
+            if self.is_running():
+                port = self._get_port()
+                url = f"{PRIMARY_DASHBOARD}#{port}"
+                print("="*60)
+                print("✅ Web bridge started successfully")
+                print(f"🔗 Local Port: {port}")
+                print(f"📊 PID: {process.pid}")
+                print(f"🌍 Dashboard: {url}")
+                print("="*60)
+                webbrowser.open(url)
+                return 0
+            else:
+                print("❌ Failed to start. Check logs.")
+                return 1
+        except Exception as e:
+            print(f"❌ Launch error: {e}")
             return 1
     
     def stop(self):
-        """Stop the web bridge."""
+        """Stop the web bridge safely across platforms."""
         if not self.is_running():
             print("⚠️  Web bridge is not running")
             return 0
         
-        pid = int(self.pid_file.read_text())
-        
         try:
+            pid = int(self.pid_file.read_text())
             print(f"🛑 Stopping web bridge (PID: {pid})...")
-            os.kill(pid, signal.SIGTERM)
             
-            # Wait for graceful shutdown
-            for _ in range(10):
-                if not self.is_running():
-                    break
-                time.sleep(0.5)
-            
-            # Force kill if needed
-            if self.is_running():
-                os.kill(pid, signal.SIGKILL)
-            
-            if self.pid_file.exists():
-                self.pid_file.unlink()
-            
+            # --- START OF FIX ---
+            if os.name == 'nt':
+                # Windows: Force kill tree
+                subprocess.run(["taskkill", "/PID", str(pid), "/T", "/F"], 
+                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
+            else:
+                # Linux/Mac: Standard kill
+                os.kill(pid, signal.SIGTERM)
+                time.sleep(1)
+                if self.is_running():
+                    os.kill(pid, signal.SIGKILL)
+            # --- END OF FIX ---
+
+            if self.pid_file.exists(): self.pid_file.unlink()
             print("✅ Web bridge stopped")
             return 0
-        except ProcessLookupError:
-            if self.pid_file.exists(): 
-                self.pid_file.unlink()
-            print("✅ Web bridge stopped (process was already dead)")
-            return 0
         except Exception as e:
-            print(f"❌ Error stopping web bridge: {e}")
+            print(f"❌ Error stopping: {e}")
+            if self.pid_file.exists(): self.pid_file.unlink()
             return 1
     
     def restart(self):
@@ -347,15 +345,31 @@ class WebBridgeManager:
         if follow:
             print(f"📝 Following logs (Ctrl+C to stop)...\n")
             try:
-                subprocess.run(["tail", "-f", str(self.log_file)])
+                # Try using tail if available (Unix/Mac)
+                subprocess.run(["tail", "-f", str(self.log_file)], check=True)
+            except (FileNotFoundError, subprocess.CalledProcessError):
+                # Windows/No-tail fallback: Python polling
+                try:
+                    with open(self.log_file, "r") as f:
+                        # Move to end of file
+                        f.seek(0, 2)
+                        while True:
+                            line = f.readline()
+                            if line:
+                                print(line, end='')
+                            else:
+                                time.sleep(0.5)
+                except KeyboardInterrupt:
+                    pass
             except KeyboardInterrupt:
-                print("\n✅ Stopped following logs")
+                pass
+            print("\n✅ Stopped following logs")
             return 0
         else:
             try:
                 # Try using tail if available (Unix)
-                subprocess.run(["tail", "-n", str(lines), str(self.log_file)])
-            except FileNotFoundError:
+                subprocess.run(["tail", "-n", str(lines), str(self.log_file)], check=True)
+            except (FileNotFoundError, subprocess.CalledProcessError):
                 # Fallback for Windows or missing tail
                 with open(self.log_file) as f:
                     all_lines = f.readlines()
