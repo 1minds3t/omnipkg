@@ -1,9 +1,17 @@
-/* docs/assets/js/interact.js - Secure Interactive Documentation */
+/* docs/assets/js/interact.js - Enhanced with Debug Logging */
 
 const WORKER_URL = 'https://omnipkg.1minds3t.workers.dev';
 let PORT = 5000;
 let isConnected = false;
 let checkInterval = null;
+const DEBUG = true; // Enable debug logging
+
+// Debug logger
+function debug(...args) {
+    if (DEBUG) {
+        console.log('[OmniPkg Debug]', ...args);
+    }
+}
 
 // XSS Protection: Escape HTML
 function escapeHtml(text) {
@@ -13,12 +21,20 @@ function escapeHtml(text) {
 }
 
 document.addEventListener("DOMContentLoaded", function() {
+    debug('DOM loaded, initializing...');
     
     // Get port from URL hash (e.g., #5000)
     if (window.location.hash) {
         const val = parseInt(window.location.hash.substring(1));
-        if (!isNaN(val) && val > 1024) PORT = val;
+        if (!isNaN(val) && val > 1024) {
+            PORT = val;
+            debug(`Port set from URL hash: ${PORT}`);
+        }
     }
+    
+    debug(`Worker URL: ${WORKER_URL}`);
+    debug(`Target Port: ${PORT}`);
+    debug(`Current Origin: ${window.location.origin}`);
 
     // Track page view
     sendTelemetry("page_view", {
@@ -37,6 +53,7 @@ document.addEventListener("DOMContentLoaded", function() {
 // Connection Status Banner
 // ==========================================
 function createStatusBanner() {
+    debug('Creating status banner...');
     const banner = document.createElement('div');
     banner.id = 'omnipkg-status-banner';
     banner.className = 'omnipkg-status-banner';
@@ -56,38 +73,68 @@ function createStatusBanner() {
     btn.id = 'reconnect-btn';
     btn.textContent = 'Retry';
     btn.style.display = 'none';
-    btn.onclick = () => checkHealth();
+    btn.onclick = () => {
+        debug('Manual retry clicked');
+        checkHealth();
+    };
     
     content.appendChild(dot);
     content.appendChild(text);
     content.appendChild(btn);
     banner.appendChild(content);
     document.body.appendChild(banner);
+    debug('Status banner created');
 }
 
 // ==========================================
 // Health Check
 // ==========================================
 async function checkHealth() {
+    debug(`Checking health: ${WORKER_URL}/proxy -> localhost:${PORT}/health`);
+    
     try {
+        const requestBody = {
+            port: PORT,
+            endpoint: '/health',
+            method: 'GET'
+        };
+        
+        debug('Sending health check request:', requestBody);
+        
         const res = await fetch(`${WORKER_URL}/proxy`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                port: PORT,
-                endpoint: '/health',
-                method: 'GET'
-            })
+            headers: { 
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(requestBody)
         });
+        
+        debug(`Health check response status: ${res.status}`);
+        debug(`Response headers:`, Object.fromEntries(res.headers.entries()));
         
         if (res.ok) {
             const data = await res.json();
+            debug('Health check data:', data);
             updateStatus(true, `Connected to OmniPkg v${data.version || 'unknown'} (Port ${PORT})`);
         } else {
-            updateStatus(false, 'Bridge not responding');
+            const errorText = await res.text();
+            debug('Health check failed:', errorText);
+            updateStatus(false, `Bridge error (HTTP ${res.status})`);
         }
     } catch (e) {
-        updateStatus(false, 'Not connected - Run: omnipkg web start');
+        debug('Health check exception:', e);
+        console.error('[OmniPkg] Connection Error:', e);
+        
+        // Provide more helpful error message
+        let errorMsg = 'Not connected';
+        if (e.message.includes('fetch')) {
+            errorMsg += ' - Network error';
+        } else if (e.message.includes('CORS')) {
+            errorMsg += ' - CORS issue';
+        }
+        errorMsg += ' | Run: omnipkg web start';
+        
+        updateStatus(false, errorMsg);
     }
 }
 
@@ -96,6 +143,8 @@ function updateStatus(connected, message) {
     const dot = document.getElementById('status-dot');
     const text = document.getElementById('status-text');
     const btn = document.getElementById('reconnect-btn');
+    
+    debug(`Status update: ${connected ? 'CONNECTED' : 'DISCONNECTED'} - ${message}`);
     
     if (dot && text && btn) {
         dot.className = connected ? 'status-dot connected' : 'status-dot';
@@ -110,6 +159,7 @@ function updateStatus(connected, message) {
 }
 
 function startHealthCheck() {
+    debug('Starting health check interval (every 5s)');
     checkHealth();
     checkInterval = setInterval(checkHealth, 5000);
 }
@@ -119,12 +169,17 @@ function startHealthCheck() {
 // ==========================================
 function injectRunButtons() {
     const codeBlocks = document.querySelectorAll('pre > code');
+    debug(`Found ${codeBlocks.length} code blocks, scanning for omnipkg commands...`);
 
+    let buttonCount = 0;
     codeBlocks.forEach((block) => {
         const text = block.innerText.trim();
         
         // Only add buttons for omnipkg/8pkg commands
         if (text.startsWith("omnipkg") || text.startsWith("8pkg")) {
+            buttonCount++;
+            debug(`Adding run button for command: ${text.substring(0, 50)}...`);
+            
             const button = document.createElement("button");
             button.className = "omni-run-btn";
             button.disabled = !isConnected;
@@ -153,12 +208,16 @@ function injectRunButtons() {
             }
         }
     });
+    
+    debug(`Injected ${buttonCount} run buttons`);
 }
 
 // ==========================================
 // Execute Command
 // ==========================================
 async function runCommand(cmd, btnElement) {
+    debug(`Running command: ${cmd}`);
+    
     if (!isConnected) {
         alert('Not connected to local bridge. Run: omnipkg web start');
         return;
@@ -187,16 +246,22 @@ async function runCommand(cmd, btnElement) {
     sendTelemetry("command_exec", { command: cmd.split(' ')[0] });
 
     try {
+        const requestBody = {
+            port: PORT,
+            endpoint: '/run',
+            method: 'POST',
+            data: { command: cmd }
+        };
+        
+        debug('Sending command request:', requestBody);
+        
         const res = await fetch(`${WORKER_URL}/proxy`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                port: PORT,
-                endpoint: '/run',
-                method: 'POST',
-                data: { command: cmd }
-            })
+            body: JSON.stringify(requestBody)
         });
+        
+        debug(`Command response status: ${res.status}`);
         
         const contentType = res.headers.get('content-type') || '';
         let data;
@@ -206,6 +271,7 @@ async function runCommand(cmd, btnElement) {
             data = { output: await res.text() };
         }
         
+        debug('Command response:', data);
         showOutput(cmd, data.output || 'No output');
         
         // Success state
@@ -230,6 +296,8 @@ async function runCommand(cmd, btnElement) {
             btnElement.disabled = false;
         }, 2000);
     } catch (e) {
+        debug('Command execution error:', e);
+        console.error('[OmniPkg] Command Error:', e);
         showOutput(cmd, `Error: ${e.message}`);
         
         // Error state
@@ -255,6 +323,8 @@ async function runCommand(cmd, btnElement) {
 // Output Modal (XSS-Safe)
 // ==========================================
 function showOutput(cmd, output) {
+    debug('Showing output modal');
+    
     // Remove existing modal if any
     const existing = document.getElementById('omni-output-modal');
     if (existing) existing.remove();
@@ -287,10 +357,10 @@ function showOutput(cmd, output) {
     body.className = 'omni-modal-body';
     const cmdDiv = document.createElement('div');
     cmdDiv.className = 'omni-command';
-    cmdDiv.textContent = `$ ${cmd}`;  // Safe: textContent escapes HTML
+    cmdDiv.textContent = `$ ${cmd}`;
     const outputPre = document.createElement('pre');
     outputPre.className = 'omni-output';
-    outputPre.textContent = output;  // Safe: textContent escapes HTML
+    outputPre.textContent = output;
     body.appendChild(cmdDiv);
     body.appendChild(outputPre);
     
@@ -324,10 +394,11 @@ function showOutput(cmd, output) {
 // Telemetry (Privacy-Safe)
 // ==========================================
 function sendTelemetry(eventType, details) {
-    // Validate input before sending
     if (typeof eventType !== 'string' || !details || typeof details !== 'object') {
         return;
     }
+    
+    debug('Sending telemetry:', eventType, details);
     
     fetch(`${WORKER_URL}/analytics/track`, {
         method: 'POST',
@@ -338,7 +409,14 @@ function sendTelemetry(eventType, details) {
             page: window.location.pathname,
             metadata: details
         })
-    }).catch(() => {
-        // Silently fail - don't interrupt user experience
+    }).catch((e) => {
+        debug('Telemetry failed:', e);
     });
 }
+
+// Add global error handler for debugging
+window.addEventListener('error', (e) => {
+    debug('Global error:', e.error);
+});
+
+debug('OmniPkg interactive docs initialized');
