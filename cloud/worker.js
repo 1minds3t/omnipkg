@@ -1,4 +1,4 @@
-// Cloudflare Worker - Production Ready with Security & Pagination
+// Cloudflare Worker - Production Ready with Tailscale Integration
 
 export default {
   async fetch(request, env, ctx) {
@@ -20,19 +20,17 @@ export default {
       return corsResponse(null, origin, isAllowedOrigin);
     }
 
-    // Route: /proxy - Forward to localhost + collect analytics
+    // Route: /proxy - Forward to Tailscale bridge + collect analytics
     if (url.pathname === '/proxy') {
       try {
         const body = await request.json();
         const { port, endpoint, method = 'GET', data } = body;
 
-        // Validate port
-        if (!port || port < 1024 || port > 65535) {
-          return jsonResponse({ error: 'Invalid port' }, 400, origin, isAllowedOrigin);
-        }
-
-        // Construct localhost URL
-        const targetUrl = `http://127.0.0.1:${port}${endpoint}`;
+        // Use Tailscale URL instead of localhost
+        const BRIDGE_BASE = 'https://1minds3t.echo-universe.ts.net/omnipkg-api';
+        const targetUrl = `${BRIDGE_BASE}${endpoint}`;
+        
+        console.log(`Proxying to: ${targetUrl}`);
         
         // Forward the request
         const fetchOptions = {
@@ -63,6 +61,7 @@ export default {
         return jsonResponse(result, response.status, origin, isAllowedOrigin);
 
       } catch (error) {
+        console.error('Proxy error:', error);
         return jsonResponse({ 
           error: 'Proxy failed', 
           details: error.message 
@@ -75,7 +74,6 @@ export default {
       try {
         const body = await request.json();
         
-        // Validate input
         if (!body || typeof body !== 'object') {
           return jsonResponse({ error: 'Invalid payload' }, 400, origin, isAllowedOrigin);
         }
@@ -115,14 +113,8 @@ export default {
 
 async function logCommandUsage(env, commandString) {
   try {
-    // Extract just the command name (not full arguments - privacy!)
     const cmdName = commandString.trim().split(' ')[0].toLowerCase();
-    
-    const dateKey = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
-    
-    // NOTE: This is a get-then-put pattern which has a race condition.
-    // Under high concurrency, some increments may be lost.
-    // For accurate counting, use Durable Objects instead.
+    const dateKey = new Date().toISOString().split('T')[0];
     const kvKey = `cmd:${dateKey}:${cmdName}`;
     
     if (env.ANALYTICS) {
@@ -135,7 +127,6 @@ async function logCommandUsage(env, commandString) {
     
   } catch (error) {
     console.error('Analytics error:', error);
-    // Never fail the actual request due to analytics
   }
 }
 
@@ -144,7 +135,6 @@ async function logFrontendEvent(env, eventData) {
     const { event_type, event_name, page, metadata } = eventData;
     const dateKey = new Date().toISOString().split('T')[0];
     
-    // Track different event types
     if (event_type === 'button_click') {
       const kvKey = `btn:${dateKey}:${event_name}`;
       if (env.ANALYTICS) {
@@ -160,7 +150,6 @@ async function logFrontendEvent(env, eventData) {
         await env.ANALYTICS.put(kvKey, (count + 1).toString());
       }
     } else if (event_type === 'feedback') {
-      // Store feedback in a separate namespace
       const feedbackKey = `feedback:${Date.now()}`;
       if (env.ANALYTICS) {
         await env.ANALYTICS.put(feedbackKey, JSON.stringify({
@@ -193,7 +182,6 @@ async function getAnalyticsStats(env) {
       total_page_views: 0,
     };
     
-    // Handle pagination for KV list() - max 1000 keys per call
     let cursor;
     let listComplete = false;
     
@@ -201,7 +189,6 @@ async function getAnalyticsStats(env) {
       const listOptions = cursor ? { cursor } : {};
       const list = await env.ANALYTICS.list(listOptions);
       
-      // Process this batch of keys
       for (const key of list.keys) {
         const value = await env.ANALYTICS.get(key.name);
         const count = parseInt(value) || 0;
@@ -309,16 +296,16 @@ function getInfoPage() {
 <body>
     <div class="container">
         <h1>📦 OmniPkg API Bridge</h1>
-        <div class="subtitle">Secure Proxy for Local Command Execution</div>
+        <div class="subtitle">Secure Proxy via Tailscale</div>
         
         <div class="feature">
             <div class="feature-title">🛡️ Privacy-First Analytics</div>
-            <div>We only track command names and button clicks. No IPs, no personal data, no tracking across sites.</div>
+            <div>We only track command names and button clicks. No IPs, no personal data.</div>
         </div>
         
         <div class="feature">
-            <div class="feature-title">🔄 Transparent Proxy</div>
-            <div>Commands pass through securely between your UI and localhost.</div>
+            <div class="feature-title">🔄 Tailscale Integration</div>
+            <div>Commands route through your secure Tailscale network.</div>
         </div>
         
         <div class="feature">
@@ -328,7 +315,8 @@ function getInfoPage() {
         
         <div class="note">
             <strong>For Users:</strong> Access the docs at 
-            <a href="https://omnipkg.pages.dev">omnipkg.pages.dev</a>
+            <a href="https://omnipkg.pages.dev">omnipkg.pages.dev</a> or
+            <a href="https://1minds3t.echo-universe.ts.net/omnipkg">via Tailscale</a>
         </div>
     </div>
 </body>

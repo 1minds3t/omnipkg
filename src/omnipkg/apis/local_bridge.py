@@ -9,6 +9,20 @@ import socket
 import webbrowser
 from pathlib import Path
 from contextlib import closing
+import logging
+import sys
+
+# Configure logging to both file and stdout
+LOG_FILE = OMNIPKG_DIR / "web_bridge.log"
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s [%(levelname)s] %(message)s',
+    handlers=[
+        logging.FileHandler(LOG_FILE),
+        logging.StreamHandler(sys.stdout)
+    ]
+)
+logger = logging.getLogger(__name__)
 
 # --- Dependency Checks ---
 try:
@@ -29,11 +43,13 @@ PRIMARY_DASHBOARD = "https://1minds3t.echo-universe.ts.net/omnipkg"
 ALLOWED_ORIGINS = {
     "https://1minds3t.echo-universe.ts.net",
     "https://omnipkg.1minds3t.workers.dev",
-    "https://omnipkg.pages.dev",  # Add Cloudflare Pages
-    "http://localhost:8085",
-    "http://127.0.0.1:8085",
-    "http://localhost:8000",  # MkDocs dev server
-    "http://127.0.0.1:8000"
+    "https://omnipkg.pages.dev",
+    "http://localhost:8085",      # ✅ Your mkdocs
+    "http://127.0.0.1:8085",      # ✅ Same but 127.0.0.1
+    "http://localhost:8000",
+    "http://127.0.0.1:8000",
+    "http://localhost:5000",      # ⭐ ADD THIS - bridge itself
+    "http://127.0.0.1:5000",      # ⭐ ADD THIS
 }
 
 # Standardized paths
@@ -154,6 +170,7 @@ def create_app(port):
     @app.route('/health', methods=['GET', 'OPTIONS'])
     def health():
         origin = request.headers.get('Origin')
+        logger.info(f"Health check from origin: {origin}")
         if request.method == "OPTIONS": 
             return corsify_response(make_response(), origin)
         return corsify_response(jsonify({
@@ -165,13 +182,15 @@ def create_app(port):
     @app.route('/run', methods=['POST', 'OPTIONS'])
     def run_command():
         origin = request.headers.get('Origin')
+        logger.info(f"Run command from origin: {origin}")
         if request.method == "OPTIONS": 
             return corsify_response(make_response(), origin)
         
         data = request.json
         cmd = data.get('command', '')
-        print(f"⚡ Web Request: {cmd}", flush=True)
+        logger.info(f"⚡ Executing: {cmd}")
         output = execute_omnipkg_command(cmd)
+        logger.info(f"✅ Command completed")
         return corsify_response(jsonify({"output": output}), origin)
     
     return app
