@@ -36,6 +36,102 @@ filelock (v3.19.1)
 License: Apache-2.0
 See licenses/filelock.txt for full license text
 
+filelock-lts
+License: Apache-2.0 (matches upstream filelock)
+See licenses/filelock.txt for full license text
+
 uv (v0.6.3)
 License: MIT
 See licenses/uv.txt for full license text
+
+urllib3
+License: MIT
+See licenses/urllib3.txt for full license text
+
+urllib3-lts
+License: MIT (matches upstream urllib3)
+See licenses/urllib3.txt for full license text
+
+psutil
+License: BSD-3-Clause
+See licenses/psutil.txt for full license text
+
+typer
+License: MIT
+See licenses/typer.txt for full license text
+
+rich
+License: MIT
+See licenses/rich.txt for full license text
+
+flask
+License: BSD-3-Clause
+See licenses/flask.txt for full license text
+
+flask-cors
+License: MIT
+See licenses/flask-cors.txt for full license text
+
+typing-extensions
+License: Python Software Foundation License
+See licenses/typing-extensions.txt for full license text
+
+importlib-metadata
+License: Apache-2.0
+See licenses/importlib-metadata.txt for full license text
+
+dataclasses
+License: Apache-2.0
+See licenses/dataclasses.txt for full license text
+
+safety
+License: MIT
+See licenses/safety.txt for full license text
+
+marshmallow
+License: MIT
+See licenses/marshmallow.txt for full license text
+
+pip-audit
+License: Apache-2.0
+See licenses/pip-audit.txt for full license text
+
+aiohappyeyeballs
+License: Python Software Foundation License
+See licenses/aiohappyeyeballs.txt for full license text
+
+aiosignal
+License: Apache-2.0
+See licenses/aiosignal.txt for full license text
+
+attrs
+License: MIT
+See licenses/attrs.txt for full license text
+
+certifi
+License: MPL-2.0
+See licenses/certifi.txt for full license text
+
+charset-normalizer
+License: MIT
+See licenses/charset-normalizer.txt for full license text
+
+frozenlist
+License: Apache-2.0
+See licenses/frozenlist.txt for full license text
+
+idna
+License: BSD-3-Clause
+See licenses/idna.txt for full license text
+
+multidict
+License: Apache-2.0
+See licenses/multidict.txt for full license text
+
+propcache
+License: Apache-2.0
+See licenses/propcache.txt for full license text
+
+yarl
+License: Apache-2.0
+See licenses/yarl.txt for full license text
