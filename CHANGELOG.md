@@ -2,6 +2,66 @@
 
 # Changelog
 
+## [v2.1.0] - 2026-01-05
+
+### 🚀 Release v2.1.0 — Executable Documentation & Hybrid Local Cloud
+
+**OmniPkg is no longer just a package manager. It is now an execution platform.**
+
+This release introduces **Executable Documentation**: a secure hybrid architecture that allows users to run real OmniPkg commands directly from the documentation website — with execution happening on their own machine, not in the cloud.
+
+Static docs are dead. Your environment is now the runtime.
+
+### ✨ New Features
+
+#### Executable Documentation
+Documentation pages now include live “Run” buttons that execute the exact command being shown and stream real output back to the browser.
+*   No copy/paste
+*   No terminal switching
+*   No “works on my machine”
+
+#### OmniPkg Web Bridge
+A new local service that securely connects your browser to your machine:
+*   Runs as a local Flask service (`omnipkg web start`)
+*   Executes commands in a constrained subprocess
+*   Streams stdout/stderr live
+*   Enforces strict CORS + allowlisting
+*   Requires no open ports
+
+#### Hybrid Cloud–Local Architecture
+OmniPkg now spans three layers — without centralizing compute:
+1.  **Cloudflare Pages:** Static docs, UI, WASM, zero trust
+2.  **Cloudflare Worker:** Edge proxy + routing
+3.  **Local Bridge:** Actual execution on your machine
+
+#### Tailscale Remote Execution
+If the user is on the same Tailnet, commands can be executed from any device (Phone → Browser → Edge → Tailscale → Local machine). Fully end-to-end encrypted via WireGuard.
+
+#### Privacy-First Telemetry (Local-Only)
+Telemetry has been redesigned from the ground up:
+*   Stored locally in `~/.omnipkg/telemetry.db`
+*   Tracks command names and UI interactions only
+*   No IP addresses, no environment data, no cloud persistence.
+
+### 🧰 New CLI Commands
+
+*   `omnipkg web start`: Start the local web bridge
+*   `omnipkg web stop`: Stop it cleanly
+*   `omnipkg web status`: Health, PID, uptime, URL
+*   `omnipkg web logs -f`: Follow live execution + telemetry
+
+### 🔒 Security Model
+*   Strict CORS enforcement
+*   Command allowlisting
+*   No arbitrary shell execution
+*   Local-only execution by default
+*   Tailscale required for remote access
+
+### 📊 Stats
+*   Files changed: 25
+*   Insertions: 2,131
+*   Deletions: 333
+
 ## [2.0.0] - 2025-12-08 - "The Singularity"
 
 **The "Hypervisor" Update.**

@@ -188,7 +188,7 @@ def create_app(port):
         return corsify_response(jsonify({
             "status": "connected", 
             "port": port, 
-            "version": "2.0.9"
+            "version": "2.1.0"
         }), origin)
 
     @app.route('/run', methods=['POST', 'OPTIONS'])
