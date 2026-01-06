@@ -152,11 +152,10 @@ jobs:
           
           if [[ "${{ matrix.distro }}" == *"alpine"* ]]; then SHELL="/bin/sh"; else SHELL="/bin/bash"; fi
           
-          # Run with isolation: tmpfs for /tmp, capabilities dropped
-          sudo podman run --rm \
-            --network=bridge \
-            --cap-drop=ALL \
-            --cap-add=CHOWN,DAC_OVERRIDE,FOWNER,SETGID,SETUID \
+          # Run rootless Podman with proper user namespace handling
+          # Using --userns=keep-id to bypass newuidmap issues
+          podman run --rm \
+            --userns=keep-id \
             --tmpfs /tmp:rw,noexec,nosuid,size=1g \
             -v $TEST_DIR:/workspace:Z \
             --platform ${{ matrix.platform }} \
