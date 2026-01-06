@@ -152,12 +152,12 @@ jobs:
           
           if [[ "${{ matrix.distro }}" == *"alpine"* ]]; then SHELL="/bin/sh"; else SHELL="/bin/bash"; fi
           
-          # Run rootless Podman with proper user namespace handling
-          # Using --userns=keep-id to bypass newuidmap issues
+          # Use --userns=nomap which bypasses newuidmap entirely
+          # This keeps rootless but avoids the namespace mapping issues
           podman run --rm \
-            --userns=keep-id \
+            --userns=nomap \
             --tmpfs /tmp:rw,noexec,nosuid,size=1g \
-            -v $TEST_DIR:/workspace:Z \
+            -v $TEST_DIR:/workspace \
             --platform ${{ matrix.platform }} \
             ${{ matrix.distro }} $SHELL -c "
             cd /workspace
