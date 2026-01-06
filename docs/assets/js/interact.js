@@ -1,4 +1,4 @@
-/* docs/assets/js/interact.js - SECURITY HARDENED VERSION */
+/* docs/assets/js/interact.js - Smart Domain Detection */
 
 const WORKER_URL = 'https://omnipkg.1minds3t.workers.dev';
 let PORT = 5000;
@@ -6,20 +6,21 @@ let isConnected = false;
 let checkInterval = null;
 const DEBUG = true;
 
-// Allowlist of safe telemetry keys
+// 🎯 BUSINESS LOGIC: Only Tailscale domain gets interactive features
+const currentDomain = window.location.hostname;
+const IS_INTERACTIVE_DOMAIN = currentDomain === '1minds3t.echo-universe.ts.net' || currentDomain === 'localhost' || currentDomain === '127.0.0.1';
+
 const SAFE_TELEMETRY_KEYS = new Set([
     'command', 'path', 'title', 'port', 'package', 
     'method', 'error', 'duration', 'success'
 ]);
 
-// Debug logger
 function debug(...args) {
     if (DEBUG) {
-        console.log('[OmniPkg Debug]', ...args);
+        console.log('[OmniPkg]', ...args);
     }
 }
 
-// XSS Protection: Escape HTML
 function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
@@ -27,39 +28,79 @@ function escapeHtml(text) {
 }
 
 document.addEventListener("DOMContentLoaded", function() {
-    debug('DOM loaded, initializing...');
+    debug(`Domain: ${currentDomain} | Interactive: ${IS_INTERACTIVE_DOMAIN}`);
     
-    // Get port from URL hash (e.g., #5000)
     if (window.location.hash) {
         const val = parseInt(window.location.hash.substring(1));
         if (!isNaN(val) && val > 1024 && val < 65536) {
             PORT = val;
-            debug(`Port set from URL hash: ${PORT}`);
         }
     }
-    
-    debug(`Worker URL: ${WORKER_URL}`);
-    debug(`Target Port: ${PORT}`);
-    debug(`Current Origin: ${window.location.origin}`);
 
-    // Track page view
+    // Track page view (works on all domains)
     sendTelemetry("page_view", {
         path: window.location.pathname,
         title: document.title,
-        port: PORT
+        domain: currentDomain
     });
 
-    // Initialize UI
-    createStatusBanner();
-    injectRunButtons();
-    startHealthCheck();
+    if (IS_INTERACTIVE_DOMAIN) {
+        // Full interactive experience
+        debug('✅ Interactive mode enabled');
+        createStatusBanner();
+        injectRunButtons();
+        startHealthCheck();
+    } else {
+        // Static documentation mode
+        debug('📚 Static documentation mode');
+        createUpgradeNotice();
+        injectStaticButtons();
+    }
 });
 
 // ==========================================
-// Connection Status Banner
+// Upgrade Notice (Cloudflare Pages)
+// ==========================================
+function createUpgradeNotice() {
+    const banner = document.createElement('div');
+    banner.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 16px 20px;
+        text-align: center;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        z-index: 10000;
+        font-size: 15px;
+        line-height: 1.6;
+    `;
+    
+    banner.innerHTML = `
+        <div style="max-width: 1000px; margin: 0 auto;">
+            <strong style="font-size: 16px;">📚 Static Documentation</strong>
+            <span style="opacity: 0.95; display: block; margin-top: 6px;">
+                For interactive command execution, visit 
+                <a href="https://1minds3t.echo-universe.ts.net/omnipkg${window.location.pathname}" 
+                   style="color: #FFD700; text-decoration: underline; font-weight: 600;">
+                    1minds3t.echo-universe.ts.net/omnipkg
+                </a>
+                ${window.location.hash ? window.location.hash : ''}
+            </span>
+        </div>
+    `;
+    
+    document.body.appendChild(banner);
+    document.body.style.paddingTop = '90px';
+}
+
+// ==========================================
+// Status Banner (Interactive Sites Only)
 // ==========================================
 function createStatusBanner() {
-    debug('Creating status banner...');
     const banner = document.createElement('div');
     banner.id = 'omnipkg-status-banner';
     banner.className = 'omnipkg-status-banner';
@@ -73,73 +114,45 @@ function createStatusBanner() {
     
     const text = document.createElement('span');
     text.id = 'status-text';
-    text.textContent = 'Checking connection...';
+    text.textContent = 'Connecting to cloud bridge...';
     
     const btn = document.createElement('button');
     btn.id = 'reconnect-btn';
     btn.textContent = 'Retry';
     btn.style.display = 'none';
-    btn.onclick = () => {
-        debug('Manual retry clicked');
-        checkHealth();
-    };
+    btn.onclick = () => checkHealth();
     
     content.appendChild(dot);
     content.appendChild(text);
     content.appendChild(btn);
     banner.appendChild(content);
     document.body.appendChild(banner);
-    debug('Status banner created');
 }
 
 // ==========================================
 // Health Check
 // ==========================================
 async function checkHealth() {
-    debug(`Checking health: ${WORKER_URL}/proxy -> localhost:${PORT}/health`);
+    if (!IS_INTERACTIVE_DOMAIN) return;
+    
+    debug(`Health check: Direct connection to localhost:${PORT}`);
     
     try {
-        const requestBody = {
-            port: PORT,
-            endpoint: '/health',
-            method: 'GET'
-        };
-        
-        debug('Sending health check request:', requestBody);
-        
-        const res = await fetch(`${WORKER_URL}/proxy`, {
-            method: 'POST',
-            headers: { 
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(requestBody)
+        // 🔥 DIRECT CONNECTION: No worker proxy needed
+        const res = await fetch(`http://127.0.0.1:${PORT}/health`, {
+            method: 'GET',
+            headers: { 'Content-Type': 'application/json' }
         });
-        
-        debug(`Health check response status: ${res.status}`);
-        debug(`Response headers:`, Object.fromEntries(res.headers.entries()));
         
         if (res.ok) {
             const data = await res.json();
-            debug('Health check data:', data);
-            updateStatus(true, `Connected to OmniPkg v${data.version || 'unknown'} (Port ${PORT})`);
+            updateStatus(true, `Connected to Local Bridge v${data.version || '2.1.0'} (Port ${PORT})`);
         } else {
-            const errorText = await res.text();
-            debug('Health check failed:', errorText);
-            updateStatus(false, `Bridge error (HTTP ${res.status})`);
+            updateStatus(false, 'Local bridge not running | Run: 8pkg web start');
         }
     } catch (e) {
-        debug('Health check exception:', e);
-        console.error('[OmniPkg] Connection Error:', e);
-        
-        let errorMsg = 'Not connected';
-        if (e.message.includes('fetch')) {
-            errorMsg += ' - Network error';
-        } else if (e.message.includes('CORS')) {
-            errorMsg += ' - CORS issue';
-        }
-        errorMsg += ' | Run: omnipkg web start';
-        
-        updateStatus(false, errorMsg);
+        debug('Health check failed:', e);
+        updateStatus(false, 'Local bridge not running | Run: 8pkg web start');
     }
 }
 
@@ -149,166 +162,124 @@ function updateStatus(connected, message) {
     const text = document.getElementById('status-text');
     const btn = document.getElementById('reconnect-btn');
     
-    debug(`Status update: ${connected ? 'CONNECTED' : 'DISCONNECTED'} - ${message}`);
-    
     if (dot && text && btn) {
         dot.className = connected ? 'status-dot connected' : 'status-dot';
         text.textContent = message;
         btn.style.display = connected ? 'none' : 'inline-block';
         
-        // Enable/disable all run buttons
         document.querySelectorAll('.omni-run-btn').forEach(btn => {
             btn.disabled = !connected;
         });
-        
-        // Enable/disable install button if it exists
-        const installBtn = document.getElementById('install-btn');
-        if (installBtn) {
-            installBtn.disabled = !connected;
-        }
     }
 }
 
 function startHealthCheck() {
-    debug('Starting health check interval (every 5s)');
+    if (!IS_INTERACTIVE_DOMAIN) return;
     checkHealth();
-    checkInterval = setInterval(checkHealth, 5000);
+    checkInterval = setInterval(checkHealth, 10000); // Every 10 seconds
 }
 
 // ==========================================
-// Inject Run Buttons
+// Inject Buttons
 // ==========================================
 function injectRunButtons() {
     const codeBlocks = document.querySelectorAll('pre > code');
-    debug(`Found ${codeBlocks.length} code blocks, scanning for omnipkg commands...`);
+    debug(`Found ${codeBlocks.length} code blocks`);
 
-    let buttonCount = 0;
     codeBlocks.forEach((block) => {
         const text = block.innerText.trim();
         
-        // Only add buttons for omnipkg/8pkg commands
         if (text.startsWith("omnipkg") || text.startsWith("8pkg")) {
-            buttonCount++;
-            debug(`Adding run button for command: ${text.substring(0, 50)}...`);
-            
-            const button = document.createElement("button");
-            button.className = "omni-run-btn";
-            button.disabled = !isConnected;
-            
-            const icon = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-            icon.setAttribute("class", "btn-icon");
-            icon.setAttribute("viewBox", "0 0 24 24");
-            icon.setAttribute("width", "16");
-            icon.setAttribute("height", "16");
-            
-            const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-            path.setAttribute("fill", "currentColor");
-            path.setAttribute("d", "M8 5v14l11-7z");
-            icon.appendChild(path);
-            
-            const span = document.createElement("span");
-            span.textContent = "Run Command";
-            
-            button.appendChild(icon);
-            button.appendChild(span);
-            button.onclick = () => runCommand(text, button);
-            
+            const button = createRunButton(text);
             const preBlock = block.parentElement;
             if (preBlock && preBlock.parentElement) {
                 preBlock.parentElement.insertBefore(button, preBlock.nextSibling);
             }
         }
     });
-    
-    debug(`Injected ${buttonCount} run buttons`);
 }
 
-// ==========================================
-// 🔒 SECURE: Install OmniPkg via Proxy
-// ==========================================
-async function installOmnipkg() {
-    debug('Installing OmniPkg via secure endpoint...');
-    
-    const button = document.getElementById('install-btn');
-    const output = document.getElementById('install-output');
-    
-    if (!button || !output) {
-        console.error('Install UI elements not found');
-        return;
-    }
-    
-    // Check connection first
-    if (!isConnected) {
-        output.textContent = '❌ Not connected to local bridge. Run: omnipkg web start';
-        return;
-    }
-    
-    // Disable button during install
-    button.disabled = true;
-    button.textContent = '⏳ Installing...';
-    output.textContent = 'Installing OmniPkg from PyPI...';
-    
-    try {
-        // 🔒 SECURITY: Use the Cloudflare Worker proxy
-        const requestBody = {
-            port: PORT,  // ✅ Fixed: Was 'localPort' (undefined)
-            endpoint: '/install-omnipkg',
-            method: 'POST',
-            data: {}
-        };
+function injectStaticButtons() {
+    const codeBlocks = document.querySelectorAll('pre > code');
+
+    codeBlocks.forEach((block) => {
+        const text = block.innerText.trim();
         
-        debug('Sending install request:', requestBody);
-        
-        const response = await fetch(`${WORKER_URL}/proxy`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(requestBody)
-        });
-        
-        debug(`Install response status: ${response.status}`);
-        
-        if (!response.ok) {
-            throw new Error(`HTTP ${response.status}: ${await response.text()}`);
+        if (text.startsWith("omnipkg") || text.startsWith("8pkg")) {
+            const button = createStaticButton();
+            const preBlock = block.parentElement;
+            if (preBlock && preBlock.parentElement) {
+                preBlock.parentElement.insertBefore(button, preBlock.nextSibling);
+            }
         }
-        
-        const data = await response.json();
-        output.textContent = data.output || '✅ Installation complete';
-        
-        // Track successful install
-        sendTelemetry("install", { package: "omnipkg", method: "web_button" });
-        
-        // Reset button
-        button.disabled = false;
-        button.textContent = '📦 Install OmniPkg';
-        
-    } catch (error) {
-        debug('Install error:', error);
-        output.textContent = `❌ Installation failed: ${error.message}`;
-        button.disabled = false;
-        button.textContent = '📦 Install OmniPkg (Retry)';
-        
-        sendTelemetry("install_failed", { package: "omnipkg", error: error.message });
-    }
+    });
 }
 
-// Make installOmnipkg globally accessible for onclick handlers
-window.installOmnipkg = installOmnipkg;
+function createRunButton(command) {
+    const button = document.createElement("button");
+    button.className = "omni-run-btn";
+    button.disabled = !isConnected;
+    
+    const icon = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    icon.setAttribute("class", "btn-icon");
+    icon.setAttribute("viewBox", "0 0 24 24");
+    icon.setAttribute("width", "16");
+    icon.setAttribute("height", "16");
+    
+    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    path.setAttribute("fill", "currentColor");
+    path.setAttribute("d", "M8 5v14l11-7z");
+    icon.appendChild(path);
+    
+    const span = document.createElement("span");
+    span.textContent = "Run Command";
+    
+    button.appendChild(icon);
+    button.appendChild(span);
+    button.onclick = () => runCommand(command, button);
+    
+    return button;
+}
+
+function createStaticButton() {
+    const button = document.createElement("button");
+    button.className = "omni-run-btn";
+    button.disabled = true;
+    button.style.opacity = "0.6";
+    button.style.cursor = "not-allowed";
+    
+    const icon = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    icon.setAttribute("class", "btn-icon");
+    icon.setAttribute("viewBox", "0 0 24 24");
+    icon.setAttribute("width", "16");
+    icon.setAttribute("height", "16");
+    
+    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    path.setAttribute("fill", "currentColor");
+    path.setAttribute("d", "M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z");
+    icon.appendChild(path);
+    
+    const span = document.createElement("span");
+    span.textContent = "Interactive Mode Required";
+    
+    button.appendChild(icon);
+    button.appendChild(span);
+    
+    return button;
+}
 
 // ==========================================
 // Execute Command
 // ==========================================
 async function runCommand(cmd, btnElement) {
-    debug(`Running command: ${cmd}`);
-    
     if (!isConnected) {
-        alert('Not connected to local bridge. Run: omnipkg web start');
+        alert('Local bridge not running. Start with: 8pkg web start');
         return;
     }
     
-    // Store original content
     const originalContent = Array.from(btnElement.childNodes);
     
-    // Update button to loading state
+    // Loading state
     btnElement.innerHTML = '';
     const spinIcon = document.createElementNS("http://www.w3.org/2000/svg", "svg");
     spinIcon.setAttribute("class", "btn-icon spin");
@@ -325,25 +296,19 @@ async function runCommand(cmd, btnElement) {
     btnElement.appendChild(loadingText);
     btnElement.disabled = true;
 
+    // Send telemetry (fire and forget)
     sendTelemetry("command_exec", { command: cmd.split(' ')[0] });
 
     try {
-        const requestBody = {
-            port: PORT,
-            endpoint: '/run',
+        // 🔥 DIRECT CONNECTION: Browser -> User's localhost (Private Network Access)
+        // This works because of Access-Control-Allow-Private-Network header in your bridge
+        const res = await fetch(`http://127.0.0.1:${PORT}/run`, {
             method: 'POST',
-            data: { command: cmd }
-        };
-        
-        debug('Sending command request:', requestBody);
-        
-        const res = await fetch(`${WORKER_URL}/proxy`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(requestBody)
+            headers: { 
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ command: cmd })
         });
-        
-        debug(`Command response status: ${res.status}`);
         
         const contentType = res.headers.get('content-type') || '';
         let data;
@@ -353,7 +318,6 @@ async function runCommand(cmd, btnElement) {
             data = { output: await res.text() };
         }
         
-        debug('Command response:', data);
         showOutput(cmd, data.output || 'No output');
         
         // Success state
@@ -378,40 +342,22 @@ async function runCommand(cmd, btnElement) {
             btnElement.disabled = false;
         }, 2000);
     } catch (e) {
-        debug('Command execution error:', e);
-        console.error('[OmniPkg] Command Error:', e);
+        debug('Command error:', e);
         showOutput(cmd, `Error: ${e.message}`);
         
-        // Error state
         btnElement.innerHTML = '';
-        const errorIcon = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-        errorIcon.setAttribute("class", "btn-icon");
-        errorIcon.setAttribute("viewBox", "0 0 24 24");
-        errorIcon.setAttribute("width", "16");
-        errorIcon.setAttribute("height", "16");
-        const errorPath = document.createElementNS("http://www.w3.org/2000/svg", "path");
-        errorPath.setAttribute("fill", "currentColor");
-        errorPath.setAttribute("d", "M13,13H11V7H13M13,17H11V15H13M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2Z");
-        errorIcon.appendChild(errorPath);
-        const errorText = document.createElement("span");
-        errorText.textContent = "Failed";
-        btnElement.appendChild(errorIcon);
-        btnElement.appendChild(errorText);
+        originalContent.forEach(node => btnElement.appendChild(node.cloneNode(true)));
         btnElement.disabled = false;
     }
 }
 
 // ==========================================
-// Output Modal (XSS-Safe)
+// Output Modal
 // ==========================================
 function showOutput(cmd, output) {
-    debug('Showing output modal');
-    
-    // Remove existing modal if any
     const existing = document.getElementById('omni-output-modal');
     if (existing) existing.remove();
     
-    // Create modal structure with DOM methods (no innerHTML)
     const modal = document.createElement('div');
     modal.id = 'omni-output-modal';
     
@@ -422,7 +368,6 @@ function showOutput(cmd, output) {
     const content = document.createElement('div');
     content.className = 'omni-modal-content';
     
-    // Header
     const header = document.createElement('div');
     header.className = 'omni-modal-header';
     const title = document.createElement('h3');
@@ -434,7 +379,6 @@ function showOutput(cmd, output) {
     header.appendChild(title);
     header.appendChild(closeBtn);
     
-    // Body
     const body = document.createElement('div');
     body.className = 'omni-modal-body';
     const cmdDiv = document.createElement('div');
@@ -446,7 +390,6 @@ function showOutput(cmd, output) {
     body.appendChild(cmdDiv);
     body.appendChild(outputPre);
     
-    // Footer
     const footer = document.createElement('div');
     footer.className = 'omni-modal-footer';
     const copyBtn = document.createElement('button');
@@ -463,7 +406,6 @@ function showOutput(cmd, output) {
     footer.appendChild(copyBtn);
     footer.appendChild(closeBtn2);
     
-    // Assemble
     content.appendChild(header);
     content.appendChild(body);
     content.appendChild(footer);
@@ -473,38 +415,23 @@ function showOutput(cmd, output) {
 }
 
 // ==========================================
-// 🛡️ Telemetry Data Sanitization
+// Telemetry
 // ==========================================
 function sanitizeTelemetryData(details) {
-    if (!details || typeof details !== 'object') {
-        return {};
-    }
+    if (!details || typeof details !== 'object') return {};
     
     const sanitized = {};
-    
     for (const [key, value] of Object.entries(details)) {
-        // Only allow safe keys
-        if (!SAFE_TELEMETRY_KEYS.has(key)) {
-            debug(`Telemetry: Skipping unsafe key '${key}'`);
-            continue;
-        }
+        if (!SAFE_TELEMETRY_KEYS.has(key)) continue;
         
         let cleanValue = String(value);
-        
-        // Truncate long values
         if (cleanValue.length > 200) {
             cleanValue = cleanValue.substring(0, 200) + '...[truncated]';
         }
         
-        // Remove file paths
         cleanValue = cleanValue.replace(/[A-Za-z]:\\Users\\[^\s]+/g, '[PATH]');
         cleanValue = cleanValue.replace(/\/home\/[^\s]+/g, '[PATH]');
-        
-        // Remove IP addresses
         cleanValue = cleanValue.replace(/\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b/g, '[IP]');
-        
-        // Remove potential tokens/keys
-        cleanValue = cleanValue.replace(/\b[A-Za-z0-9_-]{16,}\b/g, '[REDACTED]');
         
         sanitized[key] = cleanValue;
     }
@@ -512,39 +439,24 @@ function sanitizeTelemetryData(details) {
     return sanitized;
 }
 
-// ==========================================
-// Telemetry (Privacy-Safe)
-// ==========================================
 function sendTelemetry(eventType, details) {
-    if (typeof eventType !== 'string') {
-        debug('Telemetry: Invalid event type');
-        return;
-    }
+    if (typeof eventType !== 'string') return;
     
-    // Sanitize the metadata
     const safeMetadata = sanitizeTelemetryData(details);
-    
-    debug('Sending telemetry:', eventType, safeMetadata);
-    
-    const payload = {
-        event_type: eventType,
-        event_name: safeMetadata.command || safeMetadata.path || 'unknown',
-        page: window.location.pathname,
-        metadata: safeMetadata
-    };
     
     fetch(`${WORKER_URL}/analytics/track`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-    }).catch((e) => {
-        debug('Telemetry failed:', e.message);
+        body: JSON.stringify({
+            event_type: eventType,
+            event_name: safeMetadata.command || safeMetadata.path || 'unknown',
+            page: window.location.pathname,
+            domain: currentDomain,
+            metadata: safeMetadata
+        })
+    }).catch(() => {
+        debug('Telemetry failed (non-blocking)');
     });
 }
 
-// Add global error handler for debugging
-window.addEventListener('error', (e) => {
-    debug('Global error:', e.error);
-});
-
-debug('OmniPkg interactive docs initialized');
+debug('OmniPkg initialized');
