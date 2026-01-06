@@ -11,6 +11,6 @@ By obtaining a commercial license, you are granted permission to:
 
 To inquire about commercial terms and pricing, please contact:
 
-📧  omnipkg@proton.me
+📧  1minds3t@proton.me
 
 This license does NOT affect the open-source AGPLv3 version, which remains freely available.
