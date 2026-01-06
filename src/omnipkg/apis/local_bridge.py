@@ -371,6 +371,31 @@ def create_app(port):
     except Exception as e:
         logger.error(f"Failed to init DB: {e}")
 
+    @app.before_request
+    def enforce_origin():
+        # Allow OPTIONS (Preflight) to pass for CORS checks
+        if request.method == "OPTIONS":
+            return
+        
+        # Get the Origin header sent by the browser
+        origin = request.headers.get('Origin')
+        
+        # 1. Block requests with NO Origin (like standard curl/scripts)
+        if not origin:
+            return jsonify({
+                "error": "❌ Direct API access prohibited.",
+                "message": "You must use the OmniPkg Web UI to interact with this bridge.",
+                "url": PRIMARY_DASHBOARD
+            }), 403
+
+        # 2. Block requests from unauthorized domains (spoofing attempts)
+        clean_origin = origin.rstrip("/")
+        if clean_origin not in ALLOWED_ORIGINS:
+             return jsonify({
+                "error": "❌ Unauthorized Origin.",
+                "message": f"Origin '{clean_origin}' is not whitelisted."
+            }), 403
+
     @app.route('/health', methods=['GET', 'OPTIONS'])
     def health():
         origin = request.headers.get('Origin')
