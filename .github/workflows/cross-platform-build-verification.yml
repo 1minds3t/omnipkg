@@ -112,7 +112,7 @@ jobs:
           omnipkg list
 
   # ═══════════════════════════════════════════════════════════════════
-  # 2. CRITICAL TESTS (Podman) - FIXED: Standard rootless with label=disable
+  # 2. CRITICAL TESTS (Podman) - FIXED: Use /var/tmp for all tests
   # ═══════════════════════════════════════════════════════════════════
   linux-distros-podman-critical:
     name: Podman - ${{ matrix.distro }} (${{ matrix.platform }})
@@ -144,19 +144,15 @@ jobs:
           
       - name: Test
         run: |
-          # For ARM64 emulation, use a dedicated test directory outside workspace
-          # This avoids both QEMU /tmp issues and recursive copy problems
-          if [[ "${{ matrix.platform }}" == "linux/arm64" ]]; then
-            # Use /var/tmp which is more persistent and reliable for QEMU
-            SAFE_DISTRO="${{ matrix.distro }}"
-            SAFE_DISTRO="${SAFE_DISTRO//:/}"  # Remove colons
-            TEST_DIR="/var/tmp/omnipkg-test-${SAFE_DISTRO}-$"
-            mkdir -p "$TEST_DIR"
-            trap "rm -rf $TEST_DIR" EXIT
-          else
-            TEST_DIR=$(mktemp -d)
-            trap "rm -rf $TEST_DIR" EXIT
-          fi
+          # Use /var/tmp for ALL Podman tests to avoid namespace/storage issues
+          # This is more reliable than /tmp for rootless Podman with QEMU emulation
+          SAFE_DISTRO="${{ matrix.distro }}"
+          SAFE_DISTRO="${SAFE_DISTRO//:/}"  # Remove colons
+          SAFE_DISTRO="${SAFE_DISTRO//\//_}"  # Remove slashes
+          TEST_DIR="/var/tmp/omnipkg-test-${SAFE_DISTRO}-$$"
+          
+          mkdir -p "$TEST_DIR"
+          trap "rm -rf $TEST_DIR" EXIT
           
           # Copy source to isolated test directory
           cp -r . "$TEST_DIR/"
@@ -164,7 +160,6 @@ jobs:
           if [[ "${{ matrix.distro }}" == *"alpine"* ]]; then SHELL="/bin/sh"; else SHELL="/bin/bash"; fi
           
           # Use standard rootless Podman with label=disable to avoid SELinux issues
-          # For ARM64 emulation, ensure the path is absolute and exists
           podman run --rm \
             --security-opt label=disable \
             -v "$TEST_DIR:/workspace:rw" \
@@ -187,7 +182,7 @@ jobs:
             omnipkg --version
             omnipkg list
           "
-          
+
   # ═══════════════════════════════════════════════════════════════════
   # 3. DOCKER JOBS
   # ═══════════════════════════════════════════════════════════════════
