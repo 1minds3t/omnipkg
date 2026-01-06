@@ -26,18 +26,22 @@ except ImportError:
     HAS_WEB_DEPS = False
 
 # --- Configuration ---
+DEV_MODE = os.environ.get("OMNIPKG_DEV_MODE", "0") == "1"
+
 PRIMARY_DASHBOARD = "https://1minds3t.echo-universe.ts.net/omnipkg/"
+# 🔒 SECURITY: Only allow requests from the actual Frontend UI
 ALLOWED_ORIGINS = {
+    # 1. Your Public Tailscale Funnel (The main UI)
     "https://1minds3t.echo-universe.ts.net",
-    "https://omnipkg.1minds3t.workers.dev",
+    
+    # 2. Cloudflare Pages (Static docs fallback)
     "https://omnipkg.pages.dev",
-    "http://localhost:8085",
-    "http://127.0.0.1:8085",
-    "http://localhost:8000",
-    "http://127.0.0.1:8000",
-    "http://localhost:5000",
-    "http://127.0.0.1:5000",
 }
+if DEV_MODE:
+    ALLOWED_ORIGINS.update({
+        "http://localhost:8085",
+        "http://127.0.0.1:8085",
+    })
 
 OMNIPKG_DIR = Path.home() / ".omnipkg"
 PID_FILE = OMNIPKG_DIR / "web_bridge.pid"
@@ -721,13 +725,21 @@ class WebBridgeManager:
         return f"{int(h)}h {int(m)}m {int(s)}s"
 
 # Configure logging
+log_handlers = [logging.StreamHandler(sys.stdout)]
+
+try:
+    # Ensure directory exists before creating log file
+    OMNIPKG_DIR.mkdir(parents=True, exist_ok=True)
+    log_handlers.append(logging.FileHandler(LOG_FILE))
+except Exception:
+    # If directory creation fails (e.g. permissions), fail silently 
+    # and only log to stdout. Do not crash the CLI.
+    pass
+
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s [%(levelname)s] %(message)s',
-    handlers=[
-        logging.FileHandler(LOG_FILE),
-        logging.StreamHandler(sys.stdout)
-    ]
+    handlers=log_handlers
 )
 logger = logging.getLogger(__name__)
 
