@@ -152,11 +152,11 @@ jobs:
           
           if [[ "${{ matrix.distro }}" == *"alpine"* ]]; then SHELL="/bin/sh"; else SHELL="/bin/bash"; fi
           
-          # Run with full isolation: no network after install, read-only mounts where possible, tmpfs for /tmp
+          # Run with isolation: tmpfs for /tmp, capabilities dropped
           sudo podman run --rm \
             --network=bridge \
             --cap-drop=ALL \
-            --security-opt=no-new-privileges \
+            --cap-add=CHOWN,DAC_OVERRIDE,FOWNER,SETGID,SETUID \
             --tmpfs /tmp:rw,noexec,nosuid,size=1g \
             -v $TEST_DIR:/workspace:Z \
             --platform ${{ matrix.platform }} \
