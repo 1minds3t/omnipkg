@@ -366,21 +366,19 @@ def stress_test_command(force=False):
     safe_print()
     safe_print(_("✨ omnipkg does this LIVE, in the same Python process!"))
     safe_print(_("📊 Expected downloads: ~500MB | Duration: 30 seconds - 3 minutes"))
-    if force:
-        safe_print(_("⚡ Non-interactive mode detected: Starting immediately..."))
+    from omnipkg.common_utils import safe_input, is_interactive_session
+
+    # Auto-proceed if forced OR in non-interactive env
+    if force or not is_interactive_session():
+        safe_print(_("⚡ Non-interactive mode: Starting immediately..."))
         return True
 
-    try:
-        response = input(_("🚀 Ready to witness the impossible? (y/n): ")).lower().strip()
-    except EOFError:
-        response = "n"
-    
-    if response == "y":
-        return True
-    else:
-        safe_print(_("🎪 Cancelled. Run 'omnipkg stress-test' anytime!"))
-        return False
+    response = safe_input(
+        _("🚀 Ready to witness the impossible? (y/n): "),
+        default="n"
+    ).lower()
 
+    return response == "y"
 
 def run_actual_stress_test():
     """Run the actual stress test by locating and executing the test file."""
@@ -674,8 +672,14 @@ def create_parser():
     demo_parser = subparsers.add_parser("demo", help=_("Interactive demo for version switching"))
     demo_parser.add_argument(
         "demo_id", 
-        nargs="?", 
-        help=_("Run a specific demo by number (e.g., 'omnipkg demo 1') to skip interactive menu")
+        nargs="?",
+        type=int,  # Make it parse as integer
+        help=_("Run a specific demo by number (1-11) to skip interactive menu")
+    )
+    demo_parser.add_argument(
+        "--non-interactive", "-y",
+        action="store_true",
+        help=_("Run in non-interactive mode (uses defaults)")
     )
     stress_parser = subparsers.add_parser("stress-test", help=_("Ultimate demonstration with heavy packages"))
     stress_parser.add_argument(
@@ -1058,16 +1062,19 @@ def main():
                     versions = sorted(interpreters.keys())
                     for i, ver in enumerate(versions, 1):
                         safe_print(_("  {}. Python {}").format(i, ver))
-                    try:
-                        choice = input(_("Select version (1-{}): ").format(len(versions))).strip()
-                        if choice.isdigit() and 1 <= int(choice) <= len(versions):
-                            selected_version = versions[int(choice) - 1]
-                            return pkg_instance.switch_active_python(selected_version)
-                        else:
-                            safe_print(_("❌ Invalid selection."))
-                            return 1
-                    except (EOFError, KeyboardInterrupt):
-                        safe_print(_("\n❌ Operation cancelled."))
+                    from omnipkg.common_utils import safe_input
+
+                    choice = safe_input(
+                        _("Select version (1-{}): ").format(len(versions)),
+                        default="1",
+                        auto_value=os.environ.get("OMNIPKG_PYTHON_CHOICE", "1")
+                    )
+
+                    if choice.isdigit() and 1 <= int(choice) <= len(versions):
+                        selected_version = versions[int(choice) - 1]
+                        return pkg_instance.switch_active_python(selected_version)
+                    else:
+                        safe_print(_("❌ Invalid selection."))
                         return 1
 
             # --- Package Swapping Logic (Requires Full Core) ---
@@ -1118,10 +1125,19 @@ def main():
                 safe_print(_("10. CLI Healing Test (omnipkg run shell commands)"))
                 safe_print(_("11. 🌀 Chaos Theory Stress Test (Loader torture test)"))
 
-                try:
-                    response = input(_("Enter your choice (1-11): ")).strip()
-                except EOFError:
-                    response = ""
+                from omnipkg.common_utils import safe_input
+
+                # Check if demo_id was passed as CLI arg
+                if hasattr(args, 'demo_id') and args.demo_id:
+                    response = str(args.demo_id)
+                    safe_print(f"🎯 Running demo {response}...")
+                else:
+                    # Use safe_input with your detection logic
+                    response = safe_input(
+                        _("Enter your choice (1-11): "),
+                        default="1",  # Default to Rich test
+                        auto_value=os.environ.get("OMNIPKG_DEMO_ID", "1")  # Allow env override
+                    )
 
                 demo_map = {
                     "1": ("Rich Test", TESTS_DIR / "test_rich_switching.py", None),
