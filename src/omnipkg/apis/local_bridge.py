@@ -7,10 +7,9 @@ import shlex
 import time
 import socket
 import webbrowser
+import re
 from pathlib import Path
 from contextlib import closing
-import logging
-import sys
 
 # --- Dependency Checks ---
 try:
@@ -32,29 +31,114 @@ ALLOWED_ORIGINS = {
     "https://1minds3t.echo-universe.ts.net",
     "https://omnipkg.1minds3t.workers.dev",
     "https://omnipkg.pages.dev",
-    "http://localhost:8085",      # ✅ Your mkdocs
-    "http://127.0.0.1:8085",      # ✅ Same but 127.0.0.1
+    "http://localhost:8085",
+    "http://127.0.0.1:8085",
     "http://localhost:8000",
     "http://127.0.0.1:8000",
-    "http://localhost:5000",      # ⭐ ADD THIS - bridge itself
-    "http://127.0.0.1:5000",      # ⭐ ADD THIS
+    "http://localhost:5000",
+    "http://127.0.0.1:5000",
 }
 
-# Standardized paths
 OMNIPKG_DIR = Path.home() / ".omnipkg"
 PID_FILE = OMNIPKG_DIR / "web_bridge.pid"
 LOG_FILE = OMNIPKG_DIR / "web_bridge.log"
 
-# --- Security: Command Allowlist ---
-WEB_ALLOWED_COMMANDS = {
-    'list', 'info', 'status', 'doctor', 'config', 'check',
-    'swap', 'python', 'revert', 'rebuild-kb',
-    'reset', 'heal', 'install', 'install-with-deps',
-    'demo', 'stress-test'
+# --- Security: Command Allowlist with Argument Rules ---
+COMMAND_RULES = {
+    # Read-only commands (always safe)
+    'list': {
+        'allowed_flags': ['--verbose', '-v', '--json'],
+        'allow_args': False
+    },
+    'info': {
+        'allowed_flags': ['--verbose', '-v', '--json'],
+        'allow_args': True,  # Package names
+        'arg_pattern': r'^[a-zA-Z0-9_-]+$'
+    },
+    'status': {
+        'allowed_flags': ['--verbose', '-v', '--json'],
+        'allow_args': False
+    },
+    'doctor': {
+        'allowed_flags': ['--verbose', '-v', '--json'],
+        'allow_args': False
+    },
+    'config': {
+        'allowed_flags': ['--list', '--get', '--set'],
+        'allow_args': True,
+        'arg_pattern': r'^[a-zA-Z0-9_.-]+$'
+    },
+    'check': {
+        'allowed_flags': ['--verbose', '-v'],
+        'allow_args': False
+    },
+    
+    # Modification commands (need non-interactive flags)
+    'demo': {
+        'allowed_flags': ['--non-interactive', '-y', '--yes', '--verbose', '-v'],
+        'allow_args': True,
+        'arg_pattern': r'^\d{1,2}$',  # Demo numbers 1-99
+        'auto_flags': ['--non-interactive']  # Auto-inject this flag
+    },
+    'stress-test': {
+        'allowed_flags': ['--non-interactive', '-y', '--yes', '--verbose', '-v'],
+        'allow_args': False,
+        'auto_flags': ['--yes']
+    },
+    'swap': {
+        'allowed_flags': ['--non-interactive', '-y', '--yes', '--verbose', '-v'],
+        'allow_args': True,
+        'arg_pattern': r'^(python|node|rust|go)$'
+    },
+    'python': {
+        'allowed_flags': ['--non-interactive', '-y', '--yes', '--verbose', '-v', '--list'],
+        'allow_args': True,
+        'arg_pattern': r'^\d+\.\d+(\.\d+)?$'  # Version like 3.11 or 3.11.5
+    },
+    'revert': {
+        'allowed_flags': ['--non-interactive', '-y', '--yes', '--verbose', '-v'],
+        'allow_args': False,
+        'auto_flags': ['--yes']
+    },
+    'rebuild-kb': {
+        'allowed_flags': ['--non-interactive', '-y', '--yes', '--verbose', '-v'],
+        'allow_args': False
+    },
+    'reset': {
+        'allowed_flags': ['--non-interactive', '-y', '--yes', '--verbose', '-v'],
+        'allow_args': False,
+        'auto_flags': ['--yes']
+    },
+    'heal': {
+        'allowed_flags': ['--non-interactive', '-y', '--yes', '--verbose', '-v'],
+        'allow_args': False
+    },
+    'install': {
+        'allowed_flags': ['--upgrade', '--force', '--force-reinstall', '--no-deps', 
+                         '--verbose', '-v', '--non-interactive', '-y', '--yes'],
+        'allow_args': True,
+        'arg_pattern': r'^[a-zA-Z0-9_-]+$',  # Only package names, no URLs
+        'blocked_patterns': [r'://', r'git\+', r'\.\.', r'^/']
+    },
+    'install-with-deps': {
+        'allowed_flags': ['--upgrade', '--force', '--force-reinstall', 
+                         '--verbose', '-v', '--non-interactive', '-y', '--yes'],
+        'allow_args': True,
+        'arg_pattern': r'^[a-zA-Z0-9_-]+$',
+        'blocked_patterns': [r'://', r'git\+', r'\.\.', r'^/']
+    },
+    'prune': {
+        'allowed_flags': ['--keep-latest', '--force', '--non-interactive', 
+                         '-y', '--yes', '--verbose', '-v'],
+        'allow_args': True,
+        'arg_pattern': r'^\d+$',  # Number of versions to keep
+        'auto_flags': ['--yes']
+    }
 }
 
-WEB_BLOCKED_COMMANDS = {
-    'run', 'shell', 'exec', 'uninstall', 'prune', 'upgrade', 'reset-config'
+# Commands that are completely blocked from web access
+BLOCKED_COMMANDS = {
+    'run', 'shell', 'exec', 'uninstall', 'upgrade', 'reset-config', 'daemon'
 }
 
 # ==========================================
@@ -71,78 +155,104 @@ def find_free_port(start_port=5000, max_port=65535):
 
 def clean_and_validate(cmd_str):
     """
-    🔒 HARDENED VALIDATOR
-    - Sanitizes incoming commands
-    - Blocks dangerous verbs
-    - Prevents package poisoning via install
-    - Prevents flag injection
+    🔒 ENHANCED VALIDATOR v4 - Non-Interactive Friendly
+    
+    Security features:
+    - Whitelist-based command validation
+    - Argument pattern matching
+    - Shell injection prevention
+    - URL install blocking
+    - Path traversal prevention
+    
+    New features:
+    - Supports numeric arguments (for demo selection)
+    - Allows non-interactive flags
+    - Auto-injects required flags for safety
     """
     if not cmd_str or not cmd_str.strip():
-        return False, "Empty command.", None
+        return False, "Empty command.", None, []
     
     clean_str = cmd_str.strip()
+    
     # Strip common prefixes
     if clean_str.lower().startswith("8pkg "):
         clean_str = clean_str[5:].strip()
     elif clean_str.lower().startswith("omnipkg "):
         clean_str = clean_str[8:].strip()
     
-    parts = shlex.split(clean_str)
-    clean_parts = [p for p in parts if not p.startswith('-')]
+    # Remove any piping/chaining attempts
+    clean_str = clean_str.split('|')[0].split(';')[0].split('&')[0].strip()
     
-    if not clean_parts:
-        return False, "No command found.", None
-
-    primary_command = clean_parts[0].lower()
-
-    # Block daemon control
-    if primary_command == 'daemon':
-        return False, "⛔ Daemon control via web is restricted.", None
-
-    # Block dangerous commands
-    if primary_command in WEB_BLOCKED_COMMANDS:
-        return False, f"⛔ Security: '{primary_command}' is disabled via Web.", None
+    try:
+        parts = shlex.split(clean_str)
+    except ValueError as e:
+        return False, f"⛔ Invalid shell syntax: {e}", None, []
     
-    # 🔒 NEW: Strict validation for 'install' commands
-    if primary_command in ['install', 'install-with-deps']:
-        for arg in parts[1:]:
-            # Block URL installations (git+https://, http://, file://, etc.)
-            if "://" in arg or arg.startswith("git+"):
-                return False, "⛔ Security: Remote URL installs disabled via Web. Use /install-omnipkg endpoint.", None
-            
-            # Block path traversal attempts
-            if ".." in arg or arg.startswith("/") or (len(arg) > 2 and arg[1] == ":"):
-                return False, "⛔ Security: Absolute/relative paths not allowed.", None
-            
-            # Block dangerous flags (only allow safe ones)
-            if arg.startswith("--"):
-                safe_flags = {"--upgrade", "--force", "--dry-run", "--no-deps"}
-                if arg not in safe_flags:
-                    return False, f"⛔ Security: Flag '{arg}' is not allowed via Web.", None
-            
-            # Block shell metacharacters in package names
-            if any(char in arg for char in [";", "|", "&", "$", "`", "(", ")", "<", ">", "\\"]):
-                return False, "⛔ Security: Invalid characters in package name.", None
-        
-        # Require at least one package name
-        package_names = [p for p in parts[1:] if not p.startswith('-')]
-        if not package_names:
-            return False, "⚠️ No package name specified.", None
-    
-    # Check if command is in whitelist
-    if primary_command not in WEB_ALLOWED_COMMANDS:
-        return False, f"⚠️ Unknown command '{primary_command}'.", None
+    if not parts:
+        return False, "No command found.", None, []
 
-    return True, "", clean_str
+    primary_command = parts[0].lower()
+    
+    # Check if command is blocked
+    if primary_command in BLOCKED_COMMANDS:
+        return False, f"⛔ Security: '{primary_command}' is disabled via Web.", None, []
+    
+    # Check if command is in our rules
+    if primary_command not in COMMAND_RULES:
+        return False, f"⚠️ Unknown command '{primary_command}'.", None, []
+    
+    rules = COMMAND_RULES[primary_command]
+    
+    # Validate each argument
+    for arg in parts[1:]:
+        # Check if it's a flag
+        if arg.startswith('-'):
+            if arg not in rules.get('allowed_flags', []):
+                return False, f"⛔ Flag '{arg}' not allowed for '{primary_command}'.", None, []
+        else:
+            # It's a positional argument
+            if not rules.get('allow_args', False):
+                return False, f"⛔ Command '{primary_command}' doesn't accept arguments.", None, []
+            
+            # Check against pattern
+            pattern = rules.get('arg_pattern')
+            if pattern and not re.match(pattern, arg):
+                return False, f"⛔ Invalid argument format: '{arg}'.", None, []
+            
+            # Check blocked patterns (for install commands)
+            blocked = rules.get('blocked_patterns', [])
+            for blocked_pattern in blocked:
+                if re.search(blocked_pattern, arg):
+                    return False, f"⛔ Security: Argument contains blocked pattern.", None, []
+    
+    # Get flags to auto-inject
+    auto_flags = rules.get('auto_flags', [])
+    
+    return True, "", clean_str, auto_flags
 
 def execute_omnipkg_command(cmd_str):
-    """Executes the validated command via subprocess with sanitized output."""
-    is_valid, msg, cleaned_cmd = clean_and_validate(cmd_str)
+    """
+    Executes validated commands with automatic non-interactive mode injection.
+    
+    Key features:
+    - Sets environment variables for non-interactive operation
+    - Auto-injects safety flags based on command rules
+    - Sanitizes all output
+    - Proper timeout handling
+    """
+    is_valid, msg, cleaned_cmd, auto_flags = clean_and_validate(cmd_str)
     if not is_valid:
-        return sanitize_output(msg)  # ✅ Sanitize even validation errors
+        return sanitize_output(msg)
 
     try:
         args = shlex.split(cleaned_cmd)
+        
+        # 🤖 AUTO-FLAG INJECTION for safety
+        for flag in auto_flags:
+            if flag not in args:
+                args.append(flag)
+                logger.info(f"🔧 Auto-injected flag: {flag}")
+        
         full_command = [sys.executable, "-m", "omnipkg", *args]
         
         startupinfo = None
@@ -152,29 +262,70 @@ def execute_omnipkg_command(cmd_str):
 
         env = os.environ.copy()
         env["PYTHONUNBUFFERED"] = "1"
+        env["OMNIPKG_WEB_MODE"] = "1"
+        env["OMNIPKG_NONINTERACTIVE"] = "1"
+        env["CI"] = "1"  # Standard CI indicator
 
         result = subprocess.run(
             full_command,
             capture_output=True,
             text=True,
-            timeout=120,
+            timeout=180,  # 3 minutes for stress tests
             env=env,
             startupinfo=startupinfo,
             cwd=Path.home() 
         )
         
-        if result.returncode == 0:
-            output = result.stdout or "(Command completed successfully)"
-            return sanitize_output(output)  # ✅ Sanitize success output
+        output = result.stdout + "\n" + result.stderr
         
-        # ✅ Sanitize error output
-        error_msg = f"Error ({result.returncode}):\n{result.stderr}\n{result.stdout}"
-        return sanitize_output(error_msg)
+        if result.returncode == 0:
+            return sanitize_output(output or "✅ Command completed successfully")
+        
+        return sanitize_output(f"⚠️ Exit Code {result.returncode}:\n{output}")
         
     except subprocess.TimeoutExpired:
-        return "Error: Command timed out after 120 seconds"
+        return "⚠️ Error: Command timed out (exceeded 3 minutes)."
     except Exception as e:
-        return sanitize_output(f"System Error: {str(e)}")  # ✅ Sanitize exceptions
+        return sanitize_output(f"System Error: {str(e)}")
+
+def sanitize_output(text):
+    """
+    🛡️ Removes sensitive information from command outputs.
+    
+    Redacts:
+    - User paths (Windows and Unix)
+    - Private IP addresses
+    - API keys/tokens
+    - Limits output length
+    """
+    if not text:
+        return text
+    
+    # Redact Windows user paths
+    text = re.sub(r'[A-Za-z]:\\Users\\[^\\]+', r'[USER]', text)
+    
+    # Redact Unix home paths
+    text = re.sub(r'/home/[^/\s]+', r'/home/[USER]', text)
+    
+    # Redact private IPs
+    text = re.sub(r'\b10\.\d{1,3}\.\d{1,3}\.\d{1,3}\b', '[IP]', text)
+    text = re.sub(r'\b192\.168\.\d{1,3}\.\d{1,3}\b', '[IP]', text)
+    text = re.sub(r'\b172\.(1[6-9]|2[0-9]|3[0-1])\.\d{1,3}\.\d{1,3}\b', '[IP]', text)
+    
+    # Redact secrets
+    text = re.sub(
+        r'(api[_-]?key|token|password|secret)[\s:=]+[\w-]{16,}', 
+        r'\1=[REDACTED]', 
+        text, 
+        flags=re.IGNORECASE
+    )
+    
+    # Truncate if too long
+    MAX_LENGTH = 10000
+    if len(text) > MAX_LENGTH:
+        text = text[:MAX_LENGTH] + "\n\n... [Output truncated for safety]"
+    
+    return text
 
 def corsify_response(response, origin):
     """Adds CORS headers if the origin is allowed."""
@@ -186,48 +337,8 @@ def corsify_response(response, origin):
         response.headers.add("Access-Control-Allow-Private-Network", "true")
     return response
 
-import re
-
-import re
-
-def sanitize_output(text):
-    r"""
-    🛡️ Removes sensitive information from command outputs before sending to browser.
-    Prevents:
-    - Absolute file paths (e.g., C:\Users\Alice\Documents\...)
-    - Environment variables
-    - IP addresses (private ranges)
-    - API keys/tokens in error messages
-    """
-    if not text:
-        return text
-    
-    # Replace Windows paths: C:\Users\anything -> [REDACTED]\...
-    text = re.sub(r'[A-Za-z]:\\Users\\[^\\]+', r'[USER]', text)
-    
-    # Replace Unix home paths: /home/username -> /home/[USER]
-    text = re.sub(r'/home/[^/]+', r'/home/[USER]', text)
-    
-    # Replace generic absolute paths (but keep relative ones like ./file.py)
-    text = re.sub(r'(?<!\.)(/[a-zA-Z0-9_/.-]+/[a-zA-Z0-9_.-]+)', r'[PATH]', text)
-    
-    # Redact private IP addresses (10.x, 192.168.x, 172.16-31.x)
-    text = re.sub(r'\b10\.\d{1,3}\.\d{1,3}\.\d{1,3}\b', '[IP]', text)
-    text = re.sub(r'\b192\.168\.\d{1,3}\.\d{1,3}\b', '[IP]', text)
-    text = re.sub(r'\b172\.(1[6-9]|2[0-9]|3[0-1])\.\d{1,3}\.\d{1,3}\b', '[IP]', text)
-    
-    # Redact common secret patterns (basic detection)
-    text = re.sub(r'(api[_-]?key|token|password|secret)[\s:=]+[\w-]{16,}', r'\1=[REDACTED]', text, flags=re.IGNORECASE)
-    
-    # Limit output length (prevent abuse via massive error dumps)
-    MAX_LENGTH = 5000
-    if len(text) > MAX_LENGTH:
-        text = text[:MAX_LENGTH] + "\n\n... [Output truncated for safety]"
-    
-    return text
-
 def create_app(port):
-    """Creates the Flask application with SQLite Telemetry."""
+    """Creates the Flask application with telemetry support."""
     import sqlite3
     import json
     from datetime import datetime
@@ -239,7 +350,7 @@ def create_app(port):
     log = logging.getLogger('werkzeug')
     log.setLevel(logging.ERROR)
     
-    # Init DB
+    # Initialize telemetry DB
     DB_FILE = OMNIPKG_DIR / "telemetry.db"
     def init_db():
         with sqlite3.connect(DB_FILE) as conn:
@@ -253,17 +364,52 @@ def create_app(port):
                     meta TEXT
                 )
             ''')
+    
     try:
         init_db()
         logger.info(f"📊 Telemetry DB initialized at {DB_FILE}")
     except Exception as e:
         logger.error(f"Failed to init DB: {e}")
 
+    @app.route('/health', methods=['GET', 'OPTIONS'])
+    def health():
+        origin = request.headers.get('Origin')
+        if request.method == "OPTIONS": 
+            return corsify_response(make_response(), origin)
+        return corsify_response(jsonify({
+            "status": "connected", 
+            "port": port, 
+            "version": "4.0.0"
+        }), origin)
+
+    @app.route('/run', methods=['POST', 'OPTIONS'])
+    def run_command():
+        origin = request.headers.get('Origin')
+        if request.method == "OPTIONS": 
+            return corsify_response(make_response(), origin)
+        
+        data = request.json
+        cmd = data.get('command', '')
+        logger.info(f"⚡ Executing: {cmd}")
+        output = execute_omnipkg_command(cmd)
+        
+        # Log to telemetry
+        try:
+            with sqlite3.connect(DB_FILE) as conn:
+                conn.execute(
+                    "INSERT INTO telemetry (timestamp, event_type, event_name, page, meta) VALUES (?, ?, ?, ?, ?)",
+                    (datetime.utcnow().isoformat(), "command_exec", cmd.split()[0] if cmd.split() else "unknown", "local_bridge", json.dumps({"full_cmd": cmd}))
+                )
+        except Exception as e:
+            logger.error(f"DB Error: {e}")
+
+        return corsify_response(jsonify({"output": output}), origin)
+
     @app.route('/install-omnipkg', methods=['POST', 'OPTIONS'])
     def install_omnipkg():
         """
         🔒 HARDCODED INSTALLATION ENDPOINT
-        Only installs omnipkg from PyPI. No arguments accepted.
+        Only installs omnipkg from PyPI. No user arguments accepted.
         """
         origin = request.headers.get('Origin')
         if request.method == "OPTIONS": 
@@ -272,7 +418,6 @@ def create_app(port):
         logger.info("🔧 Installing omnipkg from PyPI...")
         
         try:
-            # HARDCODED - no user input whatsoever
             result = subprocess.run(
                 [sys.executable, "-m", "pip", "install", "--upgrade", "omnipkg"],
                 capture_output=True,
@@ -302,44 +447,9 @@ def create_app(port):
         except Exception as e:
             return corsify_response(jsonify({"output": f"❌ System Error: {sanitize_output(str(e))}"}), origin)
 
-    @app.route('/health', methods=['GET', 'OPTIONS'])
-    def health():
-        origin = request.headers.get('Origin')
-        # logger.info(f"Health check from origin: {origin}") # Commented out to reduce log noise
-        if request.method == "OPTIONS": 
-            return corsify_response(make_response(), origin)
-        return corsify_response(jsonify({
-            "status": "connected", 
-            "port": port, 
-            "version": "2.1.0"
-        }), origin)
-
-    @app.route('/run', methods=['POST', 'OPTIONS'])
-    def run_command():
-        origin = request.headers.get('Origin')
-        if request.method == "OPTIONS": 
-            return corsify_response(make_response(), origin)
-        
-        data = request.json
-        cmd = data.get('command', '')
-        logger.info(f"⚡ Executing: {cmd}")
-        output = execute_omnipkg_command(cmd)
-        
-        # Auto-log commands to DB
-        try:
-            with sqlite3.connect(DB_FILE) as conn:
-                conn.execute(
-                    "INSERT INTO telemetry (timestamp, event_type, event_name, page, meta) VALUES (?, ?, ?, ?, ?)",
-                    (datetime.utcnow().isoformat(), "command_exec", cmd.split()[0], "local_bridge", json.dumps({"full_cmd": cmd}))
-                )
-        except Exception as e:
-            logger.error(f"DB Error: {e}")
-
-        return corsify_response(jsonify({"output": output}), origin)
-
-    # 🚨 NEW ENDPOINT FOR CLOUDFLARE TO SEND DATA TO
     @app.route('/telemetry', methods=['POST', 'OPTIONS'])
     def telemetry():
+        """Receives telemetry data from Cloudflare worker."""
         origin = request.headers.get('Origin')
         if request.method == "OPTIONS": 
             return corsify_response(make_response(), origin)
@@ -412,11 +522,8 @@ class WebBridgeManager:
         # Cross-platform detachment logic
         kwargs = {}
         if os.name == 'nt':
-            # Windows: Create new process group and detach
-            # 0x00000008 is DETACHED_PROCESS, 0x00000200 is CREATE_NEW_PROCESS_GROUP
             kwargs['creationflags'] = 0x00000008 | 0x00000200
         else:
-            # Unix/Mac: Start new session
             kwargs['start_new_session'] = True
 
         try:
@@ -460,25 +567,23 @@ class WebBridgeManager:
             pid = int(self.pid_file.read_text())
             print(f"🛑 Stopping web bridge (PID: {pid})...")
             
-            # --- START OF FIX ---
             if os.name == 'nt':
-                # Windows: Force kill tree
                 subprocess.run(["taskkill", "/PID", str(pid), "/T", "/F"], 
                              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
             else:
-                # Linux/Mac: Standard kill
                 os.kill(pid, signal.SIGTERM)
                 time.sleep(1)
                 if self.is_running():
                     os.kill(pid, signal.SIGKILL)
-            # --- END OF FIX ---
 
-            if self.pid_file.exists(): self.pid_file.unlink()
+            if self.pid_file.exists(): 
+                self.pid_file.unlink()
             print("✅ Web bridge stopped")
             return 0
         except Exception as e:
             print(f"❌ Error stopping: {e}")
-            if self.pid_file.exists(): self.pid_file.unlink()
+            if self.pid_file.exists(): 
+                self.pid_file.unlink()
             return 1
     
     def restart(self):
@@ -534,13 +639,10 @@ class WebBridgeManager:
         if follow:
             print(f"📝 Following logs (Ctrl+C to stop)...\n")
             try:
-                # Try using tail if available (Unix/Mac)
                 subprocess.run(["tail", "-f", str(self.log_file)], check=True)
             except (FileNotFoundError, subprocess.CalledProcessError):
-                # Windows/No-tail fallback: Python polling
                 try:
                     with open(self.log_file, "r") as f:
-                        # Move to end of file
                         f.seek(0, 2)
                         while True:
                             line = f.readline()
@@ -556,10 +658,8 @@ class WebBridgeManager:
             return 0
         else:
             try:
-                # Try using tail if available (Unix)
                 subprocess.run(["tail", "-n", str(lines), str(self.log_file)], check=True)
             except (FileNotFoundError, subprocess.CalledProcessError):
-                # Fallback for Windows or missing tail
                 with open(self.log_file) as f:
                     all_lines = f.readlines()
                     print("".join(all_lines[-lines:]))
@@ -571,7 +671,7 @@ class WebBridgeManager:
             return False
         try:
             pid = int(self.pid_file.read_text())
-            os.kill(pid, 0)  # Signal 0 checks if process exists
+            os.kill(pid, 0)
             return True
         except (OSError, ValueError):
             return False
@@ -595,10 +695,7 @@ class WebBridgeManager:
         h, m = divmod(m, 60)
         return f"{int(h)}h {int(m)}m {int(s)}s"
 
-# logging
-
-# Configure logging to both file and stdout
-LOG_FILE = OMNIPKG_DIR / "web_bridge.log"
+# Configure logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s [%(levelname)s] %(message)s',
@@ -614,6 +711,4 @@ logger = logging.getLogger(__name__)
 # ==========================================
 
 if __name__ == "__main__":
-    # If this file is run directly (python -m omnipkg.apis.local_bridge), 
-    # it implies we are the background process trying to start the server.
     run_bridge_server()
