@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "omnipkg"
-version = "2.0.9"
+version = "2.1.0"
 authors = [
   { name = "1minds3t", email = "1minds3t@proton.me" },
 ]
@@ -88,6 +88,14 @@ dependencies = [
     # CVE-safe urllib3
     "urllib3-lts>=2025.66471.3",
 
+    # flask for interactive docs
+    "flask>=2.0,<3.0; python_version < '3.8'",
+    "flask>=2.0; python_version >= '3.8'",
+
+    # Flask-CORS for interactive docs
+    "flask-cors>=3.0,<4.0; python_version < '3.8'",
+    "flask-cors>=3.0; python_version >= '3.8'",
+
 ]
 
 [project.optional-dependencies]
@@ -106,11 +114,12 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/1minds3t/omnipkg"
+"Homepage" = "https://omnipkg.pages.dev/"
+"Repository" = "https://github.com/1minds3t/omnipkg"
+"Live Interactive Console" = "https://1minds3t.echo-universe.ts.net/omnipkg/"
 "Bug Tracker" = "https://github.com/1minds3t/omnipkg/issues"
-PyPi = "https://pypi.org/project/omnipkg/"
-Conda-Forge = "https://anaconda.org/conda-forge/omnipkg"
-Docs = "https://omnipkg.readthedocs.io/en/latest/"
+"Conda-Forge" = "https://anaconda.org/conda-forge/omnipkg"
+"Docker Hub" = "https://hub.docker.com/r/1minds3t/omnipkg"
 
 [project.scripts]
 omnipkg = "omnipkg.cli:main"
