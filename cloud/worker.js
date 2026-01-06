@@ -235,7 +235,7 @@ function getInfoPage() {
         
         <div class="note">
             <strong>Get Started:</strong><br>
-            Visit <a href="https://1minds3t.echo-universe.ts.net/omnipkg">1minds3t.echo-universe.ts.net/omnipkg</a>
+            Visit <a href="https://1minds3t.echo-universe.ts.net/omnipkg/">1minds3t.echo-universe.ts.net/omnipkg</a>
             or view docs at <a href="https://omnipkg.pages.dev">omnipkg.pages.dev</a>
         </div>
     </div>
