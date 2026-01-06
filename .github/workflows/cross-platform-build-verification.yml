@@ -111,7 +111,7 @@ jobs:
           omnipkg --version
           omnipkg list
   # ═══════════════════════════════════════════════════════════════════
-  # 2. CRITICAL TESTS (Podman)
+  # 2. CRITICAL TESTS (Podman) - FIXED WITH --userns=keep-id
   # ═══════════════════════════════════════════════════════════════════
   linux-distros-podman-critical:
     name: Podman - ${{ matrix.distro }} (${{ matrix.platform }})
@@ -144,7 +144,7 @@ jobs:
       - name: Test
         run: |
           if [[ "${{ matrix.distro }}" == *"alpine"* ]]; then SHELL="/bin/sh"; else SHELL="/bin/bash"; fi
-          podman run --rm -v $(pwd):/workspace:Z --platform ${{ matrix.platform }} ${{ matrix.distro }} $SHELL -c "
+          podman run --rm --userns=keep-id -v $(pwd):/workspace:Z --platform ${{ matrix.platform }} ${{ matrix.distro }} $SHELL -c "
             cd /workspace
             
             # Install build dependencies based on distro
