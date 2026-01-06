@@ -144,20 +144,28 @@ jobs:
           
       - name: Test
         run: |
-          # Create isolated test directory
-          TEST_DIR=$(mktemp -d)
-          trap "rm -rf $TEST_DIR" EXIT
+          # For ARM64 emulation, use workspace subdirectory instead of temp dir
+          # This avoids QEMU emulation issues with temporary directory mounting
+          if [[ "${{ matrix.platform }}" == "linux/arm64" ]]; then
+            TEST_DIR="${GITHUB_WORKSPACE}/.test-isolated-${{ matrix.distro }}"
+            TEST_DIR="${TEST_DIR//:/}"  # Remove colons from distro name
+            mkdir -p "$TEST_DIR"
+            trap "rm -rf $TEST_DIR" EXIT
+          else
+            TEST_DIR=$(mktemp -d)
+            trap "rm -rf $TEST_DIR" EXIT
+          fi
           
           # Copy source to isolated test directory
-          cp -r . $TEST_DIR/
+          cp -r . "$TEST_DIR/"
           
           if [[ "${{ matrix.distro }}" == *"alpine"* ]]; then SHELL="/bin/sh"; else SHELL="/bin/bash"; fi
           
           # Use standard rootless Podman with label=disable to avoid SELinux issues
-          # No userns flags needed - Podman's default rootless mode now works after storage cleanup
+          # For ARM64 emulation, ensure the path is absolute and exists
           podman run --rm \
             --security-opt label=disable \
-            -v $TEST_DIR:/workspace:rw \
+            -v "$TEST_DIR:/workspace:rw" \
             --platform ${{ matrix.platform }} \
             ${{ matrix.distro }} $SHELL -c "
             cd /workspace
@@ -177,7 +185,7 @@ jobs:
             omnipkg --version
             omnipkg list
           "
-
+          
   # ═══════════════════════════════════════════════════════════════════
   # 3. DOCKER JOBS
   # ═══════════════════════════════════════════════════════════════════
