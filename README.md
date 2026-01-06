@@ -1,4 +1,4 @@
-<p align="center">
+<p align="center"> 
   <a href="https://github.com/1minds3t/omnipkg">
     <img src="https://raw.githubusercontent.com/1minds3t/omnipkg/main/.github/logo.svg" alt="omnipkg Logo" width="150">
   </a>
