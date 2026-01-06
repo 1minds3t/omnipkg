@@ -1,4 +1,119 @@
-linux-distros-podman-critical:
+name: Cross-Platform Build Verification
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      target_ref:
+        description: 'Git Ref to verify (e.g. v2.0.6). Leave empty to use current ref.'
+        required: false
+        type: string
+        default: ''
+
+jobs:
+  # ═══════════════════════════════════════════════════════════════════
+  # 1. BUILD MATRIX
+  # ═══════════════════════════════════════════════════════════════════
+  build-matrix:
+    name: ${{ matrix.label }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: [self-hosted, linux, x64]
+            label: "Linux x86_64 (self-hosted)"
+          - runner: [self-hosted, macos, x64]
+            label: "macOS x86_64 Intel (self-hosted)"
+          - runner: ubuntu-latest
+            label: "Ubuntu x86_64"
+          - runner: windows-latest
+            label: "Windows x86_64"
+          - runner: macos-14
+            label: "macOS ARM64 (Apple Silicon)"
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.target_ref || github.ref }}
+      
+      - name: Set up Python 3.11
+        if: ${{ !contains(matrix.runner, 'self-hosted') }} 
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: Verify Architecture
+        id: arch
+        shell: bash
+        run: |
+          ARCH=$(uname -m)
+          OS=$(uname -s)
+          echo "Detected: $OS $ARCH"
+      
+      - name: Build and Test (Self-Hosted Linux)
+        if: contains(matrix.runner, 'self-hosted') && contains(matrix.runner, 'linux')
+        shell: bash
+        env:
+          PYTHONUNBUFFERED: "1"
+        run: |
+          set -x
+          
+          # 1. Find a Python to bootstrap (Conda or System)
+          if [ -f "$HOME/miniconda3/envs/evocoder_env/bin/python3.11" ]; then
+            BASE_PY="$HOME/miniconda3/envs/evocoder_env/bin/python3.11"
+            echo "🔧 Bootstrapping from: $BASE_PY"
+          elif command -v python3.11 >/dev/null 2>&1; then
+            BASE_PY=python3.11
+          else
+            BASE_PY=python3
+          fi
+          
+          # 2. Create ISOLATED venv (Protects your lollama/tensorflow env)
+          echo "🛡️ Creating fresh .venv..."
+          rm -rf .venv
+          $BASE_PY -m venv .venv
+          
+          # 3. Activate venv
+          source .venv/bin/activate
+          
+          # 4. Install & Build INSIDE venv
+          echo "🔥 Installing build tools..."
+          python -m pip install --upgrade pip build
+          
+          echo "📦 Building package..."
+          python -m build
+          
+          echo "💿 Installing package (Isolated)..."
+          python -m pip install dist/*.whl
+          
+          # 5. Test
+          echo "🧪 Testing..."
+          omnipkg --version
+          omnipkg list
+      
+      - name: Build and Test (Other Platforms)
+        if: ${{ !(contains(matrix.runner, 'self-hosted') && contains(matrix.runner, 'linux')) }}
+        shell: bash
+        run: |
+          if command -v python3 &>/dev/null; then PY=python3; else PY=python; fi
+          if ! $PY -m venv .venv; then
+             $PY -m venv .venv --without-pip
+             curl -sS https://bootstrap.pypa.io/get-pip.py | .venv/bin/python
+          fi
+          if [ -f ".venv/bin/activate" ]; then source .venv/bin/activate; else source .venv/Scripts/activate; fi
+          
+          python -m pip install --upgrade pip build
+          python -m build
+          pip install dist/*.whl
+          omnipkg --version
+          omnipkg list
+  # ═══════════════════════════════════════════════════════════════════
+  # 2. CRITICAL TESTS (Podman)
+  # ═══════════════════════════════════════════════════════════════════
+  linux-distros-podman-critical:
     name: Podman - ${{ matrix.distro }} (${{ matrix.platform }})
     runs-on: [self-hosted, linux, x64]
     timeout-minutes: 25
@@ -14,7 +129,7 @@ linux-distros-podman-critical:
           - distro: fedora:39
             platform: linux/amd64
             
-          # ARM64 QEMU (Debian & Rocky ONLY)
+          # ARM64 QEMU (Debian & Rocky ONLY - Removed Ubuntu & Alpine)
           - distro: debian:12
             platform: linux/arm64
           - distro: rockylinux:9
@@ -28,21 +143,8 @@ linux-distros-podman-critical:
           
       - name: Test
         run: |
-          # Use the workspace directly - no temp dir needed
-          # GitHub Actions already provides an isolated workspace per job
-          WORKSPACE_DIR="$(pwd)"
-          
-          echo "Testing in workspace: $WORKSPACE_DIR"
-          
-          if [[ "${{ matrix.distro }}" == *"alpine"* ]]; then SHELL_CMD="/bin/sh"; else SHELL_CMD="/bin/bash"; fi
-          
-          # Mount the current workspace directly
-          # This avoids temp directory issues entirely
-          podman run --rm \
-            --security-opt label=disable \
-            -v "$WORKSPACE_DIR:/workspace:rw" \
-            --platform ${{ matrix.platform }} \
-            ${{ matrix.distro }} $SHELL_CMD -c "
+          if [[ "${{ matrix.distro }}" == *"alpine"* ]]; then SHELL="/bin/sh"; else SHELL="/bin/bash"; fi
+          podman run --rm -v $(pwd):/workspace:Z --platform ${{ matrix.platform }} ${{ matrix.distro }} $SHELL -c "
             cd /workspace
             
             # Install build dependencies based on distro
@@ -60,3 +162,114 @@ linux-distros-podman-critical:
             omnipkg --version
             omnipkg list
           "
+  # ═══════════════════════════════════════════════════════════════════
+  # 3. DOCKER JOBS
+  # ═══════════════════════════════════════════════════════════════════
+  linux-distros-docker-debian:
+    name: Docker - Debian/Ubuntu
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        distro: [debian:12, debian:11, ubuntu:24.04, ubuntu:22.04, ubuntu:20.04]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.target_ref || github.ref }}
+      - name: Test
+        run: |
+          docker run --rm -v $(pwd):/workspace ${{ matrix.distro }} /bin/bash -c "
+            cd /workspace
+            apt-get update && apt-get install -y python3 python3-pip python3-venv build-essential python3-dev gcc
+            python3 -m pip install --upgrade pip build || python3 -m pip install --break-system-packages pip build
+            python3 -m build
+            python3 -m pip install --break-system-packages dist/*.whl
+            omnipkg --version
+            omnipkg list
+          "
+  linux-distros-docker-rhel:
+    name: Docker - RHEL/Fedora
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        distro: [fedora:39, fedora:38, rockylinux:9, rockylinux:8, almalinux:9]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.target_ref || github.ref }}
+      - name: Test
+        run: |
+          docker run --rm -v $(pwd):/workspace ${{ matrix.distro }} /bin/bash -c "
+            cd /workspace
+            if grep -q 'release 8' /etc/redhat-release; then
+              dnf install -y python39 python39-pip gcc python3-devel && ln -sf /usr/bin/python3.9 /usr/bin/python3 && ln -sf /usr/bin/pip3.9 /usr/bin/pip3
+            else 
+              dnf install -y python3 python3-pip gcc python3-devel
+            fi
+            python3 -m pip install --upgrade pip build
+            python3 -m build
+            python3 -m pip install dist/*.whl
+            omnipkg --version
+            omnipkg list
+          "
+  linux-distros-docker-other:
+    name: Docker - Arch/Alpine
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        distro: [archlinux:latest, alpine:latest]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.target_ref || github.ref }}
+      - name: Test
+        run: |
+          docker run --rm -v $(pwd):/workspace ${{ matrix.distro }} /bin/sh -c "
+            cd /workspace
+            if command -v pacman &> /dev/null; then 
+              pacman -Sy --noconfirm python python-pip base-devel gcc
+            elif command -v apk &> /dev/null; then 
+              apk add --no-cache python3 py3-pip py3-build gcc python3-dev musl-dev linux-headers
+            fi
+            python3 -m pip install --break-system-packages --upgrade pip build
+            python3 -m build
+            python3 -m pip install --break-system-packages dist/*.whl
+            omnipkg --version
+            omnipkg list
+          "
+  # ═══════════════════════════════════════════════════════════════════
+  # 4. README STATS
+  # ═══════════════════════════════════════════════════════════════════
+  update-readme-stats:
+    name: "📝 Update README Platform Stats"
+    needs: [build-matrix, linux-distros-podman-critical, linux-distros-docker-debian, linux-distros-docker-rhel, linux-distros-docker-other]
+    runs-on: ubuntu-latest
+    if: success()
+    continue-on-error: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ inputs.target_ref || github.ref }}
+      - name: Update Stats
+        run: |
+          sed -i "s/platforms-[0-9]*%20verified/platforms-22%20verified/" README.md
+          if ! grep -q "macOS ARM64" README.md; then
+            sed -i '/macOS Intel.*x86_64.*Intel/a | macOS ARM64 | ARM64 (Apple Silicon) | ✅ | Native installation |' README.md
+          fi
+      - name: Commit and Push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          if ! git diff --quiet README.md; then
+            git add README.md
+            git commit -m "🤖 Auto-update: Platform verification stats [skip ci]"
+            git pull --rebase origin main || echo "⚠️ Rebase conflict, overwriting..."
+            git push || echo "⚠️ Push failed, ignoring."
+          fi
