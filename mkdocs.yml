@@ -56,3 +56,9 @@ extra_css:
 extra_javascript:
   - assets/js/interact.js
   - assets/javascripts/trailing-slash.js
+
+# 🔒 SECURITY: Add Content Security Policy
+extra:
+  meta:
+    - name: "Content-Security-Policy"
+      content: "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; connect-src 'self' https://omnipkg.1minds3t.workers.dev https://*.ts.net http://127.0.0.1:* http://localhost:*; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; frame-ancestors 'none';"

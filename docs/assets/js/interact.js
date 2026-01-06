@@ -1,10 +1,16 @@
-/* docs/assets/js/interact.js - Enhanced with Debug Logging */
+/* docs/assets/js/interact.js - SECURITY HARDENED VERSION */
 
 const WORKER_URL = 'https://omnipkg.1minds3t.workers.dev';
 let PORT = 5000;
 let isConnected = false;
 let checkInterval = null;
-const DEBUG = true; // Enable debug logging
+const DEBUG = true;
+
+// Allowlist of safe telemetry keys
+const SAFE_TELEMETRY_KEYS = new Set([
+    'command', 'path', 'title', 'port', 'package', 
+    'method', 'error', 'duration', 'success'
+]);
 
 // Debug logger
 function debug(...args) {
@@ -26,7 +32,7 @@ document.addEventListener("DOMContentLoaded", function() {
     // Get port from URL hash (e.g., #5000)
     if (window.location.hash) {
         const val = parseInt(window.location.hash.substring(1));
-        if (!isNaN(val) && val > 1024) {
+        if (!isNaN(val) && val > 1024 && val < 65536) {
             PORT = val;
             debug(`Port set from URL hash: ${PORT}`);
         }
@@ -125,7 +131,6 @@ async function checkHealth() {
         debug('Health check exception:', e);
         console.error('[OmniPkg] Connection Error:', e);
         
-        // Provide more helpful error message
         let errorMsg = 'Not connected';
         if (e.message.includes('fetch')) {
             errorMsg += ' - Network error';
@@ -155,6 +160,12 @@ function updateStatus(connected, message) {
         document.querySelectorAll('.omni-run-btn').forEach(btn => {
             btn.disabled = !connected;
         });
+        
+        // Enable/disable install button if it exists
+        const installBtn = document.getElementById('install-btn');
+        if (installBtn) {
+            installBtn.disabled = !connected;
+        }
     }
 }
 
@@ -211,6 +222,77 @@ function injectRunButtons() {
     
     debug(`Injected ${buttonCount} run buttons`);
 }
+
+// ==========================================
+// 🔒 SECURE: Install OmniPkg via Proxy
+// ==========================================
+async function installOmnipkg() {
+    debug('Installing OmniPkg via secure endpoint...');
+    
+    const button = document.getElementById('install-btn');
+    const output = document.getElementById('install-output');
+    
+    if (!button || !output) {
+        console.error('Install UI elements not found');
+        return;
+    }
+    
+    // Check connection first
+    if (!isConnected) {
+        output.textContent = '❌ Not connected to local bridge. Run: omnipkg web start';
+        return;
+    }
+    
+    // Disable button during install
+    button.disabled = true;
+    button.textContent = '⏳ Installing...';
+    output.textContent = 'Installing OmniPkg from PyPI...';
+    
+    try {
+        // 🔒 SECURITY: Use the Cloudflare Worker proxy
+        const requestBody = {
+            port: PORT,  // ✅ Fixed: Was 'localPort' (undefined)
+            endpoint: '/install-omnipkg',
+            method: 'POST',
+            data: {}
+        };
+        
+        debug('Sending install request:', requestBody);
+        
+        const response = await fetch(`${WORKER_URL}/proxy`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(requestBody)
+        });
+        
+        debug(`Install response status: ${response.status}`);
+        
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${await response.text()}`);
+        }
+        
+        const data = await response.json();
+        output.textContent = data.output || '✅ Installation complete';
+        
+        // Track successful install
+        sendTelemetry("install", { package: "omnipkg", method: "web_button" });
+        
+        // Reset button
+        button.disabled = false;
+        button.textContent = '📦 Install OmniPkg';
+        
+    } catch (error) {
+        debug('Install error:', error);
+        output.textContent = `❌ Installation failed: ${error.message}`;
+        button.disabled = false;
+        button.textContent = '📦 Install OmniPkg (Retry)';
+        
+        sendTelemetry("install_failed", { package: "omnipkg", error: error.message });
+    }
+}
+
+// Make installOmnipkg globally accessible for onclick handlers
+window.installOmnipkg = installOmnipkg;
 
 // ==========================================
 // Execute Command
@@ -391,26 +473,72 @@ function showOutput(cmd, output) {
 }
 
 // ==========================================
+// 🛡️ Telemetry Data Sanitization
+// ==========================================
+function sanitizeTelemetryData(details) {
+    if (!details || typeof details !== 'object') {
+        return {};
+    }
+    
+    const sanitized = {};
+    
+    for (const [key, value] of Object.entries(details)) {
+        // Only allow safe keys
+        if (!SAFE_TELEMETRY_KEYS.has(key)) {
+            debug(`Telemetry: Skipping unsafe key '${key}'`);
+            continue;
+        }
+        
+        let cleanValue = String(value);
+        
+        // Truncate long values
+        if (cleanValue.length > 200) {
+            cleanValue = cleanValue.substring(0, 200) + '...[truncated]';
+        }
+        
+        // Remove file paths
+        cleanValue = cleanValue.replace(/[A-Za-z]:\\Users\\[^\s]+/g, '[PATH]');
+        cleanValue = cleanValue.replace(/\/home\/[^\s]+/g, '[PATH]');
+        
+        // Remove IP addresses
+        cleanValue = cleanValue.replace(/\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b/g, '[IP]');
+        
+        // Remove potential tokens/keys
+        cleanValue = cleanValue.replace(/\b[A-Za-z0-9_-]{16,}\b/g, '[REDACTED]');
+        
+        sanitized[key] = cleanValue;
+    }
+    
+    return sanitized;
+}
+
+// ==========================================
 // Telemetry (Privacy-Safe)
 // ==========================================
 function sendTelemetry(eventType, details) {
-    if (typeof eventType !== 'string' || !details || typeof details !== 'object') {
+    if (typeof eventType !== 'string') {
+        debug('Telemetry: Invalid event type');
         return;
     }
     
-    debug('Sending telemetry:', eventType, details);
+    // Sanitize the metadata
+    const safeMetadata = sanitizeTelemetryData(details);
+    
+    debug('Sending telemetry:', eventType, safeMetadata);
+    
+    const payload = {
+        event_type: eventType,
+        event_name: safeMetadata.command || safeMetadata.path || 'unknown',
+        page: window.location.pathname,
+        metadata: safeMetadata
+    };
     
     fetch(`${WORKER_URL}/analytics/track`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            event_type: eventType,
-            event_name: details.command || details.path || 'unknown',
-            page: window.location.pathname,
-            metadata: details
-        })
+        body: JSON.stringify(payload)
     }).catch((e) => {
-        debug('Telemetry failed:', e);
+        debug('Telemetry failed:', e.message);
     });
 }
 

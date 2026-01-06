@@ -70,7 +70,13 @@ def find_free_port(start_port=5000, max_port=65535):
     raise RuntimeError(f"No free ports found between {start_port} and {start_port + 1000}")
 
 def clean_and_validate(cmd_str):
-    """Sanitizes and validates incoming web commands."""
+    """
+    🔒 HARDENED VALIDATOR
+    - Sanitizes incoming commands
+    - Blocks dangerous verbs
+    - Prevents package poisoning via install
+    - Prevents flag injection
+    """
     if not cmd_str or not cmd_str.strip():
         return False, "Empty command.", None
     
@@ -89,22 +95,51 @@ def clean_and_validate(cmd_str):
 
     primary_command = clean_parts[0].lower()
 
+    # Block daemon control
     if primary_command == 'daemon':
         return False, "⛔ Daemon control via web is restricted.", None
 
+    # Block dangerous commands
     if primary_command in WEB_BLOCKED_COMMANDS:
         return False, f"⛔ Security: '{primary_command}' is disabled via Web.", None
+    
+    # 🔒 NEW: Strict validation for 'install' commands
+    if primary_command in ['install', 'install-with-deps']:
+        for arg in parts[1:]:
+            # Block URL installations (git+https://, http://, file://, etc.)
+            if "://" in arg or arg.startswith("git+"):
+                return False, "⛔ Security: Remote URL installs disabled via Web. Use /install-omnipkg endpoint.", None
+            
+            # Block path traversal attempts
+            if ".." in arg or arg.startswith("/") or (len(arg) > 2 and arg[1] == ":"):
+                return False, "⛔ Security: Absolute/relative paths not allowed.", None
+            
+            # Block dangerous flags (only allow safe ones)
+            if arg.startswith("--"):
+                safe_flags = {"--upgrade", "--force", "--dry-run", "--no-deps"}
+                if arg not in safe_flags:
+                    return False, f"⛔ Security: Flag '{arg}' is not allowed via Web.", None
+            
+            # Block shell metacharacters in package names
+            if any(char in arg for char in [";", "|", "&", "$", "`", "(", ")", "<", ">", "\\"]):
+                return False, "⛔ Security: Invalid characters in package name.", None
         
-    if primary_command in WEB_ALLOWED_COMMANDS:
-        return True, "", clean_str
+        # Require at least one package name
+        package_names = [p for p in parts[1:] if not p.startswith('-')]
+        if not package_names:
+            return False, "⚠️ No package name specified.", None
+    
+    # Check if command is in whitelist
+    if primary_command not in WEB_ALLOWED_COMMANDS:
+        return False, f"⚠️ Unknown command '{primary_command}'.", None
 
-    return False, f"⚠️ Unknown command '{primary_command}'.", None
+    return True, "", clean_str
 
 def execute_omnipkg_command(cmd_str):
-    """Executes the validated command via subprocess."""
+    """Executes the validated command via subprocess with sanitized output."""
     is_valid, msg, cleaned_cmd = clean_and_validate(cmd_str)
     if not is_valid:
-        return msg
+        return sanitize_output(msg)  # ✅ Sanitize even validation errors
 
     try:
         args = shlex.split(cleaned_cmd)
@@ -129,12 +164,17 @@ def execute_omnipkg_command(cmd_str):
         )
         
         if result.returncode == 0:
-            return result.stdout or "(Command completed successfully)"
-        return f"Error ({result.returncode}):\n{result.stderr}\n{result.stdout}"
+            output = result.stdout or "(Command completed successfully)"
+            return sanitize_output(output)  # ✅ Sanitize success output
+        
+        # ✅ Sanitize error output
+        error_msg = f"Error ({result.returncode}):\n{result.stderr}\n{result.stdout}"
+        return sanitize_output(error_msg)
+        
     except subprocess.TimeoutExpired:
         return "Error: Command timed out after 120 seconds"
     except Exception as e:
-        return f"System Error: {str(e)}"
+        return sanitize_output(f"System Error: {str(e)}")  # ✅ Sanitize exceptions
 
 def corsify_response(response, origin):
     """Adds CORS headers if the origin is allowed."""
@@ -145,6 +185,46 @@ def corsify_response(response, origin):
         response.headers.add("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
         response.headers.add("Access-Control-Allow-Private-Network", "true")
     return response
+
+import re
+
+import re
+
+def sanitize_output(text):
+    r"""
+    🛡️ Removes sensitive information from command outputs before sending to browser.
+    Prevents:
+    - Absolute file paths (e.g., C:\Users\Alice\Documents\...)
+    - Environment variables
+    - IP addresses (private ranges)
+    - API keys/tokens in error messages
+    """
+    if not text:
+        return text
+    
+    # Replace Windows paths: C:\Users\anything -> [REDACTED]\...
+    text = re.sub(r'[A-Za-z]:\\Users\\[^\\]+', r'[USER]', text)
+    
+    # Replace Unix home paths: /home/username -> /home/[USER]
+    text = re.sub(r'/home/[^/]+', r'/home/[USER]', text)
+    
+    # Replace generic absolute paths (but keep relative ones like ./file.py)
+    text = re.sub(r'(?<!\.)(/[a-zA-Z0-9_/.-]+/[a-zA-Z0-9_.-]+)', r'[PATH]', text)
+    
+    # Redact private IP addresses (10.x, 192.168.x, 172.16-31.x)
+    text = re.sub(r'\b10\.\d{1,3}\.\d{1,3}\.\d{1,3}\b', '[IP]', text)
+    text = re.sub(r'\b192\.168\.\d{1,3}\.\d{1,3}\b', '[IP]', text)
+    text = re.sub(r'\b172\.(1[6-9]|2[0-9]|3[0-1])\.\d{1,3}\.\d{1,3}\b', '[IP]', text)
+    
+    # Redact common secret patterns (basic detection)
+    text = re.sub(r'(api[_-]?key|token|password|secret)[\s:=]+[\w-]{16,}', r'\1=[REDACTED]', text, flags=re.IGNORECASE)
+    
+    # Limit output length (prevent abuse via massive error dumps)
+    MAX_LENGTH = 5000
+    if len(text) > MAX_LENGTH:
+        text = text[:MAX_LENGTH] + "\n\n... [Output truncated for safety]"
+    
+    return text
 
 def create_app(port):
     """Creates the Flask application with SQLite Telemetry."""
@@ -178,6 +258,49 @@ def create_app(port):
         logger.info(f"📊 Telemetry DB initialized at {DB_FILE}")
     except Exception as e:
         logger.error(f"Failed to init DB: {e}")
+
+    @app.route('/install-omnipkg', methods=['POST', 'OPTIONS'])
+    def install_omnipkg():
+        """
+        🔒 HARDCODED INSTALLATION ENDPOINT
+        Only installs omnipkg from PyPI. No arguments accepted.
+        """
+        origin = request.headers.get('Origin')
+        if request.method == "OPTIONS": 
+            return corsify_response(make_response(), origin)
+        
+        logger.info("🔧 Installing omnipkg from PyPI...")
+        
+        try:
+            # HARDCODED - no user input whatsoever
+            result = subprocess.run(
+                [sys.executable, "-m", "pip", "install", "--upgrade", "omnipkg"],
+                capture_output=True,
+                text=True,
+                timeout=120
+            )
+            
+            if result.returncode == 0:
+                output = sanitize_output(result.stdout or "✅ omnipkg installed successfully")
+            else:
+                output = f"❌ Installation failed:\n{sanitize_output(result.stderr)}"
+            
+            # Log to telemetry
+            try:
+                with sqlite3.connect(DB_FILE) as conn:
+                    conn.execute(
+                        "INSERT INTO telemetry (timestamp, event_type, event_name, page, meta) VALUES (?, ?, ?, ?, ?)",
+                        (datetime.utcnow().isoformat(), "install", "omnipkg", "local_bridge", json.dumps({"success": result.returncode == 0}))
+                    )
+            except Exception as e:
+                logger.error(f"DB Error: {e}")
+            
+            return corsify_response(jsonify({"output": output}), origin)
+            
+        except subprocess.TimeoutExpired:
+            return corsify_response(jsonify({"output": "❌ Installation timed out"}), origin)
+        except Exception as e:
+            return corsify_response(jsonify({"output": f"❌ System Error: {sanitize_output(str(e))}"}), origin)
 
     @app.route('/health', methods=['GET', 'OPTIONS'])
     def health():

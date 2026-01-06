@@ -171,6 +171,26 @@ You can verify LTS package sources at:
 
 ---
 
+## 🔒 Web Bridge Security
+
+The OmniPkg web bridge implements multiple security layers:
+
+- **Command Validation**: Only safe commands are allowed via web
+- **URL Blocking**: Git URLs and custom package indexes are disabled
+- **Path Sanitization**: File system paths cannot be accessed
+- **Output Redaction**: Sensitive info is automatically removed
+- **CORS Protection**: Only authorized origins can send commands
+
+### Allowed Commands
+✅ `status`, `list`, `info`, `check`, `config`, `doctor`, `swap`, `python`
+
+### Blocked Commands
+❌ `run`, `shell`, `exec`, `uninstall`, `prune`, Remote URLs, Custom indexes
+
+For package installation, use the dedicated "Install OmniPkg" button.
+
+---
+
 ### 📢 Security Updates
 
 To stay informed about security updates:

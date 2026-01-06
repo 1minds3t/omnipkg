@@ -2,6 +2,42 @@
 
 This guide will walk you through installing `omnipkg` and performing the initial setup.
 
+
+# Installing OmniPkg
+
+## Quick Install via Web Bridge
+
+If you have the OmniPkg web bridge running, you can install directly from this page:
+
+<button id="install-btn" onclick="installOmnipkg()" style="padding: 12px 24px; background: #5c6bc0; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 16px; font-weight: 500;">
+    📦 Install OmniPkg
+</button>
+
+<pre id="install-output" style="background: #1e1e1e; color: #d4d4d4; padding: 16px; border-radius: 6px; margin-top: 12px; min-height: 60px; font-family: 'Courier New', monospace;">
+Ready to install...
+</pre>
+
+> **Note:** Make sure your web bridge is running first: `omnipkg web start`
+
+---
+
+## Manual Installation
+
+If you prefer the traditional method, use pip:
+
+```bash
+pip install omnipkg
+```
+
+Or install from source:
+
+```bash
+git clone https://github.com/1minds3t/omnipkg
+cd omnipkg
+pip install -e .
+```
+
+
 ## 1. Installation
 
 `omnipkg` is available on PyPI. You can install it directly using `pip`:
