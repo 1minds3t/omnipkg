@@ -35,7 +35,8 @@ jobs:
       id: get-version
       run: |
         if [ "${{ github.event_name }}" == "workflow_run" ]; then
-          VERSION=$(echo "${{ github.event.workflow_run.head_branch }}" | sed 's/^v//')
+          RAW_BRANCH="${{ github.event.workflow_run.head_branch }}"
+          VERSION=$(printf '%s' "$RAW_BRANCH" | sed -E 's/^v//' | tr -cd '0-9A-Za-z._-')
           if [ -z "$VERSION" ]; then
             VERSION=$(gh api repos/${{ github.repository }}/releases/latest --jq '.tag_name' | sed 's/^v//')
           fi
