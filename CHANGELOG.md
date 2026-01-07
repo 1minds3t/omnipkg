@@ -2,6 +2,85 @@
 
 # Changelog
 
+# Changelog
+
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [2.1.1] - 2026-01-07
+
+### 🔥 Critical Fix
+- **Fixed streaming output for interactive documentation console**
+  - Changed `/execute` endpoint from buffered `subprocess.run()` to streaming `subprocess.Popen()`
+  - Implemented Server-Sent Events (SSE) for real-time line-by-line output delivery
+  - Prevents timeout/hanging issues during command execution in web-based docs
+  - Essential for demo functionality and user experience in interactive console
+
+### Added
+- **Interactive Documentation Structure**
+  - New CLI Commands section with detailed command reference
+  - Platform Support section documenting 70+ CI builds
+  - Interactive Demos section with 4 live examples:
+    - C Extension Version Switching
+    - Rich Module Styling Demonstration
+    - TensorFlow Dependency Management
+    - UV Binary Hot-Swapping
+  - All docs include YAML front matter with metadata
+  - Embedded terminal with real-time command execution
+
+- **Bridge API Improvements**
+  - Added health check telemetry logging to SQLite database
+  - Cloudflare Worker telemetry forwarding (fire-and-forget pattern)
+  - DEV_MODE now allows missing Origin header for curl/testing
+  - Expanded CORS origins to support local development:
+    - `http://localhost:5000` (MkDocs dev server)
+    - `http://127.0.0.1:8085` (Bridge local testing)
+    - `https://omnipkg.workers.dev` (Cloudflare Worker)
+
+- **Enhanced MkDocs Configuration**
+  - Fixed `site_url` for Cloudflare Pages deployment
+  - Added modern navigation features:
+    - `navigation.instant` - SPA-like feel
+    - `navigation.tracking` - URL updates on scroll
+    - `navigation.sections` - Better sidebar grouping
+    - `navigation.expand` - Auto-expand details
+    - `navigation.indexes` - Clickable section headers
+    - `toc.follow` - TOC highlights during scroll
+  - New plugins: mkdocs-awesome-pages, mkdocs-macros, mkdocs-minify, mkdocs-redirects
+  - Added `meta` extension for YAML front matter parsing
+  - Mermaid diagram support via pymdownx.superfences
+
+### Changed
+- **execute_omnipkg_command()** now yields output as generator instead of returning complete string
+- **/execute** endpoint returns SSE stream instead of JSON response
+- Updated package description to include interactive documentation links
+- Documentation URLs changed from readthedocs.io to omnipkg.pages.dev
+- Improved error handling with streaming context in bridge API
+- Updated aiohttp dependency constraint to `>=3.13.3`
+
+### Fixed
+- Interactive docs console no longer hangs waiting for command completion
+- Real-time output now displays progressively instead of all-at-once
+- CORS validation logic improved for production vs development modes
+- Streaming responses properly handle errors and timeouts
+
+### Documentation
+- Added 15 new markdown files with interactive content
+- Reorganized docs into logical sections with `.pages.yml` navigation
+- All documentation pages include builder metadata headers
+- Comprehensive platform support matrix with live CI links
+- Step-by-step demo walkthroughs with copy-paste commands
+
+### Package Metadata
+- Version bump: 2.1.0 → 2.1.1
+- Updated conda recipes with new PyPI SHA256 hash
+- Added `flask` and `flask-cors` to dependencies
+- Updated package URLs to point to new documentation site
+
+---
+
 ## [v2.1.0] - 2026-01-05
 
 ### 🚀 Release v2.1.0 — Executable Documentation & Hybrid Local Cloud
