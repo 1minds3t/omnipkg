@@ -1,5 +1,5 @@
 {% set name = "omnipkg" %}
-{% set version = "2.0.9" %}
+{% set version = "2.1.0" %}
 {% set python_min = "3.10" %}
 
 package:
@@ -8,7 +8,7 @@ package:
 
 source:
   url: https://pypi.org/packages/source/{{ name[0] }}/{{ name }}/{{ name }}-{{ version }}.tar.gz
-  sha256: UPDATE_THIS_HASH_FOR_2.0.9
+  sha256: f4c0b93869baa678e1d0399d860534d4c98eff07bc03bf188a7643332c0264c2
 
 build:
   number: 0  # ← Noarch is now the fallback (lower priority)
@@ -35,13 +35,15 @@ requirements:
     - packaging >=23.0
     - tomli
     - authlib >=1.6.5
-    - aiohttp >=3.13.1
+    - aiohttp >=3.13.3
     - safety >=3.7.0
     - marshmallow >=4.1.2
     - pip-audit >=2.6.0
     - urllib3 >=1.26.19
     - tqdm >=4.67.1
     - typing-extensions >=4.0.0
+    - flask >=2.0
+    - flask-cors >=3.0
     # NO uv - optional performance enhancement, installed separately
 
 test:
@@ -74,11 +76,19 @@ about:
     - Zero-copy multi-framework orchestration
     - Smart dependency resolution with snapshot restoration
     - Live daemon monitoring dashboard
+    - Interactive web-based documentation with real-time command execution
+    
+    Documentation:
+    - 📚 Static docs: https://omnipkg.pages.dev/
+    - 🎮 Interactive console: https://1minds3t.echo-universe.ts.net/omnipkg/
+    - Execute omnipkg commands in real-time through your browser
+    - Streaming output via public → CORS → Cloudflare → localhost bridge
+    - Runs commands locally on your machine (privacy-safe, GDPR compliant)
     
     Performance Note:
     - Install 'uv' separately for 6x faster script execution with '8pkg run'
     - Core functionality works with standard pip (already included)
-  doc_url: https://omnipkg.readthedocs.io/en/latest/
+  doc_url: https://omnipkg.pages.dev/
   dev_url: https://github.com/1minds3t/omnipkg
 
 extra:
