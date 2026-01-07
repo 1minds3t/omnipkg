@@ -6,9 +6,14 @@ let isConnected = false;
 let checkInterval = null;
 const DEBUG = true;
 
-// 🎯 BUSINESS LOGIC: Only Tailscale domain gets interactive features
+// 🎯 BUSINESS LOGIC: Detect if we're on Tailnet or localhost
 const currentDomain = window.location.hostname;
 const IS_INTERACTIVE_DOMAIN = currentDomain === '1minds3t.echo-universe.ts.net' || currentDomain === 'localhost' || currentDomain === '127.0.0.1';
+
+// Use Tailscale proxy when accessing remotely
+const BRIDGE_URL = currentDomain === '1minds3t.echo-universe.ts.net' 
+    ? 'https://1minds3t.echo-universe.ts.net/omnipkg-api'  // Tailscale proxy
+    : `http://127.0.0.1:${PORT}`;  // Direct localhost
 
 const SAFE_TELEMETRY_KEYS = new Set([
     'command', 'path', 'title', 'port', 'package', 
@@ -135,11 +140,13 @@ function createStatusBanner() {
 async function checkHealth() {
     if (!IS_INTERACTIVE_DOMAIN) return;
     
-    debug(`Health check: Direct connection to localhost:${PORT}`);
+    debug(`Health check: ${BRIDGE_URL}`);
+    
+    // 📊 TELEMETRY: Always notify Cloudflare of health checks
+    sendTelemetry("health_check", { method: currentDomain === '1minds3t.echo-universe.ts.net' ? 'tailnet' : 'direct' });
     
     try {
-        // 🔥 DIRECT CONNECTION: No worker proxy needed
-        const res = await fetch(`http://127.0.0.1:${PORT}/health`, {
+        const res = await fetch(`${BRIDGE_URL}/health`, {  // ← USE BRIDGE_URL
             method: 'GET',
             headers: { 'Content-Type': 'application/json' }
         });
@@ -147,14 +154,19 @@ async function checkHealth() {
         if (res.ok) {
             const data = await res.json();
             updateStatus(true, `Connected to Local Bridge v${data.version || '2.1.0'} (Port ${PORT})`);
+            // Track successful connection
+            sendTelemetry("bridge_connected", { port: PORT, version: data.version });
         } else {
             updateStatus(false, 'Local bridge not running | Run: 8pkg web start');
+            sendTelemetry("bridge_failed", { port: PORT, status: res.status });
         }
     } catch (e) {
         debug('Health check failed:', e);
         updateStatus(false, 'Local bridge not running | Run: 8pkg web start');
+        sendTelemetry("bridge_offline", { port: PORT, error: e.message });
     }
 }
+
 
 function updateStatus(connected, message) {
     isConnected = connected;
@@ -271,9 +283,11 @@ function createStaticButton() {
 // ==========================================
 // Execute Command
 // ==========================================
+
 async function runCommand(cmd, btnElement) {
     if (!isConnected) {
         alert('Local bridge not running. Start with: 8pkg web start');
+        sendTelemetry("command_blocked", { reason: "bridge_offline" });
         return;
     }
     
@@ -299,14 +313,16 @@ async function runCommand(cmd, btnElement) {
     // Send telemetry (fire and forget)
     sendTelemetry("command_exec", { command: cmd.split(' ')[0] });
 
+    const startTime = Date.now();
+
     try {
         // Open modal immediately to show streaming output
         const modal = createStreamingModal(cmd);
         const outputPre = modal.querySelector('.omni-output');
         let fullOutput = '';
         
-        // 🔥 DIRECT CONNECTION with streaming
-        const res = await fetch(`http://127.0.0.1:${PORT}/run`, {
+        // 🔥 CONNECTION with streaming
+        const res = await fetch(`${BRIDGE_URL}/run`, {
             method: 'POST',
             headers: { 
                 'Content-Type': 'application/json'
@@ -342,6 +358,14 @@ async function runCommand(cmd, btnElement) {
             }
         }
         
+        // Track successful completion
+        const duration = Date.now() - startTime;
+        sendTelemetry("command_complete", {
+            command: cmd.split(' ')[0],
+            duration_ms: duration,
+            success: true
+        });
+        
         // Success state
         btnElement.innerHTML = '';
         const checkIcon = document.createElementNS("http://www.w3.org/2000/svg", "svg");
@@ -365,6 +389,15 @@ async function runCommand(cmd, btnElement) {
         }, 2000);
     } catch (e) {
         debug('Command error:', e);
+        
+        // Track error
+        const duration = Date.now() - startTime;
+        sendTelemetry("command_error", {
+            command: cmd.split(' ')[0],
+            error: e.message,
+            duration_ms: duration
+        });
+        
         showOutput(cmd, `Error: ${e.message}`);
         
         btnElement.innerHTML = '';
