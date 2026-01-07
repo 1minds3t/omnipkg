@@ -1,3 +1,13 @@
+---
+title: omnipkg CLI Commands Reference
+doc_type: guide
+status: draft
+generated: true
+created: '2026-01-07'
+builder: omnipkg-docbuilder
+builder_version: 2.1.0
+---
+
 # omnipkg CLI Commands Reference
 
 This document provides a comprehensive overview of all `omnipkg` command-line interface (CLI) commands and their usage.

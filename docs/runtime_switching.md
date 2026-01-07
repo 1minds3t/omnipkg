@@ -1,3 +1,13 @@
+---
+title: Runtime Version Switching with omnipkgLoader
+doc_type: guide
+status: draft
+generated: true
+created: '2026-01-07'
+builder: omnipkg-docbuilder
+builder_version: 2.1.0
+---
+
 # Runtime Version Switching with omnipkgLoader
 
 One of `omnipkg`'s most revolutionary features is the ability to dynamically switch between different package versions *within the same Python script or process*, without requiring separate virtual environments, Docker containers, or process restarts. This is achieved using the `omnipkgLoader` context manager.

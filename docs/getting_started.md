@@ -1,3 +1,13 @@
+---
+title: Getting Started with omnipkg
+doc_type: guide
+status: draft
+generated: true
+created: '2026-01-07'
+builder: omnipkg-docbuilder
+builder_version: 2.1.0
+---
+
 # Getting Started with omnipkg
 
 This guide will walk you through installing `omnipkg` and performing the initial setup.

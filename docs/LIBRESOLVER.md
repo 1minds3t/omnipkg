@@ -1,3 +1,13 @@
+---
+title: LibResolver - System Library Version Swapper
+doc_type: guide
+status: draft
+generated: true
+created: '2026-01-07'
+builder: omnipkg-docbuilder
+builder_version: 2.1.0
+---
+
 # LibResolver - System Library Version Swapper
 
 ## Overview
