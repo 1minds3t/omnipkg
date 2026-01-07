@@ -1,64 +1,139 @@
 site_name: omnipkg
-site_description: 'The Ultimate Python Dependency Resolver. One environment. Infinite packages. Zero conflicts.'
-site_url: https://omnipkg.pages.dev/  # Make sure this has trailing slash
-use_directory_urls: true  # THIS IS CRITICAL - ensures /getting_started/ works
-repo_url: https://github.com/1minds3t/omnipkg 
+site_description: 'The Ultimate Python Dependency Resolver. One environment. Infinite
+  packages. Zero conflicts.'
+# CRITICAL: As requested
+site_url: https://omnipkg.pages.dev/
+use_directory_urls: true
+repo_url: https://github.com/1minds3t/omnipkg
 repo_name: 1minds3t/omnipkg
 
 # Navigation with tabs
 nav:
-  - Home: index.md
-  - Getting Started: getting_started.md
-  - CLI Commands: cli_commands_reference.md
-  - Advanced Features:
-      - Overview: advanced_management.md
-      - Python Hot-Swapping: python_hot_swapping.md
-      - Runtime Switching: runtime_switching.md
-      - System Libs (LibResolver): LIBRESOLVER.md
-  - Roadmap: future_roadmap.md
+- Home: index.md
+- Getting Started: getting_started.md
+- CLI Commands: cli_commands_reference.md
+- Advanced Features:
+  - Overview: advanced_management.md
+  - Python Hot-Swapping: python_hot_swapping.md
+  - Runtime Switching: runtime_switching.md
+  - System Libs (LibResolver): LIBRESOLVER.md
+- Roadmap: future_roadmap.md
 
 # Material theme configuration
+- Demos: demos/
+
 theme:
   name: material
   logo: assets/logo.svg
   favicon: assets/favicon.png
   palette:
-    - scheme: default
-      primary: indigo
-      accent: indigo
-      toggle:
-        icon: material/brightness-7
-        name: Switch to dark mode
-    - scheme: slate
-      primary: black
-      accent: indigo
-      toggle:
-        icon: material/brightness-4
-        name: Switch to light mode
+  - scheme: default
+    primary: indigo
+    accent: indigo
+    toggle:
+      icon: material/brightness-7
+      name: Switch to dark mode
+  - scheme: slate
+    primary: black
+    accent: indigo
+    toggle:
+      icon: material/brightness-4
+      name: Switch to light mode
   features:
-    - navigation.tabs
-    - navigation.tabs.sticky
-    - navigation.top
-    - search.suggest
-    - search.highlight
-    - content.code.copy
-    - content.code.annotate
+    # Navigation Features (Merged)
+  - navigation.tabs
+  - navigation.tabs.sticky
+  - navigation.top
+  - navigation.instant        # Added: SPAs feel
+  - navigation.tracking       # Added: URL updates on scroll
+  - navigation.sections       # Added: Better sidebar grouping
+  - navigation.expand         # Added: Open details by default
+  - navigation.indexes        # Added: Clickable section headers
+  - toc.follow               # Added: TOC highlights as you scroll
+    # Content Features
+  - search.suggest
+  - search.highlight
+  - content.code.copy
+  - content.code.annotate
+  - content.tabs.link
   icon:
     repo: fontawesome/brands/github
+
+plugins:
+- search
+- awesome-pages
+- macros
+- minify:
+    minify_html: true
+- git-revision-date-localized:
+    enable_creation_date: true
+    type: timeago
+- redirects:
+    redirect_maps:
+      old_page.md: new_page.md
+- sitemap:
+    changefreq: weekly
+    priority: 0.5
+
+markdown_extensions:
+- admonition
+- codehilite
+- footnotes
+- tables                      # Added: Missing from original
+- toc:
+    permalink: true
+  # Advanced Fences (Updated for Mermaid)
+- pymdownx.superfences:
+    custom_fences:
+    - name: mermaid
+      class: mermaid
+      format: !!python/name:pymdownx.superfences.fence_code_format
+- pymdownx.tabbed:
+    alternate_style: true
+- pymdownx.details
+- pymdownx.highlight:
+    anchor_linenums: true
+    line_spans: __span
+    pygments_lang_class: true
+- pymdownx.inlinehilite
+- pymdownx.magiclink
+- pymdownx.snippets          # Added: Allows including files
+- pymdownx.betterem:
+    smart_enable: all
+- pymdownx.caret
+- pymdownx.emoji:
+    emoji_index: !!python/name:materialx.emoji.twemoji
+    emoji_generator: !!python/name:materialx.emoji.to_svg
+    options:
+      custom_size: 20px
+- pymdownx.keys
+- attr_list
+- def_list
+- md_in_html
+- smarty
+- wikilinks
 
 # Documentation directory
 docs_dir: docs
 
 # CRITICAL: Add custom CSS and JS for interactivity
 extra_css:
-  - assets/css/interact.css
-  
+- assets/css/interact.css
+- stylesheets/extra.css     # Added: To support any new styles
+
 extra_javascript:
-  - assets/js/interact.js
-  - assets/javascripts/trailing-slash.js
+- assets/js/interact.js
+- assets/javascripts/trailing-slash.js
 
 # 🔒 SECURITY: Add Content Security Policy
 extra:
+  social:
+  - icon: fontawesome/brands/github
+    link: https://github.com/1minds3t/omnipkg
   meta:
-    - name: "Content-Security-Policy"
-      content: "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; connect-src 'self' https://omnipkg.1minds3t.workers.dev https://*.ts.net http://127.0.0.1:* http://localhost:*; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; frame-ancestors 'none';"
+  - name: "Content-Security-Policy"
+    content: "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com;
+      connect-src 'self' https://omnipkg.1minds3t.workers.dev https://*.ts.net http://127.0.0.1:*
+      http://localhost:*; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
+      font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; frame-ancestors
+      'none';"

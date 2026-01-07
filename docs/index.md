@@ -1,3 +1,13 @@
+---
+title: omnipkg - The Ultimate Python Dependency Resolver
+doc_type: guide
+status: draft
+generated: true
+created: '2026-01-07'
+builder: omnipkg-docbuilder
+builder_version: 2.1.0
+---
+
 # omnipkg - The Ultimate Python Dependency Resolver
 
 > One environment. Infinite Python and package versions. Zero conflicts.

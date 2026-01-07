@@ -1,3 +1,13 @@
+---
+title: Advanced omnipkg Management
+doc_type: guide
+status: draft
+generated: true
+created: '2026-01-07'
+builder: omnipkg-docbuilder
+builder_version: 2.1.0
+---
+
 # Advanced omnipkg Management
 
 This section covers more advanced topics related to `omnipkg`'s internal workings, manual interventions (use with caution!), and future capabilities.
