@@ -80,7 +80,7 @@ omnipkg run legacy_model.py
 
 ## Try It Now
 ```bash
-omnipkg demo 7  # Auto-healing demo
+omnipkg demo 7
 ```
 
 ## Performance Metrics

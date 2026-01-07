@@ -17,14 +17,18 @@ nav:
   - Runtime Switching: runtime_switching.md
   - System Libs (LibResolver): LIBRESOLVER.md
 - Roadmap: future_roadmap.md
+- CLI Commands:
+  - Overview: cli_commands/index.md
+  - Details: cli_commands/cli_commands_details.md
+  - Overview: cli_commands/cli_commands_overview.md
+  - Run: cli_commands/cli_commands_run.md
+- Platform Support:
+  - Overview: platform_support/index.md
+  - CI Verification: platform_support/platform_support_ci_verification.md
 - Demos:
   - Overview: demos/index.md
   - Rich Module Switching: demos/demos_rich_module_switching.md
   - UV Binary Switching: demos/demos_uv_binary_switching.md
-- CLI Commands:
-  - Overview: cli_commands/index.md
-- Platform Support:
-  - Overview: platform_support/index.md
 theme:
   name: material
   logo: assets/logo.svg
