@@ -9,14 +9,6 @@ builder_version: 2.1.0
 section: demos
 ---
 
-You are absolutely right to catch that. I missed the explicit **"How to Run"** command block in that specific file draft.
-
-While the log title hinted at it, you need a dedicated code block so users know exactly what to type to reproduce the demo on their machine.
-
-Here is the **corrected** version for `docs/demos/rich_module_switching.md`.
-
-**Paste this into:** `docs/demos/rich_module_switching.md`
-
 ```markdown
 ---
 title: Rich Module Switching

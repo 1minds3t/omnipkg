@@ -9,18 +9,6 @@ builder_version: 2.1.0
 section: demos
 ---
 
-Yes, for the **Rich Test** (Demo 1), if you want to run it **directly** (non-interactive mode) in your docs code block, the command is:
-
-```bash
-omnipkg demo 1
-```
-
-*(In the previous Rich Test draft, I used the log output you gave me which was interactive `omnipkg demo --verbose` then selecting `1`. But for the "Usage" section of the docs, `omnipkg demo 1` is the correct instruction to give users.)*
-
-Here is the **Index Overview** for `docs/demos/index.md` that catalogs all 11 demos found in your CLI.
-
-**Paste this into:** `docs/demos/index.md`
-
 ```markdown
 ---
 title: Demos
