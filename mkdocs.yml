@@ -68,12 +68,10 @@ plugins:
 - git-revision-date-localized:
     enable_creation_date: true
     type: timeago
+    fallback_to_build_date: true  # Add this line
 - redirects:
     redirect_maps:
-      old_page.md: new_page.md
-- sitemap:
-    changefreq: weekly
-    priority: 0.5
+
 
 markdown_extensions:
 - admonition
@@ -102,10 +100,8 @@ markdown_extensions:
     smart_enable: all
 - pymdownx.caret
 - pymdownx.emoji:
-    emoji_index: !!python/name:materialx.emoji.twemoji
-    emoji_generator: !!python/name:materialx.emoji.to_svg
-    options:
-      custom_size: 20px
+    emoji_index: !!python/name:material.extensions.emoji.twemoji
+    emoji_generator: !!python/name:material.extensions.emoji.to_svg
 - pymdownx.keys
 - attr_list
 - def_list
