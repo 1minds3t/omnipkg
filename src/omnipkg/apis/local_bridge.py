@@ -33,9 +33,13 @@ PRIMARY_DASHBOARD = "https://1minds3t.echo-universe.ts.net/omnipkg/"
 ALLOWED_ORIGINS = {
     # 1. Your Public Tailscale Funnel (The main UI)
     "https://1minds3t.echo-universe.ts.net",
-    
+    "http://127.0.0.1:8085/",
+    "http://localhost:5000",
+    "http://127.0.0.1:5000",
+    "http://localhost:8085",
     # 2. Cloudflare Pages (Static docs fallback)
     "https://omnipkg.pages.dev",
+    "https://omnipkg.workers.dev",
 }
 if DEV_MODE:
     ALLOWED_ORIGINS.update({
@@ -377,34 +381,49 @@ def create_app(port):
 
     @app.before_request
     def enforce_origin():
-        # Allow OPTIONS (Preflight) to pass for CORS checks
         if request.method == "OPTIONS":
             return
         
-        # Get the Origin header sent by the browser
         origin = request.headers.get('Origin')
         
-        # 1. Block requests with NO Origin (like standard curl/scripts)
-        if not origin:
+        # 🔓 DEV MODE: Allow missing Origin for curl/testing
+        if DEV_MODE and not origin:
+            logger.info("⚠️ DEV MODE: Allowing request without Origin header")
+            return
+        
+        # Block requests with NO Origin in production
+        if not origin and not DEV_MODE:
             return jsonify({
                 "error": "❌ Direct API access prohibited.",
                 "message": "You must use the OmniPkg Web UI to interact with this bridge.",
                 "url": PRIMARY_DASHBOARD
             }), 403
 
-        # 2. Block requests from unauthorized domains (spoofing attempts)
-        clean_origin = origin.rstrip("/")
-        if clean_origin not in ALLOWED_ORIGINS:
-             return jsonify({
-                "error": "❌ Unauthorized Origin.",
-                "message": f"Origin '{clean_origin}' is not whitelisted."
-            }), 403
+        # Validate origin if present
+        if origin:
+            clean_origin = origin.rstrip("/")
+            if clean_origin not in ALLOWED_ORIGINS:
+                return jsonify({
+                    "error": "❌ Unauthorized Origin.",
+                    "message": f"Origin '{clean_origin}' is not whitelisted."
+                }), 403
 
     @app.route('/health', methods=['GET', 'OPTIONS'])
     def health():
         origin = request.headers.get('Origin')
         if request.method == "OPTIONS": 
             return corsify_response(make_response(), origin)
+        
+        # Log health check telemetry
+        try:
+            with sqlite3.connect(DB_FILE) as conn:
+                conn.execute(
+                    "INSERT INTO telemetry (timestamp, event_type, event_name, page, meta) VALUES (?, ?, ?, ?, ?)",
+                    (datetime.utcnow().isoformat(), "health_check", "ping", "bridge", json.dumps({"port": port}))
+                )
+        except Exception as e:
+            logger.error(f"DB Error: {e}")
+        
         return corsify_response(jsonify({
             "status": "connected", 
             "port": port, 
@@ -490,6 +509,7 @@ def create_app(port):
             page = data.get('page', 'unknown')
             meta = json.dumps(data.get('metadata', {}))
             
+            # 1. Save locally
             with sqlite3.connect(DB_FILE) as conn:
                 conn.execute(
                     "INSERT INTO telemetry (timestamp, event_type, event_name, page, meta) VALUES (?, ?, ?, ?, ?)",
@@ -497,6 +517,19 @@ def create_app(port):
                 )
             
             logger.info(f"📡 TELEMETRY: [{event_type}] {event_name}")
+            
+            # 2. Forward to Cloudflare Worker (fire and forget)
+            try:
+                import requests
+                requests.post(
+                    'https://omnipkg.1minds3t.workers.dev/analytics/track',
+                    json=data,
+                    timeout=2
+                )
+                logger.info("☁️ Telemetry forwarded to Cloudflare")
+            except Exception as e:
+                logger.warning(f"Failed to forward to Cloudflare: {e}")
+            
             return corsify_response(jsonify({"status": "saved"}), origin)
         except Exception as e:
             logger.error(f"Telemetry save failed: {e}")
