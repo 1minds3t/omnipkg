@@ -1,7 +1,7 @@
 site_name: omnipkg
 site_description: 'The Ultimate Python Dependency Resolver. One environment. Infinite packages. Zero conflicts.'
-site_url: ""
-use_directory_urls: false
+site_url: https://omnipkg.pages.dev/  # Make sure this has trailing slash
+use_directory_urls: true  # THIS IS CRITICAL - ensures /getting_started/ works
 repo_url: https://github.com/1minds3t/omnipkg 
 repo_name: 1minds3t/omnipkg
 
