@@ -1,5 +1,5 @@
 {% set name = "omnipkg" %}
-{% set version = "2.0.7" %}
+{% set version = "2.1.0" %}
 
 package:
   name: {{ name|lower }}
@@ -7,10 +7,10 @@ package:
 
 source:
   url: https://pypi.org/packages/source/{{ name[0] }}/{{ name }}/{{ name }}-{{ version }}.tar.gz
-  sha256: f07d3bd32e786e5de143b6e07558b1fe5ee1ab08ac701af3f98b8eb05bd8490b
+  sha256: f4c0b93869baa678e1d0399d860534d4c98eff07bc03bf188a7643332c0264c2
 
 build:
-  number: 8  # Bump this!
+  number: 0  # Reset for new version
   script:
     # Unix/Mac: Use the build python, but force install to the ARM location (${PREFIX})
     - python -m pip install . --no-deps --no-build-isolation --prefix "${PREFIX}" -vv  # [unix]
@@ -42,7 +42,7 @@ requirements:
     - packaging >=23.0
     - tomli  # [py<311]
     - authlib >=1.6.5
-    - aiohttp >=3.13.1
+    - aiohttp >=3.13.3
     - safety >=3.7.0  # [py<314]
     - marshmallow >=4.1.2
     - pip-audit >=2.6.0  # [py>=314]
@@ -50,6 +50,8 @@ requirements:
     - urllib3 >=1.26.19
     - tqdm >=4.67.1
     - typing-extensions >=4.0.0
+    - flask >=2.0
+    - flask-cors >=3.0
 
 test:
   # This selector skips tests when building osx-arm64 on an Intel runner
@@ -61,7 +63,7 @@ test:
     - omnipkg --version  # [build_platform == target_platform]
 
 about:
-  home: https://github.com/1minds3t/omnipkg
+  home: https://omnipkg.pages.dev/
   license: AGPL-3.0-only
   license_family: AGPL
   license_file: LICENSE
@@ -82,7 +84,19 @@ about:
     - Zero-copy multi-framework orchestration
     - Smart dependency resolution with snapshot restoration
     - Live daemon monitoring dashboard
-  doc_url: https://omnipkg.readthedocs.io/en/latest/
+    - Interactive web-based documentation with real-time command execution
+    
+    Documentation:
+    - 📚 Static docs: https://omnipkg.pages.dev/
+    - 🎮 Interactive console: https://1minds3t.echo-universe.ts.net/omnipkg/
+    - Execute omnipkg commands in real-time through your browser
+    - Streaming output via public → CORS → Cloudflare → localhost bridge
+    - Runs commands locally on your machine (privacy-safe, GDPR compliant)
+    
+    Performance Note:
+    - Install 'uv' separately for 6x faster script execution with '8pkg run'
+    - Core functionality works with standard pip (already included)
+  doc_url: https://omnipkg.pages.dev/
   dev_url: https://github.com/1minds3t/omnipkg
 
 extra:
