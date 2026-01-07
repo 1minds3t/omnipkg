@@ -300,8 +300,12 @@ async function runCommand(cmd, btnElement) {
     sendTelemetry("command_exec", { command: cmd.split(' ')[0] });
 
     try {
-        // 🔥 DIRECT CONNECTION: Browser -> User's localhost (Private Network Access)
-        // This works because of Access-Control-Allow-Private-Network header in your bridge
+        // Open modal immediately to show streaming output
+        const modal = createStreamingModal(cmd);
+        const outputPre = modal.querySelector('.omni-output');
+        let fullOutput = '';
+        
+        // 🔥 DIRECT CONNECTION with streaming
         const res = await fetch(`http://127.0.0.1:${PORT}/run`, {
             method: 'POST',
             headers: { 
@@ -310,15 +314,33 @@ async function runCommand(cmd, btnElement) {
             body: JSON.stringify({ command: cmd })
         });
         
-        const contentType = res.headers.get('content-type') || '';
-        let data;
-        if (contentType.includes('application/json')) {
-            data = await res.json();
-        } else {
-            data = { output: await res.text() };
-        }
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
         
-        showOutput(cmd, data.output || 'No output');
+        while (true) {
+            const {done, value} = await reader.read();
+            if (done) break;
+            
+            const chunk = decoder.decode(value, {stream: true});
+            const lines = chunk.split('\n\n');
+            
+            for (const line of lines) {
+                if (line.startsWith('data: ')) {
+                    const jsonStr = line.substring(6);
+                    try {
+                        const data = JSON.parse(jsonStr);
+                        if (data.done) break;
+                        if (data.line) {
+                            fullOutput += data.line;
+                            outputPre.textContent = fullOutput;
+                            outputPre.scrollTop = outputPre.scrollHeight;
+                        }
+                    } catch (e) {
+                        debug('Parse error:', e);
+                    }
+                }
+            }
+        }
         
         // Success state
         btnElement.innerHTML = '';
@@ -412,6 +434,58 @@ function showOutput(cmd, output) {
     modal.appendChild(backdrop);
     modal.appendChild(content);
     document.body.appendChild(modal);
+}
+
+function createStreamingModal(cmd) {
+    const existing = document.getElementById('omni-output-modal');
+    if (existing) existing.remove();
+    
+    const modal = document.createElement('div');
+    modal.id = 'omni-output-modal';
+    
+    const backdrop = document.createElement('div');
+    backdrop.className = 'omni-modal-backdrop';
+    
+    const content = document.createElement('div');
+    content.className = 'omni-modal-content';
+    
+    const header = document.createElement('div');
+    header.className = 'omni-modal-header';
+    const title = document.createElement('h3');
+    title.textContent = 'Command Output (Live)';
+    const closeBtn = document.createElement('button');
+    closeBtn.className = 'omni-modal-close';
+    closeBtn.textContent = '×';
+    closeBtn.onclick = () => modal.remove();
+    header.appendChild(title);
+    header.appendChild(closeBtn);
+    
+    const body = document.createElement('div');
+    body.className = 'omni-modal-body';
+    const cmdDiv = document.createElement('div');
+    cmdDiv.className = 'omni-command';
+    cmdDiv.textContent = `$ ${cmd}`;
+    const outputPre = document.createElement('pre');
+    outputPre.className = 'omni-output';
+    outputPre.textContent = 'Executing...\n';
+    body.appendChild(cmdDiv);
+    body.appendChild(outputPre);
+    
+    const footer = document.createElement('div');
+    footer.className = 'omni-modal-footer';
+    const closeBtn2 = document.createElement('button');
+    closeBtn2.textContent = 'Close';
+    closeBtn2.onclick = () => modal.remove();
+    footer.appendChild(closeBtn2);
+    
+    content.appendChild(header);
+    content.appendChild(body);
+    content.appendChild(footer);
+    modal.appendChild(backdrop);
+    modal.appendChild(content);
+    document.body.appendChild(modal);
+    
+    return modal;
 }
 
 // ==========================================
