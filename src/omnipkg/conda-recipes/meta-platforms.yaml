@@ -84,19 +84,7 @@ about:
     - Zero-copy multi-framework orchestration
     - Smart dependency resolution with snapshot restoration
     - Live daemon monitoring dashboard
-    - Interactive web-based documentation with real-time command execution
-    
-    Documentation:
-    - 📚 Static docs: https://omnipkg.pages.dev/
-    - 🎮 Interactive console: https://1minds3t.echo-universe.ts.net/omnipkg/
-    - Execute omnipkg commands in real-time through your browser
-    - Streaming output via public → CORS → Cloudflare → localhost bridge
-    - Runs commands locally on your machine (privacy-safe, GDPR compliant)
-    
-    Performance Note:
-    - Install 'uv' separately for 6x faster script execution with '8pkg run'
-    - Core functionality works with standard pip (already included)
-  doc_url: https://omnipkg.pages.dev/
+  doc_url: https://omnipkg.readthedocs.io/en/latest/
   dev_url: https://github.com/1minds3t/omnipkg
 
 extra:
