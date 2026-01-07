@@ -1,12 +1,17 @@
 ---
-title: omnipkg CLI Commands Reference
-doc_type: guide
+title: Details
+doc_type: reference
 status: draft
 generated: true
 created: '2026-01-07'
 builder: omnipkg-docbuilder
 builder_version: 2.1.0
+section: cli_commands
 ---
+
+# Details
+
+## Overview
 
 # omnipkg CLI Commands Reference
 
