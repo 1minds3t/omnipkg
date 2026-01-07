@@ -27,7 +27,10 @@ nav:
   - CI Verification: platform_support/platform_support_ci_verification.md
 - Demos:
   - Overview: demos/index.md
+  - C Extension Switching: demos/demos_c_extension_switching.md
   - Rich Module Switching: demos/demos_rich_module_switching.md
+  - Tensorflow Dependency Switching: 
+      demos/demos_tensorflow_dependency_switching.md
   - UV Binary Switching: demos/demos_uv_binary_switching.md
 theme:
   name: material
