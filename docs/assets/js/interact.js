@@ -84,7 +84,7 @@ function createUpgradeNotice() {
             <strong style="font-size: 16px;">📚 Static Documentation</strong>
             <span style="opacity: 0.95; display: block; margin-top: 6px;">
                 For interactive command execution, visit 
-                <a href="https://1minds3t.echo-universe.ts.net/omnipkg/${window.location.pathname}" 
+                <a href="https://1minds3t.echo-universe.ts.net/omnipkg${window.location.pathname}" 
                    style="color: #FFD700; text-decoration: underline; font-weight: 600;">
                     1minds3t.echo-universe.ts.net/omnipkg/
                 </a>
