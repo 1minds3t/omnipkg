@@ -9,21 +9,15 @@ builder_version: 2.1.0
 section: demos
 ---
 
-```markdown
----
-title: Rich Module Switching
-doc_type: demo
-status: stable
-generated: true
-builder: omnipkg-docbuilder
-builder_version: 2.1.0
-section: demos
----
-
 # Rich Module Switching
 
 !!! success "Demo Status: Verified"
     This demo is fully functional and runs automatically via the CLI.
+
+**Try it now:** Click the play button to run this demo instantly:
+```bash
+omnipkg demo 1
+```
 
 This demo showcases OmniPkg's ability to manage **multiple concurrent versions** of a pure Python package (like `rich`) within a single environment, switching between them instantly using the **Worker Daemon**.
 
@@ -153,4 +147,3 @@ Below is the actual output from running this demo. Notice how OmniPkg handles th
 1.  **Stability Protection**: When the script requested `rich==13.5.3`, OmniPkg saw that `13.7.1` was already installed. Instead of downgrading (which would break the main environment), it triggered **Stability Protection**.
 2.  **Bubble Storage**: The older versions were installed into hidden directories (`.omnipkg_versions/`).
 3.  **Daemon Isolation**: The main process kept using v13.7.1. The verification requests for older versions were sent to the **Worker Daemon**, which dynamically loaded the bubble paths into `sys.path` for that specific execution context.
-```

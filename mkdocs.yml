@@ -18,10 +18,9 @@ nav:
   - Runtime Switching: runtime_switching.md
   - System Libs (LibResolver): LIBRESOLVER.md
 - Roadmap: future_roadmap.md
-
-# Material theme configuration
-- Demos: demos/
-
+- Demos:
+  - Overview: demos/index.md
+  - Rich Module Switching: demos/demos_rich_module_switching.md
 theme:
   name: material
   logo: assets/logo.svg
@@ -75,6 +74,7 @@ plugins:
 
 markdown_extensions:
 - admonition
+- meta                        # ADD THIS LINE (parse YAML front matter)
 - codehilite
 - footnotes
 - tables                      # Added: Missing from original

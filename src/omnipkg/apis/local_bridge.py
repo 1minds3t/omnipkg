@@ -240,17 +240,13 @@ def clean_and_validate(cmd_str):
 
 def execute_omnipkg_command(cmd_str):
     """
-    Executes validated commands with automatic non-interactive mode injection.
-    
-    Key features:
-    - Sets environment variables for non-interactive operation
-    - Auto-injects safety flags based on command rules
-    - Sanitizes all output
-    - Proper timeout handling
+    Executes validated commands with streaming output (generator function).
+    Yields output line-by-line in real-time.
     """
     is_valid, msg, cleaned_cmd, auto_flags = clean_and_validate(cmd_str)
     if not is_valid:
-        return sanitize_output(msg)
+        yield sanitize_output(msg)
+        return
 
     try:
         args = shlex.split(cleaned_cmd)
@@ -272,29 +268,34 @@ def execute_omnipkg_command(cmd_str):
         env["PYTHONUNBUFFERED"] = "1"
         env["OMNIPKG_WEB_MODE"] = "1"
         env["OMNIPKG_NONINTERACTIVE"] = "1"
-        env["CI"] = "1"  # Standard CI indicator
+        env["CI"] = "1"
 
-        result = subprocess.run(
+        # Use Popen for streaming
+        process = subprocess.Popen(
             full_command,
-            capture_output=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
             text=True,
-            timeout=180,  # 3 minutes for stress tests
+            bufsize=1,  # Line buffered
             env=env,
             startupinfo=startupinfo,
-            cwd=Path.home() 
+            cwd=Path.home()
         )
         
-        output = result.stdout + "\n" + result.stderr
+        # Stream output line by line
+        for line in process.stdout:
+            yield sanitize_output(line)
         
-        if result.returncode == 0:
-            return sanitize_output(output or "✅ Command completed successfully")
+        process.wait(timeout=180)
         
-        return sanitize_output(f"⚠️ Exit Code {result.returncode}:\n{output}")
+        if process.returncode != 0:
+            yield f"\n⚠️ Exit Code {process.returncode}\n"
         
     except subprocess.TimeoutExpired:
-        return "⚠️ Error: Command timed out (exceeded 3 minutes)."
+        process.kill()
+        yield "\n⚠️ Error: Command timed out (exceeded 3 minutes).\n"
     except Exception as e:
-        return sanitize_output(f"System Error: {str(e)}")
+        yield sanitize_output(f"\nSystem Error: {str(e)}\n")
 
 def sanitize_output(text):
     """
@@ -439,7 +440,6 @@ def create_app(port):
         data = request.json
         cmd = data.get('command', '')
         logger.info(f"⚡ Executing: {cmd}")
-        output = execute_omnipkg_command(cmd)
         
         # Log to telemetry
         try:
@@ -450,8 +450,18 @@ def create_app(port):
                 )
         except Exception as e:
             logger.error(f"DB Error: {e}")
-
-        return corsify_response(jsonify({"output": output}), origin)
+        
+        # Stream response using Server-Sent Events format
+        def generate():
+            for line in execute_omnipkg_command(cmd):
+                yield f"data: {json.dumps({'line': line})}\n\n"
+            yield "data: {\"done\": true}\n\n"
+        
+        response = make_response(generate())
+        response.headers['Content-Type'] = 'text/event-stream'
+        response.headers['Cache-Control'] = 'no-cache'
+        response.headers['X-Accel-Buffering'] = 'no'
+        return corsify_response(response, origin)
 
     @app.route('/install-omnipkg', methods=['POST', 'OPTIONS'])
     def install_omnipkg():
