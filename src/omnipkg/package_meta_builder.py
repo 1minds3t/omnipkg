@@ -1245,11 +1245,13 @@ class omnipkgMetadataGatherer:
             if should_create_or_upgrade or not bubble_path.is_dir():
                 if should_create_or_upgrade and current_version:
                     safe_print(
-                        f"📦 Upgrading safety tool: v{current_version} → v{tool_version_to_use}"
+                        f"📦 Upgrading safety tool: v{current_version} → v{tool_version_to_use}",
+                        flush=True  # ADD THIS
                     )
                 else:
                     safe_print(
-                        f"💡 First-time setup: Creating isolated bubble for '{TOOL_SPEC}'..."
+                        f"💡 First-time setup: Creating isolated bubble for '{TOOL_SPEC}'...",
+                        flush=True  # ADD THIS
                     )
 
                 for old_bubble in self.omnipkg_instance.multiversion_base.glob(f"{TOOL_NAME}-*"):
@@ -1304,7 +1306,14 @@ class omnipkgMetadataGatherer:
                     reqs_file_path,
                     "--json",
                 ]
-                result = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
+                safe_print("   🔍 Running safety vulnerability scan...", flush=True)
+                result = subprocess.run(
+                    cmd, 
+                    capture_output=True,  # Keep this for JSON parsing
+                    text=True, 
+                    timeout=180
+                )
+                safe_print("   ✓ Scan complete", flush=True)
 
             self.security_report = {}
             if result.stdout:
@@ -1363,7 +1372,14 @@ class omnipkgMetadataGatherer:
 
             python_exe = self.config.get("python_executable", sys.executable)
             cmd = [python_exe, "-m", "pip", "audit", "--json", "-r", reqs_file_path]
+            
+            # ADD THIS:
+            safe_print("   🔍 Running pip audit scan...", flush=True)
+            
             result = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
+            
+            # ADD THIS:
+            safe_print("   ✓ Audit complete", flush=True)
 
             if result.returncode == 0 and result.stdout:
                 audit_data = json.loads(result.stdout)
@@ -1606,6 +1622,7 @@ class omnipkgMetadataGatherer:
 
         updated_count = 0
         max_workers = (os.cpu_count() or 4) * 2
+        safe_print(f"   🔄 Processing {total_packages} packages in parallel...", flush=True)
 
         with concurrent.futures.ThreadPoolExecutor(
             max_workers=max_workers, thread_name_prefix="omnipkg_builder"
