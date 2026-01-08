@@ -1622,6 +1622,7 @@ class omnipkgMetadataGatherer:
 
         updated_count = 0
         max_workers = (os.cpu_count() or 4) * 2
+        total_packages = len(distributions_to_process)
         safe_print(f"   🔄 Processing {total_packages} packages in parallel...", flush=True)
 
         with concurrent.futures.ThreadPoolExecutor(
@@ -1650,7 +1651,6 @@ class omnipkgMetadataGatherer:
 
         end_time = time.perf_counter()
         total_time = end_time - start_time
-        total_packages = len(distributions_to_process)
         pkgs_per_sec = total_packages / total_time if total_time > 0 else float("inf")
 
         safe_print("\n" + "─" * 60)
