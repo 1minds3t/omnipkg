@@ -11304,31 +11304,6 @@ class omnipkg:
 
                 any_installations_made = True
                 packages_after = self.get_installed_packages(live=True)
-                safe_print("⚙️ Running pip install for: {}...".format(package_spec))
-
-                return_code, pkg_install_output = self._run_pip_install(
-                    [package_spec],
-                    target_directory=target_directory,
-                    force_reinstall=force_reinstall,
-                    index_url=index_url,
-                    extra_index_url=extra_index_url,
-                )
-
-                if return_code != 0:
-                    safe_print(f"❌ Pip installation failed for {package_spec}.")
-
-                    # Restore from snapshot on failure
-                    safe_print("\n🔄 Restoring environment from pre-install snapshot...")
-                    if self._restore_from_pre_install_snapshot(snapshot_key):
-                        safe_print("   ✅ Environment restored to pre-install state")
-                    else:
-                        safe_print("   ❌ CRITICAL: Snapshot restore failed!")
-                        safe_print("   💡 You may need to run: omnipkg revert")
-
-                    continue
-
-                any_installations_made = True
-                packages_after = self.get_installed_packages(live=True)
 
                 # 3. Change Detection
                 all_changes = self._detect_all_changes(packages_before, packages_after)
