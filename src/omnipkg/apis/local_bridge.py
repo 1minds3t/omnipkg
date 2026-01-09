@@ -392,11 +392,6 @@ def create_app(port):
             logger.info("⚠️ DEV MODE: Allowing request without Origin header")
             return
         
-        # 🔓 TAILSCALE PROXY: Requests from Tailscale proxy don't have Origin
-        if not origin and request.headers.get('X-Forwarded-For'):
-            logger.info("🔒 Tailscale proxy request detected - allowing")
-            return
-        
         # Block requests with NO Origin in production
         if not origin and not DEV_MODE:
             return jsonify({
@@ -404,7 +399,7 @@ def create_app(port):
                 "message": "You must use the OmniPkg Web UI to interact with this bridge.",
                 "url": PRIMARY_DASHBOARD
             }), 403
-    
+
         # Validate origin if present
         if origin:
             clean_origin = origin.rstrip("/")
@@ -567,7 +562,7 @@ def run_bridge_server():
     print(f"Local Port: {port}", flush=True)
     
     app = create_app(port)
-    app.run(host="0.0.0.0", port=port, threaded=True, use_reloader=False)  # ← CHANGE TO 0.0.0.0
+    app.run(host="127.0.0.1", port=port, threaded=True, use_reloader=False)
 
 # ==========================================
 # PART 2: Manager Logic (CLI Control)
