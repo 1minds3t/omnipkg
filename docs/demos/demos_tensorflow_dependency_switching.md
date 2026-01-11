@@ -11,6 +11,9 @@ section: demos
 
 # Tensorflow Dependency Switching
 
+!!! success "Demo Status: Verified"
+    This demo is fully functional and runs automatically via the CLI.
+
 ## Overview
 
 This log demonstrates **Complex Dependency Tree Management**.

@@ -28,6 +28,7 @@ nav:
 - Demos:
   - Overview: demos/index.md
   - C Extension Switching: demos/demos_c_extension_switching.md
+  - Concurrent Multiverse: demos/demos_concurrent_multiverse.md
   - Multiverse Healing: demos/demos_multiverse_healing.md
   - Rich Module Switching: demos/demos_rich_module_switching.md
   - Script Healing: demos/demos_script_healing.md

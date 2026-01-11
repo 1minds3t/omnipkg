@@ -11,7 +11,8 @@ section: demos
 
 # Script Healing Test
 
-## Overview
+!!! success "Demo Status: Verified"
+    This demo is fully functional and runs automatically via the CLI.
 
 This demo demonstrates **Automatic Script Healing with Version Detection**.
 
