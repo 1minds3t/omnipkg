@@ -11,6 +11,9 @@ section: demos
 
 # Multiverse Healing Test
 
+!!! success "Demo Status: Verified"
+    This demo is fully functional and runs automatically via the CLI.
+
 ## Overview
 
 This demo demonstrates **Cross-Python Hot-Swapping Mid-Script** with automatic environment healing.
