@@ -32,6 +32,16 @@ except ImportError:
     from omnipkg.common_utils import safe_print
 IS_WINDOWS = platform.system() == "Windows"
 
+try:
+    from omnipkg.isolation import omnipkg_atomic
+    _HAS_ATOMICS = True
+    # Print to stderr so it shows up in daemon logs
+    sys.stderr.write(f"✅ [DAEMON] Hardware Atomics LOADED: {omnipkg_atomic}\n")
+except ImportError as e:
+    _HAS_ATOMICS = False
+    sys.stderr.write(f"⚠️ [DAEMON] Hardware Atomics FAILED: {e}\n")
+    # Debug: print sys.path to see where it's looking
+    sys.stderr.write(f"   sys.path: {sys.path}\n")
 
 # ═══════════════════════════════════════════════════════════════
 # 0. CONSTANTS & UTILITIES
@@ -45,7 +55,6 @@ DAEMON_LOG_FILE = "/tmp/omnipkg_daemon.log"
 # ═══════════════════════════════════════════════════════════════
 # STATE MONITOR (OPTIMISTIC CONCURRENCY CONTROL)
 # ═══════════════════════════════════════════════════════════════
-
 class SharedStateMonitor:
     """
     Manages a shared memory control block for Optimistic Concurrency Control.
@@ -119,6 +128,58 @@ class SharedStateMonitor:
             
         except (filelock.Timeout, Exception):
             return False
+
+    def acquire_atomic_spinlock(self, timeout_seconds: float = 5.0) -> int:
+        """
+        Spinlock using LOCK CMPXCHG.
+        Protocol: We only lock if Version is EVEN.
+        Action: CAS(Current, Current + 1).
+        Returns: The new (Odd) version if successful, else raises Timeout.
+        """
+        if not _HAS_ATOMICS: raise NotImplementedError("No atomic extension found")
+        
+        # Wrap memoryview in ctypes to get address
+        c_obj = ctypes.c_longlong.from_buffer(self.shm.buf)
+        addr = ctypes.addressof(c_obj)
+        
+        start = time.time()
+        
+        while True:
+            # 1. Dirty Read (Fast check)
+            current = self.get_version()
+            
+            # If locked (Odd), wait
+            if current % 2 != 0:
+                if time.time() - start > timeout_seconds:
+                    raise TimeoutError("Spinlock timeout")
+                
+                # 🔥 CRITICAL FIX: YIELD THE GIL!
+                # Without this, spinning threads starve the lock holder.
+                # time.sleep(0) yields the thread's timeslice.
+                time.sleep(0) 
+                continue 
+                
+            # 2. Atomic Attempt: Even -> Odd
+            # If successful, we own the lock!
+            if omnipkg_atomic.cas_version(addr, current, current + 1):
+                return current + 1
+            
+            # CAS failed (contention). Backoff slightly.
+            time.sleep(0)
+
+    def release_atomic_spinlock(self, my_odd_version: int):
+        """
+        Unlock: CAS(Odd -> Odd + 1). Makes it Even (Free).
+        """
+        # 🔥 FIX: Wrap memoryview in ctypes to get address
+        c_obj = ctypes.c_longlong.from_buffer(self.shm.buf)
+        addr = ctypes.addressof(c_obj)
+        
+        # Verify we still own it (sanity check)
+        if not omnipkg_atomic.cas_version(addr, my_odd_version, my_odd_version + 1):
+             # Should never happen if logic is sound
+             sys.stderr.write("CRITICAL: Atomic release failed (Version Mismatch)!\n")
+
 
     def commit_and_release(self, new_version: int):
         """Write finished. Increment version, clear lock flag, release file lock."""
@@ -207,8 +268,6 @@ def recv_json(sock: socket.socket, timeout: float = 30.0) -> dict:
             raise ConnectionResetError("Socket stream interrupted.")
         data_buffer.extend(chunk)
     return json.loads(data_buffer.decode("utf-8"))
-
-
 class UniversalGpuIpc:
     """
     Pure CUDA IPC using ctypes - works WITHOUT PyTorch!
@@ -366,8 +425,6 @@ class UniversalGpuIpc:
             CUDABuffer(final_ptr, data["shape"], data["typestr"]),
             device=f"cuda:{data['device']}",
         )
-
-
 class SHMRegistry:
     """Track and cleanup orphaned shared memory blocks."""
 
@@ -417,7 +474,6 @@ class SHMRegistry:
                 except Exception:
                     pass
             self._save_registry()
-
 
 # Global SHM registry
 shm_registry = SHMRegistry()
@@ -2912,6 +2968,24 @@ class DaemonClient:
                 return {"success": False, "error": f"Communication error: {e}"}
         return {"success": False, "error": "Connection failed after retries"}
 
+    def optimistic_update_atomic(self, expected_version: int) -> bool:
+        """
+        TRUE HARDWARE CAS.
+        Replaces try_lock_and_validate for the C++ path.
+        """
+        if not _HAS_ATOMICS:
+            return self.try_lock_and_validate(expected_version)
+            
+        # Get raw pointer address
+        addr = ctypes.addressof(self.shm.buf)
+        
+        # Call C extension
+        # Atomically: if version == expected, set version = expected + 1
+        # We skip the "Lock" state entirely because CAS *is* the lock.
+        success = omnipkg_atomic.cas_version(addr, expected_version, expected_version + 1)
+        
+        return success
+
     def execute_optimistic_write(
         self,
         spec: str,
@@ -2921,75 +2995,41 @@ class DaemonClient:
         python_exe: str = None,
         max_retries: int = 100
     ):
-        """
-        Executes a concurrent write using Optimistic Concurrency Control.
-        
-        Algorithm:
-        1. Read Version V1
-        2. Execute Kernel (Calculation Phase)
-        3. CAS(Expect=V1, New=V1+1)
-           - If success: Commit
-           - If fail: Invalidate & Retry
-        
-        Args:
-            code_template: Python string with {version} placeholder
-        """
         monitor = SharedStateMonitor(control_block_name)
         
+        # 🟢 FAST PATH: Hardware Atomics
+        if _HAS_ATOMICS:
+            try:
+                locked_ver = monitor.acquire_atomic_spinlock(timeout_seconds=5.0)
+                res, meta = self.execute_cuda_ipc(
+                    spec, code_template, tensor_in, tensor_in.shape, "float32", 
+                    python_exe=python_exe, ipc_mode="universal"
+                )
+                monitor.release_atomic_spinlock(locked_ver)
+                return res, meta, 0
+            except Exception as e:
+                # If spinlock fails, fall back to retry loop or raise
+                raise e
+
+        # 🟡 SLOW PATH: Legacy File Lock (Existing Logic)
         retries = 0
         while retries < max_retries:
-            # 1. SNAPSHOT START
             start_version = monitor.get_version()
-            
-            # 2. CALCULATION (Speculative Execution)
-            # We inject the EXPECTED version into the worker
-            # The worker returns the result but DOES NOT strictly need to lock 
-            # (In this demo, the client manages the lock, effectively acting as the CAS arbiter)
-            
-            # We run the code via standard IPC
-            # The code should perform the math but NOT finalize persistent state yet if complex
-            # For this tensor demo, we do the math on the tensor in-place, which is risky
-            # ideally we compute to a buffer, then swap.
-            
-            # For the Demo: We hold the lock during the critical section because
-            # true CAS on large tensors requires GPU atomic support.
-            # We are simulating the COORDINATION logic.
-            
             if monitor.try_lock_and_validate(start_version):
                 try:
-                    # CRITICAL SECTION
-                    # We own the slot. No one else is writing.
-                    
-                    safe_print(f"   🔒 Acquired Lock (Ver: {start_version}) - Writing...")
-                    
-                    # Execute the write
                     res, meta = self.execute_cuda_ipc(
-                        spec=spec,
-                        code=code_template.format(version=start_version),
-                        input_tensor=tensor_in,
-                        output_shape=tensor_in.shape,
-                        output_dtype="float32",
-                        ipc_mode="universal",
-                        python_exe=python_exe
+                        spec, code_template, tensor_in, tensor_in.shape, "float32",
+                        python_exe=python_exe, ipc_mode="universal"
                     )
-                    
-                    # COMMIT
-                    monitor.commit_and_release(start_version + 1)
+                    monitor.commit_and_release(start_version + 2) # Maintain parity
                     return res, meta, retries
-                    
-                except Exception as e:
-                    # Rollback logic would go here
-                    monitor.commit_and_release(start_version) # Revert lock
-                    raise e
+                except:
+                    monitor.commit_and_release(start_version)
+                    raise
             else:
-                # CAS Failed - State changed while we were preparing
-                # Or lock was held by someone else.
                 retries += 1
-                # Exponential backoff
                 time.sleep(0.001 * (2 ** min(retries, 5)))
-                continue
-                
-        raise RuntimeError("Max retries exceeded for optimistic write")
+        raise RuntimeError("Max retries exceeded")
 
     def execute_cuda_ipc(
         self,

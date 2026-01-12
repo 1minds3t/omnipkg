@@ -26,8 +26,8 @@ import threading
 import subprocess
 import random
 
-# Ensure we can find omnipkg
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../")))
+# Ensure we can find omnipkg (Force SRC usage to pick up local .so build)
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../src")))
 
 try:
     from omnipkg.isolation.worker_daemon import DaemonClient, WorkerPoolDaemon, SharedStateMonitor
@@ -64,8 +64,15 @@ def main():
 
     # 1. BOOT DAEMON
     print("⚙️  BOOTING DAEMON...")
-    subprocess.Popen([sys.executable, "-m", "omnipkg.isolation.worker_daemon", "start"])
+    
+    # 🔥 FIX: Pass PYTHONPATH to daemon so it finds 'src/omnipkg/isolation/omnipkg_atomic.so'
+    env = os.environ.copy()
+    src_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../src"))
+    env["PYTHONPATH"] = src_path + os.pathsep + env.get("PYTHONPATH", "")
+    
+    subprocess.Popen([sys.executable, "-m", "omnipkg.isolation.worker_daemon", "start"], env=env)
     time.sleep(2)
+    print("⚙️  BOOTING DAEMON...")
     client = DaemonClient()
 
     # 2. WARMUP
