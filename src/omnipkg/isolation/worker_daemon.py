@@ -12,7 +12,7 @@ import socket
 import subprocess
 import sys
 import tempfile
-
+import struct  # <--- ADDED for control block packing
 # import psutil  # Made lazy
 import threading
 import time
@@ -41,6 +41,104 @@ DEFAULT_SOCKET = "/tmp/omnipkg_daemon.sock"
 PID_FILE = "/tmp/omnipkg_daemon.pid"
 SHM_REGISTRY_FILE = "/tmp/omnipkg_shm_registry.json"
 DAEMON_LOG_FILE = "/tmp/omnipkg_daemon.log"
+
+# ═══════════════════════════════════════════════════════════════
+# STATE MONITOR (OPTIMISTIC CONCURRENCY CONTROL)
+# ═══════════════════════════════════════════════════════════════
+
+class SharedStateMonitor:
+    """
+    Manages a shared memory control block for Optimistic Concurrency Control.
+    
+    Structure Layout (128 bytes total to ensure cache line isolation):
+    - [0:8]   Version (int64) - Monotonically increasing
+    - [8:16]  Writer PID (int64) - Who holds the lock
+    - [16:24] Lock State (int64) - 0=Free, 1=Locked
+    - [24:128] Padding (Prevent False Sharing)
+    
+    NOTE: In the future, this class will be replaced by a C++ extension
+    performing true atomic hardware instructions (LOCK CMPXCHG).
+    For now, we simulate atomicity using a file lock on the control block.
+    """
+    
+    STRUCT_FMT = "qqq104x"  # 3 int64s + 104 pad bytes = 128 bytes
+    STRUCT_SIZE = struct.calcsize(STRUCT_FMT)
+
+    def __init__(self, name: str, create: bool = False):
+        from multiprocessing import shared_memory
+        self.name = name
+        try:
+            if create:
+                # Cleanup existing if needed
+                try:
+                    s = shared_memory.SharedMemory(name=name)
+                    s.close()
+                    s.unlink()
+                except: pass
+                self.shm = shared_memory.SharedMemory(create=True, size=self.STRUCT_SIZE, name=name)
+                # Initialize to 0
+                self.shm.buf[:] = bytearray(self.STRUCT_SIZE)
+            else:
+                self.shm = shared_memory.SharedMemory(name=name)
+        except Exception as e:
+            raise RuntimeError(f"Failed to attach control block {name}: {e}")
+            
+        # We need a secondary lock mechanism because Python lacks true atomic CAS
+        # In C++, this would be std::atomic<T>
+        self._lock_file = Path(f"/tmp/{name}.lock")
+        self._lock = filelock.FileLock(str(self._lock_file))
+
+    def read_state(self) -> Tuple[int, int, int]:
+        """Reads current state without locking (dirty read)."""
+        return struct.unpack(self.STRUCT_FMT, self.shm.buf)
+
+    def get_version(self) -> int:
+        """Get the current version number."""
+        ver, _, _ = self.read_state()
+        return ver
+
+    def try_lock_and_validate(self, expected_version: int) -> bool:
+        """
+        Attempt to lock for writing, BUT only if version hasn't changed.
+        This is the CAS (Compare-And-Swap) Simulation.
+        """
+        try:
+            self._lock.acquire(timeout=0.01) # Non-blocking attempt
+            
+            # Re-read state inside lock
+            current_ver, _, is_locked = struct.unpack(self.STRUCT_FMT, self.shm.buf)
+            
+            if is_locked or current_ver != expected_version:
+                self._lock.release()
+                return False
+                
+            # Acquired! Set locked flag
+            struct.pack_into(self.STRUCT_FMT, self.shm.buf, 0, current_ver, os.getpid(), 1)
+            # Note: We KEEP the file lock held until commit
+            return True
+            
+        except (filelock.Timeout, Exception):
+            return False
+
+    def commit_and_release(self, new_version: int):
+        """Write finished. Increment version, clear lock flag, release file lock."""
+        try:
+            struct.pack_into(self.STRUCT_FMT, self.shm.buf, 0, new_version, 0, 0)
+        finally:
+            if self._lock.is_locked:
+                self._lock.release()
+
+    def close(self):
+        self.shm.close()
+        try:
+            if hasattr(self, '_lock') and self._lock.is_locked:
+                self._lock.release()
+        except: pass
+        
+    def unlink(self):
+        try:
+            self.shm.unlink()
+        except: pass
 
 # ═══════════════════════════════════════════════════════════════
 # HFT OPTIMIZATION: Silence Resource Tracker
@@ -2813,6 +2911,85 @@ class DaemonClient:
             except Exception as e:
                 return {"success": False, "error": f"Communication error: {e}"}
         return {"success": False, "error": "Connection failed after retries"}
+
+    def execute_optimistic_write(
+        self,
+        spec: str,
+        code_template: str, 
+        control_block_name: str,
+        tensor_in: "torch.Tensor",
+        python_exe: str = None,
+        max_retries: int = 100
+    ):
+        """
+        Executes a concurrent write using Optimistic Concurrency Control.
+        
+        Algorithm:
+        1. Read Version V1
+        2. Execute Kernel (Calculation Phase)
+        3. CAS(Expect=V1, New=V1+1)
+           - If success: Commit
+           - If fail: Invalidate & Retry
+        
+        Args:
+            code_template: Python string with {version} placeholder
+        """
+        monitor = SharedStateMonitor(control_block_name)
+        
+        retries = 0
+        while retries < max_retries:
+            # 1. SNAPSHOT START
+            start_version = monitor.get_version()
+            
+            # 2. CALCULATION (Speculative Execution)
+            # We inject the EXPECTED version into the worker
+            # The worker returns the result but DOES NOT strictly need to lock 
+            # (In this demo, the client manages the lock, effectively acting as the CAS arbiter)
+            
+            # We run the code via standard IPC
+            # The code should perform the math but NOT finalize persistent state yet if complex
+            # For this tensor demo, we do the math on the tensor in-place, which is risky
+            # ideally we compute to a buffer, then swap.
+            
+            # For the Demo: We hold the lock during the critical section because
+            # true CAS on large tensors requires GPU atomic support.
+            # We are simulating the COORDINATION logic.
+            
+            if monitor.try_lock_and_validate(start_version):
+                try:
+                    # CRITICAL SECTION
+                    # We own the slot. No one else is writing.
+                    
+                    safe_print(f"   🔒 Acquired Lock (Ver: {start_version}) - Writing...")
+                    
+                    # Execute the write
+                    res, meta = self.execute_cuda_ipc(
+                        spec=spec,
+                        code=code_template.format(version=start_version),
+                        input_tensor=tensor_in,
+                        output_shape=tensor_in.shape,
+                        output_dtype="float32",
+                        ipc_mode="universal",
+                        python_exe=python_exe
+                    )
+                    
+                    # COMMIT
+                    monitor.commit_and_release(start_version + 1)
+                    return res, meta, retries
+                    
+                except Exception as e:
+                    # Rollback logic would go here
+                    monitor.commit_and_release(start_version) # Revert lock
+                    raise e
+            else:
+                # CAS Failed - State changed while we were preparing
+                # Or lock was held by someone else.
+                retries += 1
+                # Exponential backoff
+                time.sleep(0.001 * (2 ** min(retries, 5)))
+                continue
+                
+        raise RuntimeError("Max retries exceeded for optimistic write")
 
     def execute_cuda_ipc(
         self,

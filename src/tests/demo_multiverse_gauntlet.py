@@ -10,11 +10,13 @@ Features:
 3.  🧪 Multi-Torch: PyTorch 1.13, 2.0, and 2.1 sharing the same VRAM.
 4.  ⚡ High Frequency: Sub-2ms context switching.
 5.  🧵 Concurrency: Thread-safe dispatch for parallel reads.
+6.  🛡️ Optimistic Concurrency: CAS-based simulation for concurrent writes.
 
 Scenario:
 - ACT 1 (Pipeline): Data is mutated sequentially by 3 different runtimes.
 - ACT 2 (Swarm): Data is read concurrently by 3 different runtimes.
 - ACT 3 (Gauntlet): Random-access stress test of the control plane.
+- ACT 4 (Crucible): Concurrent WRITE contention with retry logic.
 """
 
 import sys
@@ -28,14 +30,13 @@ import random
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../")))
 
 try:
-    from omnipkg.isolation.worker_daemon import DaemonClient, WorkerPoolDaemon
+    from omnipkg.isolation.worker_daemon import DaemonClient, WorkerPoolDaemon, SharedStateMonitor
     from omnipkg.loader import omnipkgLoader
 except ImportError:
     print("❌ Error: Could not import omnipkg. Run this from the project root.")
     sys.exit(1)
 
 # 🔧 CONFIGURATION: HARDCODED PATHS FOR PRODUCTION DEMO
-# These match the verified environment on the demo machine.
 UNIVERSES = [
     {
         "name": "Alpha (Py3.9)", 
@@ -76,8 +77,7 @@ def main():
         client.execute_shm(u["spec"], "pass", {}, {}, python_exe=u["exe"])
     print("✅ Fleet Ready.")
 
-    # 3. GENESIS (Create Data in Main Process)
-    # We use a loader context to ensure torch is available locally for creation
+    # 3. GENESIS
     with omnipkgLoader("torch==2.0.1+cu118", quiet=True):
         import torch
         if not torch.cuda.is_available():
@@ -87,6 +87,10 @@ def main():
         # 250MB Tensor
         data = torch.zeros(10000, 6250, device="cuda:0") 
         print(f"\n📦 GENESIS: Created 250MB Tensor at {hex(data.data_ptr())}")
+        
+        # Initialize Control Block
+        monitor = SharedStateMonitor("gauntlet_control", create=True)
+        print(f"🛡️  CONTROL BLOCK: Initialized at /dev/shm/gauntlet_control")
         
         # =========================================================================
         # ACT 1: THE PIPELINE (Sequential)
@@ -174,13 +178,77 @@ def main():
             )
             if i % 10 == 0: sys.stdout.write(".")
             sys.stdout.flush()
-                
-        avg_swap = ((time.perf_counter() - t_gauntlet) / count) * 1000
-        print(f"\n   ✅ Gauntlet Complete.")
-        print(f"   ⚡ Average Swap Latency: {avg_swap:.2f}ms")
 
-        print(f"\n🏆 GRAND UNIFIED DEMO SUCCESSFUL")
-        print(f"   Zero Copies. Zero Serialization. 100% VRAM Resident.")
+        # =========================================================================
+        # ACT 4: THE CRUCIBLE (Concurrent Writes with CAS)
+        # =========================================================================
+        print(f"\n🎬 ACT 4: THE CRUCIBLE (Concurrent Writes + Contention)")
+        print(f"{'='*60}")
+        print("   ⚔️  3 Universes fighting to increment the tensor.")
+        print("   🛡️  Using SharedStateMonitor for arbitration.")
+
+        total_increments = 15 # 5 per universe
+        
+        def fighter(u, target_count, stats):
+            local_success = 0
+            while local_success < target_count:
+                try:
+                    # CRITICAL FIX: Use IN-PLACE addition (add_) to modify shared memory.
+                    # We also copy to tensor_out just to satisfy the IPC return contract.
+                    code = "tensor_in.add_(1.0); tensor_out[:] = tensor_in; torch.cuda.synchronize()"
+                    
+                    res, meta, retries = client.execute_optimistic_write(
+                        spec=u["spec"],
+                        code_template=code,
+                        control_block_name="gauntlet_control",
+                        tensor_in=current_tensor,
+                        python_exe=u["exe"]
+                    )
+                    
+                    if retries > 0:
+                        stats['collisions'] += retries
+                        # print(f"      ⚠️ {u['name']} collided {retries} times")
+                    
+                    local_success += 1
+                    stats['success'] += 1
+                    sys.stdout.write(f" [{u['name'][0]}]") # Visual progress
+                    sys.stdout.flush()
+                    
+                except Exception as e:
+                    print(f"\n❌ {u['name']} DIED: {e}")
+                    break
+
+        threads = []
+        stats = {'success': 0, 'collisions': 0}
+        t_crucible = time.perf_counter()
+        
+        # Reset tensor to 0 for clean counting
+        current_tensor.zero_()
+        
+        for u in UNIVERSES:
+            t = threading.Thread(target=fighter, args=(u, 5, stats))
+            threads.append(t)
+            t.start()
+            
+        for t in threads: t.join()
+        
+        dt_crucible = (time.perf_counter() - t_crucible) * 1000
+        final_val = current_tensor[0,0].item()
+        
+        print(f"\n\n   ✅ Crucible Complete in {dt_crucible:.2f}ms")
+        print(f"   📊 Stats:")
+        print(f"      - Successful Writes: {stats['success']}/{total_increments}")
+        print(f"      - Collisions/Retries: {stats['collisions']}")
+        print(f"      - Final Tensor Value: {final_val} (Expected {float(total_increments)})")
+        
+        if final_val == float(total_increments):
+            print(f"   🏆 DATA INTEGRITY VERIFIED")
+        else:
+            print(f"   ❌ DATA CORRUPTION DETECTED (Got {final_val})")
+
+        # Clean up
+        monitor.close()
+        monitor.unlink()
 
 if __name__ == "__main__":
     main()
