@@ -1,53 +1,81 @@
 #include <Python.h>
-#include <stdatomic.h>
-#include <stdbool.h>
 
-// The Control Block Structure (Aligned to 64 bytes)
-typedef struct {
-    volatile long version;      // 8 bytes
-    volatile long writer_pid;   // 8 bytes
-    volatile long lock_state;   // 8 bytes
-    char padding[40];           // Pad to 64 bytes (Cache Line)
-} ControlBlock;
+// --------------------------------------------------------
+// HARDWARE ATOMICS FOR PYTHON (HFT GRADE)
+// --------------------------------------------------------
 
-// Atomic Compare-And-Swap for Version
-// Returns 1 if successful, 0 if failed
-static PyObject* atomic_cas_version(PyObject* self, PyObject* args) {
-    long long buffer_addr;
-    long expected_ver;
-    long new_ver;
+// 1. COMPARE AND SWAP (CAS)
+// Used for: Optimistic locking, updating state without mutex
+static PyObject* atomic_cas64(PyObject* self, PyObject* args) {
+    long long buffer_addr;  // Address of the shared memory (from Tensor.data_ptr())
+    long long expected;
+    long long desired;
 
-    if (!PyArg_ParseTuple(args, "Lll", &buffer_addr, &expected_ver, &new_ver)) {
+    if (!PyArg_ParseTuple(args, "LLL", &buffer_addr, &expected, &desired)) {
         return NULL;
     }
 
-    ControlBlock* block = (ControlBlock*)buffer_addr;
+    // Volatile pointer to ensure compiler doesn't cache the read
+    volatile long long* ptr = (volatile long long*)buffer_addr;
     
-    // ATOMIC MAGIC: atomic_compare_exchange_strong
-    // If block->version == expected_ver, set it to new_ver and return True
-    // Else, return False
-    // This happens in ~10-20 CPU cycles.
-    bool success = __sync_bool_compare_and_swap(&block->version, expected_ver, new_ver);
+    // GCC BUILTIN: Generates 'lock cmpxchg' instruction
+    // Returns true if swap happened, false otherwise
+    int success = __sync_bool_compare_and_swap(ptr, expected, desired);
 
     return PyBool_FromLong(success);
 }
 
-// Method Definitions
+// 2. ATOMIC STORE (WRITE)
+// Used for: Ringing the Doorbell
+static PyObject* atomic_store64(PyObject* self, PyObject* args) {
+    long long buffer_addr;
+    long long value;
+
+    if (!PyArg_ParseTuple(args, "LL", &buffer_addr, &value)) {
+        return NULL;
+    }
+
+    volatile long long* ptr = (volatile long long*)buffer_addr;
+    
+    // ATOMIC STORE with Release Semantics (Ensures prior writes are visible)
+    // Generates 'mov' with memory barrier on x86
+    __atomic_store_n(ptr, value, __ATOMIC_RELEASE);
+
+    Py_RETURN_NONE;
+}
+
+// 3. ATOMIC LOAD (READ)
+// Used for: Checking Stop Flags
+static PyObject* atomic_load64(PyObject* self, PyObject* args) {
+    long long buffer_addr;
+
+    if (!PyArg_ParseTuple(args, "L", &buffer_addr)) {
+        return NULL;
+    }
+
+    volatile long long* ptr = (volatile long long*)buffer_addr;
+    
+    // ATOMIC LOAD with Acquire Semantics
+    long long val = __atomic_load_n(ptr, __ATOMIC_ACQUIRE);
+
+    return PyLong_FromLongLong(val);
+}
+
 static PyMethodDef AtomicMethods[] = {
-    {"cas_version", atomic_cas_version, METH_VARARGS, "Atomic Compare-And-Swap on Version"},
+    {"cas64", atomic_cas64, METH_VARARGS, "Atomic Compare-And-Swap (64-bit)"},
+    {"store64", atomic_store64, METH_VARARGS, "Atomic Store (Release Semantics)"},
+    {"load64", atomic_load64, METH_VARARGS, "Atomic Load (Acquire Semantics)"},
     {NULL, NULL, 0, NULL}
 };
 
-// Module Definition
 static struct PyModuleDef atomicmodule = {
     PyModuleDef_HEAD_INIT,
     "omnipkg_atomic",
-    "Hardware atomic operations for OmniPkg",
+    "HFT Hardware Atomics",
     -1,
     AtomicMethods
 };
 
-// Init
 PyMODINIT_FUNC PyInit_omnipkg_atomic(void) {
     return PyModule_Create(&atomicmodule);
 }

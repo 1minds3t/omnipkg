@@ -79,7 +79,7 @@ def _patch_numpy_for_tf_recursion():
 
         healed_issubdtype.__omnipkg_healed__ = True
         nt.issubdtype = healed_issubdtype
-        safe_print("🩹 [OMNIPKG] Healed NumPy's issubdtype for TensorFlow.")
+        #         safe_print("🩹 [OMNIPKG] Healed NumPy's issubdtype for TensorFlow.")
 
     except (ImportError, AttributeError) as e:
         # This might happen if NumPy isn't installed or has an unusual structure.
