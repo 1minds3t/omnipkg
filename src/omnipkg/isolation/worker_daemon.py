@@ -103,7 +103,7 @@ class SharedStateMonitor:
 
     def get_version(self) -> int:
         """Get the current version number."""
-        ver, _, _ = self.read_state()
+        ver, unused, unused = self.read_state()
         return ver
 
     def try_lock_and_validate(self, expected_version: int) -> bool:
@@ -115,7 +115,7 @@ class SharedStateMonitor:
             self._lock.acquire(timeout=0.01) # Non-blocking attempt
             
             # Re-read state inside lock
-            current_ver, _, is_locked = struct.unpack(self.STRUCT_FMT, self.shm.buf)
+            current_ver, unused, is_locked = struct.unpack(self.STRUCT_FMT, self.shm.buf)
             
             if is_locked or current_ver != expected_version:
                 self._lock.release()
