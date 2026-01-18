@@ -25,6 +25,7 @@ import os
 import threading
 import subprocess
 import random
+from omnipkg.i18n import _
 
 # Ensure we can find omnipkg (Force SRC usage to pick up local .so build)
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../src")))
@@ -57,13 +58,13 @@ UNIVERSES = [
 
 def main():
     # 🧹 PRE-FLIGHT CLEANUP
-    print("🧹 CLEARING PROCESSES...")
+    print(_('🧹 CLEARING PROCESSES...'))
     os.system("pkill -f omnipkg.isolation.worker_daemon")
     os.system("pkill -f omnipkg_stdin")
     time.sleep(1)
 
     # 1. BOOT DAEMON
-    print("⚙️  BOOTING DAEMON...")
+    print(_('⚙️  BOOTING DAEMON...'))
     
     # 🔥 FIX: Pass PYTHONPATH to daemon so it finds 'src/omnipkg/isolation/omnipkg_atomic.so'
     env = os.environ.copy()
@@ -72,38 +73,38 @@ def main():
     
     subprocess.Popen([sys.executable, "-m", "omnipkg.isolation.worker_daemon", "start"], env=env)
     time.sleep(2)
-    print("⚙️  BOOTING DAEMON...")
+    print(_('⚙️  BOOTING DAEMON...'))
     client = DaemonClient()
 
     # 2. WARMUP
-    print("🔥 WARMING UP THE FLEET...")
+    print(_('🔥 WARMING UP THE FLEET...'))
     for u in UNIVERSES:
         if not os.path.exists(u["exe"]):
-            print(f"❌ Error: Python interpreter not found: {u['exe']}")
+            print(_('❌ Error: Python interpreter not found: {}').format(u['exe']))
             sys.exit(1)
         client.execute_shm(u["spec"], "pass", {}, {}, python_exe=u["exe"])
-    print("✅ Fleet Ready.")
+    print(_('✅ Fleet Ready.'))
 
     # 3. GENESIS
     with omnipkgLoader("torch==2.0.1+cu118", quiet=True):
         import torch
         if not torch.cuda.is_available():
-            print("❌ Error: CUDA not available.")
+            print(_('❌ Error: CUDA not available.'))
             sys.exit(1)
 
         # 250MB Tensor
         data = torch.zeros(10000, 6250, device="cuda:0") 
-        print(f"\n📦 GENESIS: Created 250MB Tensor at {hex(data.data_ptr())}")
+        print(_('\n📦 GENESIS: Created 250MB Tensor at {}').format(hex(data.data_ptr())))
         
         # Initialize Control Block
         monitor = SharedStateMonitor("gauntlet_control", create=True)
-        print(f"🛡️  CONTROL BLOCK: Initialized at /dev/shm/gauntlet_control")
+        print(_('🛡️  CONTROL BLOCK: Initialized at /dev/shm/gauntlet_control'))
         
         # =========================================================================
         # ACT 1: THE PIPELINE (Sequential)
         # =========================================================================
-        print(f"\n🎬 ACT 1: THE PIPELINE (Sequential Hand-off)")
-        print(f"{'='*60}")
+        print(_('\n🎬 ACT 1: THE PIPELINE (Sequential Hand-off)'))
+        print(_('{}').format('=' * 60))
         
         current_tensor = data
         t_start = time.perf_counter()
@@ -123,13 +124,13 @@ def main():
 
         t_pipe = (time.perf_counter() - t_start) * 1000
         print(f"   ✅ Pipeline Complete in {t_pipe:.2f}ms")
-        print(f"   🏁 Final Checksum: {current_tensor[0,0].item()} (Expected 3.0)")
+        print(_('   🏁 Final Checksum: {} (Expected 3.0)').format(current_tensor[0, 0].item()))
 
         # =========================================================================
         # ACT 2: THE SWARM (Concurrent Read)
         # =========================================================================
-        print(f"\n🎬 ACT 2: THE SWARM (Concurrent Read)")
-        print(f"{'='*60}")
+        print(_('\n🎬 ACT 2: THE SWARM (Concurrent Read)'))
+        print(_('{}').format('=' * 60))
         
         # Thread Lock to prevent ctypes race condition in client library setup
         client_lock = threading.Lock()
@@ -159,16 +160,16 @@ def main():
             t.start()
         for t in threads: t.join()
         
-        print(f"   ✅ Swarm Complete.")
+        print(_('   ✅ Swarm Complete.'))
 
         # =========================================================================
         # ACT 3: THE GAUNTLET (High Frequency)
         # =========================================================================
-        print(f"\n🎬 ACT 3: THE GAUNTLET (Rapid Random Access)")
-        print(f"{'='*60}")
+        print(_('\n🎬 ACT 3: THE GAUNTLET (Rapid Random Access)'))
+        print(_('{}').format('=' * 60))
         
         count = 50
-        print(f"   🔄 Executing {count} random swaps...")
+        print(_('   🔄 Executing {} random swaps...').format(count))
         
         t_gauntlet = time.perf_counter()
         
@@ -189,9 +190,9 @@ def main():
         # =========================================================================
         # ACT 4: THE CRUCIBLE (Concurrent Writes with CAS)
         # =========================================================================
-        print(f"\n🎬 ACT 4: THE CRUCIBLE (Concurrent Writes + Contention)")
-        print(f"{'='*60}")
-        print("   ⚔️  3 Universes fighting to increment the tensor.")
+        print(_('\n🎬 ACT 4: THE CRUCIBLE (Concurrent Writes + Contention)'))
+        print(_('{}').format('=' * 60))
+        print(_('   ⚔️  3 Universes fighting to increment the tensor.'))
         print("   🛡️  Using SharedStateMonitor for arbitration.")
 
         total_increments = 15 # 5 per universe
@@ -222,7 +223,7 @@ def main():
                     sys.stdout.flush()
                     
                 except Exception as e:
-                    print(f"\n❌ {u['name']} DIED: {e}")
+                    print(_('\n❌ {} DIED: {}').format(u['name'], e))
                     break
 
         threads = []
@@ -243,15 +244,15 @@ def main():
         final_val = current_tensor[0,0].item()
         
         print(f"\n\n   ✅ Crucible Complete in {dt_crucible:.2f}ms")
-        print(f"   📊 Stats:")
-        print(f"      - Successful Writes: {stats['success']}/{total_increments}")
-        print(f"      - Collisions/Retries: {stats['collisions']}")
-        print(f"      - Final Tensor Value: {final_val} (Expected {float(total_increments)})")
+        print(_('   📊 Stats:'))
+        print(_('      - Successful Writes: {}/{}').format(stats['success'], total_increments))
+        print(_('      - Collisions/Retries: {}').format(stats['collisions']))
+        print(_('      - Final Tensor Value: {} (Expected {})').format(final_val, float(total_increments)))
         
         if final_val == float(total_increments):
-            print(f"   🏆 DATA INTEGRITY VERIFIED")
+            print(_('   🏆 DATA INTEGRITY VERIFIED'))
         else:
-            print(f"   ❌ DATA CORRUPTION DETECTED (Got {final_val})")
+            print(_('   ❌ DATA CORRUPTION DETECTED (Got {})').format(final_val))
 
         # Clean up
         monitor.close()

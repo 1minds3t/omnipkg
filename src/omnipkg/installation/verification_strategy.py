@@ -14,6 +14,7 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
+from omnipkg.i18n import _
 
 try:
     from .common_utils import safe_print
@@ -112,9 +113,9 @@ class SmartVerificationStrategy:
         # Step 1: Organize packages into verification groups
         packages_by_group = self._organize_into_groups(all_dists)
 
-        safe_print(f"      Found {len(all_dists)} package(s) in staging area")
+        safe_print(_('      Found {} package(s) in staging area').format(len(all_dists)))
         if len(packages_by_group) > 1:
-            safe_print(f"      Organized into {len(packages_by_group)} verification group(s)")
+            safe_print(_('      Organized into {} verification group(s)').format(len(packages_by_group)))
 
         # Step 2: Verify each group
         all_results = []
@@ -170,7 +171,7 @@ class SmartVerificationStrategy:
             failed_count = sum(1 for r in all_results if not r.success)
             if failed_count > 0:
                 safe_print(
-                    f"   ⚠️  Note: {failed_count} dependency/dependencies failed, but main package is OK."
+                    _('   ⚠️  Note: {} dependency/dependencies failed, but main package is OK.').format(failed_count)
                 )
             return True, all_results
         else:
@@ -223,7 +224,7 @@ class SmartVerificationStrategy:
         results = []
 
         if group_def:
-            safe_print(f"      - Testing group '{group_name}' ({len(dists)} packages together)...")
+            safe_print(_("      - Testing group '{}' ({} packages together)...").format(group_name, len(dists)))
             test_order = group_def.test_order if group_def.test_order else None
         else:
             test_order = None
@@ -251,7 +252,7 @@ class SmartVerificationStrategy:
             import_candidates = self.gatherer._get_import_candidates(dist, pkg_name)
 
             if not import_candidates:
-                safe_print(f"         🟡 Skipping {pkg_name}: No importable modules")
+                safe_print(_('         🟡 Skipping {}: No importable modules').format(pkg_name))
                 continue
 
             # Attempt to import this package
@@ -314,7 +315,7 @@ class SmartVerificationStrategy:
                 status = "❌"
                 detail = f"FAILED ({result.error})"
 
-            safe_print(f"      {status} {result.package_name}: {detail}")
+            safe_print(_('      {} {}: {}').format(status, result.package_name, detail))
 
 
 # ============================================================================

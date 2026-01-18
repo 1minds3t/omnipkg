@@ -5,6 +5,7 @@ import json
 import time
 import concurrent.futures
 import threading
+from omnipkg.i18n import _
 
 print_lock = threading.Lock()
 omnipkg_lock = threading.Lock()
@@ -41,11 +42,11 @@ def run_omnipkg_cli(
     )
 
     if result.returncode != 0:
-        safe_print(f"{prefix} ❌ COMMAND FAILED: {' '.join(cmd)}")
+        safe_print(_('{} ❌ COMMAND FAILED: {}').format(prefix, ' '.join(cmd)))
         if result.stdout:
-            safe_print(f"{prefix} STDOUT:\n{result.stdout.strip()}")
+            safe_print(_('{} STDOUT:\n{}').format(prefix, result.stdout.strip()))
         if result.stderr:
-            safe_print(f"{prefix} STDERR:\n{result.stderr.strip()}")
+            safe_print(_('{} STDERR:\n{}').format(prefix, result.stderr.strip()))
 
     return result.returncode, result.stdout, result.stderr, duration_ms
 
@@ -56,7 +57,7 @@ def run_and_stream_install(
     """Runs `omnipkg install` and streams its output live."""
     prefix = f"[T{thread_id}]"
     install_prefix = f"  {prefix}|install"
-    safe_print(f"{prefix} 📦 Installing {' '.join(args[1:])} (Live Output Below)")
+    safe_print(_('{} 📦 Installing {} (Live Output Below)').format(prefix, ' '.join(args[1:])))
     start_time = time.perf_counter()
 
     cmd = [python_exe, "-m", "omnipkg.cli"] + args
@@ -110,32 +111,32 @@ def get_interpreter_path(version: str) -> str:
             if len(parts) == 2:
                 path_part = parts[1].strip().split()[0]
                 return path_part
-    raise RuntimeError(f"Python {version} not found in registry")
+    raise RuntimeError(_('Python {} not found in registry').format(version))
 
 
 def adopt_if_needed(version: str, thread_id: int) -> bool:
     """Adopt Python version if not already present, with locking."""
     prefix = f"[T{thread_id}|Adopt]"
     if verify_registry_contains(version):
-        safe_print(f"{prefix} ✅ Python {version} already available.")
+        safe_print(_('{} ✅ Python {} already available.').format(prefix, version))
         return True
 
     with omnipkg_lock:
         if verify_registry_contains(version):
-            safe_print(f"{prefix} ✅ Python {version} adopted by another thread.")
+            safe_print(_('{} ✅ Python {} adopted by another thread.').format(prefix, version))
             return True
 
-        safe_print(f"{prefix} 🚀 Adopting Python {version}...")
+        safe_print(_('{} 🚀 Adopting Python {}...').format(prefix, version))
         result = subprocess.run(
             ["omnipkg", "python", "adopt", version], capture_output=True, text=True
         )
         if result.returncode != 0:
-            safe_print(f"{prefix} ❌ Adoption failed")
-            safe_print(f"{prefix} STDOUT: {result.stdout}")
-            safe_print(f"{prefix} STDERR: {result.stderr}")
+            safe_print(_('{} ❌ Adoption failed').format(prefix))
+            safe_print(_('{} STDOUT: {}').format(prefix, result.stdout))
+            safe_print(_('{} STDERR: {}').format(prefix, result.stderr))
             return False
 
-        safe_print(f"{prefix} ✅ Adopted and verified Python {version}")
+        safe_print(_('{} ✅ Adopted and verified Python {}').format(prefix, version))
         return True
 
 
@@ -157,7 +158,7 @@ def test_dimension(config: tuple, thread_id: int) -> dict:
         safe_print(f"{prefix} 🚀 Testing Python {py_version} with Rich {rich_version}")
 
         python_exe = get_interpreter_path(py_version)
-        safe_print(f"{prefix} 📍 Using: {python_exe}")
+        safe_print(_('{} 📍 Using: {}').format(prefix, python_exe))
 
         safe_print(f"{prefix} ⏳ Waiting for lock...")
         timings["wait_start"] = time.perf_counter()
@@ -186,7 +187,7 @@ def test_dimension(config: tuple, thread_id: int) -> dict:
             safe_print(f"{prefix} 🔓 LOCK RELEASED")
             timings["lock_released"] = time.perf_counter()
 
-        safe_print(f"{prefix} 🧪 Testing Rich import...")
+        safe_print(_('{} 🧪 Testing Rich import...').format(prefix))
         timings["test_start"] = time.perf_counter()
 
         # --- THE FIX: Define variables BEFORE the try block ---
@@ -254,7 +255,7 @@ except Exception as e:
 
         if not json_output:
             raise RuntimeError(
-                f"Test failed to produce JSON. STDOUT: {result.stdout} STDERR: {result.stderr}"
+                _('Test failed to produce JSON. STDOUT: {} STDERR: {}').format(result.stdout, result.stderr)
             )
 
         test_data = json.loads(json_output)
@@ -264,9 +265,9 @@ except Exception as e:
 
         timings["end"] = time.perf_counter()
 
-        safe_print(f"{prefix} ✅ VERIFIED:")
+        safe_print(_('{} ✅ VERIFIED:').format(prefix))
         safe_print(
-            f"{prefix}    Python: {test_data['python_version']} ({test_data['python_path']})"
+            _('{}    Python: {} ({})').format(prefix, test_data['python_version'], test_data['python_path'])
         )
         safe_print(
             f"{prefix}    Rich: {test_data['rich_version']} (from {test_data['rich_file']})"
@@ -288,7 +289,7 @@ except Exception as e:
         }
 
     except Exception as e:
-        safe_print(f"{prefix} ❌ FAILED: {e}")
+        safe_print(_('{} ❌ FAILED: {}').format(prefix, e))
         import traceback
 
         safe_print(f"{prefix} {traceback.format_exc()}")
@@ -320,14 +321,14 @@ def print_summary(results: list, total_time: float):
         )
 
     safe_print("-" * 100)
-    safe_print(f"⏱️  Total concurrent runtime: {format_duration(total_time)}")
+    safe_print(_('⏱️  Total concurrent runtime: {}').format(format_duration(total_time)))
     safe_print("=" * 100)
 
     safe_print("\n🔍 VERIFICATION - Actual Python Executables Used:")
     safe_print("-" * 100)
     for r in sorted(results, key=lambda x: x["thread_id"]):
         safe_print(f"T{r['thread_id']}: {r['python_path']}")
-        safe_print(f"     └─ Rich loaded from: {r['rich_file']}")
+        safe_print(_('     └─ Rich loaded from: {}').format(r['rich_file']))
     safe_print("-" * 100)
 
 
@@ -344,7 +345,7 @@ def main():
     safe_print("\n📥 Phase 1: Adopting interpreters (sequential for safety)...")
     for version, unused in test_configs:
         if not adopt_if_needed(version, 0):
-            safe_print(f"❌ Failed to adopt Python {version}")
+            safe_print(_('❌ Failed to adopt Python {}').format(version))
             sys.exit(1)
 
     safe_print("\n✅ All interpreters ready. Starting concurrent tests...\n")

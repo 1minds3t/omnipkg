@@ -304,7 +304,7 @@ class omnipkgMetadataGatherer:
                             pkg_name = parts[0]
 
                             # Inject Name field
-                            fixed_content = f"Name: {pkg_name}\n{content}"
+                            fixed_content = _('Name: {}\n{}').format(pkg_name, content)
 
                             # Atomic write
                             temp_file = metadata_file.with_suffix(".tmp")
@@ -338,7 +338,7 @@ class omnipkgMetadataGatherer:
 
         vendored_dist_infos = list(base_path.rglob("*/_vendor/*.dist-info"))
         if verbose:
-            safe_print(f"         Found {len(vendored_dist_infos)} vendored dist-info directories")
+            safe_print(_('         Found {} vendored dist-info directories').format(len(vendored_dist_infos)))
 
         for vendor_dist_info in vendored_dist_infos:
             if not vendor_dist_info.is_dir():
@@ -357,7 +357,7 @@ class omnipkgMetadataGatherer:
                     if verbose:  # Only print in verbose mode
                         vendor_parent = str(vendor_dist_info).split("/_vendor/")[0].split("/")[-1]
                         safe_print(
-                            f"✅ Found VENDORED {dist_name} v{dist.version} (inside {vendor_parent}) at {vendor_dist_info}"
+                            _('✅ Found VENDORED {} v{} (inside {}) at {}').format(dist_name, dist.version, vendor_parent, vendor_dist_info)
                         )
             except Exception:
                 continue
@@ -403,7 +403,7 @@ class omnipkgMetadataGatherer:
                                 results.append((dist, dist_info_path.resolve()))
                                 if verbose:  # Only print in verbose mode
                                     safe_print(
-                                        f"✅ Found {dist_name} v{dist.version} at {dist_info_path}"
+                                        _('✅ Found {} v{} at {}').format(dist_name, dist.version, dist_info_path)
                                     )
                     except Exception:
                         continue
@@ -473,11 +473,11 @@ class omnipkgMetadataGatherer:
                                     results.append((dist, dist_info_path.resolve()))
                                     if verbose:  # Only print in verbose mode
                                         safe_print(
-                                            f"✅ Found nested {dist_name} v{dist.version} at {dist_info_path}"
+                                            _('✅ Found nested {} v{} at {}').format(dist_name, dist.version, dist_info_path)
                                         )
                                 elif verbose and version:
                                     safe_print(
-                                        f"         Found {dist_name} in nested dir, but version mismatch ({dist.version} != {version})"
+                                        _('         Found {} in nested dir, but version mismatch ({} != {})').format(dist_name, dist.version, version)
                                     )
 
                         except Exception:
@@ -510,7 +510,7 @@ class omnipkgMetadataGatherer:
 
         if verbose:
             safe_print(
-                f"         Found {len(unique_dist_infos)} unique dist-info directories to check"
+                _('         Found {} unique dist-info directories to check').format(len(unique_dist_infos))
             )
 
         for dist_info_path in unique_dist_infos:
@@ -528,7 +528,7 @@ class omnipkgMetadataGatherer:
                 if name_matches and (version is None or dist.version == version):
                     results.append((dist, dist_info_path.resolve()))
                     if verbose:  # Only print in verbose mode
-                        safe_print(f"✅ Found {dist_name} v{dist.version} at {dist_info_path}")
+                        safe_print(_('✅ Found {} v{} at {}').format(dist_name, dist.version, dist_info_path))
             except Exception:
                 continue
         return results
@@ -561,11 +561,11 @@ class omnipkgMetadataGatherer:
                             results.append((dist, dist._path.resolve()))
                             if verbose:
                                 safe_print(
-                                    f"✅ Found AUTHORITATIVE {dist_name} v{dist.version} at {dist._path}"
+                                    _('✅ Found AUTHORITATIVE {} v{} at {}').format(dist_name, dist.version, dist._path)
                                 )
         except Exception as e:
             if verbose:
-                safe_print(f"      -> ⚠️  Strategy 5 failed: {e}")
+                safe_print(_('      -> ⚠️  Strategy 5 failed: {}').format(e))
 
         return results
 
@@ -618,7 +618,7 @@ class omnipkgMetadataGatherer:
                                     results.append((dist, dist_info_path.resolve()))
                                     if verbose:
                                         safe_print(
-                                            f"✅ Found DEEP NESTED {dist_name} v{dist.version} at {dist_info_path}"
+                                            _('✅ Found DEEP NESTED {} v{} at {}').format(dist_name, dist.version, dist_info_path)
                                         )
                         except Exception:
                             continue
@@ -647,7 +647,7 @@ class omnipkgMetadataGatherer:
             search_paths = [Path(search_path_override).resolve()]
             if verbose:
                 safe_print(
-                    f"   - STRATEGY: Constrained search. ONLY this path will be used: {search_paths[0]}"
+                    _('   - STRATEGY: Constrained search. ONLY this path will be used: {}').format(search_paths[0])
                 )
         else:
             search_paths = [p for p in [main_site_packages, multiversion_base] if p.exists()]
@@ -676,7 +676,7 @@ class omnipkgMetadataGatherer:
                         )
                         continue
                 except ValueError as e:
-                    safe_print(f"❌ Could not parse spec '{spec}': {e}")
+                    safe_print(_("❌ Could not parse spec '{}': {}").format(spec, e))
                     continue
 
                 if verbose:
@@ -699,7 +699,7 @@ class omnipkgMetadataGatherer:
                                 all_found_dists[dist._path.resolve()] = dist
                                 if verbose:
                                     safe_print(
-                                        f"      ✅ Found via FAST-PATH 1 (bubble): {dist._path}"
+                                        _('      ✅ Found via FAST-PATH 1 (bubble): {}').format(dist._path)
                                     )
                                 found_for_spec = True
                         except Exception:
@@ -721,7 +721,7 @@ class omnipkgMetadataGatherer:
                                 all_found_dists[dist._path.resolve()] = dist
                                 if verbose:
                                     safe_print(
-                                        f"      ✅ Found via FAST-PATH 2 (site-packages): {dist._path}"
+                                        _('      ✅ Found via FAST-PATH 2 (site-packages): {}').format(dist._path)
                                     )
                                 found_for_spec = True
                                 break
@@ -796,7 +796,7 @@ class omnipkgMetadataGatherer:
 
             final_list = list(all_found_dists.values())
             safe_print(
-                f"   -> Found {len(final_list)} unique instance(s) across {len(targeted_packages)} target(s)."
+                _('   -> Found {} unique instance(s) across {} target(s).').format(len(final_list), len(targeted_packages))
             )
             return final_list
 
@@ -812,7 +812,7 @@ class omnipkgMetadataGatherer:
 
             for path in search_paths:
                 if verbose:
-                    safe_print(f"      -> Authoritative scan of: {path}")
+                    safe_print(_('      -> Authoritative scan of: {}').format(path))
                 try:
                     for dist_info_path in path.rglob("*.dist-info"):
                         try:
@@ -826,11 +826,11 @@ class omnipkgMetadataGatherer:
                         except (OSError, FileNotFoundError, PermissionError):
                             continue
                 except (OSError, FileNotFoundError, PermissionError) as e:
-                    safe_print(f"   - ⚠️  Could not scan {path}: {e}")
+                    safe_print(_('   - ⚠️  Could not scan {}: {}').format(path, e))
                     continue
 
             safe_print(
-                f"   - Phase 2: Parsing {len(all_dist_info_paths)} metadata files in parallel..."
+                _('   - Phase 2: Parsing {} metadata files in parallel...').format(len(all_dist_info_paths))
             )
 
             discovered_dists = []
@@ -867,7 +867,7 @@ class omnipkgMetadataGatherer:
 
             if verbose:
                 safe_print(
-                    f"✅ Authoritative discovery complete. Found {len(final_dists)} total package versions."
+                    _('✅ Authoritative discovery complete. Found {} total package versions.').format(len(final_dists))
                 )
 
             return final_dists
@@ -905,7 +905,7 @@ class omnipkgMetadataGatherer:
 
             if not version:
                 if verbose:
-                    safe_print(f"   ⚠️  Skipping '{pkg_spec}' - no version specified")
+                    safe_print(_("   ⚠️  Skipping '{}' - no version specified").format(pkg_spec))
                 continue
 
             canonical_name = canonicalize_name(pkg_name)
@@ -931,7 +931,7 @@ class omnipkgMetadataGatherer:
             expected_bubble = multiversion_base / f"{pkg_name}-{version}"
             if expected_bubble.exists():
                 if verbose:
-                    safe_print(f"   🎯 Found expected bubble: {expected_bubble}")
+                    safe_print(_('   🎯 Found expected bubble: {}').format(expected_bubble))
 
                 dist_infos = list(expected_bubble.glob("*.dist-info"))
                 if dist_infos:
@@ -952,7 +952,7 @@ class omnipkgMetadataGatherer:
 
                 if matches:
                     if verbose:
-                        safe_print(f"   ✅ Found in main env: {matches[0]}")
+                        safe_print(_('   ✅ Found in main env: {}').format(matches[0]))
                     try:
                         dist = importlib.metadata.Distribution.at(matches[0])
                         found_dists.append(dist)
@@ -974,7 +974,7 @@ class omnipkgMetadataGatherer:
 
                     if matches:
                         if verbose:
-                            safe_print(f"   ✅ Found nested: {matches[0]}")
+                            safe_print(_('   ✅ Found nested: {}').format(matches[0]))
                         try:
                             from importlib.metadata import PathDistribution
 
@@ -986,7 +986,7 @@ class omnipkgMetadataGatherer:
 
         if verbose:
             safe_print(
-                f"   ✅ Fast discovery complete: {len(found_dists)}/{len(targeted_packages)} packages found"
+                _('   ✅ Fast discovery complete: {}/{} packages found').format(len(found_dists), len(targeted_packages))
             )
 
         return found_dists
@@ -1107,7 +1107,7 @@ class omnipkgMetadataGatherer:
         if is_ci:
             # CI/CD: Don't upgrade, just warn
             safe_print(
-                f"    ⚠️  Safety tool outdated: v{current_version} (latest: v{latest_version})"
+                _('    ⚠️  Safety tool outdated: v{} (latest: v{})').format(current_version, latest_version)
             )
             safe_print("    💡 Non-interactive mode detected - skipping auto-upgrade")
             safe_print("    📝 Manual upgrade: `8pkg upgrade safety")
@@ -1119,8 +1119,8 @@ class omnipkgMetadataGatherer:
         safe_print("=" * 60)
         safe_print("🔒 Security Tool Update Available")
         safe_print("=" * 60)
-        safe_print(f"    Current: safety v{current_version}")
-        safe_print(f"    Latest:  safety v{latest_version}")
+        safe_print(_('    Current: safety v{}').format(current_version))
+        safe_print(_('    Latest:  safety v{}').format(latest_version))
         safe_print("")
         safe_print("    Safety scans for vulnerabilities in your packages.")
         safe_print("    Newer versions include updated vulnerability databases.")
@@ -1219,7 +1219,7 @@ class omnipkgMetadataGatherer:
             current_version = None
             for bubble in self.omnipkg_instance.multiversion_base.glob(f"{TOOL_NAME}-*"):
                 current_version = bubble.name.split("-", 1)[1]
-                safe_print(f"   -> Found existing 'safety' tool bubble: v{current_version}")
+                safe_print(_("   -> Found existing 'safety' tool bubble: v{}").format(current_version))
                 break
 
             should_create_or_upgrade = False
@@ -1245,7 +1245,7 @@ class omnipkgMetadataGatherer:
             if should_create_or_upgrade or not bubble_path.is_dir():
                 if should_create_or_upgrade and current_version:
                     safe_print(
-                        f"📦 Upgrading safety tool: v{current_version} → v{tool_version_to_use}",
+                        _('📦 Upgrading safety tool: v{} → v{}').format(current_version, tool_version_to_use),
                         flush=True  # ADD THIS
                     )
                 else:
@@ -1256,7 +1256,7 @@ class omnipkgMetadataGatherer:
 
                 for old_bubble in self.omnipkg_instance.multiversion_base.glob(f"{TOOL_NAME}-*"):
                     if old_bubble.name != bubble_path.name:
-                        safe_print(f"   -> Removing old tool bubble: {old_bubble.name}")
+                        safe_print(_('   -> Removing old tool bubble: {}').format(old_bubble.name))
                         import shutil
 
                         shutil.rmtree(old_bubble)
@@ -1457,11 +1457,11 @@ class omnipkgMetadataGatherer:
             if len(parts) == 2:
                 pkg_name, pkg_version = parts
             else:
-                safe_print(f"      -> Could not parse package name from: {folder_name}")
+                safe_print(_('      -> Could not parse package name from: {}').format(folder_name))
                 return False
 
             # Create fixed content
-            fixed_content = f"Name: {pkg_name}\n{content}"
+            fixed_content = _('Name: {}\n{}').format(pkg_name, content)
 
             # Atomic write with backup
             backup_file = metadata_file.with_suffix(".backup")
@@ -1479,7 +1479,7 @@ class omnipkgMetadataGatherer:
                 # Atomic replace
                 temp_file.replace(metadata_file)
 
-                safe_print(f"      -> Injected 'Name: {pkg_name}' into METADATA")
+                safe_print(_("      -> Injected 'Name: {}' into METADATA").format(pkg_name))
 
                 # Clean up backup after success
                 if backup_file.exists():
@@ -1488,14 +1488,14 @@ class omnipkgMetadataGatherer:
                 return True
 
             except Exception as e:
-                safe_print(f"      -> Write failed: {e}")
+                safe_print(_('      -> Write failed: {}').format(e))
                 # Restore from backup if it exists
                 if backup_file.exists():
                     shutil.copy2(backup_file, metadata_file)
                 return False
 
         except Exception as e:
-            safe_print(f"      -> Emergency healing failed: {e}")
+            safe_print(_('      -> Emergency healing failed: {}').format(e))
             return False
 
     def run(
@@ -1563,7 +1563,7 @@ class omnipkgMetadataGatherer:
                     distributions_to_process.append(dist)
 
         safe_print(
-            f"   -> Found {len(distributions_to_process)} packages belonging to this context."
+            _('   -> Found {} packages belonging to this context.').format(len(distributions_to_process))
         )
 
         if not distributions_to_process:
@@ -1579,7 +1579,7 @@ class omnipkgMetadataGatherer:
                 valid_distributions.append(dist)
             else:
                 # ATTEMPT ON-THE-SPOT HEALING
-                safe_print(f"🔧 Detected corrupt metadata at: {dist._path}")
+                safe_print(_('🔧 Detected corrupt metadata at: {}').format(dist._path))
                 safe_print("   -> Attempting emergency repair...")
 
                 if self._emergency_heal_metadata(dist._path):
@@ -1595,7 +1595,7 @@ class omnipkgMetadataGatherer:
                         else:
                             safe_print("   ⚠️  Healing failed - still no Name field")
                     except Exception as e:
-                        safe_print(f"   ⚠️  Could not reload after healing: {e}")
+                        safe_print(_('   ⚠️  Could not reload after healing: {}').format(e))
                 else:
                     safe_print("   ⚠️  Emergency healing failed, skipping this distribution")
 
@@ -1623,7 +1623,7 @@ class omnipkgMetadataGatherer:
         updated_count = 0
         max_workers = (os.cpu_count() or 4) * 2
         total_packages = len(distributions_to_process)
-        safe_print(f"   🔄 Processing {total_packages} packages in parallel...", flush=True)
+        safe_print(_('   🔄 Processing {} packages in parallel...').format(total_packages), flush=True)
 
         with concurrent.futures.ThreadPoolExecutor(
             max_workers=max_workers, thread_name_prefix="omnipkg_builder"
@@ -1647,7 +1647,7 @@ class omnipkgMetadataGatherer:
                         updated_count += 1
                 except Exception as exc:
                     dist = future_to_dist[future]
-                    safe_print(f'\n❌ Error processing {dist.metadata["Name"]}: {exc}')
+                    safe_print(_('\n❌ Error processing {}: {}').format(dist.metadata['Name'], exc))
 
         end_time = time.perf_counter()
         total_time = end_time - start_time
@@ -1749,7 +1749,7 @@ class omnipkgMetadataGatherer:
             return self._store_in_redis(dist, is_active=is_active, context_info=context_info)
 
         except Exception as e:
-            safe_print(f"\n❌ Error processing {dist._path}: {e}")
+            safe_print(_('\n❌ Error processing {}: {}').format(dist._path, e))
             return False
 
     def _build_comprehensive_metadata(self, dist: importlib.metadata.Distribution) -> Dict:
@@ -1964,7 +1964,7 @@ class omnipkgMetadataGatherer:
             return True
 
         except Exception as e:
-            safe_print(f'\n❌ Error storing {dist.metadata.get("Name", "N/A")} in Redis: {e}')
+            safe_print(_('\n❌ Error storing {} in Redis: {}').format(dist.metadata.get('Name', 'N/A'), e))
             return False
 
     def _perform_health_checks(
@@ -2020,19 +2020,19 @@ class omnipkgMetadataGatherer:
                 # --- FIX IS HERE ---
                 # We append the code to the script string, NOT to a local list variable.
                 script_lines.append(
-                    f"results.append(('{candidate}', False, 'Skipped: Not a valid identifier'))"
+                    _("results.append(('{}', False, 'Skipped: Not a valid identifier'))").format(candidate)
                 )
                 continue
 
             script_lines.extend(
                 [
-                    f"# Testing import: {candidate}",
+                    _('# Testing import: {}').format(candidate),
                     "try:",
-                    f"    mod = importlib.import_module('{candidate}')",
+                    _("    mod = importlib.import_module('{}')").format(candidate),
                     "    version = getattr(mod, '__version__', 'N/A')",
-                    f"    results.append(('{candidate}', True, str(version)))",
+                    _("    results.append(('{}', True, str(version)))").format(candidate),
                     "except Exception as e:",
-                    f"    results.append(('{candidate}', False, traceback.format_exc()))",
+                    _("    results.append(('{}', False, traceback.format_exc()))").format(candidate),
                 ]
             )
 
@@ -2077,7 +2077,7 @@ class omnipkgMetadataGatherer:
             error_msg = e.stderr.strip() if hasattr(e, "stderr") and e.stderr else str(e)
             return {
                 "importable": False,
-                "error": f"Subprocess failed: {error_msg}",
+                "error": _('Subprocess failed: {}').format(error_msg),
                 "attempted_modules": import_candidates,
             }
 

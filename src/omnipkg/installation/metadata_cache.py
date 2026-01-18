@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 import requests
+from omnipkg.i18n import _
 
 
 class MetadataCache:
@@ -69,12 +70,12 @@ class MetadataCache:
                 metadata = resp.json()
                 print(f"✓ Fetched metadata for {package} from GitHub")
             elif resp.status_code == 404:
-                print(f"⚠ Package {package} not in GitHub metadata repo")
+                print(_('⚠ Package {} not in GitHub metadata repo').format(package))
             else:
-                print(f"✗ Failed to fetch metadata: HTTP {resp.status_code}")
+                print(_('✗ Failed to fetch metadata: HTTP {}').format(resp.status_code))
 
         except Exception as e:
-            print(f"✗ Error fetching metadata: {e}")
+            print(_('✗ Error fetching metadata: {}').format(e))
 
         try:
             # Fetch compatibility data
@@ -240,24 +241,24 @@ if __name__ == "__main__":
     info = cache.get_package_info("torch")
 
     if info["metadata"]:
-        print(f"\nPackage: {info['metadata']['name']}")
-        print(f"Latest Version: {info['metadata']['version']}")
-        print(f"Summary: {info['metadata']['summary']}")
-        print(f"Source: {info['source']}")
+        print(_('\nPackage: {}').format(info['metadata']['name']))
+        print(_('Latest Version: {}').format(info['metadata']['version']))
+        print(_('Summary: {}').format(info['metadata']['summary']))
+        print(_('Source: {}').format(info['source']))
 
     # Check compatibility for current platform
     compat = cache.check_compatibility("torch", "3.11", "linux-x64")
     if compat:
         print("\nCompatibility for Python 3.11 on Linux:")
-        print(f"  Install Success: {compat['install_success']}")
+        print(_('  Install Success: {}').format(compat['install_success']))
         print(f"  Import Success: {compat['import_success']}")
-        print(f"  Install Time: {compat['install_time_seconds']}s")
+        print(_('  Install Time: {}s').format(compat['install_time_seconds']))
         if compat["errors"]:
-            print(f"  ⚠ Known Issues: {compat['errors']}")
+            print(_('  ⚠ Known Issues: {}').format(compat['errors']))
 
     # Get stats
     stats = cache.get_cache_stats()
-    print("\nCache Stats:")
-    print(f"  Total Packages: {stats['total_cached_packages']}")
-    print(f"  Cache Hits: {stats['total_cache_hits']}")
-    print(f"  Expired Entries: {stats['expired_entries']}")
+    print(_('\nCache Stats:'))
+    print(_('  Total Packages: {}').format(stats['total_cached_packages']))
+    print(_('  Cache Hits: {}').format(stats['total_cache_hits']))
+    print(_('  Expired Entries: {}').format(stats['expired_entries']))

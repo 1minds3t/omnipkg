@@ -7,6 +7,7 @@ import shutil
 import subprocess
 import traceback
 from pathlib import Path
+from omnipkg.i18n import _
 
 # Setup project path to allow omnipkg imports
 project_root = Path(__file__).resolve().parent.parent
@@ -21,7 +22,7 @@ BUBBLE_VERSIONS_TO_TEST = ["13.5.3", "13.4.2"]
 
 def print_header(title):
     safe_print("\n" + "=" * 80)
-    safe_print(f"  🚀 {title}")
+    safe_print(_('  🚀 {}').format(title))
     safe_print("=" * 80)
 
 
@@ -90,11 +91,11 @@ def setup_environment(omnipkg_core: OmnipkgCore):
 
     if main_rich_version:
         safe_print(
-            f"   ⚠️  Found existing Rich v{main_rich_version} (unexpected after cleanup)."
+            _('   ⚠️  Found existing Rich v{} (unexpected after cleanup).').format(main_rich_version)
         )
     else:
         safe_print(
-            f"   ℹ️  Rich not found. Installing baseline v{DEFAULT_RICH_VERSION}..."
+            _('   ℹ️  Rich not found. Installing baseline v{}...').format(DEFAULT_RICH_VERSION)
         )
         omnipkg_core.smart_install([f"rich=={DEFAULT_RICH_VERSION}"])
         main_rich_version = DEFAULT_RICH_VERSION
@@ -138,7 +139,7 @@ def test_version_via_daemon(
 
     if is_bubble:
         # 🚀 DAEMON PATH: Run inside an isolated, persistent worker
-        safe_print(f"   ⚡ Verifying v{expected_version} via Daemon Worker...")
+        safe_print(_('   ⚡ Verifying v{} via Daemon Worker...').format(expected_version))
 
         proxy = DaemonProxy(client, f"rich=={expected_version}")
 
@@ -166,29 +167,29 @@ print(f"PATH={rich.__file__}")
                 elif line.startswith("PATH="):
                     actual_path = line.split("=", 1)[1]
 
-            safe_print(f"      - Version: {actual_version}")
-            safe_print(f"      - Path: {actual_path}")
+            safe_print(_('      - Version: {}').format(actual_version))
+            safe_print(_('      - Path: {}').format(actual_path))
             safe_print(f"      - Latency: {duration:.2f}ms")
 
             if actual_version != expected_version:
                 raise AssertionError(
-                    f"Bubble mismatch! Expected {expected_version}, got {actual_version}"
+                    _('Bubble mismatch! Expected {}, got {}').format(expected_version, actual_version)
                 )
         else:
-            raise RuntimeError(f"Daemon execution failed: {result.get('error')}")
+            raise RuntimeError(_('Daemon execution failed: {}').format(result.get('error')))
 
     else:
         # MAIN ENV PATH: Check local process
-        safe_print(f"   🏠 Verifying v{expected_version} in Main Process...")
+        safe_print(_('   🏠 Verifying v{} in Main Process...').format(expected_version))
 
         actual_version = version("rich")
 
         if actual_version != expected_version:
             raise AssertionError(
-                f"Main env mismatch! Expected {expected_version}, got {actual_version}"
+                _('Main env mismatch! Expected {}, got {}').format(expected_version, actual_version)
             )
 
-    safe_print(f"   ✅ Verified version {actual_version}")
+    safe_print(_('   ✅ Verified version {}').format(actual_version))
 
 
 def run_comprehensive_test():
@@ -209,7 +210,7 @@ def run_comprehensive_test():
 
         # Test Main Environment
         safe_print(
-            f"\n--- Testing Main Environment (rich=={main_version_to_preserve}) ---"
+            _('\n--- Testing Main Environment (rich=={}) ---').format(main_version_to_preserve)
         )
         try:
             test_version_via_daemon(
@@ -217,7 +218,7 @@ def run_comprehensive_test():
             )
             test_results[f"main-{main_version_to_preserve}"] = True
         except Exception as e:
-            safe_print(f"   ❌ FAILED: {e}")
+            safe_print(_('   ❌ FAILED: {}').format(e))
             test_results[f"main-{main_version_to_preserve}"] = False
 
         # Test Bubbled Versions via Daemon
@@ -225,12 +226,12 @@ def run_comprehensive_test():
             if version == main_version_to_preserve:
                 continue
 
-            safe_print(f"\n--- Testing Bubble (rich=={version}) ---")
+            safe_print(_('\n--- Testing Bubble (rich=={}) ---').format(version))
             try:
                 test_version_via_daemon(version, daemon_client, is_bubble=True)
                 test_results[f"bubble-{version}"] = True
             except Exception as e:
-                safe_print(f"   ❌ FAILED: {e}")
+                safe_print(_('   ❌ FAILED: {}').format(e))
                 test_results[f"bubble-{version}"] = False
 
         print_header("FINAL TEST RESULTS")
@@ -242,7 +243,7 @@ def run_comprehensive_test():
         return all_passed
 
     except Exception as e:
-        safe_print(f"\n❌ Critical error: {e}")
+        safe_print(_('\n❌ Critical error: {}').format(e))
         traceback.print_exc()
         return False
     finally:
@@ -253,7 +254,7 @@ def run_comprehensive_test():
                 [f"rich=={v}" for v in BUBBLE_VERSIONS_TO_TEST], force=True
             )
             safe_print(
-                f"   ✅ Main environment (v{main_version_to_preserve}) preserved."
+                _('   ✅ Main environment (v{}) preserved.').format(main_version_to_preserve)
             )
 
 

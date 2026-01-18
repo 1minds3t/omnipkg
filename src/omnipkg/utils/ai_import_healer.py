@@ -26,6 +26,7 @@ import re
 import sys
 from pathlib import Path
 from typing import List, Tuple
+from omnipkg.i18n import _
 
 
 class AIImportHealer:
@@ -229,12 +230,12 @@ class AIImportHealer:
     def _log(self, msg: str):
         """Log message if verbose mode is on."""
         if self.verbose:
-            safe_print(f"🔧 {msg}", file=sys.stderr)
+            safe_print(_('🔧 {}').format(msg), file=sys.stderr)
 
     def _summary(self, msg: str):
         """Show summary message unless silent mode is on."""
         if not self.silent:
-            safe_print(f"🔧 {msg}", file=sys.stderr)
+            safe_print(_('🔧 {}').format(msg), file=sys.stderr)
 
     def detect_hallucinated_imports(self, code: str) -> List[Tuple[str, str, bool]]:
         """
@@ -288,13 +289,13 @@ class AIImportHealer:
         for line, module_name, is_obvious in hallucinations:
             # Safety check: verify module isn't safe
             if not is_obvious and self._is_safe_import(module_name, code):
-                self._log(f"   ⚠️  Skipping (appears safe): {line}")
+                self._log(_('   ⚠️  Skipping (appears safe): {}').format(line))
                 self.skipped_safe.append(line)
                 continue
 
             # Remove the import
             confidence = "HIGH" if is_obvious else "MEDIUM"
-            self._log(f"   Removing [{confidence}]: {line}")
+            self._log(_('   Removing [{}]: {}').format(confidence, line))
             self.removed_lines.append(line)
 
             # Use word boundaries to avoid partial matches
@@ -303,7 +304,7 @@ class AIImportHealer:
             self.healed_count += 1
 
         if self.healed_count > 0:
-            self._log(f"✅ Healed {self.healed_count} hallucinated import(s)")
+            self._log(_('✅ Healed {} hallucinated import(s)').format(self.healed_count))
             # Show summary even if not verbose (unless silent)
             if not self.verbose:
                 self._summary(f"Removed {self.healed_count} AI import hallucination(s)")
@@ -320,7 +321,7 @@ class AIImportHealer:
         Returns:
             True if file was modified, False otherwise
         """
-        self._log(f"📄 Scanning: {filepath}")
+        self._log(_('📄 Scanning: {}').format(filepath))
 
         code = filepath.read_text()
         healed_code, was_healed = self.heal(code)
@@ -329,16 +330,16 @@ class AIImportHealer:
             # Create backup
             backup_path = filepath.with_suffix(filepath.suffix + ".bak")
             filepath.rename(backup_path)
-            self._log(f"💾 Backup saved: {backup_path}")
+            self._log(_('💾 Backup saved: {}').format(backup_path))
 
             # Write healed code
             filepath.write_text(healed_code)
-            self._log(f"💾 Saved healed code to: {filepath}")
+            self._log(_('💾 Saved healed code to: {}').format(filepath))
 
             # Show summary even if not verbose
             if not self.verbose:
                 self._summary(
-                    f"Healed {filepath.name}: removed {self.healed_count} hallucination(s)"
+                    _('Healed {}: removed {} hallucination(s)').format(filepath.name, self.healed_count)
                 )
 
             return True
@@ -353,17 +354,17 @@ class AIImportHealer:
 
         report = "🔧 AI Import Healer Report\n"
         report += f"{'=' * 50}\n"
-        report += f"Total hallucinations healed: {self.healed_count}\n"
+        report += _('Total hallucinations healed: {}\n').format(self.healed_count)
 
         if self.removed_lines:
             report += "\nRemoved lines:\n"
             for line in self.removed_lines:
-                report += f"  ❌ {line}\n"
+                report += _('  ❌ {}\n').format(line)
 
         if self.skipped_safe:
             report += "\nPreserved safe imports:\n"
             for line in self.skipped_safe:
-                report += f"  ✅ {line}\n"
+                report += _('  ✅ {}\n').format(line)
 
         return report
 

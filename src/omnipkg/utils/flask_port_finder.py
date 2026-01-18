@@ -34,6 +34,7 @@ import unittest
 from contextlib import closing
 from pathlib import Path
 from typing import Optional, Tuple
+from omnipkg.i18n import _
 
 try:
     from .common_utils import safe_print
@@ -197,13 +198,13 @@ except Exception as e:
 
         # Only print stderr if validation failed to keep logs clean on success
         if result.stderr:
-            safe_print(f"Flask validation failed details: {result.stderr.strip()}")
+            safe_print(_('Flask validation failed details: {}').format(result.stderr.strip()))
         return False
     except subprocess.TimeoutExpired:
         safe_print(f"Flask validation timed out after {timeout}s")
         return False
     except Exception as e:
-        safe_print(f"Flask validation error: {e}")
+        safe_print(_('Flask validation error: {}').format(e))
         return False
 
 
@@ -228,7 +229,7 @@ class FlaskAppManager:
     def start(self) -> bool:
         """Start the Flask app (or just validate it)."""
         if self.validate_only:
-            safe_print(f"🔍 Validating Flask app on port {self.port}...")
+            safe_print(_('🔍 Validating Flask app on port {}...').format(self.port))
             return validate_flask_app(self.code, self.port)
 
         wrapper_code = f"""
@@ -275,13 +276,13 @@ threading.Thread(target=periodic_check, daemon=True).start()
             )
 
             self.is_running = True
-            safe_print(f"✅ Flask app started on port {self.port} (PID: {self.process.pid})")
-            safe_print(f"🌐 Access at: http://127.0.0.1:{self.port}")
-            safe_print(f"🛑 To stop: FlaskAppManager.shutdown() or delete {self.shutdown_file}")
+            safe_print(_('✅ Flask app started on port {} (PID: {})').format(self.port, self.process.pid))
+            safe_print(_('🌐 Access at: http://127.0.0.1:{}').format(self.port))
+            safe_print(_('🛑 To stop: FlaskAppManager.shutdown() or delete {}').format(self.shutdown_file))
 
             return True
         except Exception as e:
-            safe_print(f"❌ Failed to start Flask app: {e}")
+            safe_print(_('❌ Failed to start Flask app: {}').format(e))
             return False
 
     def shutdown(self):
@@ -300,14 +301,14 @@ threading.Thread(target=periodic_check, daemon=True).start()
             self.shutdown_file.write_text("SHUTDOWN")
             try:
                 self.process.wait(timeout=3.0)
-                safe_print(f"✅ Flask app (PID {self.process.pid}) shut down gracefully")
+                safe_print(_('✅ Flask app (PID {}) shut down gracefully').format(self.process.pid))
             except subprocess.TimeoutExpired:
                 self.process.terminate()
                 try:
                     self.process.wait(timeout=2.0)
                 except subprocess.TimeoutExpired:
                     self.process.kill()
-                safe_print(f"⚠️  Flask app (PID {self.process.pid}) force killed")
+                safe_print(_('⚠️  Flask app (PID {}) force killed').format(self.process.pid))
 
             if self.shutdown_file.exists():
                 self.shutdown_file.unlink()
@@ -315,7 +316,7 @@ threading.Thread(target=periodic_check, daemon=True).start()
             release_port(self.port)
             self.is_running = False
         except Exception as e:
-            safe_print(f"⚠️  Error during shutdown: {e}")
+            safe_print(_('⚠️  Error during shutdown: {}').format(e))
             release_port(self.port)  # Always release port
 
     def wait_for_ready(self, timeout: float = 10.0) -> bool:
@@ -327,13 +328,13 @@ threading.Thread(target=periodic_check, daemon=True).start()
                     sock.settimeout(0.5)
                     result = sock.connect_ex(("127.0.0.1", self.port))
                     if result == 0:
-                        safe_print(f"✅ Flask app is ready on port {self.port}")
+                        safe_print(_('✅ Flask app is ready on port {}').format(self.port))
                         return True
             except:
                 pass
             time.sleep(0.2)
 
-        safe_print(f"⚠️  Flask app did not become ready within {timeout}s")
+        safe_print(_('⚠️  Flask app did not become ready within {}s').format(timeout))
         return False
 
 
@@ -360,7 +361,7 @@ def patch_flask_code(
         # CRITICAL FIX: Always inject use_reloader=False to ensure process management works
         # The reloader spawns a child process that is hard to kill cleanly via Popen.
         patched_code = re.sub(
-            pattern, f"app.run(port={free_port}, debug=False, use_reloader=False)", code
+            pattern, _('app.run(port={}, debug=False, use_reloader=False)').format(free_port), code
         )
 
     manager = FlaskAppManager(patched_code, free_port, validate_only) if interactive else None
@@ -380,11 +381,11 @@ def auto_patch_flask_port(code: str, interactive: bool = False, validate_only: b
                 # Silent success for validation to keep logs clean
                 pass
             elif success and not validate_only:
-                safe_print(f"🔧 Flask app running on port {port}")
+                safe_print(_('🔧 Flask app running on port {}').format(port))
             else:
                 safe_print("❌ Flask app failed to start/validate")
         else:
-            safe_print(f"🔧 Auto-patched Flask app to use port {port}", file=sys.stderr)
+            safe_print(_('🔧 Auto-patched Flask app to use port {}').format(port), file=sys.stderr)
 
         return patched_code
     return code
@@ -396,7 +397,7 @@ if __name__ == "__main__":
         def test_1_basic_port_allocation(self):
             port = find_free_port(reserve=False)
             self.assertTrue(5000 <= port < 5100, "Port should be in expected range")
-            safe_print(f"✅ Found and reserved free port: {port}")
+            safe_print(_('✅ Found and reserved free port: {}').format(port))
             self.assertTrue(True)
 
         def test_2_concurrent_allocation(self):
@@ -412,12 +413,12 @@ if __name__ == "__main__":
                 ports = [f.result() for f in concurrent.futures.as_completed(futures)]
 
             self.assertEqual(len(ports), len(set(ports)), "Ports should be unique")
-            safe_print(f"✅ All {len(ports)} ports unique: {sorted(ports)}")
+            safe_print(_('✅ All {} ports unique: {}').format(len(ports), sorted(ports)))
             self.assertTrue(True)
 
         def test_3_windows_compatibility(self):
             port = find_free_port(reserve=False)
-            safe_print(f"✅ Port {port} found, demonstrating platform-agnostic socket operations.")
+            safe_print(_('✅ Port {} found, demonstrating platform-agnostic socket operations.').format(port))
             self.assertTrue(True)
 
         def test_4_flask_validation(self):
@@ -434,7 +435,7 @@ def hello():
             port = find_free_port(reserve=True)
             success = validate_flask_app(valid_app, port)
             self.assertTrue(success, "Valid app should pass validation")
-            safe_print(f"🔍 Validating Flask app on port {port}...")
+            safe_print(_('🔍 Validating Flask app on port {}...').format(port))
             safe_print("  ✅ Valid app correctly passed validation.")
             release_port(port)
 
@@ -454,7 +455,7 @@ if __name__ == '__main__':
             self.assertIn(f"port={port}", patched_code)
             self.assertIn("debug=False", patched_code)
             self.assertIn("use_reloader=False", patched_code)
-            safe_print(f"✅ Code patched successfully to use port {port}.")
+            safe_print(_('✅ Code patched successfully to use port {}.').format(port))
             release_port(port)
 
         def test_6_flask_manager_lifecycle(self):
@@ -477,10 +478,10 @@ if __name__ == '__main__':
             self.assertTrue(success, "Manager start should succeed")
 
             if not manager.validate_only:
-                safe_print(f"✅ Flask app started on port {port} (PID: {manager.process.pid})")
-                safe_print(f"🌐 Access at: http://127.0.0.1:{port}")
+                safe_print(_('✅ Flask app started on port {} (PID: {})').format(port, manager.process.pid))
+                safe_print(_('🌐 Access at: http://127.0.0.1:{}').format(port))
                 safe_print(
-                    f"🛑 To stop: FlaskAppManager.shutdown() or delete {manager.shutdown_file}"
+                    _('🛑 To stop: FlaskAppManager.shutdown() or delete {}').format(manager.shutdown_file)
                 )
 
                 # Wait longer for CI

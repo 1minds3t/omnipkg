@@ -5,6 +5,7 @@ import subprocess
 import sys
 import threading
 from pathlib import Path
+from omnipkg.i18n import _
 
 
 class PersistentWorker:
@@ -183,10 +184,10 @@ except:
                 raise RuntimeError("Worker process died immediately.")
             data = json.loads(line)
             if data.get("status") != "ready":
-                raise RuntimeError(f"Worker initialization failed: {data}")
+                raise RuntimeError(_('Worker initialization failed: {}').format(data))
         except Exception as e:
             self._stop_logging.set()
-            raise RuntimeError(f"Handshake failed: {e}")
+            raise RuntimeError(_('Handshake failed: {}').format(e))
 
     def _stream_logs(self):
         """Streams stderr from worker to console in real-time."""

@@ -4,6 +4,7 @@ import shutil
 import torch
 import time
 from torch.utils.cpp_extension import load_inline
+from omnipkg.i18n import _
 
 def setup_cuda_env():
     if "CUDA_HOME" in os.environ: return
@@ -16,7 +17,7 @@ def setup_cuda_env():
     if not nvcc_path and os.path.exists("/usr/local/cuda/bin/nvcc"):
         nvcc_path = "/usr/local/cuda/bin/nvcc"
     if not nvcc_path:
-        print("❌ Error: nvcc not found."); sys.exit(1)
+        print(_('❌ Error: nvcc not found.')); sys.exit(1)
     cuda_home = os.path.dirname(os.path.dirname(nvcc_path))
     os.environ["CUDA_HOME"] = cuda_home
     os.environ["PATH"] = os.path.join(cuda_home, "bin") + os.pathsep + os.environ["PATH"]
@@ -161,7 +162,7 @@ void launch_consumers(
 """
 
 def main():
-    print("\n🏭 COMPILING DEBUG PRODUCER/CONSUMER SYSTEM...")
+    print(_('\n🏭 COMPILING DEBUG PRODUCER/CONSUMER SYSTEM...'))
     try:
         module = load_inline(
             name='gpu_mpmc_v3_debug',
@@ -172,7 +173,7 @@ def main():
             extra_cuda_cflags=["-O3"]
         )
     except Exception as e: 
-        print(f"❌ Compile Error: {e}")
+        print(_('❌ Compile Error: {}').format(e))
         return
 
     BUFFER_SIZE = 1024 * 1024 * 10
@@ -188,7 +189,7 @@ def main():
     input_data = torch.ones(PACKET_SIZE, device='cuda', dtype=torch.float32)
     output_sink = torch.zeros(TOTAL_OPS * PACKET_SIZE, device='cuda', dtype=torch.float32)
 
-    print(f"\n⚡ STEP 1: Launching {NUM_WRITERS} producers...")
+    print(_('\n⚡ STEP 1: Launching {} producers...').format(NUM_WRITERS))
     torch.cuda.synchronize()
     
     # Launch producers FIRST and wait for them to complete
@@ -200,9 +201,9 @@ def main():
     torch.cuda.synchronize()
     
     stats = ctrl_block.cpu().numpy()
-    print(f"   ✓ Producers finished: {stats[3]} writes committed")
+    print(_('   ✓ Producers finished: {} writes committed').format(stats[3]))
 
-    print(f"\n⚡ STEP 2: Launching {NUM_READERS} consumers...")
+    print(_('\n⚡ STEP 2: Launching {} consumers...').format(NUM_READERS))
     start_t = time.perf_counter()
     
     module.launch_consumers(
@@ -219,22 +220,22 @@ def main():
     reads = stats[5]
     debug_count = stats[6]
     
-    print("\n🏁 RESULTS:")
+    print(_('\n🏁 RESULTS:'))
     print(f"   Time Taken:   {(end_t - start_t)*1000:.2f} ms")
     print(f"   Throughput:   {TOTAL_OPS / (end_t - start_t):.0f} packets/sec")
-    print(f"   Writes Committed: {writes}")
-    print(f"   Reads Completed:  {reads}")
-    print(f"   Consumer Loop Iterations: {debug_count}")
+    print(_('   Writes Committed: {}').format(writes))
+    print(_('   Reads Completed:  {}').format(reads))
+    print(_('   Consumer Loop Iterations: {}').format(debug_count))
     
     sample = output_sink[0:5].cpu().numpy()
-    print(f"   Sample Data Read: {sample}")
+    print(_('   Sample Data Read: {}').format(sample))
     
     if writes == reads == NUM_WRITERS:
-        print("✅ SUCCESS: Full Producer-Consumer Pipeline Verified!")
+        print(_('✅ SUCCESS: Full Producer-Consumer Pipeline Verified!'))
     else:
-        print(f"❌ FAILURE: Mismatch - writes={writes}, reads={reads}, expected={NUM_WRITERS}")
+        print(_('❌ FAILURE: Mismatch - writes={}, reads={}, expected={}').format(writes, reads, NUM_WRITERS))
         if debug_count >= MAX_ITERATIONS * NUM_READERS:
-            print("⚠️  TIMEOUT: Consumers hit iteration limit (possible deadlock)")
+            print(_('⚠️  TIMEOUT: Consumers hit iteration limit (possible deadlock)'))
 
 if __name__ == "__main__":
     main()

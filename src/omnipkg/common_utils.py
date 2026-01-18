@@ -157,7 +157,7 @@ def safe_subprocess_call(
         except subprocess.TimeoutExpired:
             process.kill()
             returncode = -1
-            safe_print(f"⚠️ Process timed out after {timeout} seconds")
+            safe_print(_('⚠️ Process timed out after {} seconds').format(timeout))
 
         # Read stderr
         stderr_lines = process.stderr.readlines()
@@ -367,17 +367,17 @@ class UVFailureDetector:
 
 def debug_python_context(label=""):
     """Print comprehensive Python context information for debugging."""
-    print(f"\n{'='*70}")
-    safe_print(f"🔍 DEBUG CONTEXT CHECK: {label}")
-    print(f"{'='*70}")
-    safe_print(f"📍 sys.executable:        {sys.executable}")
-    safe_print(f"📍 sys.version:           {sys.version}")
+    print(_('\n{}').format('=' * 70))
+    safe_print(_('🔍 DEBUG CONTEXT CHECK: {}').format(label))
+    print(_('{}').format('=' * 70))
+    safe_print(_('📍 sys.executable:        {}').format(sys.executable))
+    safe_print(_('📍 sys.version:           {}').format(sys.version))
     safe_print(
-        f"📍 sys.version_info:      {sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
+        _('📍 sys.version_info:      {}.{}.{}').format(sys.version_info.major, sys.version_info.minor, sys.version_info.micro)
     )
-    safe_print(f"📍 os.getpid():           {os.getpid()}")
+    safe_print(_('📍 os.getpid():           {}').format(os.getpid()))
     safe_print(f"📍 __file__ (if exists):  {__file__ if '__file__' in globals() else 'N/A'}")
-    safe_print(f"📍 Path.cwd():            {Path.cwd()}")
+    safe_print(_('📍 Path.cwd():            {}').format(Path.cwd()))
 
     # Environment variables that might affect context
     relevant_env_vars = [
@@ -393,14 +393,14 @@ def debug_python_context(label=""):
     safe_print("\n📦 Relevant Environment Variables:")
     for var in relevant_env_vars:
         value = os.environ.get(var, "NOT SET")
-        print(f"   {var}: {value}")
+        print(_('   {}: {}').format(var, value))
 
     # Check sys.path for omnipkg locations
     safe_print("\n📂 sys.path (first 5 entries):")
     for i, path in enumerate(sys.path[:5]):
-        print(f"   [{i}] {path}")
+        print(_('   [{}] {}').format(i, path))
 
-    print(f"{'='*70}\n")
+    print(_('{}\n').format('=' * 70))
 
 
 def sync_context_to_runtime():
@@ -682,7 +682,7 @@ def safe_input(prompt: str, default: str = "", auto_value: str = None):
     """
     if not is_interactive_session():
         result = auto_value if auto_value is not None else default
-        safe_print(f"🤖 Auto-selecting: {result}")
+        safe_print(_('🤖 Auto-selecting: {}').format(result))
         return result
     
     try:

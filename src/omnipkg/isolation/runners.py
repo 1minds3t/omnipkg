@@ -3,6 +3,7 @@ import sys
 import textwrap
 
 from omnipkg.common_utils import safe_print
+from omnipkg.i18n import _
 
 
 def run_python_code_in_isolation(
@@ -74,7 +75,7 @@ def run_python_code_in_isolation(
 
         if result.returncode != 0:
             if result.stderr:
-                print(f"--- {job_name} STDERR ---")
+                print(_('--- {} STDERR ---').format(job_name))
                 print(result.stderr)
                 print("-------------------------")
             return False
@@ -82,5 +83,5 @@ def run_python_code_in_isolation(
         return True
 
     except subprocess.TimeoutExpired:
-        safe_print(f"❌ {job_name} timed out after {timeout}s")
+        safe_print(_('❌ {} timed out after {}s').format(job_name, timeout))
         return False
