@@ -101,7 +101,7 @@ def check_python_compatibility():
     """Check if current Python version can run the old flask-login version."""
     py_version = sys.version_info
     safe_print(
-        f"\n🐍 Python version: {py_version.major}.{py_version.minor}.{py_version.micro}"
+        _('\n🐍 Python version: {}.{}.{}').format(py_version.major, py_version.minor, py_version.micro)
     )
 
     if py_version.major == 3 and 6 <= py_version.minor <= 11:
@@ -319,7 +319,7 @@ def run_demo():
                 )
             )
         else:
-            safe_print(f"⚠️  Expected {MODERN_VERSION}, got {version}")
+            safe_print(_('⚠️  Expected {}, got {}').format(MODERN_VERSION, version))
 
         time.sleep(3)
 
@@ -330,7 +330,7 @@ def run_demo():
 
         # Show current version before destruction
         current_version = check_version_with_pip("flask-login")
-        safe_print(f"\n📦 Current version (via pip show): {current_version}")
+        safe_print(_('\n📦 Current version (via pip show): {}').format(current_version))
 
         time.sleep(2)
 
@@ -345,14 +345,14 @@ def run_demo():
 
             safe_print("\n📊 Before pip install:")
             before_version = check_version_with_pip("flask-login")
-            safe_print(f"   flask-login version: {before_version}")
+            safe_print(_('   flask-login version: {}').format(before_version))
 
             # Let pip DESTROY the environment
             run_command(["pip", "install", f"flask-login=={OLD_VERSION}"])
 
             safe_print("\n📊 After pip install:")
             after_version = check_version_with_pip("flask-login")
-            safe_print(f"   flask-login version: {after_version}")
+            safe_print(_('   flask-login version: {}').format(after_version))
 
             safe_print(_("\n💥 BOOM! Look what pip did:"))
             safe_print(_(f"   ❌ Uninstalled flask-login {before_version}"))
@@ -405,11 +405,11 @@ def run_demo():
             bubble_path = omnipkg_core.multiversion_base / f"flask-login-{OLD_VERSION}"
 
             safe_print("\n📊 Final state:")
-            safe_print(f"   • Main environment: flask-login {main_version}")
+            safe_print(_('   • Main environment: flask-login {}').format(main_version))
             if bubble_path.exists():
-                safe_print(f"   • Bubble: flask-login {OLD_VERSION} ✅")
+                safe_print(_('   • Bubble: flask-login {} ✅').format(OLD_VERSION))
             else:
-                safe_print(f"   • Bubble: flask-login {OLD_VERSION} (creating...)")
+                safe_print(_('   • Bubble: flask-login {} (creating...)').format(OLD_VERSION))
 
             time.sleep(3)
 
@@ -465,7 +465,7 @@ def run_demo():
     finally:
         # Restore original install strategy
         if config_manager and original_strategy:
-            safe_print(f"\n🔄 Restoring original install strategy: {original_strategy}")
+            safe_print(_('\n🔄 Restoring original install strategy: {}').format(original_strategy))
             config_manager.set("install_strategy", original_strategy)
 
 

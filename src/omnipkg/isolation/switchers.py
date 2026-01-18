@@ -6,6 +6,7 @@ from omnipkg.common_utils import safe_print
 from omnipkg.loader import omnipkgLoader
 
 from .workers import PersistentWorker
+from omnipkg.i18n import _
 
 
 class TrueSwitcher:
@@ -40,7 +41,7 @@ class TrueSwitcher:
                 sys.exit(0)  # Success
             except Exception as e:
                 # Ideally log the error to stderr so parent sees it
-                sys.stderr.write(f"Forked task failed: {e}\n")
+                sys.stderr.write(_('Forked task failed: {}\n').format(e))
                 sys.exit(1)  # Failure
         else:  # Parent process
             _, status = os.waitpid(pid, 0)

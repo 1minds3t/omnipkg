@@ -15,6 +15,7 @@ from pathlib import Path
 from omnipkg.core import ConfigManager
 from omnipkg.loader import omnipkgLoader
 from omnipkg.common_utils import print_header
+from omnipkg.i18n import _
 
 # --- [Helper functions from original script] ---
 
@@ -124,9 +125,9 @@ def setup():
     all_installed = True
     for pkg, version in baseline_packages.items():
         if check_package_installed(python_exe, pkg, version):
-            print_with_flush(f"      ✅ Found {pkg}=={version}")
+            print_with_flush(_('      ✅ Found {}=={}').format(pkg, version))
         else:
-            print_with_flush(f"      ❌ Did not find {pkg}=={version}")
+            print_with_flush(_('      ❌ Did not find {}=={}').format(pkg, version))
             all_installed = False
             # No need to check further if one is missing
             break

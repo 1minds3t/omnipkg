@@ -4,6 +4,7 @@ from contextlib import contextmanager
 from pathlib import Path
 
 from omnipkg.common_utils import safe_print
+from omnipkg.i18n import _
 
 
 class OmnipkgLockManager:
@@ -37,7 +38,7 @@ class OmnipkgLockManager:
                     break  # Lock acquired!
                 except BlockingIOError:
                     if time.time() - start_time > timeout:
-                        raise TimeoutError(f"Failed to acquire '{lock_name}' lock after {timeout}s")
+                        raise TimeoutError(_("Failed to acquire '{}' lock after {}s").format(lock_name, timeout))
                     safe_print(f"⏳ Waiting for {lock_name} lock...")
                     time.sleep(0.1)
 

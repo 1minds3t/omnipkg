@@ -17,6 +17,7 @@ import unittest
 import threading
 import requests
 import importlib.util
+from omnipkg.i18n import _
 
 # Add omnipkg to the Python path to import necessary modules
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -91,7 +92,7 @@ except ImportError:
                 except subprocess.TimeoutExpired:
                     self.process.kill()
             release_port(self.port)
-            safe_print(f"  ✅ Port {self.port} released and manager shut down.")
+            safe_print(_('  ✅ Port {} released and manager shut down.').format(self.port))
 
         def wait_for_ready(self, timeout=5.0):
             start_time = time.time()
@@ -114,7 +115,7 @@ except ImportError:
             ("app.run(debug=True)", f"app.run(host='0.0.0.0', port={port})"),
             (
                 "app.run(use_reloader=False)",
-                f"app.run(use_reloader=False, host='0.0.0.0', port={port})",
+                _("app.run(use_reloader=False, host='0.0.0.0', port={})").format(port),
             ),
         ]
 
@@ -152,7 +153,7 @@ class TestEnhancedFlaskPortFinder(unittest.TestCase):
         port = find_free_port(reserve=True)
         self.reserved_ports.append(port)
         self.assertIsNotNone(port, "Should find a free port.")
-        safe_print(f"  ✅ Found and reserved free port: {port}")
+        safe_print(_('  ✅ Found and reserved free port: {}').format(port))
         safe_print("✅ TEST 1 PASSED")
 
     def test_2_concurrent_port_allocation(self):
@@ -180,7 +181,7 @@ class TestEnhancedFlaskPortFinder(unittest.TestCase):
         for thread in threads:
             thread.join()
         self.assertEqual(len(ports), 10, "Should allocate 10 unique ports.")
-        safe_print(f"  ✅ All 10 ports unique: {sorted(list(ports))}")
+        safe_print(_('  ✅ All 10 ports unique: {}').format(sorted(list(ports))))
         safe_print("✅ TEST 2 PASSED")
 
     def test_3_windows_compatibility_check(self):
@@ -191,7 +192,7 @@ class TestEnhancedFlaskPortFinder(unittest.TestCase):
         port = find_free_port()
         self.assertIsNotNone(port)
         safe_print(
-            f"  ✅ Port {port} found, demonstrating platform-agnostic socket operations."
+            _('  ✅ Port {} found, demonstrating platform-agnostic socket operations.').format(port)
         )
         safe_print("✅ TEST 3 PASSED")
 
@@ -232,7 +233,7 @@ class TestEnhancedFlaskPortFinder(unittest.TestCase):
         # The exact patch details might vary, so we check for the essential part.
         self.assertIn(f"port={port}", patched_code)
         self.assertNotIn("debug=True", patched_code)
-        safe_print(f"  ✅ Code patched successfully to use port {port}.")
+        safe_print(_('  ✅ Code patched successfully to use port {}.').format(port))
         safe_print("✅ TEST 5 PASSED")
 
     def test_6_flask_app_manager_full_lifecycle(self):
@@ -260,7 +261,7 @@ if __name__ == '__main__':
             self.assertIsNotNone(manager, "Manager should be created.")
             safe_print(f"  ✅ Manager created for port {port}.")
             self.assertTrue(manager.start(), "Flask app should start successfully.")
-            safe_print(f"  ✅ Flask app process started on port {port}.")
+            safe_print(_('  ✅ Flask app process started on port {}.').format(port))
 
             # FIX: Added a robust wait for the server to be ready before sending a request.
             # This prevents the "Connection refused" race condition.

@@ -55,7 +55,7 @@ def temporary_install_strategy(core: OmnipkgCore, strategy: str):
     # Only perform the switch if the desired strategy is different from the current one.
     switched = False
     if original_strategy != strategy:
-        safe_print(f"   - 🔄 Temporarily switching install strategy to '{strategy}'...")
+        safe_print(_("   - 🔄 Temporarily switching install strategy to '{}'...").format(strategy))
         # Update both the in-memory config for the current run and the persistent config
         core.config["install_strategy"] = strategy
         core.config_manager.set("install_strategy", strategy)
@@ -69,7 +69,7 @@ def temporary_install_strategy(core: OmnipkgCore, strategy: str):
         if switched:
             core.config["install_strategy"] = original_strategy
             core.config_manager.set("install_strategy", original_strategy)
-            safe_print(f"   - ✅ Strategy restored to '{original_strategy}'")
+            safe_print(_("   - ✅ Strategy restored to '{}'").format(original_strategy))
 
 
 def run_command(command_list, check=True, capture=False, stream=True):
@@ -412,9 +412,9 @@ def run_demo():
     finally:
         # Restore original install strategy (always runs)
         if config_manager and original_strategy:
-            safe_print(f"\n🔄 Restoring original install strategy: {original_strategy}")
+            safe_print(_('\n🔄 Restoring original install strategy: {}').format(original_strategy))
             config_manager.set("install_strategy", original_strategy)
-            safe_print(f"   ✅ Strategy restored to '{original_strategy}'")
+            safe_print(_("   ✅ Strategy restored to '{}'").format(original_strategy))
 
 
 if __name__ == "__main__":

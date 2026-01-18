@@ -10,6 +10,7 @@ to create the IPC handles.
 from omnipkg.loader import omnipkgLoader
 from omnipkg.isolation.worker_daemon import DaemonClient
 import time
+from omnipkg.i18n import _
 
 print("=" * 70)
 safe_print("🔥 Testing NATIVE CUDA IPC - Client in Correct Context")
@@ -24,8 +25,8 @@ try:
 except ImportError:
     from omnipkg.common_utils import safe_print
 
-    safe_print(f"\n📦 Client PyTorch: {torch.__version__}")
-    print(f"   CUDA available: {torch.cuda.is_available()}")
+    safe_print(_('\n📦 Client PyTorch: {}').format(torch.__version__))
+    print(_('   CUDA available: {}').format(torch.cuda.is_available()))
 
     if not torch.cuda.is_available():
         safe_print("❌ CUDA not available")
@@ -34,23 +35,23 @@ except ImportError:
     # Create test tensor
     safe_print("\n🧪 Creating test tensor...")
     input_tensor = torch.randn(500, 250, device="cuda")
-    print(f"   Shape: {input_tensor.shape}")
-    print(f"   Device: {input_tensor.device}")
+    print(_('   Shape: {}').format(input_tensor.shape))
+    print(_('   Device: {}').format(input_tensor.device))
     print(f"   Checksum: {input_tensor.sum().item():.2f}")
 
     # Test native IPC detection in client
     safe_print("\n🔍 Testing native IPC detection in client...")
     storage = input_tensor.storage()
-    print(f"   Storage type: {type(storage)}")
+    print(_('   Storage type: {}').format(type(storage)))
     print(f"   Has _share_cuda_: {hasattr(storage, '_share_cuda_')}")
 
     if hasattr(storage, "_share_cuda_"):
         try:
             ipc_data = storage._share_cuda_()
             safe_print("   ✅ Client can create IPC handles!")
-            print(f"   IPC data length: {len(ipc_data)}")
+            print(_('   IPC data length: {}').format(len(ipc_data)))
         except Exception as e:
-            safe_print(f"   ❌ Failed to create IPC handle: {e}")
+            safe_print(_('   ❌ Failed to create IPC handle: {}').format(e))
             sys.exit(1)
     else:
         safe_print("   ❌ _share_cuda_() not available")
@@ -74,14 +75,14 @@ result = {'status': 'ok'}
 
     safe_print("\n📊 Results:")
     print(f"   Elapsed: {elapsed:.3f}ms")
-    print(f"   Method: {response.get('cuda_method', 'unknown')}")
-    print(f"   Output shape: {output_tensor.shape}")
-    print(f"   Output device: {output_tensor.device}")
+    print(_('   Method: {}').format(response.get('cuda_method', 'unknown')))
+    print(_('   Output shape: {}').format(output_tensor.shape))
+    print(_('   Output device: {}').format(output_tensor.device))
     print(f"   Output checksum: {output_tensor.sum().item():.2f}")
 
     if response.get("cuda_method") == "native_ipc":
         safe_print("\n🔥🔥🔥 SUCCESS! NATIVE IPC WORKING!")
     else:
-        safe_print(f"\n⚠️  Fell back to {response.get('cuda_method')}")
+        safe_print(_('\n⚠️  Fell back to {}').format(response.get('cuda_method')))
 
 print("\n" + "=" * 70)

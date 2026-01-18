@@ -7,6 +7,7 @@ import threading
 import warnings
 
 from omnipkg.common_utils import safe_print
+from omnipkg.i18n import _
 
 try:
     from omnipkg.common_utils import ProcessCorruptedException
@@ -84,7 +85,7 @@ def _patch_numpy_for_tf_recursion():
     except (ImportError, AttributeError) as e:
         # This might happen if NumPy isn't installed or has an unusual structure.
         # It's safe to ignore and proceed without the patch.
-        safe_print(f"⚠️  [OMNIPKG] Could not apply NumPy recursion patch: {e}")
+        safe_print(_('⚠️  [OMNIPKG] Could not apply NumPy recursion patch: {}').format(e))
 
 
 def smart_tf_patcher():
@@ -447,7 +448,7 @@ def print_circular_import_summary():
         summary = ", ".join(
             f"{dep}×{count}" for dep, count in sorted(_circular_import_stats.items())
         )
-        safe_print(f"🔄 [OMNIPKG] Healed circular imports: {summary}")
+        safe_print(_('🔄 [OMNIPKG] Healed circular imports: {}').format(summary))
 
 
 def _is_partially_initialized_tf(globals):

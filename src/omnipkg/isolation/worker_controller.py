@@ -17,6 +17,7 @@ import time
 from dataclasses import dataclass
 from enum import Enum
 from typing import Dict, Optional
+from omnipkg.i18n import _
 
 
 class WorkerPhase(Enum):
@@ -97,11 +98,11 @@ class ConcurrentSpawnController:
 
         # Wait for Phase 1 completion
         if not spawn_request["ready_event"].wait(timeout):
-            raise TimeoutError(f"Worker spawn timed out: {package_spec}")
+            raise TimeoutError(_('Worker spawn timed out: {}').format(package_spec))
 
         worker = spawn_request["result"]
         if worker.phase == WorkerPhase.FAILED:
-            raise RuntimeError(f"Worker spawn failed: {worker.error}")
+            raise RuntimeError(_('Worker spawn failed: {}').format(worker.error))
 
         return worker
 
@@ -195,7 +196,7 @@ class ConcurrentSpawnController:
                 )
             else:
                 safe_print(
-                    f"⚠️  [SPAWN] Phase 2 timeout: {package_spec} (worker functional but slower)"
+                    _('⚠️  [SPAWN] Phase 2 timeout: {} (worker functional but slower)').format(package_spec)
                 )
 
         except Exception as e:
@@ -203,7 +204,7 @@ class ConcurrentSpawnController:
             worker.error = str(e)
             request["result"] = worker
             ready_event.set()
-            safe_print(f"❌ [SPAWN] Failed: {package_spec} - {e}")
+            safe_print(_('❌ [SPAWN] Failed: {} - {}').format(package_spec, e))
 
     def _create_daemon_process(self, package_spec: str):
         """Create the actual daemon process (placeholder)."""
@@ -306,7 +307,7 @@ def demo_concurrent_spawning():
             safe_print(f"   ✅ Spawned {pkg} in {elapsed:.0f}ms (Phase 1)")
             return worker
         except Exception as e:
-            safe_print(f"   ❌ Failed to spawn {pkg}: {e}")
+            safe_print(_('   ❌ Failed to spawn {}: {}').format(pkg, e))
             return None
 
     # Launch all spawns in parallel
@@ -326,7 +327,7 @@ def demo_concurrent_spawning():
     safe_print("\n📈 Statistics:")
 
     stats = controller.get_stats()
-    print(f"   - Total workers: {stats['total_workers']}")
+    print(_('   - Total workers: {}').format(stats['total_workers']))
     print(f"   - Average FS time: {stats['average_fs_time_ms']:.0f}ms")
     print(f"   - Average total time: {stats['average_total_time_ms']:.0f}ms")
 

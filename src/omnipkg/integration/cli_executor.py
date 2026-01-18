@@ -15,6 +15,7 @@ import subprocess
 import sys
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
+from omnipkg.i18n import _
 
 
 class CLIExecutor:
@@ -62,7 +63,7 @@ class CLIExecutor:
                                 "module": ep.value.split(":")[0],
                             }
         except Exception as e:
-            safe_print(f"⚠️  Error scanning entry points: {e}", file=sys.stderr)
+            safe_print(_('⚠️  Error scanning entry points: {}').format(e), file=sys.stderr)
         return None
 
     def detect_cli_conflicts(self, cli_name: str, package_info: Dict) -> List[Tuple[str, str, str]]:
@@ -87,7 +88,7 @@ class CLIExecutor:
                         except:
                             pass
         except Exception as e:
-            safe_print(f"⚠️  Error checking dependencies: {e}", file=sys.stderr)
+            safe_print(_('⚠️  Error checking dependencies: {}').format(e), file=sys.stderr)
 
         return conflicts
 
@@ -96,7 +97,7 @@ class CLIExecutor:
 
         # Check if it's a script file
         if os.path.exists(command) and command.endswith(".py"):
-            safe_print(f"🐍 Detected Python script: {command}", file=sys.stderr)
+            safe_print(_('🐍 Detected Python script: {}').format(command), file=sys.stderr)
             return self._execute_script(command, args)
 
         # Check if it's an installed CLI tool
@@ -105,10 +106,10 @@ class CLIExecutor:
             # Try to find it in PATH
             cli_path = shutil.which(command)
             if not cli_path:
-                safe_print(f"❌ Error: Command not found: {command}", file=sys.stderr)
+                safe_print(_('❌ Error: Command not found: {}').format(command), file=sys.stderr)
                 return 1
 
-        safe_print(f"🔧 Detected CLI command: {command}", file=sys.stderr)
+        safe_print(_('🔧 Detected CLI command: {}').format(command), file=sys.stderr)
 
         # Get package info
         package_info = self.get_cli_package_info(command)
@@ -120,7 +121,7 @@ class CLIExecutor:
             return subprocess.call([command] + args)
 
         safe_print(
-            f"📦 CLI provided by: {package_info['package']}=={package_info['version']}",
+            _('📦 CLI provided by: {}=={}').format(package_info['package'], package_info['version']),
             file=sys.stderr,
         )
 
@@ -128,9 +129,9 @@ class CLIExecutor:
         conflicts = self.detect_cli_conflicts(command, package_info)
 
         if conflicts:
-            safe_print(f"🔍 Detected {len(conflicts)} dependency conflicts:", file=sys.stderr)
+            safe_print(_('🔍 Detected {} dependency conflicts:').format(len(conflicts)), file=sys.stderr)
             for pkg, needed, found in conflicts:
-                print(f"   - {pkg}: need {needed}, found {found}", file=sys.stderr)
+                print(_('   - {}: need {}, found {}').format(pkg, needed, found), file=sys.stderr)
 
             # Auto-heal the conflicts
             return self._execute_with_bubbles(command, args, conflicts)
@@ -193,7 +194,7 @@ sys.exit(result)
     def _execute_script(self, script: str, args: List[str]) -> int:
         """Execute a Python script (existing functionality)"""
         # Delegate to existing script runner
-        safe_print(f"🐍 Executing Python script: {script}", file=sys.stderr)
+        safe_print(_('🐍 Executing Python script: {}').format(script), file=sys.stderr)
         # ... existing script execution logic ...
         return subprocess.call([sys.executable, script] + args)
 
@@ -209,11 +210,11 @@ def handle_run_command(args: List[str]):
     - Any executable: 8pkg run black --check .
     """
     if not args:
-        print("Usage: 8pkg run <command> [args...]", file=sys.stderr)
-        print("\nExamples:", file=sys.stderr)
+        print(_('Usage: 8pkg run <command> [args...]'), file=sys.stderr)
+        print(_('\nExamples:'), file=sys.stderr)
         print("  8pkg run my_script.py --arg1", file=sys.stderr)
-        print("  8pkg run lollama start-mining", file=sys.stderr)
-        print("  8pkg run black --check .", file=sys.stderr)
+        print(_('  8pkg run lollama start-mining'), file=sys.stderr)
+        print(_('  8pkg run black --check .'), file=sys.stderr)
         return 1
 
     command = args[0]

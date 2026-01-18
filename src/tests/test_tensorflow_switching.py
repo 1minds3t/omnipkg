@@ -301,13 +301,13 @@ if __name__ == "__main__":
         print_header("STEP 3: Test Results Summary")
         passed_tests = sum([success1, success2, success3])
         safe_print(
-            f"Test 1 (TensorFlow 2.13.0 Bubble): {'✅ PASSED' if success1 else '❌ FAILED'}"
+            _('Test 1 (TensorFlow 2.13.0 Bubble): {}').format('✅ PASSED' if success1 else '❌ FAILED')
         )
         safe_print(
-            f"Test 2 (Dependency Switching): {'✅ PASSED' if success2 else '❌ FAILED'}"
+            _('Test 2 (Dependency Switching): {}').format('✅ PASSED' if success2 else '❌ FAILED')
         )
         safe_print(
-            f"Test 3 (Nested Loaders): {'✅ PASSED' if success3 else '❌ FAILED'}"
+            _('Test 3 (Nested Loaders): {}').format('✅ PASSED' if success3 else '❌ FAILED')
         )
         safe_print(f"\\nOverall: {passed_tests}/3 tests passed")
         return passed_tests == 3
