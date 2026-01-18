@@ -33,7 +33,7 @@ from .commands.run import execute_run_command
 from .common_utils import print_header
 from .core import ConfigManager
 from .core import omnipkg as OmnipkgCore
-from omnipkg.i18n import _
+from omnipkg.i18n import _, SUPPORTED_LANGUAGES
 
 project_root = Path(__file__).resolve().parent.parent
 TESTS_DIR = Path(__file__).parent.parent / "tests"
