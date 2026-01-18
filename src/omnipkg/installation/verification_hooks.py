@@ -19,6 +19,7 @@ from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
+from omnipkg.i18n import _
 
 try:
     from .common_utils import safe_print
@@ -92,10 +93,10 @@ def run_hooks(hook_type: HookType, context: HookContext) -> bool:
         try:
             result = hook_func(context)
             if result is False:
-                safe_print(f"      ⚠️  Hook '{hook_func.__name__}' returned False, aborting")
+                safe_print(_("      ⚠️  Hook '{}' returned False, aborting").format(hook_func.__name__))
                 return False
         except Exception as e:
-            safe_print(f"      ❌ Hook '{hook_func.__name__}' failed: {e}")
+            safe_print(_("      ❌ Hook '{}' failed: {}").format(hook_func.__name__, e))
             return False
 
     return True
@@ -165,11 +166,11 @@ def time_machine_snapshot(context: HookContext) -> bool:
             context.extra = {}
         context.extra["time_machine_snapshot"] = snapshot_id
 
-        safe_print(f"      📸 Time machine snapshot: {snapshot_id}")
+        safe_print(_('      📸 Time machine snapshot: {}').format(snapshot_id))
         return True
 
     except Exception as e:
-        safe_print(f"      ⚠️  Time machine snapshot failed: {e}")
+        safe_print(_('      ⚠️  Time machine snapshot failed: {}').format(e))
         return True  # Don't block verification on snapshot failure
 
 
@@ -190,7 +191,7 @@ def time_machine_restore_on_failure(context: HookContext) -> bool:
         return True
 
     except Exception as e:
-        safe_print(f"      ❌ Time machine restore failed: {e}")
+        safe_print(_('      ❌ Time machine restore failed: {}').format(e))
         return False
 
 
@@ -219,7 +220,7 @@ def validate_critical_imports(context: HookContext) -> bool:
             critical_packages[pkg_name]()
             safe_print(f"      ✅ {pkg_name} critical function test passed")
         except Exception as e:
-            safe_print(f"      ❌ {pkg_name} critical function test failed: {e}")
+            safe_print(_('      ❌ {} critical function test failed: {}').format(pkg_name, e))
             return False
 
     return True

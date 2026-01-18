@@ -74,7 +74,7 @@ def detect_loader_hints(stderr: str, healing_plan: set):
             for missing_spec in specs:
                 missing_spec = missing_spec.strip()
                 if missing_spec and missing_spec not in healing_plan:
-                    safe_print(f"\n🔍 omnipkgLoader requested missing dependency: {missing_spec}")
+                    safe_print(_('\n🔍 omnipkgLoader requested missing dependency: {}').format(missing_spec))
                     healing_plan.add(missing_spec)
     return healing_plan
 
@@ -100,8 +100,8 @@ def ensure_jax_jaxlib_pairing(stderr: str, healing_plan: set):
         jax_requested_ver = jax_mismatch.group(2)  # What loader is trying to load
 
         safe_print("\n🔍 JAX/JAXlib Version Mismatch Detected.")
-        safe_print(f"   - Main environment has: jaxlib=={jaxlib_env_ver}")
-        safe_print(f"   - Loader attempting: jax=={jax_requested_ver}")
+        safe_print(_('   - Main environment has: jaxlib=={}').format(jaxlib_env_ver))
+        safe_print(_('   - Loader attempting: jax=={}').format(jax_requested_ver))
         safe_print("   - ⚠️  These versions are incompatible!")
 
         # Check if requested version is available
@@ -116,7 +116,7 @@ def ensure_jax_jaxlib_pairing(stderr: str, healing_plan: set):
             # Requested version too old, force upgrade both
             target_ver = MIN_AVAILABLE_JAX_VER
             safe_print(f"   - 🛑 jax=={jax_requested_ver} unavailable on PyPI (yanked)")
-            safe_print(f"   - 🛡️  Force upgrading to minimum available: {target_ver}")
+            safe_print(_('   - 🛡️  Force upgrading to minimum available: {}').format(target_ver))
         else:
             # Use the requested version
             target_ver = jax_requested_ver
@@ -125,7 +125,7 @@ def ensure_jax_jaxlib_pairing(stderr: str, healing_plan: set):
         # Add BOTH packages as a matched pair
         healing_plan.add(f"jax=={target_ver}")
         healing_plan.add(f"jaxlib=={target_ver}")
-        safe_print(f"   - 📦 Added to healing plan: jax=={target_ver}, jaxlib=={target_ver}")
+        safe_print(_('   - 📦 Added to healing plan: jax=={}, jaxlib=={}').format(target_ver, target_ver))
 
     # CRITICAL: Check what user actually requested in healing_plan and ensure pairing
     # Extract any jax/jaxlib specs already in plan
@@ -176,11 +176,11 @@ def ensure_jax_jaxlib_pairing(stderr: str, healing_plan: set):
             healing_plan.add(paired_jax)
             healing_plan.add(paired_jaxlib)
 
-            safe_print(f"   - ✅ Ensured matched pair: {paired_jax}, {paired_jaxlib}")
-            safe_print(f"   - 🎯 Master source: {master_source}")
+            safe_print(_('   - ✅ Ensured matched pair: {}, {}').format(paired_jax, paired_jaxlib))
+            safe_print(_('   - 🎯 Master source: {}').format(master_source))
         else:
             safe_print("   - ⚠️  Could not extract explicit version from specs")
-            safe_print(f"   - Found: {jax_specs_in_plan + jaxlib_specs_in_plan}")
+            safe_print(_('   - Found: {}').format(jax_specs_in_plan + jaxlib_specs_in_plan))
 
     return healing_plan
 
@@ -228,7 +228,7 @@ def analyze_runtime_failure_and_heal(
     if cli_owner_spec:
         command = cmd_args[0] if cmd_args else None
         if command and final_specs:
-            safe_print(f"♻️  Loading: {final_specs}")
+            safe_print(_('♻️  Loading: {}').format(final_specs))
             return run_cli_with_healing_wrapper(
                 final_specs,
                 command,
@@ -259,7 +259,7 @@ def analyze_runtime_failure_and_heal(
         pkg = pkg.replace("_", "-")
         spec = f"{pkg}=={ver}"
         if spec not in healing_plan:
-            safe_print(f"\n🔍 Loader reported missing bubble: {spec}")
+            safe_print(_('\n🔍 Loader reported missing bubble: {}').format(spec))
             healing_plan.add(spec)
     # ============================================================================
     # ORIGINAL ROBUST PATTERN MATCHING - ALL PRESERVED
@@ -302,7 +302,7 @@ def analyze_runtime_failure_and_heal(
     for regex, target_package, description in abi_incompatibility_patterns:
         match = re.search(regex, stderr, re.MULTILINE | re.DOTALL)
         if match:
-            safe_print(f"\n🔍 {description} detected. This requires package reinstallation...")
+            safe_print(_('\n🔍 {} detected. This requires package reinstallation...').format(description))
 
             if target_package:
                 safe_print(f"   - The issue is with '{target_package}' package")
@@ -310,7 +310,7 @@ def analyze_runtime_failure_and_heal(
                     "   - This package was likely compiled against incompatible dependencies"
                 )
                 safe_print(
-                    f"🚀 Auto-healing by reinstalling '{target_package}' to rebuild against current environment..."
+                    _("🚀 Auto-healing by reinstalling '{}' to rebuild against current environment...").format(target_package)
                 )
                 return heal_with_package_reinstall(
                     target_package,
@@ -328,7 +328,7 @@ def analyze_runtime_failure_and_heal(
                         "   - This package likely has ABI incompatibilities with current dependencies"
                     )
                     safe_print(
-                        f"🚀 Auto-healing by reinstalling '{problematic_package}' to rebuild against current environment..."
+                        _("🚀 Auto-healing by reinstalling '{}' to rebuild against current environment...").format(problematic_package)
                     )
                     return heal_with_package_reinstall(
                         problematic_package,
@@ -415,14 +415,14 @@ def analyze_runtime_failure_and_heal(
             if not is_local_module:
                 if is_stdlib_module(culprit_package):
                     safe_print(
-                        f"\n❌ AttributeError in standard library module '{culprit_package}' detected."
+                        _("\n❌ AttributeError in standard library module '{}' detected.").format(culprit_package)
                     )
                     safe_print("   This indicates a code error, not a missing package.")
                     return 1, None
 
                 safe_print("\n🔍 Deep dependency conflict detected (AttributeError).")
                 safe_print(
-                    f"   - The root cause appears to be the '{culprit_package}' package or its dependencies."
+                    _("   - The root cause appears to be the '{}' package or its dependencies.").format(culprit_package)
                 )
                 safe_print(
                     f"🚀 Auto-healing by creating an isolated bubble for '{culprit_package}'..."
@@ -436,7 +436,7 @@ def analyze_runtime_failure_and_heal(
 
             if is_stdlib_module(pkg_name_to_upgrade):
                 safe_print(
-                    f"\n❌ AttributeError in standard library module '{pkg_name_to_upgrade}' detected."
+                    _("\n❌ AttributeError in standard library module '{}' detected.").format(pkg_name_to_upgrade)
                 )
                 safe_print("   This indicates a code error, not a missing package.")
                 return 1, None
@@ -470,7 +470,7 @@ def analyze_runtime_failure_and_heal(
 
             # STDLIB CHECK
             if is_stdlib_module(top_level_module):
-                safe_print(f"\n❌ Missing standard library module '{top_level_module}'.")
+                safe_print(_("\n❌ Missing standard library module '{}'.").format(top_level_module))
                 safe_print("   This indicates a corrupted Python environment or invalid import.")
                 return 1, None
 
@@ -481,7 +481,7 @@ def analyze_runtime_failure_and_heal(
             potential_local_path_file = script_dir / f"{top_level_module}.py"
 
             if potential_local_path_dir.is_dir() or potential_local_path_file.is_file():
-                safe_print(f"\n🔍 {description} detected - This appears to be a LOCAL IMPORT.")
+                safe_print(_('\n🔍 {} detected - This appears to be a LOCAL IMPORT.').format(description))
                 safe_print(f"   - The script failed to import '{full_module_name}'.")
                 safe_print(
                     f"   - A local module '{top_level_module}' was found in the project directory."
@@ -507,11 +507,11 @@ def analyze_runtime_failure_and_heal(
             if potential_parent_module_dir.is_dir() and (
                 potential_setup_py.exists() or potential_pyproject_toml.exists()
             ):
-                safe_print(f"\n🔍 {description} detected - this appears to be a PROJECT PACKAGE.")
+                safe_print(_('\n🔍 {} detected - this appears to be a PROJECT PACKAGE.').format(description))
                 safe_print(
                     "\n💡 This is likely a package that needs to be installed in editable mode."
                 )
-                safe_print(f"   1. Try installing with: pip install -e {parent_dir}")
+                safe_print(_('   1. Try installing with: pip install -e {}').format(parent_dir))
                 safe_print(
                     "\n❌ Auto-healing aborted. Please install the local project package manually."
                 )
@@ -519,7 +519,7 @@ def analyze_runtime_failure_and_heal(
 
             # It's a missing PyPI package
             safe_print(
-                f"\n🔍 {description} detected. Auto-healing by installing missing package..."
+                _('\n🔍 {} detected. Auto-healing by installing missing package...').format(description)
             )
             pkg_name = convert_module_to_package_name(top_level_module)
 
@@ -528,10 +528,10 @@ def analyze_runtime_failure_and_heal(
             if is_package_corrupted(pkg_name, top_level_module):
 
                 safe_print(
-                    f"\n👻 Ghost package detected: '{pkg_name}' metadata exists, but '{top_level_module}' is missing."
+                    _("\n👻 Ghost package detected: '{}' metadata exists, but '{}' is missing.").format(pkg_name, top_level_module)
                 )
 
-                safe_print(f"   - Action: Force reinstalling '{pkg_name}' to fix corruption.")
+                safe_print(_("   - Action: Force reinstalling '{}' to fix corruption.").format(pkg_name))
 
                 if not omnipkg_instance:
 
@@ -658,18 +658,18 @@ def analyze_runtime_failure_and_heal(
             jax_spec = [s for s in cleaned_plan if "jax==" in s][0]
             jax_ver = jax_spec.split("==")[1]
             cleaned_plan.add(f"jaxlib=={jax_ver}")
-            safe_print(f"   🔧 Auto-added jaxlib=={jax_ver} to match jax")
+            safe_print(_('   🔧 Auto-added jaxlib=={} to match jax').format(jax_ver))
 
         if jaxlib_in_plan and not jax_in_plan:
             # Extract jaxlib version and add matching jax
             jaxlib_spec = [s for s in cleaned_plan if "jaxlib==" in s][0]
             jaxlib_ver = jaxlib_spec.split("==")[1]
             cleaned_plan.add(f"jax=={jaxlib_ver}")
-            safe_print(f"   🔧 Auto-added jax=={jaxlib_ver} to match jaxlib")
+            safe_print(_('   🔧 Auto-added jax=={} to match jaxlib').format(jaxlib_ver))
 
         specs_to_heal = sorted(list(cleaned_plan))
         safe_print(
-            f"\n🔍 Comprehensive Healing Plan Compiled (Attempt {retry_count + 1}): {specs_to_heal}"
+            _('\n🔍 Comprehensive Healing Plan Compiled (Attempt {}): {}').format(retry_count + 1, specs_to_heal)
         )
 
         # Loop detection
@@ -704,7 +704,7 @@ def analyze_runtime_failure_and_heal(
 
                         if bubble_path.is_dir() and not force_reinstall:
                             safe_print(
-                                f"   🚀 INSTANT HIT: Found existing bubble {target_spec} in KB"
+                                _('   🚀 INSTANT HIT: Found existing bubble {} in KB').format(target_spec)
                             )
                             final_specs.append(target_spec)
                             continue
@@ -756,7 +756,7 @@ def analyze_runtime_failure_and_heal(
         if cli_owner_spec:
             command = cmd_args[0] if cmd_args else None
             if command and final_specs:
-                safe_print(f"♻️  Loading: {final_specs}")
+                safe_print(_('♻️  Loading: {}').format(final_specs))
                 return run_cli_with_healing_wrapper(
                     final_specs, command, cmd_args[1:], config_manager
                 )
@@ -797,7 +797,7 @@ def heal_with_package_reinstall(
 
     try:
         # Step 1: Uninstall the problematic package completely
-        safe_print(f"🗑️  Uninstalling '{package_name}' completely...")
+        safe_print(_("🗑️  Uninstalling '{}' completely...").format(package_name))
         uninstall_result = subprocess.run(
             [sys.executable, "-m", "8pkg", "uninstall", package_name, "-y"],
             capture_output=True,
@@ -806,9 +806,9 @@ def heal_with_package_reinstall(
         )
 
         if uninstall_result.returncode == 0:
-            safe_print(f"✅ Successfully uninstalled '{package_name}'")
+            safe_print(_("✅ Successfully uninstalled '{}'").format(package_name))
         else:
-            safe_print(f"⚠️  Uninstall had issues, but continuing: {uninstall_result.stderr}")
+            safe_print(_('⚠️  Uninstall had issues, but continuing: {}').format(uninstall_result.stderr))
 
         # Step 2: Clear pip cache to ensure fresh download
         safe_print(f"🧹 Clearing pip cache for '{package_name}'...")
@@ -842,13 +842,13 @@ def heal_with_package_reinstall(
         )
 
         if install_result.returncode != 0:
-            safe_print(f"❌ Failed to reinstall '{package_name}': {install_result.stderr}")
+            safe_print(_("❌ Failed to reinstall '{}': {}").format(package_name, install_result.stderr))
             return 1, None
 
-        safe_print(f"✅ Successfully reinstalled '{package_name}'")
+        safe_print(_("✅ Successfully reinstalled '{}'").format(package_name))
 
         # Step 4: Re-run the original script
-        safe_print(f"🚀 Re-running script after '{package_name}' reinstallation...")
+        safe_print(_("🚀 Re-running script after '{}' reinstallation...").format(package_name))
         return _run_script_with_healing(
             script_path=script_path,
             script_args=script_args,
@@ -863,7 +863,7 @@ def heal_with_package_reinstall(
         safe_print(f"❌ Package reinstallation timed out for '{package_name}'")
         return 1, None
     except Exception as e:
-        safe_print(f"❌ Unexpected error during package reinstallation: {e}")
+        safe_print(_('❌ Unexpected error during package reinstallation: {}').format(e))
         return 1, None
 
 
@@ -1383,7 +1383,7 @@ def convert_module_to_package_name(module_name: str, error_message: str = None) 
             # Construct a guess like "qiskit-aer"
             heuristic_package_name = f"{module_it_failed_on}-{name_to_import.lower()}"
             safe_print(
-                f"INFO: Applying refactor heuristic. Guessing package is '{heuristic_package_name}'"
+                _("INFO: Applying refactor heuristic. Guessing package is '{}'").format(heuristic_package_name)
             )
             return heuristic_package_name
 
@@ -1392,7 +1392,7 @@ def convert_module_to_package_name(module_name: str, error_message: str = None) 
     if "." in module_name:
         namespace_package_name = module_name.replace(".", "-")
         safe_print(
-            f"INFO: Applying namespace heuristic. Guessing package is '{namespace_package_name}'"
+            _("INFO: Applying namespace heuristic. Guessing package is '{}'").format(namespace_package_name)
         )
         return namespace_package_name
 
@@ -1462,7 +1462,7 @@ def heal_with_missing_package(
             "\n⚠️  Attempt 1 (Standard Install) verified the package is present, but the issue persists."
         )
         safe_print(
-            f"🚀 Attempt 2: FORCE REINSTALLING '{pkg_name}' to fix potential binary corruption..."
+            _("🚀 Attempt 2: FORCE REINSTALLING '{}' to fix potential binary corruption...").format(pkg_name)
         )
         force = True
         attempted_fixes.add(f"{action_key}_forced")
@@ -1543,13 +1543,13 @@ def heal_with_bubble(
         if "==" in spec:
             pkg_name, pkg_version = spec.split("==", 1)
             healing_plan_versions[pkg_name.lower()] = pkg_version
-            safe_print(f"🎯 LOCKED (healing plan): {pkg_name} -> {pkg_version}")
+            safe_print(_('🎯 LOCKED (healing plan): {} -> {}').format(pkg_name, pkg_version))
 
     # ═══════════════════════════════════════════════════════════
     # STEP 1: Process Healing Plan Specs
     # ═══════════════════════════════════════════════════════════
     for spec in required_specs:
-        safe_print(f"🛠️  Resolving isolation strategy for: {spec}")
+        safe_print(_('🛠️  Resolving isolation strategy for: {}').format(spec))
 
         # Parse Name and Version
         if "==" in spec:
@@ -1564,7 +1564,7 @@ def heal_with_bubble(
                 safe_print(f"❌ Could not resolve version for {spec}.")
                 return 1, None
 
-            safe_print(f"   🎯 Resolved {pkg_name} -> {pkg_version}")
+            safe_print(_('   🎯 Resolved {} -> {}').format(pkg_name, pkg_version))
             # Add to healing plan lookup
             healing_plan_versions[pkg_name.lower()] = pkg_version
 
@@ -1585,7 +1585,7 @@ def heal_with_bubble(
         if bubble_path.exists() and not force_reinstall:
             safe_print(f"   🚀 CACHE HIT: Bubble exists for {pkg_name}=={pkg_version}")
         else:
-            safe_print(f"   📦 Force-creating ISOLATED bubble: {bubble_name}...")
+            safe_print(_('   📦 Force-creating ISOLATED bubble: {}...').format(bubble_name))
             safe_print(f"   💡 Main env has {active_ver or 'nothing'}, need {pkg_version}")
             success = omnipkg_instance.bubble_manager.create_isolated_bubble(
                 pkg_name, pkg_version, python_context
@@ -1637,7 +1637,7 @@ def heal_with_bubble(
                     pkg_normalized = pkg_name_found.lower()
 
                     if pkg_normalized in already_handled:
-                        safe_print(f"   ⏭️  Skipping {pkg_name_found} (already in healing plan)")
+                        safe_print(_('   ⏭️  Skipping {} (already in healing plan)').format(pkg_name_found))
                         continue
 
                     # Check with alternate normalization
@@ -1696,7 +1696,7 @@ def heal_with_bubble(
                 safe_print("   ✅ No additional dependencies needed")
 
     except Exception as e:
-        safe_print(f"⚠️  Dependency analysis warning: {e}")
+        safe_print(_('⚠️  Dependency analysis warning: {}').format(e))
 
     # ═══════════════════════════════════════════════════════════
     # STEP 3: Final Validation - Remove Duplicates (keep healing plan version)
@@ -1715,11 +1715,11 @@ def heal_with_bubble(
                 # Keep healing plan version
                 final_spec_map[pkg_name] = f"{pkg_name}=={healing_plan_versions[pkg_name]}"
                 safe_print(
-                    f"   ⚠️  Duplicate detected: {pkg_name} - using healing plan version {healing_plan_versions[pkg_name]}"
+                    _('   ⚠️  Duplicate detected: {} - using healing plan version {}').format(pkg_name, healing_plan_versions[pkg_name])
                 )
             else:
                 # Keep first occurrence
-                safe_print(f"   ⚠️  Duplicate detected: {pkg_name} - keeping first occurrence")
+                safe_print(_('   ⚠️  Duplicate detected: {} - keeping first occurrence').format(pkg_name))
         else:
             final_spec_map[pkg_name] = spec
 
@@ -1907,15 +1907,15 @@ def _handle_cli_execution(command, args, config_manager, omnipkg_core):
             print(result.stderr, end="", file=sys.stderr)
             error_output = result.stderr + "\n" + result.stdout
             safe_print(
-                f"\n⚠️  Command '{command}' failed (exit code {result.returncode}). Starting Auto-Healer..."
+                _("\n⚠️  Command '{}' failed (exit code {}). Starting Auto-Healer...").format(command, result.returncode)
             )
 
         except Exception as e:
-            safe_print(f"\n⚠️  Execution failed: {e}")
+            safe_print(_('\n⚠️  Execution failed: {}').format(e))
             return 1
     else:
         # Command not found in PATH
-        safe_print(f"🔍 Command '{command}' not found in PATH. Checking Knowledge Base...")
+        safe_print(_("🔍 Command '{}' not found in PATH. Checking Knowledge Base...").format(command))
 
     # Stop the timer for the failed run
     end_time_ns = time.perf_counter_ns()
@@ -1924,7 +1924,7 @@ def _handle_cli_execution(command, args, config_manager, omnipkg_core):
     # 2. Identify owner package
     owning_package = omnipkg_core.get_package_for_command(command)
     if not owning_package:
-        safe_print(f"❌ Unknown command '{command}'.")
+        safe_print(_("❌ Unknown command '{}'.").format(command))
         return 1
 
     # 3. Build initial healing plan with owner package
@@ -2060,7 +2060,7 @@ def _run_script_with_healing(
 
             # ✅ FIX: Handle interactive script failures
             if return_code != 0:
-                safe_print(f"\n❌ Interactive script crashed (Exit Code {return_code}).")
+                safe_print(_('\n❌ Interactive script crashed (Exit Code {}).').format(return_code))
 
                 # Capture the runtime of this FIRST failure, if not already captured.
                 if _initial_run_time_ns is None:
@@ -2212,14 +2212,14 @@ def _print_performance_comparison(initial_ns, heal_stats, runner_name="UV"):
     speed_percentage = ((failure_time_ms - execution_time_ms) / execution_time_ms) * 100
 
     runner_upper = runner_name.upper()
-    runner_label = f"{runner_name} Failed Run"
+    runner_label = _('{} Failed Run').format(runner_name)
 
     # --- TABLE ALIGNMENT LOGIC ---
     max_label_width = max(len(runner_label), len(omni_label))
-    row_fmt = f"{{:<{max_label_width}}} : {{:>10.3f}} ms  ({{:>15,}} ns)"
+    row_fmt = _('{:<{}} : {:>10.3f} ms  ({:>15,} ns)').format(max_label_width)
 
     safe_print("\n" + "=" * 70)
-    safe_print(f"🚀 PERFORMANCE COMPARISON: {runner_upper} vs OMNIPKG")
+    safe_print(_('🚀 PERFORMANCE COMPARISON: {} vs OMNIPKG').format(runner_upper))
     safe_print("=" * 70)
 
     safe_print(row_fmt.format(runner_label, failure_time_ms, initial_ns))
@@ -2301,17 +2301,17 @@ def run_with_healing_wrapper(
 
     if verbose:
         safe_print("\n🔍 PRE-WRAPPER DEBUGGING:")
-        safe_print(f"   Current Python executable: {sys.executable}")
-        safe_print(f"   Current working directory: {os.getcwd()}")
-        safe_print(f"   Project root: {project_root}")
+        safe_print(_('   Current Python executable: {}').format(sys.executable))
+        safe_print(_('   Current working directory: {}').format(os.getcwd()))
+        safe_print(_('   Project root: {}').format(project_root))
 
     # Check if packaging is available in current process
     try:
         import packaging
 
-        safe_print(f"   ✅ packaging found at: {packaging.__file__}")
+        safe_print(_('   ✅ packaging found at: {}').format(packaging.__file__))
     except ImportError as e:
-        safe_print(f"   ❌ packaging not available in current process: {e}")
+        safe_print(_('   ❌ packaging not available in current process: {}').format(e))
 
     # Get all possible site-packages paths
     site_packages_paths = []
@@ -2321,21 +2321,21 @@ def run_with_healing_wrapper(
     if config_site_packages:
         site_packages_paths.append(config_site_packages)
         if verbose:
-            safe_print(f"   Config site-packages: {config_site_packages}")
+            safe_print(_('   Config site-packages: {}').format(config_site_packages))
 
     # From site module
     for path in site.getsitepackages():
         if path not in site_packages_paths:
             site_packages_paths.append(path)
             if verbose:
-                safe_print(f"   Site getsitepackages: {path}")
+                safe_print(_('   Site getsitepackages: {}').format(path))
 
     # From site.USER_SITE
     if hasattr(site, "USER_SITE") and site.USER_SITE:
         if site.USER_SITE not in site_packages_paths:
             site_packages_paths.append(site.USER_SITE)
             if verbose:
-                safe_print(f"   Site USER_SITE: {site.USER_SITE}")
+                safe_print(_('   Site USER_SITE: {}').format(site.USER_SITE))
 
     # Check current sys.path for site-packages
     for path in sys.path:
@@ -2353,10 +2353,10 @@ def run_with_healing_wrapper(
             if os.path.exists(packaging_path) and os.path.exists(packaging_init):
                 packaging_locations.append(sp_path)
                 if verbose:
-                    safe_print(f"   📦 packaging found in: {sp_path}")
+                    safe_print(_('   📦 packaging found in: {}').format(sp_path))
         else:
             if verbose:
-                safe_print(f"   ❌ site-packages path doesn't exist: {sp_path}")
+                safe_print(_("   ❌ site-packages path doesn't exist: {}").format(sp_path))
 
     if not packaging_locations:
         safe_print("   ⚠️  WARNING: No packaging module found in any site-packages!")
@@ -2570,7 +2570,7 @@ safe_print(_("✅ Script completed successfully inside omnipkg bubble."))
             f.write(wrapper_content)
             temp_script_path = f.name
 
-        safe_print(f"   💾 Temporary wrapper script: {temp_script_path}")
+        safe_print(_('   💾 Temporary wrapper script: {}').format(temp_script_path))
 
         heal_command = [
             config_manager.config.get("python_executable", sys.executable),
@@ -2686,7 +2686,7 @@ def execute_run_command(
             try:
                 stdin_content = sys.stdin.read()
             except Exception as e:
-                safe_print(f"❌ Failed to read stdin: {e}")
+                safe_print(_('❌ Failed to read stdin: {}').format(e))
                 return 1
 
             if not stdin_content.strip():
@@ -2707,7 +2707,7 @@ def execute_run_command(
                 with open(temp_script_path, "w", encoding="utf-8") as f:
                     f.write(stdin_content)
 
-                safe_print(f"📝 Saved stdin to temporary script: {temp_script_path}")
+                safe_print(_('📝 Saved stdin to temporary script: {}').format(temp_script_path))
 
                 # CRITICAL: Run with _run_script_logic which has proper healing support
                 # Pass script_args (everything after '-' if present)

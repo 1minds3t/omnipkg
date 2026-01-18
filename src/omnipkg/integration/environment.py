@@ -18,6 +18,7 @@ import sys
 import textwrap
 from pathlib import Path
 from typing import Set
+from omnipkg.i18n import _
 
 
 class OmnipkgEnvironment:
@@ -40,7 +41,7 @@ class OmnipkgEnvironment:
         self.bin_dir.mkdir(exist_ok=True)
         self.wrappers_dir.mkdir(exist_ok=True)
 
-        safe_print(f"✅ Created omnipkg environment at: {self.env_dir}")
+        safe_print(_('✅ Created omnipkg environment at: {}').format(self.env_dir))
 
     def discover_cli_tools(self) -> Set[str]:
         """Find all CLI tools installed in the current environment"""
@@ -132,7 +133,7 @@ except ImportError:
         # Discover all CLI tools
         safe_print("🔍 Discovering installed CLI tools...")
         cli_tools = self.discover_cli_tools()
-        safe_print(f"📦 Found {len(cli_tools)} CLI tools")
+        safe_print(_('📦 Found {} CLI tools').format(len(cli_tools)))
 
         # Create wrappers for all tools
         safe_print("🔧 Creating auto-healing wrappers...")
@@ -144,7 +145,7 @@ except ImportError:
             except Exception as e:
                 safe_print(f"⚠️  Could not create wrapper for {cli_name}: {e}", file=sys.stderr)
 
-        safe_print(f"✅ Created {created} wrappers")
+        safe_print(_('✅ Created {} wrappers').format(created))
 
         # Generate activation script
         activation_script = self._generate_activation_script(shell)
@@ -153,15 +154,15 @@ except ImportError:
         activate_file = self.env_dir / f"activate.{shell}"
         activate_file.write_text(activation_script)
 
-        print(f"\n{'='*60}")
+        print(_('\n{}').format('=' * 60))
         safe_print("🎉 Omnipkg environment ready!")
-        print(f"{'='*60}")
-        print("\nTo activate, run:")
-        print(f"  source {activate_file}")
-        print("\nOnce activated, ALL CLI commands will auto-heal conflicts:")
-        print("  lollama start-mining  # Just works!")
-        print("  black --check .        # Just works!")
-        print("  pytest                 # Just works!")
+        print(_('{}').format('=' * 60))
+        print(_('\nTo activate, run:'))
+        print(_('  source {}').format(activate_file))
+        print(_('\nOnce activated, ALL CLI commands will auto-heal conflicts:'))
+        print(_('  lollama start-mining  # Just works!'))
+        print(_('  black --check .        # Just works!'))
+        print(_('  pytest                 # Just works!'))
 
         return activate_file
 
@@ -213,7 +214,7 @@ deactivate() {{
 """
             )
         else:
-            raise ValueError(f"Unsupported shell: {shell}")
+            raise ValueError(_('Unsupported shell: {}').format(shell))
 
     def deactivate(self):
         """Clean up the environment"""
@@ -243,7 +244,7 @@ def cmd_deactivate(args):
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        print("Usage: 8pkg activate [shell]")
+        print(_('Usage: 8pkg activate [shell]'))
         sys.exit(1)
 
     cmd = sys.argv[1]
@@ -254,5 +255,5 @@ if __name__ == "__main__":
     elif cmd == "deactivate":
         sys.exit(cmd_deactivate(args))
     else:
-        print(f"Unknown command: {cmd}")
+        print(_('Unknown command: {}').format(cmd))
         sys.exit(1)

@@ -63,17 +63,17 @@ def get_actual_python_version():
 
 def debug_python_context(label=""):
     """Print comprehensive Python context information for debugging."""
-    print(f"\n{'='*70}")
-    safe_print(f"🔍 DEBUG CONTEXT CHECK: {label}")
-    print(f"{'='*70}")
-    safe_print(f"📍 sys.executable:        {sys.executable}")
-    safe_print(f"📍 sys.version:           {sys.version}")
+    print(_('\n{}').format('=' * 70))
+    safe_print(_('🔍 DEBUG CONTEXT CHECK: {}').format(label))
+    print(_('{}').format('=' * 70))
+    safe_print(_('📍 sys.executable:        {}').format(sys.executable))
+    safe_print(_('📍 sys.version:           {}').format(sys.version))
     safe_print(
-        f"📍 sys.version_info:      {sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
+        _('📍 sys.version_info:      {}.{}.{}').format(sys.version_info.major, sys.version_info.minor, sys.version_info.micro)
     )
-    safe_print(f"📍 os.getpid():           {os.getpid()}")
+    safe_print(_('📍 os.getpid():           {}').format(os.getpid()))
     safe_print(f"📍 __file__ (if exists):  {__file__ if '__file__' in globals() else 'N/A'}")
-    safe_print(f"📍 Path.cwd():            {Path.cwd()}")
+    safe_print(_('📍 Path.cwd():            {}').format(Path.cwd()))
 
     # Environment variables that might affect context
     relevant_env_vars = [
@@ -89,14 +89,14 @@ def debug_python_context(label=""):
     safe_print("\n📦 Relevant Environment Variables:")
     for var in relevant_env_vars:
         value = os.environ.get(var, "NOT SET")
-        print(f"   {var}: {value}")
+        print(_('   {}: {}').format(var, value))
 
     # Check sys.path for omnipkg locations
     safe_print("\n📂 sys.path (first 5 entries):")
     for i, path in enumerate(sys.path[:5]):
-        print(f"   [{i}] {path}")
+        print(_('   [{}] {}').format(i, path))
 
-    print(f"{'='*70}\n")
+    print(_('{}\n').format('=' * 70))
 
 
 @contextmanager
@@ -109,7 +109,7 @@ def temporary_install_strategy(core: OmnipkgCore, strategy: str):
     # Only perform the switch if the desired strategy is different from the current one.
     switched = False
     if original_strategy != strategy:
-        safe_print(f"   - 🔄 Temporarily switching install strategy to '{strategy}'...")
+        safe_print(_("   - 🔄 Temporarily switching install strategy to '{}'...").format(strategy))
         # Update both the in-memory config for the current run and the persistent config
         core.config["install_strategy"] = strategy
         core.config_manager.set("install_strategy", strategy)
@@ -123,7 +123,7 @@ def temporary_install_strategy(core: OmnipkgCore, strategy: str):
         if switched:
             core.config["install_strategy"] = original_strategy
             core.config_manager.set("install_strategy", original_strategy)
-            safe_print(f"   - ✅ Strategy restored to '{original_strategy}'")
+            safe_print(_("   - ✅ Strategy restored to '{}'").format(original_strategy))
 
 
 def separate_python_from_packages(packages):
@@ -172,7 +172,7 @@ def upgrade(args, core):
         )
 
     # For all other packages, use the context manager to handle the strategy.
-    safe_print(f"🔄 Upgrading '{package_name}' to latest version...")
+    safe_print(_("🔄 Upgrading '{}' to latest version...").format(package_name))
     with temporary_install_strategy(core, "latest-active"):
         return core.smart_install(packages=[package_name], force_reinstall=True)
 
@@ -208,14 +208,14 @@ def run_demo_with_enforced_context(
 
     # Validate the source script exists
     if not source_script_path.exists():
-        safe_print(f"❌ Error: Source test file {source_script_path} not found.")
+        safe_print(_('❌ Error: Source test file {} not found.').format(source_script_path))
         return 1
 
     # Get the Python executable for the target version
     python_exe = pkg_instance.config_manager.get_interpreter_for_version(target_version_str)
     if not python_exe or not python_exe.exists():
-        safe_print(f"❌ Python {target_version_str} is not managed by omnipkg.")
-        safe_print(f"   Please adopt it first: {parser_prog} python adopt {target_version_str}")
+        safe_print(_('❌ Python {} is not managed by omnipkg.').format(target_version_str))
+        safe_print(_('   Please adopt it first: {} python adopt {}').format(parser_prog, target_version_str))
         return 1
 
     safe_print(
@@ -229,7 +229,7 @@ def run_demo_with_enforced_context(
         temp_script_path = Path(temp_script.name)
         temp_script.write(source_script_path.read_text(encoding="utf-8"))
 
-    safe_print(f"   - Sterile script created at: {temp_script_path}")
+    safe_print(_('   - Sterile script created at: {}').format(temp_script_path))
 
     try:
         # Execute using the enforced Python context
@@ -461,7 +461,7 @@ def run_demo_with_live_streaming(
 
         safe_print(_("📡 Live streaming output..."))
         safe_print("-" * 60)
-        safe_print(f"(Executing with: {effective_python_exe})")
+        safe_print(_('(Executing with: {})').format(effective_python_exe))
 
         env = os.environ.copy()
         # Step 3: Set PYTHONPATH using the dynamically found project root. This is now always correct.
@@ -1085,7 +1085,7 @@ def main():
                 if args.version:
                     package_spec = f"{package_spec}=={args.version}"
 
-                safe_print(f"🔄 Swapping main environment package to '{package_spec}'...")
+                safe_print(_("🔄 Swapping main environment package to '{}'...").format(package_spec))
 
                 with temporary_install_strategy(pkg_instance, "latest-active"):
                     return pkg_instance.smart_install(
@@ -1130,7 +1130,7 @@ def main():
                 # Check if demo_id was passed as CLI arg
                 if hasattr(args, 'demo_id') and args.demo_id:
                     response = str(args.demo_id)
-                    safe_print(f"🎯 Running demo {response}...")
+                    safe_print(_('🎯 Running demo {}...').format(response))
                 else:
                     # Use safe_input with your detection logic
                     response = safe_input(
@@ -1185,7 +1185,7 @@ def main():
 
                 if required_version:
                     safe_print(
-                        f"\nNOTE: The '{demo_name}' demo requires Python {required_version}."
+                        _("\nNOTE: The '{}' demo requires Python {}.").format(demo_name, required_version)
                     )
                     if not handle_python_requirement(required_version, pkg_instance, parser.prog):
                         return 1
@@ -1247,7 +1247,7 @@ def main():
 
                 # Only restore if the context was actually changed.
                 if original_python_str != current_version_after_demo_str:
-                    print_header(f"Restoring original Python {original_python_str} context")
+                    print_header(_('Restoring original Python {} context').format(original_python_str))
                     pkg_instance.switch_active_python(original_python_str)
 
         elif args.command == "stress-test":
@@ -1315,7 +1315,7 @@ def main():
                 current_version_after_install_str = f"{current_version_after_install_tuple[0]}.{current_version_after_install_tuple[1]}"
 
                 if original_python_str != current_version_after_install_str:
-                    print_header(f"Restoring original Python {original_python_str} context")
+                    print_header(_('Restoring original Python {} context').format(original_python_str))
                     final_cm = ConfigManager(suppress_init_messages=True)
                     final_pkg_instance = OmnipkgCore(config_manager=final_cm)
                     final_pkg_instance.switch_active_python(original_python_str)
@@ -1448,7 +1448,7 @@ def main():
                 )
 
             # For all other packages, use smart_install with a temporary strategy override
-            safe_print(f"🔄 Upgrading '{package_name}' to latest version...")
+            safe_print(_("🔄 Upgrading '{}' to latest version...").format(package_name))
             return pkg_instance.smart_install(
                 packages=[package_name],
                 force_reinstall=True,

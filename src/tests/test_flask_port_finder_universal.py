@@ -7,6 +7,7 @@ import requests
 import random
 from textwrap import dedent
 from pathlib import Path
+from omnipkg.i18n import _
 
 # --- Import Logic ---
 try:
@@ -28,10 +29,10 @@ except ImportError:
     )
 
 def print_banner(title):
-    print(f"\n{'='*70}\n🎬 SCENARIO: {title}\n{'='*70}")
+    print(_('\n{}\n🎬 SCENARIO: {}\n{}').format('=' * 70, title, '=' * 70))
 
 def print_proof(label, msg):
-    print(f"   🔎 PROOF [{label}]: {msg}")
+    print(_('   🔎 PROOF [{}]: {}').format(label, msg))
 
 class TestFlaskPortFinderUltimate(unittest.TestCase):
     
@@ -40,14 +41,14 @@ class TestFlaskPortFinderUltimate(unittest.TestCase):
         self.reserved_ports = []
 
     def tearDown(self):
-        print("\n   🧹 [Cleanup Phase]")
+        print(_('\n   🧹 [Cleanup Phase]'))
         for manager in self.managers:
             # We check if the manager has a process and is running before killing
             if hasattr(manager, 'is_running') and manager.is_running:
                 try:
                     manager.shutdown()
                 except Exception as e:
-                    print(f"      ⚠️ Warning during shutdown: {e}")
+                    print(_('      ⚠️ Warning during shutdown: {}').format(e))
         
         # Release ports safely
         for port in self.reserved_ports:
@@ -58,7 +59,7 @@ class TestFlaskPortFinderUltimate(unittest.TestCase):
         Visualizes 10 threads grabbing ports simultaneously.
         """
         print_banner("The 'Matrix' Concurrency Test")
-        print("   Goal: Prove 10 threads cannot accidentally grab the same port.")
+        print(_('   Goal: Prove 10 threads cannot accidentally grab the same port.'))
         
         results = []
         lock = threading.Lock()
@@ -73,24 +74,24 @@ class TestFlaskPortFinderUltimate(unittest.TestCase):
                 self.reserved_ports.append(p)
             time.sleep(0.01) 
 
-        print(f"   🚀 Launching 10 threads (Starting search at {start_search})...")
+        print(_('   🚀 Launching 10 threads (Starting search at {})...').format(start_search))
         threads = [threading.Thread(target=greedy_worker, args=(i,)) for i in range(10)]
         for t in threads: t.start()
         for t in threads: t.join()
 
         results.sort(key=lambda x: x[1])
 
-        print("\n   📊 Allocation Visualization:")
+        print(_('\n   📊 Allocation Visualization:'))
         unique_ports = set()
         for t_id, port in results:
-            print(f"      🧵 Thread {t_id} ➔ Secured Port {port}")
+            print(_('      🧵 Thread {} ➔ Secured Port {}').format(t_id, port))
             unique_ports.add(port)
         
         print("")
         if len(unique_ports) == 10:
-            print_proof("SUCCESS", f"10 Threads = {len(unique_ports)} Unique Ports.")
+            print_proof("SUCCESS", _('10 Threads = {} Unique Ports.').format(len(unique_ports)))
         else:
-            self.fail(f"❌ Collision Detected! Only {len(unique_ports)} unique ports.")
+            self.fail(_('❌ Collision Detected! Only {} unique ports.').format(len(unique_ports)))
 
     def test_2_smart_conflict_interception(self):
         """
@@ -103,8 +104,8 @@ class TestFlaskPortFinderUltimate(unittest.TestCase):
         port_a = find_free_port(start_port=random_start, reserve=True)
         self.reserved_ports.append(port_a)
         
-        print(f"1️⃣  Phase 1: Establish the 'Incumbent' (App A)")
-        print(f"    Selected Arbitrary Port: {port_a}")
+        print(_("1️⃣  Phase 1: Establish the 'Incumbent' (App A)"))
+        print(_('    Selected Arbitrary Port: {}').format(port_a))
         
         code_a = dedent(f"""
             from flask import Flask
@@ -124,8 +125,8 @@ class TestFlaskPortFinderUltimate(unittest.TestCase):
         print_proof("STATUS", f"App A is RUNNING on Port {port_a}")
 
         # --- STEP 2: The Intruder (App B) ---
-        print(f"\n2️⃣  Phase 2: The 'Intruder' (App B)")
-        print(f"    User script explicitly requests: app.run(port={port_a})")
+        print(_("\n2️⃣  Phase 2: The 'Intruder' (App B)"))
+        print(_('    User script explicitly requests: app.run(port={})').format(port_a))
 
         code_b = dedent(f"""
             from flask import Flask
@@ -138,7 +139,7 @@ class TestFlaskPortFinderUltimate(unittest.TestCase):
         """)
 
         # --- STEP 3: The Magic Patch ---
-        print(f"\n3️⃣  Phase 3: Omnipkg Intervention")
+        print(_('\n3️⃣  Phase 3: Omnipkg Intervention'))
         
         # Here we DO use interactive=True because this is the helper function, not the class
         patched_code_b, port_b, manager_b = patch_flask_code(code_b, interactive=True)
@@ -148,29 +149,29 @@ class TestFlaskPortFinderUltimate(unittest.TestCase):
         if port_b == port_a:
             self.fail("❌ Auto-patcher failed! It assigned the BUSY port.")
         
-        print_proof("INTERCEPTION", f"Detected Port {port_a} is BUSY.")
-        print_proof("PATCHING", f"Rewrote App B to use Port {port_b} instead.")
+        print_proof("INTERCEPTION", _('Detected Port {} is BUSY.').format(port_a))
+        print_proof("PATCHING", _('Rewrote App B to use Port {} instead.').format(port_b))
 
         # --- STEP 4: Double Validation ---
-        print(f"\n4️⃣  Phase 4: Co-Existence Verification")
+        print(_('\n4️⃣  Phase 4: Co-Existence Verification'))
         manager_b.start()
         manager_b.wait_for_ready()
 
         # Check App A
         try:
             resp_a = requests.get(f"http://127.0.0.1:{port_a}", timeout=2).text
-            print(f"    ✅ App A (Port {port_a}): {resp_a}")
+            print(_('    ✅ App A (Port {}): {}').format(port_a, resp_a))
             self.assertIn("Incumbent", resp_a)
         except Exception as e:
-            self.fail(f"❌ App A died! Error: {e}")
+            self.fail(_('❌ App A died! Error: {}').format(e))
 
         # Check App B
         try:
             resp_b = requests.get(f"http://127.0.0.1:{port_b}", timeout=2).text
-            print(f"    ✅ App B (Port {port_b}): {resp_b}")
+            print(_('    ✅ App B (Port {}): {}').format(port_b, resp_b))
             self.assertIn("Challenger", resp_b)
         except Exception as e:
-            self.fail(f"❌ App B failed to start! Error: {e}")
+            self.fail(_('❌ App B failed to start! Error: {}').format(e))
 
         print_proof("CONCLUSION", "Both apps are alive on different ports.")
 

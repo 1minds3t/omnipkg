@@ -13,6 +13,7 @@ This script is DESIGNED to be impossible:
 7. And doing actual computations with all of them
 """
 from omnipkg.loader import omnipkgLoader
+from omnipkg.i18n import _
 
 
 def test_tensorflow_old():
@@ -20,10 +21,10 @@ def test_tensorflow_old():
     import tensorflow as tf
     import numpy as np
 
-    safe_print(f"   TensorFlow version: {tf.__version__}")
-    safe_print(f"   NumPy version: {np.__version__}")
-    assert tf.__version__.startswith("2.12"), f"Wrong TF version: {tf.__version__}"
-    assert np.__version__.startswith("1.23"), f"Wrong numpy version: {np.__version__}"
+    safe_print(_('   TensorFlow version: {}').format(tf.__version__))
+    safe_print(_('   NumPy version: {}').format(np.__version__))
+    assert tf.__version__.startswith("2.12"), _('Wrong TF version: {}').format(tf.__version__)
+    assert np.__version__.startswith("1.23"), _('Wrong numpy version: {}').format(np.__version__)
 
     # Create a simple model
     model = tf.keras.Sequential(
@@ -47,10 +48,10 @@ def test_tensorflow_new():
     import tensorflow as tf
     import numpy as np
 
-    safe_print(f"   TensorFlow version: {tf.__version__}")
-    safe_print(f"   NumPy version: {np.__version__}")
-    assert tf.__version__.startswith("2.20"), f"Wrong TF version: {tf.__version__}"
-    assert np.__version__.startswith("2.3"), f"Wrong numpy version: {np.__version__}"
+    safe_print(_('   TensorFlow version: {}').format(tf.__version__))
+    safe_print(_('   NumPy version: {}').format(np.__version__))
+    assert tf.__version__.startswith("2.20"), _('Wrong TF version: {}').format(tf.__version__)
+    assert np.__version__.startswith("2.3"), _('Wrong numpy version: {}').format(np.__version__)
 
     # Create a different model
     model = tf.keras.Sequential(
@@ -82,11 +83,11 @@ def test_scipy_combo():
     from scipy import sparse
     from scipy import linalg
 
-    safe_print(f"   SciPy version: {scipy.__version__}")
-    safe_print(f"   NumPy version: {np.__version__}")
+    safe_print(_('   SciPy version: {}').format(scipy.__version__))
+    safe_print(_('   NumPy version: {}').format(np.__version__))
     # This should be scipy 1.12 with numpy 1.26
-    assert scipy.__version__.startswith("1.12"), f"Wrong scipy: {scipy.__version__}"
-    assert np.__version__.startswith("1.26"), f"Wrong numpy: {np.__version__}"
+    assert scipy.__version__.startswith("1.12"), _('Wrong scipy: {}').format(scipy.__version__)
+    assert np.__version__.startswith("1.26"), _('Wrong numpy: {}').format(np.__version__)
 
     # Sparse matrix operations
     matrix = sparse.csr_matrix([[1, 2], [3, 4]])
@@ -95,8 +96,8 @@ def test_scipy_combo():
     # Linear algebra
     det = linalg.det([[1, 2], [3, 4]])
 
-    safe_print(f"   ✅ Sparse sum={result1}, det={det}")
-    safe_print(f"✅ SciPy 1.12 + numpy 1.26: sparse_sum={result1}, det={det}")
+    safe_print(_('   ✅ Sparse sum={}, det={}').format(result1, det))
+    safe_print(_('✅ SciPy 1.12 + numpy 1.26: sparse_sum={}, det={}').format(result1, det))
     return result1, det
 
 
@@ -107,8 +108,8 @@ def test_scipy_modern():
     from scipy import sparse
     from scipy.sparse import linalg as sparse_linalg
 
-    safe_print(f"   SciPy version: {scipy.__version__}")
-    safe_print(f"   NumPy version: {np.__version__}")
+    safe_print(_('   SciPy version: {}').format(scipy.__version__))
+    safe_print(_('   NumPy version: {}').format(np.__version__))
 
     # Create sparse matrix
     matrix = sparse.random(50, 50, density=0.1)
@@ -116,8 +117,8 @@ def test_scipy_modern():
 
     safe_print(f"   ✅ Sparse sum = {result:.4f}")
     return result1
-    assert scipy.__version__.startswith("1.16"), f"Wrong scipy: {scipy.__version__}"
-    assert np.__version__.startswith("2.3"), f"Wrong numpy: {np.__version__}"
+    assert scipy.__version__.startswith("1.16"), _('Wrong scipy: {}').format(scipy.__version__)
+    assert np.__version__.startswith("2.3"), _('Wrong numpy: {}').format(np.__version__)
 
     # Create larger sparse matrix
     matrix = sparse.random(100, 100, density=0.1)
@@ -135,8 +136,8 @@ def print_with_old_rich():
     from rich import print as rprint
     from rich.panel import Panel
 
-    safe_print(f"   Rich version: {rich.__version__}")
-    assert rich.__version__ == "13.4.2", f"Wrong Rich: {rich.__version__}"
+    safe_print(_('   Rich version: {}').format(rich.__version__))
+    assert rich.__version__ == "13.4.2", _('Wrong Rich: {}').format(rich.__version__)
 
     rprint(
         Panel(
@@ -153,8 +154,8 @@ def print_with_new_rich():
     from rich import print as rprint
     from rich.panel import Panel
 
-    safe_print(f"   Rich version: {rich.__version__}")
-    assert rich.__version__ == "13.7.1", f"Wrong Rich: {rich.__version__}"
+    safe_print(_('   Rich version: {}').format(rich.__version__))
+    assert rich.__version__ == "13.7.1", _('Wrong Rich: {}').format(rich.__version__)
 
     rprint(
         Panel(
@@ -219,9 +220,9 @@ if __name__ == "__main__":
     safe_print("🎉 IMPOSSIBLE TEST PASSED!")
     safe_print(f"   TF 2.12 result: {result1:.4f}")
     safe_print(f"   TF 2.20 result: {result2:.4f}")
-    safe_print(f"   SciPy 1.12 results: {scipy_result1}")
+    safe_print(_('   SciPy 1.12 results: {}').format(scipy_result1))
     safe_print(f"   SciPy 1.16 result: {scipy_result2:.4f}")
-    safe_print(f"   SciPy results: {scipy_result1}, {scipy_result2}")
+    safe_print(_('   SciPy results: {}, {}').format(scipy_result1, scipy_result2))
     safe_print("=" * 70 + "\n")
 
     safe_print("💀 This script should have destroyed pip, conda, docker, uv, poetry...")

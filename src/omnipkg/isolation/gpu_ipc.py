@@ -8,6 +8,7 @@ import time
 import torch
 
 from omnipkg.common_utils import safe_print
+from omnipkg.i18n import _
 
 try:
     from .common_utils import safe_print
@@ -104,7 +105,7 @@ class UniversalGpuIpc:
         if err == 201:
             return None
         if err != 0:
-            raise RuntimeError(f"Open Handle Failed: {err}")
+            raise RuntimeError(_('Open Handle Failed: {}').format(err))
         final_ptr = dev_ptr.value + data["offset"]
 
         class CUDABuffer:
@@ -191,7 +192,7 @@ if __name__ == "__main__":
             elif i < 5:
                 safe_print(f"   🔥 Run {i+1} (Warm):       {lat:.4f} ms")
             elif i == 99:
-                print("   ... (Runs 6-99 hidden) ...")
+                print(_('   ... (Runs 6-99 hidden) ...'))
                 safe_print(f"   🔥 Run 100 (Warm):     {lat:.4f} ms")
 
     in_q.put(("STOP", None))

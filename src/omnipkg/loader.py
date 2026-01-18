@@ -79,7 +79,7 @@ except ImportError:
     # Patcher module not available - that's OK!
     pass
 except Exception as e:
-    _PATCHER_ERROR = f"Unexpected error loading patcher: {str(e)}"
+    _PATCHER_ERROR = _('Unexpected error loading patcher: {}').format(str(e))
     pass
 
 # ═══════════════════════════════════════════════════════════
@@ -359,7 +359,7 @@ class omnipkgLoader:
         except Exception as e:
             # If cache init fails, set to None (will skip KB optimization)
             if not self.quiet:
-                safe_print(f"   ⚠️ Cache init failed: {e}")
+                safe_print(_('   ⚠️ Cache init failed: {}').format(e))
             self.cache_client = None
             self.redis_key_prefix = "omnipkg:pkg:"
 
@@ -408,7 +408,7 @@ class omnipkgLoader:
     def print_profile_report(cls):
         """Print aggregated profiling data"""
         if not cls._profile_data:
-            print("No profiling data collected")
+            print(_('No profiling data collected'))
             return
 
         print("\n" + "=" * 70)
@@ -482,7 +482,7 @@ class omnipkgLoader:
                 return worker, False  # (worker, from_pool)
             except Exception as e:
                 if verbose:
-                    safe_print(f"   ❌ Worker creation failed: {e}")
+                    safe_print(_('   ❌ Worker creation failed: {}').format(e))
                 return None, False
 
     @classmethod
@@ -499,16 +499,16 @@ class omnipkgLoader:
                 return
 
             if verbose:
-                safe_print(f"   🛑 Shutting down worker pool ({len(cls._worker_pool)} workers)...")
+                safe_print(_('   🛑 Shutting down worker pool ({} workers)...').format(len(cls._worker_pool)))
 
             for spec, worker in list(cls._worker_pool.items()):
                 try:
                     worker.shutdown()
                     if verbose:
-                        safe_print(f"      ✅ Shutdown: {spec}")
+                        safe_print(_('      ✅ Shutdown: {}').format(spec))
                 except Exception as e:
                     if verbose:
-                        safe_print(f"      ⚠️  Failed to shutdown {spec}: {e}")
+                        safe_print(_('      ⚠️  Failed to shutdown {}: {}').format(spec, e))
 
             cls._worker_pool.clear()
 
@@ -561,7 +561,7 @@ class omnipkgLoader:
 
         except Exception as e:
             if not self.quiet:
-                safe_print(f"   ⚠️  Daemon connection failed: {e}. Falling back to local.")
+                safe_print(_('   ⚠️  Daemon connection failed: {}. Falling back to local.').format(e))
             return None
 
     def stabilize_daemon_state(self):
@@ -590,7 +590,7 @@ class omnipkgLoader:
                 if res.get("success"):
                     success = True
                     if not self.quiet:
-                        safe_print(f"   🔄 Daemon Uncloak: {res.get('count')} items restored")
+                        safe_print(_('   🔄 Daemon Uncloak: {} items restored').format(res.get('count')))
             except Exception:
                 pass
 
@@ -913,7 +913,7 @@ class omnipkgLoader:
                     if cloaks:
                         if not self.quiet:
                             safe_print(
-                                f"   🚑 RESURRECTING critical package: {canonical} (Found {len(cloaks)} cloaks)"
+                                _('   🚑 RESURRECTING critical package: {} (Found {} cloaks)').format(canonical, len(cloaks))
                             )
 
                         # Sort by timestamp (newest first) and restore
@@ -940,12 +940,12 @@ class omnipkgLoader:
                             try:
                                 dep_module = importlib.import_module(dep_variant)
                                 if not self.quiet:
-                                    safe_print(f"      ✅ Resurrected and loaded: {original_name}")
+                                    safe_print(_('      ✅ Resurrected and loaded: {}').format(original_name))
                             except ImportError:
                                 continue  # Still broken, give up on this variant
                         except Exception as e:
                             if not self.quiet:
-                                safe_print(f"      ❌ Failed to resurrect {canonical}: {e}")
+                                safe_print(_('      ❌ Failed to resurrect {}: {}').format(canonical, e))
                             continue
                     else:
                         continue  # No cloak found, genuinely missing
@@ -1166,7 +1166,7 @@ class omnipkgLoader:
                 packages_to_cloak.append(pkg)
 
             if not self.quiet and packages_to_cloak:
-                safe_print(f"   - 🔍 Will cloak files for: {', '.join(packages_to_cloak)}")
+                safe_print(_('   - 🔍 Will cloak files for: {}').format(', '.join(packages_to_cloak)))
 
             successful_cloaks = []
             # --- Find, prepare, and execute cloaking operations ---
@@ -1202,7 +1202,7 @@ class omnipkgLoader:
 
                             successful_cloaks.append((original_path, cloak_path, True))
                             if not self.quiet:
-                                safe_print(f"      ✅ Cloaked: {original_path.name}")
+                                safe_print(_('      ✅ Cloaked: {}').format(original_path.name))
 
                     except filelock.Timeout:
                         if not self.quiet:
@@ -1212,7 +1212,7 @@ class omnipkgLoader:
                         successful_cloaks.append((original_path, cloak_path, False))
                     except Exception as e:
                         if not self.quiet:
-                            safe_print(f"      ❌ Failed to cloak {original_path.name}: {e}")
+                            safe_print(_('      ❌ Failed to cloak {}: {}').format(original_path.name, e))
                         successful_cloaks.append((original_path, cloak_path, False))
 
             self._cloaked_main_modules.extend(successful_cloaks)
@@ -1244,13 +1244,13 @@ class omnipkgLoader:
         for pattern in patterns:
             for cloaked_path in self.site_packages_root.glob(pattern):
                 all_cloaks.append(cloaked_path)
-                safe_print(f"   📦 Found cloak: {cloaked_path.name}")
+                safe_print(_('   📦 Found cloak: {}').format(cloaked_path.name))
 
         if not all_cloaks:
             safe_print(f"   ✅ No cloaks found for {pkg_name}")
             return 0
 
-        safe_print(f"\n💥 NUKING {len(all_cloaks)} cloak(s)...")
+        safe_print(_('\n💥 NUKING {} cloak(s)...').format(len(all_cloaks)))
         destroyed_count = 0
 
         for cloak_path in all_cloaks:
@@ -1260,9 +1260,9 @@ class omnipkgLoader:
                 else:
                     cloak_path.unlink()
                 destroyed_count += 1
-                safe_print(f"   ☠️  Destroyed: {cloak_path.name}")
+                safe_print(_('   ☠️  Destroyed: {}').format(cloak_path.name))
             except Exception as e:
-                safe_print(f"   ❌ Failed to destroy {cloak_path.name}: {e}")
+                safe_print(_('   ❌ Failed to destroy {}: {}').format(cloak_path.name, e))
 
         safe_print(f"\n✅ Nuked {destroyed_count}/{len(all_cloaks)} cloaks for {pkg_name}\n")
         return destroyed_count
@@ -1377,7 +1377,7 @@ class omnipkgLoader:
                     elif target_path.is_dir():
                         # Has content, skip this cloak
                         if not self.quiet:
-                            safe_print(f"   ⏭️  Skipping restore (target exists): {original_name}")
+                            safe_print(_('   ⏭️  Skipping restore (target exists): {}').format(original_name))
                         continue
                     else:
                         # File exists, skip
@@ -1385,14 +1385,14 @@ class omnipkgLoader:
 
                 shutil.move(str(cloak_path), str(target_path))
                 if not self.quiet:
-                    safe_print(f"   ✅ Restored: {original_name}")
+                    safe_print(_('   ✅ Restored: {}').format(original_name))
 
                 # SUCCESS! Keep other cloaks as backups (don't delete)
                 return
 
             except Exception as e:
                 if not self.quiet:
-                    safe_print(f"   ⚠️  Failed to restore {cloak_path.name}: {e}")
+                    safe_print(_('   ⚠️  Failed to restore {}: {}').format(cloak_path.name, e))
                 continue
 
         if not self.quiet:
@@ -1423,7 +1423,7 @@ class omnipkgLoader:
         for cloaked_path, original_name, *unused in cloaked_versions:
             if requested_version in original_name:
                 if not self.quiet:
-                    safe_print(f"      [Strategy 0/6] Found CLOAKED version: {cloaked_path.name}")
+                    safe_print(_('      [Strategy 0/6] Found CLOAKED version: {}').format(cloaked_path.name))
                 return (requested_version, cloaked_path)
 
         # ═══════════════════════════════════════════════════════════
@@ -1432,7 +1432,7 @@ class omnipkgLoader:
         exact_dist_info_path = site_packages / f"{filesystem_name}-{requested_version}.dist-info"
         if exact_dist_info_path.exists() and exact_dist_info_path.is_dir():
             if not self.quiet:
-                safe_print(f"      ✅ [Strategy 1/6] Found at exact path: {exact_dist_info_path}")
+                safe_print(_('      ✅ [Strategy 1/6] Found at exact path: {}').format(exact_dist_info_path))
             return (requested_version, None)
 
         # ═══════════════════════════════════════════════════════════
@@ -1445,17 +1445,17 @@ class omnipkgLoader:
                     if dist.version == requested_version:
                         if not self.quiet:
                             safe_print(
-                                f"      ✅ [Strategy 2/6] Found via importlib.metadata: {dist.version}"
+                                _('      ✅ [Strategy 2/6] Found via importlib.metadata: {}').format(dist.version)
                             )
                         return (dist.version, None)
                     else:
                         if not self.quiet:
                             safe_print(
-                                f"      ℹ️  [Strategy 2/6] Found {package_name} but version mismatch: {dist.version} != {requested_version}"
+                                _('      ℹ️  [Strategy 2/6] Found {} but version mismatch: {} != {}').format(package_name, dist.version, requested_version)
                             )
         except Exception as e:
             if not self.quiet:
-                safe_print(f"      ⚠️  [Strategy 2/6] importlib.metadata failed: {e}")
+                safe_print(_('      ⚠️  [Strategy 2/6] importlib.metadata failed: {}').format(e))
 
         # ═══════════════════════════════════════════════════════════
         # STRATEGY 3: Glob search
@@ -1469,7 +1469,7 @@ class omnipkgLoader:
                     )
                     if version_part == requested_version:
                         if not self.quiet:
-                            safe_print(f"      ✅ [Strategy 3/6] Found via glob: {match}")
+                            safe_print(_('      ✅ [Strategy 3/6] Found via glob: {}').format(match))
                         return (requested_version, None)
                 except Exception:
                     continue
@@ -1477,11 +1477,11 @@ class omnipkgLoader:
         # All strategies exhausted
         if not self.quiet:
             safe_print(
-                f"      ❌ All strategies exhausted. {package_name}=={requested_version} not found."
+                _('      ❌ All strategies exhausted. {}=={} not found.').format(package_name, requested_version)
             )
             if cloaked_versions:
                 safe_print(
-                    f"      ⚠️  WARNING: Found {len(cloaked_versions)} cloaked versions but none match {requested_version}"
+                    _('      ⚠️  WARNING: Found {} cloaked versions but none match {}').format(len(cloaked_versions), requested_version)
                 )
                 safe_print("      💡 Running emergency cleanup...")
                 self._cleanup_all_cloaks_for_package(package_name)
@@ -1519,7 +1519,7 @@ class omnipkgLoader:
                 return False
             except Exception as e:
                 if not self.quiet:
-                    safe_print(f"      ⚠️ Failed to restore {source.name}: {e}")
+                    safe_print(_('      ⚠️ Failed to restore {}: {}').format(source.name, e))
                 return False
 
         # 1. Restore the dist-info we found
@@ -1543,7 +1543,7 @@ class omnipkgLoader:
                     safe_restore(cloaked_item, target_item)
 
         if restored_any and not self.quiet:
-            safe_print(f"      ✅ Restored cloaked '{pkg_name}' in main environment")
+            safe_print(_("      ✅ Restored cloaked '{}' in main environment").format(pkg_name))
 
     def _should_use_worker_proactively(self, pkg_name: str) -> bool:
         """
@@ -1560,7 +1560,7 @@ class omnipkgLoader:
         for pkg, indicator in cpp_indicators.items():
             if pkg in pkg_name.lower() and indicator in sys.modules:
                 if not self.quiet:
-                    safe_print(f"   🧠 Proactive worker mode: {indicator} already loaded")
+                    safe_print(_('   🧠 Proactive worker mode: {} already loaded').format(indicator))
                 return True
 
         # 2. FORCE WORKER for these packages to ensure Daemon usage
@@ -1598,7 +1598,7 @@ class omnipkgLoader:
         }
 
         # Daemon worker reads stdout for status updates
-        print(f"OMNIPKG_EVENT:{json.dumps(status)}", flush=True)
+        print(_('OMNIPKG_EVENT:{}').format(json.dumps(status)), flush=True)
 
     def _get_daemon_client(self):
         """
@@ -1781,7 +1781,7 @@ class omnipkgLoader:
         try:
             pkg_name, requested_version = self._current_package_spec.split("==")
         except ValueError:
-            raise ValueError(f"Invalid package_spec format: '{self._current_package_spec}'")
+            raise ValueError(_("Invalid package_spec format: '{}'").format(self._current_package_spec))
 
         self._profile_end("init_checks", print_now=self._profiling_enabled)
 
@@ -1852,7 +1852,7 @@ class omnipkgLoader:
                             self._cloaked_bubbles.append((cloak_path, bubble_path))
                         except Exception as e:
                             if not self.quiet:
-                                safe_print(f"         - ⚠️ Failed to cloak {bubble_path.name}: {e}")
+                                safe_print(_('         - ⚠️ Failed to cloak {}: {}').format(bubble_path.name, e))
 
                     self._profile_end("cloak_conflicts", print_now=self._profiling_enabled)
 
@@ -1916,7 +1916,7 @@ class omnipkgLoader:
                                 except Exception as e:
                                     if not self.quiet:
                                         safe_print(
-                                            f"         - ⚠️ Failed to cloak {bubble_path.name}: {e}"
+                                            _('         - ⚠️ Failed to cloak {}: {}').format(bubble_path.name, e)
                                         )
 
                             self._profile_end("cloak_conflicts", print_now=self._profiling_enabled)
@@ -1951,7 +1951,7 @@ class omnipkgLoader:
                 if current_bubble_version == requested_version:
                     # CASE B: Already in correct bubble, reuse it
                     if not self.quiet:
-                        safe_print(f"   ✅ Already in {pkg_name}=={current_bubble_version} bubble")
+                        safe_print(_('   ✅ Already in {}=={} bubble').format(pkg_name, current_bubble_version))
 
                     self._profile_end("check_system_version")
                     self._activation_successful = True
@@ -1971,7 +1971,7 @@ class omnipkgLoader:
                     # CASE C: Wrong bubble version, need to switch!
                     if not self.quiet:
                         safe_print(
-                            f"   🔄 Version mismatch: have {current_bubble_version}, need {requested_version}"
+                            _('   🔄 Version mismatch: have {}, need {}').format(current_bubble_version, requested_version)
                         )
                     # Fall through to bubble activation logic below
 
@@ -1996,12 +1996,12 @@ class omnipkgLoader:
             if cloaked_bubbles:
                 target = sorted(cloaked_bubbles, key=lambda p: str(p), reverse=True)[0]
                 if not self.quiet:
-                    safe_print(f"   🔓 Found CLOAKED bubble {target.name}, restoring...")
+                    safe_print(_('   🔓 Found CLOAKED bubble {}, restoring...').format(target.name))
                 try:
                     shutil.move(str(target), str(bubble_path))
                 except Exception as e:
                     if not self.quiet:
-                        safe_print(f"      ⚠️ Failed to restore cloaked bubble: {e}")
+                        safe_print(_('      ⚠️ Failed to restore cloaked bubble: {}').format(e))
 
         self._profile_end("find_bubble", print_now=self._profiling_enabled)
 
@@ -2015,7 +2015,7 @@ class omnipkgLoader:
         if bubble_path.is_dir():
             self._profile_start("activate_bubble")
             if not self.quiet:
-                safe_print(f"   ✅ Bubble found: {bubble_path}")
+                safe_print(_('   ✅ Bubble found: {}').format(bubble_path))
             self._using_main_env = False
 
             if is_numpy_involved:
@@ -2101,7 +2101,7 @@ class omnipkgLoader:
                 if conflicting_bubbles:
                     if not self.quiet:
                         safe_print(
-                            f"      - 🔒 Cloaking {len(conflicting_bubbles)} conflicting bubble(s)."
+                            _('      - 🔒 Cloaking {} conflicting bubble(s).').format(len(conflicting_bubbles))
                         )
 
                     timestamp = int(time.time() * 1000000)
@@ -2116,11 +2116,11 @@ class omnipkgLoader:
                             shutil.move(str(bubble_path_item), str(cloak_path))
                             self._cloaked_bubbles.append((cloak_path, bubble_path_item))
                             if not self.quiet:
-                                safe_print(f"         - Cloaked: {bubble_path_item.name}")
+                                safe_print(_('         - Cloaked: {}').format(bubble_path_item.name))
                         except Exception as e:
                             if not self.quiet:
                                 safe_print(
-                                    f"         - ⚠️ Failed to cloak {bubble_path_item.name}: {e}"
+                                    _('         - ⚠️ Failed to cloak {}: {}').format(bubble_path_item.name, e)
                                 )
 
                 # Cleanup
@@ -2221,12 +2221,12 @@ class omnipkgLoader:
                 return result
 
             if not self.quiet:
-                safe_print(f"   - 🔧 Auto-creating bubble for: {self._current_package_spec}")
+                safe_print(_('   - 🔧 Auto-creating bubble for: {}').format(self._current_package_spec))
 
             install_success = self._install_bubble_inline(self._current_package_spec)
 
             if not install_success:
-                raise RuntimeError(f"Failed to install {self._current_package_spec}")
+                raise RuntimeError(_('Failed to install {}').format(self._current_package_spec))
 
             # Post-install check
             if bubble_path.is_dir():
@@ -2262,11 +2262,11 @@ class omnipkgLoader:
                         if dep_bubble_path.exists() and dep_bubble_path.is_dir():
                             dependency_bubbles.append(str(dep_bubble_path))
                             if not self.quiet:
-                                safe_print(f"      🔗 Found dependency bubble: {dep_bubble_name}")
+                                safe_print(_('      🔗 Found dependency bubble: {}').format(dep_bubble_name))
 
                 if dependency_bubbles and not self.quiet:
                     safe_print(
-                        f"   📦 Activating {len(dependency_bubbles)} dependency bubbles (CUDA/NVIDIA libs)..."
+                        _('   📦 Activating {} dependency bubbles (CUDA/NVIDIA libs)...').format(len(dependency_bubbles))
                     )
 
                 # 1B. Determine conflicts
@@ -2290,7 +2290,7 @@ class omnipkgLoader:
                     self._packages_we_cloaked.update(packages_to_cloak)
                     cloaked_count = self._batch_cloak_packages(packages_to_cloak)
                     if not self.quiet and cloaked_count > 0:
-                        safe_print(f"   🔒 Cloaked {cloaked_count} conflicting packages")
+                        safe_print(_('   🔒 Cloaked {} conflicting packages').format(cloaked_count))
 
                 # 1D. Setup sys.path (LOCKED: ~0.1ms)
                 bubble_path_str = str(bubble_path)
@@ -2364,7 +2364,7 @@ class omnipkgLoader:
                 if found_ver == requested_version:
                     if not self.quiet:
                         safe_print(
-                            f"   - ✅ Confirmed {pkg_name}=={requested_version} in main environment"
+                            _('   - ✅ Confirmed {}=={} in main environment').format(pkg_name, requested_version)
                         )
 
                     self._using_main_env = True
@@ -2387,8 +2387,7 @@ class omnipkgLoader:
                     return self
                 else:
                     raise RuntimeError(
-                        f"Installation reported success but {pkg_name}=={requested_version} "
-                        f"not found. Found version: {found_ver}"
+                        _('Installation reported success but {}=={} not found. Found version: {}').format(pkg_name, requested_version, found_ver)
                     )
 
     def _activate_bubble(self, bubble_path, pkg_name):
@@ -2415,8 +2414,7 @@ class omnipkgLoader:
 
             if not self.quiet:
                 safe_print(
-                    f"   📊 Bubble: {len(bubble_deps)} packages, "
-                    f"{len(packages_to_cloak)} conflicts"
+                    _('   📊 Bubble: {} packages, {} conflicts').format(len(bubble_deps), len(packages_to_cloak))
                 )
 
             # Phase 3: Module purging (conditional)
@@ -2426,7 +2424,7 @@ class omnipkgLoader:
                 should_purge = False
                 if not self.quiet:
                     safe_print(
-                        f"   ⏭️  Skipping module purge (nested overlay, depth={omnipkgLoader._nesting_depth})"
+                        _('   ⏭️  Skipping module purge (nested overlay, depth={})').format(omnipkgLoader._nesting_depth)
                     )
 
             if should_purge:
@@ -2454,7 +2452,7 @@ class omnipkgLoader:
             cloaked_count = self._batch_cloak_packages(packages_to_cloak)
 
             if not self.quiet and cloaked_count > 0:
-                safe_print(f"   🔒 Cloaked {cloaked_count} conflicting packages")
+                safe_print(_('   🔒 Cloaked {} conflicting packages').format(cloaked_count))
             self._profile_end("cloak_conflicts", print_now=self._profiling_enabled)
 
             # Phase 5: Setup sys.path
@@ -2478,7 +2476,7 @@ class omnipkgLoader:
             bin_path = bubble_path / "bin"
             if bin_path.is_dir():
                 if not self.quiet:
-                    safe_print(f"   - 🔩 Activating binary path: {bin_path}")
+                    safe_print(_('   - 🔩 Activating binary path: {}').format(bin_path))
                 os.environ["PATH"] = str(bin_path) + os.pathsep + self.original_path_env
             self._profile_end("setup_bin_path", print_now=self._profiling_enabled)
 
@@ -2502,7 +2500,7 @@ class omnipkgLoader:
             return self
 
         except Exception as e:
-            safe_print(f"   ❌ Activation failed: {str(e)}")
+            safe_print(_('   ❌ Activation failed: {}').format(str(e)))
             self._panic_restore_cloaks()
             raise
 
@@ -2542,13 +2540,13 @@ class omnipkgLoader:
                         conflicts.append(pkg)
                         if not self.quiet:
                             safe_print(
-                                f"   ⚠️ Conflict (Redis): {pkg} (main: {main_ver} vs bubble: {bubble_ver})"
+                                _('   ⚠️ Conflict (Redis): {} (main: {} vs bubble: {})').format(pkg, main_ver, bubble_ver)
                             )
 
         except Exception as e:
             # If Redis flakes out, fallback to disk silently
             if not self.quiet:
-                safe_print(f"   ⚠️ Redis conflict check failed ({e}), falling back to disk...")
+                safe_print(_('   ⚠️ Redis conflict check failed ({}), falling back to disk...').format(e))
             return self._detect_conflicts_legacy(bubble_deps)
 
         return conflicts
@@ -2582,7 +2580,7 @@ class omnipkgLoader:
         cleaned = self._cleanup_all_cloaks_globally()
 
         if cleaned > 0 and not self.quiet:
-            safe_print(f"   ✅ Emergency cleanup removed {cleaned} orphaned cloaks")
+            safe_print(_('   ✅ Emergency cleanup removed {} orphaned cloaks').format(cleaned))
 
     def _install_bubble_inline(self, spec):
         """
@@ -2636,7 +2634,7 @@ class omnipkgLoader:
 
         except Exception as e:
             if not self.quiet:
-                safe_print(f"      ❌ Auto-install exception: {e}")
+                safe_print(_('      ❌ Auto-install exception: {}').format(e))
                 import traceback
 
                 safe_print(traceback.format_exc())
@@ -2668,7 +2666,7 @@ class omnipkgLoader:
                     self._active_worker.shutdown()
                 except Exception as e:
                     if not self.quiet:
-                        safe_print(f"   ⚠️  Worker shutdown warning: {e}")
+                        safe_print(_('   ⚠️  Worker shutdown warning: {}').format(e))
                 finally:
                     self._active_worker = None
 
@@ -2681,7 +2679,7 @@ class omnipkgLoader:
         if not self.quiet:
             depth_marker = f" [depth={current_depth}]" if self._is_nested else ""
             safe_print(
-                f"🌀 omnipkg loader: Deactivating {self._current_package_spec}{depth_marker}..."
+                _('🌀 omnipkg loader: Deactivating {}{}...').format(self._current_package_spec, depth_marker)
             )
 
         if not self._activation_successful:
@@ -2704,7 +2702,7 @@ class omnipkgLoader:
         if self._cloaked_main_modules:
             if not self.quiet:
                 safe_print(
-                    f"   - 🔓 Restoring {len(self._cloaked_main_modules)} cloaked main env package(s)..."
+                    _('   - 🔓 Restoring {} cloaked main env package(s)...').format(len(self._cloaked_main_modules))
                 )
 
             for original_path, cloak_path, was_successful in reversed(self._cloaked_main_modules):
@@ -2796,7 +2794,7 @@ class omnipkgLoader:
             self._profile_end("global_cleanup", print_now=self._profiling_enabled)
 
             if not self.quiet and orphan_count > 0:
-                safe_print(f"   ✅ Cleaned up {orphan_count} orphaned cloaks")
+                safe_print(_('   ✅ Cleaned up {} orphaned cloaks').format(orphan_count))
 
         self._deactivation_end_time = time.perf_counter_ns()
         self._total_deactivation_time_ns = (
@@ -2818,7 +2816,7 @@ class omnipkgLoader:
                 if not final_cloaks:
                     safe_print(f"   ✅ Verified: No orphaned cloaks for {pkg_name}")
                 else:
-                    safe_print(f"   ⚠️  WARNING: {len(final_cloaks)} cloaks still remaining!")
+                    safe_print(_('   ⚠️  WARNING: {} cloaks still remaining!').format(len(final_cloaks)))
 
     # NEW HELPER METHOD: Simple unconditional restoration
     def _simple_restore_all_cloaks(self):
@@ -2852,7 +2850,7 @@ class omnipkgLoader:
             # Skip if we couldn't parse the name
             if "_omnipkg_cloaked" in original_name:
                 if not self.quiet:
-                    safe_print(f"         ⚠️  Can't parse cloak name: {cloak_path.name}")
+                    safe_print(_("         ⚠️  Can't parse cloak name: {}").format(cloak_path.name))
                 continue
 
             original_path = cloak_path.parent / original_name
@@ -2873,11 +2871,11 @@ class omnipkgLoader:
                 restored += 1
 
                 if not self.quiet:
-                    safe_print(f"         ✅ {original_name}")
+                    safe_print(_('         ✅ {}').format(original_name))
 
             except Exception as e:
                 if not self.quiet:
-                    safe_print(f"         ❌ Failed: {cloak_path.name}: {e}")
+                    safe_print(_('         ❌ Failed: {}: {}').format(cloak_path.name, e))
 
         self._profile_end("cleanup_restore", print_now=self._profiling_enabled)
 
@@ -2939,7 +2937,7 @@ class omnipkgLoader:
             return
 
         if not self.quiet:
-            safe_print(f"   🧹 Force-restoring {len(cloaks_to_restore)} owned cloaks...")
+            safe_print(_('   🧹 Force-restoring {} owned cloaks...').format(len(cloaks_to_restore)))
 
         for original_path, cloak_path in cloaks_to_restore:
             try:
@@ -2957,7 +2955,7 @@ class omnipkgLoader:
                 if cloak_path.exists():
                     shutil.move(str(cloak_path), str(original_path))
                     if not self.quiet:
-                        safe_print(f"      ✅ Restored: {original_path.name}")
+                        safe_print(_('      ✅ Restored: {}').format(original_path.name))
 
                 # Unregister
                 with omnipkgLoader._active_cloaks_lock:
@@ -2965,7 +2963,7 @@ class omnipkgLoader:
 
             except Exception as e:
                 if not self.quiet:
-                    safe_print(f"      ⚠️ Failed to force-restore {original_path.name}: {e}")
+                    safe_print(_('      ⚠️ Failed to force-restore {}: {}').format(original_path.name, e))
 
     def _restore_cloaked_modules(self):
         """
@@ -3014,7 +3012,7 @@ class omnipkgLoader:
 
                         restored_count += 1
                         if not self.quiet:
-                            safe_print(f"   ✅ Restored: {original_path.name}")
+                            safe_print(_('   ✅ Restored: {}').format(original_path.name))
 
                 except filelock.Timeout:
                     if not self.quiet:
@@ -3024,13 +3022,13 @@ class omnipkgLoader:
                     failed_count += 1
                 except Exception as e:
                     if not self.quiet:
-                        safe_print(f"   ❌ Failed to restore {original_path.name}: {e}")
+                        safe_print(_('   ❌ Failed to restore {}: {}').format(original_path.name, e))
                     failed_count += 1
 
             self._cloaked_main_modules.clear()
 
             if not self.quiet and (restored_count > 0 or failed_count > 0):
-                safe_print(f"   📊 Restoration: {restored_count} restored, {failed_count} failed")
+                safe_print(_('   📊 Restoration: {} restored, {} failed').format(restored_count, failed_count))
 
     def _find_cloaked_versions(self, pkg_name):
         """
@@ -3050,9 +3048,9 @@ class omnipkgLoader:
                     cloaked_versions.append((cloaked_path, original_name, timestamp))
 
         if cloaked_versions and not self.quiet:
-            safe_print(f"   🔍 Found {len(cloaked_versions)} cloaked version(s) of {pkg_name}:")
+            safe_print(_('   🔍 Found {} cloaked version(s) of {}:').format(len(cloaked_versions), pkg_name))
             for cloak_path, orig_name, ts in cloaked_versions:
-                safe_print(f"      - {cloak_path.name} (timestamp: {ts})")
+                safe_print(_('      - {} (timestamp: {})').format(cloak_path.name, ts))
 
         return cloaked_versions
 
@@ -3355,7 +3353,7 @@ class omnipkgLoader:
 
         if found_cloaks:
             if not self.quiet:
-                safe_print(f"      🔍 Found {len(found_cloaks)} potential main env cloaks")
+                safe_print(_('      🔍 Found {} potential main env cloaks').format(len(found_cloaks)))
 
             with omnipkgLoader._active_cloaks_lock:
                 for cloak_path in found_cloaks:
@@ -3378,7 +3376,7 @@ class omnipkgLoader:
                                 shutil.move(str(cloak_path), str(original_path))
                                 total_cleaned += 1
                                 if not self.quiet:
-                                    safe_print(f"         ✅ Restored: {original_name}")
+                                    safe_print(_('         ✅ Restored: {}').format(original_name))
                             else:
                                 if cloak_path.is_dir():
                                     shutil.rmtree(cloak_path)
@@ -3387,11 +3385,11 @@ class omnipkgLoader:
                                 total_cleaned += 1
                                 if not self.quiet:
                                     safe_print(
-                                        f"         🗑️  Deleted malformed cloak: {cloak_path.name}"
+                                        _('         🗑️  Deleted malformed cloak: {}').format(cloak_path.name)
                                     )
                         except Exception as e:
                             if not self.quiet:
-                                safe_print(f"         ⚠️  Failed to process {cloak_path.name}: {e}")
+                                safe_print(_('         ⚠️  Failed to process {}: {}').format(cloak_path.name, e))
                     else:
                         try:
                             if cloak_path.is_dir():
@@ -3401,11 +3399,11 @@ class omnipkgLoader:
                             total_cleaned += 1
                             if not self.quiet:
                                 safe_print(
-                                    f"         🗑️  Deleted duplicate cloak: {cloak_path.name}"
+                                    _('         🗑️  Deleted duplicate cloak: {}').format(cloak_path.name)
                                 )
                         except Exception as e:
                             if not self.quiet:
-                                safe_print(f"         ⚠️  Failed to delete {cloak_path.name}: {e}")
+                                safe_print(_('         ⚠️  Failed to delete {}: {}').format(cloak_path.name, e))
 
         # --- Cleanup bubble cloaks ---
         if self.multiversion_base.exists():
@@ -3416,7 +3414,7 @@ class omnipkgLoader:
 
             if bubble_cloaks:
                 if not self.quiet:
-                    safe_print(f"      🔍 Found {len(bubble_cloaks)} potential bubble cloaks")
+                    safe_print(_('      🔍 Found {} potential bubble cloaks').format(len(bubble_cloaks)))
 
                 for cloak_path in bubble_cloaks:
                     if str(cloak_path) in omnipkgLoader._active_cloaks:
@@ -3444,7 +3442,7 @@ class omnipkgLoader:
 
         if total_cleaned > 0:
             if not self.quiet:
-                safe_print(f"   ✅ Cleaned up {total_cleaned} orphaned/duplicate cloaks")
+                safe_print(_('   ✅ Cleaned up {} orphaned/duplicate cloaks').format(total_cleaned))
         elif not self.quiet:
             safe_print("   ✅ No cleanup needed")
 
@@ -3571,7 +3569,7 @@ class omnipkgLoader:
                                     return import_name
                         except Exception as e:
                             if not self.quiet:
-                                safe_print(f"      ⚠️  Failed to read {top_level_file}: {e}")
+                                safe_print(_('      ⚠️  Failed to read {}: {}').format(top_level_file, e))
                             continue
 
                     # If top_level.txt doesn't exist, try RECORD file
@@ -3592,7 +3590,7 @@ class omnipkgLoader:
         if pkg_name.lower() in known_mappings:
             import_name = known_mappings[pkg_name.lower()]
             if not self.quiet:
-                safe_print(f"      📦 Using known mapping: {pkg_name} -> {import_name}")
+                safe_print(_('      📦 Using known mapping: {} -> {}').format(pkg_name, import_name))
             return import_name
 
         # Last resort: transform package name
@@ -3600,7 +3598,7 @@ class omnipkgLoader:
         transformed = pkg_name.replace("-", "_").lower()
 
         if not self.quiet and transformed != pkg_name:
-            safe_print(f"      📦 Using transformed name: {pkg_name} -> {transformed}")
+            safe_print(_('      📦 Using transformed name: {} -> {}').format(pkg_name, transformed))
 
         return transformed
 
@@ -3717,7 +3715,7 @@ class omnipkgLoader:
                 # 2. RUN THE BRAIN CHECK
                 if not self._perform_sanity_check(pkg_name):
                     raise ImportError(
-                        f"Package {pkg_name} imported but failed sanity check (Zombie State detected!)"
+                        _('Package {} imported but failed sanity check (Zombie State detected!)').format(pkg_name)
                     )
 
                 if attempt > 0 and not self.quiet:
@@ -3744,7 +3742,7 @@ class omnipkgLoader:
                 else:
                     if not self.quiet:
                         error_snippet = str(e).split("\n")[0][:80]
-                        safe_print(f"      ⚠️  Attempt {attempt + 1} failed: {error_snippet}")
+                        safe_print(_('      ⚠️  Attempt {} failed: {}').format(attempt + 1, error_snippet))
                     continue
 
         return False
@@ -3833,7 +3831,7 @@ class omnipkgLoader:
             return False
         except Exception as e:
             if not self.quiet:
-                safe_print(f"      ❌ Subprocess validation error: {e}")
+                safe_print(_('      ❌ Subprocess validation error: {}').format(e))
             return False
 
     def _trigger_process_reexec(self):
@@ -3851,7 +3849,7 @@ class omnipkgLoader:
             safe_print("   ❌ CRITICAL: Max re-execution attempts reached. Aborting re-exec.")
             return
 
-        safe_print(f"   🔄 INITIATING PROCESS RE-EXECUTION (Attempt {restart_count + 1}/3)...")
+        safe_print(_('   🔄 INITIATING PROCESS RE-EXECUTION (Attempt {}/3)...').format(restart_count + 1))
         safe_print("   👋 See you in the next life!")
 
         # Mark the environment so the next process knows it's a restart
@@ -3925,7 +3923,7 @@ class omnipkgLoader:
 
             try:
                 if not self.quiet:
-                    safe_print(f"      📦 Reinstalling {pkg_spec}...")
+                    safe_print(_('      📦 Reinstalling {}...').format(pkg_spec))
 
                 result = core.smart_install([pkg_spec])
 
@@ -3955,7 +3953,7 @@ class omnipkgLoader:
 
         except Exception as e:
             if not self.quiet:
-                safe_print(f"      ❌ Auto-heal failed: {e}")
+                safe_print(_('      ❌ Auto-heal failed: {}').format(e))
             return False
 
     def execute(self, code: str) -> dict:
@@ -4095,14 +4093,14 @@ class WorkerDelegationMixin:
             # Check exact match
             if mod_pattern in sys.modules:
                 if not self.quiet:
-                    safe_print(f"   🚨 C++ collision risk: {mod_pattern} already loaded")
+                    safe_print(_('   🚨 C++ collision risk: {} already loaded').format(mod_pattern))
                 return True
 
             # Check prefix match (e.g., 'torch._C' matches 'torch._C._something')
             for loaded_mod in sys.modules:
                 if loaded_mod.startswith(mod_pattern):
                     if not self.quiet:
-                        safe_print(f"   🚨 C++ collision risk: {loaded_mod} detected")
+                        safe_print(_('   🚨 C++ collision risk: {} detected').format(loaded_mod))
                     return True
 
         # Check for version conflicts in C++-heavy packages
@@ -4124,8 +4122,7 @@ class WorkerDelegationMixin:
                     }:
                         if not self.quiet:
                             safe_print(
-                                f"   🚨 C++ version conflict: {pkg} "
-                                f"({main_version} vs {bubble_version})"
+                                _('   🚨 C++ version conflict: {} ({} vs {})').format(pkg, main_version, bubble_version)
                             )
                         return True
             except PackageNotFoundError:
@@ -4158,7 +4155,7 @@ class WorkerDelegationMixin:
 
         except Exception as e:
             if not self.quiet:
-                safe_print(f"   ⚠️  Daemon connection failed: {e}. Falling back to local.")
+                safe_print(_('   ⚠️  Daemon connection failed: {}. Falling back to local.').format(e))
             return None
 
     def __enter__(self):
@@ -4169,7 +4166,7 @@ class WorkerDelegationMixin:
         try:
             pkg_name, requested_version = self._current_package_spec.split("==")
         except ValueError:
-            raise ValueError(f"Invalid package_spec format: '{self._current_package_spec}'")
+            raise ValueError(_("Invalid package_spec format: '{}'").format(self._current_package_spec))
 
         # 1. Proactive Worker Mode (Daemon)
         if self._worker_fallback_enabled and self._should_use_worker_proactively(pkg_name):
@@ -4192,7 +4189,7 @@ class WorkerDelegationMixin:
         try:
             pkg_name, requested_version = self._current_package_spec.split("==")
         except ValueError:
-            raise ValueError(f"Invalid package_spec format: '{self._current_package_spec}'")
+            raise ValueError(_("Invalid package_spec format: '{}'").format(self._current_package_spec))
 
         # STRATEGY 1: Proactive Worker Mode for Known Problematic Packages
         if self._worker_fallback_enabled and self._should_use_worker_mode(pkg_name):
@@ -4259,7 +4256,7 @@ class WorkerDelegationMixin:
 
             if not self.quiet:
                 safe_print("   🔄 C++ collision detected, switching to worker mode...")
-                safe_print(f"      Original error: {str(e)}")
+                safe_print(_('      Original error: {}').format(str(e)))
 
             # Clean up any partial activation state
             self._panic_restore_cloaks()
@@ -4295,7 +4292,7 @@ class WorkerDelegationMixin:
                 self._active_worker.shutdown()
             except Exception as e:
                 if not self.quiet:
-                    safe_print(f"   ⚠️  Worker shutdown warning: {e}")
+                    safe_print(_('   ⚠️  Worker shutdown warning: {}').format(e))
             finally:
                 self._active_worker = None
                 self._worker_mode = False
