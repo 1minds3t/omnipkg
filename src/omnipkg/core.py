@@ -41,7 +41,7 @@ from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Set, Tuple
-
+from omnipkg.i18n import _, SUPPORTED_LANGUAGES
 try:
     import redis
 
@@ -10775,14 +10775,12 @@ class omnipkg:
         if not self._connect_cache():
             return 1
 
-        # ... rest of your existing smart_install code continues here ...
         if dry_run:
             safe_print("🔬 Running in --dry-run mode. No changes will be made.")
             return 0
         if not packages:
             safe_print("🚫 No packages specified for installation.")
             return 1
-        from .i18n import _  # Add this line at the top
 
         install_strategy = None  # ✅ Initialize at the top so it's always defined
 
