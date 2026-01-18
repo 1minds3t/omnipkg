@@ -13,6 +13,7 @@ import random
 import threading
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from omnipkg.i18n import _
 
 # Import the daemon client
 try:
@@ -206,9 +207,9 @@ print(f"{np.__version__}|{result}")
             time.sleep(0.02)
 
     except ImportError as e:
-        safe_print(f"   ❌ Daemon mode not available: {e}")
+        safe_print(_('   ❌ Daemon mode not available: {}').format(e))
     except Exception as e:
-        safe_print(f"   ❌ Daemon error: {str(e)[:50]}")
+        safe_print(_('   ❌ Daemon error: {}').format(str(e)[:50]))
 
     # ==================================================================
     # COMPARISON RESULTS
@@ -287,7 +288,7 @@ def chaos_test_2_dependency_inception():
         indent = "  " * level
         ver = random.choice(versions)
 
-        safe_print(f"   {indent}{'🔻' * level} Level {level}: numpy {ver}")
+        safe_print(_('   {}{} Level {}: numpy {}').format(indent, '🔻' * level, level, ver))
 
         # We MUST do the import INSIDE the with block
         with omnipkgLoader(f"numpy=={ver}", quiet=not verbose, worker_fallback=True):
@@ -295,19 +296,19 @@ def chaos_test_2_dependency_inception():
 
             # Now we check the version
             if np.__version__ != ver:
-                safe_print(f"   💥 Mismatch! Expected {ver} got {np.__version__}")
+                safe_print(_('   💥 Mismatch! Expected {} got {}').format(ver, np.__version__))
 
             depth_legacy = max(depth_legacy, level)
 
             if level < MAX_DEPTH:
                 go_deeper_legacy(level + 1)
             else:
-                safe_print(f"   {indent}{'💥' * 10} REACHED THE CORE!")
+                safe_print(_('   {}{} REACHED THE CORE!').format(indent, '💥' * 10))
 
     try:
         go_deeper_legacy(1)
     except Exception as e:
-        safe_print(f"   ❌ Legacy Phase Failed: {e}")
+        safe_print(_('   ❌ Legacy Phase Failed: {}').format(e))
 
     total_legacy_time = time.perf_counter() - start_legacy
     safe_print(f"\n   ⏱️  Legacy Time: {total_legacy_time:.3f}s")
@@ -389,21 +390,21 @@ go_deeper(1)
                     lvl = int(parts[0][1:])
                     ver = parts[1]
                     indent = "  " * lvl
-                    safe_print(f"   ⚡ {indent}{'⚡' * lvl} Level {lvl}: numpy {ver}")
+                    safe_print(_('   ⚡ {}{} Level {}: numpy {}').format(indent, '⚡' * lvl, lvl, ver))
                 elif "CORE_REACHED" in line:
                     indent = "  " * MAX_DEPTH
                     safe_print(
-                        f"   ⚡ {indent}{'💥' * 10} REACHED THE CORE (REMOTELY)!"
+                        _('   ⚡ {}{} REACHED THE CORE (REMOTELY)!').format(indent, '💥' * 10)
                     )
                 elif verbose:
                     # Print raw loader logs if verbose is ON
                     safe_print(f"      [Remote] {line}")
         else:
-            safe_print(f"   ❌ Daemon Execution Failed: {result['error']}")
+            safe_print(_('   ❌ Daemon Execution Failed: {}').format(result['error']))
             total_daemon_time = float("inf")
 
     except Exception as e:
-        safe_print(f"   ❌ Daemon Error: {e}")
+        safe_print(_('   ❌ Daemon Error: {}').format(e))
         total_daemon_time = float("inf")
 
     # ==================================================================
@@ -654,7 +655,7 @@ arr_out[0] = val.numpy()
             f"   🚀 TF 2.13 (1MB)   → Sum: {result_val:.0f} via {transport} ({duration:.2f}ms)"
         )
     else:
-        safe_print(f"   💥 TF Failed: {res.get('error')}")
+        safe_print(_('   💥 TF Failed: {}').format(res.get('error')))
 
     return True
     # ---------------------------------------------------------
@@ -691,7 +692,7 @@ result = {'sum': float(arr_out[0])}
             f"   🚀 TensorFlow 2.13 → Sum: {result_val:.0f} via {transport} ({tf_duration:.2f}ms)"
         )
     else:
-        safe_print(f"   💥 TensorFlow Failed: {res.get('error')}")
+        safe_print(_('   💥 TensorFlow Failed: {}').format(res.get('error')))
 
     # PyTorch Sum via SHM
     t_start = time.perf_counter()
@@ -715,7 +716,7 @@ result = {'sum': float(arr_out[0])}
             f"   🚀 PyTorch 2.0     → Sum: {result_val:.0f} via {transport} ({torch_duration:.2f}ms)"
         )
     else:
-        safe_print(f"   💥 PyTorch Failed: {res.get('error')}")
+        safe_print(_('   💥 PyTorch Failed: {}').format(res.get('error')))
 
     # NumPy Sum via SHM
     t_start = time.perf_counter()
@@ -739,7 +740,7 @@ result = {'sum': float(arr_out[0])}
             f"   🚀 NumPy 2.3.5     → Sum: {result_val:.0f} via {transport} ({numpy_duration:.2f}ms)"
         )
     else:
-        safe_print(f"   💥 NumPy Failed: {res.get('error')}")
+        safe_print(_('   💥 NumPy Failed: {}').format(res.get('error')))
 
     safe_print("\n📊 ZERO-COPY PERFORMANCE:")
     safe_print(f"   Data Size: {data_size_mb:.2f}MB")
@@ -780,8 +781,8 @@ def chaos_test_4_memory_madness():
             allocations.append((ver, mem_mb, addr))
             safe_print(f"🧠 numpy {ver}: Allocated {mem_mb:.1f}MB at {addr}")
 
-    safe_print(f"\n🎯 Total allocations: {len(allocations)}")
-    safe_print(f"🎯 Unique memory addresses: {len(set(a[2] for a in allocations))}")
+    safe_print(_('\n🎯 Total allocations: {}').format(len(allocations)))
+    safe_print(_('🎯 Unique memory addresses: {}').format(len(set((a[2] for a in allocations)))))
     safe_print("✅ MEMORY CHAOS CONTAINED!\n")
 
 
@@ -855,7 +856,7 @@ print(np.__version__)
                     msg = f"{remote_version:<14}"
                 else:
                     status = "❌"
-                    msg = f"MATH ERROR: {local_det} vs {remote_det}"
+                    msg = _('MATH ERROR: {} vs {}').format(local_det, remote_det)
 
                 thread_results.append((spec, remote_version, status))
 
@@ -889,7 +890,7 @@ print(np.__version__)
         successful_switches += sum(1 for r in thread_results if r[2] == "✅")
 
     safe_print(f"\n{'='*60}")
-    safe_print(f"🎯 Total Requests: {total_switches}")
+    safe_print(_('🎯 Total Requests: {}').format(total_switches))
     safe_print(
         f"✅ Success Rate:   {successful_switches}/{total_switches} ({successful_switches/total_switches*100:.1f}%)"
     )
@@ -920,11 +921,11 @@ def chaos_test_6_version_time_machine():
         ("🚀 MODERN", "numpy==2.3.5", "2024"),
     ]
 
-    print("⏰ Initiating temporal displacement...\n")
+    print(_('⏰ Initiating temporal displacement...\n'))
 
     for era, spec, year in timeline:
         try:
-            safe_print(f"🌀 Jumping to {year}...")
+            safe_print(_('🌀 Jumping to {}...').format(year))
             with omnipkgLoader(spec):
                 import numpy as np
 
@@ -932,7 +933,7 @@ def chaos_test_6_version_time_machine():
                 mean = arr.mean()
                 print(f"   {era:20} {spec:20} → mean={mean}")
         except Exception as e:
-            safe_print(f"   ⚠️  {era}: Time jump failed - {e}")
+            safe_print(_('   ⚠️  {}: Time jump failed - {}').format(era, e))
         time.sleep(0.2)
 
     safe_print("\n✅ TIME TRAVEL COMPLETE!\n")
@@ -965,11 +966,11 @@ def chaos_test_7_dependency_jenga():
                 )
                 time.sleep(0.1)
         except Exception:
-            safe_print(f"   💥 TOWER COLLAPSED AT LEVEL {i+1}!")
+            safe_print(_('   💥 TOWER COLLAPSED AT LEVEL {}!').format(i + 1))
             break
 
     if len(stack) == len(versions):
-        safe_print(f"\n🏆 PERFECT TOWER! All {len(stack)} blocks stable!")
+        safe_print(_('\n🏆 PERFECT TOWER! All {} blocks stable!').format(len(stack)))
     print()
 
 
@@ -989,24 +990,24 @@ def chaos_test_8_quantum_superposition():
 
         state1 = np1.array([1, 2, 3])
         states.append(("1.24.3", hex(id(state1))))
-        safe_print(f"   |ψ₁⟩ numpy 1.24.3 exists at {hex(id(state1))}")
+        safe_print(_('   |ψ₁⟩ numpy 1.24.3 exists at {}').format(hex(id(state1))))
 
         with omnipkgLoader("numpy==1.26.4"):
             import numpy as np2
 
             state2 = np2.array([4, 5, 6])
             states.append(("1.26.4", hex(id(state2))))
-            safe_print(f"   |ψ₂⟩ numpy 1.26.4 exists at {hex(id(state2))}")
+            safe_print(_('   |ψ₂⟩ numpy 1.26.4 exists at {}').format(hex(id(state2))))
 
             with omnipkgLoader("numpy==2.3.5"):
                 import numpy as np3
 
                 state3 = np3.array([7, 8, 9])
                 states.append(("2.3.5", hex(id(state3))))
-                safe_print(f"   |ψ₃⟩ numpy 2.3.5 exists at {hex(id(state3))}")
+                safe_print(_('   |ψ₃⟩ numpy 2.3.5 exists at {}').format(hex(id(state3))))
 
                 safe_print("\n   💫 QUANTUM SUPERPOSITION ACHIEVED!")
-                safe_print(f"   💫 {len(states)} states exist simultaneously!")
+                safe_print(_('   💫 {} states exist simultaneously!').format(len(states)))
 
     safe_print("\n✅ WAVE FUNCTION COLLAPSED SAFELY!\n")
 
@@ -1042,7 +1043,7 @@ with omnipkgLoader("numpy==1.23.5"):
         if result["success"]:
             safe_print("      ✅ TensorFlow Reality survived")
         else:
-            safe_print(f"      ⚠️  TensorFlow failed: {result['error'][:60]}...")
+            safe_print(_('      ⚠️  TensorFlow failed: {}...').format(result['error'][:60]))
     finally:
         tf_worker.shutdown()
 
@@ -1052,10 +1053,10 @@ with omnipkgLoader("numpy==1.23.5"):
         with omnipkgLoader("numpy==1.24.3"):
             import numpy as np
 
-            safe_print(f"      ✅ numpy {np.__version__} survived")
+            safe_print(_('      ✅ numpy {} survived').format(np.__version__))
     except Exception as e:
         error_msg = str(e).split("\n")[0][:60]
-        safe_print(f"      ⚠️  numpy==1.24.3 - {error_msg}...")
+        safe_print(_('      ⚠️  numpy==1.24.3 - {}...').format(error_msg))
 
     # Circle 3: PyTorch Inferno
     safe_print("   😈 Circle 3: PyTorch Inferno")
@@ -1063,10 +1064,10 @@ with omnipkgLoader("numpy==1.23.5"):
         with omnipkgLoader("torch==2.0.1+cu118"):
             import torch
 
-            safe_print(f"      ✅ torch {torch.__version__} survived")
+            safe_print(_('      ✅ torch {} survived').format(torch.__version__))
     except Exception as e:
         error_msg = str(e).split("\n")[0][:60]
-        safe_print(f"      ⚠️  torch==2.0.1+cu118 - {error_msg}...")
+        safe_print(_('      ⚠️  torch==2.0.1+cu118 - {}...').format(error_msg))
 
     # Circle 4: NumPy Chaos
     safe_print("   😈 Circle 4: NumPy Chaos")
@@ -1075,10 +1076,10 @@ with omnipkgLoader("numpy==1.23.5"):
             with omnipkgLoader(f"numpy=={numpy_ver}"):
                 import numpy as np
 
-                safe_print(f"      ✅ numpy {np.__version__} survived")
+                safe_print(_('      ✅ numpy {} survived').format(np.__version__))
         except Exception as e:
             error_msg = str(e).split("\n")[0][:60]
-            safe_print(f"      ⚠️  numpy=={numpy_ver} - {error_msg}...")
+            safe_print(_('      ⚠️  numpy=={} - {}...').format(numpy_ver, error_msg))
 
     # Circle 5: Mixed Madness
     safe_print("   😈 Circle 5: Mixed Madness")
@@ -1086,17 +1087,17 @@ with omnipkgLoader("numpy==1.23.5"):
         with omnipkgLoader("torch==2.0.1+cu118"):
             import torch
 
-            safe_print(f"      ✅ torch {torch.__version__} survived")
+            safe_print(_('      ✅ torch {} survived').format(torch.__version__))
     except Exception as e:
-        safe_print(f"      ⚠️  torch - {str(e)[:60]}...")
+        safe_print(_('      ⚠️  torch - {}...').format(str(e)[:60]))
 
     try:
         with omnipkgLoader("numpy==2.3.5"):
             import numpy as np
 
-            safe_print(f"      ✅ numpy {np.__version__} survived")
+            safe_print(_('      ✅ numpy {} survived').format(np.__version__))
     except Exception as e:
-        safe_print(f"      ⚠️  numpy - {str(e)[:60]}...")
+        safe_print(_('      ⚠️  numpy - {}...').format(str(e)[:60]))
 
     time.sleep(0.1)
     safe_print("\n✅ ESCAPED FROM HELL!\n")
@@ -1145,7 +1146,7 @@ def chaos_test_10_grand_finale():
 
             np.ones((500, 500))
 
-    print("⏰ Time travel sequence...")
+    print(_('⏰ Time travel sequence...'))
     for ver in ["1.24.3", "2.3.5", "1.24.3"]:
         with omnipkgLoader(f"numpy=={ver}", config=omnipkg_config):
             import numpy as np
@@ -1175,7 +1176,7 @@ def chaos_test_11_tensorflow_resurrection():
     sequential_times = []
 
     for i in range(5):
-        safe_print(f"\n      🔄 Iteration {i+1}/5: Spawning & executing...")
+        safe_print(_('\n      🔄 Iteration {}/5: Spawning & executing...').format(i + 1))
 
         # CRITICAL: Measure time starting BEFORE process creation
         start_wall = time.perf_counter()
@@ -1203,10 +1204,10 @@ with omnipkgLoader("tensorflow==2.13.0"):
                 sequential_times.append(elapsed)
                 safe_print(f"         ✅ Full Lifecycle: {elapsed:.0f}ms")
             else:
-                safe_print(f"         ❌ Failed: {result.get('error')}")
+                safe_print(_('         ❌ Failed: {}').format(result.get('error')))
 
         except Exception as e:
-            safe_print(f"         ❌ Exception: {e}")
+            safe_print(_('         ❌ Exception: {}').format(e))
 
         finally:
             if worker:
@@ -1290,7 +1291,7 @@ with omnipkgLoader("tensorflow==2.13.0"):
         daemon_available = True
 
     except Exception as e:
-        safe_print(f"   ❌ Daemon mode failed: {e}\n")
+        safe_print(_('   ❌ Daemon mode failed: {}\n').format(e))
 
     # ================================================================
     # PART C: CONCURRENT SPAWN & HEAVY MATH
@@ -1326,7 +1327,7 @@ with omnipkgLoader("tensorflow==2.13.0"):
 
     for ver in versions:
         t_ver = time.perf_counter()
-        safe_print(f"      Requesting TF {ver}...")
+        safe_print(_('      Requesting TF {}...').format(ver))
         p = DaemonProxy(client, f"tensorflow=={ver}")
         # Execute simple code to force spawn wait
         p.execute(
@@ -1373,7 +1374,7 @@ with omnipkgLoader("tensorflow==2.13.0"):
         for f in futures:
             v, p = f.result()
             active_proxies[v] = p
-            safe_print(f"      ✅ Worker Ready: TF {v}")
+            safe_print(_('      ✅ Worker Ready: TF {}').format(v))
 
     conc_spawn_total = (time.perf_counter() - conc_spawn_start) * 1000
     safe_print(f"   ⏱️  Total Concurrent Spawn Time: {conc_spawn_total:.0f}ms")
@@ -1400,7 +1401,7 @@ with tf.device('/CPU:0'):
     seq_ops_times = []
 
     for v in versions:
-        safe_print(f"      running on TF {v}...")
+        safe_print(_('      running on TF {}...').format(v))
         t0 = time.perf_counter()
         res = active_proxies[v].execute(heavy_code)
         dt = (time.perf_counter() - t0) * 1000
@@ -1408,7 +1409,7 @@ with tf.device('/CPU:0'):
             seq_ops_times.append(dt)
             safe_print(f"         ✅ Done in {dt:.0f}ms")
         else:
-            safe_print(f"         ❌ Failed: {res.get('error')}")
+            safe_print(_('         ❌ Failed: {}').format(res.get('error')))
 
     total_seq_ops = sum(seq_ops_times)
     safe_print(f"   📊 Total Sequential Calc Time: {total_seq_ops:.0f}ms\n")
@@ -1544,13 +1545,13 @@ print(f"   🥊 Round #{i+1}: Fighter {{torch.__version__:<6}} | Hit -> {{y.toli
             # Print timing overlay
             sys.stdout.write(f"      ⚡ {round_duration:.2f}ms\n")
         else:
-            safe_print(f"   💥 FATALITY: {spec} failed - {result.get('error')[:50]}")
+            safe_print(_('   💥 FATALITY: {} failed - {}').format(spec, result.get('error')[:50]))
             failed_rounds += 1
 
     total_fight_time = time.perf_counter() - fight_start
     avg_round = sum(round_times) / len(round_times) if round_times else 0
 
-    safe_print(f"\n🎯 Battle Results: {successful_rounds} wins, {failed_rounds} losses")
+    safe_print(_('\n🎯 Battle Results: {} wins, {} losses').format(successful_rounds, failed_rounds))
     safe_print(f"⏱️  Total Duration: {total_fight_time:.4f}s")
     safe_print(f"⚡ Avg Round Time: {avg_round:.2f}ms")
 
@@ -1597,7 +1598,7 @@ def chaos_test_13_pytorch_lightning_storm():
     worker_successful = 0
 
     for i, config in enumerate(test_configs):
-        safe_print(f"   😈 Test {i+1}/{len(test_configs)}: {config['name']}")
+        safe_print(_('   😈 Test {}/{}: {}').format(i + 1, len(test_configs), config['name']))
 
         try:
             # Time the worker boot
@@ -1628,12 +1629,12 @@ with omnipkgLoader("{config['lightning']}"):
                 safe_print(f"      ⏱️  Boot:     {boot_time*1000:7.2f}ms")
                 safe_print(f"      ⏱️  Execution:{exec_time*1000:7.2f}ms")
                 safe_print(f"      ⏱️  TOTAL:    {total_time*1000:7.2f}ms")
-                safe_print(f"      ✅ STRIKE #{worker_successful}!\n")
+                safe_print(_('      ✅ STRIKE #{}!\n').format(worker_successful))
             else:
-                safe_print(f"      💥 Failed: {result['error']}\n")
+                safe_print(_('      💥 Failed: {}\n').format(result['error']))
 
         except Exception as e:
-            safe_print(f"      💥 Exception: {str(e)}\n")
+            safe_print(_('      💥 Exception: {}\n').format(str(e)))
         finally:
             try:
                 worker.shutdown()
@@ -1668,7 +1669,7 @@ with omnipkgLoader("{config['lightning']}"):
         return chaos_test_13_pytorch_lightning_storm()
 
     for config in test_configs:
-        safe_print(f"   😈 Testing Storm: {config['name']}")
+        safe_print(_('   😈 Testing Storm: {}').format(config['name']))
 
         config_start = time.perf_counter()
         timings = {}
@@ -1739,7 +1740,7 @@ with omnipkgLoader("{config['lightning']}"):
                     for line in result["stdout"].strip().split("\n"):
                         safe_print(f"      {line}")
                 safe_print(f"      ⏱️  Total config time: {config_time*1000:.2f}ms")
-                safe_print(f"      ✅ LIGHTNING STRIKE #{successful}!")
+                safe_print(_('      ✅ LIGHTNING STRIKE #{}!').format(successful))
             else:
                 config_time = time.perf_counter() - config_start
                 timings["total"] = config_time
@@ -1753,7 +1754,7 @@ with omnipkgLoader("{config['lightning']}"):
                 )
 
                 safe_print(f"      ⏱️  Failed after {config_time*1000:.2f}ms")
-                safe_print(f"      💥 Failed: {result.get('error', 'Unknown error')}")
+                safe_print(_('      💥 Failed: {}').format(result.get('error', 'Unknown error')))
                 if verbose and result.get("traceback"):
                     safe_print(f"      Traceback: {result['traceback'][:500]}")
 
@@ -1770,7 +1771,7 @@ with omnipkgLoader("{config['lightning']}"):
             )
 
             safe_print(f"      ⏱️  Exception after {config_time*1000:.2f}ms")
-            safe_print(f"      💥 Exception: {str(e)}")
+            safe_print(_('      💥 Exception: {}').format(str(e)))
 
     total_time = time.perf_counter() - total_start
 
@@ -1797,7 +1798,7 @@ with omnipkgLoader("{config['lightning']}"):
         if avg_exec > 0:
             safe_print(f"   ⏱️  Avg execution: {avg_exec*1000:.2f}ms")
 
-    safe_print(f"\n   🎯 Compatible Pairs: {successful}/{len(test_configs)} successful")
+    safe_print(_('\n   🎯 Compatible Pairs: {}/{} successful').format(successful, len(test_configs)))
 
     if successful == len(test_configs):
         safe_print("   ✅ PYTORCH LIGHTNING STORM SURVIVED!")
@@ -1851,7 +1852,7 @@ except Exception as e:
             safe_print("      ✅ CIRCULAR DANCE COMPLETED!")
         else:
             safe_print(
-                f"      ⚠️  Circle 1 result: {result.get('error', 'Unknown error')}"
+                _('      ⚠️  Circle 1 result: {}').format(result.get('error', 'Unknown error'))
             )
     finally:
         worker_1.shutdown()
@@ -1883,7 +1884,7 @@ with omnipkgLoader("numpy==1.24.3"):
             safe_print("      ✅ CIRCULAR MADNESS SURVIVED!")
         else:
             safe_print(
-                f"      💥 Torch/NumPy circle failed: {result['error'][:100]}..."
+                _('      💥 Torch/NumPy circle failed: {}...').format(result['error'][:100])
             )
     finally:
         worker_2.shutdown()
@@ -1922,12 +1923,12 @@ else:
                 # sys.stdout.write(f" {expected}")
                 # sys.stdout.flush()
             else:
-                safe_print(f"      💥 Round {i+1} failed: {result['error']}")
+                safe_print(_('      💥 Round {} failed: {}').format(i + 1, result['error']))
     finally:
         w_old.shutdown()
         w_new.shutdown()
 
-    print(f"\n      Rapid switches: {successes}/10 successful")
+    print(_('\n      Rapid switches: {}/10 successful').format(successes))
 
     if successes == 10:
         safe_print("      ✅ RAPID CIRCULAR SWITCHING MASTERED! (True Isolation)")
@@ -1971,7 +1972,7 @@ def chaos_test_15_isolation_strategy_benchmark():
                 sys.stdout.write(".")
                 sys.stdout.flush()
         except Exception as e:
-            safe_print(f"   ❌ Round {i+1} failed: {str(e)[:40]}")
+            safe_print(_('   ❌ Round {} failed: {}').format(i + 1, str(e)[:40]))
 
     print()  # Newline
     elapsed_in_process = time.perf_counter() - start
@@ -2084,7 +2085,7 @@ with omnipkgLoader("{spec}", quiet=True):
                         import torch
 
                         unused = torch.sin(torch.tensor([1.0]))
-                        print(f"   [Fork] {spec} done")
+                        print(_('   [Fork] {} done').format(spec))
                     sys.exit(0)
                 except Exception:
                     sys.exit(1)
@@ -2136,7 +2137,7 @@ with omnipkgLoader("{spec}", quiet=True):
                 if result["success"]:
                     success_count += 1
             except Exception as e:
-                safe_print(f"   ❌ Round {i+1} failed: {str(e)[:40]}")
+                safe_print(_('   ❌ Round {} failed: {}').format(i + 1, str(e)[:40]))
     finally:
         safe_print("   🛑 Shutting down worker pool...")
         for worker in workers.values():
@@ -2299,7 +2300,7 @@ def chaos_test_16_nested_reality_hell():
 
         time.sleep(0.1)  # Brief pause between switches
 
-    safe_print(f"   🎯 Phase 1 Result: {'PASSED' if phase1_success else 'FAILED'}\n")
+    safe_print(_('   🎯 Phase 1 Result: {}\n').format('PASSED' if phase1_success else 'FAILED'))
 
     # ═════════════════════════════════════════════════════════════
     # PHASE 2: 7-Layer Deep Nested Activation
@@ -2373,7 +2374,7 @@ print("SUCCESS")
             phase2_success = True
         else:
             safe_print(
-                f"\n   💥 Phase 2 COLLAPSED: {result.get('error', result.get('stderr'))}\n"
+                _('\n   💥 Phase 2 COLLAPSED: {}\n').format(result.get('error', result.get('stderr')))
             )
             phase2_success = False
 
@@ -2481,9 +2482,9 @@ def chaos_test_17_triple_python_multiverse():
 
     for u in universes:
         safe_print(f"   {u['emoji']} {u['name']:<20} Python {u['python']}")
-        safe_print(f"      ├─ TensorFlow: {u['tf_spec']}")
-        safe_print(f"      ├─ PyTorch:    {u['torch_spec']}")
-        safe_print(f"      └─ Task:       {u['operation']}")
+        safe_print(_('      ├─ TensorFlow: {}').format(u['tf_spec']))
+        safe_print(_('      ├─ PyTorch:    {}').format(u['torch_spec']))
+        safe_print(_('      └─ Task:       {}').format(u['operation']))
 
     safe_print("\n   " + "─" * 60)
     safe_print("   🎯 MISSION: Pass data through all 3 universes via SHM\n")
@@ -2518,10 +2519,10 @@ def chaos_test_17_triple_python_multiverse():
         py_path = check_python_version(u["python"])
         if py_path:
             available_pythons[u["python"]] = py_path
-            safe_print(f"   ✅ Python {u['python']}: {py_path}")
+            safe_print(_('   ✅ Python {}: {}').format(u['python'], py_path))
         else:
-            safe_print(f"   ❌ Python {u['python']}: NOT AVAILABLE")
-            safe_print(f"      💡 Install with: omnipkg python adopt {u['python']}")
+            safe_print(_('   ❌ Python {}: NOT AVAILABLE').format(u['python']))
+            safe_print(_('      💡 Install with: omnipkg python adopt {}').format(u['python']))
             all_available = False
 
     if not all_available:
@@ -2543,7 +2544,7 @@ def chaos_test_17_triple_python_multiverse():
     np.random.rand(100, 100)  # Smaller for faster demo
 
     for i, u in enumerate(universes):
-        safe_print(f"   {u['emoji']} {u['name']} starting...")
+        safe_print(_('   {} {} starting...').format(u['emoji'], u['name']))
         iter_start = time.perf_counter()
 
         # Execute in the appropriate Python + framework
@@ -2601,13 +2602,13 @@ with omnipkgLoader("{u['torch_spec']}", quiet=False):  # quiet=False for visibil
                 )
             else:
                 error_msg = result.get("error", "Unknown")
-                safe_print(f"   {u['emoji']} {u['name']} FAILED: {error_msg}")
+                safe_print(_('   {} {} FAILED: {}').format(u['emoji'], u['name'], error_msg))
                 # Print full traceback if available
                 if result.get("traceback"):
                     safe_print(f"      Traceback: {result['traceback']}")
 
         except Exception as e:
-            safe_print(f"   {u['emoji']} {u['name']} ERROR: {str(e)}")
+            safe_print(_('   {} {} ERROR: {}').format(u['emoji'], u['name'], str(e)))
             # Print full traceback
             import traceback
 
@@ -2682,7 +2683,7 @@ with omnipkgLoader("{universe['torch_spec']}", quiet=False):
                     safe_print(f"   {emoji} {u_name:<20} ✅ {elapsed:>7.2f}ms")
                     # Print diagnostic output
                     if result.get("stderr"):
-                        safe_print(f"\n   📋 [{u_name}] Diagnostics:")
+                        safe_print(_('\n   📋 [{}] Diagnostics:').format(u_name))
                         for line in result["stderr"].strip().split("\n"):
                             if line.strip():
                                 safe_print(f"      {line}")
@@ -2842,7 +2843,7 @@ arr_out[:] = result.numpy()
         safe_print("   💡 Data passed through 3 frameworks with ZERO serialization!")
 
     except Exception as e:
-        safe_print(f"   ❌ Pipeline failed: {str(e)}")
+        safe_print(_('   ❌ Pipeline failed: {}').format(str(e)))
         import traceback
 
         safe_print(f"      {traceback.format_exc()[:1000]}")
@@ -2933,7 +2934,7 @@ def chaos_test_18_worker_pool_drag_race():
     THREADS = 4
 
     safe_print(
-        f"   🚦 RACE SETTINGS: {THREADS} Threads x {LAPS} Laps = {THREADS*LAPS} Total Transactions"
+        _('   🚦 RACE SETTINGS: {} Threads x {} Laps = {} Total Transactions').format(THREADS, LAPS, THREADS * LAPS)
     )
     safe_print("   🏎️  Drivers to your engines...")
 
@@ -3030,7 +3031,7 @@ def chaos_test_19_zero_copy_hft():
 
     # 1. Create 10MB Matrix
     size = (1000, 1250)
-    safe_print(f"   📉 Generating 10MB Matrix {size}...")
+    safe_print(_('   📉 Generating 10MB Matrix {}...').format(size))
     data = np.random.rand(*size)
     safe_print("   ✅ Data ready.\n")
 
@@ -3040,7 +3041,7 @@ def chaos_test_19_zero_copy_hft():
     # ROUND 1: JSON
     # ---------------------------------------------------------
     safe_print("   🐢 ROUND 1: Standard JSON Serialization")
-    print("      (This will take ~7 seconds...)")
+    print(_('      (This will take ~7 seconds...)'))
     start = time.perf_counter()
 
     try:
@@ -3053,10 +3054,10 @@ def chaos_test_19_zero_copy_hft():
             duration_json = (time.perf_counter() - start) * 1000
             safe_print(f"      ⏱️  Total: {duration_json:.2f}ms")
         else:
-            safe_print(f"      💥 JSON Failed: {res.get('error')}")
+            safe_print(_('      💥 JSON Failed: {}').format(res.get('error')))
             duration_json = float("inf")
     except Exception as e:
-        safe_print(f"      💥 JSON Exception: {e}")
+        safe_print(_('      💥 JSON Exception: {}').format(e))
         duration_json = float("inf")
 
     # ---------------------------------------------------------
@@ -3085,7 +3086,7 @@ def chaos_test_19_zero_copy_hft():
             safe_print(f"   🏆 Speedup: {speedup:.1f}x FASTER")
 
     except Exception as e:
-        safe_print(f"      💥 SHM Failed: {e}")
+        safe_print(_('      💥 SHM Failed: {}').format(e))
         import traceback
 
         traceback.print_exc()
@@ -3147,19 +3148,19 @@ def chaos_test_20_gpu_resident_pipeline():
     ]
 
     safe_print("   📦 Pipeline Stages:")
-    safe_print(f"      Stage 1: {specs[0]}")
-    safe_print(f"      Stage 2: {specs[1]}")
-    safe_print(f"      Stage 3: {specs[2]}\n")
+    safe_print(_('      Stage 1: {}').format(specs[0]))
+    safe_print(_('      Stage 2: {}').format(specs[1]))
+    safe_print(_('      Stage 3: {}\n').format(specs[2]))
 
     # Create tensor on GPU
     try:
         pipeline_data = torch.randn(500, 250, device="cuda:0")
         safe_print(
-            f"   📦 Input: {pipeline_data.shape} tensor on {pipeline_data.device}"
+            _('   📦 Input: {} tensor on {}').format(pipeline_data.shape, pipeline_data.device)
         )
         safe_print(f"   📊 Size: {pipeline_data.numel() * 4 / 1024 / 1024:.2f} MB\n")
     except Exception as e:
-        safe_print(f"   ❌ Failed to create GPU tensor: {e}")
+        safe_print(_('   ❌ Failed to create GPU tensor: {}').format(e))
         return False
 
     # Stage 1: ReLU activation
@@ -3183,7 +3184,7 @@ tensor_out.copy_(result)
         stage1_time = (time.perf_counter() - stage1_start) * 1000
         safe_print(f"   ✅ Stage 1 complete: {stage1_time:.3f}ms (CUDA IPC)")
     except Exception as e:
-        safe_print(f"   ❌ Stage 1 failed: {e}")
+        safe_print(_('   ❌ Stage 1 failed: {}').format(e))
         import traceback
 
         safe_print(f"      {traceback.format_exc()[:500]}")
@@ -3210,7 +3211,7 @@ tensor_out.copy_(result)
         stage2_time = (time.perf_counter() - stage2_start) * 1000
         safe_print(f"   ✅ Stage 2 complete: {stage2_time:.3f}ms (CUDA IPC)")
     except Exception as e:
-        safe_print(f"   ❌ Stage 2 failed: {e}")
+        safe_print(_('   ❌ Stage 2 failed: {}').format(e))
         import traceback
 
         safe_print(f"      {traceback.format_exc()[:500]}")
@@ -3237,7 +3238,7 @@ tensor_out.copy_(result)
         stage3_time = (time.perf_counter() - stage3_start) * 1000
         safe_print(f"   ✅ Stage 3 complete: {stage3_time:.3f}ms (CUDA IPC)")
     except Exception as e:
-        safe_print(f"   ❌ Stage 3 failed: {e}")
+        safe_print(_('   ❌ Stage 3 failed: {}').format(e))
         import traceback
 
         safe_print(f"      {traceback.format_exc()[:500]}")
@@ -3257,7 +3258,7 @@ tensor_out.copy_(result)
 
     # Verify output is still on GPU
     if stage3_out.is_cuda:
-        safe_print(f"\n   ✅ Output tensor still on GPU: {stage3_out.device}")
+        safe_print(_('\n   ✅ Output tensor still on GPU: {}').format(stage3_out.device))
         safe_print("   🔥 Data NEVER left VRAM - Zero PCIe transfers!")
         safe_print("   🌌 Multi-version pipeline: 2.2 → 2.0 → 2.2 via CUDA IPC!")
     else:
@@ -3302,8 +3303,8 @@ def chaos_test_21_gpu_resident_pipeline():
 
     TORCH_VERSION = "torch==1.13.1+cu116"
 
-    print(f"   PyTorch Version: {TORCH_VERSION}")
-    safe_print(f"   🔥 Loading client in {TORCH_VERSION} context...")
+    print(_('   PyTorch Version: {}').format(TORCH_VERSION))
+    safe_print(_('   🔥 Loading client in {} context...').format(TORCH_VERSION))
 
     # ═══════════════════════════════════════════════════════════
     # CRITICAL FIX: Keep entire test inside loader context!
@@ -3315,7 +3316,7 @@ def chaos_test_21_gpu_resident_pipeline():
             safe_print("❌ CUDA not available - skipping test")
             return {"success": False, "reason": "No CUDA"}
 
-        safe_print(f"   ✅ Client PyTorch: {torch.__version__}")
+        safe_print(_('   ✅ Client PyTorch: {}').format(torch.__version__))
 
         from omnipkg.isolation.worker_daemon import DaemonClient
 
@@ -3337,12 +3338,12 @@ def chaos_test_21_gpu_resident_pipeline():
                     for ver_str in versions.keys():
                         torch_versions.append(ver_str)
 
-            print(f"Found {len(torch_versions)} PyTorch versions:")
+            print(_('Found {} PyTorch versions:').format(len(torch_versions)))
             for v in torch_versions:
                 marker = " 🔥" if v.startswith("1.13") else ""
-                print(f"   - torch=={v}{marker}")
+                print(_('   - torch=={}{}').format(v, marker))
         except Exception as e:
-            safe_print(f"   ⚠️  Could not query knowledge base: {e}")
+            safe_print(_('   ⚠️  Could not query knowledge base: {}').format(e))
             torch_versions = ["1.13.1+cu116", "2.0.1+cu118", "2.2.0+cu121"]
 
         # ═══════════════════════════════════════════════════════════
@@ -3351,7 +3352,7 @@ def chaos_test_21_gpu_resident_pipeline():
 
         safe_print("\n📍 PHASE 2: Configuring Pipeline")
         safe_print("─" * 60)
-        safe_print(f"📍 CLIENT PyTorch version: {torch.__version__}")
+        safe_print(_('📍 CLIENT PyTorch version: {}').format(torch.__version__))
 
         stage_specs = []
 
@@ -3362,7 +3363,7 @@ def chaos_test_21_gpu_resident_pipeline():
             stage_specs.append(
                 ("🔥 Stage 1 (ReLU)", f"torch=={torch_1x}", "relu", "NATIVE IPC")
             )
-            safe_print(f"   ✅ Using torch=={torch_1x} (NATIVE CUDA IPC!)")
+            safe_print(_('   ✅ Using torch=={} (NATIVE CUDA IPC!)').format(torch_1x))
         else:
             stage_specs.append(
                 ("🔴 Stage 1 (ReLU)", "torch==2.2.0+cu121", "relu", "HYBRID")
@@ -3390,9 +3391,9 @@ def chaos_test_21_gpu_resident_pipeline():
                     )
                 )
 
-        print("\n   Pipeline Configuration:")
+        print(_('\n   Pipeline Configuration:'))
         for name, spec, op, mode in stage_specs:
-            print(f"   {name}: {spec} ({mode})")
+            print(_('   {}: {} ({})').format(name, spec, mode))
 
         # ═══════════════════════════════════════════════════════════
         # PHASE 3: Execute Pipeline
@@ -3407,7 +3408,7 @@ def chaos_test_21_gpu_resident_pipeline():
         device = torch.device("cuda:0")
         pipeline_data = torch.randn(500, 250, device=device, dtype=torch.float32)
 
-        safe_print(f"\n📦 Input: {pipeline_data.shape} tensor on {device}")
+        safe_print(_('\n📦 Input: {} tensor on {}').format(pipeline_data.shape, device))
         safe_print(f"📊 Size: {pipeline_data.numel() * 4 / 1024 / 1024:.2f} MB")
         safe_print(f"🔢 Checksum: {pipeline_data.sum().item():.2f}")
 
@@ -3422,9 +3423,9 @@ def chaos_test_21_gpu_resident_pipeline():
         native_ipc_used = False
 
         for i, (name, spec, operation, mode) in enumerate(stage_specs):
-            print(f"\n{name}: Processing...")
-            print(f"   PyTorch: {spec}")
-            print(f"   Mode: {mode}")
+            print(_('\n{}: Processing...').format(name))
+            print(_('   PyTorch: {}').format(spec))
+            print(_('   Mode: {}').format(mode))
 
             stage_start = time.perf_counter()
 
@@ -3458,7 +3459,7 @@ def chaos_test_21_gpu_resident_pipeline():
                 current_tensor = result_tensor
 
             except Exception as e:
-                safe_print(f"❌ {name} failed: {e}")
+                safe_print(_('❌ {} failed: {}').format(name, e))
                 import traceback
 
                 traceback.print_exc()
@@ -3484,7 +3485,7 @@ def chaos_test_21_gpu_resident_pipeline():
         print(f"{'Total Pipeline:':<40} {total_time:>8.3f}ms")
         print(f"{'Per-Stage Average:':<40} {avg_time:>8.3f}ms")
 
-        safe_print(f"\n✅ Output tensor still on GPU: {current_tensor.device}")
+        safe_print(_('\n✅ Output tensor still on GPU: {}').format(current_tensor.device))
         safe_print(f"🔢 Final checksum: {current_tensor.sum().item():.2f}")
 
         if native_ipc_used:
@@ -3495,8 +3496,8 @@ def chaos_test_21_gpu_resident_pipeline():
             safe_print("   💡 Install torch==1.13.1+cu116 for true zero-copy")
 
         safe_print("\n💡 PERFORMANCE:")
-        print("   CPU SHM Pipeline (Test 17): ~17ms")
-        print("   GPU Hybrid (Test 20): ~13ms")
+        print(_('   CPU SHM Pipeline (Test 17): ~17ms'))
+        print(_('   GPU Hybrid (Test 20): ~13ms'))
         print(f"   This test: {total_time:.1f}ms")
 
         return {
@@ -3536,9 +3537,9 @@ def chaos_test_22_complete_ipc_benchmark():
 
     safe_print("📍 CONFIGURATION")
     safe_print("─" * 60)
-    print(f"   PyTorch Version: {TORCH_VERSION}")
-    print("   Pipeline: 3 stages (ReLU → Sigmoid → Tanh)")
-    print("   Testing 4 execution modes\n")
+    print(_('   PyTorch Version: {}').format(TORCH_VERSION))
+    print(_('   Pipeline: 3 stages (ReLU → Sigmoid → Tanh)'))
+    print(_('   Testing 4 execution modes\n'))
 
     with omnipkgLoader(TORCH_VERSION, isolation_mode="overlay"):
         import torch
@@ -3547,7 +3548,7 @@ def chaos_test_22_complete_ipc_benchmark():
             safe_print("❌ CUDA not available - skipping test")
             return {"success": False, "reason": "No CUDA"}
 
-        safe_print(f"   ✅ Client PyTorch: {torch.__version__}")
+        safe_print(_('   ✅ Client PyTorch: {}').format(torch.__version__))
 
         from omnipkg.isolation.worker_daemon import DaemonClient
 
@@ -3557,7 +3558,7 @@ def chaos_test_22_complete_ipc_benchmark():
         # Create test data: 1000x500 = 2MB float32 tensor
         pipeline_data = torch.randn(1000, 500, device=device, dtype=torch.float32)
 
-        safe_print(f"   📦 Input: {pipeline_data.shape} tensor on {device}")
+        safe_print(_('   📦 Input: {} tensor on {}').format(pipeline_data.shape, device))
         safe_print(f"   📊 Size: {pipeline_data.numel() * 4 / 1024 / 1024:.2f} MB\n")
 
         # Define 3-stage pipeline
@@ -3624,7 +3625,7 @@ def chaos_test_22_complete_ipc_benchmark():
         safe_print("─" * 60)
 
         for mode in modes:
-            print(f"\n{mode['icon']} Warming up: {mode['name']}")
+            print(_('\n{} Warming up: {}').format(mode['icon'], mode['name']))
 
             try:
                 if mode["type"] == "cpu":
@@ -3660,7 +3661,7 @@ def chaos_test_22_complete_ipc_benchmark():
                 safe_print("   ✅ Warmup complete")
 
             except Exception as e:
-                safe_print(f"   ❌ Warmup failed: {e}")
+                safe_print(_('   ❌ Warmup failed: {}').format(e))
                 results[mode["key"]] = {"error": str(e), "skipped": True}
 
         # ═══════════════════════════════════════════════════════════
@@ -3674,8 +3675,8 @@ def chaos_test_22_complete_ipc_benchmark():
             if mode["key"] in results and results[mode["key"]].get("skipped"):
                 continue
 
-            print(f"\n{mode['icon']} Testing: {mode['name']}")
-            print(f"   {mode['desc']}")
+            print(_('\n{} Testing: {}').format(mode['icon'], mode['name']))
+            print(_('   {}').format(mode['desc']))
             safe_print("   " + "─" * 60)
 
             run_times = []
@@ -3752,7 +3753,7 @@ def chaos_test_22_complete_ipc_benchmark():
                     print(f"      Stddev:  {stddev:.3f}ms")
 
             except Exception as e:
-                safe_print(f"   ❌ Benchmark failed: {e}")
+                safe_print(_('   ❌ Benchmark failed: {}').format(e))
                 results[mode["key"]] = {"error": str(e)}
 
         # ═══════════════════════════════════════════════════════════
@@ -3805,7 +3806,7 @@ def chaos_test_22_complete_ipc_benchmark():
         winner = sorted_modes[0][1]
 
         safe_print(f"\n{'═'*66}")
-        safe_print(f"🏆 WINNER: {winner['name'].upper()}")
+        safe_print(_('🏆 WINNER: {}').format(winner['name'].upper()))
         safe_print(f"{'═'*66}")
         print(f"   Best time: {winner['min']:.3f}ms")
         print(f"   Average:   {winner['avg']:.3f}ms")
@@ -3951,10 +3952,10 @@ def chaos_test_23_grand_unified_benchmark():
                 f"   📦 Payload: {SHAPE} Matrix ({input_cpu.nbytes/1024/1024:.2f} MB)"
             )
             safe_print(
-                f"   🌊 Pipeline: {STAGES[0]['spec']} → {STAGES[1]['spec']} → {STAGES[2]['spec']}\n"
+                _('   🌊 Pipeline: {} → {} → {}\n').format(STAGES[0]['spec'], STAGES[1]['spec'], STAGES[2]['spec'])
             )
     except Exception as e:
-        safe_print(f"❌ Setup failed: {e}")
+        safe_print(_('❌ Setup failed: {}').format(e))
         return {"success": False}
 
     results = {}
@@ -4009,7 +4010,7 @@ with omnipkgLoader("{stage['spec']}", quiet=True):
             # Execute Subprocess
             proc = subprocess.run([sys.executable, "-c", code], capture_output=True)
             if proc.returncode != 0:
-                raise Exception(f"Subprocess failed: {proc.stderr.decode()}")
+                raise Exception(_('Subprocess failed: {}').format(proc.stderr.decode()))
 
             # Read back
             with open(tmp_out, "rb") as f:
@@ -4021,7 +4022,7 @@ with omnipkgLoader("{stage['spec']}", quiet=True):
             if os.path.exists(tmp_out):
                 os.remove(tmp_out)
 
-            safe_print(f"   🐢 Stage {i+1} ({stage['spec']}) complete")
+            safe_print(_('   🐢 Stage {} ({}) complete').format(i + 1, stage['spec']))
 
         t_end = time.perf_counter()
         time_lame = (t_end - t_start) * 1000
@@ -4029,7 +4030,7 @@ with omnipkgLoader("{stage['spec']}", quiet=True):
         safe_print(f"   ⏱️  Total Time: {time_lame:.2f}ms")
 
     except Exception as e:
-        safe_print(f"   ❌ Failed: {e}")
+        safe_print(_('   ❌ Failed: {}').format(e))
         results["lame"] = 999999
 
     # ═══════════════════════════════════════════════════════════
@@ -4224,13 +4225,13 @@ def select_tests_interactively():
     safe_print("   [0] 🔥 RUN ALL TESTS (The Full Experience)")
     print("-" * 60)
     for i, test_func in enumerate(ALL_TESTS, 1):
-        print(f"   [{i}] {get_test_name(test_func)}")
+        print(_('   [{}] {}').format(i, get_test_name(test_func)))
     print("=" * 60)
     safe_print("\n💡 Tip: Type numbers separated by spaces (e.g. '1 3 5').")
 
     try:
         sys.stdout.flush()
-        selection = input("\n👉 Choose tests [0]: ").strip()
+        selection = input(_('\n👉 Choose tests [0]: ')).strip()
     except (EOFError, KeyboardInterrupt):
         return ALL_TESTS
 
@@ -4259,11 +4260,11 @@ def run_chaos_suite(tests_to_run=None):
         return True
 
     results = []
-    safe_print(f"\n🚀 Launching {len(tests_to_run)} chaos scenarios...\n")
+    safe_print(_('\n🚀 Launching {} chaos scenarios...\n').format(len(tests_to_run)))
 
     for i, test in enumerate(tests_to_run, 1):
         name = get_test_name(test)
-        safe_print(f"\n🧪 TEST {i}/{len(tests_to_run)}: {name}")
+        safe_print(_('\n🧪 TEST {}/{}: {}').format(i, len(tests_to_run), name))
         safe_print("─" * 66)
         try:
             test()
@@ -4271,14 +4272,14 @@ def run_chaos_suite(tests_to_run=None):
             safe_print(f"✅ {name} - PASSED")
         except Exception as e:
             results.append(("❌", name))
-            safe_print(f"❌ {name} - FAILED: {str(e)}")
+            safe_print(_('❌ {} - FAILED: {}').format(name, str(e)))
         time.sleep(0.5)
 
     print("\n" + "=" * 66)
     safe_print("   📊 DETAILED RESULTS:")
     safe_print("─" * 66)
     for status, name in results:
-        print(f"   {status} {name}")
+        print(_('   {} {}').format(status, name))
 
     passed = sum(1 for result in results if result[0] == "✅")
 
@@ -4306,11 +4307,11 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         safe_print("\n\n⚠️  CHAOS INTERRUPTED BY USER!")
     except ProcessCorruptedException as e:
-        safe_print(f"\n☢️   CATASTROPHIC CORRUPTION: {e}")
+        safe_print(_('\n☢️   CATASTROPHIC CORRUPTION: {}').format(e))
         # Re-exec logic omitted for brevity in this cleaned version
         sys.exit(1)
     except Exception as e:
         import traceback
 
-        safe_print(f"\n💥 CHAOS FAILURE: {e}")
+        safe_print(_('\n💥 CHAOS FAILURE: {}').format(e))
         traceback.print_exc()

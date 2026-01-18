@@ -10,6 +10,7 @@ import subprocess
 import sys
 import time
 from collections import defaultdict
+from omnipkg.i18n import _
 
 
 def run_cmd(cmd):
@@ -148,7 +149,7 @@ def format_time(seconds):
 
 def clear_screen():
     """Clear terminal screen"""
-    print("\033[2J\033[H", end="")
+    print(_('\x1b[2J\x1b[H'), end="")
 
 
 def print_stats(watch_mode=False):
@@ -179,7 +180,7 @@ def print_stats(watch_mode=False):
     gpu_usage = parse_nvidia_smi()
 
     if not processes:
-        print("❌ No omnipkg daemon workers found!")
+        print(_('❌ No omnipkg daemon workers found!'))
         return
 
     # Categorize processes
@@ -202,7 +203,7 @@ def print_stats(watch_mode=False):
 
     # Print daemon manager
     if daemon_managers:
-        print("🎛️  DAEMON MANAGER:")
+        print(_('🎛️  DAEMON MANAGER:'))
         print("-" * 120)
         for proc in daemon_managers:
             gpu_str = f"GPU: {proc['gpu_mb']:>4}MB" if proc["gpu_mb"] > 0 else "GPU:   --"
@@ -214,7 +215,7 @@ def print_stats(watch_mode=False):
 
     # Print persistent workers
     if persistent_workers:
-        print("🔄 PERSISTENT WORKERS (Long-lived daemon processes):")
+        print(_('🔄 PERSISTENT WORKERS (Long-lived daemon processes):'))
         print("-" * 120)
         for proc in persistent_workers:
             gpu_str = f"GPU: {proc['gpu_mb']:>4}MB" if proc["gpu_mb"] > 0 else "GPU:   --"
@@ -226,7 +227,7 @@ def print_stats(watch_mode=False):
 
     # Print active workers
     if workers:
-        print("⚙️  ACTIVE WORKERS (Package-specific bubbles):")
+        print(_('⚙️  ACTIVE WORKERS (Package-specific bubbles):'))
         print("-" * 120)
 
         total_cpu = 0
@@ -239,7 +240,7 @@ def print_stats(watch_mode=False):
                 continue
 
             procs = workers[worker_type]
-            print(f"\n📦 {worker_type}")
+            print(_('\n📦 {}').format(worker_type))
 
             for proc in procs:
                 worker_count += 1
@@ -257,9 +258,9 @@ def print_stats(watch_mode=False):
         # Print summary
         print()
         print("=" * 120)
-        print("📊 WORKER SUMMARY STATISTICS")
+        print(_('📊 WORKER SUMMARY STATISTICS'))
         print("=" * 120)
-        print(f"  Active Workers:         {worker_count}")
+        print(_('  Active Workers:         {}').format(worker_count))
         print(f"  Total CPU Usage:        {total_cpu:.1f}%")
         print(f"  Total RAM:              {total_ram_mb:.1f}MB ({total_ram_mb/1024:.2f}GB)")
         print(f"  Total GPU VRAM:         {total_gpu_mb}MB ({total_gpu_mb/1024:.2f}GB)")
@@ -270,7 +271,7 @@ def print_stats(watch_mode=False):
 
         # Print efficiency metrics
         print()
-        print("🎯 EFFICIENCY METRICS:")
+        print(_('🎯 EFFICIENCY METRICS:'))
         print("-" * 120)
         if worker_count > 0:
             docker_efficiency = (500 * worker_count) / total_ram_mb if total_ram_mb > 0 else 0
@@ -290,14 +291,14 @@ def print_stats(watch_mode=False):
 def start_monitor(watch_mode=False):
     """Entry point for the monitor"""
     if watch_mode:
-        print("Starting watch mode (Ctrl+C to exit)...")
+        print(_('Starting watch mode (Ctrl+C to exit)...'))
         time.sleep(1)
         try:
             while True:
                 print_stats(watch_mode=True)
                 time.sleep(2)
         except KeyboardInterrupt:
-            print("\n\nExiting watch mode...")
+            print(_('\n\nExiting watch mode...'))
     else:
         print_stats(watch_mode=False)
         print("\n💡 Tip: Use --watch or -w flag for live monitoring")

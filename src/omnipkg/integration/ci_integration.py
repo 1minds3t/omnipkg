@@ -18,6 +18,7 @@ Add these commands to your main CLI handler (cli.py)
 # In your cli.py, add these imports:
 from omnipkg.cli_executor import handle_run_command
 from omnipkg.omnipkg_activate import cmd_activate, cmd_deactivate
+from omnipkg.i18n import _
 
 
 # Then enhance your run command:
@@ -92,21 +93,21 @@ def status():
 
     if is_active:
         safe_print("✅ Omnipkg environment is ACTIVE")
-        print(f"   Wrappers directory: {env_dir / 'bin'}")
+        print(_('   Wrappers directory: {}').format(env_dir / 'bin'))
 
         # Count wrappers
         bin_dir = env_dir / "bin"
         if bin_dir.exists():
             wrapper_count = len(list(bin_dir.iterdir()))
-            print(f"   Active wrappers: {wrapper_count}")
+            print(_('   Active wrappers: {}').format(wrapper_count))
     else:
         safe_print("⏹️  Omnipkg environment is NOT active")
 
         if env_dir.exists():
-            print(f"   (Environment exists at {env_dir})")
-            print("   Run: 8pkg activate")
+            print(_('   (Environment exists at {})').format(env_dir))
+            print(_('   Run: 8pkg activate'))
         else:
-            print("   Run: 8pkg activate  # to create environment")
+            print(_('   Run: 8pkg activate  # to create environment'))
 
 
 """

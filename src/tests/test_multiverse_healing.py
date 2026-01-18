@@ -8,6 +8,7 @@ import re
 from pathlib import Path
 import time
 import traceback
+from omnipkg.i18n import _
 
 try:
     from omnipkg.common_utils import safe_print
@@ -31,13 +32,13 @@ if "OMNIPKG_MAIN_ORCHESTRATOR_PID" not in os.environ:
     os.environ["OMNIPKG_MAIN_ORCHESTRATOR_PID"] = str(os.getpid())
 
     print(
-        "--- BOOTSTRAP: Main orchestrator process detected. Forcing Python 3.11 context. ---"
+        _('--- BOOTSTRAP: Main orchestrator process detected. Forcing Python 3.11 context. ---')
     )
 
     # Check if we are already running on Python 3.11
     if sys.version_info[:2] != (3, 11):
         print(
-            f"   - Current Python is {sys.version_info.major}.{sys.version_info.minor}. Relaunching is required."
+            _('   - Current Python is {}.{}. Relaunching is required.').format(sys.version_info.major, sys.version_info.minor)
         )
 
         # We cannot trust the omnipkg config. We must find 3.11 ourselves.
@@ -53,7 +54,7 @@ if "OMNIPKG_MAIN_ORCHESTRATOR_PID" not in os.environ:
             )
 
             if not target_exe or not target_exe.exists():
-                print("   - Python 3.11 not found, attempting to adopt it first...")
+                print(_('   - Python 3.11 not found, attempting to adopt it first...'))
                 if omnipkg_instance.adopt_interpreter("3.11") != 0:
                     raise RuntimeError(
                         "Failed to adopt Python 3.11 for the test orchestrator."
@@ -67,8 +68,8 @@ if "OMNIPKG_MAIN_ORCHESTRATOR_PID" not in os.environ:
                     "Could not find a managed Python 3.11 to run the test."
                 )
 
-            print(f"   - Found Python 3.11 at: {target_exe}")
-            print("   - Relaunching orchestrator...")
+            print(_('   - Found Python 3.11 at: {}').format(target_exe))
+            print(_('   - Relaunching orchestrator...'))
 
             # Relaunch THIS script using the found 3.11 executable.
             # This completely bypasses the user's current swapped context.
@@ -76,13 +77,13 @@ if "OMNIPKG_MAIN_ORCHESTRATOR_PID" not in os.environ:
 
         except Exception as e:
             print(
-                f"FATAL BOOTSTRAP ERROR: Could not relaunch into Python 3.11. Error: {e}"
+                _('FATAL BOOTSTRAP ERROR: Could not relaunch into Python 3.11. Error: {}').format(e)
             )
             sys.exit(1)
 
     # If we reach here, we are guaranteed to be running under Python 3.11.
     # Now, sync the omnipkg configuration to this reality.
-    print("--- BOOTSTRAP: Now running in Python 3.11. Aligning omnipkg context. ---")
+    print(_('--- BOOTSTRAP: Now running in Python 3.11. Aligning omnipkg context. ---'))
     sync_context_to_runtime()
 
 # NOW we can import the rest after bootstrap
@@ -138,9 +139,9 @@ def run_command_with_isolated_context(command, description, check=True):
     Runs a command with isolated omnipkg context (no auto-alignment).
     This prevents the parent script's context from interfering with subcommands.
     """
-    safe_print(f"\n>> Executing: {description}")
-    print(f" Command: {' '.join(command)}")
-    print(" --- Live Output ---")
+    safe_print(_('\n>> Executing: {}').format(description))
+    print(_(' Command: {}').format(' '.join(command)))
+    print(_(' --- Live Output ---'))
 
     # Create a clean environment that prevents context auto-alignment
     env = os.environ.copy()
@@ -168,7 +169,7 @@ def run_command_with_isolated_context(command, description, check=True):
     for line in iter(process.stdout.readline, ""):
         stripped_line = line.strip()
         if stripped_line:
-            print(f" | {stripped_line}")
+            print(_(' | {}').format(stripped_line))
         output_lines.append(line)
     process.stdout.close()
     return_code = process.wait()
@@ -191,9 +192,9 @@ def get_interpreter_path(version: str) -> str:
             match = re.search(r":\s*(/\S+)", line)
             if match:
                 path = match.group(1).strip()
-                safe_print(f" [OK] Found at: {path}")
+                safe_print(_(' [OK] Found at: {}').format(path))
                 return path
-    raise RuntimeError(f"Could not find managed Python {version}.")
+    raise RuntimeError(_('Could not find managed Python {}.').format(version))
 
 
 def install_packages_with_omnipkg(packages: list, description: str):
@@ -241,15 +242,15 @@ def multiverse_analysis():
     )
 
     # Debug output to see what we actually got
-    print(f"DEBUG: Exit code: {result_3_9.returncode}")
-    print(f"DEBUG: Stdout: '{result_3_9.stdout}'")
-    print(f"DEBUG: Stderr: '{result_3_9.stderr}'")
+    print(_('DEBUG: Exit code: {}').format(result_3_9.returncode))
+    print(_("DEBUG: Stdout: '{}'").format(result_3_9.stdout))
+    print(_("DEBUG: Stderr: '{}'").format(result_3_9.stderr))
 
     if result_3_9.returncode != 0:
         safe_print(
             f"[ERROR] Legacy payload failed with exit code {result_3_9.returncode}"
         )
-        print(f"Stderr: {result_3_9.stderr}")
+        print(_('Stderr: {}').format(result_3_9.stderr))
         raise RuntimeError("Legacy payload execution failed")
 
     if not result_3_9.stdout.strip():
@@ -263,7 +264,7 @@ def multiverse_analysis():
     ]
     if not json_lines:
         raise RuntimeError(
-            f"No JSON output found in legacy payload. Output was: {result_3_9.stdout}"
+            _('No JSON output found in legacy payload. Output was: {}').format(result_3_9.stdout)
         )
 
     legacy_data = json.loads(json_lines[-1])
@@ -300,7 +301,7 @@ def multiverse_analysis():
     ][-1]
     final_prediction = json.loads(json_output)
     safe_print(
-        f"[OK] Artifact processed by 3.11: TensorFlow prediction complete. Prediction: '{final_prediction['prediction']}'"
+        _("[OK] Artifact processed by 3.11: TensorFlow prediction complete. Prediction: '{}'").format(final_prediction['prediction'])
     )
 
     return final_prediction["prediction"] == "SUCCESS"
@@ -324,7 +325,7 @@ if __name__ == "__main__":
     try:
         success = multiverse_analysis()
     except Exception as e:
-        safe_print(f"\n[ERROR] An error occurred during the analysis: {e}")
+        safe_print(_('\n[ERROR] An error occurred during the analysis: {}').format(e))
         traceback.print_exc()
 
     end_time = time.perf_counter()

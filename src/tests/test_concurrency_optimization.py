@@ -2,6 +2,7 @@ from omnipkg.common_utils import safe_print
 import sys
 import threading
 import time
+from omnipkg.i18n import _
 
 
 def cpu_bound_work(n):
@@ -15,7 +16,7 @@ def cpu_bound_work(n):
 def benchmark_comparison(num_threads=3, iterations=10_000_000):
     # Test 1: Sequential execution
     print("=" * 60)
-    print("Test 1: Sequential Execution (baseline)")
+    print(_('Test 1: Sequential Execution (baseline)'))
     print("=" * 60)
     start = time.perf_counter()
     for unused in range(num_threads):
@@ -25,7 +26,7 @@ def benchmark_comparison(num_threads=3, iterations=10_000_000):
 
     # Test 2: Threaded execution
     print("\n" + "=" * 60)
-    print("Test 2: Threaded Execution")
+    print(_('Test 2: Threaded Execution'))
     print("=" * 60)
     start = time.perf_counter()
     threads = []
@@ -43,9 +44,9 @@ def benchmark_comparison(num_threads=3, iterations=10_000_000):
     # Calculate real speedup
     speedup = sequential_time / threaded_time
     print("\n" + "=" * 60)
-    print("RESULTS")
+    print(_('RESULTS'))
     print("=" * 60)
-    print(f"GIL enabled: {getattr(sys, '_is_gil_enabled', lambda: True)()}")
+    print(_('GIL enabled: {}').format(getattr(sys, '_is_gil_enabled', lambda: True)()))
     print(f"Sequential: {sequential_time:.2f}s")
     print(f"Threaded:   {threaded_time:.2f}s")
     print(f"Real speedup: {speedup:.2f}x")

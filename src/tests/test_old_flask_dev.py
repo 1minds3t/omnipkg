@@ -29,7 +29,7 @@ BUBBLE_VERSION = "0.4.1"  # Create bubble for this old version
 
 def print_header(title):
     safe_print("\n" + "=" * 80)
-    safe_print(f"  🚀 {title}")
+    safe_print(_('  🚀 {}').format(title))
     safe_print("=" * 80)
 
 
@@ -54,7 +54,7 @@ def run_command(command_list, check=True):
 def setup_main_environment(omnipkg_core: OmnipkgCore):
     """Install MAIN version (0.6.3) in the main environment"""
     print_header("STEP 1: Installing Main Version in Main Environment")
-    safe_print(f"📦 Installing flask-login=={MAIN_VERSION} to main environment...")
+    safe_print(_('📦 Installing flask-login=={} to main environment...').format(MAIN_VERSION))
 
     # Uninstall any existing version first
     run_command(["pip", "uninstall", "-y", "flask-login"], check=False)
@@ -72,11 +72,11 @@ def setup_main_environment(omnipkg_core: OmnipkgCore):
             return True
         else:
             safe_print(
-                f"❌ Version mismatch: expected {MAIN_VERSION}, got {actual_version}"
+                _('❌ Version mismatch: expected {}, got {}').format(MAIN_VERSION, actual_version)
             )
             return False
     except Exception as e:
-        safe_print(f"❌ Failed to verify main installation: {e}")
+        safe_print(_('❌ Failed to verify main installation: {}').format(e))
         return False
 
 
@@ -112,7 +112,7 @@ def create_bubble_for_old_version(omnipkg_core: OmnipkgCore):
             safe_print(f"❌ Failed to create bubble for flask-login=={BUBBLE_VERSION}")
             return False
     except Exception as e:
-        safe_print(f"❌ Error creating bubble: {e}")
+        safe_print(_('❌ Error creating bubble: {}').format(e))
         import traceback
 
         traceback.print_exc()
@@ -205,8 +205,8 @@ def run_demo():
         omnipkg_core = OmnipkgCore(config_manager)
 
         print_header("Flask-Login Version Switching Demo")
-        safe_print(f"Main version:   {MAIN_VERSION}")
-        safe_print(f"Bubble version: {BUBBLE_VERSION}")
+        safe_print(_('Main version:   {}').format(MAIN_VERSION))
+        safe_print(_('Bubble version: {}').format(BUBBLE_VERSION))
 
         # Step 1: Install main version
         if not setup_main_environment(omnipkg_core):
@@ -222,13 +222,13 @@ def run_demo():
         test_version_switching()
 
         print_header("🎉 DEMO COMPLETE! 🎉")
-        safe_print(f"✅ Main environment: flask-login {MAIN_VERSION}")
-        safe_print(f"✅ Bubble created: flask-login {BUBBLE_VERSION}")
+        safe_print(_('✅ Main environment: flask-login {}').format(MAIN_VERSION))
+        safe_print(_('✅ Bubble created: flask-login {}').format(BUBBLE_VERSION))
         safe_print("✅ Version switching works perfectly!")
         safe_print("\n🚀 Time Machine successfully handled the legacy version!")
 
     except Exception as e:
-        safe_print(f"\n❌ Demo failed: {e}")
+        safe_print(_('\n❌ Demo failed: {}').format(e))
         import traceback
 
         traceback.print_exc()

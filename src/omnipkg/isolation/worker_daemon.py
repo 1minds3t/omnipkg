@@ -25,6 +25,7 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set, Tuple
 import filelock
 
 from omnipkg.common_utils import safe_print
+from omnipkg.i18n import _
 
 try:
     from .common_utils import safe_print
@@ -36,10 +37,10 @@ try:
     from omnipkg.isolation import omnipkg_atomic
     _HAS_ATOMICS = True
     # Print to stderr so it shows up in daemon logs
-    sys.stderr.write(f"✅ [DAEMON] Hardware Atomics LOADED: {omnipkg_atomic}\n")
+    sys.stderr.write(_('✅ [DAEMON] Hardware Atomics LOADED: {}\n').format(omnipkg_atomic))
 except ImportError as e:
     _HAS_ATOMICS = False
-    sys.stderr.write(f"⚠️ [DAEMON] Hardware Atomics FAILED: {e}\n")
+    sys.stderr.write(_('⚠️ [DAEMON] Hardware Atomics FAILED: {}\n').format(e))
     # Debug: print sys.path to see where it's looking
     sys.stderr.write(f"   sys.path: {sys.path}\n")
 
@@ -90,7 +91,7 @@ class SharedStateMonitor:
             else:
                 self.shm = shared_memory.SharedMemory(name=name)
         except Exception as e:
-            raise RuntimeError(f"Failed to attach control block {name}: {e}")
+            raise RuntimeError(_('Failed to attach control block {}: {}').format(name, e))
             
         # We need a secondary lock mechanism because Python lacks true atomic CAS
         # In C++, this would be std::atomic<T>
@@ -1234,7 +1235,7 @@ def diagnose_worker_issue(package_spec: str):
     """
     Run this to diagnose why a worker might return the wrong version.
     """
-    safe_print(f"\n🔍 Diagnosing worker issue for: {package_spec}")
+    safe_print(_('\n🔍 Diagnosing worker issue for: {}').format(package_spec))
     print("=" * 70)
 
     pkg_name, expected_version = package_spec.split("==")
@@ -1244,7 +1245,7 @@ def diagnose_worker_issue(package_spec: str):
     import sys
 
     for i, path in enumerate(sys.path):
-        print(f"   [{i}] {path}")
+        print(_('   [{}] {}').format(i, path))
 
     # Check what version is importable
     print(f"\n2. Attempting to import {pkg_name}:")
@@ -1252,12 +1253,12 @@ def diagnose_worker_issue(package_spec: str):
         from importlib.metadata import version
 
         actual_version = version(pkg_name)
-        safe_print(f"   ✅ Found version: {actual_version}")
+        safe_print(_('   ✅ Found version: {}').format(actual_version))
 
         if actual_version != expected_version:
             safe_print("   ❌ VERSION MISMATCH!")
-            print(f"      Expected: {expected_version}")
-            print(f"      Got: {actual_version}")
+            print(_('      Expected: {}').format(expected_version))
+            print(_('      Got: {}').format(actual_version))
     except Exception as e:
         safe_print(f"   ❌ Import failed: {e}")
 
@@ -1272,12 +1273,12 @@ def diagnose_worker_issue(package_spec: str):
     )
     bubble_path = site_packages / ".omnipkg_versions" / f"{pkg_name}-{expected_version}"
 
-    print("\n3. Bubble check:")
-    print(f"   Path: {bubble_path}")
-    print(f"   Exists: {bubble_path.exists()}")
+    print(_('\n3. Bubble check:'))
+    print(_('   Path: {}').format(bubble_path))
+    print(_('   Exists: {}').format(bubble_path.exists()))
 
     if bubble_path.exists():
-        print(f"   Contents: {list(bubble_path.glob('*'))[:5]}")
+        print(_('   Contents: {}').format(list(bubble_path.glob('*'))[:5]))
 
     print("\n" + "=" * 70)
 
@@ -1333,7 +1334,7 @@ class PersistentWorker:
             # Check if process is still alive
             if process.poll() is not None:
                 stderr_output = "".join(stderr_lines)
-                raise RuntimeError(f"Worker crashed during startup. Stderr: {stderr_output}")
+                raise RuntimeError(_('Worker crashed during startup. Stderr: {}').format(stderr_output))
 
             # Check for READY on stdout (non-blocking)
             ready, unused, unused = select.select([process.stdout], [], [], 0.1)
@@ -1580,11 +1581,11 @@ class PersistentWorker:
         """Start worker process with proper error handling."""
         # CRITICAL DEBUG: Check _DAEMON_SCRIPT before writing
         safe_print(
-            f"\n🔍 DEBUG: _DAEMON_SCRIPT length: {len(_DAEMON_SCRIPT)} chars",
+            _('\n🔍 DEBUG: _DAEMON_SCRIPT length: {} chars').format(len(_DAEMON_SCRIPT)),
             file=sys.stderr,
         )
         safe_print("🔍 DEBUG: Last 200 chars of _DAEMON_SCRIPT:", file=sys.stderr)
-        print(f"   '{_DAEMON_SCRIPT[-200:]}'", file=sys.stderr)
+        print(_("   '{}'").format(_DAEMON_SCRIPT[-200:]), file=sys.stderr)
 
         # Create temp script file
         with tempfile.NamedTemporaryFile(
@@ -1596,9 +1597,9 @@ class PersistentWorker:
             self.temp_file = f.name
 
         # CRITICAL DEBUG: Print the temp file path and validate syntax
-        safe_print(f"\n🔍 DEBUG: Worker script written to: {self.temp_file}", file=sys.stderr)
+        safe_print(_('\n🔍 DEBUG: Worker script written to: {}').format(self.temp_file), file=sys.stderr)
         safe_print(
-            f"🔍 DEBUG: File size: {os.path.getsize(self.temp_file)} bytes",
+            _('🔍 DEBUG: File size: {} bytes').format(os.path.getsize(self.temp_file)),
             file=sys.stderr,
         )
 
@@ -1610,8 +1611,8 @@ class PersistentWorker:
             safe_print("✅ DEBUG: Script syntax is valid", file=sys.stderr)
         except SyntaxError as e:
             safe_print("\n💥 SYNTAX ERROR IN GENERATED SCRIPT!", file=sys.stderr)
-            print(f"   File: {self.temp_file}", file=sys.stderr)
-            print(f"   Line {e.lineno}: {e.msg}", file=sys.stderr)
+            print(_('   File: {}').format(self.temp_file), file=sys.stderr)
+            print(_('   Line {}: {}').format(e.lineno, e.msg), file=sys.stderr)
             safe_print("\n📄 SCRIPT CONTENT (last 50 lines):", file=sys.stderr)
             with open(self.temp_file, "r") as f:
                 lines = f.readlines()
@@ -1640,11 +1641,11 @@ class PersistentWorker:
             env["LD_LIBRARY_PATH"] = new_ld
 
             safe_print(
-                f"🔧 [WORKER] Injecting {len(cuda_lib_paths)} CUDA paths into environment",
+                _('🔧 [WORKER] Injecting {} CUDA paths into environment').format(len(cuda_lib_paths)),
                 file=sys.stderr,
             )
             for path in cuda_lib_paths:
-                print(f"   - {path}", file=sys.stderr)
+                print(_('   - {}').format(path), file=sys.stderr)
 
         # Open daemon log for worker stderr (store as instance variable)
         self.log_file = open(DAEMON_LOG_FILE, "a", buffering=1)
@@ -1667,7 +1668,7 @@ class PersistentWorker:
             self.process.stdin.flush()
         except Exception as e:
             self.force_shutdown()
-            raise RuntimeError(f"Failed to send setup: {e}")
+            raise RuntimeError(_('Failed to send setup: {}').format(e))
 
         # Wait for READY with timeout
         try:
@@ -1694,10 +1695,10 @@ class PersistentWorker:
             try:
                 ready_status = json.loads(ready_line)
             except json.JSONDecodeError as e:
-                raise RuntimeError(f"Worker sent invalid READY JSON: {repr(ready_line)}: {e}")
+                raise RuntimeError(_('Worker sent invalid READY JSON: {}: {}').format(repr(ready_line), e))
 
             if ready_status.get("status") != "READY":
-                raise RuntimeError(f"Worker failed to initialize: {ready_status}")
+                raise RuntimeError(_('Worker failed to initialize: {}').format(ready_status))
 
             # Success!
             self.last_health_check = time.time()
@@ -1705,7 +1706,7 @@ class PersistentWorker:
 
         except Exception as e:
             self.force_shutdown()
-            raise RuntimeError(f"Worker initialization failed: {e}")
+            raise RuntimeError(_('Worker initialization failed: {}').format(e))
 
     def execute_shm_task(
         self,
@@ -1885,19 +1886,19 @@ class WorkerPoolDaemon:
             # Check if it started
             if self.is_running():
                 safe_print(
-                    f"✅ Daemon started successfully (PID: {process.pid})",
+                    _('✅ Daemon started successfully (PID: {})').format(process.pid),
                     file=sys.stderr,
                 )
                 sys.exit(0)
             else:
                 safe_print(
-                    f"❌ Daemon failed to start (check {DAEMON_LOG_FILE})",
+                    _('❌ Daemon failed to start (check {})').format(DAEMON_LOG_FILE),
                     file=sys.stderr,
                 )
                 sys.exit(1)
 
         except Exception as e:
-            safe_print(f"❌ Failed to start daemon: {e}", file=sys.stderr)
+            safe_print(_('❌ Failed to start daemon: {}').format(e), file=sys.stderr)
             import traceback
 
             traceback.print_exc()
@@ -1911,10 +1912,10 @@ class WorkerPoolDaemon:
                 # ---------------------------------------------------------
                 # PARENT PROCESS: Print success and exit
                 # ---------------------------------------------------------
-                safe_print(f"✅ Daemon started successfully (PID: {pid})")
+                safe_print(_('✅ Daemon started successfully (PID: {})').format(pid))
                 sys.exit(0)
         except OSError as e:
-            sys.stderr.write(f"fork #1 failed: {e}\n")
+            sys.stderr.write(_('fork #1 failed: {}\n').format(e))
             sys.exit(1)
 
         # Decouple from parent environment
@@ -1927,7 +1928,7 @@ class WorkerPoolDaemon:
             if pid > 0:
                 sys.exit(0)
         except OSError as e:
-            sys.stderr.write(f"fork #2 failed: {e}\n")
+            sys.stderr.write(_('fork #2 failed: {}\n').format(e))
             sys.exit(1)
 
         # Flush standard file descriptors
@@ -2104,7 +2105,7 @@ class WorkerPoolDaemon:
             except Exception as e:
                 import traceback
 
-                error_msg = f"Worker creation failed: {e}\n{traceback.format_exc()}"
+                error_msg = _('Worker creation failed: {}\n{}').format(e, traceback.format_exc())
                 return {"success": False, "error": error_msg, "status": "ERROR"}
 
         # Execute (outside all locks)
@@ -2164,7 +2165,7 @@ class WorkerPoolDaemon:
                     core.config["install_strategy"] = original_strategy
 
         except Exception as e:
-            safe_print(f"   ❌ [DAEMON] Installation failed: {e}", file=sys.stderr)
+            safe_print(_('   ❌ [DAEMON] Installation failed: {}').format(e), file=sys.stderr)
             return False
 
     def _execute_cuda_code(
@@ -2285,7 +2286,7 @@ class WorkerPoolDaemon:
             except Exception as e:
                 import traceback
 
-                error_msg = f"Worker creation failed: {e}\n{traceback.format_exc()}"
+                error_msg = _('Worker creation failed: {}\n{}').format(e, traceback.format_exc())
                 return {"success": False, "error": error_msg, "status": "ERROR"}
 
         # Execute (outside locks)
@@ -2716,7 +2717,7 @@ class SmartGPUIPC:
 
     def __init__(self):
         self.mode = detect_torch_cuda_ipc_mode()
-        safe_print(f"🔥 GPU IPC Mode: {self.mode}")
+        safe_print(_('🔥 GPU IPC Mode: {}').format(self.mode))
 
         if self.mode == "native_1x":
             self.share = share_tensor_native_1x
@@ -2836,14 +2837,14 @@ class IPCCapabilities:
                 return requested_mode, "Universal CUDA IPC available"
             else:
                 fallback = IPCCapabilities.detect_optimal_mode()
-                return fallback, f"Universal IPC unavailable, using {fallback.value}"
+                return fallback, _('Universal IPC unavailable, using {}').format(fallback.value)
 
         if requested_mode == IPCMode.PYTORCH_NATIVE:
             if IPCCapabilities.has_pytorch_1x_native():
                 return requested_mode, "PyTorch 1.x native IPC available"
             else:
                 fallback = IPCCapabilities.detect_optimal_mode()
-                return fallback, f"PyTorch native unavailable, using {fallback.value}"
+                return fallback, _('PyTorch native unavailable, using {}').format(fallback.value)
 
         # CPU SHM always works (no GPU needed)
         if requested_mode == IPCMode.CPU_SHM:
@@ -2855,7 +2856,7 @@ class IPCCapabilities:
 
         # Unknown mode
         fallback = IPCCapabilities.detect_optimal_mode()
-        return fallback, f"Unknown mode, using {fallback.value}"
+        return fallback, _('Unknown mode, using {}').format(fallback.value)
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -2965,7 +2966,7 @@ class DaemonClient:
                         "error": "Failed to auto-start daemon (timeout)",
                     }
             except Exception as e:
-                return {"success": False, "error": f"Communication error: {e}"}
+                return {"success": False, "error": _('Communication error: {}').format(e)}
         return {"success": False, "error": "Connection failed after retries"}
 
     def optimistic_update_atomic(self, expected_version: int) -> bool:
@@ -3059,13 +3060,13 @@ class DaemonClient:
         try:
             mode_enum = IPCMode(ipc_mode.lower())
         except ValueError:
-            safe_print(f"⚠️  Invalid IPC mode '{ipc_mode}', using auto")
+            safe_print(_("⚠️  Invalid IPC mode '{}', using auto").format(ipc_mode))
             mode_enum = IPCMode.AUTO
 
         # Validate and get actual mode
         actual_mode, mode_msg = IPCCapabilities.validate_mode(mode_enum)
 
-        safe_print(f"   🎯 IPC Mode: {mode_msg}")
+        safe_print(_('   🎯 IPC Mode: {}').format(mode_msg))
 
         # ═══════════════════════════════════════════════════════════
         # ROUTE 1: UNIVERSAL CUDA IPC (DEFAULT - FASTEST)
@@ -3141,7 +3142,7 @@ class DaemonClient:
             )
 
             if not response.get("success"):
-                raise RuntimeError(f"Worker Error: {response.get('error')}")
+                raise RuntimeError(_('Worker Error: {}').format(response.get('error')))
 
             safe_print("   ✅ CPU SHM mode completed")
 
@@ -3154,7 +3155,7 @@ class DaemonClient:
             return output_tensor, response
 
         except Exception as e:
-            safe_print(f"   ⚠️  CPU SHM failed: {e}")
+            safe_print(_('   ⚠️  CPU SHM failed: {}').format(e))
             raise
 
     def _execute_universal_ipc(
@@ -3203,18 +3204,18 @@ class DaemonClient:
             )
 
             if not response.get("success"):
-                raise RuntimeError(f"Worker Error: {response.get('error')}")
+                raise RuntimeError(_('Worker Error: {}').format(response.get('error')))
 
             actual_method = response.get("cuda_method", "unknown")
             if actual_method == "universal_ipc":
                 safe_print("   🔥 Worker confirmed UNIVERSAL IPC (true zero-copy)!")
             else:
-                safe_print(f"   ⚠️  Worker fell back to {actual_method}")
+                safe_print(_('   ⚠️  Worker fell back to {}').format(actual_method))
 
             return output_tensor, response
 
         except Exception as e:
-            safe_print(f"   ⚠️  Universal IPC failed: {e}")
+            safe_print(_('   ⚠️  Universal IPC failed: {}').format(e))
             raise
 
     def _execute_pytorch_native_ipc(
@@ -3314,18 +3315,18 @@ class DaemonClient:
             )
 
             if not response.get("success"):
-                raise RuntimeError(f"Worker Error: {response.get('error')}")
+                raise RuntimeError(_('Worker Error: {}').format(response.get('error')))
 
             actual_method = response.get("cuda_method", "unknown")
             if actual_method == "native_ipc":
                 safe_print("   🔥 Worker confirmed NATIVE IPC (PyTorch managed)!")
             else:
-                safe_print(f"   ⚠️  Worker fell back to {actual_method}")
+                safe_print(_('   ⚠️  Worker fell back to {}').format(actual_method))
 
             return output_tensor, response
 
         except Exception as e:
-            safe_print(f"   ⚠️  PyTorch native IPC failed: {e}")
+            safe_print(_('   ⚠️  PyTorch native IPC failed: {}').format(e))
             raise
 
     def _execute_hybrid_ipc(self, spec, code, input_tensor, output_shape, output_dtype, python_exe):
@@ -3383,7 +3384,7 @@ class DaemonClient:
             )
 
             if not response.get("success"):
-                raise RuntimeError(f"Worker Error: {response.get('error')}")
+                raise RuntimeError(_('Worker Error: {}').format(response.get('error')))
 
             safe_print("   ✅ Hybrid mode completed")
 
@@ -3447,7 +3448,7 @@ class DaemonClient:
             response = self.execute_shm(spec, code, in_meta, out_meta, python_exe=python_exe)
 
             if not response.get("success"):
-                raise RuntimeError(f"Worker Error: {response.get('error')}")
+                raise RuntimeError(_('Worker Error: {}').format(response.get('error')))
 
             result_view = np.ndarray(output_shape, dtype=output_dtype, buffer=shm_out.buf)
             return result_view.copy(), response
@@ -3599,7 +3600,7 @@ def cli_start():
     try:
         daemon.start(daemonize=True)
     except Exception as e:
-        safe_print(f"\n❌ Failed to start: {e}")
+        safe_print(_('\n❌ Failed to start: {}').format(e))
 
 
 def cli_stop():
@@ -3613,7 +3614,7 @@ def cli_stop():
         except:
             pass
     else:
-        safe_print(f"❌ Failed to stop: {result.get('error', 'Unknown error')}")
+        safe_print(_('❌ Failed to stop: {}').format(result.get('error', 'Unknown error')))
 
 
 def cli_status():
@@ -3626,30 +3627,30 @@ def cli_status():
     result = client.status()
 
     if not result.get("success"):
-        safe_print(f"❌ Error: {result.get('error', 'Unknown error')}")
+        safe_print(_('❌ Error: {}').format(result.get('error', 'Unknown error')))
         return
 
     print("\n" + "=" * 60)
     safe_print("🔥 OMNIPKG WORKER DAEMON STATUS")
     print("=" * 60)
-    print(f"  Workers: {result.get('workers', 0)}")
+    print(_('  Workers: {}').format(result.get('workers', 0)))
 
     # 🔥 FIX: Handle missing psutil gracefully
     memory_percent = result.get("memory_percent", -1)
     if memory_percent >= 0:
         print(f"  Memory Usage: {memory_percent:.1f}%")
     else:
-        print("  Memory Usage: N/A (psutil not installed)")
+        print(_('  Memory Usage: N/A (psutil not installed)'))
 
-    print(f"  Total Requests: {result['stats']['total_requests']}")
-    print(f"  Cache Hits: {result['stats']['cache_hits']}")
-    print(f"  Errors: {result['stats']['errors']}")
+    print(_('  Total Requests: {}').format(result['stats']['total_requests']))
+    print(_('  Cache Hits: {}').format(result['stats']['cache_hits']))
+    print(_('  Errors: {}').format(result['stats']['errors']))
 
     if result.get("worker_details"):
         safe_print("\n  📦 Active Workers:")
         for spec, info in result["worker_details"].items():
             idle = time.time() - info["last_used"]
-            print(f"    - {spec}")
+            print(_('    - {}').format(spec))
             print(
                 f"      Requests: {info['request_count']}, Idle: {idle:.0f}s, Failures: {info['health_failures']}"
             )
@@ -3663,11 +3664,11 @@ def cli_logs(follow: bool = False, tail_lines: int = 50):
 
     log_path = Path(DAEMON_LOG_FILE)
     if not log_path.exists():
-        safe_print(f"❌ Log file not found at: {log_path}")
-        print("   (The daemon might not have started yet)")
+        safe_print(_('❌ Log file not found at: {}').format(log_path))
+        print(_('   (The daemon might not have started yet)'))
         return
 
-    safe_print(f"📄 Tailing {log_path} (last {tail_lines} lines)...")
+    safe_print(_('📄 Tailing {} (last {} lines)...').format(log_path, tail_lines))
     print("-" * 60)
 
     try:
@@ -3707,7 +3708,7 @@ def cli_logs(follow: bool = False, tail_lines: int = 50):
     except KeyboardInterrupt:
         safe_print("\n🛑 Stopped following logs.")
     except Exception as e:
-        safe_print(f"\n❌ Error reading logs: {e}")
+        safe_print(_('\n❌ Error reading logs: {}').format(e))
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -3718,7 +3719,7 @@ if __name__ == "__main__":
     import sys
 
     if len(sys.argv) < 2:
-        print("Usage: python -m omnipkg.isolation.worker_daemon {start|stop|status|logs}")
+        print(_('Usage: python -m omnipkg.isolation.worker_daemon {start|stop|status|logs}'))
         sys.exit(1)
 
     cmd = sys.argv[1]
@@ -3755,9 +3756,9 @@ if __name__ == "__main__":
 
                 start_monitor(watch_mode=watch)
             except ImportError:
-                print("❌ resource_monitor module not found.")
+                print(_('❌ resource_monitor module not found.'))
                 sys.exit(1)
     # ^^^^^^^^^^^^^^^^^^^^^^^^
     else:
-        print(f"Unknown command: {cmd}")
+        print(_('Unknown command: {}').format(cmd))
         sys.exit(1)

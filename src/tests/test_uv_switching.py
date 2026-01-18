@@ -36,7 +36,7 @@ BUBBLE_VERSIONS_TO_TEST = ["0.4.30", "0.5.11"]
 
 def print_header(title):
     safe_print("\n" + "=" * 80)
-    safe_print(f"  🚀 {title}")
+    safe_print(_('  🚀 {}').format(title))
     safe_print("=" * 80)
 
 
@@ -109,7 +109,7 @@ def create_test_bubbles(omnipkg_core: OmnipkgCore):
             )
 
             if success:
-                safe_print(f"   ✅ Bubble created: {bubble_name}")
+                safe_print(_('   ✅ Bubble created: {}').format(bubble_name))
                 # Also ensure the KB knows about this new bubble
                 omnipkg_core.rebuild_package_kb([f"uv=={version}"])
             else:
@@ -131,14 +131,14 @@ def force_omnipkg_rescan(omnipkg_core, package_name):
 
 def inspect_bubble_structure(bubble_path):
     """Prints a summary of the bubble's directory structure for verification."""
-    safe_print(f"   🔍 Inspecting bubble structure: {bubble_path.name}")
+    safe_print(_('   🔍 Inspecting bubble structure: {}').format(bubble_path.name))
     if not bubble_path.exists():
-        safe_print(f"   ❌ Bubble doesn't exist: {bubble_path}")
+        safe_print(_("   ❌ Bubble doesn't exist: {}").format(bubble_path))
         return False
 
     dist_info = list(bubble_path.glob("uv-*.dist-info"))
     if dist_info:
-        safe_print(f"   ✅ Found dist-info: {dist_info[0].name}")
+        safe_print(_('   ✅ Found dist-info: {}').format(dist_info[0].name))
     else:
         safe_print("   ⚠️  No dist-info found")
 
@@ -148,7 +148,7 @@ def inspect_bubble_structure(bubble_path):
         safe_print(f"   ✅ Found bin directory with {len(items)} items")
         uv_bin = scripts_dir / "uv"
         if uv_bin.exists():
-            safe_print(f"   ✅ Found uv binary: {uv_bin}")
+            safe_print(_('   ✅ Found uv binary: {}').format(uv_bin))
             if os.access(uv_bin, os.X_OK):
                 safe_print("   ✅ Binary is executable")
             else:
@@ -159,7 +159,7 @@ def inspect_bubble_structure(bubble_path):
         safe_print("   ⚠️  No bin directory found")
 
     contents = list(bubble_path.iterdir())
-    safe_print(f"   📁 Bubble contents ({len(contents)} items):")
+    safe_print(_('   📁 Bubble contents ({} items):').format(len(contents)))
     for item in sorted(contents)[:5]:
         suffix = "/" if item.is_dir() else ""
         safe_print(f"      - {item.name}{suffix}")
@@ -181,36 +181,36 @@ def test_swapped_binary_execution(expected_version, config, omnipkg_core):
 
             # Debug: Show PATH and which binary is found
             path_entries = os.environ.get("PATH", "").split(os.pathsep)
-            safe_print(f"   🔍 First 3 PATH entries: {path_entries[:3]}")
-            safe_print(f'   🔍 Which uv: {shutil.which("uv")}')
-            safe_print(f"   🔍 Bubble binary: {bubble_binary}")
+            safe_print(_('   🔍 First 3 PATH entries: {}').format(path_entries[:3]))
+            safe_print(_('   🔍 Which uv: {}').format(shutil.which('uv')))
+            safe_print(_('   🔍 Bubble binary: {}').format(bubble_binary))
 
             # Test using system PATH
             result = run_command(["uv", "--version"])
             actual_version = result.stdout.strip().split()[-1]
-            safe_print(f"   📍 Version via PATH: {actual_version}")
+            safe_print(_('   📍 Version via PATH: {}').format(actual_version))
 
             # Test using direct bubble path
             result_direct = run_command([str(bubble_binary), "--version"])
             direct_version = result_direct.stdout.strip().split()[-1]
-            safe_print(f"   📍 Version via direct path: {direct_version}")
+            safe_print(_('   📍 Version via direct path: {}').format(direct_version))
 
             if actual_version == expected_version:
-                safe_print(f"   ✅ Swapped binary reported: {actual_version}")
+                safe_print(_('   ✅ Swapped binary reported: {}').format(actual_version))
                 safe_print("   🎯 Swapped binary test: PASSED")
                 return True
             else:
                 safe_print(
-                    f"   ❌ Version mismatch: expected {expected_version}, got {actual_version}"
+                    _('   ❌ Version mismatch: expected {}, got {}').format(expected_version, actual_version)
                 )
                 if direct_version == expected_version:
                     safe_print(
-                        f"   ⚠️  BUT direct binary path shows correct version {direct_version}"
+                        _('   ⚠️  BUT direct binary path shows correct version {}').format(direct_version)
                     )
                     safe_print("   ⚠️  This suggests PATH manipulation issue")
                 return False
     except Exception as e:
-        safe_print(f"   ❌ Exception during test: {e}")
+        safe_print(_('   ❌ Exception during test: {}').format(e))
         traceback.print_exc()
         return False
 
@@ -229,7 +229,7 @@ def run_comprehensive_test():
 
         original_strategy = config_manager.config.get("install_strategy", "stable-main")
         if original_strategy != "stable-main":
-            safe_print(f"   ℹ️  Current install strategy: {original_strategy}")
+            safe_print(_('   ℹ️  Current install strategy: {}').format(original_strategy))
             safe_print(
                 "   ⚙️  Temporarily setting install strategy to 'stable-main' for this test..."
             )
@@ -245,33 +245,33 @@ def run_comprehensive_test():
         all_tests_passed = True
 
         # Test Main Environment
-        print_subheader(f"Testing Main Environment (uv=={main_uv_version_to_test})")
+        print_subheader(_('Testing Main Environment (uv=={})').format(main_uv_version_to_test))
         try:
             python_exe = config_manager.config.get("python_executable", sys.executable)
             uv_binary_path = Path(python_exe).parent / "uv"
 
-            safe_print(f"   🔬 Testing binary at: {uv_binary_path}")
+            safe_print(_('   🔬 Testing binary at: {}').format(uv_binary_path))
 
             result = run_command([str(uv_binary_path), "--version"])
             actual_version = result.stdout.strip().split()[-1]
 
             main_passed = actual_version == main_uv_version_to_test
-            safe_print(f"   ✅ Main environment version: {actual_version}")
+            safe_print(_('   ✅ Main environment version: {}').format(actual_version))
             if not main_passed:
                 safe_print(
-                    f"   ❌ FAILED: Expected {main_uv_version_to_test} but found {actual_version}"
+                    _('   ❌ FAILED: Expected {} but found {}').format(main_uv_version_to_test, actual_version)
                 )
 
             test_results[f"main-{main_uv_version_to_test}"] = main_passed
             all_tests_passed &= main_passed
         except Exception as e:
-            safe_print(f"   ❌ Main environment test failed: {e}")
+            safe_print(_('   ❌ Main environment test failed: {}').format(e))
             test_results[f"main-{main_uv_version_to_test}"] = False
             all_tests_passed = False
 
         # Test Bubbles
         for version in BUBBLE_VERSIONS_TO_TEST:
-            print_subheader(f"Testing Bubble (uv=={version})")
+            print_subheader(_('Testing Bubble (uv=={})').format(version))
             bubble_path = omnipkg_core.multiversion_base / f"uv-{version}"
             if not inspect_bubble_structure(bubble_path):
                 test_results[f"bubble-{version}"] = False
@@ -297,18 +297,18 @@ def run_comprehensive_test():
 
         # REMOVED: All cleanup code
         safe_print("\n📁 Bubble files preserved for inspection")
-        safe_print(f"📍 Location: {omnipkg_core.multiversion_base}")
+        safe_print(_('📍 Location: {}').format(omnipkg_core.multiversion_base))
 
         return all_tests_passed
 
     except Exception as e:
-        safe_print(f"\n❌ Critical error during testing: {e}")
+        safe_print(_('\n❌ Critical error during testing: {}').format(e))
         traceback.print_exc()
         return False
     finally:
         # Only restore config, NO file cleanup
         if config_manager and original_strategy and original_strategy != "stable-main":
-            safe_print(f"\n🔄 Restoring original install strategy: {original_strategy}")
+            safe_print(_('\n🔄 Restoring original install strategy: {}').format(original_strategy))
             config_manager.set("install_strategy", original_strategy)
 
 

@@ -69,10 +69,10 @@ def test_rich_version():
 def run_command_isolated(cmd_args, description, python_exe=None, thread_id=None):
     """Runs a command in isolation with thread-safe output."""
     prefix = f"[T{thread_id}] " if thread_id else ""
-    thread_safe_print(f"{prefix}▶️  Executing: {description}")
+    thread_safe_print(_('{}▶️  Executing: {}').format(prefix, description))
     executable = python_exe or sys.executable
     cmd = [executable, "-m", "omnipkg.cli"] + cmd_args
-    thread_safe_print(f'{prefix}   Command: {" ".join(cmd)}')
+    thread_safe_print(_('{}   Command: {}').format(prefix, ' '.join(cmd)))
 
     result = subprocess.run(
         cmd, capture_output=True, text=True, encoding="utf-8", errors="replace"
@@ -115,17 +115,17 @@ def ensure_dimension_exists(version: str, thread_id: int = None):
     """Ensures a specific Python version is adopted by omnipkg before use."""
     prefix = f"[T{thread_id}] " if thread_id else ""
     thread_safe_print(
-        f"{prefix}   VALIDATING DIMENSION: Ensuring Python {version} is adopted..."
+        _('{}   VALIDATING DIMENSION: Ensuring Python {} is adopted...').format(prefix, version)
     )
     try:
         cmd = ["omnipkg", "python", "adopt", version]
         subprocess.run(cmd, check=True, capture_output=True, text=True)
         thread_safe_print(
-            f"{prefix}   ✅ VALIDATION COMPLETE: Python {version} is available."
+            _('{}   ✅ VALIDATION COMPLETE: Python {} is available.').format(prefix, version)
         )
     except subprocess.CalledProcessError as e:
         thread_safe_print(
-            f"{prefix}❌ FAILED TO ADOPT DIMENSION {version}!", file=sys.stderr
+            _('{}❌ FAILED TO ADOPT DIMENSION {}!').format(prefix, version), file=sys.stderr
         )
         thread_safe_print(f"{prefix}--- Subprocess STDERR ---", file=sys.stderr)
         thread_safe_print(f"{prefix}{e.stderr}", file=sys.stderr)
@@ -135,7 +135,7 @@ def ensure_dimension_exists(version: str, thread_id: int = None):
 def get_interpreter_path(version: str, thread_id: int = None) -> str:
     """Asks omnipkg for the location of a specific Python dimension."""
     prefix = f"[T{thread_id}] " if thread_id else ""
-    thread_safe_print(f"{prefix}   LOCKING ON to Python {version} dimension...")
+    thread_safe_print(_('{}   LOCKING ON to Python {} dimension...').format(prefix, version))
     result = subprocess.run(
         ["omnipkg", "info", "python"], capture_output=True, text=True, check=True
     )
@@ -144,10 +144,10 @@ def get_interpreter_path(version: str, thread_id: int = None) -> str:
             match = re.search(r":\s*(/\S+)", line)
             if match:
                 path = match.group(1).strip()
-                thread_safe_print(f"{prefix}   LOCK CONFIRMED: Target is at {path}")
+                thread_safe_print(_('{}   LOCK CONFIRMED: Target is at {}').format(prefix, path))
                 return path
     raise RuntimeError(
-        f"Could not find managed Python {version} via 'omnipkg info python'."
+        _("Could not find managed Python {} via 'omnipkg info python'.").format(version)
     )
 
 
@@ -169,23 +169,23 @@ def prepare_and_test_dimension(
         # --- START OF CRITICAL SECTION ---
         # Acquire the lock before modifying the shared environment
         with omnipkg_lock:
-            thread_safe_print(f"{prefix}   🔒 Lock acquired. Modifying environment...")
+            thread_safe_print(_('{}   🔒 Lock acquired. Modifying environment...').format(prefix))
 
             # Swap to the target dimension
             thread_safe_print(
-                f"{prefix}🌀 TELEPORTING to Python {py_version} dimension..."
+                _('{}🌀 TELEPORTING to Python {} dimension...').format(prefix, py_version)
             )
             start_swap_time = time.perf_counter()
             run_command_isolated(
                 ["swap", "python", py_version],
-                f"Switching context to {py_version}",
+                _('Switching context to {}').format(py_version),
                 python_exe=python_exe,
                 thread_id=thread_id,
             )
             end_swap_time = time.perf_counter()
             swap_duration_ms = (end_swap_time - start_swap_time) * 1000
             thread_safe_print(
-                f"{prefix}   ✅ TELEPORT COMPLETE. Active context is now Python {py_version}."
+                _('{}   ✅ TELEPORT COMPLETE. Active context is now Python {}.').format(prefix, py_version)
             )
             thread_safe_print(
                 f"{prefix}   ⏱️  Dimension swap took: {swap_duration_ms:.2f} ms"
@@ -203,14 +203,14 @@ def prepare_and_test_dimension(
             start_install_time = time.perf_counter()
             if result.returncode == 0:
                 thread_safe_print(
-                    f"{prefix}   ✅ Requirement already satisfied via pre-check: rich=={rich_version}"
+                    _('{}   ✅ Requirement already satisfied via pre-check: rich=={}').format(prefix, rich_version)
                 )
             else:
                 # Set install strategy temporarily
                 current_strategy = get_config_value("install_strategy")
                 if current_strategy != "latest-active":
                     thread_safe_print(
-                        f'{prefix}   SETTING STRATEGY: Temporarily setting install_strategy to "latest-active"...'
+                        _('{}   SETTING STRATEGY: Temporarily setting install_strategy to "latest-active"...').format(prefix)
                     )
                     run_command_isolated(
                         ["config", "set", "install_strategy", "latest-active"],
@@ -221,11 +221,11 @@ def prepare_and_test_dimension(
 
                 # Install Rich
                 thread_safe_print(
-                    f"{prefix}   🎨 Installing rich=={rich_version} in Python {py_version}..."
+                    _('{}   🎨 Installing rich=={} in Python {}...').format(prefix, rich_version, py_version)
                 )
                 run_command_isolated(
                     ["install", f"rich=={rich_version}"],
-                    f"Installing rich=={rich_version} in Python {py_version} context",
+                    _('Installing rich=={} in Python {} context').format(rich_version, py_version),
                     python_exe=python_exe,
                     thread_id=thread_id,
                 )
@@ -233,7 +233,7 @@ def prepare_and_test_dimension(
                 # Restore original strategy
                 if current_strategy != "latest-active":
                     thread_safe_print(
-                        f'{prefix}   RESTORING STRATEGY: Setting install_strategy back to "{original_strategy}"...'
+                        _('{}   RESTORING STRATEGY: Setting install_strategy back to "{}"...').format(prefix, original_strategy)
                     )
                     run_command_isolated(
                         ["config", "set", "install_strategy", original_strategy],
@@ -245,24 +245,24 @@ def prepare_and_test_dimension(
             end_install_time = time.perf_counter()
             install_duration_ms = (end_install_time - start_install_time) * 1000
             thread_safe_print(
-                f"{prefix}   ✅ PREPARATION COMPLETE: rich=={rich_version} is now available in Python {py_version} context."
+                _('{}   ✅ PREPARATION COMPLETE: rich=={} is now available in Python {} context.').format(prefix, rich_version, py_version)
             )
             thread_safe_print(
                 f"{prefix}   ⏱️  Package installation took: {install_duration_ms:.2f} ms"
             )
-            thread_safe_print(f"{prefix}   🔓 Lock released.")
+            thread_safe_print(_('{}   🔓 Lock released.').format(prefix))
         # --- END OF CRITICAL SECTION ---
 
         # The actual test execution is read-only and can run without the lock
         thread_safe_print(
-            f"{prefix}   🧪 EXECUTING Rich test in Python {py_version} dimension..."
+            _('{}   🧪 EXECUTING Rich test in Python {} dimension...').format(prefix, py_version)
         )
         # ... (the rest of the function remains the same)
-        thread_safe_print(f"{prefix}   📍 Using interpreter: {python_exe}")
+        thread_safe_print(_('{}   📍 Using interpreter: {}').format(prefix, python_exe))
 
         start_time = time.perf_counter()
         cmd = [python_exe, __file__, "--test-rich"]
-        thread_safe_print(f'{prefix}   🎯 Running command: {" ".join(cmd)}')
+        thread_safe_print(_('{}   🎯 Running command: {}').format(prefix, ' '.join(cmd)))
 
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
 
@@ -270,12 +270,12 @@ def prepare_and_test_dimension(
             thread_safe_print(
                 f"{prefix}   ❌ Rich test failed with return code {result.returncode}"
             )
-            thread_safe_print(f"{prefix}   STDOUT: {result.stdout}")
-            thread_safe_print(f"{prefix}   STDERR: {result.stderr}")
+            thread_safe_print(_('{}   STDOUT: {}').format(prefix, result.stdout))
+            thread_safe_print(_('{}   STDERR: {}').format(prefix, result.stderr))
             return None
 
         if not result.stdout.strip():
-            thread_safe_print(f"{prefix}   ❌ Rich test returned empty output")
+            thread_safe_print(_('{}   ❌ Rich test returned empty output').format(prefix))
             return None
 
         end_time = time.perf_counter()
@@ -284,7 +284,7 @@ def prepare_and_test_dimension(
             test_data = json.loads(result.stdout)
         except json.JSONDecodeError:
             thread_safe_print(
-                f"{prefix}   ❌ Failed to parse JSON output: {result.stdout}"
+                _('{}   ❌ Failed to parse JSON output: {}').format(prefix, result.stdout)
             )
             return None
 
@@ -293,9 +293,9 @@ def prepare_and_test_dimension(
         test_data["install_time_ms"] = install_duration_ms
         test_data["thread_id"] = thread_id
 
-        thread_safe_print(f"{prefix}✅ Rich test complete in Python {py_version}:")
-        thread_safe_print(f'{prefix}   - Rich Version: {test_data["rich_version"]}')
-        thread_safe_print(f'{prefix}   - Interpreter: {test_data["interpreter_path"]}')
+        thread_safe_print(_('{}✅ Rich test complete in Python {}:').format(prefix, py_version))
+        thread_safe_print(_('{}   - Rich Version: {}').format(prefix, test_data['rich_version']))
+        thread_safe_print(_('{}   - Interpreter: {}').format(prefix, test_data['interpreter_path']))
         thread_safe_print(
             f'{prefix}   ⏱️  Execution took: {test_data["execution_time_ms"]:.2f} ms'
         )
@@ -304,7 +304,7 @@ def prepare_and_test_dimension(
 
     except subprocess.TimeoutExpired:
         thread_safe_print(
-            f"{prefix}   ❌ Rich test timed out after 30 seconds - SKIPPING"
+            _('{}   ❌ Rich test timed out after 30 seconds - SKIPPING').format(prefix)
         )
         return None
     except Exception as e:
@@ -392,7 +392,7 @@ def rich_multiverse_test():
             thread_safe_print(
                 f"   Install Time: {result.get('install_time_ms', 0):.2f} ms"
             )
-            thread_safe_print(f"   Thread ID: {result.get('thread_id', 'Unknown')}")
+            thread_safe_print(_('   Thread ID: {}').format(result.get('thread_id', 'Unknown')))
             thread_safe_print()
 
         if test_results:
@@ -451,7 +451,7 @@ def rich_multiverse_test():
                 f"⏱️  TIMING: Cleanup/safety protocol took {(cleanup_end - cleanup_start) * 1000:.2f} ms"
             )
         except Exception as cleanup_error:
-            thread_safe_print(f"⚠️  Warning during cleanup: {cleanup_error}")
+            thread_safe_print(_('⚠️  Warning during cleanup: {}').format(cleanup_error))
 
 
 if __name__ == "__main__":

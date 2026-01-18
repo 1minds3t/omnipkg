@@ -10,6 +10,7 @@ import webbrowser
 import re
 from pathlib import Path
 from contextlib import closing
+from omnipkg.i18n import _
 
 # --- Dependency Checks ---
 try:
@@ -159,7 +160,7 @@ def find_free_port(start_port=5000, max_port=65535):
         with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as sock:
             if sock.connect_ex(('127.0.0.1', port)) != 0:
                 return port
-    raise RuntimeError(f"No free ports found between {start_port} and {start_port + 1000}")
+    raise RuntimeError(_('No free ports found between {} and {}').format(start_port, start_port + 1000))
 
 def clean_and_validate(cmd_str):
     """
@@ -194,7 +195,7 @@ def clean_and_validate(cmd_str):
     try:
         parts = shlex.split(clean_str)
     except ValueError as e:
-        return False, f"⛔ Invalid shell syntax: {e}", None, []
+        return False, _('⛔ Invalid shell syntax: {}').format(e), None, []
     
     if not parts:
         return False, "No command found.", None, []
@@ -203,11 +204,11 @@ def clean_and_validate(cmd_str):
     
     # Check if command is blocked
     if primary_command in BLOCKED_COMMANDS:
-        return False, f"⛔ Security: '{primary_command}' is disabled via Web.", None, []
+        return False, _("⛔ Security: '{}' is disabled via Web.").format(primary_command), None, []
     
     # Check if command is in our rules
     if primary_command not in COMMAND_RULES:
-        return False, f"⚠️ Unknown command '{primary_command}'.", None, []
+        return False, _("⚠️ Unknown command '{}'.").format(primary_command), None, []
     
     rules = COMMAND_RULES[primary_command]
     
@@ -220,18 +221,18 @@ def clean_and_validate(cmd_str):
         else:
             # It's a positional argument
             if not rules.get('allow_args', False):
-                return False, f"⛔ Command '{primary_command}' doesn't accept arguments.", None, []
+                return False, _("⛔ Command '{}' doesn't accept arguments.").format(primary_command), None, []
             
             # Check against pattern
             pattern = rules.get('arg_pattern')
             if pattern and not re.match(pattern, arg):
-                return False, f"⛔ Invalid argument format: '{arg}'.", None, []
+                return False, _("⛔ Invalid argument format: '{}'.").format(arg), None, []
             
             # Check blocked patterns (for install commands)
             blocked = rules.get('blocked_patterns', [])
             for blocked_pattern in blocked:
                 if re.search(blocked_pattern, arg):
-                    return False, f"⛔ Security: Argument contains blocked pattern.", None, []
+                    return False, _('⛔ Security: Argument contains blocked pattern.'), None, []
     
     # Get flags to auto-inject
     auto_flags = rules.get('auto_flags', [])
@@ -255,7 +256,7 @@ def execute_omnipkg_command(cmd_str):
         for flag in auto_flags:
             if flag not in args:
                 args.append(flag)
-                logger.info(f"🔧 Auto-injected flag: {flag}")
+                logger.info(_('🔧 Auto-injected flag: {}').format(flag))
         
         full_command = [sys.executable, "-m", "omnipkg", *args]
         
@@ -289,13 +290,13 @@ def execute_omnipkg_command(cmd_str):
         process.wait(timeout=180)
         
         if process.returncode != 0:
-            yield f"\n⚠️ Exit Code {process.returncode}\n"
+            yield _('\n⚠️ Exit Code {}\n').format(process.returncode)
         
     except subprocess.TimeoutExpired:
         process.kill()
         yield "\n⚠️ Error: Command timed out (exceeded 3 minutes).\n"
     except Exception as e:
-        yield sanitize_output(f"\nSystem Error: {str(e)}\n")
+        yield sanitize_output(_('\nSystem Error: {}\n').format(str(e)))
 
 def sanitize_output(text):
     """
@@ -378,7 +379,7 @@ def create_app(port):
         init_db()
         logger.info(f"📊 Telemetry DB initialized at {DB_FILE}")
     except Exception as e:
-        logger.error(f"Failed to init DB: {e}")
+        logger.error(_('Failed to init DB: {}').format(e))
 
     @app.before_request
     def enforce_origin():
@@ -406,7 +407,7 @@ def create_app(port):
             if clean_origin not in ALLOWED_ORIGINS:
                 return jsonify({
                     "error": "❌ Unauthorized Origin.",
-                    "message": f"Origin '{clean_origin}' is not whitelisted."
+                    "message": _("Origin '{}' is not whitelisted.").format(clean_origin)
                 }), 403
 
     @app.route('/health', methods=['GET', 'OPTIONS'])
@@ -423,7 +424,7 @@ def create_app(port):
                     (datetime.utcnow().isoformat(), "health_check", "ping", "bridge", json.dumps({"port": port}))
                 )
         except Exception as e:
-            logger.error(f"DB Error: {e}")
+            logger.error(_('DB Error: {}').format(e))
         
         return corsify_response(jsonify({
             "status": "connected", 
@@ -439,7 +440,7 @@ def create_app(port):
         
         data = request.json
         cmd = data.get('command', '')
-        logger.info(f"⚡ Executing: {cmd}")
+        logger.info(_('⚡ Executing: {}').format(cmd))
         
         # Log to telemetry
         try:
@@ -449,7 +450,7 @@ def create_app(port):
                     (datetime.utcnow().isoformat(), "command_exec", cmd.split()[0] if cmd.split() else "unknown", "local_bridge", json.dumps({"full_cmd": cmd}))
                 )
         except Exception as e:
-            logger.error(f"DB Error: {e}")
+            logger.error(_('DB Error: {}').format(e))
         
         # Stream response using Server-Sent Events format
         def generate():
@@ -486,7 +487,7 @@ def create_app(port):
             if result.returncode == 0:
                 output = sanitize_output(result.stdout or "✅ omnipkg installed successfully")
             else:
-                output = f"❌ Installation failed:\n{sanitize_output(result.stderr)}"
+                output = _('❌ Installation failed:\n{}').format(sanitize_output(result.stderr))
             
             # Log to telemetry
             try:
@@ -496,14 +497,14 @@ def create_app(port):
                         (datetime.utcnow().isoformat(), "install", "omnipkg", "local_bridge", json.dumps({"success": result.returncode == 0}))
                     )
             except Exception as e:
-                logger.error(f"DB Error: {e}")
+                logger.error(_('DB Error: {}').format(e))
             
             return corsify_response(jsonify({"output": output}), origin)
             
         except subprocess.TimeoutExpired:
             return corsify_response(jsonify({"output": "❌ Installation timed out"}), origin)
         except Exception as e:
-            return corsify_response(jsonify({"output": f"❌ System Error: {sanitize_output(str(e))}"}), origin)
+            return corsify_response(jsonify({"output": _('❌ System Error: {}').format(sanitize_output(str(e)))}), origin)
 
     @app.route('/telemetry', methods=['POST', 'OPTIONS'])
     def telemetry():
@@ -538,11 +539,11 @@ def create_app(port):
                 )
                 logger.info("☁️ Telemetry forwarded to Cloudflare")
             except Exception as e:
-                logger.warning(f"Failed to forward to Cloudflare: {e}")
+                logger.warning(_('Failed to forward to Cloudflare: {}').format(e))
             
             return corsify_response(jsonify({"status": "saved"}), origin)
         except Exception as e:
-            logger.error(f"Telemetry save failed: {e}")
+            logger.error(_('Telemetry save failed: {}').format(e))
             return corsify_response(jsonify({"error": str(e)}), origin)
     
     return app
@@ -550,16 +551,16 @@ def create_app(port):
 def run_bridge_server():
     """The entry point for the background process."""
     if not HAS_WEB_DEPS:
-        print("❌ Flask missing. Cannot start server.")
+        print(_('❌ Flask missing. Cannot start server.'))
         sys.exit(1)
 
     try:
         port = find_free_port(5000)
     except RuntimeError as e:
-        print(f"❌ {e}")
+        print(_('❌ {}').format(e))
         sys.exit(1)
     
-    print(f"Local Port: {port}", flush=True)
+    print(_('Local Port: {}').format(port), flush=True)
     
     app = create_app(port)
     app.run(host="127.0.0.1", port=port, threaded=True, use_reloader=False)
@@ -579,16 +580,16 @@ class WebBridgeManager:
     def start(self):
         """Start the web bridge in background."""
         if not HAS_WEB_DEPS:
-            print("❌ Dependencies missing. Please run: pip install flask flask-cors")
+            print(_('❌ Dependencies missing. Please run: pip install flask flask-cors'))
             return 1
 
         if self.is_running():
             port = self._get_port()
-            print(f"✅ Web bridge already running on port {port}")
-            print(f"🌍 Dashboard: {PRIMARY_DASHBOARD}#{port}")
+            print(_('✅ Web bridge already running on port {}').format(port))
+            print(_('🌍 Dashboard: {}#{}').format(PRIMARY_DASHBOARD, port))
             return 0
         
-        print("🚀 Starting web bridge...")
+        print(_('🚀 Starting web bridge...'))
         cmd = [sys.executable, "-m", "omnipkg.apis.local_bridge"]
         
         # Cross-platform detachment logic
@@ -615,29 +616,29 @@ class WebBridgeManager:
                 port = self._get_port()
                 url = f"{PRIMARY_DASHBOARD}#{port}"
                 print("="*60)
-                print("✅ Web bridge started successfully")
-                print(f"🔗 Local Port: {port}")
-                print(f"📊 PID: {process.pid}")
-                print(f"🌍 Dashboard: {url}")
+                print(_('✅ Web bridge started successfully'))
+                print(_('🔗 Local Port: {}').format(port))
+                print(_('📊 PID: {}').format(process.pid))
+                print(_('🌍 Dashboard: {}').format(url))
                 print("="*60)
                 webbrowser.open(url)
                 return 0
             else:
-                print("❌ Failed to start. Check logs.")
+                print(_('❌ Failed to start. Check logs.'))
                 return 1
         except Exception as e:
-            print(f"❌ Launch error: {e}")
+            print(_('❌ Launch error: {}').format(e))
             return 1
     
     def stop(self):
         """Stop the web bridge safely across platforms."""
         if not self.is_running():
-            print("⚠️  Web bridge is not running")
+            print(_('⚠️  Web bridge is not running'))
             return 0
         
         try:
             pid = int(self.pid_file.read_text())
-            print(f"🛑 Stopping web bridge (PID: {pid})...")
+            print(_('🛑 Stopping web bridge (PID: {})...').format(pid))
             
             if os.name == 'nt':
                 subprocess.run(["taskkill", "/PID", str(pid), "/T", "/F"], 
@@ -650,17 +651,17 @@ class WebBridgeManager:
 
             if self.pid_file.exists(): 
                 self.pid_file.unlink()
-            print("✅ Web bridge stopped")
+            print(_('✅ Web bridge stopped'))
             return 0
         except Exception as e:
-            print(f"❌ Error stopping: {e}")
+            print(_('❌ Error stopping: {}').format(e))
             if self.pid_file.exists(): 
                 self.pid_file.unlink()
             return 1
     
     def restart(self):
         """Restart the web bridge."""
-        print("🔄 Restarting web bridge...")
+        print(_('🔄 Restarting web bridge...'))
         self.stop()
         time.sleep(1)
         return self.start()
@@ -668,15 +669,15 @@ class WebBridgeManager:
     def status(self):
         """Check web bridge status."""
         if not self.is_running():
-            print("❌ Web bridge is not running")
-            print(f"\n💡 Start with: 8pkg web start")
+            print(_('❌ Web bridge is not running'))
+            print(_('\n💡 Start with: 8pkg web start'))
             return 1
         
         if not HAS_SYS_DEPS:
-            print("⚠️  'psutil' not installed. Limited status info available.")
+            print(_("⚠️  'psutil' not installed. Limited status info available."))
             pid = int(self.pid_file.read_text())
             port = self._get_port()
-            print(f"✅ Running (PID: {pid}, Port: {port})")
+            print(_('✅ Running (PID: {}, Port: {})').format(pid, port))
             return 0
 
         pid = int(self.pid_file.read_text())
@@ -688,28 +689,28 @@ class WebBridgeManager:
             uptime = time.time() - process.create_time()
             
             print("="*60)
-            print("✅ Web Bridge Status: RUNNING")
+            print(_('✅ Web Bridge Status: RUNNING'))
             print("="*60)
-            print(f"🔗 Port:        {port}")
-            print(f"📊 PID:         {pid}")
+            print(_('🔗 Port:        {}').format(port))
+            print(_('📊 PID:         {}').format(pid))
             print(f"💾 Memory:      {mem_info.rss / 1024 / 1024:.1f} MB")
-            print(f"⏱️  Uptime:      {self._format_uptime(uptime)}")
-            print(f"🌍 Dashboard:   {PRIMARY_DASHBOARD}#{port}")
+            print(_('⏱️  Uptime:      {}').format(self._format_uptime(uptime)))
+            print(_('🌍 Dashboard:   {}#{}').format(PRIMARY_DASHBOARD, port))
             print("="*60)
             return 0
         except psutil.NoSuchProcess:
-            print("⚠️  PID file exists but process is dead. Cleaning up...")
+            print(_('⚠️  PID file exists but process is dead. Cleaning up...'))
             self.pid_file.unlink()
             return 1
     
     def show_logs(self, follow=False, lines=50):
         """Display web bridge logs."""
         if not self.log_file.exists():
-            print(f"❌ Log file not found: {self.log_file}")
+            print(_('❌ Log file not found: {}').format(self.log_file))
             return 1
         
         if follow:
-            print(f"📝 Following logs (Ctrl+C to stop)...\n")
+            print(_('📝 Following logs (Ctrl+C to stop)...\n'))
             try:
                 subprocess.run(["tail", "-f", str(self.log_file)], check=True)
             except (FileNotFoundError, subprocess.CalledProcessError):
@@ -726,7 +727,7 @@ class WebBridgeManager:
                     pass
             except KeyboardInterrupt:
                 pass
-            print("\n✅ Stopped following logs")
+            print(_('\n✅ Stopped following logs'))
             return 0
         else:
             try:
