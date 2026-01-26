@@ -3207,18 +3207,19 @@ class BubbleIsolationManager:
         observed_dependencies: Optional[Dict[str, str]] = None,
     ):
         """
-        (V7 - SMART STRATEGY) Builds a bubble and verifies using smart group-aware testing.
-
-        This version uses the verification_strategy module to intelligently test
-        packages together when they have interdependencies.
+        (V8 - SMART STRATEGY WITH BUBBLE AWARENESS) 
+        Builds a bubble and verifies using smart group-aware testing.
+        
+        CRITICAL FIX: Now passes already-created bubbles to verification so that
+        packages like keras can find their dependencies like tensorflow during testing.
         """
         if destination_path.exists():
             shutil.rmtree(destination_path, ignore_errors=True)
-
+            
         with tempfile.TemporaryDirectory() as temp_dir:
             staging_path = Path(temp_dir)
             safe_print(f"   - 🏗️  Staging install for {package_name}=={version}...")
-
+            
             # 1. Install to staging
             return_code, stdout = self.parent_omnipkg._run_pip_install(
                 [f"{package_name}=={version}"],
@@ -3227,15 +3228,25 @@ class BubbleIsolationManager:
                 index_url=index_url,
                 extra_index_url=extra_index_url,
             )
+            
             if return_code != 0:
                 safe_print("   ❌ Pip install failed in staging area.")
                 return False
-
-            # 2. Use SMART verification strategy
+            
+            # 2. Find already-created bubbles for dependencies
+            safe_print("   - 🔍 Locating dependency bubbles for verification...")
+            existing_bubble_paths = self._find_dependency_bubbles(
+                package_name, destination_path.parent
+            )
+            
+            if existing_bubble_paths:
+                safe_print(f"      Found {len(existing_bubble_paths)} dependency bubble(s):")
+                for bubble_path in existing_bubble_paths:
+                    safe_print(f"         📦 {bubble_path.name}")
+            
+            # 3. Use SMART verification strategy WITH bubble awareness
             safe_print("   - 🧪 Running SMART import verification...")
-
             try:
-                # Import the smart strategy
                 from .installation.verification_strategy import (
                     verify_bubble_with_smart_strategy,
                 )
@@ -3243,40 +3254,48 @@ class BubbleIsolationManager:
                 from omnipkg.installation.verification_strategy import (
                     verify_bubble_with_smart_strategy,
                 )
-
+            
             # Instantiate gatherer
             try:
                 from .package_meta_builder import omnipkgMetadataGatherer
             except ImportError:
                 from omnipkg.package_meta_builder import omnipkgMetadataGatherer
-
+                
             gatherer = omnipkgMetadataGatherer(
                 config=self.parent_omnipkg.config,
                 env_id=self.parent_omnipkg.env_id,
                 omnipkg_instance=self.parent_omnipkg,
                 target_context_version=python_context_version,
             )
-
-            # Run smart verification
+            
+            # Run smart verification WITH dependency bubbles
             verification_passed = verify_bubble_with_smart_strategy(
-                self.parent_omnipkg, package_name, version, staging_path, gatherer
+                self.parent_omnipkg, 
+                package_name, 
+                version, 
+                staging_path, 
+                gatherer,
+                existing_bubble_paths=existing_bubble_paths  # NEW!
             )
-
+            
             if not verification_passed:
                 safe_print(f"   ❌ CRITICAL: Smart verification failed for '{package_name}'.")
+                # Don't trigger full rollback - let caller decide
                 return False
-
-            # 3. Analyze and move
+            
+            # 4. Analyze and move
             installed_tree = self._analyze_installed_tree(staging_path)
             safe_print(_('   - 🚚 Moving verified build to bubble: {}').format(destination_path))
+            
             # Python 3.7 compatible: remove destination if it exists, then copy
             if destination_path.exists():
                 shutil.rmtree(destination_path)
             shutil.copytree(staging_path, destination_path)
-
+            
             stats = {
                 "total_files": sum(len(info.get("files", [])) for info in installed_tree.values())
             }
+            
             self._create_bubble_manifest(
                 destination_path,
                 installed_tree,
@@ -3284,8 +3303,58 @@ class BubbleIsolationManager:
                 python_context_version=python_context_version,
                 observed_dependencies=observed_dependencies,
             )
-
+            
             return True
+
+    def _find_dependency_bubbles(
+        self, package_name: str, bubble_dir: Path
+    ) -> List[Path]:
+        """
+        Find already-created bubbles that are in the same verification group.
+        
+        This allows keras to find tensorflow, tensorboard to find tensorflow, etc.
+        during verification testing.
+        
+        Args:
+            package_name: The package being installed (e.g., "keras")
+            bubble_dir: The .omnipkg_versions directory
+            
+        Returns:
+            List of Path objects to dependency bubbles
+        """
+        try:
+            from .installation.verification_groups import find_verification_group
+        except ImportError:
+            from omnipkg.installation.verification_groups import find_verification_group
+        
+        existing_bubble_paths = []
+        
+        # Find verification group for this package
+        canonical_name = package_name.lower().replace("_", "-")
+        group_def = find_verification_group(canonical_name)
+        
+        if not group_def:
+            # No group = no dependencies to include
+            return existing_bubble_paths
+        
+        # Look for bubbles of other packages in the same group
+        for dep_pkg in group_def.packages:
+            if dep_pkg == canonical_name:
+                continue  # Skip self
+            
+            # Find ANY version of this dependency
+            # Pattern: dep_pkg-* (e.g., tensorflow-*)
+            matching_bubbles = list(bubble_dir.glob(f"{dep_pkg}-*"))
+            
+            if matching_bubbles:
+                # Take the most recent bubble (sorted by name, highest version last)
+                matching_bubbles.sort()
+                bubble_path = matching_bubbles[-1]
+                
+                if bubble_path.is_dir():
+                    existing_bubble_paths.append(bubble_path)
+        
+        return existing_bubble_paths
 
     def _granular_verify_and_heal(self, staging_path: Path, package_name: str, python_exe: str):
         """

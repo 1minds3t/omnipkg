@@ -88,15 +88,41 @@ class PackageIndexRegistry:
         """
         Detect the appropriate index URL for a package variant.
 
-        Args:
-            package_name: The package name (e.g., "torch")
-            version: The version string (e.g., "2.1.3+cu118")
-
         Returns:
-            Tuple of (index_url, extra_index_url) or (None, None) if standard PyPI
+            Tuple of (index_url, extra_index_url)
         """
         if not version:
             return None, None
+
+        pkg_lower = package_name.lower()
+
+        # Check each ecosystem in the registry
+        for ecosystem_name, ecosystem_data in self.registry.items():
+            if ecosystem_name.startswith("_"): continue
+            if "packages" not in ecosystem_data: continue
+            if pkg_lower not in [p.lower() for p in ecosystem_data["packages"]]: continue
+
+            # Try to match against rules
+            for rule in ecosystem_data.get("rules", []):
+                pattern = rule.get("pattern", "")
+                if not pattern: continue
+
+                match = re.search(pattern, version)
+                if match:
+                    url_template = rule.get("url")
+                    if not url_template: continue
+
+                    if "{0}" in url_template:
+                        captured = match.group(1) if match.groups() else ""
+                        index_url = url_template.format(captured)
+                    else:
+                        index_url = url_template
+
+                    # CRITICAL CHANGE: Return as EXTRA index URL, not primary
+                    # This allows pip to find dependencies (like triton) on PyPI
+                    return None, index_url
+
+        return None, None
 
         pkg_lower = package_name.lower()
 
