@@ -7,9 +7,14 @@ Handles intelligent import testing of packages, respecting interdependencies
 and testing related packages together when necessary.
 
 This prevents false negatives from naive per-package testing.
+
+CRITICAL FIX V2: Now uses sterile subprocess isolation to prevent ABI conflicts
+AND includes already-created dependency bubbles so keras can find tensorflow!
 """
 
 import importlib
+import subprocess
+import json
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -53,7 +58,10 @@ class SmartVerificationStrategy:
     This prevents issues like:
     - h11 failing when httpcore/httpx aren't loaded
     - tensorboard failing without tensorflow
+    - keras failing without tensorflow
     - scipy failing without numpy
+    
+    CRITICAL V2: Uses sterile subprocess AND includes dependency bubbles.
     """
 
     def __init__(self, parent_omnipkg, gatherer):
@@ -74,6 +82,7 @@ class SmartVerificationStrategy:
         target_package: str,
         all_dists: List,
         target_version: str = "unknown",
+        existing_bubble_paths: List[Path] = None,  # NEW!
     ) -> Tuple[bool, List[VerificationResult]]:
         """
         Verify all packages in staging area using smart grouping.
@@ -83,10 +92,14 @@ class SmartVerificationStrategy:
             target_package: The primary package being installed
             all_dists: List of distribution objects from metadata gatherer
             target_version: Version of the target package
+            existing_bubble_paths: Paths to already-created dependency bubbles
 
         Returns:
             Tuple of (success: bool, results: List[VerificationResult])
         """
+        if existing_bubble_paths is None:
+            existing_bubble_paths = []
+            
         if not all_dists:
             safe_print("   ❌ Verification failed: No valid packages in staging.")
             return False, []
@@ -117,29 +130,23 @@ class SmartVerificationStrategy:
         if len(packages_by_group) > 1:
             safe_print(_('      Organized into {} verification group(s)').format(len(packages_by_group)))
 
-        # Step 2: Verify each group
+        # Step 2: Verify each group IN STERILE SUBPROCESS WITH BUBBLE PATHS
         all_results = []
         group_success = {}
 
-        self.original_sys_path = sys.path[:]
+        for group_name, group_info in packages_by_group.items():
+            group_results = self._verify_group(
+                group_name, 
+                group_info["dists"], 
+                group_info["group_def"], 
+                staging_path,
+                existing_bubble_paths  # NEW!
+            )
 
-        try:
-            sys.path.insert(0, str(staging_path))
+            all_results.extend(group_results)
 
-            for group_name, group_info in packages_by_group.items():
-                group_results = self._verify_group(
-                    group_name, group_info["dists"], group_info["group_def"]
-                )
-
-                all_results.extend(group_results)
-
-                # Group succeeds if all members succeed
-                group_success[group_name] = all(r.success for r in group_results)
-
-        finally:
-            # Restore sys.path and clean up imports
-            sys.path[:] = self.original_sys_path
-            self._cleanup_imports(all_dists)
+            # Group succeeds if all members succeed
+            group_success[group_name] = all(r.success for r in group_results)
 
         # Step 3: Print summary
         self._print_verification_summary(all_results)
@@ -213,16 +220,25 @@ class SmartVerificationStrategy:
         return groups
 
     def _verify_group(
-        self, group_name: str, dists: List, group_def: Optional[VerificationGroup]
+        self, 
+        group_name: str, 
+        dists: List, 
+        group_def: Optional[VerificationGroup], 
+        staging_path: Path,
+        existing_bubble_paths: List[Path] = None  # NEW!
     ) -> List[VerificationResult]:
         """
-        Verify all packages in a group together.
-
-        This is the KEY IMPROVEMENT: Instead of testing each package alone,
-        we test them with their dependencies loaded.
+        Verify all packages in a group together IN A STERILE SUBPROCESS.
+        
+        CRITICAL FIX V2: Now includes dependency bubbles so keras can import tensorflow!
         """
-        results = []
-
+        
+        if existing_bubble_paths is None:
+            existing_bubble_paths = []
+        
+        # Prepare the list of packages to test
+        packages_to_test = []
+        
         if group_def:
             safe_print(_("      - Testing group '{}' ({} packages together)...").format(group_name, len(dists)))
             test_order = group_def.test_order if group_def.test_order else None
@@ -241,65 +257,131 @@ class SmartVerificationStrategy:
                 if d not in sorted_dists:
                     sorted_dists.append(d)
             dists = sorted_dists
-
-        # Test each package IN ORDER with previous ones already loaded
-        loaded_modules = set()
-
+        
+        # Build a simple list of dicts to send to the subprocess
         for dist in dists:
             pkg_name = dist.metadata["Name"]
             version = dist.metadata.get("Version", "unknown")
-
-            import_candidates = self.gatherer._get_import_candidates(dist, pkg_name)
-
-            if not import_candidates:
-                safe_print(_('         🟡 Skipping {}: No importable modules').format(pkg_name))
-                continue
-
-            # Attempt to import this package
-            try:
-                for candidate in import_candidates:
-                    if candidate.isidentifier():
-                        importlib.import_module(candidate)
-                        loaded_modules.add(candidate)
-
-                # Success!
-                tested_with = list(loaded_modules - {pkg_name}) if group_def else None
-                results.append(
-                    VerificationResult(
-                        package_name=pkg_name,
-                        version=version,
-                        success=True,
-                        tested_with=tested_with,
-                    )
-                )
-
-            except Exception as e:
-                # Failure
-                error_msg = str(e)
-                # Truncate very long errors
-                if len(error_msg) > 100:
-                    error_msg = error_msg[:97] + "..."
-
-                results.append(
-                    VerificationResult(
-                        package_name=pkg_name,
-                        version=version,
-                        success=False,
-                        error=error_msg,
-                        tested_with=list(loaded_modules) if group_def else None,
-                    )
-                )
-
-        return results
-
-    def _cleanup_imports(self, all_dists: List):
-        """Clean up any modules imported during verification."""
-        for dist in all_dists:
-            pkg_name = dist.metadata["Name"]
             candidates = self.gatherer._get_import_candidates(dist, pkg_name)
-            for candidate in candidates:
-                if candidate in sys.modules:
-                    del sys.modules[candidate]
+            
+            if candidates:
+                packages_to_test.append({
+                    "name": pkg_name,
+                    "version": version,
+                    "modules": [c for c in candidates if c.isidentifier()]
+                })
+            else:
+                safe_print(_('         🟡 Skipping {}: No importable modules').format(pkg_name))
+
+        if not packages_to_test:
+            return []
+
+        # RUN THE STERILE SUBPROCESS WITH BUBBLE PATHS
+        return self._run_sterile_verification(
+            str(staging_path), 
+            packages_to_test, 
+            group_def is not None,
+            [str(p) for p in existing_bubble_paths]  # NEW!
+        )
+
+    def _run_sterile_verification(
+        self, 
+        staging_path: str, 
+        packages: List[Dict], 
+        is_group: bool,
+        bubble_paths: List[str] = None
+    ) -> List[VerificationResult]:
+        if bubble_paths is None: bubble_paths = []
+        
+        # [CHANGE 1] Locate host setuptools
+        try:
+            import setuptools, os
+            setuptools_path = os.path.dirname(os.path.dirname(setuptools.__file__))
+        except:
+            setuptools_path = ""
+
+        worker_script = """
+import sys, json, importlib, traceback
+
+# [CHANGE 2] Capture paths
+staging_path = {staging_path!r}
+bubble_paths = {bubble_paths!r}
+setuptools_path = {setuptools_path!r}
+
+# Remove polluted paths
+sys.path = [p for p in sys.path if 'site-packages' not in p and 'dist-packages' not in p]
+
+# Insert paths (Dependency Bubbles -> Staging -> Setuptools)
+for p in bubble_paths: sys.path.insert(0, p)
+if staging_path: sys.path.insert(0, staging_path)
+if setuptools_path: sys.path.append(setuptools_path) # [CHANGE 3] Inject setuptools
+
+results = []
+packages_data = {packages_json}
+
+for pkg in packages_data:
+    try:
+        for module in pkg['modules']:
+            importlib.import_module(module)
+        results.append({{"package_name": pkg['name'], "version": pkg['version'], "success": True, "error": None}})
+    except Exception:
+        results.append({{"package_name": pkg['name'], "version": pkg['version'], "success": False, "error": traceback.format_exc()}})
+
+print(json.dumps(results))
+"""
+        # [CHANGE 4] Pass setuptools_path to format
+        script = worker_script.format(
+            staging_path=staging_path,
+            bubble_paths=bubble_paths,
+            setuptools_path=setuptools_path,
+            packages_json=json.dumps(packages)
+        )
+
+        try:
+            proc = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True, timeout=300)
+            if proc.returncode != 0 and not proc.stdout.strip():
+                return [VerificationResult(p['name'], p['version'], False, f"Crash: {proc.stderr}") for p in packages]
+            return [VerificationResult(r['package_name'], r['version'], r['success'], r['error']) for r in json.loads(proc.stdout)]
+        except Exception as e:
+            return [VerificationResult(p['name'], p['version'], False, str(e)) for p in packages]
+
+            # Parse the JSON output from the child
+            try:
+                raw_results = json.loads(process.stdout.strip())
+            except json.JSONDecodeError as e:
+                return [VerificationResult(
+                    package_name=p['name'],
+                    version=p['version'],
+                    success=False,
+                    error=f"JSON decode failed: {str(e)}. Output: {process.stdout[:100]}"
+                ) for p in packages]
+            
+            # Convert back to VerificationResult objects
+            results = []
+            for r in raw_results:
+                results.append(VerificationResult(
+                    package_name=r['package_name'],
+                    version=r['version'],
+                    success=r['success'],
+                    error=r.get('error'),
+                    tested_with=r.get('tested_with', [])
+                ))
+            return results
+
+        except subprocess.TimeoutExpired:
+            return [VerificationResult(
+                package_name=p['name'],
+                version=p['version'],
+                success=False,
+                error="Import verification timed out after 5 minutes"
+            ) for p in packages]
+        except Exception as e:
+            return [VerificationResult(
+                package_name=p['name'],
+                version=p['version'],
+                success=False,
+                error=f"Subprocess launch error: {str(e)}"
+            ) for p in packages]
 
     def _print_verification_summary(self, results: List[VerificationResult]):
         """Print a formatted summary of verification results."""
@@ -324,7 +406,12 @@ class SmartVerificationStrategy:
 
 
 def verify_bubble_with_smart_strategy(
-    parent_omnipkg, package_name: str, version: str, staging_path: Path, gatherer
+    parent_omnipkg, 
+    package_name: str, 
+    version: str, 
+    staging_path: Path, 
+    gatherer,
+    existing_bubble_paths: List[Path] = None  # NEW!
 ) -> bool:
     """
     Verify a bubble using the smart strategy.
@@ -337,10 +424,14 @@ def verify_bubble_with_smart_strategy(
         version: Version of primary package
         staging_path: Path to staging directory
         gatherer: omnipkgMetadataGatherer instance
+        existing_bubble_paths: Paths to dependency bubbles (NEW!)
 
     Returns:
         True if verification passed, False otherwise
     """
+    if existing_bubble_paths is None:
+        existing_bubble_paths = []
+        
     all_dists = gatherer._discover_distributions(
         targeted_packages=None, search_path_override=str(staging_path)
     )
@@ -350,7 +441,8 @@ def verify_bubble_with_smart_strategy(
         staging_path,
         package_name,
         all_dists,
-        target_version=version,  # Pass version for hooks
+        target_version=version,
+        existing_bubble_paths=existing_bubble_paths,  # NEW!
     )
 
     return success

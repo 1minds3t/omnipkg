@@ -55,10 +55,12 @@ VERIFICATION_GROUPS = {
     # PyTorch Ecosystem
     "torch": VerificationGroup(
         name="torch",
-        packages={"torch", "torchvision", "torchaudio", "torchtext"},
+        # Added 'triton' to packages
+        packages={"torch", "torchvision", "torchaudio", "torchtext", "triton"},
         primary_package="torch",
         reason="PyTorch extensions require torch to be imported first.",
-        test_order=["torch", "torchvision", "torchaudio", "torchtext"],
+        # Added 'triton' to test order
+        test_order=["triton", "torch", "torchvision", "torchaudio", "torchtext"],
     ),
     # Jupyter/IPython
     "jupyter": VerificationGroup(

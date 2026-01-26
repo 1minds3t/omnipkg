@@ -2581,11 +2581,9 @@ def receive_tensor_native_1x(meta: dict) -> "torch.Tensor":
 
     return tensor
 
-
 # ═══════════════════════════════════════════════════════════════
 # 3. CUSTOM CUDA IPC (CTYPES - WORKS WITH ANY PYTORCH)
 # ═══════════════════════════════════════════════════════════════
-
 
 class CUDAIPCHandle(ctypes.Structure):
     """CUDA IPC memory handle structure."""
@@ -2868,7 +2866,7 @@ class DaemonClient:
     def __init__(
         self,
         socket_path: str = DEFAULT_SOCKET,
-        timeout: float = 30.0,
+        timeout: float = 300.0,
         auto_start: bool = True,
     ):
         self.socket_path = socket_path
