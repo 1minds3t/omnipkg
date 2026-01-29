@@ -36,13 +36,16 @@ IS_WINDOWS = platform.system() == "Windows"
 try:
     from omnipkg.isolation import omnipkg_atomic
     _HAS_ATOMICS = True
-    # Print to stderr so it shows up in daemon logs
-    sys.stderr.write(_('✅ [DAEMON] Hardware Atomics LOADED: {}\n').format(omnipkg_atomic))
+    # Directly check command-line args. This is clean and has no side effects.
+    if "--verbose" in sys.argv or "-V" in sys.argv:
+        sys.stderr.write(_('✅ [DAEMON] Hardware Atomics LOADED: {}\n').format(omnipkg_atomic))
 except ImportError as e:
     _HAS_ATOMICS = False
-    sys.stderr.write(_('⚠️ [DAEMON] Hardware Atomics FAILED: {}\n').format(e))
-    # Debug: print sys.path to see where it's looking
-    sys.stderr.write(f"   sys.path: {sys.path}\n")
+    # Only show the failure warning if the user explicitly asks for verbose output.
+    if "--verbose" in sys.argv or "-V" in sys.argv:
+        sys.stderr.write(_('⚠️ [DAEMON] Hardware Atomics FAILED: {}\n').format(e))
+        # Also keep the helpful debug info inside the verbose check.
+        sys.stderr.write(f"   sys.path: {sys.path}\n")
 
 # ═══════════════════════════════════════════════════════════════
 # 0. CONSTANTS & UTILITIES
@@ -162,7 +165,7 @@ class SharedStateMonitor:
                 
             # 2. Atomic Attempt: Even -> Odd
             # If successful, we own the lock!
-            if omnipkg_atomic.cas_version(addr, current, current + 1):
+            if omnipkg_atomic.cas64(addr, current, current + 1):  # ← FIXED!
                 return current + 1
             
             # CAS failed (contention). Backoff slightly.
@@ -177,7 +180,7 @@ class SharedStateMonitor:
         addr = ctypes.addressof(c_obj)
         
         # Verify we still own it (sanity check)
-        if not omnipkg_atomic.cas_version(addr, my_odd_version, my_odd_version + 1):
+        if not omnipkg_atomic.cas64(addr, my_odd_version, my_odd_version + 1):  # ← FIXED!
              # Should never happen if logic is sound
              sys.stderr.write("CRITICAL: Atomic release failed (Version Mismatch)!\n")
 
@@ -269,6 +272,7 @@ def recv_json(sock: socket.socket, timeout: float = 30.0) -> dict:
             raise ConnectionResetError("Socket stream interrupted.")
         data_buffer.extend(chunk)
     return json.loads(data_buffer.decode("utf-8"))
+
 class UniversalGpuIpc:
     """
     Pure CUDA IPC using ctypes - works WITHOUT PyTorch!
@@ -426,6 +430,7 @@ class UniversalGpuIpc:
             CUDABuffer(final_ptr, data["shape"], data["typestr"]),
             device=f"cuda:{data['device']}",
         )
+        
 class SHMRegistry:
     """Track and cleanup orphaned shared memory blocks."""
 
@@ -2981,7 +2986,7 @@ class DaemonClient:
         # Call C extension
         # Atomically: if version == expected, set version = expected + 1
         # We skip the "Lock" state entirely because CAS *is* the lock.
-        success = omnipkg_atomic.cas_version(addr, expected_version, expected_version + 1)
+        success = omnipkg_atomic.cas64(addr, expected_version, expected_version + 1)  # ← FIXED!
         
         return success
 
