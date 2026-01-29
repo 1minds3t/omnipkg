@@ -3221,17 +3221,65 @@ class BubbleIsolationManager:
             safe_print(f"   - 🏗️  Staging install for {package_name}=={version}...")
             
             # 1. Install to staging
-            return_code, stdout = self.parent_omnipkg._run_pip_install(
+            return_code, install_output = self.parent_omnipkg._run_pip_install(
                 [f"{package_name}=={version}"],
                 target_directory=staging_path,
                 force_reinstall=True,
                 index_url=index_url,
                 extra_index_url=extra_index_url,
             )
-            
-            if return_code != 0:
-                safe_print("   ❌ Pip install failed in staging area.")
-                return False
+
+            verification_passed = False
+            if return_code == 0:
+                safe_print("   - 🧪 Running SMART import verification...")
+                try:
+                    from .installation.verification_strategy import verify_bubble_with_smart_strategy
+                    from .package_meta_builder import omnipkgMetadataGatherer
+                except ImportError:
+                    from omnipkg.installation.verification_strategy import verify_bubble_with_smart_strategy
+                    from omnipkg.package_meta_builder import omnipkgMetadataGatherer
+                
+                gatherer = omnipkgMetadataGatherer(
+                    config=self.parent_omnipkg.config,
+                    env_id=self.parent_omnipkg.env_id,
+                    omnipkg_instance=self.parent_omnipkg,
+                    target_context_version=python_context_version,
+                )
+                existing_bubble_paths = self._find_dependency_bubbles(package_name, destination_path.parent)
+
+                verification_passed = verify_bubble_with_smart_strategy(
+                    self.parent_omnipkg, package_name, version, staging_path, gatherer,
+                    existing_bubble_paths=existing_bubble_paths
+                )
+
+            # --- TIME MACHINE TRIGGER ---
+            # Trigger if the initial modern install fails OR if its verification fails
+            if not verification_passed:
+                safe_print("\n" + "=" * 60)
+                if return_code != 0:
+                    safe_print(f"🕰️  TIME MACHINE: Modern install failed for {package_name}=={version}.")
+                else:
+                    safe_print(f"🕰️  TIME MACHINE: Verification failed for {package_name}=={version}, indicating dependency mismatch.")
+                safe_print("   - Attempting to rebuild from the past using historical dependencies...")
+                safe_print("=" * 60)
+
+                # Clean staging area before retry
+                shutil.rmtree(staging_path)
+                staging_path.mkdir(exist_ok=True)
+
+                historical_success = self.parent_omnipkg._run_historical_install_fallback(
+                    package_name,
+                    version,
+                    target_directory_override=staging_path,
+                    index_url=index_url,
+                    extra_index_url=extra_index_url,
+                )
+
+                if not historical_success:
+                    safe_print(f"   ❌ TIME MACHINE: Historical rebuild failed for {package_name}=={version}.")
+                    return False
+
+                safe_print(f"\n   ✅ TIME MACHINE: Successfully rebuilt {package_name}=={version} into staging area.")
             
             # 2. Find already-created bubbles for dependencies
             safe_print("   - 🔍 Locating dependency bubbles for verification...")
@@ -6105,6 +6153,20 @@ class omnipkg:
                         pass
 
                 # If none of the expected patterns exist, sync is needed
+                # First, check for ANY installed omnipkg metadata. This is the ground truth.
+                conflicting_installs = [
+                    p for p in site_packages.glob("omnipkg-*.dist-info")
+                    if p.name != expected_dist_info and p.name != expected_editable_dist_info
+                ]
+
+                # If we found an old/conflicting .dist-info directory, sync is ALWAYS needed.
+                # This is non-negotiable and overrides any .pth file check.
+                if conflicting_installs:
+                    sync_needed.append((py_ver, str(exe_path)))
+                    continue # Move to the next interpreter
+
+                # Only if there are no conflicts, we check if an install exists at all.
+                # If none of the expected patterns exist, sync is needed.
                 if not (has_regular_install or has_editable_install or has_pth_install):
                     sync_needed.append((py_ver, str(exe_path)))
 
@@ -12932,17 +12994,24 @@ class omnipkg:
                 safe_print(_("🤷 No versions selected for uninstallation."))
                 continue
 
-            final_to_uninstall = [
-                item
-                for item in to_uninstall
-                if not (
-                    item.get("install_type") == "active"
-                    and (
-                        canonicalize_name(item.get("Name")) in core_deps
-                        or canonicalize_name(item.get("Name")) == "omnipkg"
-                    )
-                )
-            ]
+            final_to_uninstall = []
+            for item in to_uninstall:
+                item_name = item.get("Name")
+                
+                # Skip items with invalid/missing names
+                if not item_name or not isinstance(item_name, str):
+                    safe_print(f"⚠️  Skipping item with invalid Name: {item}")
+                    continue
+                
+                c_item_name = canonicalize_name(item_name)
+                
+                # Skip protected packages
+                if item.get("install_type") == "active" and (
+                    c_item_name in core_deps or c_item_name == "omnipkg"
+                ):
+                    continue
+                
+                final_to_uninstall.append(item)
 
             if len(final_to_uninstall) != len(to_uninstall):
                 safe_print(_("⚠️  Skipped one or more protected core packages."))
@@ -14522,6 +14591,29 @@ print(json.dumps(results))
             self._auto_heal_invalid_distributions(full_output, cleanup_path)
 
             if return_code != 0:
+                # --- TIME MACHINE FALLBACK ---
+                # Check for legacy build system failure (setuptools incompatibility)
+                is_legacy_failure = "metadata-generation-failed" in full_output.lower()
+                if is_legacy_failure and packages and "==" in packages[0]:
+                    pkg_name, pkg_ver = self._parse_package_spec(packages[0])
+                    safe_print("\n" + "=" * 60)
+                    safe_print(f"🕰️  TIME MACHINE: Detected legacy build failure for {pkg_name}=={pkg_ver}.")
+                    safe_print("   - This is common for old packages with modern build tools.")
+                    safe_print("=" * 60)
+
+                    if self._run_historical_install_fallback(
+                        pkg_name,
+                        pkg_ver,
+                        target_directory_override=target_directory,
+                        index_url=index_url,
+                        extra_index_url=extra_index_url,
+                    ):
+                        safe_print(f"\n   ✅ TIME MACHINE: Successfully rebuilt {pkg_name}=={pkg_ver} from the past.")
+                        return 0, captured_output  # Return success!
+                    else:
+                        safe_print(f"\n   ❌ TIME MACHINE: Failed to rebuild {pkg_name}=={pkg_ver}. The original error follows.")
+                        # Fall through to return the original error code below
+
                 # Check for "no compatible version" error
                 no_dist_found = (
                     "no matching distribution found" in full_output.lower()
