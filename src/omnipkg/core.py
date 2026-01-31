@@ -9500,9 +9500,7 @@ class omnipkg:
                 download_success = False
 
                 # Try Python 3.13 alternative download method
-                if version == "3.13":
-                    safe_print(_("   - Using python-build-standalone for Python 3.13..."))
-                    download_success = self._download_python_313_alternative(dest_path, full_version)
+                # removed, do not add back
 
                 # Fallback to other download methods
                 if not download_success:
@@ -9579,193 +9577,6 @@ class omnipkg:
             traceback.print_exc()
             return 1
     
-    # Add this at the START of _download_python_313_alternative,
-    # right after the function signature:
-
-    def _download_python_313_alternative(self, dest_path: Path, full_version: str) -> bool:
-        """
-        Alternative download method specifically for Python 3.13 using python-build-standalone releases.
-        Downloads from the December 5, 2024 release builds.
-        """
-        import platform
-        import shutil
-        import tarfile
-        import tempfile
-        import urllib.request
-
-        # CRITICAL FIX: Verify dest_path doesn't contain nested .omnipkg
-        dest_path_str = str(dest_path).replace("\\", "/")
-        if dest_path_str.count("/.omnipkg/") > 1:
-            safe_print(_("   - ❌ CRITICAL: Detected nested .omnipkg path!"))
-            safe_print(_("   - Bad path: {}").format(dest_path))
-
-            # Extract the real root
-            parts = dest_path_str.split("/.omnipkg/")
-            if len(parts) >= 2:
-                # Reconstruct path with only ONE .omnipkg
-                real_venv = Path(parts[0])
-                dest_path = real_venv / ".omnipkg" / "interpreters" / f"cpython-{full_version}"
-                safe_print(_("   - Corrected to: {}").format(dest_path))
-
-        try:
-            safe_print(_("   - Attempting Python 3.13 download from python-build-standalone..."))
-            system = platform.system().lower()
-            machine = platform.machine().lower()
-            base_url = (
-                "https://github.com/indygreg/python-build-standalone/releases/download/20241205/"
-            )
-            build_filename = None
-            if system == "windows":
-                if "64" in machine or machine == "amd64" or machine == "x86_64":
-                    build_filename = (
-                        "cpython-3.13.1+20241205-x86_64-pc-windows-msvc-install_only.tar.gz"
-                    )
-                else:
-                    build_filename = (
-                        "cpython-3.13.1+20241205-i686-pc-windows-msvc-install_only.tar.gz"
-                    )
-            elif system == "darwin":
-                if "arm" in machine or "m1" in machine.lower() or "arm64" in machine:
-                    build_filename = (
-                        "cpython-3.13.1+20241205-aarch64-apple-darwin-install_only.tar.gz"
-                    )
-                else:
-                    build_filename = (
-                        "cpython-3.13.1+20241205-x86_64-apple-darwin-install_only.tar.gz"
-                    )
-            elif system == "linux":
-                try:
-                    ldd_check = subprocess.run(["ldd", "--version"], capture_output=True, text=True)
-                    is_musl = "musl" in (ldd_check.stdout + ldd_check.stderr).lower()
-                except:
-                    is_musl = False
-                
-                if not is_musl and Path("/etc/alpine-release").exists():
-                    is_musl = True
-                
-                elif is_musl and full_version.startswith("3.11") and full_version != "3.11.14":
-                    safe_print(_('   🌲 Alpine detected: upgrading {} → 3.11.14 (musl-compatible)').format(full_version))
-                    full_version = "3.11.14"
-                    release_tag = "20251217"
-                elif "aarch64" in machine or "arm64" in machine:
-                    build_filename = (
-                        "cpython-3.13.1+20241205-aarch64-unknown-linux-gnu-install_only.tar.gz"
-                    )
-                elif "arm" in machine:
-                    if "hf" in machine or platform.processor().find("hard") != -1:
-                        build_filename = "cpython-3.13.1+20241205-armv7-unknown-linux-gnueabihf-install_only.tar.gz"
-                    else:
-                        build_filename = "cpython-3.13.1+20241205-armv7-unknown-linux-gnueabi-install_only.tar.gz"
-                elif "ppc64le" in machine:
-                    build_filename = (
-                        "cpython-3.13.1+20241205-ppc64le-unknown-linux-gnu-install_only.tar.gz"
-                    )
-                elif "s390x" in machine:
-                    build_filename = (
-                        "cpython-3.13.1+20241205-s390x-unknown-linux-gnu-install_only.tar.gz"
-                    )
-                elif "x86_64" in machine or "amd64" in machine:
-                    try:
-                        import subprocess
-
-                        result = subprocess.run(
-                            ["ldd", "--version"],
-                            capture_output=True,
-                            text=True,
-                            timeout=5,
-                        )
-                        if "musl" in result.stderr.lower():
-                            build_filename = "cpython-3.13.1+20241205-x86_64-unknown-linux-musl-install_only.tar.gz"
-                        else:
-                            build_filename = "cpython-3.13.1+20241205-x86_64-unknown-linux-gnu-install_only.tar.gz"
-                    except:
-                        build_filename = (
-                            "cpython-3.13.1+20241205-x86_64-unknown-linux-gnu-install_only.tar.gz"
-                        )
-                elif "i686" in machine or "i386" in machine:
-                    build_filename = (
-                        "cpython-3.13.1+20241205-i686-unknown-linux-gnu-install_only.tar.gz"
-                    )
-                else:
-                    build_filename = (
-                        "cpython-3.13.1+20241205-x86_64-unknown-linux-gnu-install_only.tar.gz"
-                    )
-            if not build_filename:
-                safe_print(
-                    _("   - ❌ Could not determine appropriate build for platform: {} {}").format(
-                        system, machine
-                    )
-                )
-                return False
-            download_url = base_url + build_filename
-            safe_print(_("   - Selected build: {}").format(build_filename))
-            safe_print(_("   - Downloading from: {}").format(download_url))
-            dest_path.parent.mkdir(parents=True, exist_ok=True)
-            with tempfile.NamedTemporaryFile(delete=False, suffix=".tar.gz") as temp_file:
-                temp_path = Path(temp_file.name)
-            try:
-
-                def show_progress(block_num, block_size, total_size):
-                    if total_size > 0:
-                        percent = min(100, block_num * block_size * 100 // total_size)
-                        if block_num % 100 == 0 or percent >= 100:
-                            safe_print(
-                                _("   - Download progress: {}%").format(percent),
-                                end="\r",
-                            )
-
-                urllib.request.urlretrieve(download_url, temp_path, reporthook=show_progress)
-                safe_print(_("\n   - Download completed, extracting..."))
-                with tarfile.open(temp_path, "r:gz") as tar_ref:
-                    with tempfile.TemporaryDirectory() as temp_extract_dir:
-                        tar_ref.extractall(temp_extract_dir)
-                        extracted_items = list(Path(temp_extract_dir).iterdir())
-                        if len(extracted_items) == 1 and extracted_items[0].is_dir():
-                            extracted_dir = extracted_items[0]
-                            if dest_path.exists():
-                                shutil.rmtree(dest_path)
-                            shutil.move(str(extracted_dir), str(dest_path))
-                        else:
-                            dest_path.mkdir(parents=True, exist_ok=True)
-                            for item in extracted_items:
-                                dest_item = dest_path / item.name
-                                if dest_item.exists():
-                                    if dest_item.is_dir():
-                                        shutil.rmtree(dest_item)
-                                    else:
-                                        dest_item.unlink()
-                                shutil.move(str(item), str(dest_item))
-                safe_print(_("   - Extraction completed"))
-                if system in ["linux", "darwin"]:
-                    python_exe = dest_path / "bin" / "python3"
-                    if python_exe.exists():
-                        python_exe.chmod(493)
-                        python_versioned = dest_path / "bin" / "python3.13"
-                        if python_versioned.exists():
-                            python_versioned.chmod(493)
-                safe_print(_("   - ✅ Python 3.13.1 installation completed successfully"))
-                safe_print(_("   - Bootstrapping the new Python 3.13 environment..."))
-                python_exe = self._find_python_executable_in_dir(dest_path)
-                if not python_exe:
-                    safe_print(
-                        _(
-                            "   - ❌ CRITICAL: Could not find Python executable in {} after extraction."
-                        ).format(dest_path)
-                    )
-                    return False
-                self._install_essential_packages(python_exe)
-
-                safe_print(_("   - ✅ Alternative Python 3.13 download and bootstrap completed"))
-                return True
-            finally:
-                temp_path.unlink(missing_ok=True)
-        except Exception as e:
-            safe_print(_("   - ❌ Python 3.13 download failed: {}").format(e))
-            import traceback
-
-            safe_print(_("   - Error details: {}").format(traceback.format_exc()))
-            return False
-
     def rescan_interpreters(self) -> int:
         """
         Forces a full, clean re-scan of the managed interpreters directory
@@ -14552,6 +14363,10 @@ print(json.dumps(results))
             cmd.extend(["--target", str(target_directory)])
         cmd.extend(packages)
 
+        env = os.environ.copy()
+        if target_directory:
+            env.pop('PIP_PREFIX', None)
+
         try:
             process = subprocess.Popen(
                 cmd,
@@ -14562,6 +14377,7 @@ print(json.dumps(results))
                 errors="replace",
                 bufsize=1,
                 universal_newlines=True,
+                env=env,  # ✨ Pass the cleaned environment
             )
 
             stdout_lines, stderr_lines = [], []
@@ -14657,7 +14473,7 @@ print(json.dumps(results))
                     )
                     if self._brute_force_package_cleanup(package_name, cleanup_path):
                         safe_print(_("   - Retrying installation on clean environment..."))
-                        retry_process = subprocess.run(cmd, capture_output=True, text=True)
+                        retry_process = subprocess.run(cmd, capture_output=True, text=True, env=env)  # ✨ ADD env=env HERE
                         if retry_process.returncode == 0:
                             safe_print(retry_process.stdout)
                             safe_print(_("   - ✅ Recovery successful!"))
