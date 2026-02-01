@@ -116,6 +116,14 @@ VERIFICATION_GROUPS = {
         reason="Requests has specific version requirements for its deps.",
         test_order=["urllib3", "chardet", "idna", "certifi", "requests"],
     ),
+    # TensorFlow IO Plugins (Critical Isolation)
+    "tensorflow-io": VerificationGroup(
+        name="tensorflow-io",
+        packages={"tensorflow-io", "tensorflow-io-gcs-filesystem"},
+        primary_package="tensorflow-io",
+        reason="TF IO plugins have C-level singletons and MUST be tested "
+        "separately from the main tensorflow group to avoid registration errors.",
+    ),
 }
 
 

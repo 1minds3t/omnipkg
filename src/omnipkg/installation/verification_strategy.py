@@ -76,6 +76,27 @@ class SmartVerificationStrategy:
         self.gatherer = gatherer
         self.original_sys_path = None
 
+    def _get_actual_import_names(self, dist) -> List[str]:
+        """
+        Read top_level.txt to get actual import names.
+        
+        This fixes issues where package name != import name (e.g. tomli -> tomli, autocommand -> autocommand).
+        """
+        try:
+            if hasattr(dist, "read_text"):
+                content = dist.read_text("top_level.txt")
+                if content:
+                    return [n for n in content.splitlines() if n and n.isidentifier()]
+            # Fallback for older dist objects
+            elif hasattr(dist, "files") and dist.files:
+                for f in dist.files:
+                    if f.name == "top_level.txt":
+                        content = f.read_text()
+                        return [n for n in content.splitlines() if n and n.isidentifier()]
+        except Exception:
+            pass
+        return []
+
     def verify_packages_in_staging(
         self,
         staging_path: Path,
@@ -189,7 +210,7 @@ class SmartVerificationStrategy:
 
     def _organize_into_groups(self, all_dists: List) -> Dict[str, Dict]:
         """
-        Organize distributions into verification groups.
+        Organize distributions into verification groups with Namespace Clustering.
 
         Returns:
             Dict mapping group_name -> {dists: [...], group_def: VerificationGroup}
@@ -209,11 +230,35 @@ class SmartVerificationStrategy:
                     groups[group_name] = {"dists": [], "group_def": group_def}
                 groups[group_name]["dists"].append(dist)
             else:
-                # Standalone package (no group)
                 standalone_packages.append(dist)
-
-        # Each standalone package gets its own "group"
+        
+        # [SMART STRATEGY] Namespace Clustering
+        # Group packages that share a common prefix (e.g., jaraco.text, jaraco.functools)
+        # to ensure they are verified in the same context.
+        namespace_clusters = {}
+        remaining_standalone = []
+        
         for dist in standalone_packages:
+            pkg_name = dist.metadata["Name"]
+            if "." in pkg_name:
+                # Use the root namespace as the cluster key (e.g., 'jaraco', 'backports')
+                root = pkg_name.split(".")[0]
+                if root not in namespace_clusters:
+                    namespace_clusters[root] = []
+                namespace_clusters[root].append(dist)
+            else:
+                remaining_standalone.append(dist)
+        
+        # Add clusters to groups
+        for root, cluster_dists in namespace_clusters.items():
+            # If only 1 package, treat as standalone to avoid unnecessary grouping overhead
+            if len(cluster_dists) == 1:
+                remaining_standalone.extend(cluster_dists)
+            else:
+                groups[f"namespace:{root}"] = {"dists": cluster_dists, "group_def": None}
+
+        # Each remaining standalone package gets its own "group"
+        for dist in remaining_standalone:
             pkg_name = dist.metadata["Name"]
             groups[f"standalone:{pkg_name}"] = {"dists": [dist], "group_def": None}
 
@@ -262,7 +307,12 @@ class SmartVerificationStrategy:
         for dist in dists:
             pkg_name = dist.metadata["Name"]
             version = dist.metadata.get("Version", "unknown")
-            candidates = self.gatherer._get_import_candidates(dist, pkg_name)
+            
+            # [SMART STRATEGY] Use top_level.txt for accurate import names
+            candidates = self._get_actual_import_names(dist)
+            if not candidates:
+                # Fallback to heuristics
+                candidates = self.gatherer._get_import_candidates(dist, pkg_name)
             
             if candidates:
                 packages_to_test.append({
@@ -303,18 +353,19 @@ class SmartVerificationStrategy:
         worker_script = """
 import sys, json, importlib, traceback
 
-# [CHANGE 2] Capture paths
+# Capture paths
 staging_path = {staging_path!r}
 bubble_paths = {bubble_paths!r}
-setuptools_path = {setuptools_path!r}
 
-# Remove polluted paths
-sys.path = [p for p in sys.path if 'site-packages' not in p and 'dist-packages' not in p]
-
-# Insert paths (Dependency Bubbles -> Staging -> Setuptools)
-for p in bubble_paths: sys.path.insert(0, p)
-if staging_path: sys.path.insert(0, staging_path)
-if setuptools_path: sys.path.append(setuptools_path) # [CHANGE 3] Inject setuptools
+# --- OVERLAY STRATEGY ---
+# Prepend new paths to the existing sys.path instead of creating a sterile environment.
+# This mimics the 'overlay' isolation mode, allowing staged packages to find
+# dependencies in the main env, fixing numerous ModuleNotFoundError issues.
+# The order is critical: staging is checked first, then bubbles, then the base env.
+all_new_paths = [staging_path] + bubble_paths
+for p in reversed(all_new_paths):
+    if p and p not in sys.path:
+        sys.path.insert(0, p)
 
 results = []
 packages_data = {packages_json}
@@ -333,7 +384,6 @@ print(json.dumps(results))
         script = worker_script.format(
             staging_path=staging_path,
             bubble_paths=bubble_paths,
-            setuptools_path=setuptools_path,
             packages_json=json.dumps(packages)
         )
 

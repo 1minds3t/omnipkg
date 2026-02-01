@@ -215,15 +215,21 @@ def multiverse_analysis():
     # === STEP 1: PYTHON 3.9 CONTEXT ===
     safe_print("\n[STEP 1] MISSION STEP 1: Setting up Python 3.9 dimension...")
 
-    # First, ensure Python 3.9 is adopted
+    # First, ensure Python 3.9 is adopted by checking if it's available.
     safe_print("\n [SETUP] Ensuring Python 3.9 is available...")
-    try:
+    info_output = run_command_with_isolated_context(
+        ["omnipkg", "info", "python"], "Checking available Python versions"
+    )
+
+    if "Python 3.9" not in info_output:
+        safe_print("   - Python 3.9 not found. Adopting it now...")
         run_command_with_isolated_context(
-            ["omnipkg", "adopt", "python", "3.9"], "Adopting Python 3.9 if not present"
+            # Corrected command from "adopt python" to "python adopt"
+            ["omnipkg", "python", "adopt", "3.9"],
+            "Adopting Python 3.9",
         )
-    except subprocess.CalledProcessError:
-        # If adopt fails, it might already be there, continue
-        pass
+    else:
+        safe_print("   - Python 3.9 is already available.")
 
     run_command_with_isolated_context(
         ["omnipkg", "swap", "python", "3.9"], "Swapping to Python 3.9 context"
