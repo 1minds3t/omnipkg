@@ -184,7 +184,6 @@ class SharedStateMonitor:
              # Should never happen if logic is sound
              sys.stderr.write("CRITICAL: Atomic release failed (Version Mismatch)!\n")
 
-
     def commit_and_release(self, new_version: int):
         """Write finished. Increment version, clear lock flag, release file lock."""
         try:
@@ -555,9 +554,14 @@ def fatal_error(msg, error=None):
 # STEP 1: READ PKG_SPEC (MUST BE FIRST)
 # ═══════════════════════════════════════════════════════════════
 try:
+    # An idle worker will block here until it's assigned a spec.
     input_line = sys.stdin.readline()
+    
+    # If readline returns empty, it means EOF (the daemon process died).
+    # Exit gracefully instead of logging a FATAL error. The daemon's
+    # idle pool monitor will replace this worker if needed.
     if not input_line:
-        fatal_error('No input received on stdin')
+        sys.exit(0)
     
     setup_data = json.loads(input_line.strip())
     PKG_SPEC = setup_data.get('package_spec', '')
@@ -1294,17 +1298,71 @@ def diagnose_worker_issue(package_spec: str):
 
 
 class PersistentWorker:
-    def __init__(self, package_spec: str, python_exe: str = None, verbose: bool = False):
+    def __init__(self, package_spec: str = None, python_exe: str = None, verbose: bool = False, defer_setup: bool = False):
         self.package_spec = package_spec
-        self.python_exe = python_exe or sys.executable  # <--- STORE IT
-        self.package_spec = package_spec
+        self.python_exe = python_exe or sys.executable
         self.process: Optional[subprocess.Popen] = None
         self.temp_file: Optional[str] = None
-        self.lock = threading.RLock()  # Per-worker lock
+        self.lock = threading.RLock()
         self.last_health_check = time.time()
         self.health_check_failures = 0
         self._last_io = None
-        self._start_worker()
+        self._is_ready = False
+
+        # Start the Python process immediately
+        self._spawn_process()
+        
+        # If not idle, configure it immediately
+        if not defer_setup and package_spec:
+            self.assign_spec(package_spec)
+
+    def _spawn_process(self):
+        """Starts the raw Python process. Sits waiting for JSON spec."""
+        with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix="_idle.py") as f:
+            f.write(_DAEMON_SCRIPT)
+            self.temp_file = f.name
+
+        env = os.environ.copy()
+        current_pythonpath = env.get("PYTHONPATH", "")
+        env["PYTHONPATH"] = f"{os.getcwd()}{os.pathsep}{current_pythonpath}"
+
+        self.log_file = open(DAEMON_LOG_FILE, "a", buffering=1)
+
+        self.process = subprocess.Popen(
+            [self.python_exe, "-u", self.temp_file],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=self.log_file,
+            text=True,
+            bufsize=0,
+            env=env,
+            preexec_fn=os.setsid if not IS_WINDOWS else None,
+        )
+
+    def assign_spec(self, package_spec: str):
+        """Converts an IDLE worker into a specific package worker."""
+        if self._is_ready: return
+        self.package_spec = package_spec
+        
+        try:
+            # 1. Send the configuration to the waiting process
+            setup_cmd = json.dumps({"package_spec": self.package_spec})
+            self.process.stdin.write(setup_cmd + "\n")
+            self.process.stdin.flush()
+
+            # 2. Wait for READY signal (Imports happen here)
+            readable, unused, unused = select.select([self.process.stdout], [], [], 30.0)
+            if readable:
+                ready_line = self.process.stdout.readline()
+                if ready_line and json.loads(ready_line.strip()).get("status") == "READY":
+                    self.last_health_check = time.time()
+                    self._is_ready = True
+                    return
+
+            raise RuntimeError("Worker failed to send READY status.")
+        except Exception as e:
+            self.force_shutdown()
+            raise RuntimeError(f"Worker spec assignment failed: {e}")
 
     def wait_for_ready_with_activity_monitoring(self, process, timeout_idle_seconds=30.0):
         """
@@ -1539,7 +1597,7 @@ class PersistentWorker:
             return cuda_paths
 
         # Strategy 1: Check main bubble
-        _, version = (
+        unused, version = (
             self.package_spec.split("==") if "==" in self.package_spec else (pkg_name, None)
         )
         if version:
@@ -1805,6 +1863,8 @@ class PersistentWorker:
 # ═══════════════════════════════════════════════════════════════
 
 
+import queue
+
 class WorkerPoolDaemon:
     def __init__(self, max_workers: int = 10, max_idle_time: int = 300, warmup_specs: list = None):
         self.max_workers = max_workers
@@ -1813,6 +1873,10 @@ class WorkerPoolDaemon:
         self.workers: Dict[str, Dict[str, Any]] = {}
         self.worker_locks: Dict[str, threading.RLock] = defaultdict(threading.RLock)
         self.pool_lock = threading.RLock()
+        
+        # 🚀 IDLE WORKER POOL: Keep 3 bare Python processes ready
+        self.min_idle_workers = 3
+        self.idle_pool = queue.Queue(maxsize=self.min_idle_workers)
         self.running = True
         self.socket_path = DEFAULT_SOCKET
         self.stats = {
@@ -1859,8 +1923,23 @@ class WorkerPoolDaemon:
         threading.Thread(target=self._health_monitor, daemon=True, name="health-monitor").start()
         threading.Thread(target=self._memory_manager, daemon=True, name="memory-manager").start()
         threading.Thread(target=self._warmup_workers, daemon=True, name="warmup").start()
+        # 🚀 Start Idle Pool Maintainer
+        threading.Thread(target=self._maintain_idle_pool, daemon=True, name="idle-pool").start()
 
         self._run_socket_server()
+
+    def _maintain_idle_pool(self):
+        """🚀 Pre-spawns Python processes so they are ready instantly."""
+        while self.running:
+            try:
+                if self.idle_pool.qsize() < self.min_idle_workers:
+                    # Spawn a generic worker (no package spec yet)
+                    idle_worker = PersistentWorker(package_spec=None, defer_setup=True)
+                    self.idle_pool.put(idle_worker)
+                    safe_print(f"   💤 [DAEMON] Spawned idle worker (Pool size: {self.idle_pool.qsize()})", file=sys.stderr)
+            except Exception:
+                pass
+            time.sleep(0.5)
 
     def _start_windows_daemon(self):
         """Start daemon on Windows using subprocess (no fork)."""
@@ -2094,7 +2173,13 @@ class WorkerPoolDaemon:
 
             # Create worker - loader's __enter__ handles ALL the locking
             try:
-                worker = PersistentWorker(spec, python_exe=python_exe)
+                try:
+                    # Instant spawn (0ms)
+                    worker = self.idle_pool.get_nowait()
+                    worker.assign_spec(spec)
+                except queue.Empty:
+                    # Fallback if queue empty (~30ms)
+                    worker = PersistentWorker(spec, python_exe=python_exe)
 
                 with self.pool_lock:
                     self.workers[worker_key] = {
@@ -2186,115 +2271,61 @@ class WorkerPoolDaemon:
             python_exe = sys.executable
 
         worker_key = f"{spec}::{python_exe}"
+        worker_info = None
 
-        # FAST PATH
+        # FAST PATH: Worker already exists for this spec
         with self.pool_lock:
             if worker_key in self.workers:
                 self.stats["cache_hits"] += 1
                 worker_info = self.workers[worker_key]
 
-        if worker_key in self.workers:
+        if worker_info:
             worker_info["last_used"] = time.time()
             worker_info["request_count"] += 1
-            worker_info["is_gpu_worker"] = True
-            worker_info["gpu_timeout"] = 60
-
-            try:
-                command = {
-                    "type": "execute_cuda",
-                    "task_id": f"{spec}-{self.stats['total_requests']}",
-                    "code": code,
-                    "cuda_in": cuda_in,
-                    "cuda_out": cuda_out,
-                }
-
-                worker_info["worker"].process.stdin.write(json.dumps(command) + "\n")
-                worker_info["worker"].process.stdin.flush()
-
-                import select
-
-                readable, unused, unused = select.select(
-                    [worker_info["worker"].process.stdout], [], [], 60.0
-                )
-
-                if not readable:
-                    raise TimeoutError("CUDA task timed out after 60s")
-
-                response_line = worker_info["worker"].process.stdout.readline()
-                if not response_line:
-                    raise RuntimeError("Worker closed connection")
-
-                return json.loads(response_line.strip())
-
-            except Exception as e:
-                return {"success": False, "error": str(e)}
-
-        # SLOW PATH (same as above, no extra locking)
-        with self.worker_locks[worker_key]:
-            with self.pool_lock:
-                if worker_key in self.workers:
-                    worker_info["last_used"] = time.time()
-                    worker_info["request_count"] += 1
-                    worker_info["is_gpu_worker"] = True
-                    worker_info["gpu_timeout"] = 60
-
+        else:
+            # SLOW PATH: No worker exists, need to create or assign one
+            with self.worker_locks[worker_key]:
+                # Double-check inside lock in case another thread created it
+                with self.pool_lock:
+                    if worker_key in self.workers:
+                        worker_info = self.workers[worker_key]
+                    
+                if not worker_info:
+                    # Evict an old worker if we are at capacity
+                    with self.pool_lock:
+                        if len(self.workers) >= self.max_workers:
+                            self._evict_oldest_worker_async()
+                    
+                    # 🚀 ACQUIRE WORKER (IDLE POOL OR NEW)
                     try:
-                        command = {
-                            "type": "execute_cuda",
-                            "task_id": f"{spec}-{self.stats['total_requests']}",
-                            "code": code,
-                            "cuda_in": cuda_in,
-                            "cuda_out": cuda_out,
-                        }
+                        try:
+                            # Instant spawn from idle pool (0ms)
+                            worker = self.idle_pool.get_nowait()
+                            worker.assign_spec(spec)
+                        except queue.Empty:
+                            # Fallback if idle pool is empty (~30ms)
+                            worker = PersistentWorker(spec, python_exe=python_exe)
 
-                        worker_info["worker"].process.stdin.write(json.dumps(command) + "\n")
-                        worker_info["worker"].process.stdin.flush()
-
-                        import select
-
-                        readable, unused, unused = select.select(
-                            [worker_info["worker"].process.stdout], [], [], 60.0
-                        )
-
-                        if not readable:
-                            raise TimeoutError("CUDA task timed out after 60s")
-
-                        response_line = worker_info["worker"].process.stdout.readline()
-                        if not response_line:
-                            raise RuntimeError("Worker closed connection")
-
-                        return json.loads(response_line.strip())
+                        # Add the newly assigned worker to the active pool
+                        with self.pool_lock:
+                            self.workers[worker_key] = {
+                                "worker": worker,
+                                "created": time.time(),
+                                "last_used": time.time(),
+                                "request_count": 0,
+                                "memory_mb": 0.0,
+                                "is_gpu_worker": True,
+                                "gpu_timeout": 60,
+                            }
+                            self.stats["workers_created"] += 1
+                            worker_info = self.workers[worker_key]
 
                     except Exception as e:
-                        return {"success": False, "error": str(e)}
+                        import traceback
+                        error_msg = _('Worker creation failed: {}\n{}').format(e, traceback.format_exc())
+                        return {"success": False, "error": error_msg, "status": "ERROR"}
 
-            with self.pool_lock:
-                if len(self.workers) >= self.max_workers:
-                    self._evict_oldest_worker_async()
-
-            try:
-                worker = PersistentWorker(spec, python_exe=python_exe)
-
-                with self.pool_lock:
-                    self.workers[worker_key] = {
-                        "worker": worker,
-                        "created": time.time(),
-                        "last_used": time.time(),
-                        "request_count": 0,
-                        "memory_mb": 0.0,
-                        "is_gpu_worker": True,
-                        "gpu_timeout": 60,
-                    }
-                    self.stats["workers_created"] += 1
-                    worker_info = self.workers[worker_key]
-
-            except Exception as e:
-                import traceback
-
-                error_msg = _('Worker creation failed: {}\n{}').format(e, traceback.format_exc())
-                return {"success": False, "error": error_msg, "status": "ERROR"}
-
-        # Execute (outside locks)
+        # EXECUTE TASK (on either existing or newly acquired worker)
         worker_info["last_used"] = time.time()
         worker_info["request_count"] += 1
 
@@ -2311,10 +2342,7 @@ class WorkerPoolDaemon:
             worker_info["worker"].process.stdin.flush()
 
             import select
-
-            readable, unused, unused = select.select(
-                [worker_info["worker"].process.stdout], [], [], 60.0
-            )
+            readable, unused, unused = select.select([worker_info["worker"].process.stdout], [], [], 60.0)
 
             if not readable:
                 raise TimeoutError("CUDA task timed out after 60s")
@@ -2324,7 +2352,6 @@ class WorkerPoolDaemon:
                 raise RuntimeError("Worker closed connection")
 
             return json.loads(response_line.strip())
-
         except Exception as e:
             return {"success": False, "error": str(e)}
 
@@ -2425,10 +2452,12 @@ class WorkerPoolDaemon:
         with self.pool_lock:
             worker_details = {}
             for k, v in self.workers.items():
+                pid = v["worker"].process.pid if v["worker"].process else None
                 worker_details[k] = {
                     "last_used": v["last_used"],
                     "request_count": v["request_count"],
                     "health_failures": v["worker"].health_check_failures,
+                    "pid": pid,
                 }
 
             # 🔥 FIX: Safe psutil memory check
@@ -3745,7 +3774,6 @@ if __name__ == "__main__":
     elif cmd == "logs":
         follow = "-f" in sys.argv or "--follow" in sys.argv
         cli_logs(follow=follow)
-    # vvvvvvv ADD THIS vvvvvvv
     elif cmd == "monitor":
         watch = "-w" in sys.argv or "--watch" in sys.argv
         try:
@@ -3761,7 +3789,6 @@ if __name__ == "__main__":
             except ImportError:
                 print(_('❌ resource_monitor module not found.'))
                 sys.exit(1)
-    # ^^^^^^^^^^^^^^^^^^^^^^^^
     else:
         print(_('Unknown command: {}').format(cmd))
         sys.exit(1)

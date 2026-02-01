@@ -7,7 +7,6 @@ import threading
 from pathlib import Path
 from omnipkg.i18n import _
 
-
 class PersistentWorker:
     """
     A persistent subprocess that acts as a specific package environment.

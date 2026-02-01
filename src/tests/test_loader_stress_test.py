@@ -431,8 +431,7 @@ go_deeper(1)
     else:
         safe_print("\n⚠️  DAEMON STACK FAILED")
         return False
-
-
+    
 def chaos_test_3_framework_battle_royale():
     """⚔️ TEST 3: FRAMEWORK BATTLE ROYALE (DAEMON EDITION)"""
     safe_print("╔══════════════════════════════════════════════════════════════╗")
@@ -656,8 +655,7 @@ arr_out[0] = val.numpy()
         )
     else:
         safe_print(_('   💥 TF Failed: {}').format(res.get('error')))
-
-    return True
+    # PyTorch Sum via Smart Client
     # ---------------------------------------------------------
     # ROUND 2: Zero-Copy Shared Memory Data Hand-off
     # ---------------------------------------------------------
@@ -756,7 +754,6 @@ result = {'sum': float(arr_out[0])}
     safe_print("   🎯 Zero-copy means NO data serialization overhead!\n")
 
     return True
-
 
 def chaos_test_4_memory_madness():
     """🧠 TEST 4: MEMORY MADNESS - Allocate everywhere"""
@@ -905,7 +902,6 @@ print(np.__version__)
     print("=" * 60 + "\n")
 
     return successful_switches == total_switches
-
 
 def chaos_test_6_version_time_machine():
     """⏰ TEST 6: VERSION TIME MACHINE - Past, present, future"""
@@ -2090,7 +2086,7 @@ with omnipkgLoader("{spec}", quiet=True):
                 except Exception:
                     sys.exit(1)
             else:
-                _, status = os.waitpid(pid, 0)
+                unused, status = os.waitpid(pid, 0)
                 if os.WIFEXITED(status) and os.WEXITSTATUS(status) == 0:
                     success_count += 1
         elapsed_fork = time.perf_counter() - start

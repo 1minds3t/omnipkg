@@ -44,7 +44,7 @@ class TrueSwitcher:
                 sys.stderr.write(_('Forked task failed: {}\n').format(e))
                 sys.exit(1)  # Failure
         else:  # Parent process
-            _, status = os.waitpid(pid, 0)
+            unused, status = os.waitpid(pid, 0)
             return os.WIFEXITED(status) and os.WEXITSTATUS(status) == 0
 
     def _run_with_worker(self, spec: str, code_to_run: str) -> bool:

@@ -13928,10 +13928,10 @@ print(json.dumps(results))
 
         # Extract tags (handle optional build tag)
         if len(parts) == 5:
-            unused, unused, python_tag, abi_tag, platform_tag = parts
+            dist_name, version, python_tag, abi_tag, platform_tag = parts
         else:
             # Has build tag
-            unused, unused, unused, python_tag, abi_tag, platform_tag = parts
+            dist_name, version, build_tag, python_tag, abi_tag, platform_tag = parts
 
         score = 0
         py_version = platform_info["py_version"]

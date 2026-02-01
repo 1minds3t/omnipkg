@@ -11,6 +11,38 @@ import sys
 import time
 from collections import defaultdict
 from omnipkg.i18n import _
+try:
+    from omnipkg.isolation.worker_daemon import DaemonClient, WorkerPoolDaemon
+except ImportError:
+    DaemonClient = None
+    WorkerPoolDaemon = None
+
+
+def get_daemon_worker_info():
+    """Connect to daemon and get PID-to-spec mapping."""
+    if not DaemonClient or not WorkerPoolDaemon or not WorkerPoolDaemon.is_running():
+        return {}
+
+    client = DaemonClient()
+    # Don't auto-start daemon if it's not running
+    client.auto_start = False
+    status = client.status()
+
+    if not status.get("success"):
+        return {}
+
+    pid_map = {}
+    worker_details = status.get("worker_details", {})
+    for spec, info in worker_details.items():
+        pid = info.get("pid")
+        if pid:
+            # Clean up the spec for display
+            pkg_spec = spec.split("::")[0]
+            py_ver_match = re.search(r'python(\d+\.\d+)', spec)
+            py_ver = py_ver_match.group(1) if py_ver_match else '?.?'
+            pid_map[str(pid)] = f"{pkg_spec} (py{py_ver})"
+            
+    return pid_map
 
 
 def run_cmd(cmd):
@@ -96,34 +128,39 @@ def get_gpu_summary():
 
     return None
 
+def identify_worker_type(proc, pid_map):
+    """Identify worker type using daemon PID map, falling back to command parsing."""
+    pid = proc["pid"]
+    cmd = proc["cmd"]
 
-def identify_worker_type(cmd):
-    """Identify what type of worker this is"""
-    if "worker_daemon.py start" in cmd:
-        return "PERSISTENT_WORKER"
-    elif "8pkg daemon start" in cmd:
+    # 1. Primary Method: Check the live map from the daemon
+    if pid in pid_map:
+        return pid_map[pid]
+
+    # 2. Fallback Methods: Parse the command string
+    if "worker_daemon.py start" in cmd or "8pkg daemon start" in cmd:
         return "DAEMON_MANAGER"
 
-    # Extract package name from temp file
+    # Identify idle workers by their temp file name suffix
+    if "tmp" in cmd and "_idle.py" in cmd:
+        return "IDLE_WORKER"
+    
+    # Legacy check for non-pool workers (less common now)
     match = re.search(r"tmp\w+_(.*?)__(.*?)\.py", cmd)
     if match:
-        package = match.group(1)
+        package = match.group(1).replace('_', '=')
         version = match.group(2)
-
-        # Determine Python version
-        if "python3.9" in cmd:
-            py_ver = "3.9"
-        elif "python3.10" in cmd:
-            py_ver = "3.10"
-        elif "python3.11" in cmd:
-            py_ver = "3.11"
-        else:
-            py_ver = "3.x"
-
+        py_ver = "3.x"
+        if "python3.9" in cmd: py_ver = "3.9"
+        elif "python3.10" in cmd: py_ver = "3.10"
+        elif "python3.11" in cmd: py_ver = "3.11"
         return f"{package}=={version} (py{py_ver})"
 
-    return "OTHER"
+    # This could be the main daemon process itself before it re-execs
+    if 'omnipkg.isolation.worker_daemon' in cmd and 'start' in cmd:
+        return "DAEMON_MANAGER"
 
+    return "OTHER"
 
 def format_memory(kb):
     """Format memory from KB to human readable"""
@@ -156,11 +193,11 @@ def print_stats(watch_mode=False):
     """Print current statistics"""
     if watch_mode:
         clear_screen()
-
+    
     print("=" * 120)
     print("🔥 OMNIPKG DAEMON RESOURCE MONITOR 🔥".center(120))
     print("=" * 120)
-
+    
     # Get GPU summary
     gpu_summary = get_gpu_summary()
     if gpu_summary:
@@ -168,39 +205,40 @@ def print_stats(watch_mode=False):
         gpu_used = gpu_summary["used_mb"]
         gpu_total = gpu_summary["total_mb"]
         gpu_pct = (gpu_used / gpu_total * 100) if gpu_total > 0 else 0
-
+    
         print(
             f"\n🎮 GPU OVERVIEW: Utilization: {gpu_util}% | VRAM: {gpu_used}MB / {gpu_total}MB ({gpu_pct:.1f}%)"
         )
-
+    
     print()
-
-    # Get process info
+    
+    # Get process info from daemon and system
+    pid_map = get_daemon_worker_info()
     processes = parse_ps_output()
     gpu_usage = parse_nvidia_smi()
-
+    
     if not processes:
-        print(_('❌ No omnipkg daemon workers found!'))
+        print(_('❌ No omnipkg daemon processes found!'))
         return
-
+    
     # Categorize processes
     workers = defaultdict(list)
     daemon_managers = []
-    persistent_workers = []
-
+    idle_workers = []
+    
     for proc in processes:
-        worker_type = identify_worker_type(proc["cmd"])
-
+        worker_type = identify_worker_type(proc, pid_map)
+    
         # Add GPU usage if available
         proc["gpu_mb"] = gpu_usage.get(proc["pid"], 0)
-
+    
         if worker_type == "DAEMON_MANAGER":
             daemon_managers.append(proc)
-        elif worker_type == "PERSISTENT_WORKER":
-            persistent_workers.append(proc)
-        else:
+        elif worker_type == "IDLE_WORKER":
+            idle_workers.append(proc)
+        elif worker_type != "OTHER":
             workers[worker_type].append(proc)
-
+    
     # Print daemon manager
     if daemon_managers:
         print(_('🎛️  DAEMON MANAGER:'))
@@ -212,81 +250,76 @@ def print_stats(watch_mode=False):
                 f"VIRT: {format_memory(proc['vsz']):>8} | {gpu_str} | Running: {format_time(proc['elapsed'])}"
             )
         print()
-
-    # Print persistent workers
-    if persistent_workers:
-        print(_('🔄 PERSISTENT WORKERS (Long-lived daemon processes):'))
-        print("-" * 120)
-        for proc in persistent_workers:
-            gpu_str = f"GPU: {proc['gpu_mb']:>4}MB" if proc["gpu_mb"] > 0 else "GPU:   --"
-            print(
-                f"  PID {proc['pid']:>6} | CPU: {proc['cpu']:>5.1f}% | RAM: {format_memory(proc['rss']):>8} | "
-                f"VIRT: {format_memory(proc['vsz']):>8} | {gpu_str} | Uptime: {format_time(proc['elapsed'])}"
-            )
-        print()
-
+    
     # Print active workers
+    total_cpu = 0
+    total_ram_mb = 0
+    total_gpu_mb = 0
+    worker_count = 0
     if workers:
         print(_('⚙️  ACTIVE WORKERS (Package-specific bubbles):'))
         print("-" * 120)
-
-        total_cpu = 0
-        total_ram_mb = 0
-        total_gpu_mb = 0
-        worker_count = 0
-
+    
         for worker_type in sorted(workers.keys()):
-            if worker_type == "OTHER":
-                continue
-
             procs = workers[worker_type]
             print(_('\n📦 {}').format(worker_type))
-
+    
             for proc in procs:
                 worker_count += 1
                 total_cpu += proc["cpu"]
                 total_ram_mb += proc["rss"] / 1024
                 total_gpu_mb += proc["gpu_mb"]
-
+    
                 gpu_str = f"GPU: {proc['gpu_mb']:>4}MB" if proc["gpu_mb"] > 0 else "GPU:   --"
-
+    
                 print(
                     f"  PID {proc['pid']:>6} | CPU: {proc['cpu']:>5.1f}% | RAM: {format_memory(proc['rss']):>8} | "
                     f"VIRT: {format_memory(proc['vsz']):>8} | {gpu_str} | Age: {format_time(proc['elapsed'])}"
                 )
-
-        # Print summary
-        print()
-        print("=" * 120)
-        print(_('📊 WORKER SUMMARY STATISTICS'))
-        print("=" * 120)
-        print(_('  Active Workers:         {}').format(worker_count))
-        print(f"  Total CPU Usage:        {total_cpu:.1f}%")
-        print(f"  Total RAM:              {total_ram_mb:.1f}MB ({total_ram_mb/1024:.2f}GB)")
-        print(f"  Total GPU VRAM:         {total_gpu_mb}MB ({total_gpu_mb/1024:.2f}GB)")
-        if worker_count > 0:
-            print(f"  Average RAM per Worker: {total_ram_mb/worker_count:.1f}MB")
-            print(f"  Average GPU per Worker: {total_gpu_mb/worker_count:.1f}MB")
-        print("=" * 120)
-
-        # Print efficiency metrics
-        print()
-        print(_('🎯 EFFICIENCY METRICS:'))
+    
+    # Print idle workers
+    if idle_workers:
+        print(_('\n💤 IDLE WORKERS (Ready to be assigned):'))
         print("-" * 120)
-        if worker_count > 0:
-            docker_efficiency = (500 * worker_count) / total_ram_mb if total_ram_mb > 0 else 0
-            venv_efficiency = (100 * worker_count) / total_ram_mb if total_ram_mb > 0 else 0
-
+        for proc in idle_workers:
+            gpu_str = f"GPU: {proc['gpu_mb']:>4}MB" if proc["gpu_mb"] > 0 else "GPU:   --"
             print(
-                f"  💡 Memory Per Worker:    {total_ram_mb/worker_count:.1f}MB (omnipkg) vs 500MB (Docker) vs 100MB (venv)"
+                f"  PID {proc['pid']:>6} | CPU: {proc['cpu']:>5.1f}% | RAM: {format_memory(proc['rss']):>8} | "
+                f"VIRT: {format_memory(proc['vsz']):>8} | {gpu_str} | Age: {format_time(proc['elapsed'])}"
             )
-            print(f"  🔥 vs Docker:            {docker_efficiency:.1f}x MORE EFFICIENT")
-            print(f"  🔥 vs VirtualEnv:        {venv_efficiency:.1f}x MORE EFFICIENT")
-            print(
-                f"  🚀 Total System Footprint: Only {total_ram_mb:.1f}MB for {worker_count} parallel package versions!"
-            )
-        print("=" * 120)
+    
+    # Print summary
+    print()
+    print("=" * 120)
+    print(_('📊 WORKER SUMMARY STATISTICS'))
+    print("=" * 120)
+    print(_('  Active Workers:         {}').format(worker_count))
+    print(_('  Idle Workers:           {}').format(len(idle_workers)))
+    print(f"  Total CPU Usage (Active): {total_cpu:.1f}%")
+    print(f"  Total RAM (Active):     {total_ram_mb:.1f}MB ({total_ram_mb/1024:.2f}GB)")
+    print(f"  Total GPU VRAM (Active):  {total_gpu_mb}MB ({total_gpu_mb/1024:.2f}GB)")
+    if worker_count > 0:
+        print(f"  Average RAM per Worker: {total_ram_mb/worker_count:.1f}MB")
+        print(f"  Average GPU per Worker: {total_gpu_mb/worker_count:.1f}MB")
+    print("=" * 120)
 
+    # Print efficiency metrics
+    print()
+    print(_('🎯 EFFICIENCY METRICS:'))
+    print("-" * 120)
+    if worker_count > 0:
+        docker_efficiency = (500 * worker_count) / total_ram_mb if total_ram_mb > 0 else 0
+        venv_efficiency = (100 * worker_count) / total_ram_mb if total_ram_mb > 0 else 0
+
+        print(
+            f"  💡 Memory Per Worker:    {total_ram_mb/worker_count:.1f}MB (omnipkg) vs 500MB (Docker) vs 100MB (venv)"
+        )
+        print(f"  🔥 vs Docker:            {docker_efficiency:.1f}x MORE EFFICIENT")
+        print(f"  🔥 vs VirtualEnv:        {venv_efficiency:.1f}x MORE EFFICIENT")
+        print(
+            f"  🚀 Total System Footprint: Only {total_ram_mb:.1f}MB for {worker_count} parallel package versions!"
+        )
+    print("=" * 120)
 
 def start_monitor(watch_mode=False):
     """Entry point for the monitor"""

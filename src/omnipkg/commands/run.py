@@ -2181,7 +2181,6 @@ def _run_script_with_healing(
 
     return test_return_code, heal_stats
 
-
 def _print_performance_comparison(initial_ns, heal_stats, runner_name="UV"):
     """Prints the final performance summary comparing Runner failure time to omnipkg execution time."""
     if not heal_stats:
@@ -2216,14 +2215,16 @@ def _print_performance_comparison(initial_ns, heal_stats, runner_name="UV"):
 
     # --- TABLE ALIGNMENT LOGIC ---
     max_label_width = max(len(runner_label), len(omni_label))
-    row_fmt = _('{:<{}} : {:>10.3f} ms  ({:>15,} ns)').format(max_label_width)
+    # Define the format string template, but do not format it yet.
+    row_fmt = _('{:<{}} : {:>10.3f} ms  ({:>15,} ns)')
 
     safe_print("\n" + "=" * 70)
     safe_print(_('🚀 PERFORMANCE COMPARISON: {} vs OMNIPKG').format(runner_upper))
     safe_print("=" * 70)
 
-    safe_print(row_fmt.format(runner_label, failure_time_ms, initial_ns))
-    safe_print(row_fmt.format(omni_label, execution_time_ms, execution_ns))
+    # Pass all required arguments, including the dynamic width, during the actual formatting call.
+    safe_print(row_fmt.format(runner_label, max_label_width, failure_time_ms, int(initial_ns_from_stats)))
+    safe_print(row_fmt.format(omni_label, max_label_width, execution_time_ms, execution_ns))
 
     safe_print("-" * 70)
 

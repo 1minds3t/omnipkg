@@ -75,8 +75,6 @@ class IdleMonitor:
             ps.kill()
         except:
             pass
-
-
 class SterileExecutor:
     """
     Runs commands in a highly isolated shell to prevent terminal corruption.

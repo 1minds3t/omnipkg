@@ -208,7 +208,7 @@ class TestEnhancedFlaskPortFinder(unittest.TestCase):
 
         # FIX: Added interactive=True to ensure the manager object is created,
         # per the user's note: "Always create manager when interactive=True".
-        _, port, manager_valid = patch_flask_code(
+        unused, port, manager_valid = patch_flask_code(
             valid_app_code, interactive=True, validate_only=True
         )
         self.reserved_ports.append(port)
@@ -256,7 +256,7 @@ if __name__ == '__main__':
         manager = None
         port = None
         try:
-            _, port, manager = patch_flask_code(app_code, interactive=True)
+            patched_code, port, manager = patch_flask_code(app_code, interactive=True)
             self.reserved_ports.append(port)
             self.assertIsNotNone(manager, "Manager should be created.")
             safe_print(f"  ✅ Manager created for port {port}.")
@@ -265,6 +265,7 @@ if __name__ == '__main__':
 
             # FIX: Added a robust wait for the server to be ready before sending a request.
             # This prevents the "Connection refused" race condition.
+
             self.assertTrue(
                 manager.wait_for_ready(timeout=15.0),
                 "Server did not become ready in time.",
