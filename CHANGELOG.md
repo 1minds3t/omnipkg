@@ -1,13 +1,33 @@
 # Changelog
 
-# Changelog
-
-# Changelog
-
 All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [2.2.0] - 2026-02-01
+
+### Added
+- **High-Performance Worker Daemon**: Introduced  with an idle worker pool to provide near-zero latency for isolated process execution.
+- **Hardware Atomics C Extension**: Added an optional C extension () for HFT-grade atomic operations (CAS, load, store), with a pure Python fallback.
+- **Fully Automated Conda-Forge CI/CD**: New GitHub Actions workflow that automatically creates and merges PRs to the conda-forge feedstock upon a new release.
+- **New Demo Documentation**: Added  to document the concurrent testing capabilities.
+
+### Changed
+- **Architecture**: Replaced the legacy  and  with the new centralized daemon logic.
+- **Internationalization (i18n)**: Massively expanded translatable strings across the entire codebase, including core, CLI, and utilities.
+- **Resource Monitor**:  is now daemon-aware and queries the API for a reliable PID-to-package mapping.
+- **Setup**:  has been enhanced to handle the optional compilation of the C extension.
+- **Bubble Verification**:  now intelligently includes dependency bubbles during import tests (e.g., providing  to ).
+- **Web UI**: Removed telemetry and proxy logic from  for a simpler, direct-to-localhost connection model.
+
+### Fixed
+- **Dev Tools**: The  script was fixed to handle multiple placeholders on a single line and preserve contextual commands.
+- **Flask Tests**: Corrected a variable shadowing bug where a throwaway  variable overwrote the  translation function.
+
+### Removed
+- **Obsolete Modules**: Deleted , , and  as their functionality is replaced or integrated elsewhere.
+- **Obsolete Tests**: Removed numerous old test files that are no longer relevant to the new architecture, including , , , and others.
 
 ## [2.1.1] - 2026-01-07
 
