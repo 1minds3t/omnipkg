@@ -73,10 +73,12 @@ jobs:
         id: install_uv_latest
         run: |
           echo "--- Installing uv (latest) with omnipkg to establish a 'good state' with snapshot ---"
-          echo "1" | omnipkg install uv==0.8.13 > /tmp/initial_uv_install_output.txt 2>&1
-          if [ $? -ne 0 ]; then 
+          # Use -y for non-interactive mode. This triggers the daemon auto-start and relaunch.
+          omnipkg install uv==0.8.13 -y 2>&1 | tee /tmp/initial_uv_install_output.txt
+          
+          # PIPESTATUS[0] captures the exit code of omnipkg, not tee.
+          if [ ${PIPESTATUS[0]} -ne 0 ]; then 
             echo "omnipkg_install_uv_success=false" >> $GITHUB_OUTPUT
-            cat /tmp/initial_uv_install_output.txt
             exit 1 
           fi
           
@@ -84,7 +86,8 @@ jobs:
           uv --version | tee -a /tmp/initial_uv_version.txt
           
           echo "omnipkg status after installing uv:" | tee -a /tmp/initial_uv_version.txt
-          echo "" | omnipkg status | tee -a /tmp/initial_uv_version.txt
+          # Use --non-interactive instead of a pipe
+          omnipkg status --non-interactive | tee -a /tmp/initial_uv_version.txt
           echo "omnipkg snapshot created - now we can revert uv's self-sabotage!"
 
       - name: 💥 Force UV to Downgrade Itself (with --system)
@@ -134,9 +137,10 @@ jobs:
           echo "--- Verifying UV version after omnipkg revert ---" | tee /tmp/final_uv_version.txt
           uv --version | tee -a /tmp/final_uv_version.txt || echo "uv command not found or failed after revert." | tee -a /tmp/final_uv_version.txt
           echo "--- omnipkg status after revert ---" | tee -a /tmp/final_uv_version.txt
-          echo "" | omnipkg status | tee -a /tmp/final_uv_version.txt
+          omnipkg status --non-interactive | tee -a /tmp/final_uv_version.txt
           echo "--- omnipkg info uv after revert ---" | tee -a /tmp/final_uv_version.txt
-          echo "" | omnipkg info uv | tee -a /tmp/final_uv_version.txt
+          # Use positional argument '1' and --non-interactive
+          omnipkg info uv 1 --non-interactive | tee -a /tmp/final_uv_version.txt
 
       - name: 📊 Generate Report
         if: always()
