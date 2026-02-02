@@ -37,4 +37,106 @@ jobs:
           from pathlib import Path
           
           # Windows-specific config path
-          config_dir = Path(os.environ['USER
+          config_dir = Path(os.environ['USERPROFILE']) / '.config' / 'omnipkg'
+          config_dir.mkdir(parents=True, exist_ok=True)
+          
+          config = {
+              "interactive": False,
+              "auto_confirm": True,
+              "daemon_port": 5678,
+              "log_level": "DEBUG" # Force debug logging for better scan results
+          }
+          
+          config_path = config_dir / 'config.json'
+          with open(config_path, 'w') as f:
+              json.dump(config, f, indent=2)
+          print(f"✅ Config created at: {config_path}")
+
+      - name: 🚀 Start Omnipkg Daemon
+        id: start_daemon
+        shell: powershell
+        run: |
+          Write-Host "--- Starting Omnipkg Daemon ---"
+          omnipkg daemon start
+          
+          # Give it a moment to initialize or crash
+          Start-Sleep -Seconds 5
+
+      - name: 🔍 Verify Daemon Status
+        id: check_status
+        shell: powershell
+        run: |
+          Write-Host "--- Checking Daemon Status ---"
+          omnipkg daemon status
+          
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "❌ Daemon is not running!"
+            exit 1
+          }
+          Write-Host "✅ Daemon is running successfully."
+
+      # ════════════════════════════════════════════════════════════════
+      # 🕵️ LOG SCANNING SECTION (Runs only if previous steps failed)
+      # ════════════════════════════════════════════════════════════════
+      - name: 🩺 Scan and Dump Omnipkg Logs
+        if: failure() || cancelled()
+        shell: powershell
+        run: |
+          Write-Host "::group::🔍 LOCATING OMNIPKG LOGS"
+          
+          # Define common log locations on Windows
+          $userProfile = $env:USERPROFILE
+          $locations = @(
+              "$userProfile\.omnipkg\logs",
+              "$userProfile\.config\omnipkg\logs",
+              "$userProfile\AppData\Local\omnipkg\logs"
+          )
+          
+          $logFiles = @()
+          
+          # Attempt to find logs in known locations
+          foreach ($loc in $locations) {
+              if (Test-Path $loc) {
+                  Write-Host "Found log directory: $loc"
+                  $files = Get-ChildItem -Path $loc -Filter "*.log" -Recurse
+                  $logFiles += $files
+              }
+          }
+          
+          # Fallback: Search user profile if nothing found (slower but thorough)
+          if ($logFiles.Count -eq 0) {
+              Write-Host "⚠️ No logs in standard paths. Searching UserProfile (this may take a moment)..."
+              $logFiles = Get-ChildItem -Path $userProfile -Filter "omnipkg*.log" -Recurse -ErrorAction SilentlyContinue
+          }
+          
+          Write-Host "::endgroup::"
+          
+          if ($logFiles.Count -eq 0) {
+              Write-Host "❌ NO LOG FILES FOUND."
+              exit 0
+          }
+          
+          # Loop through found logs and print them
+          foreach ($file in $logFiles) {
+              Write-Host "══════════════════════════════════════════════════════"
+              Write-Host "📄 LOG FILE: $($file.FullName)"
+              Write-Host "🕒 Last Write: $($file.LastWriteTime)"
+              Write-Host "══════════════════════════════════════════════════════"
+              
+              Get-Content $file.FullName
+              
+              Write-Host ""
+              Write-Host ""
+          }
+
+      - name: 📤 Upload Logs as Artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-omnipkg-logs
+          path: |
+            ~/.omnipkg/logs/*.log
+            ~/.config/omnipkg/logs/*.log
+            ~/AppData/Local/omnipkg/logs/*.log
+          if-no-files-found: warn
+          retention-days: 5
