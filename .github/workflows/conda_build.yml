@@ -216,23 +216,18 @@ jobs:
         cd feedstock
         VERSION="${{ needs.wait-for-pypi.outputs.version }}"
         BRANCH="update-noarch-v$VERSION"
+        SHA256="${{ needs.wait-for-pypi.outputs.sha256 }}"
         
-        # Define the body text in a variable to avoid YAML indentation errors
+        # Use simple multi-line string assignment (safe in YAML)
         PR_BODY="🤖 Automated update to omnipkg version $VERSION (noarch build)
-        # Use heredoc for safe multi-line string in shell
-        PR_BODY=$(cat <<EOF
-        🤖 Automated update to omnipkg version $VERSION (noarch build)
 
         **Changes:**
         - ✅ Version: $VERSION
-        - ✅ SHA256: ${{ needs.wait-for-pypi.outputs.sha256 }}
+        - ✅ SHA256: $SHA256
         - ✅ Build number: 0
         - ✅ Architecture: noarch
 
         This PR updates the recipe for conda-forge distribution."
-        This PR updates the recipe for conda-forge distribution.
-        EOF
-        )
         
         # Create PR
         PR_URL=$(gh pr create \
@@ -415,23 +410,18 @@ jobs:
         cd feedstock
         VERSION="${{ needs.wait-for-pypi.outputs.version }}"
         BRANCH="update-platforms-v$VERSION"
+        SHA256="${{ needs.wait-for-pypi.outputs.sha256 }}"
         
-        # Define the body text in a variable to avoid YAML indentation errors
+        # Use simple multi-line string assignment (safe in YAML)
         PR_BODY="🤖 Automated update to omnipkg version $VERSION (platform builds)
-        # Use heredoc for safe multi-line string in shell
-        PR_BODY=$(cat <<EOF
-        🤖 Automated update to omnipkg version $VERSION (platform builds)
 
         **Changes:**
         - ✅ Version: $VERSION
-        - ✅ SHA256: ${{ needs.wait-for-pypi.outputs.sha256 }}
+        - ✅ SHA256: $SHA256
         - ✅ Build number: 1
         - ✅ Architectures: linux-64, linux-aarch64, linux-ppc64le, osx-64, osx-arm64, win-64
 
         This PR updates the recipe for conda-forge distribution with platform-specific builds."
-        This PR updates the recipe for conda-forge distribution with platform-specific builds.
-        EOF
-        )
         
         # Create PR
         PR_URL=$(gh pr create \
@@ -447,116 +437,4 @@ jobs:
           echo "pull-request-number=$PR_NUMBER" >> $GITHUB_OUTPUT
         else
           echo "⚠️  PR may already exist, checking..."
-          PR_NUMBER=$(gh pr list --repo conda-forge/omnipkg-feedstock --head 1minds3t:$BRANCH --json number --jq '.[0].number')
-          echo "pull-request-number=$PR_NUMBER" >> $GITHUB_OUTPUT
-        fi
-
-    - name: Request re-render
-      if: env.skip_pr != 'true' && steps.create-pr.outputs.pull-request-number != ''
-      env:
-        GH_TOKEN: ${{ secrets.FEEDSTOCK_TOKEN }}
-      run: |
-        cd feedstock
-        PR_NUMBER="${{ steps.create-pr.outputs.pull-request-number }}"
-        
-        echo "🔄 Requesting re-render from @conda-forge-admin..."
-        gh pr comment $PR_NUMBER \
-          --repo conda-forge/omnipkg-feedstock \
-          --body "@conda-forge-admin, please rerender"
-        
-        echo "✅ Re-render requested, waiting 10 minutes for conda-forge-admin..."
-        sleep 600  # Wait 10 minutes for re-render
-
-    - name: Wait for checks to pass
-      if: env.skip_pr != 'true' && steps.create-pr.outputs.pull-request-number != ''
-      env:
-        GH_TOKEN: ${{ secrets.FEEDSTOCK_TOKEN }}
-      run: |
-        PR_NUMBER="${{ steps.create-pr.outputs.pull-request-number }}"
-        
-        echo "⏳ Waiting for CI checks to complete (platforms take ~30 min)..."
-        echo "⏰ Waiting additional 5 minutes for re-render to adjust builds..."
-        sleep 300
-        
-        # Now wait for actual checks to pass (this will take longer - 10+ checks)
-        ATTEMPT=0
-        MAX_ATTEMPTS=90  # 3 hours max for platform builds
-        
-        while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
-          ATTEMPT=$((ATTEMPT + 1))
-          
-          # Get check status
-          STATUS=$(gh pr view $PR_NUMBER \
-            --repo conda-forge/omnipkg-feedstock \
-            --json statusCheckRollup \
-            --jq '.statusCheckRollup[] | select(.conclusion != null) | .conclusion' | sort -u)
-          
-          PENDING=$(gh pr view $PR_NUMBER \
-            --repo conda-forge/omnipkg-feedstock \
-            --json statusCheckRollup \
-            --jq '.statusCheckRollup[] | select(.status == "IN_PROGRESS" or .status == "PENDING") | .name' | wc -l)
-          
-          TOTAL=$(gh pr view $PR_NUMBER \
-            --repo conda-forge/omnipkg-feedstock \
-            --json statusCheckRollup \
-            --jq '.statusCheckRollup | length')
-          
-          echo "📊 Check status (Attempt $ATTEMPT): $((TOTAL - PENDING))/$TOTAL completed"
-          
-          if [ "$PENDING" -eq 0 ] && [ "$TOTAL" -gt 10 ]; then
-            if echo "$STATUS" | grep -q "FAILURE"; then
-              echo "❌ Some checks failed"
-              gh pr view $PR_NUMBER --repo conda-forge/omnipkg-feedstock --json statusCheckRollup
-              exit 1
-            elif echo "$STATUS" | grep -q "SUCCESS"; then
-              echo "✅ All platform checks passed!"
-              break
-            fi
-          fi
-          
-          sleep 120  # Check every 2 minutes
-        done
-
-    - name: Merge PR
-      if: env.skip_pr != 'true' && steps.create-pr.outputs.pull-request-number != ''
-      env:
-        GH_TOKEN: ${{ secrets.FEEDSTOCK_TOKEN }}
-      run: |
-        PR_NUMBER="${{ steps.create-pr.outputs.pull-request-number }}"
-        VERSION="${{ needs.wait-for-pypi.outputs.version }}"
-        
-        echo "🎯 Merging PR #$PR_NUMBER..."
-        gh pr merge $PR_NUMBER \
-          --repo conda-forge/omnipkg-feedstock \
-          --squash \
-          --subject "Build for $VERSION (platforms)" \
-          --body ""
-        
-        echo "✅ Platform builds merged to conda-forge!"
-
-  # ═══════════════════════════════════════════════════════════════════
-  # JOB 5: Final Summary
-  # ═══════════════════════════════════════════════════════════════════
-  final-summary:
-    name: "📊 Release Summary"
-    needs: [wait-for-pypi, update-local-metas, update-feedstock-noarch, update-feedstock-platforms]
-    runs-on: ubuntu-latest
-    if: always()
-    steps:
-    - name: Print Summary
-      run: |
-        echo "═══════════════════════════════════════════════════════"
-        echo "🎉 CONDA-FORGE RELEASE COMPLETE"
-        echo "═══════════════════════════════════════════════════════"
-        echo ""
-        echo "Version: ${{ needs.wait-for-pypi.outputs.version }}"
-        echo "SHA256: ${{ needs.wait-for-pypi.outputs.sha256 }}"
-        echo ""
-        echo "✅ PyPI sync: ${{ needs.wait-for-pypi.result }}"
-        echo "✅ Local meta updates: ${{ needs.update-local-metas.result }}"
-        echo "✅ Conda-forge noarch: ${{ needs.update-feedstock-noarch.result }}"
-        echo "✅ Conda-forge platforms: ${{ needs.update-feedstock-platforms.result }}"
-        echo ""
-        echo "🎯 Package now available on conda-forge!"
-        echo "Install with: conda install -c conda-forge omnipkg"
-        echo "═══════════════════════════════════════════════════════"
+          PR_NUMBER=$(gh pr list --repo conda-forge/omnipkg-feedstock --head 1minds3t:$BRANCH --json number --jq '.[0].number'
