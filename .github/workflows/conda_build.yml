@@ -217,6 +217,8 @@ jobs:
         VERSION="${{ needs.wait-for-pypi.outputs.version }}"
         BRANCH="update-noarch-v$VERSION"
         
+        # Define the body text in a variable to avoid YAML indentation errors
+        PR_BODY="🤖 Automated update to omnipkg version $VERSION (noarch build)
         # Use heredoc for safe multi-line string in shell
         PR_BODY=$(cat <<EOF
         🤖 Automated update to omnipkg version $VERSION (noarch build)
@@ -227,6 +229,7 @@ jobs:
         - ✅ Build number: 0
         - ✅ Architecture: noarch
 
+        This PR updates the recipe for conda-forge distribution."
         This PR updates the recipe for conda-forge distribution.
         EOF
         )
@@ -413,6 +416,8 @@ jobs:
         VERSION="${{ needs.wait-for-pypi.outputs.version }}"
         BRANCH="update-platforms-v$VERSION"
         
+        # Define the body text in a variable to avoid YAML indentation errors
+        PR_BODY="🤖 Automated update to omnipkg version $VERSION (platform builds)
         # Use heredoc for safe multi-line string in shell
         PR_BODY=$(cat <<EOF
         🤖 Automated update to omnipkg version $VERSION (platform builds)
@@ -423,6 +428,7 @@ jobs:
         - ✅ Build number: 1
         - ✅ Architectures: linux-64, linux-aarch64, linux-ppc64le, osx-64, osx-arm64, win-64
 
+        This PR updates the recipe for conda-forge distribution with platform-specific builds."
         This PR updates the recipe for conda-forge distribution with platform-specific builds.
         EOF
         )

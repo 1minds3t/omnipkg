@@ -18,29 +18,38 @@ msgstr ""
 msgid "  ⚠️  Stress Test Requires Python 3.11"
 msgstr "⚠️ ውጥረት ፈተና PYTHON 3.11 ይፈልጋል"
 
+# (Validation Failed: proper_noun_mismatch_omnipkg)
+#  (Validation Failed: proper_noun_mismatch_Python)
+#  (Validation Failed: proper_noun_mismatch_Python)
+#  (Validation Failed: placeholder_mismatch)
+#  (Validation Failed: proper_noun_mismatch_Python)
+#  (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:342
 msgid "The omnipkg stress test only works in Python 3.11 environments."
-msgstr "የ OMnipg ውጥረት ፈተና በ Pytho 3.11 አካባቢዎች ውስጥ ይሠራል."
+msgstr "የ omnipkg ንድፍ ማረጋገጫ በ Python 3.11 አውሮፕላኖች ውስጥ ብቻ ይሰራል."
 
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:343
 msgid "To run the stress test:"
 msgstr "የጭንቀት ፈተናውን ለማካሄድ-"
 
+# (Validation Failed: emoji_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:350
 msgid "  🚀 omnipkg Nuclear Stress Test - Runtime Version Swapping"
-msgstr "🚀 Omnipkk የኑክሌር ጭንቀት ፈተና - የአሮጌ ሰዓት ስሪት ይቀያይሩ"
+msgstr "🚀 omnipkg የኑክሌር ውጥረት ሙከራ - የሩጫ ጊዜ ስሪት መቀየሪያ"
 
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:353
 msgid "🎪 This demo showcases IMPOSSIBLE package combinations:"
-msgstr "Coy ይህ ማሳያ የማይቻል የጥቅል ጥምረትን ያሳያል"
+msgstr "🎪 ይህ ማሳያ የማይቻል ጥቅል ጥምረት ያሳያል:"
 
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:354
 msgid "   • Runtime swapping between numpy/scipy versions mid-execution"
-msgstr "• በአድናሪ / ቅባስ ባለስልጣናት መካከል አገባብ"
+msgstr "• numpy / scipy ስሪቶች መካከል የአሂድ ጊዜ መቀየሪያ በመካከለኛው አፈጻጸም"
 
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:355
 msgid "   • Different numpy+scipy combos (1.24.3+1.12.0 → 1.26.4+1.16.1)"
-msgstr "• የተለየ ባዶ ያልሆነ + ቅቤ ኮምፖች (1.24.3 + 1.12.0 → 1.26.4 + 1.16.1)"
+msgstr "• የተለያዩ numpy+scipy combos (1.24.3+1.12.0 → 1.26.4+1.16.1)"
 
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:357
 msgid "   • Live PYTHONPATH manipulation without process restart"
@@ -66,7 +75,12 @@ msgstr "• ስሪቶችን መቀየር ስሪቶችን እንደገና ያስ�
 msgid "   • Dependency conflicts prevent coexistence"
 msgstr "• ጥገኛ የሆኑ ግጭቶች አብሮ መኖርን ይከላከላሉ"
 
+# (Empty Chain Output)
+#  (Validation Failed: proper_noun_mismatch_Python)
+#  (Validation Failed: proper_noun_mismatch_Python)
+# Lollama: Skipped (Validation Failed: proper_noun_mismatch_Python)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:367
+#, fuzzy
 msgid "✨ omnipkg does this LIVE, in the same Python process!"
 msgstr "✨ omnipkg ይህ በቀጥታ በኪራይ ሂደት ሂደት ውስጥ ይኖራል!"
 
@@ -74,19 +88,22 @@ msgstr "✨ omnipkg ይህ በቀጥታ በኪራይ ሂደት ሂደት ውስ�
 msgid "📊 Expected downloads: ~500MB | Duration: 30 seconds - 3 minutes"
 msgstr "📊 የሚጠበቁ ማውረዶች: ~ 500 ሜጋ |ቆይታ: 30 ሰከንዶች - 3 ደቂቃዎች"
 
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:385
 msgid "🔥 Starting stress test..."
-msgstr "Countress የፍጥረት ፈተናን መጀመር ..."
+msgstr "🔥 የመስመር ላይ የ Stress Test..."
 
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/common_utils.py:532
 msgid ""
 "📡 Live streaming output (this may take several minutes for heavy "
 "packages)..."
-msgstr "የቀጥታ የዜና ውፅዓት (ይህ ለከባድ ፓኬጆች ብዙ ደቂቃዎችን ሊወስድ ይችላል) ..."
+msgstr "📡 የመስመር ላይ ስሪት (አይነዚህ የኃይል packages ለማግኘት አንዳንድ ደቂቃዎች ሊሆን ይችላል)..."
 
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/common_utils.py:534
 msgid "🛑 Press Ctrl+C to safely cancel if needed"
-msgstr "አስፈላጊ ከሆነ ደህንነቱ በተጠበቀ ሁኔታ Ctrl + C ን ይጫኑ"
+msgstr "🛑 ካስፈለገ በደህና ለመሰረዝ Ctrl+C ይጫኑ"
 
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:503
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:1235
@@ -101,9 +118,10 @@ msgstr "🎉 ማሳያ በተሳካ ሁኔታ ተጠናቅቋል!"
 msgid "│                                                          │"
 msgstr "│                                                          │"
 
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/tests/test_old_flask.py:30
 msgid "│  🧠 omnipkg AI suggests:                                 │"
-msgstr "│ 🧠 Omnipkk ai ጥቆማ ይላል │"
+msgstr "│ 🧠 omnipkg AI ይጠቁማል፡ │"
 
 #: /home/minds3t/omnipkg/src/tests/test_old_flask.py:41
 msgid "│      • Break newer Flask compatibility                  │"
@@ -115,11 +133,11 @@ msgstr "│ • ዘመናዊ መተግበሪያዎን ያጥፉ │"
 
 #: /home/minds3t/omnipkg/src/tests/test_old_flask.py:43
 msgid "│      • Welcome you to dependency hell 🔥                │"
-msgstr "│ • ወደ ገሃነም 🔥 🔥 ድረስዎ በደህና መጡ"
+msgstr "│ • ወደ ጥገኝነት ሲኦል እንኩን ደህና መጣህ 🔥 │"
 
 #: /home/minds3t/omnipkg/src/tests/test_old_flask.py:45
 msgid "│  [Y]es, I want chaos | [N]o, save me omnipkg! 🦸‍♂️        │"
-msgstr "│ [y] es, choses እፈልጋለሁ |[N] o, ኦሚኒፕግ አድነኝ!🦸♂️ │"
+msgstr "│ [ያ]፣ ሁከት እፈልጋለሁ |[N] omnipkg አድነኝ!🦸‍♂️ │"
 
 #: /home/minds3t/omnipkg/src/tests/test_old_flask.py:48
 msgid "        \\   ^__^"
@@ -147,7 +165,7 @@ msgstr "🟢 - ሰንደቅ ዓላማ ተገኝቷል.መሸጎጫ ችላ ተብ
 
 #: /home/minds3t/omnipkg/src/omnipkg/package_meta_builder.py:1010
 msgid "🔍 Discovering all packages from file system (ground truth)..."
-msgstr "ሁሉንም ፓኬጆች ከፋይል ስርዓት (የመሬት እውነት) ማግኘት ..."
+msgstr "🔍 ሁሉንም ጥቅሎች ከፋይል ስርዓት (የመሬት እውነት) በማግኘት ላይ..."
 
 #: /home/minds3t/omnipkg/src/omnipkg/package_meta_builder.py:1043
 msgid "    -> Reconciling file system state with Redis knowledge base..."
@@ -175,11 +193,11 @@ msgstr "በተወሰኑ ጥገኛ ስሪቶች አማካኝነት ጥቅል ይ�
 
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:605
 msgid "Package to install (e.g., \"tensorflow==2.13.0\")"
-msgstr "ጥቅል ለመጫን (ኢ.ሲ.አር., \"Traforfow == 2.13.0\")"
+msgstr "የሚጫነው ጥቅል (ለምሳሌ፣ 'tensorflow==2.13.0')"
 
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:610
 msgid "Dependency with version (e.g., \"numpy==1.24.3\")"
-msgstr "ከትርር (ኢ.ፒ.ግ., \"N.g.,\" N.G. ,= 1.24.3)"
+msgstr "ከስሪት ጋር ጥገኛ መሆን (ለምሳሌ፣ 'numpy==1.24.3')"
 
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:614
 msgid "Intelligently remove packages and their dependencies"
@@ -228,7 +246,7 @@ msgstr "🎪 Omnipkg የሚደረግበትን ስሪት መቀያየር ይደ�
 msgid ""
 "\n"
 "Select a demo to run:"
-msgstr "ለማሄድ DEAME ን ይምረጡ"
+msgstr "ለመሮጥ ማሳያ ይምረጡ:"
 
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:1114
 msgid "1. Rich test (Python module switching)"
@@ -240,17 +258,17 @@ msgstr "2. UV ሙከራ (ሁለትዮሽ መቀየሪያ)"
 
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:1116
 msgid "3. NumPy + SciPy stress test (C-extension switching)"
-msgstr "3. የኒምፕይ + ቅባስ የጭንቀት ፈተና (C- ማራዘሚያ መቀያየር)"
+msgstr "3. NumPy + SciPy የጭንቀት ሙከራ (የሲ-ቅጥያ መቀያየር)"
 
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:1117
 msgid "4. TensorFlow test (complex dependency switching)"
-msgstr "4. የ Transfow ሙከራ (የተወሳሰበ ጥገኛ መቀያየር)"
+msgstr "4. TensorFlow ሙከራ (ውስብስባ ጥገኝነት መቀየር)"
 
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:1460
 msgid ""
 "\n"
 "💡 Did you mean 'omnipkg config set language <code>'?"
-msgstr "💡 'omnipg ውቅያኖስ አዋጅ የተዘጋጀ ቋንቋ <ኮድ>' ማለት ነው?"
+msgstr "💡 'omnipkg config set language <code>' ማለትዎ ነውን?"
 
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:1463
 msgid ""
@@ -334,7 +352,7 @@ msgstr "🚀 በሚቀጥለው ጊዜ omnipkg `ሲሮጡ, በአንደኛው �
 msgid ""
 "\n"
 "🗑️  Clearing knowledge base..."
-msgstr "የእውቀት መሠረት ማጽዳት ..."
+msgstr "🗑️  የእውቀት መሰረት ማጽዳት..."
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:6643
 msgid "   ✅ Knowledge base was already clean."
@@ -350,7 +368,7 @@ msgstr "✅ የእውቀት መሠረት በተሳካ ሁኔታ እንደገና 
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:6738
 msgid "   🔄 Rebuilding core package metadata..."
-msgstr "Communing Core Core Core Cold ጥቅል ሜታዳታ ..."
+msgstr "🔄 የኮር ፓኬጅ ሜታዳብ መልሶ መገንባት..."
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:6746
 msgid "   ✅ Core metadata rebuilt."
@@ -448,7 +466,7 @@ msgstr "✅ አካባቢዎ ቀድሞውኑ በመጨረሻው በሚለው ጥ�
 msgid ""
 "\n"
 "📝 The following actions will be taken to restore the environment:"
-msgstr "The አከባቢን ወደነበረበት ለመመለስ የሚከተሉት እርምጃዎች ይወሰዳሉ-"
+msgstr "📝 አካባቢውን ለማደስ የሚከተሉት እርምጃዎች ይወሰዳሉ"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:13037
 msgid "🚫 Revert cancelled."
@@ -468,7 +486,7 @@ msgstr "✅ አካባቢ በተሳካ ሁኔታ ወደ ኋላ ለሚታወቀው
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:15744
 msgid "🔄 omnipkg System Status"
-msgstr "🔄 የኦምኒካዊ ስርዓት ስርዓት ሁኔታ"
+msgstr "🔄 Omnipkg ስርዓቶች"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:15753
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:15760
@@ -496,7 +514,10 @@ msgid ""
 "🌍 Main Environment:"
 msgstr "🌍 ዋና አካባቢ"
 
+# (Validation Failed: translation_artifact_english)
+# Lollama: Skipped (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:15778
+#, fuzzy
 msgid ""
 "\n"
 "📦 izolasyon Alanı (Bubbles):"
@@ -534,7 +555,7 @@ msgstr "Quest ወደ ገሃነም እንኳን ደህና መጡ!🔥"
 msgid ""
 "\n"
 "🧠 Smart choice! Using omnipkg instead..."
-msgstr "🧠 ብልህ ምርጫ!ይልቁን OMNIPGG ን በመጠቀም ..."
+msgstr "🧠 ብልህ ምርጫ!በምትኩ omnipkg በመጠቀም..."
 
 #: /home/minds3t/omnipkg/src/tests/test_old_flask.py:400
 msgid ""
@@ -550,11 +571,11 @@ msgstr "🎯 ሁለቱም ስሪቶች አሁን በሰላም አብረው ይ�
 msgid ""
 "\n"
 "🔧 Note how omnipkg intelligently manages versions!"
-msgstr "The ንድፍ ጩኸት የማሰብ ችሎታ እንዴት እንደሚታዩ ልብ ይበሉ!"
+msgstr "🔧 omnipkg ስሪቶችን እንዴት በጥበባ እንደሚቆጣጡር ልብ በል!"
 
 #: /home/minds3t/omnipkg/src/tests/test_old_flask.py:440
 msgid "📚 What you learned:"
-msgstr "የተማሩት ነገር"
+msgstr "📚 እርስዎ ምን ያግኙ:"
 
 #: /home/minds3t/omnipkg/src/tests/test_old_flask.py:441
 msgid "   💀 pip: Breaks everything, creates dependency hell"
@@ -572,7 +593,9 @@ msgstr "🔄 አስማት: - ያለ መያዣዎች ያለ መያዣዎች መ�
 msgid "🚀 Dependency hell is officially SOLVED!"
 msgstr "🚀 ጥገኛነት ገሀነም በይፋ ተፈትቷል!"
 
+# Lollama: Skipped (Validation Failed: identical_to_original)
 #: /home/minds3t/omnipkg/src/omnipkg/activator.py:66
+#, fuzzy
 msgid "_omnipkg_ACTIVE_{}"
 msgstr "_OMOPIKG_ACERED_ {}"
 
@@ -646,7 +669,7 @@ msgstr "{} አረፋ: {}: {}:}: ፋይል_PATATS"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:3115
 msgid "    📦 Installing full dependency tree to temporary location..."
-msgstr "Woman ሙሉ ጥገኛ ያልሆነ ዛፍ ጊዜያዊ አካባቢን መጫን ..."
+msgstr "📦 ሙሉ ጥገኝነት ዛፍ ወደ ጊዜያዊ ቦታ በመጫን ላይ..."
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:3119
 msgid "    ❌ Failed to install exact version tree: {}"
@@ -732,7 +755,7 @@ msgstr "📊 ቦታ ውጤታማነት: - {}% ይቆልፍ."
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:4244
 msgid "    📦 Complex packages preserved: {} packages with submodules"
-msgstr "ውስብስብ ጥቅሎች ተጠብቀዋል{}ከጂምሞዲየስ ጋር ፓኬጆች"
+msgstr "📦 ውስብስባ ጥቅሎች ተጠብቀው:{}ጥቅሎች ከንዑስ ሞጁሎች ጋር"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:4343
 msgid "    🚨 CRITICAL: Missing Python module: {}"
@@ -806,7 +829,9 @@ msgstr "✅ ምንም አረፋዎች ማጽጃ ያስፈልጋቸዋል."
 msgid "    🧠 HookManager now aware of new bubble: {}=={}"
 msgstr "🧠 ሆካማንዎር አሁን አዲስ አረፋ ይገነዘባል: {} == {}"
 
+# Lollama: Skipped (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:5238
+#, fuzzy
 msgid "    ❌ Bubble not found in HookManager's map for {}=={}"
 msgstr "❌ አረፋ ለ {} == {}"
 
@@ -838,9 +863,11 @@ msgstr "እባክዎን የፋይል ፈቃዶችዎን ለ {}"
 msgid ""
 "\n"
 "🧠 omnipkg Knowledge Base Reset"
-msgstr "🧠 የ Omnipk ዕውቀት ዳግም ማስጀመር"
+msgstr "omnipkg የእውቀት መሰረት ዳግም ማስጀመር"
 
+# Lollama: Skipped (Validation Failed: proper_noun_mismatch_Python)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:6617
+#, fuzzy
 msgid "   ⚠️  This command does NOT uninstall any Python packages."
 msgstr "The ይህ ትእዛዝ ማንኛውንም የፒዮቶን ፓኬጆችን አያራግፍም."
 
@@ -900,7 +927,7 @@ msgstr "🫧 አረፋ ስሪቶች: {}"
 msgid ""
 "\n"
 "💡 Want details on a specific version?"
-msgstr "Anive በተወሰነ ስሪት ላይ ዝርዝሮችን ይፈልጋሉ?"
+msgstr "💡 በአንድ የተወሰነ ስሪት ላይ ዝርዝሮችን ይፈልጋሉ?"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:8655
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:8787
@@ -934,7 +961,9 @@ msgid ""
 "---[ Build Info ]---"
 msgstr "--- [መረጃ መገንባት መረጃ] ---"
 
+# Lollama: Skipped (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:8833
+#, fuzzy
 msgid "   ⚠️ Could not save environment snapshot: {}"
 msgstr "Commune የአካባቢን ቅጽበታዊ ገጽ እይታ ማስቀመጥ አልተቻለም: {}"
 
@@ -1060,7 +1089,7 @@ msgstr "- v{}({})"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:12934
 msgid "🗑️  Deleting bubble directory: {}"
-msgstr "አረፋ ማውጫ መሰረዝ: {}"
+msgstr "🗑️   የአረፋ ማውጫን በመሰረዝ ላይ፡-{}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:13029
 msgid "  - Uninstall: {}"
@@ -1102,7 +1131,9 @@ msgstr "❌ በአፍንጫው ማራገፍ ወቅት ያልተጠበቀ ስህ�
 msgid "⚠️ Could not retrieve versions for {}: {}"
 msgstr "The ስሪቶችን ሰርስሮ ማውጣት አልተቻለም{}የሚያያዙት ገጾች{}"
 
+# Lollama: Skipped (Validation Failed: emoji_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:15755
+#, fuzzy
 msgid "    😈 Locked up for causing chaos in the main env! 🔒 (v{})"
 msgstr "በዋናው ኤ.ቪ. ውስጥ ብጥብጥ እንዲከሰት ለማድረግ ተቆል .ል!🔒 (v{})"
 
@@ -1191,7 +1222,9 @@ msgstr "⚠️ የጅምላ ደህንነት ቅኝት አልተሳካም- {}"
 msgid "   • Previously 'incompatible' versions working together seamlessly"
 msgstr "• ከዚህ በፊት <ተኳሃኝ ያልሆኑ> ስሪቶች አብረው የሚሠሩ ናቸው"
 
+# Lollama: Skipped (Validation Failed: proper_noun_mismatch_NumPy)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:362
+#, fuzzy
 msgid "   • numpy 1.24.3 + scipy 1.12.0 → 'incompatible dependencies'"
 msgstr "• Numpy 1.24.3 + ማጭበርበሪያ 1.12.0 → 'ተኳሃኝ ያልሆኑ ጥገኛዎች'"
 
@@ -1202,7 +1235,7 @@ msgstr "• የጥቅል አስተዳዳሪዎች ብዙ ስሪቶችን ማስ�
 #: /home/minds3t/omnipkg/src/omnipkg/common_utils.py:533
 msgid ""
 "💡 Don't worry if there are pauses - packages are downloading/installing!"
-msgstr "The ፓነሎች ካሉ አይጨነቁ - ፓኬጆች ማውረድ / መጫኑን እየጫኑ ናቸው!"
+msgstr "💡 ለአፍታ መቆም ካለ አይጨነቁ - ጥቅሎች እየወረዱ/ እየጫኑ ነው!"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:3751
 msgid "    ⚠️  'requests' package not found. Skipping PyPI API strategy."
@@ -1210,7 +1243,7 @@ msgstr "⚠️ 'የጥያቄዎች ጥቅል አልተገኘም.PYPI ኤፒአ�
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:8826
 msgid "📸 Saving snapshot of the current environment as 'last known good'..."
-msgstr "The የአሁኑን አከባቢው ቅጽበታዊ ገጽ እይታን መቆጠብ 'ዘግይተው የሚታወቅ ጥሩ' ..."
+msgstr "📸 የአሁኑን አካባቢ እንደ 'የመጨረሻው የታወቀ ነገር' የማስቀመጥ..."
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:13001
 msgid "❌ No 'last known good' snapshot found. Cannot revert."
@@ -1225,7 +1258,7 @@ msgstr "❌ ስህተት: - <UV '' pov 'አልተገኘም.እባክዎን UV �
 
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:346
 msgid "3. Run 'omnipkg stress-test' from there"
-msgstr "3. የ <ኦምኒካዊ ጫፍ> ሙከራውን ከዚያ ያሂዱ"
+msgstr "3. 'omnipkg stress-test'ን ከዚያ ያሂዱ"
 
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:377
 msgid "🚀 Ready to witness the impossible? (y/n): "
@@ -1327,7 +1360,7 @@ msgstr "- አጠቃላይ አረፋ መጠን: {} mb"
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:559
 msgid ""
 "🚀 The intelligent Python package manager that eliminates dependency hell"
-msgstr "🚀 ጥገኛነት ገሃነምን የሚያወርድ ብልህ ፓይሆን ጥቅል አቀናባሪ"
+msgstr "🚀 የ Python Package Manager ንድፍ ማከማቻ እና የፈጠራ መቆጣጠሪያ"
 
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:564
 msgid "%(prog)s {}"
@@ -1337,7 +1370,7 @@ msgstr "% (Prog) s {}"
 msgid ""
 "\n"
 "👋 Welcome back to omnipkg! Run a command or see --help for details."
-msgstr "👋 ወደ ኦምኒካክ ተመልሰው በደህና መጡ!ትዕዛዙን ያሂዱ ወይም ለዝርዝሮች ይመልከቱ."
+msgstr "👋 ወደ Omnipkg እንኳን ደህና መጡ! ትዕዛዝ ይሂዱ ወይም ይመልከቱ - ዝርዝሮች ለማግኘት እርዳታ."
 
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:539
 msgid "  • Multi-version package coexistence"
@@ -1349,7 +1382,7 @@ msgstr "ስሪት: {}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:2748
 msgid "📦 Choose your default installation strategy:"
-msgstr "Dear ነባሪ የመጫኛ ስትራቴጂዎን ይምረጡ"
+msgstr "📦 ነባሪ የመጫኛ ስልትዎን ይምረጡ፡-"
 
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:823
 msgid "Clean up old, bubbled package versions"
@@ -1405,7 +1438,7 @@ msgstr "The ማንኛውንም ፓኬጆች ለመጫን አልተቻለም. ማ
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:13553
 msgid "🔎 Resolving package versions via PyPI API..."
-msgstr "The በ PYPI ኤፒአይ በኩል የጥያቄ ስሪቶችን መፍታት ..."
+msgstr "🔎 በ PyPI API በኩል የፓኬጅ ስሪቶችን መፍታት..."
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:13585
 msgid "    -> Finding latest version for '{}'..."
@@ -1424,67 +1457,69 @@ msgstr "{}}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/CondaGuard.py:51
 msgid "🛡️ Restored corrupted metadata for: {}"
-msgstr ""
+msgstr "🛡 ️ የተበላሸ ሜታዳታ ተመልሷል ለ: {}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/CondaGuard.py:68
 msgid "Failed to back up '{}': {}"
-msgstr ""
+msgstr "'{}' ማስቀመጥ አልተሳካም: {}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/CondaGuard.py:83
 msgid "Detected corruption (file missing or empty): '{}'"
-msgstr ""
+msgstr "የተገኘ ሙስና (ፋይል የጎደለው ወይም ባዶ): '{}'"
 
 #: /home/minds3t/omnipkg/src/omnipkg/CondaGuard.py:92
 msgid "Detected corruption (invalid JSON): '{}'"
-msgstr ""
+msgstr "የተገኘ ብልሹነት (ያልተፈጸመ JSON): '{}'"
 
+# Lollama: Skipped (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/CondaGuard.py:101
+#, fuzzy
 msgid "Failed to restore '{}': {}"
 msgstr ""
 
 #: /home/minds3t/omnipkg/src/omnipkg/CondaGuard.py:104
 msgid "Cannot restore '{}', backup file is missing!"
-msgstr ""
+msgstr "'{}' ወደነበረበት መመለስ አልተቻለም፣ የመጠባበቂያ ፋይል ይጎድላል!"
 
 #: /home/minds3t/omnipkg/src/omnipkg/CondaGuard.py:114
 msgid "Cleaned up backup: '{}'"
-msgstr ""
+msgstr "የቁረጥ ጥበቃ: '{}'"
 
 #: /home/minds3t/omnipkg/src/omnipkg/CondaGuard.py:117
 msgid "Failed to clean up backup '{}': {}"
-msgstr ""
+msgstr "ምትኬን '{}': {} ማፅዳት አልተቻለም"
 
 #: /home/minds3t/omnipkg/src/omnipkg/CondaGuard.py:140
 msgid "--- Running Standalone Conda Corruption Check & Fix ---"
-msgstr ""
+msgstr "--- ራሱን የቻለ ኮንዳ የሙስና ፍተሻ እና ማስተካከል ---"
 
 #: /home/minds3t/omnipkg/src/omnipkg/CondaGuard.py:146
 msgid "🔧 Fix applied. Restored files: {}"
-msgstr ""
+msgstr "🔧 ማስተካከያ ተተግብሯል።የተመለሱ ፋይሎች፡ {}\",}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/CondaGuard.py:149
 msgid "✅ No corruption found in protected files."
-msgstr ""
+msgstr "✅ በተጠበቁ ፋይሎች ውስጥ ምንም ሙስና አልተገኘም."
 
 #: /home/minds3t/omnipkg/src/omnipkg/CondaGuard.py:159
 msgid "-> Running a risky function that might corrupt Conda..."
-msgstr ""
+msgstr "-> ኮንዳ ሊበላሽ የሚችል አደገኛ ተግባር በማሄድ ላይ..."
 
 #: /home/minds3t/omnipkg/src/omnipkg/CondaGuard.py:162
 msgid "   ...simulating corruption of '{}'"
-msgstr ""
+msgstr "የ '{}' ብልሹነት በማስመሰል"
 
 #: /home/minds3t/omnipkg/src/omnipkg/CondaGuard.py:165
 msgid "-> Risky function finished."
-msgstr ""
+msgstr "-> አደጋ ተግባር ተጠናቅቋል."
 
 #: /home/minds3t/omnipkg/src/omnipkg/CondaGuard.py:167
 msgid "🧪 Testing decorator..."
-msgstr ""
+msgstr "🧪 የሙከራ ማስጌጫ..."
 
 #: /home/minds3t/omnipkg/src/omnipkg/CondaGuard.py:172
 msgid "🧪 Testing context manager..."
-msgstr ""
+msgstr "🧪 የአውድ አስተዳዳሪን በመሞከር ላይ..."
 
 #: /home/minds3t/omnipkg/src/omnipkg/CondaGuard.py:178
 msgid "   ...simulating deletion of '{}'"

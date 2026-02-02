@@ -51,10 +51,15 @@ except ImportError as e:
 # 0. CONSTANTS & UTILITIES
 # ═══════════════════════════════════════════════════════════════
 
-DEFAULT_SOCKET = "/tmp/omnipkg_daemon.sock"
-PID_FILE = "/tmp/omnipkg_daemon.pid"
-SHM_REGISTRY_FILE = "/tmp/omnipkg_shm_registry.json"
-DAEMON_LOG_FILE = "/tmp/omnipkg_daemon.log"
+# Use a system-agnostic temporary directory (e.g., /tmp on Linux, AppData\Local\Temp on Windows)
+# and create an 'omnipkg' subdirectory for cleanliness.
+OMNIPKG_TEMP_DIR = os.path.join(tempfile.gettempdir(), "omnipkg")
+
+# Define all temp files using the cross-platform path
+DEFAULT_SOCKET = os.path.join(OMNIPKG_TEMP_DIR, "omnipkg_daemon.sock")
+PID_FILE = os.path.join(OMNIPKG_TEMP_DIR, "omnipkg_daemon.pid")
+SHM_REGISTRY_FILE = os.path.join(OMNIPKG_TEMP_DIR, "omnipkg_shm_registry.json")
+DAEMON_LOG_FILE = os.path.join(OMNIPKG_TEMP_DIR, "omnipkg_daemon.log")
 
 # ═══════════════════════════════════════════════════════════════
 # STATE MONITOR (OPTIMISTIC CONCURRENCY CONTROL)
@@ -1351,7 +1356,7 @@ class PersistentWorker:
             self.process.stdin.flush()
 
             # 2. Wait for READY signal (Imports happen here)
-            readable, unused, unused = select.select([self.process.stdout], [], [], 30.0)
+            readable, unused, unused = select.select([self.process.stdout], [], [], 300.0)
             if readable:
                 ready_line = self.process.stdout.readline()
                 if ready_line and json.loads(ready_line.strip()).get("status") == "READY":
@@ -1888,45 +1893,37 @@ class WorkerPoolDaemon:
         }
         self.executor = ThreadPoolExecutor(max_workers=20, thread_name_prefix="daemon-handler")
 
-    def start(self, daemonize: bool = True):
+    def start(self, daemonize: bool = True, wait_for_ready: bool = False):
+        """
+        Starts the daemon, handling platform differences and waiting logic.
+        """
         if self.is_running():
-            return
+            return True
 
-        # 🔥 FIX: Windows: Use subprocess spawn instead of fork
-        if IS_WINDOWS and daemonize:
-            return self._start_windows_daemon()
+        if daemonize:
+            if IS_WINDOWS:
+                # Windows spawner handles its own waiting/exiting logic.
+                return self._start_windows_daemon(wait_for_ready=wait_for_ready)
+            else:  # Unix/Linux/macOS
+                try:
+                    pid = os.fork()
+                    if pid > 0:
+                        # PARENT process: Waits for the child to be ready, then exits or returns.
+                        return self._handle_parent_after_fork(pid, wait_for_ready)
+                    
+                    # CHILD process: Continues below to become the daemon.
+                    self._daemonize() # Detaches from the terminal.
+                
+                except OSError as e:
+                    safe_print(f'❌ Fork failed: {e}', file=sys.stderr)
+                    return False
 
-        # Unix: Use traditional fork
-        if daemonize and not IS_WINDOWS:
-            self._daemonize()
-
-        with open(PID_FILE, "w") as f:
-            f.write(str(os.getpid()))
-
-        # 🔥 FIX: Signal handlers only in main thread AND not on Windows
-        try:
-            import threading
-
-            if threading.current_thread() is threading.main_thread():
-                if not IS_WINDOWS:  # Windows doesn't have SIGTERM
-                    signal.signal(signal.SIGTERM, self._handle_shutdown)
-                    signal.signal(signal.SIGINT, self._handle_shutdown)
-        except (ValueError, AttributeError):
-            # ValueError: not in main thread
-            # AttributeError: signal module doesn't have SIGTERM (Windows)
-            pass
-
-        # Cleanup orphaned SHM blocks from previous runs
-        shm_registry.cleanup_orphans()
-
-        # Start background threads
-        threading.Thread(target=self._health_monitor, daemon=True, name="health-monitor").start()
-        threading.Thread(target=self._memory_manager, daemon=True, name="memory-manager").start()
-        threading.Thread(target=self._warmup_workers, daemon=True, name="warmup").start()
-        # 🚀 Start Idle Pool Maintainer
-        threading.Thread(target=self._maintain_idle_pool, daemon=True, name="idle-pool").start()
-
-        self._run_socket_server()
+        # This code is executed by:
+        # 1. The final, detached grandchild process on Unix.
+        # 2. A foreground process if daemonize=False.
+        # It is NOT executed by the initial parent process that the user runs.
+        self._initialize_daemon_process()
+        self._run_socket_server()  # This is a blocking call that starts the server loop.
 
     def _maintain_idle_pool(self):
         """🚀 Pre-spawns Python processes so they are ready instantly."""
@@ -1941,90 +1938,160 @@ class WorkerPoolDaemon:
                 pass
             time.sleep(0.5)
 
-    def _start_windows_daemon(self):
-        """Start daemon on Windows using subprocess (no fork)."""
+    def _start_windows_daemon(self, wait_for_ready: bool = False):
+        """
+        Start daemon on Windows using subprocess.
+        If wait_for_ready is True, it blocks until the daemon is confirmed running.
+        Otherwise, it follows standard daemonization and exits.
+        """
         import subprocess
-
         daemon_script = os.path.abspath(__file__)
-
-        safe_print("🚀 Starting daemon in background (Windows mode)...", file=sys.stderr)
-
+        
+        # Ensure log directory exists
         try:
-            # Windows flags for detached process
+            os.makedirs(os.path.dirname(DAEMON_LOG_FILE), exist_ok=True)
+        except OSError as e:
+            safe_print(_('❌ Failed to create log directory: {}').format(e), file=sys.stderr)
+            sys.exit(1)
+        
+        safe_print("🚀 Starting daemon in background (Windows mode)...", file=sys.stderr)
+        
+        try:
             DETACHED_PROCESS = 0x00000008
             CREATE_NEW_PROCESS_GROUP = 0x00000200
-
-            # Spawn detached process
+            
+            # FIX: Open log file BEFORE subprocess and keep reference
+            log_file_handle = open(DAEMON_LOG_FILE, "a")
+            
             process = subprocess.Popen(
                 [sys.executable, daemon_script, "start", "--no-fork"],
                 creationflags=DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP,
                 stdin=subprocess.DEVNULL,
                 stdout=subprocess.DEVNULL,
-                stderr=open(DAEMON_LOG_FILE, "a"),
-                close_fds=False,  # Can't close_fds with creationflags on Windows
+                stderr=log_file_handle,  # ← FIX: Use the variable, not inline open()
+                close_fds=False,
             )
-
-            # Wait for initialization
-            time.sleep(2)
-
-            # Check if it started
-            if self.is_running():
-                safe_print(
-                    _('✅ Daemon started successfully (PID: {})').format(process.pid),
-                    file=sys.stderr,
-                )
-                sys.exit(0)
+            
+            # --- MODIFIED LOGIC ---
+            if wait_for_ready:
+                # Block and wait for the daemon to become responsive
+                if self._wait_for_daemon_ready(timeout=10):
+                    safe_print(
+                        _('✅ Daemon confirmed running (PID: {}). Resuming original command...').format(process.pid),
+                        file=sys.stderr
+                    )
+                    return True  # Signal success to the caller
+                else:
+                    safe_print(
+                        _('❌ Daemon failed to start within timeout (check {})').format(DAEMON_LOG_FILE),
+                        file=sys.stderr
+                    )
+                    return False  # Signal failure
             else:
-                safe_print(
-                    _('❌ Daemon failed to start (check {})').format(DAEMON_LOG_FILE),
-                    file=sys.stderr,
-                )
-                sys.exit(1)
-
+                # Original "fire and forget" daemonization
+                time.sleep(2)
+                if self.is_running():
+                    safe_print(
+                        _('✅ Daemon started successfully (PID: {})').format(process.pid),
+                        file=sys.stderr,
+                    )
+                    sys.exit(0)
+                else:
+                    safe_print(
+                        _('❌ Daemon failed to start (check {})').format(DAEMON_LOG_FILE),
+                        file=sys.stderr,
+                    )
+                    sys.exit(1)
         except Exception as e:
             safe_print(_('❌ Failed to start daemon: {}').format(e), file=sys.stderr)
             import traceback
-
             traceback.print_exc()
+            if wait_for_ready:
+                return False
             sys.exit(1)
+
+    def _wait_for_daemon_ready(self, timeout: int = 10) -> bool:
+        """Waits for the daemon's PID file to appear and be valid."""
+        start_time = time.time()
+        while time.time() - start_time < timeout:
+            if self.is_running():
+                return True
+            time.sleep(0.2)
+        return False
+
+    def _handle_parent_after_fork(self, child_pid: int, wait_for_ready: bool) -> bool:
+        """Logic for the parent process on Unix after forking."""
+        if wait_for_ready:
+            if self._wait_for_daemon_ready(timeout=10):
+                safe_print(
+                    _('✅ Daemon confirmed running. Resuming original command...'),
+                    file=sys.stderr
+                )
+                return True
+            else:
+                safe_print(
+                    _('❌ Daemon failed to start within timeout (check {})').format(DAEMON_LOG_FILE),
+                    file=sys.stderr
+                )
+                return False
+        else: # Fire-and-forget for standard daemon start
+            safe_print(_('✅ Daemon process forked (PID: {})').format(child_pid))
+            sys.exit(0)
+
+    def _initialize_daemon_process(self):
+        """Tasks performed by the final, detached daemon process before serving."""
+        # This is the first thing the final daemon process should do to signal readiness.
+        with open(PID_FILE, "w") as f:
+            f.write(str(os.getpid()))
+
+        # Set signal handlers for graceful shutdown
+        try:
+            if threading.current_thread() is threading.main_thread():
+                if not IS_WINDOWS:
+                    signal.signal(signal.SIGTERM, self._handle_shutdown)
+                    signal.signal(signal.SIGINT, self._handle_shutdown)
+        except (ValueError, AttributeError):
+            pass
+
+        # Cleanup and start background maintenance threads
+        shm_registry.cleanup_orphans()
+        threading.Thread(target=self._health_monitor, daemon=True, name="health-monitor").start()
+        threading.Thread(target=self._memory_manager, daemon=True, name="memory-manager").start()
+        threading.Thread(target=self._warmup_workers, daemon=True, name="warmup").start()
+        threading.Thread(target=self._maintain_idle_pool, daemon=True, name="idle-pool").start()
 
     def _daemonize(self):
-        """Double-fork daemonization with visual feedback."""
-        try:
-            pid = os.fork()
-            if pid > 0:
-                # ---------------------------------------------------------
-                # PARENT PROCESS: Print success and exit
-                # ---------------------------------------------------------
-                safe_print(_('✅ Daemon started successfully (PID: {})').format(pid))
-                sys.exit(0)
-        except OSError as e:
-            sys.stderr.write(_('fork #1 failed: {}\n').format(e))
-            sys.exit(1)
-
-        # Decouple from parent environment
+        """Double-fork daemonization to fully detach the process."""
+        # Decouple from parent environment after the first fork
         os.setsid()
         os.umask(0)
 
-        # Second fork
+        # Second fork to prevent the process from acquiring a controlling terminal
         try:
             pid = os.fork()
             if pid > 0:
+                # This is the intermediate process, which exits cleanly.
                 sys.exit(0)
         except OSError as e:
             sys.stderr.write(_('fork #2 failed: {}\n').format(e))
             sys.exit(1)
 
-        # Flush standard file descriptors
+        # --- GRANDCHILD (FINAL DAEMON) PROCESS CONTINUES ---
         sys.stdout.flush()
         sys.stderr.flush()
 
-        # Redirect standard file descriptors
-        with open("/dev/null", "r") as f:
-            os.dup2(f.fileno(), sys.stdin.fileno())
-        with open(DAEMON_LOG_FILE, "a+") as f:  # ← CHANGED TO DAEMON_LOG_FILE
-            os.dup2(f.fileno(), sys.stdout.fileno())
-            os.dup2(f.fileno(), sys.stderr.fileno())
+        # Ensure log directory exists and redirect stdio
+        try:
+            os.makedirs(os.path.dirname(DAEMON_LOG_FILE), exist_ok=True)
+        except OSError:
+            pass
+
+        with open("/dev/null", "r") as devnull:
+            os.dup2(devnull.fileno(), sys.stdin.fileno())
+        
+        with open(DAEMON_LOG_FILE, "a+") as log_file:
+            os.dup2(log_file.fileno(), sys.stdout.fileno())
+            os.dup2(log_file.fileno(), sys.stderr.fileno())
 
     def _warmup_workers(self):
         """Pre-warm popular packages to reduce latency."""
