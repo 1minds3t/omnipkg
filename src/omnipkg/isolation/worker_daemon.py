@@ -1989,19 +1989,19 @@ class WorkerPoolDaemon:
                     return False  # Signal failure
             else:
                 # Original "fire and forget" daemonization
-                time.sleep(2)
+                time.sleep(3)
                 if self.is_running():
                     safe_print(
                         _('✅ Daemon started successfully (PID: {})').format(process.pid),
                         file=sys.stderr,
                     )
-                    sys.exit(0)
+                    return True  # FIX: Return instead of sys.exit() to avoid hanging on Windows
                 else:
                     safe_print(
                         _('❌ Daemon failed to start (check {})').format(DAEMON_LOG_FILE),
                         file=sys.stderr,
                     )
-                    sys.exit(1)
+                    return False  # FIX: Return instead of sys.exit() to avoid hanging on Windows
         except Exception as e:
             safe_print(_('❌ Failed to start daemon: {}').format(e), file=sys.stderr)
             import traceback
