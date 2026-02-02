@@ -931,6 +931,45 @@ def main():
             parser = create_parser()
 
         args = parser.parse_args(remaining_args)
+        # --- [ DAEMON PRE-FLIGHT CHECK & RELAUNCH ] ---
+        # This is the safest place: after args are parsed, before core logic runs.
+        # Commands that do NOT require the daemon to be running.
+        DAEMONLESS_COMMANDS = [
+            "daemon", "config", "python", "web", "reset-config"
+        ]
+        
+        # The 'swap' command is special: 'swap python' is daemonless, 'swap package' needs it.
+        is_daemon_swap = (args.command == "swap" and args.target and not args.target.lower().startswith("python"))
+        
+        command_requires_daemon = (args.command not in DAEMONLESS_COMMANDS) or is_daemon_swap
+
+        if command_requires_daemon:
+            # CRITICAL FIX: Import locally to prevent circular dependency
+            # cli.py -> worker_daemon.py -> (utils) -> cli.py
+            from omnipkg.isolation.worker_daemon import WorkerPoolDaemon
+
+            daemon = WorkerPoolDaemon()
+            if not daemon.is_running():
+                print_header("Daemon Startup Required")
+                safe_print("⚙️  The requested command requires the omnipkg daemon, which is not running.", file=sys.stderr)
+                safe_print("🚀 Starting it now...", file=sys.stderr)
+                
+                # Call the new blocking startup routine
+                if daemon.start(wait_for_ready=True):
+                    # Daemon started, now re-execute the original command.
+                    # os.execv replaces the current process, inheriting PID.
+                    safe_print("✅ Daemon started. Re-launching your command...", file=sys.stderr)
+                    # Use os.execv to replay the command perfectly
+                    executable = sys.executable
+                    script_path = Path(__file__).resolve() # Ensure we call the cli module correctly
+                    
+                    # Reconstruct the command to call the module: `python -m omnipkg.cli ...`
+                    relaunch_args = [executable, "-m", "omnipkg.cli"] + sys.argv[1:]
+                    
+                    os.execv(executable, relaunch_args)
+                else:
+                    safe_print("❌ Critical: Could not start the omnipkg daemon. Aborting.", file=sys.stderr)
+                    return 1 # Use return instead of sys.exit()
 
         # Manually add the pre-scanned global flags
         args.verbose = global_args.verbose
