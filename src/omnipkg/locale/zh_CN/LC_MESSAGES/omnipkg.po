@@ -7898,149 +7898,149 @@ msgstr "- 💀 发现 {} 损坏的文件"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:12220
 msgid "      -> Processing: {}"
-msgstr ""
+msgstr "-> 处理：{}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:12229
 msgid "         ❌ Failed to remove: {}"
-msgstr ""
+msgstr "❌ 删除失败：{}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:12232
 msgid "   - 🧹 Successfully cleaned {} corrupted file(s)"
-msgstr ""
+msgstr "- 🧹 成功清理 {} 个损坏的文件"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:12247
 msgid "      ⚠️  Conda clean had issues: {}"
-msgstr ""
+msgstr "⚠️ Conda clean 出现问题：{}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:12249
 msgid "      ❌ Error running conda clean: {}"
-msgstr ""
+msgstr "❌ 运行 conda clean 时出错：{}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:12276
 msgid "❌ Conda command failed: {}"
-msgstr ""
+msgstr "❌ Conda 命令失败：{}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:12280
 msgid "❌ Exception during conda command: {}"
-msgstr ""
+msgstr "❌ conda 命令期间出现异常：{}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:12295
 msgid ""
 "🛡️  AUTO-HEAL: Detected corrupted package installations. Cleaning up..."
-msgstr ""
+msgstr "🛡️  AUTO-HEAL: 检测到损坏的软件包安装。清理..."
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:12323
 msgid "   - 🗑️  Removing corrupted directory: {}"
-msgstr ""
+msgstr "- 🗑️ 删除损坏的目录：{}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:12328
 msgid "   - ❌ Failed to remove {}: {}"
-msgstr ""
+msgstr "- 无法删除 {}: {}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:12332
 msgid "   - ✅ Successfully cleaned up {} corrupted package installation(s)."
-msgstr ""
+msgstr "- ✅ 成功清理了{} 损坏的软件包安装。"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:12773
 msgid "(not in KB: {})"
-msgstr ""
+msgstr "(没有 KB: {})"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:12808
 msgid "   - 🛡️  Skipping {} v{} ({}): It is a protected dependency of '{}'."
-msgstr ""
+msgstr "- 🛡️ 跳过 {} v{} ({}): 这是 '{}' 的受保护依赖项。"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:12813
 msgid "✅ No user-managed installations of '{}' found to uninstall."
-msgstr ""
+msgstr "✅ 未找到可卸载的用户管理安装的 '{}'."
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:12826
 msgid "Found multiple uninstallable versions for '{}':"
-msgstr ""
+msgstr "找到多个可卸载版本的'{}':"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:12865
 msgid "🤷 No versions selected for uninstallation."
-msgstr ""
+msgstr "🤷 没有选择卸载的版本。"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:12881
 msgid "⚠️  Skipped one or more protected core packages."
-msgstr ""
+msgstr "⚠️ 跳过一个或多个受保护的核心软件包。"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:12884
 msgid "🤷 No versions remaining to uninstall after protection checks."
-msgstr ""
+msgstr "🤷 保护检查后没有剩余版本可供卸载。"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:12920
 msgid "🗑️ Uninstalling '{}' from main environment via pip..."
-msgstr ""
+msgstr "🗑️ 通过 pip 从主环境卸载 '{}'..."
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:12941
 msgid "      - Expected Bubble Name: {}"
-msgstr ""
+msgstr "- 预期的泡名称: {}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:12942
 msgid "      - Found Bubble Name:    {}"
-msgstr ""
+msgstr "- 發現泡沫名稱: {}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:12943
 msgid "      - Path Being Checked:   {}"
-msgstr ""
+msgstr "- 正在检查的路径：{}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:12956
 msgid "🧹 Verifying state and cleaning knowledge base..."
-msgstr ""
+msgstr "🧹 验证状态和清洁知识库..."
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:12980
 msgid "   -> Last instance of v{} removed."
-msgstr ""
+msgstr "-> 最后一个 v{} 实例已被移除."
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:13225
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:13237
 msgid "⚡ Already in Python {} context. No swap needed!"
-msgstr ""
+msgstr "⚡ 已经在 Python {} 上下文中。 无需交换!"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:13246
 msgid "   🪟 Windows detected: Forcing interpreter registry refresh..."
-msgstr ""
+msgstr "🪟 检测到 Windows：强制刷新解释器注册表..."
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:13255
 msgid "   - Python {} not found in cache, refreshing registry..."
-msgstr ""
+msgstr "- Python{} 未在缓存中找到,更新注册表..."
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:13262
 msgid "   ❌ Python {} not found in the registry."
-msgstr ""
+msgstr "❌ Python{}在注册表中找不到。"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:13263
 msgid "   - Available versions: {}"
-msgstr ""
+msgstr "- 可用版本：{}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:13266
 msgid "   ✅ Managed interpreter: {}"
-msgstr ""
+msgstr "✅ 管理翻译器: {}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:13280
 msgid "   🔧 Updating configuration..."
-msgstr ""
+msgstr "🔧 更新配置..."
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:13287
 msgid "   🧹 Windows: Clearing module cache..."
-msgstr ""
+msgstr "🧹 Windows：清除模块缓存..."
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:13293
 msgid "   🔗 Updating symlinks..."
-msgstr ""
+msgstr "🔗 正在更新符号链接..."
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:13300
 msgid "   ⚠️  Symlink update failed: {}"
-msgstr ""
+msgstr "⚠️ 符号链接更新失败：{}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:13301
 msgid "   - Continuing with config-only switch..."
-msgstr ""
+msgstr "- 继续使用 Config-only 交换..."
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:13303
 msgid "   ✅ Configuration updated (Windows uses direct paths)"
-msgstr ""
+msgstr "✅ 配置更新(Windows使用直接路径)"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:13308
 msgid ""
