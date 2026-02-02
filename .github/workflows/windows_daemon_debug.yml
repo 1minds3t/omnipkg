@@ -1,0 +1,40 @@
+name: "🪟 Windows Daemon Start & Log Scan"
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ['**']
+    paths:
+      - 'omnipkg/**'
+      - '.github/workflows/windows_daemon.yml'
+
+jobs:
+  windows-daemon-test:
+    name: "WinLatest Daemon Test"
+    runs-on: windows-latest
+    
+    steps:
+      - name: 🏁 Checkout Code
+        uses: actions/checkout@v4
+
+      - name: 🐍 Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: 📦 Install Omnipkg
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+          
+      - name: ⚙️ Generate Basic Config (Windows)
+        # We create a config to ensure the daemon has valid settings to load
+        shell: python
+        run: |
+          import json
+          import os
+          from pathlib import Path
+          
+          # Windows-specific config path
+          config_dir = Path(os.environ['USER
