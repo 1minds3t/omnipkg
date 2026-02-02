@@ -1945,31 +1945,33 @@ class WorkerPoolDaemon:
         Otherwise, it follows standard daemonization and exits.
         """
         import subprocess
-
         daemon_script = os.path.abspath(__file__)
-
+        
         # Ensure log directory exists
         try:
             os.makedirs(os.path.dirname(DAEMON_LOG_FILE), exist_ok=True)
         except OSError as e:
             safe_print(_('❌ Failed to create log directory: {}').format(e), file=sys.stderr)
             sys.exit(1)
-
+        
         safe_print("🚀 Starting daemon in background (Windows mode)...", file=sys.stderr)
-
+        
         try:
             DETACHED_PROCESS = 0x00000008
             CREATE_NEW_PROCESS_GROUP = 0x00000200
-
+            
+            # FIX: Open log file BEFORE subprocess and keep reference
+            log_file_handle = open(DAEMON_LOG_FILE, "a")
+            
             process = subprocess.Popen(
                 [sys.executable, daemon_script, "start", "--no-fork"],
                 creationflags=DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP,
                 stdin=subprocess.DEVNULL,
                 stdout=subprocess.DEVNULL,
-                stderr=open(DAEMON_LOG_FILE, "a"),
+                stderr=log_file_handle,  # ← FIX: Use the variable, not inline open()
                 close_fds=False,
             )
-
+            
             # --- MODIFIED LOGIC ---
             if wait_for_ready:
                 # Block and wait for the daemon to become responsive
@@ -1978,13 +1980,13 @@ class WorkerPoolDaemon:
                         _('✅ Daemon confirmed running (PID: {}). Resuming original command...').format(process.pid),
                         file=sys.stderr
                     )
-                    return True # Signal success to the caller
+                    return True  # Signal success to the caller
                 else:
                     safe_print(
                         _('❌ Daemon failed to start within timeout (check {})').format(DAEMON_LOG_FILE),
                         file=sys.stderr
                     )
-                    return False # Signal failure
+                    return False  # Signal failure
             else:
                 # Original "fire and forget" daemonization
                 time.sleep(2)
@@ -2000,7 +2002,6 @@ class WorkerPoolDaemon:
                         file=sys.stderr,
                     )
                     sys.exit(1)
-
         except Exception as e:
             safe_print(_('❌ Failed to start daemon: {}').format(e), file=sys.stderr)
             import traceback

@@ -8046,127 +8046,129 @@ msgstr "✅ 配置更新(Windows使用直接路径)"
 msgid ""
 "\n"
 "🎉 Switched to Python {}!"
-msgstr ""
+msgstr "🎉 转换为 Python {}!"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:13312
 msgid "   To activate in your shell, run: source {}/bin/activate"
-msgstr ""
+msgstr "要在 shell 中激活，请运行：source {}/bin/activate"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:13316
 msgid ""
 "\n"
 "   Just kidding, omnipkg handled it for you automatically!"
-msgstr ""
+msgstr "只是开玩笑, omnipkg已经为您自动处理了!"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:13357
 msgid "   📦 Cleared {} cached modules: {}"
-msgstr ""
+msgstr "📦 已清除{}缓存模块：{}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:13371
 msgid "    -> Resolving complex specifier: '{}'"
-msgstr ""
+msgstr "-> 解析复杂说明符：'{}'"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:13379
 msgid "    -> Detected environment marker: '{}'"
-msgstr ""
+msgstr "-> 检测到的环境标记：'{}'"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:13389
 msgid "    -> Marker: {}"
-msgstr ""
+msgstr "-> 标记：{}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:13390
 msgid "    -> Current Python: {}"
-msgstr ""
+msgstr "-> 当前Python：{}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:13394
 msgid "    ⚠️  Could not evaluate environment marker: {}"
-msgstr ""
+msgstr "⚠️ 无法评估环境标记：{}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:13452
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:13524
 msgid "Package '{}' requires Python {}, current is {}"
-msgstr ""
+msgstr "包 '{}' 需要 Python {}, 当前版本为 {}\",}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:13457
 msgid "    ⚠️ Could not determine compatible Python version: {}"
-msgstr ""
+msgstr "⚠️ 无法确定兼容的 Python 版本：{}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:13462
 msgid "    ✅ Pip found compatible version: {}"
-msgstr ""
+msgstr "✅ Pip 找到兼容版本：{}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:13467
 msgid "    ⚠️ Compatible version {} does NOT satisfy constraint '{}'"
-msgstr ""
+msgstr "⚠️ 兼容版本 {} 不满足约束条件 '{}'"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:13490
 msgid "    💡 Latest version matching '{}': {}"
-msgstr ""
+msgstr "💡 最新版本匹配'{}':{}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:13529
 msgid "    ⚠️ Could not determine required Python version: {}"
-msgstr ""
+msgstr "⚠️ 无法确定所需的 Python 版本：{}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:13544
 msgid "    ❌ Failed to resolve complex specifier '{}': {}"
-msgstr ""
+msgstr "❌ 无法解析复杂说明符 '{}':{}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:13560
 msgid "🔍 DEBUG: Processing '{}'"
-msgstr ""
+msgstr "🔍 调试：处理'{}'"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:13578
 msgid "    ⚠️  Could not resolve '{}'. Skipping."
-msgstr ""
+msgstr "⚠️ 无法解析 '{}'。跳过。"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:13593
 msgid "    ❌ CRITICAL: Could not resolve a version for '{}' via PyPI."
-msgstr ""
+msgstr "\\\"❌ 关键: 无法通过 PyPI 解决'{}' 的版本。\\\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:13597
 msgid "Package '{}' not found or could not be resolved."
-msgstr ""
+msgstr "未找到或无法解析包 '{}'。"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:13707
 msgid "   -   Error: {}: {}"
-msgstr ""
+msgstr "- 错误：{}: {}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:13714
 msgid "   -   STDERR: {}"
-msgstr ""
+msgstr "- 标准错误：{}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:13824
 msgid "      ✅ Successfully imported main package: {}"
-msgstr ""
+msgstr "✅ 成功导入主包：{}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:13827
 msgid "      ❌ Main package '{}' failed to import"
-msgstr ""
+msgstr "❌ 主包'{}' 导入失败"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:14087
 msgid "      - 🖥️  Platform: Python {} on {} ({})"
-msgstr ""
+msgstr "- 🖥️平台：Python{}在{}（{}）"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:14089
 msgid "      - 🎯 Install Target: {}"
-msgstr ""
+msgstr "- 🎯 安装目标：{}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:14147
 msgid "      - 📥 Downloading {}..."
-msgstr ""
+msgstr "- 📥 正在下载{}..."
 
+# Lollama: Skipped (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:14164
+#, fuzzy
 msgid "      - ❌ Failed to install {}=={}"
 msgstr ""
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:14169
 msgid "      - ❌ Error processing {}=={}: {}"
-msgstr ""
+msgstr "- ❌处理错误{}=={}：{}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:14177
 msgid ""
 "      - 📥 Downloading {} (installing LAST to ensure single-file version)..."
-msgstr ""
+msgstr "- 📥 正在下载{}（安装LAST以确保单文件版本）..."
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:14229
 msgid ""
