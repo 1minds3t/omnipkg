@@ -44,13 +44,13 @@ jobs:
           OMNIPKG_ENV_ID_OVERRIDE: ${{ env.OMNIPKG_ENV_ID_OVERRIDE }}
         run: |
           echo "--- Running Omnipkg Quantum Multiverse Warp Demo ---"
-          # This is the correct, robust way to run the test via the intended entry point.
-          # It pipes "8" to select the demo and suppresses the harmless BrokenPipeError.
-          echo "8" | omnipkg demo 2> >(grep -v "BrokenPipeError\|Broken pipe" || true)
+          # Use direct ID '8' and --non-interactive to bypass the menu and safe_input defaults.
+          omnipkg demo 8 --non-interactive
       - name: Run Quantum Multiverse Demo (Second Run - Optional)
         continue-on-error: true
         env:
           OMNIPKG_ENV_ID_OVERRIDE: ${{ env.OMNIPKG_ENV_ID_OVERRIDE }}
         run: |
           echo "--- Running Omnipkg Quantum Multiverse Warp Demo (Second Run) ---"
-          echo "8" | omnipkg demo 2> >(grep -v "BrokenPipeError\|Broken pipe" || true)
+          # Re-running with direct ID '8'
+          omnipkg demo 8 --non-interactive
