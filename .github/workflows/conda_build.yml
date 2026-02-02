@@ -217,21 +217,24 @@ jobs:
         VERSION="${{ needs.wait-for-pypi.outputs.version }}"
         BRANCH="update-noarch-v$VERSION"
         
+        # Define the body text in a variable to avoid YAML indentation errors
+        PR_BODY="🤖 Automated update to omnipkg version $VERSION (noarch build)
+
+        **Changes:**
+        - ✅ Version: $VERSION
+        - ✅ SHA256: ${{ needs.wait-for-pypi.outputs.sha256 }}
+        - ✅ Build number: 0
+        - ✅ Architecture: noarch
+
+        This PR updates the recipe for conda-forge distribution."
+        
         # Create PR
         PR_URL=$(gh pr create \
           --repo conda-forge/omnipkg-feedstock \
           --base main \
           --head 1minds3t:$BRANCH \
           --title "Update omnipkg to $VERSION (noarch)" \
-          --body "🤖 Automated update to omnipkg version $VERSION (noarch build)
-
-**Changes:**
-- ✅ Version: $VERSION
-- ✅ SHA256: ${{ needs.wait-for-pypi.outputs.sha256 }}
-- ✅ Build number: 0
-- ✅ Architecture: noarch
-
-This PR updates the recipe for conda-forge distribution." || echo "")
+          --body "$PR_BODY" || echo "")
         
         if [ -n "$PR_URL" ]; then
           PR_NUMBER=$(echo "$PR_URL" | grep -oP '\d+$')
@@ -407,21 +410,24 @@ This PR updates the recipe for conda-forge distribution." || echo "")
         VERSION="${{ needs.wait-for-pypi.outputs.version }}"
         BRANCH="update-platforms-v$VERSION"
         
+        # Define the body text in a variable to avoid YAML indentation errors
+        PR_BODY="🤖 Automated update to omnipkg version $VERSION (platform builds)
+
+        **Changes:**
+        - ✅ Version: $VERSION
+        - ✅ SHA256: ${{ needs.wait-for-pypi.outputs.sha256 }}
+        - ✅ Build number: 1
+        - ✅ Architectures: linux-64, linux-aarch64, linux-ppc64le, osx-64, osx-arm64, win-64
+
+        This PR updates the recipe for conda-forge distribution with platform-specific builds."
+        
         # Create PR
         PR_URL=$(gh pr create \
           --repo conda-forge/omnipkg-feedstock \
           --base main \
           --head 1minds3t:$BRANCH \
           --title "Update omnipkg to $VERSION (platforms)" \
-          --body "🤖 Automated update to omnipkg version $VERSION (platform builds)
-
-**Changes:**
-- ✅ Version: $VERSION
-- ✅ SHA256: ${{ needs.wait-for-pypi.outputs.sha256 }}
-- ✅ Build number: 1
-- ✅ Architectures: linux-64, linux-aarch64, linux-ppc64le, osx-64, osx-arm64, win-64
-
-This PR updates the recipe for conda-forge distribution with platform-specific builds." || echo "")
+          --body "$PR_BODY" || echo "")
         
         if [ -n "$PR_URL" ]; then
           PR_NUMBER=$(echo "$PR_URL" | grep -oP '\d+$')
@@ -502,43 +508,4 @@ This PR updates the recipe for conda-forge distribution with platform-specific b
     - name: Merge PR
       if: env.skip_pr != 'true' && steps.create-pr.outputs.pull-request-number != ''
       env:
-        GH_TOKEN: ${{ secrets.FEEDSTOCK_TOKEN }}
-      run: |
-        PR_NUMBER="${{ steps.create-pr.outputs.pull-request-number }}"
-        VERSION="${{ needs.wait-for-pypi.outputs.version }}"
-        
-        echo "🎯 Merging PR #$PR_NUMBER..."
-        gh pr merge $PR_NUMBER \
-          --repo conda-forge/omnipkg-feedstock \
-          --squash \
-          --subject "Build for $VERSION (platforms)" \
-          --body ""
-        
-        echo "✅ Platform builds merged to conda-forge!"
-
-  # ═══════════════════════════════════════════════════════════════════
-  # JOB 5: Final Summary
-  # ═══════════════════════════════════════════════════════════════════
-  final-summary:
-    name: "📊 Release Summary"
-    needs: [wait-for-pypi, update-local-metas, update-feedstock-noarch, update-feedstock-platforms]
-    runs-on: ubuntu-latest
-    if: always()
-    steps:
-    - name: Print Summary
-      run: |
-        echo "═══════════════════════════════════════════════════════"
-        echo "🎉 CONDA-FORGE RELEASE COMPLETE"
-        echo "═══════════════════════════════════════════════════════"
-        echo ""
-        echo "Version: ${{ needs.wait-for-pypi.outputs.version }}"
-        echo "SHA256: ${{ needs.wait-for-pypi.outputs.sha256 }}"
-        echo ""
-        echo "✅ PyPI sync: ${{ needs.wait-for-pypi.result }}"
-        echo "✅ Local meta updates: ${{ needs.update-local-metas.result }}"
-        echo "✅ Conda-forge noarch: ${{ needs.update-feedstock-noarch.result }}"
-        echo "✅ Conda-forge platforms: ${{ needs.update-feedstock-platforms.result }}"
-        echo ""
-        echo "🎯 Package now available on conda-forge!"
-        echo "Install with: conda install -c conda-forge omnipkg"
-        echo "═══════════════════════════════════════════════════════"
+        GH_TOKEN: ${{ secrets.FEEDSTOCK_TOKEN }
