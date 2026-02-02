@@ -2104,28 +2104,153 @@ class WorkerPoolDaemon:
             except Exception:
                 pass
 
-    def _run_socket_server(self):
-        try:
-            os.unlink(self.socket_path)
-        except OSError:
-            pass
+    import socket
+    import sys
+    import os
+    import tempfile
+    from pathlib import Path
 
-        sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        sock.bind(self.socket_path)
+    def _run_socket_server(self):
+        """
+        Fixed version that works on Windows (TCP) and Unix (domain socket)
+        """
+        
+        # Platform detection
+        is_windows = sys.platform == 'win32'
+        
+        if is_windows:
+            # ============================================================
+            # WINDOWS: Use TCP socket on localhost
+            # ============================================================
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            
+            # Get port from config (should already be in self)
+            port = getattr(self, 'daemon_port', 5678)
+            address = ('127.0.0.1', port)
+            
+            try:
+                sock.bind(address)
+                print(f"[DAEMON] Bound to TCP 127.0.0.1:{port}", flush=True)
+            except OSError as e:
+                print(f"[DAEMON] Failed to bind to port {port}: {e}", flush=True)
+                raise
+            
+            # Store connection info for clients to find us
+            conn_file = Path(tempfile.gettempdir()) / 'omnipkg' / 'daemon_connection.txt'
+            conn_file.parent.mkdir(parents=True, exist_ok=True)
+            conn_file.write_text(f"tcp://127.0.0.1:{port}")
+            
+        else:
+            # ============================================================
+            # UNIX/LINUX/MACOS: Use Unix domain socket
+            # ============================================================
+            # Remove stale socket file if it exists
+            try:
+                os.unlink(self.socket_path)
+            except OSError:
+                pass
+            
+            sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            sock.bind(self.socket_path)
+            print(f"[DAEMON] Bound to Unix socket {self.socket_path}", flush=True)
+        
+        # ============================================================
+        # COMMON: Setup and main loop (same for both platforms)
+        # ============================================================
+        
         # CRITICAL FIX: Increased backlog for high concurrency
         sock.listen(128)
-
+        
+        print("[DAEMON] Server ready, entering accept loop", flush=True)
+        
         while self.running:
             try:
                 sock.settimeout(1.0)
                 conn, unused = sock.accept()
+                
                 # CRITICAL FIX: Use thread pool instead of unbounded threads
                 self.executor.submit(self._handle_client, conn)
+                
             except socket.timeout:
                 continue
-            except Exception:
+            except Exception as e:
                 if self.running:
-                    pass
+                    # Only log if we're not shutting down
+                    print(f"[DAEMON] Accept error: {e}", flush=True)
+        
+        # Cleanup
+        sock.close()
+        print("[DAEMON] Socket closed", flush=True)
+        
+        if is_windows and conn_file.exists():
+            conn_file.unlink()
+
+
+    # ============================================================
+    # CLIENT-SIDE: How to connect to the daemon
+    # ============================================================
+
+    def connect_to_daemon(socket_path=None, daemon_port=5678):
+        """
+        Client function to connect to daemon (works on both platforms)
+        
+        Args:
+            socket_path: Unix socket path (ignored on Windows)
+            daemon_port: TCP port for Windows (default 5678)
+        
+        Returns:
+            Connected socket
+        """
+        is_windows = sys.platform == 'win32'
+        
+        if is_windows:
+            # Read connection info from file
+            conn_file = Path(tempfile.gettempdir()) / 'omnipkg' / 'daemon_connection.txt'
+            
+            if conn_file.exists():
+                conn_str = conn_file.read_text().strip()
+                # Parse "tcp://127.0.0.1:5678"
+                if conn_str.startswith('tcp://'):
+                    host_port = conn_str[6:]  # Remove "tcp://"
+                    host, port = host_port.split(':')
+                    port = int(port)
+                else:
+                    # Fallback
+                    host, port = '127.0.0.1', daemon_port
+            else:
+                # Use default
+                host, port = '127.0.0.1', daemon_port
+            
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.connect((host, port))
+            return sock
+            
+        else:
+            # Unix socket
+            if socket_path is None:
+                socket_path = Path(tempfile.gettempdir()) / 'omnipkg' / 'daemon.sock'
+            
+            sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            sock.connect(str(socket_path))
+            return sock
+
+
+    # ============================================================
+    # DAEMON STATUS CHECK: Update to work on both platforms
+    # ============================================================
+
+    def check_daemon_running(socket_path=None, daemon_port=5678):
+        """
+        Check if daemon is running by attempting connection
+        Returns True if daemon responds, False otherwise
+        """
+        try:
+            sock = connect_to_daemon(socket_path, daemon_port)
+            sock.close()
+            return True
+        except Exception:
+            return False
 
     def _handle_client(self, conn: socket.socket):
         """Handle client request with timeout protection."""
@@ -3017,44 +3142,157 @@ class DaemonClient:
         )
 
     def _wait_for_socket(self, timeout=5.0):
+        """
+        Fixed version that works on Windows and Unix
+        Wait for daemon to be ready to accept connections
+        """
         start_time = time.time()
-        while time.time() - start_time < timeout:
-            if os.path.exists(self.socket_path):
+        
+        if sys.platform == 'win32':
+            # Windows: Wait for connection file and test TCP connection
+            conn_file = Path(tempfile.gettempdir()) / 'omnipkg' / 'daemon_connection.txt'
+            
+            while time.time() - start_time < timeout:
+                if conn_file.exists():
+                    try:
+                        # Read connection info
+                        conn_str = conn_file.read_text().strip()
+                        if conn_str.startswith('tcp://'):
+                            host_port = conn_str[6:]
+                            host, port_str = host_port.split(':')
+                            port = int(port_str)
+                        else:
+                            # Fallback
+                            port = getattr(self, 'daemon_port', 5678)
+                            host = '127.0.0.1'
+                        
+                        # Try to connect
+                        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                        s.settimeout(0.5)
+                        s.connect((host, port))
+                        s.close()
+                        return True
+                        
+                    except (ConnectionRefusedError, OSError, ValueError):
+                        pass
+                
+                time.sleep(0.1)
+            return False
+        
+        else:
+            # Unix: Wait for socket file and test connection (original logic)
+            while time.time() - start_time < timeout:
+                if os.path.exists(self.socket_path):
+                    try:
+                        s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+                        s.settimeout(0.5)
+                        s.connect(self.socket_path)
+                        s.close()
+                        return True
+                    except (ConnectionRefusedError, OSError):
+                        pass
+                time.sleep(0.1)
+            return False
+
+    import socket
+    import sys
+    import os
+    import time
+    import tempfile
+    from pathlib import Path
+
+
+    # ============================================================
+    # HELPER FUNCTION: Get connection info based on platform
+    # ============================================================
+
+    def _get_connection_info(self):
+        """
+        Get socket family and address for connecting to daemon.
+        Works on both Windows (TCP) and Unix (domain socket).
+        
+        Returns:
+            tuple: (socket_family, address)
+                - Windows: (AF_INET, ('127.0.0.1', port))
+                - Unix: (AF_UNIX, '/path/to/socket')
+        """
+        if sys.platform == 'win32':
+            # Windows: Read TCP connection from file
+            conn_file = Path(tempfile.gettempdir()) / 'omnipkg' / 'daemon_connection.txt'
+            
+            if conn_file.exists():
                 try:
-                    s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-                    s.settimeout(0.5)
-                    s.connect(self.socket_path)
-                    s.close()
-                    return True
-                except (ConnectionRefusedError, OSError):
+                    conn_str = conn_file.read_text().strip()
+                    # Parse "tcp://127.0.0.1:5678"
+                    if conn_str.startswith('tcp://'):
+                        host_port = conn_str[6:]
+                        host, port_str = host_port.split(':')
+                        port = int(port_str)
+                        return (socket.AF_INET, (host, port))
+                except Exception:
                     pass
-            time.sleep(0.1)
-        return False
+            
+            # Fallback to default port
+            port = getattr(self, 'daemon_port', 5678)
+            return (socket.AF_INET, ('127.0.0.1', port))
+        else:
+            # Unix: Use socket path
+            return (socket.AF_UNIX, self.socket_path)
+
+
+    # ============================================================
+    # FIX 1: _send method (CRITICAL - used for all daemon communication)
+    # ============================================================
 
     def _send(self, req):
+        """
+        Fixed version that works on Windows and Unix
+        """
         attempts = 0
         max_attempts = 3 if not self.auto_start else 2
+        
         while attempts < max_attempts:
             attempts += 1
             try:
-                sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+                # Get platform-appropriate connection info
+                sock_family, address = self._get_connection_info()
+                
+                # Create and connect socket
+                sock = socket.socket(sock_family, socket.SOCK_STREAM)
                 sock.settimeout(self.timeout)
-                sock.connect(self.socket_path)
+                sock.connect(address)
+                
+                # Send request and receive response
                 send_json(sock, req, timeout=self.timeout)
                 res = recv_json(sock, timeout=self.timeout)
                 sock.close()
                 return res
+                
             except (ConnectionRefusedError, FileNotFoundError):
                 if not self.auto_start:
                     if attempts >= max_attempts:
                         return {"success": False, "error": "Daemon not running"}
                     time.sleep(0.2)
                     continue
-                try:
-                    os.unlink(self.socket_path)
-                except:
-                    pass
+                
+                # Clean up stale connection info
+                if sys.platform == 'win32':
+                    # Remove stale connection file
+                    conn_file = Path(tempfile.gettempdir()) / 'omnipkg' / 'daemon_connection.txt'
+                    try:
+                        conn_file.unlink()
+                    except:
+                        pass
+                else:
+                    # Remove stale Unix socket
+                    try:
+                        os.unlink(self.socket_path)
+                    except:
+                        pass
+                
+                # Try to auto-start daemon
                 self._spawn_daemon()
+                
                 if self._wait_for_socket(timeout=5.0):
                     attempts = 0
                     self.auto_start = False
@@ -3064,9 +3302,92 @@ class DaemonClient:
                         "success": False,
                         "error": "Failed to auto-start daemon (timeout)",
                     }
+                    
             except Exception as e:
                 return {"success": False, "error": _('Communication error: {}').format(e)}
+        
         return {"success": False, "error": "Connection failed after retries"}
+
+
+    # ============================================================
+    # BONUS FIX: Check if daemon is running (for status command)
+    # ============================================================
+
+    def is_daemon_running(self):
+        """
+        Check if daemon is currently running
+        Works on both Windows and Unix
+        """
+        if sys.platform == 'win32':
+            # Windows: Check if connection file exists and port is listening
+            conn_file = Path(tempfile.gettempdir()) / 'omnipkg' / 'daemon_connection.txt'
+            if not conn_file.exists():
+                return False
+            
+            try:
+                conn_str = conn_file.read_text().strip()
+                if conn_str.startswith('tcp://'):
+                    host_port = conn_str[6:]
+                    host, port_str = host_port.split(':')
+                    port = int(port_str)
+                else:
+                    port = getattr(self, 'daemon_port', 5678)
+                    host = '127.0.0.1'
+                
+                # Try quick connection
+                s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                s.settimeout(0.5)
+                s.connect((host, port))
+                s.close()
+                return True
+            except:
+                return False
+        else:
+            # Unix: Check if socket exists and is connectable
+            if not os.path.exists(self.socket_path):
+                return False
+            
+            try:
+                s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+                s.settimeout(0.5)
+                s.connect(self.socket_path)
+                s.close()
+                return True
+            except:
+                return False
+
+
+    # ============================================================
+    # ADD THIS HELPER TO YOUR CLASS
+    # ============================================================
+
+    # Add this method to your DaemonClient class (or whatever it's called):
+
+    def _get_connection_info(self):
+        """
+        Get socket family and address for connecting to daemon.
+        
+        Returns:
+            tuple: (socket_family, address)
+        """
+        if sys.platform == 'win32':
+            conn_file = Path(tempfile.gettempdir()) / 'omnipkg' / 'daemon_connection.txt'
+            
+            if conn_file.exists():
+                try:
+                    conn_str = conn_file.read_text().strip()
+                    if conn_str.startswith('tcp://'):
+                        host_port = conn_str[6:]
+                        host, port_str = host_port.split(':')
+                        return (socket.AF_INET, (host, int(port_str)))
+                except Exception:
+                    pass
+            
+            # Fallback
+            port = getattr(self, 'daemon_port', 5678)
+            return (socket.AF_INET, ('127.0.0.1', port))
+        else:
+            return (socket.AF_UNIX, self.socket_path)
 
     def optimistic_update_atomic(self, expected_version: int) -> bool:
         """
