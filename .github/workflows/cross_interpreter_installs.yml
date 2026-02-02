@@ -70,7 +70,8 @@ jobs:
           echo "--- Adopting Python 3.14 ---"
           mkdir -p /tmp/omnipkg-artifacts
           
-          omnipkg python adopt 3.14 2>&1 | tee /tmp/omnipkg-artifacts/adopt_314.txt
+          # Use -y for non-interactive mode
+          omnipkg python adopt 3.14 -y 2>&1 | tee /tmp/omnipkg-artifacts/adopt_314.txt
           
           echo "## Python 3.14 Adoption Output" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
@@ -79,7 +80,8 @@ jobs:
           
           echo "--- Switching to Python 3.14 ---"
           
-          omnipkg swap python 3.14 2>&1 | tee /tmp/omnipkg-artifacts/swap_to_314.txt
+          # Use -y for non-interactive mode
+          omnipkg swap python 3.14 -y 2>&1 | tee /tmp/omnipkg-artifacts/swap_to_314.txt
           
           echo "## Swap to Python 3.14 Output" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
@@ -106,13 +108,13 @@ jobs:
           echo "--- Attempting to install TensorFlow on Python 3.14 (incompatible) ---"
           echo "This should trigger Quantum Healing, auto-adopt Python 3.13, and auto-switch to it..."
           
-          set -o pipefail
+          # This is the first command requiring a daemon. 
+          # It will trigger the auto-start and relaunch logic.
+          # We use -y for non-interactive mode.
+          timeout 900 bash -c 'omnipkg install tensorflow -y' 2>&1 | tee /tmp/omnipkg-artifacts/tensorflow_install.txt
           
-          if timeout 900 bash -c 'omnipkg install tensorflow' 2>&1 | tee /tmp/omnipkg-artifacts/tensorflow_install.txt; then
-            INSTALL_EXIT_CODE=0
-          else
-            INSTALL_EXIT_CODE=$?
-          fi
+          # PIPESTATUS[0] captures the exit code of omnipkg, not tee.
+          INSTALL_EXIT_CODE=${PIPESTATUS[0]}
           
           echo "## TensorFlow Installation Output" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
@@ -163,8 +165,8 @@ jobs:
             echo "Checking if TensorFlow install succeeded as alternative verification..."
           fi
           
-          # Check if TensorFlow is installed
-          omnipkg info tensorflow 2>&1 | tee /tmp/omnipkg-artifacts/tensorflow_info.txt
+          # Check if TensorFlow is installed using -y
+          omnipkg info tensorflow -y 2>&1 | tee /tmp/omnipkg-artifacts/tensorflow_info.txt
           
           if grep -q "Active Version:" /tmp/omnipkg-artifacts/tensorflow_info.txt; then
             echo "✅ TensorFlow is installed and active!"
