@@ -1940,29 +1940,30 @@ class WorkerPoolDaemon:
 
     def _start_windows_daemon(self, wait_for_ready: bool = False):
         """
-        Start daemon on Windows using subprocess.
-        If wait_for_ready is True, it blocks until the daemon is confirmed running.
-        Otherwise, it follows standard daemonization and exits.
+        Start daemon on Windows using subprocess spawn.
+        CRITICAL: This method now returns a boolean instead of calling sys.exit(),
+        making it safe to call from within other scripts/benchmarks.
         """
         import subprocess
-
-        daemon_script = os.path.abspath(__file__)
 
         # Ensure log directory exists
         try:
             os.makedirs(os.path.dirname(DAEMON_LOG_FILE), exist_ok=True)
         except OSError as e:
             safe_print(_('❌ Failed to create log directory: {}').format(e), file=sys.stderr)
-            sys.exit(1)
+            return False
 
-        safe_print("🚀 Starting daemon in background (Windows mode)...", file=sys.stderr)
+        if wait_for_ready:
+            safe_print("🚀 Starting daemon in background (Windows mode)...", file=sys.stderr)
 
         try:
+            # DETACHED_PROCESS ensures the daemon lives after the parent dies
             DETACHED_PROCESS = 0x00000008
             CREATE_NEW_PROCESS_GROUP = 0x00000200
 
+            # Use module launch (-m) for guaranteed package context on Windows
             process = subprocess.Popen(
-                [sys.executable, daemon_script, "start", "--no-fork"],
+                [sys.executable, "-m", "omnipkg.isolation.worker_daemon", "start", "--no-fork"],
                 creationflags=DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP,
                 stdin=subprocess.DEVNULL,
                 stdout=subprocess.DEVNULL,
@@ -1970,44 +1971,26 @@ class WorkerPoolDaemon:
                 close_fds=False,
             )
 
-            # --- MODIFIED LOGIC ---
-            if wait_for_ready:
-                # Block and wait for the daemon to become responsive
-                if self._wait_for_daemon_ready(timeout=10):
+            # Wait for PID file to confirm the server is actually listening
+            if self._wait_for_daemon_ready(timeout=15):
+                if wait_for_ready:
                     safe_print(
                         _('✅ Daemon confirmed running (PID: {}). Resuming original command...').format(process.pid),
                         file=sys.stderr
                     )
-                    return True # Signal success to the caller
-                else:
-                    safe_print(
-                        _('❌ Daemon failed to start within timeout (check {})').format(DAEMON_LOG_FILE),
-                        file=sys.stderr
-                    )
-                    return False # Signal failure
+                return True
             else:
-                # Original "fire and forget" daemonization
-                time.sleep(2)
-                if self.is_running():
-                    safe_print(
-                        _('✅ Daemon started successfully (PID: {})').format(process.pid),
-                        file=sys.stderr,
-                    )
-                    sys.exit(0)
-                else:
-                    safe_print(
-                        _('❌ Daemon failed to start (check {})').format(DAEMON_LOG_FILE),
-                        file=sys.stderr,
-                    )
-                    sys.exit(1)
+                safe_print(
+                    _('❌ Daemon failed to start within timeout (check {})').format(DAEMON_LOG_FILE),
+                    file=sys.stderr
+                )
+                return False
 
         except Exception as e:
             safe_print(_('❌ Failed to start daemon: {}').format(e), file=sys.stderr)
             import traceback
             traceback.print_exc()
-            if wait_for_ready:
-                return False
-            sys.exit(1)
+            return False
 
     def _wait_for_daemon_ready(self, timeout: int = 10) -> bool:
         """Waits for the daemon's PID file to appear and be valid."""
@@ -3827,11 +3810,19 @@ if __name__ == "__main__":
         no_fork = "--no-fork" in sys.argv
 
         if no_fork:
-            # Direct start without fork (for Windows subprocess spawn)
+            # This branch is the actual background daemon process
             daemon = WorkerPoolDaemon(max_workers=10, max_idle_time=300, warmup_specs=[])
             daemon.start(daemonize=False)
         else:
-            cli_start()
+            # This branch is the user-facing CLI call
+            # We call daemon.start() and then handle the process exit here.
+            daemon = WorkerPoolDaemon()
+            if daemon.start(daemonize=True):
+                # Only exit if we are NOT running a script that might want to continue
+                # (Standard CLI 'daemon start' behavior)
+                sys.exit(0)
+            else:
+                sys.exit(1)
 
     elif cmd == "stop":
         cli_stop()
