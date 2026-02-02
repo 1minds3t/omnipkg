@@ -508,4 +508,43 @@ jobs:
     - name: Merge PR
       if: env.skip_pr != 'true' && steps.create-pr.outputs.pull-request-number != ''
       env:
-        GH_TOKEN: ${{ secrets.FEEDSTOCK_TOKEN }
+        GH_TOKEN: ${{ secrets.FEEDSTOCK_TOKEN }}
+      run: |
+        PR_NUMBER="${{ steps.create-pr.outputs.pull-request-number }}"
+        VERSION="${{ needs.wait-for-pypi.outputs.version }}"
+        
+        echo "🎯 Merging PR #$PR_NUMBER..."
+        gh pr merge $PR_NUMBER \
+          --repo conda-forge/omnipkg-feedstock \
+          --squash \
+          --subject "Build for $VERSION (platforms)" \
+          --body ""
+        
+        echo "✅ Platform builds merged to conda-forge!"
+
+  # ═══════════════════════════════════════════════════════════════════
+  # JOB 5: Final Summary
+  # ═══════════════════════════════════════════════════════════════════
+  final-summary:
+    name: "📊 Release Summary"
+    needs: [wait-for-pypi, update-local-metas, update-feedstock-noarch, update-feedstock-platforms]
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+    - name: Print Summary
+      run: |
+        echo "═══════════════════════════════════════════════════════"
+        echo "🎉 CONDA-FORGE RELEASE COMPLETE"
+        echo "═══════════════════════════════════════════════════════"
+        echo ""
+        echo "Version: ${{ needs.wait-for-pypi.outputs.version }}"
+        echo "SHA256: ${{ needs.wait-for-pypi.outputs.sha256 }}"
+        echo ""
+        echo "✅ PyPI sync: ${{ needs.wait-for-pypi.result }}"
+        echo "✅ Local meta updates: ${{ needs.update-local-metas.result }}"
+        echo "✅ Conda-forge noarch: ${{ needs.update-feedstock-noarch.result }}"
+        echo "✅ Conda-forge platforms: ${{ needs.update-feedstock-platforms.result }}"
+        echo ""
+        echo "🎯 Package now available on conda-forge!"
+        echo "Install with: conda install -c conda-forge omnipkg"
+        echo "═══════════════════════════════════════════════════════"
