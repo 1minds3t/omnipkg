@@ -34,7 +34,6 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -e . redis
-
       - name: Configure omnipkg and Establish Authoritative ENV_ID
         id: setup_omnipkg
         run: |
@@ -62,7 +61,6 @@ jobs:
           with open(os.environ['GITHUB_ENV'], 'a') as f:
               f.write(f"OMNIPKG_ENV_ID_OVERRIDE={main_env_id}\n")
           EOF
-
       - name: Adopt and Switch to Python 3.14
         env:
           OMNIPKG_ENV_ID_OVERRIDE: ${{ env.OMNIPKG_ENV_ID_OVERRIDE }}
@@ -70,8 +68,8 @@ jobs:
           echo "--- Adopting Python 3.14 ---"
           mkdir -p /tmp/omnipkg-artifacts
           
-          # Use -y for non-interactive mode
-          omnipkg python adopt 3.14 -y 2>&1 | tee /tmp/omnipkg-artifacts/adopt_314.txt
+          # FIX: Removed -y (unrecognized argument). Non-interactive config handles this.
+          omnipkg python adopt 3.14 2>&1 | tee /tmp/omnipkg-artifacts/adopt_314.txt
           
           echo "## Python 3.14 Adoption Output" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
@@ -80,8 +78,8 @@ jobs:
           
           echo "--- Switching to Python 3.14 ---"
           
-          # Use -y for non-interactive mode
-          omnipkg swap python 3.14 -y 2>&1 | tee /tmp/omnipkg-artifacts/swap_to_314.txt
+          # FIX: Removed -y
+          omnipkg swap python 3.14 2>&1 | tee /tmp/omnipkg-artifacts/swap_to_314.txt
           
           echo "## Swap to Python 3.14 Output" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
@@ -100,7 +98,6 @@ jobs:
             echo "⚠️  Could not verify from info output, but swap command succeeded"
             echo "Proceeding with test..."
           fi
-
       - name: Attempt to Install TensorFlow (Should Auto-Adopt 3.13 + Auto-Switch)
         env:
           OMNIPKG_ENV_ID_OVERRIDE: ${{ env.OMNIPKG_ENV_ID_OVERRIDE }}
@@ -110,8 +107,8 @@ jobs:
           
           # This is the first command requiring a daemon. 
           # It will trigger the auto-start and relaunch logic.
-          # We use -y for non-interactive mode.
-          timeout 900 bash -c 'omnipkg install tensorflow -y' 2>&1 | tee /tmp/omnipkg-artifacts/tensorflow_install.txt
+          # FIX: Removed -y
+          timeout 900 bash -c 'omnipkg install tensorflow' 2>&1 | tee /tmp/omnipkg-artifacts/tensorflow_install.txt
           
           # PIPESTATUS[0] captures the exit code of omnipkg, not tee.
           INSTALL_EXIT_CODE=${PIPESTATUS[0]}
@@ -145,7 +142,6 @@ jobs:
           else
             echo "⚠️  Installation may not have completed fully"
           fi
-
       - name: Verify Final State
         env:
           OMNIPKG_ENV_ID_OVERRIDE: ${{ env.OMNIPKG_ENV_ID_OVERRIDE }}
@@ -165,8 +161,8 @@ jobs:
             echo "Checking if TensorFlow install succeeded as alternative verification..."
           fi
           
-          # Check if TensorFlow is installed using -y
-          omnipkg info tensorflow -y 2>&1 | tee /tmp/omnipkg-artifacts/tensorflow_info.txt
+          # FIX: Removed -y
+          omnipkg info tensorflow 2>&1 | tee /tmp/omnipkg-artifacts/tensorflow_info.txt
           
           if grep -q "Active Version:" /tmp/omnipkg-artifacts/tensorflow_info.txt; then
             echo "✅ TensorFlow is installed and active!"
@@ -178,7 +174,6 @@ jobs:
           echo '```' >> $GITHUB_STEP_SUMMARY
           cat /tmp/omnipkg-artifacts/tensorflow_info.txt >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
-
       - name: Test TensorFlow Import
         env:
           OMNIPKG_ENV_ID_OVERRIDE: ${{ env.OMNIPKG_ENV_ID_OVERRIDE }}
@@ -200,7 +195,6 @@ jobs:
             echo "⚠️  Could not find Python 3.13 executable"
             exit 1
           fi
-
       - name: Generate Test Summary
         if: always()
         run: |
@@ -218,14 +212,4 @@ jobs:
           echo "- ✅ Quantum Healing triggered on incompatibility" >> $GITHUB_STEP_SUMMARY
           echo "- ✅ **Python 3.13 auto-adopted during install** (the magic!)" >> $GITHUB_STEP_SUMMARY
           echo "- ✅ **Auto-switched from 3.14 → 3.13** (zero user intervention!)" >> $GITHUB_STEP_SUMMARY
-          echo "- ✅ TensorFlow installed without any manual steps" >> $GITHUB_STEP_SUMMARY
-          echo "- ✅ TensorFlow imports successfully" >> $GITHUB_STEP_SUMMARY
-
-      - name: Archive Test Outputs
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: omnipkg-quantum-switch-test-output
-          path: /tmp/omnipkg-artifacts/
-          retention-days: 7
-          compression-level: 6
+          echo "- ✅ TensorFlo
