@@ -1139,11 +1139,10 @@ msgid "    😈 Locked up for causing chaos in the main env! 🔒 (v{})"
 msgstr "😈 因在主环境中造成混乱而被锁定！🔒 (v{})"
 
 # (Validation Failed: emoji_mismatch)
-# Lollama: Skipped (Empty Chain Output)
+#  (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:15766
-#, fuzzy
 msgid "    😈 Speedy troublemaker locked up in the main env! 🔒 (v{})"
-msgstr "😈快速的麻烦制造商锁定在主要的环境中！🔒（v {}）"
+msgstr "😈 快速麻烦制造者被锁在主环境中！🔒 (v{})"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:15776
 msgid "  - Path: {}"
