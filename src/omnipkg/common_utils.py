@@ -29,6 +29,7 @@ def safe_print(*args, **kwargs):
     Ultra-robust print: Handles Windows encoding issues and prevents shell crashes.
     Detects non-UTF8 sessions (like cp1252) and strips emojis to prevent mojibake.
     """
+    from omnipkg.i18n import _
     if "flush" not in kwargs:
         kwargs["flush"] = True
     try:
@@ -60,6 +61,7 @@ def safe_print(*args, **kwargs):
 
 def safe_unlink(path: Path) -> None:
     """Python 3.7 compatible unlink that ignores missing files."""
+    from omnipkg.i18n import _
     if path.exists():
         path.unlink()
 
@@ -78,6 +80,7 @@ def pass_config_to_subprocess(config_dict: Dict[str, Any]) -> str:
     Returns:
         Path to temporary config file (caller should clean up after subprocess completes)
     """
+    from omnipkg.i18n import _
     fd, temp_path = tempfile.mkstemp(suffix=".json", prefix="omnipkg_config_")
     try:
         with os.fdopen(fd, "w") as f:
@@ -118,6 +121,7 @@ def safe_subprocess_call(
     Returns:
         (returncode, stdout, stderr)
     """
+    from omnipkg.i18n import _
     config_file = None
 
     try:
@@ -204,6 +208,7 @@ def create_subprocess_script_with_config(
         # Your code here using config
         ```
     """
+    from omnipkg.i18n import _
     fd, script_path = tempfile.mkstemp(suffix=".py", prefix=f"omnipkg_{script_name}_")
 
     try:
@@ -245,6 +250,7 @@ def run_python_script_with_config(
     Returns:
         (returncode, stdout, stderr)
     """
+    from omnipkg.i18n import _
     python_exe = python_exe or sys.executable
     config_file = None
     script_file = None
@@ -335,7 +341,7 @@ class ProcessCorruptedException(Exception):
 
 class UVFailureDetector:
     """Detects UV dependency resolution failures."""
-
+    
     FAILURE_PATTERNS = [
         "No solution found when resolving dependencies",
         "ResolutionImpossible",
@@ -345,6 +351,7 @@ class UVFailureDetector:
 
     def detect_failure(self, stderr_output):
         """Check if UV output contains dependency resolution failure"""
+        from omnipkg.i18n import _
         for pattern in self.FAILURE_PATTERNS:
             if re.search(pattern, stderr_output, re.IGNORECASE):
                 return True
@@ -354,6 +361,7 @@ class UVFailureDetector:
         """
         Extracts the first specific conflicting package==version from the error message.
         """
+        from omnipkg.i18n import _
         matches = re.findall(self.CONFLICT_PATTERN, stderr_output)
         if matches:
             for line in stderr_output.splitlines():
@@ -378,7 +386,7 @@ def debug_python_context(label=""):
     safe_print(_('📍 os.getpid():           {}').format(os.getpid()))
     safe_print(f"📍 __file__ (if exists):  {__file__ if '__file__' in globals() else 'N/A'}")
     safe_print(_('📍 Path.cwd():            {}').format(Path.cwd()))
-
+    from omnipkg.i18n import _
     # Environment variables that might affect context
     relevant_env_vars = [
         "PYTHONPATH",
@@ -656,7 +664,7 @@ def is_interactive_session():
     Returns False for: CI, Docker, piped input, explicitly non-interactive envs.
     """
     import sys
-    
+    from omnipkg.i18n import _
     # Check all the conditions you're already using
     is_docker = os.path.exists("/.dockerenv") or os.path.exists("/run/.containerenv")
     no_tty = not sys.stdin.isatty()
@@ -680,6 +688,7 @@ def safe_input(prompt: str, default: str = "", auto_value: str = None):
         default: Default value for non-interactive (if auto_value not specified)
         auto_value: Specific value to use in non-interactive mode (overrides default)
     """
+    from omnipkg.i18n import _
     if not is_interactive_session():
         result = auto_value if auto_value is not None else default
         safe_print(_('🤖 Auto-selecting: {}').format(result))

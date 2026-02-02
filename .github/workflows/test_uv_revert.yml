@@ -26,7 +26,6 @@ jobs:
           sudo apt-get install -y redis-server
           sudo systemctl start redis-server
           redis-cli ping
-
       - name: 📦 Install omnipkg
         run: |
           python -m pip install --upgrade pip
@@ -40,11 +39,9 @@ jobs:
           import json
           from pathlib import Path
           import os
-
           site_packages_path = site.getsitepackages()[0]
           python_executable_path = sys.executable
           project_root = Path(os.environ['GITHUB_WORKSPACE'])
-
           config_data = {
               'site_packages_path': site_packages_path,
               'multiversion_base': str(Path(site_packages_path) / '.omnipkg_versions'),
@@ -57,14 +54,11 @@ jobs:
               'auto_cleanup': True,
               'cleanup_threshold_days': 30
           }
-
           config_dir = Path.home() / '.config' / 'omnipkg'
           config_dir.mkdir(parents=True, exist_ok=True)
           config_path = config_dir / 'config.json'
-
           with open(config_path, 'w') as f:
               json.dump(config_data, f, indent=2)
-
           print(f'omnipkg config created at {config_path}:')
           print(json.dumps(config_data, indent=2))
           EOF
@@ -73,10 +67,13 @@ jobs:
         id: install_uv_latest
         run: |
           echo "--- Installing uv (latest) with omnipkg to establish a 'good state' with snapshot ---"
-          echo "1" | omnipkg install uv==0.8.13 > /tmp/initial_uv_install_output.txt 2>&1
-          if [ $? -ne 0 ]; then 
+          # FIX: Removed '-y'. Omnipkg detects CI environment automatically (see logs), 
+          # and '-y' was raising "unrecognized arguments".
+          omnipkg install uv==0.8.13 2>&1 | tee /tmp/initial_uv_install_output.txt
+          
+          # PIPESTATUS[0] captures the exit code of omnipkg, not tee.
+          if [ ${PIPESTATUS[0]} -ne 0 ]; then 
             echo "omnipkg_install_uv_success=false" >> $GITHUB_OUTPUT
-            cat /tmp/initial_uv_install_output.txt
             exit 1 
           fi
           
@@ -84,9 +81,9 @@ jobs:
           uv --version | tee -a /tmp/initial_uv_version.txt
           
           echo "omnipkg status after installing uv:" | tee -a /tmp/initial_uv_version.txt
-          echo "" | omnipkg status | tee -a /tmp/initial_uv_version.txt
+          # Use --non-interactive instead of a pipe
+          omnipkg status --non-interactive | tee -a /tmp/initial_uv_version.txt
           echo "omnipkg snapshot created - now we can revert uv's self-sabotage!"
-
       - name: 💥 Force UV to Downgrade Itself (with --system)
         id: uv_self_downgrade
         run: |
@@ -112,7 +109,6 @@ jobs:
           
           echo "Full output from uv self-downgrade attempt captured to /tmp/uv_downgrade_output.txt"
           cat /tmp/uv_downgrade_output.txt 
-
       - name: 🚑 Run omnipkg Revert (Regardless of UV's Previous Outcome)
         id: omnipkg_revert
         run: |
@@ -127,17 +123,16 @@ jobs:
             echo "omnipkg revert failed. See logs for details."
             exit 1 
           fi
-
       - name: ✅ Verify Final UV Version After Revert
         if: steps.omnipkg_revert.outputs.revert_success == 'true'
         run: |
           echo "--- Verifying UV version after omnipkg revert ---" | tee /tmp/final_uv_version.txt
           uv --version | tee -a /tmp/final_uv_version.txt || echo "uv command not found or failed after revert." | tee -a /tmp/final_uv_version.txt
           echo "--- omnipkg status after revert ---" | tee -a /tmp/final_uv_version.txt
-          echo "" | omnipkg status | tee -a /tmp/final_uv_version.txt
+          omnipkg status --non-interactive | tee -a /tmp/final_uv_version.txt
           echo "--- omnipkg info uv after revert ---" | tee -a /tmp/final_uv_version.txt
-          echo "" | omnipkg info uv | tee -a /tmp/final_uv_version.txt
-
+          # Use positional argument '1' and --non-interactive
+          omnipkg info uv 1 --non-interactive | tee -a /tmp/final_uv_version.txt
       - name: 📊 Generate Report
         if: always()
         run: |
@@ -195,7 +190,6 @@ jobs:
             echo "### Conclusion" >> $REPORT_FILE
             echo "❌ The \`omnipkg\` revert test failed. Review workflow logs for details." >> $REPORT_FILE
           fi
-
       - name: 📤 Upload Report Artifact
         uses: actions/upload-artifact@v4
         with:

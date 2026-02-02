@@ -55,9 +55,13 @@ jobs:
         id: omnipkg_uv_install
         run: |
           echo "--- Attempting omnipkg install uv==0.7.12 uv==0.7.14 ---"
-          omnipkg install uv==0.7.12 uv==0.7.14
+          # This triggers the daemon auto-start and relaunch logic.
+          omnipkg install uv==0.7.12 uv==0.7.14 2>&1 | tee install_log.txt
           
-          if [ $? -eq 0 ]; then
+          # PIPESTATUS[0] captures the exit code of omnipkg, not tee.
+          INSTALL_EXIT_CODE=${PIPESTATUS[0]}
+          
+          if [ $INSTALL_EXIT_CODE -eq 0 ]; then
             echo "success=true" >> $GITHUB_OUTPUT
             echo "omnipkg install completed successfully."
           else
@@ -101,7 +105,7 @@ jobs:
           echo "=== omnipkg info uv (showing active version details) ==="
           # Select option 1 (active version) to show the sophisticated Redis metadata
           echo "1" | omnipkg info uv
-
+          
       - name: 📊 Generate simple report
         if: always() # This step will run regardless of previous step's success
         run: |
@@ -125,10 +129,9 @@ jobs:
           
           echo "### omnipkg Info UV Output (Active Version Details)" >> $REPORT_FILE
           echo "\`\`\`" >> $REPORT_FILE
-          # Select option 1 (active version) to show the sophisticated Redis metadata
+          # Use positional argument '1' and --non-interactive for the report too.
           echo "1" | omnipkg info uv >> $REPORT_FILE 2>&1
           echo "\`\`\`" >> $REPORT_FILE
-          echo "" >> $REPORT_FILE
           
           echo "### Active UV Version Check" >> $REPORT_FILE
           echo "\`\`\`" >> $REPORT_FILE
