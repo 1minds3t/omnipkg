@@ -217,21 +217,27 @@ jobs:
         VERSION="${{ needs.wait-for-pypi.outputs.version }}"
         BRANCH="update-noarch-v$VERSION"
         
+        # Use heredoc for safe multi-line string in shell
+        PR_BODY=$(cat <<EOF
+        🤖 Automated update to omnipkg version $VERSION (noarch build)
+
+        **Changes:**
+        - ✅ Version: $VERSION
+        - ✅ SHA256: ${{ needs.wait-for-pypi.outputs.sha256 }}
+        - ✅ Build number: 0
+        - ✅ Architecture: noarch
+
+        This PR updates the recipe for conda-forge distribution.
+        EOF
+        )
+        
         # Create PR
         PR_URL=$(gh pr create \
           --repo conda-forge/omnipkg-feedstock \
           --base main \
           --head 1minds3t:$BRANCH \
           --title "Update omnipkg to $VERSION (noarch)" \
-          --body "🤖 Automated update to omnipkg version $VERSION (noarch build)
-
-**Changes:**
-- ✅ Version: $VERSION
-- ✅ SHA256: ${{ needs.wait-for-pypi.outputs.sha256 }}
-- ✅ Build number: 0
-- ✅ Architecture: noarch
-
-This PR updates the recipe for conda-forge distribution." || echo "")
+          --body "$PR_BODY" || echo "")
         
         if [ -n "$PR_URL" ]; then
           PR_NUMBER=$(echo "$PR_URL" | grep -oP '\d+$')
@@ -407,21 +413,27 @@ This PR updates the recipe for conda-forge distribution." || echo "")
         VERSION="${{ needs.wait-for-pypi.outputs.version }}"
         BRANCH="update-platforms-v$VERSION"
         
+        # Use heredoc for safe multi-line string in shell
+        PR_BODY=$(cat <<EOF
+        🤖 Automated update to omnipkg version $VERSION (platform builds)
+
+        **Changes:**
+        - ✅ Version: $VERSION
+        - ✅ SHA256: ${{ needs.wait-for-pypi.outputs.sha256 }}
+        - ✅ Build number: 1
+        - ✅ Architectures: linux-64, linux-aarch64, linux-ppc64le, osx-64, osx-arm64, win-64
+
+        This PR updates the recipe for conda-forge distribution with platform-specific builds.
+        EOF
+        )
+        
         # Create PR
         PR_URL=$(gh pr create \
           --repo conda-forge/omnipkg-feedstock \
           --base main \
           --head 1minds3t:$BRANCH \
           --title "Update omnipkg to $VERSION (platforms)" \
-          --body "🤖 Automated update to omnipkg version $VERSION (platform builds)
-
-**Changes:**
-- ✅ Version: $VERSION
-- ✅ SHA256: ${{ needs.wait-for-pypi.outputs.sha256 }}
-- ✅ Build number: 1
-- ✅ Architectures: linux-64, linux-aarch64, linux-ppc64le, osx-64, osx-arm64, win-64
-
-This PR updates the recipe for conda-forge distribution with platform-specific builds." || echo "")
+          --body "$PR_BODY" || echo "")
         
         if [ -n "$PR_URL" ]; then
           PR_NUMBER=$(echo "$PR_URL" | grep -oP '\d+$')
