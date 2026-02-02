@@ -80,7 +80,7 @@ jobs:
           # This is the first command requiring a daemon. 
           # It will trigger the auto-start and relaunch logic.
           # We use -y for non-interactive mode.
-          omnipkg install requests==2.28.0 -y 2>&1 | tee /tmp/omnipkg-artifacts/install_old_version.txt
+          omnipkg install requests==2.28.0 2>&1 | tee /tmp/omnipkg-artifacts/install_old_version.txt
           
           # Capture the exit code of omnipkg, not tee
           INSTALL_EXIT_CODE=${PIPESTATUS[0]}
