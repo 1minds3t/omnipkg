@@ -90,14 +90,26 @@ jobs:
           echo "--- Running Omnipkg Demo for TensorFlow (Complex Dependency Testing) ---"
           mkdir -p /tmp/omnipkg-artifacts
           
-          # The demo can exit with an error code even on success, so we check the output log instead.
-          # We use '|| true' to ensure the script continues to the verification step regardless of the exit code.
-          timeout 900 bash -c 'echo "4" | omnipkg demo 2>&1 | tee /tmp/omnipkg-artifacts/tensorflow_demo_output.txt' || true
+          # Use the direct ID '4' and --non-interactive flag to skip the menu.
+          # We capture PIPESTATUS[0] to get the actual exit code of omnipkg.
+          timeout 900 bash -c 'omnipkg demo 4 --non-interactive 2>&1 | tee /tmp/omnipkg-artifacts/tensorflow_demo_output.txt'
+          DEMO_EXIT_CODE=${PIPESTATUS[0]}
           
           echo "## TensorFlow Demo Output" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
           cat /tmp/omnipkg-artifacts/tensorflow_demo_output.txt >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
+          
+          # Verify both the exit code and the specific TensorFlow success indicators
+          if [ $DEMO_EXIT_CODE -eq 0 ] && grep -q "Demo completed successfully" /tmp/omnipkg-artifacts/tensorflow_demo_output.txt; then
+               echo "Demo completed successfully (verified by exit code and log content)."
+               echo "demo_outcome=success" >> $GITHUB_OUTPUT
+          else
+            echo "Demo failed (Exit Code: $DEMO_EXIT_CODE or success message not found)."
+            echo "demo_outcome=failure" >> $GITHUB_OUTPUT
+            cat /tmp/omnipkg-artifacts/tensorflow_demo_output.txt
+            exit 1
+          fi
           
           # The success indicator is the text "TensorFlow escaped the matrix".
           if grep -q "Demo completed successfully" /tmp/omnipkg-artifacts/tensorflow_demo_output.txt; then
