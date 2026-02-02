@@ -1,4 +1,4 @@
-name: "Windows Daemon Test - Improved"
+name: "Windows Daemon Test - Fire and Forget"
 
 on:
   workflow_dispatch:
@@ -77,56 +77,83 @@ jobs:
               Write-Host "Created: $dir"
           }
 
-      - name: Start Daemon with Verbose Output
-        id: start_daemon
-        continue-on-error: true
+      - name: Start Daemon (Fire and Forget)
         shell: pwsh
         run: |
           Write-Host "============================================"
-          Write-Host "Starting Omnipkg Daemon"
+          Write-Host "Starting Omnipkg Daemon (Background Mode)"
           Write-Host "============================================"
           
-          # Capture both stdout and stderr
-          $output = omnipkg daemon start 2>&1
-          $exitCode = $LASTEXITCODE
+          # Fire and forget - truly detached background process
+          # Use Start-Job for PowerShell background execution
+          $job = Start-Job -ScriptBlock {
+              python -m omnipkg daemon start
+          }
           
-          Write-Host "Output:"
-          Write-Host $output
-          Write-Host "Exit Code: $exitCode"
-          
-          # Wait for daemon initialization
+          Write-Host "✅ Daemon start job initiated (Job ID: $($job.Id))"
+          Write-Host "Waiting 8 seconds for daemon initialization..."
           Start-Sleep -Seconds 8
           
-          exit $exitCode
+          # Check job state (it should still be running if daemon spawned)
+          $jobState = Get-Job -Id $job.Id | Select-Object -ExpandProperty State
+          Write-Host "Job state after 8 seconds: $jobState"
 
-      - name: Check Daemon Status
-        if: steps.start_daemon.outcome == 'success'
+      - name: Verify Daemon is Running
         shell: pwsh
         run: |
-          Write-Host "Checking daemon status..."
+          Write-Host "============================================"
+          Write-Host "Verifying Daemon Status"
+          Write-Host "============================================"
+          
           omnipkg daemon status
           
           if ($LASTEXITCODE -ne 0) {
-              Write-Error "Daemon status check failed"
+              Write-Error "❌ Daemon status check failed"
               exit 1
           }
-          Write-Host "Daemon is running"
+          
+          Write-Host "✅ Daemon is confirmed running!"
 
       - name: Test Daemon Functionality
-        if: steps.start_daemon.outcome == 'success'
         continue-on-error: true
         shell: pwsh
         run: |
-          Write-Host "Testing daemon with a simple command..."
+          Write-Host "============================================"
+          Write-Host "Testing Daemon with Simple Command"
+          Write-Host "============================================"
+          
           omnipkg list --limit 5
+          
+          if ($LASTEXITCODE -eq 0) {
+              Write-Host "✅ Daemon functionality test passed"
+          } else {
+              Write-Host "⚠️  Daemon functionality test had issues"
+          }
+
+      - name: Monitor Daemon (Optional)
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          Write-Host "============================================"
+          Write-Host "Daemon Monitor Snapshot"
+          Write-Host "============================================"
+          
+          # Try to get daemon monitor info if available
+          omnipkg daemon monitor 2>&1 | Select-Object -First 20
 
       - name: Stop Daemon
         if: always()
         continue-on-error: true
         shell: pwsh
         run: |
+          Write-Host "============================================"
+          Write-Host "Stopping Daemon"
+          Write-Host "============================================"
+          
           omnipkg daemon stop 2>&1
           Start-Sleep -Seconds 2
+          
+          Write-Host "✅ Daemon stop command completed"
 
       # ════════════════════════════════════════════════════════════════
       # COMPREHENSIVE LOG COLLECTION
@@ -202,16 +229,41 @@ jobs:
           netstat -ano | Select-String "5678"
           Write-Host "::endgroup::"
 
+      - name: Copy Logs to Workspace
+        if: always()
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          # Create a logs directory in the workspace
+          $workspaceLogs = "$env:GITHUB_WORKSPACE\collected_logs"
+          New-Item -ItemType Directory -Force -Path $workspaceLogs | Out-Null
+          
+          # Copy all omnipkg logs to workspace
+          $searchPaths = @(
+              "$env:USERPROFILE\.omnipkg\logs",
+              "$env:USERPROFILE\.config\omnipkg\logs",
+              "$env:LOCALAPPDATA\omnipkg\logs",
+              "$env:TEMP\omnipkg"
+          )
+          
+          foreach ($path in $searchPaths) {
+              if (Test-Path $path) {
+                  $logs = Get-ChildItem -Path $path -Filter "*.log" -Recurse -ErrorAction SilentlyContinue
+                  foreach ($log in $logs) {
+                      $destName = "$($log.Directory.Name)_$($log.Name)"
+                      Copy-Item $log.FullName -Destination "$workspaceLogs\$destName" -ErrorAction SilentlyContinue
+                      Write-Host "Copied: $destName"
+                  }
+              }
+          }
+          
+          Write-Host "Logs copied to: $workspaceLogs"
+
       - name: Upload Logs as Artifact
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: windows-daemon-logs
-          path: |
-            ${{ runner.temp }}/omnipkg/*.log
-            ~/.omnipkg/logs/**/*.log
-            ~/.config/omnipkg/logs/**/*.log
-            ~/AppData/Local/omnipkg/logs/**/*.log
-            ~/AppData/Local/Temp/omnipkg/**/*.log
+          path: collected_logs/**/*.log
           if-no-files-found: warn
           retention-days: 7
