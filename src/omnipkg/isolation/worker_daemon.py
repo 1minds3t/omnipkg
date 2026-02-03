@@ -1943,76 +1943,56 @@ class WorkerPoolDaemon:
             time.sleep(0.5)
 
     def _start_windows_daemon(self, wait_for_ready: bool = False):
-        """
-        Start daemon on Windows using subprocess.
-        If wait_for_ready is True, it blocks until the daemon is confirmed running.
-        Otherwise, it follows standard daemonization and exits.
-        """
+        """Start daemon on Windows using subprocess."""
         import subprocess
         daemon_script = os.path.abspath(__file__)
         
-        # Ensure log directory exists
-        try:
-            os.makedirs(os.path.dirname(DAEMON_LOG_FILE), exist_ok=True)
-        except OSError as e:
-            safe_print(_('❌ Failed to create log directory: {}').format(e), file=sys.stderr)
-            sys.exit(1)
+        os.makedirs(os.path.dirname(DAEMON_LOG_FILE), exist_ok=True)
         
         safe_print("🚀 Starting daemon in background (Windows mode)...", file=sys.stderr)
         
         try:
             DETACHED_PROCESS = 0x00000008
             CREATE_NEW_PROCESS_GROUP = 0x00000200
+            CREATE_NO_WINDOW = 0x08000000  # ADD THIS - prevents console popup
             
-            # FIX: Open log file BEFORE subprocess and keep reference
-            log_file_handle = open(DAEMON_LOG_FILE, "a")
+            # Keep log file handle open in parent process to prevent premature close
+            log_file_handle = open(DAEMON_LOG_FILE, "a", buffering=1)
             
             process = subprocess.Popen(
-                [sys.executable, daemon_script, "start", "--no-fork"],
-                creationflags=DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP,
+                [sys.executable, "-u", daemon_script, "start", "--no-fork"],  # ADD -u for unbuffered
+                creationflags=DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP | CREATE_NO_WINDOW,
                 stdin=subprocess.DEVNULL,
-                stdout=subprocess.DEVNULL,
-                stderr=log_file_handle,  # ← FIX: Use the variable, not inline open()
+                stdout=log_file_handle,  # ALSO redirect stdout
+                stderr=log_file_handle,
                 close_fds=False,
+                # ADD THIS - keep process handle alive
+                env=dict(os.environ, PYTHONUNBUFFERED="1")
             )
             
-            # --- MODIFIED LOGIC ---
+            # DON'T close log_file_handle here - keep it alive
+            # Store it so Python doesn't GC it
+            self._daemon_log_handle = log_file_handle
+            self._daemon_process_handle = process  # Keep reference
+            
             if wait_for_ready:
-                # Block and wait for the daemon to become responsive
-                if self._wait_for_daemon_ready(timeout=10):
-                    safe_print(
-                        _('✅ Daemon confirmed running (PID: {}). Resuming original command...').format(process.pid),
-                        file=sys.stderr
-                    )
-                    return True  # Signal success to the caller
+                if self._wait_for_daemon_ready(timeout=15):  # Increase timeout
+                    safe_print(f'✅ Daemon running (PID from file)', file=sys.stderr)
+                    return True
                 else:
-                    safe_print(
-                        _('❌ Daemon failed to start within timeout (check {})').format(DAEMON_LOG_FILE),
-                        file=sys.stderr
-                    )
-                    return False  # Signal failure
+                    safe_print(f'❌ Timeout (check {DAEMON_LOG_FILE})', file=sys.stderr)
+                    return False
             else:
-                # Original "fire and forget" daemonization
-                time.sleep(3)
+                time.sleep(5)  # Give Windows more time
                 if self.is_running():
-                    safe_print(
-                        _('✅ Daemon started successfully (PID: {})').format(process.pid),
-                        file=sys.stderr,
-                    )
-                    return True  # FIX: Return instead of sys.exit() to avoid hanging on Windows
+                    safe_print('✅ Daemon started', file=sys.stderr)
+                    return True
                 else:
-                    safe_print(
-                        _('❌ Daemon failed to start (check {})').format(DAEMON_LOG_FILE),
-                        file=sys.stderr,
-                    )
-                    return False  # FIX: Return instead of sys.exit() to avoid hanging on Windows
+                    safe_print(f'❌ Failed (check {DAEMON_LOG_FILE})', file=sys.stderr)
+                    return False
         except Exception as e:
-            safe_print(_('❌ Failed to start daemon: {}').format(e), file=sys.stderr)
-            import traceback
-            traceback.print_exc()
-            if wait_for_ready:
-                return False
-            sys.exit(1)
+            safe_print(f'❌ Failed: {e}', file=sys.stderr)
+            return False if wait_for_ready else sys.exit(1)
 
     def _wait_for_daemon_ready(self, timeout: int = 10) -> bool:
         """Waits for the daemon's PID file to appear and be valid."""
