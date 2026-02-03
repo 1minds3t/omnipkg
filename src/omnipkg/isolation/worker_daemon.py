@@ -1356,7 +1356,7 @@ class PersistentWorker:
             self.process.stdin.flush()
 
             # 2. Wait for READY signal (Imports happen here)
-            readable, unused, unused = select.select([self.process.stdout], [], [], 300.0)
+            readable, unused, unused = select.select([self.process.stdout], [], [], 3000.0)
             if readable:
                 ready_line = self.process.stdout.readline()
                 if ready_line and json.loads(ready_line.strip()).get("status") == "READY":
