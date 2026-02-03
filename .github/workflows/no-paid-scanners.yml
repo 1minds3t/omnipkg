@@ -14,14 +14,25 @@ jobs:
       
       - name: Check for paid security scanners
         run: |
+          # Get the current workflow filename
+          CURRENT_FILE="${GITHUB_WORKFLOW_REF#*@}"
+          CURRENT_FILE="${CURRENT_FILE##*/}"
+          
           FORBIDDEN='snyk|veracode|black.duck|synopsys|jfrog|sonarqube|sonarcloud|checkmarx|anchore|sysdig|zscaler|endorlabs|ethicalcheck|crunch42|contrast|frogbot|mayhem|cloudrail|crda|kubesec|xanitizer|soos'
           
           echo "🔍 Scanning for paid security scanners..."
+          echo "Current workflow file: $CURRENT_FILE"
           
           # Check workflow files
           SCANNER_FOUND=false
           for file in .github/workflows/*.yml .github/workflows/*.yaml; do
             if [[ -f "$file" ]]; then
+              # Skip the current workflow file to avoid self-blocking
+              if [[ "$(basename "$file")" == "$CURRENT_FILE" ]]; then
+                echo "⏭️ Skipping self: $(basename "$file")"
+                continue
+              fi
+              
               if grep -iE "$FORBIDDEN" "$file" > /dev/null; then
                 echo "❌ Found forbidden scanner in: $(basename "$file")"
                 SCANNER_FOUND=true
