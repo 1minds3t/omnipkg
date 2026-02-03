@@ -1747,7 +1747,7 @@ msgstr "የ Python ስሪቶችን ወይም የጥቅል አካባቢዎችን 
 
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:639
 msgid "Specific version to swap to"
-msgstr ""
+msgstr "ለስዊፕ የተወሰነ ስሪት"
 
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:645
 msgid "Manage Python interpreters for the environment"
