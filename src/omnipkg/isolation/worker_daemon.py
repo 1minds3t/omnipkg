@@ -1904,7 +1904,7 @@ class WorkerPoolDaemon:
         self.idle_pools: Dict[str, queue.Queue] = defaultdict(lambda: queue.Queue(maxsize=10))
         # Default configuration: 3 idle workers for the daemon's own python
         self.idle_config: Dict[str, int] = {sys.executable: 3}
-        
+        self.worker_locks: Dict[str, threading.RLock] = defaultdict(threading.RLock)
         self.running = True
         self.socket_path = DEFAULT_SOCKET
         
