@@ -1348,7 +1348,6 @@ class PersistentWorker:
         """Converts an IDLE worker into a specific package worker."""
         if self._is_ready: return
         
-        # Add file lock to prevent concurrent initialization races
         lock_path = os.path.join(OMNIPKG_TEMP_DIR, f"worker_init_{id(self)}.lock")
         lock = filelock.FileLock(lock_path, timeout=10)
         
@@ -1361,14 +1360,32 @@ class PersistentWorker:
                 self.process.stdin.flush()
                 
                 # 2. Wait for READY signal (Imports happen here)
-                readable, unused, unused = select.select([self.process.stdout], [], [], 3000.0)
-                if readable:
-                    ready_line = self.process.stdout.readline()
-                    if ready_line and json.loads(ready_line.strip()).get("status") == "READY":
-                        self.last_health_check = time.time()
-                        self._is_ready = True
-                        return
-                raise RuntimeError("Worker failed to send READY status.")
+                # WINDOWS FIX: select() only works on sockets on Windows
+                if IS_WINDOWS:
+                    # Poll-based approach for Windows
+                    start_time = time.time()
+                    while time.time() - start_time < 3000.0:
+                        line = self.process.stdout.readline()
+                        if line:
+                            if json.loads(line.strip()).get("status") == "READY":
+                                self.last_health_check = time.time()
+                                self._is_ready = True
+                                return
+                        if self.process.poll() is not None:
+                            raise RuntimeError("Worker process died during initialization")
+                        time.sleep(0.01)  # Small sleep to prevent CPU spin
+                    raise RuntimeError("Worker failed to send READY status (timeout)")
+                else:
+                    # Unix: use select
+                    readable, _, _ = select.select([self.process.stdout], [], [], 3000.0)
+                    if readable:
+                        ready_line = self.process.stdout.readline()
+                        if ready_line and json.loads(ready_line.strip()).get("status") == "READY":
+                            self.last_health_check = time.time()
+                            self._is_ready = True
+                            return
+                    raise RuntimeError("Worker failed to send READY status.")
+                    
             except Exception as e:
                 self.force_shutdown()
                 raise RuntimeError(f"Worker spec assignment failed: {e}")
