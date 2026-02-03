@@ -5142,11 +5142,10 @@ msgid ""
 "⚠️  The Chaos Theory test is interactive - you'll be prompted to select scenarios."
 msgstr "⚠️ 混沌理论测试是互动的 - 系统会提示您选择场景。"
 
-# Lollama: Skipped (Validation Failed: emoji_mismatch)
+# (Validation Failed: emoji_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:1213
-#, fuzzy
 msgid "💡 Tip: Choose \"0\" to run all tests for the full experience!\n"
-msgstr ""
+msgstr "💡 提示:选择'0'运行所有测试,以获得完整的体验!"
 
 # Lollama: Skipped (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:1250
