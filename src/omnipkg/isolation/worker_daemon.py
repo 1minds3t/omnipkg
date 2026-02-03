@@ -1303,9 +1303,11 @@ def diagnose_worker_issue(package_spec: str):
 
 
 class PersistentWorker:
-    def __init__(self, package_spec: str = None, python_exe: str = None, verbose: bool = False, defer_setup: bool = False):
+    def __init__(self, package_spec: str = None, python_exe: str = None, verbose: bool = False, defer_setup: bool = False, site_packages: str = None, multiversion_base: str = None):
         self.package_spec = package_spec
         self.python_exe = python_exe or sys.executable
+        self.site_packages = site_packages
+        self.multiversion_base = multiversion_base
         self.process: Optional[subprocess.Popen] = None
         self.temp_file: Optional[str] = None
         self.lock = threading.RLock()
@@ -1327,9 +1329,26 @@ class PersistentWorker:
             f.write(_DAEMON_SCRIPT)
             self.temp_file = f.name
 
+        # 🔥 CRITICAL: Sanitize environment for the worker
+        # We MUST NOT inherit PYTHONPATH from the daemon's environment (usually 3.11).
         env = os.environ.copy()
-        current_pythonpath = env.get("PYTHONPATH", "")
-        env["PYTHONPATH"] = f"{os.getcwd()}{os.pathsep}{current_pythonpath}"
+        
+        # Scrub variables that cause cross-version contamination
+        for var in ["PYTHONPATH", "PYTHONHOME", "PYTHONUSERBASE", "OMNIPKG_IS_DAEMON"]:
+            env.pop(var, None)
+
+        # Inject the correct multiversion base so omnipkgLoader knows exactly where bubbles are
+        if self.multiversion_base:
+            env["OMNIPKG_MULTIVERSION_BASE"] = self.multiversion_base
+
+        # Add ONLY the omnipkg source root to PYTHONPATH so the worker can 
+        # import the loader, but uses its own site-packages for everything else.
+        try:
+            import omnipkg
+            pkg_root = str(Path(omnipkg.__file__).parent.parent)
+            env["PYTHONPATH"] = pkg_root
+        except Exception:
+            env["PYTHONPATH"] = os.getcwd()
 
         self.log_file = open(DAEMON_LOG_FILE, "a", buffering=1)
 
@@ -1838,7 +1857,16 @@ class WorkerPoolDaemon:
         self.max_workers = max_workers
         self.max_idle_time = max_idle_time
         self.warmup_specs = warmup_specs or []
+        
+        # Use ConfigManager for path resolution
+        try:
+            from omnipkg.core import ConfigManager
+            self.cm = ConfigManager(suppress_init_messages=True)
+        except ImportError:
+            self.cm = None
+
         self.workers: Dict[str, Dict[str, Any]] = {}
+        self.worker_locks: Dict[str, threading.RLock] = defaultdict(threading.RLock)
         self.pool_lock = threading.RLock()
         
         # 🚀 IDLE WORKER POOL: Keep bare Python processes ready per executable
@@ -1903,8 +1931,19 @@ class WorkerPoolDaemon:
                     pool = self.idle_pools[python_exe]
                     
                     if pool.qsize() < target_count:
+                        # Resolve authoritative paths for this specific python version
+                        target_paths = {}
+                        if self.cm:
+                            target_paths = self.cm._get_paths_for_interpreter(python_exe) or {}
+
                         # Spawn a generic worker for this specific python executable
-                        idle_worker = PersistentWorker(package_spec=None, python_exe=python_exe, defer_setup=True)
+                        idle_worker = PersistentWorker(
+                            package_spec=None, 
+                            python_exe=python_exe, 
+                            defer_setup=True,
+                            site_packages=target_paths.get("site_packages_path"),
+                            multiversion_base=target_paths.get("multiversion_base")
+                        )
                         try:
                             pool.put_nowait(idle_worker)
                             safe_print(f"   💤 [DAEMON] Spawned idle worker for {python_exe} (Pool size: {pool.qsize()})", file=sys.stderr)
@@ -2349,8 +2388,17 @@ class WorkerPoolDaemon:
                     else:
                         raise queue.Empty
                 except (queue.Empty, RuntimeError):
+                    target_paths = {}
+                    if self.cm:
+                        target_paths = self.cm._get_paths_for_interpreter(python_exe) or {}
+
                     # Fallback if queue empty or no pool exists for this exe (~30ms)
-                    worker = PersistentWorker(spec, python_exe=python_exe)
+                    worker = PersistentWorker(
+                        spec, 
+                        python_exe=python_exe,
+                        site_packages=target_paths.get("site_packages_path"),
+                        multiversion_base=target_paths.get("multiversion_base")
+                    )
 
                 with self.pool_lock:
                     self.workers[worker_key] = {
@@ -2478,8 +2526,18 @@ class WorkerPoolDaemon:
                             else:
                                 raise queue.Empty
                         except queue.Empty:
+                            # Resolve authoritative paths for the target Python version
+                            target_paths = {}
+                            if self.cm:
+                                target_paths = self.cm._get_paths_for_interpreter(python_exe) or {}
+
                             # Fallback if idle pool is empty (~30ms)
-                            worker = PersistentWorker(spec, python_exe=python_exe)
+                            worker = PersistentWorker(
+                                spec, 
+                                python_exe=python_exe,
+                                site_packages=target_paths.get("site_packages_path"),
+                                multiversion_base=target_paths.get("multiversion_base")
+                            )
 
                         # Add the newly assigned worker to the active pool
                         with self.pool_lock:

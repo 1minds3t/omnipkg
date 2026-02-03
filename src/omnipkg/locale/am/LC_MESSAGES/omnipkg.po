@@ -1832,52 +1832,54 @@ msgstr "📍 የተዋቀረ መንገድ፡-{}"
 msgid ""
 "\n"
 "💡 To switch context, use: {} swap python <version>"
-msgstr ""
+msgstr "💡 አውድ ለመቀየር, ይጠቀሙ: {} swap python <version"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:524
 msgid "   ⚠️  Could not reset setup flag in config file: {}"
-msgstr ""
+msgstr "⚠ ️ በማዋቀር ፋይሉ ውስጥ የማዋቀርን ባንዲራ ዳግም ማስጀመር አልተቻለም፡ {}\",}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:532
 msgid "  🚀 Environment Hotswap to a Managed Python 3.11"
-msgstr ""
+msgstr "🚀 የአካባቢ ሆትስዋፕ ወደ የሚተዳደር Python 3.11"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:538
 msgid ""
 "\n"
 "To ensure everything 'just works', omnipkg will now perform a one-time setup:"
-msgstr ""
+msgstr "ሁሉም ነገር 'ልክ እንደሚሰራ' ለማረጋገጥ omnipkg አሁን የአንድ ጊዜ ማዋቀርን ያከናውናል፡"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:540
 msgid ""
 "  1. Download a self-contained Python 3.11 into your virtual environment."
-msgstr ""
+msgstr "1. በራስ-ሰር የተገነባ Python 3.11 ወደ ምናባዊ አካባቢዎ ያውርዱ."
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:550
 msgid ""
 "\n"
 "🛑 Operation cancelled. Aborting."
-msgstr ""
+msgstr "🛑 ክወና ተሰርዟል."
 
+# Lollama: Skipped (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:629
+#, fuzzy
 msgid "🔧 Aligning configuration to use Python interpreter: {}"
 msgstr ""
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:637
 msgid "   - New site-packages path: {}"
-msgstr ""
+msgstr "- አዲስ ጣቢያ-ጥቅሎች መንገድ;{}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:638
 msgid "   - New Python executable: {}"
-msgstr ""
+msgstr "- አዲስ Python ሊተገበር የሚችል:{}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:644
 msgid "   ✅ Configuration updated and saved successfully."
-msgstr ""
+msgstr "✅ ውቅር በተሳካ ሁኔታ ተዘምኗል እና ተቀምጧል."
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:722
 msgid "✅ Detected a suitable Python 3.11 within your virtual environment."
-msgstr ""
+msgstr "✅ በእርስዎ ምናባዊ አካባቢ ውስጥ ተስማሚ የሆነ Python 3.11 አግኝቷል።"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:732
 msgid ""
