@@ -1770,37 +1770,41 @@ msgstr "• Python {}፡ {}\",}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:1027
 msgid "❌ Error: You must specify what to swap."
-msgstr ""
+msgstr "❌ ስሪት: እርስዎ የሚፈልጉ ነገር ያካትታል."
 
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:1028
 msgid "Examples:"
-msgstr ""
+msgstr "ምሳሌዎች :"
 
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:1030
 msgid "  {} swap python           # Interactive Python version picker"
-msgstr ""
+msgstr "{} swap python # በይነተገናኝ የፓይተን ስሪት መምረጥ"
 
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:1035
 msgid "  {} swap python 3.11      # Switch to Python 3.11"
-msgstr ""
+msgstr "{}ስዋፕ ፓይቶን 3.11 # ወደ Python 3.11 ቀይር"
 
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:1059
 msgid "❌ No Python interpreters found."
-msgstr ""
+msgstr "Ye Python Misl Alaitchumim."
 
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:1061
 msgid "🐍 Available Python versions:"
-msgstr ""
+msgstr "🐍 የ Python ስሪት:"
 
+# Lollama: Skipped (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:1064
+#, fuzzy
 msgid "  {}. Python {}"
 msgstr ""
 
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:1068
 msgid "Select version (1-{}): "
-msgstr ""
+msgstr "ስሪት ይምረጡ (1-{}):"
 
+# Lollama: Skipped (Validation Failed: proper_noun_mismatch_Python)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:1359
+#, fuzzy
 msgid "Python Interpreter Information"
 msgstr ""
 

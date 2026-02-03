@@ -1390,39 +1390,53 @@ class PersistentWorker:
         except psutil.NoSuchProcess:
             raise RuntimeError("Worker process died immediately after spawn")
 
-        stderr_lines = []
-
         while True:
             # Check if process is still alive
             if process.poll() is not None:
-                stderr_output = "".join(stderr_lines)
-                raise RuntimeError(f'Worker crashed during startup. Stderr: {stderr_output}')
+                raise RuntimeError('Worker crashed during startup')
 
-            # Check for READY on stdout (non-blocking)
-            ready, _, _ = select.select([process.stdout], [], [], 0.1)
-            if ready:
-                ready_line = process.stdout.readline()
-                if ready_line:
-                    return ready_line
+            # PLATFORM-SPECIFIC: Check for READY on stdout
+            if IS_WINDOWS:
+                # Windows: Use non-blocking readline with timeout
+                import msvcrt
+                import os
+                
+                # Check if data is available (non-blocking peek)
+                if msvcrt.kbhit() if hasattr(msvcrt, 'kbhit') else False:
+                    ready_line = process.stdout.readline()
+                    if ready_line:
+                        return ready_line
+                else:
+                    # Try reading anyway (might block briefly)
+                    # Use a thread to timeout the read
+                    import threading
+                    result = [None]
+                    
+                    def try_read():
+                        try:
+                            result[0] = process.stdout.readline()
+                        except:
+                            pass
+                    
+                    t = threading.Thread(target=try_read, daemon=True)
+                    t.start()
+                    t.join(timeout=0.1)  # Wait 100ms max
+                    
+                    if result[0]:
+                        return result[0]
+            else:
+                # Unix: Use select (works on pipes)
+                ready, _, _ = select.select([process.stdout], [], [], 0.1)
+                if ready:
+                    ready_line = process.stdout.readline()
+                    if ready_line:
+                        return ready_line
 
-            # FIX: Only collect stderr if it's a real pipe (not a file handle)
-            if hasattr(process.stderr, 'fileno'):
-                try:
-                    err_ready, _, _ = select.select([process.stderr], [], [], 0.0)
-                    if err_ready:
-                        line = process.stderr.readline()
-                        if line:
-                            stderr_lines.append(line)
-                except (ValueError, TypeError):
-                    # stderr is a file, not selectable - skip it
-                    pass
-
-            # Monitor process activity
+            # Monitor process activity (works on all platforms)
             try:
                 cpu_percent = ps_process.cpu_percent(interval=0.1)
                 memory_mb = ps_process.memory_info().rss / 1024 / 1024
 
-                # Detect activity
                 activity_detected = cpu_percent > 1.0 or memory_mb > last_memory_mb + 1.0
 
                 if activity_detected:
@@ -1435,12 +1449,12 @@ class PersistentWorker:
 
                 if idle_duration > timeout_idle_seconds:
                     raise RuntimeError(
-                        f"Worker startup timeout: No activity for {idle_duration:.1f}s\n"
-                        f"Last CPU: {last_cpu_percent:.1f}%, Last Memory: {last_memory_mb:.1f}MB"
+                        f"Worker timeout: No activity for {idle_duration:.1f}s\n"
+                        f"CPU: {last_cpu_percent:.1f}%, Mem: {last_memory_mb:.1f}MB"
                     )
 
             except psutil.NoSuchProcess:
-                raise RuntimeError("Worker process disappeared during startup")
+                raise RuntimeError("Worker process disappeared")
 
             time.sleep(0.1)
 
