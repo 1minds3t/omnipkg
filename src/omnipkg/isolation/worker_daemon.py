@@ -1377,20 +1377,7 @@ class PersistentWorker:
                 raise RuntimeError(f"Worker spec assignment failed: {e}")
                 
     def wait_for_ready_with_activity_monitoring(self, process, timeout_idle_seconds=30.0):
-        """
-        Wait for worker READY signal while monitoring actual process activity.
-        Only timeout if the process is ACTUALLY idle (no CPU/memory activity).
-
-        Args:
-            process: subprocess.Popen instance
-            timeout_idle_seconds: How long to wait if process shows NO activity
-
-        Returns:
-            ready_line: The READY JSON line from stdout
-
-        Raises:
-            RuntimeError: If process is idle for too long or crashes
-        """
+        """Wait for worker READY signal while monitoring actual process activity."""
         import psutil
 
         start_time = time.time()
@@ -1409,35 +1396,34 @@ class PersistentWorker:
             # Check if process is still alive
             if process.poll() is not None:
                 stderr_output = "".join(stderr_lines)
-                raise RuntimeError(_('Worker crashed during startup. Stderr: {}').format(stderr_output))
+                raise RuntimeError(f'Worker crashed during startup. Stderr: {stderr_output}')
 
             # Check for READY on stdout (non-blocking)
-            ready, unused, unused = select.select([process.stdout], [], [], 0.1)
+            ready, _, _ = select.select([process.stdout], [], [], 0.1)
             if ready:
                 ready_line = process.stdout.readline()
                 if ready_line:
                     return ready_line
 
-            # Collect stderr (non-blocking)
-            err_ready, unused, unused = select.select([process.stderr], [], [], 0.0)
-            if err_ready:
-                line = process.stderr.readline()
-                if line:
-                    stderr_lines.append(line)
+            # FIX: Only collect stderr if it's a real pipe (not a file handle)
+            if hasattr(process.stderr, 'fileno'):
+                try:
+                    err_ready, _, _ = select.select([process.stderr], [], [], 0.0)
+                    if err_ready:
+                        line = process.stderr.readline()
+                        if line:
+                            stderr_lines.append(line)
+                except (ValueError, TypeError):
+                    # stderr is a file, not selectable - skip it
+                    pass
 
             # Monitor process activity
             try:
                 cpu_percent = ps_process.cpu_percent(interval=0.1)
                 memory_mb = ps_process.memory_info().rss / 1024 / 1024
 
-                # Detect activity: CPU usage or memory growth
-                activity_detected = False
-
-                if cpu_percent > 1.0:  # More than 1% CPU usage
-                    activity_detected = True
-
-                if memory_mb > last_memory_mb + 1.0:  # Memory grew by >1MB
-                    activity_detected = True
+                # Detect activity
+                activity_detected = cpu_percent > 1.0 or memory_mb > last_memory_mb + 1.0
 
                 if activity_detected:
                     last_activity_time = time.time()
@@ -1448,17 +1434,14 @@ class PersistentWorker:
                 idle_duration = time.time() - last_activity_time
 
                 if idle_duration > timeout_idle_seconds:
-                    stderr_output = "".join(stderr_lines)
                     raise RuntimeError(
                         f"Worker startup timeout: No activity for {idle_duration:.1f}s\n"
-                        f"Last CPU: {last_cpu_percent:.1f}%, Last Memory: {last_memory_mb:.1f}MB\n"
-                        f"Stderr: {stderr_output if stderr_output else 'empty'}"
+                        f"Last CPU: {last_cpu_percent:.1f}%, Last Memory: {last_memory_mb:.1f}MB"
                     )
 
             except psutil.NoSuchProcess:
                 raise RuntimeError("Worker process disappeared during startup")
 
-            # Small sleep to avoid busy-waiting
             time.sleep(0.1)
 
     def execute_with_activity_monitoring(
