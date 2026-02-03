@@ -2858,7 +2858,7 @@ class ConfigManager:
                         )
                     )
             else:
-                subprocess.run(rebuild_cmd, check=True, capture_output=True, text=True)
+                subprocess.run(rebuild_cmd, check=True)
         except subprocess.CalledProcessError:
             if interactive:
                 safe_print(_("   ⚠️  Knowledge base will be built on first command usage instead."))

@@ -2918,69 +2918,61 @@ msgstr "⚠️ 未能处理 {} 包"
 msgid " ⚠️ Multiversion base does not exist: {}"
 msgstr "⚠️ 多版本基础不存在：{}"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:7744
-#, fuzzy
 msgid "    ✅ Matching Python {} packages: {}"
-msgstr ""
+msgstr "✅ 匹配Python{}套餐：{}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:7749
 msgid " 🫧 Bubble Package Scan Summary:"
 msgstr "Did you mean: '_register_pytree_node'?"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:7755
-#, fuzzy
 msgid "        • Python {}: {} packages"
-msgstr ""
+msgstr "• Python{}:{}包"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:7765
-#, fuzzy
 msgid "    📦 {}: {} instances ({})"
-msgstr ""
+msgstr "📦 {}：{} 实例 ({})"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:7771
-#, fuzzy
 msgid "    📦 Other packages: {} unique types"
-msgstr ""
+msgstr "📦 其他包：{} 独特类型"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:7773
-#, fuzzy
 msgid "    ⚠️  Failed to process {} bubbles"
-msgstr ""
+msgstr "⚠️ 处理失败{}气泡"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:7776
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:7785
 msgid "        • {}: {}"
 msgstr "        • {}: {}"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:9113
-#, fuzzy
 msgid "   - ✅ Python {} is already adopted and managed."
-msgstr ""
+msgstr "- ✅ Python {} 已被采用并纳入管理。"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:9151
 msgid ""
 "   - ⚠️  Safety checks failed for local copy. Falling back to download."
 msgstr "Did you mean: '_register_pytree_node'?"
 
-# Lollama: Skipped (Validation Failed: emoji_mismatch)
+# (Validation Failed: emoji_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:9175
-#, fuzzy
 msgid "🔧 Forcing rescan to register the copied interpreter..."
-msgstr ""
+msgstr "🔧 强制重新扫描以注册复制的解释器..."
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:9186
-#, fuzzy
 msgid ""
 "   - ❌ An error occurred during the copy attempt: {}. Falling back to "
 "download."
-msgstr ""
+msgstr "- ❌ 尝试复制期间发生错误：{}. 回退去下载。"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:9288
 msgid ""
@@ -2988,11 +2980,10 @@ msgid ""
 "--- Running robust download strategy ---"
 msgstr "Did you mean: '_register_pytree_node'?"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:9334
-#, fuzzy
 msgid "   - Found existing directory for Python {}. Verifying integrity..."
-msgstr ""
+msgstr "- 找到 Python {} 的现有目录。验证完整性..."
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:9337
 msgid "   - ✅ Integrity check passed. Installation is valid and complete."
@@ -3032,11 +3023,10 @@ msgstr ""
 "\n"
 "RESPONSE:    {\"best_translation\":"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:9364
-#, fuzzy
 msgid "   - ❌ FATAL: Failed to remove existing broken directory: {}"
-msgstr ""
+msgstr "- FATAL: 未能删除现有破碎的目录: {}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:9368
 msgid "   - Starting fresh download and installation..."
@@ -3045,35 +3035,30 @@ msgstr ""
 "\n"
 "RESPONSE:    {\"best_translation\":"
 
-# Lollama: Skipped (Validation Failed: proper_noun_mismatch_Python)
+# (Validation Failed: proper_noun_mismatch_Python)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:9373
-#, fuzzy
 msgid "   - Using python-build-standalone for Python 3.13..."
-msgstr ""
+msgstr "- 使用 python-build-standalone 构建 Python 3.13..."
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:9402
-#, fuzzy
 msgid "   - Warning: _install_managed_python failed: {}"
-msgstr ""
+msgstr "- 警告: _install_managed_python 失败: {}"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:9408
-#, fuzzy
 msgid "   - Warning: install_managed_python failed: {}"
-msgstr ""
+msgstr "- 警告：install_managed_python 失败：{}"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:9414
-#, fuzzy
 msgid "   - Warning: download_python failed: {}"
-msgstr ""
+msgstr "- 警告：download_python 失败：{}"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:9417
-#, fuzzy
 msgid "❌ Error: All download methods failed for Python {}"
-msgstr ""
+msgstr "❌ 错误：Python 的所有下载方法均失败{}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:9436
 msgid "   - ✅ Download and installation completed successfully."
@@ -3089,41 +3074,35 @@ msgstr ""
 "\n"
 "RESPONSE:    {\"best_translation\":"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:9446
-#, fuzzy
 msgid "❌ Download and installation process failed: {}"
-msgstr ""
+msgstr "❌ 下载和安装过程失败：{}"
 
-# Lollama: Skipped (Validation Failed: proper_noun_mismatch_Python)
+# (Validation Failed: proper_noun_mismatch_Python)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:9480
-#, fuzzy
 msgid "   - Attempting Python 3.13 download from python-build-standalone..."
-msgstr ""
+msgstr "- 尝试从 python-build-standalone 下载 Python 3.13..."
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:9564
-#, fuzzy
 msgid "   - ❌ Could not determine appropriate build for platform: {} {}"
-msgstr ""
+msgstr "- ❌ 无法确定适合平台的构建：{} {}\",}"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:9570
-#, fuzzy
 msgid "   - Selected build: {}"
-msgstr ""
+msgstr "- 选定版本：{}"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:9571
-#, fuzzy
 msgid "   - Downloading from: {}"
-msgstr ""
+msgstr "- 下载地址：{}"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:9582
-#, fuzzy
 msgid "   - Download progress: {}%"
-msgstr ""
+msgstr "- 下载进度：{}%"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:9587
 msgid ""
@@ -3135,42 +3114,36 @@ msgstr "Did you mean: '_register_pytree_node'?"
 msgid "   - Extraction completed"
 msgstr "Did you mean: '_register_pytree_node'?"
 
-# Lollama: Skipped (Validation Failed: proper_noun_mismatch_Python)
+# (Validation Failed: proper_noun_mismatch_Python)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:9615
-#, fuzzy
 msgid "   - ✅ Python 3.13.1 installation completed successfully"
-msgstr ""
+msgstr "- ✅ Python 3.13.1 安装成功完成"
 
-# Lollama: Skipped (Validation Failed: proper_noun_mismatch_Python)
+# (Validation Failed: proper_noun_mismatch_Python)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:9616
-#, fuzzy
 msgid "   - Bootstrapping the new Python 3.13 environment..."
-msgstr ""
+msgstr "- 引导新的 Python 3.13 环境..."
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:9620
-#, fuzzy
 msgid ""
 "   - ❌ CRITICAL: Could not find Python executable in {} after extraction."
-msgstr ""
+msgstr "- CRITICAL: 提取后无法在 {} 中找到 Python 可执行文件."
 
-# Lollama: Skipped (Validation Failed: proper_noun_mismatch_Python)
+# (Validation Failed: proper_noun_mismatch_Python)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:9627
-#, fuzzy
 msgid "   - ✅ Alternative Python 3.13 download and bootstrap completed"
-msgstr ""
+msgstr "- ✅ 替代 Python 3.13 下载和引导已完成"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:9632
-#, fuzzy
 msgid "   - ❌ Python 3.13 download failed: {}"
-msgstr ""
+msgstr "- ❌ Python 3.13 下载失败：{}"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:9635
-#, fuzzy
 msgid "   - Error details: {}"
-msgstr ""
+msgstr "- 错误详细信息：{}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:9643
 msgid "Performing a full re-scan of managed interpreters..."
@@ -3182,78 +3155,68 @@ msgid ""
 "✅ Interpreter registry successfully rebuilt."
 msgstr "Did you mean: '_register_pytree_node'?"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:9654
-#, fuzzy
 msgid ""
 "\n"
 "❌ An error occurred during the re-scan: {}"
-msgstr ""
+msgstr "❌ 重新扫描时出现错误：{}"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:9844
-#, fuzzy
 msgid "🔥 Attempting to remove managed Python interpreter: {}"
-msgstr ""
+msgstr "🔥 尝试删除托管 Python 解释器：{}"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:9861
-#, fuzzy
 msgid ""
 "❌ SAFETY LOCK: Cannot remove the currently active Python interpreter ({})."
-msgstr ""
+msgstr "❌ 安全锁：无法删除当前活动的 Python 解释器 ({} ) 。"
 
-# Lollama: Skipped (Validation Failed: proper_noun_mismatch_omnipkg)
+# (Validation Failed: proper_noun_mismatch_omnipkg)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:9866
-#, fuzzy
 msgid ""
 "   Switch to a different Python version first using 'omnipkg swap python "
 "<other_version>'."
-msgstr ""
+msgstr "首先使用'omnipkg swap python <other_version>'切换到不同的Python版本。"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:9878
-#, fuzzy
 msgid "🤷 Error: Python version {} is not a known managed interpreter."
-msgstr ""
+msgstr "🤷 错误：Python 版本{}不是已知的托管解释器。"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:9911
 msgid "   Directory does not exist. It may have already been cleaned up."
 msgstr "Did you mean: '_register_pytree_node'?"
 
-# Lollama: Skipped (Validation Failed: emoji_mismatch)
+# (Validation Failed: emoji_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:9921
-#, fuzzy
 msgid "🚫 Removal cancelled."
-msgstr ""
+msgstr "🚫 撤离取消。"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:9926
-#, fuzzy
 msgid "🗑️ Deleting directory: {}"
-msgstr ""
+msgstr "🗑️ 删除目录：{}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:9928
 msgid "✅ Directory removed successfully."
 msgstr "Did you mean: '_register_pytree_node'?"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:9930
-#, fuzzy
 msgid "❌ Failed to remove directory: {}"
-msgstr ""
+msgstr "❌ 删除目录失败：{}"
 
-# Lollama: Skipped (Validation Failed: emoji_mismatch)
+# (Validation Failed: emoji_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:9965
-#, fuzzy
 msgid "🔧 Rescanning interpreters to update the registry..."
-msgstr ""
+msgstr "🔧 正在重新扫描解释器以更新注册表..."
 
-# Lollama: Skipped (Validation Failed: emoji_mismatch)
+# (Validation Failed: emoji_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:11463
-#, fuzzy
 msgid "🛡️ LATEST-ACTIVE STRATEGY: Preserving replaced versions"
-msgstr ""
+msgstr "🛡️ 最新活跃策略：保留替换版本"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:11548
 msgid ""
@@ -3275,795 +3238,692 @@ msgid ""
 "🧹 Cleaning redundant bubbles..."
 msgstr "Did you mean: '_register_pytree_node'?"
 
+# (Validation Failed: placeholder_mismatch)
 # Lollama: Skipped (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:12344
 #, fuzzy
 msgid "🧹 Performing brute-force cleanup of corrupted package '{}' in {}..."
 msgstr ""
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:12354
-#, fuzzy
 msgid "   - Deleting library directory: {}"
-msgstr ""
+msgstr "- 删除库目录：{}"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:12358
-#, fuzzy
 msgid "   - Deleting metadata: {}"
-msgstr ""
+msgstr "- 删除元数据：{}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:12360
 msgid "   - ✅ Brute-force cleanup complete."
 msgstr "Did you mean: '_register_pytree_node'?"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
+# Lollama: Skipped (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:12363
 #, fuzzy
 msgid "   - ❌ Brute-force cleanup FAILED: {}"
 msgstr ""
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:7837
-#, fuzzy
 msgid "   ⚠️  Warning: Could not exorcise ghost {}: {}"
-msgstr ""
+msgstr "⚠️ 警告：无法驱除幽灵 {}: {}\",}"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:12584
-#, fuzzy
 msgid "🧠 Forcing targeted KB rebuild for: {}..."
-msgstr ""
+msgstr "🧠 强制目标 KB 重建：{}..."
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:12655
-#, fuzzy
 msgid "   ✅ Exorcised {} ghost entries."
-msgstr ""
+msgstr "✅ 驱除{}鬼条目。"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:12660
-#, fuzzy
 msgid "    ❌ An unexpected error occurred during targeted KB rebuild: {}"
-msgstr ""
+msgstr "❌ 在目标 KB 重建时出现了一个意想不到的错误: {}"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:14415
-#, fuzzy
 msgid "   - Targeting installation to: {}"
-msgstr ""
+msgstr "- 目标安装为: {}"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:14497
-#, fuzzy
 msgid "🛡️  AUTO-RECOVERY: Detected corrupted package '{}'."
-msgstr ""
+msgstr "🛡️ 自动恢复：检测到损坏的软件包 '{}'。"
 
-# Lollama: Skipped (Validation Failed: language_mismatch_detected_en)
+# (Validation Failed: language_mismatch_detected_en)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:14500
-#, fuzzy
 msgid "   - Retrying installation on clean environment..."
-msgstr ""
+msgstr "- 正在干净的环境中重试安装..."
 
-# Lollama: Skipped (Validation Failed: suspicious_length_ratio_5.08)
+# (Validation Failed: suspicious_length_ratio_5.08)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:14504
-#, fuzzy
 msgid "   - ✅ Recovery successful!"
-msgstr ""
+msgstr "- ✅恢复成功！"
 
-# Lollama: Skipped (Validation Failed: language_mismatch_detected_en)
+# (Validation Failed: language_mismatch_detected_en)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:14510
-#, fuzzy
 msgid "   - ❌ Recovery failed. Pip error after cleanup:"
-msgstr ""
+msgstr "- 恢复失败。清理后出现 Pip 错误："
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:14619
-#, fuzzy
 msgid " -> Test-installing '{}' to discover latest compatible version..."
-msgstr ""
+msgstr "-> 测试安装'{}' 发现最新的兼容版本..."
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:14640
-#, fuzzy
 msgid "    Running: {}"
-msgstr ""
+msgstr "运行：{}"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
+# Lollama: Skipped (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:14658
 #, fuzzy
 msgid "    [STDOUT] {}"
 msgstr ""
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:14669
-#, fuzzy
 msgid "    🚀 EARLY SUCCESS DETECTED! Version {} is compatible!"
-msgstr ""
+msgstr "🚀 发现早期成功！版本{}是兼容的！"
 
-# Lollama: Skipped (Validation Failed: language_mismatch_detected_en)
+# (Validation Failed: language_mismatch_detected_en)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:14674
-#, fuzzy
 msgid "    ⚡ Canceling temp install to save time - will use smart installer"
-msgstr ""
+msgstr "⚡ 取消临时安装以节省时间 - 将使用智能安装程序"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:14702
-#, fuzzy
 msgid "    ⚡ Terminating test install process (PID: {})"
-msgstr ""
+msgstr "⚡ 终止测试安装进程（PID：{}）"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:14716
-#, fuzzy
 msgid "    ✅ Early success! Latest compatible version: {}"
-msgstr ""
+msgstr "✅ 早期成功! 最新兼容版本: {}"
 
-# Lollama: Skipped (Validation Failed: language_mismatch_detected_en)
+# (Validation Failed: language_mismatch_detected_en)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:14725
-#, fuzzy
 msgid "    ⏰ Test installation timed out, terminating..."
-msgstr ""
+msgstr "测试安装时间已结束,结束..."
 
-# Lollama: Skipped (Validation Failed: language_mismatch_detected_en)
+# (Validation Failed: language_mismatch_detected_en)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:14738
-#, fuzzy
 msgid "    ✅ Test installation completed successfully"
-msgstr ""
+msgstr "✅ 测试安装成功完成"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:14740
-#, fuzzy
 msgid ""
 "Installing collected "
 "packages:\\s+{}-([0-9]+(?:\\.[0-9]+)*(?:[a-zA-Z0-9\\.-_]*)?)"
-msgstr ""
+msgstr "安装收集的软件包：\\s+{}-([0-9]+(?:\\.[0-9]+)*(?:[a-zA-Z0-9\\.-_]*)?)"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:14751
-#, fuzzy
 msgid "    ✅ Successfully installed latest compatible version: {}"
-msgstr ""
+msgstr "✅ 成功安装最新兼容版本：{}"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:14777
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:14779
-#, fuzzy
 msgid "    Warning: Could not check dist-info: {}"
-msgstr ""
+msgstr "警告：无法检查 dist-info：{}"
 
-# Lollama: Skipped (Validation Failed: language_mismatch_detected_en)
+# (Validation Failed: language_mismatch_detected_en)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:14780
-#, fuzzy
 msgid "    ⚠️ Installation succeeded but couldn't determine version"
-msgstr ""
+msgstr "⚠️ 安装成功，但无法确定版本"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:14815
-#, fuzzy
 msgid "    ✅ Found {} compatible versions"
-msgstr ""
+msgstr "✅ 成立{}兼容版本"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:14820
-#, fuzzy
 msgid "    ✅ Latest compatible version: {}"
-msgstr ""
+msgstr "✅ 最新兼容版本：{}"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:14824
-#, fuzzy
 msgid "    ❌ Error sorting versions: {}"
-msgstr ""
+msgstr "❌ 错误排序版本：{}"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:14828
-#, fuzzy
 msgid "    ⚠️ Using fallback version: {}"
-msgstr ""
+msgstr "⚠️ 使用备用版本：{}"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:14835
-#, fuzzy
 msgid "    📋 Found Python version requirements: {}"
-msgstr ""
+msgstr "📋 找到Python版本要求：{}"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:14841
-#, fuzzy
 msgid "    ❌ Unexpected error during test installation: {}"
-msgstr ""
+msgstr "❌ 测试安装过程中出现意外错误：{}"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:14859
-#, fuzzy
 msgid "    ⚠️ Warning: Could not clean up temp directory {}: {}"
-msgstr ""
+msgstr "⚠️ 警告：无法清理临时目录 {}: {}\",}"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:14915
-#, fuzzy
 msgid "    ✅ Latest version {} is compatible!"
-msgstr ""
+msgstr "✅ 最新版本 {} 是兼容的!"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:14956
-#, fuzzy
 msgid "    🎯 Latest compatible version: {}"
-msgstr ""
+msgstr "🎯 最新兼容版本：{}"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:14959
-#, fuzzy
 msgid "    ⚠️ Error sorting versions: {}"
-msgstr ""
+msgstr "⚠️ 版本排序错误：{}"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:14965
-#, fuzzy
 msgid "    ❌ Quick compatibility check failed: {}"
-msgstr ""
+msgstr "❌ 快速兼容性检查失败：{}"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:15059
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:15482
-#, fuzzy
 msgid "    📦 Latest PyPI version: {}"
-msgstr ""
+msgstr "📦 最新 PyPI 版本：{}"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:15117
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:15506
-#, fuzzy
 msgid "    📋 Currently installed version: {}"
-msgstr ""
+msgstr "📋 当前安装的版本：{}"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:15120
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:15509
-#, fuzzy
 msgid "    🚀 JACKPOT! Latest PyPI version {} is already installed!"
-msgstr ""
+msgstr "🚀 最新版本的PyPI {} 已经安装好了!"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:15138
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:15527
-#, fuzzy
 msgid "    📋 Package '{}' is not currently installed"
-msgstr ""
+msgstr "📋 包裹 '{}'当前未安装"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:15142
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:15531
-#, fuzzy
 msgid "    ❌ Package '{}' not found on PyPI (404 error)"
-msgstr ""
+msgstr "❌ 包裹 '{}' 在 PyPI 上找不到（404 错误）"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:15149
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:15538
-#, fuzzy
 msgid "    ❌ Could not fetch PyPI data (status: {})"
-msgstr ""
+msgstr "❌ 无法获取 PyPI 数据(状态: {})"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:15154
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:15542
-#, fuzzy
 msgid "    ❌ Network error checking PyPI: {}"
-msgstr ""
+msgstr "❌ 网络错误检查 PyPI: {}"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:15157
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:15545
-#, fuzzy
 msgid "    ❌ Error checking PyPI: {}"
-msgstr ""
+msgstr "❌ 检查错误 PyPI: {}"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:15177
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:15565
-#, fuzzy
 msgid "    ⚠️ Quick compatibility check failed: {}"
-msgstr ""
+msgstr "⚠️ 快速兼容性检查失败：{}"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:15045
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:15195
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:15583
-#, fuzzy
 msgid "    ⚠️ Test installation approach failed: {}"
-msgstr ""
+msgstr "⚠️ 测试安装方法失败：{}"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:15231
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:15619
-#, fuzzy
 msgid "    ❌ Package '{}' appears to not exist or be accessible"
-msgstr ""
+msgstr "❌ 包裹 '{}' 似乎不存在或无法访问"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:15277
-#, fuzzy
 msgid "Requirement already satisfied:\\s+{}-([^\\s]+)"
-msgstr ""
+msgstr "要求已满足：\\s+{}-([^\\s]+)"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:15276
-#, fuzzy
 msgid "Requirement already satisfied:\\s+{}==([^\\s]+)"
-msgstr ""
+msgstr "要求已满足：\\s+{}==([^\\s]+)"
 
+# (Validation Failed: placeholder_mismatch)
 # Lollama: Skipped (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:15275
 #, fuzzy
 msgid "Requirement already satisfied:\\s+{}\\s+in\\s+[^\\s]+\\s+\\(([^)]+)\\)"
 msgstr ""
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:15314
-#, fuzzy
 msgid " ✅ Found latest version via pip index: {}"
-msgstr ""
+msgstr "✅ 通过 pip 索引找到最新版本：{}"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:15320
-#, fuzzy
 msgid ""
 "(?:Would install|Installing collected "
 "packages:|Collecting)\\s+{}-([0-9]+(?:\\.[0-9]+)*(?:[a-zA-Z0-9\\.-_]*)?)"
-msgstr ""
+msgstr "(?:会安装|安装收集的软件包:|收集) + {}-([0-9]+(?:\\.[0-9]+)*(?:[a-zA-Z0-9\\.-_]*)?)"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:15332
-#, fuzzy
 msgid " ✅ Pip resolver identified latest compatible version: {} (pattern {})"
-msgstr ""
+msgstr "✅ Pip resolver 确定了最新的兼容版本: {} (图案 {})"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:15365
-#, fuzzy
 msgid " ✅ Found installed version via pip list: {}"
-msgstr ""
+msgstr "✅ 通过 pip list 找到已安装的版本：{}"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:15369
-#, fuzzy
 msgid " -> pip list approach failed: {}"
-msgstr ""
+msgstr "-> pip list 方法失败：{}"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/tests/test_swap_install.py:48
-#, fuzzy
 msgid "--- Testing Rich in Python {} ---"
-msgstr ""
+msgstr "--- 用 Python 进行丰富的测试 {} ---"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/tests/test_swap_install.py:51
-#, fuzzy
 msgid "--- Interpreter Path: {} ---"
-msgstr ""
+msgstr "--- 解释器路径：{}---"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/tests/test_multiverse_analysis.py:114
 #: /home/minds3t/omnipkg/src/tests/test_pip_multiverse_analysis.py:62
-#, fuzzy
 msgid ""
 "\n"
 "▶️  Executing: {}"
-msgstr ""
+msgstr "▶️执行：{}"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/tests/test_multiverse_analysis.py:115
 #: /home/minds3t/omnipkg/src/tests/test_pip_multiverse_analysis.py:63
-#, fuzzy
 msgid "   Command: {}"
-msgstr ""
+msgstr "命令：{}"
 
 #: /home/minds3t/omnipkg/src/tests/test_multiverse_analysis.py:134
 #: /home/minds3t/omnipkg/src/tests/test_pip_multiverse_analysis.py:87
 msgid "   | {}"
 msgstr "   | {}"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/tests/test_swap_install.py:99
-#, fuzzy
 msgid "⚠️  Could not get environment ID: {}"
-msgstr ""
+msgstr "⚠️ 无法获取环境ID：{}"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/tests/test_swap_install.py:150
-#, fuzzy
 msgid "Could not find managed Python {} via 'omnipkg info python'."
-msgstr ""
+msgstr "无法通过 'omnipkg info python' 找到托管的 Python {}."
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/tests/test_swap_install.py:181
-#, fuzzy
 msgid "Switching context to {}"
-msgstr ""
+msgstr "将上下文切换到{}"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/tests/test_swap_install.py:228
-#, fuzzy
 msgid "Installing rich=={} in Python {} context"
-msgstr ""
+msgstr "在 Python {} 上下文中安装 rich=={}"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/tests/test_swap_install.py:329
-#, fuzzy
 msgid "📍 Initial Environment ID: {}"
-msgstr ""
+msgstr "📍 初始环境ID：{}"
 
-# Lollama: Skipped (Validation Failed: emoji_mismatch)
+# (Validation Failed: emoji_mismatch)
 #: /home/minds3t/omnipkg/src/tests/test_swap_install.py:335
-#, fuzzy
 msgid ""
 "\n"
 "🔍 Checking dimension prerequisites..."
-msgstr ""
+msgstr "🔍 检查尺寸先决条件..."
 
-# Lollama: Skipped (Validation Failed: translation_artifact_english)
+# (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/tests/test_swap_install.py:339
-#, fuzzy
 msgid "✅ All required dimensions are available."
-msgstr ""
+msgstr "✅ 所有所需的尺寸都可用."
 
-# Lollama: Skipped (Validation Failed: suspicious_length_ratio_9.72)
+# (Validation Failed: suspicious_length_ratio_9.72)
 #: /home/minds3t/omnipkg/src/tests/test_swap_install.py:376
-#, fuzzy
 msgid ""
 "\n"
 "📊 RESULTS SUMMARY:"
-msgstr ""
+msgstr "📊 结果摘要："
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/tests/test_swap_install.py:386
-#, fuzzy
 msgid "   Interpreter: {}"
-msgstr ""
+msgstr "翻译员：{}"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/tests/test_swap_install.py:402
-#, fuzzy
 msgid "✅ Verified {} different Rich versions: {}"
-msgstr ""
+msgstr "✅ 已验证{}不同的丰富版本：{}"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/tests/test_swap_install.py:407
-#, fuzzy
 msgid "✅ Verified {} different Python interpreters used"
-msgstr ""
+msgstr "✅ 已验证{}使用不同的Python解释器"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/tests/test_multiverse_analysis.py:250
 #: /home/minds3t/omnipkg/src/tests/test_pip_multiverse_analysis.py:181
 #: /home/minds3t/omnipkg/src/tests/test_swap_install.py:440
-#, fuzzy
 msgid ""
 "\n"
 "🌀 SAFETY PROTOCOL: Returning to original dimension (Python {})..."
-msgstr ""
+msgstr "🌀 安全协议：返回原始维度（Python {}）..."
 
-# Lollama: Skipped (Validation Failed: suspicious_length_ratio_12.50)
+# (Validation Failed: suspicious_length_ratio_12.50)
 #: /home/minds3t/omnipkg/src/tests/test_swap_install.py:468
-#, fuzzy
 msgid "  📊 TEST SUMMARY"
-msgstr ""
+msgstr "📊 测试摘要"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/deptimemachine.py:26
-#, fuzzy
 msgid ""
 "curl -s \"https://pypi.org/pypi/{}/json\" | jq -r "
 "'.releases.\"{}\"[0].upload_time_iso_8601'"
 msgstr ""
+"curl -s 'https://pypi.org/pypi/{}/json' | jq -r "
+"'.releases.'{}'[0].upload_time_iso_8601'"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/deptimemachine.py:33
-#, fuzzy
 msgid "Error fetching release date: {}"
-msgstr ""
+msgstr "错误获取发布日期: {}"
 
-# Lollama: Skipped (Validation Failed: language_mismatch_detected_en)
+# (Validation Failed: language_mismatch_detected_en)
 #: /home/minds3t/omnipkg/src/omnipkg/deptimemachine.py:42
-#, fuzzy
 msgid "Automating real install in a temporary environment..."
-msgstr ""
+msgstr "在临时环境中自动执行实际安装..."
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/deptimemachine.py:68
-#, fuzzy
 msgid "Error during real install automation: {}"
-msgstr ""
+msgstr "在实际安装自动化过程中发生错误：{}"
 
-# Lollama: Skipped (Validation Failed: suspicious_length_ratio_5.30)
+# (Validation Failed: suspicious_length_ratio_5.30)
 #: /home/minds3t/omnipkg/src/omnipkg/deptimemachine.py:72
-#, fuzzy
 msgid "Cleaned up temporary environment."
-msgstr ""
+msgstr "清理了临时环境."
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/deptimemachine.py:84
-#, fuzzy
 msgid "Error: Invalid date format: {}"
-msgstr ""
+msgstr "错误：无效日期格式：{}"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/deptimemachine.py:86
-#, fuzzy
 msgid ""
 "\n"
 "Finding historical versions before: {}"
-msgstr ""
+msgstr "查找之前的历史版本：{}"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/deptimemachine.py:88
-#, fuzzy
 msgid "  Processing {}..."
-msgstr ""
+msgstr "处理 {}..."
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/deptimemachine.py:116
-#, fuzzy
 msgid "    ✓ Found {}=={} (released {})"
-msgstr ""
+msgstr "✓ 找到{}=={}（发布{}\")}"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/deptimemachine.py:127
-#, fuzzy
 msgid "    ✗ Unexpected error processing {}: {}"
-msgstr ""
+msgstr "✗ 意外错误处理{}:{}"
 
-# Lollama: Skipped (Validation Failed: emoji_mismatch)
+# (Validation Failed: emoji_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/deptimemachine.py:135
-#, fuzzy
 msgid ""
 "\n"
 "🔧 Finding build-compatible versions..."
-msgstr ""
+msgstr "🔧 寻找构建兼容的版本..."
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/deptimemachine.py:146
-#, fuzzy
 msgid "  🔄 {}: {} → {} (compatibility fix)"
-msgstr ""
+msgstr "🔄 {}:{}→{}（兼容性修复）"
 
-# Lollama: Skipped (Validation Failed: suspicious_length_ratio_5.47)
+# (Validation Failed: suspicious_length_ratio_5.47)
 #: /home/minds3t/omnipkg/src/omnipkg/deptimemachine.py:161
-#, fuzzy
 msgid "📋 INITIAL DEPENDENCY RESOLUTION:"
-msgstr ""
+msgstr "📋 初始依赖解决方案："
 
 #: /home/minds3t/omnipkg/src/omnipkg/deptimemachine.py:164
 #: /home/minds3t/omnipkg/src/omnipkg/deptimemachine.py:165
 msgid "  {}=={}"
 msgstr "  {}=={}"
 
-# Lollama: Skipped (Validation Failed: language_mismatch_detected_en)
+# (Validation Failed: language_mismatch_detected_en)
 #: /home/minds3t/omnipkg/src/omnipkg/deptimemachine.py:180
-#, fuzzy
 msgid ""
 "\n"
 "❓ Do you want to execute this installation? (y/N): "
-msgstr ""
+msgstr "❓ 您想执行此安装吗？（是/否）："
 
-# Lollama: Skipped (Validation Failed: suspicious_length_ratio_5.30)
+# (Validation Failed: suspicious_length_ratio_5.30)
 #: /home/minds3t/omnipkg/src/omnipkg/deptimemachine.py:183
 #: /home/minds3t/omnipkg/src/omnipkg/deptimemachine.py:302
-#, fuzzy
 msgid "❌ Installation cancelled by user."
-msgstr ""
+msgstr "❌ 用户取消了安装。"
 
-# Lollama: Skipped (Validation Failed: suspicious_length_ratio_6.48)
+# (Validation Failed: suspicious_length_ratio_6.48)
 #: /home/minds3t/omnipkg/src/omnipkg/deptimemachine.py:185
-#, fuzzy
 msgid ""
 "\n"
 "🔧 Executing installation..."
-msgstr ""
+msgstr "🔧 正在执行安装..."
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/deptimemachine.py:193
-#, fuzzy
 msgid ""
 "\n"
 "🎯 Trying: {}"
-msgstr ""
+msgstr "🎯 尝试：{}"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/deptimemachine.py:208
-#, fuzzy
 msgid "✅ INSTALLATION COMPLETED SUCCESSFULLY! (using {})"
-msgstr ""
+msgstr "✅ 成功完成安装! ( 使用 {})"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/deptimemachine.py:214
-#, fuzzy
 msgid "❌ {} failed:"
-msgstr ""
+msgstr "❌ {}失败的："
 
 #: /home/minds3t/omnipkg/src/omnipkg/deptimemachine.py:218
 msgid "  {}"
 msgstr "  {}"
 
-# Lollama: Skipped (Validation Failed: language_mismatch_detected_en)
+# (Validation Failed: language_mismatch_detected_en)
 #: /home/minds3t/omnipkg/src/omnipkg/deptimemachine.py:222
-#, fuzzy
 msgid "❌ ALL INSTALLATION STRATEGIES FAILED!"
-msgstr ""
+msgstr "❌ 所有安装策略都失败了!"
 
-# Lollama: Skipped (Validation Failed: suspicious_length_ratio_12.50)
+# (Validation Failed: suspicious_length_ratio_12.50)
 #: /home/minds3t/omnipkg/src/omnipkg/deptimemachine.py:224
-#, fuzzy
 msgid "💡 Suggestions:"
-msgstr ""
+msgstr "💡 建议："
 
-# Lollama: Skipped (Validation Failed: language_mismatch_detected_en)
+# (Validation Failed: language_mismatch_detected_en)
 #: /home/minds3t/omnipkg/src/omnipkg/deptimemachine.py:225
-#, fuzzy
 msgid "  1. Try installing in a fresh Python 3.7 or 3.8 environment"
-msgstr ""
+msgstr "1.尝试在新的Python 3.7或3.8环境中安装"
 
+# (Validation Failed: translation_artifact_english)
 # Lollama: Skipped (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/omnipkg/deptimemachine.py:226
 #, fuzzy
 msgid "  2. Use older setuptools: pip install 'setuptools<58'"
 msgstr ""
 
-# Lollama: Skipped (Validation Failed: suspicious_length_ratio_6.48)
+# (Validation Failed: suspicious_length_ratio_6.48)
 #: /home/minds3t/omnipkg/src/omnipkg/deptimemachine.py:235
-#, fuzzy
 msgid ""
 "\n"
 "🔍 Verifying installation..."
-msgstr ""
+msgstr "🔍 正在验证安装..."
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/deptimemachine.py:255
-#, fuzzy
 msgid "  ✓ {}=={} (correct)"
-msgstr ""
+msgstr "✓ {}=={}（正确的）"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/deptimemachine.py:258
-#, fuzzy
 msgid "  ⚠️  {}=={} (expected {})"
-msgstr ""
+msgstr "⚠️ {}=={}（预计 {})"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/deptimemachine.py:263
-#, fuzzy
 msgid "  ❓ {}: Could not determine version"
-msgstr ""
+msgstr "❓ {}: 无法确定版本"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/deptimemachine.py:265
-#, fuzzy
 msgid "  ❌ {}: Not found or not installed"
-msgstr ""
+msgstr "❌ {}: 未找到或未安装"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/deptimemachine.py:285
-#, fuzzy
 msgid "🎯 Target: {}=={}"
-msgstr ""
+msgstr "🎯 目标：{}=={}"
 
-# Lollama: Skipped (Validation Failed: language_mismatch_detected_en)
+# (Validation Failed: language_mismatch_detected_en)
 #: /home/minds3t/omnipkg/src/omnipkg/deptimemachine.py:289
-#, fuzzy
 msgid "❌ Failed to get release date. Exiting."
-msgstr ""
+msgstr "❌ 没有找到发布日期."
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/deptimemachine.py:291
-#, fuzzy
 msgid "✓ Successfully retrieved release date: {}"
-msgstr ""
+msgstr "✓ 成功获取发布日期：{}"
 
-# Lollama: Skipped (Validation Failed: translation_artifact_english)
+# (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/omnipkg/deptimemachine.py:292
-#, fuzzy
 msgid ""
 "\n"
 "📦 Step 2: Getting actual dependencies via real install"
-msgstr ""
+msgstr "📦 步骤2:通过实际安装获得实际依赖"
 
-# Lollama: Skipped (Validation Failed: language_mismatch_detected_en)
+# (Validation Failed: language_mismatch_detected_en)
 #: /home/minds3t/omnipkg/src/omnipkg/deptimemachine.py:295
-#, fuzzy
 msgid "ℹ️ No dependencies found to process."
-msgstr ""
+msgstr "没有找到要处理的依赖项。"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
+# Lollama: Skipped (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/omnipkg/deptimemachine.py:296
 #, fuzzy
 msgid "pip install \"{}=={}\""
 msgstr ""
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/deptimemachine.py:297
-#, fuzzy
 msgid ""
 "\n"
 "🚀 Install command:\n"
 "{}"
-msgstr ""
+msgstr "🚀 安装命令：{}"
 
-# Lollama: Skipped (Validation Failed: language_mismatch_detected_en)
+# (Validation Failed: language_mismatch_detected_en)
 #: /home/minds3t/omnipkg/src/omnipkg/deptimemachine.py:299
-#, fuzzy
 msgid ""
 "\n"
 "❓ Do you want to install the target package? (y/N): "
-msgstr ""
+msgstr "❓ 您要安装目标包吗？（是/否）："
 
-# Lollama: Skipped (Validation Failed: language_mismatch_detected_en)
+# (Validation Failed: language_mismatch_detected_en)
 #: /home/minds3t/omnipkg/src/omnipkg/deptimemachine.py:306
-#, fuzzy
 msgid "✅ Target package installed successfully!"
-msgstr ""
+msgstr "✅ 目标包成功安装!"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/deptimemachine.py:308
-#, fuzzy
 msgid "❌ Failed to install target package: {}"
-msgstr ""
+msgstr "❌ 未能安装目标包: {}"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/deptimemachine.py:311
-#, fuzzy
 msgid "✓ Discovered dependencies: {}"
-msgstr ""
+msgstr "✓ 发现依赖关系：{}"
 
-# Lollama: Skipped (Validation Failed: emoji_mismatch)
+# (Validation Failed: emoji_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/deptimemachine.py:312
-#, fuzzy
 msgid ""
 "\n"
 "🔍 Step 3: Finding historical versions"
-msgstr ""
+msgstr "🔍 第三步：查找历史版本"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/deptimemachine.py:320
-#, fuzzy
 msgid ""
 "\n"
 "🎉 Complete! {}=={} and all historical dependencies are now installed."
-msgstr ""
+msgstr "🎉 完全的！{}=={}所有历史依赖项现已安装。"
 
-# Lollama: Skipped (Validation Failed: emoji_mismatch)
+# (Validation Failed: emoji_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/deptimemachine.py:325
-#, fuzzy
 msgid ""
 "📦 The packages are installed in your current Python environment and can be "
 "found"
-msgstr ""
+msgstr "📦 这些软件包已安装在您当前的 Python 环境中，并且可以找到"
 
-# Lollama: Skipped (Validation Failed: language_mismatch_detected_en)
+# (Validation Failed: language_mismatch_detected_en)
 #: /home/minds3t/omnipkg/src/omnipkg/deptimemachine.py:329
-#, fuzzy
 msgid ""
 "   in your site-packages directory, accessible to your Python interpreter."
-msgstr ""
+msgstr "在您的 site-packages 目录中，可供 Python 解释器访问。"
 
-# Lollama: Skipped (Validation Failed: language_mismatch_detected_en)
+# (Validation Failed: language_mismatch_detected_en)
 #: /home/minds3t/omnipkg/src/omnipkg/deptimemachine.py:334
-#, fuzzy
 msgid ""
 "\n"
 "❌ Could not resolve any dependencies. Exiting."
-msgstr ""
+msgstr "❌ 无法解决任何依赖关系。退出。"
 
-# Lollama: Skipped (Validation Failed: language_mismatch_detected_en)
+# (Validation Failed: language_mismatch_detected_en)
 #: /home/minds3t/omnipkg/src/omnipkg/deptimemachine.py:342
-#, fuzzy
 msgid ""
 "\n"
 "\n"
 "⏹️  Installation interrupted by user."
-msgstr ""
+msgstr "⏹️ 安装被用户中断。"
 
+# (Validation Failed: placeholder_mismatch)
 # Lollama: Skipped (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/deptimemachine.py:345
 #, fuzzy
@@ -4072,165 +3932,144 @@ msgid ""
 "💥 Unexpected error: {}"
 msgstr ""
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:293
-#, fuzzy
 msgid "🐍 [omnipkg loader] Running in Python {} context"
-msgstr ""
+msgstr "🐍 [omnipkg 加载程序] 在 Python 中运行{}语境"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:669
-#, fuzzy
 msgid "✅ [omnipkg loader] Using configured site-packages: {}"
-msgstr ""
+msgstr "[omnipkg loader] 使用配置好的 site-packages :{}"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:676
-#, fuzzy
 msgid ""
 "⚠️ [omnipkg loader] Configured site-packages path is not compatible with "
 "Python {}. Auto-detecting..."
-msgstr ""
+msgstr "⚠️ [omnipkg 加载器] 配置的 site-packages 路径与 Python {} 不兼容。正在自动检测..."
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:684
-#, fuzzy
 msgid ""
 "⚠️ [omnipkg loader] Config not provided or incomplete. Auto-detecting Python"
 " {}-compatible paths."
-msgstr ""
+msgstr "⚠️ [omnipkg loader] 配置未提供或不完整。自动检测 Python {} - 兼容的路径。"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:695
-#, fuzzy
 msgid "✅ [omnipkg loader] Created bubble directory: {}"
-msgstr ""
+msgstr "[omnipkg loader] 创建了气泡目录：{}"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:722
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:1000
-#, fuzzy
 msgid ""
 "🚫 [omnipkg loader] Rejecting incompatible path (contains python{}) for "
 "context python{}: {}"
-msgstr ""
+msgstr "🚫 [omnipkg loader] 拒绝上下文 python{} 的不兼容路径（包含 python{}）：{}"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:738
-#, fuzzy
 msgid "✅ [omnipkg loader] Auto-detected compatible site-packages: {}"
-msgstr ""
+msgstr "[omnipkg loader] 自动检测兼容的站点包：{}"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:750
-#, fuzzy
 msgid "✅ [omnipkg loader] Using sys.prefix-based site-packages: {}"
-msgstr ""
+msgstr "[omnipkg loader] 使用基于 sys.prefix 的 site-packages：{}"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:761
-#, fuzzy
 msgid "✅ [omnipkg loader] Using sys.path-derived site-packages: {}"
-msgstr ""
+msgstr "[omnipkg loader] 使用 sys.path 派生的站点包: {}"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:767
-#, fuzzy
 msgid "Could not auto-detect Python {}-compatible site-packages directory"
-msgstr ""
+msgstr "无法自动检测Python{}兼容的站点包目录"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:795
-#, fuzzy
 msgid ""
 "✅ [omnipkg loader] Stored clean original state with {} compatible paths"
-msgstr ""
+msgstr "✅ [omnipkg loader] 存储干净的原始状态{}兼容路径"
 
-# Lollama: Skipped (Validation Failed: emoji_mismatch)
+# (Validation Failed: emoji_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:3072
-#, fuzzy
 msgid ""
 "\n"
 "🔍 DEBUG: Python Version Compatibility Check"
-msgstr ""
+msgstr "🔍 DEBUG：Python版本兼容性检查"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:3073
-#, fuzzy
 msgid "Current Python version: {}"
-msgstr ""
+msgstr "当前Python版本：{}"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:3074
-#, fuzzy
 msgid "Site-packages root: {}"
-msgstr ""
+msgstr "网站包根: {}"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:3076
-#, fuzzy
 msgid "Compatible: {}"
-msgstr ""
+msgstr "兼容：{}"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:3078
-#, fuzzy
 msgid ""
 "\n"
 "🔍 Current sys.path compatibility ({} entries):"
-msgstr ""
+msgstr "🔍 当前 sys.path 兼容性（{}条目）："
 
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:3087
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:3486
 msgid "   [{}] {} {}"
 msgstr "   [{}] {} {}"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:3089
-#, fuzzy
 msgid ""
 "\n"
 "📊 Summary: {}/{} paths are Python {}-compatible"
-msgstr ""
+msgstr "📊 摘要：{}/{}路径与Python{}兼容"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:3482
-#, fuzzy
 msgid ""
 "\n"
 "🔍 DEBUG: Current sys.path ({} entries):"
-msgstr ""
+msgstr "🔍 现在的 sys.path ({} 条目):"
 
-# Lollama: Skipped (Validation Failed: translation_artifact_english)
+# (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:3491
-#, fuzzy
 msgid ""
 "\n"
 "🔍 DEBUG: Detected omnipkg dependencies:"
-msgstr ""
+msgstr "🔍 调试：检测到omnipkg依赖项："
 
-# Lollama: Skipped (Validation Failed: translation_artifact_english)
+# (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:3493
-#, fuzzy
 msgid "   ❌ No dependencies detected"
-msgstr ""
+msgstr "❌ 没有发现的依赖性"
 
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:3497
 msgid "   {} {}: {}"
 msgstr "   {} {}: {}"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/package_meta_builder.py:341
-#, fuzzy
 msgid "         Found {} vendored dist-info directories"
-msgstr ""
+msgstr "找到 {} 供应商 dist-info 目录"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/package_meta_builder.py:360
-#, fuzzy
 msgid "✅ Found VENDORED {} v{} (inside {}) at {}"
-msgstr ""
+msgstr "✅ 发现已出售{}v{}（里面{}） 在{}"
 
+# (Validation Failed: placeholder_mismatch)
 # Lollama: Skipped (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/package_meta_builder.py:406
 #: /home/minds3t/omnipkg/src/omnipkg/package_meta_builder.py:531
@@ -4238,672 +4077,587 @@ msgstr ""
 msgid "✅ Found {} v{} at {}"
 msgstr ""
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/package_meta_builder.py:476
-#, fuzzy
 msgid "✅ Found nested {} v{} at {}"
-msgstr ""
+msgstr "✅ 在 {} 处找到嵌套的 {} v{}"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/package_meta_builder.py:679
-#, fuzzy
 msgid "❌ Could not parse spec '{}': {}"
-msgstr ""
+msgstr "❌ 无法解析规范'{}':{}"
 
-# Lollama: Skipped (Validation Failed: language_mismatch_detected_en)
+# (Validation Failed: language_mismatch_detected_en)
 #: /home/minds3t/omnipkg/src/omnipkg/package_meta_builder.py:1325
-#, fuzzy
 msgid " ⚠️ Could not parse safety JSON output."
-msgstr ""
+msgstr "⚠️ 无法解析安全 JSON 输出。"
 
-# Lollama: Skipped (Validation Failed: language_mismatch_detected_en)
+# (Validation Failed: language_mismatch_detected_en)
 #: /home/minds3t/omnipkg/src/omnipkg/package_meta_builder.py:1512
-#, fuzzy
 msgid "❌ Cache client not available to the builder. Aborting."
-msgstr ""
+msgstr "❌ Cache 客户端不适用于建筑师. 堕胎。"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
+# Lollama: Skipped (Validation Failed: identical_to_original)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:4383
 #: /home/minds3t/omnipkg/src/omnipkg/package_meta_builder.py:2031
 #, fuzzy
 msgid "    mod = importlib.import_module('{}')"
 msgstr ""
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
+# Lollama: Skipped (Validation Failed: identical_to_original)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:4387
 #, fuzzy
 msgid "    results.append(('{}', False, str(e)))"
 msgstr ""
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
+# Lollama: Skipped (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:4385
 #, fuzzy
 msgid "    results.append(('{}', True, version))"
 msgstr ""
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:4381
 #: /home/minds3t/omnipkg/src/omnipkg/package_meta_builder.py:2029
-#, fuzzy
 msgid "# Testing import: {}"
-msgstr ""
+msgstr "# 测试导入：{}"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:4435
 #: /home/minds3t/omnipkg/src/omnipkg/package_meta_builder.py:2080
 #: /home/minds3t/omnipkg/src/tests/test_loader_stress_test.py:4013
-#, fuzzy
 msgid "Subprocess failed: {}"
-msgstr ""
+msgstr "子进程失败：{}"
 
+# (Validation Failed: translation_artifact_english)
 # Lollama: Skipped (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/omnipkg/package_meta_builder.py:2421
 #, fuzzy
 msgid "🚀 Starting omnipkg Metadata Builder v12 (SQLite/Redis Edition)..."
 msgstr ""
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/package_meta_builder.py:2429
-#, fuzzy
 msgid "   (Inherited environment ID: {})"
-msgstr ""
+msgstr "(继承的环境 ID :{})"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/package_meta_builder.py:2439
-#, fuzzy
 msgid "   (Calculated environment ID: {})"
-msgstr ""
+msgstr "(计算环境ID: {})"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/package_meta_builder.py:2452
-#, fuzzy
 msgid "   (Using SQLite cache at: {})"
-msgstr ""
+msgstr "(使用 SQLite 缓存：{})"
 
-# Lollama: Skipped (Validation Failed: language_mismatch_detected_en)
+# (Validation Failed: language_mismatch_detected_en)
 #: /home/minds3t/omnipkg/src/omnipkg/package_meta_builder.py:2462
-#, fuzzy
 msgid "❌ Failed to connect to SQLite cache. Aborting."
-msgstr ""
+msgstr "❌ 无法连接到 SQLite 缓存。正在流产。"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/tests/test_multiverse_analysis.py:109
-#, fuzzy
 msgid "Error in modern payload: {}"
-msgstr ""
+msgstr "现代有效负载中的错误：{}"
 
-# Lollama: Skipped (Validation Failed: suspicious_length_ratio_9.21)
+# (Validation Failed: suspicious_length_ratio_9.21)
 #: /home/minds3t/omnipkg/src/tests/test_multiverse_analysis.py:116
 #: /home/minds3t/omnipkg/src/tests/test_pip_multiverse_analysis.py:64
-#, fuzzy
 msgid "   --- Live Output ---"
-msgstr ""
+msgstr "--- 实时输出 ---"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/tests/test_multiverse_analysis.py:137
 #: /home/minds3t/omnipkg/src/tests/test_pip_multiverse_analysis.py:90
-#, fuzzy
 msgid "   | Error reading output: {}"
-msgstr ""
+msgstr "|读取输出时出错：{}"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/tests/test_multiverse_analysis.py:156
 #: /home/minds3t/omnipkg/src/tests/test_pip_multiverse_analysis.py:110
-#, fuzzy
 msgid "   ✅ Found at: {}"
-msgstr ""
+msgstr "✅ 发现于：{}"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/tests/test_multiverse_analysis.py:158
 #: /home/minds3t/omnipkg/src/tests/test_multiverse_healing.py:197
 #: /home/minds3t/omnipkg/src/tests/test_pip_multiverse_analysis.py:112
-#, fuzzy
 msgid "Could not find managed Python {}."
-msgstr ""
+msgstr "找不到托管 Python{}."
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/tests/test_multiverse_analysis.py:163
-#, fuzzy
 msgid ""
 "\n"
 "   🔧 Installing packages via OMNIPKG: {}"
-msgstr ""
+msgstr "🔧 通过 OMNIPKG 安装软件包：{}"
 
-# Lollama: Skipped (Validation Failed: emoji_mismatch)
+# (Validation Failed: emoji_mismatch)
 #: /home/minds3t/omnipkg/src/tests/test_multiverse_analysis.py:177
 #: /home/minds3t/omnipkg/src/tests/test_pip_multiverse_analysis.py:138
-#, fuzzy
 msgid ""
 "\n"
 "📦 MISSION STEP 1: Setting up Python 3.9 dimension..."
-msgstr ""
+msgstr "📦 任务第 1 步：设置 Python 3.9 维度..."
 
-# Lollama: Skipped (Validation Failed: language_mismatch_detected_en)
+# (Validation Failed: language_mismatch_detected_en)
 #: /home/minds3t/omnipkg/src/tests/test_multiverse_analysis.py:185
-#, fuzzy
 msgid ""
 "\n"
 "   🧪 Executing legacy payload in Python 3.9..."
-msgstr ""
+msgstr "🧪 在 Python 3.9 中执行旧有效负载..."
 
-# Lollama: Skipped (Validation Failed: emoji_mismatch)
+# (Validation Failed: emoji_mismatch)
 #: /home/minds3t/omnipkg/src/tests/test_multiverse_analysis.py:197
 #: /home/minds3t/omnipkg/src/tests/test_pip_multiverse_analysis.py:157
-#, fuzzy
 msgid ""
 "\n"
 "📦 MISSION STEP 2: Setting up Python 3.11 dimension..."
-msgstr ""
+msgstr "📦 任务第 2 步：设置 Python 3.11 维度..."
 
-# Lollama: Skipped (Validation Failed: language_mismatch_detected_en)
+# (Validation Failed: language_mismatch_detected_en)
 #: /home/minds3t/omnipkg/src/tests/test_multiverse_analysis.py:206
-#, fuzzy
 msgid ""
 "\n"
 "   🧪 Executing modern payload in Python 3.11 using 'omnipkg run' to trigger auto-healing..."
-msgstr ""
+msgstr "🧪 使用 Python 3.11 执行现代有效载荷，通过 'omnipkg run' 触发自动修复..."
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/tests/test_multiverse_analysis.py:229
 #: /home/minds3t/omnipkg/src/tests/test_pip_multiverse_analysis.py:174
-#, fuzzy
 msgid ""
 "✅ Artifact processed by 3.11: TensorFlow prediction complete. Prediction: "
 "'{}'"
-msgstr ""
+msgstr "✅ 3.11处理的工件：TensorFlow预测完成。预言： '{}'"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/tests/test_multiverse_analysis.py:245
-#, fuzzy
 msgid "   Output: {}"
-msgstr ""
+msgstr "输出：{}"
 
-# Lollama: Skipped (Validation Failed: emoji_mismatch)
+# (Validation Failed: emoji_mismatch)
 #: /home/minds3t/omnipkg/src/tests/test_multiverse_analysis.py:332
-#, fuzzy
 msgid ""
 "🎉🎉🎉 MULTIVERSE ANALYSIS COMPLETE! Context switching, package management, and"
 " cross-dimensional validation working perfectly! 🎉🎉🎉"
-msgstr ""
+msgstr "🎉🎉🎉 多元宇宙分析完成！上下文切换、包管理和跨维度验证完美运行！ 🎉🎉🎉"
 
-# Lollama: Skipped (Validation Failed: emoji_mismatch)
+# (Validation Failed: emoji_mismatch)
 #: /home/minds3t/omnipkg/src/tests/test_multiverse_analysis.py:346
-#, fuzzy
 msgid ""
 "\n"
 "📊 Generated bar chart comparing SciPy, NumPy, and TensorFlow results. Visualize it in a Chart.js-compatible viewer!"
-msgstr ""
+msgstr "📊 生成的条形图比较了 SciPy、NumPy 和 TensorFlow 的结果,可在 Chart.js 兼容的查看器中进行可视化!"
 
-# Lollama: Skipped (Validation Failed: language_mismatch_detected_en)
+# (Validation Failed: language_mismatch_detected_en)
 #: /home/minds3t/omnipkg/src/tests/test_multiverse_healing.py:35
-#, fuzzy
 msgid ""
 "--- BOOTSTRAP: Main orchestrator process detected. Forcing Python 3.11 "
 "context. ---"
-msgstr ""
+msgstr "--- BOOTSTRAP：检测到主协调器进程。强制使用 Python 3.11 上下文。---"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/tests/test_multiverse_healing.py:41
-#, fuzzy
 msgid "   - Current Python is {}.{}. Relaunching is required."
-msgstr ""
+msgstr "- 当前Python是{}.{}。需要重新启动。"
 
-# Lollama: Skipped (Validation Failed: language_mismatch_detected_en)
+# (Validation Failed: language_mismatch_detected_en)
 #: /home/minds3t/omnipkg/src/tests/test_multiverse_healing.py:57
-#, fuzzy
 msgid "   - Python 3.11 not found, attempting to adopt it first..."
-msgstr ""
+msgstr "- 未找到 Python 3.11，尝试先采用它..."
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/tests/test_multiverse_healing.py:71
-#, fuzzy
 msgid "   - Found Python 3.11 at: {}"
-msgstr ""
+msgstr "- 在以下位置找到 Python 3.11：{}"
 
-# Lollama: Skipped (Validation Failed: suspicious_length_ratio_6.03)
+# (Validation Failed: suspicious_length_ratio_6.03)
 #: /home/minds3t/omnipkg/src/tests/test_multiverse_healing.py:72
-#, fuzzy
 msgid "   - Relaunching orchestrator..."
-msgstr ""
+msgstr "- 重新启动协调器..."
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/tests/test_multiverse_healing.py:80
-#, fuzzy
 msgid "FATAL BOOTSTRAP ERROR: Could not relaunch into Python 3.11. Error: {}"
-msgstr ""
+msgstr "致命引导错误：无法重新启动到 Python 3.11。错误：{}}\""
 
-# Lollama: Skipped (Validation Failed: language_mismatch_detected_en)
+# (Validation Failed: language_mismatch_detected_en)
 #: /home/minds3t/omnipkg/src/tests/test_multiverse_healing.py:86
-#, fuzzy
 msgid ""
 "--- BOOTSTRAP: Now running in Python 3.11. Aligning omnipkg context. ---"
-msgstr ""
+msgstr "--- BOOTSTRAP：现在在 Python 3.11 中运行。对齐omnipkg上下文。---"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/tests/test_multiverse_healing.py:143
-#, fuzzy
 msgid " Command: {}"
-msgstr ""
+msgstr "命令：{}"
 
-# Lollama: Skipped (Validation Failed: suspicious_length_ratio_9.21)
+# (Validation Failed: suspicious_length_ratio_9.21)
 #: /home/minds3t/omnipkg/src/tests/test_multiverse_healing.py:144
-#, fuzzy
 msgid " --- Live Output ---"
-msgstr ""
+msgstr "--- 实时输出 ---"
 
 #: /home/minds3t/omnipkg/src/tests/test_multiverse_healing.py:172
 msgid " | {}"
 msgstr " | {}"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/tests/test_multiverse_healing.py:245
-#, fuzzy
 msgid "DEBUG: Exit code: {}"
-msgstr ""
+msgstr "调试：退出代码：{}"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/tests/test_multiverse_healing.py:246
-#, fuzzy
 msgid "DEBUG: Stdout: '{}'"
-msgstr ""
+msgstr "调试：标准输出：'{}'"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/tests/test_multiverse_healing.py:247
-#, fuzzy
 msgid "DEBUG: Stderr: '{}'"
-msgstr ""
+msgstr "调试：标准错误：'{}'"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
+# Lollama: Skipped (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/tests/test_multiverse_healing.py:253
 #, fuzzy
 msgid "Stderr: {}"
 msgstr ""
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/tests/test_multiverse_healing.py:267
-#, fuzzy
 msgid "No JSON output found in legacy payload. Output was: {}"
-msgstr ""
+msgstr "没有在旧有效载荷中找到 JSON 输出。输入为: {}\",}"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/tests/test_pip_multiverse_analysis.py:117
-#, fuzzy
 msgid ""
 "\n"
 "   Installing packages: {}"
-msgstr ""
+msgstr "安装包：{}"
 
-# Lollama: Skipped (Validation Failed: proper_noun_mismatch_Python)
+# (Validation Failed: proper_noun_mismatch_Python)
 #: /home/minds3t/omnipkg/src/tests/test_pip_multiverse_analysis.py:146
-#, fuzzy
 msgid ""
 "\n"
 "   Executing legacy payload in Python 3.9..."
-msgstr ""
+msgstr "在 Python 3.9 中执行旧的有效载荷..."
 
-# Lollama: Skipped (Validation Failed: language_mismatch_detected_en)
+# (Validation Failed: language_mismatch_detected_en)
 #: /home/minds3t/omnipkg/src/tests/test_pip_multiverse_analysis.py:165
-#, fuzzy
 msgid ""
 "\n"
 "   Executing modern payload in Python 3.11..."
-msgstr ""
+msgstr "在 Python 3.11 中执行现代有效负载..."
 
-# Lollama: Skipped (Validation Failed: emoji_mismatch)
+# (Validation Failed: emoji_mismatch)
 #: /home/minds3t/omnipkg/src/tests/test_pip_multiverse_analysis.py:206
-#, fuzzy
 msgid ""
 "🎉🎉🎉 MULTIVERSE ANALYSIS COMPLETE! Context switching and package management "
 "working perfectly! 🎉🎉🎉"
-msgstr ""
+msgstr "🎉🎉🎉 多元宇宙分析完成！上下文切换和包管理完美运行！ 🎉🎉🎉"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/tests/test_old_rich.py:27
-#, fuzzy
 msgid "Incorrect rich version! Expected 13.4.2, got {}"
-msgstr ""
+msgstr "错误的富版本！预期版本号为13.4.2，实际收到{}}"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/tests/test_old_rich.py:32
-#, fuzzy
 msgid "✅ Successfully imported rich version: {}"
-msgstr ""
+msgstr "✅ 成功导入丰富版本：{}"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/tests/test_swap_install.py:381
-#, fuzzy
 msgid "Test {}: Python {} | Rich {}"
-msgstr ""
+msgstr "测试{}： Python{} | Rich {}\",}"
 
-# Lollama: Skipped (Validation Failed: translation_artifact_english)
+# (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/tests/test_swap_install.py:426
-#, fuzzy
 msgid ""
 "\n"
 "❌ A CRITICAL ERROR OCCURRED IN A SUBPROCESS."
-msgstr ""
+msgstr "❌ 一个子流程中发生了一个关键错误。"
 
-# Lollama: Skipped (Validation Failed: suspicious_length_ratio_25.00)
+# (Validation Failed: suspicious_length_ratio_25.00)
 #: /home/minds3t/omnipkg/src/tests/test_swap_install.py:429
-#, fuzzy
 msgid "STDOUT:"
-msgstr ""
+msgstr "标准输出："
 
-# Lollama: Skipped (Validation Failed: suspicious_length_ratio_25.00)
+# (Validation Failed: suspicious_length_ratio_25.00)
 #: /home/minds3t/omnipkg/src/tests/test_swap_install.py:431
-#, fuzzy
 msgid "STDERR:"
-msgstr ""
+msgstr "标准错误："
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/tests/test_uv_switching.py:199
-#, fuzzy
 msgid "   ✅ Swapped binary reported: {}"
-msgstr ""
+msgstr "✅ 交换的二进制文件报告：{}"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/apis/local_bridge.py:163
-#, fuzzy
 msgid "No free ports found between {} and {}"
-msgstr ""
+msgstr "{} 和 {} 之间未找到可用端口"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/apis/local_bridge.py:198
-#, fuzzy
 msgid "⛔ Invalid shell syntax: {}"
-msgstr ""
+msgstr "⛔ 无效的 shell 语法：{}"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/apis/local_bridge.py:207
-#, fuzzy
 msgid "⛔ Security: '{}' is disabled via Web."
-msgstr ""
+msgstr "⛔ 安全：'{}' 通过网络被禁用。"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/apis/local_bridge.py:211
-#, fuzzy
 msgid "⚠️ Unknown command '{}'."
-msgstr ""
+msgstr "⚠️ 未知命令 '{}'。"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/apis/local_bridge.py:224
-#, fuzzy
 msgid "⛔ Command '{}' doesn't accept arguments."
-msgstr ""
+msgstr "⛔ 命令 '{}' 不接受参数。"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/apis/local_bridge.py:229
-#, fuzzy
 msgid "⛔ Invalid argument format: '{}'."
-msgstr ""
+msgstr "⛔ 参数格式无效：'{}'。"
 
-# Lollama: Skipped (Validation Failed: language_mismatch_detected_en)
+# (Validation Failed: language_mismatch_detected_en)
 #: /home/minds3t/omnipkg/src/omnipkg/apis/local_bridge.py:235
-#, fuzzy
 msgid "⛔ Security: Argument contains blocked pattern."
-msgstr ""
+msgstr "⛔ 安全性：参数包含被阻止的模式。"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/apis/local_bridge.py:259
-#, fuzzy
 msgid "🔧 Auto-injected flag: {}"
-msgstr ""
+msgstr "🔧 自动注入标志：{}"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/apis/local_bridge.py:293
-#, fuzzy
 msgid ""
 "\n"
 "⚠️ Exit Code {}\n"
-msgstr ""
+msgstr "⚠️ 退出代码 {}"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/apis/local_bridge.py:299
-#, fuzzy
 msgid ""
 "\n"
 "System Error: {}\n"
-msgstr ""
+msgstr "系统错误：{}"
 
+# (Validation Failed: placeholder_mismatch)
 # Lollama: Skipped (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/apis/local_bridge.py:382
 #, fuzzy
 msgid "Failed to init DB: {}"
 msgstr ""
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/apis/local_bridge.py:410
-#, fuzzy
 msgid "Origin '{}' is not whitelisted."
-msgstr ""
+msgstr "来源'{}' 未列入白名单。"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/apis/local_bridge.py:427
 #: /home/minds3t/omnipkg/src/omnipkg/apis/local_bridge.py:453
 #: /home/minds3t/omnipkg/src/omnipkg/apis/local_bridge.py:500
-#, fuzzy
 msgid "DB Error: {}"
-msgstr ""
+msgstr "数据库错误：{}"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/apis/local_bridge.py:443
-#, fuzzy
 msgid "⚡ Executing: {}"
-msgstr ""
+msgstr "⚡ 执行：{}"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/apis/local_bridge.py:490
-#, fuzzy
 msgid ""
 "❌ Installation failed:\n"
 "{}"
-msgstr ""
+msgstr "❌ 安装失败：{}"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/apis/local_bridge.py:507
-#, fuzzy
 msgid "❌ System Error: {}"
-msgstr ""
+msgstr "❌ 系统错误：{}"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/apis/local_bridge.py:542
-#, fuzzy
 msgid "Failed to forward to Cloudflare: {}"
-msgstr ""
+msgstr "未能转发至 Cloudflare：{}"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/apis/local_bridge.py:546
-#, fuzzy
 msgid "Telemetry save failed: {}"
-msgstr ""
+msgstr "远程测量保存失败: {}"
 
-# Lollama: Skipped (Validation Failed: translation_artifact_english)
+# (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/omnipkg/apis/local_bridge.py:554
-#, fuzzy
 msgid "❌ Flask missing. Cannot start server."
-msgstr ""
+msgstr "❌ 没有瓶子,无法启动服务器."
 
 #: /home/minds3t/omnipkg/src/omnipkg/apis/local_bridge.py:560
 msgid "❌ {}"
 msgstr "❌ {}"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/apis/local_bridge.py:563
-#, fuzzy
 msgid "Local Port: {}"
-msgstr ""
+msgstr "地方港口: {}"
 
-# Lollama: Skipped (Validation Failed: language_mismatch_detected_en)
+# (Validation Failed: language_mismatch_detected_en)
 #: /home/minds3t/omnipkg/src/omnipkg/apis/local_bridge.py:583
-#, fuzzy
 msgid "❌ Dependencies missing. Please run: pip install flask flask-cors"
-msgstr ""
+msgstr "❌ 缺少依赖项。请运行：pip install flask flask-cors"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/apis/local_bridge.py:588
-#, fuzzy
 msgid "✅ Web bridge already running on port {}"
-msgstr ""
+msgstr "✅ 网桥已在端口上运行{}"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/apis/local_bridge.py:589
-#, fuzzy
 msgid "🌍 Dashboard: {}#{}"
-msgstr ""
+msgstr "🌍 仪表板：{}#{}"
 
-# Lollama: Skipped (Validation Failed: suspicious_length_ratio_7.29)
+# (Validation Failed: suspicious_length_ratio_7.29)
 #: /home/minds3t/omnipkg/src/omnipkg/apis/local_bridge.py:592
-#, fuzzy
 msgid "🚀 Starting web bridge..."
-msgstr ""
+msgstr "🚀 开始网络桥..."
 
-# Lollama: Skipped (Validation Failed: suspicious_length_ratio_5.30)
+# (Validation Failed: suspicious_length_ratio_5.30)
 #: /home/minds3t/omnipkg/src/omnipkg/apis/local_bridge.py:619
-#, fuzzy
 msgid "✅ Web bridge started successfully"
-msgstr ""
+msgstr "✅ 网桥成功启动"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/apis/local_bridge.py:620
-#, fuzzy
 msgid "🔗 Local Port: {}"
-msgstr ""
+msgstr "🔗 地方港口: {}"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
+# Lollama: Skipped (Validation Failed: identical_to_original)
 #: /home/minds3t/omnipkg/src/omnipkg/apis/local_bridge.py:621
 #, fuzzy
 msgid "📊 PID: {}"
 msgstr ""
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/apis/local_bridge.py:622
-#, fuzzy
 msgid "🌍 Dashboard: {}"
-msgstr ""
+msgstr "🌍 仪表板：{}"
 
-# Lollama: Skipped (Validation Failed: suspicious_length_ratio_5.83)
+# (Validation Failed: suspicious_length_ratio_5.83)
 #: /home/minds3t/omnipkg/src/omnipkg/apis/local_bridge.py:627
-#, fuzzy
 msgid "❌ Failed to start. Check logs."
-msgstr ""
+msgstr "❌ 启动失败。检查日志。"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/apis/local_bridge.py:630
-#, fuzzy
 msgid "❌ Launch error: {}"
-msgstr ""
+msgstr "❌ 启动错误：{}"
 
-# Lollama: Skipped (Validation Failed: suspicious_length_ratio_6.03)
+# (Validation Failed: suspicious_length_ratio_6.03)
 #: /home/minds3t/omnipkg/src/omnipkg/apis/local_bridge.py:636
-#, fuzzy
 msgid "⚠️  Web bridge is not running"
-msgstr ""
+msgstr "⚠️ Web桥未运行"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/apis/local_bridge.py:641
-#, fuzzy
 msgid "🛑 Stopping web bridge (PID: {})..."
-msgstr ""
+msgstr "🛑 停止网桥(PID: {})..."
 
-# Lollama: Skipped (Validation Failed: suspicious_length_ratio_8.75)
+# (Validation Failed: suspicious_length_ratio_8.75)
 #: /home/minds3t/omnipkg/src/omnipkg/apis/local_bridge.py:654
-#, fuzzy
 msgid "✅ Web bridge stopped"
-msgstr ""
+msgstr "✅ 网络桥停了"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/apis/local_bridge.py:657
-#, fuzzy
 msgid "❌ Error stopping: {}"
-msgstr ""
+msgstr "❌ 错误停止：{}"
 
-# Lollama: Skipped (Validation Failed: suspicious_length_ratio_6.73)
+# (Validation Failed: suspicious_length_ratio_6.73)
 #: /home/minds3t/omnipkg/src/omnipkg/apis/local_bridge.py:664
-#, fuzzy
 msgid "🔄 Restarting web bridge..."
-msgstr ""
+msgstr "🔄 重启网络桥接..."
 
-# Lollama: Skipped (Validation Failed: suspicious_length_ratio_6.48)
+# (Validation Failed: suspicious_length_ratio_6.48)
 #: /home/minds3t/omnipkg/src/omnipkg/apis/local_bridge.py:672
-#, fuzzy
 msgid "❌ Web bridge is not running"
-msgstr ""
+msgstr "❌ 网桥不运行"
 
-# Lollama: Skipped (Validation Failed: suspicious_length_ratio_6.25)
+# (Validation Failed: suspicious_length_ratio_6.25)
 #: /home/minds3t/omnipkg/src/omnipkg/apis/local_bridge.py:673
-#, fuzzy
 msgid ""
 "\n"
 "💡 Start with: 8pkg web start"
-msgstr ""
+msgstr "💡 从: 8pkg web start"
 
-# Lollama: Skipped (Validation Failed: language_mismatch_detected_en)
+# (Validation Failed: language_mismatch_detected_en)
+# Lollama: Skipped (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/omnipkg/apis/local_bridge.py:677
 #, fuzzy
 msgid "⚠️  'psutil' not installed. Limited status info available."
 msgstr ""
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/apis/local_bridge.py:680
-#, fuzzy
 msgid "✅ Running (PID: {}, Port: {})"
-msgstr ""
+msgstr "✅ 运行中（PID：{}, 港口：{}）"
 
-# Lollama: Skipped (Validation Failed: suspicious_length_ratio_6.25)
+# (Validation Failed: suspicious_length_ratio_6.25)
 #: /home/minds3t/omnipkg/src/omnipkg/apis/local_bridge.py:692
-#, fuzzy
 msgid "✅ Web Bridge Status: RUNNING"
-msgstr ""
+msgstr "✅ 状态: 运行中"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/apis/local_bridge.py:694
-#, fuzzy
 msgid "🔗 Port:        {}"
-msgstr ""
+msgstr "🔗 港口：{}"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/apis/local_bridge.py:695
-#, fuzzy
 msgid "📊 PID:         {}"
-msgstr ""
+msgstr "📊 PID: {}"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/apis/local_bridge.py:697
-#, fuzzy
 msgid "⏱️  Uptime:      {}"
-msgstr ""
+msgstr "⏱️ 正常运行时间：{}"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/apis/local_bridge.py:698
-#, fuzzy
 msgid "🌍 Dashboard:   {}#{}"
-msgstr ""
+msgstr "🌍 仪表板：{}#{}"
 
-# Lollama: Skipped (Validation Failed: language_mismatch_detected_en)
+# (Validation Failed: language_mismatch_detected_en)
 #: /home/minds3t/omnipkg/src/omnipkg/apis/local_bridge.py:702
-#, fuzzy
 msgid "⚠️  PID file exists but process is dead. Cleaning up..."
-msgstr ""
+msgstr "⚠️ PID文件存在但进程已终止。正在清理中..."
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/apis/local_bridge.py:709
-#, fuzzy
 msgid "❌ Log file not found: {}"
-msgstr ""
+msgstr "❌ 未找到日志文件：{}"
 
-# Lollama: Skipped (Validation Failed: emoji_mismatch)
+# (Validation Failed: emoji_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/apis/local_bridge.py:713
-#, fuzzy
 msgid "📝 Following logs (Ctrl+C to stop)...\n"
-msgstr ""
+msgstr "📝 后续日志 (按Ctrl+C停止)..."
 
-# Lollama: Skipped (Validation Failed: suspicious_length_ratio_7.29)
+# (Validation Failed: suspicious_length_ratio_7.29)
 #: /home/minds3t/omnipkg/src/omnipkg/apis/local_bridge.py:730
-#, fuzzy
 msgid ""
 "\n"
 "✅ Stopped following logs"
-msgstr ""
+msgstr "✅ 停止关注日志"
 
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:66
 #: /home/minds3t/omnipkg/src/omnipkg/common_utils.py:370
@@ -4915,7 +4669,8 @@ msgstr ""
 "\n"
 "{}"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
+# Lollama: Skipped (Validation Failed: identical_to_original)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:67
 #: /home/minds3t/omnipkg/src/omnipkg/common_utils.py:371
 #, fuzzy
@@ -4928,13 +4683,15 @@ msgstr ""
 msgid "{}"
 msgstr "{}"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
+# Lollama: Skipped (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:69
 #: /home/minds3t/omnipkg/src/omnipkg/common_utils.py:373
 #, fuzzy
 msgid "📍 sys.executable:        {}"
 msgstr ""
 
+# (Validation Failed: placeholder_mismatch)
 # Lollama: Skipped (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:70
 #: /home/minds3t/omnipkg/src/omnipkg/common_utils.py:374
@@ -4942,26 +4699,25 @@ msgstr ""
 msgid "📍 sys.version:           {}"
 msgstr ""
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:72
 #: /home/minds3t/omnipkg/src/omnipkg/common_utils.py:376
-#, fuzzy
 msgid "📍 sys.version_info:      {}.{}.{}"
-msgstr ""
+msgstr "📍 sys.version_info: {}.{}.{}"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
+# Lollama: Skipped (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:74
 #: /home/minds3t/omnipkg/src/omnipkg/common_utils.py:378
 #, fuzzy
 msgid "📍 os.getpid():           {}"
 msgstr ""
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:76
 #: /home/minds3t/omnipkg/src/omnipkg/common_utils.py:380
-#, fuzzy
 msgid "📍 Path.cwd():            {}"
-msgstr ""
+msgstr "📍 Path.cwd(): {}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:97
 #: /home/minds3t/omnipkg/src/omnipkg/common_utils.py:401
@@ -4975,488 +4731,416 @@ msgstr "   [{}] {}"
 msgid "{}\n"
 msgstr "{}\n"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:112
 #: /home/minds3t/omnipkg/src/tests/test_cli_healing.py:58
-#, fuzzy
 msgid "   - 🔄 Temporarily switching install strategy to '{}'..."
-msgstr ""
+msgstr "- 🔄 暂时将安装策略切换为 '{}'..."
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:126
 #: /home/minds3t/omnipkg/src/tests/test_cli_healing.py:72
-#, fuzzy
 msgid "   - ✅ Strategy restored to '{}'"
-msgstr ""
+msgstr "- ✅策略恢复为'{}'"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:175
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:1451
-#, fuzzy
 msgid "🔄 Upgrading '{}' to latest version..."
-msgstr ""
+msgstr "🔄 升级'{}'到最新版本..."
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:211
-#, fuzzy
 msgid "❌ Error: Source test file {} not found."
-msgstr ""
+msgstr "❌ 错误：源测试文件{}未找到。"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:217
-#, fuzzy
 msgid "❌ Python {} is not managed by omnipkg."
-msgstr ""
+msgstr "❌ Python{}不由omnipkg 管理。"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:218
-#, fuzzy
 msgid "   Please adopt it first: {} python adopt {}"
-msgstr ""
+msgstr "請先接受: {}python 接受 {}\",}"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:232
-#, fuzzy
 msgid "   - Sterile script created at: {}"
-msgstr ""
+msgstr "- 无菌脚本创建于：{}"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:261
-#, fuzzy
 msgid "  - Diagnosis: This operation requires Python {}"
-msgstr ""
+msgstr "- 诊断：此操作需要 Python {}"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:263
-#, fuzzy
 msgid "  - Current Context: Python {}.{}"
-msgstr ""
+msgstr "- 当前上下文：Python{}.{}"
 
-# Lollama: Skipped (Validation Failed: language_mismatch_detected_en)
+# (Validation Failed: language_mismatch_detected_en)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:268
-#, fuzzy
 msgid ""
 "  - Action: omnipkg will now attempt to automatically configure the correct "
 "interpreter."
-msgstr ""
+msgstr "- 操作：omnipkg 现在将尝试自动配置正确的解释器。"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:277
-#, fuzzy
 msgid ""
 "\n"
 "   - Step 1: Adopting Python {}... (This may trigger a download)"
-msgstr ""
+msgstr "- 步骤 1: 采用 Python {}......(这可能引发下载)"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:283
-#, fuzzy
 msgid "   - ❌ Failed to adopt Python {}. Cannot proceed with healing."
-msgstr ""
+msgstr "- ❌ 未能采用 Python {}. 无法继续治疗。"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:288
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:9131
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:9158
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:9180
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:9195
-#, fuzzy
 msgid "   - ✅ Successfully adopted Python {}."
-msgstr ""
+msgstr "- ✅ 成功采用Python{}."
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:291
-#, fuzzy
 msgid ""
 "\n"
 "   - Step 2: Swapping active context to Python {}..."
-msgstr ""
+msgstr "- 第 2 步：将活动上下文交换到 Python{}..."
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:295
-#, fuzzy
 msgid "   - ❌ Failed to swap to Python {}. Please try manually."
-msgstr ""
+msgstr "- ❌ 切换Python失败{}.请手动尝试。"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:299
-#, fuzzy
 msgid "      Run: {} swap python {}"
-msgstr ""
+msgstr "运行：{} 交换 python {}\",}"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:303
-#, fuzzy
 msgid "   - ✅ Environment successfully configured for Python {}."
-msgstr ""
+msgstr "- ✅ 成功配置 Python 环境{}."
 
-# Lollama: Skipped (Validation Failed: suspicious_length_ratio_11.67)
+# (Validation Failed: suspicious_length_ratio_11.67)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:305
-#, fuzzy
 msgid "🚀 Proceeding..."
-msgstr ""
+msgstr "🚀 进行中..."
 
-# Lollama: Skipped (Validation Failed: language_mismatch_detected_en)
+# (Validation Failed: language_mismatch_detected_en)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:373
-#, fuzzy
 msgid "⚡ Non-interactive mode: Starting immediately..."
-msgstr ""
+msgstr "⚡ 非交互模式：立即开始..."
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:448
-#, fuzzy
 msgid "🚀 Running {} demo from source: {}..."
-msgstr ""
+msgstr "🚀 从源代码运行 {} 演示：{}..."
 
+# (Validation Failed: placeholder_mismatch)
 # Lollama: Skipped (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:454
 #, fuzzy
 msgid "❌ CRITICAL ERROR: Test file not found at: {}"
 msgstr ""
 
-# Lollama: Skipped (Validation Failed: language_mismatch_detected_en)
+# (Validation Failed: language_mismatch_detected_en)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:456
-#, fuzzy
 msgid ""
 " (This can happen if omnipkg is not installed in the target Python "
 "environment.)"
-msgstr ""
+msgstr "（如果目标 Python 环境中未安装omnipkg，则可能会发生这种情况。）"
 
-# Lollama: Skipped (Validation Failed: suspicious_length_ratio_6.73)
+# (Validation Failed: suspicious_length_ratio_6.73)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:462
-#, fuzzy
 msgid "📡 Live streaming output..."
-msgstr ""
+msgstr "📡 直播输出..."
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:464
-#, fuzzy
 msgid "(Executing with: {})"
-msgstr ""
+msgstr "(执行时：{})"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:510
-#, fuzzy
 msgid "❌ Demo failed with a critical error: {}"
-msgstr ""
+msgstr "❌ 演示失败并出现严重错误：{}"
 
-# Lollama: Skipped (Validation Failed: translation_artifact_english)
+# (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:575
-#, fuzzy
 msgid "Enable verbose output for detailed debugging"
-msgstr ""
+msgstr "启用详细输出以进行详细调试"
 
-# Lollama: Skipped (Validation Failed: language_mismatch_detected_en)
+# (Validation Failed: language_mismatch_detected_en)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:596
-#, fuzzy
 msgid "Force reinstall even if already satisfied"
-msgstr ""
+msgstr "强迫重新安装,即使已经满足"
 
-# Lollama: Skipped (Validation Failed: language_mismatch_detected_en)
+# (Validation Failed: language_mismatch_detected_en)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:598
-#, fuzzy
 msgid "Base URL of the Python Package Index"
-msgstr ""
+msgstr "Python 包索引的基本 URL"
 
-# Lollama: Skipped (Validation Failed: language_mismatch_detected_en)
+# (Validation Failed: language_mismatch_detected_en)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:599
-#, fuzzy
 msgid "Extra URLs of package indexes to use"
-msgstr ""
+msgstr "要使用的额外软件包索引 URL"
 
-# Lollama: Skipped (Validation Failed: language_mismatch_detected_en)
+# (Validation Failed: language_mismatch_detected_en)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:637
-#, fuzzy
 msgid "What to swap (e.g., \"python\", \"numpy==1.24.3\")"
-msgstr ""
+msgstr "换什么 (例如'python','numpy==1.24.3')"
 
-# Lollama: Skipped (Validation Failed: language_mismatch_detected_en)
+# (Validation Failed: language_mismatch_detected_en)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:677
-#, fuzzy
 msgid "Run a specific demo by number (1-11) to skip interactive menu"
-msgstr ""
+msgstr "按编号 (1-11) 运行特定演示以跳过交互式菜单"
 
-# Lollama: Skipped (Validation Failed: translation_artifact_english)
+# (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:682
-#, fuzzy
 msgid "Run in non-interactive mode (uses defaults)"
-msgstr ""
+msgstr "运行非互动模式 (默认使用)"
 
-# Lollama: Skipped (Validation Failed: suspicious_length_ratio_7.29)
+# (Validation Failed: suspicious_length_ratio_7.29)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:688
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:851
-#, fuzzy
 msgid "Skip confirmation prompt"
-msgstr ""
+msgstr "跳过确认提示"
 
-# Lollama: Skipped (Validation Failed: language_mismatch_detected_en)
+# (Validation Failed: language_mismatch_detected_en)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:728
-#, fuzzy
 msgid ""
 "Diagnose and repair a corrupted environment with conflicting package "
 "versions."
-msgstr ""
+msgstr "诊断并修复软件包版本冲突的损坏环境。"
 
-# Lollama: Skipped (Validation Failed: language_mismatch_detected_en)
+# (Validation Failed: language_mismatch_detected_en)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:730
-#, fuzzy
 msgid ""
 "🩺  Finds and removes orphaned package metadata ('ghosts') left behind\n"
 "   by failed or interrupted installations from other package managers."
 msgstr ""
+"🩺 查找并删除遗留的孤立包元数据（“幽灵”）\n"
+"由于其他包管理器的安装失败或中断。"
 
-# Lollama: Skipped (Validation Failed: language_mismatch_detected_en)
+# (Validation Failed: language_mismatch_detected_en)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:738
-#, fuzzy
 msgid ""
 "Diagnose the environment and show the healing plan without making any "
 "changes."
-msgstr ""
+msgstr "诊断环境并显示治疗计划，无需进行任何更改。"
 
-# Lollama: Skipped (Validation Failed: language_mismatch_detected_en)
+# (Validation Failed: language_mismatch_detected_en)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:745
-#, fuzzy
 msgid "Automatically confirm and proceed with healing without prompting."
-msgstr ""
+msgstr "自动确认并继续治疗，无需提示。"
 
-# Lollama: Skipped (Validation Failed: language_mismatch_detected_en)
+# (Validation Failed: language_mismatch_detected_en)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:778
-#, fuzzy
 msgid "Manage the persistent worker daemon"
-msgstr ""
+msgstr "管理持久的工人Daemon"
 
-# Lollama: Skipped (Validation Failed: suspicious_length_ratio_6.48)
+# (Validation Failed: suspicious_length_ratio_6.48)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:780
-#, fuzzy
 msgid "Start the background daemon"
-msgstr ""
+msgstr "启动背景 Daemon"
 
-# Lollama: Skipped (Validation Failed: suspicious_length_ratio_11.67)
+# (Validation Failed: suspicious_length_ratio_11.67)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:781
-#, fuzzy
 msgid "Stop the daemon"
-msgstr ""
+msgstr "停止守护进程"
 
-# Lollama: Skipped (Validation Failed: language_mismatch_detected_en)
+# (Validation Failed: language_mismatch_detected_en)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:782
-#, fuzzy
 msgid "Check daemon status and memory usage"
-msgstr ""
+msgstr "检查守护进程状态和内存使用情况"
 
-# Lollama: Skipped (Validation Failed: suspicious_length_ratio_6.73)
+# (Validation Failed: suspicious_length_ratio_6.73)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:785
-#, fuzzy
 msgid "View or follow daemon logs"
-msgstr ""
+msgstr "查看或跟踪守护程序日志"
 
-# Lollama: Skipped (Validation Failed: language_mismatch_detected_en)
+# (Validation Failed: language_mismatch_detected_en)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:790
-#, fuzzy
 msgid "Output appended data as the file grows"
-msgstr ""
+msgstr "随着文件的增长输出附加数据"
 
-# Lollama: Skipped (Validation Failed: suspicious_length_ratio_7.61)
+# (Validation Failed: suspicious_length_ratio_7.61)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:793
-#, fuzzy
 msgid "Output the last N lines"
-msgstr ""
+msgstr "输出最后的 N 线"
 
-# Lollama: Skipped (Validation Failed: language_mismatch_detected_en)
+# (Validation Failed: language_mismatch_detected_en)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:796
-#, fuzzy
 msgid "Live resource usage dashboard (TUI)"
-msgstr ""
+msgstr "实时资源使用仪表板 (TUI)"
 
-# Lollama: Skipped (Validation Failed: language_mismatch_detected_en)
+# (Validation Failed: language_mismatch_detected_en)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:802
-#, fuzzy
 msgid "Auto-refresh mode (dashboard style)"
-msgstr ""
+msgstr "自动刷新模式(仪表板风格)"
 
-# Lollama: Skipped (Validation Failed: suspicious_length_ratio_6.48)
+# (Validation Failed: suspicious_length_ratio_6.48)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:804
-#, fuzzy
 msgid "Manage the local web bridge"
-msgstr ""
+msgstr "管理本地网桥"
 
-# Lollama: Skipped (Validation Failed: suspicious_length_ratio_5.15)
+# (Validation Failed: suspicious_length_ratio_5.15)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:806
-#, fuzzy
 msgid "Start the web bridge in background"
-msgstr ""
+msgstr "在背景下启动网桥"
 
-# Lollama: Skipped (Validation Failed: suspicious_length_ratio_9.21)
+# (Validation Failed: suspicious_length_ratio_9.21)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:807
-#, fuzzy
 msgid "Stop the web bridge"
-msgstr ""
+msgstr "停止网桥"
 
-# Lollama: Skipped (Validation Failed: suspicious_length_ratio_7.61)
+# (Validation Failed: suspicious_length_ratio_7.61)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:808
-#, fuzzy
 msgid "Check web bridge status"
-msgstr ""
+msgstr "检查网桥状态"
 
-# Lollama: Skipped (Validation Failed: suspicious_length_ratio_7.95)
+# (Validation Failed: suspicious_length_ratio_7.95)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:809
-#, fuzzy
 msgid "Restart the web bridge"
-msgstr ""
+msgstr "重新启动网桥"
 
-# Lollama: Skipped (Validation Failed: suspicious_length_ratio_8.75)
+# (Validation Failed: suspicious_length_ratio_8.75)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:811
-#, fuzzy
 msgid "View web bridge logs"
-msgstr ""
+msgstr "查看网页桥梁日志"
 
-# Lollama: Skipped (Validation Failed: suspicious_length_ratio_5.83)
+# (Validation Failed: suspicious_length_ratio_5.83)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:815
-#, fuzzy
 msgid "Follow log output in real-time"
-msgstr ""
+msgstr "实时追踪日志输出"
 
-# Lollama: Skipped (Validation Failed: language_mismatch_detected_en)
+# (Validation Failed: language_mismatch_detected_en)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:821
-#, fuzzy
 msgid "Number of lines to show (default: 50)"
-msgstr ""
+msgstr "显示的行数（默认值：50）"
 
-# Lollama: Skipped (Validation Failed: language_mismatch_detected_en)
+# (Validation Failed: language_mismatch_detected_en)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:835
-#, fuzzy
 msgid "Upgrade omnipkg or other packages to the latest version"
-msgstr ""
+msgstr "升级 omnipkg 或其他包到最新版本"
 
-# Lollama: Skipped (Validation Failed: language_mismatch_detected_en)
+# (Validation Failed: language_mismatch_detected_en)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:856
-#, fuzzy
 msgid "Force upgrade even in a developer environment (use with caution)"
-msgstr ""
+msgstr "即使在开发环境中也强制升级（谨慎使用）"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:1037
-#, fuzzy
 msgid "  {} swap python==3.11     # Also works!"
-msgstr ""
+msgstr "{} swap python==3.11 # 也有效！"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:1039
-#, fuzzy
 msgid "  {} swap numpy==1.26.4    # Swap main env version to 1.26.4"
-msgstr ""
+msgstr "{} swap numpy==1.26.4 # 将主环境版本替换为 1.26.4"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:1088
-#, fuzzy
 msgid "🔄 Swapping main environment package to '{}'..."
-msgstr ""
+msgstr "🔄 将主环境包交换为 '{}'..."
 
-# Lollama: Skipped (Validation Failed: suspicious_length_ratio_6.03)
+# (Validation Failed: suspicious_length_ratio_6.03)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:1109
-#, fuzzy
 msgid "   • Python modules (e.g., rich)"
-msgstr ""
+msgstr "• Python 模块（例如 rich）"
 
-# Lollama: Skipped (Validation Failed: suspicious_length_ratio_6.25)
+# (Validation Failed: suspicious_length_ratio_6.25)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:1110
-#, fuzzy
 msgid "   • Binary packages (e.g., uv)"
-msgstr ""
+msgstr "• 二进制包（例如，uv\")}"
 
-# Lollama: Skipped (Validation Failed: language_mismatch_detected_en)
+# (Validation Failed: language_mismatch_detected_en)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:1111
-#, fuzzy
 msgid "   • C-extension packages (e.g., numpy, scipy)"
-msgstr ""
+msgstr "• C 扩展包（例如 numpy、scipy\")}"
 
-# Lollama: Skipped (Validation Failed: language_mismatch_detected_en)
+# (Validation Failed: language_mismatch_detected_en)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:1112
-#, fuzzy
 msgid "   • Complex dependency packages (e.g., TensorFlow)"
-msgstr ""
+msgstr "• 复杂的依赖包（例如TensorFlow\")}"
 
-# Lollama: Skipped (Validation Failed: emoji_mismatch)
+# (Validation Failed: emoji_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:1119
-#, fuzzy
 msgid "5. 🚀 Multiverse Healing Test (Cross-Python Hot-Swapping Mid-Script)"
-msgstr ""
+msgstr "5. 🚀 多元宇宙修复测试（跨Python热交换中间脚本\")}"
 
-# Lollama: Skipped (Validation Failed: language_mismatch_detected_en)
+# (Validation Failed: language_mismatch_detected_en)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:1121
-#, fuzzy
 msgid "6. Old Flask Test (legacy package healing) - Fully functional!"
-msgstr ""
+msgstr "6. 旧瓶测试(遗留包修复 ) - 功能全面!"
 
-# Lollama: Skipped (Validation Failed: language_mismatch_detected_en)
+# (Validation Failed: language_mismatch_detected_en)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:1122
-#, fuzzy
 msgid "7. Script-healing Test (omnipkg run scripts)"
-msgstr ""
+msgstr "7. 脚本修复测试（omnipkg 运行脚本\")}"
 
-# Lollama: Skipped (Validation Failed: emoji_mismatch)
+# (Validation Failed: emoji_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:1123
-#, fuzzy
 msgid "8. 🌠 Quantum Multiverse Warp (Concurrent Python Installations)"
-msgstr ""
+msgstr "8. 🌠 量子多重宇宙扭曲（并发 Python 安装\")}"
 
-# Lollama: Skipped (Validation Failed: language_mismatch_detected_en)
+# (Validation Failed: language_mismatch_detected_en)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:1124
-#, fuzzy
 msgid "9. Flask Port Finder Test (auto-healing with Flask)"
-msgstr ""
+msgstr "9. Flask Port Finder 测试（使用 Flask 自动修复）"
 
-# Lollama: Skipped (Validation Failed: language_mismatch_detected_en)
+# (Validation Failed: language_mismatch_detected_en)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:1125
-#, fuzzy
 msgid "10. CLI Healing Test (omnipkg run shell commands)"
-msgstr ""
+msgstr "10. CLI 修复测试（omnipkg 运行 shell 命令）"
 
-# Lollama: Skipped (Validation Failed: emoji_mismatch)
+# (Validation Failed: emoji_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:1126
-#, fuzzy
 msgid "11. 🌀 Chaos Theory Stress Test (Loader torture test)"
-msgstr ""
+msgstr "11. 🌀混沌理论压力测试（Loader折磨测试）"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:1133
-#, fuzzy
 msgid "🎯 Running demo {}..."
-msgstr ""
+msgstr "🎯 运行演示{}..."
 
-# Lollama: Skipped (Validation Failed: suspicious_length_ratio_7.00)
+# (Validation Failed: suspicious_length_ratio_7.00)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:1137
-#, fuzzy
 msgid "Enter your choice (1-11): "
-msgstr ""
+msgstr "输入您的选择 (1-11):"
 
-# Lollama: Skipped (Validation Failed: language_mismatch_detected_en)
+# (Validation Failed: language_mismatch_detected_en)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:1181
-#, fuzzy
 msgid "❌ Invalid choice. Please select 1 through 11."
-msgstr ""
+msgstr "❌ 不合格的选项 请选择 1 至 11."
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:1188
-#, fuzzy
 msgid ""
 "\n"
 "NOTE: The '{}' demo requires Python {}."
-msgstr ""
+msgstr "注意：'{}' 演示需要 Python {}."
 
-# Lollama: Skipped (Validation Failed: emoji_mismatch)
+# (Validation Failed: emoji_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:1203
-#, fuzzy
 msgid ""
 "🚀 This demo uses \"omnipkg run\" to showcase its auto-healing capabilities."
-msgstr ""
+msgstr "🚀 此演示使用'omnipkg run'来展示其自我修复功能."
 
-# Lollama: Skipped (Validation Failed: language_mismatch_detected_en)
+# (Validation Failed: language_mismatch_detected_en)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:1209
-#, fuzzy
 msgid ""
 "\n"
 "⚠️  The Chaos Theory test is interactive - you'll be prompted to select scenarios."
-msgstr ""
+msgstr "⚠️ 混沌理论测试是互动的 - 系统会提示您选择场景。"
 
 # Lollama: Skipped (Validation Failed: emoji_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:1213
