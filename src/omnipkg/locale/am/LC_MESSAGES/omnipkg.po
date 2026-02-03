@@ -1523,146 +1523,152 @@ msgstr "🧪 የአውድ አስተዳዳሪን በመሞከር ላይ..."
 
 #: /home/minds3t/omnipkg/src/omnipkg/CondaGuard.py:178
 msgid "   ...simulating deletion of '{}'"
-msgstr ""
+msgstr "የ '{}' መሰረዝን በማስመሰል ላይ"
 
 #: /home/minds3t/omnipkg/src/omnipkg/CondaGuard.py:180
 msgid "-> Leaving safe context..."
-msgstr ""
+msgstr "-> ከአስተማማኝ አውድ በመውጣት ላይ..."
 
 #: /home/minds3t/omnipkg/src/omnipkg/CondaGuard.py:181
 msgid ""
 "\n"
 "✅ Demo finished."
-msgstr ""
+msgstr "✅ የሞክሮ መጨረሻ"
 
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:971
 msgid "✅ Install strategy permanently set to: {}"
-msgstr ""
+msgstr "✅ ስልት በቋሚነት ተዘጋጅቷል ይጫኑ: {}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/common_utils.py:758
 msgid "🛡️ ConfigGuard: Activated temporary test configuration."
-msgstr ""
+msgstr "🛡 ️ ConfigGuard: አክቲባ ጊዜያዊ የሙከራ ውቅር."
 
 #: /home/minds3t/omnipkg/src/omnipkg/common_utils.py:768
 msgid "🛡️ ConfigGuard: Restored original user configuration."
-msgstr ""
+msgstr "🛡 ️ ConfigGuard፡ ወደነበረበት ተመልሷል የተጠቃሚ ውቅር።"
 
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:3192
 msgid " ⚠️ Warning: Could not remove existing cloak {}: {}"
-msgstr ""
+msgstr "⚠ ️ ማስጠንቀቂያ፡ የነበረውን ካባ ማስወገድ አልተቻለም{}:{}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/isolation/worker_daemon.py:1648
 msgid "   - {}"
-msgstr ""
+msgstr "   - {}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:965
 msgid "❌ Error: Invalid install strategy. Must be one of: {}"
-msgstr ""
+msgstr "❌ ስህተት፡ ልክ ያልሆነ የመጫኛ ስልት።አንዱ መሆን አለበት፡-{}}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:536
 msgid "🔥 Key Features:"
-msgstr ""
+msgstr "🔥 መለያዎች:"
 
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:537
 msgid "  • Runtime version switching without environment restart"
-msgstr ""
+msgstr "• ያለ አካባቢ ዳግም መጀመር የአሂድ ስሪት መቀየር"
 
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:538
 msgid "  • Automatic conflict resolution with intelligent bubbling"
-msgstr ""
+msgstr "• ብልህ አረፋ ጋር አውቶማቲክ ግጭት መፍትሔ"
 
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:541
 msgid "💡 Quick Start:"
-msgstr ""
+msgstr "💡 ፈጣን ጅምር:"
 
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:542
 msgid ""
 "  omnipkg install <package>      # Smart install with conflict resolution"
-msgstr ""
+msgstr "omnipkg install <package> # Smart install ከግጭት አፈታት ጋር"
 
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:543
 msgid "  omnipkg list                   # View installed packages and status"
-msgstr ""
+msgstr "omnipkg ዝርዝር # የተጫኑ ጥቅሎችን እና ሁኔታን ይመልከቱ"
 
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:544
 msgid "  omnipkg info <package>         # Interactive package explorer"
-msgstr ""
+msgstr "omnipkg መረጃ <package> # በይነተገናኝ አሳሽ"
 
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:545
 msgid "  omnipkg demo                   # Try version-switching demos"
-msgstr ""
+msgstr "omnipkg ማሳያ # የስሪት-መቀያየር ማሳያዎችን ይሞክሩ"
 
+# Lollama: Skipped (Validation Failed: proper_noun_mismatch_stress-test)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:546
+#, fuzzy
 msgid "  omnipkg stress-test            # See the magic in action"
 msgstr ""
 
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:548
 msgid "🛠️ Examples:"
-msgstr ""
+msgstr "🛠 ️ምሳሌ፡-"
 
+# Lollama: Skipped (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:549
+#, fuzzy
 msgid "  omnipkg install requests numpy>=1.20"
 msgstr ""
 
+# Lollama: Skipped (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:550
+#, fuzzy
 msgid "  omnipkg install uv==0.7.13 uv==0.7.14  # Multiple versions!"
 msgstr ""
 
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:551
 msgid "  omnipkg info tensorflow==2.13.0"
-msgstr ""
+msgstr "omnipkg መረጃ tensorflow==2.13.0"
 
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:552
 msgid "  omnipkg config set language es"
-msgstr ""
+msgstr "omnipkg ማዋቀር ቋንቋ es"
 
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:589
 msgid "Install from requirements file"
-msgstr ""
+msgstr "ከመስፈርቶች ጫን"
 
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:616
 msgid "Packages to uninstall"
-msgstr ""
+msgstr "ለማራገፍ ጥቅሎች"
 
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:629
 msgid "Package to inspect (e.g., \"requests\" or \"requests==2.28.1\")"
-msgstr ""
+msgstr "ማረጋገጫ ጥቅል (በ.ም. 'የተግበሪያዎች' ወይም 'መግቢያዎች==2.28.1')"
 
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:631
 msgid "Revert to last known good environment"
-msgstr ""
+msgstr "ወደ ቀድሞው ጥሩ አካባቢ ተመለስ"
 
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:641
 msgid "View all installed packages and their status"
-msgstr ""
+msgstr "ሁሉንም የተጫኑ ጥቅሎች እና ሁኔታቸውን ይመልከቱ"
 
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:671
 msgid "Environment health dashboard"
-msgstr ""
+msgstr "የአካባቢ ጤና ዳሽቦርድ"
 
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:684
 msgid "Ultimate demonstration with heavy packages"
-msgstr ""
+msgstr "አቅርቦት ፎቶዎች ጓደኞች"
 
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:690
 msgid "Rebuild the omnipkg knowledge base"
-msgstr ""
+msgstr "የ omnipkg የእውቀት መሰረትን እንደገና ገንባ"
 
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:698
 msgid "Force complete rebuild"
-msgstr ""
+msgstr "እንደገና እንዲገነባ አስገድድ"
 
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:701
 msgid "Delete config file for fresh setup"
-msgstr ""
+msgstr "የ Config ፋይበር ለመቀነስ አዲስ መሣሪያ"
 
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:706
 msgid "View or edit omnipkg configuration"
-msgstr ""
+msgstr "omnipkg ውቅርን ይመልከቱ ወይም አርትዕ"
 
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:715
 msgid "Configuration key to set"
-msgstr ""
+msgstr "ለማዋቀር የማዋቀሪያ ቁልፍ"
 
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:824
 msgid "Package whose bubbles to prune"

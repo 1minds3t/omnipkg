@@ -1897,12 +1897,17 @@ class WorkerPoolDaemon:
         self.max_idle_time = max_idle_time
         self.warmup_specs = warmup_specs or []
         self.workers: Dict[str, Dict[str, Any]] = {}
-        self.worker_locks: Dict[str, threading.RLock] = defaultdict(threading.RLock)
         self.pool_lock = threading.RLock()
         
-        # 🚀 IDLE WORKER POOL: Keep 3 bare Python processes ready
-        self.min_idle_workers = 3
-        self.idle_pool = queue.Queue(maxsize=self.min_idle_workers)
+        # 🚀 IDLE WORKER POOL: Keep bare Python processes ready per executable
+        # Key: python_exe path, Value: Queue of idle workers
+        self.idle_pools: Dict[str, queue.Queue] = defaultdict(lambda: queue.Queue(maxsize=10))
+        # Default configuration: 3 idle workers for the daemon's own python
+        self.idle_config: Dict[str, int] = {sys.executable: 3}
+        
+        self.running = True
+        self.socket_path = DEFAULT_SOCKET
+        
         self.running = True
         self.socket_path = DEFAULT_SOCKET
         self.stats = {
@@ -1947,17 +1952,34 @@ class WorkerPoolDaemon:
         self._run_socket_server()  # This is a blocking call that starts the server loop.
 
     def _maintain_idle_pool(self):
-        """🚀 Pre-spawns Python processes so they are ready instantly."""
+        """🚀 Pre-spawns Python processes for specific executables so they are ready instantly."""
         while self.running:
             try:
-                if self.idle_pool.qsize() < self.min_idle_workers:
-                    # Spawn a generic worker (no package spec yet)
-                    idle_worker = PersistentWorker(package_spec=None, defer_setup=True)
-                    self.idle_pool.put(idle_worker)
-                    safe_print(f"   💤 [DAEMON] Spawned idle worker (Pool size: {self.idle_pool.qsize()})", file=sys.stderr)
+                # Iterate over configured python executables and their target counts
+                # Use list(items) to safely iterate while potentially modifying elsewhere
+                for python_exe, target_count in list(self.idle_config.items()):
+                    pool = self.idle_pools[python_exe]
+                    
+                    if pool.qsize() < target_count:
+                        # Spawn a generic worker for this specific python executable
+                        idle_worker = PersistentWorker(package_spec=None, python_exe=python_exe, defer_setup=True)
+                        try:
+                            pool.put_nowait(idle_worker)
+                            safe_print(f"   💤 [DAEMON] Spawned idle worker for {python_exe} (Pool size: {pool.qsize()})", file=sys.stderr)
+                        except queue.Full:
+                            # If pool is full (e.g. config changed downward), kill the extra worker
+                            idle_worker.force_shutdown()
+                        except Exception as e:
+                            safe_print(f"   ⚠️ [DAEMON] Failed to spawn idle worker for {python_exe}: {e}", file=sys.stderr)
+                            # Avoid tight loop on failure
+                            time.sleep(1.0)
             except Exception:
                 pass
             time.sleep(0.5)
+
+    def set_idle_config(self, python_exe: str, count: int):
+        """Runtime configuration of idle pools."""
+        self.idle_config[python_exe] = count
 
     def _start_windows_daemon(self, wait_for_ready: bool = False):
         """Start daemon on Windows using subprocess."""
@@ -2278,6 +2300,12 @@ class WorkerPoolDaemon:
                 )
             elif req["type"] == "status":
                 res = self._get_status()
+            elif req["type"] == "configure_idle":
+                # { "type": "configure_idle", "python_exe": "...", "count": 5 }
+                p_exe = req.get("python_exe", sys.executable)
+                count = req.get("count", 3)
+                self.set_idle_config(p_exe, count)
+                res = {"success": True, "config": self.idle_config}
             elif req["type"] == "shutdown":
                 self.running = False
                 res = {"success": True}
@@ -2367,11 +2395,19 @@ class WorkerPoolDaemon:
             # Create worker - loader's __enter__ handles ALL the locking
             try:
                 try:
-                    # Instant spawn (0ms)
-                    worker = self.idle_pool.get_nowait()
-                    worker.assign_spec(spec)
-                except queue.Empty:
-                    # Fallback if queue empty (~30ms)
+                    # Instant spawn (0ms) - MUST match requested python_exe
+                    pool = self.idle_pools.get(python_exe)
+                    if pool:
+                        worker = pool.get_nowait()
+                        # Double check (paranoia)
+                        if worker.python_exe != python_exe:
+                            worker.force_shutdown()
+                            raise RuntimeError("Idle worker python mismatch")
+                        worker.assign_spec(spec)
+                    else:
+                        raise queue.Empty
+                except (queue.Empty, RuntimeError):
+                    # Fallback if queue empty or no pool exists for this exe (~30ms)
                     worker = PersistentWorker(spec, python_exe=python_exe)
 
                 with self.pool_lock:
@@ -2492,9 +2528,13 @@ class WorkerPoolDaemon:
                     # 🚀 ACQUIRE WORKER (IDLE POOL OR NEW)
                     try:
                         try:
-                            # Instant spawn from idle pool (0ms)
-                            worker = self.idle_pool.get_nowait()
-                            worker.assign_spec(spec)
+                            # Instant spawn from idle pool (0ms) - MUST match requested python_exe
+                            pool = self.idle_pools.get(python_exe)
+                            if pool:
+                                worker = pool.get_nowait()
+                                worker.assign_spec(spec)
+                            else:
+                                raise queue.Empty
                         except queue.Empty:
                             # Fallback if idle pool is empty (~30ms)
                             worker = PersistentWorker(spec, python_exe=python_exe)
