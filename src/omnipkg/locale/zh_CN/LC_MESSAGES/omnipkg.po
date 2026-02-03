@@ -5370,30 +5370,26 @@ msgstr "✅ 成功重新安装了'{}'"
 msgid "🚀 Re-running script after '{}' reinstallation..."
 msgstr "🚀 重新安装 '{}' 后重新运行脚本..."
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/commands/run.py:866
-#, fuzzy
 msgid "❌ Unexpected error during package reinstallation: {}"
-msgstr ""
+msgstr "❌ 软件包安装过程中出现意外错误：{}"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/commands/run.py:1386
-#, fuzzy
 msgid "INFO: Applying refactor heuristic. Guessing package is '{}'"
-msgstr ""
+msgstr "信息：应用重构启发式。猜测包是'{}'"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/commands/run.py:1395
-#, fuzzy
 msgid "INFO: Applying namespace heuristic. Guessing package is '{}'"
-msgstr ""
+msgstr "信息：应用命名空间启发式。猜测包是'{}'"
 
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+# (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/commands/run.py:1465
-#, fuzzy
 msgid ""
 "🚀 Attempt 2: FORCE REINSTALLING '{}' to fix potential binary corruption..."
-msgstr ""
+msgstr "🚀 尝试 2：强制重新安装 '{}' 修复潜在的二进制损坏..."
 
 # Lollama: Skipped (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/commands/run.py:1472
