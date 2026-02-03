@@ -1347,28 +1347,32 @@ class PersistentWorker:
     def assign_spec(self, package_spec: str):
         """Converts an IDLE worker into a specific package worker."""
         if self._is_ready: return
-        self.package_spec = package_spec
         
-        try:
-            # 1. Send the configuration to the waiting process
-            setup_cmd = json.dumps({"package_spec": self.package_spec})
-            self.process.stdin.write(setup_cmd + "\n")
-            self.process.stdin.flush()
-
-            # 2. Wait for READY signal (Imports happen here)
-            readable, unused, unused = select.select([self.process.stdout], [], [], 3000.0)
-            if readable:
-                ready_line = self.process.stdout.readline()
-                if ready_line and json.loads(ready_line.strip()).get("status") == "READY":
-                    self.last_health_check = time.time()
-                    self._is_ready = True
-                    return
-
-            raise RuntimeError("Worker failed to send READY status.")
-        except Exception as e:
-            self.force_shutdown()
-            raise RuntimeError(f"Worker spec assignment failed: {e}")
-
+        # Add file lock to prevent concurrent initialization races
+        lock_path = os.path.join(OMNIPKG_TEMP_DIR, f"worker_init_{id(self)}.lock")
+        lock = filelock.FileLock(lock_path, timeout=10)
+        
+        with lock:
+            self.package_spec = package_spec
+            try:
+                # 1. Send the configuration to the waiting process
+                setup_cmd = json.dumps({"package_spec": self.package_spec})
+                self.process.stdin.write(setup_cmd + "\n")
+                self.process.stdin.flush()
+                
+                # 2. Wait for READY signal (Imports happen here)
+                readable, unused, unused = select.select([self.process.stdout], [], [], 3000.0)
+                if readable:
+                    ready_line = self.process.stdout.readline()
+                    if ready_line and json.loads(ready_line.strip()).get("status") == "READY":
+                        self.last_health_check = time.time()
+                        self._is_ready = True
+                        return
+                raise RuntimeError("Worker failed to send READY status.")
+            except Exception as e:
+                self.force_shutdown()
+                raise RuntimeError(f"Worker spec assignment failed: {e}")
+                
     def wait_for_ready_with_activity_monitoring(self, process, timeout_idle_seconds=30.0):
         """
         Wait for worker READY signal while monitoring actual process activity.
