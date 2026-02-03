@@ -3196,16 +3196,16 @@ class BubbleIsolationManager:
         return True
 
     def install_and_verify(
-        self,
-        package_name: str,
-        version: str,
-        python_context_version: str,
-        destination_path: Path,
-        index_url: Optional[str] = None,
-        extra_index_url: Optional[str] = None,
-        python_exe_override: Optional[str] = None,
-        observed_dependencies: Optional[Dict[str, str]] = None,
-    ):
+            self,
+            package_name: str,
+            version: str,
+            python_context_version: str,
+            destination_path: Path,
+            index_url: Optional[str] = None,
+            extra_index_url: Optional[str] = None,
+            python_exe_override: Optional[str] = None,
+            observed_dependencies: Optional[Dict[str, str]] = None,
+        ):
         """
         (V8 - SMART STRATEGY WITH BUBBLE AWARENESS) 
         Builds a bubble and verifies using smart group-aware testing.
@@ -3220,6 +3220,10 @@ class BubbleIsolationManager:
             staging_path = Path(temp_dir)
             safe_print(f"   - 🏗️  Staging install for {package_name}=={version}...")
             
+            # Track if verification has been done
+            verification_passed = False
+            verification_already_done = False
+            
             # 1. Install to staging
             return_code, install_output = self.parent_omnipkg._run_pip_install(
                 [f"{package_name}=={version}"],
@@ -3229,7 +3233,6 @@ class BubbleIsolationManager:
                 extra_index_url=extra_index_url,
             )
 
-            verification_passed = False
             if return_code == 0:
                 safe_print("   - 🧪 Running SMART import verification...")
                 try:
@@ -3251,6 +3254,7 @@ class BubbleIsolationManager:
                     self.parent_omnipkg, package_name, version, staging_path, gatherer,
                     existing_bubble_paths=existing_bubble_paths
                 )
+                verification_already_done = True  # Mark as done
 
             # --- TIME MACHINE TRIGGER ---
             # Trigger if the initial modern install fails OR if its verification fails
@@ -3280,6 +3284,9 @@ class BubbleIsolationManager:
                     return False
 
                 safe_print(f"\n   ✅ TIME MACHINE: Successfully rebuilt {package_name}=={version} into staging area.")
+                # Reset verification status after TIME MACHINE rebuild
+                verification_passed = False
+                verification_already_done = False
             
             # 2. Find already-created bubbles for dependencies
             safe_print("   - 🔍 Locating dependency bubbles for verification...")
@@ -3293,66 +3300,40 @@ class BubbleIsolationManager:
                     safe_print(f"         📦 {bubble_path.name}")
             
             # 3. Use SMART verification strategy WITH bubble awareness
-            safe_print("   - 🧪 Running SMART import verification...")
-            try:
-                from .installation.verification_strategy import (
-                    verify_bubble_with_smart_strategy,
+            # ONLY if verification hasn't been done yet OR TIME MACHINE rebuilt
+            if not verification_already_done or not verification_passed:
+                safe_print("   - 🧪 Running SMART import verification...")
+                try:
+                    from .installation.verification_strategy import (
+                        verify_bubble_with_smart_strategy,
+                    )
+                    from .package_meta_builder import omnipkgMetadataGatherer
+                except ImportError:
+                    from omnipkg.installation.verification_strategy import (
+                        verify_bubble_with_smart_strategy,
+                    )
+                    from omnipkg.package_meta_builder import omnipkgMetadataGatherer
+                    
+                gatherer = omnipkgMetadataGatherer(
+                    config=self.parent_omnipkg.config,
+                    env_id=self.parent_omnipkg.env_id,
+                    omnipkg_instance=self.parent_omnipkg,
+                    target_context_version=python_context_version,
                 )
-            except ImportError:
-                from omnipkg.installation.verification_strategy import (
-                    verify_bubble_with_smart_strategy,
-                )
-            
-            # Instantiate gatherer
-            try:
-                from .package_meta_builder import omnipkgMetadataGatherer
-            except ImportError:
-                from omnipkg.package_meta_builder import omnipkgMetadataGatherer
                 
-            gatherer = omnipkgMetadataGatherer(
-                config=self.parent_omnipkg.config,
-                env_id=self.parent_omnipkg.env_id,
-                omnipkg_instance=self.parent_omnipkg,
-                target_context_version=python_context_version,
-            )
-            
-            # Run smart verification WITH dependency bubbles
-            verification_passed = verify_bubble_with_smart_strategy(
-                self.parent_omnipkg, 
-                package_name, 
-                version, 
-                staging_path, 
-                gatherer,
-                existing_bubble_paths=existing_bubble_paths  # NEW!
-            )
-            
-            if not verification_passed:
-                safe_print(f"   ❌ CRITICAL: Smart verification failed for '{package_name}'.")
-                # Don't trigger full rollback - let caller decide
-                return False
-            
-            # 4. Analyze and move
-            installed_tree = self._analyze_installed_tree(staging_path)
-            safe_print(_('   - 🚚 Moving verified build to bubble: {}').format(destination_path))
-            
-            # Python 3.7 compatible: remove destination if it exists, then copy
-            if destination_path.exists():
-                shutil.rmtree(destination_path)
-            shutil.copytree(staging_path, destination_path)
-            
-            stats = {
-                "total_files": sum(len(info.get("files", [])) for info in installed_tree.values())
-            }
-            
-            self._create_bubble_manifest(
-                destination_path,
-                installed_tree,
-                stats,
-                python_context_version=python_context_version,
-                observed_dependencies=observed_dependencies,
-            )
-            
-            return True
+                # Run smart verification WITH dependency bubbles
+                verification_passed = verify_bubble_with_smart_strategy(
+                    self.parent_omnipkg, 
+                    package_name, 
+                    version, 
+                    staging_path, 
+                    gatherer,
+                    existing_bubble_paths=existing_bubble_paths  # NEW!
+                )
+                
+                if not verification_passed:
+                    safe_print(f"   ❌ CRITICAL: Smart verification failed for '{package_name}'.")
+                    # Don't trigger full rollback -
 
     def _find_dependency_bubbles(
         self, package_name: str, bubble_dir: Path

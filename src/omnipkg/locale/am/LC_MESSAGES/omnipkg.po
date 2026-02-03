@@ -1886,35 +1886,40 @@ msgid ""
 "⚠️ Warning: Could not find registered Python 3.11 path after setup. Config "
 "may be incorrect."
 msgstr ""
+"⚠ ️ ግምገማ: የ Python 3.11 ማውረድ በኋላ የተመሠረተ መንገድ ማግኘት አይችልም. Config ሊሆን ይችላል."
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:737
 msgid ""
 "\n"
 "✅ Environment setup is complete!"
-msgstr ""
+msgstr "✅ የአካባቢ ማዋቀር ተጠናቅቋል!"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:761
 msgid "   - Registering current Python 3.11..."
-msgstr ""
+msgstr "- የአሁኑን Python 3.11 በመመዝገብ ላይ..."
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:813
 msgid "   - ✅ Created symlink: {} -> {}"
-msgstr ""
+msgstr "- ✅ የተፈጠረ ሲምሊክ፡-{}->{}"
 
+# Lollama: Skipped (Validation Failed: proper_noun_mismatch_Python)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:918
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:1608
+#, fuzzy
 msgid "🔧 Registering all managed Python interpreters..."
 msgstr ""
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:1691
 msgid "   ✅ Registered {} managed Python interpreters."
-msgstr ""
+msgstr "✅ ተመዝግቧል{}የሚተዳደር Python ተርጓሚዎች።"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:1856
 msgid "Unsupported operating system: {}"
-msgstr ""
+msgstr "ያልተደገፈ ስርዓተ ክወና: {}"
 
+# Lollama: Skipped (Validation Failed: proper_noun_mismatch_Python)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:1136
+#, fuzzy
 msgid "✅ Found existing Python 3.11 interpreter."
 msgstr ""
 
