@@ -1693,23 +1693,27 @@ msgstr "✅ የመጫኛ ስልት ለጊዜው ወደ የቅርብ ጊዜ-ገ�
 msgid "   ⚠️  Failed to set install strategy to latest-active: {}"
 msgstr ""
 
+# Lollama: Skipped (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:13070
+#, fuzzy
 msgid "   ℹ️  Continuing with current strategy: {}"
 msgstr ""
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:13073
 msgid "   ℹ️  Install strategy already set to latest-active"
-msgstr ""
+msgstr "ℹ️ የመጫን ስልት አስቀድሞ ወደ የቅርብ ጊዜ-ገባሪ ተቀናብሯል።"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:13084
 msgid "   🔄 Restoring original install strategy: {}"
-msgstr ""
+msgstr "🔄 የመጀመሪያውን የመጫኛ ስልት ወደነበረበት በመመለስ ላይ፡ {}\",}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:13100
 msgid "   ✅ Install strategy restored to: {}"
-msgstr ""
+msgstr "✅ የመጫን ስልት ወደ: {} ተመልሷል"
 
+# Lollama: Skipped (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:13107
+#, fuzzy
 msgid "   ⚠️  Failed to restore install strategy to {}: {}"
 msgstr ""
 
@@ -1718,16 +1722,20 @@ msgid ""
 "   💡 You may need to manually restore it with: omnipkg config set "
 "install_strategy {}"
 msgstr ""
+"💡 አንተ በእጅ ጋር መልሶ ማግኘት ሊያስፈልግህ ይችላል: omnipkg config set install_strategy "
+"{}\",}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:13117
 msgid "   ℹ️  Install strategy unchanged: {}"
-msgstr ""
+msgstr "i️ የመጫን ስልት ያልተለወጠ: {}"
 
 #: /home/minds3t/omnipkg/src/tests/test_uv_switching.py:232
 msgid "   ℹ️  Current install strategy: {}"
-msgstr ""
+msgstr "i️ የአሁኑ የመጫን ስልት: {}"
 
+# Lollama: Skipped (Validation Failed: proper_noun_mismatch_Python)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:524
+#, fuzzy
 msgid ""
 "🚀 The intelligent Python package manager that eliminates dependency hell "
 "(8pkg = ∞pkg)"
@@ -1735,7 +1743,7 @@ msgstr ""
 
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:634
 msgid "Swap Python versions or package environments"
-msgstr ""
+msgstr "የ Python ስሪቶችን ወይም የጥቅል አካባቢዎችን ይቀይሩ"
 
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:639
 msgid "Specific version to swap to"
