@@ -1359,32 +1359,18 @@ class PersistentWorker:
                 self.process.stdin.write(setup_cmd + "\n")
                 self.process.stdin.flush()
                 
-                # 2. Wait for READY signal (Imports happen here)
-                # WINDOWS FIX: select() only works on sockets on Windows
-                if IS_WINDOWS:
-                    # Poll-based approach for Windows
-                    start_time = time.time()
-                    while time.time() - start_time < 3000.0:
-                        line = self.process.stdout.readline()
-                        if line:
-                            if json.loads(line.strip()).get("status") == "READY":
-                                self.last_health_check = time.time()
-                                self._is_ready = True
-                                return
-                        if self.process.poll() is not None:
-                            raise RuntimeError("Worker process died during initialization")
-                        time.sleep(0.01)  # Small sleep to prevent CPU spin
-                    raise RuntimeError("Worker failed to send READY status (timeout)")
-                else:
-                    # Unix: use select
-                    readable, _, _ = select.select([self.process.stdout], [], [], 3000.0)
-                    if readable:
-                        ready_line = self.process.stdout.readline()
-                        if ready_line and json.loads(ready_line.strip()).get("status") == "READY":
-                            self.last_health_check = time.time()
-                            self._is_ready = True
-                            return
-                    raise RuntimeError("Worker failed to send READY status.")
+                # 2. Wait for READY with ACTIVITY MONITORING (not blind timeout)
+                ready_line = self.wait_for_ready_with_activity_monitoring(
+                    self.process, 
+                    timeout_idle_seconds=30.0  # Only timeout if truly idle
+                )
+                
+                if ready_line and json.loads(ready_line.strip()).get("status") == "READY":
+                    self.last_health_check = time.time()
+                    self._is_ready = True
+                    return
+                    
+                raise RuntimeError("Worker failed to send READY status.")
                     
             except Exception as e:
                 self.force_shutdown()
