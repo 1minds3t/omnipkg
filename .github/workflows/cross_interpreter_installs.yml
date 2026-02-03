@@ -212,4 +212,4 @@ jobs:
           echo "- ✅ Quantum Healing triggered on incompatibility" >> $GITHUB_STEP_SUMMARY
           echo "- ✅ **Python 3.13 auto-adopted during install** (the magic!)" >> $GITHUB_STEP_SUMMARY
           echo "- ✅ **Auto-switched from 3.14 → 3.13** (zero user intervention!)" >> $GITHUB_STEP_SUMMARY
-          echo "- ✅ TensorFlo
+          echo "- ✅ TensorFlow installed successfully" >> $GITHUB_STEP_SUMMARY
