@@ -1376,85 +1376,44 @@ class PersistentWorker:
                 self.force_shutdown()
                 raise RuntimeError(f"Worker spec assignment failed: {e}")
                 
-    def wait_for_ready_with_activity_monitoring(self, process, timeout_idle_seconds=30.0):
-        """Wait for worker READY signal while monitoring actual process activity."""
-        import psutil
-
+    def wait_for_ready_with_activity_monitoring(self, process, timeout_idle_seconds=300.0):
+        """Wait for worker READY signal with simple polling."""
         start_time = time.time()
-        last_activity_time = start_time
-        last_cpu_percent = 0.0
-        last_memory_mb = 0.0
-
-        try:
-            ps_process = psutil.Process(process.pid)
-        except psutil.NoSuchProcess:
-            raise RuntimeError("Worker process died immediately after spawn")
 
         while True:
-            # Check if process is still alive
+            # Check if process crashed
             if process.poll() is not None:
                 raise RuntimeError('Worker crashed during startup')
 
-            # PLATFORM-SPECIFIC: Check for READY on stdout
+            # Try to read READY signal
             if IS_WINDOWS:
-                # Windows: Use non-blocking readline with timeout
-                import msvcrt
-                import os
+                # Windows: threaded non-blocking read
+                import threading
+                result = [None]
                 
-                # Check if data is available (non-blocking peek)
-                if msvcrt.kbhit() if hasattr(msvcrt, 'kbhit') else False:
-                    ready_line = process.stdout.readline()
-                    if ready_line:
-                        return ready_line
-                else:
-                    # Try reading anyway (might block briefly)
-                    # Use a thread to timeout the read
-                    import threading
-                    result = [None]
-                    
-                    def try_read():
-                        try:
-                            result[0] = process.stdout.readline()
-                        except:
-                            pass
-                    
-                    t = threading.Thread(target=try_read, daemon=True)
-                    t.start()
-                    t.join(timeout=0.1)  # Wait 100ms max
-                    
-                    if result[0]:
-                        return result[0]
+                def try_read():
+                    try:
+                        result[0] = process.stdout.readline()
+                    except:
+                        pass
+                
+                t = threading.Thread(target=try_read, daemon=True)
+                t.start()
+                t.join(timeout=0.1)
+                
+                if result[0]:
+                    return result[0]
             else:
-                # Unix: Use select (works on pipes)
+                # Unix: select works
                 ready, _, _ = select.select([process.stdout], [], [], 0.1)
                 if ready:
                     ready_line = process.stdout.readline()
                     if ready_line:
                         return ready_line
 
-            # Monitor process activity (works on all platforms)
-            try:
-                cpu_percent = ps_process.cpu_percent(interval=0.1)
-                memory_mb = ps_process.memory_info().rss / 1024 / 1024
-
-                activity_detected = cpu_percent > 1.0 or memory_mb > last_memory_mb + 1.0
-
-                if activity_detected:
-                    last_activity_time = time.time()
-                    last_cpu_percent = cpu_percent
-                    last_memory_mb = memory_mb
-
-                # Check idle timeout
-                idle_duration = time.time() - last_activity_time
-
-                if idle_duration > timeout_idle_seconds:
-                    raise RuntimeError(
-                        f"Worker timeout: No activity for {idle_duration:.1f}s\n"
-                        f"CPU: {last_cpu_percent:.1f}%, Mem: {last_memory_mb:.1f}MB"
-                    )
-
-            except psutil.NoSuchProcess:
-                raise RuntimeError("Worker process disappeared")
+            # Simple timeout check
+            if time.time() - start_time > timeout_idle_seconds:
+                raise RuntimeError(f"Worker timeout after {timeout_idle_seconds}s")
 
             time.sleep(0.1)
 
