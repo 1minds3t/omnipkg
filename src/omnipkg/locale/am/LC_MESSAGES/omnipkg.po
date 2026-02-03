@@ -1808,23 +1808,25 @@ msgstr "ስሪት ይምረጡ (1-{}):"
 msgid "Python Interpreter Information"
 msgstr ""
 
+# Lollama: Skipped (Validation Failed: proper_noun_mismatch_Python)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:1363
+#, fuzzy
 msgid "🐍 Managed Python Versions (available for swapping):"
 msgstr ""
 
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:1370
 msgid "   • Python {}: {}{}"
-msgstr ""
+msgstr "• Python {}፡ {}{}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:1372
 msgid ""
 "\n"
 "🎯 Active Context: Python {}"
-msgstr ""
+msgstr "🎯 ንቁ አውድ: Python {}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:1373
 msgid "📍 Configured Path: {}"
-msgstr ""
+msgstr "📍 የተዋቀረ መንገድ፡-{}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:1377
 msgid ""
