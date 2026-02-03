@@ -1751,20 +1751,22 @@ msgstr "ለስዊፕ የተወሰነ ስሪት"
 
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:645
 msgid "Manage Python interpreters for the environment"
-msgstr ""
+msgstr "ለአካባቢው Python ተርጓሚዎችን ያስተዳድሩ"
 
+# Lollama: Skipped (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:648
+#, fuzzy
 msgid "Available subcommands:"
 msgstr ""
 
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:655
 msgid "Switch the active Python interpreter for this environment"
-msgstr ""
+msgstr "ለዚህ አካባቢ ንቁውን የ Python አስተርጓሚ ይቀይሩ"
 
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:1000
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:1007
 msgid "   • Python {}: {}"
-msgstr ""
+msgstr "• Python {}፡ {}\",}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:1027
 msgid "❌ Error: You must specify what to swap."
