@@ -1672,22 +1672,24 @@ msgstr "ለማዋቀር የማዋቀሪያ ቁልፍ"
 
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:824
 msgid "Package whose bubbles to prune"
-msgstr ""
+msgstr "አረፋው የሚቆረጥበት ጥቅል"
 
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:829
 msgid "Keep N most recent bubbled versions"
-msgstr ""
+msgstr "የቅርብ ልጥፍ ስሪት N ይቀላሉ"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:13045
 msgid ""
 "   ⚙️  Temporarily setting install strategy to latest-active for revert..."
-msgstr ""
+msgstr "⚙ ️ ለጊዜው የመጫኛ ስልትን ወደ የቅርብ ጊዜ-ገባሪ መልሶ ለመመለስ በማዋቀር..."
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:13061
 msgid "   ✅ Install strategy temporarily set to latest-active"
-msgstr ""
+msgstr "✅ የመጫኛ ስልት ለጊዜው ወደ የቅርብ ጊዜ-ገባሪ ተቀናብሯል።"
 
+# Lollama: Skipped (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:13067
+#, fuzzy
 msgid "   ⚠️  Failed to set install strategy to latest-active: {}"
 msgstr ""
 
