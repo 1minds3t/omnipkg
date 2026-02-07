@@ -3334,6 +3334,20 @@ class BubbleIsolationManager:
                 if not verification_passed:
                     safe_print(f"   ❌ CRITICAL: Smart verification failed for '{package_name}'.")
                     # Don't trigger full rollback -
+                    safe_print(f"   ❌ CRITICAL: Smart verification failed for '{package_name}'.")
+                    # Don't trigger full rollback - just return False
+                    return False
+            
+                # 4. Move to final destination if verification passed
+                if verification_passed:
+                    safe_print(f"   - 📦 Finalizing bubble for {package_name}=={version}...")
+                    destination_path.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.move(str(staging_path), str(destination_path))
+                    safe_print(f"   - ✅ Bubble created successfully at {destination_path}")
+                    return True
+                else:
+                    safe_print(f"   - ❌ Verification failed, bubble not created")
+                    return False
 
     def _find_dependency_bubbles(
         self, package_name: str, bubble_dir: Path
