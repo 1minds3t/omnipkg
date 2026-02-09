@@ -953,6 +953,9 @@ def main():
 
         args = parser.parse_args(remaining_args)
         # --- [ DAEMON PRE-FLIGHT CHECK & RELAUNCH ] ---
+        
+        # Determine if running in interactive mode
+        is_interactive = sys.stdin.isatty() and sys.stdout.isatty()
         # This is the safest place: after args are parsed, before core logic runs.
         # Commands that do NOT require the daemon to be running.
         DAEMONLESS_COMMANDS = [
@@ -1079,8 +1082,7 @@ def main():
                 return pkg_instance.switch_active_python(args.version)
             else:
                 parser.print_help()
-                    is_interactive = sys.stdin.isatty() and sys.stdout.isatty()
-            elif args.command == "swap":
+        elif args.command == "swap":
                 if not args.target:
                     safe_print(_("❌ Error: You must specify what to swap."))
                     safe_print(_("Examples:"))
