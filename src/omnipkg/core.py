@@ -2900,6 +2900,9 @@ class ConfigManager:
             safe_print(_("   ✅ Using default configuration (non-interactive mode)"))
 
         # Save configuration
+        # ENSURE PARENT DIRECTORY EXISTS
+        self.config_path.parent.mkdir(parents=True, exist_ok=True)
+
         try:
             with open(self.config_path, "r") as f:
                 full_config = json.load(f)
