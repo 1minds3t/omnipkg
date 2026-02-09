@@ -114,3 +114,4 @@ vendor/
 .devcontainer/
 site/
 *.so
+src/tests/debug_test*.py

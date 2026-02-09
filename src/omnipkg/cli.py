@@ -569,6 +569,11 @@ def create_parser():
         help=_("Override the display language for this command (e.g., es, de, ja)"),
     )
     parser.add_argument(
+        "--python",
+        metavar="VERSION",
+        help=_("Specify which Python version to use for this command (e.g. 3.10, 3.11)"),
+    )
+    parser.add_argument(
         "--verbose",
         "-V",
         action="store_true",
@@ -859,10 +864,29 @@ def create_parser():
     upgrade_parser.set_defaults(func=upgrade)
     return parser
 
-
 def main():
     """Main application entry point with pre-flight version check."""
     try:
+        # ═══════════════════════════════════════════════════════════
+        # 🎯 DETECT VERSION-SPECIFIC COMMAND (8pkg310, 8pkg311, etc.)
+        # ═══════════════════════════════════════════════════════════
+        prog_name = Path(sys.argv[0]).name.lower()
+        version_match = re.match(r"8pkg(\d)(\d+)", prog_name)
+        
+        if version_match:
+            major = version_match.group(1)
+            minor = version_match.group(2)
+            forced_version = f"{major}.{minor}"
+            
+            # 🎯 CRITICAL: Only inject if NOT already present
+            # This prevents double-injection and respects existing flags
+            if "--python" not in sys.argv:
+                sys.argv.insert(1, "--python")
+                sys.argv.insert(2, forced_version)
+                
+                if os.environ.get("OMNIPKG_DEBUG") == "1":
+                    print(f"[DEBUG-CLI] Detected: {prog_name} -> forcing --python {forced_version}", file=sys.stderr)
+        
         # 🎪 NORMALIZE FLAGS AND COMMANDS (but not package names)
         normalized_argv = [sys.argv[0]]
         for arg in sys.argv[1:]:
@@ -871,9 +895,7 @@ def main():
                 normalized_argv.append(arg.lower())
             else:
                 # Could be a command or package name
-                # We'll handle this more carefully
                 normalized_argv.append(arg)
-
         sys.argv = normalized_argv
 
         global_parser = argparse.ArgumentParser(add_help=False)
@@ -1058,41 +1080,23 @@ def main():
                 return pkg_instance.switch_active_python(args.version)
             else:
                 parser.print_help()
-                return 1
-        elif args.command == "upgrade":
-            return upgrade(args, pkg_instance)
         elif args.command == "swap":
             if not args.target:
                 safe_print(_("❌ Error: You must specify what to swap."))
                 safe_print(_("Examples:"))
-                safe_print(
-                    _("  {} swap python           # Interactive Python version picker").format(
-                        parser.prog
-                    )
-                )
-                safe_print(
-                    _("  {} swap python 3.11      # Switch to Python 3.11").format(parser.prog)
-                )
-                safe_print(_("  {} swap python==3.11     # Also works!").format(parser.prog))
-                safe_print(
-                    _("  {} swap numpy==1.26.4    # Swap main env version to 1.26.4").format(
-                        parser.prog
-                    )
-                )
+                safe_print(_("  {} swap python 3.11").format(parser.prog))
+                safe_print(_("  {} swap numpy==1.26.4").format(parser.prog))
                 return 1
 
-            # --- Python Swapping Logic (Minimal Core is fine) ---
+            # --- Python "Swapping" (Non-destructive) ---
             if args.target.lower().startswith("python"):
                 # Handle both "swap python 3.12" and "swap python==3.12"
                 if "==" in args.target:
-                    # Extract version from python==3.12
                     version = args.target.split("==")[1]
-                    return pkg_instance.switch_active_python(version)
                 elif args.version:
-                    # "swap python 3.12" (two separate args)
-                    return pkg_instance.switch_active_python(args.version)
+                    version = args.version
                 else:
-                    # "swap python" (interactive picker)
+                    # Interactive picker
                     interpreters = pkg_instance.config_manager.list_available_pythons()
                     if not interpreters:
                         safe_print(_("❌ No Python interpreters found."))
@@ -1110,16 +1114,184 @@ def main():
                     )
 
                     if choice.isdigit() and 1 <= int(choice) <= len(versions):
-                        selected_version = versions[int(choice) - 1]
-                        return pkg_instance.switch_active_python(selected_version)
+                        version = versions[int(choice) - 1]
                     else:
                         safe_print(_("❌ Invalid selection."))
                         return 1
 
-            # --- Package Swapping Logic (Requires Full Core) ---
+                # Verify the Python exists
+                from omnipkg.dispatcher import resolve_python_path
+                python_path = resolve_python_path(version)
+                
+                if not python_path.exists():
+                    safe_print(_("❌ Python {} not found: {}").format(version, python_path))
+                    safe_print(_("   Install with: 8pkg python adopt {}").format(version))
+                    return 1
+
+                # ═══════════════════════════════════════════════════════════════
+                # SHIM-BASED SWAP WITH PROPER CLEANUP
+                # ═══════════════════════════════════════════════════════════════
+                
+                safe_print(_("✅ Activating Python {} context...").format(version))
+                
+                # 1. Ensure shims are installed
+                shims_dir = pkg_instance.config_manager._ensure_shims_installed()
+                
+                # 2. Prepare environment - FULL COPY to preserve everything
+                new_env = os.environ.copy()
+                
+                # ═══════════════════════════════════════════════════════════════
+                # CRITICAL: Set dispatcher signal variables
+                # ═══════════════════════════════════════════════════════════════
+                new_env["OMNIPKG_PYTHON"] = version
+                new_env["OMNIPKG_ACTIVE_PYTHON"] = version
+                
+                # Preserve original venv root
+                original_venv = pkg_instance.config_manager.venv_path
+                new_env["OMNIPKG_VENV_ROOT"] = str(original_venv)
+                
+                # ═══════════════════════════════════════════════════════════════
+                # CRITICAL: Clean PATH - Remove old omnipkg entries ONLY
+                # ═══════════════════════════════════════════════════════════════
+                current_path = new_env.get("PATH", "")
+                path_parts = current_path.split(os.pathsep)
+                
+                # Remove ONLY old omnipkg-related paths
+                cleaned_parts = []
+                for p in path_parts:
+                    # Remove old shim directories
+                    if ".omnipkg/shims" in p:
+                        continue
+                    # Remove old interpreter paths  
+                    if ".omnipkg/interpreters" in p and "/bin" in p:
+                        continue
+                    # KEEP everything else (conda paths, system paths, etc.)
+                    cleaned_parts.append(p)
+                
+                # Deduplicate while preserving order
+                seen = set()
+                deduped = []
+                for p in cleaned_parts:
+                    if p and p not in seen:
+                        deduped.append(p)
+                        seen.add(p)
+                
+                # Prepend the shims directory at the FRONT (highest priority)
+                deduped.insert(0, str(shims_dir))
+                new_env["PATH"] = os.pathsep.join(deduped)
+                
+                # ═══════════════════════════════════════════════════════════════
+                # CRITICAL: Conda environment preservation
+                # ═══════════════════════════════════════════════════════════════
+                new_env["CONDA_CHANGEPS1"] = "false"
+                new_env["CONDA_AUTO_ACTIVATE_BASE"] = "false"
+                
+                # ═══════════════════════════════════════════════════════════════
+                # CRITICAL: Handle custom exit() function cleanup
+                # ═══════════════════════════════════════════════════════════════
+                # Create a cleanup script that runs on actual shell exit
+                # This unsets OMNIPKG_PYTHON when the user does 'exit!' or Ctrl+D
+                
+                # ═══════════════════════════════════════════════════════════
+                # Create a cleanup script that runs on actual shell exit
+                # ═══════════════════════════════════════════════════════════
+                import tempfile
+
+                # Step 1: Create temp file FIRST (without the script content yet)
+                with tempfile.NamedTemporaryFile(mode='w', suffix='.sh', delete=False) as f:
+                    cleanup_file = f.name  # Get the filename
+
+                # Step 2: NOW create the script with the filename
+                cleanup_script = f'''
+# Omnipkg swap context marker
+export _OMNIPKG_SWAP_ACTIVE=1
+
+# Override the exit function to clean up omnipkg context
+_omnipkg_original_exit=$(declare -f exit 2>/dev/null || echo "")
+
+exit() {{
+    # If there's a custom exit function, call it first
+    if [ -n "$_omnipkg_original_exit" ]; then
+        eval "$_omnipkg_original_exit"
+    fi
+    
+    # Clean up omnipkg context before exiting
+    unset OMNIPKG_PYTHON
+    unset OMNIPKG_ACTIVE_PYTHON
+    unset OMNIPKG_VENV_ROOT
+    unset _OMNIPKG_SWAP_ACTIVE
+    
+    # CRITICAL: Remove shims from PATH
+    export PATH=$(echo "$PATH" | tr ':' '\\n' | grep -v '.omnipkg/shims' | tr '\\n' ':' | sed 's/:$//')
+    
+    # Self-destruct: Delete this cleanup script
+    rm -f "{cleanup_file}" 2>/dev/null
+    
+    # Call the real exit
+    command exit "$@"
+}}
+
+# Also clean up on Ctrl+D (EOF)
+trap '
+    unset OMNIPKG_PYTHON OMNIPKG_ACTIVE_PYTHON OMNIPKG_VENV_ROOT _OMNIPKG_SWAP_ACTIVE
+    export PATH=$(echo "$PATH" | tr ":" "\\n" | grep -v ".omnipkg/shims" | tr "\\n" ":" | sed "s/:$//")
+    rm -f "{cleanup_file}" 2>/dev/null
+' EXIT
+'''
+
+                # Step 3: Write the script to the file
+                with open(cleanup_file, 'w') as f:
+                    f.write(cleanup_script)
+
+                # Set BASH_ENV to source the cleanup script
+                new_env["BASH_ENV"] = cleanup_file
+
+                # Detect shell
+                shell = os.environ.get("SHELL", "/bin/bash")
+                if os.name == "nt":
+                    shell = os.environ.get("COMSPEC", "cmd.exe")
+
+                try:
+                    if os.environ.get("OMNIPKG_DEBUG") == "1":
+                        safe_print(f"[DEBUG] Spawning shell: {shell}")
+                        safe_print(f"[DEBUG] Target Python: {python_path}")
+                        safe_print(f"[DEBUG] OMNIPKG_PYTHON: {version}")
+                        safe_print(f"[DEBUG] OMNIPKG_VENV_ROOT: {original_venv}")
+                        safe_print(f"[DEBUG] Shims directory: {shims_dir}")
+                        safe_print(f"[DEBUG] PATH prefix: {deduped[0]}")
+                        safe_print(f"[DEBUG] Cleanup script: {cleanup_file}")
+                        safe_print(f"[DEBUG] CONDA_PREFIX: {new_env.get('CONDA_PREFIX', 'NOT SET')}")
+                        safe_print(f"[DEBUG] CONDA_DEFAULT_ENV: {new_env.get('CONDA_DEFAULT_ENV', 'NOT SET')}")
+
+                    safe_print(_("🐚 Spawning new shell... (Type 'exit' to return)"))
+                    safe_print(f"   🐍 Python {version} context active (via shims)")
+                    safe_print(f"   💡 Note: Type 'exit' to clean up and return")
+                    
+                    conda_env = os.environ.get("CONDA_DEFAULT_ENV", "")
+                    if conda_env:
+                        safe_print(f"   📦 Conda env '{conda_env}' preserved")
+                    
+                    # Launch interactive shell
+                    os.execle(
+                        shell,
+                        shell.split('/')[-1],
+                        "-i",
+                        new_env
+                    )
+                    
+                except Exception as e:
+                    safe_print(_("❌ Failed to spawn shell: {}").format(e))
+                    # Only delete on error
+                    try:
+                        os.unlink(cleanup_file)
+                    except:
+                        pass
+                    return 1
+
+                # NO finally block - let the cleanup script delete itself!
+            
+            # --- Package Swapping Logic (unchanged) ---
             else:
-                # At this point, use_minimal should already be False from the earlier logic,
-                # so pkg_instance should have full initialization. Just proceed directly.
                 package_spec = args.target
                 if args.version:
                     package_spec = f"{package_spec}=={args.version}"
@@ -1130,6 +1302,8 @@ def main():
                     return pkg_instance.smart_install(
                         packages=[package_spec],
                     )
+        elif args.command == "upgrade":
+            return upgrade(args, pkg_instance)
         elif args.command == "status":
             return pkg_instance.show_multiversion_status()
         elif args.command == "demo":
@@ -1386,32 +1560,40 @@ def main():
             return pkg_instance.revert_to_last_known_good(force=args.yes)
         elif args.command == "info":
             if args.package_spec.lower() == "python":
-                configured_active_exe = pkg_instance.config.get("python_executable")
-                active_version_tuple = pkg_instance.config_manager._verify_python_version(
-                    configured_active_exe
-                )
-                active_version_str = (
-                    f"{active_version_tuple[0]}.{active_version_tuple[1]}"
-                    if active_version_tuple
-                    else None
-                )
+                # ═══════════════════════════════════════════════════════════
+                # CRITICAL: Always use ACTUAL running Python (sys.executable)
+                # The --python flag already forced us into the right Python!
+                # ═══════════════════════════════════════════════════════════
+                current_python = Path(sys.executable).resolve()
+                active_version_tuple = (sys.version_info.major, sys.version_info.minor)
+                active_version_str = f"{active_version_tuple[0]}.{active_version_tuple[1]}"
+                
                 print_header(_("Python Interpreter Information"))
                 managed_interpreters = (
                     pkg_instance.interpreter_manager.list_available_interpreters()
                 )
                 safe_print(_("🐍 Managed Python Versions (available for swapping):"))
+                
                 for ver, path in sorted(managed_interpreters.items()):
-                    marker = (
-                        " ⭐ (currently active)"
-                        if active_version_str and ver == active_version_str
-                        else ""
-                    )
+                    # Mark as active if it matches the CURRENT executable path
+                    path_obj = Path(path).resolve()
+                    is_current = (path_obj == current_python)
+                    marker = " ⭐ (currently active)" if is_current else ""
                     safe_print(_("   • Python {}: {}{}").format(ver, path, marker))
-                if active_version_str:
-                    safe_print(_("\n🎯 Active Context: Python {}").format(active_version_str))
-                    safe_print(_("📍 Configured Path: {}").format(configured_active_exe))
-                else:
-                    safe_print("\n⚠️ Could not determine active Python version from config.")
+                
+                safe_print(_("\n🎯 Active Context: Python {}").format(active_version_str))
+                safe_print(_("📍 Current Executable: {}").format(current_python))
+                
+                # Show swap info ONLY as additional context, not as "active"
+                swapped_version = os.environ.get("OMNIPKG_PYTHON")
+                if swapped_version and swapped_version != active_version_str:
+                    safe_print(_("💡 Note: OMNIPKG_PYTHON env var is set to {}, but you're running {}").format(
+                        swapped_version, active_version_str
+                    ))
+                    safe_print(_("   (This is expected when using version-specific commands like 8pkg{})").format(
+                        active_version_str.replace(".", "")
+                    ))
+                
                 safe_print(
                     _("\n💡 To switch context, use: {} swap python <version>").format(parser.prog)
                 )

@@ -160,6 +160,18 @@ except:
         # Prevent infinite worker recursion
         env["OMNIPKG_IS_WORKER_PROCESS"] = "1"
 
+        # 🔥 CRITICAL: Sanitize environment to prevent contamination from the parent.
+        # This is the fix for the rapid switching failure. We must not inherit
+        # library paths from the parent's active torch environment.
+        for var in [
+            "PYTHONPATH", 
+            "PYTHONHOME", 
+            "LD_LIBRARY_PATH", 
+            "LD_PRELOAD",
+            # Add other potentially problematic vars if needed
+        ]:
+            env.pop(var, None)
+
         # CRITICAL: Disable buffering in subprocess
         # NOW worker_code is defined, so we can use it!
         self.process = subprocess.Popen(

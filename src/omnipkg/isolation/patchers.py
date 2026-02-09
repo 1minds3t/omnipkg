@@ -35,6 +35,7 @@ _tf_smart_initialized = False
 _tf_module_cache = {}
 _original_import_func = builtins.__import__
 _circular_import_stats = {}
+_tf_loaded_pids = set()  # Track which PIDs have loaded TF
 
 _tf_circular_deps_known = {
     "module_util": "tensorflow.python.tools.module_util",
@@ -128,6 +129,9 @@ def smart_tf_patcher():
             "_distutils_hack",
             "packaging",
             "wheel",
+            "safetensors",  # <-- ADD THIS to prevent torch-checking safetensors.torch
+            "huggingface_hub",  # <-- ADD THIS too for transformers compatibility
+            "accelerate",  # <-- ADD THIS for transformers dependencies
         }
 
         # Check if this is a standard library import that we should ignore
@@ -148,7 +152,11 @@ def smart_tf_patcher():
         # ═══════════════════════════════════════════════════════════
         # Continue with existing special handling logic
         # ═══════════════════════════════════════════════════════════
-        is_torch_or_numpy = name and ("torch" in name or "numpy" in name)
+        # Be more specific about torch - don't catch safetensors.torch!
+        is_torch_or_numpy = name and (
+            (name == "torch" or name.startswith("torch.")) or 
+            (name == "numpy" or name.startswith("numpy."))
+        )
         is_tf_import = name and (name == "tensorflow" or name.startswith("tensorflow."))
         is_tf_submodule = (
             fromlist and any("tensorflow" in str(f) for f in fromlist) if fromlist else False
@@ -159,9 +167,11 @@ def smart_tf_patcher():
         if not needs_special_handling:
             return _original_import_func(name, globals, locals, fromlist, level)
 
-        # Patch numpy BEFORE TensorFlow imports it
+        # Patch numpy AND opt_einsum BEFORE TensorFlow imports them
         if is_tf_import and "tensorflow" not in sys.modules:
             _patch_numpy_for_tf_recursion()
+            _patch_opt_einsum_for_isolation()
+
 
         # ═══════════════════════════════════════════════════════════
         # torch/numpy SPECIFIC LOGIC (Warning Suppression)
@@ -179,19 +189,75 @@ def smart_tf_patcher():
                     category=UserWarning,
                 )
                 return _original_import_func(name, globals, locals, fromlist, level)
+        # ═══════════════════════════════════════════════════════════
+        # NEW: Handle opt_einsum (used by both TF and PyTorch)
+        # ═══════════════════════════════════════════════════════════
+        is_opt_einsum = name and name.startswith("opt_einsum")
+        
+        # Be more specific about torch - don't catch safetensors.torch!
+        is_torch_or_numpy = name and (
+            (name == "torch" or name.startswith("torch.")) or 
+            (name == "numpy" or name.startswith("numpy."))
+        )
+        is_tf_import = name and (name == "tensorflow" or name.startswith("tensorflow."))
+        is_tf_submodule = (
+            fromlist and any("tensorflow" in str(f) for f in fromlist) if fromlist else False
+        )
+
+        needs_special_handling = is_torch_or_numpy or is_tf_import or is_tf_submodule or is_opt_einsum
+
+        if not needs_special_handling:
+            return _original_import_func(name, globals, locals, fromlist, level)
+
+        # Patch numpy AND opt_einsum BEFORE TensorFlow imports them
+        if is_tf_import and "tensorflow" not in sys.modules:
+            _patch_numpy_for_tf_recursion()
+            _patch_opt_einsum_for_isolation()
+
+        # ═══════════════════════════════════════════════════════════
+        # opt_einsum SPECIFIC LOGIC (Prevent cross-framework imports)
+        # ═══════════════════════════════════════════════════════════
+        if is_opt_einsum:
+            # If we're in opt_einsum.backends and trying to import torch/jax/etc,
+            # catch the ImportError gracefully
+            with warnings.catch_warnings():
+                warnings.filterwarnings("ignore")
+                try:
+                    return _original_import_func(name, globals, locals, fromlist, level)
+                except ImportError:
+                    # This is expected - opt_einsum tries to detect available backends
+                    # Return a dummy module to prevent crashes
+                    if fromlist and "torch" in fromlist:
+                        # Create a fake namespace
+                        class DummyBackend:
+                            pass
+                        return DummyBackend()
+                    raise
 
         # ═══════════════════════════════════════════════════════════
         # tensorflow SPECIFIC LOGIC (Reload Protection & Circular Deps)
         # ═══════════════════════════════════════════════════════════
         if is_tf_import:
-            # Only check for reload if TensorFlow was previously loaded
-            if hasattr(builtins, "__omnipkg_tf_loaded_once__") and "tensorflow" not in sys.modules:
+            import os
+            current_pid = os.getpid()
+            
+            # Only check for reload if THIS WORKER previously loaded TF successfully
+            if current_pid in _tf_loaded_pids and "tensorflow" not in sys.modules:
                 safe_print("☢️  [OMNIPKG] FATAL TENSORFLOW RELOAD DETECTED!")
                 raise ProcessCorruptedException(
                     "Attempted to reload TensorFlow in a process where its C++ libraries were already initialized."
                 )
-
         if is_tf_import or is_tf_submodule:
+            # FIX: Pre-emptively heal circular 'experimental' imports in nn modules
+            if name and name.endswith(".nn") and fromlist and "experimental" in fromlist:
+                if name in sys.modules:
+                    mod = sys.modules[name]
+                    # If experimental isn't attached yet, look for the partial module
+                    if not hasattr(mod, "experimental"):
+                        exp_name = name + ".experimental"
+                        if exp_name in sys.modules:
+                            setattr(mod, "experimental", sys.modules[exp_name])
+
             # Check for circular imports first
             if _detect_circular_import_scenario(name, fromlist, globals):
                 return _handle_circular_import(name, fromlist, globals)
@@ -216,8 +282,8 @@ def smart_tf_patcher():
         module = _original_import_func(name, globals, locals, fromlist, level)
 
         if is_tf_import and module:
-            if not hasattr(builtins, "__omnipkg_tf_loaded_once__"):
-                builtins.__omnipkg_tf_loaded_once__ = True
+            import os
+            _tf_loaded_pids.add(os.getpid())  # Mark THIS worker as having loaded TF
             _patch_numpy_for_tf_recursion()
 
         return module
@@ -399,6 +465,54 @@ def _detect_circular_import_scenario(name, fromlist, globals):
 
     return False
 
+def _patch_opt_einsum_for_isolation():
+    """
+    Robustly isolate opt_einsum from torch/jax/cupy using stubs
+    to prevent circular imports and partial initialization errors during TF load.
+    """
+    import sys
+    import types
+
+    # Frameworks to isolate if not already loaded
+    targets = ['torch', 'jax', 'cupy']
+    
+    try:
+        # We only stub if the main package isn't already loaded.
+        # If torch is already in sys.modules, opt_einsum can use it safely.
+        # If it's NOT, we stub it to prevent opt_einsum from triggering a load.
+        unavailable = [t for t in targets if t not in sys.modules]
+        
+        if not unavailable:
+            return
+
+        for framework in unavailable:
+            backend_name = f'opt_einsum.backends.{framework}'
+            
+            # Create stub module
+            backend_module = types.ModuleType(backend_name)
+            backend_module.__file__ = '<omnipkg-isolated>'
+            
+            # Add required opt_einsum interface methods to prevent AttributeErrors
+            backend_module.build_expression = lambda *args, **kwargs: None
+            backend_module.evaluate_constants = lambda *args, **kwargs: None
+            backend_module.compute_size_by_dict = lambda *args, **kwargs: None
+            
+            # Add framework-specific stubs
+            if framework == 'torch':
+                backend_module.to_torch = lambda x: None
+                backend_module.TorchBackend = object
+            elif framework == 'jax':
+                backend_module.to_jax = lambda x: None
+                backend_module.JaxBackend = object
+            elif framework == 'cupy':
+                backend_module.to_cupy = lambda x: None
+                backend_module.CupyBackend = object
+            
+            # Inject into sys.modules
+            sys.modules[backend_name] = backend_module
+
+    except Exception as e:
+        safe_print(_('⚠️  [OMNIPKG] opt_einsum isolation failed: {}').format(e))
 
 def _handle_circular_import(name, fromlist, globals):
     """Handle circular imports by pre-loading dependencies."""
