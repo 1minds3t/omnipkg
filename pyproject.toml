@@ -124,10 +124,10 @@ dev = [
 "Docker Hub" = "https://hub.docker.com/r/1minds3t/omnipkg"
 
 [project.scripts]
-omnipkg = "omnipkg.cli:main"
-8pkg = "omnipkg.cli:main"
-OMNIPKG = "omnipkg.cli:main"
-8PKG = "omnipkg.cli:main"
+omnipkg = "omnipkg.dispatcher:main"
+8pkg = "omnipkg.dispatcher:main"
+OMNIPKG = "omnipkg.dispatcher:main"
+8PKG = "omnipkg.dispatcher:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

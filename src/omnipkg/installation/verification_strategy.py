@@ -343,12 +343,9 @@ class SmartVerificationStrategy:
     ) -> List[VerificationResult]:
         if bubble_paths is None: bubble_paths = []
         
-        # [CHANGE 1] Locate host setuptools
-        try:
-            import setuptools, os
-            setuptools_path = os.path.dirname(os.path.dirname(setuptools.__file__))
-        except:
-            setuptools_path = ""
+        # [CRITICAL FIX] Capture parent paths so dependencies like 'rich' are found
+        # We filter out 'omnipkg' source paths if needed, but keeping site-packages is crucial
+        parent_paths = [p for p in sys.path if p and p != staging_path]
 
         worker_script = """
 import sys, json, importlib, traceback
@@ -356,11 +353,16 @@ import sys, json, importlib, traceback
 # Capture paths
 staging_path = {staging_path!r}
 bubble_paths = {bubble_paths!r}
+parent_paths = {parent_paths!r}
+
+# --- CRITICAL FIX FOR RICH/SHARED LIBS ---
+# Ensure the worker sees the same site-packages as the parent
+for p in parent_paths:
+    if p not in sys.path:
+        sys.path.append(p)
 
 # --- OVERLAY STRATEGY ---
-# Prepend new paths to the existing sys.path instead of creating a sterile environment.
-# This mimics the 'overlay' isolation mode, allowing staged packages to find
-# dependencies in the main env, fixing numerous ModuleNotFoundError issues.
+# Prepend new paths to the existing sys.path.
 # The order is critical: staging is checked first, then bubbles, then the base env.
 all_new_paths = [staging_path] + bubble_paths
 for p in reversed(all_new_paths):
@@ -380,58 +382,29 @@ for pkg in packages_data:
 
 print(json.dumps(results))
 """
-        # [CHANGE 4] Pass setuptools_path to format
+        # [CHANGE 4] Pass parent_paths to format
         script = worker_script.format(
             staging_path=staging_path,
             bubble_paths=bubble_paths,
-            packages_json=json.dumps(packages)
+            packages_json=json.dumps(packages),
+            parent_paths=parent_paths
         )
 
         try:
             proc = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True, timeout=300)
             if proc.returncode != 0 and not proc.stdout.strip():
+                # Provide stderr in crash report
                 return [VerificationResult(p['name'], p['version'], False, f"Crash: {proc.stderr}") for p in packages]
-            return [VerificationResult(r['package_name'], r['version'], r['success'], r['error']) for r in json.loads(proc.stdout)]
+            
+            # Handle potential JSON decode errors if stdout contains garbage
+            try:
+                raw_results = json.loads(proc.stdout)
+                return [VerificationResult(r['package_name'], r['version'], r['success'], r['error']) for r in raw_results]
+            except json.JSONDecodeError:
+                 return [VerificationResult(p['name'], p['version'], False, f"JSON Error: {proc.stdout[:200]}...") for p in packages]
+                 
         except Exception as e:
             return [VerificationResult(p['name'], p['version'], False, str(e)) for p in packages]
-
-            # Parse the JSON output from the child
-            try:
-                raw_results = json.loads(process.stdout.strip())
-            except json.JSONDecodeError as e:
-                return [VerificationResult(
-                    package_name=p['name'],
-                    version=p['version'],
-                    success=False,
-                    error=f"JSON decode failed: {str(e)}. Output: {process.stdout[:100]}"
-                ) for p in packages]
-            
-            # Convert back to VerificationResult objects
-            results = []
-            for r in raw_results:
-                results.append(VerificationResult(
-                    package_name=r['package_name'],
-                    version=r['version'],
-                    success=r['success'],
-                    error=r.get('error'),
-                    tested_with=r.get('tested_with', [])
-                ))
-            return results
-
-        except subprocess.TimeoutExpired:
-            return [VerificationResult(
-                package_name=p['name'],
-                version=p['version'],
-                success=False,
-                error="Import verification timed out after 5 minutes"
-            ) for p in packages]
-        except Exception as e:
-            return [VerificationResult(
-                package_name=p['name'],
-                version=p['version'],
-                success=False,
-                error=f"Subprocess launch error: {str(e)}"
-            ) for p in packages]
 
     def _print_verification_summary(self, results: List[VerificationResult]):
         """Print a formatted summary of verification results."""

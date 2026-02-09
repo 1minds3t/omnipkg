@@ -2224,7 +2224,23 @@ class omnipkgLoader:
                 safe_print(_('   - 🔧 Auto-creating bubble for: {}').format(self._current_package_spec))
 
             install_success = self._install_bubble_inline(self._current_package_spec)
-
+            if install_success:
+                # 🔧 FIX: Force filesystem and import cache refresh
+                importlib.invalidate_caches()
+                gc.collect()
+                time.sleep(0.01)  # Brief pause for filesystem sync
+                
+                # Re-check bubble existence with explicit path resolution
+                bubble_path = bubble_path.resolve()  # Force fresh stat
+                
+                if not bubble_path.exists():
+                    # Nuclear option: check if it's a timing issue
+                    time.sleep(0.1)
+                    bubble_path = self.multiversion_base / f"{pkg_name}-{requested_version}"
+                
+                if bubble_path.is_dir():
+                    if not self.quiet:
+                        safe_print("   - ✅ Bubble verified after installation.")
             if not install_success:
                 raise RuntimeError(_('Failed to install {}').format(self._current_package_spec))
 
@@ -2608,7 +2624,23 @@ class omnipkgLoader:
                 if not self.quiet:
                     safe_print(f"      📦 Installing {spec} with dependencies...")
 
-                result = core.smart_install([spec])
+                # 🔧 FIX: Extract and pass index URLs
+                index_url = None
+                extra_index_url = None
+                
+                # Auto-detect PyTorch index
+                if 'torch' in spec.lower() and '+cu' in spec:
+                    cu_version = spec.split('+cu')[1].split('==')[0] if '==' in spec else spec.split('+cu')[1]
+                    extra_index_url = f"https://download.pytorch.org/whl/cu{cu_version}"
+                    if not self.quiet:
+                        safe_print(f"      🔍 Auto-detected PyTorch index: {extra_index_url}")
+
+                # Pass index URLs to smart_install
+                result = core.smart_install(
+                    [spec],
+                    index_url=index_url,
+                    extra_index_url=extra_index_url
+                )
 
                 if result != 0:
                     if not self.quiet:
@@ -2634,9 +2666,8 @@ class omnipkgLoader:
 
         except Exception as e:
             if not self.quiet:
-                safe_print(_('      ❌ Auto-install exception: {}').format(e))
+                safe_print(f'      ❌ Auto-install exception: {e}')
                 import traceback
-
                 safe_print(traceback.format_exc())
             return False
 

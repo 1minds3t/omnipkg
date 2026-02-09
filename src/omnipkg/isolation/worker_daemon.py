@@ -710,6 +710,75 @@ _devnull.close()
 sys.stdout = _original_stdout
 sys.stdout.reconfigure(line_buffering=True)
 
+# ═══════════════════════════════════════════════════════════════
+# THE REAL FIX: Complete stub backend modules
+# ═══════════════════════════════════════════════════════════════
+
+def _patch_opt_einsum_worker():    
+    # Check what frameworks are NOT in this worker's spec
+    unavailable = []
+    for framework in ['torch', 'jax', 'cupy']:
+        if framework not in PKG_SPEC and framework not in sys.modules:
+            unavailable.append(framework)
+    
+    if not unavailable:
+        return  # All frameworks available, no patching needed
+    
+    try:
+        import types
+        
+        for framework in unavailable:
+            backend_name = f'opt_einsum.backends.{framework}'
+            
+            # Create a realistic backend module with expected exports
+            backend_module = types.ModuleType(backend_name)
+            backend_module.__file__ = '<omnipkg-isolated>'
+            
+            # Add stub functions/classes that opt_einsum expects
+            # These are named after what opt_einsum.backends.* modules export
+            
+            # Satisfy opt_einsum interface checks
+            backend_module.build_expression = lambda *args, **kwargs: None
+            backend_module.evaluate_constants = lambda *args, **kwargs: None
+            backend_module.compute_size_by_dict = lambda *args, **kwargs: None
+
+            if framework == 'torch':
+                # opt_einsum.backends.torch exports: to_torch, TorchBackend
+                def stub_to_torch(array): raise NotImplementedError("torch backend unavailable")
+                backend_module.to_torch = stub_to_torch
+                backend_module.TorchBackend = object  # Dummy class
+                
+            elif framework == 'jax':
+                # opt_einsum.backends.jax exports: to_jax, JaxBackend
+                def stub_to_jax(array): raise NotImplementedError("jax backend unavailable")
+                backend_module.to_jax = stub_to_jax
+                backend_module.JaxBackend = object
+                
+            elif framework == 'cupy':
+                # opt_einsum.backends.cupy exports: to_cupy, CupyBackend
+                def stub_to_cupy(array): raise NotImplementedError("cupy backend unavailable")
+                backend_module.to_cupy = stub_to_cupy
+                backend_module.CupyBackend = object
+            
+            # Add to sys.modules
+            sys.modules[backend_name] = backend_module
+        
+        sys.stderr.write(f'🩹 [DAEMON] Isolated worker from: {", ".join(unavailable)}\\n')
+        sys.stderr.flush()
+        
+    except Exception as e:
+        import traceback
+        sys.stderr.write(f'⚠️  [DAEMON] Isolation patch failed: {e}\\n')
+        sys.stderr.write(traceback.format_exc())
+        sys.stderr.flush()
+
+# Apply isolation patch BEFORE any imports
+_patch_opt_einsum_worker()
+
+# NOW it's safe to import TensorFlow - when it tries to import opt_einsum,
+# and opt_einsum.backends tries to "from .torch import TorchBackend",
+# it will succeed (getting our stub) instead of crashing
+
 # ═══════════════════════════════════════════════════════════
 # STEP 6: NOW IMPORT FRAMEWORKS (Paths are in sys.path now!)
 # ═══════════════════════════════════════════════════════════
@@ -740,11 +809,15 @@ try:
         def get_lib(cls):
             if cls._lib: return cls._lib
             candidates = []
-            try:
-                import torch
-                torch_lib = os.path.join(os.path.dirname(torch.__file__), 'lib')
-                candidates.extend(glob.glob(os.path.join(torch_lib, 'libcudart.so*')))
-            except: pass
+            # OPTIMIZATION: Only look inside torch if it is requested or already loaded.
+            # Importing torch is heavy (~300MB) and we want lightweight workers for non-ML tasks.
+            if 'torch' in PKG_SPEC or 'torch' in sys.modules:
+                try:
+                    import torch
+                    torch_lib = os.path.join(os.path.dirname(torch.__file__), 'lib')
+                    candidates.extend(glob.glob(os.path.join(torch_lib, 'libcudart.so*')))
+                except: pass
+            
             if 'CONDA_PREFIX' in os.environ:
                 candidates.extend(glob.glob(os.path.join(os.environ['CONDA_PREFIX'], 'lib', 'libcudart.so*')))
             candidates.extend(['libcudart.so.12', 'libcudart.so.11.0', 'libcudart.so'])
@@ -802,14 +875,29 @@ try:
                     self.__cuda_array_interface__ = { "data": (ptr, False), "shape": shape, "typestr": typestr, "version": 3 }
             return torch.as_tensor(CUDABuffer(final_ptr, data["shape"], data["typestr"]), device=f"cuda:{data['device']}")
 
-    _universal_gpu_ipc_available = False
-    try:
-        UniversalGpuIpc.get_lib()
-        _universal_gpu_ipc_available = True
-        sys.stderr.write('🔥🔥🔥 [DAEMON] UNIVERSAL CUDA IPC ENABLED (ctypes - NO PYTORCH NEEDED)\\n')
-        sys.stderr.flush()
-    except Exception: 
-        pass
+    # LAZY CUDA DETECTION: Don't load libcudart until we actually need it.
+    # This keeps VIRT memory low for CPU-only workers (like rich).
+    _universal_gpu_ipc_available = None 
+
+    def ensure_gpu_ipc():
+        global _universal_gpu_ipc_available
+        if _universal_gpu_ipc_available is not None:
+            return _universal_gpu_ipc_available
+            
+        try:
+            UniversalGpuIpc.get_lib()
+            _universal_gpu_ipc_available = True
+            sys.stderr.write('🔥🔥🔥 [DAEMON] UNIVERSAL CUDA IPC ENABLED (ctypes - NO PYTORCH NEEDED)\\n')
+            sys.stderr.flush()
+        except Exception:
+            _universal_gpu_ipc_available = False
+        return _universal_gpu_ipc_available
+
+    # Initialize flags to prevent NameError
+    _gpu_ipc_available = False
+    _torch_available = False
+    _cuda_available = False
+    _native_ipc_mode = False
 
     # Import TensorFlow if in spec
     if 'tensorflow' in PKG_SPEC:
@@ -858,8 +946,10 @@ try:
             sys.stderr.write(f'⚠️  [DAEMON] PyTorch import failed: {e}\\n')
             sys.stderr.flush()
 
+    
     # If neither is available, Universal IPC might still work via ctypes
-    if _universal_gpu_ipc_available:
+    # (We check this lazily now, so assume True for capability reporting if not failed)
+    if _universal_gpu_ipc_available is not False:
         _gpu_ipc_available = True
 
 finally:
@@ -869,70 +959,38 @@ finally:
     if _captured:
         sys.stderr.write(f'📝 [DAEMON] Captured stdout during imports:\\n{_captured}')
         sys.stderr.flush()
-
-# ═══════════════════════════════════════════════════════════════
-# 🔥 CRITICAL FIX: Import torch/tensorflow AFTER activation
-# ═══════════════════════════════════════════════════════════════
+        
 from multiprocessing import shared_memory
 from contextlib import redirect_stdout, redirect_stderr
-import io
 import base64
 
-_gpu_ipc_available = False
-_torch_available = False
-_cuda_available = False
-_native_ipc_mode = False
+# Ensure all IPC flags are defined (defensive programming)
+try:
+    _gpu_ipc_available
+except NameError:
+    _gpu_ipc_available = False
 
-# Only check TensorFlow if it's in the spec
-if 'tensorflow' in PKG_SPEC:
-    try:
-        import tensorflow as tf
-        gpus = tf.config.list_physical_devices('GPU')
-        if gpus:
-            for gpu in gpus:
-                try: 
-                    tf.config.experimental.set_memory_growth(gpu, True)
-                except: 
-                    pass
-        sys.stderr.write('✅ [DAEMON] TensorFlow initialized (Memory Growth ON)\\n')
-        sys.stderr.flush()
-    except Exception as e:
-        sys.stderr.write(f'⚠️  [DAEMON] TensorFlow import failed: {e}\\n')
-        sys.stderr.flush()
+try:
+    _torch_available
+except NameError:
+    _torch_available = False
 
-# Only check PyTorch if it's in the spec
-if 'torch' in PKG_SPEC:
-    try:
-        import torch
-        _torch_available = True
-        _cuda_available = torch.cuda.is_available()
-        sys.stderr.write(f'🔍 [DAEMON] PyTorch {torch.__version__} initialized\\n')
-        sys.stderr.flush()
-        
-        if _cuda_available:
-            torch_version = torch.__version__.split('+')[0]
-            major = int(torch_version.split('.')[0])
-            if major == 1:
-                try:
-                    test_tensor = torch.zeros(1).cuda()
-                    if hasattr(test_tensor.storage(), '_share_cuda_'):
-                        _native_ipc_mode = True
-                        _gpu_ipc_available = True
-                        sys.stderr.write('🔥🔥🔥 [DAEMON] NATIVE CUDA IPC ENABLED\\n')
-                        sys.stderr.flush()
-                except: 
-                    pass
-            else:
-                _gpu_ipc_available = True
-                sys.stderr.write('🚀 [DAEMON] GPU IPC available (Hybrid/Universal)\\n')
-                sys.stderr.flush()
-    except Exception as e:
-        sys.stderr.write(f'⚠️  [DAEMON] PyTorch import failed: {e}\\n')
-        sys.stderr.flush()
+try:
+    _cuda_available
+except NameError:
+    _cuda_available = False
 
-# If neither is available, Universal IPC might still work via ctypes
-if _universal_gpu_ipc_available:
-    _gpu_ipc_available = True
+try:
+    _native_ipc_mode
+except NameError:
+    _native_ipc_mode = False
+
+try:
+    _universal_gpu_ipc_available
+except NameError:
+    _universal_gpu_ipc_available = None
+
+# Now it's safe to use these variables in the READY signal
 
 # ═══════════════════════════════════════════════════════════════
 # STEP 7: SEND READY SIGNAL
@@ -978,6 +1036,10 @@ while True:
         # ═══════════════════════════════════════════════════════════
         # INPUT HANDLING - UNIVERSAL IPC FIRST!
         # ═══════════════════════════════════════════════════════════
+        # Check/Load CUDA support lazily if this is a CUDA request
+        if is_cuda_request and _universal_gpu_ipc_available is None:
+            ensure_gpu_ipc()
+
         if in_meta and is_cuda_request and _universal_gpu_ipc_available and 'universal_ipc' in in_meta:
             try:
                 # Load tensor using universal IPC
@@ -1202,12 +1264,19 @@ while True:
             if not isinstance(result, dict):
                 result = {}
             
+            # In _DAEMON_SCRIPT, around line 800 where the result is built:
             result['task_id'] = task_id
             result['status'] = 'COMPLETED'
             result['success'] = True
             result['stdout'] = stdout_buffer.getvalue()
             result['stderr'] = stderr_buffer.getvalue()
             result['cuda_method'] = actual_cuda_method
+
+            # ADD THESE:
+            if _torch_available:
+                import torch
+                result['worker_torch_version'] = torch.__version__
+                result['worker_python_version'] = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
             
             print(json.dumps(result), flush=True)
             
@@ -1323,9 +1392,54 @@ class PersistentWorker:
         if not defer_setup and package_spec:
             self.assign_spec(package_spec)
 
+    def execute(self, code: str) -> dict:
+        """
+        Backward compatibility wrapper for legacy execute calls.
+        Maps the new SHM-based task system to the old dictionary format.
+        """
+        import uuid
+        task_id = f"legacy_{uuid.uuid4().hex[:8]}"
+        
+        try:
+            # Call the new internal execution logic
+            # We use a generous timeout because PyTorch/Lightning loads can be slow
+            response = self.execute_shm_task(
+                task_id=task_id,
+                code=code,
+                shm_in={},
+                shm_out={},
+                timeout=300.0 
+            )
+
+            # Map the new response protocol to the legacy format
+            if response.get("status") == "COMPLETED":
+                # In the new worker, results are usually tucked in the 'result' key
+                res_data = response.get("result", {})
+                return {
+                    "success": True, 
+                    "stdout": res_data.get("stdout", ""), 
+                    "locals": str(res_data.get("locals", []))
+                }
+            else:
+                return {
+                    "success": False, 
+                    "error": response.get("message", "Execution failed")
+                }
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def shutdown(self):
+        """Alias for force_shutdown to support legacy cleanup calls."""
+        self.force_shutdown()
+
     def _spawn_process(self):
         """Starts the raw Python process. Sits waiting for JSON spec."""
-        with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix="_idle.py") as f:
+        # Ensure our dedicated temp dir exists
+        os.makedirs(OMNIPKG_TEMP_DIR, exist_ok=True)
+        
+        with tempfile.NamedTemporaryFile(
+            mode="w", delete=False, suffix="_idle.py", dir=OMNIPKG_TEMP_DIR
+        ) as f:
             f.write(_DAEMON_SCRIPT)
             self.temp_file = f.name
 
@@ -1341,14 +1455,30 @@ class PersistentWorker:
         if self.multiversion_base:
             env["OMNIPKG_MULTIVERSION_BASE"] = self.multiversion_base
 
-        # Add ONLY the omnipkg source root to PYTHONPATH so the worker can 
-        # import the loader, but uses its own site-packages for everything else.
+        # SMART PYTHONPATH INJECTION:
+        # Only inject PYTHONPATH if we are running from source (Dev Mode).
+        # If we are running from an installed package, we assume the target interpreter
+        # also has omnipkg installed (via 'adopt'). Injecting the daemon's site-packages
+        # into a different Python version is dangerous (binary incompatibility).
         try:
             import omnipkg
-            pkg_root = str(Path(omnipkg.__file__).parent.parent)
-            env["PYTHONPATH"] = pkg_root
+            omnipkg_path = Path(omnipkg.__file__).resolve()
+            
+            # Check if we are in a site-packages directory
+            is_installed = "site-packages" in str(omnipkg_path) or "dist-packages" in str(omnipkg_path)
+            
+            if not is_installed:
+                # Dev mode: Inject source root
+                pkg_root = str(omnipkg_path.parent.parent)
+                env["PYTHONPATH"] = pkg_root
+            else:
+                # Installed mode: Do NOT inject PYTHONPATH. Rely on target env.
+                # This prevents cross-contamination between Python versions (e.g. 3.11 -> 3.9)
+                pass
+                
         except Exception:
-            env["PYTHONPATH"] = os.getcwd()
+            # Fallback
+            pass
 
         self.log_file = open(DAEMON_LOG_FILE, "a", buffering=1)
 
@@ -1379,14 +1509,23 @@ class PersistentWorker:
                 self.process.stdin.flush()
                 
                 # 2. Wait for READY with ACTIVITY MONITORING (not blind timeout)
+                # 2. Wait for READY with ACTIVITY MONITORING (not blind timeout)
+                # INCREASED TIMEOUT: Package installation (bubbling) can take minutes.
+                # We use a long timeout, but the activity monitor will keep it alive
+                # as long as it's actually doing work (installing/compiling).
+                timeout = 600.0 
+                
+                safe_print(f"   ⏳ [DAEMON] Configuring worker for '{self.package_spec}' (Timeout: {timeout}s)...", file=sys.stderr)
+                
                 ready_line = self.wait_for_ready_with_activity_monitoring(
                     self.process, 
-                    timeout_idle_seconds=30.0  # Only timeout if truly idle
+                    timeout_idle_seconds=timeout
                 )
                 
                 if ready_line and json.loads(ready_line.strip()).get("status") == "READY":
                     self.last_health_check = time.time()
                     self._is_ready = True
+                    safe_print(f"   ✅ [DAEMON] Worker ready: {self.package_spec}", file=sys.stderr)
                     return
                     
                 raise RuntimeError("Worker failed to send READY status.")
@@ -1396,8 +1535,24 @@ class PersistentWorker:
                 raise RuntimeError(f"Worker spec assignment failed: {e}")
                 
     def wait_for_ready_with_activity_monitoring(self, process, timeout_idle_seconds=300.0):
-        """Wait for worker READY signal with simple polling."""
+        """Wait for worker READY signal with REAL activity monitoring (CPU/Mem/IO)."""
+        import select
+        try:
+            import psutil
+            ps_process = psutil.Process(process.pid)
+            has_psutil = True
+        except ImportError:
+            has_psutil = False
+
         start_time = time.time()
+        last_activity_time = start_time
+        
+        # Initial resource baselines
+        last_mem = 0.0
+        if has_psutil:
+            try:
+                last_mem = ps_process.memory_info().rss
+            except: pass
 
         while True:
             # Check if process crashed
@@ -1405,34 +1560,69 @@ class PersistentWorker:
                 raise RuntimeError('Worker crashed during startup')
 
             # Try to read READY signal
+            ready_line = None
             if IS_WINDOWS:
                 # Windows: threaded non-blocking read
                 import threading
                 result = [None]
-                
                 def try_read():
-                    try:
-                        result[0] = process.stdout.readline()
-                    except:
-                        pass
-                
+                    try: result[0] = process.stdout.readline()
+                    except: pass
                 t = threading.Thread(target=try_read, daemon=True)
                 t.start()
                 t.join(timeout=0.1)
-                
-                if result[0]:
-                    return result[0]
+                if result[0]: ready_line = result[0]
             else:
                 # Unix: select works
                 ready, _, _ = select.select([process.stdout], [], [], 0.1)
                 if ready:
                     ready_line = process.stdout.readline()
-                    if ready_line:
-                        return ready_line
 
-            # Simple timeout check
-            if time.time() - start_time > timeout_idle_seconds:
-                raise RuntimeError(f"Worker timeout after {timeout_idle_seconds}s")
+            if ready_line:
+                return ready_line
+
+            # Activity Monitoring
+            now = time.time()
+            is_active = False
+            
+            if has_psutil:
+                try:
+                    # Check CPU (interval=0.0 is non-blocking)
+                    cpu = ps_process.cpu_percent(interval=0.0)
+                    if cpu > 0.1: is_active = True
+                    
+                    # Check Memory change
+                    mem = ps_process.memory_info().rss
+                    if abs(mem - last_mem) > 1024 * 1024: # 1MB change
+                        is_active = True
+                        last_mem = mem
+                        
+                    # Check IO (if available)
+                    try:
+                        io = ps_process.io_counters()
+                        if not hasattr(self, '_last_io_startup'): self._last_io_startup = io
+                        if io.read_bytes != self._last_io_startup.read_bytes or io.write_bytes != self._last_io_startup.write_bytes:
+                            is_active = True
+                            self._last_io_startup = io
+                    except: pass
+                except:
+                    pass
+            
+            if is_active:
+                last_activity_time = now
+            
+            # Timeout check
+            if has_psutil:
+                # If we have psutil, we timeout on IDLE time (no activity)
+                if now - last_activity_time > timeout_idle_seconds:
+                     raise RuntimeError(f"Worker startup timed out (Idle for {timeout_idle_seconds}s)")
+                # Hard limit: 3x idle timeout (e.g. 30 mins) to prevent infinite loops even with activity
+                if now - start_time > timeout_idle_seconds * 3:
+                     raise RuntimeError(f"Worker startup exceeded hard limit ({timeout_idle_seconds*3}s)")
+            else:
+                # Without psutil, treat timeout_idle_seconds as total timeout
+                if now - start_time > timeout_idle_seconds:
+                    raise RuntimeError(f"Worker timeout after {timeout_idle_seconds}s")
 
             time.sleep(0.1)
 
@@ -1873,7 +2063,28 @@ class WorkerPoolDaemon:
         # Key: python_exe path, Value: Queue of idle workers
         self.idle_pools: Dict[str, queue.Queue] = defaultdict(lambda: queue.Queue(maxsize=10))
         # Default configuration: 3 idle workers for the daemon's own python
+        # Default configuration: 3 idle workers for the daemon's own python
         self.idle_config: Dict[str, int] = {sys.executable: 3}
+
+        # 🚀 AUTO-DISCOVERY: Find other managed interpreters and keep 1 idle for them
+        if self.cm:
+            try:
+                registry_path = self.cm.venv_path / ".omnipkg" / "interpreters" / "registry.json"
+                if registry_path.exists():
+                    with open(registry_path, "r") as f:
+                        data = json.load(f)
+                        for version, path in data.get("interpreters", {}).items():
+                            # Normalize path
+                            path = str(Path(path).resolve())
+                            current_exe = str(Path(sys.executable).resolve())
+                            
+                            if path != current_exe:
+                                # Keep 1 idle worker for other versions to ensure fast swapping
+                                self.idle_config[path] = 1
+            except Exception:
+                # Non-fatal, just won't have warm workers for others
+                pass
+
         self.worker_locks: Dict[str, threading.RLock] = defaultdict(threading.RLock)
         self.running = True
         self.socket_path = DEFAULT_SOCKET
@@ -1889,10 +2100,63 @@ class WorkerPoolDaemon:
         }
         self.executor = ThreadPoolExecutor(max_workers=20, thread_name_prefix="daemon-handler")
 
+    def _cleanup_stale_temp_files(self):
+        """Clean up old temporary files from previous runs."""
+        import shutil
+        safe_print("   🧹 [DAEMON] Cleaning up stale temporary files...", file=sys.stderr)
+        script_count = 0
+        pip_dir_count = 0
+        
+        try:
+            # --- Worker & Swap Script Cleanup ---
+            # Clean up our dedicated temp directory for worker scripts
+            if os.path.exists(OMNIPKG_TEMP_DIR):
+                for f in glob.glob(os.path.join(OMNIPKG_TEMP_DIR, "tmp*_idle.py")):
+                    try:
+                        os.unlink(f)
+                        script_count += 1
+                    except OSError:
+                        pass
+            
+            # Clean up swap cleanup scripts from system temp
+            for f in glob.glob(os.path.join(tempfile.gettempdir(), "tmp*.sh")):
+                try:
+                    os.unlink(f)
+                    script_count += 1
+                except OSError:
+                    pass
+
+            if script_count > 0:
+                safe_print(f"   🗑️  [DAEMON] Removed {script_count} stale temp script(s).", file=sys.stderr)
+
+            # --- Pip Temporary Directory Cleanup (CRITICAL for disk space) ---
+            temp_dir = tempfile.gettempdir()
+            for pattern in ["pip-unpack-*", "pip-target-*"]:
+                for path in glob.glob(os.path.join(temp_dir, pattern)):
+                    try:
+                        # Only remove if it's old (e.g., > 1 hour) to avoid race conditions
+                        if time.time() - os.path.getmtime(path) > 3600:
+                            if os.path.isdir(path):
+                                shutil.rmtree(path, ignore_errors=True)
+                                pip_dir_count += 1
+                            elif os.path.isfile(path):
+                                os.unlink(path)
+                                pip_dir_count += 1
+                    except Exception:
+                        pass
+            
+            if pip_dir_count > 0:
+                 safe_print(f"   🗑️  [DAEMON] Removed {pip_dir_count} stale pip temporary directory/file(s).", file=sys.stderr)
+
+        except Exception as e:
+            safe_print(f"   ⚠️  [DAEMON] Error during cleanup: {e}", file=sys.stderr)
+
     def start(self, daemonize: bool = True, wait_for_ready: bool = False):
         """
         Starts the daemon, handling platform differences and waiting logic.
         """
+        self._cleanup_stale_temp_files()
+        
         if self.is_running():
             return True
 
@@ -2393,6 +2657,8 @@ class WorkerPoolDaemon:
                         target_paths = self.cm._get_paths_for_interpreter(python_exe) or {}
 
                     # Fallback if queue empty or no pool exists for this exe (~30ms)
+                    # Fallback if queue empty or no pool exists for this exe (~30ms)
+                    # Note: PersistentWorker constructor calls assign_spec if spec is provided
                     worker = PersistentWorker(
                         spec, 
                         python_exe=python_exe,
@@ -2422,6 +2688,13 @@ class WorkerPoolDaemon:
         worker_info["request_count"] += 1
 
         try:
+            # CRITICAL: Ensure worker is ready before executing
+            # If it came from idle pool, assign_spec was called above.
+            # If it was created new, constructor called assign_spec.
+            # But we double check here to be safe.
+            if not worker_info["worker"]._is_ready:
+                 worker_info["worker"].assign_spec(spec)
+
             result = worker_info["worker"].execute_shm_task(
                 f"{spec}-{self.stats['total_requests']}",
                 code,
@@ -3626,8 +3899,6 @@ class DaemonClient:
         import torch
 
         from omnipkg.isolation.worker_daemon import UniversalGpuIpc
-
-        safe_print("   🔥 Using UNIVERSAL CUDA IPC (ctypes - TRUE ZERO-COPY)")
 
         try:
             # Share input tensor using Universal IPC
