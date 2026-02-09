@@ -1329,29 +1329,45 @@ class ConfigManager:
             core_deps = _get_core_dependencies(target_py_version)
 
             if core_deps:
+                # Parse version once
+                major, minor = map(int, target_py_version.split("."))
+                
                 # Filter dependencies based on target Python version
                 filtered_deps = []
                 for dep in core_deps:
                     dep_lower = dep.lower()
+                    
                     # Skip uv for Python 3.7
-                    if "uv" in dep_lower and target_py_version.startswith("3.7"):
+                    if "uv" in dep_lower and major == 3 and minor < 8:
                         safe_print(
-                            f"   ⏭️  Skipping {dep} (not compatible with Python {target_py_version})"
+                            _("   ⏭️  Skipping {} (not compatible with Python {})").format(dep, target_py_version)
                         )
                         continue
+                    
                     # Skip pip-audit for Python < 3.14
-                    if "pip-audit" in dep_lower and not target_py_version.startswith("3.14"):
+                    if "pip-audit" in dep_lower and major == 3 and minor < 14:
                         safe_print(
                             _('   ⏭️  Skipping {} (requires Python 3.14+, have {})').format(dep, target_py_version)
                         )
                         continue
-                    # Skip safety 3.x for Python < 3.10
+                    
+                    # Handle safety version constraints
                     if "safety" in dep_lower:
-                        major, minor = map(int, target_py_version.split("."))
                         if major == 3 and minor < 10:
-                            # Use older safety for Python 3.7-3.9
+                            # Python 3.7-3.9: use safety 2.x
+                            safe_print(
+                                _("   📌 Using safety 2.x for Python {}").format(target_py_version)
+                            )
                             filtered_deps.append("safety>=2.0.0,<3.0")
                             continue
+                        elif major == 3 and minor >= 15:
+                            # Python 3.15+: skip safety (pydantic-core doesn't support it yet)
+                            safe_print(
+                                _("   ⏭️  Skipping {} (pydantic-core not yet compatible with Python 3.15+)").format(dep)
+                            )
+                            continue
+                        # Python 3.10-3.14: use safety 3.x (default from pyproject.toml)
+                    
                     filtered_deps.append(dep)
 
                 if filtered_deps:
@@ -1813,6 +1829,7 @@ class ConfigManager:
 
         # Base version to release tag mapping
         VERSION_TO_RELEASE_TAG_MAP = {
+                "3.15.0a5": "20260203",  # <-- FULL VERSION WITH ALPHA DESIGNATION
             "3.8.20": "20241002",
             "3.14.0": "20251014",
             "3.13.7": "20250818",
@@ -2006,10 +2023,9 @@ class ConfigManager:
                         safe_print("\n   - 🚀 Restarting process to load the new package...")
 
                         # Re-run the original command the user typed.
-                        args_for_exec = [sys.executable] + sys.argv
+                        args_for_exec = [sys.executable, '-m', 'omnipkg.cli'] + sys.argv[1:]
 
                         try:
-                            # This replaces the current process with a new one.
                             os.execv(sys.executable, args_for_exec)
                         except Exception as e:
                             # If the handoff fails, instruct the user.
@@ -9663,7 +9679,9 @@ class omnipkg:
         safe_print("🌌 QUANTUM HEALING: Python Incompatibility Detected")
         safe_print("=" * 60)
         safe_print(
-            _("   - Diagnosis: Cannot install '{}' on your current Python ({}).").format(e.package_name, e.current_python)
+            _("   - Diagnosis: Cannot install '{}' on your current Python ({}).").format(
+                e.package_name, e.current_python
+            )
         )
         safe_print(_('   - Prescription: This package requires Python {}.').format(e.compatible_python))
 
@@ -9678,28 +9696,39 @@ class omnipkg:
             )
             return 1
 
-        if not handle_python_requirement(e.compatible_python, self, "omnipkg"):
+        # Set quantum healing flag so switch_active_python knows this is automated
+        os.environ["_OMNIPKG_QUANTUM_HEALING"] = "1"
+        
+        try:
+            if not handle_python_requirement(e.compatible_python, self, "omnipkg"):
+                safe_print(
+                    _('❌ Healing failed: Could not automatically switch to Python {}.').format(
+                        e.compatible_python
+                    )
+                )
+                return 1
+
             safe_print(
-                _('❌ Healing failed: Could not automatically switch to Python {}.').format(e.compatible_python)
+                _('\n🚀 Retrying original `install` command in the new Python {} context...').format(
+                    e.compatible_python
+                )
             )
-            return 1
-
-        safe_print(
-            _('\n🚀 Retrying original `install` command in the new Python {} context...').format(e.compatible_python)
-        )
-
-        new_config_manager = ConfigManager(suppress_init_messages=True)
-        new_omnipkg_instance = self.__class__(new_config_manager)
-
-        return new_omnipkg_instance.smart_install(
-            packages,
-            dry_run=dry_run,
-            force_reinstall=force_reinstall,
-            override_strategy=override_strategy,
-            target_directory=target_directory,
-            index_url=index_url,
-            extra_index_url=extra_index_url,
-        )
+            
+            new_config_manager = ConfigManager(suppress_init_messages=True)
+            new_omnipkg_instance = self.__class__(new_config_manager)
+            
+            return new_omnipkg_instance.smart_install(
+                packages,
+                dry_run=dry_run,
+                force_reinstall=force_reinstall,
+                override_strategy=override_strategy,
+                target_directory=target_directory,
+                index_url=index_url,
+                extra_index_url=extra_index_url,
+            )
+        finally:
+            # Clean up the flag
+            os.environ.pop("_OMNIPKG_QUANTUM_HEALING", None)
 
     def _sort_packages_for_install(self, packages: List[str], strategy: str) -> List[str]:
         """
@@ -9726,12 +9755,17 @@ class omnipkg:
         should_reverse = strategy == "stable-main"
         return sorted(packages, key=get_version_key, reverse=should_reverse)
 
+    # At the top of the class or module
+    SUPPORTED_IMPLEMENTATIONS = {"cpython"}  # Future: add "pypy", "graalpy", etc.
+
+
     def adopt_interpreter(self, version: str) -> int:
         """
         Safely adopts a Python version by checking the registry, then trying to copy
         from the local system, and finally falling back to download.
 
         CRITICAL FIX: Always refreshes the interpreter registry cache after adoption.
+        CRITICAL FIX 2: Only adopts supported Python implementations (currently CPython only).
         """
         safe_print(_("🐍 Attempting to adopt Python {} into the environment...").format(version))
 
@@ -9763,6 +9797,37 @@ class omnipkg:
 
         source_exe_path = Path(source_path_str)
 
+        # Check if this is a supported implementation before proceeding
+        try:
+            impl = self._detect_python_implementation(source_exe_path)
+            
+            if impl not in SUPPORTED_IMPLEMENTATIONS:
+                impl_display = impl.title() if impl != 'unknown' else 'non-CPython'
+                safe_print(
+                    _("   - 🔍 Found {} (Python {}), omnipkg currently manages only CPython.").format(
+                        impl_display, version
+                    )
+                )
+                safe_print(_("   - 📥 Installing managed CPython instead..."))
+                result = self._fallback_to_download(version)
+                
+                if result == 0:
+                    self.interpreter_manager.refresh_registry()
+                    safe_print(_("   - ✅ Successfully adopted CPython {}.").format(version))
+                
+                return result
+                
+        except Exception as e:
+            safe_print(_("   - ⚠️  Could not detect Python implementation: {}").format(e))
+            safe_print(_("   - 📥 Installing managed CPython for safety..."))
+            result = self._fallback_to_download(version)
+            
+            if result == 0:
+                self.interpreter_manager.refresh_registry()
+                safe_print(_("   - ✅ Successfully adopted CPython {}.").format(version))
+            
+            return result
+
         try:
             cmd = [str(source_exe_path), "-c", "import sys; print(sys.prefix)"]
             cmd_result = subprocess.run(cmd, capture_output=True, text=True, check=True, timeout=10)
@@ -9788,8 +9853,12 @@ class omnipkg:
 
                 return result
 
+            # Use implementation in path naming (future-proof for PyPy, etc.)
             dest_root = (
-                self.config_manager.venv_path / ".omnipkg" / "interpreters" / f"cpython-{version}"
+                self.config_manager.venv_path 
+                / ".omnipkg" 
+                / "interpreters" 
+                / f"{impl}-{version}"
             )
 
             if dest_root.exists():
@@ -9824,6 +9893,45 @@ class omnipkg:
                 safe_print(_("   - ✅ Successfully adopted Python {}.").format(version))
 
             return result
+
+
+    def _detect_python_implementation(self, python_exe: Path) -> str:
+        """
+        Detect the Python implementation (cpython, pypy, graalpy, etc.).
+        
+        Returns:
+            str: Normalized implementation name ('cpython', 'pypy', 'graalpy', 'unknown')
+        
+        Raises:
+            OSError: If detection fails catastrophically
+        """
+        try:
+            result = subprocess.run(
+                [str(python_exe), "-c", "import sys; print(sys.implementation.name)"],
+                capture_output=True,
+                text=True,
+                timeout=2,  # Fast timeout - interpreter startup should be quick
+                check=True
+            )
+            
+            impl_name = result.stdout.strip().lower()
+            
+            # Normalize weird variants
+            if impl_name.startswith("cpython"):
+                return "cpython"
+            elif impl_name.startswith("pypy"):
+                return "pypy"
+            elif impl_name.startswith("graalpy") or impl_name.startswith("graal"):
+                return "graalpy"
+            elif impl_name:
+                return impl_name  # Return as-is for other known implementations
+            else:
+                return "unknown"
+                
+        except subprocess.TimeoutExpired:
+            raise OSError(_("Python implementation detection timed out after 2 seconds"))
+        except Exception as e:
+            raise OSError(_("Failed to detect Python implementation: {}").format(e))
 
     def _is_interpreter_directory_valid(self, path: Path) -> bool:
         """
@@ -9925,6 +10033,7 @@ class omnipkg:
                 "3.12": "3.12.11",
                 "3.13": "3.13.7",
                 "3.14": "3.14.0",
+                    "3.15": "3.15.0a5",  # <-- USE THE FULL ALPHA VERSION STRING
             }
 
             full_version = full_versions.get(version)
@@ -10630,12 +10739,17 @@ class omnipkg:
                             current_python=self.current_python_context.replace("py", ""),
                             compatible_python=compatible_py,
                         )
+                except NoCompatiblePythonError:
+                    # CRITICAL: Re-raise this specific exception so it bubbles up
+                    raise
                 except Exception:
+                    # Swallow other exceptions during PyPI check
                     pass
 
             return None, pip_user_error_output
 
         except NoCompatiblePythonError:
+            # CRITICAL: Let this bubble up to the caller
             raise
         except Exception as e:
             return None, _('An unexpected error occurred during pip resolution: {}').format(e)
@@ -13642,127 +13756,55 @@ class omnipkg:
     def switch_active_python(self, version: str) -> int:
         """
         Switch the active Python context to the specified version.
-
-        Windows-specific behavior:
-        - Always performs full swap (no fast path) due to DLL caching issues
-        - Includes additional cleanup steps to prevent import errors
-        - SKIPS symlink/copy updates (uses config paths directly)
-
-        Linux/macOS behavior:
-        - Uses fast path optimization when already in correct context
-        - Updates symlinks for shell integration
+        
+        FOR QUANTUM HEALING ONLY: Updates the in-memory config for this omnipkg instance
+        to point to the correct Python. Does NOT touch symlinks or global state.
+        
+        For interactive swaps, users should use: 8pkg swap python <version>
         """
-        start_time = time.perf_counter_ns()
-        is_windows = platform.system() == "Windows"
-
-        # === TIER 1: THE NANOSECOND FAST PATH (In-Memory Check) ===
-        # SKIP THIS ON WINDOWS - Windows DLL caching makes fast path unreliable
-        if not is_windows:
-            configured_python = self.config_manager.get("python_executable")
-            if configured_python:
-                path_str = str(configured_python)
-                # Direct string checks - faster than regex!
-                if f"cpython-{version}" in path_str or path_str.endswith(f"python{version}"):
-                    elapsed_ns = time.perf_counter_ns() - start_time
-                    elapsed_ms = elapsed_ns / 1_000_000
-                    safe_print(
-                        _("⚡ Already in Python {} context. No swap needed!").format(version)
-                    )
-                    safe_print(f"   ⏱️  Detection time: {elapsed_ms:.3f}ms ({elapsed_ns:,} ns)")
-                    return 0
-
-        # === TIER 2: THE MILLISECOND FAST PATH (Authoritative Check) ===
-        # SKIP THIS ON WINDOWS - Same reason as above
-        if not is_windows:
-            target_context = f"py{version}"
-            if self.current_python_context == target_context:
-                elapsed_ns = time.perf_counter_ns() - start_time
-                elapsed_ms = elapsed_ns / 1_000_000
-                safe_print(_("⚡ Already in Python {} context. No swap needed!").format(version))
-                safe_print(f"   ⏱️  Detection time: {elapsed_ms:.3f}ms ({elapsed_ns:,} ns)")
-                return 0
-
-        # === THE SWAP PATH (Always executed on Windows, conditional on Linux/macOS) ===
         safe_print(_("🐍 Switching active Python context to version {}...").format(version))
-
-        # Windows-specific: Force refresh interpreter registry
-        if is_windows:
-            safe_print(_("   🪟 Windows detected: Forcing interpreter registry refresh..."))
-            self.interpreter_manager.refresh_registry()
-
+        
+        # Verify the target Python exists first
         managed_interpreters = self.interpreter_manager.list_available_interpreters()
-        target_interpreter_path = managed_interpreters.get(version)
-
-        # CRITICAL FIX: If not found, try refreshing the registry once (for non-Windows)
-        if not target_interpreter_path and not is_windows:
-            safe_print(
-                _("   - Python {} not found in cache, refreshing registry...").format(version)
-            )
-            self.interpreter_manager.refresh_registry()
-            managed_interpreters = self.interpreter_manager.list_available_interpreters()
-            target_interpreter_path = managed_interpreters.get(version)
-
-        if not target_interpreter_path:
+        if version not in managed_interpreters:
             safe_print(_('   ❌ Python {} not found in the registry.').format(version))
             safe_print(_('   - Available versions: {}').format(', '.join(managed_interpreters.keys())))
             return 1
-
-        safe_print(_("   ✅ Managed interpreter: {}").format(target_interpreter_path))
-        new_paths = self.config_manager._get_paths_for_interpreter(str(target_interpreter_path))
+        
+        target_path = managed_interpreters[version]
+        safe_print(_("   ✅ Managed interpreter: {}").format(target_path))
+        
+        # Update config (in-memory only for this omnipkg instance)
+        safe_print(_("   🔧 Updating configuration..."))
+        new_paths = self.config_manager._get_paths_for_interpreter(str(target_path))
+        
         if not new_paths:
             safe_print(f"❌ Could not determine paths for Python {version}.")
             return 1
+        
+        # ONLY update in-memory config - no file writes, no symlinks!
+        self.config_manager.set("python_executable", new_paths["python_executable"])
+        self.config_manager.set("site_packages_path", new_paths["site_packages_path"])
+        self.config_manager.set("multiversion_base", new_paths["multiversion_base"])
+        
+        # Bootstrap check (non-critical)
         try:
-            # Call the bootstrap helper on the ConfigManager
             self.config_manager._ensure_omnipkg_bootstrapped(
-                Path(target_interpreter_path), 
+                Path(target_path), 
                 version
             )
         except Exception as e:
             safe_print("   ⚠️  Bootstrap verification warning: {}".format(e))
-            # Proceed anyway; the check inside _ensure_omnipkg_bootstrapped is robust
-        safe_print(_("   🔧 Updating configuration..."))
-        self.config_manager.set("python_executable", new_paths["python_executable"])
-        self.config_manager.set("site_packages_path", new_paths["site_packages_path"])
-        self.config_manager.set("multiversion_base", new_paths["multiversion_base"])
-
-        # Windows-specific: Clear module cache to prevent stale imports
-        if is_windows:
-            safe_print(_("   🧹 Windows: Clearing module cache..."))
-            self._clear_windows_module_cache()
-
-        # CRITICAL FIX: Only update symlinks on Unix systems
-        # Windows uses config paths directly and doesn't need file copying/symlinking
-        if not is_windows:
-            safe_print(_("   🔗 Updating symlinks..."))
-            venv_path = self.config_manager.venv_path
-            try:
-                self.config_manager._update_default_python_links(
-                    venv_path, Path(target_interpreter_path)
-                )
-            except Exception as e:
-                safe_print(_("   ⚠️  Symlink update failed: {}").format(e))
-                safe_print(_("   - Continuing with config-only switch..."))
-        else:
-            safe_print(_("   ✅ Configuration updated (Windows uses direct paths)"))
-
-        elapsed_ns = time.perf_counter_ns() - start_time
-        elapsed_ms = elapsed_ns / 1_000_000
-
-        safe_print(_("\n🎉 Switched to Python {}!").format(version))
-
-        if not is_windows:
-            safe_print(
-                _("   To activate in your shell, run: source {}/bin/activate").format(
-                    self.config_manager.venv_path
-                )
-            )
-            safe_print(_("\n   Just kidding, omnipkg handled it for you automatically!"))
-
-        safe_print(f"   ⏱️  Swap completed in: {elapsed_ms:.3f}ms")
-
+        
+        # That's it! No symlinks, no global mutations!
+        safe_print(_("   - ✅ Environment successfully configured for Python {}.").format(version))
+        
+        # Remind users about the proper way to swap interactively
+        if os.environ.get("_OMNIPKG_QUANTUM_HEALING") != "1":
+            safe_print(_("   💡 For interactive shells, use: 8pkg swap python {}").format(version))
+        
         return 0
-
+        
     def _clear_windows_module_cache(self):
         """
         Windows-specific: Clear cached modules that might cause import conflicts.
