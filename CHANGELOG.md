@@ -5,30 +5,171 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [2.2.0] - 2026-02-01
+## [2.2.0] - 2026-02-09
 
-### Added
-- **High-Performance Worker Daemon**: Introduced  with an idle worker pool to provide near-zero latency for isolated process execution.
-- **Hardware Atomics C Extension**: Added an optional C extension () for HFT-grade atomic operations (CAS, load, store), with a pure Python fallback.
-- **Fully Automated Conda-Forge CI/CD**: New GitHub Actions workflow that automatically creates and merges PRs to the conda-forge feedstock upon a new release.
-- **New Demo Documentation**: Added  to document the concurrent testing capabilities.
+### 🔥 BREAKING CHANGES
 
-### Changed
-- **Architecture**: Replaced the legacy  and  with the new centralized daemon logic.
-- **Internationalization (i18n)**: Massively expanded translatable strings across the entire codebase, including core, CLI, and utilities.
-- **Resource Monitor**:  is now daemon-aware and queries the API for a reliable PID-to-package mapping.
-- **Setup**:  has been enhanced to handle the optional compilation of the C extension.
-- **Bubble Verification**:  now intelligently includes dependency bubbles during import tests (e.g., providing  to ).
-- **Web UI**: Removed telemetry and proxy logic from  for a simpler, direct-to-localhost connection model.
+**Global Interpreter State Removed - Per-Process Isolation Architecture**
 
-### Fixed
-- **Dev Tools**: The  script was fixed to handle multiple placeholders on a single line and preserve contextual commands.
-- **Flask Tests**: Corrected a variable shadowing bug where a throwaway  variable overwrote the  translation function.
+This is the most fundamental architectural change in omnipkg history. The entire global state mutation system (symlinks + single config) has been replaced with per-process isolation via shims.
 
-### Removed
-- **Obsolete Modules**: Deleted , , and  as their functionality is replaced or integrated elsewhere.
-- **Obsolete Tests**: Removed numerous old test files that are no longer relevant to the new architecture, including , , , and others.
+**What Changed:**
+- **OLD:** `omnipkg swap python 3.10` modified global symlinks, affecting ALL terminal sessions
+- **NEW:** `omnipkg swap python 3.10` spawns an isolated subshell with shims, affecting ONLY that shell/process
+- **Migration Required:** Update workflows to use `omnipkg swap python <version>` for interactive shells or version aliases (`8pkg311`, `8pkg310`) for one-shot commands
 
+### 🚀 Major Features
+
+#### Per-Process Python Isolation
+Complete architectural redesign eliminating global state pollution:
+- **Version-Aware Dispatcher:** CLI now uses `omnipkg.dispatcher:main` for intelligent routing
+- **Per-Interpreter Configs:** Each Python stores its own `.omnipkg_config.json` in its bin/ directory
+- **Shim-Based Routing:** Shims intercept python calls, read `OMNIPKG_PYTHON` env var, route to correct interpreter
+- **Isolated Subshells:** `omnipkg swap python` spawns isolated subshell with shim PATH prefix
+- **Version Aliases:** New `8pkg311`, `8pkg310`, etc. commands inject `--python` flag for one-shot operations
+- **Smart Cleanup:** Logic ignores leaked `OMNIPKG_PYTHON` when shell/conda env changes
+
+**Shell Isolation Example:**
+```bash
+$ python --version → 3.11
+$ 8pkg swap python 3.10 → new shell
+$ python --version → 3.10
+$ exit
+$ python --version → 3.11
+$ 8pkg311 info python → one-shot in 3.11
+```
+
+#### Quantum Healing - Finally Fixed!
+The quantum healing system now actually works:
+- **Proper Activation:** Now triggers during install validation on incompatible Python versions
+- **Auto-Swap Example:** Installing TF 2.20 on Python 3.11 → auto-swap to 3.13 → install → swap back
+- **Healing Flag:** Uses `_OMNIPKG_QUANTUM_HEALING` to distinguish automated vs user-initiated swaps
+- **Context Preservation:** Shell context fully preserved — returns to original Python after healing
+
+#### High-Performance Worker Daemon
+Replaced on-demand workers with persistent `WorkerPoolDaemon`:
+- **Sub-millisecond Latency:** Eliminates cold-start overhead for package execution
+- **Per-Python Pools:** Daemon idle pools now per-python version → prevents version mismatch races
+- **Environment Isolation:** `PersistentWorker` scrubs `LD_LIBRARY_PATH`/`PYTHONPATH` → fixes torch import contamination
+- **Improved Lifecycle:** Better process isolation and resource management
+
+#### Hardware-Accelerated Atomic Operations
+Optional C extension (`omnipkg_atomic`) for HFT-grade concurrency:
+- **Native CPU Atomics:** Compare-and-swap (CAS) operations using native CPU atomic instructions
+- **Lock-Free Data Structures:** Zero-overhead abstraction
+- **Graceful Degradation:** Automatic fallback to pure-Python implementation when compilation unavailable
+
+#### Fully Automated Conda-Forge Pipeline
+End-to-end automation for conda-forge distribution:
+1. Monitors PyPI publication
+2. Computes package SHA256 checksums
+3. Generates conda-forge feedstock pull requests
+4. Validates CI/CD test results
+5. Auto-merges upon successful validation
+6. Manages multi-platform build orchestration
+
+### ✨ Key Improvements
+
+#### System Compatibility & Stability
+- **Non-Interactive Detection:** Auto-detects TTY/CI/Docker/first-setup → no subshell in pipelines
+- **ABI Fixes:** Dependency constraints, numpy dtype size errors resolved
+- **Python 3.15 Support:** Full Python 3.15.0a5 support + safety skipping on 3.15+
+- **Dependency Constraints:** New `dependency_constraints.py` module for ABI compatibility
+
+#### Testing & Quality Assurance
+- **Modernized Test Suite:** DaemonProxy everywhere, warmup phase, tensor math in circular switching
+- **Production Benchmarks:** Focused on real-world performance validation
+- **Refactored Architecture:** Aligned with new daemon architecture
+- **Removed Obsolete Tests:** Cleaned up `quantum_chaos.py`, `test_multiverse_analysis.py`, `test_native_ipc_proper.py`, and 6 other deprecated test files
+
+#### Internationalization (i18n)
+- **Massive Translation Expansion:** ~2k Arabic/Amharic strings via AI consensus chain
+- **26 Languages Updated:** All locale files regenerated with new strings
+- **Binary Size Reduction:** .mo files optimized (e.g., zh_CN: 21KB → 15KB)
+
+#### CI/CD Enhancements
+- **Windows Daemon Hardening:** Polling fixes, deadlock resolution
+- **New Workflows:** `no-paid-scanners.yml`, `windows_daemon_debug.yml` (269 lines)
+- **Cross-Interpreter Testing:** Enhanced validation across Python versions
+
+#### Intelligent Resource Monitoring
+- **Daemon-Aware Monitoring:** `omnipkg daemon monitor` queries API for real-time worker pool status
+- **Accurate Process Tracking:** Reliable PID-to-package mapping
+
+#### Dependency-Aware Verification
+- **Transitive Dependency Support:** Verification includes dependency bubbles (e.g., providing TensorFlow when verifying Keras)
+- **Smarter Import Tests:** `verification_strategy.py` enhanced with 294 line changes
+
+#### Integrated Historical Package Support
+- **Consolidated Time-Machine:** Functionality integrated directly into core installation logic
+- **Removed Separate Module:** Deleted `deptimemachine.py` (346 lines)
+
+### 🗑️ Code Quality & Cleanup
+
+#### Architectural Simplification
+- **Removed Deprecated Modules:**
+  - `worker_controller.py` (340 lines) → Replaced by centralized daemon
+  - `deptimemachine.py` (346 lines) → Integrated into core
+  - `lockmanager.py` (49 lines) → Replaced by atomic operations
+- **Consolidated Logic:** Daemon logic centralized in `worker_daemon.py`
+- **Removed Obsolete Tests:** 9 test files deleted (1,167 lines total)
+
+#### Statistics (v2.1.2 → v2.2.0)
+**Excluding locale files:**
+- Files changed: 75
+- Insertions: +7,255
+- Deletions: -5,145
+- **Net: +2,110 lines of production code**
+
+**Including locale files:**
+- Files changed: 125
+- Insertions: +184,067
+- Deletions: -85,770
+- **Net: +98,297 lines total** (~96k from i18n updates across 26 languages)
+
+### 🐛 Bug Fixes & Resolved Issues
+
+**Closes:**
+- Global state pollution across terminal sessions
+- Quantum healing activation failures
+- ABI/worker contamination issues
+- CI deadlocks on Windows
+- Interactive CI hangs in non-TTY environments
+- Version mismatch races in daemon pools
+- Torch import contamination from environment variables
+
+### 📝 Upgrade Instructions
+```bash
+# Standard upgrade
+pip install --upgrade omnipkg
+# or
+conda install -c conda-forge omnipkg
+
+# Restart daemon (recommended for daemon users)
+omnipkg daemon stop && omnipkg daemon start
+```
+
+**Migration Notes:**
+1. **Global Switching Removed:** If you relied on global Python switching, update to use:
+   - `omnipkg swap python <version>` for interactive shells
+   - Version aliases (`8pkg311`, `8pkg310`) for scripts/one-shot commands
+2. **Subshell Behavior:** `swap` now spawns isolated subshells; use `exit` to return to original context
+3. **Config Location:** Configs now per-interpreter in `<python>/bin/.omnipkg_config.json`
+
+### 🎯 What's Next
+
+The per-process isolation architecture is the foundation for:
+- **True Process Sandboxing:** Each package runs in completely isolated context
+- **Parallel Multi-Version:** Run Python 3.8, 3.11, 3.13 simultaneously without interference
+- **Enhanced Security:** No global state = no cross-contamination
+
+### 🙏 Acknowledgments
+
+This release represents months of architectural redesign and over 75 files touched. Special thanks to the CI infrastructure for catching edge cases across 70+ platform builds.
+
+**All CI green ✅**
+
+---
 ## [2.1.1] - 2026-01-07
 
 ### 🔥 Critical Fix
