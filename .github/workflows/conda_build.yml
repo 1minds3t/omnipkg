@@ -27,9 +27,10 @@ jobs:
       run: |
         if [ "${{ github.event_name }}" == "release" ]; then
           VERSION="${{ github.event.release.tag_name }}"
-          VERSION="${VERSION#v}"
+          VERSION="${VERSION#v}"  # ← STRIP the v here (ALREADY IN YOUR CODE!)
         else
           VERSION="${{ github.event.inputs.version }}"
+          VERSION="${VERSION#v}"  # ← Also strip if manually entered with v
         fi
         echo "version=$VERSION" >> $GITHUB_OUTPUT
         echo "🔍 Target version: $VERSION"
