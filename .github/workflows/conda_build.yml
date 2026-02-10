@@ -126,10 +126,11 @@ jobs:
             --title "chore: update conda meta files to version $VERSION" \
             --body "Automated update from release workflow" \
             --base main \
-            --head "$BRANCH"
+            --head "$BRANCH" || echo "ℹ️  PR already exists"
           
-          echo "✅ PR created for conda meta updates"
+          echo "✅ Branch updated"
           echo "pr_branch=$BRANCH" >> $GITHUB_OUTPUT
+          
         fi
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
