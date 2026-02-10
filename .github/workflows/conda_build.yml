@@ -11,12 +11,13 @@ on:
         type: string
 
 jobs:
+
   # ═══════════════════════════════════════════════════════════════════
   # JOB 1: Wait for PyPI and get SHA256 from PyPI directly
   # ═══════════════════════════════════════════════════════════════════
   wait-for-pypi:
     runs-on: ubuntu-latest
-    timeout-minutes: 1440  # 24 hours - no rush, let builds complete
+    timeout-minutes: 1440
     outputs:
       version: ${{ steps.get-version.outputs.version }}
       sha256: ${{ steps.get-sha.outputs.sha256 }}
@@ -26,7 +27,7 @@ jobs:
       run: |
         if [ "${{ github.event_name }}" == "release" ]; then
           VERSION="${{ github.event.release.tag_name }}"
-          VERSION="${VERSION#v}"  # Remove 'v' prefix if present
+          VERSION="${VERSION#v}"
         else
           VERSION="${{ github.event.inputs.version }}"
         fi
@@ -50,26 +51,24 @@ jobs:
             echo "🕐 Still waiting... ${ELAPSED} minutes elapsed"
           fi
           
-          # Check PyPI JSON API for the version
           HTTP_CODE=$(curl -s -o pypi_response.json -w "%{http_code}" \
             "https://pypi.org/pypi/omnipkg/$VERSION/json")
           
           if [ "$HTTP_CODE" = "200" ]; then
             echo "✅ Package found on PyPI!"
             
-            # Extract SHA256 directly from PyPI JSON for the .tar.gz file
             SHA256=$(jq -r '.urls[] | select(.filename | endswith(".tar.gz")) | .digests.sha256' pypi_response.json)
             
             if [ -n "$SHA256" ] && [ "$SHA256" != "null" ]; then
               echo "✅ SHA256 extracted from PyPI: $SHA256"
               echo "sha256=$SHA256" >> $GITHUB_OUTPUT
-              break  # ← Just break here, no CDN check needed
+              break
             else
               echo "⚠️  SHA256 not found in response, retrying..."
             fi
           fi
           
-          sleep 120  # Check every 2 minutes
+          sleep 120
         done
         
         rm -f pypi_response.json
@@ -85,9 +84,9 @@ jobs:
       uses: actions/checkout@v4
       with:
         token: ${{ secrets.GITHUB_TOKEN }}
-        ref: main  # ← Force checkout main branch
+        ref: main
         fetch-depth: 0
-        
+
     - name: Update meta-noarch.yaml
       run: |
         VERSION="${{ needs.wait-for-pypi.outputs.version }}"
@@ -110,26 +109,32 @@ jobs:
         
         echo "✅ Updated meta-platforms.yaml"
         
-    - name: Commit and push updates
+    - name: Create PR with conda meta updates
       run: |
         VERSION="${{ needs.wait-for-pypi.outputs.version }}"
+        BRANCH="auto-update-conda-meta-$VERSION"
         
+        git checkout -b "$BRANCH"
         git config --local user.email "action@github.com"
         git config --local user.name "GitHub Action"
-        
-        # Make sure we're on main
-        git checkout main
-        git pull origin main
-        
         git add src/omnipkg/conda-recipes/meta-noarch.yaml src/omnipkg/conda-recipes/meta-platforms.yaml
         
         if git diff --staged --quiet; then
           echo "ℹ️  No changes to commit"
         else
           git commit -m "chore: update conda meta files to version $VERSION"
-          git push origin main  # ← Explicitly push to main
-          echo "✅ Changes pushed to main repo"
+          git push origin "$BRANCH"
+          
+          gh pr create \
+            --title "chore: update conda meta files to version $VERSION" \
+            --body "Automated update from release workflow" \
+            --base main \
+            --head "$BRANCH"
+          
+          echo "✅ PR created for conda meta updates"
         fi
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   # ═══════════════════════════════════════════════════════════════════
   # JOB 3: Update conda-forge feedstock (NOARCH - Build 0)
