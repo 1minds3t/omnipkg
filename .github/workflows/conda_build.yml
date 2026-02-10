@@ -380,7 +380,22 @@ jobs:
         path: main-repo
         ref: ${{ needs.update-local-templates.outputs.pr_branch || 'main' }}
 
+    - name: Check if work needed
+      id: check-needed
+      run: |
+        cd feedstock
+        VERSION="${{ needs.wait-for-pypi.outputs.version }}"
+        BRANCH="update-platforms-v$VERSION"
+        
+        if git ls-remote --heads origin "$BRANCH" | grep -q "$BRANCH"; then
+          echo "✅ Branch exists, skipping update"
+          echo "skip_update=true" >> $GITHUB_ENV
+        else
+          echo "skip_update=false" >> $GITHUB_ENV
+        fi
+
     - name: Update feedstock with PLATFORMS template
+      if: env.skip_update != 'true'
       run: |
         cd feedstock
         VERSION="${{ needs.wait-for-pypi.outputs.version }}"
@@ -405,6 +420,7 @@ jobs:
         cat conda-forge.yml
         
     - name: Create branch and commit
+      if: env.skip_update != 'true'
       run: |
         cd feedstock
         VERSION="${{ needs.wait-for-pypi.outputs.version }}"
@@ -482,7 +498,7 @@ jobs:
         GH_TOKEN: ${{ secrets.FEEDSTOCK_TOKEN }}
       run: |
         VERSION="${{ needs.wait-for-pypi.outputs.version }}"
-        BRANCH="update-noarch-v$VERSION"
+        BRANCH="update-platforms-v$VERSION"
         
         # Get PR number from create step OR find existing
         PR_NUMBER="${{ steps.create-pr.outputs.pull-request-number }}"
