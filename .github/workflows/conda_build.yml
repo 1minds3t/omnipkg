@@ -120,7 +120,7 @@ jobs:
           echo "pr_branch=" >> $GITHUB_OUTPUT
         else
           git commit -m "chore: update conda meta files to version $VERSION"
-          git push origin "$BRANCH"
+          git push -f origin "$BRANCH"
           
           gh pr create \
             --title "chore: update conda meta files to version $VERSION" \
