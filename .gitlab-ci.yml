@@ -1,0 +1,13 @@
+image: python:3.11
+
+pages:
+  stage: deploy
+  before_script:
+    - pip install -r requirements-docs.txt
+  script:
+    - mkdocs build --site-dir public
+  artifacts:
+    paths:
+      - public
+  only:
+    - main
