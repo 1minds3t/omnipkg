@@ -170,10 +170,9 @@ jobs:
         fi
   
     - name: Sync fork with upstream
-      if: steps.version-check.outputs.already_exists != 'true'
       run: |
         cd feedstock
-        git remote add upstream https://github.com/conda-forge/omnipkg-feedstock.git
+        git remote add upstream https://github.com/conda-forge/omnipkg-feedstock.git || true
         git fetch upstream
         git checkout main
         git reset --hard upstream/main
