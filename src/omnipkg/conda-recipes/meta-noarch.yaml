@@ -17,10 +17,10 @@ build:
     - export OMNIPKG_SKIP_C_EXT=1
     - python -m pip install . --no-deps --no-build-isolation -vv
   entry_points:
-    - omnipkg = omnipkg.cli:main
-    - 8pkg = omnipkg.cli:main
-    - 8PKG = omnipkg.cli:main
-    - OMNIPKG = omnipkg.cli:main
+  - omnipkg = omnipkg.dispatcher:main
+  - 8pkg = omnipkg.dispatcher:main
+  - 8PKG = omnipkg.dispatcher:main
+  - OMNIPKG = omnipkg.dispatcher:main
 
 requirements:
   host:
