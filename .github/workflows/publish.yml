@@ -215,10 +215,21 @@ jobs:
           exit 1
         fi
         
-    - name: Clean and build
+    - name: Install build tools
       run: |
-        rm -rf dist/ build/ *.egg-info/
-        python -m build
+        python -m pip install --upgrade pip
+        pip install build tomli cibuildwheel
+        
+    - name: Build wheels with cibuildwheel
+      uses: pypa/cibuildwheel@v2.20.0
+      env:
+        CIBW_BUILD: cp311-*
+        CIBW_SKIP: "*-musllinux_*"
+        CIBW_ARCHS_LINUX: x86_64
+        
+    - name: Build source distribution
+      run: |
+        python -m build --sdist
         
     - name: Publish to PyPI using Trusted Publishing
       uses: pypa/gh-action-pypi-publish@release/v1
