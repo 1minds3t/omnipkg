@@ -247,12 +247,12 @@ jobs:
         if [ -n "$PR_URL" ]; then
           PR_NUMBER=$(echo "$PR_URL" | grep -oP '\d+$')
           echo "✅ PR created: $PR_URL"
-          echo "pull-request-number=$PR_NUMBER" >> $GITHUB_OUTPUT
         else
-          echo "⚠️  PR may already exist"
+          echo "⚠️  PR already exists, finding it..."
           PR_NUMBER=$(gh pr list --repo conda-forge/omnipkg-feedstock --head 1minds3t:$BRANCH --json number --jq '.[0].number')
-          echo "pull-request-number=$PR_NUMBER" >> $GITHUB_OUTPUT
+          echo "✅ Found existing PR #$PR_NUMBER"
         fi
+        echo "pull-request-number=$PR_NUMBER" >> $GITHUB_OUTPUT
 
     - name: Request re-render
       if: env.skip_pr != 'true' && steps.create-pr.outputs.pull-request-number != ''
@@ -473,11 +473,12 @@ jobs:
         if [ -n "$PR_URL" ]; then
           PR_NUMBER=$(echo "$PR_URL" | grep -oP '\d+$')
           echo "✅ PR created: $PR_URL"
-          echo "pull-request-number=$PR_NUMBER" >> $GITHUB_OUTPUT
         else
+          echo "⚠️  PR already exists, finding it..."
           PR_NUMBER=$(gh pr list --repo conda-forge/omnipkg-feedstock --head 1minds3t:$BRANCH --json number --jq '.[0].number')
-          echo "pull-request-number=$PR_NUMBER" >> $GITHUB_OUTPUT
+          echo "✅ Found existing PR #$PR_NUMBER"
         fi
+        echo "pull-request-number=$PR_NUMBER" >> $GITHUB_OUTPUT
 
     - name: Request re-render
       if: env.skip_pr != 'true' && steps.create-pr.outputs.pull-request-number != ''
