@@ -4,3 +4,4 @@
 
 [build.environment]
   PYTHON_VERSION = "3.11"
+  NETLIFY_NEXT_PLUGIN_SKIP = "true"
