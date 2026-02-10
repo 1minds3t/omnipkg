@@ -164,8 +164,12 @@ jobs:
               uv python pin 3.11
               
               # Add UV's Python to PATH so 'python3' and 'omnipkg' work
-              export PATH=\"\$HOME/.local/share/uv/python/cpython-3.11.14-linux-x86_64-gnu/bin:\$PATH\"
-              
+              ARCH=\$(uname -m)
+              if [ \"\$ARCH\" = \"aarch64\" ]; then
+                export PATH=\"\$HOME/.local/share/uv/python/cpython-3.11.14-linux-aarch64-gnu/bin:\$PATH\"
+              else
+                export PATH=\"\$HOME/.local/share/uv/python/cpython-3.11.14-linux-x86_64-gnu/bin:\$PATH\"
+              fi
               # Create symlink for convenience
               ln -sf \$(uv python find 3.11) /usr/local/bin/python3
               
