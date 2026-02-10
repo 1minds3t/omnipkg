@@ -274,7 +274,7 @@ jobs:
         GH_TOKEN: ${{ secrets.FEEDSTOCK_TOKEN }}
       run: |
         VERSION="${{ needs.wait-for-pypi.outputs.version }}"
-        BRANCH="update-platforms-v$VERSION"
+        BRANCH="update-noarch-v$VERSION"
         
         # Get PR number from find-pr step OR create step
         PR_NUMBER="${{ steps.find-pr.outputs.pr_number }}"
@@ -349,7 +349,7 @@ jobs:
         GH_TOKEN: ${{ secrets.FEEDSTOCK_TOKEN }}
       run: |
         VERSION="${{ needs.wait-for-pypi.outputs.version }}"
-        BRANCH="update-platforms-v$VERSION"
+        BRANCH="update-noarch-v$VERSION"
         
         # Get PR number the SAME WAY we found it in wait-for-checks
         PR_NUMBER="${{ steps.find-pr.outputs.pr_number }}"
@@ -376,7 +376,7 @@ jobs:
         gh pr merge $PR_NUMBER \
           --repo conda-forge/omnipkg-feedstock \
           --squash \
-          --subject "Build for $VERSION (platforms)" \
+          --subject "Build for $VERSION (no-arch)" \
           --body ""
         
         echo "✅ Platforms build merged!"
