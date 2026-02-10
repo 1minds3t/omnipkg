@@ -163,7 +163,10 @@ jobs:
               uv python install 3.11
               uv python pin 3.11
               
-              # Create alias so 'python3' works
+              # Add UV's Python to PATH so 'python3' and 'omnipkg' work
+              export PATH=\"\$HOME/.local/share/uv/python/cpython-3.11.14-linux-aarch64-gnu/bin:\$PATH\"
+              
+              # Create symlink for convenience
               ln -sf \$(uv python find 3.11) /usr/local/bin/python3
               
             elif command -v apk > /dev/null 2>&1; then 
