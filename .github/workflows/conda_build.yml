@@ -305,7 +305,13 @@ jobs:
               echo "❌ Some checks failed"
               gh pr view $PR_NUMBER --repo conda-forge/omnipkg-feedstock --json statusCheckRollup
               exit 1
-            elif echo "$STATUS" | grep -q "SUCCESS"; then
+           FAILED=$(gh pr view $PR_NUMBER --repo conda-forge/omnipkg-feedstock --json statusCheckRollup --jq '[.statusCheckRollup[] | select(.conclusion == "FAILURE")] | length')
+            
+            if [ "$FAILED" -gt 0 ]; then
+              exit 1
+            else
+              break  # All passed!
+            fi
               echo "✅ All checks passed!"
               break
             fi
@@ -496,7 +502,13 @@ jobs:
             if echo "$STATUS" | grep -q "FAILURE"; then
               echo "❌ Checks failed"
               exit 1
-            elif echo "$STATUS" | grep -q "SUCCESS"; then
+            FAILED=$(gh pr view $PR_NUMBER --repo conda-forge/omnipkg-feedstock --json statusCheckRollup --jq '[.statusCheckRollup[] | select(.conclusion == "FAILURE")] | length')
+              
+              if [ "$FAILED" -gt 0 ]; then
+                exit 1
+              else
+                break  # All passed!
+              fi
               echo "✅ All passed!"
               break
             fi
