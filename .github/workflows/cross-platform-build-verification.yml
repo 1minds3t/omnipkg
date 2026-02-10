@@ -152,23 +152,14 @@ jobs:
             if command -v apt-get > /dev/null 2>&1; then 
               apt-get update && apt-get install -y python3 python3-pip python3-venv build-essential python3-dev gcc
             elif command -v dnf > /dev/null 2>&1; then 
-              # ROCKY FIX: Install Python 3.11 from EPEL instead of broken 3.9
-              dnf install -y epel-release
-              dnf install -y python3.11 python3.11-pip python3.11-devel gcc make
-              alternatives --set python3 /usr/bin/python3.11 || ln -sf /usr/bin/python3.11 /usr/bin/python3
+              dnf install -y python3 python3-pip gcc python3-devel
             elif command -v apk > /dev/null 2>&1; then 
               apk add --no-cache python3 py3-pip py3-build gcc python3-dev musl-dev linux-headers
             fi
             
             python3 -m pip install --upgrade pip build || python3 -m pip install --break-system-packages pip build
-            
-            # Clean dist before building
-            rm -rf dist/ build/ *.egg-info
-            
             python3 -m build
-            
             python3 -m pip install dist/*.whl || python3 -m pip install --break-system-packages dist/*.whl
-            
             omnipkg --version
             omnipkg list
           "
