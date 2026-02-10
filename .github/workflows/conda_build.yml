@@ -63,17 +63,7 @@ jobs:
             if [ -n "$SHA256" ] && [ "$SHA256" != "null" ]; then
               echo "✅ SHA256 extracted from PyPI: $SHA256"
               echo "sha256=$SHA256" >> $GITHUB_OUTPUT
-              
-              # Verify the file is actually downloadable
-              DOWNLOAD_URL="https://files.pythonhosted.org/packages/source/o/omnipkg/omnipkg-$VERSION.tar.gz"
-              DOWNLOAD_CODE=$(curl -s -o /dev/null -w "%{http_code}" -I "$DOWNLOAD_URL")
-              
-              if [ "$DOWNLOAD_CODE" = "200" ] || [ "$DOWNLOAD_CODE" = "302" ]; then
-                echo "✅ Package file is downloadable!"
-                break
-              else
-                echo "⚠️  Package found but file not yet on CDN (HTTP $DOWNLOAD_CODE), retrying..."
-              fi
+              break  # ← Just break here, no CDN check needed
             else
               echo "⚠️  SHA256 not found in response, retrying..."
             fi
