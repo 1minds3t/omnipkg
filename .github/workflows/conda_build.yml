@@ -305,7 +305,7 @@ jobs:
           echo "✅ PR already existed, checking status immediately..."
         else
           echo "⏳ Newly created PR, waiting for checks to start..."
-          sleep 300
+          sleep 120
         fi
         
         ATTEMPT=0
