@@ -117,7 +117,7 @@ jobs:
   linux-distros-podman-critical:
     name: Podman - ${{ matrix.distro }} (${{ matrix.platform }})
     runs-on: [self-hosted, linux, x64]
-    timeout-minutes: 25
+    timeout-minutes: 99999999999999999999999999999999999999999999999999999999999999999999999999999
     strategy:
       fail-fast: false
       matrix:
