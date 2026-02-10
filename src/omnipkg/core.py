@@ -11673,6 +11673,7 @@ class omnipkg:
 
                     packages_after = self.get_installed_packages(live=True)
                     any_installations_made = True
+                    final_main_state = packages_after.copy()  # Track latest state
 
                     # Update KB for the new omnipkg version
                     main_env_kb_updates["omnipkg"] = requested_version
@@ -11796,6 +11797,11 @@ class omnipkg:
         bubbled_kb_updates = {}
         any_installations_made = False
 
+        # ADD THESE THREE LINES:
+        initial_packages_before = self.get_installed_packages(live=True)
+        final_main_state = {}  # Will be updated after each package install
+        packages_before = initial_packages_before.copy()  # For snapshot comparison
+
         for package_spec in sorted_packages:
             try:
                 safe_print("\n" + "─" * 60)
@@ -11858,7 +11864,7 @@ class omnipkg:
 
                 any_installations_made = True
                 packages_after = self.get_installed_packages(live=True)
-
+                final_main_state = packages_after.copy()  # Track latest state
                 # 3. Change Detection
                 all_changes = self._detect_all_changes(packages_before, packages_after)
 
@@ -12099,30 +12105,31 @@ class omnipkg:
         if not force_reinstall:
             self._cleanup_redundant_bubbles(protected_packages=protected_from_cleanup)
         # Knowledge base update and cleanup logic remains the same...
-        safe_print(_("\n🧠 Updating knowledge base (consolidated)..."))
-        all_changed_specs = set()
-        final_main_state = self.get_installed_packages(live=True)
-        initial_packages_before = (
-            self.get_installed_packages(live=True)
-            if not any_installations_made
-            else packages_before
-        )
+        safe_print(_("\n🧠 Updating knowledge base (priority packages only)..."))
+
+        # Separate main packages from nested packages
+        priority_specs = set()  # Main packages that changed
+        bubble_paths_to_scan = {}  # {pkg_name: bubble_path} for background scan
 
         for name, ver in final_main_state.items():
             if name not in initial_packages_before or initial_packages_before[name] != ver:
-                all_changed_specs.add(f"{name}=={ver}")
-        for pkg_name, version in bubbled_kb_updates.items():
-            all_changed_specs.add(f"{pkg_name}=={version}")
-        for pkg_name, version in main_env_kb_updates.items():
-            all_changed_specs.add(f"{pkg_name}=={version}")
+                priority_specs.add(f"{name}=={ver}")
 
-        if all_changed_specs:
-            safe_print(
-                "    Targeting {} package(s) for KB update...".format(len(all_changed_specs))
-            )
+        for pkg_name, version in bubbled_kb_updates.items():
+            priority_specs.add(f"{pkg_name}=={version}")
+            # Track bubble location for background scan
+            bubble_path = self.multiversion_base / f"{pkg_name}-{version}"
+            if bubble_path.exists():
+                bubble_paths_to_scan[pkg_name] = bubble_path
+
+        for pkg_name, version in main_env_kb_updates.items():
+            priority_specs.add(f"{pkg_name}=={version}")
+
+        if priority_specs:
+            safe_print(f"    ⚡ Updating {len(priority_specs)} priority package(s) immediately...")
             try:
                 from .package_meta_builder import omnipkgMetadataGatherer
-
+                
                 gatherer = omnipkgMetadataGatherer(
                     config=self.config,
                     env_id=self.env_id,
@@ -12131,7 +12138,19 @@ class omnipkg:
                     omnipkg_instance=self,
                 )
                 gatherer.cache_client = self.cache_client
-                gatherer.run(targeted_packages=list(all_changed_specs))
+                
+                # PRIORITY UPDATE: Only the main packages, skip nested discovery
+                gatherer.run(
+                    targeted_packages=list(priority_specs),
+                    skip_nested_discovery=True  # NEW FLAG
+                )
+                
+                safe_print("    ✅ Priority packages indexed")
+                
+                # Schedule background scan for nested packages
+                if bubble_paths_to_scan:
+                    safe_print(f"    🔄 Scheduling background scan of {len(bubble_paths_to_scan)} bubble(s)...")
+                    self._schedule_background_kb_scan(bubble_paths_to_scan, python_context_version)
                 if hasattr(self, "_info_cache"):
                     self._info_cache.clear()
                 else:
@@ -12151,6 +12170,33 @@ class omnipkg:
         self._save_last_known_good_snapshot()
         self._synchronize_knowledge_base_with_reality()
         return 0
+
+    def _schedule_background_kb_scan(self, bubble_paths: Dict[str, Path], python_version: str):
+        """
+        Launches a non-blocking background process to scan nested packages inside bubbles.
+        """
+        import subprocess
+        
+        bubble_list = [f"{name}:{path}" for name, path in bubble_paths.items()]
+        
+        # Create a background scan script
+        scan_cmd = [
+            sys.executable,
+            "-m", "omnipkg.background_scanner",
+            "--bubbles", ",".join(bubble_list),
+            "--python-version", python_version,
+            "--env-id", self.env_id
+        ]
+        
+        # Launch detached process
+        subprocess.Popen(
+            scan_cmd,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            start_new_session=True  # Detach from parent
+        )
+        
+        safe_print(f"    💫 Background scan started: Deep-scanning .dist-info inside {len(bubble_paths)} bubbles (non-blocking)...")
 
     def smart_upgrade(
         self,
@@ -13272,7 +13318,13 @@ class omnipkg:
         if pre_discovered_dists is not None:
             all_dists = pre_discovered_dists
         else:
-            all_dists = gatherer._discover_distributions(None, verbose=False)
+            # FIXED: Removed 'search_path_override' to allow global search
+            all_dists = gatherer._discover_distributions(
+                targeted_packages=[],
+                verbose=False,
+                search_path_override=None, 
+                skip_nested_discovery=False
+            )
 
         target_dists = [
             dist for dist in all_dists if canonicalize_name(dist.metadata.get("Name", "")) == c_name
