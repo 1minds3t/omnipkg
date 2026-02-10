@@ -145,264 +145,217 @@ jobs:
     timeout-minutes: 120
     outputs:
       pr_number: ${{ steps.create-pr.outputs.pull-request-number }}
+    
     steps:
-    - name: Checkout feedstock fork
-      uses: actions/checkout@v4
-      with:
-        repository: 1minds3t/omnipkg-feedstock
-        token: ${{ secrets.FEEDSTOCK_TOKEN }}
-        path: feedstock
-        fetch-depth: 0
-  
-    - name: Check if version already exists
-      id: version-check
-      run: |
-        cd feedstock
-        VERSION="${{ needs.wait-for-pypi.outputs.version }}"
-        
-        # Check if this version is already in the feedstock
-        if grep -q "{% set version = \"$VERSION\" %}" recipe/meta.yaml; then
-          echo "✅ Version $VERSION already exists in feedstock"
-          echo "already_exists=true" >> $GITHUB_OUTPUT
-        else
-          echo "🆕 Version $VERSION needs to be added"
-          echo "already_exists=false" >> $GITHUB_OUTPUT
-        fi
-  
-    - name: Sync fork with upstream
-      run: |
-        cd feedstock
-        git remote add upstream https://github.com/conda-forge/omnipkg-feedstock.git || true
-        git fetch upstream
-        git checkout main
-        git reset --hard upstream/main
-        git push -f origin main
-        echo "✅ Fork synced"
+      - name: Checkout feedstock fork
+        uses: actions/checkout@v4
+        with:
+          repository: 1minds3t/omnipkg-feedstock
+          token: ${{ secrets.FEEDSTOCK_TOKEN }}
+          path: feedstock
+          fetch-depth: 0
 
-    - name: Force clean state after sync
-      run: |
-        cd feedstock
-        git checkout main
-        git reset --hard upstream/main
-        git push -f origin main
-        echo "✅ Fork reset to upstream state"
-        
-    - name: Checkout main repo templates (from PR branch if exists)
-      uses: actions/checkout@v4
-      with:
-        path: main-repo
-        ref: ${{ needs.update-local-templates.outputs.pr_branch || 'main' }}
+      - name: Sync fork with upstream
+        run: |
+          cd feedstock
+          git remote add upstream https://github.com/conda-forge/omnipkg-feedstock.git 2>/dev/null || true
+          git fetch upstream
+          git checkout main
+          git reset --hard upstream/main
+          git push -f origin main
+          echo "✅ Fork synced and reset to upstream"
 
-    - name: Update feedstock with NOARCH template
-      run: |
-        cd feedstock
-        VERSION="${{ needs.wait-for-pypi.outputs.version }}"
-        SHA256="${{ needs.wait-for-pypi.outputs.sha256 }}"
-        
-        echo "📝 Copying NOARCH templates"
-        
-        # Copy meta-noarch.yaml → recipe/meta.yaml
-        cp ../main-repo/src/omnipkg/conda-recipes/meta-noarch.yaml recipe/meta.yaml
-        
-        # Copy conda-forge-noarch.yml → conda-forge.yml
-        cp ../main-repo/src/omnipkg/conda-recipes/conda-forge-noarch.yml conda-forge.yml
-        
-        # Update version and SHA256 in meta.yaml
-        sed -i "s/{% set version = \".*\" %}/{% set version = \"$VERSION\" %}/" recipe/meta.yaml
-        sed -i "s/sha256: .*/sha256: $SHA256/" recipe/meta.yaml
-        
-        echo "✅ NOARCH files updated:"
-        echo "--- recipe/meta.yaml ---"
-        head -20 recipe/meta.yaml
-        echo "--- conda-forge.yml ---"
-        cat conda-forge.yml
-        
-    - name: Create branch and commit
-      run: |
-        cd feedstock
-        VERSION="${{ needs.wait-for-pypi.outputs.version }}"
-        BRANCH="update-noarch-v$VERSION"
-        
-        git checkout -b "$BRANCH"
-        git config --local user.email "action@github.com"
-        git config --local user.name "GitHub Action"
-        git add recipe/meta.yaml conda-forge.yml
-        
-        if git diff --staged --quiet; then
-          echo "ℹ️  No changes to commit"
-          echo "skip_pr=true" >> $GITHUB_ENV
-        else
-          git commit -m "Update omnipkg to $VERSION (noarch)"
-          git push -f origin "$BRANCH"
-          echo "✅ Changes pushed to branch $BRANCH"
-          echo "skip_pr=false" >> $GITHUB_ENV
-        fi
-        
-    - name: Create PR to conda-forge
-      id: create-pr
-      if: env.skip_pr != 'true'
-      env:
-        GH_TOKEN: ${{ secrets.FEEDSTOCK_TOKEN }}
-      run: |
-        cd feedstock
-        VERSION="${{ needs.wait-for-pypi.outputs.version }}"
-        BRANCH="update-noarch-v$VERSION"
-        SHA256="${{ needs.wait-for-pypi.outputs.sha256 }}"
-        
-        PR_BODY="🤖 Automated update to omnipkg version $VERSION (noarch build)
-
-        **Changes:**
-        - ✅ Version: $VERSION
-        - ✅ SHA256: $SHA256
-        - ✅ Build number: 0
-        - ✅ Architecture: noarch
-        - ✅ Updated conda-forge.yml for noarch config
-
-        This PR updates the recipe for conda-forge distribution."
-        
-        PR_URL=$(gh pr create \
-          --repo conda-forge/omnipkg-feedstock \
-          --base main \
-          --head 1minds3t:$BRANCH \
-          --title "Update omnipkg to $VERSION (noarch)" \
-          --body "$PR_BODY" || echo "")
-        
-        if [ -n "$PR_URL" ]; then
-          PR_NUMBER=$(echo "$PR_URL" | grep -oP '\d+$')
-          echo "✅ PR created: $PR_URL"
-        else
-          echo "⚠️  PR already exists, finding it..."
-          PR_NUMBER=$(gh pr list --repo conda-forge/omnipkg-feedstock --head 1minds3t:$BRANCH --json number --jq '.[0].number')
-          echo "✅ Found existing PR #$PR_NUMBER"
-        fi
-        echo "pull-request-number=$PR_NUMBER" >> $GITHUB_OUTPUT
-
-    - name: Request re-render
-      if: env.skip_pr != 'true' && steps.create-pr.outputs.pull-request-number != ''
-      env:
-        GH_TOKEN: ${{ secrets.FEEDSTOCK_TOKEN }}
-      run: |
-        PR_NUMBER="${{ steps.create-pr.outputs.pull-request-number }}"
-        
-        echo "🔄 Requesting re-render..."
-        gh pr comment $PR_NUMBER \
-          --repo conda-forge/omnipkg-feedstock \
-          --body "@conda-forge-admin, please rerender"
-        
-        sleep 600
-
-    - name: Wait for checks
-      if: env.skip_pr != 'true'
-      env:
-        GH_TOKEN: ${{ secrets.FEEDSTOCK_TOKEN }}
-      run: |
-        VERSION="${{ needs.wait-for-pypi.outputs.version }}"
-        BRANCH="update-noarch-v$VERSION"
-        
-        # Get PR number from find-pr step OR create step
-        PR_NUMBER="${{ steps.find-pr.outputs.pr_number }}"
-        PR_ALREADY_EXISTED=true
-        
-        if [ -z "$PR_NUMBER" ]; then
-          PR_NUMBER="${{ steps.create-pr.outputs.pull-request-number }}"
-          PR_ALREADY_EXISTED=false
-        fi
-        
-        if [ -z "$PR_NUMBER" ]; then
-          echo "🔍 Trying alternative PR search..."
-          PR_NUMBER=$(gh pr list \
-            --repo conda-forge/omnipkg-feedstock \
-            --state open \
-            --json number,headRefName \
-            --jq ".[] | select(.headRefName==\"$BRANCH\") | .number")
+      - name: Determine build number
+        id: build-number
+        run: |
+          cd feedstock
+          VERSION="${{ needs.wait-for-pypi.outputs.version }}"
           
-          if [ -z "$PR_NUMBER" ]; then
-            echo "❌ Could not find PR"
-            exit 1
+          CURRENT_VERSION=$(grep -oP '{% set version = "\K[^"]+' recipe/meta.yaml || echo "0.0.0")
+          CURRENT_BUILD=$(grep -oP 'number: \K\d+' recipe/meta.yaml || echo "0")
+          
+          echo "📊 Current feedstock state:"
+          echo "   Version: $CURRENT_VERSION"
+          echo "   Build: $CURRENT_BUILD"
+          echo "   Target Version: $VERSION"
+          
+          if [ "$CURRENT_VERSION" = "$VERSION" ]; then
+            NEW_BUILD=$((CURRENT_BUILD + 1))
+            echo "🔄 Version unchanged - incrementing build: $CURRENT_BUILD → $NEW_BUILD"
+          else
+            NEW_BUILD=0
+            echo "🆕 New version detected - resetting to build 0"
           fi
-          echo "✅ Found PR #$PR_NUMBER"
-        fi
-        
-        # If PR already existed, check immediately - no wait
-        if [ "$PR_ALREADY_EXISTED" = true ]; then
-          echo "✅ PR already existed, checking status immediately..."
-        else
-          echo "⏳ Newly created PR, waiting for checks to start..."
+          
+          echo "build_number=$NEW_BUILD" >> $GITHUB_OUTPUT
+          echo "✅ Will use build number: $NEW_BUILD"
+
+      - name: Checkout main repo templates
+        uses: actions/checkout@v4
+        with:
+          path: main-repo
+          ref: ${{ needs.update-local-templates.outputs.pr_branch || 'main' }}
+
+      - name: Update feedstock with NOARCH template
+        run: |
+          cd feedstock
+          VERSION="${{ needs.wait-for-pypi.outputs.version }}"
+          SHA256="${{ needs.wait-for-pypi.outputs.sha256 }}"
+          BUILD_NUMBER="${{ steps.build-number.outputs.build_number }}"
+          
+          echo "📝 Copying NOARCH templates"
+          
+          cp ../main-repo/src/omnipkg/conda-recipes/meta-noarch.yaml recipe/meta.yaml
+          cp ../main-repo/src/omnipkg/conda-recipes/conda-forge-noarch.yml conda-forge.yml
+          
+          sed -i "s/{% set version = \".*\" %}/{% set version = \"$VERSION\" %}/" recipe/meta.yaml
+          sed -i "s/sha256: .*/sha256: $SHA256/" recipe/meta.yaml
+          sed -i "s/number: .*/number: $BUILD_NUMBER/" recipe/meta.yaml
+          
+          echo "✅ NOARCH files updated:"
+          echo "   Version: $VERSION"
+          echo "   SHA256: $SHA256"
+          echo "   Build: $BUILD_NUMBER"
+          head -25 recipe/meta.yaml
+          
+      - name: Create branch and commit
+        run: |
+          cd feedstock
+          VERSION="${{ needs.wait-for-pypi.outputs.version }}"
+          BRANCH="update-noarch-v$VERSION"
+          
+          git push origin --delete "$BRANCH" 2>/dev/null || true
+          
+          git checkout -b "$BRANCH"
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add recipe/meta.yaml conda-forge.yml
+          
+          if git diff --staged --quiet; then
+            echo "ℹ️  No changes to commit"
+            echo "skip_pr=true" >> $GITHUB_ENV
+          else
+            git commit -m "Update omnipkg to $VERSION (noarch)"
+            git push -f origin "$BRANCH"
+            echo "✅ Changes pushed to branch $BRANCH"
+            echo "skip_pr=false" >> $GITHUB_ENV
+          fi
+          
+      - name: Create PR to conda-forge
+        id: create-pr
+        if: env.skip_pr != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.FEEDSTOCK_TOKEN }}
+        run: |
+          cd feedstock
+          VERSION="${{ needs.wait-for-pypi.outputs.version }}"
+          BRANCH="update-noarch-v$VERSION"
+          SHA256="${{ needs.wait-for-pypi.outputs.sha256 }}"
+          BUILD_NUMBER="${{ steps.build-number.outputs.build_number }}"
+          
+          PR_BODY="🤖 Automated update to omnipkg version $VERSION (noarch build)
+
+          **Changes:**
+          - ✅ Version: $VERSION
+          - ✅ SHA256: $SHA256
+          - ✅ Build number: $BUILD_NUMBER
+          - ✅ Architecture: noarch
+          - ✅ Updated conda-forge.yml for noarch config
+
+          This PR updates the recipe for conda-forge distribution."
+          
+          PR_URL=$(gh pr create \
+            --repo conda-forge/omnipkg-feedstock \
+            --base main \
+            --head 1minds3t:$BRANCH \
+            --title "Update omnipkg to $VERSION (noarch, build $BUILD_NUMBER)" \
+            --body "$PR_BODY" || echo "")
+          
+          if [ -n "$PR_URL" ]; then
+            PR_NUMBER=$(echo "$PR_URL" | grep -oP '\d+$')
+            echo "✅ PR created: $PR_URL"
+          else
+            echo "⚠️  PR already exists, finding it..."
+            PR_NUMBER=$(gh pr list --repo conda-forge/omnipkg-feedstock --head 1minds3t:$BRANCH --json number --jq '.[0].number')
+            echo "✅ Found existing PR #$PR_NUMBER"
+          fi
+          echo "pull-request-number=$PR_NUMBER" >> $GITHUB_OUTPUT
+
+      - name: Request re-render
+        if: env.skip_pr != 'true' && steps.create-pr.outputs.pull-request-number != ''
+        env:
+          GH_TOKEN: ${{ secrets.FEEDSTOCK_TOKEN }}
+        run: |
+          PR_NUMBER="${{ steps.create-pr.outputs.pull-request-number }}"
+          
+          echo "🔄 Requesting re-render..."
+          gh pr comment $PR_NUMBER \
+            --repo conda-forge/omnipkg-feedstock \
+            --body "@conda-forge-admin, please rerender"
+          
+          sleep 600
+
+      - name: Wait for checks
+        if: env.skip_pr != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.FEEDSTOCK_TOKEN }}
+        run: |
+          PR_NUMBER="${{ steps.create-pr.outputs.pull-request-number }}"
+          
+          echo "⏳ Waiting for checks to start..."
           sleep 120
-        fi
-        
-        ATTEMPT=0
-        MAX_ATTEMPTS=60
-        
-        while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
-          ATTEMPT=$((ATTEMPT + 1))
           
-          PENDING=$(gh pr view $PR_NUMBER \
-            --repo conda-forge/omnipkg-feedstock \
-            --json statusCheckRollup \
-            --jq '[.statusCheckRollup[] | select(.status == "IN_PROGRESS" or .status == "PENDING" or .status == "QUEUED")] | length')
+          ATTEMPT=0
+          MAX_ATTEMPTS=60
           
-          TOTAL=$(gh pr view $PR_NUMBER \
-            --repo conda-forge/omnipkg-feedstock \
-            --json statusCheckRollup \
-            --jq '.statusCheckRollup | length')
-          
-          FAILED=$(gh pr view $PR_NUMBER \
-            --repo conda-forge/omnipkg-feedstock \
-            --json statusCheckRollup \
-            --jq '[.statusCheckRollup[] | select(.conclusion == "FAILURE")] | length')
-          
-          echo "📊 Check status (Attempt $ATTEMPT): $((TOTAL - PENDING))/$TOTAL completed"
-          
-          if [ "$PENDING" -eq 0 ] && [ "$TOTAL" -gt 0 ]; then
-            if [ "$FAILED" -gt 0 ]; then
-              echo "❌ Some checks failed"
-              exit 1
-            else
-              echo "✅ All checks passed!"
-              break
+          while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
+            ATTEMPT=$((ATTEMPT + 1))
+            
+            PENDING=$(gh pr view $PR_NUMBER \
+              --repo conda-forge/omnipkg-feedstock \
+              --json statusCheckRollup \
+              --jq '[.statusCheckRollup[] | select(.status == "IN_PROGRESS" or .status == "PENDING" or .status == "QUEUED")] | length')
+            
+            TOTAL=$(gh pr view $PR_NUMBER \
+              --repo conda-forge/omnipkg-feedstock \
+              --json statusCheckRollup \
+              --jq '.statusCheckRollup | length')
+            
+            FAILED=$(gh pr view $PR_NUMBER \
+              --repo conda-forge/omnipkg-feedstock \
+              --json statusCheckRollup \
+              --jq '[.statusCheckRollup[] | select(.conclusion == "FAILURE")] | length')
+            
+            echo "📊 Check status (Attempt $ATTEMPT): $((TOTAL - PENDING))/$TOTAL completed"
+            
+            if [ "$PENDING" -eq 0 ] && [ "$TOTAL" -gt 0 ]; then
+              if [ "$FAILED" -gt 0 ]; then
+                echo "❌ Some checks failed"
+                exit 1
+              else
+                echo "✅ All checks passed!"
+                break
+              fi
             fi
-          fi
-          
-          sleep 120
-        done
+            
+            sleep 120
+          done
 
-    - name: Merge PR
-      env:
-        GH_TOKEN: ${{ secrets.FEEDSTOCK_TOKEN }}
-      run: |
-        VERSION="${{ needs.wait-for-pypi.outputs.version }}"
-        BRANCH="update-noarch-v$VERSION"
-        
-        # Get PR number the SAME WAY we found it in wait-for-checks
-        PR_NUMBER="${{ steps.find-pr.outputs.pr_number }}"
-        
-        if [ -z "$PR_NUMBER" ]; then
+      - name: Merge PR
+        env:
+          GH_TOKEN: ${{ secrets.FEEDSTOCK_TOKEN }}
+        run: |
           PR_NUMBER="${{ steps.create-pr.outputs.pull-request-number }}"
-        fi
-        
-        if [ -z "$PR_NUMBER" ]; then
-          echo "🔍 Finding PR to merge..."
-          PR_NUMBER=$(gh pr list \
+          VERSION="${{ needs.wait-for-pypi.outputs.version }}"
+          
+          echo "🎯 Merging PR #$PR_NUMBER..."
+          gh pr merge $PR_NUMBER \
             --repo conda-forge/omnipkg-feedstock \
-            --state open \
-            --json number,headRefName \
-            --jq ".[] | select(.headRefName==\"$BRANCH\") | .number")
-        fi
-        
-        if [ -z "$PR_NUMBER" ]; then
-          echo "❌ No PR found to merge"
-          exit 1
-        fi
-        
-        echo "🎯 Merging PR #$PR_NUMBER..."
-        gh pr merge $PR_NUMBER \
-          --repo conda-forge/omnipkg-feedstock \
-          --squash \
-          --subject "Build for $VERSION (no-arch)" \
-          --body ""
-        
-        echo "✅ Platforms build merged!"
+            --squash \
+            --subject "Build for $VERSION (noarch)" \
+            --body ""
+          
+          echo "✅ Noarch build merged!"
 
   # ═══════════════════════════════════════════════════════════════════
   # JOB 4: Conda-Forge PLATFORMS (Build 1)
@@ -412,253 +365,209 @@ jobs:
     needs: [wait-for-pypi, update-local-templates, update-feedstock-noarch]
     runs-on: ubuntu-latest
     timeout-minutes: 180
+    
     steps:
-    - name: Checkout feedstock fork
-      uses: actions/checkout@v4
-      with:
-        repository: 1minds3t/omnipkg-feedstock
-        token: ${{ secrets.FEEDSTOCK_TOKEN }}
-        path: feedstock
-        fetch-depth: 0
+      - name: Checkout feedstock fork
+        uses: actions/checkout@v4
+        with:
+          repository: 1minds3t/omnipkg-feedstock
+          token: ${{ secrets.FEEDSTOCK_TOKEN }}
+          path: feedstock
+          fetch-depth: 0
 
-    - name: Sync fork with upstream
-      run: |
-        cd feedstock
-        git remote add upstream https://github.com/conda-forge/omnipkg-feedstock.git || true
-        git fetch upstream
-        git checkout main
-        git merge upstream/main --no-edit || echo "Already up to date"
-        git push origin main
-        echo "✅ Fork re-synced"
-        
-    - name: Force clean state after sync
-      run: |
-        cd feedstock
-        git checkout main
-        git reset --hard upstream/main
-        git push -f origin main
-        echo "✅ Fork reset to upstream state"
+      - name: Sync fork with upstream
+        run: |
+          cd feedstock
+          git remote add upstream https://github.com/conda-forge/omnipkg-feedstock.git 2>/dev/null || true
+          git fetch upstream
+          git checkout main
+          git reset --hard upstream/main
+          git push -f origin main
+          echo "✅ Fork synced and reset to upstream"
 
-    - name: Checkout main repo templates (from PR branch if exists)
-      uses: actions/checkout@v4
-      with:
-        path: main-repo
-        ref: ${{ needs.update-local-templates.outputs.pr_branch || 'main' }}
-
-    - name: Find existing PR
-      id: find-pr
-      run: |
-        VERSION="${{ needs.wait-for-pypi.outputs.version }}"
-        BRANCH="update-platforms-v$VERSION"
-        
-        PR_NUMBER=$(gh pr list \
-          --repo conda-forge/omnipkg-feedstock \
-          --head 1minds3t:$BRANCH \
-          --state open \
-          --json number \
-          --jq '.[0].number')
-        
-        if [ -n "$PR_NUMBER" ]; then
-          echo "✅ Found existing PR #$PR_NUMBER"
-          echo "pr_number=$PR_NUMBER" >> $GITHUB_OUTPUT
-        fi
-      env:
-        GH_TOKEN: ${{ secrets.FEEDSTOCK_TOKEN }}
-
-    - name: Check if work needed
-      id: check-needed
-      run: |
-        cd feedstock
-        VERSION="${{ needs.wait-for-pypi.outputs.version }}"
-        BRANCH="update-platforms-v$VERSION"
-        
-        if git ls-remote --heads origin "$BRANCH" | grep -q "$BRANCH"; then
-          echo "✅ Branch exists, skipping update"
-          echo "skip_update=true" >> $GITHUB_ENV
-        else
-          echo "skip_update=false" >> $GITHUB_ENV
-        fi
-
-    - name: Update feedstock with PLATFORMS template
-      if: env.skip_update != 'true'
-      run: |
-        cd feedstock
-        VERSION="${{ needs.wait-for-pypi.outputs.version }}"
-        SHA256="${{ needs.wait-for-pypi.outputs.sha256 }}"
-        
-        echo "📝 Copying PLATFORMS templates"
-        
-        # Copy meta-platforms.yaml → recipe/meta.yaml
-        cp ../main-repo/src/omnipkg/conda-recipes/meta-platforms.yaml recipe/meta.yaml
-        
-        # Copy conda-forge-platforms.yml → conda-forge.yml
-        cp ../main-repo/src/omnipkg/conda-recipes/conda-forge-platforms.yml conda-forge.yml
-        
-        # Update version and SHA256 in meta.yaml
-        sed -i "s/{% set version = \".*\" %}/{% set version = \"$VERSION\" %}/" recipe/meta.yaml
-        sed -i "s/sha256: .*/sha256: $SHA256/" recipe/meta.yaml
-        
-        echo "✅ PLATFORMS files updated:"
-        echo "--- recipe/meta.yaml ---"
-        head -20 recipe/meta.yaml
-        echo "--- conda-forge.yml ---"
-        cat conda-forge.yml
-        
-    - name: Create branch and commit
-      if: env.skip_update != 'true'
-      run: |
-        cd feedstock
-        VERSION="${{ needs.wait-for-pypi.outputs.version }}"
-        BRANCH="update-platforms-v$VERSION"
-        
-        git checkout -b "$BRANCH"
-        git config --local user.email "action@github.com"
-        git config --local user.name "GitHub Action"
-        git add recipe/meta.yaml conda-forge.yml
-        
-        if git diff --staged --quiet; then
-          echo "ℹ️  No changes to commit"
-          echo "skip_pr=true" >> $GITHUB_ENV
-        else
-          git commit -m "Update omnipkg to $VERSION (platforms)"
-          git push -f origin "$BRANCH"
-          echo "✅ Changes pushed"
-          echo "skip_pr=false" >> $GITHUB_ENV
-        fi
-        
-    - name: Create PR to conda-forge
-      id: create-pr
-      if: env.skip_pr != 'true'
-      env:
-        GH_TOKEN: ${{ secrets.FEEDSTOCK_TOKEN }}
-      run: |
-        cd feedstock
-        VERSION="${{ needs.wait-for-pypi.outputs.version }}"
-        BRANCH="update-platforms-v$VERSION"
-        SHA256="${{ needs.wait-for-pypi.outputs.sha256 }}"
-        
-        PR_BODY="🤖 Automated update to omnipkg version $VERSION (platform builds)
-
-        **Changes:**
-        - ✅ Version: $VERSION
-        - ✅ SHA256: $SHA256
-        - ✅ Build number: 1
-        - ✅ Architectures: linux-64, linux-aarch64, linux-ppc64le, osx-64, osx-arm64, win-64
-        - ✅ Updated conda-forge.yml for cross-compilation
-
-        This PR updates the recipe for platform-specific builds."
-        
-        PR_URL=$(gh pr create \
-          --repo conda-forge/omnipkg-feedstock \
-          --base main \
-          --head 1minds3t:$BRANCH \
-          --title "Update omnipkg to $VERSION (platforms)" \
-          --body "$PR_BODY" || echo "")
-        
-        if [ -n "$PR_URL" ]; then
-          PR_NUMBER=$(echo "$PR_URL" | grep -oP '\d+$')
-          echo "✅ PR created: $PR_URL"
-        else
-          echo "⚠️  PR already exists, finding it..."
-          PR_NUMBER=$(gh pr list --repo conda-forge/omnipkg-feedstock --head 1minds3t:$BRANCH --json number --jq '.[0].number')
-          echo "✅ Found existing PR #$PR_NUMBER"
-        fi
-        echo "pull-request-number=$PR_NUMBER" >> $GITHUB_OUTPUT
-
-    - name: Request re-render
-      if: env.skip_pr != 'true' && steps.create-pr.outputs.pull-request-number != ''
-      env:
-        GH_TOKEN: ${{ secrets.FEEDSTOCK_TOKEN }}
-      run: |
-        PR_NUMBER="${{ steps.create-pr.outputs.pull-request-number }}"
-        
-        gh pr comment $PR_NUMBER \
-          --repo conda-forge/omnipkg-feedstock \
-          --body "@conda-forge-admin, please rerender"
-        
-        sleep 600
-
-    - name: Wait for checks
-      if: env.skip_pr != 'true'
-      env:
-        GH_TOKEN: ${{ secrets.FEEDSTOCK_TOKEN }}
-      run: |
-        VERSION="${{ needs.wait-for-pypi.outputs.version }}"
-        BRANCH="update-platforms-v$VERSION"
-        
-        # Get PR number from find-pr step
-        PR_NUMBER="${{ steps.find-pr.outputs.pr_number }}"
-        
-        if [ -z "$PR_NUMBER" ]; then
-          echo "🔍 Trying alternative PR search..."
-          PR_NUMBER=$(gh pr list \
-            --repo conda-forge/omnipkg-feedstock \
-            --state open \
-            --json number,headRefName \
-            --jq ".[] | select(.headRefName==\"$BRANCH\") | .number")
+      - name: Determine build number
+        id: build-number
+        run: |
+          cd feedstock
+          VERSION="${{ needs.wait-for-pypi.outputs.version }}"
           
-          if [ -z "$PR_NUMBER" ]; then
-            echo "❌ Could not find PR for branch $BRANCH"
-            echo "🔍 Listing all open PRs:"
-            gh pr list --repo conda-forge/omnipkg-feedstock --state open
-            exit 1
+          CURRENT_VERSION=$(grep -oP '{% set version = "\K[^"]+' recipe/meta.yaml || echo "0.0.0")
+          CURRENT_BUILD=$(grep -oP 'number: \K\d+' recipe/meta.yaml || echo "0")
+          
+          echo "📊 Current feedstock state:"
+          echo "   Version: $CURRENT_VERSION"
+          echo "   Build: $CURRENT_BUILD"
+          
+          if [ "$CURRENT_VERSION" = "$VERSION" ]; then
+            NEW_BUILD=$((CURRENT_BUILD + 1))
+            echo "🔄 Incrementing build: $CURRENT_BUILD → $NEW_BUILD"
+          else
+            NEW_BUILD=1
+            echo "🆕 New version - starting at build 1 (platforms)"
           fi
           
-          echo "✅ Found PR #$PR_NUMBER"
-        fi
-        
-        echo "⏳ Waiting for checks..."
-        sleep 300
-        
-        ATTEMPT=0
-        MAX_ATTEMPTS=60
-        
-        while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
-          ATTEMPT=$((ATTEMPT + 1))
+          echo "build_number=$NEW_BUILD" >> $GITHUB_OUTPUT
+
+      - name: Checkout main repo templates
+        uses: actions/checkout@v4
+        with:
+          path: main-repo
+          ref: ${{ needs.update-local-templates.outputs.pr_branch || 'main' }}
+
+      - name: Update feedstock with PLATFORMS template
+        run: |
+          cd feedstock
+          VERSION="${{ needs.wait-for-pypi.outputs.version }}"
+          SHA256="${{ needs.wait-for-pypi.outputs.sha256 }}"
+          BUILD_NUMBER="${{ steps.build-number.outputs.build_number }}"
           
-          PENDING=$(gh pr view $PR_NUMBER \
+          echo "📝 Copying PLATFORMS templates"
+          
+          cp ../main-repo/src/omnipkg/conda-recipes/meta-platforms.yaml recipe/meta.yaml
+          cp ../main-repo/src/omnipkg/conda-recipes/conda-forge-platforms.yml conda-forge.yml
+          
+          sed -i "s/{% set version = \".*\" %}/{% set version = \"$VERSION\" %}/" recipe/meta.yaml
+          sed -i "s/sha256: .*/sha256: $SHA256/" recipe/meta.yaml
+          sed -i "s/number: .*/number: $BUILD_NUMBER/" recipe/meta.yaml
+          
+          echo "✅ PLATFORMS files updated (Build $BUILD_NUMBER)"
+          head -25 recipe/meta.yaml
+          
+      - name: Create branch and commit
+        run: |
+          cd feedstock
+          VERSION="${{ needs.wait-for-pypi.outputs.version }}"
+          BRANCH="update-platforms-v$VERSION"
+          
+          git push origin --delete "$BRANCH" 2>/dev/null || true
+          
+          git checkout -b "$BRANCH"
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add recipe/meta.yaml conda-forge.yml
+          
+          if git diff --staged --quiet; then
+            echo "ℹ️  No changes to commit"
+            echo "skip_pr=true" >> $GITHUB_ENV
+          else
+            git commit -m "Update omnipkg to $VERSION (platforms)"
+            git push -f origin "$BRANCH"
+            echo "✅ Changes pushed"
+            echo "skip_pr=false" >> $GITHUB_ENV
+          fi
+          
+      - name: Create PR to conda-forge
+        id: create-pr
+        if: env.skip_pr != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.FEEDSTOCK_TOKEN }}
+        run: |
+          cd feedstock
+          VERSION="${{ needs.wait-for-pypi.outputs.version }}"
+          BRANCH="update-platforms-v$VERSION"
+          SHA256="${{ needs.wait-for-pypi.outputs.sha256 }}"
+          BUILD_NUMBER="${{ steps.build-number.outputs.build_number }}"
+          
+          PR_BODY="🤖 Automated update to omnipkg version $VERSION (platform builds)
+
+          **Changes:**
+          - ✅ Version: $VERSION
+          - ✅ SHA256: $SHA256
+          - ✅ Build number: $BUILD_NUMBER
+          - ✅ Architectures: linux-64, linux-aarch64, linux-ppc64le, osx-64, osx-arm64, win-64
+          - ✅ Updated conda-forge.yml for cross-compilation
+
+          This PR updates the recipe for platform-specific builds."
+          
+          PR_URL=$(gh pr create \
             --repo conda-forge/omnipkg-feedstock \
-            --json statusCheckRollup \
-            --jq '[.statusCheckRollup[] | select(.status == "IN_PROGRESS" or .status == "PENDING" or .status == "QUEUED")] | length')
+            --base main \
+            --head 1minds3t:$BRANCH \
+            --title "Update omnipkg to $VERSION (platforms, build $BUILD_NUMBER)" \
+            --body "$PR_BODY" || echo "")
           
-          TOTAL=$(gh pr view $PR_NUMBER \
+          if [ -n "$PR_URL" ]; then
+            PR_NUMBER=$(echo "$PR_URL" | grep -oP '\d+$')
+            echo "✅ PR created: $PR_URL"
+          else
+            echo "⚠️  PR already exists, finding it..."
+            PR_NUMBER=$(gh pr list --repo conda-forge/omnipkg-feedstock --head 1minds3t:$BRANCH --json number --jq '.[0].number')
+            echo "✅ Found existing PR #$PR_NUMBER"
+          fi
+          echo "pull-request-number=$PR_NUMBER" >> $GITHUB_OUTPUT
+
+      - name: Request re-render
+        if: env.skip_pr != 'true' && steps.create-pr.outputs.pull-request-number != ''
+        env:
+          GH_TOKEN: ${{ secrets.FEEDSTOCK_TOKEN }}
+        run: |
+          PR_NUMBER="${{ steps.create-pr.outputs.pull-request-number }}"
+          
+          gh pr comment $PR_NUMBER \
             --repo conda-forge/omnipkg-feedstock \
-            --json statusCheckRollup \
-            --jq '.statusCheckRollup | length')
+            --body "@conda-forge-admin, please rerender"
           
-          FAILED=$(gh pr view $PR_NUMBER \
-            --repo conda-forge/omnipkg-feedstock \
-            --json statusCheckRollup \
-            --jq '[.statusCheckRollup[] | select(.conclusion == "FAILURE")] | length')
+          sleep 600
+
+      - name: Wait for checks
+        if: env.skip_pr != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.FEEDSTOCK_TOKEN }}
+        run: |
+          PR_NUMBER="${{ steps.create-pr.outputs.pull-request-number }}"
           
-          echo "📊 Check status (Attempt $ATTEMPT): $((TOTAL - PENDING))/$TOTAL completed"
+          echo "⏳ Waiting for checks..."
+          sleep 300
           
-          if [ "$PENDING" -eq 0 ] && [ "$TOTAL" -gt 0 ]; then
-            if [ "$FAILED" -gt 0 ]; then
-              echo "❌ Some checks failed"
-              gh pr view $PR_NUMBER --repo conda-forge/omnipkg-feedstock --json statusCheckRollup
-              exit 1
-            else
-              echo "✅ All checks passed!"
-              break
+          ATTEMPT=0
+          MAX_ATTEMPTS=60
+          
+          while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
+            ATTEMPT=$((ATTEMPT + 1))
+            
+            PENDING=$(gh pr view $PR_NUMBER \
+              --repo conda-forge/omnipkg-feedstock \
+              --json statusCheckRollup \
+              --jq '[.statusCheckRollup[] | select(.status == "IN_PROGRESS" or .status == "PENDING" or .status == "QUEUED")] | length')
+            
+            TOTAL=$(gh pr view $PR_NUMBER \
+              --repo conda-forge/omnipkg-feedstock \
+              --json statusCheckRollup \
+              --jq '.statusCheckRollup | length')
+            
+            FAILED=$(gh pr view $PR_NUMBER \
+              --repo conda-forge/omnipkg-feedstock \
+              --json statusCheckRollup \
+              --jq '[.statusCheckRollup[] | select(.conclusion == "FAILURE")] | length')
+            
+            echo "📊 Check status (Attempt $ATTEMPT): $((TOTAL - PENDING))/$TOTAL completed"
+            
+            if [ "$PENDING" -eq 0 ] && [ "$TOTAL" -gt 0 ]; then
+              if [ "$FAILED" -gt 0 ]; then
+                echo "❌ Some checks failed"
+                gh pr view $PR_NUMBER --repo conda-forge/omnipkg-feedstock --json statusCheckRollup
+                exit 1
+              else
+                echo "✅ All checks passed!"
+                break
+              fi
             fi
-          fi
-          
-          sleep 120
-        done
+            
+            sleep 120
+          done
 
-    - name: Merge PR
-      if: env.skip_pr != 'true' && steps.create-pr.outputs.pull-request-number != ''
-      env:
-        GH_TOKEN: ${{ secrets.FEEDSTOCK_TOKEN }}
-      run: |
-        PR_NUMBER="${{ steps.create-pr.outputs.pull-request-number }}"
-        VERSION="${{ needs.wait-for-pypi.outputs.version }}"
-        
-        gh pr merge $PR_NUMBER \
-          --repo conda-forge/omnipkg-feedstock \
-          --squash \
-          --subject "Build for $VERSION (platforms)" \
-          --body ""
-        
-        echo "✅ Platforms build merged!"
+      - name: Merge PR
+        if: env.skip_pr != 'true' && steps.create-pr.outputs.pull-request-number != ''
+        env:
+          GH_TOKEN: ${{ secrets.FEEDSTOCK_TOKEN }}
+        run: |
+          PR_NUMBER="${{ steps.create-pr.outputs.pull-request-number }}"
+          VERSION="${{ needs.wait-for-pypi.outputs.version }}"
+          
+          gh pr merge $PR_NUMBER \
+            --repo conda-forge/omnipkg-feedstock \
+            --squash \
+            --subject "Build for $VERSION (platforms)" \
+            --body ""
+          
+          echo "✅ Platforms build merged!"
