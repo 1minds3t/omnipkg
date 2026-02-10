@@ -223,9 +223,19 @@ jobs:
     - name: Build wheels with cibuildwheel
       uses: pypa/cibuildwheel@v2.20.0
       env:
-        CIBW_BUILD: cp311-*
+        # Build for Python 3.10, 3.11, 3.12, 3.13
+        CIBW_BUILD: cp310-* cp311-* cp312-* cp313-*
+        
+        # Skip Muslim Linux (usually not needed, saves time)
         CIBW_SKIP: "*-musllinux_*"
-        CIBW_ARCHS_LINUX: x86_64
+        
+        # Multi-platform builds
+        CIBW_ARCHS_LINUX: x86_64 aarch64  # Linux: x64 + ARM64
+        CIBW_ARCHS_MACOS: x86_64 arm64    # macOS: Intel + Apple Silicon
+        CIBW_ARCHS_WINDOWS: AMD64         # Windows: x64
+    
+    # If you have C extensions that need special flags
+    CIBW_ENVIRONMENT: "OMNIPKG_SKIP_C_EXT=0"  # Enable C extensions
         
     - name: Build source distribution
       run: |
