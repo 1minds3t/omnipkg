@@ -152,7 +152,7 @@ jobs:
             if command -v apt-get > /dev/null 2>&1; then 
               apt-get update && apt-get install -y python3 python3-pip python3-venv build-essential python3-dev gcc
             elif command -v dnf > /dev/null 2>&1; then 
-              # ROCKY FIX: Use UV's standalone Python instead of broken system Python
+              # ROCKY/FEDORA FIX: Use UV's standalone Python instead of broken system Python
               dnf install -y curl gcc make
               
               # Install UV
@@ -164,7 +164,7 @@ jobs:
               uv python pin 3.11
               
               # Add UV's Python to PATH so 'python3' and 'omnipkg' work
-              export PATH=\"\$HOME/.local/share/uv/python/cpython-3.11.14-linux-aarch64-gnu/bin:\$PATH\"
+              export PATH=\"\$HOME/.local/share/uv/python/cpython-3.11.14-linux-x86_64-gnu/bin:\$PATH\"
               
               # Create symlink for convenience
               ln -sf \$(uv python find 3.11) /usr/local/bin/python3
