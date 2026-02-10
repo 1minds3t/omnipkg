@@ -153,15 +153,31 @@ jobs:
         token: ${{ secrets.FEEDSTOCK_TOKEN }}
         path: feedstock
         fetch-depth: 0
-
+  
+    - name: Check if version already exists
+      id: version-check
+      run: |
+        cd feedstock
+        VERSION="${{ needs.wait-for-pypi.outputs.version }}"
+        
+        # Check if this version is already in the feedstock
+        if grep -q "{% set version = \"$VERSION\" %}" recipe/meta.yaml; then
+          echo "✅ Version $VERSION already exists in feedstock"
+          echo "already_exists=true" >> $GITHUB_OUTPUT
+        else
+          echo "🆕 Version $VERSION needs to be added"
+          echo "already_exists=false" >> $GITHUB_OUTPUT
+        fi
+  
     - name: Sync fork with upstream
+      if: steps.version-check.outputs.already_exists != 'true'
       run: |
         cd feedstock
         git remote add upstream https://github.com/conda-forge/omnipkg-feedstock.git
         git fetch upstream
         git checkout main
-        git merge upstream/main --no-edit || echo "Already up to date"
-        git push origin main
+        git reset --hard upstream/main
+        git push -f origin main
         echo "✅ Fork synced"
 
     - name: Force clean state after sync
