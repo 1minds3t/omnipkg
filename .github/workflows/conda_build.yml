@@ -164,6 +164,14 @@ jobs:
         git push origin main
         echo "✅ Fork synced"
 
+    - name: Force clean state after sync
+      run: |
+        cd feedstock
+        git checkout main
+        git reset --hard upstream/main
+        git push -f origin main
+        echo "✅ Fork reset to upstream state"
+        
     - name: Checkout main repo templates (from PR branch if exists)
       uses: actions/checkout@v4
       with:
@@ -407,6 +415,14 @@ jobs:
         git merge upstream/main --no-edit || echo "Already up to date"
         git push origin main
         echo "✅ Fork re-synced"
+        
+    - name: Force clean state after sync
+      run: |
+        cd feedstock
+        git checkout main
+        git reset --hard upstream/main
+        git push -f origin main
+        echo "✅ Fork reset to upstream state"
 
     - name: Checkout main repo templates (from PR branch if exists)
       uses: actions/checkout@v4
