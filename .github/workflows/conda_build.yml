@@ -269,53 +269,47 @@ jobs:
         sleep 600
 
     - name: Wait for checks
-      if: env.skip_pr != 'true'
+      if: steps.check-pr.outputs.pr_number != ''
       env:
         GH_TOKEN: ${{ secrets.FEEDSTOCK_TOKEN }}
       run: |
-        VERSION="${{ needs.wait-for-pypi.outputs.version }}"
-        BRANCH="update-platforms-v$VERSION"
+        PR_NUMBER="${{ steps.check-pr.outputs.pr_number }}"
         
-        # Get PR number from create step OR find existing
-        PR_NUMBER="${{ steps.create-pr.outputs.pull-request-number }}"
+        echo "⏳ Checking PR #$PR_NUMBER status..."
         
-        if [ -z "$PR_NUMBER" ]; then
-          echo "🔍 No PR from create step, looking for existing PR..."
-          
-          # Debug: show what we're searching for
-          echo "Searching for branch: 1minds3t:$BRANCH"
-          
-          # Try to find PR
-          PR_NUMBER=$(gh pr list \
-            --repo conda-forge/omnipkg-feedstock \
-            --head "1minds3t:$BRANCH" \
-            --state open \
-            --json number \
-            --jq '.[0].number' 2>&1)
-          
-          echo "Raw result: '$PR_NUMBER'"
-          
-          # If still empty, try without the fork prefix
-          if [ -z "$PR_NUMBER" ] || [ "$PR_NUMBER" == "null" ]; then
-            echo "Trying without fork prefix..."
-            PR_NUMBER=$(gh pr list \
-              --repo conda-forge/omnipkg-feedstock \
-              --state open \
-              --json number,headRefName \
-              --jq ".[] | select(.headRefName==\"$BRANCH\") | .number")
-            echo "Second attempt result: '$PR_NUMBER'"
-          fi
-          
-          if [ -n "$PR_NUMBER" ] && [ "$PR_NUMBER" != "null" ]; then
-            echo "✅ Found existing PR #$PR_NUMBER"
-          else
-            echo "❌ Could not find PR for branch $BRANCH"
+        # Check IMMEDIATELY - don't sleep first
+        PENDING=$(gh pr view $PR_NUMBER \
+          --repo conda-forge/omnipkg-feedstock \
+          --json statusCheckRollup \
+          --jq '[.statusCheckRollup[] | select(.status == "IN_PROGRESS" or .status == "PENDING" or .status == "QUEUED")] | length')
+        
+        TOTAL=$(gh pr view $PR_NUMBER \
+          --repo conda-forge/omnipkg-feedstock \
+          --json statusCheckRollup \
+          --jq '.statusCheckRollup | length')
+        
+        FAILED=$(gh pr view $PR_NUMBER \
+          --repo conda-forge/omnipkg-feedstock \
+          --json statusCheckRollup \
+          --jq '[.statusCheckRollup[] | select(.conclusion == "FAILURE")] | length')
+        
+        echo "📊 Status: $((TOTAL - PENDING))/$TOTAL completed"
+        
+        # If already done, skip the wait loop entirely
+        if [ "$PENDING" -eq 0 ] && [ "$TOTAL" -gt 0 ]; then
+          if [ "$FAILED" -gt 0 ]; then
+            echo "❌ Some checks failed"
+            gh pr view $PR_NUMBER --repo conda-forge/omnipkg-feedstock --json statusCheckRollup
             exit 1
+          else
+            echo "✅ All checks already passed!"
+            exit 0
           fi
         fi
         
-        echo "⏳ Waiting for checks..."
-        sleep 300
+        # Only wait if checks are actually pending
+        echo "⏳ Checks still running, waiting..."
+        sleep 120
         
         ATTEMPT=0
         MAX_ATTEMPTS=60
