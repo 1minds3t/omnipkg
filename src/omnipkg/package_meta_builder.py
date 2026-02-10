@@ -633,11 +633,17 @@ class omnipkgMetadataGatherer:
         verbose: bool = False,
         search_path_override: Optional[str] = None,
         skip_existing_checksums: bool = False,
+        skip_nested_discovery: bool = False,
     ) -> List[importlib.metadata.Distribution]:
         """
-        (V16 - SURGICAL FAST-PATH) Discovers distributions by prioritizing direct,
-        fast-path lookups for targeted packages before falling back to comprehensive scans.
-        This dramatically speeds up post-install KB updates.
+        ULTRA-FAST targeted discovery for known packages.
+        """
+        # SAFETY FIX: Ensure targeted_packages is always a list
+        targeted_packages = targeted_packages or []
+        """
+        (V17 - SURGICAL STRATEGY EXECUTION)
+        Uses the full power of all 8 discovery strategies but applies them SURGICALLY
+        to specific directories (Active Env + Specific Bubble) instead of scanning the world.
         """
         # --- Stage 1: Determine search paths ---
         main_site_packages = Path(self.config.get("site_packages_path")).resolve()
@@ -656,145 +662,91 @@ class omnipkgMetadataGatherer:
             safe_print("   - ❌ ERROR: No valid search paths determined. Aborting discovery.")
             return []
 
-        # --- TARGETED PACKAGE MODE (WITH NEW FAST-PATH LOGIC) ---
+        # --- TARGETED PACKAGE MODE (WITH SURGICAL STRATEGY EXECUTION) ---
         if targeted_packages:
             if verbose:
                 safe_print(
                     f"🎯 Running SURGICAL targeted scan for {len(targeted_packages)} package(s)."
                 )
 
-            all_found_dists = (
-                {}
-            )  # Use dict to store {resolved_path: dist} for automatic deduplication
+            all_found_dists = {}  # {resolved_path_str: dist}
 
             for spec in targeted_packages:
                 try:
                     name, version = self._parse_package_spec(spec)
                     if not version:
-                        safe_print(
-                            f"   ⚠️  Skipping '{spec}' in fast discovery - no version specified for direct lookup."
-                        )
+                        if verbose:
+                            safe_print(f"   ⚠️  Skipping '{spec}' in surgical discovery - version required.")
                         continue
                 except ValueError as e:
                     safe_print(_("❌ Could not parse spec '{}': {}").format(spec, e))
                     continue
 
+                # 1. Determine Surgical Search Roots
+                # We do NOT scan the entire multiversion_base. We only scan:
+                # A. Main Site Packages (The active environment)
+                # B. The specific bubble directory for this package version
+                
+                surgical_roots = []
+                surgical_roots.append(main_site_packages)
+                
+                expected_bubble = multiversion_base / f"{name}-{version}"
+                if expected_bubble.is_dir():
+                    surgical_roots.append(expected_bubble)
+
                 if verbose:
-                    safe_print(f"    surgically searching for '{spec}'...")
+                    safe_print(f"    🔎 Scanning for '{spec}' in {len(surgical_roots)} specific location(s)...")
 
-                found_for_spec = False
-
-                # FAST-PATH 1: Check expected bubble location
-                expected_bubble_path = multiversion_base / f"{name}-{version}"
-                if expected_bubble_path.is_dir():
-                    dist_info_paths = list(expected_bubble_path.glob("*.dist-info"))
-                    if dist_info_paths:
-                        try:
-                            from importlib.metadata import PathDistribution
-
-                            dist = PathDistribution(dist_info_paths[0])
-                            if dist.version == version and canonicalize_name(
-                                dist.metadata.get("Name", "")
-                            ) == canonicalize_name(name):
-                                all_found_dists[dist._path.resolve()] = dist
-                                if verbose:
-                                    safe_print(
-                                        _('      ✅ Found via FAST-PATH 1 (bubble): {}').format(dist._path)
-                                    )
-                                found_for_spec = True
-                        except Exception:
-                            pass
-
-                if found_for_spec:
-                    continue
-
-                # FAST-PATH 2: Check main site-packages
+                # 2. Execute Strategies on Surgical Roots (Parallelized)
+                # We use the ORIGINAL robust strategies, but constrained to our specific roots.
+                # This keeps the "smarts" (variants, vendored checks, nested dirs) but fixes the "lazy" globbing.
+                
                 name_variants = self._get_package_name_variants(name)
-                for variant in name_variants:
-                    dist_info_path = main_site_packages / f"{variant}-{version}.dist-info"
-                    if dist_info_path.is_dir():
+                
+                with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
+                    futures = []
+                    
+                    for root in surgical_roots:
+                        # Strategy 1: Vendored (SKIP if skip_nested_discovery=True)
+                        if not skip_nested_discovery:
+                            futures.append(executor.submit(self._run_strategy_1, root, name_variants, version, verbose))
+                        
+                        # Strategy 2-5: Keep these (they find the main package)
+                        futures.append(executor.submit(self._run_strategy_2, root, name, name_variants, version, verbose))
+                        futures.append(executor.submit(self._run_strategy_3, root, name_variants, version, verbose))
+                        futures.append(executor.submit(self._run_strategy_4, root, name_variants, version, verbose))
+                        futures.append(executor.submit(self._run_strategy_5, name, version, verbose, [root]))
+                        
+                        # Strategy 6: Deep nested scan (SKIP if skip_nested_discovery=True)
+                        if not skip_nested_discovery:
+                            futures.append(executor.submit(self._run_strategy_6, root, name_variants, version, verbose))
+                        
+                        # SKIP the deep dive into content directories when skip_nested_discovery=True
+                        if not skip_nested_discovery:
+                            for variant in name_variants:
+                                content_candidates = [
+                                    root / variant,
+                                    root / variant.replace('-', '_'),
+                                    root / variant.lower()
+                                ]
+                            
+                            for cand in content_candidates:
+                                if cand.is_dir():
+                                    # This is likely the package source dir (e.g. .../torch/)
+                                    # Run deep strategies HERE to find "friends"
+                                    futures.append(executor.submit(self._run_strategy_1, cand, name_variants, None, verbose)) 
+                                    futures.append(executor.submit(self._run_strategy_6, cand, name_variants, None, verbose))
+
+                    for future in concurrent.futures.as_completed(futures):
                         try:
-                            dist = importlib.metadata.Distribution.at(dist_info_path)
-                            if dist.version == version and canonicalize_name(
-                                dist.metadata.get("Name", "")
-                            ) == canonicalize_name(name):
-                                all_found_dists[dist._path.resolve()] = dist
-                                if verbose:
-                                    safe_print(
-                                        _('      ✅ Found via FAST-PATH 2 (site-packages): {}').format(dist._path)
-                                    )
-                                found_for_spec = True
-                                break
+                            results = future.result()
+                            for dist, resolved_path in results:
+                                all_found_dists[str(resolved_path)] = dist
                         except Exception:
                             pass
-
-                if found_for_spec:
-                    continue
-
-                # FALLBACK: If fast-paths fail, run the comprehensive strategies for this spec only
-                if verbose:
-                    safe_print(
-                        f"      -> Fast-path failed for '{spec}'. Using comprehensive fallback scan..."
-                    )
-
-                for base_path in search_paths:
-                    with concurrent.futures.ThreadPoolExecutor(max_workers=6) as executor:
-                        future_s1 = executor.submit(
-                            self._run_strategy_1,
-                            base_path,
-                            name_variants,
-                            version,
-                            verbose,
-                        )
-                        future_s2 = executor.submit(
-                            self._run_strategy_2,
-                            base_path,
-                            name,
-                            name_variants,
-                            version,
-                            verbose,
-                        )
-                        future_s3 = executor.submit(
-                            self._run_strategy_3,
-                            base_path,
-                            name_variants,
-                            version,
-                            verbose,
-                        )
-                        future_s4 = executor.submit(
-                            self._run_strategy_4,
-                            base_path,
-                            name_variants,
-                            version,
-                            verbose,
-                        )
-                        future_s5 = executor.submit(
-                            self._run_strategy_5, name, version, verbose, search_paths
-                        )
-                        future_s6 = executor.submit(
-                            self._run_strategy_6,
-                            base_path,
-                            name_variants,
-                            version,
-                            verbose,
-                        )
-
-                        futures = [
-                            future_s1,
-                            future_s2,
-                            future_s3,
-                            future_s4,
-                            future_s5,
-                            future_s6,
-                        ]
-                        for future in concurrent.futures.as_completed(futures):
-                            try:
-                                for dist, resolved_path in future.result():
-                                    all_found_dists[resolved_path] = dist
-                            except Exception:
-                                pass
 
             final_list = list(all_found_dists.values())
+            
             safe_print(
                 _('   -> Found {} unique instance(s) across {} target(s).').format(len(final_list), len(targeted_packages))
             )
@@ -876,9 +828,11 @@ class omnipkgMetadataGatherer:
 
     def _discover_distributions_fast(
         self,
-        targeted_packages: List[str],
-        known_bubble_paths: Optional[Dict[str, Path]] = None,
+        targeted_packages: Optional[List[str]],
         verbose: bool = False,
+        search_path_override: Optional[str] = None,
+        skip_existing_checksums: bool = False,
+        skip_nested_discovery: bool = False,  # ADD THIS PARAMETER
     ) -> List[importlib.metadata.Distribution]:
         """
         ULTRA-FAST targeted discovery for known packages.
@@ -1504,6 +1458,7 @@ class omnipkgMetadataGatherer:
         search_path_override: Optional[str] = None,
         skip_existing_checksums: bool = False,
         pre_discovered_distributions: Optional[List[importlib.metadata.Distribution]] = None,
+        skip_nested_discovery: bool = False,  # NEW PARAMETER
     ):
         """
         (V5.4 - ON-THE-SPOT HEALING) The main execution loop with immediate corruption repair.
@@ -1520,6 +1475,7 @@ class omnipkgMetadataGatherer:
                 targeted_packages,
                 search_path_override=search_path_override,
                 skip_existing_checksums=skip_existing_checksums,
+                skip_nested_discovery=skip_nested_discovery,  # ADD THIS
             )
 
         distributions_to_process = []
