@@ -115,3 +115,4 @@ vendor/
 site/
 *.so
 src/tests/debug_test*.py
+*.zip
