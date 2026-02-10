@@ -152,7 +152,6 @@ jobs:
             if command -v apt-get > /dev/null 2>&1; then 
               apt-get update && apt-get install -y python3 python3-pip python3-venv build-essential python3-dev gcc
             elif command -v dnf > /dev/null 2>&1; then 
-              # ROCKY FIX: Reinstall Python first to fix broken imports
               dnf reinstall -y python3 python3-libs
               dnf install -y python3-pip gcc python3-devel make
             elif command -v apk > /dev/null 2>&1; then 
@@ -166,17 +165,13 @@ jobs:
             
             python3 -m pip install --upgrade pip build || python3 -m pip install --break-system-packages pip build
             
-            # ROCKY FIX: Clean dist before building to avoid cp310 wheel contamination
+            # 🔥 FIX: Clean dist before building to prevent cp310 contamination
             rm -rf dist/ build/ *.egg-info
             
             python3 -m build
             
-            # ROCKY FIX: Install the correct cp39 wheel explicitly for Rocky
-            if [[ '${{ matrix.distro }}' == *'rocky'* ]]; then
-              python3 -m pip install dist/*-cp39-*.whl || python3 -m pip install --break-system-packages dist/*-cp39-*.whl
-            else
-              python3 -m pip install dist/*.whl || python3 -m pip install --break-system-packages dist/*.whl
-            fi
+            # Install the wheel that was just built (auto-detects cp39 vs cp310)
+            python3 -m pip install dist/*.whl || python3 -m pip install --break-system-packages dist/*.whl
             
             omnipkg --version
             omnipkg list
