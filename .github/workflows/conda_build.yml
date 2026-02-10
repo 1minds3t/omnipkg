@@ -269,11 +269,26 @@ jobs:
         sleep 600
 
     - name: Wait for checks
-      if: env.skip_pr != 'true' && steps.create-pr.outputs.pull-request-number != ''
+      if: env.skip_pr != 'true'
       env:
         GH_TOKEN: ${{ secrets.FEEDSTOCK_TOKEN }}
       run: |
+        VERSION="${{ needs.wait-for-pypi.outputs.version }}"
+        BRANCH="update-noarch-v$VERSION"
+        
+        # Get PR number from create step OR find existing
         PR_NUMBER="${{ steps.create-pr.outputs.pull-request-number }}"
+        
+        if [ -z "$PR_NUMBER" ]; then
+          echo "🔍 No PR from create step, looking for existing PR..."
+          PR_NUMBER=$(gh pr list \
+            --repo conda-forge/omnipkg-feedstock \
+            --head 1minds3t:$BRANCH \
+            --state open \
+            --json number \
+            --jq '.[0].number')
+          echo "✅ Found existing PR #$PR_NUMBER"
+        fi
         
         echo "⏳ Waiting for checks..."
         sleep 300
@@ -462,11 +477,26 @@ jobs:
         sleep 600
 
     - name: Wait for checks
-      if: env.skip_pr != 'true' && steps.create-pr.outputs.pull-request-number != ''
+      if: env.skip_pr != 'true'
       env:
         GH_TOKEN: ${{ secrets.FEEDSTOCK_TOKEN }}
       run: |
+        VERSION="${{ needs.wait-for-pypi.outputs.version }}"
+        BRANCH="update-noarch-v$VERSION"
+        
+        # Get PR number from create step OR find existing
         PR_NUMBER="${{ steps.create-pr.outputs.pull-request-number }}"
+        
+        if [ -z "$PR_NUMBER" ]; then
+          echo "🔍 No PR from create step, looking for existing PR..."
+          PR_NUMBER=$(gh pr list \
+            --repo conda-forge/omnipkg-feedstock \
+            --head 1minds3t:$BRANCH \
+            --state open \
+            --json number \
+            --jq '.[0].number')
+          echo "✅ Found existing PR #$PR_NUMBER"
+        fi
         
         echo "⏳ Waiting for checks..."
         sleep 300
