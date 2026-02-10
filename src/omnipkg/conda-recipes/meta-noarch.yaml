@@ -11,9 +11,11 @@ source:
   sha256: f4c0b93869baa678e1d0399d860534d4c98eff07bc03bf188a7643332c0264c2
 
 build:
-  number: 0  # ← Noarch is now the fallback (lower priority)
+  number: 0
   noarch: python
-  script: python -m pip install . --no-deps --no-build-isolation -vv
+  script: 
+    - export OMNIPKG_SKIP_C_EXT=1
+    - python -m pip install . --no-deps --no-build-isolation -vv
   entry_points:
     - omnipkg = omnipkg.cli:main
     - 8pkg = omnipkg.cli:main
