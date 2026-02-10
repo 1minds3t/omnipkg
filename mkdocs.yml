@@ -82,6 +82,7 @@ plugins:
     enable_creation_date: true
     type: timeago
     fallback_to_build_date: true  # Add this line
+    enable_parallel_processing: false
 - redirects:
     redirect_maps:
 
