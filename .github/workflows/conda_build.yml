@@ -269,47 +269,29 @@ jobs:
         sleep 600
 
     - name: Wait for checks
-      if: steps.check-pr.outputs.pr_number != ''
+      if: env.skip_pr != 'true' && steps.create-pr.outputs.pull-request-number != ''
       env:
         GH_TOKEN: ${{ secrets.FEEDSTOCK_TOKEN }}
       run: |
-        PR_NUMBER="${{ steps.check-pr.outputs.pr_number }}"
+        VERSION="${{ needs.wait-for-pypi.outputs.version }}"
+        BRANCH="update-noarch-v$VERSION"
         
-        echo "⏳ Checking PR #$PR_NUMBER status..."
+        # Get PR number from create step
+        PR_NUMBER="${{ steps.create-pr.outputs.pull-request-number }}"
         
-        # Check IMMEDIATELY - don't sleep first
-        PENDING=$(gh pr view $PR_NUMBER \
-          --repo conda-forge/omnipkg-feedstock \
-          --json statusCheckRollup \
-          --jq '[.statusCheckRollup[] | select(.status == "IN_PROGRESS" or .status == "PENDING" or .status == "QUEUED")] | length')
-        
-        TOTAL=$(gh pr view $PR_NUMBER \
-          --repo conda-forge/omnipkg-feedstock \
-          --json statusCheckRollup \
-          --jq '.statusCheckRollup | length')
-        
-        FAILED=$(gh pr view $PR_NUMBER \
-          --repo conda-forge/omnipkg-feedstock \
-          --json statusCheckRollup \
-          --jq '[.statusCheckRollup[] | select(.conclusion == "FAILURE")] | length')
-        
-        echo "📊 Status: $((TOTAL - PENDING))/$TOTAL completed"
-        
-        # If already done, skip the wait loop entirely
-        if [ "$PENDING" -eq 0 ] && [ "$TOTAL" -gt 0 ]; then
-          if [ "$FAILED" -gt 0 ]; then
-            echo "❌ Some checks failed"
-            gh pr view $PR_NUMBER --repo conda-forge/omnipkg-feedstock --json statusCheckRollup
-            exit 1
-          else
-            echo "✅ All checks already passed!"
-            exit 0
-          fi
+        if [ -z "$PR_NUMBER" ]; then
+          echo "🔍 No PR number from create step, looking for existing PR..."
+          PR_NUMBER=$(gh pr list \
+            --repo conda-forge/omnipkg-feedstock \
+            --head 1minds3t:$BRANCH \
+            --state open \
+            --json number \
+            --jq '.[0].number')
+          echo "✅ Found existing PR #$PR_NUMBER"
         fi
         
-        # Only wait if checks are actually pending
-        echo "⏳ Checks still running, waiting..."
-        sleep 120
+        echo "⏳ Waiting for checks..."
+        sleep 300
         
         ATTEMPT=0
         MAX_ATTEMPTS=60
