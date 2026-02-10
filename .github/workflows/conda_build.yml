@@ -284,35 +284,29 @@ jobs:
         while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
           ATTEMPT=$((ATTEMPT + 1))
           
-          STATUS=$(gh pr view $PR_NUMBER \
-            --repo conda-forge/omnipkg-feedstock \
-            --json statusCheckRollup \
-            --jq '.statusCheckRollup[] | select(.conclusion != null) | .conclusion' | sort -u)
-          
           PENDING=$(gh pr view $PR_NUMBER \
             --repo conda-forge/omnipkg-feedstock \
             --json statusCheckRollup \
-            --jq '.statusCheckRollup[] | select(.status == "IN_PROGRESS" or .status == "PENDING") | .name' | wc -l)
+            --jq '[.statusCheckRollup[] | select(.status == "IN_PROGRESS" or .status == "PENDING" or .status == "QUEUED")] | length')
           
           TOTAL=$(gh pr view $PR_NUMBER \
             --repo conda-forge/omnipkg-feedstock \
             --json statusCheckRollup \
             --jq '.statusCheckRollup | length')
           
+          FAILED=$(gh pr view $PR_NUMBER \
+            --repo conda-forge/omnipkg-feedstock \
+            --json statusCheckRollup \
+            --jq '[.statusCheckRollup[] | select(.conclusion == "FAILURE")] | length')
+          
           echo "📊 Check status (Attempt $ATTEMPT): $((TOTAL - PENDING))/$TOTAL completed"
           
           if [ "$PENDING" -eq 0 ] && [ "$TOTAL" -gt 0 ]; then
-            if echo "$STATUS" | grep -q "FAILURE"; then
+            if [ "$FAILED" -gt 0 ]; then
               echo "❌ Some checks failed"
               gh pr view $PR_NUMBER --repo conda-forge/omnipkg-feedstock --json statusCheckRollup
               exit 1
-           FAILED=$(gh pr view $PR_NUMBER --repo conda-forge/omnipkg-feedstock --json statusCheckRollup --jq '[.statusCheckRollup[] | select(.conclusion == "FAILURE")] | length')
-            
-            if [ "$FAILED" -gt 0 ]; then
-              exit 1
             else
-              break  # All passed!
-            fi
               echo "✅ All checks passed!"
               break
             fi
@@ -474,6 +468,7 @@ jobs:
       run: |
         PR_NUMBER="${{ steps.create-pr.outputs.pull-request-number }}"
         
+        echo "⏳ Waiting for checks..."
         sleep 300
         
         ATTEMPT=0
@@ -482,35 +477,30 @@ jobs:
         while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
           ATTEMPT=$((ATTEMPT + 1))
           
-          STATUS=$(gh pr view $PR_NUMBER \
-            --repo conda-forge/omnipkg-feedstock \
-            --json statusCheckRollup \
-            --jq '.statusCheckRollup[] | select(.conclusion != null) | .conclusion' | sort -u)
-          
           PENDING=$(gh pr view $PR_NUMBER \
             --repo conda-forge/omnipkg-feedstock \
             --json statusCheckRollup \
-            --jq '.statusCheckRollup[] | select(.status == "IN_PROGRESS" or .status == "PENDING") | .name' | wc -l)
+            --jq '[.statusCheckRollup[] | select(.status == "IN_PROGRESS" or .status == "PENDING" or .status == "QUEUED")] | length')
           
           TOTAL=$(gh pr view $PR_NUMBER \
             --repo conda-forge/omnipkg-feedstock \
             --json statusCheckRollup \
             --jq '.statusCheckRollup | length')
           
-          echo "📊 Checks: $((TOTAL - PENDING))/$TOTAL"
+          FAILED=$(gh pr view $PR_NUMBER \
+            --repo conda-forge/omnipkg-feedstock \
+            --json statusCheckRollup \
+            --jq '[.statusCheckRollup[] | select(.conclusion == "FAILURE")] | length')
+          
+          echo "📊 Check status (Attempt $ATTEMPT): $((TOTAL - PENDING))/$TOTAL completed"
           
           if [ "$PENDING" -eq 0 ] && [ "$TOTAL" -gt 0 ]; then
-            if echo "$STATUS" | grep -q "FAILURE"; then
-              echo "❌ Checks failed"
+            if [ "$FAILED" -gt 0 ]; then
+              echo "❌ Some checks failed"
+              gh pr view $PR_NUMBER --repo conda-forge/omnipkg-feedstock --json statusCheckRollup
               exit 1
-            FAILED=$(gh pr view $PR_NUMBER --repo conda-forge/omnipkg-feedstock --json statusCheckRollup --jq '[.statusCheckRollup[] | select(.conclusion == "FAILURE")] | length')
-              
-              if [ "$FAILED" -gt 0 ]; then
-                exit 1
-              else
-                break  # All passed!
-              fi
-              echo "✅ All passed!"
+            else
+              echo "✅ All checks passed!"
               break
             fi
           fi
