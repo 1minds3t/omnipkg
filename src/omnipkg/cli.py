@@ -2,6 +2,7 @@ from __future__ import annotations  # Python 3.6+ compatibility
 
 from omnipkg.common_utils import safe_print
 
+from omnipkg.i18n import _, SUPPORTED_LANGUAGES
 """omnipkg CLI - Enhanced with runtime interpreter switching and language support"""
 try:
     from .common_utils import safe_print
@@ -33,7 +34,6 @@ from .commands.run import execute_run_command
 from .common_utils import print_header
 from .core import ConfigManager
 from .core import omnipkg as OmnipkgCore
-from omnipkg.i18n import _, SUPPORTED_LANGUAGES
 
 project_root = Path(__file__).resolve().parent.parent
 TESTS_DIR = Path(__file__).parent.parent / "tests"
@@ -935,7 +935,6 @@ def main():
             import importlib
             from omnipkg import i18n
             importlib.reload(i18n)
-            from omnipkg.i18n import _
             
             _.set_language(user_lang)
             os.environ["OMNIPKG_LANG"] = user_lang
