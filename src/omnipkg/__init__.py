@@ -81,10 +81,8 @@ __all__ = [
     "cli",
     "loader",
     "activator",
-    "demo",
     "package_meta_builder",
-    "stress_test",
-    "common_utils",
+    "common_utils"
 ]
 
 # Vendor patched filelock for Python <3.10 (CVE-2025-68146)
