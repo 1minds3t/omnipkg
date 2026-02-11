@@ -3,7 +3,7 @@ from omnipkg.common_utils import safe_print
 try:
     from .common_utils import safe_print
 except ImportError:
-    from omnipkg.common_utils import safe_print
+    pass
 import sys
 import os
 import json

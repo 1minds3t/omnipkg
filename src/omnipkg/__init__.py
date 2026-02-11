@@ -5,7 +5,7 @@ from omnipkg.common_utils import safe_print
 try:
     from .common_utils import safe_print
 except ImportError:
-    from omnipkg.common_utils import safe_print
+    pass
 # In /home/minds3t/omnipkg/omnipkg/__init__.py
 
 from .i18n import _
@@ -86,9 +86,6 @@ __all__ = [
     "stress_test",
     "common_utils",
 ]
-
-# Vendor patched filelock for Python <3.10 (CVE-2025-68146)
-import sys
 if sys.version_info < (3, 10):
     from omnipkg._vendor import filelock
     sys.modules['filelock'] = filelock
