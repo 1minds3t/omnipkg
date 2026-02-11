@@ -202,6 +202,8 @@ jobs:
         
         if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
           EXPECTED_VERSION="${{ inputs.version }}"
+          # Strip the 'v' prefix if present
+          EXPECTED_VERSION="${EXPECTED_VERSION#v}"
         else
           TAG_VERSION="${{ github.ref_name }}"
           EXPECTED_VERSION=${TAG_VERSION#v}
@@ -214,6 +216,8 @@ jobs:
           echo "❌ Version mismatch!"
           exit 1
         fi
+    
+    echo "✅ Version verified: $PACKAGE_VERSION"
         
     - name: Install build tools
       run: |
