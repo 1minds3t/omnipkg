@@ -1645,7 +1645,6 @@ class PersistentWorker:
         Returns:
             Response dict from worker
         """
-
         import psutil
 
         try:
@@ -1733,7 +1732,6 @@ class PersistentWorker:
         Discover CUDA library paths for this package spec.
         Dynamically detects CUDA version requirement (cu11 vs cu12).
         """
-
         cuda_paths = []
 
         # 1. Detect required CUDA version from spec
@@ -4376,7 +4374,6 @@ def cli_status():
 
 def cli_logs(follow: bool = False, tail_lines: int = 50):
     """View or follow the daemon logs."""
-
     log_path = Path(DAEMON_LOG_FILE)
     if not log_path.exists():
         safe_print(_('❌ Log file not found at: {}').format(log_path))

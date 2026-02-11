@@ -1844,7 +1844,6 @@ class omnipkgMetadataGatherer:
         (AUTHORITATIVE) Generates the one true, consistent instance hash for any
         distribution by using its real, canonical path.
         """
-
         # This is the single source of truth for a package's physical location.
         # os.path.realpath resolves symlinks and gives the canonical path.
         resolved_path_str = os.path.realpath(str(dist._path))

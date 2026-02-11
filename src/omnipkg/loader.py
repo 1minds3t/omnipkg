@@ -1400,7 +1400,6 @@ class omnipkgLoader:
         CRITICAL FIX: Strictly checks self.site_packages_root to avoid confusion
         from parent loaders' bubbles in sys.path.
         """
-
         canonical_target = canonicalize_name(package_name)
         filesystem_name = package_name.replace("-", "_")
 
