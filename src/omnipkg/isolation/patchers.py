@@ -21,7 +21,7 @@ try:
     from .common_utils import safe_print
 except ImportError:
     try:
-        from omnipkg.common_utils import safe_print
+        pass
     except ImportError:
         # Ultimate fallback if safe_print isn't available
         def safe_print(msg):
@@ -470,7 +470,6 @@ def _patch_opt_einsum_for_isolation():
     Robustly isolate opt_einsum from torch/jax/cupy using stubs
     to prevent circular imports and partial initialization errors during TF load.
     """
-    import sys
     import types
 
     # Frameworks to isolate if not already loaded

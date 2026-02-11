@@ -11,7 +11,7 @@ from omnipkg.utils.ai_import_healer import heal_code_string
 try:
     from ..common_utils import safe_print
 except ImportError:
-    from omnipkg.common_utils import safe_print
+    pass
 
 import json
 import os
@@ -2624,8 +2624,6 @@ def execute_run_command(
     # ADD THIS LINE - Propagate verbose flag to subprocesses
     if verbose:
         os.environ["OMNIPKG_VERBOSE"] = "1"
-
-    from omnipkg.i18n import _
 
     if not cmd_args:
         safe_print(_("❌ Error: No script or command specified to run."))
