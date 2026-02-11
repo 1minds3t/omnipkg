@@ -788,7 +788,7 @@ msgstr "💾{}ファイルのハッシュをredisキャッシュに保存しま�
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:4944
 msgid "    📈 Indexed {} files from main environment."
-msgstr "main環境からのインデックス付き{}ファイル。"
+msgstr "📈 主な環境からインデックスされた {} ファイル。"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:5086
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:5120
@@ -797,7 +797,7 @@ msgstr "{} bubble_locations"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:4969
 msgid "    📝 Registered bubble location and stats for {} packages."
-msgstr "ed {}パッケージの登録バブルの場所と統計。"
+msgstr "📝 {} パッケージの登録されたバブルの位置と統計。"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:5099
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:5106
