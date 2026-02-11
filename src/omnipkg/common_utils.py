@@ -451,7 +451,6 @@ def sync_context_to_runtime():
 
     except Exception as e:
         safe_print(_("❌ A critical error occurred during context synchronization: {}").format(e))
-        import traceback
 
         traceback.print_exc()
         sys.exit(1)
@@ -487,7 +486,6 @@ def ensure_script_is_running_on_version(required_version: str):
     )
     safe_print(_("   - Relaunching into the correct context..."))
     try:
-        from omnipkg.core import ConfigManager
         from omnipkg.core import omnipkg as OmnipkgCore
 
         cm = ConfigManager(suppress_init_messages=True)
@@ -520,7 +518,6 @@ def ensure_script_is_running_on_version(required_version: str):
         safe_print("\n" + "-" * 80)
         safe_print(_("   ❌ FATAL ERROR during context relaunch."))
         safe_print(_("   -> Error: {}").format(e))
-        import traceback
 
         traceback.print_exc()
         safe_print("-" * 80)
@@ -652,7 +649,6 @@ def ensure_python_or_relaunch(required_version: str):
         safe_print("\n" + "-" * 80)
         safe_print(_("   ❌ FATAL ERROR during dimension jump."))
         safe_print(_("   -> Error: {}").format(e))
-        import traceback
 
         traceback.print_exc()
         safe_print("-" * 80)
@@ -663,7 +659,6 @@ def is_interactive_session():
     Reusable version of the detection logic you already have in _first_time_setup.
     Returns False for: CI, Docker, piped input, explicitly non-interactive envs.
     """
-    import sys
     from omnipkg.i18n import _
     # Check all the conditions you're already using
     is_docker = os.path.exists("/.dockerenv") or os.path.exists("/run/.containerenv")

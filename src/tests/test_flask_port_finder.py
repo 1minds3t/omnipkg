@@ -32,8 +32,7 @@ try:
         release_port,
         patch_flask_code,
         FlaskAppManager,
-        safe_print,
-    )
+        )
 except ImportError:
     print("Warning: 'omnipkg' not found. Using mock objects for demonstration.")
     _reserved_ports = set()
