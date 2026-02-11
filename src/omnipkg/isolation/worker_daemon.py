@@ -1525,14 +1525,14 @@ class PersistentWorker:
                 if ready_line and json.loads(ready_line.strip()).get("status") == "READY":
                     self.last_health_check = time.time()
                     self._is_ready = True
-                    safe_print(f"   ✅ [DAEMON] Worker ready: {self.package_spec}", file=sys.stderr)
+                    safe_print(_('   ✅ [DAEMON] Worker ready: {}').format(self.package_spec), file=sys.stderr)
                     return
                     
                 raise RuntimeError("Worker failed to send READY status.")
                     
             except Exception as e:
                 self.force_shutdown()
-                raise RuntimeError(f"Worker spec assignment failed: {e}")
+                raise RuntimeError(_('Worker spec assignment failed: {}').format(e))
                 
     def wait_for_ready_with_activity_monitoring(self, process, timeout_idle_seconds=300.0):
         """Wait for worker READY signal with REAL activity monitoring (CPU/Mem/IO)."""
@@ -1574,7 +1574,7 @@ class PersistentWorker:
                 if result[0]: ready_line = result[0]
             else:
                 # Unix: select works
-                ready, _, _ = select.select([process.stdout], [], [], 0.1)
+                ready, unused, unused = select.select([process.stdout], [], [], 0.1)
                 if ready:
                     ready_line = process.stdout.readline()
 
@@ -2127,7 +2127,7 @@ class WorkerPoolDaemon:
                     pass
 
             if script_count > 0:
-                safe_print(f"   🗑️  [DAEMON] Removed {script_count} stale temp script(s).", file=sys.stderr)
+                safe_print(_('   🗑️  [DAEMON] Removed {} stale temp script(s).').format(script_count), file=sys.stderr)
 
             # --- Pip Temporary Directory Cleanup (CRITICAL for disk space) ---
             temp_dir = tempfile.gettempdir()
@@ -2146,10 +2146,10 @@ class WorkerPoolDaemon:
                         pass
             
             if pip_dir_count > 0:
-                 safe_print(f"   🗑️  [DAEMON] Removed {pip_dir_count} stale pip temporary directory/file(s).", file=sys.stderr)
+                 safe_print(_('   🗑️  [DAEMON] Removed {} stale pip temporary directory/file(s).').format(pip_dir_count), file=sys.stderr)
 
         except Exception as e:
-            safe_print(f"   ⚠️  [DAEMON] Error during cleanup: {e}", file=sys.stderr)
+            safe_print(_('   ⚠️  [DAEMON] Error during cleanup: {}').format(e), file=sys.stderr)
 
     def start(self, daemonize: bool = True, wait_for_ready: bool = False):
         """
@@ -2175,7 +2175,7 @@ class WorkerPoolDaemon:
                     self._daemonize() # Detaches from the terminal.
                 
                 except OSError as e:
-                    safe_print(f'❌ Fork failed: {e}', file=sys.stderr)
+                    safe_print(_('❌ Fork failed: {}').format(e), file=sys.stderr)
                     return False
 
         # This code is executed by:
@@ -2264,7 +2264,7 @@ class WorkerPoolDaemon:
                     safe_print(f'✅ Daemon running (PID from file)', file=sys.stderr)
                     return True
                 else:
-                    safe_print(f'❌ Timeout (check {DAEMON_LOG_FILE})', file=sys.stderr)
+                    safe_print(_('❌ Timeout (check {})').format(DAEMON_LOG_FILE), file=sys.stderr)
                     return False
             else:
                 time.sleep(5)  # Give Windows more time
@@ -2272,10 +2272,10 @@ class WorkerPoolDaemon:
                     safe_print('✅ Daemon started', file=sys.stderr)
                     return True
                 else:
-                    safe_print(f'❌ Failed (check {DAEMON_LOG_FILE})', file=sys.stderr)
+                    safe_print(_('❌ Failed (check {})').format(DAEMON_LOG_FILE), file=sys.stderr)
                     return False
         except Exception as e:
-            safe_print(f'❌ Failed: {e}', file=sys.stderr)
+            safe_print(_('❌ Failed: {}').format(e), file=sys.stderr)
             return False if wait_for_ready else sys.exit(1)
 
     def _wait_for_daemon_ready(self, timeout: int = 10) -> bool:
@@ -2399,9 +2399,9 @@ class WorkerPoolDaemon:
             
             try:
                 sock.bind(address)
-                print(f"[DAEMON] Bound to TCP 127.0.0.1:{port}", flush=True)
+                print(_('[DAEMON] Bound to TCP 127.0.0.1:{}').format(port), flush=True)
             except OSError as e:
-                print(f"[DAEMON] Failed to bind to port {port}: {e}", flush=True)
+                print(_('[DAEMON] Failed to bind to port {}: {}').format(port, e), flush=True)
                 raise
             
             # Store connection info for clients to find us
@@ -2421,7 +2421,7 @@ class WorkerPoolDaemon:
             
             sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
             sock.bind(self.socket_path)
-            print(f"[DAEMON] Bound to Unix socket {self.socket_path}", flush=True)
+            print(_('[DAEMON] Bound to Unix socket {}').format(self.socket_path), flush=True)
         
         # ============================================================
         # COMMON: Setup and main loop (same for both platforms)
@@ -2430,7 +2430,7 @@ class WorkerPoolDaemon:
         # CRITICAL FIX: Increased backlog for high concurrency
         sock.listen(128)
         
-        print("[DAEMON] Server ready, entering accept loop", flush=True)
+        print(_('[DAEMON] Server ready, entering accept loop'), flush=True)
         
         while self.running:
             try:
@@ -2445,11 +2445,11 @@ class WorkerPoolDaemon:
             except Exception as e:
                 if self.running:
                     # Only log if we're not shutting down
-                    print(f"[DAEMON] Accept error: {e}", flush=True)
+                    print(_('[DAEMON] Accept error: {}').format(e), flush=True)
         
         # Cleanup
         sock.close()
-        print("[DAEMON] Socket closed", flush=True)
+        print(_('[DAEMON] Socket closed'), flush=True)
         
         if is_windows and conn_file.exists():
             conn_file.unlink()
@@ -4487,7 +4487,7 @@ if __name__ == "__main__":
 
                 start_monitor(watch_mode=watch)
             except ImportError:
-                print(_('❌ resource_monitor module not found.'))
+                safe_print(_('❌ resource_monitor module not found.'))
                 sys.exit(1)
     else:
         print(_('Unknown command: {}').format(cmd))

@@ -676,7 +676,7 @@ class omnipkgMetadataGatherer:
                     name, version = self._parse_package_spec(spec)
                     if not version:
                         if verbose:
-                            safe_print(f"   ⚠️  Skipping '{spec}' in surgical discovery - version required.")
+                            safe_print(_("   ⚠️  Skipping '{}' in surgical discovery - version required.").format(spec))
                         continue
                 except ValueError as e:
                     safe_print(_("❌ Could not parse spec '{}': {}").format(spec, e))

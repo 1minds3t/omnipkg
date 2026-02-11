@@ -884,7 +884,7 @@ def main():
                 sys.argv.insert(2, forced_version)
                 
                 if os.environ.get("OMNIPKG_DEBUG") == "1":
-                    print(f"[DEBUG-CLI] Detected: {prog_name} -> forcing --python {forced_version}", file=sys.stderr)
+                    print(_('[DEBUG-CLI] Detected: {} -> forcing --python {}').format(prog_name, forced_version), file=sys.stderr)
         
         # 🎪 NORMALIZE FLAGS AND COMMANDS (but not package names)
         normalized_argv = [sys.argv[0]]
@@ -917,11 +917,28 @@ def main():
             # Always show "omnipkg" - 8pkg is just an alias
             safe_print(_("omnipkg {}").format(get_version()))
             return 0
+        # BEFORE creating ConfigManager
+        os.environ["OMNIPKG_LANG"] = os.environ.get("OMNIPKG_LANG", "")
+
+        cm = ConfigManager()
+        user_lang = global_args.lang or cm.config.get("language") or os.environ.get("OMNIPKG_LANG")
 
         cm = ConfigManager()
         user_lang = global_args.lang or cm.config.get("language")
+
+        # NEW: Check environment variable first (highest priority)
+        if not user_lang:
+            user_lang = os.environ.get("OMNIPKG_LANG")
+
         if user_lang:
+            # Force re-import to pick up env var
+            import importlib
+            from omnipkg import i18n
+            importlib.reload(i18n)
+            from omnipkg.i18n import _
+            
             _.set_language(user_lang)
+            os.environ["OMNIPKG_LANG"] = user_lang
 
         # --- DECIDE MINIMAL VS FULL INITIALIZATION ---
         use_minimal = False
@@ -1241,23 +1258,23 @@ def main():
 
                         try:
                             if os.environ.get("OMNIPKG_DEBUG") == "1":
-                                safe_print(f"[DEBUG] Spawning shell: {shell}")
-                                safe_print(f"[DEBUG] Target Python: {python_path}")
-                                safe_print(f"[DEBUG] OMNIPKG_PYTHON: {version}")
-                                safe_print(f"[DEBUG] OMNIPKG_VENV_ROOT: {original_venv}")
-                                safe_print(f"[DEBUG] Shims directory: {shims_dir}")
-                                safe_print(f"[DEBUG] PATH prefix: {deduped[0]}")
-                                safe_print(f"[DEBUG] Cleanup script: {cleanup_file}")
-                                safe_print(f"[DEBUG] CONDA_PREFIX: {new_env.get('CONDA_PREFIX', 'NOT SET')}")
-                                safe_print(f"[DEBUG] CONDA_DEFAULT_ENV: {new_env.get('CONDA_DEFAULT_ENV', 'NOT SET')}")
+                                safe_print(_('[DEBUG] Spawning shell: {}').format(shell))
+                                safe_print(_('[DEBUG] Target Python: {}').format(python_path))
+                                safe_print(_('[DEBUG] OMNIPKG_PYTHON: {}').format(version))
+                                safe_print(_('[DEBUG] OMNIPKG_VENV_ROOT: {}').format(original_venv))
+                                safe_print(_('[DEBUG] Shims directory: {}').format(shims_dir))
+                                safe_print(_('[DEBUG] PATH prefix: {}').format(deduped[0]))
+                                safe_print(_('[DEBUG] Cleanup script: {}').format(cleanup_file))
+                                safe_print(_('[DEBUG] CONDA_PREFIX: {}').format(new_env.get('CONDA_PREFIX', 'NOT SET')))
+                                safe_print(_('[DEBUG] CONDA_DEFAULT_ENV: {}').format(new_env.get('CONDA_DEFAULT_ENV', 'NOT SET')))
 
                             safe_print(_("🐚 Spawning new shell... (Type 'exit' to return)"))
                             safe_print(f"   🐍 Python {version} context active (via shims)")
-                            safe_print(f"   💡 Note: Type 'exit' to clean up and return")
+                            safe_print(_("   💡 Note: Type 'exit' to clean up and return"))
                             
                             conda_env = os.environ.get("CONDA_DEFAULT_ENV", "")
                             if conda_env:
-                                safe_print(f"   📦 Conda env '{conda_env}' preserved")
+                                safe_print(_("   📦 Conda env '{}' preserved").format(conda_env))
                             
                             # Launch interactive shell
                             os.execle(

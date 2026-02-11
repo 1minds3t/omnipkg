@@ -59,7 +59,9 @@ msgstr ""
 msgid "🤯 What makes this impossible with traditional tools:"
 msgstr "🤯 Vad gör detta omöjligt med traditionella verktyg:"
 
+# Lollama: Skipped (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:363
+#, fuzzy
 msgid "   • Switching versions requires environment restart"
 msgstr "• Att byta versioner kräver omstart av miljön"
 
@@ -132,7 +134,9 @@ msgstr "\\ ^__ ^"
 msgid "         \\  (💀💀)\\______   <- This is your environment"
 msgstr "\\ (💀💀) \\ ______ <- Detta är din miljö"
 
+# Lollama: Skipped (API Error)
 #: /home/minds3t/omnipkg/src/tests/test_old_flask.py:50
+#, fuzzy
 msgid "            (__)\\       )\\/\\   after using pip"
 msgstr "(__) \\) \\/\\ Efter att ha använt PIP"
 
@@ -160,7 +164,9 @@ msgstr "-> Förena filsystemstillstånd med Redis Knowledge Base ..."
 msgid "Override the display language for this command (e.g., es, de, ja)"
 msgstr "Åsidosätta visningsspråket för detta kommando (t.ex. ES, DE, JA)"
 
+# Lollama: Skipped (API Error)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:578
+#, fuzzy
 msgid "Available commands:"
 msgstr "Tillgängliga kommandon:"
 
@@ -357,7 +363,9 @@ msgstr "✅ Kunskapsbasen byggdes om framgångsrikt."
 msgid "   🔄 Rebuilding core package metadata..."
 msgstr "🔄 Ombyggnad av kärnpaketmetadata ..."
 
+# Lollama: Skipped (API Error)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:6746
+#, fuzzy
 msgid "   ✅ Core metadata rebuilt."
 msgstr "✅ Kärnmetadata ombyggd."
 
@@ -391,7 +399,9 @@ msgstr "❌ Ogiltigt urval."
 msgid ""
 "\n"
 "   Skipped."
-msgstr "Hoppade över."
+msgstr ""
+"\n"
+"   Skipped."
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:8831
 msgid "   ✅ Snapshot saved."
@@ -473,7 +483,9 @@ msgid ""
 msgstr ""
 "✅ Miljö återvände framgångsrikt till det senaste kända goda tillståndet."
 
+# Lollama: Skipped (API Error)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:15744
+#, fuzzy
 msgid "🔄 omnipkg System Status"
 msgstr "🔄 Omnipkg -systemstatus"
 
@@ -503,7 +515,9 @@ msgid ""
 "🌍 Main Environment:"
 msgstr "🌍 Huvudmiljö:"
 
+# Lollama: Skipped (API Error)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:15778
+#, fuzzy
 msgid ""
 "\n"
 "📦 izolasyon Alanı (Bubbles):"
@@ -519,7 +533,9 @@ msgid ""
 "🔓 Releasing pip... (your funeral)"
 msgstr "🔓 Släpp Pip ... (din begravning)"
 
+# Lollama: Skipped (API Error)
 #: /home/minds3t/omnipkg/src/tests/test_old_flask.py:344
+#, fuzzy
 msgid "💀 Watch as pip destroys your beautiful environment..."
 msgstr "💀 Titta när Pip förstör din vackra miljö ..."
 
@@ -543,7 +559,9 @@ msgid ""
 "🧠 Smart choice! Using omnipkg instead..."
 msgstr "🧠 Smart Choice!Använda omnipkg istället ..."
 
+# Lollama: Skipped (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/tests/test_old_flask.py:400
+#, fuzzy
 msgid ""
 "\n"
 "✅ omnipkg install successful!"
@@ -557,7 +575,7 @@ msgstr "🎯 Båda versionerna samexisterar nu fredligt!"
 msgid ""
 "\n"
 "🔧 Note how omnipkg intelligently manages versions!"
-msgstr "🔧 Observera hur ONEPKG intelligent hanterade versioner!"
+msgstr "🔧 Observera hur omnipkg hanterar versioner på ett intelligent sätt!"
 
 #: /home/minds3t/omnipkg/src/tests/test_old_flask.py:440
 msgid "📚 What you learned:"
@@ -677,7 +695,7 @@ msgstr "{} == {}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:3789
 msgid "{}{}"
-msgstr "{} {}"
+msgstr "{}{}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:3909
 msgid "    ⚠️  Could not analyze {}: {}"
@@ -745,7 +763,7 @@ msgstr "📦 Komplexa paket bevarade: {} paket med submoduler"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:4343
 msgid "    🚨 CRITICAL: Missing Python module: {}"
-msgstr "Kritisk: saknas Python -modul: {}"
+msgstr "🚨 Kritisk: Missing Python modul: {}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:4347
 msgid "    🔧 Fixed: Copied missing module {}"
@@ -775,7 +793,9 @@ msgstr "🔄 Fallback -skanning för {} paket: {} {}"
 msgid "    💾 Saving {} file hashes to Redis cache..."
 msgstr "💾 Spara {} fil hash för att redisera cache ..."
 
+# Lollama: Skipped (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:4944
+#, fuzzy
 msgid "    📈 Indexed {} files from main environment."
 msgstr "📈 Indexerade {} filer från huvudmiljön."
 
@@ -835,7 +855,9 @@ msgstr "✅ Bubble validerad framgångsrikt: {} == {}"
 msgid "🗑️  This will permanently delete your configuration file at:"
 msgstr "🗑 Detta kommer att radera din konfigurationsfil permanent på:"
 
+# Lollama: Skipped (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:6593
+#, fuzzy
 msgid "❌ Error: Could not delete configuration file: {}"
 msgstr "❌ ERROR: kunde inte ta bort konfigurationsfilen: {}"
 
@@ -879,7 +901,7 @@ msgstr "⚠ kunde inte utföra live -paketskanning: {}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:8450
 msgid "{}versions"
-msgstr "{} versioner"
+msgstr "{}versions"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:8550
 msgid "   -> Cleaning up {} uninstalled package(s) from Redis..."
@@ -897,10 +919,12 @@ msgstr "{}, ... och {} mer"
 msgid ""
 "\n"
 "📋 KEY DATA for '{}':"
-msgstr "📋 Nyckeldata för '{}':"
+msgstr "📋 KEY DATA för '{}':"
 
+# Lollama: Skipped (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:8622
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:8761
+#, fuzzy
 msgid "🫧 Bubbled Versions: {}"
 msgstr "🫧 Bubblade versioner: {}"
 
@@ -943,7 +967,9 @@ msgid ""
 "---[ Build Info ]---"
 msgstr "--- [Bygg info] ---"
 
+# Lollama: Skipped (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:8833
+#, fuzzy
 msgid "   ⚠️ Could not save environment snapshot: {}"
 msgstr "⚠ kunde inte spara ögonblicksbild: {}"
 
@@ -955,11 +981,15 @@ msgstr "Fel att få aktiv version av {}: {}"
 msgid "   -> Cleaning up replaced version from knowledge base: {} v{}"
 msgstr "-> Rensa upp ersatt version från kunskapsbas: {} V {}"
 
+# Lollama: Skipped (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:12443
+#, fuzzy
 msgid "   -> Uninstalling: {}"
 msgstr "-> Avinstallation: {}"
 
+# Lollama: Skipped (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:12446
+#, fuzzy
 msgid "   -> Installing/Fixing: {}"
 msgstr "-> Installera/fixa: {}"
 
@@ -1019,7 +1049,9 @@ msgstr "❌ Det gick inte att hämta PYPI -data för {} == {}: {}"
 msgid "❌ Unexpected PyPI response structure: missing {}"
 msgstr "❌ Oväntad PYPI -svarstruktur: saknas {}"
 
+# Lollama: Skipped (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:12545
+#, fuzzy
 msgid "❌ Error parsing PyPI data: {}"
 msgstr "❌ Fel att analysera PYPI -data: {}"
 
@@ -1079,11 +1111,15 @@ msgstr "🗑 Radera bubbelkatalog: {}"
 msgid "  - Uninstall: {}"
 msgstr "- avinstallera: {}"
 
+# Lollama: Skipped (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:13031
+#, fuzzy
 msgid "  - Install: {}"
 msgstr "- installera: {}"
 
+# Lollama: Skipped (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:13033
+#, fuzzy
 msgid "  - Fix Version: {}"
 msgstr "- fixa version: {}"
 
@@ -1206,7 +1242,9 @@ msgstr "⚠ Bulk Security Scan Failed: {}"
 msgid "   • Previously 'incompatible' versions working together seamlessly"
 msgstr "• Tidigare \"inkompatibla\" versioner som arbetar tillsammans sömlöst"
 
+# Lollama: Skipped (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:362
+#, fuzzy
 msgid "   • numpy 1.24.3 + scipy 1.12.0 → 'incompatible dependencies'"
 msgstr "• Numpy 1.24.3 + Scipy 1.12.0 → 'Inkompatibla beroenden'"
 
@@ -1285,7 +1323,9 @@ msgid ""
 msgstr ""
 "💡 Oroa dig inte - även om vissa steg misslyckades fungerar kärnisoleringen!"
 
+# Lollama: Skipped (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/omnipkg/package_meta_builder.py:128
+#, fuzzy
 msgid "⚠️ Install 'tqdm' for a better progress bar."
 msgstr "⚠ Installera 'TQDM' för en bättre framstegsfält."
 
@@ -1303,11 +1343,15 @@ msgstr "❌ Kritiskt fel under testning: {}"
 msgid "   🔍 Inspecting bubble structure: {}"
 msgstr "🔍 Inspektera bubblestruktur: {}"
 
+# Lollama: Skipped (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/tests/test_uv_switching.py:136
+#, fuzzy
 msgid "   ❌ Bubble doesn't exist: {}"
 msgstr "❌ Bubble finns inte: {}"
 
+# Lollama: Skipped (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/tests/test_uv_switching.py:141
+#, fuzzy
 msgid "   ✅ Found dist-info: {}"
 msgstr "✅ Hittade dist-INFO: {}"
 
@@ -1315,7 +1359,9 @@ msgstr "✅ Hittade dist-INFO: {}"
 msgid "   ✅ Found uv binary: {}"
 msgstr "✅ Hittade uv binär: {}"
 
+# Lollama: Skipped (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/tests/test_uv_switching.py:162
+#, fuzzy
 msgid "   📁 Bubble contents ({} items):"
 msgstr "📁 Bubbleinnehåll ({} artiklar):"
 
@@ -1327,11 +1373,15 @@ msgstr "❌ Version Mismatch: förväntat {}, Got {}"
 msgid "   ✅ Main environment version: {}"
 msgstr "✅ Huvudmiljöversionen: {}"
 
+# Lollama: Skipped (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/tests/test_uv_switching.py:268
+#, fuzzy
 msgid "   ❌ Main environment test failed: {}"
 msgstr "❌ Huvudmiljöprov misslyckades: {}"
 
+# Lollama: Skipped (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/tests/test_uv_switching.py:274
+#, fuzzy
 msgid "Testing Bubble (uv=={})"
 msgstr "Testa bubbla (UV == {})"
 
@@ -1339,7 +1389,9 @@ msgstr "Testa bubbla (UV == {})"
 msgid "  - 📁 {} ({} MB){}"
 msgstr "- 📁 {} ({} mb) {}"
 
+# Lollama: Skipped (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:15811
+#, fuzzy
 msgid "  - Total Bubble Size: {} MB"
 msgstr "- Total bubbelstorlek: {} MB"
 
@@ -1351,7 +1403,7 @@ msgstr ""
 
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:564
 msgid "%(prog)s {}"
-msgstr "%(prog) s {}"
+msgstr "\"%(prog)s {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:940
 msgid ""
@@ -1365,7 +1417,9 @@ msgstr ""
 msgid "  • Multi-version package coexistence"
 msgstr "• Multisversionspaket samexistens"
 
+# Lollama: Skipped (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:554
+#, fuzzy
 msgid "Version: {}"
 msgstr "Version:{}"
 
@@ -1405,7 +1459,9 @@ msgid ""
 "The following bubbled versions will be permanently deleted:"
 msgstr "Följande bubblade versioner kommer att raderas permanent:"
 
+# Lollama: Skipped (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:6787
+#, fuzzy
 msgid "  - v{} (bubble)"
 msgstr "- v {} (bubbla)"
 
@@ -1413,7 +1469,9 @@ msgstr "- v {} (bubbla)"
 msgid "🛡️  The active version (v{}) will NOT be affected."
 msgstr "🛡 Den aktiva versionen (v {} ) påverkas inte."
 
+# Lollama: Skipped (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:6797
+#, fuzzy
 msgid "🚫 Prune cancelled."
 msgstr "🚫 Beskärmad avbruten."
 
@@ -1431,7 +1489,9 @@ msgstr "❌ kunde inte lösa några paket som ska installeras. Avbryter."
 msgid "🔎 Resolving package versions via PyPI API..."
 msgstr "🔎 Lös paketversioner via PYPI API ..."
 
+# Lollama: Skipped (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:13585
+#, fuzzy
 msgid "    -> Finding latest version for '{}'..."
 msgstr "-> Hitta den senaste versionen för '{}' ..."
 
@@ -1448,7 +1508,7 @@ msgstr "   {}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/CondaGuard.py:51
 msgid "🛡️ Restored corrupted metadata for: {}"
-msgstr ""
+msgstr "🛡️ Återställd korrupt metadata för: {}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/CondaGuard.py:68
 msgid "Failed to back up '{}': {}"

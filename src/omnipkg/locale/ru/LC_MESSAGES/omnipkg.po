@@ -45,7 +45,7 @@ msgstr "• Различные комбинации Numpy+Scipy (1.24.3+1.12.0 �
 
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:357
 msgid "   • Live PYTHONPATH manipulation without process restart"
-msgstr "• Живые манипуляции с питонепатом без перезапуска процесса"
+msgstr "• Оперативное манипулирование PYTHONPATH без перезапуска процесса."
 
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:358
 msgid "   • Space-efficient deduplication (shows deduplication - normally"
@@ -122,7 +122,9 @@ msgstr "│ • Уничтожьте ваше современное прило�
 msgid "│      • Welcome you to dependency hell 🔥                │"
 msgstr "│ • Добро пожаловать вам в зависимость, ад, 🔥 │ │ │"
 
+# Lollama: Skipped (API Error)
 #: /home/minds3t/omnipkg/src/tests/test_old_flask.py:45
+#, fuzzy
 msgid "│  [Y]es, I want chaos | [N]o, save me omnipkg! 🦸‍♂️        │"
 msgstr "│ [y] es, я хочу хаос |[N] o, Спаси меня, омнипкг!🦸‍♂️ │"
 
@@ -481,7 +483,9 @@ msgstr ""
 "✅ Окружающая среда успешно вернулась к последнему известному хорошему "
 "государству."
 
+# Lollama: Skipped (API Error)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:15744
+#, fuzzy
 msgid "🔄 omnipkg System Status"
 msgstr "🔄 Omnipkg System Статус системы"
 
@@ -561,7 +565,9 @@ msgstr "✅ Omnipkg Установите успешно!"
 msgid "🎯 BOTH versions now coexist peacefully!"
 msgstr "🎯 Обе версии сейчас мирно сосуществуют!"
 
+# Lollama: Skipped (API Error)
 #: /home/minds3t/omnipkg/src/tests/test_old_flask.py:421
+#, fuzzy
 msgid ""
 "\n"
 "🔧 Note how omnipkg intelligently manages versions!"
@@ -1364,7 +1370,7 @@ msgstr ""
 
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:564
 msgid "%(prog)s {}"
-msgstr "%(prog) s {}"
+msgstr "\"%(prog)s {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:940
 msgid ""
