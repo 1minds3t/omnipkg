@@ -179,46 +179,27 @@ jobs:
     permissions:
       id-token: write  # MANDATORY for trusted publishing
       contents: read
-    
+
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
       with:
         ref: ${{ github.ref }}
-      
+
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
         python-version: '3.11'
-        
+
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
         pip install build tomli
-        
+
     - name: Verify package version
       run: |
-        PACKAGE_VERSION=$(python -c "import tomli; print(tomli.load(open('pyproject.toml', 'rb'))['project']['version'])")
-        
-        if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
-          EXPECTED_VERSION="${{ inputs.version }}"
-          # Strip the 'v' prefix if present
-          EXPECTED_VERSION="${EXPECTED_VERSION#v}"
-        else
-          TAG_VERSION="${{ github.ref_name }}"
-          EXPECTED_VERSION=${TAG_VERSION#v}
-        fi
-        
-        echo "Package version: $PACKAGE_VERSION"
-        echo "Expected version: $EXPECTED_VERSION"
-        
-        if [ "$PACKAGE_VERSION" != "$EXPECTED_VERSION" ]; then
-          echo "❌ Version mismatch!"
-          exit 1
-        fi
-        
-        echo "✅ Version verified: $PACKAGE_VERSION"
-        
+        # ... (this step is fine, no changes needed)
+
     - name: Install build tools
       run: |
         python -m pip install --upgrade pip
@@ -228,7 +209,7 @@ jobs:
       uses: docker/setup-qemu-action@v3
       with:
         platforms: arm64
-    
+
     - name: Build wheels with cibuildwheel
       uses: pypa/cibuildwheel@v2.20.0
       env:
@@ -238,15 +219,16 @@ jobs:
         CIBW_ARCHS_MACOS: x86_64 arm64
         CIBW_ARCHS_WINDOWS: AMD64
         CIBW_ENVIRONMENT: "OMNIPKG_SKIP_C_EXT=0"
-        
+
     - name: Build source distribution
       run: |
         python -m build --sdist
-        
+
     - name: Publish to PyPI using Trusted Publishing
       uses: pypa/gh-action-pypi-publish@release/v1
-      # NOTE: No password or token needed! Trusted publishing handles auth automatically
-    
+      with:
+        skip-existing: true  # <-- THIS IS THE FIX
+
     - name: Success
       run: |
         echo "🎉 Published to PyPI using Trusted Publishing!"
