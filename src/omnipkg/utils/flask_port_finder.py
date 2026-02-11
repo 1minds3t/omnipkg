@@ -40,7 +40,7 @@ try:
     from .common_utils import safe_print
 except ImportError:
     try:
-        from omnipkg.common_utils import safe_print
+        pass
     except ImportError:
 
         def safe_print(*args, **kwargs):

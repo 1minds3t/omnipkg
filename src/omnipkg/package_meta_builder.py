@@ -6,7 +6,7 @@ from omnipkg.i18n import _
 try:
     from .common_utils import safe_print
 except ImportError:
-    from omnipkg.common_utils import safe_print
+    pass
 """
 omnipkg_metadata_builder.py - v11 - The "Multi-Version Complete" Edition
 A fully integrated, self-aware metadata gatherer with complete multi-version
@@ -962,7 +962,6 @@ class omnipkgMetadataGatherer:
         and cleans up any "ghost" entries from the Redis index that no longer exist.
         """
         safe_print(_("🔍 Discovering all packages from file system (ground truth)..."))
-        from packaging.utils import canonicalize_name
 
         found_on_disk = {}
         active_packages = {}
@@ -1845,7 +1844,6 @@ class omnipkgMetadataGatherer:
         (AUTHORITATIVE) Generates the one true, consistent instance hash for any
         distribution by using its real, canonical path.
         """
-        import os
 
         # This is the single source of truth for a package's physical location.
         # os.path.realpath resolves symlinks and gives the canonical path.
@@ -1870,10 +1868,6 @@ class omnipkgMetadataGatherer:
 
             # Compute hash from resolved path
             instance_hash = self._get_instance_hash(dist)
-
-            # The path stored in metadata MUST match what the hash was generated from.
-            # os.path.realpath is the key to consistency.
-            import os
 
             resolved_path_str = os.path.realpath(str(dist._path))
             metadata["path"] = resolved_path_str
@@ -2368,9 +2362,6 @@ class omnipkgMetadataGatherer:
 
 
 if __name__ == "__main__":
-    import hashlib
-    import json
-    from pathlib import Path
 
     from omnipkg.cache import SQLiteCacheClient
 
@@ -2419,7 +2410,6 @@ if __name__ == "__main__":
             sys.exit(1)
     except Exception as e:
         safe_print(_("\n❌ An unexpected error occurred during metadata build: {}").format(e))
-        import traceback
 
         traceback.print_exc()
         sys.exit(1)
