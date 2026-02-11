@@ -161,12 +161,12 @@ class BubbleProfiler:
     def print_report(self):
         if self.quiet:
             return
-        print("\n" + "=" * 70 + "\n📊 BUBBLE ACTIVATION PROFILE\n" + "=" * 70)
+        safe_print("\n" + "=" * 70 + "\n📊 BUBBLE ACTIVATION PROFILE\n" + "=" * 70)
         for m in self.marks[:-1]:
             icon = self.CATEGORIES.get(m.category, "❓")
             fix = "✅ FIX" if m.fixable else "❌ NOPE"
             print(f"   {icon} {m.name:30s} {m.elapsed_ms:8.2f}ms  {fix:8s}  {m.category}")
-        print("-" * 70 + f"\n🎯 TOTAL: {self.marks[-1].elapsed_ms:.2f}ms\n" + "=" * 70 + "\n")
+        safe_print("-" * 70 + f"\n🎯 TOTAL: {self.marks[-1].elapsed_ms:.2f}ms\n" + "=" * 70 + "\n")
 
 
 class omnipkgLoader:
@@ -2633,7 +2633,7 @@ class omnipkgLoader:
                     cu_version = spec.split('+cu')[1].split('==')[0] if '==' in spec else spec.split('+cu')[1]
                     extra_index_url = f"https://download.pytorch.org/whl/cu{cu_version}"
                     if not self.quiet:
-                        safe_print(f"      🔍 Auto-detected PyTorch index: {extra_index_url}")
+                        safe_print(_('      🔍 Auto-detected PyTorch index: {}').format(extra_index_url))
 
                 # Pass index URLs to smart_install
                 result = core.smart_install(
@@ -2666,7 +2666,7 @@ class omnipkgLoader:
 
         except Exception as e:
             if not self.quiet:
-                safe_print(f'      ❌ Auto-install exception: {e}')
+                safe_print(_('      ❌ Auto-install exception: {}').format(e))
                 import traceback
                 safe_print(traceback.format_exc())
             return False
@@ -3283,7 +3283,7 @@ class omnipkgLoader:
         if self._profiling_enabled:
             _t2 = time.perf_counter_ns()
             if not self.quiet:
-                print(f"         ⏱️ pre_inval:{(_t2-_t)/1e6:.3f}ms")
+                safe_print(f"         ⏱️ pre_inval:{(_t2-_t)/1e6:.3f}ms")
             _t = _t2
 
         pkg_name_normalized = pkg_name.replace("-", "_")
@@ -3308,7 +3308,7 @@ class omnipkgLoader:
         if self._profiling_enabled:
             _t2 = time.perf_counter_ns()
             if not self.quiet:
-                print(f"         ⏱️ special_check:{(_t2-_t)/1e6:.3f}ms")
+                safe_print(f"         ⏱️ special_check:{(_t2-_t)/1e6:.3f}ms")
             _t = _t2
 
         # GET MODULES - THIS IS LIKELY THE BOTTLENECK
@@ -3317,7 +3317,7 @@ class omnipkgLoader:
         if self._profiling_enabled:
             _t2 = time.perf_counter_ns()
             if not self.quiet:
-                print(f"         ⏱️ get_modules:{(_t2-_t)/1e6:.3f}ms")
+                safe_print(f"         ⏱️ get_modules:{(_t2-_t)/1e6:.3f}ms")
             _t = _t2
 
         # Add package name variants
@@ -3341,12 +3341,12 @@ class omnipkgLoader:
         if self._profiling_enabled:
             _t2 = time.perf_counter_ns()
             if not self.quiet:
-                print(f"         ⏱️ del_loop:{(_t2-_t)/1e6:.3f}ms")
+                safe_print(f"         ⏱️ del_loop:{(_t2-_t)/1e6:.3f}ms")
             _t = _t2
 
             _t2 = time.perf_counter_ns()
             if not self.quiet:
-                print(f"         ⏱️ gc:{(_t2-_t)/1e6:.3f}ms")
+                safe_print(f"         ⏱️ gc:{(_t2-_t)/1e6:.3f}ms")
             _t = _t2
 
         if hasattr(importlib, "invalidate_caches"):
@@ -3355,11 +3355,11 @@ class omnipkgLoader:
         if self._profiling_enabled:
             _t2 = time.perf_counter_ns()
             if not self.quiet:
-                print(f"         ⏱️ post_inval:{(_t2-_t)/1e6:.3f}ms")
+                safe_print(f"         ⏱️ post_inval:{(_t2-_t)/1e6:.3f}ms")
             _t = _t2
 
             if not self.quiet:
-                print(f"         ⏱️ TOTAL_cleanup:{(time.perf_counter_ns()-_t0)/1e6:.3f}ms")
+                safe_print(f"         ⏱️ TOTAL_cleanup:{(time.perf_counter_ns()-_t0)/1e6:.3f}ms")
 
     def _cleanup_all_cloaks_globally(self):
         """

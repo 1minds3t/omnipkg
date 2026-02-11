@@ -720,7 +720,7 @@ msgstr "📦 {}: حزمة مجمع ({} عارضات فرعية) - نسخ جمي�
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:4149
 msgid "    📄 {}: copied {}, deduplicated {}"
-msgstr "📄 {}: منسوخ{}، مكرر {}\",}"
+msgstr "📄 {}: منسوخ{}، مكرر {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:4157
 msgid "    ⚠️  Found {} file(s) not listed in package metadata."
@@ -1349,7 +1349,7 @@ msgstr "🚀 مدير حزم Python الذكي الذي يزيل الجحيم ا
 
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:564
 msgid "%(prog)s {}"
-msgstr "٪ (prog) s {}"
+msgstr "\"٪ %(prog)s {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:940
 msgid ""
@@ -1446,11 +1446,11 @@ msgstr "{}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/CondaGuard.py:51
 msgid "🛡️ Restored corrupted metadata for: {}"
-msgstr "🛡️ تم استعادة البيانات الوصفية التالفة لـ: {}\",}"
+msgstr "🛡️ تم استعادة البيانات الوصفية التالفة لـ: {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/CondaGuard.py:68
 msgid "Failed to back up '{}': {}"
-msgstr "فشل النسخ الاحتياطي لـ '{}': {}\",}"
+msgstr "فشل النسخ الاحتياطي لـ '{}': {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/CondaGuard.py:83
 msgid "Detected corruption (file missing or empty): '{}'"
@@ -1462,7 +1462,7 @@ msgstr "تم اكتشاف تلف (JSON غير صالح): '{}'"
 
 #: /home/minds3t/omnipkg/src/omnipkg/CondaGuard.py:101
 msgid "Failed to restore '{}': {}"
-msgstr "فشلت في استعادة '{}': {}\",}"
+msgstr "فشلت في استعادة '{}': {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/CondaGuard.py:104
 msgid "Cannot restore '{}', backup file is missing!"
@@ -1536,7 +1536,7 @@ msgstr "🛡️ ConfigGuard: استعادة التكوين الأصلي للمس
 
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:3192
 msgid " ⚠️ Warning: Could not remove existing cloak {}: {}"
-msgstr "⚠ ️ تحذير: لا يمكن إزالة العباءة الموجودة {}: {}\",}"
+msgstr "⚠ ️ تحذير: لا يمكن إزالة العباءة الموجودة {}: {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/isolation/worker_daemon.py:1648
 msgid "   - {}"
@@ -1544,7 +1544,7 @@ msgstr "   - {}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:965
 msgid "❌ Error: Invalid install strategy. Must be one of: {}"
-msgstr "❌ خطأ: استراتيجية التثبيت غير صالحة. يجب أن تكون واحدة من: {}\",}"
+msgstr "❌ خطأ: استراتيجية التثبيت غير صالحة. يجب أن تكون واحدة من: {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:536
 msgid "🔥 Key Features:"
@@ -1718,7 +1718,7 @@ msgstr "✅ تمت استعادة استراتيجية التثبيت إلى:{}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:13107
 msgid "   ⚠️  Failed to restore install strategy to {}: {}"
-msgstr "⚠️ فشل استعادة استراتيجية التثبيت إلى {}: {}\",}"
+msgstr "⚠️ فشل استعادة استراتيجية التثبيت إلى {}: {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:13112
 msgid ""
@@ -1870,7 +1870,7 @@ msgstr "🛑 تم إلغاء العملية.الإجهاض."
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:629
 msgid "🔧 Aligning configuration to use Python interpreter: {}"
-msgstr "🔧 تكوين التحالف لاستخدام مترجم Python: {}\",}"
+msgstr "🔧 تكوين التحالف لاستخدام مترجم Python: {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:637
 msgid "   - New site-packages path: {}"
@@ -1881,7 +1881,7 @@ msgstr "- مسار حزم الموقع الجديد:{}"
 #  (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:638
 msgid "   - New Python executable: {}"
-msgstr "- Python الجديدة قابلة للتنفيذ: {"
+msgstr "- Python الجديدة قابلة للتنفيذ: {}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:644
 msgid "   ✅ Configuration updated and saved successfully."
@@ -1965,7 +1965,7 @@ msgstr "بنية غير مدعومة: {}"
 #  (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:1863
 msgid "   - URL: {}"
-msgstr "- عنوان URL:{"
+msgstr "\"   - عنوان URL:{}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:1876
 msgid "✅ Downloaded {} bytes"
@@ -2129,11 +2129,11 @@ msgstr "🔍 الكشف التلقائي عن مترجم Python الأصلي..."
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:1492
 msgid "   - Detected: Python {} at {}"
-msgstr "- تم الكشف عن: Python {} في {}\",}"
+msgstr "- تم الكشف عن: Python {} في {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:1505
 msgid "   ✅ Python {} already registered at: {}"
-msgstr "Python {} مسجل بالفعل في: {}\",}"
+msgstr "Python {} مسجل بالفعل في: {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:1521
 msgid "   📝 Registering Python {} (original) without copying..."
@@ -2145,7 +2145,7 @@ msgstr "✅ الرابط الرمزي الذي تم إنشاؤه:{}->{}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:1531
 msgid "      ⚠️  Could not create symlink {}: {}"
-msgstr "⚠️ تعذر إنشاء الرابط الرمزي {}: {}\",}"
+msgstr "⚠️ تعذر إنشاء الرابط الرمزي {}: {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:1543
 msgid "      ✅ Created pip symlink: {}"
@@ -2153,7 +2153,7 @@ msgstr "تم إنشاء رابط رمزي pip: {}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:1546
 msgid "      ⚠️  Could not create pip symlink: {}"
-msgstr "⚠️ تعذر إنشاء رابط رمزي pip: {}\",}"
+msgstr "⚠️ تعذر إنشاء رابط رمزي pip: {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:1559
 msgid "   ✅ Registered Python {} in registry"
@@ -2189,7 +2189,7 @@ msgstr "⚠ ️ لم يتم العثور على دليل bin/ في{}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:1637
 msgid "      ⚠️  No valid Python executable found in {}"
-msgstr "⚠️ لم يتم العثور على ملف Python قابل للتنفيذ صالح في {}\",}"
+msgstr "⚠️ لم يتم العثور على ملف Python قابل للتنفيذ صالح في {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:1667
 msgid "      ✅ Found valid executable: {} ({})"
@@ -2222,7 +2222,7 @@ msgstr "ℹ️ لم يتم العثور على مترجمين فوريين مُ�
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:2108
 msgid "Failed to download or extract Python: {}"
-msgstr "فشلت في تنزيل أو استخراج Python: {}\",}"
+msgstr "فشلت في تنزيل أو استخراج Python: {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:2577
 msgid "💡 Grounding configuration in the current active environment..."
@@ -2303,7 +2303,7 @@ msgstr "🎉 بناء البيانات المكتملة"
 msgid ""
 "\n"
 "❌ An unexpected error occurred during metadata build: {}"
-msgstr "❌ حدث خطأ غير متوقع أثناء بناء البيانات: {}\",}"
+msgstr "❌ حدث خطأ غير متوقع أثناء بناء البيانات: {}\""
 
 #: /home/minds3t/omnipkg/src/tests/test_tensorflow_switching.py:54
 msgid "   📦 Ensuring TensorFlow bubbles exist..."
@@ -2335,7 +2335,7 @@ msgstr "الاختبار 2 (تبديل التبعية): {}"
 
 #: /home/minds3t/omnipkg/src/tests/test_tensorflow_switching.py:310
 msgid "Test 3 (Nested Loaders): {}"
-msgstr "اختبار 3 (الشحنات المضغوطة): {}\",}"
+msgstr "اختبار 3 (الشحنات المضغوطة): {}\""
 
 #: /home/minds3t/omnipkg/src/tests/test_tensorflow_switching.py:316
 msgid "\\n❌ Critical error during testing: {}"
@@ -2403,7 +2403,7 @@ msgstr "إعادة تعيين سجل المترجمين الفوريين الم�
 
 #: /home/minds3t/omnipkg/src/omnipkg/commands/run.py:401
 msgid "   - Conflict identified for: {}"
-msgstr "- الصراع محدد ل: {}\", \"score\": 9.23}"
+msgstr "- الصراع محدد ل: {}\", \"score\": 9.23"
 
 #: /home/minds3t/omnipkg/src/omnipkg/commands/run.py:522
 msgid ""
@@ -2423,7 +2423,7 @@ msgstr "تمت مزامنة السياق."
 
 #: /home/minds3t/omnipkg/src/omnipkg/commands/run.py:2304
 msgid "   Current Python executable: {}"
-msgstr "التنفيذية الحالية Python: {}\",}"
+msgstr "التنفيذية الحالية Python: {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/commands/run.py:2305
 msgid "   Current working directory: {}"
@@ -2513,7 +2513,7 @@ msgstr "-> المستهدف المترجم لم يتم إدارته بعد.مح�
 #: /home/minds3t/omnipkg/src/omnipkg/common_utils.py:496
 #: /home/minds3t/omnipkg/src/omnipkg/common_utils.py:629
 msgid "Failed to adopt required Python version {}"
-msgstr "فشل في اعتماد Python المطلوب {}\",}"
+msgstr "فشل في اعتماد Python المطلوب {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/common_utils.py:505
 #: /home/minds3t/omnipkg/src/omnipkg/common_utils.py:638
@@ -2694,7 +2694,7 @@ msgstr "للإصدارات المتاحة."
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:2106
 msgid "HTTP error downloading Python: {} - {}"
-msgstr "خطأ HTTP تنزيل Python: {} - {}\",}"
+msgstr "خطأ HTTP تنزيل Python: {} - {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:3944
 msgid ""
@@ -2739,7 +2739,7 @@ msgstr "❌ لا يمكن تحديد إصدار Python المُثبن."
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:6836
 msgid "💡 First use of Python {} detected."
-msgstr "💡 تم اكتشاف الاستخدام الأول لـ Python {}.\", \"score\": 9.6}"
+msgstr "💡 تم اكتشاف الاستخدام الأول لـ Python {}.\", \"score\": 9.6"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:7598
 msgid " ⚠️ Site-packages path does not exist: {}"
@@ -2767,7 +2767,7 @@ msgstr "📦 حزمة أخرى: {}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:7656
 msgid "    ⚠️  Failed to process {} packages"
-msgstr "⚠️ فشل معالجة حزم {}\",}"
+msgstr "⚠️ فشل معالجة حزم {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:7668
 msgid " ⚠️ Multiversion base does not exist: {}"
@@ -2775,7 +2775,7 @@ msgstr "⚠️ قاعدة متعددة الإصدارات غير موجودة: {
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:7744
 msgid "    ✅ Matching Python {} packages: {}"
-msgstr "✅ تطابق Python {} الحزم: {}\",}"
+msgstr "✅ تطابق Python {} الحزم: {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:7749
 msgid " 🫧 Bubble Package Scan Summary:"
@@ -2893,7 +2893,7 @@ msgstr "- تحذير: فشل download_python: {}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:9417
 msgid "❌ Error: All download methods failed for Python {}"
-msgstr "❌ الخطأ: فشل جميع أساليب التنزيل لـ Python {}\",}"
+msgstr "❌ الخطأ: فشل جميع أساليب التنزيل لـ Python {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:9436
 msgid "   - ✅ Download and installation completed successfully."
@@ -2913,7 +2913,7 @@ msgstr "- محاولة تنزيل Python 3.13 من python-build-standalone..."
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:9564
 msgid "   - ❌ Could not determine appropriate build for platform: {} {}"
-msgstr "- ❌ لم يتمكن من تحديد البناء المناسب للمنصة: {} {}\",}"
+msgstr "- ❌ لم يتمكن من تحديد البناء المناسب للمنصة: {} {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:9570
 msgid "   - Selected build: {}"
@@ -3076,7 +3076,7 @@ msgstr ""
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:7837
 msgid "   ⚠️  Warning: Could not exorcise ghost {}: {}"
-msgstr "⚠️ تحذير: لا يمكن طرد الشبح {}: {}\",}"
+msgstr "⚠️ تحذير: لا يمكن طرد الشبح {}: {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:12584
 msgid "🧠 Forcing targeted KB rebuild for: {}..."
@@ -3198,7 +3198,7 @@ msgstr ""
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:14859
 msgid "    ⚠️ Warning: Could not clean up temp directory {}: {}"
-msgstr "⚠️ تحذير: تعذر تنظيف الدليل المؤقت {}: {}\",}"
+msgstr "⚠️ تحذير: تعذر تنظيف الدليل المؤقت {}: {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:14915
 msgid "    ✅ Latest version {} is compatible!"
@@ -3306,7 +3306,7 @@ msgstr "حدد محلل النقاط أحدث إصداف متوافق:{}(نمط{
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:15365
 msgid " ✅ Found installed version via pip list: {}"
-msgstr "✅ تم العثور على الإصدار المثبت عبر قائمة pip: {}\",}"
+msgstr "✅ تم العثور على الإصدار المثبت عبر قائمة pip: {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:15369
 msgid " -> pip list approach failed: {}"
@@ -3379,7 +3379,7 @@ msgstr "المترجم: {}"
 
 #: /home/minds3t/omnipkg/src/tests/test_swap_install.py:402
 msgid "✅ Verified {} different Rich versions: {}"
-msgstr "✅ تم التحقق من {} إصدارات مختلفة من Rich: {}\",}"
+msgstr "✅ تم التحقق من {} إصدارات مختلفة من Rich: {}\""
 
 #: /home/minds3t/omnipkg/src/tests/test_swap_install.py:407
 msgid "✅ Verified {} different Python interpreters used"
@@ -3668,7 +3668,7 @@ msgid ""
 "context python{}: {}"
 msgstr ""
 "🚫 [omnipkg loader] رفض مسار غير متوافق (يحتوي على python{}) لسياق python{}: "
-"{}\",}"
+"{}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:738
 msgid "✅ [omnipkg loader] Auto-detected compatible site-packages: {}"
@@ -3724,7 +3724,7 @@ msgstr "   [{}] {} {}"
 msgid ""
 "\n"
 "📊 Summary: {}/{} paths are Python {}-compatible"
-msgstr "📊 ملخص: {}/{} المسارات متوافقة مع Python {}.\", \"score\": 9.65}"
+msgstr "📊 ملخص: {}/{} المسارات متوافقة مع Python {}.\", \"score\": 9.65"
 
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:3482
 msgid ""
@@ -3752,16 +3752,16 @@ msgstr "تم العثور على {} من أدلة معلوماte التوزيع 
 
 #: /home/minds3t/omnipkg/src/omnipkg/package_meta_builder.py:360
 msgid "✅ Found VENDORED {} v{} (inside {}) at {}"
-msgstr "✅ وجدت VENDORED {} v{} (داخل {}) في {}\",}"
+msgstr "✅ وجدت VENDORED {} v{} (داخل {}) في {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/package_meta_builder.py:406
 #: /home/minds3t/omnipkg/src/omnipkg/package_meta_builder.py:531
 msgid "✅ Found {} v{} at {}"
-msgstr "✅ تم العثور على {} v{} في {}\",}"
+msgstr "✅ تم العثور على {} v{} في {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/package_meta_builder.py:476
 msgid "✅ Found nested {} v{} at {}"
-msgstr "✅ تم العثور عليه متداخل {} v{} في {}\",}"
+msgstr "✅ تم العثور عليه متداخل {} v{} في {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/package_meta_builder.py:679
 msgid "❌ Could not parse spec '{}': {}"
@@ -4019,7 +4019,7 @@ msgstr ""
 
 #: /home/minds3t/omnipkg/src/tests/test_old_rich.py:27
 msgid "Incorrect rich version! Expected 13.4.2, got {}"
-msgstr "نسخة غنية غير صحيحة! المتوقع 13.4.2، تم الحصول على {}\",}"
+msgstr "نسخة غنية غير صحيحة! المتوقع 13.4.2، تم الحصول على {}\""
 
 #: /home/minds3t/omnipkg/src/tests/test_old_rich.py:32
 msgid "✅ Successfully imported rich version: {}"
@@ -4027,7 +4027,7 @@ msgstr "النسخة الغنية المستوردة بنجاح: {}"
 
 #: /home/minds3t/omnipkg/src/tests/test_swap_install.py:381
 msgid "Test {}: Python {} | Rich {}"
-msgstr "اختبار {}: Python {} | Rich {}\",}"
+msgstr "اختبار {}: Python {} | Rich {}\""
 
 #: /home/minds3t/omnipkg/src/tests/test_swap_install.py:426
 msgid ""
@@ -4055,11 +4055,11 @@ msgstr "تم الإبلاغ عن الثنائي المُبادلة:{}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/apis/local_bridge.py:163
 msgid "No free ports found between {} and {}"
-msgstr "لا توجد أي منفذ مجاني بين {} و {}\",}"
+msgstr "لا توجد أي منفذ مجاني بين {} و {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/apis/local_bridge.py:198
 msgid "⛔ Invalid shell syntax: {}"
-msgstr "⛔ مؤشر shell غير صالحة: {}\",}"
+msgstr "⛔ مؤشر shell غير صالحة: {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/apis/local_bridge.py:207
 msgid "⛔ Security: '{}' is disabled via Web."
@@ -4109,7 +4109,7 @@ msgstr "الأصل '{}' غير مدرج في القائمة البيضاء."
 #: /home/minds3t/omnipkg/src/omnipkg/apis/local_bridge.py:453
 #: /home/minds3t/omnipkg/src/omnipkg/apis/local_bridge.py:500
 msgid "DB Error: {}"
-msgstr "خطأ DB: {}\",}"
+msgstr "خطأ DB: {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/apis/local_bridge.py:443
 msgid "⚡ Executing: {}"
@@ -4255,7 +4255,7 @@ msgstr "⚠️ ملف PID موجود ولكن العملية متوقفة. يت�
 
 #: /home/minds3t/omnipkg/src/omnipkg/apis/local_bridge.py:709
 msgid "❌ Log file not found: {}"
-msgstr "❌ ملف السجل لم يتم العثور عليه: {}\",}"
+msgstr "❌ ملف السجل لم يتم العثور عليه: {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/apis/local_bridge.py:713
 msgid "📝 Following logs (Ctrl+C to stop)...\n"
@@ -4359,7 +4359,7 @@ msgstr "لا يتم إدارة Python {} بواسطة omnipkg."
 
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:218
 msgid "   Please adopt it first: {} python adopt {}"
-msgstr "يرجى اعتماده أولاً: {} python adopt {}\",}"
+msgstr "يرجى اعتماده أولاً: {} python adopt {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:232
 msgid "   - Sterile script created at: {}"
@@ -4693,7 +4693,7 @@ msgstr "🐍 تثبيت مترجم Python(s): {}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:1297
 msgid "⚠️  Warning: Failed to install Python {}"
-msgstr "⚠️ تحذير: فشل تثبيت Python {}\",}"
+msgstr "⚠️ تحذير: فشل تثبيت Python {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:1332
 msgid "🗑️  Uninstalling Python interpreter(s): {}"
@@ -4701,7 +4701,7 @@ msgstr "🗑️ إلغاء تثبيت مترجم Python: {}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:1339
 msgid "⚠️  Warning: Failed to remove Python {}"
-msgstr "⚠️ تحذير: لم يتم إزالة Python {}\",}"
+msgstr "⚠️ تحذير: لم يتم إزالة Python {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:1412
 msgid "❌ Error: resource_monitor module not found."
@@ -4845,7 +4845,7 @@ msgstr ""
 msgid ""
 "\n"
 "🔍 Comprehensive Healing Plan Compiled (Attempt {}): {}"
-msgstr "🔍 تم تجميع خطة الشفاء الشاملة (محاولة {}): {}\",}"
+msgstr "🔍 تم تجميع خطة الشفاء الشاملة (محاولة {}): {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/commands/run.py:707
 msgid "   🚀 INSTANT HIT: Found existing bubble {} in KB"
@@ -4861,11 +4861,11 @@ msgstr "✅ تم إلغاء التثبيت بنجاح '{}'"
 
 #: /home/minds3t/omnipkg/src/omnipkg/commands/run.py:811
 msgid "⚠️  Uninstall had issues, but continuing: {}"
-msgstr "⚠️ واجهت مشكلة في إلغاء التثبيت، ولكن الاستمرار: {}\",}"
+msgstr "⚠️ واجهت مشكلة في إلغاء التثبيت، ولكن الاستمرار: {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/commands/run.py:845
 msgid "❌ Failed to reinstall '{}': {}"
-msgstr "❌ فشل في إعادة تثبيت '{}': {}\",}"
+msgstr "❌ فشل في إعادة تثبيت '{}': {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/commands/run.py:848
 msgid "✅ Successfully reinstalled '{}'"
@@ -4894,7 +4894,7 @@ msgstr "🚀 المحاولة 2: فرض إعادة التثبيت '{}' لإصل�
 
 #: /home/minds3t/omnipkg/src/omnipkg/commands/run.py:1472
 msgid "🚀 Attempt 1: Auto-installing missing package: {}"
-msgstr "🚀 المحاولة 1: التثبيت التلقائي للحزمة المفقودة: {}\",}"
+msgstr "🚀 المحاولة 1: التثبيت التلقائي للحزمة المفقودة: {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/commands/run.py:1488
 msgid ""
@@ -4916,7 +4916,7 @@ msgstr "🛠 ️ حل استراتيجية العزل لـ: {}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/commands/run.py:1567
 msgid "   🎯 Resolved {} -> {}"
-msgstr "🎯 تم الحل {} -> {}\",}"
+msgstr "🎯 تم الحل {} -> {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/commands/run.py:1588
 msgid "   📦 Force-creating ISOLATED bubble: {}..."
@@ -5011,7 +5011,7 @@ msgstr "❌ فشل في قراءة stdin: {}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/commands/run.py:2710
 msgid "📝 Saved stdin to temporary script: {}"
-msgstr "📝 حفظ stdin إلى النص المؤقت: {}\",}"
+msgstr "📝 حفظ stdin إلى النص المؤقت: {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/commands/run.py:2746
 msgid ""
@@ -5089,7 +5089,7 @@ msgstr "- ✅ تم إنشاء بيئة Python {} بنجاح"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:708
 msgid "   - ❌ Failed to create managed Python: {}"
-msgstr "- ❌ فشل في إنشاء Python المدير: {}\",}"
+msgstr "- ❌ فشل في إنشاء Python المدير: {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:782
 msgid "   - Native Python {} - using directly (no symlink)"
@@ -5153,7 +5153,7 @@ msgstr "✅ تم بنجاح تمهيد Python {}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:946
 msgid "   ℹ️  Preserving native Python {}: {}"
-msgstr "i️ الحفاظ على Python الأصلي {}: {}\",}"
+msgstr "i️ الحفاظ على Python الأصلي {}: {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:952
 msgid "   ⚠️  Native Python {} no longer exists, removing from registry"
@@ -5165,7 +5165,7 @@ msgstr "⚠ ️ تعذر تحميل السجل الموجود: {}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:967
 msgid "   ℹ️  Auto-preserving current Python {}: {}"
-msgstr "ℹ️ الحفظ التلقائي لـ Python الحالي {}: {}\",}"
+msgstr "ℹ️ الحفظ التلقائي لـ Python الحالي {}: {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:995
 msgid "   - Removing legacy native symlink..."
@@ -5368,7 +5368,7 @@ msgstr "-تسجيل Python الأصلي لتبادل الإصدارات المس
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:2709
 msgid "   - ⚠️ Failed to adopt Python {}: {}"
-msgstr "- ⚠️ فشل في اعتماد Python {}: {}\",}"
+msgstr "- ⚠️ فشل في اعتماد Python {}: {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:2769
 msgid "⚡️ Attempt to use Redis for high-performance caching? (y/n) [y]: "
@@ -5432,7 +5432,7 @@ msgstr "🔧 معالجة تلقائية: تم إدخال 'الاسم: {}' في 
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:3398
 msgid "   ⚠️  Failed to heal {}: {}"
-msgstr "⚠️ فشل في الشفاء {}: {}\",}"
+msgstr "⚠️ فشل في الشفاء {}: {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:3409
 msgid "   ✅ Healed {} corrupt metadata file(s)"
@@ -5444,7 +5444,7 @@ msgstr "- بيئة التطوير المكتشفة:{}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:3444
 msgid "   - Detected local development source: {}"
-msgstr "- مصدر التنمية المحلية المكتشف: {}\",}"
+msgstr "- مصدر التنمية المحلية المكتشف: {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:3534
 msgid "   - Using site-packages: {}"
@@ -5457,7 +5457,7 @@ msgstr "- تم العثور على {} تبعيات في pyproject.toml"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:3568
 msgid "   - ⚠️  Could not parse pyproject.toml: {}"
-msgstr "- ️ لم أستطع تحليل pyproject.toml: {}\",}"
+msgstr "- ️ لم أستطع تحليل pyproject.toml: {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:3576
 msgid "   - Copying source files from: {}"
@@ -5475,7 +5475,7 @@ msgid ""
 msgstr ""
 "بيانات التعريف-الإصدار: 2.1\n"
 "الاسم: {}\n"
-"الإصدار: {}\",}"
+"الإصدار: {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:3613
 msgid "   - Copying {} dependencies..."
@@ -5495,7 +5495,7 @@ msgstr "🧪 اختبار الواردات لـ:{}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:4289
 msgid "    ❌ Import test failed for {}: {}"
-msgstr "❌ اختبار الاستيراد فشل ل {}: {}\",}"
+msgstr "❌ اختبار الاستيراد فشل ل {}: {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:4295
 msgid "    ✅ Import test passed for {} (modules: {})"
@@ -5539,11 +5539,11 @@ msgstr "نسخ الدليل المفقود:{}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:4684
 msgid "    📦 Copying all Python files for package: {}"
-msgstr "📦 نسخ جميع ملفات Python للحزمة: {}\", score: 9.47}"
+msgstr "📦 نسخ جميع ملفات Python للحزمة: {}\", score: 9.47"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:4695
 msgid "    ✅ Copied {} Python files for {}"
-msgstr "نسخ {} ملفات Python ل {}\",}"
+msgstr "نسخ {} ملفات Python ل {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:4755
 msgid "Source metadata file is empty or missing: {}"
@@ -5555,7 +5555,7 @@ msgstr "فشل التحقق من نسخ ملف METADATA: {}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:4771
 msgid "    ❌ Failed to copy {}: {}"
-msgstr "❌ فشل النسخ {}: {}\",}"
+msgstr "❌ فشل النسخ {}: {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:5071
 msgid "    📝 Created manifest and registered bubble \"{}\" existence."
@@ -5567,7 +5567,7 @@ msgstr "⚠ ️ تحذير: فشل في تسجيل وجود الفقاعة في 
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:5080
 msgid "    📝 Local manifest was still created at {}"
-msgstr "📝 لا يزال يتم إنشاء البيان المحلي على الرقم {}\",}"
+msgstr "📝 لا يزال يتم إنشاء البيان المحلي على الرقم {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:5279
 msgid ""
@@ -5610,17 +5610,17 @@ msgstr "🗑️ تم حذف الغطاء المشوه: {}"
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:5662
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:3392
 msgid "         ⚠️  Failed to process {}: {}"
-msgstr "⚠️ فشل معالجة {}: {}\",}"
+msgstr "⚠️ فشل معالجة {}: {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:5670
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:3402
 msgid "         🗑️  Deleted duplicate cloak: {}"
-msgstr "🗑️ تم حذف التكرار المزدوج: {}\",}"
+msgstr "🗑️ تم حذف التكرار المزدوج: {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:5672
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:3406
 msgid "         ⚠️  Failed to delete {}: {}"
-msgstr "⚠️ فشل حذف {}: {}\",}"
+msgstr "⚠️ فشل حذف {}: {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:5682
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:3417
@@ -5686,15 +5686,15 @@ msgstr "📊 تمت تهيئة ذاكرة التخزين المؤقت السيا
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:6459
 msgid "   - Error: {}: {}"
-msgstr "- الخطأ: {}: {}\",}"
+msgstr "- الخطأ: {}: {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:6480
 msgid "❌ FATAL: Could not initialize SQLite cache: {}"
-msgstr "❌ FATAL: لا يمكن أن يبدأ SQLite cache: {}\",}"
+msgstr "❌ FATAL: لا يمكن أن يبدأ SQLite cache: {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:6525
 msgid "   ⚠️  Could not persist config change: {}"
-msgstr "⚠️ تعذر الاحتفاظ بتغيير التكوين: {}\",}"
+msgstr "⚠️ تعذر الاحتفاظ بتغيير التكوين: {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:6563
 msgid "   ⚠️  Could not persist Redis fallback to config: {}"
@@ -5723,7 +5723,7 @@ msgstr "- ✅ تم إصلاح البيان لـ Python {}."
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:6995
 msgid "      - ⚠️  Failed to fast-clone {}: {}"
-msgstr "- ⚠️ فشل في الاستنساخ السريع {}: {}\",}"
+msgstr "- ⚠️ فشل في الاستنساخ السريع {}: {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:7124
 msgid "   🔧 HEALING corrupt metadata: {}"
@@ -5906,7 +5906,7 @@ msgstr "-> معالجة {} حزمة (حزم) متغيرة/جديدة لسياق 
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:8599
 msgid "❌ No installations found for package: {}"
-msgstr "❌ لم يتم العثور على أي تثبيتات للحزمة: {}\",}"
+msgstr "❌ لم يتم العثور على أي تثبيتات للحزمة: {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:8608
 msgid "📋 KEY DATA for '{}':\n"
@@ -6139,7 +6139,7 @@ msgstr "- المرجح: اكتشفت مسار .omnipkg المُعقد!"
 # (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:9469
 msgid "   - Bad path: {}"
-msgstr "- مسار خاطئ: {}\", score: 9.28}"
+msgstr "- مسار خاطئ: {}\", score: 9.28"
 
 # (Validation Failed: proper_noun_mismatch_omnipkg)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:9810
@@ -6502,7 +6502,7 @@ msgstr "- ✅ تم فهرسة وفهرسة omnipkg v{}."
 msgid ""
 "\n"
 "   - ❌ CRITICAL: Handover failed: {}"
-msgstr "- ❌حرج: فشل التسليم: {}\", score: 9.38}"
+msgstr "- ❌حرج: فشل التسليم: {}\", score: 9.38"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:11757
 msgid "   - Using PyPI source: {}"
@@ -6790,7 +6790,7 @@ msgstr "💡 أحدث نسخة مطابقة '{}':{}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:13529
 msgid "    ⚠️ Could not determine required Python version: {}"
-msgstr "⚠️ تعذر تحديد النسخة Python المطلوبة: {}\", \"score\": 9.58}"
+msgstr "⚠️ تعذر تحديد النسخة Python المطلوبة: {}\", \"score\": 9.58"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:13544
 msgid "    ❌ Failed to resolve complex specifier '{}': {}"
@@ -9893,7 +9893,7 @@ msgstr "🏠 التحقق من v{} في العملية الرئيسية..."
 # (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/tests/test_rich_switching.py:189
 msgid "Main env mismatch! Expected {}, got {}"
-msgstr "عدم تطابق البيئة الرئيسية!مُتوقع{}, يملك{}}\""
+msgstr "عدم تطابق البيئة الرئيسية!مُتوقع{}, يملك{}"
 
 # (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/tests/test_rich_switching.py:192

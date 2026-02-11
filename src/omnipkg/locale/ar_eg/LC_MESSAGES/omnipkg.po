@@ -1337,7 +1337,7 @@ msgstr "🚀 مدير حزمة بيثون الذكي الذي يلغي الجح�
 
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:564
 msgid "%(prog)s {}"
-msgstr "٪ (prog) s {}"
+msgstr "\"٪ %(prog)s {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:940
 msgid ""

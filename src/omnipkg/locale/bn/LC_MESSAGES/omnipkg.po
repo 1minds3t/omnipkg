@@ -639,7 +639,7 @@ msgstr "❌ একটি অপ্রত্যাশিত ত্রুটি �
 #: /home/minds3t/omnipkg/src/omnipkg/common_utils.py:318
 #: /home/minds3t/omnipkg/src/omnipkg/common_utils.py:719
 msgid "Subprocess command '{}' failed with exit code {}."
-msgstr "সাবপ্রসেস কমান্ড '{}' প্রস্থান কোড {} দিয়ে ব্যর্থ}"
+msgstr "সাবপ্রসেস কমান্ড '{}' প্রস্থান কোড {} দিয়ে ব্যর্থ"
 
 #: /home/minds3t/omnipkg/src/omnipkg/common_utils.py:731
 #: /home/minds3t/omnipkg/src/tests/test_old_flask.py:58
@@ -671,7 +671,7 @@ msgstr "Phicelation ইনস্টলেশন চলাকালীন অপ�
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:3687
 msgid "    ⚠️ All dependency resolution strategies failed for {}=={}."
-msgstr "⚠ সমস্ত নির্ভরতা রেজোলিউশন কৌশলগুলি {} == {} এর জন্য ব্যর্থ হয়েছে}"
+msgstr "⚠ সমস্ত নির্ভরতা রেজোলিউশন কৌশলগুলি {} == {} এর জন্য ব্যর্থ হয়েছে"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:3691
 msgid "    ℹ️  Proceeding with full temporary installation to build bubble."
@@ -1367,7 +1367,7 @@ msgstr "🚀 বুদ্ধিমান পাইথন প্যাকেজ �
 
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:564
 msgid "%(prog)s {}"
-msgstr "%(প্রগ) এস {}"
+msgstr "\"\"%(প্রগ) এস {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:940
 msgid ""

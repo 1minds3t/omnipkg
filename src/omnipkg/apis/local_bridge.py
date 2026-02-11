@@ -551,13 +551,13 @@ def create_app(port):
 def run_bridge_server():
     """The entry point for the background process."""
     if not HAS_WEB_DEPS:
-        print(_('❌ Flask missing. Cannot start server.'))
+        safe_print(_('❌ Flask missing. Cannot start server.'))
         sys.exit(1)
 
     try:
         port = find_free_port(5000)
     except RuntimeError as e:
-        print(_('❌ {}').format(e))
+        safe_print(_('❌ {}').format(e))
         sys.exit(1)
     
     print(_('Local Port: {}').format(port), flush=True)
@@ -580,16 +580,16 @@ class WebBridgeManager:
     def start(self):
         """Start the web bridge in background."""
         if not HAS_WEB_DEPS:
-            print(_('❌ Dependencies missing. Please run: pip install flask flask-cors'))
+            safe_print(_('❌ Dependencies missing. Please run: pip install flask flask-cors'))
             return 1
 
         if self.is_running():
             port = self._get_port()
-            print(_('✅ Web bridge already running on port {}').format(port))
-            print(_('🌍 Dashboard: {}#{}').format(PRIMARY_DASHBOARD, port))
+            safe_print(_('✅ Web bridge already running on port {}').format(port))
+            safe_print(_('🌍 Dashboard: {}#{}').format(PRIMARY_DASHBOARD, port))
             return 0
         
-        print(_('🚀 Starting web bridge...'))
+        safe_print(_('🚀 Starting web bridge...'))
         cmd = [sys.executable, "-m", "omnipkg.apis.local_bridge"]
         
         # Cross-platform detachment logic
@@ -616,29 +616,29 @@ class WebBridgeManager:
                 port = self._get_port()
                 url = f"{PRIMARY_DASHBOARD}#{port}"
                 print("="*60)
-                print(_('✅ Web bridge started successfully'))
-                print(_('🔗 Local Port: {}').format(port))
-                print(_('📊 PID: {}').format(process.pid))
-                print(_('🌍 Dashboard: {}').format(url))
+                safe_print(_('✅ Web bridge started successfully'))
+                safe_print(_('🔗 Local Port: {}').format(port))
+                safe_print(_('📊 PID: {}').format(process.pid))
+                safe_print(_('🌍 Dashboard: {}').format(url))
                 print("="*60)
                 webbrowser.open(url)
                 return 0
             else:
-                print(_('❌ Failed to start. Check logs.'))
+                safe_print(_('❌ Failed to start. Check logs.'))
                 return 1
         except Exception as e:
-            print(_('❌ Launch error: {}').format(e))
+            safe_print(_('❌ Launch error: {}').format(e))
             return 1
     
     def stop(self):
         """Stop the web bridge safely across platforms."""
         if not self.is_running():
-            print(_('⚠️  Web bridge is not running'))
+            safe_print(_('⚠️  Web bridge is not running'))
             return 0
         
         try:
             pid = int(self.pid_file.read_text())
-            print(_('🛑 Stopping web bridge (PID: {})...').format(pid))
+            safe_print(_('🛑 Stopping web bridge (PID: {})...').format(pid))
             
             if os.name == 'nt':
                 subprocess.run(["taskkill", "/PID", str(pid), "/T", "/F"], 
@@ -651,17 +651,17 @@ class WebBridgeManager:
 
             if self.pid_file.exists(): 
                 self.pid_file.unlink()
-            print(_('✅ Web bridge stopped'))
+            safe_print(_('✅ Web bridge stopped'))
             return 0
         except Exception as e:
-            print(_('❌ Error stopping: {}').format(e))
+            safe_print(_('❌ Error stopping: {}').format(e))
             if self.pid_file.exists(): 
                 self.pid_file.unlink()
             return 1
     
     def restart(self):
         """Restart the web bridge."""
-        print(_('🔄 Restarting web bridge...'))
+        safe_print(_('🔄 Restarting web bridge...'))
         self.stop()
         time.sleep(1)
         return self.start()
@@ -669,15 +669,15 @@ class WebBridgeManager:
     def status(self):
         """Check web bridge status."""
         if not self.is_running():
-            print(_('❌ Web bridge is not running'))
-            print(_('\n💡 Start with: 8pkg web start'))
+            safe_print(_('❌ Web bridge is not running'))
+            safe_print(_('\n💡 Start with: 8pkg web start'))
             return 1
         
         if not HAS_SYS_DEPS:
-            print(_("⚠️  'psutil' not installed. Limited status info available."))
+            safe_print(_("⚠️  'psutil' not installed. Limited status info available."))
             pid = int(self.pid_file.read_text())
             port = self._get_port()
-            print(_('✅ Running (PID: {}, Port: {})').format(pid, port))
+            safe_print(_('✅ Running (PID: {}, Port: {})').format(pid, port))
             return 0
 
         pid = int(self.pid_file.read_text())
@@ -689,28 +689,28 @@ class WebBridgeManager:
             uptime = time.time() - process.create_time()
             
             print("="*60)
-            print(_('✅ Web Bridge Status: RUNNING'))
+            safe_print(_('✅ Web Bridge Status: RUNNING'))
             print("="*60)
-            print(_('🔗 Port:        {}').format(port))
-            print(_('📊 PID:         {}').format(pid))
-            print(f"💾 Memory:      {mem_info.rss / 1024 / 1024:.1f} MB")
-            print(_('⏱️  Uptime:      {}').format(self._format_uptime(uptime)))
-            print(_('🌍 Dashboard:   {}#{}').format(PRIMARY_DASHBOARD, port))
+            safe_print(_('🔗 Port:        {}').format(port))
+            safe_print(_('📊 PID:         {}').format(pid))
+            safe_print(f"💾 Memory:      {mem_info.rss / 1024 / 1024:.1f} MB")
+            safe_print(_('⏱️  Uptime:      {}').format(self._format_uptime(uptime)))
+            safe_print(_('🌍 Dashboard:   {}#{}').format(PRIMARY_DASHBOARD, port))
             print("="*60)
             return 0
         except psutil.NoSuchProcess:
-            print(_('⚠️  PID file exists but process is dead. Cleaning up...'))
+            safe_print(_('⚠️  PID file exists but process is dead. Cleaning up...'))
             self.pid_file.unlink()
             return 1
     
     def show_logs(self, follow=False, lines=50):
         """Display web bridge logs."""
         if not self.log_file.exists():
-            print(_('❌ Log file not found: {}').format(self.log_file))
+            safe_print(_('❌ Log file not found: {}').format(self.log_file))
             return 1
         
         if follow:
-            print(_('📝 Following logs (Ctrl+C to stop)...\n'))
+            safe_print(_('📝 Following logs (Ctrl+C to stop)...\n'))
             try:
                 subprocess.run(["tail", "-f", str(self.log_file)], check=True)
             except (FileNotFoundError, subprocess.CalledProcessError):
@@ -727,7 +727,7 @@ class WebBridgeManager:
                     pass
             except KeyboardInterrupt:
                 pass
-            print(_('\n✅ Stopped following logs'))
+            safe_print(_('\n✅ Stopped following logs'))
             return 0
         else:
             try:

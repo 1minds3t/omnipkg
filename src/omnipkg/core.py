@@ -418,7 +418,7 @@ class ConfigManager:
             if missing_symlinks:
                 debug_mode = os.environ.get("OMNIPKG_DEBUG") == "1"
                 if debug_mode:
-                    print(f"[DEBUG] Creating {len(missing_symlinks)} missing symlinks", file=sys.stderr)
+                    print(_('[DEBUG] Creating {} missing symlinks').format(len(missing_symlinks)), file=sys.stderr)
                 
                 for version in missing_symlinks:
                     self._create_symlink_for_version(version)
@@ -430,7 +430,7 @@ class ConfigManager:
         except Exception as e:
             # Fail silently - don't break initialization
             if os.environ.get("OMNIPKG_DEBUG") == "1":
-                print(f"[DEBUG] Symlink verification failed: {e}", file=sys.stderr)
+                print(_('[DEBUG] Symlink verification failed: {}').format(e), file=sys.stderr)
 
     def _set_rebuild_flag_for_version(self, version_str: str):
         """
@@ -947,7 +947,7 @@ class ConfigManager:
             if ".omnipkg/interpreters" not in str(native_python):
                 # This is truly native - good!
                 true_native_path = native_python
-                safe_print(f"   ✅ Detected true native Python {current_version}: {true_native_path}")
+                safe_print(_('   ✅ Detected true native Python {}: {}').format(current_version, true_native_path))
                 
                 # Check if there's a downloaded version masquerading as native
                 for interp_dir in managed_interpreters_dir.iterdir():
@@ -958,19 +958,19 @@ class ConfigManager:
                     if f"cpython-{current_version}" in interp_dir.name:
                         downloaded_python = interp_dir / "bin" / f"python{current_version}"
                         if downloaded_python.exists():
-                            safe_print(f"   ⚠️  Found downloaded Python {current_version} at: {interp_dir.name}")
+                            safe_print(_('   ⚠️  Found downloaded Python {} at: {}').format(current_version, interp_dir.name))
                             safe_print(f"   🧹 This will be kept as a managed interpreter, not treated as native")
                 
                 # Remove legacy symlinks
                 legacy_symlink = managed_interpreters_dir / f"cpython-{current_version}-managed"
                 if legacy_symlink.exists() and legacy_symlink.is_symlink():
-                    safe_print(f"   🗑️  Removing legacy symlink: {legacy_symlink.name}")
+                    safe_print(_('   🗑️  Removing legacy symlink: {}').format(legacy_symlink.name))
                     legacy_symlink.unlink()
                     
                 # Another legacy pattern
                 legacy_native_symlink = managed_interpreters_dir / f"cpython-{current_version}-venv-native"
                 if legacy_native_symlink.exists():
-                    safe_print(f"   🗑️  Removing legacy native symlink: {legacy_native_symlink.name}")
+                    safe_print(_('   🗑️  Removing legacy native symlink: {}').format(legacy_native_symlink.name))
                     if legacy_native_symlink.is_symlink():
                         legacy_native_symlink.unlink()
                     else:
@@ -3033,14 +3033,14 @@ class ConfigManager:
             alias_path.symlink_to(main_8pkg)
             
             if os.environ.get("OMNIPKG_DEBUG") == "1":
-                print(f"[DEBUG] Created symlink: {alias_name} -> 8pkg", file=sys.stderr)
+                print(_('[DEBUG] Created symlink: {} -> 8pkg').format(alias_name), file=sys.stderr)
             
             return True
         
         except OSError as e:
             # Fail silently - don't break the setup process
             if os.environ.get("OMNIPKG_DEBUG") == "1":
-                print(f"[DEBUG] Failed to create {alias_name}: {e}", file=sys.stderr)
+                print(_('[DEBUG] Failed to create {}: {}').format(alias_name, e), file=sys.stderr)
             return False
 
     def _ensure_shims_installed(self):
@@ -3067,7 +3067,7 @@ class ConfigManager:
             shim_path = shims_dir / (target + (".exe" if is_windows else ""))
             
             if not shim_path.exists():
-                safe_print(f"   🔧 Creating shim: {target}...")
+                safe_print(_('   🔧 Creating shim: {}...').format(target))
                 if is_windows:
                     # On Windows, we might need to copy the entry point executable
                     # or create a .bat wrapper. Copying the dispatcher exe is safest.
@@ -3165,13 +3165,13 @@ class ConfigManager:
                 json.dump(config_data, f, indent=2)
             
             if debug_mode:
-                print(f"[DEBUG-CONFIG-WRITE] ✅ Wrote config to: {config_path}", file=sys.stderr)
+                safe_print(_('[DEBUG-CONFIG-WRITE] ✅ Wrote config to: {}').format(config_path), file=sys.stderr)
             
             return config_path
         
         except Exception as e:
             if debug_mode:
-                print(f"[DEBUG-CONFIG-WRITE] ❌ Failed to write config: {e}", file=sys.stderr)
+                safe_print(_('[DEBUG-CONFIG-WRITE] ❌ Failed to write config: {}').format(e), file=sys.stderr)
             return None
 
     def _get_all_interpreters_for_config(self, current_version: str, current_path: Path) -> Dict[str, str]:
@@ -3271,7 +3271,7 @@ class ConfigManager:
         if "OMNIPKG_CONFIG_PATH" in os.environ:
             path = Path(os.environ["OMNIPKG_CONFIG_PATH"])
             if debug_mode:
-                print(f"[DEBUG-CONFIG] Using override: {path}", file=sys.stderr)
+                print(_('[DEBUG-CONFIG] Using override: {}').format(path), file=sys.stderr)
             return path
         
         # Priority 2: Per-Python config next to the executable
@@ -3281,20 +3281,20 @@ class ConfigManager:
         per_python_config = exe_dir / ".omnipkg_config.json"
         
         if debug_mode:
-            print(f"[DEBUG-CONFIG] Python exe: {exe_path}", file=sys.stderr)
+            print(_('[DEBUG-CONFIG] Python exe: {}').format(exe_path), file=sys.stderr)
             print(f"[DEBUG-CONFIG] Looking for config at: {per_python_config}", file=sys.stderr)
         
         # If config exists, use it
         if per_python_config.exists():
             if debug_mode:
-                print(f"[DEBUG-CONFIG] ✅ Using per-Python config: {per_python_config}", file=sys.stderr)
+                safe_print(_('[DEBUG-CONFIG] ✅ Using per-Python config: {}').format(per_python_config), file=sys.stderr)
             return per_python_config
         
         # If we're in a managed interpreter directory, we SHOULD have a config
         # Create it if missing
         if ".omnipkg/interpreters" in str(exe_path):
             if debug_mode:
-                print(f"[DEBUG-CONFIG] In managed interpreter, creating config", file=sys.stderr)
+                print(_('[DEBUG-CONFIG] In managed interpreter, creating config'), file=sys.stderr)
             
             # Extract version from path
             version = self._extract_version_from_path(exe_path)
@@ -3306,7 +3306,7 @@ class ConfigManager:
         global_config = Path.home() / ".config" / "omnipkg" / f"{self.env_id}.json"
         
         if debug_mode:
-            print(f"[DEBUG-CONFIG] Fallback to global config: {global_config}", file=sys.stderr)
+            print(_('[DEBUG-CONFIG] Fallback to global config: {}').format(global_config), file=sys.stderr)
         
         return global_config
 
@@ -3357,7 +3357,7 @@ class ConfigManager:
             
             if missing_keys:
                 if interactive:
-                    safe_print(f"   ⚠️  Config missing required fields {missing_keys}, regenerating...")
+                    safe_print(_('   ⚠️  Config missing required fields {}, regenerating...').format(missing_keys))
                 
                 # If we are in a managed interpreter context, we should try to regenerate 
                 # the config using _write_interpreter_config logic if possible.
@@ -3383,7 +3383,7 @@ class ConfigManager:
         
         except (json.JSONDecodeError, IOError) as e:
             if interactive:
-                safe_print(f"   ⚠️  Config corrupted ({e}), regenerating...")
+                safe_print(_('   ⚠️  Config corrupted ({}), regenerating...').format(e))
             config = self._first_time_setup(interactive=interactive)
             self.config_path.parent.mkdir(parents=True, exist_ok=True)
             with open(self.config_path, "w") as f:
@@ -3790,7 +3790,7 @@ class BubbleIsolationManager:
                     safe_print(f"   ❌ TIME MACHINE: Historical rebuild failed for {package_name}=={version}.")
                     return False
 
-                safe_print(f"\n   ✅ TIME MACHINE: Successfully rebuilt {package_name}=={version} into staging area.")
+                safe_print(_('\n   ✅ TIME MACHINE: Successfully rebuilt {}=={} into staging area.').format(package_name, version))
                 
                 # Re-run verification after TIME MACHINE rebuild
                 safe_print("   - 🧪 Running SMART import verification...")
@@ -3839,10 +3839,10 @@ class BubbleIsolationManager:
                 safe_print(f"   - 📦 Finalizing bubble for {package_name}=={version}...")
                 destination_path.parent.mkdir(parents=True, exist_ok=True)
                 shutil.move(str(staging_path), str(destination_path))
-                safe_print(f"   - ✅ Bubble created successfully at {destination_path}")
+                safe_print(_('   - ✅ Bubble created successfully at {}').format(destination_path))
                 
                 # 3. CREATE MANIFEST - Use existing _analyze_installed_tree method
-                safe_print(f"   - 📝 Creating bubble manifest...")
+                safe_print(_('   - 📝 Creating bubble manifest...'))
 
                 # Use the existing method that already does this!
                 installed_tree = self._analyze_installed_tree(destination_path)
@@ -3868,7 +3868,7 @@ class BubbleIsolationManager:
 
                 return True
             else:
-                safe_print(f"   - ❌ Verification failed, bubble not created")
+                safe_print(_('   - ❌ Verification failed, bubble not created'))
                 return False
 
     def _find_dependency_bubbles(
@@ -12126,7 +12126,7 @@ class omnipkg:
             priority_specs.add(f"{pkg_name}=={version}")
 
         if priority_specs:
-            safe_print(f"    ⚡ Updating {len(priority_specs)} priority package(s) immediately...")
+            safe_print(_('    ⚡ Updating {} priority package(s) immediately...').format(len(priority_specs)))
             try:
                 from .package_meta_builder import omnipkgMetadataGatherer
                 
@@ -12149,7 +12149,7 @@ class omnipkg:
                 
                 # Schedule background scan for nested packages
                 if bubble_paths_to_scan:
-                    safe_print(f"    🔄 Scheduling background scan of {len(bubble_paths_to_scan)} bubble(s)...")
+                    safe_print(_('    🔄 Scheduling background scan of {} bubble(s)...').format(len(bubble_paths_to_scan)))
                     self._schedule_background_kb_scan(bubble_paths_to_scan, python_context_version)
                 if hasattr(self, "_info_cache"):
                     self._info_cache.clear()
@@ -15037,7 +15037,7 @@ print(json.dumps(results))
                             
                             if needs_fix:
                                 safe_print(f"\n⚠️  Detected numpy {installed_numpy} incompatible with {pkg_name} {pkg_ver}")
-                                safe_print(f"🔧 Fixing: Installing numpy{numpy_constraint}...")
+                                safe_print(_('🔧 Fixing: Installing numpy{}...').format(numpy_constraint))
                                 
                                 # Remove bad numpy
                                 import shutil
@@ -15100,7 +15100,7 @@ print(json.dumps(results))
                         safe_print(f"\n   ✅ TIME MACHINE: Successfully rebuilt {pkg_name}=={pkg_ver} from the past.")
                         return 0, captured_output
                     else:
-                        safe_print(f"\n   ❌ TIME MACHINE: Failed to rebuild {pkg_name}=={pkg_ver}. The original error follows.")
+                        safe_print(_('\n   ❌ TIME MACHINE: Failed to rebuild {}=={}. The original error follows.').format(pkg_name, pkg_ver))
 
                 # Check for "no compatible version" error
                 no_dist_found = (

@@ -28,7 +28,7 @@ msgstr "ストレステストを実行するには："
 
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:350
 msgid "  🚀 omnipkg Nuclear Stress Test - Runtime Version Swapping"
-msgstr "omn​​ipkg核ストレステスト - ランタイムバージョンスワッピング"
+msgstr "🚀 omnipkg 核ストレステスト - ランタイムバージョン 交換"
 
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:353
 msgid "🎪 This demo showcases IMPOSSIBLE package combinations:"
@@ -68,11 +68,11 @@ msgstr "•依存関係の競合により、共存を防ぎます"
 
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:367
 msgid "✨ omnipkg does this LIVE, in the same Python process!"
-msgstr "omn​​ipkg同じPythonプロセスでこれをライブで行います！"
+msgstr "✨ omnipkg は、同じ Python プロセス内でこれをライブで実行します。"
 
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:368
 msgid "📊 Expected downloads: ~500MB | Duration: 30 seconds - 3 minutes"
-msgstr "showedダウンロード：〜500MB |期間：30秒-3分"
+msgstr "📊 予想されるダウンロード: ~500MB |持続時間: 30秒～3分"
 
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:385
 msgid "🔥 Starting stress test..."
@@ -86,12 +86,12 @@ msgstr "📡ライブストリーミング出力（重いパッケージには�
 
 #: /home/minds3t/omnipkg/src/omnipkg/common_utils.py:534
 msgid "🛑 Press Ctrl+C to safely cancel if needed"
-msgstr "ctrl+Cを押して、必要に応じて安全にキャンセルします"
+msgstr "🛑 必要に応じて Ctrl+C を押して安全にキャンセルします"
 
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:503
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:1235
 msgid "🎉 Demo completed successfully!"
-msgstr "demoデモが正常に完了しました！"
+msgstr "🎉 デモがうまく終わりました!"
 
 #: /home/minds3t/omnipkg/src/tests/test_old_flask.py:27
 #: /home/minds3t/omnipkg/src/tests/test_old_flask.py:29
@@ -147,7 +147,7 @@ msgstr "🟢 - 検出されたフラグフラグ。キャッシュは無視さ�
 
 #: /home/minds3t/omnipkg/src/omnipkg/package_meta_builder.py:1010
 msgid "🔍 Discovering all packages from file system (ground truth)..."
-msgstr "fileファイルシステムからすべてのパッケージを発見する（グラウンドトゥルース）..."
+msgstr "🔍 ファイルシステムからすべてのパッケージを発見する (ground truth)..."
 
 #: /home/minds3t/omnipkg/src/omnipkg/package_meta_builder.py:1043
 msgid "    -> Reconciling file system state with Redis knowledge base..."
@@ -222,7 +222,7 @@ msgstr "✅言語は永続的に設定されています：{lang}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:1108
 msgid "🎪 Omnipkg supports version switching for:"
-msgstr "omn​​ipkgのバージョンの切り替えをサポートしています："
+msgstr "🎪 Omnipkg は以下のバージョン切り替えをサポートしています。"
 
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:1113
 msgid ""
@@ -246,11 +246,12 @@ msgstr "3。Numpy + Scipyストレステスト（C-Extension Switching）"
 msgid "4. TensorFlow test (complex dependency switching)"
 msgstr "4。Tensorflowテスト（複雑な依存関係の切り替え）"
 
+# (Validation Failed: suspicious_length_ratio_27.50)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:1460
 msgid ""
 "\n"
 "💡 Did you mean 'omnipkg config set language <code>'?"
-msgstr "burnay 'omnipkg config set language <code>」を意味しましたか？"
+msgstr "💡 「omnipkg config set language <code>」のことですか？"
 
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:1463
 msgid ""
@@ -260,7 +261,7 @@ msgstr "opersユーザーがキャンセルした操作。"
 
 #: /home/minds3t/omnipkg/src/omnipkg/common_utils.py:708
 msgid "💭 Simulating Enter key press..."
-msgstr "centingキープレスのシミュレーション..."
+msgstr "💭 Enter キーの押下をシミュレートしています..."
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:2749
 msgid ""
@@ -318,7 +319,7 @@ msgstr "✅設定ファイルは存在しません。何もすることはあり
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:6579
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:6621
 msgid "🚫 Reset cancelled."
-msgstr "CANCEREDをリセットします。"
+msgstr "🚫 リセットがキャンセルされました。"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:6583
 msgid "✅ Configuration file deleted successfully."
@@ -328,7 +329,7 @@ msgstr "configuration正常に削除された構成ファイル。"
 msgid ""
 "🚀 The next time you run `omnipkg`, you will be guided through the first-time"
 " setup."
-msgstr "necury次回「Omnipkg」を実行すると、初めてのセットアップをガイドされます。"
+msgstr "🚀 次回「omnipkg」を実行すると、初回セットアップのガイドが表示されます。"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:6623
 msgid ""
@@ -350,7 +351,7 @@ msgstr "✅知識ベースが正常に再構築されました。"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:6738
 msgid "   🔄 Rebuilding core package metadata..."
-msgstr "coreコアパッケージメタデータの再構築..."
+msgstr "🔄 コア パッケージのメタデータを再構築中..."
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:6746
 msgid "   ✅ Core metadata rebuilt."
@@ -358,7 +359,7 @@ msgstr "coreコアメタデータが再構築されました。"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:8393
 msgid "🔄 Updating cached file hash index..."
-msgstr "cachedファイルハッシュインデックスの更新..."
+msgstr "🔄 キャッシュファイルハッシュインデックスを更新する..."
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:8424
 msgid "✅ Hash index updated."
@@ -397,11 +398,11 @@ msgstr "SnapShotが保存されました。"
 msgid ""
 "\n"
 "🎉 All package operations complete."
-msgstr "compleasすべてのパッケージ操作が完了します。"
+msgstr "🎉 すべてのパッケージ操作が完了しました."
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:12430
 msgid "🔄 Restoring main environment from snapshot..."
-msgstr "snapshotからメイン環境を復元する..."
+msgstr "🔄 スナップショットからメイン環境を復元しています..."
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:12440
 msgid "   ✅ Environment is already in its original state."
@@ -414,13 +415,13 @@ msgstr "✅環境が復元されました。"
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:12850
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:12904
 msgid "🚫 Uninstall cancelled."
-msgstr "caNCEREDのアンインストール。"
+msgstr "🚫 アンインストールがキャンセルされました。"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:12861
 msgid ""
 "\n"
 "🚫 Uninstall cancelled."
-msgstr "caNCEREDのアンインストール。"
+msgstr "🚫 アンインストールがキャンセルされました。"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:12989
 msgid "✅ Uninstallation complete."
@@ -445,17 +446,17 @@ msgstr "ryoutあなたの環境はすでに最後の既知の良い状態にあ�
 msgid ""
 "\n"
 "📝 The following actions will be taken to restore the environment:"
-msgstr "bursion環境を復元するために、次のアクションが実行されます。"
+msgstr "📝 環境を回復するために、以下の措置が行われます。"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:13037
 msgid "🚫 Revert cancelled."
-msgstr "canseledキャンセル。"
+msgstr "🚫 元に戻すがキャンセルされました。"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:13039
 msgid ""
 "\n"
 "🚀 Starting revert operation..."
-msgstr "cortive操作を再入力します..."
+msgstr "🚀 元に戻す操作を開始しています..."
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:13079
 msgid ""
@@ -465,7 +466,7 @@ msgstr "✅環境は、最後の既知の良好な状態に成功しました。
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:15744
 msgid "🔄 omnipkg System Status"
-msgstr "omn​​ipkgシステムステータス"
+msgstr "🔄 omnipkg システム状態"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:15753
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:15760
@@ -476,16 +477,16 @@ msgstr "🔒刑務所のピップ（主要な環境）"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:15761
 msgid "    🚫 Pip not found in the main env. Escaped or never caught!"
-msgstr "main env。にはありません。逃げた、または捕まえなかった！"
+msgstr "🚫 ピップが見つかりません メイン env. Escaped or never caught!"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:15764
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:15771
 msgid "🔒 UV in Jail (main environment)"
-msgstr "hov刑務所のUV（メイン環境）"
+msgstr "🔒 UV in Jail (メイン環境)"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:15772
 msgid "    🚫 UV not found in the main env. Too fast to catch!"
-msgstr "main envには見つかりません。キャッチするには速すぎる！"
+msgstr "🚫 UV がメイン環境に見つかりません。速すぎて捕まえられない！"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:15773
 msgid ""
@@ -497,7 +498,7 @@ msgstr "🌍主な環境："
 msgid ""
 "\n"
 "📦 izolasyon Alanı (Bubbles):"
-msgstr "IzolasyonAlanı（泡）："
+msgstr "📦 隔離エリア (バブル):"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:15780
 msgid "  - No isolated package versions found."
@@ -507,11 +508,11 @@ msgstr "- 孤立したパッケージバージョンは見つかりませんで�
 msgid ""
 "\n"
 "🔓 Releasing pip... (your funeral)"
-msgstr "pipのリリース...（あなたの葬式）"
+msgstr "🔓 ピップを解放します... (あなたの葬儀)"
 
 #: /home/minds3t/omnipkg/src/tests/test_old_flask.py:344
 msgid "💀 Watch as pip destroys your beautiful environment..."
-msgstr "pipがあなたの美しい環境を破壊するのを見る..."
+msgstr "💀 パイプが美しい環境を破壊するのを観察する..."
 
 #: /home/minds3t/omnipkg/src/tests/test_old_flask.py:357
 msgid ""
@@ -537,7 +538,7 @@ msgstr "🧠スマートな選択！代わりにomnipkgを使用してくださ�
 msgid ""
 "\n"
 "✅ omnipkg install successful!"
-msgstr "omn​​ipkgインストールが成功しました！"
+msgstr "✅ omnipkg インストールが成功しました!"
 
 #: /home/minds3t/omnipkg/src/tests/test_old_flask.py:401
 msgid "🎯 BOTH versions now coexist peacefully!"
@@ -547,19 +548,21 @@ msgstr "🎯現在、両方のバージョンが平和に共存しています�
 msgid ""
 "\n"
 "🔧 Note how omnipkg intelligently manages versions!"
-msgstr "one OnePkgがインテリジェントに管理されたバージョンにどのように注意してください！"
+msgstr "🔧 omnipkgがバージョNをどのように賢く管理しているか注意してください!"
 
 #: /home/minds3t/omnipkg/src/tests/test_old_flask.py:440
 msgid "📚 What you learned:"
 msgstr "📚学んだこと："
 
+# (Validation Failed: suspicious_length_ratio_29.18)
 #: /home/minds3t/omnipkg/src/tests/test_old_flask.py:441
 msgid "   💀 pip: Breaks everything, creates dependency hell"
-msgstr "pip：すべてを破り、依存関係の地獄を作成します"
+msgstr "💀 pip: すべてを壊し,依存症の地獄を作り出します"
 
+# (Validation Failed: suspicious_length_ratio_29.79)
 #: /home/minds3t/omnipkg/src/tests/test_old_flask.py:442
 msgid "   🧠 omnipkg: Smart isolation, peaceful coexistence"
-msgstr "omn​​ipkg：賢明な隔離、平和的な共存"
+msgstr "🧠 omnipkg: スマートな分離、平和的な共存"
 
 #: /home/minds3t/omnipkg/src/tests/test_old_flask.py:446
 msgid "   🔄 Magic: Seamless switching without containers"
@@ -637,11 +640,15 @@ msgstr "選択（Y/N）："
 msgid "💭 {}"
 msgstr "💭{}"
 
+# (Validation Failed: suspicious_length_ratio_75.26)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:3896
 msgid "{}bubble:{}:{}:file_paths"
-msgstr "{} bubble：{}：{}：file_paths"
+msgstr "{}バブル:{}:{}:ファイルパス"
 
+# (Validation Failed: suspicious_length_ratio_24.66)
+# Lollama: Skipped (Validation Failed: emoji_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:3115
+#, fuzzy
 msgid "    📦 Installing full dependency tree to temporary location..."
 msgstr "full依存関係ツリーを一時的な場所にインストールします..."
 
@@ -667,7 +674,7 @@ msgstr "{} == {}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:3789
 msgid "{}{}"
-msgstr "{} {}"
+msgstr "{}{}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:3909
 msgid "    ⚠️  Could not analyze {}: {}"
@@ -683,7 +690,10 @@ msgstr "Registryにない{}ファイルが見つかりました。それらは�
 msgid "    🧹 Creating deduplicated bubble at {}"
 msgstr "    で重複排除されたバブルを作成 🧹 {}で重複排除されたバブルを作成"
 
+# (Validation Failed: suspicious_length_ratio_49.31)
+# Lollama: Skipped (Validation Failed: emoji_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:4081
+#, fuzzy
 msgid "    🔬 Found C-extension packages: {}"
 msgstr "coundC-Extensionパッケージを見つけました：{}"
 
@@ -691,7 +701,10 @@ msgstr "coundC-Extensionパッケージを見つけました：{}"
 msgid "    ⚙️  Found binary packages: {}"
 msgstr "hurdy subed foundバイナリパッケージ：{}"
 
+# (Validation Failed: suspicious_length_ratio_34.88)
+# Lollama: Skipped (Validation Failed: emoji_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:4086
+#, fuzzy
 msgid "    📦 Found complex packages with submodules: {}"
 msgstr "subモジュールで複雑なパッケージを見つけました：{}"
 
@@ -723,15 +736,21 @@ msgstr "📦{}：{}追加ファイルが見つかりました"
 msgid "    ✅ Bubble created: {} files copied, {} deduplicated."
 msgstr "bubble作成：{}ファイルのコピー、{}重複排除。"
 
+# Lollama: Skipped (Validation Failed: emoji_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:4241
+#, fuzzy
 msgid "    📊 Space efficiency: {}% saved."
 msgstr "spaceスペース効率：{}％節約。"
 
+# Lollama: Skipped (Validation Failed: emoji_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:4244
+#, fuzzy
 msgid "    📦 Complex packages preserved: {} packages with submodules"
 msgstr "durved保存された複雑なパッケージ：{}サブモジュール付きパッケージ"
 
+# Lollama: Skipped (Validation Failed: emoji_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:4343
+#, fuzzy
 msgid "    🚨 CRITICAL: Missing Python module: {}"
 msgstr "crivalクリティカル：Pythonモジュールの欠落：{}"
 
@@ -743,19 +762,23 @@ msgstr "🔧固定：コピーされた欠落モジュール{}"
 msgid "{}main_env:file_hashes"
 msgstr "{} main_env：file_hashes"
 
+# Lollama: Skipped (Validation Failed: emoji_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:4792
+#, fuzzy
 msgid "    📈 Loaded {} file hashes from Redis."
 msgstr "Redisから{}ファイルハッシュをロードします。"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:4794
 msgid "    🔍 Building main environment hash index..."
-msgstr "buildingメイン環境ハッシュインデックス..."
+msgstr "🔍 環境ハッシュインデックスの構築..."
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:4874
 msgid "    ✅ Successfully indexed {} packages via metadata"
 msgstr "metadata経由で{}パッケージに正常にインデックス付けされました"
 
+# Lollama: Skipped (Validation Failed: suspicious_length_ratio_27.63)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:4880
+#, fuzzy
 msgid "    🔄 Fallback scan for {} packages: {}{}"
 msgstr "    ᔄ {}パッケージのフォールバックスキャン：{}{}"
 
@@ -1326,7 +1349,7 @@ msgstr "dotensed依存関係を排除するインテリジェントなPythonパ�
 
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:564
 msgid "%(prog)s {}"
-msgstr "％（prog）s {}"
+msgstr "\"％（prog）s {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:940
 msgid ""
