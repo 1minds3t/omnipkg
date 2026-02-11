@@ -770,7 +770,6 @@ Available Scenarios:
 *   **[19] Zero Copy HFT:** High-frequency data transfer between isolated processes.
 *   **[23] Grand Unified Benchmark:** Run everything at once.
 
-```
 ---
 
 ### 4. 🌍 Global Intelligence & AI-Driven Localization [![🤖 AI-Powered: 24 Languages](https://img.shields.io/badge/🤖_AI--Powered-24_Languages-brightgreen?logo=openai&logoColor=white)](https://github.com/1minds3t/omnipkg/actions/workflows/language_test.yml)
