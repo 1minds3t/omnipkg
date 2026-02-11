@@ -3,11 +3,11 @@
     <img src="https://raw.githubusercontent.com/1minds3t/omnipkg/main/.github/logo.svg" alt="omnipkg Logo" width="150">
   </a>
 </p>
-<h1 align="center">omnipkg - The Ultimate Python Dependency Resolver</h1>
+<h1 align="center">omnipkg – Universal Python Runtime Orchestrator</h1>
 <p align="center">
   <p align="center">
     <p align="center">
-  <strong><strong>Run infinite Python packages and interpreters concurrently in one environment with zero conflicts.</strong>
+  <strong><strong>Run multiple Python versions, C-extensions, and ML frameworks concurrently with zero-copy IPC.</strong>
     
 <p align="center">
   <!-- Core Project Info -->
@@ -42,8 +42,6 @@
   </a>
   <p align="center">
 
-
-
 </p>
 <p align="center">
   <!-- Quality & Security -->
@@ -66,6 +64,7 @@
     <img src="https://img.shields.io/badge/Socket-secured-success?logo=socket" alt="Socket">
 </a>
 </p>
+
 <p align="center">
   <!-- Key Features -->
     <a href="https://github.com/1minds3t/omnipkg/actions/workflows/multiverse_test.yml">
@@ -84,7 +83,6 @@
     <img src="https://img.shields.io/badge/💥_Breaking_Language_Barriers-24_Languages-success?logo=babel&logoColor=white" alt="24 Languages">
   </a>
 </p>
-
 
 ---
 
