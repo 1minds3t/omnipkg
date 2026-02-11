@@ -216,8 +216,8 @@ jobs:
           echo "❌ Version mismatch!"
           exit 1
         fi
-    
-    echo "✅ Version verified: $PACKAGE_VERSION"
+        
+        echo "✅ Version verified: $PACKAGE_VERSION"
         
     - name: Install build tools
       run: |
