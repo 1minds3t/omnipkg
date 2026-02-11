@@ -5965,7 +5965,6 @@ class MultiversionFinder:
         if pkg_path and os.path.exists(pkg_path):
             if pkg_path not in sys.path:
                 sys.path.insert(0, pkg_path)
-        return None
 
 
 class NoCompatiblePythonError(Exception):
