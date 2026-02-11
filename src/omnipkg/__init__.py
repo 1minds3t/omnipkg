@@ -81,10 +81,8 @@ __all__ = [
     "cli",
     "loader",
     "activator",
-    "demo",
     "package_meta_builder",
-    "stress_test",
-    "common_utils",
+    "common_utils"
 ]
 if sys.version_info < (3, 10):
     from omnipkg._vendor import filelock
