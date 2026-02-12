@@ -22,12 +22,15 @@ jobs:
         with:
           python-version: '3.11'
       
-      - name: Configure UTF-8 encoding (Windows fix)
+      - name: Configure UTF-8 encoding and unbuffered output (Windows fix)
         run: |
           echo "PYTHONIOENCODING=utf-8" >> $env:GITHUB_ENV
           echo "PYTHONUTF8=1" >> $env:GITHUB_ENV
+          echo "PYTHONUNBUFFERED=1" >> $env:GITHUB_ENV
+          # Force immediate flush for all streams
+          echo "PYTHONDONTWRITEBYTECODE=1" >> $env:GITHUB_ENV
         shell: pwsh
-      
+            
       - name: Install omnipkg
         run: |
           python -m pip install --upgrade pip
@@ -48,10 +51,12 @@ jobs:
         shell: pwsh
       
       - name: Run Demo (Option 8 - Quantum Multiverse)
-        # Use direct ID '8' and --non-interactive to bypass safe_input and PowerShell pipe issues.
-        # This will trigger the Windows daemon auto-start and os.execv relaunch.
-        run: omnipkg demo 8 --non-interactive
-        shell: pwsh
+        run: |
+            # Redirect to file to avoid pipe buffer issues
+            omnipkg demo 8 --non-interactive 2>&1 | Tee-Object -FilePath demo_output.log
+            # Or even simpler - just redirect both streams
+            # omnipkg demo 8 --non-interactive *>&1
+          shell: pwsh
       
       - name: Run Demo Again (Verify Caching)
         continue-on-error: true
