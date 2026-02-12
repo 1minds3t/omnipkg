@@ -51,12 +51,13 @@ jobs:
         shell: pwsh
       
       - name: Run Demo (Option 8 - Quantum Multiverse)
-        run: |
-            # Redirect to file to avoid pipe buffer issues
-            omnipkg demo 8 --non-interactive 2>&1 | Tee-Object -FilePath demo_output.log
-            # Or even simpler - just redirect both streams
-            # omnipkg demo 8 --non-interactive *>&1
-          shell: pwsh
+        run: omnipkg demo 8 --non-interactive
+        shell: cmd
+
+      - name: Run Demo Again (Verify Caching)
+        continue-on-error: true
+        run: omnipkg demo 8 --non-interactive
+        shell: cmd
       
       - name: Run Demo Again (Verify Caching)
         continue-on-error: true
