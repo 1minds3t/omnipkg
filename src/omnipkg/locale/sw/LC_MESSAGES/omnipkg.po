@@ -1367,7 +1367,7 @@ msgstr ""
 
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:564
 msgid "%(prog)s {}"
-msgstr "%(Prog) S {}"
+msgstr "\"%(prog)s {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:940
 msgid ""

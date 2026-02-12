@@ -60,7 +60,9 @@ msgstr ""
 msgid "🤯 What makes this impossible with traditional tools:"
 msgstr "🤯 Hva gjør dette umulig med tradisjonelle verktøy:"
 
+# Lollama: Skipped (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:363
+#, fuzzy
 msgid "   • Switching versions requires environment restart"
 msgstr "• Bytteversjoner krever omstart av miljøet"
 
@@ -104,7 +106,9 @@ msgstr "🎉 Demo fullført med hell!"
 msgid "│                                                          │"
 msgstr "│                                                          │"
 
+# Lollama: Skipped (API Error)
 #: /home/minds3t/omnipkg/src/tests/test_old_flask.py:30
+#, fuzzy
 msgid "│  🧠 omnipkg AI suggests:                                 │"
 msgstr "│ 🧠 Omnipkg Ai antyder: │"
 
@@ -132,7 +136,9 @@ msgstr "\\ ^__ ^"
 msgid "         \\  (💀💀)\\______   <- This is your environment"
 msgstr "\\ (💀💀) \\ ______ <- Dette er ditt miljø"
 
+# Lollama: Skipped (API Error)
 #: /home/minds3t/omnipkg/src/tests/test_old_flask.py:50
+#, fuzzy
 msgid "            (__)\\       )\\/\\   after using pip"
 msgstr "(__) \\) \\/\\ etter bruk av Pip"
 
@@ -160,7 +166,9 @@ msgstr "-> Avstemming av filsystemstat med Redis Knowledge Base ..."
 msgid "Override the display language for this command (e.g., es, de, ja)"
 msgstr "Overstyr skjermspråket for denne kommandoen (f.eks. ES, DE, JA)"
 
+# Lollama: Skipped (API Error)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:578
+#, fuzzy
 msgid "Available commands:"
 msgstr "Tilgjengelige kommandoer:"
 
@@ -1358,7 +1366,7 @@ msgstr ""
 
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:564
 msgid "%(prog)s {}"
-msgstr "%(prog) s {}"
+msgstr "\"%(prog)s {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:940
 msgid ""

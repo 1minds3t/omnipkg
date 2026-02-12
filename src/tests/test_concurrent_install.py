@@ -96,7 +96,7 @@ def ensure_daemon_running() -> bool:
             return False
             
     except Exception as e:
-        safe_print(f"   ❌ Daemon error: {e}")
+        safe_print(_('   ❌ Daemon error: {}').format(e))
         return False
 
 
@@ -114,7 +114,7 @@ def warmup_worker(config: tuple, thread_id: int) -> dict:
         from omnipkg.isolation.worker_daemon import DaemonClient
         client = DaemonClient()
         
-        safe_print(f"{prefix} 🔥 Warming up Python {py_version} + Rich {rich_version}...")
+        safe_print(_('{} 🔥 Warming up Python {} + Rich {}...').format(prefix, py_version, rich_version))
         start = time.perf_counter()
         
         warmup_code = f"""
@@ -134,10 +134,10 @@ with omnipkgLoader("rich=={rich_version}"):
         elapsed = (time.perf_counter() - start) * 1000
         
         if not result.get("success"):
-            safe_print(f"{prefix} ❌ Failed: {result.get('error')}")
+            safe_print(_('{} ❌ Failed: {}').format(prefix, result.get('error')))
             return None
         
-        safe_print(f"{prefix} ✅ Warmed up in {format_duration(elapsed)} (discarded)")
+        safe_print(_('{} ✅ Warmed up in {} (discarded)').format(prefix, format_duration(elapsed)))
         
         return {
             "thread_id": thread_id,
@@ -147,7 +147,7 @@ with omnipkgLoader("rich=={rich_version}"):
         }
         
     except Exception as e:
-        safe_print(f"{prefix} ❌ {e}")
+        safe_print(_('{} ❌ {}').format(prefix, e))
         return None
 
 
@@ -165,7 +165,7 @@ def benchmark_execution(config: tuple, thread_id: int, warmup_data: dict) -> dic
         from omnipkg.isolation.worker_daemon import DaemonClient
         client = DaemonClient()
         
-        safe_print(f"{prefix} ⚡ Benchmarking Python {py_version} + Rich {rich_version}...")
+        safe_print(_('{} ⚡ Benchmarking Python {} + Rich {}...').format(prefix, py_version, rich_version))
         
         # PURE EXECUTION - Just import, nothing else
         benchmark_code = f"""
@@ -187,9 +187,9 @@ with omnipkgLoader("rich=={rich_version}"):
         elapsed = (time.perf_counter() - start) * 1000
         
         if not result.get("success"):
-            raise RuntimeError(f"Execution failed: {result.get('error')}")
+            raise RuntimeError(_('Execution failed: {}').format(result.get('error')))
         
-        safe_print(f"{prefix} ✅ Benchmark: {format_duration(elapsed)}")
+        safe_print(_('{} ✅ Benchmark: {}').format(prefix, format_duration(elapsed)))
         
         return {
             "thread_id": thread_id,
@@ -200,7 +200,7 @@ with omnipkgLoader("rich=={rich_version}"):
         }
         
     except Exception as e:
-        safe_print(f"{prefix} ❌ {e}")
+        safe_print(_('{} ❌ {}').format(prefix, e))
         return None
 
 
@@ -245,11 +245,11 @@ with omnipkgLoader("rich=={rich_version}"):
         )
         
         if not result.get("success"):
-            raise RuntimeError(f"Verification failed: {result.get('error')}")
+            raise RuntimeError(_('Verification failed: {}').format(result.get('error')))
         
         data = json.loads(result.get("stdout", "{}"))
         
-        safe_print(f"{prefix} ✅ Python {data['python_version']} + Rich {data['rich_version']}")
+        safe_print(_('{} ✅ Python {} + Rich {}').format(prefix, data['python_version'], data['rich_version']))
         
         return {
             "thread_id": thread_id,
@@ -260,7 +260,7 @@ with omnipkgLoader("rich=={rich_version}"):
         }
         
     except Exception as e:
-        safe_print(f"{prefix} ❌ {e}")
+        safe_print(_('{} ❌ {}').format(prefix, e))
         return None
 
 
@@ -300,15 +300,15 @@ def print_benchmark_summary(results: list, total_time: float):
     min_benchmark = min(benchmark_times)
     max_benchmark = max(benchmark_times)
     
-    safe_print(f"⏱️  Sequential time (sum of all):  {format_duration(sequential_time)}")
-    safe_print(f"⏱️  Concurrent time (longest one):  {format_duration(concurrent_time)}")
+    safe_print(_('⏱️  Sequential time (sum of all):  {}').format(format_duration(sequential_time)))
+    safe_print(_('⏱️  Concurrent time (longest one):  {}').format(format_duration(concurrent_time)))
     safe_print("=" * 100)
     
-    safe_print(f"\n🎯 PERFORMANCE METRICS:")
+    safe_print(_('\n🎯 PERFORMANCE METRICS:'))
     safe_print("-" * 100)
-    safe_print(f"   Warmup (cold start):     {format_duration(avg_warmup)} avg")
-    safe_print(f"   Benchmark (hot workers): {format_duration(avg_benchmark)} avg")
-    safe_print(f"   Range:                   {format_duration(min_benchmark)} - {format_duration(max_benchmark)}")
+    safe_print(_('   Warmup (cold start):     {} avg').format(format_duration(avg_warmup)))
+    safe_print(_('   Benchmark (hot workers): {} avg').format(format_duration(avg_benchmark)))
+    safe_print(_('   Range:                   {} - {}').format(format_duration(min_benchmark), format_duration(max_benchmark)))
     safe_print(f"   Speedup (warmup→hot):    {avg_warmup / avg_benchmark:.1f}x")
     
     speedup = sequential_time / concurrent_time
@@ -324,10 +324,10 @@ def print_verification_summary(results: list):
     safe_print("=" * 100)
     
     for r in sorted(results, key=lambda x: x["thread_id"]):
-        safe_print(f"\nT{r['thread_id']}: Python {r['python_version']}")
+        safe_print(_('\nT{}: Python {}').format(r['thread_id'], r['python_version']))
         safe_print(f"     Executable: {r['python_path']}")
         safe_print(f"     Rich {r['rich_version']}")
-        safe_print(f"     Loaded from: {r['rich_file']}")
+        safe_print(_('     Loaded from: {}').format(r['rich_file']))
     
     safe_print("\n" + "=" * 100)
 
@@ -449,7 +449,7 @@ def main():
     safe_print("   ✅ Hot worker performance: sub-50ms execution!")
     safe_print("   ✅ Zero state corruption or interference")
     safe_print("   ✅ Production-grade benchmark methodology")
-    safe_print(f"\n⏱️  Total test duration: {format_duration(total_time)}")
+    safe_print(_('\n⏱️  Total test duration: {}').format(format_duration(total_time)))
     safe_print("\n🚀 This is IMPOSSIBLE with traditional Python environments!")
     
     sys.exit(0)

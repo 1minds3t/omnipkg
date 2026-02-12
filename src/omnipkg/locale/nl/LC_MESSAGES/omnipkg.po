@@ -107,7 +107,9 @@ msgstr "🎉 Demo met succes voltooid!"
 msgid "│                                                          │"
 msgstr "│                                                          │"
 
+# Lollama: Skipped (API Error)
 #: /home/minds3t/omnipkg/src/tests/test_old_flask.py:30
+#, fuzzy
 msgid "│  🧠 omnipkg AI suggests:                                 │"
 msgstr "│ 🧠 🧠 omnipkg ai suggereert: │"
 
@@ -135,7 +137,9 @@ msgstr "\\ ^__ ^"
 msgid "         \\  (💀💀)\\______   <- This is your environment"
 msgstr "\\ (💀💀) \\ ______ <- Dit is uw omgeving"
 
+# Lollama: Skipped (API Error)
 #: /home/minds3t/omnipkg/src/tests/test_old_flask.py:50
+#, fuzzy
 msgid "            (__)\\       )\\/\\   after using pip"
 msgstr "(__) \\) \\/\\ na het gebruik van PIP"
 
@@ -167,7 +171,9 @@ msgstr ""
 msgid "Override the display language for this command (e.g., es, de, ja)"
 msgstr "Registreer de weergavetaal voor deze opdracht (bijv. Es, DE, Ja)"
 
+# Lollama: Skipped (API Error)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:578
+#, fuzzy
 msgid "Available commands:"
 msgstr "Beschikbare opdrachten:"
 
@@ -224,7 +230,9 @@ msgstr "Bevestiging overslaan"
 msgid "Refresh the intelligence knowledge base"
 msgstr "Vernieuw de kennisbasis van de intelligentie"
 
+# Lollama: Skipped (API Error)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:711
+#, fuzzy
 msgid "Set a configuration value"
 msgstr "Stel een configuratiewaarde in"
 
@@ -1380,7 +1388,7 @@ msgstr ""
 
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:564
 msgid "%(prog)s {}"
-msgstr "%(prog) s {}"
+msgstr "\"%(prog)s {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:940
 msgid ""

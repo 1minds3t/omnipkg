@@ -119,7 +119,7 @@ def chaos_test_1_version_tornado():
         # Warm up EACH version before timing
         for ver in versions:
             pkg_spec = f"numpy=={ver}"
-            safe_print(f"   🔥 Warming up {pkg_spec}...")
+            safe_print(_('   🔥 Warming up {}...').format(pkg_spec))
             
             warmup_start = time.perf_counter()
             try:
@@ -139,16 +139,16 @@ print(f"WARMED:{np.__version__}")
                 if result.get("success"):
                     safe_print(f"      ✅ {pkg_spec} warmup: {warmup_time:.2f}ms")
                 else:
-                    safe_print(f"      ⚠️  {pkg_spec} warmup failed")
+                    safe_print(_('      ⚠️  {} warmup failed').format(pkg_spec))
                     
             except Exception as e:
-                safe_print(f"      ❌ {pkg_spec} warmup error: {str(e)[:50]}")
+                safe_print(_('      ❌ {} warmup error: {}').format(pkg_spec, str(e)[:50]))
         
         safe_print(f"\n   🔥 Total warmup time: {sum(daemon_warmup_times.values()):.2f}ms")
         safe_print("   💡 This is ONE-TIME cost! Subsequent calls are ~0.6ms!\n")
         
     except Exception as e:
-        safe_print(f"   ❌ Daemon warmup failed: {str(e)[:50]}")
+        safe_print(_('   ❌ Daemon warmup failed: {}').format(str(e)[:50]))
         return False
     
     # ==================================================================
@@ -267,7 +267,7 @@ print(f"{np.__version__}|{result}")
         total_daemon_cost = sum(daemon_warmup_times.values()) + sum(daemon_times)
         safe_print(f"      Total with warmup: {total_daemon_cost:.2f}ms")
         safe_print(f"      Warmup was: {sum(daemon_warmup_times.values()):.2f}ms")
-        safe_print(f"      Warmup per version: {', '.join([f'{v}={t:.1f}ms' for v, t in daemon_warmup_times.items()])}")
+        safe_print(_('      Warmup per version: {}').format(', '.join([f'{v}={t:.1f}ms' for v, t in daemon_warmup_times.items()])))
 
         # Calculate speedup (POST-WARMUP vs Legacy)
         if legacy_times:
@@ -320,7 +320,7 @@ print(f"{result}")
         p95 = sorted(rapid_times)[int(len(rapid_times) * 0.95)]
         p99 = sorted(rapid_times)[int(len(rapid_times) * 0.99)]
         
-        safe_print(f"\n   📈 Daemon Performance (100 switches):")
+        safe_print(_('\n   📈 Daemon Performance (100 switches):'))
         safe_print(f"      Average: {avg_rapid:.2f}ms")
         safe_print(f"      P95: {p95:.2f}ms")
         safe_print(f"      P99: {p99:.2f}ms")
@@ -898,7 +898,7 @@ def chaos_test_5_race_condition_roulette():
     for spec in versions:
         t_start = time.perf_counter()
         try:
-            _, _ = client.execute_zero_copy(
+            unused, unused = client.execute_zero_copy(
                 spec,
                 """
 import numpy as np
@@ -968,7 +968,7 @@ print(np.__version__)
                     msg = f"{remote_version:<14}"
                 else:
                     status = "❌"
-                    msg = f"MATH ERROR: sum {local_sum} vs {remote_sum} | mean {local_mean} vs {remote_mean}"
+                    msg = _('MATH ERROR: sum {} vs {} | mean {} vs {}').format(local_sum, remote_sum, local_mean, remote_mean)
 
                 thread_results.append((spec, remote_version, status, duration_ms))
 
@@ -999,13 +999,13 @@ print(np.__version__)
     total_latency = 0.0
     for thread_id, thread_results in results.items():
         total_swaps += len(thread_results)
-        for _, _, status, duration in thread_results:
+        for unused, unused, status, duration in thread_results:
             if status == "✅":
                 successful_swaps += 1
                 total_latency += duration
 
     safe_print(f"\n{'='*60}")
-    safe_print(f"🎯 Total Requests: {total_swaps}")
+    safe_print(_('🎯 Total Requests: {}').format(total_swaps))
     safe_print(
         f"✅ Success Rate: {successful_swaps}/{total_swaps} "
         f"({successful_swaps / total_swaps * 100:.1f}%)"
@@ -1014,7 +1014,7 @@ print(np.__version__)
     safe_print(f"⚡ Throughput: {total_swaps / race_time:.1f} swaps/sec")
     if successful_swaps > 0:
         safe_print(f"🚀 Avg Latency (success only): {total_latency / successful_swaps:.2f} ms/swap")
-    safe_print(f"✅ CHAOS SURVIVED! (Memory Integrity Verified)")
+    safe_print(_('✅ CHAOS SURVIVED! (Memory Integrity Verified)'))
     print("=" * 60 + "\n")
 
     return successful_swaps == total_swaps
@@ -3049,7 +3049,7 @@ arr_out[:] = result.numpy()
                 pipeline_gpu_success = True
 
     except Exception as e:
-        safe_print(f"   ❌ GPU Pipeline failed: {e}")
+        safe_print(_('   ❌ GPU Pipeline failed: {}').format(e))
         import traceback
         safe_print(f"      {traceback.format_exc()[:500]}")
 
@@ -3058,11 +3058,11 @@ arr_out[:] = result.numpy()
     # ═══════════════════════════════════════════════════════════════
     safe_print("\n   🏆 CROSS-VERSION CUDA IPC VERIFICATION:")
     safe_print("   ────────────────────────────────────────────────────────────")
-    safe_print(f"   Stage 1: PyTorch {unused1.get('worker_torch_version')} → Universal IPC ✅")
-    safe_print(f"   Stage 2: PyTorch {unused2.get('worker_torch_version')} → Universal IPC ✅")
-    safe_print(f"   Stage 3: PyTorch {unused3.get('worker_torch_version')} → Universal IPC ✅")
+    safe_print(_('   Stage 1: PyTorch {} → Universal IPC ✅').format(unused1.get('worker_torch_version')))
+    safe_print(_('   Stage 2: PyTorch {} → Universal IPC ✅').format(unused2.get('worker_torch_version')))
+    safe_print(_('   Stage 3: PyTorch {} → Universal IPC ✅').format(unused3.get('worker_torch_version')))
     safe_print(f"\n   💡 Same GPU tensor passed through 3 different PyTorch versions")
-    safe_print(f"   💡 WITHOUT copying to CPU or serialization!")
+    safe_print(_('   💡 WITHOUT copying to CPU or serialization!'))
     safe_print(f"   💡 Total time: {total_pipeline_gpu:.2f}ms (TRUE zero-copy)")
     if pipeline_cpu_success and pipeline_gpu_success:
         safe_print("\n" + "=" * 70)
@@ -3075,7 +3075,7 @@ arr_out[:] = result.numpy()
             speedup = total_pipeline_cpu / total_pipeline_gpu
             saved_ms = total_pipeline_cpu - total_pipeline_gpu
             safe_print(f"\n   🚀 GPU is {speedup:.1f}x FASTER (saved {saved_ms:.2f}ms)")
-            safe_print(f"   💡 Zero-copy GPU transfers eliminate CPU↔GPU bottleneck!")
+            safe_print(_('   💡 Zero-copy GPU transfers eliminate CPU↔GPU bottleneck!'))
         else:
             slowdown = total_pipeline_gpu / total_pipeline_cpu
             extra_ms = total_pipeline_gpu - total_pipeline_cpu

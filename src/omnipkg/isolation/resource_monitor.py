@@ -360,7 +360,7 @@ def print_stats(watch_mode=False):
         clear_screen()
 
     print("=" * 120)
-    print("🔥 OMNIPKG DAEMON RESOURCE MONITOR 🔥".center(120))
+    safe_print("🔥 OMNIPKG DAEMON RESOURCE MONITOR 🔥".center(120))
     print("=" * 120)
 
     # Get GPU summary
@@ -383,7 +383,7 @@ def print_stats(watch_mode=False):
     gpu_usage = parse_nvidia_smi()
 
     if not processes:
-        print(_('❌ No omnipkg daemon processes found!'))
+        safe_print(_('❌ No omnipkg daemon processes found!'))
         return
 
     # Categorize processes
@@ -404,7 +404,7 @@ def print_stats(watch_mode=False):
 
     # Print daemon manager
     if daemon_managers:
-        print(_('🎛️  DAEMON MANAGER:'))
+        safe_print(_('🎛️  DAEMON MANAGER:'))
         print("-" * 120)
         for proc in daemon_managers:
             gpu_str = f"GPU: {proc['gpu_mb']:>4}MB" if proc["gpu_mb"] > 0 else "GPU:   --"
@@ -421,12 +421,12 @@ def print_stats(watch_mode=False):
     worker_count = 0
     
     if workers:
-        print(_('⚙️  ACTIVE WORKERS (Package-specific bubbles):'))
+        safe_print(_('⚙️  ACTIVE WORKERS (Package-specific bubbles):'))
         print("-" * 120)
 
         for worker_type in sorted(workers.keys()):
             procs = workers[worker_type]
-            print(_('\n📦 {}').format(worker_type))
+            safe_print(_('\n📦 {}').format(worker_type))
 
             for proc in procs:
                 worker_count += 1
@@ -443,7 +443,7 @@ def print_stats(watch_mode=False):
 
     # Print idle workers
     if idle_workers:
-        print(_('\n💤 IDLE WORKERS (Ready to be assigned):'))
+        safe_print(_('\n💤 IDLE WORKERS (Ready to be assigned):'))
         print("-" * 120)
         for proc in idle_workers:
             gpu_str = f"GPU: {proc['gpu_mb']:>4}MB" if proc["gpu_mb"] > 0 else "GPU:   --"
@@ -455,7 +455,7 @@ def print_stats(watch_mode=False):
     # Print summary
     print()
     print("=" * 120)
-    print(_('📊 WORKER SUMMARY STATISTICS'))
+    safe_print(_('📊 WORKER SUMMARY STATISTICS'))
     print("=" * 120)
     print(_('  Active Workers:         {}').format(worker_count))
     print(_('  Idle Workers:           {}').format(len(idle_workers)))
@@ -470,13 +470,13 @@ def print_stats(watch_mode=False):
     # Print IMPROVED efficiency metrics with PACKAGE-AWARE BASELINES
     if worker_count > 0:
         print()
-        print(_('🎯 EFFICIENCY COMPARISON (vs Traditional Solutions):'))
+        safe_print(_('🎯 EFFICIENCY COMPARISON (vs Traditional Solutions):'))
         print("-" * 120)
         
         efficiency = calculate_efficiency_metrics(workers, total_ram_mb, total_gpu_mb)
         actual_per_worker = efficiency["per_worker"]
         
-        print(f"  💾 omnipkg Memory:       {actual_per_worker:.1f}MB per worker (RSS - actual RAM)")
+        safe_print(f"  💾 omnipkg Memory:       {actual_per_worker:.1f}MB per worker (RSS - actual RAM)")
         print()
         
         # Show comparison table
@@ -491,20 +491,20 @@ def print_stats(watch_mode=False):
             solution_name = solution.upper().ljust(8)
             
             if ratio > 1.0:
-                print(f"  🔥 vs {solution_name}:  {ratio:.1f}x MORE EFFICIENT (saves {saved:.0f}MB total, {startup_ratio:.0f}x faster startup)")
-                print(f"      └─ {solution} would use {baseline:.1f}MB/worker × {worker_count} = {baseline_total:.0f}MB total")
+                safe_print(f"  🔥 vs {solution_name}:  {ratio:.1f}x MORE EFFICIENT (saves {saved:.0f}MB total, {startup_ratio:.0f}x faster startup)")
+                safe_print(f"      └─ {solution} would use {baseline:.1f}MB/worker × {worker_count} = {baseline_total:.0f}MB total")
             else:
                 overhead = abs(saved)
-                print(f"  ⚖️  vs {solution_name}:  {1/ratio:.1f}x overhead (+{overhead:.0f}MB, but {startup_ratio:.0f}x faster startup)")
-                print(f"      └─ {solution} would use {baseline:.1f}MB/worker × {worker_count} = {baseline_total:.0f}MB total")
+                safe_print(f"  ⚖️  vs {solution_name}:  {1/ratio:.1f}x overhead (+{overhead:.0f}MB, but {startup_ratio:.0f}x faster startup)")
+                safe_print(f"      └─ {solution} would use {baseline:.1f}MB/worker × {worker_count} = {baseline_total:.0f}MB total")
         
         print()
-        print(f"  🚀 Total Footprint:      {total_ram_mb:.1f}MB for {worker_count} concurrent package version(s)")
-        print(f"  ⚡ Startup Performance:  ~5ms per worker (vs 150-800ms traditional)")
-        print(f"  🎁 Zero Serialization:   Direct memory sharing, no JSON/pickle overhead")
-        print(f"  🔄 Context Switches:     Same process space = minimal overhead")
+        safe_print(f"  🚀 Total Footprint:      {total_ram_mb:.1f}MB for {worker_count} concurrent package version(s)")
+        safe_print(f"  ⚡ Startup Performance:  ~5ms per worker (vs 150-800ms traditional)")
+        safe_print(f"  🎁 Zero Serialization:   Direct memory sharing, no JSON/pickle overhead")
+        safe_print(f"  🔄 Context Switches:     Same process space = minimal overhead")
         print()
-        print(f"  📝 NOTE: Baselines are package-aware (e.g., PyTorch needs ~350MB regardless of method)")
+        safe_print(f"  📝 NOTE: Baselines are package-aware (e.g., PyTorch needs ~350MB regardless of method)")
         
     print("=" * 120)
 
@@ -522,7 +522,7 @@ def start_monitor(watch_mode=False):
             print(_('\n\nExiting watch mode...'))
     else:
         print_stats(watch_mode=False)
-        print("\n💡 Tip: Use --watch or -w flag for live monitoring")
+        safe_print("\n💡 Tip: Use --watch or -w flag for live monitoring")
 
 
 if __name__ == "__main__":

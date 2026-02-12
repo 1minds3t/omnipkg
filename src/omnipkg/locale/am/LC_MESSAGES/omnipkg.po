@@ -622,7 +622,7 @@ msgstr "❌ ማሳያ በመመለሻ ኮድ {}"
 #: /home/minds3t/omnipkg/src/tests/test_tensorflow_switching.py:44
 #: /home/minds3t/omnipkg/src/tests/test_uv_switching.py:39
 msgid "  🚀 {}"
-msgstr "🚀 {}}"
+msgstr "🚀 {}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:952
 msgid "❌ Error: Language '{}' not supported. Supported: {}"
@@ -661,11 +661,11 @@ msgstr "ምርጫ (Y / N)"
 #: /home/minds3t/omnipkg/src/omnipkg/common_utils.py:735
 #: /home/minds3t/omnipkg/src/tests/test_old_flask.py:62
 msgid "💭 {}"
-msgstr "💭 {}}"
+msgstr "💭 {}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:3896
 msgid "{}bubble:{}:{}:file_paths"
-msgstr "{} አረፋ: {}: {}:}: ፋይል_PATATS"
+msgstr "{} 气泡:{}:{}:文件路径"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:3115
 msgid "    📦 Installing full dependency tree to temporary location..."
@@ -689,7 +689,7 @@ msgstr "A አረፋ ለመገንባት ሙሉ ጊዜያዊ ጭነት መጀመ�
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:3698
 msgid "{}=={}\n"
-msgstr "{} == {}}"
+msgstr "{} == {}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:3789
 msgid "{}{}"
@@ -707,7 +707,7 @@ msgstr "⚠️ ተገኝቷል{}ምዝገባዎች በደግነት ውስጥ አ
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:4047
 msgid "    🧹 Creating deduplicated bubble at {}"
-msgstr "🧹 በ {} ላይ የተደነገገው አረፋ መፍጠር}"
+msgstr "🧹 በ {} ላይ የተደነገገው አረፋ መፍጠር"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:4081
 msgid "    🔬 Found C-extension packages: {}"
@@ -783,7 +783,7 @@ msgstr "{} በተሳካ ሁኔታ}} ፓኬጆች ሜታዳታ በኩል"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:4880
 msgid "    🔄 Fallback scan for {} packages: {}{}"
-msgstr "🔄} {} ፓኬጆች} {} {}"
+msgstr "🔄 Fallback scan for {} packages: {}{}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:4935
 msgid "    💾 Saving {} file hashes to Redis cache..."
@@ -889,7 +889,7 @@ msgstr "❌ ሜታዳታ መልሶ መገንባት አልተሳካም- {}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:6750
 msgid "   (Skipping {} - feature coming soon!)"
-msgstr "({} -} - በቅርቡ የሚመጣው ባህሪይ!)"
+msgstr "({} - 功能即将推出！)"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:8444
 msgid "    ⚠️  Could not perform live package scan: {}"
@@ -901,7 +901,7 @@ msgstr "{} ስሪቶች"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:8550
 msgid "   -> Cleaning up {} uninstalled package(s) from Redis..."
-msgstr "->} ማጽዳት {} ያልተገለፀው ጥቅል (ቶች) ከቀዳሚ ..."
+msgstr "-> 清理 Redis 中的 {} 个未安装的包..."
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:8578
 msgid "    ⚠️ Failed to update knowledge base for delta: {}"
@@ -940,7 +940,7 @@ msgstr "ቁጥር ያስገቡ (1- {}) ወይም ለመዝለል አስገባን
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:8902
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:8904
 msgid "{}: {}"
-msgstr "{} {}}"
+msgstr "{} {}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:8912
 msgid ""
@@ -953,7 +953,7 @@ msgstr "--- [ጤና) ጤና እና ደህንነት] - -"
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:8915
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:8927
 msgid "   {}: {}"
-msgstr "{} {}}"
+msgstr "{} {}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:8922
 msgid ""
@@ -1194,7 +1194,9 @@ msgstr "በማሳያ ወቅት ያልተጠበቀ ስህተት ተከስቷል {
 
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:701
 msgid "Failed to create bubble directory at {}: {}"
-msgstr "አረፋ ማውጫ ውስጥ {}} {}"
+msgstr ""
+"创建气泡目录失败：{} {}\n"
+"```"
 
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:3201
 msgid " ⚠️ Failed to cloak {}: {}"
@@ -1364,7 +1366,7 @@ msgstr "🚀 የ Python Package Manager ንድፍ ማከማቻ እና የፈጠ�
 
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:564
 msgid "%(prog)s {}"
-msgstr "% (Prog) s {}"
+msgstr "\"%%(prog)s {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:940
 msgid ""
@@ -1453,7 +1455,7 @@ msgstr "✅ ፍጡ'{}'to '{}'"
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:6575
 #: /home/minds3t/omnipkg/src/tests/test_loader_stress_test.py:3679
 msgid "   {}"
-msgstr "{}}"
+msgstr "{}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/CondaGuard.py:51
 msgid "🛡️ Restored corrupted metadata for: {}"
@@ -1495,7 +1497,7 @@ msgstr "--- ራሱን የቻለ ኮንዳ የሙስና ፍተሻ እና ማስ�
 
 #: /home/minds3t/omnipkg/src/omnipkg/CondaGuard.py:146
 msgid "🔧 Fix applied. Restored files: {}"
-msgstr "🔧 ማስተካከያ ተተግብሯል።የተመለሱ ፋይሎች፡ {}\",}"
+msgstr "🔧 ማስተካከያ ተተግብሯል።የተመለሱ ፋይሎች፡ {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/CondaGuard.py:149
 msgid "✅ No corruption found in protected files."
@@ -1557,7 +1559,7 @@ msgstr "   - {}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:965
 msgid "❌ Error: Invalid install strategy. Must be one of: {}"
-msgstr "❌ ስህተት፡ ልክ ያልሆነ የመጫኛ ስልት።አንዱ መሆን አለበት፡-{}}\""
+msgstr "\"❌ ስህተት፡ ልክ ያልሆነ የመጫኛ ስልት።አንዱ መሆን አለበት፡{}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:536
 msgid "🔥 Key Features:"
@@ -1705,7 +1707,7 @@ msgstr "ℹ️ የመጫን ስልት አስቀድሞ ወደ የቅርብ ጊዜ
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:13084
 msgid "   🔄 Restoring original install strategy: {}"
-msgstr "🔄 የመጀመሪያውን የመጫኛ ስልት ወደነበረበት በመመለስ ላይ፡ {}\",}"
+msgstr "🔄 የመጀመሪያውን የመጫኛ ስልት ወደነበረበት በመመለስ ላይ፡ {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:13100
 msgid "   ✅ Install strategy restored to: {}"
@@ -1722,8 +1724,7 @@ msgid ""
 "   💡 You may need to manually restore it with: omnipkg config set "
 "install_strategy {}"
 msgstr ""
-"💡 አንተ በእጅ ጋር መልሶ ማግኘት ሊያስፈልግህ ይችላል: omnipkg config set install_strategy "
-"{}\",}"
+"💡 አንተ በእጅ ጋር መልሶ ማግኘት ሊያስፈልግህ ይችላል: omnipkg config set install_strategy {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:13117
 msgid "   ℹ️  Install strategy unchanged: {}"
@@ -1766,7 +1767,7 @@ msgstr "ለዚህ አካባቢ ንቁውን የ Python አስተርጓሚ ይቀ
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:1000
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:1007
 msgid "   • Python {}: {}"
-msgstr "• Python {}፡ {}\",}"
+msgstr "• Python {}፡ {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:1027
 msgid "❌ Error: You must specify what to swap."
@@ -1836,7 +1837,7 @@ msgstr "💡 አውድ ለመቀየር, ይጠቀሙ: {} swap python <version"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:524
 msgid "   ⚠️  Could not reset setup flag in config file: {}"
-msgstr "⚠ ️ በማዋቀር ፋይሉ ውስጥ የማዋቀርን ባንዲራ ዳግም ማስጀመር አልተቻለም፡ {}\",}"
+msgstr "⚠ ️ በማዋቀር ፋይሉ ውስጥ የማዋቀርን ባንዲራ ዳግም ማስጀመር አልተቻለም፡ {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:532
 msgid "  🚀 Environment Hotswap to a Managed Python 3.11"
@@ -2032,7 +2033,7 @@ msgstr ""
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:13242
 msgid "🐍 Switching active Python context to version {}..."
-msgstr "🐍 ንቁ የ Python አውድ ወደ ስሪት {}...\", \"score\": 9.17}"
+msgstr "🐍 ንቁ የ Python አውድ ወደ ስሪት {}...\", \"score\": 9.17"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:1582
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:9107
@@ -2076,7 +2077,7 @@ msgstr "አካባቢዎ አሁን ሙሉ በሙሉ በ omnipkg ነው የሚተ�
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:363
 msgid "❌ A critical error occurred during one-time setup: {}"
-msgstr "❌ በአንድ ጊዜ ማዋቀር ወቅት ወሳኝ ስህተት ተከስቷል: {}\",}"
+msgstr "❌ በአንድ ጊዜ ማዋቀር ወቅት ወሳኝ ስህተት ተከስቷል: {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:323
 msgid "⚠️ CRITICAL Warning: Config failed to load, omnipkg may not function."
@@ -2089,11 +2090,11 @@ msgstr "⚠ ️ የተስተናገዱ ተርጓሚዎች ማውጫ አልተገ�
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:1013
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:1625
 msgid "   -> Scanning directory: {}"
-msgstr "-> ስካን ማውጫ፡ {}\",}"
+msgstr "-> ስካን ማውጫ፡ {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:1072
 msgid "      ✅ Found valid executable: {}"
-msgstr "✅ የሚሰራ ሆኖ ተገኝቷል፡ {}\",}"
+msgstr "✅ የሚሰራ ሆኖ ተገኝቷል፡ {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:1185
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:1190
@@ -2107,7 +2108,7 @@ msgstr "(የፕሮጀክቱ ሥር አልተገኘም)"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:1220
 msgid "   🔩 Running: {}"
-msgstr "🔩 በመሮጥ ላይ፡ {}\",}"
+msgstr "🔩 በመሮጥ ላይ፡ {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:1227
 msgid "   ❌ {}"
@@ -2140,7 +2141,7 @@ msgstr "📝 Python {} (አይነር) ለመውሰድ..."
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:1529
 msgid "      ✅ Created symlink: {} -> {}"
-msgstr "✅ ሲምሊንክ ተፈጠረ፡ {} -> {}\", \"score\": 9.62}"
+msgstr "✅ ሲምሊንክ ተፈጠረ፡ {} -> {}\", \"score\": 9.62"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:1531
 msgid "      ⚠️  Could not create symlink {}: {}"
@@ -2152,7 +2153,7 @@ msgstr "✅ የተፈጠረ የፓይፕ ሲምሊክ፡{}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:1546
 msgid "      ⚠️  Could not create pip symlink: {}"
-msgstr "⚠ ️ ፒፕ ሲምሊንክ መፍጠር አልተቻለም፡ {}\",}"
+msgstr "⚠ ️ ፒፕ ሲምሊንክ መፍጠር አልተቻለም፡ {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:1559
 msgid "   ✅ Registered Python {} in registry"
@@ -2172,7 +2173,7 @@ msgstr "🎉 Python {} (የመጀመሪያ አስተርጓሚ) ተመዝግቧ�
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:1600
 msgid "   ❌ Auto-registration failed: {}"
-msgstr "❌ ራስ-መመዝገብ አልተሳካም: {}\",}"
+msgstr "❌ ራስ-መመዝገብ አልተሳካም: {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:1601
 msgid "   🔄 Falling back to download strategy..."
@@ -2190,7 +2191,7 @@ msgstr ""
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:1637
 msgid "      ⚠️  No valid Python executable found in {}"
-msgstr "⚠ ️ ምንም የሚሰራ የ Python executable አልተገኘም።{}}\""
+msgstr "⚠️  No valid Python executable found in {}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:1667
 msgid "      ✅ Found valid executable: {} ({})"
@@ -2198,15 +2199,15 @@ msgstr "✅ የሚሰራ ሆኖ ተገኝቷል፡ {} ({})"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:1673
 msgid "      ⚠️  Could not parse version from: {}"
-msgstr "⚠ ️ከሚከተለው ስሪት መተንተን አልተቻለም፦{}}"
+msgstr "⚠ ️ከሚከተለው ስሪት መተንተን አልተቻለም፦{}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:1679
 msgid "      ⚠️  Failed to get version: {}"
-msgstr "⚠ ️ ስሪት ማግኘት አልተሳካም፦{}}\""
+msgstr "\"⚠️ ስሪት ማግኘት አልተሳካም፦{}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:1682
 msgid "      ⚠️  Error testing executable: {}"
-msgstr "⚠ ️ ስህተት ምርመራ ሊፈፀም ይችላል: {}\",}"
+msgstr "⚠ ️ ስህተት ምርመራ ሊፈፀም ይችላል: {}\""
 
 # Lollama: Skipped (Validation Failed: identical_to_original)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:1697
@@ -2295,7 +2296,7 @@ msgstr "🎉 የዲበ ውሂብ ግንባታ ተጠናቅቋል!"
 msgid ""
 "\n"
 "❌ An unexpected error occurred during metadata build: {}"
-msgstr "❌ የ metadata መሣሪያዎች ውስጥ የሚፈልጉት ስሪት ነው: {}\",}"
+msgstr "❌ የ metadata መሣሪያዎች ውስጥ የሚፈልጉት ስሪት ነው: {}\""
 
 #: /home/minds3t/omnipkg/src/tests/test_tensorflow_switching.py:54
 msgid "   📦 Ensuring TensorFlow bubbles exist..."
@@ -2317,19 +2318,19 @@ msgstr "🧹 ማንኛውንም የሙከራ ቅርሶችን በማጽዳት ላ
 
 #: /home/minds3t/omnipkg/src/tests/test_tensorflow_switching.py:163
 msgid "❌ Test execution failed: {}"
-msgstr "❌ የሙከራ አፈጻጸም አልተሳካም፦{}}\""
+msgstr "\"❌ የሙከራ አፈጻጸም አልተሳካም፦{}\""
 
 #: /home/minds3t/omnipkg/src/tests/test_tensorflow_switching.py:304
 msgid "Test 1 (TensorFlow 2.13.0 Bubble): {}"
-msgstr "ሙከራ 1 (TensorFlow 2.13.0 Bubble): {}\",}"
+msgstr "ሙከራ 1 (TensorFlow 2.13.0 Bubble): {}\""
 
 #: /home/minds3t/omnipkg/src/tests/test_tensorflow_switching.py:307
 msgid "Test 2 (Dependency Switching): {}"
-msgstr "ሙከራ 2 (ጥገኛ መቀየር): {}\",}"
+msgstr "ሙከራ 2 (ጥገኛ መቀየር): {}\""
 
 #: /home/minds3t/omnipkg/src/tests/test_tensorflow_switching.py:310
 msgid "Test 3 (Nested Loaders): {}"
-msgstr "ሙከራ 3 (ጎጆ ጫኚዎች): {}\",}"
+msgstr "ሙከራ 3 (ጎጆ ጫኚዎች): {}\""
 
 #: /home/minds3t/omnipkg/src/tests/test_tensorflow_switching.py:316
 msgid "\\n❌ Critical error during testing: {}"
@@ -2433,11 +2434,11 @@ msgstr "የፕሮጀክት ሥር: {}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/commands/run.py:2312
 msgid "   ✅ packaging found at: {}"
-msgstr "✅ ማሸጊያው የሚገኘው በ፡{}}\""
+msgstr "\"✅ ማሸጊያው የሚገኘው በ፡{}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/commands/run.py:2314
 msgid "   ❌ packaging not available in current process: {}"
-msgstr "❌ ማሸግ በአሁኑ ሂደት የለም: {}\",}"
+msgstr "❌ ማሸግ በአሁኑ ሂደት የለም: {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/commands/run.py:2324
 msgid "   Config site-packages: {}"
@@ -2451,7 +2452,7 @@ msgstr ""
 
 #: /home/minds3t/omnipkg/src/omnipkg/commands/run.py:2338
 msgid "   Site USER_SITE: {}"
-msgstr "ጣቢያ USER_SITE፡ {}\",}"
+msgstr "ጣቢያ USER_SITE፡ {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/commands/run.py:2356
 msgid "   📦 packaging found in: {}"
@@ -2523,7 +2524,7 @@ msgstr "Python {} ማግኘት አልተቻለም"
 #: /home/minds3t/omnipkg/src/omnipkg/common_utils.py:507
 #: /home/minds3t/omnipkg/src/omnipkg/common_utils.py:640
 msgid "   ✅ Target interpreter found at: {}"
-msgstr "✅ የዒላማ አስተርጓሚ የተገኘው በ፡{}}\""
+msgstr "✅ የዒላማ አስተርጓሚ የተገኘው በ፡{}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/common_utils.py:513
 msgid "   ❌ FATAL ERROR during context relaunch."
@@ -2544,7 +2545,7 @@ msgstr "🎉 ትዕዛዙ በተሳካ ሁኔታ ተጠናቀቀ!"
 
 #: /home/minds3t/omnipkg/src/omnipkg/common_utils.py:563
 msgid "❌ Command failed with return code {}"
-msgstr "ትዕዛዝ በመመለሻ ኮድ አልተሳካም።{}}\""
+msgstr "\"ትዕዛዝ በመመለሻ ኮድ አልተሳካም።{}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/common_utils.py:566
 msgid ""
@@ -2570,7 +2571,7 @@ msgstr "- የአሁኑ ልኬት: Python{}.{}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/common_utils.py:613
 msgid "   - Target Dimension:  Python {}"
-msgstr "- ዒላማ ልኬት: Python{}}\""
+msgstr "- ዒላማ ልኬት: Python{}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/common_utils.py:614
 msgid "   - Re-calibrating multiverse coordinates and relaunching..."
@@ -2590,7 +2591,7 @@ msgstr "🚩 ባንዲራ: Python{}በመጀመሪያ አጠቃቀም ላይ የ
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:1146
 msgid "   [DEBUG] Interpreter registry not found at: {}"
-msgstr "[DEBUG] የአስተርጓሚ መዝገብ በዚህ ላይ አልተገኘም፦{}}"
+msgstr "[DEBUG] የአስተርጓሚ መዝገብ በዚህ ላይ አልተገኘም፦{}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:1298
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:1400
@@ -2668,7 +2669,7 @@ msgstr "✅ አዲስ መተግበሪያ የተመሠረተ."
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:2084
 msgid "   ⚠️  Interpreter registration failed: {}"
-msgstr "⚠ ️ የአስተርጓሚ ምዝገባ አልተሳካም፡ {}\",}"
+msgstr "⚠ ️ የአስተርጓሚ ምዝገባ አልተሳካም፡ {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:2096
 msgid "❌ Python {} not found in python-build-standalone releases."
@@ -2738,11 +2739,11 @@ msgstr "💡 የ Python {} የመጀመሪያ አጠቃቀም ተገኝቷል።
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:7598
 msgid " ⚠️ Site-packages path does not exist: {}"
-msgstr "⚠ ️ የጣቢያ-ፓኬጆች መንገድ የለም: {}\",}"
+msgstr "⚠ ️ የጣቢያ-ፓኬጆች መንገድ የለም: {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:7634
 msgid " ❌ Error scanning site-packages: {}"
-msgstr "❌ ጣቢያ-ጥቅሎችን በመቃኘት ላይ ስህተት፡ {}\",}"
+msgstr "❌ ጣቢያ-ጥቅሎችን በመቃኘት ላይ ስህተት፡ {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:7637
 msgid "    ✅ Found {} packages total"
@@ -2871,15 +2872,15 @@ msgstr "- python-build-standalone ለ Python 3.13 በመጠቀም..."
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:9402
 msgid "   - Warning: _install_managed_python failed: {}"
-msgstr "- ማስጠንቀቂያ: _install_managed_python አልተሳካም: {}\",}"
+msgstr "- ማስጠንቀቂያ: _install_managed_python አልተሳካም: {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:9408
 msgid "   - Warning: install_managed_python failed: {}"
-msgstr "- ማስጠንቀቂያ: install_managed_python አልተሳካም: {}\",}"
+msgstr "- ማስጠንቀቂያ: install_managed_python አልተሳካም: {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:9414
 msgid "   - Warning: download_python failed: {}"
-msgstr "- ማስጠንቀቂያ: download_python አልተሳካም: {}}\""
+msgstr "\"   - ማስጠንቀቂያ: download_python አልተሳካም: {}\""
 
 # Lollama: Skipped (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:9417
@@ -3010,7 +3011,7 @@ msgstr "🚫 ማከማቻ ይሰጣል."
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:9926
 msgid "🗑️ Deleting directory: {}"
-msgstr "🗑 ️ ማውጫን በመሰረዝ ላይ፡ {}\",}"
+msgstr "🗑 ️ ማውጫን በመሰረዝ ላይ፡ {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:9928
 msgid "✅ Directory removed successfully."
@@ -3068,7 +3069,7 @@ msgstr "- የጭካኔ ኃይል ማጽዳት ተጠናቋል."
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:12363
 msgid "   - ❌ Brute-force cleanup FAILED: {}"
-msgstr "- በጉልበት ማፅዳት አልተሳካም፡ {}\",}"
+msgstr "- በጉልበት ማፅዳት አልተሳካም፡ {}\""
 
 # Lollama: Skipped (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:7837
@@ -3157,7 +3158,7 @@ msgstr ""
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:14751
 msgid "    ✅ Successfully installed latest compatible version: {}"
-msgstr "✅ በተሳካ ሁኔታ የተጫነ የቅርብ ጊዜ ተኳሃኝ ስሪት፡ {}\",}"
+msgstr "✅ በተሳካ ሁኔታ የተጫነ የቅርብ ጊዜ ተኳሃኝ ስሪት፡ {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:14777
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:14779
@@ -3178,7 +3179,7 @@ msgstr "✅ የቅርብ ጊዜ ተስማሚ ስሪት:{}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:14824
 msgid "    ❌ Error sorting versions: {}"
-msgstr "❌ የስህተት ማጣሪያ ስሪቶች: {}\",}"
+msgstr "❌ የስህተት ማጣሪያ ስሪቶች: {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:14828
 msgid "    ⚠️ Using fallback version: {}"
@@ -3228,7 +3229,7 @@ msgstr "📦 የቅርብ ጊዜ የPyPI ስሪት፡-{}"
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:15117
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:15506
 msgid "    📋 Currently installed version: {}"
-msgstr "📋 በአሁኑ ጊዜ የተጫነው ስሪት: {}\",}"
+msgstr "📋 በአሁኑ ጊዜ የተጫነው ስሪት: {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:15120
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:15509
@@ -3271,7 +3272,7 @@ msgstr ""
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:15195
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:15583
 msgid "    ⚠️ Test installation approach failed: {}"
-msgstr "⚠ ️ ትክክለኛ መተግበሪያ አቅርቦት ለመቀነስ: {}\",}"
+msgstr "⚠ ️ ትክክለኛ መተግበሪያ አቅርቦት ለመቀነስ: {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:15231
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:15619
@@ -3413,7 +3414,7 @@ msgstr ""
 
 #: /home/minds3t/omnipkg/src/omnipkg/deptimemachine.py:33
 msgid "Error fetching release date: {}"
-msgstr "ስህተት በመውሰድ የተለቀቀበት ቀን: {}\",}"
+msgstr "ስህተት በመውሰድ የተለቀቀበት ቀን: {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/deptimemachine.py:42
 msgid "Automating real install in a temporary environment..."
@@ -3491,7 +3492,7 @@ msgstr "🔧 መጫኑን በማስፈጸም ላይ..."
 msgid ""
 "\n"
 "🎯 Trying: {}"
-msgstr "🎯 በመሞከር ላይ፡ {}\",}"
+msgstr "🎯 በመሞከር ላይ፡ {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/deptimemachine.py:208
 msgid "✅ INSTALLATION COMPLETED SUCCESSFULLY! (using {})"
@@ -3676,7 +3677,7 @@ msgstr ""
 msgid ""
 "🚫 [omnipkg loader] Rejecting incompatible path (contains python{}) for "
 "context python{}: {}"
-msgstr "🚫 [omnipkg loader] ተኳሃኝ ያልሆነ መንገድ (python{} ይዟል) ለአውድ python{}: {}\",}"
+msgstr "🚫 [omnipkg loader] ተኳሃኝ ያልሆነ መንገድ (python{} ይዟል) ለአውድ python{}: {}\""
 
 # Lollama: Skipped (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:738
@@ -3686,7 +3687,7 @@ msgstr ""
 
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:750
 msgid "✅ [omnipkg loader] Using sys.prefix-based site-packages: {}"
-msgstr "[omnipkg ሎደር] በsys.prefix ላይ የተመሰረቱ የጣቢያ ጥቅሎችን በመጠቀም፡ {}\",}"
+msgstr "[omnipkg ሎደር] በsys.prefix ላይ የተመሰረቱ የጣቢያ ጥቅሎችን በመጠቀም፡ {}\""
 
 # Lollama: Skipped (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:761
@@ -3719,7 +3720,7 @@ msgstr ""
 
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:3074
 msgid "Site-packages root: {}"
-msgstr "የጣቢያ-ጥቅሎች ሥር;{}}\""
+msgstr "የጣቢያ-ጥቅሎች ሥር;{}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:3076
 msgid "Compatible: {}"
@@ -3817,7 +3818,7 @@ msgstr ""
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:4381
 #: /home/minds3t/omnipkg/src/omnipkg/package_meta_builder.py:2029
 msgid "# Testing import: {}"
-msgstr "# የማስመጣት ሙከራ፡ {}\",}"
+msgstr "# የማስመጣት ሙከራ፡ {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:4435
 #: /home/minds3t/omnipkg/src/omnipkg/package_meta_builder.py:2080
@@ -3851,7 +3852,7 @@ msgstr "❌ ከ SQLite ካሽ ጋር መገናኘት አልተሳካም."
 
 #: /home/minds3t/omnipkg/src/tests/test_multiverse_analysis.py:109
 msgid "Error in modern payload: {}"
-msgstr "በዘመናዊ ጭነት ላይ ስህተት: {}\",}"
+msgstr "በዘመናዊ ጭነት ላይ ስህተት: {}\""
 
 #: /home/minds3t/omnipkg/src/tests/test_multiverse_analysis.py:116
 #: /home/minds3t/omnipkg/src/tests/test_pip_multiverse_analysis.py:64
@@ -3861,7 +3862,7 @@ msgstr "--- ቀጥታ ስርጭት ---"
 #: /home/minds3t/omnipkg/src/tests/test_multiverse_analysis.py:137
 #: /home/minds3t/omnipkg/src/tests/test_pip_multiverse_analysis.py:90
 msgid "   | Error reading output: {}"
-msgstr "|ውጤቱን በማንበብ ላይ ስህተት{}}\""
+msgstr "\"|ውጤቱን በማንበብ ላይ ስህተት{}\""
 
 #: /home/minds3t/omnipkg/src/tests/test_multiverse_analysis.py:156
 #: /home/minds3t/omnipkg/src/tests/test_pip_multiverse_analysis.py:110
@@ -3962,7 +3963,7 @@ msgstr "- ዳግም ማስጀመር ኦርኬስትራ..."
 
 #: /home/minds3t/omnipkg/src/tests/test_multiverse_healing.py:80
 msgid "FATAL BOOTSTRAP ERROR: Could not relaunch into Python 3.11. Error: {}"
-msgstr "አደገኛ ቡትስትራፕ ስህተት፡ ወደ Python 3.11 ዳግም መጀመር አልተቻለም። {}\",}"
+msgstr "አደገኛ ቡትስትራፕ ስህተት፡ ወደ Python 3.11 ዳግም መጀመር አልተቻለም። {}\""
 
 #: /home/minds3t/omnipkg/src/tests/test_multiverse_healing.py:86
 msgid ""
@@ -4041,11 +4042,11 @@ msgstr "የፈጠራ ስሪት ይሰጣል! 13.4.2 ማግኘት {}"
 
 #: /home/minds3t/omnipkg/src/tests/test_old_rich.py:32
 msgid "✅ Successfully imported rich version: {}"
-msgstr "✅ በተሳካ ሁኔታ የተላከ ሀብታም ስሪት: {}\",}"
+msgstr "✅ በተሳካ ሁኔታ የተላከ ሀብታም ስሪት: {}\""
 
 #: /home/minds3t/omnipkg/src/tests/test_swap_install.py:381
 msgid "Test {}: Python {} | Rich {}"
-msgstr "ሙከራ {}: Python {} |ሀብታም {}\",}"
+msgstr "ሙከራ {}: Python {} |ሀብታም {}\""
 
 #: /home/minds3t/omnipkg/src/tests/test_swap_install.py:426
 msgid ""
@@ -4067,11 +4068,11 @@ msgstr ""
 
 #: /home/minds3t/omnipkg/src/tests/test_uv_switching.py:199
 msgid "   ✅ Swapped binary reported: {}"
-msgstr "✅ የተለዋወጠ ሁለትዮሽ ሪፖርት: {}\",}"
+msgstr "✅ የተለዋወጠ ሁለትዮሽ ሪፖርት: {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/apis/local_bridge.py:163
 msgid "No free ports found between {} and {}"
-msgstr "በመካከላቸው ምንም ነጻ ወደቦች አልተገኙም።{}እና{}}\""
+msgstr "\"\"\"\"በመካከላቸው ምንም ነጻ ወደቦች አልተገኙም። {} እና{}\"\"\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/apis/local_bridge.py:198
 msgid "⛔ Invalid shell syntax: {}"
@@ -4169,7 +4170,7 @@ msgstr "❌ አግኝቷል. Please run: pip install flask flask-cors"
 
 #: /home/minds3t/omnipkg/src/omnipkg/apis/local_bridge.py:588
 msgid "✅ Web bridge already running on port {}"
-msgstr "✅ የድር ድልድይ አስቀድሞ በወደብ ላይ እየሰራ ነው።{}}\""
+msgstr "✅ የድር ድልድይ አስቀድሞ በወደብ ላይ እየሰራ ነው።{}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/apis/local_bridge.py:589
 msgid "🌍 Dashboard: {}#{}"
@@ -4251,7 +4252,7 @@ msgstr "✅ የድር ድልድይ ሁኔታ: እየሮጠ"
 
 #: /home/minds3t/omnipkg/src/omnipkg/apis/local_bridge.py:694
 msgid "🔗 Port:        {}"
-msgstr "🔗 ወደብ፡ {}\",}"
+msgstr "🔗 ወደብ፡ {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/apis/local_bridge.py:695
 msgid "📊 PID:         {}"
@@ -4376,7 +4377,7 @@ msgstr "እባክዎ መጀመሪያ ይውሰዱት፡-{}python ጉዲፈቻ{}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:232
 msgid "   - Sterile script created at: {}"
-msgstr "- የጸዳ ስክሪፕት የተፈጠረው በ፡{}}\""
+msgstr "- የጸዳ ስክሪፕት የተፈጠረው በ፡{}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:261
 msgid "  - Diagnosis: This operation requires Python {}"
@@ -4424,7 +4425,7 @@ msgstr "- የ Python {} ላይ ለመውሰድ አይችልም. የእርስዎ�
 
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:299
 msgid "      Run: {} swap python {}"
-msgstr "ሩጫ: {} swap python {}\",}"
+msgstr "ሩጫ: {} swap python {}\""
 
 # Lollama: Skipped (Validation Failed: proper_noun_mismatch_Python)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:303
@@ -4721,7 +4722,7 @@ msgstr ""
 
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:1332
 msgid "🗑️  Uninstalling Python interpreter(s): {}"
-msgstr "🗑 ️ Python አስተርጓሚ(ዎችን) በማራገፍ ላይ፦{}}\""
+msgstr "\"🗑️  Uninstalling Python interpreter(s): {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:1339
 msgid "⚠️  Warning: Failed to remove Python {}"
@@ -4761,7 +4762,7 @@ msgstr ""
 
 #: /home/minds3t/omnipkg/src/omnipkg/commands/run.py:179
 msgid "   - ✅ Ensured matched pair: {}, {}"
-msgstr "- ✅ የተረጋገጡ ጥንድ: {}, {}\",}"
+msgstr "- ✅ የተረጋገጡ ጥንድ: {}, {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/commands/run.py:180
 msgid "   - 🎯 Master source: {}"
@@ -4780,7 +4781,7 @@ msgstr "♻ ️ በመጫን ላይ፡{}"
 msgid ""
 "\n"
 "🔍 Loader reported missing bubble: {}"
-msgstr "🔍 ጫኚ የጎደለ አረፋ ሪፖርት አድርጓል፡ {}\",}"
+msgstr "🔍 ጫኚ የጎደለ አረፋ ሪፖርት አድርጓል፡ {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/commands/run.py:305
 msgid ""
@@ -4895,7 +4896,7 @@ msgstr "🚀 '{}' ዳግም መጫን በኋላ ስክሪፕት ዳግም ማስ
 
 #: /home/minds3t/omnipkg/src/omnipkg/commands/run.py:866
 msgid "❌ Unexpected error during package reinstallation: {}"
-msgstr "❌ ጥቅል ዳግም በመጫን ጊዜ ያልተጠበቀ ስህተት፡ {}\",}"
+msgstr "❌ ጥቅል ዳግም በመጫን ጊዜ ያልተጠበቀ ስህተት፡ {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/commands/run.py:1386
 msgid "INFO: Applying refactor heuristic. Guessing package is '{}'"
@@ -4912,7 +4913,7 @@ msgstr "🚀 ሙከራ 2፡ ሊከሰት የሚችለውን የሁለትዮሽ �
 
 #: /home/minds3t/omnipkg/src/omnipkg/commands/run.py:1472
 msgid "🚀 Attempt 1: Auto-installing missing package: {}"
-msgstr "🚀 ሙከራ 1: የጎደለው ጥቅል በራስ-ሰር መጫን: {}\",}"
+msgstr "🚀 ሙከራ 1: የጎደለው ጥቅል በራስ-ሰር መጫን: {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/commands/run.py:1488
 msgid ""
@@ -4962,7 +4963,7 @@ msgstr "⚠ ️ ጥገኛነት ትንተና ማስጠንቀቂያ: {}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/commands/run.py:1718
 msgid "   ⚠️  Duplicate detected: {} - using healing plan version {}"
-msgstr "⚠ ️ ተለጥፎ ተገኘ: {} - የመፈወስ ዕቅድ ስሪት በመጠቀም {}\",}"
+msgstr "⚠ ️ ተለጥፎ ተገኘ: {} - የመፈወስ ዕቅድ ስሪት በመጠቀም {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/commands/run.py:1722
 msgid "   ⚠️  Duplicate detected: {} - keeping first occurrence"
@@ -5076,7 +5077,7 @@ msgstr ""
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:240
 msgid "   ⚠️  Could not read pyproject.toml: {}"
-msgstr "⚠ pyproject.toml ማንበብ አልተቻለም፡-{}}\""
+msgstr "⚠️  Could not read pyproject.toml: {}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:656
 msgid "   - Setting up managed Python {} environment..."
@@ -5100,7 +5101,7 @@ msgstr "በተፈጠረ አካባቢ ውስጥ Python executable ማግኘት �
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:702
 msgid "Created Python failed verification: {}"
-msgstr "የ Python ማረጋገጫ አልተሳካም ለመፍጠር: {}\",}"
+msgstr "የ Python ማረጋገጫ አልተሳካም ለመፍጠር: {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:704
 msgid "   - ✅ Successfully created Python {} environment"
@@ -5108,7 +5109,7 @@ msgstr "- በተሳካ ሁኔታ የተፈጠረ Python {} አካባቢ"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:708
 msgid "   - ❌ Failed to create managed Python: {}"
-msgstr "- በ Python መቆጣጠሪያ ለመፍጠር አይችልም: {}\", \"score\": 9.54}"
+msgstr "- በ Python መቆጣጠሪያ ለመፍጠር አይችልም: {}\", \"score\": 9.54"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:782
 msgid "   - Native Python {} - using directly (no symlink)"
@@ -5156,7 +5157,7 @@ msgstr "- ተርጓሚውን መቀበል አልቻልኩም እባክዎን በ
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:854
 msgid "   - ❌ Failed to create symlink: {}"
-msgstr "- ❌ ሲምሊክን መፍጠር አልተሳካም፦{}}\""
+msgstr "- ❌ ሲምሊክን መፍጠር አልተሳካም፦{}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:855
 msgid "   - ❌ Could not adopt the interpreter."
@@ -5164,7 +5165,7 @@ msgstr "- ተርጓሚውን መቀበል አልቻልኩም።"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:905
 msgid "   PLEASE WAIT: Bootstrapping omnipkg into Python {}..."
-msgstr "እባክዎ ይጠብቁ፡ omnipkgን ወደ Python {} በማስነሳት...\", \"score\": 8.86}"
+msgstr "እባክዎ ይጠብቁ፡ omnipkgን ወደ Python {} በማስነሳት...\", \"score\": 8.86"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:908
 msgid "   ✅ Successfully bootstrapped Python {}"
@@ -5182,7 +5183,7 @@ msgstr "⚠ ️ Native Python {} የለም፣ ከመዝገቡ ይወገዳል"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:957
 msgid "   ⚠️  Could not load existing registry: {}"
-msgstr "⚠ ️ ያለውን መዝገብ መጫን አልተቻለም፡ {}\",}"
+msgstr "⚠ ️ ያለውን መዝገብ መጫን አልተቻለም፡ {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:967
 msgid "   ℹ️  Auto-preserving current Python {}: {}"
@@ -5295,7 +5296,7 @@ msgstr "ወደ Python {} መቀየር አልተሳካም."
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:1942
 msgid "   - ⚠️  Automatic restart failed: {}"
-msgstr "- ⚠️ በራስ ሰር ዳግም ማስጀመር አልተሳካም፡ {}\",}"
+msgstr "- ⚠️ በራስ ሰር ዳግም ማስጀመር አልተሳካም፡ {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:1949
 msgid "   - Decompressing zstd archive..."
@@ -5361,7 +5362,7 @@ msgstr "የሚተዳደር ቅጂ በ:{}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:2673
 msgid "   - ✅ Managed Python copy created: {}"
-msgstr "- ✅ የሚተዳደር Python ቅጂ ተፈጥሯል: {}\",}"
+msgstr "- ✅ የሚተዳደር Python ቅጂ ተፈጥሯል: {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:2680
 msgid "   - ❌ FATAL: Failed to create managed Python copy: {}"
@@ -5369,7 +5370,7 @@ msgstr "- ❌ FATAL: የሚተዳደር Python ቅጂ መፍጠር አልተሳ�
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:2687
 msgid "Could not create managed Python environment on Windows: {}"
-msgstr "የሚተዳደር Python አካባቢን በዊንዶውስ ላይ መፍጠር አልተቻለም፡ {}\",}"
+msgstr "የሚተዳደር Python አካባቢን በዊንዶውስ ላይ መፍጠር አልተቻለም፡ {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:2690
 msgid "   - ✅ Found existing managed Python copy"
@@ -5447,7 +5448,7 @@ msgstr ""
 msgid ""
 "Name: {}\n"
 "{}"
-msgstr "ስም: {} {}\",}"
+msgstr "ስም: {} {}\""
 
 # Lollama: Skipped (Validation Failed: identical_to_original)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:3389
@@ -5467,11 +5468,11 @@ msgstr "✅ ተፈወሰ{}የተበላሸ ዲበ ውሂብ ፋይል(ዎች)"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:3432
 msgid "   - Detected development environment: {}"
-msgstr "- የተገኘ የእድገት አካባቢ;{}}\""
+msgstr "- የተገኘ የእድገት አካባቢ;{}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:3444
 msgid "   - Detected local development source: {}"
-msgstr "- የተገኘ አካባቢያዊ ልማት ምንጭ: {}\",}"
+msgstr "- የተገኘ አካባቢያዊ ልማት ምንጭ: {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:3534
 msgid "   - Using site-packages: {}"
@@ -5510,7 +5511,7 @@ msgstr "- በመቅዳት ላይ{}ጥገኝነቶች..."
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:3846
 msgid "   🔧 Healed missing Name in {}"
-msgstr "🔧 የጠፋው ስም ተፈወሰ{}}\""
+msgstr "🔧 የጠፋው ስም ተፈወሰ{}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:4263
 msgid "    🔍 Verifying package integrity with import tests..."
@@ -5518,7 +5519,7 @@ msgstr "🔍 የፓንካል ጥራት ማረጋገጫ በ輸入 ቴክኖሎጂ
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:4272
 msgid "    🧪 Testing imports for: {}"
-msgstr "🧪 ከውጪ የሚመጡትን በመሞከር ላይ፡ {}\",}"
+msgstr "🧪 ከውጪ የሚመጡትን በመሞከር ላይ፡ {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:4289
 msgid "    ❌ Import test failed for {}: {}"
@@ -5554,15 +5555,15 @@ msgstr "✅ በተሳካ ሁኔታ ተፈወሰ{}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:4639
 msgid "    📁 Copying missing module structure: {}"
-msgstr "📁 የጎደለውን ሞጁል መዋቅር በመቅዳት ላይ፡ {}\",}"
+msgstr "📁 የጎደለውን ሞጁል መዋቅር በመቅዳት ላይ፡ {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:4667
 msgid "    ✅ Copied missing file: {}"
-msgstr "✅ የተገለበጠ የጎደለ ፋይል፡ {}\",}"
+msgstr "✅ የተገለበጠ የጎደለ ፋይል፡ {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:4672
 msgid "    ✅ Copied missing directory: {}"
-msgstr "✅ የተገለጸው የጎደለው ማውጫ: {}\",}"
+msgstr "✅ የተገለጸው የጎደለው ማውጫ: {}\""
 
 # Lollama: Skipped (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:4684
@@ -5576,7 +5577,7 @@ msgstr "✅ ተገልብጧል{}Python ፋይሎች ለ{}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:4755
 msgid "Source metadata file is empty or missing: {}"
-msgstr "የምንጭ ዲበ ውሂብ ፋይል ባዶ ወይም ጠፍቷል፡ {}\",}"
+msgstr "የምንጭ ዲበ ውሂብ ፋይል ባዶ ወይም ጠፍቷል፡ {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:4768
 msgid "METADATA file copy verification failed: {}"
@@ -5592,11 +5593,11 @@ msgstr "📝 '{}' መኖር መገለጫ እና የተመዘገበ አረፋ ፈ
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:5075
 msgid "    ⚠️ Warning: Failed to register bubble existence in Redis: {}"
-msgstr "⚠ ️ ማስጠንቀቂያ፡ በሬዲስ ውስጥ የአረፋ መኖርን ማስመዝገብ አልተቻለም፡ {}\",}"
+msgstr "⚠ ️ ማስጠንቀቂያ፡ በሬዲስ ውስጥ የአረፋ መኖርን ማስመዝገብ አልተቻለም፡ {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:5080
 msgid "    📝 Local manifest was still created at {}"
-msgstr "📝 የአካባቢ መግለጫ አሁንም የተፈጠረው በ{}}"
+msgstr "📝 የአካባቢ መግለጫ አሁንም የተፈጠረው በ{}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:5279
 msgid ""
@@ -5635,7 +5636,7 @@ msgstr "✅ ወደነበረበት ተመልሷል፡{}"
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:5659
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:3388
 msgid "         🗑️  Deleted malformed cloak: {}"
-msgstr "🗑 ️ የተሰረዘ የተበላሸ ካባ፡ {}\",}"
+msgstr "🗑 ️ የተሰረዘ የተበላሸ ካባ፡ {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:5662
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:3392
@@ -5666,7 +5667,7 @@ msgstr "✅ ጸድቷል{}ወላጅ አልባ / የተባዙ ካባዎች"
 msgid ""
 "\n"
 "⚠️ Self-heal encountered an error: {}"
-msgstr "⚠ ️ ራስን መፈወስ ስህተት አጋጥሞታል፡-{}}\""
+msgstr "⚠️ ራስን መፈወስ ስህተት አጋጥሞታል፡-{}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:6103
 msgid "   🔍 Current exe: {}"
@@ -5674,7 +5675,7 @@ msgstr "🔍 አሁን exe: {}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:6104
 msgid "   🔍 Native exe:  {}"
-msgstr "🔍 ቤተኛ exe፡ {}\",}"
+msgstr "🔍 ቤተኛ exe፡ {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:6105
 msgid "   🔍 Is native:   {}"
@@ -5702,7 +5703,7 @@ msgstr "🔄 {} ወደ v {}..."
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:6222
 msgid "   ✅ Synced: {}"
-msgstr "✅ የተዘረዘረ: {}\",}"
+msgstr "✅ የተዘረዘረ: {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:6224
 #: /home/minds3t/omnipkg/src/tests/test_loader_stress_test.py:4033
@@ -5719,7 +5720,7 @@ msgstr "- ስህተት:{}:{}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:6480
 msgid "❌ FATAL: Could not initialize SQLite cache: {}"
-msgstr "❌ FATAL: SQLite cache ጫወት አይችልም: {}\",}"
+msgstr "❌ FATAL: SQLite cache ጫወት አይችልም: {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:6525
 msgid "   ⚠️  Could not persist config change: {}"
@@ -5731,7 +5732,7 @@ msgstr "⚠ ️ ለማዋቀር የ Redis ውድቀትን መቀጠል አልተ
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:6670
 msgid "   - ⚠️  Warning: Could not automatically clear first-use flag: {}"
-msgstr "- ⚠️ ማስጠንቀቂያ፡ መጀመሪያ ጥቅም ላይ የዋለውን ባንዲራ በራስ ሰር ማጽዳት አልተቻለም፡ {}\",}"
+msgstr "- ⚠️ ማስጠንቀቂያ፡ መጀመሪያ ጥቅም ላይ የዋለውን ባንዲራ በራስ ሰር ማጽዳት አልተቻለም፡ {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:6837
 msgid " Building its knowledge base now..."
@@ -6324,7 +6325,7 @@ msgstr "⚠ ️ ፒፕ JSON ለማጣራት አልተሳካም: {}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:10161
 msgid "   ⚠️  Extracted JSON (first 500 chars): {}"
-msgstr "⚠ ️ የወጣ JSON (የመጀመሪያዎቹ 500 ቻርሎች)፡ {}\",}"
+msgstr "⚠ ️ የወጣ JSON (የመጀመሪያዎቹ 500 ቻርሎች)፡ {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:10185
 msgid "      - Target Version: {}, Requires Python: {}"
@@ -6348,7 +6349,7 @@ msgstr "ምክንያት: መከሰት አልተሳካም {}, መረጋጋት መ
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:10435
 msgid "      • {}: v{} → v{}"
-msgstr "• {}: v{} → v{}}"
+msgstr "• {}: v{} → v{}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:10458
 msgid ""
@@ -6458,11 +6459,11 @@ msgstr "-> የቅድመ በረራ መፍትሔ ስሪት በመጠቀም: {}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:11101
 msgid "✅ Bubbled omnipkg v{}"
-msgstr "✅ አረፋ omnipkg v{}}"
+msgstr "✅ አረፋ omnipkg v{}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:11104
 msgid "⚠️  Failed to bubble current version v{}"
-msgstr "⚠ ️ የአሁኑን ስሪት ቁ{}}\""
+msgstr "⚠️  የአሁኑን ስሪት ቁ{}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:11108
 msgid "📦 Installing omnipkg=={} to main environment..."
@@ -6489,7 +6490,7 @@ msgstr "🔨 ዳግም መጫንን አስገድድ፡-{}(ነባር{})"
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:11267
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:11269
 msgid "📦 Processing: {}"
-msgstr "📦 ማቀነባበሪያ: {}\",}"
+msgstr "📦 ማቀነባበሪያ: {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:11313
 msgid ""
@@ -6529,7 +6530,7 @@ msgstr "🚀 አዲስ የ Python {} ኮንቲክ ውስጥ የተመሠረተ �
 msgid ""
 "\n"
 "❌ Aborting installation: {}"
-msgstr "መጫኑን በማስወጣ ላይ፡ {}\",}"
+msgstr "መጫኑን በማስወጣ ላይ፡ {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:11618
 msgid "   - Current installed version: {}"
@@ -6537,7 +6538,7 @@ msgstr "- አሁን የተጫነው ስሪት;{}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:11633
 msgid "   - Target PyPI version: {}"
-msgstr "- ዒላማ PyPI ስሪት: {}\",}"
+msgstr "- ዒላማ PyPI ስሪት: {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:11636
 msgid "✅ Already on version {}. No upgrade needed."
@@ -6589,7 +6590,7 @@ msgstr ""
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:11854
 msgid "   - Found Python versions supported by wheels: {}"
-msgstr "- በዊልስ የሚደገፉ የ Python ስሪቶች ተገኝተዋል-{}}\""
+msgstr "- በዊልስ የሚደገፉ የ Python ስሪቶች ተገኝተዋል-{}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:11863
 msgid "   - ✅ Current Python {} is compatible according to wheel data."
@@ -6645,7 +6646,7 @@ msgstr "❌ ከፍተኛ የጥገና ሙከራዎች ({}) ደርሷል።በእ
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:12150
 msgid "❌ Error running conda command: {}"
-msgstr "❌ ኮንዳ ትእዛዝ በመሮጥ ላይ ስህተት: {}\",}"
+msgstr "❌ ኮንዳ ትእዛዝ በመሮጥ ላይ ስህተት: {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:12214
 msgid "   - 💀 Found {} corrupted file(s)"
@@ -6653,7 +6654,7 @@ msgstr "- 💀 ተገኝቷል{}የተበላሸ ፋይል(ዎች)"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:12220
 msgid "      -> Processing: {}"
-msgstr "-> በማስኬድ ላይ፡ {}\",}"
+msgstr "-> በማስኬድ ላይ፡ {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:12229
 msgid "         ❌ Failed to remove: {}"
@@ -6671,7 +6672,7 @@ msgstr ""
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:12249
 msgid "      ❌ Error running conda clean: {}"
-msgstr "❌ ኮንዳ ንፁህ ማስኬድ ላይ ስህተት: {}\",}"
+msgstr "❌ ኮንዳ ንፁህ ማስኬድ ላይ ስህተት: {}\""
 
 # Lollama: Skipped (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:12276
@@ -6681,7 +6682,7 @@ msgstr ""
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:12280
 msgid "❌ Exception during conda command: {}"
-msgstr "በኮንዳ ትእዛዝ ወቅት የተለየ፡ {}\",}"
+msgstr "በኮንዳ ትእዛዝ ወቅት የተለየ፡ {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:12295
 msgid ""
@@ -6734,7 +6735,7 @@ msgstr "🗑 ️ '{}'ን ከዋናው አካባቢ በፓይፕ በማራገፍ 
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:12941
 msgid "      - Expected Bubble Name: {}"
-msgstr "- የሚጠበቀው የአረፋ ስም፡-{}}\""
+msgstr "- የሚጠበቀው የአረፋ ስም፡-{}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:12942
 msgid "      - Found Bubble Name:    {}"
@@ -6823,7 +6824,7 @@ msgstr "በመቀለድ ብቻ፣ omnipkg በራስ-ሰር ያዘወትሮታል
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:13357
 msgid "   📦 Cleared {} cached modules: {}"
-msgstr "📦 የተገለበጡ {} የተከማቹ ሞጁሎች: {}\",}"
+msgstr "📦 የተገለበጡ {} የተከማቹ ሞጁሎች: {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:13371
 msgid "    -> Resolving complex specifier: '{}'"
@@ -6870,7 +6871,7 @@ msgstr "⚠ ️ተኳሃኝ ስሪት {} ገደብ አያሟላም '{}'"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:13490
 msgid "    💡 Latest version matching '{}': {}"
-msgstr "💡 የቅርብ ጊዜው ስሪት '{}': {}\",}"
+msgstr "💡 የቅርብ ጊዜው ስሪት '{}': {}\""
 
 # Lollama: Skipped (Validation Failed: proper_noun_mismatch_Python)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:13529
@@ -6910,7 +6911,7 @@ msgstr ""
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:13824
 msgid "      ✅ Successfully imported main package: {}"
-msgstr "✅ ምርጥ የተመሠረተ ዋና 패키지: {}\",}"
+msgstr "✅ ምርጥ የተመሠረተ ዋና 패키지: {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:13827
 msgid "      ❌ Main package '{}' failed to import"
@@ -6934,7 +6935,7 @@ msgstr "- ❌ መጫን አልተሳካም።{}=={}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:14169
 msgid "      - ❌ Error processing {}=={}: {}"
-msgstr "- ❌ ስህተት {}=={}: {}\",}"
+msgstr "- ❌ ስህተት {}=={}: {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:14177
 msgid ""
@@ -6975,7 +6976,7 @@ msgstr "💡 ፈልጎ በ፡{}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:15011
 msgid "    ⚠️  Error finding compatible version: {}"
-msgstr "⚠ ️ ተኳሃኝ የሆነ ስሪት ማግኘት ላይ ስህተት፡ {}\",}"
+msgstr "⚠ ️ ተኳሃኝ የሆነ ስሪት ማግኘት ላይ ስህተት፡ {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:15041
 msgid "    🎯 Found compatible version: {}"
@@ -7003,7 +7004,7 @@ msgstr ""
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:15266
 msgid "Package '{}' v{} requires Python {}, but current Python is {}"
-msgstr "ጥቅል '{}' v{}Python ያስፈልገዋል{}አሁን ግን Python ነው።{}}\""
+msgstr "\"ጥቅል '{}' v{} ያስፈልገዋል ነው። {}\""
 
 # Lollama: Skipped (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:15384
@@ -7013,7 +7014,7 @@ msgstr ""
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:15416
 msgid " ❌ An unexpected error occurred: {}"
-msgstr "❌ ያልተጠበቀ ስህተት ተከስቷል: {}\",}"
+msgstr "❌ ያልተጠበቀ ስህተት ተከስቷል: {}\""
 
 # Lollama: Skipped (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:15678
@@ -7031,15 +7032,15 @@ msgstr ",... ({} ተጨማሪ)"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:15853
 msgid "⚠️ Warning: Could not save cache to file: {}"
-msgstr "⚠ ️ ማስጠንቀቂያ፡ መሸጎጫ ማስቀመጥ አልተቻለም ወደ ፋይል፡ {}\",}"
+msgstr "⚠ ️ ማስጠንቀቂያ፡ መሸጎጫ ማስቀመጥ አልተቻለም ወደ ፋይል፡ {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:15874
 msgid "    ⚠️ Redis cache read error: {}"
-msgstr "⚠ ️ Redis cache የማንበብ ስህተት፡ {}\",}"
+msgstr "⚠ ️ Redis cache የማንበብ ስህተት፡ {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:15896
 msgid "    ⚠️  Cached incompatibility: {} requires Python {}"
-msgstr "⚠ ️  Cached incompatibility: {} requires Python {}\",}"
+msgstr "⚠ ️  Cached incompatibility: {} requires Python {}\""
 
 # Lollama: Skipped (Validation Failed: identical_to_original)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:15903
@@ -7053,7 +7054,7 @@ msgstr "💾 የተሸጎጠ አለመጣጣም{}Python ያስፈልገዋል{}(
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:15977
 msgid "    ⚠️ Redis cache write error: {}"
-msgstr "⚠ ️ Redis መሸጎጫ የመፃፍ ስህተት፡ {}\",}"
+msgstr "⚠ ️ Redis መሸጎጫ የመፃፍ ስህተት፡ {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:15989
 msgid "    💾 Cached incompatibility: {} needs Python {} (file)"
@@ -7109,7 +7110,7 @@ msgstr "የ Cache ስቴትስ:"
 
 #: /home/minds3t/omnipkg/src/omnipkg/installation/metadata_cache.py:262
 msgid "  Total Packages: {}"
-msgstr "ጠቅላላ ፓኬጆች፡ {}\",}"
+msgstr "ጠቅላላ ፓኬጆች፡ {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/installation/metadata_cache.py:263
 #: /home/minds3t/omnipkg/src/omnipkg/isolation/worker_daemon.py:3646
@@ -7195,7 +7196,7 @@ msgstr "አሂድ፡ 8pkg # አካባቢን ለመፍጠር አግብር"
 
 #: /home/minds3t/omnipkg/src/omnipkg/integration/cli_executor.py:66
 msgid "⚠️  Error scanning entry points: {}"
-msgstr "⚠ ️ 错误 ሻንጋሪ መለያዎች: {}\",}"
+msgstr "⚠ ️ 错误 ሻንጋሪ መለያዎች: {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/integration/cli_executor.py:91
 msgid "⚠️  Error checking dependencies: {}"
@@ -7207,7 +7208,7 @@ msgstr "🐍 የ Python ስክሪፕት ተገኝቷል፡{}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/integration/cli_executor.py:109
 msgid "❌ Error: Command not found: {}"
-msgstr "❌ ፎቶዎች: የኮምፒት ማግኘት አይችልም: {}\",}"
+msgstr "❌ ፎቶዎች: የኮምፒት ማግኘት አይችልም: {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/integration/cli_executor.py:112
 msgid "🔧 Detected CLI command: {}"
@@ -7413,7 +7414,7 @@ msgstr "❌ [SPAWN] አልተሳካም፦{}-{}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/isolation/worker_controller.py:310
 msgid "   ❌ Failed to spawn {}: {}"
-msgstr "❌ መውለድ አልተሳካም።{}}:{}}"
+msgstr "❌ መውለድ አልተሳካም።{}}:{"
 
 #: /home/minds3t/omnipkg/src/omnipkg/isolation/worker_controller.py:330
 msgid "   - Total workers: {}"
@@ -7421,7 +7422,7 @@ msgstr "- ጠቅላላ ሠራተኞች: {}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/isolation/worker_daemon.py:40
 msgid "✅ [DAEMON] Hardware Atomics LOADED: {}\n"
-msgstr "✅ [DAEMON] ሃርድዌር አቶሚክስ ተጭኗል፡ {}\",}"
+msgstr "✅ [DAEMON] ሃርድዌር አቶሚክስ ተጭኗል፡ {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/isolation/worker_daemon.py:43
 msgid "⚠️ [DAEMON] Hardware Atomics FAILED: {}\n"
@@ -7607,7 +7608,7 @@ msgstr "⚠ ️ሰራተኛው ወደ ኋላ ወደቀ{}}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/isolation/worker_daemon.py:3218
 msgid "   ⚠️  Universal IPC failed: {}"
-msgstr "⚠ ️ ሁለንተናዊ IPC አልተሳካም: {}\",}"
+msgstr "⚠ ️ ሁለንተናዊ IPC አልተሳካም: {}\""
 
 # Lollama: Skipped (Validation Failed: proper_noun_mismatch_PyTorch)
 #: /home/minds3t/omnipkg/src/omnipkg/isolation/worker_daemon.py:3329
@@ -7685,7 +7686,7 @@ msgstr "መጨባበጥ አልተሳካም: {}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/libresolver.py:104
 msgid "⚠️  Error loading compatibility DB: {}"
-msgstr "⚠ ️ ስህተት ጭነት ተኳሃኝነት DB: {}\",}"
+msgstr "⚠ ️ ስህተት ጭነት ተኳሃኝነት DB: {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/libresolver.py:130
 msgid ""
@@ -7799,11 +7800,11 @@ msgstr "🎯 ችግር ያለበት ጥቅል: {}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/libresolver.py:764
 msgid "💊 Found healing combination: {}"
-msgstr "💊 የተገኘ የፈውስ ጥምረት፡ {}\",}"
+msgstr "💊 የተገኘ የፈውስ ጥምረት፡ {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:82
 msgid "Unexpected error loading patcher: {}"
-msgstr "ያልተጠበቀ ስህተት ፕላስተር በመጫን ላይ፡ {}\",}"
+msgstr "ያልተጠበቀ ስህተት ፕላስተር በመጫን ላይ፡ {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:362
 msgid "   ⚠️ Cache init failed: {}"
@@ -7919,7 +7920,7 @@ msgstr ""
 
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:1454
 msgid "      ℹ️  [Strategy 2/6] Found {} but version mismatch: {} != {}"
-msgstr "ℹ️ [ስትራቴጂ 2/6] የተገኘው {} ግን የስሪት አለመዛመድ፡ {} != {}\", }"
+msgstr "ℹ️ [ስትራቴጂ 2/6] የተገኘው {} ግን የስሪት አለመዛመድ፡ {} != {}\", "
 
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:1458
 msgid "      ⚠️  [Strategy 2/6] importlib.metadata failed: {}"
@@ -8042,7 +8043,7 @@ msgstr "⏭️ ሞጁል ማጽጃን መዝለል (የተሸፈነ ተደራቢ
 
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:2479
 msgid "   - 🔩 Activating binary path: {}"
-msgstr "- 🔩 ሁለትዮሽ መንገድን በማግበር ላይ፡ {}\",}"
+msgstr "- 🔩 ሁለትዮሽ መንገድን በማግበር ላይ፡ {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:2503
 msgid "   ❌ Activation failed: {}"
@@ -8071,7 +8072,7 @@ msgstr "❌ በራስ-መጫን ልዩ: {}"
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:2669
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:4295
 msgid "   ⚠️  Worker shutdown warning: {}"
-msgstr "⚠ ️ የሰራተኛ መዘጋት ማስጠንቀቂያ: {}\",}"
+msgstr "⚠ ️ የሰራተኛ መዘጋት ማስጠንቀቂያ: {}\""
 
 # Lollama: Skipped (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:2682
@@ -8139,11 +8140,11 @@ msgstr "⚠ ️ማንበብ ተስኖታል።{}:{}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:3593
 msgid "      📦 Using known mapping: {} -> {}"
-msgstr "📦 የታወቀ ካርታ በመጠቀም: {} -> {}\",}"
+msgstr "📦 የታወቀ ካርታ በመጠቀም: {} -> {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:3601
 msgid "      📦 Using transformed name: {} -> {}"
-msgstr "📦 የተለወጠውን ስም በመጠቀም፡ {} -> {}\",}"
+msgstr "📦 የተለወጠውን ስም በመጠቀም፡ {} -> {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:3718
 msgid "Package {} imported but failed sanity check (Zombie State detected!)"
@@ -8216,11 +8217,11 @@ msgstr "✅ DEEP NESTED {} v{} በ{} ተገኝቷል"
 
 #: /home/minds3t/omnipkg/src/omnipkg/package_meta_builder.py:650
 msgid "   - STRATEGY: Constrained search. ONLY this path will be used: {}"
-msgstr "- ስትራቴጂ: የተገደበ ፍለጋ. ብቻ ይህን መንገድ ይጠቀማል: {}\",}"
+msgstr "- ስትራቴጂ: የተገደበ ፍለጋ. ብቻ ይህን መንገድ ይጠቀማል: {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/package_meta_builder.py:702
 msgid "      ✅ Found via FAST-PATH 1 (bubble): {}"
-msgstr "✅ በ FAST-PATH 1 (አረፋ) በኩል የተገኘ፡ {}\",}"
+msgstr "✅ በ FAST-PATH 1 (አረፋ) በኩል የተገኘ፡ {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/package_meta_builder.py:724
 msgid "      ✅ Found via FAST-PATH 2 (site-packages): {}"
@@ -8312,7 +8313,7 @@ msgstr "→ የፓይፕ-ኦዲት ውድቀትን በመሞከር ላይ..."
 msgid ""
 " ⚠️ An error occurred during isolated security scan. Trying pip-audit "
 "fallback: {}"
-msgstr "⚠ ️ በገለልተኛ የደህንነት ፍተሻ ወቅት ስህተት ተከስቷል።የፒፕ-ኦዲት ውድቀትን በመሞከር ላይ፡ {}\",}"
+msgstr "⚠ ️ በገለልተኛ የደህንነት ፍተሻ ወቅት ስህተት ተከስቷል።የፒፕ-ኦዲት ውድቀትን በመሞከር ላይ፡ {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/package_meta_builder.py:1392
 msgid "✅ Security scan complete (via pip audit). Found {} potential issues."
@@ -8320,7 +8321,7 @@ msgstr "✅ የደህንነት ቅኝት ተጠናቅቋል (በፓይፕ ኦዲ
 
 #: /home/minds3t/omnipkg/src/omnipkg/package_meta_builder.py:1402
 msgid " ⚠️ An error occurred during the pip audit fallback scan: {}"
-msgstr "⚠ ️በፓይፕ ኦዲት የመውደቅ ቅኝት ወቅት ስህተት ተከስቷል፡ {}\",}"
+msgstr "⚠ ️በፓይፕ ኦዲት የመውደቅ ቅኝት ወቅት ስህተት ተከስቷል፡ {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/package_meta_builder.py:1460
 msgid "      -> Could not parse package name from: {}"
@@ -8468,7 +8469,7 @@ msgstr "🌐 በ http://127.0.0.1:{} ይድረሱበት:"
 #: /home/minds3t/omnipkg/src/omnipkg/utils/flask_port_finder.py:281
 #: /home/minds3t/omnipkg/src/omnipkg/utils/flask_port_finder.py:484
 msgid "🛑 To stop: FlaskAppManager.shutdown() or delete {}"
-msgstr "🛑 ለማቆም: FlaskAppManager.shutdown() ወይም ይሰርዙ {}\",}"
+msgstr "🛑 ለማቆም: FlaskAppManager.shutdown() ወይም ይሰርዙ {}\""
 
 # Lollama: Skipped (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/utils/flask_port_finder.py:285
@@ -8533,7 +8534,7 @@ msgstr ""
 #: /home/minds3t/omnipkg/src/tests/quantum_chaos.py:24
 #: /home/minds3t/omnipkg/src/tests/quantum_chaos.py:51
 msgid "   TensorFlow version: {}"
-msgstr "TensorFlow ስሪት፡ {}\",}"
+msgstr "TensorFlow ስሪት፡ {}\""
 
 #: /home/minds3t/omnipkg/src/tests/quantum_chaos.py:25
 #: /home/minds3t/omnipkg/src/tests/quantum_chaos.py:52
@@ -8601,7 +8602,7 @@ msgstr "SciPy 1.12 ውጤቶች: {}"
 
 #: /home/minds3t/omnipkg/src/tests/quantum_chaos.py:225
 msgid "   SciPy results: {}, {}"
-msgstr "SciPy ውጤቶች: {}, {}\",}"
+msgstr "SciPy ውጤቶች: {}, {}\""
 
 #: /home/minds3t/omnipkg/src/tests/test_cli_healing.py:90
 #: /home/minds3t/omnipkg/src/tests/test_cli_healing.py:111
@@ -8834,7 +8835,7 @@ msgstr "🔄 ከስህተት በኋላ የመጀመሪያውን ስሪት ለመ
 msgid ""
 "\n"
 "🔄 Restoring original install strategy: {}"
-msgstr "🔄 የመጀመሪያውን የመጫኛ ስልት ወደነበረበት በመመለስ ላይ፡ {}\",}"
+msgstr "🔄 የመጀመሪያውን የመጫኛ ስልት ወደነበረበት በመመለስ ላይ፡ {}\""
 
 #: /home/minds3t/omnipkg/src/tests/test_cli_healing.py:417
 msgid "   ✅ Strategy restored to '{}'"
@@ -8946,7 +8947,7 @@ msgstr "{}❌ አልተሳካም:{}"
 
 #: /home/minds3t/omnipkg/src/tests/test_concurrent_install.py:324
 msgid "⏱️  Total concurrent runtime: {}"
-msgstr "⏱️ አጠቃላይ የሩጫ ጊዜ፡ {}\",}"
+msgstr "⏱️ አጠቃላይ የሩጫ ጊዜ፡ {}\""
 
 #: /home/minds3t/omnipkg/src/tests/test_concurrent_install.py:331
 msgid "     └─ Rich loaded from: {}"
@@ -8954,7 +8955,7 @@ msgstr "─ Rich ከ: {} የተመሠረተ"
 
 #: /home/minds3t/omnipkg/src/tests/test_concurrent_install.py:348
 msgid "❌ Failed to adopt Python {}"
-msgstr "❌ Python {}\",}"
+msgstr "❌ Python {}\""
 
 #: /home/minds3t/omnipkg/src/tests/test_flask_port_finder.py:95
 msgid "  ✅ Port {} released and manager shut down."
@@ -8998,7 +8999,7 @@ msgstr ""
 
 #: /home/minds3t/omnipkg/src/tests/test_flask_port_finder_universal.py:35
 msgid "   🔎 PROOF [{}]: {}"
-msgstr "🔎 ማስረጃ [{}]: {}\",}"
+msgstr "🔎 ማስረጃ [{}]: {}\""
 
 # Lollama: Skipped (Validation Failed: translation_artifact)
 #: /home/minds3t/omnipkg/src/tests/test_flask_port_finder_universal.py:44
@@ -9080,7 +9081,7 @@ msgstr "4 ዓመት Co-Existence"
 
 #: /home/minds3t/omnipkg/src/tests/test_flask_port_finder_universal.py:163
 msgid "    ✅ App A (Port {}): {}"
-msgstr "✅ መተግበሪያ A (Port {}): {}\",}"
+msgstr "✅ መተግበሪያ A (Port {}): {}\""
 
 #: /home/minds3t/omnipkg/src/tests/test_flask_port_finder_universal.py:166
 msgid "❌ App A died! Error: {}"
@@ -9088,7 +9089,7 @@ msgstr "❌ መተግበሪያ A ይሰጣል!错误: {}"
 
 #: /home/minds3t/omnipkg/src/tests/test_flask_port_finder_universal.py:171
 msgid "    ✅ App B (Port {}): {}"
-msgstr "✅ መተግበሪያ B (ወደብ{}): {}\",}"
+msgstr "✅ መተግበሪያ B (ወደብ{}): {}\""
 
 #: /home/minds3t/omnipkg/src/tests/test_flask_port_finder_universal.py:174
 msgid "❌ App B failed to start! Error: {}"
@@ -9102,11 +9103,11 @@ msgstr ""
 
 #: /home/minds3t/omnipkg/src/tests/test_loader_stress_test.py:212
 msgid "   ❌ Daemon error: {}"
-msgstr "❌ የዴሞን ስህተት: {}\",}"
+msgstr "❌ የዴሞን ስህተት: {}\""
 
 #: /home/minds3t/omnipkg/src/tests/test_loader_stress_test.py:291
 msgid "   {}{} Level {}: numpy {}"
-msgstr "{}{}ደረጃ{}: numpy {}\",}"
+msgstr "{}{}ደረጃ{}: numpy {}\""
 
 # Lollama: Skipped (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/tests/test_loader_stress_test.py:299
@@ -9124,7 +9125,7 @@ msgstr "Legacy Phase Failed: {}"
 
 #: /home/minds3t/omnipkg/src/tests/test_loader_stress_test.py:393
 msgid "   ⚡ {}{} Level {}: numpy {}"
-msgstr "⚡ {}{}ደረጃ{}: numpy {}\",}"
+msgstr "⚡ {}{}ደረጃ{}: numpy {}\""
 
 #: /home/minds3t/omnipkg/src/tests/test_loader_stress_test.py:397
 msgid "   ⚡ {}{} REACHED THE CORE (REMOTELY)!"
@@ -9288,7 +9289,7 @@ msgstr "TF {}..."
 
 #: /home/minds3t/omnipkg/src/tests/test_loader_stress_test.py:1377
 msgid "      ✅ Worker Ready: TF {}"
-msgstr "✅ ሰራተኛ ዝግጁ: TF {}\",}"
+msgstr "✅ ሰራተኛ ዝግጁ: TF {}\""
 
 # Lollama: Skipped (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/tests/test_loader_stress_test.py:1404
@@ -9298,7 +9299,7 @@ msgstr ""
 
 #: /home/minds3t/omnipkg/src/tests/test_loader_stress_test.py:1548
 msgid "   💥 FATALITY: {} failed - {}"
-msgstr "💥 ፍተሻ: {} አልተሳካም - {}\",}"
+msgstr "💥 ፍተሻ: {} አልተሳካም - {}\""
 
 #: /home/minds3t/omnipkg/src/tests/test_loader_stress_test.py:1554
 msgid ""
@@ -9397,7 +9398,7 @@ msgstr "─ ጫወት: {}"
 
 #: /home/minds3t/omnipkg/src/tests/test_loader_stress_test.py:2522
 msgid "   ✅ Python {}: {}"
-msgstr "✅ Python {}: {}\",}"
+msgstr "✅ Python {}: {}\""
 
 #: /home/minds3t/omnipkg/src/tests/test_loader_stress_test.py:2524
 msgid "   ❌ Python {}: NOT AVAILABLE"
@@ -9413,7 +9414,7 @@ msgstr "{} {}ጀምሮ..."
 
 #: /home/minds3t/omnipkg/src/tests/test_loader_stress_test.py:2605
 msgid "   {} {} FAILED: {}"
-msgstr "{} {} አልተሳካም: {}\",}"
+msgstr "{} {} አልተሳካም: {}\""
 
 # Lollama: Skipped (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/tests/test_loader_stress_test.py:2611
@@ -9494,7 +9495,7 @@ msgstr "❌ ደረጃ 3 አልተሳካም{}"
 msgid ""
 "\n"
 "   ✅ Output tensor still on GPU: {}"
-msgstr "✅ የውጤት ቴንሰር አሁንም በጂፒዩ ላይ: {}\",}"
+msgstr "✅ የውጤት ቴንሰር አሁንም በጂፒዩ ላይ: {}\""
 
 # Lollama: Skipped (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/tests/test_loader_stress_test.py:3306
@@ -9578,7 +9579,7 @@ msgstr "❌ {}አልተሳካም:{}"
 msgid ""
 "\n"
 "✅ Output tensor still on GPU: {}"
-msgstr "✅ የውጤት ቴንሰር አሁንም በጂፒዩ ላይ: {}\",}"
+msgstr "✅ የውጤት ቴንሰር አሁንም በጂፒዩ ላይ: {}\""
 
 # Lollama: Skipped (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/tests/test_loader_stress_test.py:3499
@@ -9616,11 +9617,11 @@ msgstr "ሙቀት ማሞቂያ አልተሳካም: {}"
 msgid ""
 "\n"
 "{} Testing: {}"
-msgstr "{} ሙከራ: {}\",}"
+msgstr "{} ሙከራ: {}\""
 
 #: /home/minds3t/omnipkg/src/tests/test_loader_stress_test.py:3756
 msgid "   ❌ Benchmark failed: {}"
-msgstr "ቤንችማርክ አልተሳካም፡ {}\",}"
+msgstr "ቤንችማርክ አልተሳካም፡ {}\""
 
 #: /home/minds3t/omnipkg/src/tests/test_loader_stress_test.py:3809
 msgid "🏆 WINNER: {}"
@@ -9698,7 +9699,7 @@ msgstr "11: TensorFlow ትንበያ የተጠናቀቀ. ትንበያ: '{}'"
 msgid ""
 "\n"
 "[ERROR] An error occurred during the analysis: {}"
-msgstr "[ስህተት] በመተንተን ወቅት ስህተት ተከስቷል፡ {}\",}"
+msgstr "[ስህተት] በመተንተን ወቅት ስህተት ተከስቷል፡ {}\""
 
 # Lollama: Skipped (Validation Failed: proper_noun_mismatch_PyTorch)
 #: /home/minds3t/omnipkg/src/tests/test_native_ipc_proper.py:28
@@ -9794,7 +9795,7 @@ msgstr ""
 msgid ""
 "\n"
 "📦 Current version (via pip show): {}"
-msgstr "📦 አሁን ስሪት (የ Pip Show ላይ): {}\",}"
+msgstr "📦 አሁን ስሪት (የ Pip Show ላይ): {}\""
 
 # Lollama: Skipped (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/tests/test_old_flask.py:348
@@ -9859,7 +9860,7 @@ msgstr "❌ ዋናውን ጭነት ማረጋገጥ አልተሳካም:{}"
 
 #: /home/minds3t/omnipkg/src/tests/test_old_flask_dev.py:115
 msgid "❌ Error creating bubble: {}"
-msgstr "❌ ስህተት አረፋ መፍጠር: {}\",}"
+msgstr "❌ ስህተት አረፋ መፍጠር: {}\""
 
 #: /home/minds3t/omnipkg/src/tests/test_old_flask_dev.py:208
 msgid "Main version:   {}"
@@ -9909,7 +9910,7 @@ msgstr "- መንገድ:{}"
 
 #: /home/minds3t/omnipkg/src/tests/test_rich_switching.py:176
 msgid "Bubble mismatch! Expected {}, got {}"
-msgstr "የአረፋ አለመዛመድ!የተጠበቅ {}, አግኝቷል {}\",}"
+msgstr "የአረፋ አለመዛመድ!የተጠበቅ {}, አግኝቷል {}\""
 
 #: /home/minds3t/omnipkg/src/tests/test_rich_switching.py:179
 msgid "Daemon execution failed: {}"
@@ -10059,7 +10060,7 @@ msgstr "{}❌ የበለጸገ ሙከራ ባዶ ውጤት መለሰ"
 
 #: /home/minds3t/omnipkg/src/tests/test_swap_install.py:287
 msgid "{}   ❌ Failed to parse JSON output: {}"
-msgstr "{} የ JSON ውፅዓት ለመተንተን አልተሳካም: {}\",}"
+msgstr "{} የ JSON ውፅዓት ለመተንተን አልተሳካም: {}\""
 
 # Lollama: Skipped (Validation Failed: proper_noun_mismatch_Python)
 #: /home/minds3t/omnipkg/src/tests/test_swap_install.py:296
@@ -10075,7 +10076,7 @@ msgstr ""
 
 #: /home/minds3t/omnipkg/src/tests/test_swap_install.py:298
 msgid "{}   - Interpreter: {}"
-msgstr "{} - ተርጓሚ፡ {}\",}"
+msgstr "{} - ተርጓሚ፡ {}\""
 
 #: /home/minds3t/omnipkg/src/tests/test_swap_install.py:307
 msgid "{}   ❌ Rich test timed out after 30 seconds - SKIPPING"
@@ -10131,7 +10132,7 @@ msgstr "✅ አረፋ ተፈጠረ፡-{}"
 
 #: /home/minds3t/omnipkg/src/tests/test_uv_switching.py:184
 msgid "   🔍 First 3 PATH entries: {}"
-msgstr "🔍 የመጀመሪያዎቹ 3 PATH ግቤቶች: {}\",}"
+msgstr "🔍 የመጀመሪያዎቹ 3 PATH ግቤቶች: {}\""
 
 #: /home/minds3t/omnipkg/src/tests/test_uv_switching.py:185
 msgid "   🔍 Which uv: {}"
@@ -10139,7 +10140,7 @@ msgstr "🔍 የትኛው uv: {}"
 
 #: /home/minds3t/omnipkg/src/tests/test_uv_switching.py:186
 msgid "   🔍 Bubble binary: {}"
-msgstr "🔍 የአረፋ ሁለትዮሽ፡ {}\",}"
+msgstr "🔍 የአረፋ ሁለትዮሽ፡ {}\""
 
 #: /home/minds3t/omnipkg/src/tests/test_uv_switching.py:191
 msgid "   📍 Version via PATH: {}"
@@ -10151,11 +10152,11 @@ msgstr "📍 ስሪት በቀጥታ መንገድ: {}"
 
 #: /home/minds3t/omnipkg/src/tests/test_uv_switching.py:208
 msgid "   ⚠️  BUT direct binary path shows correct version {}"
-msgstr "⚠ ️ ግን ቀጥተኛ ሁለትዮሽ መንገድ ትክክለኛውን ስሪት ያሳያል{}}"
+msgstr "⚠ ️ ግን ቀጥተኛ ሁለትዮሽ መንገድ ትክክለኛውን ስሪት ያሳያል{}"
 
 #: /home/minds3t/omnipkg/src/tests/test_uv_switching.py:213
 msgid "   ❌ Exception during test: {}"
-msgstr "❌ በፈተና ወቅት የተለየ፡ {}\",}"
+msgstr "❌ በፈተና ወቅት የተለየ፡ {}\""
 
 #: /home/minds3t/omnipkg/src/tests/test_uv_switching.py:253
 msgid "   🔬 Testing binary at: {}"
@@ -10163,7 +10164,7 @@ msgstr "🔬 ሁለትዮሽ በ፡{}"
 
 #: /home/minds3t/omnipkg/src/tests/test_uv_switching.py:262
 msgid "   ❌ FAILED: Expected {} but found {}"
-msgstr "❌ አልተሳካም: የተጠበቀው{} ግን የተገኘው {}\",}"
+msgstr "❌ አልተሳካም: የተጠበቀው{} ግን የተገኘው {}\""
 
 #: /home/minds3t/omnipkg/src/tests/test_uv_switching.py:300
 msgid "📍 Location: {}"

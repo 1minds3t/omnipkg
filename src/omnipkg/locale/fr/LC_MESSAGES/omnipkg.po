@@ -49,7 +49,7 @@ msgstr "• Différents combos Numpy + Scipy (1.24.3 + 1.12.0 → 1.26.4 + 1.16.
 
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:357
 msgid "   • Live PYTHONPATH manipulation without process restart"
-msgstr "• Manipulation en direct en direct sans redémarrage de processus"
+msgstr "• Manipulation PYTHONPATH en direct sans redémarrage du processus"
 
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:358
 msgid "   • Space-efficient deduplication (shows deduplication - normally"
@@ -66,7 +66,9 @@ msgstr ""
 msgid "🤯 What makes this impossible with traditional tools:"
 msgstr "🤯 Ce qui rend cela impossible avec les outils traditionnels:"
 
+# Lollama: Skipped (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:363
+#, fuzzy
 msgid "   • Switching versions requires environment restart"
 msgstr ""
 "• Le changement de versions nécessite un redémarrage de l'environnement"
@@ -140,7 +142,9 @@ msgstr "\\ ^ __ ^"
 msgid "         \\  (💀💀)\\______   <- This is your environment"
 msgstr "\\ (💀💀) \\ ______ <- c'est votre environnement"
 
+# Lollama: Skipped (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/tests/test_old_flask.py:50
+#, fuzzy
 msgid "            (__)\\       )\\/\\   after using pip"
 msgstr "(__) \\) \\ / \\ après avoir utilisé PIP"
 
@@ -174,7 +178,9 @@ msgstr ""
 "Remplacez le langage d'affichage pour cette commande (par exemple, ES, DE, "
 "JA)"
 
+# Lollama: Skipped (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:578
+#, fuzzy
 msgid "Available commands:"
 msgstr "Commandes disponibles:"
 
@@ -229,7 +235,9 @@ msgstr "Skip Confirmation"
 msgid "Refresh the intelligence knowledge base"
 msgstr "Actualiser la base de connaissances de l'intelligence"
 
+# Lollama: Skipped (API Error)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:711
+#, fuzzy
 msgid "Set a configuration value"
 msgstr "Définir une valeur de configuration"
 
@@ -343,7 +351,9 @@ msgstr "✅ Le fichier de configuration n'existe pas.Rien à faire."
 msgid "🚫 Reset cancelled."
 msgstr "🚫 Réinitialiser annulé."
 
+# Lollama: Skipped (API Error)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:6583
+#, fuzzy
 msgid "✅ Configuration file deleted successfully."
 msgstr "✅ Fichier de configuration supprimé avec succès."
 
@@ -373,7 +383,9 @@ msgstr "🧠 Forcer une reconstruction complète de la base de connaissances ...
 msgid "✅ Knowledge base rebuilt successfully."
 msgstr "✅ Base de connaissances reconstruite avec succès."
 
+# Lollama: Skipped (API Error)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:6738
+#, fuzzy
 msgid "   🔄 Rebuilding core package metadata..."
 msgstr "🔄 Reconstruire les métadonnées du package de base ..."
 
@@ -1401,7 +1413,7 @@ msgstr ""
 
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:564
 msgid "%(prog)s {}"
-msgstr "% (prog) s {}"
+msgstr "\"\"%(prog)s {}\"\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:940
 msgid ""

@@ -10,6 +10,10 @@ from typing import Any, Dict, Optional
 
 import requests
 from omnipkg.i18n import _
+try:
+    from .common_utils import safe_print
+except ImportError:
+    from omnipkg.common_utils import safe_print
 
 
 class MetadataCache:
@@ -68,14 +72,14 @@ class MetadataCache:
             resp = requests.get(meta_url, timeout=5)
             if resp.status_code == 200:
                 metadata = resp.json()
-                print(f"✓ Fetched metadata for {package} from GitHub")
+                safe_print(f"✓ Fetched metadata for {package} from GitHub")
             elif resp.status_code == 404:
-                print(_('⚠ Package {} not in GitHub metadata repo').format(package))
+                safe_print(_('⚠ Package {} not in GitHub metadata repo').format(package))
             else:
-                print(_('✗ Failed to fetch metadata: HTTP {}').format(resp.status_code))
+                safe_print(_('✗ Failed to fetch metadata: HTTP {}').format(resp.status_code))
 
         except Exception as e:
-            print(_('✗ Error fetching metadata: {}').format(e))
+            safe_print(_('✗ Error fetching metadata: {}').format(e))
 
         try:
             # Fetch compatibility data
@@ -83,7 +87,7 @@ class MetadataCache:
             resp = requests.get(compat_url, timeout=5)
             if resp.status_code == 200:
                 compat_data = resp.json()
-                print(f"✓ Fetched compatibility data for {package}")
+                safe_print(f"✓ Fetched compatibility data for {package}")
 
         except Exception:
             # Compatibility data is optional
@@ -137,11 +141,11 @@ class MetadataCache:
                             (package,),
                         )
 
-                        print(f"✓ Cache hit for {package} (age: {result['cache_age_hours']:.1f}h)")
+                        safe_print(f"✓ Cache hit for {package} (age: {result['cache_age_hours']:.1f}h)")
                         return result
 
         # Cache miss or expired - fetch from GitHub
-        print(f"⟳ Fetching {package} from GitHub (cache expired or forced refresh)")
+        safe_print(f"⟳ Fetching {package} from GitHub (cache expired or forced refresh)")
         metadata, compat_data = self._fetch_from_github(package)
 
         if metadata or compat_data:
@@ -254,7 +258,7 @@ if __name__ == "__main__":
         print(f"  Import Success: {compat['import_success']}")
         print(_('  Install Time: {}s').format(compat['install_time_seconds']))
         if compat["errors"]:
-            print(_('  ⚠ Known Issues: {}').format(compat['errors']))
+            safe_print(_('  ⚠ Known Issues: {}').format(compat['errors']))
 
     # Get stats
     stats = cache.get_cache_stats()

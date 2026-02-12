@@ -26,7 +26,9 @@ msgstr "O teste de estresse Omnipkg funciona apenas em ambientes Python 3.11."
 msgid "To run the stress test:"
 msgstr "Para executar o teste de estresse:"
 
+# Lollama: Skipped (API Error)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:350
+#, fuzzy
 msgid "  🚀 omnipkg Nuclear Stress Test - Runtime Version Swapping"
 msgstr ""
 "Omnipkg Teste de estresse nuclear - Versão de tempo de execução Swapping"
@@ -61,7 +63,9 @@ msgstr "A média de ~ 60% de economia, mas menos para extensões/binários C)"
 msgid "🤯 What makes this impossible with traditional tools:"
 msgstr "🤯 O que torna isso impossível com as ferramentas tradicionais:"
 
+# Lollama: Skipped (API Error)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:363
+#, fuzzy
 msgid "   • Switching versions requires environment restart"
 msgstr "• A troca de versões requer reinicialização do ambiente"
 
@@ -106,7 +110,9 @@ msgstr "🎉 A demonstração foi concluída com sucesso!"
 msgid "│                                                          │"
 msgstr "│                                                          │"
 
+# Lollama: Skipped (API Error)
 #: /home/minds3t/omnipkg/src/tests/test_old_flask.py:30
+#, fuzzy
 msgid "│  🧠 omnipkg AI suggests:                                 │"
 msgstr "│ 🧠 omnipkg ai sugere: │"
 
@@ -134,7 +140,9 @@ msgstr "\\ ^__ ^"
 msgid "         \\  (💀💀)\\______   <- This is your environment"
 msgstr "\\ (💀💀) \\ ______ <- Este é o seu ambiente"
 
+# Lollama: Skipped (API Error)
 #: /home/minds3t/omnipkg/src/tests/test_old_flask.py:50
+#, fuzzy
 msgid "            (__)\\       )\\/\\   after using pip"
 msgstr "(__) \\) \\/\\ depois de usar PIP"
 
@@ -1373,7 +1381,7 @@ msgstr ""
 
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:564
 msgid "%(prog)s {}"
-msgstr "%(prog) s {}"
+msgstr "\"%(prog)s {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:940
 msgid ""
