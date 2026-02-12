@@ -401,7 +401,7 @@ print(json.dumps(results))
                 raw_results = json.loads(proc.stdout)
                 return [VerificationResult(r['package_name'], r['version'], r['success'], r['error']) for r in raw_results]
             except json.JSONDecodeError:
-                 return [VerificationResult(p['name'], p['version'], False, f"JSON Error: {proc.stdout[:200]}...") for p in packages]
+                 return [VerificationResult(p['name'], p['version'], False, _('JSON Error: {}...').format(proc.stdout[:200])) for p in packages]
                  
         except Exception as e:
             return [VerificationResult(p['name'], p['version'], False, str(e)) for p in packages]

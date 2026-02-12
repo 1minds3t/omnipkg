@@ -61,7 +61,9 @@ msgstr ""
 msgid "🤯 What makes this impossible with traditional tools:"
 msgstr "🤯 Was macht dies mit traditionellen Werkzeugen unmöglich:"
 
+# Lollama: Skipped (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:363
+#, fuzzy
 msgid "   • Switching versions requires environment restart"
 msgstr "• Umversionen erfordert den Neustart von Umgebern"
 
@@ -134,7 +136,9 @@ msgstr "\\ ^__ ^"
 msgid "         \\  (💀💀)\\______   <- This is your environment"
 msgstr "\\ (💀💀) \\ ______ <- Dies ist Ihre Umgebung"
 
+# Lollama: Skipped (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/tests/test_old_flask.py:50
+#, fuzzy
 msgid "            (__)\\       )\\/\\   after using pip"
 msgstr "(__) \\) \\/\\ nach der Verwendung von PIP"
 
@@ -163,7 +167,9 @@ msgid "Override the display language for this command (e.g., es, de, ja)"
 msgstr ""
 "Überschreiben Sie die Anzeigesprache für diesen Befehl (z. B. ES, DE, JA)."
 
+# Lollama: Skipped (API Error)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:578
+#, fuzzy
 msgid "Available commands:"
 msgstr "Verfügbare Befehle:"
 
@@ -220,7 +226,9 @@ msgstr "Bestätigung überspringen"
 msgid "Refresh the intelligence knowledge base"
 msgstr "Aktualisieren Sie die Intelligenzwissensbasis"
 
+# Lollama: Skipped (API Error)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:711
+#, fuzzy
 msgid "Set a configuration value"
 msgstr "Legen Sie einen Konfigurationswert fest"
 
@@ -364,7 +372,9 @@ msgstr "✅ Die Wissensbasis erfolgreich umgebaut."
 msgid "   🔄 Rebuilding core package metadata..."
 msgstr "🔄 Wiederaufbau von Core -Paket -Metadaten ..."
 
+# Lollama: Skipped (API Error)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:6746
+#, fuzzy
 msgid "   ✅ Core metadata rebuilt."
 msgstr "✅ Kernmetadaten wieder aufgebaut."
 
@@ -1381,7 +1391,7 @@ msgstr ""
 
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:564
 msgid "%(prog)s {}"
-msgstr "%(prog) s {}"
+msgstr "\"%(prog)s {}\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:940
 msgid ""

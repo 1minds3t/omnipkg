@@ -2624,6 +2624,11 @@ def execute_run_command(
     # ADD THIS LINE - Propagate verbose flag to subprocesses
     if verbose:
         os.environ["OMNIPKG_VERBOSE"] = "1"
+    
+    # NEW: Ensure language persists to subprocess
+    current_lang = config_manager.config.get("language")
+    if current_lang:
+        os.environ["OMNIPKG_LANG"] = current_lang
 
     if not cmd_args:
         safe_print(_("❌ Error: No script or command specified to run."))

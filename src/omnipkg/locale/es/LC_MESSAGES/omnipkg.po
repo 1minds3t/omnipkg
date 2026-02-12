@@ -109,7 +109,9 @@ msgstr "🎉 ¡Demo completada con éxito!"
 msgid "│                                                          │"
 msgstr "│                                                          │"
 
+# Lollama: Skipped (API Error)
 #: /home/minds3t/omnipkg/src/tests/test_old_flask.py:30
+#, fuzzy
 msgid "│  🧠 omnipkg AI suggests:                                 │"
 msgstr "│ 🧠 omnipkg ai sugiere: │"
 
@@ -171,7 +173,9 @@ msgstr ""
 "Anule el lenguaje de visualización para este comando (por ejemplo, ES, DE, "
 "JA)"
 
+# Lollama: Skipped (API Error)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:578
+#, fuzzy
 msgid "Available commands:"
 msgstr "Comandos disponibles:"
 
@@ -228,7 +232,9 @@ msgstr "Skip Confirmación"
 msgid "Refresh the intelligence knowledge base"
 msgstr "Actualizar la base de conocimiento de inteligencia"
 
+# Lollama: Skipped (API Error)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:711
+#, fuzzy
 msgid "Set a configuration value"
 msgstr "Establecer un valor de configuración"
 
@@ -240,7 +246,9 @@ msgstr "✅ Lenguaje establecido permanentemente en: {lang}"
 msgid "🎪 Omnipkg supports version switching for:"
 msgstr "🎪 omnipkg admite el cambio de versión para:"
 
+# Lollama: Skipped (API Error)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:1113
+#, fuzzy
 msgid ""
 "\n"
 "Select a demo to run:"
@@ -1386,7 +1394,7 @@ msgstr ""
 
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:564
 msgid "%(prog)s {}"
-msgstr "%(prog) s {}"
+msgstr "\"\"%(prog)s {}\"\"\""
 
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:940
 msgid ""
