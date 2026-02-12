@@ -2228,6 +2228,14 @@ class WorkerPoolDaemon:
 
     def _start_windows_daemon(self, wait_for_ready: bool = False):
         """Start daemon on Windows using subprocess."""
+        # Windows daemon is opt-in due to stability issues
+        if not os.environ.get("OMNIPKG_ENABLE_DAEMON_WINDOWS"):
+            safe_print("❌ Daemon is disabled on Windows by default.", file=sys.stderr)
+            safe_print("   Windows has subprocess/encoding issues that cause instability.", file=sys.stderr)
+            safe_print("   To enable: set OMNIPKG_ENABLE_DAEMON_WINDOWS=1", file=sys.stderr)
+            safe_print("   Note: This is experimental and may cause issues.", file=sys.stderr)
+            return False
+
         import subprocess
         daemon_script = os.path.abspath(__file__)
         
@@ -2251,7 +2259,7 @@ class WorkerPoolDaemon:
                 stderr=log_file_handle,
                 close_fds=False,
                 # ADD THIS - keep process handle alive
-                env=dict(os.environ, PYTHONUNBUFFERED="1")
+                env=dict(os.environ, PYTHONUNBUFFERED="1", PYTHONUTF8="1", PYTHONIOENCODING="utf-8")
             )
             
             # DON'T close log_file_handle here - keep it alive

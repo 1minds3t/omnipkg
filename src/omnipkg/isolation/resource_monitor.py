@@ -1,3 +1,4 @@
+from omnipkg.common_utils import safe_print
 #!/usr/bin/env python3
 """
 omnipkg Daemon Resource Monitor - IMPROVED VERSION
