@@ -40,7 +40,6 @@ def force_clean_rich():
     except Exception as e:
         safe_print(f"   ⚠️  Uninstall attempt completed with note: {e}")
 
-
 def ensure_daemon_running():
     """Ensures the worker daemon is up and running."""
     safe_print("   ⚙️  Checking Worker Daemon status...")
@@ -49,18 +48,34 @@ def ensure_daemon_running():
 
     if not status.get("success"):
         safe_print("   🚀 Daemon not running. Starting it now...")
-        WorkerPoolDaemon().start(daemonize=True)
-        # Give it a moment to warm up
-        for unused in range(20):
-            if client.status().get("success"):
-                break
-            time.sleep(0.1)
-        safe_print("   ✅ Daemon started and ready.")
+        
+        # NON-BLOCKING daemon start
+        subprocess.Popen(
+            [sys.executable, "-m", "omnipkg.cli", "daemon", "start"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            start_new_session=True  # Detach completely on Unix
+        )
+        
+        # Wait for daemon to actually start (with timeout)
+        safe_print("   ⏳ Waiting for daemon to initialize...", end="", flush=True)
+        for i in range(50):  # 10 second timeout (50 * 0.2s)
+            time.sleep(0.2)
+            status = client.status()
+            if status.get("success"):
+                safe_print(" ✅")
+                safe_print("   ✅ Daemon started and ready.")
+                return client
+            if i % 5 == 0:  # Print dot every second
+                safe_print(".", end="", flush=True)
+        
+        # Timeout
+        safe_print(" ❌")
+        raise RuntimeError("Daemon failed to start within timeout")
     else:
         safe_print("   ✅ Daemon is already running.")
 
     return client
-
 
 def setup_environment(omnipkg_core: OmnipkgCore):
     """

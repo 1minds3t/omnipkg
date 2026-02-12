@@ -4540,24 +4540,56 @@ def run_chaos_suite(tests_to_run=None):
 
     return passed == len(tests_to_run)
 
-
 if __name__ == "__main__":
     try:
-        if os.environ.get("OMNIPKG_REEXEC_COUNT"):
-            run_chaos_suite(ALL_TESTS)
+        # Parse command-line arguments for test selection
+        if len(sys.argv) > 1:
+            # User passed test numbers via CLI (e.g., `python test.py 11 17 18`)
+            test_args = sys.argv[1:]
+            
+            # Check for special case: single "0" or "all"
+            if len(test_args) == 1 and (test_args[0] == "0" or test_args[0].lower() == "all"):
+                safe_print(_("🔥 Running ALL chaos tests..."))
+                run_chaos_suite(ALL_TESTS)
+            else:
+                # Parse the test numbers
+                selected_tests = []
+                try:
+                    indices = [int(x) for x in test_args if x.strip().isdigit()]
+                    for idx in indices:
+                        if idx == 0:
+                            # 0 means all
+                            selected_tests = ALL_TESTS
+                            break
+                        if 1 <= idx <= len(ALL_TESTS):
+                            selected_tests.append(ALL_TESTS[idx - 1])
+                        else:
+                            safe_print(_("⚠️  Skipping invalid test number: {}").format(idx))
+                except ValueError as e:
+                    safe_print(_("❌ Invalid test number format: {}").format(e))
+                    sys.exit(1)
+                
+                if selected_tests:
+                    safe_print(_("🎯 Running {} selected test(s)...").format(len(selected_tests)))
+                    run_chaos_suite(selected_tests)
+                else:
+                    safe_print(_("❌ No valid tests selected."))
+                    sys.exit(1)
         else:
-            selected = select_tests_interactively()
-            if selected:
-                run_chaos_suite(selected)
+            # No CLI args - show interactive menu
+            if os.environ.get("OMNIPKG_REEXEC_COUNT"):
+                run_chaos_suite(ALL_TESTS)
+            else:
+                selected = select_tests_interactively()
+                if selected:
+                    run_chaos_suite(selected)
 
     except KeyboardInterrupt:
         safe_print("\n\n⚠️  CHAOS INTERRUPTED BY USER!")
     except ProcessCorruptedException as e:
         safe_print(_('\n☢️   CATASTROPHIC CORRUPTION: {}').format(e))
-        # Re-exec logic omitted for brevity in this cleaned version
         sys.exit(1)
     except Exception as e:
         import traceback
-
         safe_print(_('\n💥 CHAOS FAILURE: {}').format(e))
         traceback.print_exc()
