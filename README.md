@@ -7,7 +7,7 @@
 <p align="center">
   <p align="center">
     <p align="center">
-  <strong><strong>Run multiple Python versions, C-extensions, and ML frameworks concurrently with zero-copy IPC.</strong>
+  <strong><strong>Run multiple Python runtimes, C-extensions, and ML framework versions concurrently using zero-copy IPC.</strong>
     
 <p align="center">
   <!-- Core Project Info -->
