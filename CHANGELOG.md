@@ -5,32 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+---
+
 Implements comprehensive daemon management and i18n improvements:
 
-**Daemon & Worker Management:**
-- Add 'daemon idle' command for Python version-specific worker pool config
-- Group idle workers by Python version in resource monitor
-- Add stale worker detection (>24h) with interactive cleanup
-- Add daemon restart command (stop + start)
-- Make Windows daemon opt-in (OMNIPKG_ENABLE_DAEMON_WINDOWS) with UTF-8/unbuffered I/O
-- Remove implicit auto-start for explicit control
-
-**Internationalization (i18n):**
-- Complete Japanese translation (ja/LC_MESSAGES/omnipkg.po)
-- Hoist i18n imports to global scope, fix UnboundLocalError
-- Add OMNIPKG_LANG env var for language priority
-- Propagate lang setting to all subprocesses and shims
-- Replace print() with safe_print() for encoding safety
-
-**Testing & CI:**
-- Windows concurrency test workflow improvements
-- Stress test CLI args for specific test selection
-- Non-blocking daemon startup in concurrent tests
+<!-- TODO: Add detailed description here -->
+<!-- Copy from GitHub Release or write a summary of key changes -->
 
 Files changed: 78 files changed, 9270 insertions(+), 6574 deletions(-)
 
 **Features:**
 - feat(i18n): Integrate and propagate i18n across core components
+- feat: daemon idle worker management and i18n updates
 
 **Fixes:**
 - fix(i18n): finalize Japanese translation
