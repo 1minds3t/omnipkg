@@ -1,3 +1,10 @@
+# Changelog
+
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
 78 files changed, 9264 insertions(+), 6579 deletions(-)
 
 - restore: recover deleted changelog
@@ -34,7 +41,17 @@
 - fix(cli): hoist i18n imports to global scope to prevent UnboundLocalError
 - feat(i18n): Integrate and propagate i18n across core components
 
-## [2.2.2] - 2026-02-13
+78 files changed, 9290 insertions(+), 6579 deletions(-)
+
+- restore: recover deleted changelog
+- fix(i18n): finalize Japanese translation
+- refactor: remove undefined name from `__all__`
+- refactor: remove reimported module
+- Sync main → development (auto-merge conflict fixes)
+- refactor: remove unnecessary return statement
+- Sync main → development after auto-merge
+- fix(cli): hoist i18n imports to global scope to prevent UnboundLocalError
+- feat(i18n): Integrate and propagate i18n across core components
 
 ## [2.2.0] - 2026-02-09
 
