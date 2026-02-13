@@ -42,6 +42,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Update conda_build.yml
 - Update conda_build.yml
 
+78 files changed, 9291 insertions(+), 6574 deletions(-)
+
+- restore: recover deleted changelog
+- fix(i18n): finalize Japanese translation
+- Update windows-concurrency-test.yml
+- Update windows-concurrency-test.yml
+- Update windows-concurrency-test.yml
+- Update windows-concurrency-test.yml
+- Update README.md
+- Update README.md
+- Update README.md
+- refactor: remove undefined name from `__all__`
+- refactor: remove reimported module
+- Sync main → development (auto-merge conflict fixes)
+- refactor: remove unnecessary return statement
+- Sync main → development after auto-merge
+- fix(cli): hoist i18n imports to global scope to prevent UnboundLocalError
+- feat(i18n): Integrate and propagate i18n across core components
+- Update README.md
+- Update README.md
+- Update README.md
+- Update publish.yml
+- Update publish.yml
+- Update README.md
+- Update publish.yml
+- Update publish.yml
+- Update conda_build.yml
+- Update conda_build.yml
+- Update conda_build.yml
+- Update meta-platforms.yaml
+- Update meta-noarch.yaml
+- Update meta-platforms.yaml
+- Update publish.yml
+- Update publish.yml
+- Update conda_build.yml
+- Update conda_build.yml
+
 ## [2.2.0] - 2026-02-09
 
 ### 🔥 BREAKING CHANGES
