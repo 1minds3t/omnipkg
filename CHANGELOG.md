@@ -53,6 +53,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - fix(cli): hoist i18n imports to global scope to prevent UnboundLocalError
 - feat(i18n): Integrate and propagate i18n across core components
 
+78 files changed, 9302 insertions(+), 6574 deletions(-)
+
+- restore: recover deleted changelog
+- fix(i18n): finalize Japanese translation
+- refactor: remove undefined name from `__all__`
+- refactor: remove reimported module
+- Sync main → development (auto-merge conflict fixes)
+- refactor: remove unnecessary return statement
+- Sync main → development after auto-merge
+- fix(cli): hoist i18n imports to global scope to prevent UnboundLocalError
+- feat(i18n): Integrate and propagate i18n across core components
+
 ## [2.2.0] - 2026-02-09
 
 ### 🔥 BREAKING CHANGES
