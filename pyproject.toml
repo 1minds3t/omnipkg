@@ -5,11 +5,11 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "omnipkg"
-version = "2.2.1"
+version = "2.2.2"
 authors = [
   { name = "1minds3t", email = "1minds3t@proton.me" },
 ]
-description = "The Ultimate Python Dependency Resolver. One environment. Infinite packages. Zero conflicts."
+description = "Universal Python Runtime Orchestrator. One environment. Infinite Pythons and packages. Zero conflicts."
 readme = "README.md"
 requires-python = ">=3.7, <3.16"
 
@@ -31,6 +31,7 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
     "Programming Language :: Python :: 3.14",
+    "Programming Language :: Python :: 3.15",
     "Environment :: Console",
     "Topic :: Software Development :: Build Tools",
     "Topic :: System :: Software Distribution",
