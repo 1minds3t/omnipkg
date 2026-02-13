@@ -237,7 +237,33 @@ def identify_worker_type(proc, pid_map):
         return "DAEMON_MANAGER"
 
     if "tmp" in cmd and "_idle.py" in cmd:
-        return "IDLE_WORKER"
+        # Extract Python version from command - try multiple patterns
+        py_ver = "3.x"
+        
+        # Try to find pythonX.Y or pythonX.YY pattern (including alpha/beta versions)
+        version_match = re.search(r'python3\.(\d+)', cmd)
+        if version_match:
+            minor = version_match.group(1)
+            py_ver = f"3.{minor}"
+        else:
+            # Try to extract from the full path (e.g., cpython-3.15.0a5/bin/python3)
+            path_match = re.search(r'cpython-3\.(\d+)(?:\.\d+)?(?:a\d+|b\d+|rc\d+)?', cmd)
+            if path_match:
+                minor = path_match.group(1)
+                py_ver = f"3.{minor}"
+            else:
+                # Fallback: check specific versions
+                for ver in ["3.15", "3.14", "3.13", "3.12", "3.11", "3.10", "3.9", "3.8", "3.7"]:
+                    if f"python{ver}" in cmd or f"python3{ver.split('.')[1]}" in cmd or f"cpython-{ver}" in cmd:
+                        py_ver = ver
+                        break
+        
+        # DEBUG: If still 3.x, print the command for debugging
+        if py_ver == "3.x":
+            if "--debug" in sys.argv:
+                print(f"DEBUG: Could not detect version from: {cmd[:100]}")
+        
+        return f"IDLE_WORKER_PY{py_ver}"
 
     match = re.search(r"tmp\w+_(.*?)__(.*?)\.py", cmd)
     if match:
@@ -387,9 +413,10 @@ def print_stats(watch_mode=False):
         return
 
     # Categorize processes
+    # Categorize processes
     workers = defaultdict(list)
     daemon_managers = []
-    idle_workers = []
+    idle_workers_by_version = defaultdict(list)  # Group by Python version
 
     for proc in processes:
         worker_type = identify_worker_type(proc, pid_map)
@@ -397,8 +424,9 @@ def print_stats(watch_mode=False):
 
         if worker_type == "DAEMON_MANAGER":
             daemon_managers.append(proc)
-        elif worker_type == "IDLE_WORKER":
-            idle_workers.append(proc)
+        elif worker_type.startswith("IDLE_WORKER_PY"):  # Changed
+            py_ver = worker_type.replace("IDLE_WORKER_PY", "")
+            idle_workers_by_version[py_ver].append(proc)
         elif worker_type != "OTHER":
             workers[worker_type].append(proc)
 
@@ -441,16 +469,25 @@ def print_stats(watch_mode=False):
                     f"VIRT: {format_memory(proc['vsz']):>8} | {gpu_str} | Age: {format_time(proc['elapsed'])}"
                 )
 
-    # Print idle workers
-    if idle_workers:
+    # Print idle workers grouped by Python version
+    idle_workers = []
+    for py_ver, procs in idle_workers_by_version.items():
+        idle_workers.extend(procs)
+    
+    if idle_workers_by_version:
         safe_print(_('\n💤 IDLE WORKERS (Ready to be assigned):'))
         print("-" * 120)
-        for proc in idle_workers:
-            gpu_str = f"GPU: {proc['gpu_mb']:>4}MB" if proc["gpu_mb"] > 0 else "GPU:   --"
-            print(
-                f"  PID {proc['pid']:>6} | CPU: {proc['cpu']:>5.1f}% | RAM: {format_memory(proc['rss']):>8} | "
-                f"VIRT: {format_memory(proc['vsz']):>8} | {gpu_str} | Age: {format_time(proc['elapsed'])}"
-            )
+        
+        for py_ver in sorted(idle_workers_by_version.keys()):
+            procs = idle_workers_by_version[py_ver]
+            safe_print(f'\n🐍 Python {py_ver} ({len(procs)} worker{"s" if len(procs) != 1 else ""})')
+            
+            for proc in procs:
+                gpu_str = f"GPU: {proc['gpu_mb']:>4}MB" if proc["gpu_mb"] > 0 else "GPU:   --"
+                print(
+                    f"  PID {proc['pid']:>6} | CPU: {proc['cpu']:>5.1f}% | RAM: {format_memory(proc['rss']):>8} | "
+                    f"VIRT: {format_memory(proc['vsz']):>8} | {gpu_str} | Age: {format_time(proc['elapsed'])}"
+                )
 
     # Print summary
     print()
@@ -507,6 +544,54 @@ def print_stats(watch_mode=False):
         safe_print(f"  📝 NOTE: Baselines are package-aware (e.g., PyTorch needs ~350MB regardless of method)")
         
     print("=" * 120)
+
+    # Detect stale workers (older than 24 hours) and offer cleanup
+    if idle_workers_by_version and not watch_mode:
+        stale_workers = []
+        STALE_THRESHOLD = 24 * 3600  # 24 hours in seconds
+        
+        for py_ver, procs in idle_workers_by_version.items():
+            for proc in procs:
+                if proc['elapsed'] > STALE_THRESHOLD:
+                    stale_workers.append((py_ver, proc))
+        
+        if stale_workers:
+            print()
+            safe_print(f"⚠️  STALE WORKERS DETECTED: {len(stale_workers)} idle worker(s) running for >24 hours")
+            print("-" * 120)
+            
+            for py_ver, proc in stale_workers:
+                age_str = format_time(proc['elapsed'])
+                ram_str = format_memory(proc['rss'])
+                print(f"  Python {py_ver} | PID {proc['pid']:>6} | RAM: {ram_str:>8} | Age: {age_str}")
+            
+            print()
+            if sys.stdin.isatty():  # Only offer interactive cleanup if running in a terminal
+                try:
+                    response = input("🧹 Would you like to clean up these stale workers? [y/N]: ").strip().lower()
+                    if response in ['y', 'yes']:
+                        print()
+                        safe_print("🧹 Cleaning up stale workers...")
+                        killed = 0
+                        for py_ver, proc in stale_workers:
+                            try:
+                                pid = int(proc['pid'])
+                                subprocess.run(['kill', str(pid)], check=False)
+                                print(f"  ✓ Killed PID {pid} (Python {py_ver})")
+                                killed += 1
+                            except Exception as e:
+                                print(f"  ✗ Failed to kill PID {proc['pid']}: {e}")
+                        
+                        print()
+                        safe_print(f"✅ Cleaned up {killed}/{len(stale_workers)} stale workers")
+                    else:
+                        print("  Skipping cleanup. Stale workers will remain.")
+                except (EOFError, KeyboardInterrupt):
+                    print("\n  Cleanup cancelled.")
+            else:
+                safe_print("  💡 Run 'omnipkg daemon restart' to clean up all workers")
+            
+            print("=" * 120)
 
 
 def start_monitor(watch_mode=False):

@@ -6,6 +6,7 @@ import glob
 import json
 import os
 import platform
+import re
 import select
 import signal
 import socket
@@ -2510,7 +2511,6 @@ class WorkerPoolDaemon:
         try:
             req = recv_json(conn, timeout=30.0)
             self.stats["total_requests"] += 1
-
             if req["type"] == "execute":
                 res = self._execute_code(
                     req["spec"],
@@ -2519,7 +2519,7 @@ class WorkerPoolDaemon:
                     req.get("shm_out", {}),
                     req.get("python_exe"),
                 )
-            elif req["type"] == "execute_cuda":  # ← ADD THIS
+            elif req["type"] == "execute_cuda":
                 res = self._execute_cuda_code(
                     req["spec"],
                     req["code"],
@@ -2529,28 +2529,33 @@ class WorkerPoolDaemon:
                 )
             elif req["type"] == "status":
                 res = self._get_status()
-            elif req["type"] == "configure_idle":
-                # { "type": "configure_idle", "python_exe": "...", "count": 5 }
+            elif req["type"] == "configure_idle":  # ✅ Fixed
                 p_exe = req.get("python_exe", sys.executable)
                 count = req.get("count", 3)
                 self.set_idle_config(p_exe, count)
-                res = {"success": True, "config": self.idle_config}
-            elif req["type"] == "shutdown":
+                res = {"success": True, "config": dict(self.idle_config)}
+            elif req["type"] == "get_idle_config":  # ✅ Fixed
+                res = {
+                    "success": True,
+                    "config": dict(self.idle_config)
+                }
+            elif req["type"] == "set_idle_config":  # ✅ Fixed
+                python_exe = req.get("python_exe")
+                count = req.get("count", 0)
+                if python_exe:
+                    self.set_idle_config(python_exe, count)
+                    res = {"success": True}
+                else:
+                    res = {"success": False, "error": "python_exe required"}
+            elif req["type"] == "shutdown":  # ✅ Fixed
                 self.running = False
                 res = {"success": True}
             else:
-                res = {"success": False, "error": "Unknown type"}
-
-            send_json(conn, res, timeout=30.0)
+                res = {"success": False, "error": f"Unknown type: {req['type']}"}  # ✅ Fixed
+            send_json(conn, res)
         except Exception as e:
-            self.stats["errors"] += 1
             try:
-                send_json(conn, {"success": False, "error": str(e)}, timeout=5.0)
-            except:
-                pass
-        finally:
-            try:
-                conn.close()
+                send_json(conn, {"success": False, "error": str(e)})
             except:
                 pass
 
@@ -3436,6 +3441,18 @@ class DaemonClient:
             preexec_fn=os.setsid,
         )
 
+    def get_idle_config(self) -> dict:
+        """Get current idle pool configuration."""
+        return self._send({"type": "get_idle_config"})
+    
+    def set_idle_config(self, python_exe: str, count: int) -> dict:
+        """Set idle pool configuration for a Python executable."""
+        return self._send({
+            "type": "set_idle_config",
+            "python_exe": python_exe,
+            "count": count
+        })
+
     def _wait_for_socket(self, timeout=5.0):
         """
         Fixed version that works on Windows and Unix
@@ -3643,13 +3660,6 @@ class DaemonClient:
                 return True
             except:
                 return False
-
-
-    # ============================================================
-    # ADD THIS HELPER TO YOUR CLASS
-    # ============================================================
-
-    # Add this method to your DaemonClient class (or whatever it's called):
 
     def _get_connection_info(self):
         """
@@ -4414,6 +4424,69 @@ def cli_logs(follow: bool = False, tail_lines: int = 50):
         safe_print("\n🛑 Stopped following logs.")
     except Exception as e:
         safe_print(_('\n❌ Error reading logs: {}').format(e))
+
+def cli_idle_config(python_version: str = None, count: int = None):
+    """Configure idle worker pools."""
+    from omnipkg.dispatcher import resolve_python_path
+    
+    client = DaemonClient()
+    
+    if python_version is None and count is None:
+        # Show current config
+        result = client.get_idle_config()
+        if result.get("success"):
+            safe_print("\n📊 Current Idle Worker Configuration:")
+            safe_print("=" * 60)
+            config = result.get("config", {})
+            if not config:
+                safe_print("   No idle workers configured.")
+                safe_print("\n💡 Example: 8pkg daemon idle --python 3.11 --count 5")
+            else:
+                for py_exe, target_count in sorted(config.items()):
+                    # Extract version from path for display
+                    version = "unknown"
+                    # Try to extract from cpython-X.Y.Z in the path
+                    match = re.search(r'cpython-(\d+\.\d+\.\d+[a-z0-9]*)', py_exe)
+                    if match:
+                        version = match.group(1)
+                    else:
+                        # Fallback to executable name
+                        if "python3." in py_exe:
+                            version = py_exe.split("python3.")[1].split("/")[0]
+                            version = f"3.{version}"
+                    safe_print(f"   Python {version}: {target_count} worker(s)")
+                    safe_print(f"     └─ {py_exe}")
+            safe_print("=" * 60 + "\n")
+        else:
+            safe_print(_('❌ Error: {}').format(result.get('error')))
+        return
+    
+    if python_version and count is not None:
+        # Resolve version to actual path
+        try:
+            python_path = resolve_python_path(python_version)
+            python_exe = str(python_path)
+        except Exception as e:
+            safe_print(f"❌ Could not find Python {python_version}: {e}")
+            safe_print("💡 Use '8pkg list python' to see available versions")
+            return
+        
+        # Set config
+        result = client.set_idle_config(python_exe, count)
+        if result.get("success"):
+            if count == 0:
+                safe_print(f"✅ Disabled idle workers for Python {python_version}")
+            else:
+                safe_print(f"✅ Set {count} idle worker(s) for Python {python_version}")
+                safe_print(f"   └─ Using: {python_exe}")
+        else:
+            safe_print(_('❌ Error: {}').format(result.get('error')))
+    else:
+        safe_print("❌ Both --python and --count are required")
+        safe_print("💡 Examples:")
+        safe_print("   8pkg daemon idle                    # View current config")
+        safe_print("   8pkg daemon idle --python 3.11 --count 5")
+        safe_print("   8pkg daemon idle --python 3.12 --count 0  # Disable")
 
 
 # ═══════════════════════════════════════════════════════════════

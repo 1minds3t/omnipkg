@@ -65,40 +65,39 @@ def adopt_if_needed(version: str) -> bool:
     safe_print(_('   ✅ Adopted Python {}').format(version))
     return True
 
-
 def ensure_daemon_running() -> bool:
     """Ensure daemon is running."""
     try:
         from omnipkg.isolation.worker_daemon import DaemonClient
-        
         client = DaemonClient()
         status = client.status()
-        
         if status.get("success"):
             safe_print("   ✅ Daemon already running")
             return True
         
         safe_print("   🔄 Starting daemon...")
-        subprocess.run(
+        
+        # Non-blocking daemon start
+        subprocess.Popen(
             ["8pkg", "daemon", "start"],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
+            start_new_session=True  # Detach completely
         )
-        time.sleep(2)
         
-        client = DaemonClient()
-        status = client.status()
-        if status.get("success"):
-            safe_print("   ✅ Daemon started successfully")
-            return True
-        else:
-            safe_print("   ❌ Failed to start daemon")
-            return False
-            
+        # Wait for it to actually start
+        for _ in range(10):  # 2 second timeout
+            time.sleep(0.2)
+            status = client.status()
+            if status.get("success"):
+                safe_print("   ✅ Daemon started successfully")
+                return True
+        
+        safe_print("   ❌ Failed to start daemon")
+        return False
     except Exception as e:
         safe_print(_('   ❌ Daemon error: {}').format(e))
         return False
-
 
 def warmup_worker(config: tuple, thread_id: int) -> dict:
     """

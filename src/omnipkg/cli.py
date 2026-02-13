@@ -24,6 +24,7 @@ from omnipkg.isolation.worker_daemon import (
     cli_start,
     cli_status,
     cli_stop,
+    cli_idle_config
 )
 try:
     from omnipkg.apis.local_bridge import WebBridgeManager
@@ -328,7 +329,6 @@ def get_version():
 
 
 VERSION = get_version()
-
 
 def stress_test_command(force=False):
     """Handle stress test command - BLOCK if not Python 3.11."""
@@ -685,11 +685,19 @@ def create_parser():
         action="store_true",
         help=_("Run in non-interactive mode (uses defaults)")
     )
-    stress_parser = subparsers.add_parser("stress-test", help=_("Ultimate demonstration with heavy packages"))
+    stress_parser = subparsers.add_parser(
+        "stress-test", 
+        help=_("Run chaos theory stress tests")
+    )
+    stress_parser.add_argument(
+        "tests",
+        nargs="*",  # Allow multiple test numbers
+        help=_("Specific test numbers to run (e.g., '11 17 18'). Leave empty for interactive menu.")
+    )
     stress_parser.add_argument(
         "--yes", "-y", 
         action="store_true", 
-        help=_("Skip confirmation prompt")
+        help=_("Skip confirmation and run all tests (equivalent to test 0)")
     )
     reset_parser = subparsers.add_parser("reset", help=_("Rebuild the omnipkg knowledge base"))
     reset_parser.add_argument(
@@ -784,7 +792,15 @@ def create_parser():
     daemon_subparsers.add_parser("start", help=_("Start the background daemon"))
     daemon_subparsers.add_parser("stop", help=_("Stop the daemon"))
     daemon_subparsers.add_parser("status", help=_("Check daemon status and memory usage"))
-
+    idle_parser = daemon_subparsers.add_parser('idle', help=_('Configure idle worker pools'))
+    idle_parser.add_argument(
+        '--python-version',  # ✅ Changed from --python
+        type=str, 
+        dest='idle_python',  # ✅ Add explicit dest
+        metavar='VERSION',
+        help=_('Python version (e.g., 3.11, 3.12) or "all" to show all configs')
+    )
+    idle_parser.add_argument('--count', type=int, help=_('Number of idle workers (0 to disable)'))
     # --- ADD THIS BLOCK ---
     daemon_logs = daemon_subparsers.add_parser("logs", help=_("View or follow daemon logs"))
     daemon_logs.add_argument(
@@ -1480,9 +1496,30 @@ def main():
                     pkg_instance.switch_active_python(original_python_str)
 
         elif args.command == "stress-test":
-            if stress_test_command():
-                run_actual_stress_test()
-            return 0
+            # Run the chaos theory test instead
+            test_file = TESTS_DIR / "test_loader_stress_test.py"
+            
+            if not test_file.exists():
+                safe_print(_("❌ Error: Chaos test file not found."))
+                return 1
+            
+            # Build the command
+            cmd = [sys.executable, str(test_file)]
+            
+            # Add test numbers if specified
+            if hasattr(args, 'tests') and args.tests:
+                cmd.extend(args.tests)
+            elif args.yes:
+                # --yes means run all (test 0)
+                cmd.append("0")
+            
+            safe_print(_("🌀 Launching Chaos Theory Stress Test..."))
+            if args.tests:
+                safe_print(_("   Running tests: {}").format(", ".join(args.tests)))
+            
+            # Run it
+            returncode = subprocess.call(cmd)
+            return returncode
         elif args.command == "install":
             original_python_tuple = get_actual_python_version()
             original_python_str = f"{original_python_tuple[0]}.{original_python_tuple[1]}"
@@ -1648,7 +1685,11 @@ def main():
                 except ImportError:
                     safe_print(_("❌ Error: resource_monitor module not found."))
                     return 1
-            return
+            elif args.daemon_command == "idle":
+                print(f"DEBUG: About to call cli_idle_config")
+                print(f"DEBUG: args.python={args.python}, args.count={args.count}")
+                from omnipkg.isolation.worker_daemon import cli_idle_config
+                cli_idle_config(python_version=args.idle_python, count=args.count)
         elif args.command == "web":
             from omnipkg.apis.local_bridge import WebBridgeManager
             manager = WebBridgeManager()
