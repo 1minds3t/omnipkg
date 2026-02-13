@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [2.2.2] - 2026-02-13
+
 Implements comprehensive daemon management and i18n improvements:
 
 **Daemon & Worker Management:**
@@ -29,7 +31,7 @@ Implements comprehensive daemon management and i18n improvements:
 - Stress test CLI args for specific test selection
 - Non-blocking daemon startup in concurrent tests
 
-Files changed: 78 files changed, 9288 insertions(+), 6573 deletions(-)
+Files changed: 78 files changed, 9304 insertions(+), 6573 deletions(-)
 
 **Features:**
 - feat(i18n): Integrate and propagate i18n across core components
