@@ -1,4 +1,4 @@
-78 files changed, 9299 insertions(+), 6579 deletions(-)
+78 files changed, 9264 insertions(+), 6579 deletions(-)
 
 - restore: recover deleted changelog
 - fix(i18n): finalize Japanese translation
