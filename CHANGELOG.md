@@ -31,6 +31,10 @@
 - main → development after auto-merge
 - meta-noarch.yaml
 
+
+
+
+
 ## [2.2.2] - 2026-02-13
 
 Implements comprehensive daemon management and i18n improvements:
