@@ -1,5 +1,7 @@
 - chore: release v2.2.2
 - chore: release v2.2.2
+- chore: release v2.2.2
+- chore: release v2.2.2
 - restore: recover deleted changelog
 - chore: release v2.2.2
 - chore: release v2.2.2
@@ -20,7 +22,7 @@
 - fix(cli): hoist i18n imports to global scope to prevent UnboundLocalError
 - feat(i18n): Integrate and propagate i18n across core components
 
- 78 files changed, 9284 insertions(+), 7219 deletions(-)
+ 78 files changed, 9344 insertions(+), 6580 deletions(-)
 
 - README.md (x7)
 - publish.yml (x6)
@@ -31,64 +33,6 @@
 - main → development after auto-merge
 - meta-noarch.yaml
 
-
-
-
-
-## [2.2.2] - 2026-02-13
-
-Implements comprehensive daemon management and i18n improvements:
-
-### Daemon & Worker Management
-- Add 'daemon idle' command for Python version-specific worker pool config
-- Group idle workers by Python version in resource monitor
-- Add stale worker detection (>24h) with interactive cleanup
-- Add daemon restart command (stop + start)
-- Make Windows daemon opt-in (OMNIPKG_ENABLE_DAEMON_WINDOWS) with UTF-8/unbuffered I/O
-- Remove implicit auto-start for explicit control
-
-### Internationalization (i18n)
-- Complete Japanese translation (ja/LC_MESSAGES/omnipkg.po)
-- Hoist i18n imports to global scope, fix UnboundLocalError
-- Add OMNIPKG_LANG env var for language priority
-- Propagate lang setting to all subprocesses and shims
-- Replace print() with safe_print() for encoding safety
-
-### Testing & CI
-- Windows concurrency test workflow improvements
-- Stress test CLI args for specific test selection
-- Non-blocking daemon startup in concurrent tests
-
-### Files Changed
-8 files, +6365 insertions, -3444 deletions
-Core changes: cli.py, worker_daemon.py, resource_monitor.py, ja/omnipkg.po
-
-Implements comprehensive daemon management and i18n improvements:
-
-Daemon & Worker Management:
-- Add 'daemon idle' command for Python version-specific worker pool config
-- Group idle workers by Python version in resource monitor
-- Add stale worker detection (>24h) with interactive cleanup
-- Add daemon restart command (stop + start)
-- Make Windows daemon opt-in (OMNIPKG_ENABLE_DAEMON_WINDOWS) with UTF-8/unbuffered I/O
-- Remove implicit auto-start for explicit control
-
-Internationalization (i18n):
-- Complete Japanese translation (ja/LC_MESSAGES/omnipkg.po)
-- Hoist i18n imports to global scope, fix UnboundLocalError
-- Add OMNIPKG_LANG env var for language priority
-- Propagate lang setting to all subprocesses and shims
-- Replace print() with safe_print() for encoding safety
-
-Testing & CI:
-- Windows concurrency test workflow improvements
-- Stress test CLI args for specific test selection
-- Non-blocking daemon startup in concurrent tests
-
-Files changed: 8 files, +6365 insertions, -3444 deletions
-Core changes: cli.py, worker_daemon.py, resource_monitor.py, ja/omnipkg.poMerge development into main: prefer Windows daemon safety checks
-
-- feat: daemon idle worker management and i18n updates
 ## [2.2.0] - 2026-02-09
 
 ### 🔥 BREAKING CHANGES
