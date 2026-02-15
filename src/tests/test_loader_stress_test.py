@@ -17,7 +17,6 @@ from omnipkg.i18n import _
 
 # Import the daemon client
 try:
-    from omnipkg.common_utils import safe_print
     from omnipkg.loader import omnipkgLoader
     from omnipkg.isolation.worker_daemon import DaemonClient, WorkerPoolDaemon
 except ImportError:
@@ -34,7 +33,7 @@ If this runs without exploding, we've broken the laws of Python itself.
 # ═══════════════════════════════════════════════════════════
 try:
     # 1. Common Utils
-    from omnipkg.common_utils import safe_print, ProcessCorruptedException
+    from omnipkg.common_utils import ProcessCorruptedException
 
     # 2. The Core Loader
     from omnipkg.loader import omnipkgLoader
@@ -46,7 +45,7 @@ try:
 except ImportError:
     # Fallback for running directly without package installed
     sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
-    from omnipkg.common_utils import safe_print, ProcessCorruptedException
+    from omnipkg.common_utils import ProcessCorruptedException
     from omnipkg.loader import omnipkgLoader
     from omnipkg.isolation.runners import run_python_code_in_isolation
     from omnipkg.isolation.workers import PersistentWorker
@@ -530,7 +529,7 @@ def chaos_test_3_framework_battle_royale():
     # 1. Connect to Daemon and measure startup
     try:
         from omnipkg.isolation.worker_daemon import DaemonClient, WorkerPoolDaemon
-        from concurrent.futures import ThreadPoolExecutor, as_completed
+        from concurrent.futures import as_completed
         import numpy as np
 
         daemon_start = time.perf_counter()
@@ -879,10 +878,6 @@ def chaos_test_5_race_condition_roulette():
 
     import numpy as np
     from omnipkg.isolation.worker_daemon import DaemonClient, WorkerPoolDaemon
-    from concurrent.futures import ThreadPoolExecutor
-    import threading
-    import random
-    import time
 
     results = {}
     versions = ["numpy==1.24.3", "numpy==1.26.4", "numpy==2.3.5"]
@@ -1354,7 +1349,6 @@ with omnipkgLoader("tensorflow==2.13.0"):
 
     try:
         from omnipkg.isolation.worker_daemon import DaemonClient, DaemonProxy
-        import subprocess
 
         safe_print("   🧹 Restarting Daemon...")
         subprocess.run(
@@ -1473,8 +1467,6 @@ with omnipkgLoader("tensorflow==2.13.0"):
     client = DaemonClient()  # Reconnect
 
     safe_print("   🚀 STEP 2: Concurrent Spawn (All at once)...")
-
-    from concurrent.futures import ThreadPoolExecutor
 
     conc_spawn_start = time.perf_counter()
     active_proxies = {}
@@ -2571,8 +2563,6 @@ def chaos_test_17_triple_python_multiverse():
     try:
         from omnipkg.isolation.worker_daemon import DaemonClient, WorkerPoolDaemon
         import numpy as np
-        import threading
-        import subprocess as sp  # Use alias to avoid conflicts
 
         client = DaemonClient()
         if not client.status().get("success"):
@@ -3263,7 +3253,6 @@ def chaos_test_18_worker_pool_drag_race():
 def chaos_test_19_zero_copy_hft():
     """🚀 TEST 19: ZERO-COPY vs JSON (10MB BENCHMARK)"""
     import numpy as np
-    import time
     from omnipkg.isolation.worker_daemon import DaemonClient
 
     safe_print("\n╔══════════════════════════════════════════════════════════════╗")
@@ -3371,8 +3360,6 @@ def chaos_test_20_gpu_resident_pipeline():
     # Initialize daemon
     try:
         from omnipkg.isolation.worker_daemon import DaemonClient
-        import subprocess
-        import time
 
         client = DaemonClient()
         if not client.status().get("success"):
@@ -3534,8 +3521,6 @@ def chaos_test_21_gpu_resident_pipeline():
     📍 PHASE 4: Zero-Copy Data Pipeline
      NOW ACTUALLY USES PyTorch 1.13's native CUDA IPC!
     """
-    import time
-    import sys
 
     safe_print(f"\n{'═'*66}")
     safe_print("║  TEST 21: 🔥 GPU-RESIDENT MULTI-VERSION PIPELINE           ║")
@@ -3766,8 +3751,6 @@ def chaos_test_22_complete_ipc_benchmark():
 
     Tests the same 3-stage pipeline across all modes with proper warmup.
     """
-    import sys
-    import time
 
     safe_print(f"\n{'═'*66}")
     safe_print("║  TEST 22: 🔥 COMPLETE IPC MODE BENCHMARK              ║")
@@ -4142,11 +4125,7 @@ def chaos_test_23_grand_unified_benchmark():
 
     Runs a multi-version pipeline (PyTorch 1.13 -> 2.0 -> 2.1) across all modes.
     """
-    import sys
-    import time
-    import subprocess
     import pickle
-    import os
     import numpy as np
 
     # ═══════════════════════════════════════════════════════════

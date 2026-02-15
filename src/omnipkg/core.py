@@ -9,11 +9,10 @@ and isolates conflicting versions in deduplicated bubbles to guarantee a stable 
 try:
     from .common_utils import print_header, safe_print
 except ImportError:
-    from omnipkg.common_utils import safe_print, print_header
+    from omnipkg.common_utils import print_header
 import importlib
 
 import hashlib
-import importlib
 try:
     import importlib.metadata
 except ImportError:
@@ -374,7 +373,6 @@ class ConfigManager:
         
         # If flag exists and is recent (within 24 hours), skip check
         if symlinks_verified_flag.exists():
-            import time
             file_age = time.time() - symlinks_verified_flag.stat().st_mtime
             if file_age < 86400:  # 24 hours in seconds
                 return  # Symlinks were verified recently
@@ -974,7 +972,6 @@ class ConfigManager:
                     if legacy_native_symlink.is_symlink():
                         legacy_native_symlink.unlink()
                     else:
-                        import shutil
                         shutil.rmtree(legacy_native_symlink, ignore_errors=True)
             
             # ═══════════════════════════════════════════════════════════════
@@ -1065,7 +1062,6 @@ class ConfigManager:
                 if bad_symlink.is_symlink():
                     bad_symlink.unlink()
                 else:
-                    import shutil
 
                     shutil.rmtree(bad_symlink, ignore_errors=True)
                 safe_print(_("   - ✅ Legacy symlink removed"))
@@ -1162,9 +1158,6 @@ class ConfigManager:
                 "last_updated": datetime.now().isoformat(),
             }
 
-            # Write to a temp file first, then atomic rename (prevents partial writes)
-            import tempfile
-
             temp_fd, temp_path = tempfile.mkstemp(dir=registry_path.parent, suffix=".json")
             try:
                 with os.fdopen(temp_fd, "w") as f:
@@ -1233,7 +1226,6 @@ class ConfigManager:
         """
         Find the project root directory by looking for setup.py, pyproject.toml, or .git
         """
-        from pathlib import Path
 
         current_dir = Path.cwd()
         module_dir = Path(__file__).parent.parent
@@ -2172,7 +2164,6 @@ class ConfigManager:
                     safe_print(_("   ✅ New interpreter registered successfully."))
                 except Exception as e:
                     safe_print(_("   ⚠️  Interpreter registration failed: {}").format(e))
-                    import traceback
 
                     traceback.print_exc()
 
@@ -2401,7 +2392,6 @@ class ConfigManager:
         This is more reliable than calculating it from sys.prefix when hotswapping is involved.
         Cross-platform compatible with special handling for Windows.
         """
-        import platform
 
         is_windows = platform.system() == "Windows"
 
@@ -2523,9 +2513,6 @@ class ConfigManager:
         Runs an interpreter in a subprocess to ask for its version and calculates its site-packages path.
         This is the only reliable way to get paths for an interpreter that isn't the currently running one.
         """
-        import platform
-
-        from .common_utils import safe_print
 
         try:
             # Step 1: Get version and prefix (this part works fine)
@@ -2647,7 +2634,6 @@ class ConfigManager:
         
         AUTO-DETECTS non-interactive environments (Docker, CI, piped input, etc.)
         """
-        import sys
         
         # ============================================================================
         # CRITICAL: Auto-detect non-interactive environments
@@ -2770,7 +2756,6 @@ class ConfigManager:
                             _("   - ❌ FATAL: Failed to create managed Python copy: {}").format(e)
                         )
                         if dest_path.exists():
-                            import shutil
 
                             shutil.rmtree(dest_path, ignore_errors=True)
                         raise RuntimeError(
@@ -3081,8 +3066,6 @@ class ConfigManager:
                     except FileExistsError:
                         pass
                     except OSError:
-                        # Fallback to copy if symlink fails
-                        import shutil
                         shutil.copy2(dispatcher_exe, shim_path)
         
         return shims_dir
@@ -3094,7 +3077,6 @@ class ConfigManager:
         
         IMPORTANT: This creates a FULL config, not just metadata!
         """
-        from datetime import datetime
         debug_mode = os.environ.get("OMNIPKG_DEBUG") == "1"
         
         # Get the bin directory where the interpreter lives
@@ -3227,7 +3209,6 @@ class ConfigManager:
         - /path/to/.omnipkg/interpreters/cpython-3.10-managed/bin/python3.10 → "3.10"
         - /path/to/bin/python3.11 → "3.11"
         """
-        import re
         
         # Try to extract from the executable name itself
         match = re.search(r'python(\d+\.\d+)', exe_path.name)
@@ -3242,7 +3223,6 @@ class ConfigManager:
         
         # Fallback: ask Python itself
         try:
-            import subprocess
             result = subprocess.run(
                 [str(exe_path), '-c', 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")'],
                 capture_output=True,
@@ -4161,7 +4141,6 @@ class BubbleIsolationManager:
                     break
 
             if not site_packages:
-                import site as site_module
 
                 site_packages = Path(site_module.getsitepackages()[0])
 
@@ -4296,7 +4275,6 @@ class BubbleIsolationManager:
 
         except Exception as e:
             safe_print(f"   - ❌ Failed to create bubble from editable install: {e}")
-            import traceback
 
             traceback.print_exc()
             return False
@@ -4380,7 +4358,7 @@ class BubbleIsolationManager:
 
     def _try_pypi_api(self, package_name: str, version: str) -> Optional[List[str]]:
         try:
-            import requests
+            pass
         except ImportError:
             safe_print(_("    ⚠️  'requests' package not found. Skipping PyPI API strategy."))
             return None
@@ -4655,7 +4633,6 @@ class BubbleIsolationManager:
         }
         if name in common_executables:
             return True
-        import re
 
         if re.match("^[a-z][a-z0-9]*[0-9]+(?:\\.[0-9]+)*$", name):
             base_name = re.sub("[0-9]+(?:\\.[0-9]+)*$", "", name)
@@ -5077,7 +5054,6 @@ class BubbleIsolationManager:
         (Authoritative) Finds import candidates by reading top_level.txt from the
         package's .dist-info directory. Handles PyPI's inconsistent naming conventions.
         """
-        from packaging.utils import canonicalize_name
 
         # Strategy 1: Find ANY .dist-info directory that might match this package
         version = pkg_info["version"]
@@ -5245,7 +5221,6 @@ class BubbleIsolationManager:
 
     def _extract_missing_module_name(self, error_msg: str) -> str:
         """Extract the specific missing module name from error messages."""
-        import re
 
         # Try different patterns for extracting module names
         patterns = [
@@ -5378,8 +5353,6 @@ class BubbleIsolationManager:
                 "RECORD",
                 "WHEEL",
             ):
-                # Ensure file is fully written and closed before copying
-                import time
 
                 # Brief pause to ensure file handle is released
                 time.sleep(0.01)
@@ -5708,7 +5681,6 @@ class BubbleIsolationManager:
             safe_print(
                 _("    ⚠️ Warning: Failed to register bubble existence in Redis: {}").format(e)
             )
-            import traceback
 
             traceback.print_exc()
             safe_print(_("    📝 Local manifest was still created at {}").format(manifest_path))
@@ -6387,7 +6359,6 @@ class omnipkg:
         2. Managed interpreters (in .omnipkg/) NEVER trigger syncs
         3. On Windows, extra conservative - can be disabled entirely
         """
-        import time
 
         overall_start = time.perf_counter_ns()
 
@@ -6476,7 +6447,6 @@ class omnipkg:
 
         except Exception as e:
             if "--verbose" in sys.argv or "-V" in sys.argv:
-                import traceback
 
                 safe_print(_('\n⚠️ Self-heal encountered an error: {}').format(e))
                 traceback.print_exc()
@@ -6490,7 +6460,6 @@ class omnipkg:
         cache_path = self._get_heal_cache_path()
         if cache_path.exists():
             try:
-                import json
 
                 with open(cache_path, "r") as f:
                     return json.load(f)
@@ -6502,7 +6471,6 @@ class omnipkg:
         """Writes data to the self-heal cache file."""
         cache_path = self._get_heal_cache_path()
         try:
-            import json
 
             with open(cache_path, "w") as f:
                 json.dump(data, f)
@@ -6708,8 +6676,6 @@ class omnipkg:
         It is NEVER in .omnipkg/interpreters/. Only the native interpreter can update itself.
         """
         import concurrent.futures
-        import json
-        import textwrap
 
         # === DETERMINE THE NATIVE INTERPRETER PATH ===
         # Native is ALWAYS at venv_path/bin (or Scripts on Windows)
@@ -6783,7 +6749,6 @@ class omnipkg:
 
         # === SYNC NATIVE FIRST (ONLY IF WE ARE THE NATIVE INTERPRETER) ===
         if native_needs_sync and is_current_native:
-            import tempfile
 
             native_sync_start = time.perf_counter()
             safe_print(_('🔄 Syncing native Python {} to v{}...').format(current_version, master_version))
@@ -7125,7 +7090,6 @@ class omnipkg:
 
         except Exception as e:
             safe_print(_('❌ FATAL: Could not initialize SQLite cache: {}').format(e))
-            import traceback
 
             traceback.print_exc()
             self._cache_connection_status = "failed_all"
@@ -7137,8 +7101,6 @@ class omnipkg:
         Does not raise exceptions - gracefully handles any failures.
         """
         try:
-            import json
-            from datetime import datetime
 
             config_path = self.config_manager.config_path
 
@@ -7364,7 +7326,6 @@ class omnipkg:
             safe_print(
                 _("    ❌ An unexpected error occurred during knowledge base rebuild: {}").format(e)
             )
-            import traceback
 
             traceback.print_exc()
             return 1
@@ -7822,8 +7783,6 @@ class omnipkg:
         if not self.cache_client:
             return []
 
-        from .package_meta_builder import omnipkgMetadataGatherer
-
         gatherer = omnipkgMetadataGatherer(
             config=self.config,
             env_id=self.env_id,
@@ -7842,12 +7801,6 @@ class omnipkg:
             # <--- CRITICAL FIX: Skip if Name is None
             if dist.metadata.get("Name")
         }
-
-        # ========================================================================
-        # AUTHORITATIVE PATH-BASED HEALING (v9)
-        # ========================================================================
-
-        import os
 
         disk_path_map = {os.path.realpath(str(dist._path)): dist for dist in all_discovered_dists}
 
@@ -9162,8 +9115,6 @@ class omnipkg:
             # --- END FIX ---
 
             if changed_specs:
-                # WAIT for bubbles to be fully written
-                import time
 
                 for spec in changed_specs:
                     if "==" in spec:
@@ -9223,7 +9174,6 @@ class omnipkg:
             safe_print(_("✅ Knowledge base updated successfully."))
         except Exception as e:
             safe_print(_("    ⚠️ Failed to update knowledge base for delta: {}").format(e))
-            import traceback
 
             traceback.print_exc()
 
@@ -9235,7 +9185,6 @@ class omnipkg:
         """
         Enhanced package data display with interactive selection.
         """
-        from packaging.utils import canonicalize_name
 
         c_name = canonicalize_name(pkg_name)
 
@@ -9332,7 +9281,6 @@ class omnipkg:
             safe_print(_("\n✅ Skipping detailed view."))
         except Exception as e:
             safe_print(_("❌ Error during selection: {}").format(e))
-            import traceback
 
             traceback.print_exc()
 
@@ -9738,10 +9686,6 @@ class omnipkg:
         - 'latest-active': Sorts oldest to newest to ensure the last one installed is the latest.
         - 'stable-main': Sorts newest to oldest to minimize environmental changes.
         """
-        import re
-
-        from packaging.version import InvalidVersion
-        from packaging.version import parse as parse_version
 
         def get_version_key(pkg_spec):
             """Extracts a sortable version key from a package spec."""
@@ -10063,8 +10007,6 @@ class omnipkg:
             dest_path.parent.mkdir(parents=True, exist_ok=True)
             lock_path = dest_path.parent / f"cpython-{full_version}.lock"
 
-            from filelock import FileLock
-
             with FileLock(lock_path, timeout=300):
                 safe_print(_("   - Target installation path: {}").format(dest_path))
 
@@ -10182,7 +10124,6 @@ class omnipkg:
 
         except Exception as e:
             safe_print(_("❌ Download and installation process failed: {}").format(e))
-            import traceback
             traceback.print_exc()
             return 1
     
@@ -10203,7 +10144,6 @@ class omnipkg:
             return 0
         except Exception as e:
             safe_print(_("\n❌ An error occurred during the re-scan: {}").format(e))
-            import traceback
 
             traceback.print_exc()
             return 1
@@ -10397,7 +10337,6 @@ class omnipkg:
         # SAFETY CHECK 1: Cannot remove currently active interpreter
         configured_python = self.config_manager.get("python_executable")
         if configured_python:
-            import re
 
             version_match = re.search(r"python(\d+\.\d+)", str(configured_python))
             if version_match:
@@ -12159,7 +12098,6 @@ class omnipkg:
                 safe_print(_("    ✅ Knowledge base updated successfully."))
             except Exception as e:
                 safe_print("    ⚠️ Failed to run consolidated knowledge base update: {}".format(e))
-                import traceback
 
                 traceback.print_exc()
         else:
@@ -12174,7 +12112,6 @@ class omnipkg:
         """
         Launches a non-blocking background process to scan nested packages inside bubbles.
         """
-        import subprocess
         
         bubble_list = [f"{name}:{path}" for name, path in bubble_paths.items()]
         
@@ -12585,8 +12522,6 @@ class omnipkg:
                         f"   - Found redundant bubble for active package: {pkg_name}=={active_version}"
                     )
                     try:
-                        # Robust cleanup to handle 'Directory not empty' race conditions
-                        import time
 
                         for i in range(3):
                             try:
@@ -13278,7 +13213,6 @@ class omnipkg:
             }
             key = "package:{}:{}".format(pkg_name, version)
             if hasattr(self, "cache_client") and self.cache_client:
-                import json
 
                 self.cache_client.set(key, json.dumps(package_info))
                 safe_print(_("📝 Registered {}=={} in knowledge base").format(pkg_name, version))
@@ -13293,7 +13227,6 @@ class omnipkg:
 
     def _get_current_timestamp(self) -> str:
         """Helper to get current timestamp for knowledge base entries."""
-        import datetime
 
         return datetime.datetime.now().isoformat()
 
@@ -13802,11 +13735,6 @@ class omnipkg:
         version_key = f"{main_key}:{version}"
         return self.cache_client.hgetall(version_key)
 
-    import platform
-    import sys
-    import time
-    from pathlib import Path
-
     def switch_active_python(self, version: str) -> int:
         """
         Switch the active Python context to the specified version.
@@ -13906,7 +13834,6 @@ class omnipkg:
         """
         from packaging.markers import Marker
         from packaging.specifiers import SpecifierSet
-        from packaging.version import parse as parse_version
 
         safe_print(_("    -> Resolving complex specifier: '{}'").format(package_spec))
         try:
@@ -13974,7 +13901,6 @@ class omnipkg:
                         requires_python = data["info"].get("requires_python")
 
                         if requires_python:
-                            from packaging.specifiers import SpecifierSet
 
                             spec = SpecifierSet(requires_python)
 
@@ -14389,9 +14315,6 @@ print(json.dumps(results))
             safe_print("   - ❌ Failed to get release date. Time Machine cannot proceed.")
             return False
 
-        # Parse the release year
-        from datetime import datetime
-
         release_datetime = datetime.fromisoformat(release_date.replace("Z", "+00:00"))
         release_year = release_datetime.year
 
@@ -14457,7 +14380,6 @@ print(json.dumps(results))
         if system == "linux":
             # Check for musl vs glibc
             try:
-                import subprocess
 
                 ldd_output = subprocess.check_output(
                     ["ldd", "--version"], stderr=subprocess.STDOUT, text=True
@@ -14723,8 +14645,6 @@ print(json.dumps(results))
             temp_file.write_bytes(file_response.content)
 
             safe_print("      - 🔧 Special handling for single-file itsdangerous 0.24...")
-            import shutil
-            import tarfile
 
             # Extract the tarball
             extract_dir = Path(tempfile.mkdtemp())
@@ -15030,7 +14950,6 @@ print(json.dumps(results))
                             if '<2' in numpy_constraint and installed_numpy.startswith('2.'):
                                 needs_fix = True
                             elif '<1.28' in numpy_constraint:
-                                from packaging.version import parse as parse_version
                                 if parse_version(installed_numpy) >= parse_version('1.28'):
                                     needs_fix = True
                             
@@ -15447,7 +15366,6 @@ print(json.dumps(results))
                         break
                 if compatible_versions:
                     try:
-                        from packaging.version import parse as parse_version
 
                         stable_versions = [
                             v for v in compatible_versions if not re.search("[a-zA-Z]", v)
@@ -15588,7 +15506,6 @@ print(json.dumps(results))
 
                         if compatible_versions:
                             try:
-                                from packaging.version import parse as parse_version
 
                                 stable_versions = [
                                     v for v in compatible_versions if not re.search("[a-zA-Z]", v)
@@ -15628,7 +15545,6 @@ print(json.dumps(results))
     ) -> Optional[str]:
         """Find newest package version with wheels for target Python version"""
         try:
-            from packaging.version import parse as parse_version
 
             releases = pypi_data.get("releases", {})
 

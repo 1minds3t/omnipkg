@@ -5,6 +5,59 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+---
+
+## [2.2.2] - 2026-02-13
+
+Implements comprehensive daemon management and i18n improvements:
+
+**Daemon & Worker Management:**
+- Add 'daemon idle' command for Python version-specific worker pool config
+- Group idle workers by Python version in resource monitor
+- Add stale worker detection (>24h) with interactive cleanup
+- Add daemon restart command (stop + start)
+- Make Windows daemon opt-in (OMNIPKG_ENABLE_DAEMON_WINDOWS) with UTF-8/unbuffered I/O
+- Remove implicit auto-start for explicit control
+
+**Internationalization (i18n):**
+- Complete Japanese translation (ja/LC_MESSAGES/omnipkg.po)
+- Hoist i18n imports to global scope, fix UnboundLocalError
+- Add OMNIPKG_LANG env var for language priority
+- Propagate lang setting to all subprocesses and shims
+- Replace print() with safe_print() for encoding safety
+
+**Testing & CI:**
+- Windows concurrency test workflow improvements
+- Stress test CLI args for specific test selection
+- Non-blocking daemon startup in concurrent tests
+
+Files changed: 78 files changed, 9304 insertions(+), 6573 deletions(-)
+
+**Features:**
+- feat(i18n): Integrate and propagate i18n across core components
+
+**Fixes:**
+- fix(i18n): finalize Japanese translation
+- fix(cli): hoist i18n imports to global scope to prevent UnboundLocalError
+
+**Refactoring:**
+- refactor: remove undefined name from `__all__`
+- refactor: remove reimported module
+- refactor: remove unnecessary return statement
+
+**Configuration Updates:**
+- Update windows-concurrency-test.yml
+- Update README.md
+- Update publish.yml
+- Update conda_build.yml
+- Update meta-platforms.yaml
+- Update meta-noarch.yaml
+
+**Other Changes:**
+- restore: recover deleted changelog
+
+---
+
 ## [2.2.0] - 2026-02-09
 
 ### 🔥 BREAKING CHANGES
@@ -645,4 +698,3 @@ Localization support for 24 additional languages.
 ### Notes
 - Restored stable foundation of v1.0.7.
 - Removed experimental features from v1.0.8 for maximum stability.
-- Recommended for production use.

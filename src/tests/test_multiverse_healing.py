@@ -11,7 +11,7 @@ import traceback
 from omnipkg.i18n import _
 
 try:
-    from omnipkg.common_utils import safe_print
+    pass
 except ImportError:
     # Fallback if run in a weird context before omnipkg is in path
     def safe_print(*args, **kwargs):
@@ -103,8 +103,6 @@ def run_legacy_payload():
     """Simulates a legacy task requiring older numpy/scipy."""
     import scipy.signal
     import numpy
-    import json
-    import sys
 
     print(
         f"--- Executing in Python {sys.version.split()[0]} with SciPy {scipy.__version__} & NumPy {numpy.__version__} ---",
@@ -118,8 +116,6 @@ def run_legacy_payload():
 def run_modern_payload(legacy_data_json: str):
     """Simulates a modern task requiring TensorFlow and its dependencies."""
     import tensorflow as tf
-    import json
-    import sys
 
     print(
         f"--- Executing in Python {sys.version.split()[0]} with TensorFlow {tf.__version__} ---",

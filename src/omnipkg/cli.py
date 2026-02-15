@@ -7,7 +7,7 @@ from omnipkg.i18n import _, SUPPORTED_LANGUAGES
 try:
     from .common_utils import safe_print
 except ImportError:
-    from omnipkg.common_utils import safe_print
+    pass
 
 import argparse
 import os
@@ -1177,9 +1177,6 @@ def main():
                         # CRITICAL: Conda environment preservation
                         new_env["CONDA_CHANGEPS1"] = "false"
                         new_env["CONDA_AUTO_ACTIVATE_BASE"] = "false"
-                        
-                        # Create cleanup script
-                        import tempfile
 
                         # Step 1: Create temp file FIRST
                         with tempfile.NamedTemporaryFile(mode='w', suffix='.sh', delete=False) as f:

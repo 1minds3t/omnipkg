@@ -3,11 +3,9 @@ from omnipkg.common_utils import safe_print
 # tests/test_old_rich.py (Corrected)
 
 try:
-    # This is your project's safe_print for standard, unstyled output
-    from omnipkg.common_utils import safe_print
+    pass
 except ImportError:
-    # Fallback for different execution contexts
-    from omnipkg.common_utils import safe_print
+    pass
 
 import rich
 import importlib.metadata

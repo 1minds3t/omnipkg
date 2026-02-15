@@ -36,7 +36,6 @@ def run(
         8pkg run black --check .
         8pkg run pytest tests/
     """
-    import sys
 
     # Combine command and args for execution
     all_args = [command] + (args or [])
@@ -61,7 +60,6 @@ def activate(shell: Optional[str] = typer.Option(None, help="Shell type (bash, z
         lollama start-mining  # Auto-heals conflicts!
         black .               # Auto-heals conflicts!
     """
-    import sys
 
     sys.exit(cmd_activate([shell] if shell else []))
 
@@ -76,7 +74,6 @@ def deactivate():
 try:
     from .common_utils import safe_print
 except ImportError:
-    from omnipkg.common_utils import safe_print
 
     sys.exit(cmd_deactivate([]))
 

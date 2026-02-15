@@ -3,7 +3,7 @@ from omnipkg.common_utils import safe_print
 try:
     from .common_utils import safe_print
 except ImportError:
-    from omnipkg.common_utils import safe_print
+    pass
 import sys
 import subprocess
 import json
@@ -41,8 +41,6 @@ def test_rich_version():
     """This function tests rich version and shows interpreter info - executed in different Python versions."""
     import rich
     import importlib.metadata
-    import sys
-    import json
 
     safe_print(
         _("--- Testing Rich in Python {} ---").format(sys.version[:5]), file=sys.stderr
