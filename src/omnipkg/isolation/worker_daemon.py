@@ -31,7 +31,7 @@ from omnipkg.i18n import _
 try:
     from .common_utils import safe_print
 except ImportError:
-    from omnipkg.common_utils import safe_print
+    pass
 IS_WINDOWS = platform.system() == "Windows"
 
 try:
@@ -1326,7 +1326,6 @@ def diagnose_worker_issue(package_spec: str):
 
     # Check what's in sys.path
     print("\n1. Current sys.path:")
-    import sys
 
     for i, path in enumerate(sys.path):
         print(_('   [{}] {}').format(i, path))
@@ -1345,9 +1344,6 @@ def diagnose_worker_issue(package_spec: str):
             print(_('      Got: {}').format(actual_version))
     except Exception as e:
         safe_print(f"   ❌ Import failed: {e}")
-
-    # Check for bubble
-    from pathlib import Path
 
     site_packages = (
         Path(sys.prefix)
@@ -1537,7 +1533,6 @@ class PersistentWorker:
                 
     def wait_for_ready_with_activity_monitoring(self, process, timeout_idle_seconds=300.0):
         """Wait for worker READY signal with REAL activity monitoring (CPU/Mem/IO)."""
-        import select
         try:
             import psutil
             ps_process = psutil.Process(process.pid)
@@ -1563,8 +1558,6 @@ class PersistentWorker:
             # Try to read READY signal
             ready_line = None
             if IS_WINDOWS:
-                # Windows: threaded non-blocking read
-                import threading
                 result = [None]
                 def try_read():
                     try: result[0] = process.stdout.readline()
@@ -1652,7 +1645,6 @@ class PersistentWorker:
         Returns:
             Response dict from worker
         """
-        import json
 
         import psutil
 
@@ -1741,7 +1733,6 @@ class PersistentWorker:
         Discover CUDA library paths for this package spec.
         Dynamically detects CUDA version requirement (cu11 vs cu12).
         """
-        from pathlib import Path
 
         cuda_paths = []
 
@@ -2229,15 +2220,6 @@ class WorkerPoolDaemon:
 
     def _start_windows_daemon(self, wait_for_ready: bool = False):
         """Start daemon on Windows using subprocess."""
-        # Windows daemon is opt-in due to stability issues
-        if not os.environ.get("OMNIPKG_ENABLE_DAEMON_WINDOWS"):
-            safe_print("❌ Daemon is disabled on Windows by default.", file=sys.stderr)
-            safe_print("   Windows has subprocess/encoding issues that cause instability.", file=sys.stderr)
-            safe_print("   To enable: set OMNIPKG_ENABLE_DAEMON_WINDOWS=1", file=sys.stderr)
-            safe_print("   Note: This is experimental and may cause issues.", file=sys.stderr)
-            return False
-
-        import subprocess
         daemon_script = os.path.abspath(__file__)
         
         os.makedirs(os.path.dirname(DAEMON_LOG_FILE), exist_ok=True)
@@ -2260,7 +2242,7 @@ class WorkerPoolDaemon:
                 stderr=log_file_handle,
                 close_fds=False,
                 # ADD THIS - keep process handle alive
-                env=dict(os.environ, PYTHONUNBUFFERED="1", PYTHONUTF8="1", PYTHONIOENCODING="utf-8")
+                env=dict(os.environ, PYTHONUNBUFFERED="1")
             )
             
             # DON'T close log_file_handle here - keep it alive
@@ -2380,12 +2362,6 @@ class WorkerPoolDaemon:
                 self._execute_code(spec, "pass", {}, {})
             except Exception:
                 pass
-
-    import socket
-    import sys
-    import os
-    import tempfile
-    from pathlib import Path
 
     def _run_socket_server(self):
         """
@@ -2859,8 +2835,6 @@ class WorkerPoolDaemon:
 
             worker_info["worker"].process.stdin.write(json.dumps(command) + "\n")
             worker_info["worker"].process.stdin.flush()
-
-            import select
             readable, unused, unused = select.select([worker_info["worker"].process.stdout], [], [], 60.0)
 
             if not readable:
@@ -3452,7 +3426,6 @@ class DaemonClient:
         return self._send({"type": "shutdown"})
 
     def _spawn_daemon(self):
-        import subprocess
 
         daemon_script = os.path.abspath(__file__)
 
@@ -3532,13 +3505,6 @@ class DaemonClient:
                         pass
                 time.sleep(0.1)
             return False
-
-    import socket
-    import sys
-    import os
-    import time
-    import tempfile
-    from pathlib import Path
 
 
     # ============================================================
@@ -4410,7 +4376,6 @@ def cli_status():
 
 def cli_logs(follow: bool = False, tail_lines: int = 50):
     """View or follow the daemon logs."""
-    from pathlib import Path
 
     log_path = Path(DAEMON_LOG_FILE)
     if not log_path.exists():
@@ -4529,7 +4494,6 @@ def cli_idle_config(python_version: str = None, count: int = None):
 # ═══════════════════════════════════════════════════════════════
 
 if __name__ == "__main__":
-    import sys
 
     if len(sys.argv) < 2:
         print(_('Usage: python -m omnipkg.isolation.worker_daemon {start|stop|status|logs}'))

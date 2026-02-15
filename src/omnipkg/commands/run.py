@@ -11,7 +11,7 @@ from omnipkg.utils.ai_import_healer import heal_code_string
 try:
     from ..common_utils import safe_print
 except ImportError:
-    from omnipkg.common_utils import safe_print
+    pass
 
 import json
 import os
@@ -2629,8 +2629,6 @@ def execute_run_command(
     current_lang = config_manager.config.get("language")
     if current_lang:
         os.environ["OMNIPKG_LANG"] = current_lang
-
-    from omnipkg.i18n import _
 
     if not cmd_args:
         safe_print(_("❌ Error: No script or command specified to run."))

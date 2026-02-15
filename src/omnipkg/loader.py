@@ -40,8 +40,7 @@ try:
 except ImportError:
     from omnipkg.common_utils import (
         ProcessCorruptedException,
-        safe_print,
-    )
+        )
 
 # Import i18n
 from omnipkg.i18n import _
@@ -597,7 +596,6 @@ class omnipkgLoader:
         # 3. Fallback (Slow Subprocess)
         if not success:
             try:
-                import subprocess
 
                 script = (
                     "import shutil, sys, json, os; moves=json.loads(sys.argv[1]); "
@@ -1095,8 +1093,6 @@ class omnipkgLoader:
         # Fallback: scan dist-info
         from importlib.metadata import PathDistribution
 
-        from packaging.utils import canonicalize_name
-
         dependencies = {}
         dist_infos = list(bubble_path.rglob("*.dist-info"))
 
@@ -1404,7 +1400,6 @@ class omnipkgLoader:
         CRITICAL FIX: Strictly checks self.site_packages_root to avoid confusion
         from parent loaders' bubbles in sys.path.
         """
-        from packaging.utils import canonicalize_name
 
         canonical_target = canonicalize_name(package_name)
         filesystem_name = package_name.replace("-", "_")
