@@ -3521,7 +3521,6 @@ def chaos_test_21_gpu_resident_pipeline():
     📍 PHASE 4: Zero-Copy Data Pipeline
      NOW ACTUALLY USES PyTorch 1.13's native CUDA IPC!
     """
-
     safe_print(f"\n{'═'*66}")
     safe_print("║  TEST 21: 🔥 GPU-RESIDENT MULTI-VERSION PIPELINE           ║")
     safe_print("║  PyTorch 1.13.1 with NATIVE CUDA IPC (True Zero-Copy!)     ║")
@@ -3751,7 +3750,6 @@ def chaos_test_22_complete_ipc_benchmark():
 
     Tests the same 3-stage pipeline across all modes with proper warmup.
     """
-
     safe_print(f"\n{'═'*66}")
     safe_print("║  TEST 22: 🔥 COMPLETE IPC MODE BENCHMARK              ║")
     safe_print("║  Same Pipeline × 4 Different Execution Modes          ║")
