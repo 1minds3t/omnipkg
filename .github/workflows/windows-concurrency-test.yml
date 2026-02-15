@@ -28,7 +28,6 @@ jobs:
           echo "PYTHONUTF8=1" >> $env:GITHUB_ENV
           echo "PYTHONUNBUFFERED=1" >> $env:GITHUB_ENV
           echo "OMNIPKG_DEBUG=1" >> $env:GITHUB_ENV
-          echo "OMNIPKG_ENABLE_DAEMON_WINDOWS=1" >> $env:GITHUB_ENV
           # Force immediate flush for all streams
           echo "PYTHONDONTWRITEBYTECODE=1" >> $env:GITHUB_ENV
         shell: pwsh
