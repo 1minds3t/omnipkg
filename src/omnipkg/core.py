@@ -1226,7 +1226,6 @@ class ConfigManager:
         """
         Find the project root directory by looking for setup.py, pyproject.toml, or .git
         """
-
         current_dir = Path.cwd()
         module_dir = Path(__file__).parent.parent
         search_paths = [current_dir, module_dir]
@@ -2392,7 +2391,6 @@ class ConfigManager:
         This is more reliable than calculating it from sys.prefix when hotswapping is involved.
         Cross-platform compatible with special handling for Windows.
         """
-
         is_windows = platform.system() == "Windows"
 
         try:
@@ -2513,7 +2511,6 @@ class ConfigManager:
         Runs an interpreter in a subprocess to ask for its version and calculates its site-packages path.
         This is the only reliable way to get paths for an interpreter that isn't the currently running one.
         """
-
         try:
             # Step 1: Get version and prefix (this part works fine)
             cmd = [
@@ -2634,7 +2631,6 @@ class ConfigManager:
         
         AUTO-DETECTS non-interactive environments (Docker, CI, piped input, etc.)
         """
-        
         # ============================================================================
         # CRITICAL: Auto-detect non-interactive environments
         # ============================================================================
@@ -3209,7 +3205,6 @@ class ConfigManager:
         - /path/to/.omnipkg/interpreters/cpython-3.10-managed/bin/python3.10 → "3.10"
         - /path/to/bin/python3.11 → "3.11"
         """
-        
         # Try to extract from the executable name itself
         match = re.search(r'python(\d+\.\d+)', exe_path.name)
         if match:
@@ -5054,7 +5049,6 @@ class BubbleIsolationManager:
         (Authoritative) Finds import candidates by reading top_level.txt from the
         package's .dist-info directory. Handles PyPI's inconsistent naming conventions.
         """
-
         # Strategy 1: Find ANY .dist-info directory that might match this package
         version = pkg_info["version"]
         canonical = canonicalize_name(pkg_name)
@@ -5221,7 +5215,6 @@ class BubbleIsolationManager:
 
     def _extract_missing_module_name(self, error_msg: str) -> str:
         """Extract the specific missing module name from error messages."""
-
         # Try different patterns for extracting module names
         patterns = [
             r"No module named '([^']+)'",
@@ -6359,7 +6352,6 @@ class omnipkg:
         2. Managed interpreters (in .omnipkg/) NEVER trigger syncs
         3. On Windows, extra conservative - can be disabled entirely
         """
-
         overall_start = time.perf_counter_ns()
 
         # === SAFETY CHECK 1: Determine if we're the native interpreter ===
@@ -9185,7 +9177,6 @@ class omnipkg:
         """
         Enhanced package data display with interactive selection.
         """
-
         c_name = canonicalize_name(pkg_name)
 
         # Find all installations
@@ -12112,7 +12103,6 @@ class omnipkg:
         """
         Launches a non-blocking background process to scan nested packages inside bubbles.
         """
-        
         bubble_list = [f"{name}:{path}" for name, path in bubble_paths.items()]
         
         # Create a background scan script
@@ -13227,7 +13217,6 @@ class omnipkg:
 
     def _get_current_timestamp(self) -> str:
         """Helper to get current timestamp for knowledge base entries."""
-
         return datetime.datetime.now().isoformat()
 
     def _find_package_installations(
