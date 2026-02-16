@@ -2251,6 +2251,7 @@ class WorkerPoolDaemon:
             
             with open(DAEMON_LOG_FILE, "a") as f:
                 f.write(f"[DEBUG] Spawning subprocess NOW\n")
+                f.write(f"[DEBUG] env['OMNIPKG_DAEMON_CHILD'] = {env.get('OMNIPKG_DAEMON_CHILD')}\n")
                 f.flush()
             
             process = subprocess.Popen(
