@@ -540,7 +540,9 @@ except ImportError:
 os.environ['OMNIPKG_IS_DAEMON_WORKER'] = '1'
 os.environ['OMNIPKG_DISABLE_WORKER_POOL'] = '1'
 
-sys.stdin.reconfigure(line_buffering=True)
+# CRITICAL: Configure stdin/stdout/stderr for proper encoding and buffering
+sys.stdin.reconfigure(encoding='utf-8', errors='replace', line_buffering=True)
+sys.stderr.reconfigure(encoding='utf-8', errors='replace', line_buffering=True)
 
 _original_stdout = sys.stdout
 _devnull = open(os.devnull, 'w')
@@ -596,7 +598,7 @@ try:
     loaders = []
     
     for s in specs:
-        l = omnipkgLoader(s, isolation_mode='overlay')
+        l = omnipkgLoader(s, isolation_mode='overlay', quiet=True)
         l.__enter__()
         loaders.append(l)
 
@@ -1007,6 +1009,8 @@ except Exception as e:
     sys.stderr.write(f"ERROR: Failed to send READY: {e}\\n")
     sys.stderr.flush()
     sys.exit(1)
+sys.stderr.write('🎯 [WORKER] READY signal sent, entering main execution loop...\\n')
+sys.stderr.flush()
 
 # ═══════════════════════════════════════════════════════════════
 # MAIN EXECUTION LOOP
@@ -1014,20 +1018,38 @@ except Exception as e:
 
 while True:
     try:
+        sys.stderr.write('📥 [WORKER] Waiting for command...\\n')
+        sys.stderr.flush()
+        
         command_line = sys.stdin.readline()
+        
+        sys.stderr.write(f'📨 [WORKER] Received: {command_line[:100] if command_line else \"EOF\"}...\\n')
+        sys.stderr.flush()
+        
         if not command_line:
+            sys.stderr.write('🛑 [WORKER] EOF received, exiting\\n')
+            sys.stderr.flush()
             break
         
         command_line = command_line.strip()
         if not command_line:
+            sys.stderr.write('⚠️  [WORKER] Empty line, continuing\\n')
+            sys.stderr.flush()
             continue
         
         command = json.loads(command_line)
+        sys.stderr.write(f'✅ [WORKER] Parsed command type: {command.get(\"type\")}\\n')
+        sys.stderr.flush()
         
         if command.get('type') == 'shutdown':
+            sys.stderr.write('🛑 [WORKER] Shutdown requested\\n')
+            sys.stderr.flush()
             break
         
         task_id = command.get('task_id', 'UNKNOWN')
+        sys.stderr.write(f'🎯 [WORKER] Processing task {task_id}\\n')
+        sys.stderr.flush()
+        
         worker_code = command.get('code', '')
         exec_scope = {'input_data': command}
         shm_blocks = []
