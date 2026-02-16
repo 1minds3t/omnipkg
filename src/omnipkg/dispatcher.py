@@ -12,7 +12,7 @@ import json
 from pathlib import Path
 from omnipkg.i18n import _
 from omnipkg.common_utils import safe_print  # ← Should be here
-
+import platform
 
 def main():
     """
