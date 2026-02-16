@@ -1,137 +1,139 @@
 omnipkg includes the following third-party software:
+================================================================================
 
-redis (v6.4.0)
+aiohappyeyeballs (v2.6.1)
 License: MIT
-See licenses/redis.txt for full license text
+See licenses/aiohappyeyeballs.txt for full license text
 
-packaging (v25.0)
-License: Apache-2.0 or BSD-2-Clause
-See licenses/packaging.txt for full license text
-
-Authlib (v1.6.4)
-License: BSD-3-Clause
-See licenses/authlib.txt for full license text
-
-requests (v2.32.4)
-License: Apache-2.0
-See licenses/requests.txt for full license text
-
-python-magic (v0.4.27)
-License: MIT
-See licenses/python-magic.txt for full license text
-
-aiohttp (v3.12.15)
+aiohttp (v3.13.3)
 License: Apache-2.0
 See licenses/aiohttp.txt for full license text
 
-tqdm (v4.67.1)
-License: MIT and MPL-2.0
-See licenses/tqdm.txt for full license text
-
-tomli (v2.2.1)
-License: MIT
-See licenses/tomli.txt for full license text
-
-filelock (v3.19.1)
+aiosignal (v1.4.0)
 License: Apache-2.0
-See licenses/filelock.txt for full license text
+See licenses/aiosignal.txt for full license text
 
-filelock-lts
-License: Apache-2.0 (matches upstream filelock)
-See licenses/filelock.txt for full license text
-
-uv (v0.6.3)
+attrs (v25.4.0)
 License: MIT
-See licenses/uv.txt for full license text
+See licenses/attrs.txt for full license text
 
-urllib3
-License: MIT
-See licenses/urllib3.txt for full license text
-
-urllib3-lts
-License: MIT (matches upstream urllib3)
-See licenses/urllib3.txt for full license text
-
-psutil
+authlib (v1.6.7)
 License: BSD-3-Clause
-See licenses/psutil.txt for full license text
+See licenses/authlib.txt for full license text
 
-typer
+certifi (v2026.1.4)
+License: MPL-2.0
+See licenses/certifi.txt for full license text
+
+charset-normalizer (v3.4.4)
 License: MIT
-See licenses/typer.txt for full license text
-
-rich
-License: MIT
-See licenses/rich.txt for full license text
-
-flask
-License: BSD-3-Clause
-See licenses/flask.txt for full license text
-
-flask-cors
-License: MIT
-See licenses/flask-cors.txt for full license text
-
-typing-extensions
-License: Python Software Foundation License
-See licenses/typing-extensions.txt for full license text
-
-importlib-metadata
-License: Apache-2.0
-See licenses/importlib-metadata.txt for full license text
+See licenses/charset-normalizer.txt for full license text
 
 dataclasses
 License: Apache-2.0
 See licenses/dataclasses.txt for full license text
 
-safety
-License: MIT
-See licenses/safety.txt for full license text
+filelock-lts
+License: Unknown
+See licenses/filelock-lts.txt for full license text
 
-marshmallow
-License: MIT
+filelock (v3.20.3)
+License: Apache-2.0
+See licenses/filelock.txt for full license text
+
+flask-cors (v6.0.2)
+License: Unknown
+See licenses/flask-cors.txt for full license text
+
+flask (v3.1.2)
+License: Unknown
+See licenses/flask.txt for full license text
+
+frozenlist (v1.7.0)
+License: BSD-3-Clause
+See licenses/frozenlist.txt for full license text
+
+idna (v2.10)
+License: BSD-3-Clause
+See licenses/idna.txt for full license text
+
+importlib-metadata (v8.7.0)
+License: Apache-2.0
+See licenses/importlib-metadata.txt for full license text
+
+marshmallow (v4.2.2)
+License: Unknown
 See licenses/marshmallow.txt for full license text
+
+multidict (v6.7.0)
+License: Apache-2.0
+See licenses/multidict.txt for full license text
+
+packaging (v26.0)
+License: Apache-2.0
+See licenses/packaging.txt for full license text
 
 pip-audit
 License: Apache-2.0
 See licenses/pip-audit.txt for full license text
 
-aiohappyeyeballs
-License: Python Software Foundation License
-See licenses/aiohappyeyeballs.txt for full license text
-
-aiosignal
-License: Apache-2.0
-See licenses/aiosignal.txt for full license text
-
-attrs
-License: MIT
-See licenses/attrs.txt for full license text
-
-certifi
-License: MPL-2.0
-See licenses/certifi.txt for full license text
-
-charset-normalizer
-License: MIT
-See licenses/charset-normalizer.txt for full license text
-
-frozenlist
-License: Apache-2.0
-See licenses/frozenlist.txt for full license text
-
-idna
-License: BSD-3-Clause
-See licenses/idna.txt for full license text
-
-multidict
-License: Apache-2.0
-See licenses/multidict.txt for full license text
-
-propcache
+propcache (v0.3.1)
 License: Apache-2.0
 See licenses/propcache.txt for full license text
 
-yarl
+psutil (v7.2.2)
+License: BSD-3-Clause
+See licenses/psutil.txt for full license text
+
+python-magic
+License: MIT
+See licenses/python-magic.txt for full license text
+
+redis (v7.1.0)
+License: MIT
+See licenses/redis.txt for full license text
+
+requests (v2.32.5)
+License: Apache-2.0
+See licenses/requests.txt for full license text
+
+rich (v13.7.1)
+License: Unknown
+See licenses/rich.txt for full license text
+
+safety (v3.7.0)
+License: MIT
+See licenses/safety.txt for full license text
+
+tomli (v2.4.0)
+License: MIT
+See licenses/tomli.txt for full license text
+
+tqdm (v4.67.3)
+License: MIT
+See licenses/tqdm.txt for full license text
+
+typer (v0.21.1)
+License: MIT
+See licenses/typer.txt for full license text
+
+typing-extensions (v4.15.0)
+License: PSF
+See licenses/typing-extensions.txt for full license text
+
+urllib3-lts (v2025.66471.3)
+License: Unknown
+See licenses/urllib3-lts.txt for full license text
+
+urllib3 (v2.6.3)
+License: MIT
+See licenses/urllib3.txt for full license text
+
+uv (v0.9.5)
+License: MIT
+See licenses/uv.txt for full license text
+
+yarl (v1.22.0)
 License: Apache-2.0
 See licenses/yarl.txt for full license text
+

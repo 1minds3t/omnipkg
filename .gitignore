@@ -116,3 +116,6 @@ site/
 *.so
 src/tests/debug_test*.py
 *.zip
+
+# Auto-generated license files
+licenses/
