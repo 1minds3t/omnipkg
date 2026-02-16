@@ -2632,29 +2632,6 @@ class ConfigManager:
         AUTO-DETECTS non-interactive environments (Docker, CI, piped input, etc.)
         """
         # ============================================================================
-        # WINDOWS CONSOLE FIX: Enable proper UTF-8 and ANSI handling
-        # ============================================================================
-        if platform.system() == "Windows":
-            try:
-                # Enable ANSI escape sequences
-                import ctypes
-                kernel32 = ctypes.windll.kernel32
-                kernel32.SetConsoleMode(kernel32.GetStdHandle(-11), 7)
-                
-                # Force UTF-8 encoding for stdin/stdout/stderr
-                if hasattr(sys.stdout, 'reconfigure'):
-                    sys.stdout.reconfigure(encoding='utf-8', line_buffering=True)
-                    sys.stderr.reconfigure(encoding='utf-8', line_buffering=True)
-                if hasattr(sys.stdin, 'reconfigure'):
-                    sys.stdin.reconfigure(encoding='utf-8')
-                    
-                # Set environment variables
-                os.environ['PYTHONIOENCODING'] = 'utf-8'
-                os.environ['PYTHONUNBUFFERED'] = '1'
-            except Exception:
-                pass  # If it fails, continue anyway
-        
-        # ============================================================================
         # CRITICAL: Auto-detect non-interactive environments
         # ============================================================================
         is_docker = os.path.exists("/.dockerenv") or os.path.exists("/run/.containerenv")
@@ -2662,8 +2639,12 @@ class ConfigManager:
         forced_noninteractive = os.environ.get("OMNIPKG_NONINTERACTIVE")
         in_ci = os.environ.get("CI")
         
+        # WINDOWS: ALWAYS force non-interactive mode - input() is fundamentally broken
+        if platform.system() == "Windows":
+            interactive = False
+            safe_print(_("🪟 Windows detected - using non-interactive setup"))
         # If ANY of these conditions are true, force non-interactive mode
-        if interactive and (in_ci or forced_noninteractive or no_tty or is_docker):
+        elif interactive and (in_ci or forced_noninteractive or no_tty or is_docker):
             interactive = False
             safe_print(_("🤖 Non-interactive environment detected - using defaults"))
         
@@ -2827,7 +2808,7 @@ class ConfigManager:
         defaults = self._get_sensible_defaults(managed_python_exe_str)
         final_config = defaults.copy()
 
-        # Interactive prompts (ONLY if truly interactive)
+        # Interactive prompts (ONLY if truly interactive - NOT on Windows)
         if interactive:
             safe_print(_("🌍 Welcome to omnipkg! Let's get you configured."))
             safe_print("-" * 60)
@@ -2938,29 +2919,46 @@ class ConfigManager:
         ]
         try:
             if interactive:
-                process = subprocess.Popen(
-                    rebuild_cmd,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.STDOUT,
-                    text=True,
-                )
-                while True:
-                    output = process.stdout.readline()
-                    if output == "" and process.poll() is not None:
-                        break
-                    if output and (
-                        "Processing" in output or "Building" in output or "Scanning" in output
-                    ):
-                        safe_print(_("   {}").format(output.strip()))
-                process.wait()
-                if process.returncode != 0:
-                    safe_print(
-                        _(
-                            "   ⚠️  Knowledge base initialization encountered issues but continuing..."
-                        )
+                if platform.system() == "Windows":
+                    # Windows: Use simple subprocess.run() to avoid console corruption
+                    safe_print(_("   🔄 Building knowledge base..."))
+                    result = subprocess.run(
+                        rebuild_cmd,
+                        capture_output=True,
+                        text=True,
+                        encoding='utf-8',
+                        errors='replace'
                     )
+                    if result.returncode != 0:
+                        safe_print(_("   ⚠️  Knowledge base initialization encountered issues but continuing..."))
+                        if result.stderr:
+                            safe_print(_("   Error: {}").format(result.stderr[:200]))
+                else:
+                    # Unix: Use streaming output
+                    process = subprocess.Popen(
+                        rebuild_cmd,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.STDOUT,
+                        text=True,
+                    )
+                    while True:
+                        output = process.stdout.readline()
+                        if output == "" and process.poll() is not None:
+                            break
+                        if output and (
+                            "Processing" in output or "Building" in output or "Scanning" in output
+                        ):
+                            safe_print(_("   {}").format(output.strip()))
+                    process.wait()
+                    if process.returncode != 0:
+                        safe_print(
+                            _(
+                                "   ⚠️  Knowledge base initialization encountered issues but continuing..."
+                            )
+                        )
             else:
-                subprocess.run(rebuild_cmd, check=True)
+                # Non-interactive: silent run
+                subprocess.run(rebuild_cmd, check=True, capture_output=True)
         except subprocess.CalledProcessError:
             if interactive:
                 safe_print(_("   ⚠️  Knowledge base will be built on first command usage instead."))
