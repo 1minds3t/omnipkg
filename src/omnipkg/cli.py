@@ -882,6 +882,27 @@ def create_parser():
 
 def main():
     """Main application entry point with pre-flight version check."""
+    # ============================================================================
+    # WINDOWS CONSOLE FIX - Must be FIRST before any output
+    # ============================================================================
+    if sys.platform == 'win32':
+        try:
+            import ctypes
+            kernel32 = ctypes.windll.kernel32
+            kernel32.SetConsoleMode(kernel32.GetStdHandle(-11), 7)
+            
+            if hasattr(sys.stdout, 'reconfigure'):
+                sys.stdout.reconfigure(encoding='utf-8', line_buffering=True)
+                sys.stderr.reconfigure(encoding='utf-8', line_buffering=True)
+            if hasattr(sys.stdin, 'reconfigure'):
+                sys.stdin.reconfigure(encoding='utf-8')
+                
+            os.environ['PYTHONIOENCODING'] = 'utf-8'
+            os.environ['PYTHONUNBUFFERED'] = '1'
+        except Exception:
+            pass
+            
+    """Main application entry point with pre-flight version check."""
     try:
         # ═══════════════════════════════════════════════════════════
         # 🎯 DETECT VERSION-SPECIFIC COMMAND (8pkg310, 8pkg311, etc.)
