@@ -796,7 +796,7 @@ class omnipkgMetadataGatherer:
                 }
 
                 iterator = concurrent.futures.as_completed(future_to_path)
-                if HAS_TQDM:
+                if HAS_TQDM and platform.system() != "Windows":
                     iterator = tqdm(
                         iterator,
                         total=len(future_to_path),
@@ -1588,7 +1588,7 @@ class omnipkgMetadataGatherer:
                 for dist in distributions_to_process
             }
             iterator = concurrent.futures.as_completed(future_to_dist)
-            if HAS_TQDM:
+            if HAS_TQDM and platform.system() != "Windows":
                 iterator = tqdm(
                     iterator,
                     total=len(distributions_to_process),
