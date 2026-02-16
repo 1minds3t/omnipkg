@@ -148,7 +148,7 @@ def get_daemon_worker_info():
 def run_cmd(cmd):
     """Execute shell command and return output"""
     try:
-        result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+        result = subprocess.run(cmd, shell=True, capture_output=True, text=True, encoding="utf-8", errors="replace")
         return result.stdout
     except Exception as e:
         return f"Error: {e}"
