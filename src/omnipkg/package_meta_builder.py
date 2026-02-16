@@ -158,7 +158,6 @@ class omnipkgMetadataGatherer:
             py_ver_str = f"py{match.group(1)}"
         else:
             try:
-                creationflags = subprocess.CREATE_NO_WINDOW if platform.system() == "Windows" else 0
                 result = subprocess.run(
                     [
                         python_exe_path,
@@ -167,11 +166,8 @@ class omnipkgMetadataGatherer:
                     ],
                     capture_output=True,
                     text=True,
-                    encoding="utf-8",
-                    errors="replace",
                     check=True,
                     timeout=2,
-                    creationflags=creationflags,
                 )
                 py_ver_str = result.stdout.strip()
             except Exception:
@@ -1265,15 +1261,11 @@ class omnipkgMetadataGatherer:
                     "--json",
                 ]
                 safe_print("   🔍 Running safety vulnerability scan...", flush=True)
-                creationflags = subprocess.CREATE_NO_WINDOW if platform.system() == "Windows" else 0
                 result = subprocess.run(
                     cmd, 
-                    capture_output=True,
-                    text=True,
-                    encoding="utf-8",
-                    errors="replace",
-                    timeout=180,
-                    creationflags=creationflags,
+                    capture_output=True,  # Keep this for JSON parsing
+                    text=True, 
+                    timeout=180
                 )
                 safe_print("   ✓ Scan complete", flush=True)
 
@@ -1338,8 +1330,7 @@ class omnipkgMetadataGatherer:
             # ADD THIS:
             safe_print("   🔍 Running pip audit scan...", flush=True)
             
-            creationflags = subprocess.CREATE_NO_WINDOW if platform.system() == "Windows" else 0
-            result = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=180, creationflags=creationflags)
+            result = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=180)
             
             # ADD THIS:
             safe_print("   ✓ Audit complete", flush=True)
@@ -2002,16 +1993,12 @@ class omnipkgMetadataGatherer:
         try:
             # 4. Run the generated script
             python_exe = self.config.get("python_executable", sys.executable)
-            creationflags = subprocess.CREATE_NO_WINDOW if platform.system() == "Windows" else 0
             result = subprocess.run(
                 [python_exe, "-c", script],
                 capture_output=True,
                 text=True,
-                encoding="utf-8",
-                errors="replace",
                 check=True,
                 timeout=15,
-                creationflags=creationflags,
             )
 
             test_results = json.loads(result.stdout.strip())
@@ -2210,15 +2197,11 @@ class omnipkgMetadataGatherer:
                 for name, version in packages.items():
                     f.write(f"{name}=={version}\n")
             python_exe = self.config.get("python_executable", sys.executable)
-            creationflags = subprocess.CREATE_NO_WINDOW if platform.system() == "Windows" else 0
             result = subprocess.run(
                 [python_exe, "-m", "safety", "check", "-r", reqs_file_path, "--json"],
                 capture_output=True,
                 text=True,
-                encoding="utf-8",
-                errors="replace",
                 timeout=120,
-                creationflags=creationflags,
             )
             if result.stdout:
                 self.security_report = json.loads(result.stdout)
@@ -2264,7 +2247,6 @@ class omnipkgMetadataGatherer:
             return {"help_text": "Executable not found."}
         for flag in ["--help", "-h"]:
             try:
-                creationflags = subprocess.CREATE_NO_WINDOW if platform.system() == "Windows" else 0
                 result = subprocess.run(
                     [executable_path, flag],
                     capture_output=True,
@@ -2272,7 +2254,6 @@ class omnipkgMetadataGatherer:
                     encoding="utf-8",
                     timeout=3,
                     errors="ignore",
-                    creationflags=creationflags,
                 )
                 output = (result.stdout or result.stderr).strip()
                 if output and "usage:" in output.lower():
