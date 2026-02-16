@@ -174,6 +174,15 @@ except:
 
         # CRITICAL: Disable buffering in subprocess
         # NOW worker_code is defined, so we can use it!
+        
+        # 🔥 WINDOWS FIX: Prevent visible console windows
+        import platform
+        creationflags = 0
+        if platform.system() == "Windows":
+            # CREATE_NO_WINDOW prevents console window from appearing
+            # This is the subprocess equivalent, not process detachment
+            creationflags = 0x08000000  # CREATE_NO_WINDOW
+        
         self.process = subprocess.Popen(
             [sys.executable, "-u", "-c", worker_code],
             stdin=subprocess.PIPE,
@@ -182,6 +191,7 @@ except:
             bufsize=0,
             text=True,
             env=env,
+            creationflags=creationflags,
         )
 
         # Start logging thread
