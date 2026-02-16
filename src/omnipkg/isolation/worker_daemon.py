@@ -2237,12 +2237,15 @@ class WorkerPoolDaemon:
             log_file_handle = open(DAEMON_LOG_FILE, "a", buffering=1)
             
             # 🔥 CRITICAL: Set environment variable to prevent infinite spawning
+            # The child process will detect this and start directly
             env = dict(os.environ, 
                       PYTHONUNBUFFERED="1",
                       OMNIPKG_DAEMON_CHILD="1")  # Mark this as daemon child
             
+            # Launch the daemon script directly - it will detect OMNIPKG_DAEMON_CHILD
+            # and start without parsing command line arguments
             process = subprocess.Popen(
-                [sys.executable, "-u", daemon_script, "start", "--no-fork"],
+                [sys.executable, "-u", daemon_script],  # No "start" argument needed!
                 creationflags=DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP,  # Removed CREATE_NO_WINDOW
                 stdin=subprocess.DEVNULL,
                 stdout=log_file_handle,
@@ -2264,7 +2267,7 @@ class WorkerPoolDaemon:
                     safe_print(_('❌ Timeout (check {})').format(DAEMON_LOG_FILE), file=sys.stderr)
                     return False
             else:
-                time.sleep(5)  # Give Windows more time
+                time.sleep(2)  # Reduced from 5 to 2 seconds
                 if self.is_running():
                     safe_print('✅ Daemon started', file=sys.stderr)
                     return True
@@ -2273,6 +2276,8 @@ class WorkerPoolDaemon:
                     return False
         except Exception as e:
             safe_print(_('❌ Failed: {}').format(e), file=sys.stderr)
+            import traceback
+            traceback.print_exc(file=sys.stderr)
             return False if wait_for_ready else sys.exit(1)
 
     def _wait_for_daemon_ready(self, timeout: int = 10) -> bool:
@@ -2377,6 +2382,8 @@ class WorkerPoolDaemon:
         # Platform detection
         is_windows = sys.platform == 'win32'
         
+        print(_('[DAEMON] Starting socket server (running={})').format(self.running), flush=True)
+        
         if is_windows:
             # ============================================================
             # WINDOWS: Use TCP socket on localhost
@@ -2393,6 +2400,7 @@ class WorkerPoolDaemon:
                 print(_('[DAEMON] Bound to TCP 127.0.0.1:{}').format(port), flush=True)
             except OSError as e:
                 print(_('[DAEMON] Failed to bind to port {}: {}').format(port, e), flush=True)
+                self.running = False  # Set to False so we don't try to loop
                 raise
             
             # Store connection info for clients to find us
@@ -2421,17 +2429,23 @@ class WorkerPoolDaemon:
         # CRITICAL FIX: Increased backlog for high concurrency
         sock.listen(128)
         
-        print(_('[DAEMON] Server ready, entering accept loop'), flush=True)
+        print(_('[DAEMON] Server ready, entering accept loop (running={})').format(self.running), flush=True)
         
+        loop_count = 0
         while self.running:
             try:
                 sock.settimeout(1.0)
                 conn, unused = sock.accept()
                 
+                print(f'[DAEMON] Accepted connection (loop_count={loop_count})', flush=True)
+                
                 # CRITICAL FIX: Use thread pool instead of unbounded threads
                 self.executor.submit(self._handle_client, conn)
                 
             except socket.timeout:
+                loop_count += 1
+                if loop_count % 10 == 0:  # Log every 10 seconds
+                    print(f'[DAEMON] Still alive (running={self.running}, loop_count={loop_count})', flush=True)
                 continue
             except Exception as e:
                 if self.running:
@@ -2439,6 +2453,7 @@ class WorkerPoolDaemon:
                     print(_('[DAEMON] Accept error: {}').format(e), flush=True)
         
         # Cleanup
+        print(f'[DAEMON] Exited loop (running={self.running})', flush=True)
         sock.close()
         print(_('[DAEMON] Socket closed'), flush=True)
         
@@ -4519,9 +4534,17 @@ if __name__ == "__main__":
     # 🔥 CRITICAL FIX: Prevent infinite daemon spawning on Windows
     # Check if we're already running as a daemon child BEFORE doing anything else
     if IS_WINDOWS and os.environ.get("OMNIPKG_DAEMON_CHILD") == "1":
-        # We are the daemon child process - start directly without spawning more
-        daemon = WorkerPoolDaemon(max_workers=10, max_idle_time=300, warmup_specs=[])
-        daemon.start(daemonize=False)
+        # We are the daemon child process - start directly without any argv processing
+        # This prevents the child from trying to parse commands like "start" again
+        try:
+            daemon = WorkerPoolDaemon(max_workers=10, max_idle_time=300, warmup_specs=[])
+            daemon.start(daemonize=False)
+        except KeyboardInterrupt:
+            pass
+        except Exception as e:
+            sys.stderr.write(f"[DAEMON] Fatal error: {e}\n")
+            import traceback
+            traceback.print_exc()
         sys.exit(0)
 
     if len(sys.argv) < 2:
@@ -4536,6 +4559,8 @@ if __name__ == "__main__":
 
         if no_fork:
             # Direct start without fork (for Windows subprocess spawn)
+            # This path should NOT be reached on Windows with OMNIPKG_DAEMON_CHILD
+            # but keep it as fallback
             daemon = WorkerPoolDaemon(max_workers=10, max_idle_time=300, warmup_specs=[])
             daemon.start(daemonize=False)
         else:
