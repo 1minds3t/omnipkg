@@ -802,6 +802,8 @@ def heal_with_package_reinstall(
             [sys.executable, "-m", "8pkg", "uninstall", package_name, "-y"],
             capture_output=True,
             text=True,
+            encoding='utf-8',
+            errors='replace',
             timeout=300,
         )
 
@@ -816,6 +818,8 @@ def heal_with_package_reinstall(
             [sys.executable, "-m", "pip", "cache", "remove", package_name],
             capture_output=True,
             text=True,
+            encoding='utf-8',
+            errors='replace',
             timeout=60,
         )
 
@@ -838,6 +842,8 @@ def heal_with_package_reinstall(
             ],
             capture_output=True,
             text=True,
+            encoding='utf-8',
+            errors='replace',
             timeout=600,
         )
 
@@ -2026,6 +2032,7 @@ def _run_script_with_healing(
         stdin=subprocess.PIPE,
         text=True,
         encoding="utf-8",
+        errors="replace",
         cwd=Path.cwd(),
         env=env,
     )
@@ -2076,6 +2083,7 @@ def _run_script_with_healing(
                     stdin=subprocess.PIPE,
                     text=True,
                     encoding="utf-8",
+                    errors="replace",
                     cwd=Path.cwd(),
                     env=env,
                 )
@@ -2585,6 +2593,7 @@ safe_print(_("✅ Script completed successfully inside omnipkg bubble."))
             stderr=subprocess.STDOUT,
             text=True,
             encoding="utf-8",
+            errors="replace",
         )
 
         output_lines = []
@@ -2920,6 +2929,7 @@ safe_print("✅ CLI command completed successfully inside omnipkg bubble.")
             stderr=subprocess.STDOUT,
             text=True,
             encoding="utf-8",
+            errors="replace",
         )
 
         output_lines = []
@@ -3072,6 +3082,7 @@ def _run_script_logic(
                     stdin=subprocess.PIPE,  # Pipe empty stdin to prevent hangs
                     text=True,
                     encoding="utf-8",
+                    errors="replace",
                     cwd=Path.cwd(),
                     env=env,
                 )
