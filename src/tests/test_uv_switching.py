@@ -2,6 +2,7 @@ from omnipkg.common_utils import safe_print
 from omnipkg.i18n import _
 import sys
 import os
+import platform
 from pathlib import Path
 import subprocess
 import shutil
@@ -40,13 +41,40 @@ def print_header(title):
     safe_print("=" * 80)
 
 
+def parse_uv_version(version_output):
+    """
+    Parse uv version from output, handling different formats.
+    
+    Examples:
+    - "uv 0.4.30 (2024-11-04)" -> "0.4.30"
+    - "uv 0.5.11 (commit abc123)" -> "0.5.11"
+    - "0.10.2" -> "0.10.2"
+    """
+    # Split the output and look for version pattern (X.Y.Z)
+    import re
+    match = re.search(r'\b(\d+\.\d+\.\d+)\b', version_output)
+    if match:
+        return match.group(1)
+    # Fallback: return the whole thing
+    return version_output.strip()
+
+
 def print_subheader(title):
     safe_print(f"\n--- {title} ---")
 
 
 def run_command(command, check=True):
-    """Helper to run a command and capture output."""
-    return subprocess.run(command, capture_output=True, text=True, check=check)
+    """Helper to run a command and capture output with Windows compatibility."""
+    creationflags = subprocess.CREATE_NO_WINDOW if platform.system() == "Windows" else 0
+    return subprocess.run(
+        command,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        check=check,
+        creationflags=creationflags
+    )
 
 
 def setup_environment(omnipkg_core: OmnipkgCore):
@@ -187,12 +215,12 @@ def test_swapped_binary_execution(expected_version, config, omnipkg_core):
 
             # Test using system PATH
             result = run_command(["uv", "--version"])
-            actual_version = result.stdout.strip().split()[-1]
+            actual_version = parse_uv_version(result.stdout)
             safe_print(_('   📍 Version via PATH: {}').format(actual_version))
 
             # Test using direct bubble path
             result_direct = run_command([str(bubble_binary), "--version"])
-            direct_version = result_direct.stdout.strip().split()[-1]
+            direct_version = parse_uv_version(result_direct.stdout)
             safe_print(_('   📍 Version via direct path: {}').format(direct_version))
 
             if actual_version == expected_version:
@@ -247,13 +275,21 @@ def run_comprehensive_test():
         # Test Main Environment
         print_subheader(_('Testing Main Environment (uv=={})').format(main_uv_version_to_test))
         try:
-            python_exe = config_manager.config.get("python_executable", sys.executable)
-            uv_binary_path = Path(python_exe).parent / "uv"
+            # Use shutil.which to find uv in PATH (handles .exe on Windows)
+            uv_binary_path = shutil.which("uv")
+            
+            if not uv_binary_path:
+                # Fallback: try to construct path manually
+                python_exe = config_manager.config.get("python_executable", sys.executable)
+                scripts_dir = Path(python_exe).parent / ("Scripts" if sys.platform == "win32" else "bin")
+                uv_binary_path = scripts_dir / ("uv.exe" if sys.platform == "win32" else "uv")
+                if not uv_binary_path.exists():
+                    raise FileNotFoundError(f"UV binary not found in {scripts_dir}")
 
             safe_print(_('   🔬 Testing binary at: {}').format(uv_binary_path))
 
             result = run_command([str(uv_binary_path), "--version"])
-            actual_version = result.stdout.strip().split()[-1]
+            actual_version = parse_uv_version(result.stdout)
 
             main_passed = actual_version == main_uv_version_to_test
             safe_print(_('   ✅ Main environment version: {}').format(actual_version))
