@@ -2147,7 +2147,7 @@ class WorkerPoolDaemon:
         """
         # 🔥 DEBUG
         with open(DAEMON_LOG_FILE, "a") as f:
-            f.write(f"[DEBUG] WorkerPoolDaemon.start() called - daemonize={daemonize}, wait_for_ready={wait_for_ready}\n")
+            f.write(f"[DEBUG] WorkerPoolDaemon.start() ENTRY - daemonize={daemonize}, wait_for_ready={wait_for_ready}, PID={os.getpid()}\n")
             f.write(f"[DEBUG] IS_WINDOWS={IS_WINDOWS}, is_running={self.is_running()}\n")
             f.flush()
         
@@ -2155,17 +2155,21 @@ class WorkerPoolDaemon:
         
         if self.is_running():
             with open(DAEMON_LOG_FILE, "a") as f:
-                f.write(f"[DEBUG] Daemon already running, returning True\n")
+                f.write(f"[DEBUG] Daemon already running, returning True - PID={os.getpid()}\n")
                 f.flush()
             return True
 
         if daemonize:
             if IS_WINDOWS:
                 with open(DAEMON_LOG_FILE, "a") as f:
-                    f.write(f"[DEBUG] Calling _start_windows_daemon\n")
+                    f.write(f"[DEBUG] Calling _start_windows_daemon - PID={os.getpid()}\n")
                     f.flush()
                 # Windows spawner handles its own waiting/exiting logic.
-                return self._start_windows_daemon(wait_for_ready=wait_for_ready)
+                result = self._start_windows_daemon(wait_for_ready=wait_for_ready)
+                with open(DAEMON_LOG_FILE, "a") as f:
+                    f.write(f"[DEBUG] _start_windows_daemon returned {result} - PID={os.getpid()}\n")
+                    f.flush()
+                return result
             else:  # Unix/Linux/macOS
                 try:
                     pid = os.fork()
@@ -2184,8 +2188,17 @@ class WorkerPoolDaemon:
         # 1. The final, detached grandchild process on Unix.
         # 2. A foreground process if daemonize=False.
         # It is NOT executed by the initial parent process that the user runs.
+        with open(DAEMON_LOG_FILE, "a") as f:
+            f.write(f"[DEBUG] About to call _initialize_daemon_process - PID={os.getpid()}\n")
+            f.flush()
         self._initialize_daemon_process()
+        with open(DAEMON_LOG_FILE, "a") as f:
+            f.write(f"[DEBUG] About to call _run_socket_server (BLOCKING) - PID={os.getpid()}\n")
+            f.flush()
         self._run_socket_server()  # This is a blocking call that starts the server loop.
+        with open(DAEMON_LOG_FILE, "a") as f:
+            f.write(f"[DEBUG] _run_socket_server returned! - PID={os.getpid()}\n")
+            f.flush()
 
     def _maintain_idle_pool(self):
         """🚀 Pre-spawns Python processes for specific executables so they are ready instantly."""
@@ -4324,6 +4337,10 @@ class DaemonProxy:
 
 def cli_start():
     """Start the daemon with status checks."""
+    with open(DAEMON_LOG_FILE, "a") as f:
+        f.write(f"[DEBUG] cli_start() ENTRY - PID={os.getpid()}\n")
+        f.flush()
+    
     if WorkerPoolDaemon.is_running():
         safe_print("⚠️  Daemon is already running.")
         # Optional: Print info about the running instance
@@ -4337,9 +4354,19 @@ def cli_start():
 
     # Start (The parent process will print "✅" and exit inside this call)
     try:
+        with open(DAEMON_LOG_FILE, "a") as f:
+            f.write(f"[DEBUG] cli_start() calling daemon.start() - PID={os.getpid()}\n")
+            f.flush()
         daemon.start(daemonize=True)
+        with open(DAEMON_LOG_FILE, "a") as f:
+            f.write(f"[DEBUG] cli_start() daemon.start() returned - PID={os.getpid()}\n")
+            f.flush()
     except Exception as e:
         safe_print(_('\n❌ Failed to start: {}').format(e))
+    
+    with open(DAEMON_LOG_FILE, "a") as f:
+        f.write(f"[DEBUG] cli_start() EXIT - PID={os.getpid()}\n")
+        f.flush()
 
 
 def cli_stop():
@@ -4516,6 +4543,19 @@ def cli_idle_config(python_version: str = None, count: int = None):
 # ═══════════════════════════════════════════════════════════════
 
 if __name__ == "__main__":
+    # 🔥 ADD EXTENSIVE DEBUG
+    import traceback
+    with open(DAEMON_LOG_FILE, "a") as f:
+        f.write(f"\n{'='*80}\n")
+        f.write(f"[DEBUG] __main__ ENTRY - PID={os.getpid()}\n")
+        f.write(f"[DEBUG] sys.argv = {sys.argv}\n")
+        f.write(f"[DEBUG] OMNIPKG_DAEMON_CHILD = {os.environ.get('OMNIPKG_DAEMON_CHILD')}\n")
+        f.write(f"[DEBUG] Call stack:\n")
+        for line in traceback.format_stack()[:-1]:
+            f.write(line)
+        f.write(f"{'='*80}\n")
+        f.flush()
+    
     # 🔥 CRITICAL: Check if we're a daemon child on Windows FIRST
     if IS_WINDOWS and os.environ.get("OMNIPKG_DAEMON_CHILD") == "1":
         try:
@@ -4547,13 +4587,32 @@ if __name__ == "__main__":
     if cmd == "start":
         # 🔥 FIX: Check for --no-fork flag (Windows internal use)
         no_fork = "--no-fork" in sys.argv
+        
+        with open(DAEMON_LOG_FILE, "a") as f:
+            f.write(f"[DEBUG] cmd='start', no_fork={no_fork} - PID={os.getpid()}\n")
+            f.flush()
 
         if no_fork:
             # Direct start without fork (for Windows subprocess spawn)
+            with open(DAEMON_LOG_FILE, "a") as f:
+                f.write(f"[DEBUG] no_fork path: creating WorkerPoolDaemon - PID={os.getpid()}\n")
+                f.flush()
             daemon = WorkerPoolDaemon(max_workers=10, max_idle_time=300, warmup_specs=[])
+            with open(DAEMON_LOG_FILE, "a") as f:
+                f.write(f"[DEBUG] no_fork path: calling daemon.start(daemonize=False) - PID={os.getpid()}\n")
+                f.flush()
             daemon.start(daemonize=False)
+            with open(DAEMON_LOG_FILE, "a") as f:
+                f.write(f"[DEBUG] no_fork path: daemon.start() returned - PID={os.getpid()}\n")
+                f.flush()
         else:
+            with open(DAEMON_LOG_FILE, "a") as f:
+                f.write(f"[DEBUG] calling cli_start() - PID={os.getpid()}\n")
+                f.flush()
             cli_start()
+            with open(DAEMON_LOG_FILE, "a") as f:
+                f.write(f"[DEBUG] cli_start() returned - PID={os.getpid()}\n")
+                f.flush()
 
     elif cmd == "stop":
         cli_stop()
