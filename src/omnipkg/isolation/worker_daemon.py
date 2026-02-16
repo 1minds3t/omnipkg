@@ -447,14 +447,14 @@ class SHMRegistry:
     def _load_registry(self):
         try:
             if os.path.exists(SHM_REGISTRY_FILE):
-                with open(SHM_REGISTRY_FILE, "r", encoding="utf-8") as f:
+                with open(SHM_REGISTRY_FILE, "r") as f:
                     self.active_blocks = set(json.load(f))
         except:
             self.active_blocks = set()
 
     def _save_registry(self):
         try:
-            with open(SHM_REGISTRY_FILE, "w", encoding="utf-8") as f:
+            with open(SHM_REGISTRY_FILE, "w") as f:
                 json.dump(list(self.active_blocks), f)
         except:
             pass
@@ -1435,7 +1435,7 @@ class PersistentWorker:
         os.makedirs(OMNIPKG_TEMP_DIR, exist_ok=True)
         
         with tempfile.NamedTemporaryFile(
-            mode="w", encoding="utf-8", delete=False, suffix="_idle.py", dir=OMNIPKG_TEMP_DIR
+            mode="w", delete=False, suffix="_idle.py", dir=OMNIPKG_TEMP_DIR
         ) as f:
             f.write(_DAEMON_SCRIPT)
             self.temp_file = f.name
@@ -1477,22 +1477,17 @@ class PersistentWorker:
             # Fallback
             pass
 
-        self.log_file = open(DAEMON_LOG_FILE, "a", encoding="utf-8", buffering=1)
+        self.log_file = open(DAEMON_LOG_FILE, "a", buffering=1)
 
-        # Windows: Add CREATE_NO_WINDOW flag to prevent console window and I/O deadlock
-        creationflags = subprocess.CREATE_NO_WINDOW if IS_WINDOWS else 0
         self.process = subprocess.Popen(
             [self.python_exe, "-u", self.temp_file],
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=self.log_file,
             text=True,
-            encoding='utf-8',
-            errors='replace',
             bufsize=0,
             env=env,
             preexec_fn=os.setsid if not IS_WINDOWS else None,
-            creationflags=creationflags,
         )
 
     def assign_spec(self, package_spec: str):
@@ -1825,7 +1820,6 @@ class PersistentWorker:
         # Create temp script file
         with tempfile.NamedTemporaryFile(
             mode="w",
-            encoding="utf-8",
             delete=False,
             suffix=f"_{self.package_spec.replace('=', '_').replace('==', '_')}.py",
         ) as f:
@@ -1841,7 +1835,7 @@ class PersistentWorker:
 
         # Validate syntax before running
         try:
-            with open(self.temp_file, "r", encoding="utf-8") as f:
+            with open(self.temp_file, "r") as f:
                 script_content = f.read()
             compile(script_content, self.temp_file, "exec")
             safe_print("✅ DEBUG: Script syntax is valid", file=sys.stderr)
@@ -1850,7 +1844,7 @@ class PersistentWorker:
             print(_('   File: {}').format(self.temp_file), file=sys.stderr)
             print(_('   Line {}: {}').format(e.lineno, e.msg), file=sys.stderr)
             safe_print("\n📄 SCRIPT CONTENT (last 50 lines):", file=sys.stderr)
-            with open(self.temp_file, "r", encoding="utf-8") as f:
+            with open(self.temp_file, "r") as f:
                 lines = f.readlines()
                 start_line = max(0, len(lines) - 50)
                 for i, line in enumerate(lines[start_line:], start=start_line + 1):
@@ -1863,7 +1857,7 @@ class PersistentWorker:
         env["PYTHONPATH"] = f"{os.getcwd()}{os.pathsep}{current_pythonpath}"
 
         # 🔥 FIX: Open daemon log for worker stderr (store as instance variable)
-        self.log_file = open(DAEMON_LOG_FILE, "a", encoding="utf-8", buffering=1)  # Line buffering
+        self.log_file = open(DAEMON_LOG_FILE, "a", buffering=1)  # Line buffering
 
         # ═══════════════════════════════════════════════════════════
         # 🔥 NEW: INJECT CUDA LIBRARY PATHS BEFORE SPAWN
@@ -1884,22 +1878,17 @@ class PersistentWorker:
                 print(_('   - {}').format(path), file=sys.stderr)
 
         # Open daemon log for worker stderr (store as instance variable)
-        self.log_file = open(DAEMON_LOG_FILE, "a", encoding="utf-8", buffering=1)
+        self.log_file = open(DAEMON_LOG_FILE, "a", buffering=1)
 
-        # Windows: Add CREATE_NO_WINDOW flag to prevent console window and I/O deadlock
-        creationflags = subprocess.CREATE_NO_WINDOW if IS_WINDOWS else 0
         self.process = subprocess.Popen(
             [self.python_exe, "-u", self.temp_file],
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=self.log_file,  # ✅ Log to file instead of /dev/null
             text=True,
-            encoding='utf-8',
-            errors='replace',
             bufsize=0,
             env=env,
             preexec_fn=os.setsid if not IS_WINDOWS else None,  # 🔥 Windows fix
-            creationflags=creationflags,
         )
 
         # Send setup command
@@ -2072,7 +2061,7 @@ class WorkerPoolDaemon:
             try:
                 registry_path = self.cm.venv_path / ".omnipkg" / "interpreters" / "registry.json"
                 if registry_path.exists():
-                    with open(registry_path, "r", encoding="utf-8") as f:
+                    with open(registry_path, "r") as f:
                         data = json.load(f)
                         for version, path in data.get("interpreters", {}).items():
                             # Normalize path
@@ -2156,25 +2145,13 @@ class WorkerPoolDaemon:
         """
         Starts the daemon, handling platform differences and waiting logic.
         """
-        # 🔥 DEBUG
-        with open(DAEMON_LOG_FILE, "a", encoding="utf-8") as f:
-            f.write(f"[DEBUG] WorkerPoolDaemon.start() called - daemonize={daemonize}, wait_for_ready={wait_for_ready}\n")
-            f.write(f"[DEBUG] IS_WINDOWS={IS_WINDOWS}, is_running={self.is_running()}\n")
-            f.flush()
-        
         self._cleanup_stale_temp_files()
         
         if self.is_running():
-            with open(DAEMON_LOG_FILE, "a", encoding="utf-8") as f:
-                f.write(f"[DEBUG] Daemon already running, returning True\n")
-                f.flush()
             return True
 
         if daemonize:
             if IS_WINDOWS:
-                with open(DAEMON_LOG_FILE, "a", encoding="utf-8") as f:
-                    f.write(f"[DEBUG] Calling _start_windows_daemon\n")
-                    f.flush()
                 # Windows spawner handles its own waiting/exiting logic.
                 return self._start_windows_daemon(wait_for_ready=wait_for_ready)
             else:  # Unix/Linux/macOS
@@ -2253,17 +2230,7 @@ class WorkerPoolDaemon:
             CREATE_NO_WINDOW = 0x08000000  # ADD THIS - prevents console popup
             
             # Keep log file handle open in parent process to prevent premature close
-            log_file_handle = open(DAEMON_LOG_FILE, "a", encoding="utf-8", buffering=1)
-            
-            # 🔥 CRITICAL: Add OMNIPKG_DAEMON_CHILD to environment to prevent infinite spawning
-            env = dict(os.environ, 
-                      PYTHONUNBUFFERED="1",
-                      OMNIPKG_DAEMON_CHILD="1")
-            
-            with open(DAEMON_LOG_FILE, "a", encoding="utf-8") as f:
-                f.write(f"[DEBUG] Spawning subprocess NOW\n")
-                f.write(f"[DEBUG] env['OMNIPKG_DAEMON_CHILD'] = {env.get('OMNIPKG_DAEMON_CHILD')}\n")
-                f.flush()
+            log_file_handle = open(DAEMON_LOG_FILE, "a", buffering=1)
             
             process = subprocess.Popen(
                 [sys.executable, "-u", daemon_script, "start", "--no-fork"],  # ADD -u for unbuffered
@@ -2272,12 +2239,9 @@ class WorkerPoolDaemon:
                 stdout=log_file_handle,  # ALSO redirect stdout
                 stderr=log_file_handle,
                 close_fds=False,
-                env=env
+                # ADD THIS - keep process handle alive
+                env=dict(os.environ, PYTHONUNBUFFERED="1")
             )
-            
-            with open(DAEMON_LOG_FILE, "a", encoding="utf-8") as f:
-                f.write(f"[DEBUG] Subprocess spawned, PID={process.pid}\n")
-                f.flush()
             
             # DON'T close log_file_handle here - keep it alive
             # Store it so Python doesn't GC it
@@ -2334,7 +2298,7 @@ class WorkerPoolDaemon:
     def _initialize_daemon_process(self):
         """Tasks performed by the final, detached daemon process before serving."""
         # This is the first thing the final daemon process should do to signal readiness.
-        with open(PID_FILE, "w", encoding="utf-8") as f:
+        with open(PID_FILE, "w") as f:
             f.write(str(os.getpid()))
 
         # Set signal handlers for graceful shutdown
@@ -3466,27 +3430,14 @@ class DaemonClient:
         # Optional: Set minimal CUDA paths for daemon itself
         env = os.environ.copy()
 
-        if IS_WINDOWS:
-            # Windows: Use CREATE_NO_WINDOW and don't use preexec_fn
-            creationflags = subprocess.CREATE_NO_WINDOW
-            subprocess.Popen(
-                [sys.executable, daemon_script, "start"],
-                stdin=subprocess.DEVNULL,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                env=env,
-                creationflags=creationflags,
-            )
-        else:
-            # Unix: Use preexec_fn for process group
-            subprocess.Popen(
-                [sys.executable, daemon_script, "start"],
-                stdin=subprocess.DEVNULL,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                env=env,
-                preexec_fn=os.setsid,
-            )
+        subprocess.Popen(
+            [sys.executable, daemon_script, "start"],
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            env=env,  # Pass environment
+            preexec_fn=os.setsid,
+        )
 
     def get_idle_config(self) -> dict:
         """Get current idle pool configuration."""
@@ -4540,27 +4491,6 @@ def cli_idle_config(python_version: str = None, count: int = None):
 # ═══════════════════════════════════════════════════════════════
 
 if __name__ == "__main__":
-    # 🔥 CRITICAL: Check if we're a daemon child on Windows FIRST
-    if IS_WINDOWS and os.environ.get("OMNIPKG_DAEMON_CHILD") == "1":
-        try:
-            with open(DAEMON_LOG_FILE, "a", encoding="utf-8") as f:
-                f.write(f"[DEBUG] OMNIPKG_DAEMON_CHILD detected - starting daemon (daemonize=False)\n")
-                f.flush()
-            daemon = WorkerPoolDaemon(max_workers=10, max_idle_time=300, warmup_specs=[])
-            daemon.start(daemonize=False)
-            with open(DAEMON_LOG_FILE, "a", encoding="utf-8") as f:
-                f.write(f"[DEBUG] daemon.start() returned, exiting now\n")
-                f.flush()
-        except Exception as e:
-            with open(DAEMON_LOG_FILE, "a", encoding="utf-8") as f:
-                f.write(f"[ERROR] Daemon child crashed: {e}\n")
-                import traceback
-                traceback.print_exc(file=f)
-                f.flush()
-        with open(DAEMON_LOG_FILE, "a", encoding="utf-8") as f:
-            f.write(f"[DEBUG] sys.exit(0) from daemon child\n")
-            f.flush()
-        sys.exit(0)
 
     if len(sys.argv) < 2:
         print(_('Usage: python -m omnipkg.isolation.worker_daemon {start|stop|status|logs}'))

@@ -6,7 +6,6 @@ import importlib
 import io  # <-- ADD THIS, needed for execute() method
 import json
 import os
-import platform
 import re
 import shutil
 import site
@@ -602,15 +601,11 @@ class omnipkgLoader:
                     "import shutil, sys, json, os; moves=json.loads(sys.argv[1]); "
                     "for s,d in moves: (shutil.move(s,d) if os.path.exists(s) else None)"
                 )
-                creationflags = subprocess.CREATE_NO_WINDOW if platform.system() == "Windows" else 0
                 subprocess.run(
                     [sys.executable, "-c", script, json.dumps(moves)],
                     stdout=subprocess.DEVNULL,
                     stderr=subprocess.DEVNULL,
                     timeout=5,
-                    encoding="utf-8",
-                    errors="replace",
-                    creationflags=creationflags,
                 )
             except:
                 pass
@@ -1618,13 +1613,11 @@ class omnipkgLoader:
             safe_print("   ⚙️  Worker Daemon not running. Auto-starting background service...")
 
         # Launch independent process using the CLI command
-        creationflags = subprocess.CREATE_NO_WINDOW if platform.system() == "Windows" else 0
         subprocess.Popen(
             [sys.executable, "-m", "omnipkg.isolation.worker_daemon", "start"],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
             close_fds=True,
-            creationflags=creationflags,
         )
 
         # 3. Wait for warmup (up to 3 seconds)
@@ -3844,15 +3837,11 @@ class omnipkgLoader:
 
         try:
             # Run the check in a clean subprocess
-            creationflags = subprocess.CREATE_NO_WINDOW if platform.system() == "Windows" else 0
             result = subprocess.run(
                 [sys.executable, "-c", check_script],
                 capture_output=True,
                 text=True,
-                encoding="utf-8",
-                errors="replace",
                 timeout=10,
-                creationflags=creationflags,
             )
 
             if not self.quiet and result.returncode != 0:
