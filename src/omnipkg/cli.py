@@ -428,7 +428,7 @@ def run_demo_with_live_streaming(
             "-c",
             "import omnipkg; from pathlib import Path; print(Path(omnipkg.__file__).resolve().parent.parent)",
         ]
-        result = subprocess.run(cmd, capture_output=True, text=True, check=True, encoding="utf-8")
+        result = subprocess.run(cmd, capture_output=True, text=True, check=True, encoding="utf-8", errors="replace")
         project_root_in_context = Path(result.stdout.strip())
 
         # Step 2: Determine the final path to the SCRIPT to be executed.
