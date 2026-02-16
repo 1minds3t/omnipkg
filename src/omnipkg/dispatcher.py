@@ -18,6 +18,28 @@ def main():
     """
     Omnipkg Unified Dispatcher.
     """
+    # ============================================================================
+    # WINDOWS CONSOLE FIX: Enable proper UTF-8 and ANSI handling FIRST
+    # ============================================================================
+    if sys.platform == 'win32':
+        try:
+            import ctypes
+            kernel32 = ctypes.windll.kernel32
+            # Enable ANSI escape sequences for stdout
+            kernel32.SetConsoleMode(kernel32.GetStdHandle(-11), 7)
+            
+            # Force UTF-8 encoding
+            if hasattr(sys.stdout, 'reconfigure'):
+                sys.stdout.reconfigure(encoding='utf-8', line_buffering=True)
+                sys.stderr.reconfigure(encoding='utf-8', line_buffering=True)
+            if hasattr(sys.stdin, 'reconfigure'):
+                sys.stdin.reconfigure(encoding='utf-8')
+                
+            os.environ['PYTHONIOENCODING'] = 'utf-8'
+            os.environ['PYTHONUNBUFFERED'] = '1'
+        except Exception:
+            pass
+    
     debug_mode = os.environ.get("OMNIPKG_DEBUG") == "1"
     
     # ═══════════════════════════════════════════════════════════
