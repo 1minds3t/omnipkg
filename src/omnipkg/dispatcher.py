@@ -127,7 +127,11 @@ def main():
     if debug_mode:
         print(_('[DEBUG-DISPATCH] Executing: {}').format(' '.join(exec_args)), file=sys.stderr)
     
-    os.execv(str(target_python), exec_args)
+    if platform.system() == "Windows":
+        # Windows: Use subprocess instead of execv to avoid handle inheritance issues
+        sys.exit(subprocess.call(exec_args))
+    else:
+        os.execv(str(target_python), exec_args)
 
 
 def determine_target_python() -> Path:
