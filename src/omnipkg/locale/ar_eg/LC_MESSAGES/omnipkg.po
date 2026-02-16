@@ -4195,7 +4195,7 @@ msgstr "❌ ملف تسجيل لا يمكن العثور عليه: {}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/apis/local_bridge.py:713
 msgid "📝 Following logs (Ctrl+C to stop)...\n"
-msgstr ""
+msgstr "📝 متابعة السجلات (Ctrl+C للإيقاف)..."
 
 #: /home/minds3t/omnipkg/src/omnipkg/apis/local_bridge.py:730
 msgid ""
