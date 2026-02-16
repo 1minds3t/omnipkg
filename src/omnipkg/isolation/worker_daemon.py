@@ -1479,11 +1479,6 @@ class PersistentWorker:
 
         self.log_file = open(DAEMON_LOG_FILE, "a", buffering=1)
 
-        # 🔥 WINDOWS FIX: Prevent visible console windows
-        creationflags = 0
-        if IS_WINDOWS:
-            creationflags = 0x08000000  # CREATE_NO_WINDOW
-
         self.process = subprocess.Popen(
             [self.python_exe, "-u", self.temp_file],
             stdin=subprocess.PIPE,
@@ -1492,7 +1487,6 @@ class PersistentWorker:
             text=True,
             bufsize=0,
             env=env,
-            creationflags=creationflags,
             preexec_fn=os.setsid if not IS_WINDOWS else None,
         )
 
@@ -2228,29 +2222,32 @@ class WorkerPoolDaemon:
         
         os.makedirs(os.path.dirname(DAEMON_LOG_FILE), exist_ok=True)
         
+        # 🔥 DEBUG
+        with open(DAEMON_LOG_FILE, "a") as f:
+            f.write(f"[DEBUG] _start_windows_daemon called\n")
+            f.write(f"[DEBUG] daemon_script = {daemon_script}\n")
+            f.write(f"[DEBUG] About to spawn subprocess with args: [sys.executable, -u, daemon_script, start, --no-fork]\n")
+            f.flush()
+        
         safe_print("🚀 Starting daemon in background (Windows mode)...", file=sys.stderr)
         
         try:
             DETACHED_PROCESS = 0x00000008
             CREATE_NEW_PROCESS_GROUP = 0x00000200
-            # DO NOT use CREATE_NO_WINDOW for daemon itself - only for workers
+            CREATE_NO_WINDOW = 0x08000000  # ADD THIS - prevents console popup
             
             # Keep log file handle open in parent process to prevent premature close
             log_file_handle = open(DAEMON_LOG_FILE, "a", buffering=1)
             
-            # 🔥 CRITICAL: Set OMNIPKG_DAEMON_CHILD to prevent infinite spawning
-            env = dict(os.environ, 
-                      PYTHONUNBUFFERED="1",
-                      OMNIPKG_DAEMON_CHILD="1")
-            
             process = subprocess.Popen(
-                [sys.executable, "-u", daemon_script],  # NO "start" arg - env var handles it
-                creationflags=DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP,
+                [sys.executable, "-u", daemon_script, "start", "--no-fork"],  # ADD -u for unbuffered
+                creationflags=DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP | CREATE_NO_WINDOW,
                 stdin=subprocess.DEVNULL,
-                stdout=log_file_handle,
+                stdout=log_file_handle,  # ALSO redirect stdout
                 stderr=log_file_handle,
                 close_fds=False,
-                env=env
+                # ADD THIS - keep process handle alive
+                env=dict(os.environ, PYTHONUNBUFFERED="1")
             )
             
             # DON'T close log_file_handle here - keep it alive
@@ -2266,7 +2263,7 @@ class WorkerPoolDaemon:
                     safe_print(_('❌ Timeout (check {})').format(DAEMON_LOG_FILE), file=sys.stderr)
                     return False
             else:
-                time.sleep(2)  # Reduced from 5
+                time.sleep(5)  # Give Windows more time
                 if self.is_running():
                     safe_print('✅ Daemon started', file=sys.stderr)
                     return True
@@ -2275,8 +2272,6 @@ class WorkerPoolDaemon:
                     return False
         except Exception as e:
             safe_print(_('❌ Failed: {}').format(e), file=sys.stderr)
-            import traceback
-            traceback.print_exc()
             return False if wait_for_ready else sys.exit(1)
 
     def _wait_for_daemon_ready(self, timeout: int = 10) -> bool:
@@ -4503,20 +4498,17 @@ def cli_idle_config(python_version: str = None, count: int = None):
 # ═══════════════════════════════════════════════════════════════
 
 if __name__ == "__main__":
-    # 🔥 CRITICAL WINDOWS FIX: Prevent infinite daemon spawning
-    # Check if we're already running as a daemon child BEFORE parsing sys.argv
-    if IS_WINDOWS and os.environ.get("OMNIPKG_DAEMON_CHILD") == "1":
-        # We are the daemon child process - start directly
-        try:
-            daemon = WorkerPoolDaemon(max_workers=10, max_idle_time=300, warmup_specs=[])
-            daemon.start(daemonize=False)
-        except KeyboardInterrupt:
-            pass
-        except Exception as e:
-            sys.stderr.write(f"[DAEMON] Fatal error: {e}\n")
-            import traceback
-            traceback.print_exc()
-        sys.exit(0)
+    # 🔥 DEBUG to daemon log
+    try:
+        os.makedirs(os.path.dirname(DAEMON_LOG_FILE), exist_ok=True)
+        with open(DAEMON_LOG_FILE, "a") as f:
+            f.write(f"\n{'='*60}\n")
+            f.write(f"[DEBUG] __main__ called - PID={os.getpid()}\n")
+            f.write(f"[DEBUG] sys.argv = {sys.argv}\n")
+            f.write(f"[DEBUG] IS_WINDOWS = {IS_WINDOWS}\n")
+            f.write(f"[DEBUG] OMNIPKG_DAEMON_CHILD = {os.environ.get('OMNIPKG_DAEMON_CHILD')}\n")
+            f.flush()
+    except: pass
 
     if len(sys.argv) < 2:
         print(_('Usage: python -m omnipkg.isolation.worker_daemon {start|stop|status|logs}'))
