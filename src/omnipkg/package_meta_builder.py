@@ -1330,7 +1330,7 @@ class omnipkgMetadataGatherer:
             # ADD THIS:
             safe_print("   🔍 Running pip audit scan...", flush=True)
             
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
+            result = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=180)
             
             # ADD THIS:
             safe_print("   ✓ Audit complete", flush=True)

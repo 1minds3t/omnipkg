@@ -1803,7 +1803,7 @@ class ConfigManager:
         is_musl = False
         if system == "linux":
             try:
-                ldd_check = subprocess.run(["ldd", "--version"], capture_output=True, text=True)
+                ldd_check = subprocess.run(["ldd", "--version"], capture_output=True, text=True, encoding="utf-8", errors="replace")
                 if "musl" in (ldd_check.stdout + ldd_check.stderr).lower():
                     is_musl = True
             except:
@@ -1896,7 +1896,7 @@ class ConfigManager:
         is_musl = False
         if system == "linux":
             try:
-                ldd_check = subprocess.run(["ldd", "--version"], capture_output=True, text=True)
+                ldd_check = subprocess.run(["ldd", "--version"], capture_output=True, text=True, encoding="utf-8", errors="replace")
                 if "musl" in (ldd_check.stdout + ldd_check.stderr).lower():
                     is_musl = True
             except:
@@ -2119,7 +2119,7 @@ class ConfigManager:
                     )
                 if system == "linux":
                     try:
-                        ldd_check = subprocess.run(["ldd", "--version"], capture_output=True, text=True)
+                        ldd_check = subprocess.run(["ldd", "--version"], capture_output=True, text=True, encoding="utf-8", errors="replace")
                         is_musl = "musl" in (ldd_check.stdout + ldd_check.stderr).lower()
                     except:
                         is_musl = False
@@ -2519,7 +2519,7 @@ class ConfigManager:
                 "-c",
                 "import sys, json; print(json.dumps({'version': f'{sys.version_info.major}.{sys.version_info.minor}', 'prefix': sys.prefix}))",
             ]
-            result = subprocess.run(cmd, capture_output=True, text=True, check=True, timeout=10)
+            result = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", check=True, timeout=10)
             json.loads(result.stdout)
 
             # Step 2: Ask the interpreter for its site-packages path authoritatively.
@@ -3466,7 +3466,7 @@ class InterpreterManager:
         if not interpreter_path:
             raise ValueError(_("Python {} interpreter not found").format(version))
         full_cmd = [str(interpreter_path)] + cmd
-        return subprocess.run(full_cmd, capture_output=True, text=True)
+        return subprocess.run(full_cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
 
     def install_package_with_version(self, package: str, python_version: str):
         """Install a package using a specific Python version."""
@@ -3474,7 +3474,7 @@ class InterpreterManager:
         if not interpreter_path:
             raise ValueError(_("Python {} interpreter not found").format(python_version))
         cmd = [str(interpreter_path), "-m", "pip", "install", package]
-        result = subprocess.run(cmd, capture_output=True, text=True)
+        result = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
         if result.returncode != 0:
             raise RuntimeError(
                 f"Failed to install {package} with Python {python_version}: {result.stderr}"
@@ -3606,7 +3606,7 @@ class BubbleIsolationManager:
             if extra_index_url:
                 cmd.extend(["--extra-index-url", extra_index_url])
             safe_print(_("    📦 Installing full dependency tree to temporary location..."))
-            result = subprocess.run(cmd, capture_output=True, text=True)
+            result = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
             if result.returncode != 0:
                 safe_print(
                     _("    ❌ Failed to install exact version tree: {}").format(result.stderr)
@@ -3962,7 +3962,7 @@ class BubbleIsolationManager:
                         f"import sys; sys.path.insert(0, r'{staging_path}'); import {module_name}; print('OK')",
                     ]
 
-                    result = subprocess.run(cmd, capture_output=True, text=True)
+                    result = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
 
                     if result.returncode != 0:
                         safe_print(_('      💔 Broken module detected: {}').format(module_name))
@@ -4103,7 +4103,7 @@ class BubbleIsolationManager:
                 str(temp_path),
                 install_source,
             ]
-            result = subprocess.run(cmd, capture_output=True, text=True)
+            result = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
 
             if result.returncode != 0:
                 safe_print(
@@ -4336,7 +4336,7 @@ class BubbleIsolationManager:
                 "-r",
                 req_file,
             ]
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+            result = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=60)
             if result.returncode != 0:
                 return None
             if not result.stdout or not result.stdout.strip():
@@ -4424,7 +4424,7 @@ class BubbleIsolationManager:
     def _try_pip_show_fallback(self, package_name: str, version: str) -> Optional[List[str]]:
         try:
             cmd = [self.config["python_executable"], "-m", "pip", "show", package_name]
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+            result = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=10)
             if result.returncode != 0:
                 return None
             for line in result.stdout.split("\n"):
@@ -6782,7 +6782,7 @@ class omnipkg:
         '--force-reinstall', '--no-deps', '--no-cache-dir', '-q'
     ] + install_spec
 
-    result = subprocess.run(cmd, capture_output=True, text=True)
+    result = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
     if result.returncode == 0:
         safe_print("   ✅ Synced: {current_version}")
     else:
@@ -6831,7 +6831,7 @@ class omnipkg:
                     "--no-cache-dir",
                     "-q",
                 ] + install_spec
-                result = subprocess.run(heal_cmd, capture_output=True, text=True, timeout=60)
+                result = subprocess.run(heal_cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=60)
                 return (py_ver, result.returncode == 0)
 
             with concurrent.futures.ThreadPoolExecutor(max_workers=6) as executor:
@@ -8701,7 +8701,7 @@ class omnipkg:
                     "-c",
                     f"import {import_name}; print(getattr({import_name}, '__version__', None))",
                 ]
-                result = subprocess.run(cmd, capture_output=True, text=True, check=True, timeout=5)
+                result = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", check=True, timeout=5)
                 version_output = result.stdout.strip()
 
                 if version_output and version_output != "None":
@@ -9047,7 +9047,7 @@ class omnipkg:
                     "list",
                     "--format=json",
                 ]
-                result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+                result = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", check=True)
                 live_packages = {
                     pkg["name"].lower(): pkg["version"] for pkg in json.loads(result.stdout)
                 }
@@ -9788,7 +9788,7 @@ class omnipkg:
 
         try:
             cmd = [str(source_exe_path), "-c", "import sys; print(sys.prefix)"]
-            cmd_result = subprocess.run(cmd, capture_output=True, text=True, check=True, timeout=10)
+            cmd_result = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", check=True, timeout=10)
             source_root = Path(os.path.realpath(cmd_result.stdout.strip()))
             current_venv_root = self.config_manager.venv_path.resolve()
 
@@ -12320,7 +12320,7 @@ class omnipkg:
                 "--no-cache-dir",  # Force fresh download
                 install_source,
             ]
-            result = subprocess.run(cmd, capture_output=True, text=True)
+            result = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
 
             if result.returncode != 0:
                 safe_print(f'   - ❌ Failed to install "{install_source}" from PyPI.')
@@ -12645,7 +12645,7 @@ class omnipkg:
 
         for attempt in range(max_attempts):
             try:
-                proc = subprocess.run(full_cmd, capture_output=True, text=True, timeout=300)
+                proc = subprocess.run(full_cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=300)
 
                 # If successful, return immediately
                 if proc.returncode == 0:
@@ -14172,7 +14172,7 @@ print(json.dumps(results))
 
         try:
             cmd = [python_exe, "-I", "-c", script]
-            result = subprocess.run(cmd, capture_output=True, text=True, check=True, timeout=120)
+            result = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", check=True, timeout=120)
             return json.loads(result.stdout)
         except subprocess.CalledProcessError as e:
             # The subprocess failed. Now we check stderr for our detailed JSON error.
@@ -14277,7 +14277,7 @@ print(json.dumps(results))
                 script = "\n".join(script_lines)
                 cmd = [python_exe, "-c", script]
 
-                result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+                result = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=30)
 
                 # Parse output
                 output_lines = result.stdout.strip().split("\n")
@@ -14990,7 +14990,7 @@ print(json.dumps(results))
                                 if extra_index_url:
                                     fix_cmd.extend(["--extra-index-url", extra_index_url])
                                 
-                                fix_result = subprocess.run(fix_cmd, capture_output=True, text=True)
+                                fix_result = subprocess.run(fix_cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
                                 if fix_result.returncode == 0:
                                     safe_print("✅ Successfully installed correct numpy version")
                                 else:
@@ -15075,7 +15075,7 @@ print(json.dumps(results))
                     )
                     if self._brute_force_package_cleanup(package_name, cleanup_path):
                         safe_print(_("   - Retrying installation on clean environment..."))
-                        retry_process = subprocess.run(cmd, capture_output=True, text=True, env=env)
+                        retry_process = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", env=env)
                         if retry_process.returncode == 0:
                             safe_print(retry_process.stdout)
                             safe_print(_("   - ✅ Recovery successful!"))
@@ -15142,7 +15142,7 @@ print(json.dumps(results))
             return 0
         try:
             cmd = [self.config["uv_executable"], "install", "--quiet"] + packages
-            result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+            result = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", check=True)
             safe_print(result.stdout)
             return result.returncode
         except FileNotFoundError:
@@ -15166,7 +15166,7 @@ print(json.dumps(results))
             return 0
         try:
             cmd = [self.config["uv_executable"], "pip", "uninstall"] + packages
-            result = subprocess.run(cmd, check=True, text=True, capture_output=True)
+            result = subprocess.run(cmd, check=True, text=True, encoding="utf-8", errors="replace", capture_output=True)
             safe_print(result.stdout)
             return result.returncode
         except FileNotFoundError:
@@ -15923,7 +15923,7 @@ print(json.dumps(results))
                 safe_print(" -> Package appears to be installed, checking with pip list...")
                 try:
                     cmd = [self.config['python_executable'], '-m', 'pip', 'list', '--format=freeze']
-                    result_list = subprocess.run(cmd, capture_output=True, text=True, timeout=30, check=False)
+                    result_list = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=30, check=False)
 
                     if result_list.returncode == 0 and result_list.stdout.strip():
                         # Filter in Python instead of using shell grep
