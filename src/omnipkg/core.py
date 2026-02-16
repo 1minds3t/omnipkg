@@ -2632,6 +2632,29 @@ class ConfigManager:
         AUTO-DETECTS non-interactive environments (Docker, CI, piped input, etc.)
         """
         # ============================================================================
+        # WINDOWS CONSOLE FIX: Enable proper UTF-8 and ANSI handling
+        # ============================================================================
+        if platform.system() == "Windows":
+            try:
+                # Enable ANSI escape sequences
+                import ctypes
+                kernel32 = ctypes.windll.kernel32
+                kernel32.SetConsoleMode(kernel32.GetStdHandle(-11), 7)
+                
+                # Force UTF-8 encoding for stdin/stdout/stderr
+                if hasattr(sys.stdout, 'reconfigure'):
+                    sys.stdout.reconfigure(encoding='utf-8', line_buffering=True)
+                    sys.stderr.reconfigure(encoding='utf-8', line_buffering=True)
+                if hasattr(sys.stdin, 'reconfigure'):
+                    sys.stdin.reconfigure(encoding='utf-8')
+                    
+                # Set environment variables
+                os.environ['PYTHONIOENCODING'] = 'utf-8'
+                os.environ['PYTHONUNBUFFERED'] = '1'
+            except Exception:
+                pass  # If it fails, continue anyway
+        
+        # ============================================================================
         # CRITICAL: Auto-detect non-interactive environments
         # ============================================================================
         is_docker = os.path.exists("/.dockerenv") or os.path.exists("/run/.containerenv")
