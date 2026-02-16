@@ -1,0 +1,13 @@
+License for filelock-lts
+=====================================
+
+License file not found in package distribution.
+
+License information may be available at:
+https://pypi.org/project/filelock-lts/
+
+Package information:
+https://pypi.org/project/filelock-lts/
+
+To view package metadata:
+pip show filelock-lts
