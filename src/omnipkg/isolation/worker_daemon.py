@@ -4539,6 +4539,30 @@ def cli_idle_config(python_version: str = None, count: int = None):
 
 
 # ═══════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════
+# 🔥 WINDOWS COMPATIBILITY LAYER
+# ═══════════════════════════════════════════════════════════════
+# On Windows, we fake the daemon using PersistentWorker to avoid infinite spawn bugs
+if IS_WINDOWS:
+    # Override DaemonClient and CLI functions with Windows-compatible versions
+    try:
+        from omnipkg.isolation.windows_daemon_compat import (
+            WindowsDaemonClient as DaemonClient,
+            cli_start,
+            cli_stop,
+            cli_status,
+            cli_logs,
+            cli_idle_config,
+        )
+        _USING_WINDOWS_COMPAT = True
+    except ImportError:
+        # Fallback to regular daemon (will have spawn issues)
+        _USING_WINDOWS_COMPAT = False
+        pass
+else:
+    _USING_WINDOWS_COMPAT = False
+
+
 # CLI ENTRY
 # ═══════════════════════════════════════════════════════════════
 
@@ -4577,6 +4601,11 @@ if __name__ == "__main__":
             f.write(f"[DEBUG] sys.exit(0) from daemon child\n")
             f.flush()
         sys.exit(0)
+    
+    # 🔥 WINDOWS COMPAT: If using Windows compatibility layer, skip daemon spawning
+    if IS_WINDOWS and _USING_WINDOWS_COMPAT:
+        # The CLI functions are already overridden, just let them run
+        pass
 
     if len(sys.argv) < 2:
         print(_('Usage: python -m omnipkg.isolation.worker_daemon {start|stop|status|logs}'))
