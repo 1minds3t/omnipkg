@@ -391,7 +391,7 @@ print(json.dumps(results))
         )
 
         try:
-            proc = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True, timeout=300)
+            proc = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=300)
             if proc.returncode != 0 and not proc.stdout.strip():
                 # Provide stderr in crash report
                 return [VerificationResult(p['name'], p['version'], False, f"Crash: {proc.stderr}") for p in packages]
