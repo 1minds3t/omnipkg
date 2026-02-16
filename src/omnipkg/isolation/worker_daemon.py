@@ -2222,13 +2222,6 @@ class WorkerPoolDaemon:
         
         os.makedirs(os.path.dirname(DAEMON_LOG_FILE), exist_ok=True)
         
-        # 🔥 DEBUG
-        with open(DAEMON_LOG_FILE, "a") as f:
-            f.write(f"[DEBUG] _start_windows_daemon called\n")
-            f.write(f"[DEBUG] daemon_script = {daemon_script}\n")
-            f.write(f"[DEBUG] About to spawn subprocess with args: [sys.executable, -u, daemon_script, start, --no-fork]\n")
-            f.flush()
-        
         safe_print("🚀 Starting daemon in background (Windows mode)...", file=sys.stderr)
         
         try:
@@ -2239,6 +2232,11 @@ class WorkerPoolDaemon:
             # Keep log file handle open in parent process to prevent premature close
             log_file_handle = open(DAEMON_LOG_FILE, "a", buffering=1)
             
+            # 🔥 CRITICAL: Add OMNIPKG_DAEMON_CHILD to environment to prevent infinite spawning
+            env = dict(os.environ, 
+                      PYTHONUNBUFFERED="1",
+                      OMNIPKG_DAEMON_CHILD="1")
+            
             process = subprocess.Popen(
                 [sys.executable, "-u", daemon_script, "start", "--no-fork"],  # ADD -u for unbuffered
                 creationflags=DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP | CREATE_NO_WINDOW,
@@ -2246,8 +2244,7 @@ class WorkerPoolDaemon:
                 stdout=log_file_handle,  # ALSO redirect stdout
                 stderr=log_file_handle,
                 close_fds=False,
-                # ADD THIS - keep process handle alive
-                env=dict(os.environ, PYTHONUNBUFFERED="1")
+                env=env
             )
             
             # DON'T close log_file_handle here - keep it alive
@@ -4498,17 +4495,21 @@ def cli_idle_config(python_version: str = None, count: int = None):
 # ═══════════════════════════════════════════════════════════════
 
 if __name__ == "__main__":
-    # 🔥 DEBUG to daemon log
-    try:
-        os.makedirs(os.path.dirname(DAEMON_LOG_FILE), exist_ok=True)
-        with open(DAEMON_LOG_FILE, "a") as f:
-            f.write(f"\n{'='*60}\n")
-            f.write(f"[DEBUG] __main__ called - PID={os.getpid()}\n")
-            f.write(f"[DEBUG] sys.argv = {sys.argv}\n")
-            f.write(f"[DEBUG] IS_WINDOWS = {IS_WINDOWS}\n")
-            f.write(f"[DEBUG] OMNIPKG_DAEMON_CHILD = {os.environ.get('OMNIPKG_DAEMON_CHILD')}\n")
-            f.flush()
-    except: pass
+    # 🔥 CRITICAL: Check if we're a daemon child on Windows FIRST
+    if IS_WINDOWS and os.environ.get("OMNIPKG_DAEMON_CHILD") == "1":
+        try:
+            with open(DAEMON_LOG_FILE, "a") as f:
+                f.write(f"[DEBUG] OMNIPKG_DAEMON_CHILD detected - starting daemon\n")
+                f.flush()
+            daemon = WorkerPoolDaemon(max_workers=10, max_idle_time=300, warmup_specs=[])
+            daemon.start(daemonize=False)
+        except Exception as e:
+            with open(DAEMON_LOG_FILE, "a") as f:
+                f.write(f"[ERROR] Daemon child crashed: {e}\n")
+                import traceback
+                traceback.print_exc(file=f)
+                f.flush()
+        sys.exit(0)
 
     if len(sys.argv) < 2:
         print(_('Usage: python -m omnipkg.isolation.worker_daemon {start|stop|status|logs}'))
