@@ -1,0 +1,13 @@
+License for urllib3-lts
+=====================================
+
+License file not found in package distribution.
+
+License information may be available at:
+https://pypi.org/project/urllib3-lts/
+
+Package information:
+https://pypi.org/project/urllib3-lts/
+
+To view package metadata:
+pip show urllib3-lts
