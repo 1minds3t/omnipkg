@@ -34,6 +34,8 @@ def force_clean_rich():
             [sys.executable, "-m", "pip", "uninstall", "rich", "-y"],
             capture_output=True,
             text=True,
+            encoding='utf-8',
+            errors='replace',
             check=False,
         )
         safe_print("   ✅ Rich uninstalled successfully (if it was present).")
