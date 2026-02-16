@@ -4603,8 +4603,9 @@ if __name__ == "__main__":
                 f.flush()
             daemon.start(daemonize=False)
             with open(DAEMON_LOG_FILE, "a") as f:
-                f.write(f"[DEBUG] no_fork path: daemon.start() returned - PID={os.getpid()}\n")
+                f.write(f"[DEBUG] no_fork path: daemon.start() returned, EXITING - PID={os.getpid()}\n")
                 f.flush()
+            sys.exit(0)  # 🔥 CRITICAL: Exit immediately after daemon.start() returns
         else:
             with open(DAEMON_LOG_FILE, "a") as f:
                 f.write(f"[DEBUG] calling cli_start() - PID={os.getpid()}\n")
