@@ -1479,6 +1479,8 @@ class PersistentWorker:
 
         self.log_file = open(DAEMON_LOG_FILE, "a", encoding="utf-8", buffering=1)
 
+        # Windows: Add CREATE_NO_WINDOW flag to prevent console window and I/O deadlock
+        creationflags = subprocess.CREATE_NO_WINDOW if IS_WINDOWS else 0
         self.process = subprocess.Popen(
             [self.python_exe, "-u", self.temp_file],
             stdin=subprocess.PIPE,
@@ -1490,6 +1492,7 @@ class PersistentWorker:
             bufsize=0,
             env=env,
             preexec_fn=os.setsid if not IS_WINDOWS else None,
+            creationflags=creationflags,
         )
 
     def assign_spec(self, package_spec: str):
@@ -1883,6 +1886,8 @@ class PersistentWorker:
         # Open daemon log for worker stderr (store as instance variable)
         self.log_file = open(DAEMON_LOG_FILE, "a", encoding="utf-8", buffering=1)
 
+        # Windows: Add CREATE_NO_WINDOW flag to prevent console window and I/O deadlock
+        creationflags = subprocess.CREATE_NO_WINDOW if IS_WINDOWS else 0
         self.process = subprocess.Popen(
             [self.python_exe, "-u", self.temp_file],
             stdin=subprocess.PIPE,
@@ -1894,6 +1899,7 @@ class PersistentWorker:
             bufsize=0,
             env=env,
             preexec_fn=os.setsid if not IS_WINDOWS else None,  # 🔥 Windows fix
+            creationflags=creationflags,
         )
 
         # Send setup command
@@ -3460,14 +3466,27 @@ class DaemonClient:
         # Optional: Set minimal CUDA paths for daemon itself
         env = os.environ.copy()
 
-        subprocess.Popen(
-            [sys.executable, daemon_script, "start"],
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            env=env,  # Pass environment
-            preexec_fn=os.setsid,
-        )
+        if IS_WINDOWS:
+            # Windows: Use CREATE_NO_WINDOW and don't use preexec_fn
+            creationflags = subprocess.CREATE_NO_WINDOW
+            subprocess.Popen(
+                [sys.executable, daemon_script, "start"],
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                env=env,
+                creationflags=creationflags,
+            )
+        else:
+            # Unix: Use preexec_fn for process group
+            subprocess.Popen(
+                [sys.executable, daemon_script, "start"],
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                env=env,
+                preexec_fn=os.setsid,
+            )
 
     def get_idle_config(self) -> dict:
         """Get current idle pool configuration."""
