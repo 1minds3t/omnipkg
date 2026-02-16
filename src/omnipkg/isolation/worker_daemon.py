@@ -998,7 +998,11 @@ except NameError:
 # ═══════════════════════════════════════════════════════════════
 try:
     ready_msg = {'status': 'READY', 'package': PKG_SPEC, 'native_ipc': _native_ipc_mode}
-    print(json.dumps(ready_msg), flush=True)
+    # CRITICAL FIX: Write to _original_stdout, not sys.stdout (which is /dev/null)
+    _original_stdout.write(json.dumps(ready_msg) + '\\n')
+    _original_stdout.flush()
+    sys.stderr.write(f'✅ [DAEMON] Sent READY signal for {PKG_SPEC}\\n')
+    sys.stderr.flush()
 except Exception as e:
     sys.stderr.write(f"ERROR: Failed to send READY: {e}\\n")
     sys.stderr.flush()
@@ -1279,7 +1283,13 @@ while True:
                 result['worker_torch_version'] = torch.__version__
                 result['worker_python_version'] = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
             
-            print(json.dumps(result), flush=True)
+            # CRITICAL FIX: Write to _original_stdout, not sys.stdout (which is /dev/null)
+            sys.stderr.write(f'🔍 [DAEMON] Sending result for task {task_id}, status={result.get(\"status\")}\\n')
+            sys.stderr.flush()
+            _original_stdout.write(json.dumps(result) + '\\n')
+            _original_stdout.flush()
+            sys.stderr.write(f'✅ [DAEMON] Result sent for task {task_id}\\n')
+            sys.stderr.flush()
             
         except Exception as e:
             import traceback
@@ -1290,7 +1300,11 @@ while True:
                 'traceback': traceback.format_exc(),
                 'success': False
             }
-            print(json.dumps(error_response), flush=True)
+            sys.stderr.write(f'❌ [DAEMON] Sending error for task {task_id}: {str(e)}\\n')
+            sys.stderr.flush()
+            # CRITICAL FIX: Write to _original_stdout
+            _original_stdout.write(json.dumps(error_response) + '\\n')
+            _original_stdout.flush()
         finally:
             for shm in shm_blocks:
                 try:
@@ -1308,7 +1322,11 @@ while True:
             'traceback': traceback.format_exc(),
             'success': False
         }
-        print(json.dumps(error_response), flush=True)
+        sys.stderr.write(f'❌ [DAEMON] Command processing error: {str(e)}\\n')
+        sys.stderr.flush()
+        # CRITICAL FIX: Write to _original_stdout
+        _original_stdout.write(json.dumps(error_response) + '\\n')
+        _original_stdout.flush()
 
 # Cleanup on exit
 """
@@ -1563,6 +1581,7 @@ class PersistentWorker:
             # Try to read READY signal
             ready_line = None
             if IS_WINDOWS:
+                # Use threading approach on Windows
                 result = [None]
                 def try_read():
                     try: result[0] = process.stdout.readline()
@@ -1578,6 +1597,7 @@ class PersistentWorker:
                     ready_line = process.stdout.readline()
 
             if ready_line:
+                safe_print(f"✅ [DAEMON] Got READY signal: {ready_line[:100]}", file=sys.stderr)
                 return ready_line
 
             # Activity Monitoring
@@ -1681,11 +1701,24 @@ class PersistentWorker:
                 raise TimeoutError(f"Task exceeded maximum time limit ({max_total_time}s)")
 
             # Check for response (non-blocking)
-            ready, unused, unused = select.select([worker_process.stdout], [], [], 0.1)
-            if ready:
-                response_line = worker_process.stdout.readline()
-                if response_line:
-                    return json.loads(response_line.strip())
+            response_line = None
+            if IS_WINDOWS:
+                # Threading approach for Windows
+                result = [None]
+                def try_read():
+                    try: result[0] = worker_process.stdout.readline()
+                    except: pass
+                t = threading.Thread(target=try_read, daemon=True)
+                t.start()
+                t.join(timeout=0.1)
+                response_line = result[0]
+            else:
+                ready, unused, unused = select.select([worker_process.stdout], [], [], 0.1)
+                if ready:
+                    response_line = worker_process.stdout.readline()
+                    
+            if response_line:
+                return json.loads(response_line.strip())
 
             # Monitor activity
             try:
@@ -1913,14 +1946,21 @@ class PersistentWorker:
 
         # Wait for READY with timeout
         try:
-            # ONLY check stdout now (stderr is going to log file)
-            readable, unused, unused = select.select([self.process.stdout], [], [], 30.0)
-
+            # Windows-compatible waiting for READY
             ready_line = None
-
-            # Read stdout
-            if readable:
-                ready_line = self.process.stdout.readline()
+            if IS_WINDOWS:
+                result = [None]
+                def try_read():
+                    try: result[0] = self.process.stdout.readline()
+                    except: pass
+                t = threading.Thread(target=try_read, daemon=True)
+                t.start()
+                t.join(timeout=30.0)
+                ready_line = result[0]
+            else:
+                readable, unused, unused = select.select([self.process.stdout], [], [], 30.0)
+                if readable:
+                    ready_line = self.process.stdout.readline()
 
             if not ready_line:
                 # Check if process died
@@ -1971,22 +2011,50 @@ class PersistentWorker:
                     "shm_out": shm_out,
                 }
 
+                safe_print(f"🔍 [DAEMON] Sending task {task_id} to worker (package_spec={self.package_spec})", file=sys.stderr)
+                safe_print(f"🔍 [DAEMON] Command: {json.dumps(command)[:200]}...", file=sys.stderr)
+                
                 self.process.stdin.write(json.dumps(command) + "\n")
                 self.process.stdin.flush()
+                
+                safe_print(f"🔍 [DAEMON] Task sent, waiting for response (timeout={timeout}s)...", file=sys.stderr)
 
-                # Wait for response
-                readable, unused, unused = select.select([self.process.stdout], [], [], timeout)
+                # Windows-compatible response reading
+                response_line = None
+                if IS_WINDOWS:
+                    # Use threading on Windows since select doesn't work with pipes
+                    result = [None]
+                    def try_read():
+                        try: 
+                            result[0] = self.process.stdout.readline()
+                            safe_print(f"🔍 [DAEMON] Read thread got response: {result[0][:100] if result[0] else 'None'}...", file=sys.stderr)
+                        except Exception as e:
+                            safe_print(f"❌ [DAEMON] Read thread exception: {e}", file=sys.stderr)
+                    
+                    t = threading.Thread(target=try_read, daemon=True)
+                    t.start()
+                    t.join(timeout=timeout)
+                    response_line = result[0]
+                else:
+                    # Unix: select works fine
+                    readable, unused, unused = select.select([self.process.stdout], [], [], timeout)
+                    if readable:
+                        response_line = self.process.stdout.readline()
 
-                if not readable:
+                if not response_line:
+                    safe_print(f"❌ [DAEMON] No response received within {timeout}s", file=sys.stderr)
+                    safe_print(f"❌ [DAEMON] Worker process poll status: {self.process.poll()}", file=sys.stderr)
                     raise TimeoutError(f"Task timed out after {timeout}s")
 
-                response_line = self.process.stdout.readline()
-                if not response_line:
-                    raise RuntimeError("Worker closed connection")
+                safe_print(f"✅ [DAEMON] Got response: {response_line[:200]}...", file=sys.stderr)
+                parsed = json.loads(response_line.strip())
+                safe_print(f"✅ [DAEMON] Parsed response status: {parsed.get('status')}", file=sys.stderr)
+                return parsed
 
-                return json.loads(response_line.strip())
-
-            except Exception:
+            except Exception as e:
+                safe_print(f"❌ [DAEMON] execute_shm_task exception: {e}", file=sys.stderr)
+                import traceback
+                safe_print(traceback.format_exc(), file=sys.stderr)
                 self.health_check_failures += 1
                 raise
 
@@ -2869,14 +2937,25 @@ class WorkerPoolDaemon:
 
             worker_info["worker"].process.stdin.write(json.dumps(command) + "\n")
             worker_info["worker"].process.stdin.flush()
-            readable, unused, unused = select.select([worker_info["worker"].process.stdout], [], [], 60.0)
+            
+            # Windows-compatible response reading
+            response_line = None
+            if IS_WINDOWS:
+                result = [None]
+                def try_read():
+                    try: result[0] = worker_info["worker"].process.stdout.readline()
+                    except: pass
+                t = threading.Thread(target=try_read, daemon=True)
+                t.start()
+                t.join(timeout=60.0)
+                response_line = result[0]
+            else:
+                readable, unused, unused = select.select([worker_info["worker"].process.stdout], [], [], 60.0)
+                if readable:
+                    response_line = worker_info["worker"].process.stdout.readline()
 
-            if not readable:
-                raise TimeoutError("CUDA task timed out after 60s")
-
-            response_line = worker_info["worker"].process.stdout.readline()
             if not response_line:
-                raise RuntimeError("Worker closed connection")
+                raise TimeoutError("CUDA task timed out after 60s")
 
             return json.loads(response_line.strip())
         except Exception as e:
