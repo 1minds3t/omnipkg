@@ -3,6 +3,7 @@ from omnipkg.isolation.worker_daemon import DaemonClient, DaemonProxy, WorkerPoo
 from omnipkg.core import ConfigManager, omnipkg as OmnipkgCore
 import sys
 import time
+import platform
 import shutil
 import subprocess
 import traceback
@@ -30,6 +31,7 @@ def force_clean_rich():
     """Force remove any existing Rich installation to avoid corruption."""
     safe_print("   🧹 Force removing any existing Rich installation...")
     try:
+        creationflags = subprocess.CREATE_NO_WINDOW if platform.system() == "Windows" else 0
         subprocess.run(
             [sys.executable, "-m", "pip", "uninstall", "rich", "-y"],
             capture_output=True,
@@ -37,6 +39,7 @@ def force_clean_rich():
             encoding='utf-8',
             errors='replace',
             check=False,
+            creationflags=creationflags,
         )
         safe_print("   ✅ Rich uninstalled successfully (if it was present).")
     except Exception as e:
@@ -51,12 +54,21 @@ def ensure_daemon_running():
     if not status.get("success"):
         safe_print("   🚀 Daemon not running. Starting it now...")
         
-        # NON-BLOCKING daemon start
+        # NON-BLOCKING daemon start with Windows compatibility
+        creationflags = subprocess.CREATE_NO_WINDOW if platform.system() == "Windows" else 0
+        popen_kwargs = {
+            "stdout": subprocess.DEVNULL,
+            "stderr": subprocess.DEVNULL,
+            "creationflags": creationflags,
+        }
+        
+        # Only use start_new_session on Unix
+        if platform.system() != "Windows":
+            popen_kwargs["start_new_session"] = True
+        
         subprocess.Popen(
             [sys.executable, "-m", "omnipkg.cli", "daemon", "start"],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            start_new_session=True  # Detach completely on Unix
+            **popen_kwargs
         )
         
         # Wait for daemon to actually start (with timeout)
