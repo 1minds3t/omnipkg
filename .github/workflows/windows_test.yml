@@ -4,11 +4,11 @@ on:
   push:
     branches:
       - development
-      - development
+      - main
   pull_request:
     branches:
       - development
-      - development
+      - main
   workflow_dispatch:
     inputs:
       branch:
@@ -18,7 +18,7 @@ on:
         type: choice
         options:
           - development
-          - development
+          - main
 jobs:
   true-first-run-test-windows:
     runs-on: windows-latest
@@ -33,6 +33,7 @@ jobs:
           Write-Host "Testing on: Windows"
           Write-Host "Branch: ${{ github.ref_name }}"
           Write-Host "Commit: ${{ github.sha }}"
+          Write-Host "PowerShell Version: $($PSVersionTable.PSVersion)"
         shell: pwsh
         
       # Step 1: ENSURE A CLEAN SLATE
@@ -56,35 +57,85 @@ jobs:
           python-version: '3.9'
           
       - name: Install omnipkg in editable mode
-        run: pip install -e .
+        run: |
+          # Force unbuffered output
+          $env:PYTHONUNBUFFERED = "1"
+          pip install -e . 2>&1 | ForEach-Object { 
+            Write-Host $_ 
+            [Console]::Out.Flush()
+          }
         shell: pwsh
         
       # Step 3: Trigger the REAL first-time setup and 3.11 download.
       # This MUST now perform the full download and bootstrap of 3.11,
       # including installing omnipkg's dependencies into it.
       - name: Trigger first-time setup and Python 3.11 download
-        run: omnipkg status
+        run: |
+          Write-Host "=== Starting omnipkg status with debug mode ===" -ForegroundColor Green
+          omnipkg status 2>&1 | ForEach-Object { 
+            Write-Host $_ 
+            [Console]::Out.Flush()
+          }
+          Write-Host "=== omnipkg status completed ===" -ForegroundColor Green
         shell: pwsh
         env:
           PYTHONUTF8: "1"
+          PYTHONUNBUFFERED: "1"
+          PYTHONIOENCODING: "utf-8"
+          OMNIPKG_DEBUG: "1"
+          # Prevent subprocess output buffering issues on Windows
+          PYTHONLEGACYWINDOWSSTDIO: "0"
           
       # Step 4: Swap the active context to the newly downloaded 3.11.
       - name: Swap the active context to Python 3.11
-        run: omnipkg swap python 3.11
+        run: |
+          Write-Host "=== Swapping to Python 3.11 ===" -ForegroundColor Green
+          omnipkg swap python 3.11 2>&1 | ForEach-Object { 
+            Write-Host $_ 
+            [Console]::Out.Flush()
+          }
+          Write-Host "=== Swap completed ===" -ForegroundColor Green
         shell: pwsh
         env:
           PYTHONUTF8: "1"
+          PYTHONUNBUFFERED: "1"
+          PYTHONIOENCODING: "utf-8"
+          OMNIPKG_DEBUG: "1"
+          PYTHONLEGACYWINDOWSSTDIO: "0"
         
       # Step 5: Install a test package in the new 3.11 context.
       - name: Install a package in the new 3.11 context
-        run: omnipkg install six==1.16.0
+        run: |
+          Write-Host "=== Installing six==1.16.0 ===" -ForegroundColor Green
+          omnipkg install six==1.16.0 2>&1 | ForEach-Object { 
+            Write-Host $_ 
+            [Console]::Out.Flush()
+          }
+          Write-Host "=== Installation completed ===" -ForegroundColor Green
         shell: pwsh
         env:
           PYTHONUTF8: "1"
+          PYTHONUNBUFFERED: "1"
+          PYTHONIOENCODING: "utf-8"
+          OMNIPKG_DEBUG: "1"
+          PYTHONLEGACYWINDOWSSTDIO: "0"
           
       # Step 6: Verify the knowledge base was updated correctly post-swap.
       - name: Verify package info is in the knowledge base
-        run: omnipkg info six | Select-String -Pattern "1.16.0"
+        run: |
+          Write-Host "=== Verifying package info ===" -ForegroundColor Green
+          $output = omnipkg info six 2>&1 | Out-String
+          Write-Host $output
+          if ($output -match "1\.16\.0") {
+            Write-Host "✅ SUCCESS: Found version 1.16.0 in knowledge base" -ForegroundColor Green
+          } else {
+            Write-Host "❌ FAILURE: Version 1.16.0 not found in knowledge base" -ForegroundColor Red
+            exit 1
+          }
         shell: pwsh
         env:
           PYTHONUTF8: "1"
+          PYTHONUNBUFFERED: "1"
+          PYTHONIOENCODING: "utf-8"
+          OMNIPKG_DEBUG: "1"
+          PYTHONLEGACYWINDOWSSTDIO: "0"
