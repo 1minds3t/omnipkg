@@ -7,6 +7,108 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [2.2.3] — 2026-02-16
+
+Major Windows Stability Overhaul & Daemon Fixes
+
+**Release Notes:**
+
+This release addresses critical stability issues in Windows environments. Following extensive debugging, we have overhauled the daemon process management and console handling to ensure `omnipkg` functions correctly on Windows without hanging, crashing, or spawning visible console popups.
+
+**🪟 Windows Compatibility & Stability**
+*   **Daemon Process:** Fixed the "visible console window" annoyance when spawning background workers. The daemon now correctly uses `CREATE_NO_WINDOW` and detached process flags.
+*   **Encoding Fixes:** Solved `UnicodeEncodeError` and "mojibake" issues in the Windows console by forcing UTF-8 encoding and enabling ANSI escape sequences via `ctypes`.
+*   **Path Handling:** Removed hardcoded references to `/tmp` (which doesn't exist on Windows) in favor of cross-platform temporary directories for file locking.
+*   **Subprocess Calls:** Switched to `subprocess.call` / `sys.executable` patterns that respect Windows execution policies and prevent handle inheritance issues.
+
+**⚡ Core Improvements**
+*   **Daemon Lifecycle:** Improved logic for starting, stopping, and restarting the daemon.
+*   **Output Buffering:** Forced unbuffered output (`PYTHONUNBUFFERED=1`) and explicit flushing to ensure logs appear in real-time during CI/CD runs.
+*   **Resource Monitor:** Enhanced idle worker detection and cleanup logic.
+
+**🌍 Internationalization**
+*   **Japanese:** Major translation updates and finalizing of message catalogs.
+*   **Arabic:** Corrections to text direction and terminology.
+
+**🛡️ Maintenance**
+*   Updated `THIRD_PARTY_NOTICES.txt` and added missing license files for vendored dependencies.
+*   Fixed race conditions in `package_meta_builder.py` during concurrent metadata gathering.
+
+#
+#
+## 🚀 Major Feature Release: The "Atomic Workflow" Engine
+This release transforms Gitship from a collection of scripts into a robust Git orchestration platform.
+
+### 🌟 Key Highlights
+- **Atomic GitOps Engine:** All operations now use a safety layer...
+- **Interactive Merge Suite:** A new guided conflict resolution workflow...
+
+### 🛠 New Commands
+- `gitship merge` / `resolve`: Interactive merge and conflict resolution
+- `gitship sync`: Unified sync workflow
+
+---
+
+**📚 Documentation:**
+- THIRD_PARTY_NOTICES.txt (178 lines)
+- licenses/annotated-types.txt (21 lines)
+- licenses/anyio.txt (20 lines)
+- licenses/cffi.txt (23 lines)
+- licenses/click.txt (28 lines)
+- licenses/cryptography.txt (3 lines)
+- licenses/dparse.txt (11 lines)
+- licenses/filelock-lts.txt (13 lines)
+- licenses/h11.txt (22 lines)
+- licenses/httpcore.txt (27 lines)
+- licenses/httpx.txt (12 lines)
+- licenses/jinja2.txt (28 lines)
+- licenses/joblib.txt (29 lines)
+- licenses/markdown-it-py.txt (21 lines)
+- licenses/markupsafe.txt (28 lines)
+- licenses/mdurl.txt (46 lines)
+- licenses/nltk.txt (202 lines)
+- licenses/pycparser.txt (27 lines)
+- licenses/pydantic-core.txt (21 lines)
+- licenses/pydantic.txt (21 lines)
+- licenses/pygments.txt (25 lines)
+- licenses/regex.txt (208 lines)
+- licenses/ruamel-yaml-clib.txt (21 lines)
+- licenses/ruamel-yaml.txt (21 lines)
+- licenses/safety-schemas.txt (21 lines)
+- licenses/shellingham.txt (13 lines)
+- licenses/tenacity.txt (202 lines)
+- licenses/tomlkit.txt (20 lines)
+- licenses/typing-inspection.txt (21 lines)
+- licenses/urllib3-lts.txt (13 lines)
+
+**⚙️ Configuration:**
+- pyproject.toml (2 lines)
+
+**Additional Changes:**
+- chore: Add licenses.
+- Update translations (1 languages); Update documentation; Update configuration
+
+**New Features:**
+- feat: daemon idle worker management and i18n updates
+
+**Bug Fixes:**
+- fix: add encoding='utf-8' to all subprocess calls to fix Windows Unicode issues
+
+**Updates:**
+- Update translations.
+- Update test_rich_switching.py
+- Update test_uv_switching.py
+- Update loader.py
+- Update worker_daemon.py
+- Update dispatcher.py
+- Update package_meta_builder.py
+- Update cli.py
+- Update run.py
+- Update workers.py
+- ...and 4 more updates
+
+_55 files changed, 6900 insertions(+), 4583 deletions(-)_
+
 ## [2.2.2] - 2026-02-13
 
 Implements comprehensive daemon management and i18n improvements:
