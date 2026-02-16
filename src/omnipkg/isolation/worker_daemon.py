@@ -595,8 +595,11 @@ try:
     specs = [s.strip() for s in PKG_SPEC.split(',')]
     loaders = []
     
+    # CRITICAL FIX: Use quiet=True to prevent pip output flooding the stdout pipe
+    # When the loader needs to install packages, pip can generate >64KB of output
+    # which fills the Windows pipe buffer and causes deadlock
     for s in specs:
-        l = omnipkgLoader(s, isolation_mode='overlay')
+        l = omnipkgLoader(s, isolation_mode='overlay', quiet=True)  # ← ADD quiet=True
         l.__enter__()
         loaders.append(l)
 
