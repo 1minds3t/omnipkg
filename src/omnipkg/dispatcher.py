@@ -129,8 +129,15 @@ def main():
         print(_('[DEBUG-DISPATCH] Executing: {}').format(' '.join(exec_args)), file=sys.stderr)
     
     if platform.system() == "Windows":
-        # Windows: Use subprocess instead of execv to avoid handle inheritance issues
-        sys.exit(subprocess.call(exec_args))
+        # Windows: Use subprocess with proper flags to avoid handle inheritance issues and hangs
+        creationflags = subprocess.CREATE_NO_WINDOW
+        result = subprocess.run(
+            exec_args,
+            creationflags=creationflags,
+            encoding="utf-8",
+            errors="replace"
+        )
+        sys.exit(result.returncode)
     else:
         os.execv(str(target_python), exec_args)
 
@@ -210,11 +217,15 @@ def test_active_python_version() -> str:
     
     try:
         # Run `python --version` and capture output
+        creationflags = subprocess.CREATE_NO_WINDOW if platform.system() == "Windows" else 0
         result = subprocess.run(
             ["python", "--version"],
             capture_output=True,
             text=True,
-            timeout=2
+            encoding="utf-8",
+            errors="replace",
+            timeout=2,
+            creationflags=creationflags,
         )
         
         # Parse version from "Python 3.10.18" -> "3.10"
