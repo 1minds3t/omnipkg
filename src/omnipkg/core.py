@@ -55,7 +55,7 @@ except ImportError:
     from importlib_metadata import version
 
 import requests as http_requests
-from filelock import FileLock
+from filelock import FileLock, Timeout
 from packaging.utils import canonicalize_name
 from packaging.version import InvalidVersion
 from packaging.version import parse as parse_version
@@ -2910,31 +2910,34 @@ class ConfigManager:
             safe_print(_("   💡 Future startups will be instant!"))
 
         # Initialize knowledge base
-        rebuild_cmd = [
-            str(final_config["python_executable"]),
-            "-m",
-            "omnipkg.cli",
-            "reset",
-            "-y",
-        ]
+        is_windows = platform.system() == "Windows"
+        creationflags = subprocess.CREATE_NO_WINDOW if is_windows else 0
+        win_env = {**os.environ, "PYTHONIOENCODING": "utf-8", "PYTHONUTF8": "1"}
+
         try:
             if interactive:
-                if platform.system() == "Windows":
-                    # Windows: Use simple subprocess.run() to avoid console corruption
+                if is_windows:
                     safe_print(_("   🔄 Building knowledge base..."))
-                    result = subprocess.run(
+                    proc = subprocess.Popen(
                         rebuild_cmd,
-                        capture_output=True,
-                        text=True,
-                        encoding='utf-8',
-                        errors='replace'
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        creationflags=creationflags,
+                        env=win_env,
                     )
-                    if result.returncode != 0:
-                        safe_print(_("   ⚠️  Knowledge base initialization encountered issues but continuing..."))
-                        if result.stderr:
-                            safe_print(_("   Error: {}").format(result.stderr[:200]))
+                    try:
+                        raw_out, raw_err = proc.communicate(timeout=300)
+                        if proc.returncode != 0:
+                            err_text = raw_err.decode("utf-8", errors="replace")[:200]
+                            safe_print(_("   ⚠️  Knowledge base initialization encountered issues but continuing..."))
+                            if err_text:
+                                safe_print(_("   Error: {}").format(err_text))
+                    except subprocess.TimeoutExpired:
+                        proc.kill()
+                        proc.communicate()
+                        safe_print(_("   ⚠️  Knowledge base build timed out, will retry on next run."))
                 else:
-                    # Unix: Use streaming output
+                    # Unix: streaming output
                     process = subprocess.Popen(
                         rebuild_cmd,
                         stdout=subprocess.PIPE,
@@ -2951,99 +2954,81 @@ class ConfigManager:
                             safe_print(_("   {}").format(output.strip()))
                     process.wait()
                     if process.returncode != 0:
-                        safe_print(
-                            _(
-                                "   ⚠️  Knowledge base initialization encountered issues but continuing..."
-                            )
-                        )
+                        safe_print(_("   ⚠️  Knowledge base initialization encountered issues but continuing..."))
             else:
-                # Non-interactive: silent run
-                subprocess.run(rebuild_cmd, check=True, capture_output=True)
-        except subprocess.CalledProcessError:
+                # Non-interactive: safe Popen+communicate on all platforms
+                proc = subprocess.Popen(
+                    rebuild_cmd,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    creationflags=creationflags,
+                    env=win_env,
+                )
+                try:
+                    proc.communicate(timeout=300)
+                except subprocess.TimeoutExpired:
+                    proc.kill()
+                    proc.communicate()
+
+        except Exception as e:
             if interactive:
                 safe_print(_("   ⚠️  Knowledge base will be built on first command usage instead."))
-            pass
 
         return final_config
 
     def _create_version_symlinks(self):
-        """
-        Auto-create version-specific symlinks (8pkg310, 8pkg311, etc.)
-        whenever a new interpreter is registered.
-        """
-        bin_dir = self.venv_path / "bin"
-        main_8pkg = bin_dir / "8pkg"
-        
-        if not main_8pkg.exists():
-            return  # 8pkg not installed yet
-        
         registry_path = self.venv_path / ".omnipkg" / "interpreters" / "registry.json"
         if not registry_path.exists():
             return
-        
         try:
             with open(registry_path, "r") as f:
                 data = json.load(f)
-            
-            interpreters = data.get("interpreters", {})
-            
-            for version in interpreters.keys():
-                parts = version.split(".")
-                if len(parts) >= 2:
-                    alias_name = f"8pkg{parts[0]}{parts[1]}"
-                    alias_path = bin_dir / alias_name
-                    
-                    # Create/update symlink
-                    if alias_path.exists() or alias_path.is_symlink():
-                        alias_path.unlink()
-                    
-                    try:
-                        alias_path.symlink_to(main_8pkg)
-                    except OSError:
-                        pass  # Fail silently if symlinks not supported
-        
+            for version in data.get("interpreters", {}).keys():
+                self._create_symlink_for_version(version)
         except Exception:
-            pass  # Don't break setup if symlink creation fails
+            pass
 
     def _create_symlink_for_version(self, version: str) -> bool:
         """
-        Create a single version-specific symlink (e.g., 8pkg311).
-        Returns True if symlink was created, False otherwise.
+        Creates a version-specific entry point (8pkg311, 8pkg312, etc.).
+        On Unix: symlink. On Windows: .bat shim (symlinks require admin rights).
         """
-        if platform.system() == "Windows":
-            return False
-        
-        bin_dir = self.venv_path / "bin"
-        main_8pkg = bin_dir / "8pkg"
-        
-        if not main_8pkg.exists():
-            return False
-        
         parts = version.split(".")
         if len(parts) < 2:
             return False
-        
+
         alias_name = f"8pkg{parts[0]}{parts[1]}"
-        alias_path = bin_dir / alias_name
-        
-        try:
-            # Remove existing symlink/file if present
-            if alias_path.exists() or alias_path.is_symlink():
-                alias_path.unlink()
-            
-            # Create new symlink
-            alias_path.symlink_to(main_8pkg)
-            
-            if os.environ.get("OMNIPKG_DEBUG") == "1":
-                print(_('[DEBUG] Created symlink: {} -> 8pkg').format(alias_name), file=sys.stderr)
-            
-            return True
-        
-        except OSError as e:
-            # Fail silently - don't break the setup process
-            if os.environ.get("OMNIPKG_DEBUG") == "1":
-                print(_('[DEBUG] Failed to create {}: {}').format(alias_name, e), file=sys.stderr)
-            return False
+        is_windows = platform.system() == "Windows"
+
+        if is_windows:
+            scripts_dir = self.venv_path / "Scripts"
+            bat_path = scripts_dir / f"{alias_name}.bat"
+            try:
+                scripts_dir.mkdir(parents=True, exist_ok=True)
+                # .bat shim: forwards all args to 8pkg --python <version>
+                bat_content = (
+                    f'@echo off\n'
+                    f'"{scripts_dir / "8pkg.exe"}" --python {version} %*\n'
+                )
+                bat_path.write_text(bat_content, encoding="utf-8")
+                return True
+            except OSError as e:
+                if os.environ.get("OMNIPKG_DEBUG") == "1":
+                    safe_print(f"[DEBUG] Failed to create {alias_name}.bat: {e}")
+                return False
+        else:
+            bin_dir = self.venv_path / "bin"
+            main_8pkg = bin_dir / "8pkg"
+            if not main_8pkg.exists():
+                return False
+            alias_path = bin_dir / alias_name
+            try:
+                if alias_path.exists() or alias_path.is_symlink():
+                    alias_path.unlink()
+                alias_path.symlink_to(main_8pkg)
+                return True
+            except OSError:
+                return False
 
     def _ensure_shims_installed(self):
         """
@@ -3311,61 +3296,67 @@ class ConfigManager:
         Load config for THIS Python, create if doesn't exist.
         No more nested "environments" structure - FLAT data.
         """
-        # If config file doesn't exist, create it
         if not self.config_path.exists():
+            current_exe = Path(sys.executable).resolve()
+            python_ver = f"{sys.version_info.major}.{sys.version_info.minor}"
+
+            # If we're a managed interpreter (inside .omnipkg/interpreters/cpython-3.11.9 etc),
+            # generate config directly from known paths — never run _first_time_setup here,
+            # that's for brand new environments only and will hang/prompt on Windows.
+            if ".omnipkg" in str(current_exe) and "interpreters" in str(current_exe):
+                version = self._extract_version_from_path(current_exe)
+                if version:
+                    if interactive:
+                        safe_print(f"   ℹ️  No config found for Python {version}, generating from interpreter paths...")
+                    written_path = self._write_interpreter_config(current_exe, version)
+                    if written_path and written_path.exists():
+                        try:
+                            with open(written_path, "r") as f:
+                                return json.load(f)
+                        except (json.JSONDecodeError, IOError):
+                            pass  # fall through to first_time_setup below
+
+            # Brand new environment — full first time setup
             if interactive:
-                python_ver = f"{sys.version_info.major}.{sys.version_info.minor}"
                 safe_print(f"   ℹ️  No config found for Python {python_ver}")
                 safe_print(f"   Creating: {self.config_path}")
-            
-            # Generate defaults FOR THIS PYTHON
+
             config = self._first_time_setup(interactive=interactive)
-            
-            # Save it (FLAT structure, not nested!)
             self.config_path.parent.mkdir(parents=True, exist_ok=True)
             with open(self.config_path, "w") as f:
                 json.dump(config, f, indent=4)
-            
             return config
-        
-        # Load existing config
+
+        # Config file exists — load it
         try:
             with open(self.config_path, "r") as f:
                 config = json.load(f)
-            
+
             # Check if it's OLD format (nested) or NEW format (flat)
             if "environments" in config:
-                # OLD FORMAT: Extract our env_id's data
                 config = config.get("environments", {}).get(self.env_id, {})
-                
                 if not config:
-                    # Not found in nested structure, create new
                     config = self._first_time_setup(interactive=interactive)
-                
-                # Migrate to flat structure
                 self.config_path.parent.mkdir(parents=True, exist_ok=True)
                 with open(self.config_path, "w") as f:
                     json.dump(config, f, indent=4)
-            
-            # Validate structure
+
+            # Validate required keys
             required_keys = ["python_executable", "multiversion_base", "site_packages_path"]
             missing_keys = [k for k in required_keys if k not in config]
-            
+
             if missing_keys:
                 if interactive:
                     safe_print(_('   ⚠️  Config missing required fields {}, regenerating...').format(missing_keys))
-                
-                # If we are in a managed interpreter context, we should try to regenerate 
-                # the config using _write_interpreter_config logic if possible.
+
                 current_exe = Path(sys.executable).resolve()
-                if ".omnipkg/interpreters" in str(current_exe):
+                if ".omnipkg" in str(current_exe) and "interpreters" in str(current_exe):
                     version = self._extract_version_from_path(current_exe)
                     if version:
-                        # Regenerate the config file
-                        self._write_interpreter_config(current_exe, version)
-                        # Reload it
-                        with open(self.config_path, "r") as f:
-                            config = json.load(f)
+                        written_path = self._write_interpreter_config(current_exe, version)
+                        if written_path and written_path.exists():
+                            with open(written_path, "r") as f:
+                                config = json.load(f)
                     else:
                         config = self._first_time_setup(interactive=interactive)
                         with open(self.config_path, "w") as f:
@@ -3374,9 +3365,9 @@ class ConfigManager:
                     config = self._first_time_setup(interactive=interactive)
                     with open(self.config_path, "w") as f:
                         json.dump(config, f, indent=4)
-            
+
             return config
-        
+
         except (json.JSONDecodeError, IOError) as e:
             if interactive:
                 safe_print(_('   ⚠️  Config corrupted ({}), regenerating...').format(e))
@@ -7428,40 +7419,63 @@ class omnipkg:
     def _check_and_run_pending_rebuild(self) -> bool:
         """
         Checks for a flag file indicating a new interpreter needs its KB built.
-        If the current context matches a version in the flag, it runs the build.
+        If the currently running Python matches a version in the flag, it runs the build.
         Returns True if a rebuild was run, False otherwise.
         """
         flag_file = self.config_manager.venv_path / ".omnipkg" / ".needs_kb_rebuild"
         if not flag_file.exists():
             return False
 
-        configured_exe = self.config.get("python_executable")
-        version_tuple = self.config_manager._verify_python_version(configured_exe)
-        if not version_tuple:
+        # Always use the ACTUAL running interpreter — never the config's registered exe.
+        # When the user runs `8pkg --python 3.11`, this process IS 3.11. sys.version_info
+        # is always correct regardless of what the config says.
+        current_version_str = f"{sys.version_info.major}.{sys.version_info.minor}"
+
+        # Fast path: peek at the flag file without touching the lock.
+        # If our version isn't listed, we have nothing to do.
+        try:
+            with open(flag_file, "r") as f:
+                versions_to_rebuild = json.load(f)
+            if current_version_str not in versions_to_rebuild:
+                return False
+        except (json.JSONDecodeError, IOError):
             return False
 
-        current_version_str = f"{version_tuple[0]}.{version_tuple[1]}"
         lock_file = self.config_manager.venv_path / ".omnipkg" / ".needs_kb_rebuild.lock"
 
-        with FileLock(lock_file):
-            versions_to_rebuild = []
-            try:
-                with open(flag_file, "r") as f:
-                    versions_to_rebuild = json.load(f)
-            except (json.JSONDecodeError, IOError):
-                if flag_file.exists():
-                    flag_file.unlink()
-                return False
+        # Remove stale lock left by a killed process (older than 5 minutes).
+        _STALE_LOCK_SECONDS = 300
+        try:
+            if lock_file.exists():
+                age = time.time() - lock_file.stat().st_mtime
+                if age > _STALE_LOCK_SECONDS:
+                    safe_print(_(
+                        "⚠️  Stale KB rebuild lock detected ({:.0f}s old). Removing and continuing."
+                    ).format(age))
+                    lock_file.unlink(missing_ok=True)
+        except OSError:
+            pass
 
-            if current_version_str in versions_to_rebuild:
+        try:
+            with FileLock(lock_file, timeout=30):
+                # Re-read under the lock — another process may have already handled our version.
+                try:
+                    with open(flag_file, "r") as f:
+                        versions_to_rebuild = json.load(f)
+                except (json.JSONDecodeError, IOError):
+                    if flag_file.exists():
+                        flag_file.unlink()
+                    return False
+
+                if current_version_str not in versions_to_rebuild:
+                    return False
+
                 safe_print(_("💡 First use of Python {} detected.").format(current_version_str))
                 safe_print(_(" Building its knowledge base now..."))
 
                 rebuild_status = self.rebuild_knowledge_base(force=True)
 
                 if rebuild_status == 0:
-                    # After a successful rebuild, update the flag file directly
-                    # since we already hold the lock.
                     versions_to_rebuild.remove(current_version_str)
                     if not versions_to_rebuild:
                         if flag_file.exists():
@@ -7469,16 +7483,16 @@ class omnipkg:
                     else:
                         with open(flag_file, "w") as f:
                             json.dump(versions_to_rebuild, f)
-
-                    safe_print(f" ✅ Knowledge base for Python {current_version_str} is ready.")
+                    safe_print(_(" ✅ Knowledge base for Python {} is ready.").format(current_version_str))
                     return True
                 else:
-                    safe_print(
-                        _(
-                            " ❌ Failed to build knowledge base. It will be re-attempted on the next run."
-                        )
-                    )
+                    safe_print(_(" ❌ Failed to build knowledge base. Will retry on next run."))
                     return False
+
+        except Timeout:
+            # Another live process is actively rebuilding our version right now. Skip.
+            safe_print(_("⚠️  KB rebuild already in progress for {}. Skipping.").format(current_version_str))
+            return False
 
         return False
 

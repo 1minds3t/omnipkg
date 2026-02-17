@@ -1252,43 +1252,89 @@ def main():
                         shell = os.environ.get("SHELL", "/bin/bash")
                         if os.name == "nt":
                             shell = os.environ.get("COMSPEC", "cmd.exe")
-
-                        try:
-                            if os.environ.get("OMNIPKG_DEBUG") == "1":
-                                safe_print(_('[DEBUG] Spawning shell: {}').format(shell))
-                                safe_print(_('[DEBUG] Target Python: {}').format(python_path))
-                                safe_print(_('[DEBUG] OMNIPKG_PYTHON: {}').format(version))
-                                safe_print(_('[DEBUG] OMNIPKG_VENV_ROOT: {}').format(original_venv))
-                                safe_print(_('[DEBUG] Shims directory: {}').format(shims_dir))
-                                safe_print(_('[DEBUG] PATH prefix: {}').format(deduped[0]))
-                                safe_print(_('[DEBUG] Cleanup script: {}').format(cleanup_file))
-                                safe_print(_('[DEBUG] CONDA_PREFIX: {}').format(new_env.get('CONDA_PREFIX', 'NOT SET')))
-                                safe_print(_('[DEBUG] CONDA_DEFAULT_ENV: {}').format(new_env.get('CONDA_DEFAULT_ENV', 'NOT SET')))
-
-                            safe_print(_("🐚 Spawning new shell... (Type 'exit' to return)"))
-                            safe_print(f"   🐍 Python {version} context active (via shims)")
-                            safe_print(_("   💡 Note: Type 'exit' to clean up and return"))
                             
-                            conda_env = os.environ.get("CONDA_DEFAULT_ENV", "")
-                            if conda_env:
-                                safe_print(_("   📦 Conda env '{}' preserved").format(conda_env))
-                            
-                            # Launch interactive shell
-                            os.execle(
-                                shell,
-                                shell.split('/')[-1],
-                                "-i",
-                                new_env
-                            )
-                            
-                        except Exception as e:
-                            safe_print(_("❌ Failed to spawn shell: {}").format(e))
-                            # Only delete on error
+                            # CMD.exe flags: /K keeps the shell open after running a command
+                            # No "-i" flag — that's bash only and causes silent failure on Windows
                             try:
-                                os.unlink(cleanup_file)
-                            except:
-                                pass
-                            return 1
+                                if os.environ.get("OMNIPKG_DEBUG") == "1":
+                                    safe_print(_('[DEBUG] Spawning shell: {}').format(shell))
+                                    safe_print(_('[DEBUG] Target Python: {}').format(python_path))
+                                    safe_print(_('[DEBUG] OMNIPKG_PYTHON: {}').format(version))
+                                    safe_print(_('[DEBUG] OMNIPKG_VENV_ROOT: {}').format(original_venv))
+                                    safe_print(_('[DEBUG] Shims directory: {}').format(shims_dir))
+                                    safe_print(_('[DEBUG] PATH prefix: {}').format(deduped[0]))
+                                    safe_print(_('[DEBUG] CONDA_PREFIX: {}').format(new_env.get('CONDA_PREFIX', 'NOT SET')))
+                                    safe_print(_('[DEBUG] CONDA_DEFAULT_ENV: {}').format(new_env.get('CONDA_DEFAULT_ENV', 'NOT SET')))
+
+                                safe_print(_("🐚 Spawning new shell... (Type 'exit' to return)"))
+                                safe_print(f"   🐍 Python {version} context active (via shims)")
+                                safe_print(_("   💡 Note: Type 'exit' to clean up and return"))
+
+                                conda_env = os.environ.get("CONDA_DEFAULT_ENV", "")
+                                if conda_env:
+                                    safe_print(_("   📦 Conda env '{}' preserved").format(conda_env))
+
+                                # Write a .bat shim for each target command if not already present
+                                # This is what actually makes `python` resolve to the right interpreter
+                                scripts_dir = Path(shims_dir)
+                                scripts_dir.mkdir(parents=True, exist_ok=True)
+
+                                for cmd_name in ["python", "python3", "pip"]:
+                                    bat_path = scripts_dir / f"{cmd_name}.bat"
+                                    bat_path.write_text(
+                                        f'@echo off\n"{python_path}" %*\n',
+                                        encoding="utf-8"
+                                    )
+
+                                # pip shim points to the right python's pip module
+                                (scripts_dir / "pip.bat").write_text(
+                                    f'@echo off\n"{python_path}" -m pip %*\n',
+                                    encoding="utf-8"
+                                )
+
+                                # Also write versioned shim: 8pkg311.bat, 8pkg312.bat etc
+                                major_minor = version.replace(".", "")
+                                pkg8_src = Path(os.environ.get("COMSPEC", "")).parent  # not useful
+                                # Find actual 8pkg executable
+                                pkg8_exe = Path(sys.executable).parent / "Scripts" / "8pkg.exe"
+                                if pkg8_exe.exists():
+                                    (scripts_dir / f"8pkg{major_minor}.bat").write_text(
+                                        f'@echo off\n"{pkg8_exe}" --python {version} %*\n',
+                                        encoding="utf-8"
+                                    )
+
+                                # On Windows, os.execle replaces the process which kills the terminal.
+                                # Use subprocess instead, then exit cleanly.
+                                import subprocess as _sp
+                                proc = _sp.Popen(
+                                    [shell, "/K"],  # /K = run and keep open, no startup command needed
+                                    env=new_env,
+                                )
+                                proc.wait()
+
+                                # Cleanup env vars after shell exits
+                                for var in ["OMNIPKG_PYTHON", "OMNIPKG_ACTIVE_PYTHON", "OMNIPKG_VENV_ROOT"]:
+                                    os.environ.pop(var, None)
+
+                                return 0
+
+                            except Exception as e:
+                                safe_print(_("❌ Failed to spawn shell: {}").format(e))
+                                return 1
+
+                        else:
+                            # Unix path — unchanged
+                            shell = os.environ.get("SHELL", "/bin/bash")
+                            try:
+                                # ... existing Unix os.execle code ...
+                                os.execle(shell, shell.split('/')[-1], "-i", new_env)
+                            except Exception as e:
+                                safe_print(_("❌ Failed to spawn shell: {}").format(e))
+                                try:
+                                    os.unlink(cleanup_file)
+                                except:
+                                    pass
+                                return 1
 
                     else:
                         # CI/non-interactive mode: just update config and export env vars
