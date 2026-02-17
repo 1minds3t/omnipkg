@@ -172,6 +172,9 @@ class omnipkgMetadataGatherer:
                     check=True,
                     timeout=2,
                     creationflags=creationflags,
+                    # WINDOWS FIX: force UTF-8 in the spawned process to avoid
+                    # cp1252/system-codepage encoding mismatches on Windows
+                    env={**os.environ, "PYTHONIOENCODING": "utf-8", "PYTHONUTF8": "1"},
                 )
                 py_ver_str = result.stdout.strip()
             except Exception:
@@ -834,10 +837,11 @@ class omnipkgMetadataGatherer:
     def _discover_distributions_fast(
         self,
         targeted_packages: Optional[List[str]],
+        known_bubble_paths: Optional[Dict[str, Path]] = None,  # FIX: was referenced in body but missing from signature
         verbose: bool = False,
         search_path_override: Optional[str] = None,
         skip_existing_checksums: bool = False,
-        skip_nested_discovery: bool = False,  # ADD THIS PARAMETER
+        skip_nested_discovery: bool = False,
     ) -> List[importlib.metadata.Distribution]:
         """
         ULTRA-FAST targeted discovery for known packages.
@@ -845,7 +849,7 @@ class omnipkgMetadataGatherer:
 
         Args:
             targeted_packages: List of "pkg==version" specs
-            known_bubble_paths: Optional dict of {pkg_name: bubble_path} to skip searching
+            known_bubble_paths: Optional dict of {canonical_pkg_name: bubble_path} to skip searching
             verbose: Enable debug output
 
         Returns:
@@ -1335,20 +1339,41 @@ class omnipkgMetadataGatherer:
             python_exe = self.config.get("python_executable", sys.executable)
             cmd = [python_exe, "-m", "pip", "audit", "--json", "-r", reqs_file_path]
             
-            # ADD THIS:
             safe_print("   🔍 Running pip audit scan...", flush=True)
             
-            creationflags = subprocess.CREATE_NO_WINDOW if platform.system() == "Windows" else 0
-            result = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=180, creationflags=creationflags)
-            
-            # ADD THIS:
+            is_windows = platform.system() == "Windows"
+            creationflags = subprocess.CREATE_NO_WINDOW if is_windows else 0
+            win_env = {**os.environ, "PYTHONIOENCODING": "utf-8", "PYTHONUTF8": "1"}
+
+            # WINDOWS FIX: Use Popen+communicate() instead of subprocess.run().
+            # During __init__, this runs on the main thread. subprocess.run with
+            # capture_output=True can deadlock on Windows if the pip audit output
+            # fills the OS pipe buffer before we start reading it. communicate()
+            # drains both pipes concurrently, which is always safe.
+            proc = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                creationflags=creationflags,
+                env=win_env,
+            )
+            try:
+                raw_stdout, raw_stderr = proc.communicate(timeout=180)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                proc.communicate()
+                safe_print(_(" ⚠️ pip audit timed out after 180s, skipping security scan."))
+                self.security_report = {}
+                return
+
+            stdout_str = raw_stdout.decode("utf-8", errors="replace").strip()
             safe_print("   ✓ Audit complete", flush=True)
 
-            if result.returncode == 0 and result.stdout:
-                audit_data = json.loads(result.stdout)
+            if proc.returncode == 0 and stdout_str:
+                audit_data = json.loads(stdout_str)
                 self.security_report = self._parse_pip_audit_output(audit_data)
             else:
-                self.security_report = []  # No issues found or error occurred
+                self.security_report = []  # No issues found or non-zero exit (no vulns found returns 0)
 
             issue_count = len(self.security_report)
             safe_print(
@@ -1359,7 +1384,7 @@ class omnipkgMetadataGatherer:
 
         except (
             json.JSONDecodeError,
-            subprocess.SubprocessError,
+            OSError,
             FileNotFoundError,
         ) as e:
             safe_print(_(" ⚠️ An error occurred during the pip audit fallback scan: {}").format(e))
@@ -1586,9 +1611,22 @@ class omnipkgMetadataGatherer:
         start_time = time.perf_counter()
 
         updated_count = 0
-        max_workers = (os.cpu_count() or 4) * 2
+        # WINDOWS FIX: Aggressively cap max_workers on Windows.
+        # On Windows, each worker can spawn a subprocess (for import verification),
+        # and too many concurrent subprocesses + pipes causes the OS pipe buffer
+        # pool to exhaust, leading to silent deadlocks. cpu_count() workers is the
+        # safe upper bound; half that is more stable under load.
+        is_windows = platform.system() == "Windows"
+        if is_windows:
+            max_workers = max(2, (os.cpu_count() or 4))
+        else:
+            max_workers = (os.cpu_count() or 4) * 2
         total_packages = len(distributions_to_process)
         safe_print(_('   🔄 Processing {} packages in parallel...').format(total_packages), flush=True)
+
+        # WINDOWS FIX: Per-future timeout so a single hung subprocess can't block
+        # the entire build forever. 60s is generous for any single package.
+        _FUTURE_TIMEOUT = 60  # seconds
 
         with concurrent.futures.ThreadPoolExecutor(
             max_workers=max_workers, thread_name_prefix="omnipkg_builder"
@@ -1598,7 +1636,7 @@ class omnipkgMetadataGatherer:
                 for dist in distributions_to_process
             }
             iterator = concurrent.futures.as_completed(future_to_dist)
-            if HAS_TQDM and platform.system() != "Windows":
+            if HAS_TQDM:
                 iterator = tqdm(
                     iterator,
                     total=len(distributions_to_process),
@@ -1607,12 +1645,17 @@ class omnipkgMetadataGatherer:
                 )
 
             for future in iterator:
+                dist = future_to_dist[future]
                 try:
-                    if future.result():
+                    # WINDOWS FIX: Use a timeout on future.result() so a single
+                    # hung import-verification subprocess cannot stall the whole loop.
+                    if future.result(timeout=_FUTURE_TIMEOUT):
                         updated_count += 1
+                except concurrent.futures.TimeoutError:
+                    safe_print(_('\n⚠️  Timed out processing {}, skipping.').format(dist.metadata.get('Name', '?')))
+                    future.cancel()
                 except Exception as exc:
-                    dist = future_to_dist[future]
-                    safe_print(_('\n❌ Error processing {}: {}').format(dist.metadata['Name'], exc))
+                    safe_print(_('\n❌ Error processing {}: {}').format(dist.metadata.get('Name', '?'), exc))
 
         end_time = time.perf_counter()
         total_time = end_time - start_time
@@ -1969,6 +2012,10 @@ class omnipkgMetadataGatherer:
             "import importlib",
             "import json",
             "import traceback",
+            # WINDOWS FIX: Explicitly reconfigure stdout to UTF-8 so JSON output
+            # containing non-ASCII package names doesn't get mangled by the default
+            # Windows console encoding (cp1252 etc.) when read through the pipe.
+            "if hasattr(sys.stdout, 'reconfigure'): sys.stdout.reconfigure(encoding='utf-8', errors='replace')",
             "results = []",
             f"sys.path.insert(0, r'{path_to_test}')",
         ]
@@ -2001,20 +2048,48 @@ class omnipkgMetadataGatherer:
 
         try:
             # 4. Run the generated script
+            # WINDOWS FIX: Use Popen + communicate() instead of subprocess.run(check=True).
+            # On Windows, running many parallel subprocesses with capture_output=True and
+            # check=True causes pipe buffer deadlocks when stdout/stderr fill up before
+            # the process is waited on. communicate() drains both pipes concurrently,
+            # which is the only safe pattern for parallel subprocess use on Windows.
             python_exe = self.config.get("python_executable", sys.executable)
-            creationflags = subprocess.CREATE_NO_WINDOW if platform.system() == "Windows" else 0
-            result = subprocess.run(
-                [python_exe, "-c", script],
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                check=True,
-                timeout=15,
-                creationflags=creationflags,
-            )
+            is_windows = platform.system() == "Windows"
+            creationflags = subprocess.CREATE_NO_WINDOW if is_windows else 0
 
-            test_results = json.loads(result.stdout.strip())
+            proc = subprocess.Popen(
+                [python_exe, "-c", script],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                creationflags=creationflags,
+                # WINDOWS FIX: Force UTF-8 via env rather than relying on text=True,
+                # because Windows console subprocesses inherit the system code page
+                # (often cp1252/cp936) which breaks JSON output containing non-ASCII.
+                env={**os.environ, "PYTHONIOENCODING": "utf-8", "PYTHONUTF8": "1"},
+            )
+            try:
+                raw_stdout, raw_stderr = proc.communicate(timeout=15)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                proc.communicate()  # drain to avoid zombie handles on Windows
+                return {
+                    "importable": False,
+                    "error": "Import verification timed out (15s)",
+                    "attempted_modules": import_candidates,
+                }
+
+            # Decode with explicit utf-8 + replace so we never crash on bad bytes
+            stdout_str = raw_stdout.decode("utf-8", errors="replace").strip()
+            stderr_str = raw_stderr.decode("utf-8", errors="replace").strip()
+
+            if proc.returncode != 0:
+                return {
+                    "importable": False,
+                    "error": _('Subprocess exited {}: {}').format(proc.returncode, stderr_str[:500]),
+                    "attempted_modules": import_candidates,
+                }
+
+            test_results = json.loads(stdout_str)
             successful_imports = [(name, ver) for name, success, ver in test_results if success]
             failed_imports = [(name, err) for name, success, err in test_results if not success]
 
@@ -2033,14 +2108,17 @@ class omnipkgMetadataGatherer:
                     "attempted_modules": import_candidates,
                 }
         except (
-            subprocess.CalledProcessError,
-            subprocess.TimeoutExpired,
             json.JSONDecodeError,
         ) as e:
-            error_msg = e.stderr.strip() if hasattr(e, "stderr") and e.stderr else str(e)
             return {
                 "importable": False,
-                "error": _('Subprocess failed: {}').format(error_msg),
+                "error": _('JSON decode failed: {}').format(str(e)),
+                "attempted_modules": import_candidates,
+            }
+        except Exception as e:
+            return {
+                "importable": False,
+                "error": _('Subprocess failed: {}').format(str(e)),
                 "attempted_modules": import_candidates,
             }
 
@@ -2204,9 +2282,10 @@ class omnipkgMetadataGatherer:
         return files
 
     def _run_bulk_security_check(self, packages: Dict[str, str]):
-        reqs_file_path = "/tmp/bulk_safety_reqs.txt"
+        # WINDOWS FIX: /tmp/ doesn't exist on Windows; use tempfile.mkstemp instead.
+        reqs_fd, reqs_file_path = tempfile.mkstemp(suffix=".txt", prefix="omnipkg_safety_")
         try:
-            with open(reqs_file_path, "w") as f:
+            with os.fdopen(reqs_fd, "w", encoding="utf-8") as f:
                 for name, version in packages.items():
                     f.write(f"{name}=={version}\n")
             python_exe = self.config.get("python_executable", sys.executable)
@@ -2273,6 +2352,9 @@ class omnipkgMetadataGatherer:
                     timeout=3,
                     errors="ignore",
                     creationflags=creationflags,
+                    # WINDOWS FIX: Ensure the spawned process uses UTF-8 so help
+                    # text with non-ASCII characters doesn't crash the decode step.
+                    env={**os.environ, "PYTHONIOENCODING": "utf-8", "PYTHONUTF8": "1"},
                 )
                 output = (result.stdout or result.stderr).strip()
                 if output and "usage:" in output.lower():

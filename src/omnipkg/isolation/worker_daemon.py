@@ -1519,6 +1519,10 @@ class PersistentWorker:
 
         self.log_file = open(DAEMON_LOG_FILE, "a", encoding="utf-8", buffering=1)
 
+        # Initialize output queue for thread-safe reading on Windows
+        import queue
+        self.stdout_queue = queue.Queue()
+
         # Windows: Add CREATE_NO_WINDOW flag to prevent console window and I/O deadlock
         creationflags = subprocess.CREATE_NO_WINDOW if IS_WINDOWS else 0
         self.process = subprocess.Popen(
@@ -1534,6 +1538,23 @@ class PersistentWorker:
             preexec_fn=os.setsid if not IS_WINDOWS else None,
             creationflags=creationflags,
         )
+
+        # Start a single persistent reader thread to prevent deadlocks on Windows
+        def _reader_thread():
+            while self.process and self.process.stdout:
+                try:
+                    line = self.process.stdout.readline()
+                    if line:
+                        self.stdout_queue.put(line)
+                    else:
+                        # Process stdout has been closed, exit thread
+                        break
+                except (ValueError, OSError):
+                    # Pipe closed or other I/O error
+                    break
+        
+        self._io_thread = threading.Thread(target=_reader_thread, daemon=True)
+        self._io_thread.start()
 
     def assign_spec(self, package_spec: str):
         """Converts an IDLE worker into a specific package worker."""
@@ -1600,23 +1621,14 @@ class PersistentWorker:
             if process.poll() is not None:
                 raise RuntimeError('Worker crashed during startup')
 
-            # Try to read READY signal
+            # Try to read READY signal from Queue (Platform Independent)
             ready_line = None
-            if IS_WINDOWS:
-                # Use threading approach on Windows
-                result = [None]
-                def try_read():
-                    try: result[0] = process.stdout.readline()
-                    except: pass
-                t = threading.Thread(target=try_read, daemon=True)
-                t.start()
-                t.join(timeout=0.1)
-                if result[0]: ready_line = result[0]
-            else:
-                # Unix: select works
-                ready, unused, unused = select.select([process.stdout], [], [], 0.1)
-                if ready:
-                    ready_line = process.stdout.readline()
+            try:
+                # Non-blocking check since we loop anyway
+                import queue
+                ready_line = self.stdout_queue.get_nowait()
+            except queue.Empty:
+                pass
 
             if ready_line:
                 safe_print(f"✅ [DAEMON] Got READY signal: {ready_line[:100]}", file=sys.stderr)
@@ -2041,27 +2053,17 @@ class PersistentWorker:
                 
                 safe_print(f"🔍 [DAEMON] Task sent, waiting for response (timeout={timeout}s)...", file=sys.stderr)
 
-                # Windows-compatible response reading
-                response_line = None
-                if IS_WINDOWS:
-                    # Use threading on Windows since select doesn't work with pipes
-                    result = [None]
-                    def try_read():
-                        try: 
-                            result[0] = self.process.stdout.readline()
-                            safe_print(f"🔍 [DAEMON] Read thread got response: {result[0][:100] if result[0] else 'None'}...", file=sys.stderr)
-                        except Exception as e:
-                            safe_print(f"❌ [DAEMON] Read thread exception: {e}", file=sys.stderr)
-                    
-                    t = threading.Thread(target=try_read, daemon=True)
-                    t.start()
-                    t.join(timeout=timeout)
-                    response_line = result[0]
-                else:
-                    # Unix: select works fine
-                    readable, unused, unused = select.select([self.process.stdout], [], [], timeout)
-                    if readable:
-                        response_line = self.process.stdout.readline()
+                # Read from Queue with timeout
+                import queue
+                try:
+                    # Drain any stale output before waiting for new response
+                    # (optional, but helps keep protocol sync)
+                    # while not self.stdout_queue.empty():
+                    #     self.stdout_queue.get_nowait()
+
+                    response_line = self.stdout_queue.get(timeout=timeout)
+                except queue.Empty:
+                    response_line = None
 
                 if not response_line:
                     safe_print(f"❌ [DAEMON] No response received within {timeout}s", file=sys.stderr)
