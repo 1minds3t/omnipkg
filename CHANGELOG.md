@@ -7,32 +7,93 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [2.2.3] — 2026-02-16
+## [2.2.3] — 2026-02-17
 
-Major Windows Stability Overhaul & Daemon Fixes
+Windows Stability, Daemon Overhaul & Concurrency Fixes
 
-**Release Notes:**
+Release Notes — omnipkg v2.2.3
 
-This release addresses critical stability issues in Windows environments. Following extensive debugging, we have overhauled the daemon process management and console handling to ensure `omnipkg` functions correctly on Windows without hanging, crashing, or spawning visible console popups.
+This release focuses on major Windows reliability improvements, daemon lifecycle fixes, concurrency stability, and cross-platform process management. After extensive debugging and refactoring, daemon behavior and subprocess handling are now stable under heavy parallel workloads.
 
-**🪟 Windows Compatibility & Stability**
-*   **Daemon Process:** Fixed the "visible console window" annoyance when spawning background workers. The daemon now correctly uses `CREATE_NO_WINDOW` and detached process flags.
-*   **Encoding Fixes:** Solved `UnicodeEncodeError` and "mojibake" issues in the Windows console by forcing UTF-8 encoding and enabling ANSI escape sequences via `ctypes`.
-*   **Path Handling:** Removed hardcoded references to `/tmp` (which doesn't exist on Windows) in favor of cross-platform temporary directories for file locking.
-*   **Subprocess Calls:** Switched to `subprocess.call` / `sys.executable` patterns that respect Windows execution policies and prevent handle inheritance issues.
+⸻
 
-**⚡ Core Improvements**
-*   **Daemon Lifecycle:** Improved logic for starting, stopping, and restarting the daemon.
-*   **Output Buffering:** Forced unbuffered output (`PYTHONUNBUFFERED=1`) and explicit flushing to ensure logs appear in real-time during CI/CD runs.
-*   **Resource Monitor:** Enhanced idle worker detection and cleanup logic.
+🪟 Windows Compatibility & Stability
 
-**🌍 Internationalization**
-*   **Japanese:** Major translation updates and finalizing of message catalogs.
-*   **Arabic:** Corrections to text direction and terminology.
+Daemon & Worker Execution
+	•	Fixed parallel subprocess deadlocks during metadata parsing and package operations.
+	•	Hardened Windows daemon launch logic to prevent hangs and zombie workers.
+	•	Added compatibility layer for Windows daemon execution.
+	•	Eliminated visible console popups when spawning background workers.
+	•	Improved worker lifecycle handling to prevent orphaned processes.
 
-**🛡️ Maintenance**
-*   Updated `THIRD_PARTY_NOTICES.txt` and added missing license files for vendored dependencies.
-*   Fixed race conditions in `package_meta_builder.py` during concurrent metadata gathering.
+Console & Encoding Fixes
+	•	Resolved Windows console Unicode and mojibake issues.
+	•	All subprocess calls now explicitly use UTF-8 encoding.
+	•	Enabled proper ANSI escape sequence support on Windows consoles.
+
+Path & Process Handling
+	•	Removed hardcoded /tmp usage in favor of platform-correct temp paths.
+	•	Subprocess execution now consistently uses interpreter-safe invocation patterns.
+	•	Improved interpreter configuration handling across parallel executions.
+
+⸻
+
+⚡ Core Improvements
+
+Worker & Daemon Lifecycle
+	•	Improved daemon start/stop/restart handling.
+	•	Added CLI daemon restart support.
+	•	Idle worker detection and cleanup logic improved.
+	•	Worker reuse and shutdown behavior stabilized.
+
+Output & CI Stability
+	•	Forced unbuffered output in daemon workers.
+	•	Fixed delayed logging during CI/CD runs.
+	•	Reduced buffering issues during concurrent installs.
+
+Dispatcher & Core Execution
+	•	Dispatcher logic simplified and stabilized.
+	•	Reduced race conditions in worker dispatch logic.
+	•	Improved concurrency handling in metadata processing.
+
+⸻
+
+🌍 Internationalization
+	•	Major Japanese translation updates and catalog cleanup.
+	•	Improved message consistency.
+	•	Locale handling fixes across CLI and daemon components.
+
+⸻
+
+🛡️ Maintenance & Infrastructure
+	•	Added missing third-party license files.
+	•	Updated THIRD_PARTY_NOTICES.
+	•	Fixed concurrent metadata builder race conditions.
+	•	Cleanup of misplaced test files and legacy code.
+	•	Removed duplicate module imports and dead code.
+
+⸻
+
+🧪 Test & CI Improvements
+	•	Improved concurrency testing workflows for Windows.
+	•	Updated rich switching and interpreter switching tests.
+	•	Stability improvements in stress and concurrency test suites.
+
+⸻
+
+📦 Summary
+
+55+ files changed
+~6900 insertions / ~4500 deletions
+
+This release significantly improves reliability for:
+	•	Windows environments
+	•	Concurrent installs
+	•	Metadata processing
+	•	Worker reuse
+	•	Long-running daemon sessions
+
+⸻
 
 #
 #
@@ -49,45 +110,6 @@ This release transforms Gitship from a collection of scripts into a robust Git o
 
 ---
 
-**📚 Documentation:**
-- THIRD_PARTY_NOTICES.txt (178 lines)
-- licenses/annotated-types.txt (21 lines)
-- licenses/anyio.txt (20 lines)
-- licenses/cffi.txt (23 lines)
-- licenses/click.txt (28 lines)
-- licenses/cryptography.txt (3 lines)
-- licenses/dparse.txt (11 lines)
-- licenses/filelock-lts.txt (13 lines)
-- licenses/h11.txt (22 lines)
-- licenses/httpcore.txt (27 lines)
-- licenses/httpx.txt (12 lines)
-- licenses/jinja2.txt (28 lines)
-- licenses/joblib.txt (29 lines)
-- licenses/markdown-it-py.txt (21 lines)
-- licenses/markupsafe.txt (28 lines)
-- licenses/mdurl.txt (46 lines)
-- licenses/nltk.txt (202 lines)
-- licenses/pycparser.txt (27 lines)
-- licenses/pydantic-core.txt (21 lines)
-- licenses/pydantic.txt (21 lines)
-- licenses/pygments.txt (25 lines)
-- licenses/regex.txt (208 lines)
-- licenses/ruamel-yaml-clib.txt (21 lines)
-- licenses/ruamel-yaml.txt (21 lines)
-- licenses/safety-schemas.txt (21 lines)
-- licenses/shellingham.txt (13 lines)
-- licenses/tenacity.txt (202 lines)
-- licenses/tomlkit.txt (20 lines)
-- licenses/typing-inspection.txt (21 lines)
-- licenses/urllib3-lts.txt (13 lines)
-
-**⚙️ Configuration:**
-- pyproject.toml (2 lines)
-
-**Additional Changes:**
-- chore: Add licenses.
-- Update translations (1 languages); Update documentation; Update configuration
-
 **New Features:**
 - feat: daemon idle worker management and i18n updates
 
@@ -95,19 +117,27 @@ This release transforms Gitship from a collection of scripts into a robust Git o
 - fix: add encoding='utf-8' to all subprocess calls to fix Windows Unicode issues
 
 **Updates:**
-- Update translations.
-- Update test_rich_switching.py
-- Update test_uv_switching.py
-- Update loader.py
-- Update worker_daemon.py
 - Update dispatcher.py
+- Update worker_daemon.py
+- Update test_rich_switching.py
+- Update loader.py
+- Update test_uv_switching.py
 - Update package_meta_builder.py
 - Update cli.py
 - Update run.py
 - Update workers.py
-- ...and 4 more updates
+- Update common_utils.py
+- ...and 2 more updates
 
-_55 files changed, 6900 insertions(+), 4583 deletions(-)_
+**Other Changes:**
+- ﻿fix(windows): resolve parallel subprocess deadlocks and interpreter config
+- Remove misplaced test files from root directory
+- fix windows subprocess calls
+- Create windows_daemon_compat.py
+- Revert "pyproject.toml", "requirements-trace.txt" to state before ef66efa4 (parent: ce646557)
+- ...and 4 more changes
+
+_55 files changed, 7076 insertions(+), 4488 deletions(-)_
 
 ## [2.2.2] - 2026-02-13
 
