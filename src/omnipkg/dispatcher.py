@@ -358,6 +358,11 @@ def resolve_python_path(version: str) -> Path:
                     if path.exists():
                         if debug_mode:
                             print(_('[DEBUG-DISPATCH] Registry hit ({}): {}').format(key, path), file=sys.stderr)
+                        # AUTO-CREATE config for this interpreter if missing.
+                        # Without this, managed interpreters (cpython-3.11.9 etc)
+                        # have no .omnipkg_config.json and fall back to the global
+                        # config, running as the wrong Python version.
+                        _ensure_interpreter_config(path, key, venv_root, debug_mode)
                         return path
         
         except Exception as e:
@@ -397,6 +402,77 @@ def resolve_python_path(version: str) -> Path:
     
     # Not found
     return Path(f"/path/to/python{major_minor}/NOT_FOUND")
+
+
+
+def _ensure_interpreter_config(interpreter_path: Path, version: str, venv_root: Path, debug_mode: bool):
+    """
+    Creates .omnipkg_config.json next to the interpreter if it doesn't exist.
+    Called from the dispatcher at the earliest moment we know a path is valid —
+    right after a registry hit — so the config is always present before cli.py loads.
+    
+    This is intentionally lightweight: no imports from core.py, no subprocesses.
+    We just write the essential keys so _load_or_create_config has something to read.
+    """
+    import re as _re
+    config_path = interpreter_path.parent / ".omnipkg_config.json"
+    if config_path.exists():
+        return  # Already exists, nothing to do
+
+    if debug_mode:
+        print(f"[DEBUG-DISPATCH] Creating missing config for {version} at {config_path}", file=sys.stderr)
+
+    try:
+        # Derive site-packages path for this interpreter without running a subprocess.
+        # Standard layout: .../cpython-3.11.9/Lib/site-packages (Windows)
+        #                   .../cpython-3.11.9/lib/python3.11/site-packages (Unix)
+        exe_dir = interpreter_path.parent  # e.g. .../cpython-3.11.9/ or .../cpython-3.11.9/bin/
+        
+        # Walk up to find the interpreter root (parent of bin/ or Scripts/)
+        interp_root = exe_dir
+        if exe_dir.name.lower() in ("bin", "scripts"):
+            interp_root = exe_dir.parent
+
+        # Try Windows layout first, then Unix
+        major_minor = ".".join(version.split(".")[:2])
+        candidates = [
+            interp_root / "Lib" / "site-packages",
+            interp_root / "lib" / f"python{major_minor}" / "site-packages",
+            interp_root / "lib" / "site-packages",
+        ]
+        site_packages = next((str(p) for p in candidates if p.exists()), None)
+
+        if not site_packages:
+            # Fall back to the venv's own site-packages
+            site_packages = str(venv_root / "Lib" / "site-packages")
+
+        config_data = {
+            "python_executable": str(interpreter_path.resolve()),
+            "python_version": version,
+            "python_version_short": major_minor,
+            "site_packages_path": site_packages,
+            "multiversion_base": str(Path(site_packages) / ".omnipkg_versions"),
+            "install_strategy": "stable-main",
+            "redis_enabled": True,
+            "redis_host": "localhost",
+            "redis_port": 6379,
+            "enable_python_hotswap": True,
+            "venv_root": str(venv_root.resolve()),
+            "managed_by_omnipkg": True,
+            "_auto_generated_by": "dispatcher",
+        }
+
+        config_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(config_path, "w", encoding="utf-8") as f:
+            json.dump(config_data, f, indent=2)
+
+        if debug_mode:
+            print(f"[DEBUG-DISPATCH] ✅ Config written to {config_path}", file=sys.stderr)
+
+    except Exception as e:
+        if debug_mode:
+            print(f"[DEBUG-DISPATCH] ⚠️  Could not write config for {version}: {e}", file=sys.stderr)
+        # Non-fatal — _load_or_create_config will handle it via fallback
 
 
 def find_absolute_venv_root(ignore_env_override: bool = False) -> Path:
