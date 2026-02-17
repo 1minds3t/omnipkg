@@ -97,16 +97,8 @@ This release significantly improves reliability for:
 
 #
 #
-## 🚀 Major Feature Release: The "Atomic Workflow" Engine
-This release transforms Gitship from a collection of scripts into a robust Git orchestration platform.
-
-### 🌟 Key Highlights
-- **Atomic GitOps Engine:** All operations now use a safety layer...
-- **Interactive Merge Suite:** A new guided conflict resolution workflow...
-
-### 🛠 New Commands
-- `gitship merge` / `resolve`: Interactive merge and conflict resolution
-- `gitship sync`: Unified sync workflow
+#
+#
 
 ---
 
@@ -137,7 +129,7 @@ This release transforms Gitship from a collection of scripts into a robust Git o
 - Revert "pyproject.toml", "requirements-trace.txt" to state before ef66efa4 (parent: ce646557)
 - ...and 4 more changes
 
-_55 files changed, 7076 insertions(+), 4488 deletions(-)_
+_55 files changed, 7106 insertions(+), 4488 deletions(-)_
 
 ## [2.2.2] - 2026-02-13
 
