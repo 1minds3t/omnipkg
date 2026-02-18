@@ -62,24 +62,30 @@ def get_daemon_worker_info():
     if not status.get("success"):
         return {}
     pid_map = {}
-    for spec, info in status.get("worker_details", {}).items():
+    for spec_key, info in status.get("worker_details", {}).items():
         pid = info.get("pid")
         if not pid:
             continue
-        pkg_spec = spec.split("::")[0]
-        # Try spec key first, then python_exe field — Windows paths use cpython-3.9.23 style
+
+        # Use the explicit fields added in _get_status (preferred)
+        pkg_spec = info.get("pkg_spec") or spec_key.split("::")[0]
+        python_exe = info.get("python_exe", "")
+
+        # Extract python version from python_exe path
         py_ver = "?.?"
-        for search_str in [spec, info.get("python_exe", ""), info.get("exe", "")]:
+        import re
+        for search_str in [python_exe, spec_key]:
             if not search_str:
                 continue
             m = re.search(r"cpython[\-_](3\.\d+)", str(search_str), re.IGNORECASE)
             if m:
                 py_ver = m.group(1)
                 break
-            m = re.search(r"python(3\.\d+)", str(search_str), re.IGNORECASE)
+            m = re.search(r"python3?[\.\-_]?(\d+)", str(search_str), re.IGNORECASE)
             if m:
-                py_ver = m.group(1)
+                py_ver = "3." + m.group(1) if "." not in m.group(0) else m.group(0).lstrip("python").lstrip("3.")
                 break
+
         pid_map[str(pid)] = f"{pkg_spec} (py{py_ver})"
     return pid_map
 
