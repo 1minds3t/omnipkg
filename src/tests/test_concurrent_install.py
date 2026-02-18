@@ -9,6 +9,20 @@ from omnipkg.i18n import _
 
 print_lock = threading.Lock()
 
+# ── Windows subprocess environment ───────────────────────────────────────────
+# Force UTF-8 + unbuffered output for all child processes.
+# Without this, Windows uses cp1252 (chokes on emoji) and interactive
+# prompts hang forever waiting for stdin that never comes.
+import os as _os
+_WIN_ENV = {
+    **_os.environ,
+    "PYTHONIOENCODING": "utf-8",
+    "PYTHONUTF8": "1",
+    "PYTHONUNBUFFERED": "1",
+    "OMNIPKG_NONINTERACTIVE": "1",  # suppress all interactive prompts
+}
+_SP = dict(encoding="utf-8", errors="replace", env=_WIN_ENV)
+
 
 def format_duration(ms: float) -> str:
     """Format duration for readability."""
@@ -20,26 +34,36 @@ def format_duration(ms: float) -> str:
         return f"{ms/1000:.2f}s"
 
 
+def _run_info_python() -> str:
+    """Run `omnipkg info python`, always UTF-8, never interactive."""
+    result = subprocess.run(
+        ["omnipkg", "info", "python"],
+        capture_output=True,
+        **_SP,
+    )
+    return result.stdout or ""
+
+
 def verify_registry_contains(version: str) -> bool:
     """Verify registry contains the version."""
     try:
-        result = subprocess.run(
-            ["omnipkg", "info", "python"], capture_output=True, text=True, check=True
-        )
-        for line in result.stdout.splitlines():
+        output = _run_info_python()
+        for line in output.splitlines():
             if f"Python {version}:" in line:
                 return True
-    except subprocess.CalledProcessError:
+    except Exception:
         return False
     return False
 
 
 def get_interpreter_path(version: str) -> str:
     """Get interpreter path from omnipkg."""
-    result = subprocess.run(
-        ["omnipkg", "info", "python"], capture_output=True, text=True, check=True
-    )
-    for line in result.stdout.splitlines():
+    try:
+        output = _run_info_python()
+    except Exception as e:
+        raise RuntimeError(_('Failed to query omnipkg: {}').format(e)) from e
+
+    for line in output.splitlines():
         if f"Python {version}:" in line:
             parts = line.split(":", 1)
             if len(parts) == 2:
@@ -56,10 +80,12 @@ def adopt_if_needed(version: str) -> bool:
 
     safe_print(_('   🚀 Adopting Python {}...').format(version))
     result = subprocess.run(
-        ["omnipkg", "python", "adopt", version], capture_output=True, text=True
+        ["omnipkg", "python", "adopt", version],
+        capture_output=True,
+        **_SP,
     )
     if result.returncode != 0:
-        safe_print(_('   ❌ Adoption failed'))
+        safe_print(_('   ❌ Adoption failed: {}').format(result.stderr.strip()))
         return False
 
     safe_print(_('   ✅ Adopted Python {}').format(version))
