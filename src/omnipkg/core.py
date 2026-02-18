@@ -7426,10 +7426,9 @@ class omnipkg:
         if not flag_file.exists():
             return False
 
-        # Always use the ACTUAL running interpreter — never the config's registered exe.
         current_version_str = f"{sys.version_info.major}.{sys.version_info.minor}"
 
-        # Fast path: peek at the flag file without touching the lock.
+        # Fast path: peek without touching the lock.
         try:
             with open(flag_file, "r") as f:
                 versions_to_rebuild = json.load(f)
@@ -7441,38 +7440,53 @@ class omnipkg:
         lock_file = self.config_manager.venv_path / ".omnipkg" / ".needs_kb_rebuild.lock"
         _STALE_LOCK_SECONDS = 300
 
-        # ── Stale lock check ────────────────────────────────────────────────
-        # If the lock exists but is older than 5 minutes, the process that
-        # created it is gone. Delete it and proceed WITHOUT acquiring a new
-        # lock — we are now the sole owner.
-        stale_lock_removed = False
+        # ── Attempt to become the owner ──────────────────────────────────────
+        # We are the owner if EITHER:
+        #   (a) no lock exists and we create it atomically, OR
+        #   (b) the existing lock is stale and we replace it atomically.
+        #
+        # Use os.open with O_CREAT|O_EXCL for a true atomic create on all
+        # platforms (FileLock itself uses this internally).  If the file already
+        # exists and is fresh, someone else is genuinely working — skip.
+        we_own_lock = False
         try:
             if lock_file.exists():
                 age = time.time() - lock_file.stat().st_mtime
-                if age > _STALE_LOCK_SECONDS:
-                    safe_print(_(
-                        "⚠️  Stale KB rebuild lock detected ({:.0f}s old). Taking over rebuild."
-                    ).format(age))
-                    lock_file.unlink(missing_ok=True)
-                    stale_lock_removed = True
-        except OSError:
-            pass
+                if age <= _STALE_LOCK_SECONDS:
+                    # Live process holds it — don't wait, just skip.
+                    safe_print(_("⚠️  KB rebuild already in progress for {}. Skipping.").format(
+                        current_version_str))
+                    return False
+                # Stale — atomically replace it by deleting then exclusive-creating.
+                lock_file.unlink(missing_ok=True)
 
-        def _do_rebuild() -> bool:
-            """
-            Core rebuild logic — called either under a fresh lock or after
-            evicting a stale one.  Returns True on success.
-            """
-            # Re-read under ownership to avoid double-work from a race.
+            # Atomic exclusive create — fails if another process beat us here.
+            fd = os.open(str(lock_file), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+            os.write(fd, str(os.getpid()).encode())
+            os.close(fd)
+            we_own_lock = True
+
+        except FileExistsError:
+            # Another process won the race for the lock — skip silently.
+            return False
+        except OSError:
+            return False
+
+        if not we_own_lock:
+            return False
+
+        # ── We own the lock — do the rebuild ─────────────────────────────────
+        try:
+            # Re-read flag under ownership (another process may have finished already).
             try:
                 with open(flag_file, "r") as f:
-                    versions = json.load(f)
+                    versions_to_rebuild = json.load(f)
             except (json.JSONDecodeError, IOError):
                 flag_file.unlink(missing_ok=True)
                 return False
 
-            if current_version_str not in versions:
-                return False  # Another process already handled it
+            if current_version_str not in versions_to_rebuild:
+                return False  # Already handled by a concurrent process
 
             safe_print(_("💡 First use of Python {} detected. Building knowledge base...").format(
                 current_version_str))
@@ -7480,39 +7494,21 @@ class omnipkg:
             rebuild_status = self.rebuild_knowledge_base(force=True)
 
             if rebuild_status == 0:
-                versions.remove(current_version_str)
-                if not versions:
+                versions_to_rebuild.remove(current_version_str)
+                if not versions_to_rebuild:
                     flag_file.unlink(missing_ok=True)
                 else:
                     with open(flag_file, "w") as f:
-                        json.dump(versions, f)
+                        json.dump(versions_to_rebuild, f)
                 safe_print(_("✅ Knowledge base for Python {} is ready.").format(current_version_str))
                 return True
             else:
                 safe_print(_("❌ Failed to build knowledge base. Will retry on next run."))
                 return False
 
-        # ── If we evicted a stale lock, rebuild directly — no lock contention ──
-        if stale_lock_removed:
-            try:
-                # Write a fresh lock so other processes know we're running
-                lock_file.touch()
-                result = _do_rebuild()
-                return result
-            finally:
-                lock_file.unlink(missing_ok=True)
-
-        # ── Normal path: try to acquire lock with zero wait ──────────────────
-        # timeout=0 means "give up instantly if someone else holds it".
-        # If a LIVE process is genuinely rebuilding right now, skip — don't
-        # queue up behind it for 30 seconds.
-        try:
-            with FileLock(lock_file, timeout=0):
-                return _do_rebuild()
-        except Timeout:
-            safe_print(_("⚠️  KB rebuild already in progress for {}. Skipping.").format(
-                current_version_str))
-            return False
+        finally:
+            # Always release our lock, even if rebuild raised an exception.
+            lock_file.unlink(missing_ok=True)
 
     def _repair_manifest_context_mismatch(
         self, dist: importlib.metadata.Distribution, current_python_version: str
