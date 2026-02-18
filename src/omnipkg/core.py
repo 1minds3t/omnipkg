@@ -7427,12 +7427,9 @@ class omnipkg:
             return False
 
         # Always use the ACTUAL running interpreter — never the config's registered exe.
-        # When the user runs `8pkg --python 3.11`, this process IS 3.11. sys.version_info
-        # is always correct regardless of what the config says.
         current_version_str = f"{sys.version_info.major}.{sys.version_info.minor}"
 
         # Fast path: peek at the flag file without touching the lock.
-        # If our version isn't listed, we have nothing to do.
         try:
             with open(flag_file, "r") as f:
                 versions_to_rebuild = json.load(f)
@@ -7442,59 +7439,80 @@ class omnipkg:
             return False
 
         lock_file = self.config_manager.venv_path / ".omnipkg" / ".needs_kb_rebuild.lock"
-
-        # Remove stale lock left by a killed process (older than 5 minutes).
         _STALE_LOCK_SECONDS = 300
+
+        # ── Stale lock check ────────────────────────────────────────────────
+        # If the lock exists but is older than 5 minutes, the process that
+        # created it is gone. Delete it and proceed WITHOUT acquiring a new
+        # lock — we are now the sole owner.
+        stale_lock_removed = False
         try:
             if lock_file.exists():
                 age = time.time() - lock_file.stat().st_mtime
                 if age > _STALE_LOCK_SECONDS:
                     safe_print(_(
-                        "⚠️  Stale KB rebuild lock detected ({:.0f}s old). Removing and continuing."
+                        "⚠️  Stale KB rebuild lock detected ({:.0f}s old). Taking over rebuild."
                     ).format(age))
                     lock_file.unlink(missing_ok=True)
+                    stale_lock_removed = True
         except OSError:
             pass
 
-        try:
-            with FileLock(lock_file, timeout=30):
-                # Re-read under the lock — another process may have already handled our version.
-                try:
-                    with open(flag_file, "r") as f:
-                        versions_to_rebuild = json.load(f)
-                except (json.JSONDecodeError, IOError):
-                    if flag_file.exists():
-                        flag_file.unlink()
-                    return False
+        def _do_rebuild() -> bool:
+            """
+            Core rebuild logic — called either under a fresh lock or after
+            evicting a stale one.  Returns True on success.
+            """
+            # Re-read under ownership to avoid double-work from a race.
+            try:
+                with open(flag_file, "r") as f:
+                    versions = json.load(f)
+            except (json.JSONDecodeError, IOError):
+                flag_file.unlink(missing_ok=True)
+                return False
 
-                if current_version_str not in versions_to_rebuild:
-                    return False
+            if current_version_str not in versions:
+                return False  # Another process already handled it
 
-                safe_print(_("💡 First use of Python {} detected.").format(current_version_str))
-                safe_print(_(" Building its knowledge base now..."))
+            safe_print(_("💡 First use of Python {} detected. Building knowledge base...").format(
+                current_version_str))
 
-                rebuild_status = self.rebuild_knowledge_base(force=True)
+            rebuild_status = self.rebuild_knowledge_base(force=True)
 
-                if rebuild_status == 0:
-                    versions_to_rebuild.remove(current_version_str)
-                    if not versions_to_rebuild:
-                        if flag_file.exists():
-                            flag_file.unlink()
-                    else:
-                        with open(flag_file, "w") as f:
-                            json.dump(versions_to_rebuild, f)
-                    safe_print(_(" ✅ Knowledge base for Python {} is ready.").format(current_version_str))
-                    return True
+            if rebuild_status == 0:
+                versions.remove(current_version_str)
+                if not versions:
+                    flag_file.unlink(missing_ok=True)
                 else:
-                    safe_print(_(" ❌ Failed to build knowledge base. Will retry on next run."))
-                    return False
+                    with open(flag_file, "w") as f:
+                        json.dump(versions, f)
+                safe_print(_("✅ Knowledge base for Python {} is ready.").format(current_version_str))
+                return True
+            else:
+                safe_print(_("❌ Failed to build knowledge base. Will retry on next run."))
+                return False
 
+        # ── If we evicted a stale lock, rebuild directly — no lock contention ──
+        if stale_lock_removed:
+            try:
+                # Write a fresh lock so other processes know we're running
+                lock_file.touch()
+                result = _do_rebuild()
+                return result
+            finally:
+                lock_file.unlink(missing_ok=True)
+
+        # ── Normal path: try to acquire lock with zero wait ──────────────────
+        # timeout=0 means "give up instantly if someone else holds it".
+        # If a LIVE process is genuinely rebuilding right now, skip — don't
+        # queue up behind it for 30 seconds.
+        try:
+            with FileLock(lock_file, timeout=0):
+                return _do_rebuild()
         except Timeout:
-            # Another live process is actively rebuilding our version right now. Skip.
-            safe_print(_("⚠️  KB rebuild already in progress for {}. Skipping.").format(current_version_str))
+            safe_print(_("⚠️  KB rebuild already in progress for {}. Skipping.").format(
+                current_version_str))
             return False
-
-        return False
 
     def _repair_manifest_context_mismatch(
         self, dist: importlib.metadata.Distribution, current_python_version: str
