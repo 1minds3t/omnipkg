@@ -9,17 +9,14 @@ from omnipkg.i18n import _
 
 print_lock = threading.Lock()
 
-# ── Windows subprocess environment ───────────────────────────────────────────
-# Force UTF-8 + unbuffered output for all child processes.
-# Without this, Windows uses cp1252 (chokes on emoji) and interactive
-# prompts hang forever waiting for stdin that never comes.
+# Windows subprocess environment — UTF-8, unbuffered, non-interactive
 import os as _os
 _WIN_ENV = {
     **_os.environ,
     "PYTHONIOENCODING": "utf-8",
     "PYTHONUTF8": "1",
     "PYTHONUNBUFFERED": "1",
-    "OMNIPKG_NONINTERACTIVE": "1",  # suppress all interactive prompts
+    "OMNIPKG_NONINTERACTIVE": "1",
 }
 _SP = dict(encoding="utf-8", errors="replace", env=_WIN_ENV)
 
@@ -35,7 +32,7 @@ def format_duration(ms: float) -> str:
 
 
 def _run_info_python() -> str:
-    """Run `omnipkg info python`, always UTF-8, never interactive."""
+    """Run omnipkg info python, always UTF-8, never interactive."""
     result = subprocess.run(
         ["omnipkg", "info", "python"],
         capture_output=True,
@@ -62,7 +59,6 @@ def get_interpreter_path(version: str) -> str:
         output = _run_info_python()
     except Exception as e:
         raise RuntimeError(_('Failed to query omnipkg: {}').format(e)) from e
-
     for line in output.splitlines():
         if f"Python {version}:" in line:
             parts = line.split(":", 1)
@@ -72,24 +68,49 @@ def get_interpreter_path(version: str) -> str:
     raise RuntimeError(_('Python {} not found in registry').format(version))
 
 
-def adopt_if_needed(version: str) -> bool:
-    """Adopt Python version if not already present."""
+def adopt_if_needed(version: str, poll_interval: float = 5.0, timeout: float = 300.0) -> bool:
+    """
+    Stream adopt output directly to terminal (no pipe = no 1KB Windows buffer hang).
+    Poll info python every poll_interval seconds to confirm registry entry.
+    """
     if verify_registry_contains(version):
         safe_print(_('   ✅ Python {} already available.').format(version))
         return True
 
-    safe_print(_('   🚀 Adopting Python {}...').format(version))
-    result = subprocess.run(
-        ["omnipkg", "python", "adopt", version],
-        capture_output=True,
-        **_SP,
-    )
-    if result.returncode != 0:
-        safe_print(_('   ❌ Adoption failed: {}').format(result.stderr.strip()))
-        return False
+    safe_print(_('   🚀 Adopting Python {} (streaming live output)...').format(version))
 
-    safe_print(_('   ✅ Adopted Python {}').format(version))
-    return True
+    # No stdout/stderr redirect — inherits terminal directly, bypasses all pipe limits
+    proc = subprocess.Popen(
+        ["omnipkg", "python", "adopt", version],
+        env=_WIN_ENV,
+    )
+
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        rc = proc.poll()
+
+        if verify_registry_contains(version):
+            if rc is None:
+                proc.wait()
+            safe_print(_('   ✅ Python {} confirmed in registry.').format(version))
+            return True
+
+        if rc is not None:
+            # Process exited but not in registry yet — one grace check
+            if rc == 0:
+                time.sleep(1)
+                if verify_registry_contains(version):
+                    safe_print(_('   ✅ Python {} confirmed in registry.').format(version))
+                    return True
+            safe_print(_('   ❌ Adopt process exited (code {}) but Python {} not in registry.').format(rc, version))
+            return False
+
+        safe_print(_('   ⏳ Waiting for Python {}... (polling registry)').format(version))
+        time.sleep(poll_interval)
+
+    proc.kill()
+    safe_print(_('   ❌ Adopt timed out after {}s').format(int(timeout)))
+    return False
 
 def ensure_daemon_running() -> bool:
     """Ensure daemon is running."""
