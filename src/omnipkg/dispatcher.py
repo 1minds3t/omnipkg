@@ -531,6 +531,269 @@ def _ensure_interpreter_config(interpreter_path: Path, version: str, venv_root: 
         # Non-fatal — _load_or_create_config will handle it via fallback
 
 
+def spawn_swap_shell(version: str, python_path: Path, pkg_instance) -> int:
+    """
+    Spawn an interactive sub-shell with the swapped Python context.
+    Handles all shim setup, PATH manipulation, .bat writing (Windows),
+    rcfile generation (Unix), and debug output.
+
+    This is the SINGLE source of truth for interactive swap logic.
+    cli.py must not duplicate any of this.
+    """
+    debug_mode = os.environ.get("OMNIPKG_DEBUG") == "1"
+
+    from omnipkg.common_utils import safe_print
+    from omnipkg.i18n import _
+
+    # ── 1. Ensure shims dir exists ────────────────────────────────────────────
+    shims_dir = pkg_instance.config_manager._ensure_shims_installed()
+    original_venv = pkg_instance.config_manager.venv_path
+
+    # ── 2. Build environment ──────────────────────────────────────────────────
+    new_env = os.environ.copy()
+    new_env["OMNIPKG_PYTHON"] = version
+    new_env["OMNIPKG_ACTIVE_PYTHON"] = version
+    new_env["OMNIPKG_VENV_ROOT"] = str(original_venv)
+    new_env["CONDA_CHANGEPS1"] = "false"
+    new_env["CONDA_AUTO_ACTIVATE_BASE"] = "false"
+
+    # Clean PATH: remove stale omnipkg shim/interpreter entries
+    current_path = new_env.get("PATH", "")
+    path_parts = current_path.split(os.pathsep)
+    cleaned_parts = []
+    for p in path_parts:
+        if ".omnipkg/shims" in p or ".omnipkg\\shims" in p:
+            continue
+        if (".omnipkg/interpreters" in p or ".omnipkg\\interpreters" in p) and (
+            "/bin" in p or "\\bin" in p or "\\Scripts" in p
+        ):
+            continue
+        cleaned_parts.append(p)
+
+    seen: set = set()
+    deduped = []
+    for p in cleaned_parts:
+        if p and p not in seen:
+            deduped.append(p)
+            seen.add(p)
+
+    deduped.insert(0, str(shims_dir))
+    new_env["PATH"] = os.pathsep.join(deduped)
+
+    # ── 3. Resolve pip executable for this interpreter ────────────────────────
+    # Prefer <interp_dir>/pip over -m pip so the path is concrete and visible
+    interp_dir = python_path.parent
+    if sys.platform == "win32":
+        pip_exe = interp_dir / "Scripts" / "pip.exe"
+        if not pip_exe.exists():
+            pip_exe = interp_dir / "pip.exe"
+    else:
+        pip_exe = interp_dir / "pip"
+        if not pip_exe.exists():
+            pip_exe = interp_dir / "pip3"
+
+    # ── 4. Debug output ───────────────────────────────────────────────────────
+    if debug_mode:
+        safe_print("", file=sys.stderr)
+        safe_print("=" * 70, file=sys.stderr)
+        safe_print("[DEBUG-SWAP] omnipkg swap — pre-shell diagnostic", file=sys.stderr)
+        safe_print("=" * 70, file=sys.stderr)
+
+        # How to enable/disable debug — Windows-friendly
+        if sys.platform == "win32":
+            safe_print("[DEBUG-SWAP] To enable debug next time:", file=sys.stderr)
+            safe_print("   set OMNIPKG_DEBUG=1   (Command Prompt)", file=sys.stderr)
+            safe_print("   $env:OMNIPKG_DEBUG=1  (PowerShell)", file=sys.stderr)
+            safe_print("   To disable: set OMNIPKG_DEBUG=  (CMD) / Remove-Item Env:OMNIPKG_DEBUG (PS)", file=sys.stderr)
+        else:
+            safe_print("[DEBUG-SWAP] To enable debug: export OMNIPKG_DEBUG=1", file=sys.stderr)
+            safe_print("[DEBUG-SWAP] To disable:      unset OMNIPKG_DEBUG", file=sys.stderr)
+
+        safe_print("", file=sys.stderr)
+        safe_print(f"[DEBUG-SWAP] Python interpreter path : {python_path}", file=sys.stderr)
+        safe_print(f"[DEBUG-SWAP] Python interpreter exists: {python_path.exists()}", file=sys.stderr)
+        safe_print(f"[DEBUG-SWAP] pip executable path      : {pip_exe}", file=sys.stderr)
+        safe_print(f"[DEBUG-SWAP] pip exe exists           : {pip_exe.exists()}", file=sys.stderr)
+        safe_print(f"[DEBUG-SWAP] sys.executable (THIS proc): {sys.executable}", file=sys.stderr)
+
+        # Find omnipkg entry point next to this interpreter
+        if sys.platform == "win32":
+            omnipkg_exe = python_path.parent / "Scripts" / "omnipkg.exe"
+            pkg8_exe = python_path.parent / "Scripts" / "8pkg.exe"
+        else:
+            omnipkg_exe = python_path.parent / "omnipkg"
+            pkg8_exe = python_path.parent / "8pkg"
+
+        safe_print(f"[DEBUG-SWAP] omnipkg exe (target env) : {omnipkg_exe} (exists={omnipkg_exe.exists()})", file=sys.stderr)
+        safe_print(f"[DEBUG-SWAP] 8pkg exe (target env)    : {pkg8_exe} (exists={pkg8_exe.exists()})", file=sys.stderr)
+        safe_print("", file=sys.stderr)
+        safe_print(f"[DEBUG-SWAP] OMNIPKG_PYTHON           : {version}", file=sys.stderr)
+        safe_print(f"[DEBUG-SWAP] OMNIPKG_VENV_ROOT        : {original_venv}", file=sys.stderr)
+        safe_print(f"[DEBUG-SWAP] Shims directory          : {shims_dir}", file=sys.stderr)
+        safe_print(f"[DEBUG-SWAP] PATH[0] after inject     : {deduped[0]}", file=sys.stderr)
+        safe_print(f"[DEBUG-SWAP] CONDA_PREFIX             : {new_env.get('CONDA_PREFIX', 'NOT SET')}", file=sys.stderr)
+        safe_print(f"[DEBUG-SWAP] CONDA_DEFAULT_ENV        : {new_env.get('CONDA_DEFAULT_ENV', 'NOT SET')}", file=sys.stderr)
+
+        # Config contents
+        venv_root = find_absolute_venv_root()
+        config_path = venv_root / ".omnipkg_config.json"
+        interp_config_path = python_path.parent / ".omnipkg_config.json"
+        for label, cp in [("venv config", config_path), ("interp config", interp_config_path)]:
+            safe_print("", file=sys.stderr)
+            safe_print(f"[DEBUG-SWAP] --- {label}: {cp} ---", file=sys.stderr)
+            if cp.exists():
+                try:
+                    import json as _json
+                    with open(cp, "r", encoding="utf-8") as _f:
+                        _cfg = _json.load(_f)
+                    for k, v in _cfg.items():
+                        safe_print(f"[DEBUG-SWAP]   {k}: {v}", file=sys.stderr)
+                except Exception as _e:
+                    safe_print(f"[DEBUG-SWAP]   (error reading: {_e})", file=sys.stderr)
+            else:
+                safe_print("[DEBUG-SWAP]   (file not found)", file=sys.stderr)
+
+        safe_print("=" * 70, file=sys.stderr)
+        safe_print("", file=sys.stderr)
+
+    # ── 5. Platform: Windows ──────────────────────────────────────────────────
+    if sys.platform == "win32":
+        shell = os.environ.get("COMSPEC", "cmd.exe")
+
+        # Write .bat shims — python.bat and python3.bat just invoke the interpreter.
+        # pip.bat explicitly calls -m pip so it uses the right pip regardless of
+        # whether a standalone pip.exe is present in the interpreter's Scripts dir.
+        scripts_dir = Path(shims_dir)
+        scripts_dir.mkdir(parents=True, exist_ok=True)
+
+        # python / python3 shims
+        for cmd_name in ["python", "python3"]:
+            (scripts_dir / f"{cmd_name}.bat").write_text(
+                f'@echo off\n"{python_path}" %*\n',
+                encoding="utf-8",
+            )
+
+        # pip shim — always use -m pip so it's guaranteed to belong to python_path
+        (scripts_dir / "pip.bat").write_text(
+            f'@echo off\n"{python_path}" -m pip %*\n',
+            encoding="utf-8",
+        )
+
+        # Versioned 8pkg shim
+        major_minor_flat = version.replace(".", "")
+        _pkg8_exe = python_path.parent / "Scripts" / "8pkg.exe"
+        if _pkg8_exe.exists():
+            (scripts_dir / f"8pkg{major_minor_flat}.bat").write_text(
+                f'@echo off\n"{_pkg8_exe}" --python {version} %*\n',
+                encoding="utf-8",
+            )
+
+        if debug_mode:
+            safe_print(f"[DEBUG-SWAP] Wrote python.bat  -> {scripts_dir / 'python.bat'}", file=sys.stderr)
+            safe_print(f"[DEBUG-SWAP] Wrote python3.bat -> {scripts_dir / 'python3.bat'}", file=sys.stderr)
+            safe_print(f"[DEBUG-SWAP] Wrote pip.bat     -> {scripts_dir / 'pip.bat'}", file=sys.stderr)
+            safe_print(f"[DEBUG-SWAP] Spawning shell: {shell}", file=sys.stderr)
+
+        safe_print(_("🐚 Spawning new shell... (Type 'exit' to return)"))
+        safe_print(f"   🐍 Python {version} context active (via shims)")
+        safe_print(_("   💡 Note: Type 'exit' to clean up and return"))
+
+        conda_env = os.environ.get("CONDA_DEFAULT_ENV", "")
+        if conda_env:
+            safe_print(_("   📦 Conda env '{}' preserved").format(conda_env))
+
+        try:
+            proc = subprocess.Popen([shell, "/K"], env=new_env)
+            proc.wait()
+        except Exception as e:
+            safe_print(_("❌ Failed to spawn shell: {}").format(e))
+            return 1
+        finally:
+            for var in ["OMNIPKG_PYTHON", "OMNIPKG_ACTIVE_PYTHON", "OMNIPKG_VENV_ROOT"]:
+                os.environ.pop(var, None)
+
+        return 0
+
+    # ── 6. Platform: Unix ─────────────────────────────────────────────────────
+    shell = os.environ.get("SHELL", "/bin/bash")
+    shell_name = Path(shell).name  # e.g. "bash", "zsh", "fish"
+
+    # Build a temp rcfile so the swap context is active AND user aliases work.
+    # Strategy:
+    #   1. Source the user's real rc file first → all their aliases/functions load.
+    #   2. Then inject our env vars + PATH on top.
+    #   3. Trap EXIT to clean up OMNIPKG vars and strip shims from PATH.
+    #
+    # This is why the old os.execle(..., "-i") broke aliases: interactive mode
+    # skips BASH_ENV and without --rcfile the startup sequence can load
+    # /etc/bash.bashrc but NOT ~/.bashrc in some distros.
+
+    if "bash" in shell_name:
+        user_rc = Path.home() / ".bashrc"
+        system_rc = Path("/etc/bash.bashrc")
+    elif "zsh" in shell_name:
+        user_rc = Path.home() / ".zshrc"
+        system_rc = Path("/etc/zshrc")
+    else:
+        # fish, sh, etc. — fall back to simple interactive execle
+        safe_print(_("🐚 Spawning shell... (Type 'exit' to return)"))
+        safe_print(f"   🐍 Python {version} context active (via shims)")
+        try:
+            # For non-bash/zsh, just set env and exec interactive
+            os.execle(shell, shell_name, "-i", new_env)
+        except Exception as e:
+            safe_print(_("❌ Failed to spawn shell: {}").format(e))
+        return 1  # Only reached on execle failure
+
+    # Write temp rcfile
+    import tempfile as _tempfile
+    with _tempfile.NamedTemporaryFile(mode="w", suffix=".sh", delete=False, encoding="utf-8") as _tf:
+        rcfile_path = _tf.name
+        # Source user rc first (ignore errors if it doesn't exist)
+        _tf.write(f'# omnipkg swap rcfile — Python {version}\n')
+        if system_rc.exists():
+            _tf.write(f'[ -f "{system_rc}" ] && source "{system_rc}"\n')
+        if user_rc.exists():
+            _tf.write(f'[ -f "{user_rc}" ] && source "{user_rc}"\n')
+        # Inject swap context ON TOP of user's env (overrides their python/pip)
+        _tf.write(f'\n# --- omnipkg swap context ---\n')
+        _tf.write(f'export OMNIPKG_PYTHON="{version}"\n')
+        _tf.write(f'export OMNIPKG_ACTIVE_PYTHON="{version}"\n')
+        _tf.write(f'export OMNIPKG_VENV_ROOT="{original_venv}"\n')
+        _tf.write(f'export _OMNIPKG_SWAP_ACTIVE=1\n')
+        # Prepend shims to PATH (after user rc may have modified PATH)
+        _tf.write(f'export PATH="{shims_dir}:$PATH"\n')
+        # Cleanup on exit
+        _tf.write(f'\ntrap \'\n')
+        _tf.write(f'    unset OMNIPKG_PYTHON OMNIPKG_ACTIVE_PYTHON OMNIPKG_VENV_ROOT _OMNIPKG_SWAP_ACTIVE\n')
+        _tf.write(f'    export PATH=$(echo "$PATH" | tr ":" "\\n" | grep -v ".omnipkg/shims" | tr "\\n" ":" | sed "s/:$//")\n')
+        _tf.write(f'    rm -f "{rcfile_path}" 2>/dev/null\n')
+        _tf.write(f"\' EXIT\n")
+
+    if debug_mode:
+        safe_print(f"[DEBUG-SWAP] rcfile written: {rcfile_path}", file=sys.stderr)
+        safe_print(f"[DEBUG-SWAP] user rc       : {user_rc} (exists={user_rc.exists()})", file=sys.stderr)
+        safe_print(f"[DEBUG-SWAP] Spawning      : {shell} --rcfile {rcfile_path}", file=sys.stderr)
+
+    safe_print(_("🐚 Spawning new shell... (Type 'exit' to return)"))
+    safe_print(f"   🐍 Python {version} context active (via shims)")
+    safe_print(_("   💡 Note: Type 'exit' to clean up and return"))
+
+    try:
+        # --rcfile loads ONLY our file (which sources user rc first).
+        # This is the correct way to get both user aliases AND our injected env.
+        os.execle(shell, shell_name, "--rcfile", rcfile_path, new_env)
+    except Exception as e:
+        safe_print(_("❌ Failed to spawn shell: {}").format(e))
+        try:
+            os.unlink(rcfile_path)
+        except Exception:
+            pass
+        return 1
+
+    return 0  # Only reached if execle fails
+
+
 def find_absolute_venv_root(ignore_env_override: bool = False) -> Path:
     """
     Find the ABSOLUTE TOP-LEVEL virtual environment root.
