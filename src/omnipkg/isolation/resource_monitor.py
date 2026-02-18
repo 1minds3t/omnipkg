@@ -64,11 +64,23 @@ def get_daemon_worker_info():
     pid_map = {}
     for spec, info in status.get("worker_details", {}).items():
         pid = info.get("pid")
-        if pid:
-            pkg_spec = spec.split("::")[0]
-            m = re.search(r"python(\d+\.\d+)", spec)
-            py_ver = m.group(1) if m else "?.?"
-            pid_map[str(pid)] = f"{pkg_spec} (py{py_ver})"
+        if not pid:
+            continue
+        pkg_spec = spec.split("::")[0]
+        # Try spec key first, then python_exe field — Windows paths use cpython-3.9.23 style
+        py_ver = "?.?"
+        for search_str in [spec, info.get("python_exe", ""), info.get("exe", "")]:
+            if not search_str:
+                continue
+            m = re.search(r"cpython[\-_](3\.\d+)", str(search_str), re.IGNORECASE)
+            if m:
+                py_ver = m.group(1)
+                break
+            m = re.search(r"python(3\.\d+)", str(search_str), re.IGNORECASE)
+            if m:
+                py_ver = m.group(1)
+                break
+        pid_map[str(pid)] = f"{pkg_spec} (py{py_ver})"
     return pid_map
 
 
