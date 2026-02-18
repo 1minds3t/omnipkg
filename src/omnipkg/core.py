@@ -9745,6 +9745,107 @@ class omnipkg:
     SUPPORTED_IMPLEMENTATIONS = {"cpython"}  # Future: add "pypy", "graalpy", etc.
 
 
+    def _ensure_deps_in_interpreter(self, python_exe: Path, version: str) -> None:
+        """
+        Ensure critical omnipkg runtime deps are installed in a newly adopted interpreter.
+        Called immediately after any successful adopt (copy or download).
+        Currently ensures: filelock (required by worker_daemon and rebuild lock logic).
+        """
+        deps = ["filelock"]
+        safe_print(_("   - 📦 Ensuring runtime deps in Python {}...").format(version))
+        for dep in deps:
+            try:
+                result = subprocess.run(
+                    [str(python_exe), "-m", "pip", "install", "--quiet", "--upgrade", dep],
+                    capture_output=True,
+                    encoding="utf-8",
+                    errors="replace",
+                    timeout=120,
+                    env={**os.environ, "PYTHONIOENCODING": "utf-8", "PYTHONUTF8": "1",
+                         "PYTHONUNBUFFERED": "1", "OMNIPKG_NONINTERACTIVE": "1"},
+                )
+                if result.returncode == 0:
+                    safe_print(_("   - ✅ {} installed in Python {}.").format(dep, version))
+                else:
+                    safe_print(_("   - ⚠️  Failed to install {} in Python {}: {}").format(
+                        dep, version, result.stderr.strip()[:200]))
+            except Exception as e:
+                safe_print(_("   - ⚠️  Could not install {} in Python {}: {}").format(dep, version, e))
+
+    def _create_shims_for_interpreter(self, python_exe: Path, version: str) -> None:
+        """
+        Create .bat shims (Windows) or symlinks (Unix) for a newly adopted interpreter
+        so that `python`, `python3`, and `pip` resolve correctly in swap contexts
+        WITHOUT requiring the user to run `8pkg swap` first.
+
+        Shims live in: <venv_root>/.omnipkg/shims/
+        Each shim simply forwards to the specific interpreter for this version.
+        """
+        import sys as _sys
+        shims_dir = self.config_manager.venv_path / ".omnipkg" / "shims"
+        shims_dir.mkdir(parents=True, exist_ok=True)
+
+        is_windows = os.name == "nt"
+
+        if is_windows:
+            # Write version-specific .bat shims.
+            # We do NOT overwrite the generic python.bat here — that's managed by
+            # `swap` which sets the active context. Instead we write versioned shims
+            # like python3.9.bat so each version is always directly addressable.
+            major_minor = version  # e.g. "3.9"
+            mm_nodot = major_minor.replace(".", "")  # "39"
+
+            shim_map = {
+                f"python{major_minor}.bat": f'@echo off\r\n"{python_exe}" %*\r\n',
+                f"python{mm_nodot}.bat":    f'@echo off\r\n"{python_exe}" %*\r\n',
+                f"pip{major_minor}.bat":    f'@echo off\r\n"{python_exe}" -m pip %*\r\n',
+                f"pip{mm_nodot}.bat":       f'@echo off\r\n"{python_exe}" -m pip %*\r\n',
+            }
+            for name, body in shim_map.items():
+                shim_path = shims_dir / name
+                try:
+                    shim_path.write_text(body, encoding="utf-8")
+                    safe_print(_("   - 🔧 Shim: {}").format(name))
+                except OSError as e:
+                    safe_print(_("   - ⚠️  Could not write shim {}: {}").format(name, e))
+
+            # Also create the versioned 8pkg shim so `8pkg39` works right away
+            scripts_dir = self.config_manager.venv_path / "Scripts"
+            pkg8_exe = scripts_dir / "8pkg.exe"
+            if pkg8_exe.exists():
+                bat = scripts_dir / f"8pkg{mm_nodot}.bat"
+                try:
+                    bat.write_text(
+                        f'@echo off\r\n"{pkg8_exe}" --python {major_minor} %*\r\n',
+                        encoding="utf-8",
+                    )
+                    safe_print(_("   - 🔧 Shim: 8pkg{}.bat").format(mm_nodot))
+                except OSError:
+                    pass
+
+        else:
+            # Unix: symlinks in the shims dir pointing to the real interpreter
+            import shutil
+            symlink_map = {
+                f"python{version}": python_exe,
+                f"pip{version}":    None,  # handled via -m pip wrapper below
+            }
+            for name, target in symlink_map.items():
+                if target is None:
+                    continue
+                shim_path = shims_dir / name
+                try:
+                    if shim_path.exists() or shim_path.is_symlink():
+                        shim_path.unlink()
+                    shim_path.symlink_to(target)
+                    safe_print(_("   - 🔧 Symlink: {}").format(name))
+                except OSError as e:
+                    # Fallback: copy the binary
+                    try:
+                        shutil.copy2(str(target), str(shim_path))
+                    except Exception:
+                        safe_print(_("   - ⚠️  Could not create symlink {}: {}").format(name, e))
+
     def adopt_interpreter(self, version: str) -> int:
         """
         Safely adopts a Python version by checking the registry, then trying to copy
@@ -9752,43 +9853,56 @@ class omnipkg:
 
         CRITICAL FIX: Always refreshes the interpreter registry cache after adoption.
         CRITICAL FIX 2: Only adopts supported Python implementations (currently CPython only).
+        CRITICAL FIX 3: Installs runtime deps (filelock etc.) in newly adopted interpreter.
+        CRITICAL FIX 4: Creates .bat shims immediately — no need to `swap` first.
         """
         safe_print(_("🐍 Attempting to adopt Python {} into the environment...").format(version))
 
         # Check if already adopted
         managed_interpreters = self.interpreter_manager.list_available_interpreters()
-
         if version in managed_interpreters:
             safe_print(_("   - ✅ Python {} is already adopted and managed.").format(version))
+            # Still ensure shims exist even if already adopted (idempotent)
+            try:
+                exe = Path(managed_interpreters[version])
+                self._create_shims_for_interpreter(exe, version)
+            except Exception:
+                pass
             return 0
 
         discovered_pythons = self.config_manager.list_available_pythons()
         source_path_str = discovered_pythons.get(version)
 
+        def _post_adopt(python_exe: Path) -> None:
+            """Common post-adopt steps regardless of how we got the interpreter."""
+            self.interpreter_manager.refresh_registry()
+            self._ensure_deps_in_interpreter(python_exe, version)
+            self._create_shims_for_interpreter(python_exe, version)
+            safe_print(_("   - ✅ Successfully adopted Python {}.").format(version))
+
         if not source_path_str:
             safe_print(
-                _("   - No local Python {} found. Falling back to download strategy.").format(
-                    version
-                )
+                _("   - No local Python {} found. Falling back to download strategy.").format(version)
             )
-            # Download will handle registration internally
             result = self._fallback_to_download(version)
-
-            # CRITICAL: Force registry refresh after download
             if result == 0:
+                # Find the exe the download registered
                 self.interpreter_manager.refresh_registry()
-                safe_print(_("   - ✅ Successfully adopted Python {}.").format(version))
-
+                managed = self.interpreter_manager.list_available_interpreters()
+                exe = Path(managed.get(version, ""))
+                if exe.exists():
+                    _post_adopt(exe)
+                else:
+                    safe_print(_("   - ✅ Successfully adopted Python {}.").format(version))
             return result
 
         source_exe_path = Path(source_path_str)
 
-        # Check if this is a supported implementation before proceeding
+        # Check if this is a supported implementation
         try:
             impl = self._detect_python_implementation(source_exe_path)
-            
             if impl not in SUPPORTED_IMPLEMENTATIONS:
-                impl_display = impl.title() if impl != 'unknown' else 'non-CPython'
+                impl_display = impl.title() if impl != "unknown" else "non-CPython"
                 safe_print(
                     _("   - 🔍 Found {} (Python {}), omnipkg currently manages only CPython.").format(
                         impl_display, version
@@ -9796,27 +9910,31 @@ class omnipkg:
                 )
                 safe_print(_("   - 📥 Installing managed CPython instead..."))
                 result = self._fallback_to_download(version)
-                
                 if result == 0:
                     self.interpreter_manager.refresh_registry()
-                    safe_print(_("   - ✅ Successfully adopted CPython {}.").format(version))
-                
+                    managed = self.interpreter_manager.list_available_interpreters()
+                    exe = Path(managed.get(version, ""))
+                    if exe.exists():
+                        _post_adopt(exe)
                 return result
-                
         except Exception as e:
             safe_print(_("   - ⚠️  Could not detect Python implementation: {}").format(e))
             safe_print(_("   - 📥 Installing managed CPython for safety..."))
             result = self._fallback_to_download(version)
-            
             if result == 0:
                 self.interpreter_manager.refresh_registry()
-                safe_print(_("   - ✅ Successfully adopted CPython {}.").format(version))
-            
+                managed = self.interpreter_manager.list_available_interpreters()
+                exe = Path(managed.get(version, ""))
+                if exe.exists():
+                    _post_adopt(exe)
             return result
 
         try:
             cmd = [str(source_exe_path), "-c", "import sys; print(sys.prefix)"]
-            cmd_result = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", check=True, timeout=10)
+            cmd_result = subprocess.run(
+                cmd, capture_output=True, text=True, encoding="utf-8",
+                errors="replace", check=True, timeout=10,
+            )
             source_root = Path(os.path.realpath(cmd_result.stdout.strip()))
             current_venv_root = self.config_manager.venv_path.resolve()
 
@@ -9826,60 +9944,65 @@ class omnipkg:
                 or self._estimate_directory_size(source_root) > 2 * 1024 * 1024 * 1024
                 or self._is_system_critical_path(source_root)
             ):
-
-                safe_print(
-                    _("   - ⚠️  Safety checks failed for local copy. Falling back to download.")
-                )
+                safe_print(_("   - ⚠️  Safety checks failed for local copy. Falling back to download."))
                 result = self._fallback_to_download(version)
-
-                # CRITICAL: Force registry refresh after download
                 if result == 0:
                     self.interpreter_manager.refresh_registry()
-                    safe_print(_("   - ✅ Successfully adopted Python {}.").format(version))
-
+                    managed = self.interpreter_manager.list_available_interpreters()
+                    exe = Path(managed.get(version, ""))
+                    if exe.exists():
+                        _post_adopt(exe)
                 return result
 
-            # Use implementation in path naming (future-proof for PyPy, etc.)
             dest_root = (
-                self.config_manager.venv_path 
-                / ".omnipkg" 
-                / "interpreters" 
+                self.config_manager.venv_path
+                / ".omnipkg"
+                / "interpreters"
                 / f"{impl}-{version}"
             )
 
             if dest_root.exists():
                 safe_print(_("   - ✅ Adopted copy of Python {} already exists.").format(version))
+                # Find the exe and still ensure deps + shims are present
+                candidates = [
+                    dest_root / "python.exe",
+                    dest_root / "bin" / f"python{version}",
+                    dest_root / "bin" / "python3",
+                ]
+                for c in candidates:
+                    if c.exists():
+                        _post_adopt(c)
+                        break
                 return 0
 
             safe_print(_("   - Starting safe copy operation..."))
             result = self._perform_safe_copy(source_root, dest_root, version)
 
             if result == 0:
-                # Copy doesn't auto-register, so we need to rescan
                 safe_print(_("🔧 Forcing rescan to register the copied interpreter..."))
                 self.rescan_interpreters()
-
-                # CRITICAL: Force registry refresh after rescan
                 self.interpreter_manager.refresh_registry()
-                safe_print(_("   - ✅ Successfully adopted Python {}.").format(version))
+                managed = self.interpreter_manager.list_available_interpreters()
+                exe = Path(managed.get(version, ""))
+                if exe.exists():
+                    _post_adopt(exe)
+                else:
+                    safe_print(_("   - ✅ Successfully adopted Python {}.").format(version))
 
             return result
 
         except Exception as e:
             safe_print(
-                _(
-                    "   - ❌ An error occurred during the copy attempt: {}. Falling back to download."
-                ).format(e)
+                _("   - ❌ An error occurred during the copy attempt: {}. Falling back to download.").format(e)
             )
             result = self._fallback_to_download(version)
-
-            # CRITICAL: Force registry refresh after download
             if result == 0:
                 self.interpreter_manager.refresh_registry()
-                safe_print(_("   - ✅ Successfully adopted Python {}.").format(version))
-
+                managed = self.interpreter_manager.list_available_interpreters()
+                exe = Path(managed.get(version, ""))
+                if exe.exists():
+                    _post_adopt(exe)
             return result
-
 
     def _detect_python_implementation(self, python_exe: Path) -> str:
         """
