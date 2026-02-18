@@ -137,19 +137,21 @@ def main():
 
 def determine_target_python() -> Path:
     """
-    FIXED PRIORITY ORDER:
-    1. Self-awareness (config file)
-    2. CLI flag --python (HIGHEST PRIORITY FOR USER INTENT)
-    3. OMNIPKG_PYTHON env var (only if shims are actually active)
+    PRIORITY ORDER:
+    1. Self-awareness: config file next to the 8pkg script itself
+    2. CLI flag --python (explicit user intent)
+    3. OMNIPKG_PYTHON env var (only if shims are verified active via PATH check)
     4. Fallback to sys.executable
     """
     debug_mode = os.environ.get("OMNIPKG_DEBUG") == "1"
-    
-    # Priority 0: Self-awareness
+
+    # ─────────────────────────────────────────────────────────────
+    # Priority 0: Self-awareness — config next to THIS script/exe
+    # ─────────────────────────────────────────────────────────────
     script_path = Path(sys.argv[0]).resolve()
     script_dir = script_path.parent
     config_path = script_dir / ".omnipkg_config.json"
-    
+
     if config_path.exists():
         try:
             with open(config_path, "r") as f:
@@ -164,68 +166,122 @@ def determine_target_python() -> Path:
         except Exception as e:
             if debug_mode:
                 print(_('[DEBUG-DISPATCH] Config read error: {}').format(e), file=sys.stderr)
-    
-    # 🎯 Priority 1: CLI flag --python (EXPLICIT USER INTENT - HIGHEST!)
+
+    # ─────────────────────────────────────────────────────────────
+    # Priority 1: CLI flag --python  (explicit user intent)
+    # ─────────────────────────────────────────────────────────────
     if "--python" in sys.argv:
         try:
             idx = sys.argv.index("--python")
             if idx + 1 < len(sys.argv):
                 version = sys.argv[idx + 1]
-                # Don't remove from argv yet - let the CLI parser handle it
                 resolved = resolve_python_path(version)
                 if debug_mode:
                     safe_print(_('[DEBUG-DISPATCH] ✅ CLI flag: --python {} -> {}').format(version, resolved), file=sys.stderr)
                 return resolved
         except (ValueError, IndexError):
             pass
-    
-    # Priority 2: OMNIPKG_PYTHON (only if shims are actually active)
+
+    # ─────────────────────────────────────────────────────────────
+    # Priority 2: OMNIPKG_PYTHON — but ONLY when shims are live.
+    #
+    # The old approach called `subprocess.run(["python", "--version"])`
+    # to "verify" shims.  On Windows this spawns a new process that
+    # resolves "python" through the OS PATH *before* our shim dir has
+    # taken effect in the child, so it always sees the base conda Python
+    # and wrongly concludes the shims are "leaked".
+    #
+    # The correct check is purely in-process: are our shims at the
+    # FRONT of the PATH that THIS process inherited?  If yes, the
+    # shell the user is sitting in already has the shims active and
+    # OMNIPKG_PYTHON is trustworthy.
+    # ─────────────────────────────────────────────────────────────
     if "OMNIPKG_PYTHON" in os.environ:
         claimed_version = os.environ["OMNIPKG_PYTHON"]
-        actual_version = test_active_python_version()
-        
+
         if debug_mode:
             print(_('[DEBUG-DISPATCH] OMNIPKG_PYTHON claims: {}').format(claimed_version), file=sys.stderr)
-            print(_('[DEBUG-DISPATCH] Actual python --version: {}').format(actual_version), file=sys.stderr)
-        
-        if actual_version and claimed_version in actual_version:
+
+        if _shims_are_active_in_path(debug_mode):
             if debug_mode:
-                safe_print(_('[DEBUG-DISPATCH] ✅ Shims active, using swapped Python {}').format(claimed_version), file=sys.stderr)
+                safe_print(_('[DEBUG-DISPATCH] ✅ Shims confirmed in PATH, trusting OMNIPKG_PYTHON {}').format(claimed_version), file=sys.stderr)
             return resolve_python_path(claimed_version)
         else:
             if debug_mode:
-                safe_print(_('[DEBUG-DISPATCH] ⚠️ Shims inactive - OMNIPKG_PYTHON is leaked, ignoring'), file=sys.stderr)
-    
-    # Fallback
+                safe_print(_('[DEBUG-DISPATCH] ⚠️ Shims not at front of PATH - OMNIPKG_PYTHON is leaked, ignoring'), file=sys.stderr)
+
+    # ─────────────────────────────────────────────────────────────
+    # Fallback: whatever Python is running this script
+    # ─────────────────────────────────────────────────────────────
     if debug_mode:
         print(_('[DEBUG-DISPATCH] Fallback to sys.executable: {}').format(sys.executable), file=sys.stderr)
     return Path(sys.executable)
 
+
+def _shims_are_active_in_path(debug_mode: bool = False) -> bool:
+    """
+    Return True when the omnipkg shims directory is genuinely prepended to the
+    PATH that this process inherited — meaning we are inside a `swap` shell.
+
+    Strategy (works identically on Windows and Unix):
+      1. Look for OMNIPKG_VENV_ROOT to know where the shims directory lives.
+      2. Check that the shims dir appears *before* any real Python executable
+         in the current process PATH entries.
+
+    We deliberately do NOT spawn a subprocess here.  Spawning `python --version`
+    resolves the name through a fresh CreateProcess / execvp call that may not
+    see our shim .bat files first (Windows) or may pick up the wrong PATH
+    ordering — which is exactly the false-negative that broke the old check.
+    """
+    venv_root_str = os.environ.get("OMNIPKG_VENV_ROOT")
+    if not venv_root_str:
+        # Without OMNIPKG_VENV_ROOT we cannot know where shims live.
+        # The env var is always set by `swap`, so its absence means
+        # we are NOT in a swap context.
+        if debug_mode:
+            print("[DEBUG-DISPATCH] No OMNIPKG_VENV_ROOT → shims not active", file=sys.stderr)
+        return False
+
+    venv_root = Path(venv_root_str).resolve()
+    # Shims dir is always <venv_root>/.omnipkg/shims  (set by swap code)
+    shims_dir = venv_root / ".omnipkg" / "shims"
+    shims_dir_str = str(shims_dir).replace("\\", "/").lower()
+
+    current_path = os.environ.get("PATH", "")
+    path_parts = current_path.split(os.pathsep)
+
+    for entry in path_parts:
+        normalized = entry.replace("\\", "/").lower().rstrip("/")
+        if normalized == shims_dir_str.rstrip("/"):
+            if debug_mode:
+                print(_('[DEBUG-DISPATCH] Shims dir found in PATH at position {}').format(
+                    path_parts.index(entry)), file=sys.stderr)
+            return True
+
+    if debug_mode:
+        print("[DEBUG-DISPATCH] Shims dir not found in PATH entries", file=sys.stderr)
+    return False
+
+
 def test_active_python_version() -> str:
     """
-    Test what `python --version` actually returns right now.
-    Returns the version string or None if can't determine.
+    DEPRECATED — no longer used by determine_target_python().
+    Kept only so external callers don't break.
+    Returns the major.minor of whatever `python` resolves to in PATH.
     """
-    import subprocess
-    
     try:
-        # Run `python --version` and capture output
         result = subprocess.run(
             ["python", "--version"],
             capture_output=True,
             text=True,
-            timeout=2
+            timeout=2,
         )
-        
-        # Parse version from "Python 3.10.18" -> "3.10"
         output = result.stdout or result.stderr
         if "Python" in output:
-            version = output.strip().split()[1]  # "Python 3.10.18" -> "3.10.18"
-            major_minor = ".".join(version.split(".")[:2])  # "3.10.18" -> "3.10"
-            return major_minor
+            version = output.strip().split()[1]
+            return ".".join(version.split(".")[:2])
     except Exception:
         pass
-    
     return None
     
 def handle_shim_execution(prog_name: str, debug: bool):
