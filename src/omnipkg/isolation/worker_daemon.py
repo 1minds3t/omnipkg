@@ -104,7 +104,8 @@ class SharedStateMonitor:
             
         # We need a secondary lock mechanism because Python lacks true atomic CAS
         # In C++, this would be std::atomic<T>
-        self._lock_file = Path(f"/tmp/{name}.lock")
+        self._lock_file = Path(tempfile.gettempdir()) / "omnipkg" / f"{name}.lock"
+        self._lock_file.parent.mkdir(parents=True, exist_ok=True)
         self._lock = filelock.FileLock(str(self._lock_file))
 
     def read_state(self) -> Tuple[int, int, int]:
@@ -2153,11 +2154,11 @@ class WorkerPoolDaemon:
         self.pool_lock = threading.RLock()
         
         # 🚀 IDLE WORKER POOL: Keep bare Python processes ready per executable
-        # Key: python_exe path, Value: Queue of idle workers
+        # Key: python_exe path (ALWAYS resolved/normalized), Value: Queue of idle workers
         self.idle_pools: Dict[str, queue.Queue] = defaultdict(lambda: queue.Queue(maxsize=10))
-        # Default configuration: 3 idle workers for the daemon's own python
-        # Default configuration: 3 idle workers for the daemon's own python
-        self.idle_config: Dict[str, int] = {sys.executable: 3}
+        # Default configuration: 3 idle workers for the daemon's own python (normalized)
+        _own_exe = str(Path(sys.executable).resolve())
+        self.idle_config: Dict[str, int] = {_own_exe: 3}
 
         # 🚀 AUTO-DISCOVERY: Find other managed interpreters and keep 1 idle for them
         if self.cm:
@@ -2167,13 +2168,12 @@ class WorkerPoolDaemon:
                     with open(registry_path, "r", encoding="utf-8") as f:
                         data = json.load(f)
                         for version, path in data.get("interpreters", {}).items():
-                            # Normalize path
-                            path = str(Path(path).resolve())
-                            current_exe = str(Path(sys.executable).resolve())
+                            # Always normalize path
+                            norm_path = str(Path(path).resolve())
                             
-                            if path != current_exe:
+                            if norm_path != _own_exe:
                                 # Keep 1 idle worker for other versions to ensure fast swapping
-                                self.idle_config[path] = 1
+                                self.idle_config[norm_path] = 1
             except Exception:
                 # Non-fatal, just won't have warm workers for others
                 pass
@@ -2290,6 +2290,45 @@ class WorkerPoolDaemon:
         self._initialize_daemon_process()
         self._run_socket_server()  # This is a blocking call that starts the server loop.
 
+    def _replenish_idle_pool(self, python_exe: str):
+        """
+        Spawn ONE new idle worker for the given python_exe to replace one that was
+        just converted to a pkg-spec worker. Called asynchronously so it never blocks
+        the request path.
+        """
+        def _do_spawn():
+            target_paths = {}
+            if self.cm:
+                try:
+                    target_paths = self.cm._get_paths_for_interpreter(python_exe) or {}
+                except Exception:
+                    pass
+            try:
+                idle_worker = PersistentWorker(
+                    package_spec=None,
+                    python_exe=python_exe,
+                    defer_setup=True,
+                    site_packages=target_paths.get("site_packages_path"),
+                    multiversion_base=target_paths.get("multiversion_base"),
+                )
+                pool = self.idle_pools[python_exe]
+                try:
+                    pool.put_nowait(idle_worker)
+                    safe_print(
+                        f"   💤 [DAEMON] Replenished idle worker for {python_exe} "
+                        f"(Pool size: {pool.qsize()})",
+                        file=sys.stderr,
+                    )
+                except queue.Full:
+                    idle_worker.force_shutdown()
+            except Exception as e:
+                safe_print(
+                    f"   ⚠️ [DAEMON] Failed to replenish idle worker for {python_exe}: {e}",
+                    file=sys.stderr,
+                )
+
+        threading.Thread(target=_do_spawn, daemon=True, name=f"replenish-{python_exe[-20:]}").start()
+
     def _maintain_idle_pool(self):
         """🚀 Pre-spawns Python processes for specific executables so they are ready instantly."""
         while self.running:
@@ -2298,7 +2337,7 @@ class WorkerPoolDaemon:
                 # Use list(items) to safely iterate while potentially modifying elsewhere
                 for python_exe, target_count in list(self.idle_config.items()):
                     pool = self.idle_pools[python_exe]
-                    
+
                     if pool.qsize() < target_count:
                         # Resolve authoritative paths for this specific python version
                         target_paths = {}
@@ -2307,8 +2346,8 @@ class WorkerPoolDaemon:
 
                         # Spawn a generic worker for this specific python executable
                         idle_worker = PersistentWorker(
-                            package_spec=None, 
-                            python_exe=python_exe, 
+                            package_spec=None,
+                            python_exe=python_exe,
                             defer_setup=True,
                             site_packages=target_paths.get("site_packages_path"),
                             multiversion_base=target_paths.get("multiversion_base")
@@ -2329,6 +2368,7 @@ class WorkerPoolDaemon:
 
     def set_idle_config(self, python_exe: str, count: int):
         """Runtime configuration of idle pools."""
+        python_exe = str(Path(python_exe).resolve())
         self.idle_config[python_exe] = count
 
     def _start_windows_daemon(self, wait_for_ready: bool = False):
@@ -2695,6 +2735,9 @@ class WorkerPoolDaemon:
         if not python_exe:
             python_exe = sys.executable
 
+        # Normalize path for reliable cross-platform pool/key lookups
+        python_exe = str(Path(python_exe).resolve())
+
         worker_key = f"{spec}::{python_exe}"
 
         # ═══════════════════════════════════════════════════════════════
@@ -2754,32 +2797,48 @@ class WorkerPoolDaemon:
 
             # Create worker - loader's __enter__ handles ALL the locking
             try:
+                _took_from_idle = False
                 try:
                     # Instant spawn (0ms) - MUST match requested python_exe
+                    # Try exact match first, then normalized-path match
                     pool = self.idle_pools.get(python_exe)
+                    if pool is None:
+                        # Try to find a pool whose key resolves to the same path
+                        for pool_key in list(self.idle_pools.keys()):
+                            try:
+                                if str(Path(pool_key).resolve()) == python_exe:
+                                    pool = self.idle_pools[pool_key]
+                                    break
+                            except Exception:
+                                pass
                     if pool:
                         worker = pool.get_nowait()
-                        # Double check (paranoia)
-                        if worker.python_exe != python_exe:
+                        # Double check python matches
+                        if str(Path(worker.python_exe).resolve()) != python_exe:
                             worker.force_shutdown()
                             raise RuntimeError("Idle worker python mismatch")
                         worker.assign_spec(spec)
+                        _took_from_idle = True
                     else:
                         raise queue.Empty
                 except (queue.Empty, RuntimeError):
+                    _took_from_idle = False
                     target_paths = {}
                     if self.cm:
                         target_paths = self.cm._get_paths_for_interpreter(python_exe) or {}
 
                     # Fallback if queue empty or no pool exists for this exe (~30ms)
-                    # Fallback if queue empty or no pool exists for this exe (~30ms)
                     # Note: PersistentWorker constructor calls assign_spec if spec is provided
                     worker = PersistentWorker(
-                        spec, 
+                        spec,
                         python_exe=python_exe,
                         site_packages=target_paths.get("site_packages_path"),
                         multiversion_base=target_paths.get("multiversion_base")
                     )
+
+                # Once an idle worker is taken and assigned a spec, spawn a replacement
+                if _took_from_idle:
+                    self._replenish_idle_pool(python_exe)
 
                 with self.pool_lock:
                     self.workers[worker_key] = {
@@ -2832,7 +2891,7 @@ class WorkerPoolDaemon:
             self._install_locks = {}
 
         if lock_name not in self._install_locks:
-            lock_file = Path("/tmp") / f"{lock_name}.lock"
+            lock_file = Path(OMNIPKG_TEMP_DIR) / f"{lock_name}.lock"
             self._install_locks[lock_name] = filelock.FileLock(
                 str(lock_file), timeout=300  # 5 minute max for installation
             )
@@ -2877,6 +2936,9 @@ class WorkerPoolDaemon:
         if not python_exe:
             python_exe = sys.executable
 
+        # Normalize path for reliable cross-platform pool/key lookups
+        python_exe = str(Path(python_exe).resolve())
+
         worker_key = f"{spec}::{python_exe}"
         worker_info = None
 
@@ -2905,15 +2967,29 @@ class WorkerPoolDaemon:
                     
                     # 🚀 ACQUIRE WORKER (IDLE POOL OR NEW)
                     try:
+                        _took_from_idle = False
                         try:
                             # Instant spawn from idle pool (0ms) - MUST match requested python_exe
                             pool = self.idle_pools.get(python_exe)
+                            if pool is None:
+                                for pool_key in list(self.idle_pools.keys()):
+                                    try:
+                                        if str(Path(pool_key).resolve()) == python_exe:
+                                            pool = self.idle_pools[pool_key]
+                                            break
+                                    except Exception:
+                                        pass
                             if pool:
                                 worker = pool.get_nowait()
+                                if str(Path(worker.python_exe).resolve()) != python_exe:
+                                    worker.force_shutdown()
+                                    raise RuntimeError("Idle worker python mismatch")
                                 worker.assign_spec(spec)
+                                _took_from_idle = True
                             else:
                                 raise queue.Empty
-                        except queue.Empty:
+                        except (queue.Empty, RuntimeError):
+                            _took_from_idle = False
                             # Resolve authoritative paths for the target Python version
                             target_paths = {}
                             if self.cm:
@@ -2921,11 +2997,14 @@ class WorkerPoolDaemon:
 
                             # Fallback if idle pool is empty (~30ms)
                             worker = PersistentWorker(
-                                spec, 
+                                spec,
                                 python_exe=python_exe,
                                 site_packages=target_paths.get("site_packages_path"),
                                 multiversion_base=target_paths.get("multiversion_base")
                             )
+
+                        if _took_from_idle:
+                            self._replenish_idle_pool(python_exe)
 
                         # Add the newly assigned worker to the active pool
                         with self.pool_lock:
@@ -3083,12 +3162,23 @@ class WorkerPoolDaemon:
             worker_details = {}
             for k, v in self.workers.items():
                 pid = v["worker"].process.pid if v["worker"].process else None
+                # k is "spec::python_exe" — split it back out
+                parts = k.split("::", 1)
+                pkg_spec = parts[0] if parts else k
+                python_exe = parts[1] if len(parts) > 1 else ""
                 worker_details[k] = {
                     "last_used": v["last_used"],
                     "request_count": v["request_count"],
                     "health_failures": v["worker"].health_check_failures,
                     "pid": pid,
+                    "pkg_spec": pkg_spec,
+                    "python_exe": python_exe,
                 }
+
+            # 🔥 FIX: Also report idle pool sizes
+            idle_pool_info = {}
+            for py_exe, pool in self.idle_pools.items():
+                idle_pool_info[py_exe] = pool.qsize()
 
             # 🔥 FIX: Safe psutil memory check
             memory_percent = -1  # Sentinel value
@@ -3106,6 +3196,7 @@ class WorkerPoolDaemon:
                 "stats": self.stats,
                 "worker_details": worker_details,
                 "memory_percent": memory_percent,
+                "idle_pool_info": idle_pool_info,
             }
 
     def _handle_shutdown(self, signum, frame):
@@ -3142,6 +3233,29 @@ class WorkerPoolDaemon:
 
     @classmethod
     def is_running(cls) -> bool:
+        # On Windows, the most reliable check is whether the TCP socket is accepting connections.
+        if IS_WINDOWS:
+            conn_file = Path(tempfile.gettempdir()) / 'omnipkg' / 'daemon_connection.txt'
+            if not conn_file.exists():
+                return False
+            try:
+                conn_str = conn_file.read_text().strip()
+                if conn_str.startswith('tcp://'):
+                    host_port = conn_str[6:]
+                    host, port_str = host_port.split(':')
+                    port = int(port_str)
+                else:
+                    port = 5678
+                    host = '127.0.0.1'
+                s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                s.settimeout(0.5)
+                s.connect((host, port))
+                s.close()
+                return True
+            except Exception:
+                return False
+
+        # Unix: PID file check
         if not os.path.exists(PID_FILE):
             return False
         try:
@@ -3568,18 +3682,28 @@ class DaemonClient:
 
         # Optional: Set minimal CUDA paths for daemon itself
         env = os.environ.copy()
+        # 🔥 CRITICAL: Mark as daemon child to prevent infinite re-spawning
+        env["OMNIPKG_DAEMON_CHILD"] = "1"
+        env["PYTHONUNBUFFERED"] = "1"
 
         if IS_WINDOWS:
-            # Windows: Use CREATE_NO_WINDOW and don't use preexec_fn
-            creationflags = subprocess.CREATE_NO_WINDOW
+            # Windows: Use full detachment flags + OMNIPKG_DAEMON_CHILD guard
+            DETACHED_PROCESS = 0x00000008
+            CREATE_NEW_PROCESS_GROUP = 0x00000200
+            CREATE_NO_WINDOW = 0x08000000
+            os.makedirs(os.path.dirname(DAEMON_LOG_FILE), exist_ok=True)
+            log_fh = open(DAEMON_LOG_FILE, "a", encoding="utf-8", buffering=1)
             subprocess.Popen(
-                [sys.executable, daemon_script, "start"],
+                [sys.executable, "-u", daemon_script, "start", "--no-fork"],
                 stdin=subprocess.DEVNULL,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
+                stdout=log_fh,
+                stderr=log_fh,
                 env=env,
-                creationflags=creationflags,
+                close_fds=False,
+                creationflags=DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP | CREATE_NO_WINDOW,
             )
+            # Keep handle alive briefly so daemon has time to open the file itself
+            self._auto_start_log_handle = log_fh
         else:
             # Unix: Use preexec_fn for process group
             subprocess.Popen(
@@ -4516,10 +4640,38 @@ def cli_status():
         safe_print("\n  📦 Active Workers:")
         for spec, info in result["worker_details"].items():
             idle = time.time() - info["last_used"]
-            print(_('    - {}').format(spec))
+            pkg_spec = info.get("pkg_spec", spec.split("::")[0])
+            python_exe = info.get("python_exe", "")
+            pid = info.get("pid", "?")
+            # Extract short python version from path
+            import re
+            py_ver = "?"
+            m = re.search(r"cpython[\-_](3\.\d+)", python_exe, re.IGNORECASE)
+            if m:
+                py_ver = m.group(1)
+            else:
+                m = re.search(r"python(3\.\d+)", python_exe, re.IGNORECASE)
+                if m:
+                    py_ver = m.group(1)
+            safe_print(f"    - {pkg_spec}  [py{py_ver}]  PID {pid}")
             print(
                 f"      Requests: {info['request_count']}, Idle: {idle:.0f}s, Failures: {info['health_failures']}"
             )
+
+    idle_pool_info = result.get("idle_pool_info", {})
+    if idle_pool_info:
+        safe_print("\n  💤 Idle Worker Pool:")
+        for py_exe, count in idle_pool_info.items():
+            import re
+            py_ver = "?"
+            m = re.search(r"cpython[\-_](3\.\d+)", py_exe, re.IGNORECASE)
+            if m:
+                py_ver = m.group(1)
+            else:
+                m = re.search(r"python(3\.\d+)", py_exe, re.IGNORECASE)
+                if m:
+                    py_ver = m.group(1)
+            safe_print(f"    - Python {py_ver}: {count} idle worker(s)")
 
     print("=" * 60 + "\n")
 
