@@ -187,15 +187,24 @@ def get_gpu_summary():
     return None
 
 
-def _extract_python_version(cmd):
-    m = re.search(r"python3\.(\d+)", cmd, re.IGNORECASE)
-    if m:
-        return "3." + m.group(1)
-    m = re.search(r"cpython[\-_](3\.\d+)", cmd, re.IGNORECASE)
-    if m:
-        return m.group(1)
+def _extract_python_version(cmd: str, exe: str = "") -> str:
+    """
+    Pull pythonX.Y or cpython-X.Y out of a command string or exe path.
+    Checks all available strings so Windows native python.exe (no version in name)
+    is resolved via the cpython-X.Y.Z directory in its path.
+    """
+    for s in [cmd, exe]:
+        if not s:
+            continue
+        # cpython-3.9.23 or cpython-3.11.9 style (managed interpreter paths)
+        m = re.search(r"cpython[\-_](3\.\d+)", s, re.IGNORECASE)
+        if m:
+            return m.group(1)
+        # python3.9, python3.11 in command name
+        m = re.search(r"python3\.(\d+)", s, re.IGNORECASE)
+        if m:
+            return "3." + m.group(1)
     return "3.x"
-
 
 def identify_worker_type(proc, pid_map):
     pid = proc["pid"]
@@ -206,7 +215,7 @@ def identify_worker_type(proc, pid_map):
     if ("worker_daemon" in cmd_low and "start" in cmd_low) or        ("omnipkg.isolation.worker_daemon" in cmd_low and "start" in cmd_low) or        "8pkg daemon start" in cmd_low:
         return "DAEMON_MANAGER"
     if "_idle" in cmd_low:
-        return "IDLE_WORKER_PY" + _extract_python_version(cmd)
+        return "IDLE_WORKER_PY" + _extract_python_version(cmd, proc.get("exe", ""))
     m = re.search(r"tmp\w+_(.*?)__(.*?)\.py", cmd)
     if m:
         return f"{m.group(1).replace('_','=')}=={m.group(2)} (py{_extract_python_version(cmd)})"
