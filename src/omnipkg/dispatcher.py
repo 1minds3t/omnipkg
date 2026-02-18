@@ -702,6 +702,11 @@ def spawn_swap_shell(version: str, python_path: Path, pkg_instance) -> int:
         if conda_env:
             safe_print(_("   📦 Conda env '{}' preserved").format(conda_env))
 
+        if not debug_mode:
+            safe_print(_("   🔍 To debug path/pip issues, run before swapping:"))
+            safe_print(_("      set OMNIPKG_DEBUG=1        (Command Prompt)"))
+            safe_print(_("      $env:OMNIPKG_DEBUG = '1'   (PowerShell)"))
+
         try:
             proc = subprocess.Popen([shell, "/K"], env=new_env)
             proc.wait()
