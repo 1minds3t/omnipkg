@@ -7,6 +7,145 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [2.3.0] — 2026-02-18
+
+Windows Daemon Stability, Strict Python Isolation & Swap Refactor
+
+🚀 Major Improvements
+
+🪟 Windows Daemon — Reliable Headless Operation
+
+The daemon now runs correctly in headless Windows environments (SSH, CI, non-interactive shells).
+
+Key fixes:
+	•	Corrected detached process stdio handling
+	•	Eliminated silent spawn failures
+	•	Stabilized restart sequencing to avoid half-initialized daemon states
+
+8pkg daemon restart now performs deterministic stop/start behavior without race conditions.
+
+⸻
+
+🐍 Strict Cross-Interpreter Isolation
+
+Resolved a critical edge case where workers spawned for one Python interpreter could resolve packages from another interpreter’s site-packages.
+
+Isolation is now strictly enforced:
+	•	Worker path resolution is interpreter-pinned
+	•	PID → Python version detection improved
+	•	Interpreter version extraction hardened
+	•	Shim validation ensures environment authenticity
+
+This guarantees:
+	•	No cross-version leakage
+	•	Correct ABI boundaries for C-extensions
+	•	Deterministic dependency resolution
+
+⸻
+
+🔀 Swap System Refactor — Single Source of Truth
+
+All interactive swap logic has been consolidated into dispatcher.py.
+
+Previously split across CLI and dispatcher layers, swap handling now:
+	•	Centralizes PATH injection
+	•	Manages shim creation consistently
+	•	Handles Windows .bat generation
+	•	Uses --rcfile strategy on Unix
+	•	Strips stale .omnipkg shims cleanly
+	•	Preserves user aliases correctly
+
+This eliminates duplication and improves maintainability.
+
+⸻
+
+🧠 Interpreter Adoption & Shim Improvements
+
+Interpreter adoption flow significantly hardened:
+	•	Dependency checks before adoption
+	•	Automatic shim creation for adopted interpreters
+	•	Live output streaming during adoption
+	•	Registry polling for confirmation
+	•	Unified subprocess execution via _run_info_python
+
+This improves transparency and reliability when integrating external interpreters.
+
+⸻
+
+📊 Resource Monitor Enhancements
+
+Resource monitor was refactored for clarity and efficiency:
+	•	Improved PID → Python version detection
+	•	Better GPU usage reporting
+	•	Streamlined psutil-based process collection
+	•	Idle worker replenishment logic refined
+	•	Cleaner performance metric calculations
+
+Worker accounting and version reporting are now more robust.
+
+⸻
+
+🔐 Knowledge Base Lock Handling
+
+Refactored rebuild logic to properly handle stale locks and prevent deadlock conditions during concurrent operations.
+
+⸻
+
+🌍 Internationalization Surge
+
+Massive expansion of Arabic (Egyptian) localization:
+	•	Coverage increased from ~10% to 95%+
+	•	Automated translation pipeline with validation and formatting repair
+	•	.mo binaries regenerated
+	•	Significant improvements to Standard Arabic and Japanese
+
+⸻
+
+🔧 Internal Quality Improvements
+	•	Refactored _extract_python_version for more reliable version detection
+	•	Improved PATH hygiene logic
+	•	Consolidated subprocess execution patterns
+	•	Reduced architectural duplication between CLI and dispatcher layers
+
+⸻
+
+📈 Commit Summary
+
+15 commits since v2.2.3
+Major themes:
+	•	Daemon lifecycle stabilization
+	•	Strict interpreter isolation
+	•	Swap system architecture cleanup
+	•	Resource monitor modernization
+	•	Internationalization expansion
+
+⸻
+
+What This Release Represents
+
+v2.3.0 is a stability and architecture hardening release.
+
+It moves omnipkg from “feature-rich” to “operationally reliable,” particularly on Windows — the most hostile environment for process orchestration and path manipulation.
+
+---
+
+**📝 Code Changes:**
+- UPDATE: src/omnipkg/cli.py (198 lines changed)
+- UPDATE: src/omnipkg/dispatcher.py (392 lines changed)
+
+**Additional Changes:**
+- fix: Print debug to shell for users on swaps.
+- refactor(core): consolidate swap shell logic into dispatcher
+- i18n(ar_eg): massive translation surge from ~10% to 95%+ via global chain + .mo compile
+
+**Bug Fixes:**
+- fix: daemon restart uses stop/start directly, clean up restart logic
+
+**Updates:**
+- Update dispatcher.py
+
+_28 files changed, 3402 insertions(+), 2391 deletions(-)_
+
 ## [2.2.3] — 2026-02-17
 
 Windows Stability, Daemon Overhaul & Concurrency Fixes
