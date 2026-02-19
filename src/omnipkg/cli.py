@@ -1528,9 +1528,8 @@ def main():
             elif args.daemon_command == "stop":
                 cli_stop()
             elif args.daemon_command == "restart":
-                safe_print("🔄 Restarting daemon...", file=sys.stderr)
+                safe_print("🔄 Restarting daemon...")
                 cli_stop()
-                time.sleep(1)
                 cli_start()
             elif args.daemon_command == "status":
                 cli_status()
