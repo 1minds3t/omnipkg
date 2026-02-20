@@ -112,7 +112,29 @@ def main():
         return
     
     # 2. Determine which Python interpreter to use
-    target_python = determine_target_python()
+    #
+    # SPECIAL CASE: The 'swap' command itself must ALWAYS run via the host/native
+    # Python, never via a currently-swapped interpreter.  If we are inside a swap
+    # shell and the user runs '8pkg swap python X', routing it through the swapped
+    # interpreter (e.g. 3.7) will fail if that interpreter is missing deps needed
+    # by the swap command (e.g. importlib.metadata).  The swap machinery lives in
+    # the host env and should always be invoked from there.
+    argv_commands = [a for a in sys.argv[1:] if not a.startswith("-")]
+    is_swap_command = len(argv_commands) >= 1 and argv_commands[0] == "swap"
+    if is_swap_command and os.environ.get("_OMNIPKG_SWAP_ACTIVE") == "1":
+        # Force host Python by temporarily clearing the swap env vars for
+        # determine_target_python(), then restore them so the spawned shell
+        # inherits the correct environment.
+        _saved = {k: os.environ.pop(k, None)
+                  for k in ("OMNIPKG_PYTHON", "OMNIPKG_ACTIVE_PYTHON", "_OMNIPKG_SWAP_ACTIVE")}
+        target_python = determine_target_python()
+        for k, v in _saved.items():
+            if v is not None:
+                os.environ[k] = v
+        if debug_mode:
+            print("[DEBUG-DISPATCH] swap command inside swap shell — forcing host Python", file=sys.stderr)
+    else:
+        target_python = determine_target_python()
     
     if debug_mode:
         print(_('[DEBUG-DISPATCH] Using Python: {}').format(target_python), file=sys.stderr)
@@ -139,20 +161,31 @@ def determine_target_python() -> Path:
     """
     PRIORITY ORDER:
     1. Self-awareness: config file next to the 8pkg script itself
+       (SKIPPED when inside a swap shell — self-awareness resolves to the
+        host interpreter's config and returns the wrong Python version)
     2. CLI flag --python (explicit user intent)
     3. OMNIPKG_PYTHON env var (only if shims are verified active via PATH check)
     4. Fallback to sys.executable
     """
     debug_mode = os.environ.get("OMNIPKG_DEBUG") == "1"
+    swap_active = os.environ.get("_OMNIPKG_SWAP_ACTIVE") == "1"
 
     # ─────────────────────────────────────────────────────────────
     # Priority 0: Self-awareness — config next to THIS script/exe
+    #
+    # IMPORTANT: Skip entirely when inside a swap shell.
+    # When swapped, sys.argv[0] resolves to the host env's 8pkg binary
+    # which has a .omnipkg_config.json pointing at the host Python (e.g.
+    # 3.11). Self-awareness would "succeed" but return the wrong version.
+    # Instead, fall through to Priority 2 (OMNIPKG_PYTHON + shims check)
+    # which correctly picks up the swapped version.
     # ─────────────────────────────────────────────────────────────
-    script_path = Path(sys.argv[0]).resolve()
-    script_dir = script_path.parent
-    config_path = script_dir / ".omnipkg_config.json"
+    if not swap_active:
+        script_path = Path(sys.argv[0]).resolve()
+        script_dir = script_path.parent
+        config_path = script_dir / ".omnipkg_config.json"
 
-    if config_path.exists():
+    if not swap_active and config_path.exists():
         try:
             with open(config_path, "r") as f:
                 config = json.load(f)
@@ -183,32 +216,24 @@ def determine_target_python() -> Path:
             pass
 
     # ─────────────────────────────────────────────────────────────
-    # Priority 2: OMNIPKG_PYTHON — but ONLY when shims are live.
+    # Priority 2: OMNIPKG_PYTHON — only inside an active swap shell.
     #
-    # The old approach called `subprocess.run(["python", "--version"])`
-    # to "verify" shims.  On Windows this spawns a new process that
-    # resolves "python" through the OS PATH *before* our shim dir has
-    # taken effect in the child, so it always sees the base conda Python
-    # and wrongly concludes the shims are "leaked".
-    #
-    # The correct check is purely in-process: are our shims at the
-    # FRONT of the PATH that THIS process inherited?  If yes, the
-    # shell the user is sitting in already has the shims active and
-    # OMNIPKG_PYTHON is trustworthy.
+    # OMNIPKG_PYTHON leaks into parent shells after swap exits because
+    # the parent shell's environment can't be unset by the child's EXIT
+    # trap. The exe version check is useless as a leak detector — 3.10
+    # will always report 3.10. The ONLY reliable signal is
+    # _OMNIPKG_SWAP_ACTIVE, which the rcfile sets on spawn and the EXIT
+    # trap unsets on close. If it's absent, we are NOT in a swap shell.
     # ─────────────────────────────────────────────────────────────
     if "OMNIPKG_PYTHON" in os.environ:
         claimed_version = os.environ["OMNIPKG_PYTHON"]
-
-        if debug_mode:
-            print(_('[DEBUG-DISPATCH] OMNIPKG_PYTHON claims: {}').format(claimed_version), file=sys.stderr)
-
-        if _shims_are_active_in_path(debug_mode):
+        if os.environ.get("_OMNIPKG_SWAP_ACTIVE") == "1":
             if debug_mode:
-                safe_print(_('[DEBUG-DISPATCH] ✅ Shims confirmed in PATH, trusting OMNIPKG_PYTHON {}').format(claimed_version), file=sys.stderr)
+                print(f"[DEBUG-DISPATCH] ✅ _OMNIPKG_SWAP_ACTIVE set, trusting OMNIPKG_PYTHON={claimed_version}", file=sys.stderr)
             return resolve_python_path(claimed_version)
         else:
             if debug_mode:
-                safe_print(_('[DEBUG-DISPATCH] ⚠️ Shims not at front of PATH - OMNIPKG_PYTHON is leaked, ignoring'), file=sys.stderr)
+                print(f"[DEBUG-DISPATCH] ⚠️  OMNIPKG_PYTHON={claimed_version} present but _OMNIPKG_SWAP_ACTIVE not set — leaked, ignoring", file=sys.stderr)
 
     # ─────────────────────────────────────────────────────────────
     # Fallback: whatever Python is running this script
@@ -220,47 +245,33 @@ def determine_target_python() -> Path:
 
 def _shims_are_active_in_path(debug_mode: bool = False) -> bool:
     """
-    Return True when the omnipkg shims directory is genuinely prepended to the
-    PATH that this process inherited — meaning we are inside a `swap` shell.
-
-    Strategy (works identically on Windows and Unix):
-      1. Look for OMNIPKG_VENV_ROOT to know where the shims directory lives.
-      2. Check that the shims dir appears *before* any real Python executable
-         in the current process PATH entries.
-
-    We deliberately do NOT spawn a subprocess here.  Spawning `python --version`
-    resolves the name through a fresh CreateProcess / execvp call that may not
-    see our shim .bat files first (Windows) or may pick up the wrong PATH
-    ordering — which is exactly the false-negative that broke the old check.
+    DEPRECATED STUB — no longer used by determine_target_python().
+    Kept so any external callers don't break.
     """
-    venv_root_str = os.environ.get("OMNIPKG_VENV_ROOT")
-    if not venv_root_str:
-        # Without OMNIPKG_VENV_ROOT we cannot know where shims live.
-        # The env var is always set by `swap`, so its absence means
-        # we are NOT in a swap context.
+    return os.environ.get("_OMNIPKG_SWAP_ACTIVE") == "1"
+
+
+def _verify_python_version(python_path: Path, claimed_version: str, debug_mode: bool = False) -> bool:
+    """
+    Ask the actual Python executable what version it is and check it matches
+    the claimed major.minor. This is the ground truth — no env var guessing.
+    """
+    try:
+        result = subprocess.run(
+            [str(python_path), "-c", "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')"],
+            capture_output=True, text=True, timeout=5,
+        )
+        actual = result.stdout.strip()
+        claimed_mm = ".".join(str(claimed_version).split(".")[:2])
+        match = actual == claimed_mm
         if debug_mode:
-            print("[DEBUG-DISPATCH] No OMNIPKG_VENV_ROOT → shims not active", file=sys.stderr)
+            status = "✅" if match else "❌"
+            print(f"[DEBUG-DISPATCH] {status} Version check: exe reports {actual}, claimed {claimed_mm}", file=sys.stderr)
+        return match
+    except Exception as e:
+        if debug_mode:
+            print(f"[DEBUG-DISPATCH] Version check failed ({e}), rejecting", file=sys.stderr)
         return False
-
-    venv_root = Path(venv_root_str).resolve()
-    # Shims dir is always <venv_root>/.omnipkg/shims  (set by swap code)
-    shims_dir = venv_root / ".omnipkg" / "shims"
-    shims_dir_str = str(shims_dir).replace("\\", "/").lower()
-
-    current_path = os.environ.get("PATH", "")
-    path_parts = current_path.split(os.pathsep)
-
-    for entry in path_parts:
-        normalized = entry.replace("\\", "/").lower().rstrip("/")
-        if normalized == shims_dir_str.rstrip("/"):
-            if debug_mode:
-                print(_('[DEBUG-DISPATCH] Shims dir found in PATH at position {}').format(
-                    path_parts.index(entry)), file=sys.stderr)
-            return True
-
-    if debug_mode:
-        print("[DEBUG-DISPATCH] Shims dir not found in PATH entries", file=sys.stderr)
-    return False
 
 
 def test_active_python_version() -> str:
@@ -296,22 +307,26 @@ def handle_shim_execution(prog_name: str, debug: bool):
         print(_('[DEBUG-SHIM] OMNIPKG_VENV_ROOT={}').format(venv_root), file=sys.stderr)
 
     # ─────────────────────────────────────────────
-    # 1) Validate swap context against conda
+    # 1) Validate swap context
+    #
+    # Two hard requirements:
+    #   A) _OMNIPKG_SWAP_ACTIVE=1  — rcfile sets it, EXIT trap unsets it.
+    #      If it's gone, the swap shell exited and these env vars are stale.
+    #   B) The resolved Python exe must actually report the claimed version.
+    #      Ask it directly — no PATH tricks, no guessing.
     # ─────────────────────────────────────────────
     if target_version and venv_root:
-        if conda_prefix:
-            # Still inside *some* conda env: only honor swap if it matches our venv_root
-            venv_path = Path(venv_root).resolve()
-            conda_path = Path(conda_prefix).resolve()
-            if venv_path != conda_path:
-                if debug:
-                    print(_('[DEBUG-SHIM] Conda env mismatch - ignoring leaked OMNIPKG_PYTHON'),
-                          file=sys.stderr)
-                target_version = None
-        else:
-            # No conda env active at all – treat OMNIPKG_PYTHON as leaked
+        if os.environ.get("_OMNIPKG_SWAP_ACTIVE") != "1":
             if debug:
-                print(_('[DEBUG-SHIM] No conda env - ignoring leaked OMNIPKG_PYTHON'),
+                print("[DEBUG-SHIM] _OMNIPKG_SWAP_ACTIVE not set — swap shell exited, ignoring leaked env vars",
+                      file=sys.stderr)
+            target_version = None
+
+    if target_version and venv_root:
+        candidate = resolve_python_path(target_version)
+        if not candidate.exists() or not _verify_python_version(candidate, target_version, debug):
+            if debug:
+                print(f"[DEBUG-SHIM] Exe version mismatch — ignoring OMNIPKG_PYTHON={target_version}",
                       file=sys.stderr)
             target_version = None
 
@@ -327,11 +342,11 @@ def handle_shim_execution(prog_name: str, debug: bool):
             # Avoid infinite recursion on our own shims
             if ".omnipkg/shims" in path_dir:
                 continue
-            candidate = Path(path_dir) / prog_name
-            if candidate.exists() and os.access(candidate, os.X_OK):
+            real_exe = Path(path_dir) / prog_name
+            if real_exe.exists() and os.access(real_exe, os.X_OK):
                 if debug:
-                    print(_('[DEBUG-SHIM] Found: {}').format(candidate), file=sys.stderr)
-                os.execv(str(candidate), [str(candidate)] + sys.argv[1:])
+                    print(_('[DEBUG-SHIM] Found: {}').format(real_exe), file=sys.stderr)
+                os.execv(str(real_exe), [str(real_exe)] + sys.argv[1:])
 
         # Nothing found → behave like a real shell command-not-found
         if debug:
@@ -343,15 +358,10 @@ def handle_shim_execution(prog_name: str, debug: bool):
         sys.exit(127)
 
     # ─────────────────────────────────────────────
-    # 3) Valid swap: run via omnipkg daemon
-    # ─────────────────────────────────────────────
-    from omnipkg.isolation.worker_daemon import DaemonClient
-    # ─────────────────────────────────────────────
     # 3) Valid swap: execute the swapped Python
+    # (candidate already resolved and verified above)
     # ─────────────────────────────────────────────
-    from omnipkg.dispatcher import resolve_python_path
-
-    target_python = resolve_python_path(target_version)
+    target_python = candidate
 
     if debug:
         print(_('[DEBUG-SHIM] Executing: {} {}').format(target_python, ' '.join(sys.argv[1:])), file=sys.stderr)
@@ -550,10 +560,16 @@ def spawn_swap_shell(version: str, python_path: Path, pkg_instance) -> int:
     original_venv = pkg_instance.config_manager.venv_path
 
     # ── 2. Build environment ──────────────────────────────────────────────────
+    # IMPORTANT: OMNIPKG_PYTHON, OMNIPKG_VENV_ROOT, and _OMNIPKG_SWAP_ACTIVE are
+    # intentionally NOT set in new_env. new_env is the inherited process environment
+    # for the bash subprocess — anything in it persists across nested shells and
+    # survives the EXIT trap (the trap unsets shell variables, not the inherited env).
+    # These vars are set ONLY inside the rcfile so they exist exclusively within
+    # the swap subshell and are fully cleaned up by the EXIT trap.
     new_env = os.environ.copy()
-    new_env["OMNIPKG_PYTHON"] = version
-    new_env["OMNIPKG_ACTIVE_PYTHON"] = version
-    new_env["OMNIPKG_VENV_ROOT"] = str(original_venv)
+    # Strip any leaked OMNIPKG vars from the parent env before passing to bash
+    for _var in ("OMNIPKG_PYTHON", "OMNIPKG_ACTIVE_PYTHON", "OMNIPKG_VENV_ROOT", "_OMNIPKG_SWAP_ACTIVE"):
+        new_env.pop(_var, None)
     new_env["CONDA_CHANGEPS1"] = "false"
     new_env["CONDA_AUTO_ACTIVATE_BASE"] = "false"
 
@@ -577,7 +593,18 @@ def spawn_swap_shell(version: str, python_path: Path, pkg_instance) -> int:
             deduped.append(p)
             seen.add(p)
 
-    deduped.insert(0, str(shims_dir))
+    # Shims are intentionally NOT inserted into new_env["PATH"].
+    # new_env is passed to os.execle() which becomes the baseline inherited
+    # environment for the bash process. If shims were in it, they would survive
+    # across nested swap shells and the EXIT trap could not fully clean them:
+    # the trap clears the shell variable but the process-inherited PATH is gone.
+    # On nested swaps (3.11 shell → 3.7 shell → exit), the outer shell would
+    # retain shims in its inherited env, causing _shims_are_active_in_path() to
+    # return True indefinitely even after the inner shell exits.
+    #
+    # Shims are injected ONLY inside the rcfile via "export PATH=shims_dir:/home/claude/.npm-global/bin:/home/claude/.local/bin:/root/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+    # which runs after bash initialises. The EXIT trap strips them in that same
+    # shell. The parent shell's PATH is completely untouched.
     new_env["PATH"] = os.pathsep.join(deduped)
 
     # ── 3. Resolve pip executable for this interpreter ────────────────────────
@@ -630,7 +657,7 @@ def spawn_swap_shell(version: str, python_path: Path, pkg_instance) -> int:
         safe_print(f"[DEBUG-SWAP] OMNIPKG_PYTHON           : {version}", file=sys.stderr)
         safe_print(f"[DEBUG-SWAP] OMNIPKG_VENV_ROOT        : {original_venv}", file=sys.stderr)
         safe_print(f"[DEBUG-SWAP] Shims directory          : {shims_dir}", file=sys.stderr)
-        safe_print(f"[DEBUG-SWAP] PATH[0] after inject     : {deduped[0]}", file=sys.stderr)
+        safe_print(f"[DEBUG-SWAP] PATH[0] (rcfile injects shims above this): {deduped[0]}", file=sys.stderr)
         safe_print(f"[DEBUG-SWAP] CONDA_PREFIX             : {new_env.get('CONDA_PREFIX', 'NOT SET')}", file=sys.stderr)
         safe_print(f"[DEBUG-SWAP] CONDA_DEFAULT_ENV        : {new_env.get('CONDA_DEFAULT_ENV', 'NOT SET')}", file=sys.stderr)
 
@@ -768,7 +795,20 @@ def spawn_swap_shell(version: str, python_path: Path, pkg_instance) -> int:
         _tf.write(f'export _OMNIPKG_SWAP_ACTIVE=1\n')
         # Prepend shims to PATH (after user rc may have modified PATH)
         _tf.write(f'export PATH="{shims_dir}:$PATH"\n')
-        # Cleanup on exit
+        # Override any user-defined exit() shell function (e.g. ones that call
+        # conda deactivate instead of actually exiting) so that typing 'exit'
+        # inside a swap shell always terminates the bash process and fires the
+        # EXIT trap.  We undefine the function and replace it with a thin wrapper
+        # that calls the real builtin, which guarantees the EXIT trap runs.
+        _tf.write(f'\n# Ensure exit actually exits this shell (not a user conda wrapper)\n')
+        _tf.write(f'unset -f exit 2>/dev/null\n')
+        _tf.write(f'exit() {{ builtin exit "$@"; }}\n')
+        # Set prompt to show conda env + python version
+        conda_env = os.environ.get("CONDA_DEFAULT_ENV", "")
+        env_prefix = f"({conda_env}) " if conda_env else ""
+        _tf.write(f'\n# Show conda env + python version in prompt\n')
+        _tf.write(f'export PS1="{env_prefix}(py{version}) \\u@\\h:\\w\\$ "\n')
+        # Cleanup on exit — trap fires when the bash process actually terminates
         _tf.write(f'\ntrap \'\n')
         _tf.write(f'    unset OMNIPKG_PYTHON OMNIPKG_ACTIVE_PYTHON OMNIPKG_VENV_ROOT _OMNIPKG_SWAP_ACTIVE\n')
         _tf.write(f'    export PATH=$(echo "$PATH" | tr ":" "\\n" | grep -v ".omnipkg/shims" | tr "\\n" ":" | sed "s/:$//")\n')
@@ -780,9 +820,8 @@ def spawn_swap_shell(version: str, python_path: Path, pkg_instance) -> int:
         safe_print(f"[DEBUG-SWAP] user rc       : {user_rc} (exists={user_rc.exists()})", file=sys.stderr)
         safe_print(f"[DEBUG-SWAP] Spawning      : {shell} --rcfile {rcfile_path}", file=sys.stderr)
 
-    safe_print(_("🐚 Spawning new shell... (Type 'exit' to return)"))
-    safe_print(f"   🐍 Python {version} context active (via shims)")
-    safe_print(_("   💡 Note: Type 'exit' to clean up and return"))
+    safe_print(_(f"🐚 Entering Python {version} swap context..."))
+    safe_print(f"   🐍 Python {version} active — type 'exit' to return")
 
     try:
         # --rcfile loads ONLY our file (which sources user rc first).

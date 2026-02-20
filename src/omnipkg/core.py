@@ -7458,7 +7458,7 @@ class omnipkg:
                         current_version_str))
                     return False
                 # Stale — atomically replace it by deleting then exclusive-creating.
-                lock_file.unlink(missing_ok=True)
+                if lock_file.exists(): lock_file.unlink()
 
             # Atomic exclusive create — fails if another process beat us here.
             fd = os.open(str(lock_file), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
@@ -7482,7 +7482,7 @@ class omnipkg:
                 with open(flag_file, "r") as f:
                     versions_to_rebuild = json.load(f)
             except (json.JSONDecodeError, IOError):
-                flag_file.unlink(missing_ok=True)
+                if flag_file.exists(): flag_file.unlink()
                 return False
 
             if current_version_str not in versions_to_rebuild:
@@ -7496,7 +7496,7 @@ class omnipkg:
             if rebuild_status == 0:
                 versions_to_rebuild.remove(current_version_str)
                 if not versions_to_rebuild:
-                    flag_file.unlink(missing_ok=True)
+                    if flag_file.exists(): flag_file.unlink()
                 else:
                     with open(flag_file, "w") as f:
                         json.dump(versions_to_rebuild, f)
@@ -7508,7 +7508,7 @@ class omnipkg:
 
         finally:
             # Always release our lock, even if rebuild raised an exception.
-            lock_file.unlink(missing_ok=True)
+            if lock_file.exists(): lock_file.unlink()
 
     def _repair_manifest_context_mismatch(
         self, dist: importlib.metadata.Distribution, current_python_version: str
@@ -9744,15 +9744,34 @@ class omnipkg:
     # At the top of the class or module
     SUPPORTED_IMPLEMENTATIONS = {"cpython"}  # Future: add "pypy", "graalpy", etc.
 
-
     def _ensure_deps_in_interpreter(self, python_exe: Path, version: str) -> None:
         """
         Ensure critical omnipkg runtime deps are installed in a newly adopted interpreter.
-        Called immediately after any successful adopt (copy or download).
-        Currently ensures: filelock (required by worker_daemon and rebuild lock logic).
         """
+        import tempfile
+
+        # Validate the exe path before doing anything — a relative path like "."
+        # means the registry returned garbage for this interpreter.
+        if not python_exe.is_absolute():
+            safe_print(_("   - ⚠️  Skipping dep install for Python {}: interpreter path is not absolute: {}").format(version, python_exe))
+            return
+        if not python_exe.exists():
+            safe_print(_("   - ⚠️  Skipping dep install for Python {}: interpreter not found at {}").format(version, python_exe))
+            return
+
         deps = ["filelock"]
         safe_print(_("   - 📦 Ensuring runtime deps in Python {}...").format(version))
+
+        clean_env = {k: v for k, v in os.environ.items()
+                     if k not in ("PYTHONPATH", "PYTHONSTARTUP", "PYTHONINSPECT",
+                                  "PYTHONHOME", "PYTHONUSERBASE")}
+        clean_env.update({
+            "PYTHONIOENCODING": "utf-8",
+            "PYTHONUTF8": "1",
+            "PYTHONUNBUFFERED": "1",
+            "OMNIPKG_NONINTERACTIVE": "1",
+        })
+
         for dep in deps:
             try:
                 result = subprocess.run(
@@ -9761,8 +9780,8 @@ class omnipkg:
                     encoding="utf-8",
                     errors="replace",
                     timeout=120,
-                    env={**os.environ, "PYTHONIOENCODING": "utf-8", "PYTHONUTF8": "1",
-                         "PYTHONUNBUFFERED": "1", "OMNIPKG_NONINTERACTIVE": "1"},
+                    cwd=tempfile.gettempdir(),
+                    env=clean_env,
                 )
                 if result.returncode == 0:
                     safe_print(_("   - ✅ {} installed in Python {}.").format(dep, version))
@@ -9774,77 +9793,51 @@ class omnipkg:
 
     def _create_shims_for_interpreter(self, python_exe: Path, version: str) -> None:
         """
-        Create .bat shims (Windows) or symlinks (Unix) for a newly adopted interpreter
-        so that `python`, `python3`, and `pip` resolve correctly in swap contexts
-        WITHOUT requiring the user to run `8pkg swap` first.
+        On Windows only: create versioned .bat shims so python3.9, pip3.9, etc.
+        are directly addressable regardless of swap context.
 
-        Shims live in: <venv_root>/.omnipkg/shims/
-        Each shim simply forwards to the specific interpreter for this version.
+        On Unix: do NOTHING. Symlinks bleed into global shell state — every
+        session everywhere would see them regardless of swap context.
+        The swap rcfile injects shims into PATH for the duration of that shell
+        only, which is the correct per-session mechanism.
         """
         import sys as _sys
+        if os.name != "nt":
+            # Unix: no persistent shims at adopt time. swap handles this.
+            return
+
         shims_dir = self.config_manager.venv_path / ".omnipkg" / "shims"
         shims_dir.mkdir(parents=True, exist_ok=True)
 
-        is_windows = os.name == "nt"
+        major_minor = version
+        mm_nodot = major_minor.replace(".", "")
 
-        if is_windows:
-            # Write version-specific .bat shims.
-            # We do NOT overwrite the generic python.bat here — that's managed by
-            # `swap` which sets the active context. Instead we write versioned shims
-            # like python3.9.bat so each version is always directly addressable.
-            major_minor = version  # e.g. "3.9"
-            mm_nodot = major_minor.replace(".", "")  # "39"
+        shim_map = {
+            f"python{major_minor}.bat": f'@echo off\r\n"{python_exe}" %*\r\n',
+            f"python{mm_nodot}.bat":    f'@echo off\r\n"{python_exe}" %*\r\n',
+            f"pip{major_minor}.bat":    f'@echo off\r\n"{python_exe}" -m pip %*\r\n',
+            f"pip{mm_nodot}.bat":       f'@echo off\r\n"{python_exe}" -m pip %*\r\n',
+        }
+        for name, body in shim_map.items():
+            shim_path = shims_dir / name
+            try:
+                shim_path.write_text(body, encoding="utf-8")
+                safe_print(_("   - 🔧 Shim: {}").format(name))
+            except OSError as e:
+                safe_print(_("   - ⚠️  Could not write shim {}: {}").format(name, e))
 
-            shim_map = {
-                f"python{major_minor}.bat": f'@echo off\r\n"{python_exe}" %*\r\n',
-                f"python{mm_nodot}.bat":    f'@echo off\r\n"{python_exe}" %*\r\n',
-                f"pip{major_minor}.bat":    f'@echo off\r\n"{python_exe}" -m pip %*\r\n',
-                f"pip{mm_nodot}.bat":       f'@echo off\r\n"{python_exe}" -m pip %*\r\n',
-            }
-            for name, body in shim_map.items():
-                shim_path = shims_dir / name
-                try:
-                    shim_path.write_text(body, encoding="utf-8")
-                    safe_print(_("   - 🔧 Shim: {}").format(name))
-                except OSError as e:
-                    safe_print(_("   - ⚠️  Could not write shim {}: {}").format(name, e))
-
-            # Also create the versioned 8pkg shim so `8pkg39` works right away
-            scripts_dir = self.config_manager.venv_path / "Scripts"
-            pkg8_exe = scripts_dir / "8pkg.exe"
-            if pkg8_exe.exists():
-                bat = scripts_dir / f"8pkg{mm_nodot}.bat"
-                try:
-                    bat.write_text(
-                        f'@echo off\r\n"{pkg8_exe}" --python {major_minor} %*\r\n',
-                        encoding="utf-8",
-                    )
-                    safe_print(_("   - 🔧 Shim: 8pkg{}.bat").format(mm_nodot))
-                except OSError:
-                    pass
-
-        else:
-            # Unix: symlinks in the shims dir pointing to the real interpreter
-            import shutil
-            symlink_map = {
-                f"python{version}": python_exe,
-                f"pip{version}":    None,  # handled via -m pip wrapper below
-            }
-            for name, target in symlink_map.items():
-                if target is None:
-                    continue
-                shim_path = shims_dir / name
-                try:
-                    if shim_path.exists() or shim_path.is_symlink():
-                        shim_path.unlink()
-                    shim_path.symlink_to(target)
-                    safe_print(_("   - 🔧 Symlink: {}").format(name))
-                except OSError as e:
-                    # Fallback: copy the binary
-                    try:
-                        shutil.copy2(str(target), str(shim_path))
-                    except Exception:
-                        safe_print(_("   - ⚠️  Could not create symlink {}: {}").format(name, e))
+        scripts_dir = self.config_manager.venv_path / "Scripts"
+        pkg8_exe = scripts_dir / "8pkg.exe"
+        if pkg8_exe.exists():
+            bat = scripts_dir / f"8pkg{mm_nodot}.bat"
+            try:
+                bat.write_text(
+                    f'@echo off\r\n"{pkg8_exe}" --python {major_minor} %*\r\n',
+                    encoding="utf-8",
+                )
+                safe_print(_("   - 🔧 Shim: 8pkg{}.bat").format(mm_nodot))
+            except OSError:
+                pass
 
     def adopt_interpreter(self, version: str) -> int:
         """
@@ -10500,7 +10493,6 @@ class omnipkg:
         # SAFETY CHECK 1: Cannot remove currently active interpreter
         configured_python = self.config_manager.get("python_executable")
         if configured_python:
-
             version_match = re.search(r"python(\d+\.\d+)", str(configured_python))
             if version_match:
                 active_python_version = version_match.group(1)
@@ -10511,14 +10503,10 @@ class omnipkg:
 
         if version == active_python_version:
             safe_print(
-                _(
-                    "❌ SAFETY LOCK: Cannot remove the currently active Python interpreter ({})."
-                ).format(version)
+                _("❌ SAFETY LOCK: Cannot remove the currently active Python interpreter ({}).").format(version)
             )
             safe_print(
-                _(
-                    "   Switch to a different Python version first using 'omnipkg swap python <other_version>'."
-                )
+                _("   Switch to a different Python version first using 'omnipkg swap python <other_version>'.")
             )
             return 1
 
@@ -10532,12 +10520,11 @@ class omnipkg:
             )
             return 1
 
-        # === CRITICAL SAFETY CHECK 2: Check if this is a native interpreter ===
+        # SAFETY CHECK 2: Must be inside managed interpreters dir (not native)
         interpreter_path_obj = Path(interpreter_path)
         managed_interpreters_dir = self.config_manager.venv_path / ".omnipkg" / "interpreters"
 
         is_native = not str(interpreter_path_obj).startswith(str(managed_interpreters_dir))
-
         if is_native:
             safe_print(
                 _("❌ SAFETY LOCK: Cannot remove native Python interpreter ({}).").format(version)
@@ -10546,21 +10533,34 @@ class omnipkg:
             safe_print(_("   Only downloaded/managed interpreters can be removed."))
             safe_print(_("   Native interpreter path: {}").format(interpreter_path))
             return 1
-        # === END SAFETY CHECK ===
 
-        interpreter_root_dir = interpreter_path_obj.parent.parent
+        # Resolve the interpreter root — walk up from the exe until we're a direct
+        # child of managed_interpreters_dir, handling both bin/python and plain python.
+        interpreter_root_dir = interpreter_path_obj
+        while True:
+            parent = interpreter_root_dir.parent
+            if parent == managed_interpreters_dir:
+                break
+            if parent == interpreter_root_dir:
+                # Reached filesystem root without finding the right parent
+                interpreter_root_dir = interpreter_path_obj.parent.parent
+                break
+            interpreter_root_dir = parent
+
         safe_print(f"   Target directory for deletion: {interpreter_root_dir}")
 
-        # SAFETY CHECK 3: Verify directory is inside managed interpreters directory
-        if not str(interpreter_root_dir).startswith(str(managed_interpreters_dir)):
+        # SAFETY CHECK 3: Must still be inside managed interpreters dir
+        try:
+            interpreter_root_dir.resolve().relative_to(managed_interpreters_dir.resolve())
+        except ValueError:
             safe_print(
                 _("❌ SAFETY LOCK: Refusing to delete directory outside managed interpreters area.")
             )
-            safe_print(_("   Expected location: {}").format(managed_interpreters_dir))
-            safe_print(_("   Attempted location: {}").format(interpreter_root_dir))
+            safe_print(_("   Expected parent: {}").format(managed_interpreters_dir))
+            safe_print(_("   Attempted path: {}").format(interpreter_root_dir))
             return 1
 
-        if not interpreter_root_dir.exists():
+        if not interpreter_root_dir.exists() and not interpreter_root_dir.is_symlink():
             safe_print(_("   Directory does not exist. It may have already been cleaned up."))
             self.rescan_interpreters()
             return 0
@@ -10574,26 +10574,50 @@ class omnipkg:
                 safe_print(_("🚫 Removal cancelled."))
                 return 1
 
-        # Perform deletion
+        # Perform deletion — handle symlinks, real dirs, and broken symlinks
         try:
-            safe_print(_("🗑️ Deleting directory: {}").format(interpreter_root_dir))
-            shutil.rmtree(interpreter_root_dir)
-            safe_print(_("✅ Directory removed successfully."))
+            safe_print(_("🗑️ Deleting: {}").format(interpreter_root_dir))
+            if interpreter_root_dir.is_symlink():
+                interpreter_root_dir.unlink()
+                safe_print(_("   ✅ Symlink removed."))
+            elif interpreter_root_dir.is_dir():
+                shutil.rmtree(interpreter_root_dir)
+                safe_print(_("   ✅ Directory removed."))
+            else:
+                interpreter_root_dir.unlink()
+                safe_print(_("   ✅ File removed."))
         except Exception as e:
-            safe_print(_("❌ Failed to remove directory: {}").format(e))
+            safe_print(_("❌ Failed to remove: {}").format(e))
             return 1
 
-        # Clean up knowledge base (ONLY if cache is available)
-        # ✅ FIX: Check if we have a cache_client before trying to use it
+        # Also remove any versioned shims pointing to this interpreter (Unix symlinks
+        # created by older omnipkg versions, or Windows .bat files)
+        shims_dir = self.config_manager.venv_path / ".omnipkg" / "shims"
+        if shims_dir.exists():
+            mm_nodot = version.replace(".", "")
+            stale_patterns = [
+                f"python{version}", f"python{mm_nodot}",
+                f"pip{version}", f"pip{mm_nodot}",
+                f"python{version}.bat", f"python{mm_nodot}.bat",
+                f"pip{version}.bat", f"pip{mm_nodot}.bat",
+            ]
+            for name in stale_patterns:
+                p = shims_dir / name
+                try:
+                    if p.exists() or p.is_symlink():
+                        p.unlink()
+                        safe_print(_("   🧹 Removed stale shim: {}").format(name))
+                except Exception:
+                    pass
+
+        # Clean up knowledge base
         if hasattr(self, "cache_client") and self.cache_client is not None:
             safe_print(f"🧹 Cleaning up Knowledge Base for Python {version}...")
             try:
                 keys_to_delete_pattern = self._get_redis_key_prefix_for_version(version) + "*"
                 keys = self.cache_client.keys(keys_to_delete_pattern)
                 if keys:
-                    safe_print(
-                        _("   -> Found {} stale entries in cache. Purging...").format(len(keys))
-                    )
+                    safe_print(_("   -> Found {} stale entries in cache. Purging...").format(len(keys)))
                     delete_command = (
                         self.cache_client.unlink
                         if hasattr(self.cache_client, "unlink")
@@ -10602,25 +10626,17 @@ class omnipkg:
                     delete_command(*keys)
                     safe_print(f"   ✅ Knowledge Base for Python {version} has been purged.")
                 else:
-                    safe_print(
-                        f"   ✅ No Knowledge Base entries found for Python {version}. Nothing to clean."
-                    )
+                    safe_print(f"   ✅ No Knowledge Base entries found for Python {version}. Nothing to clean.")
             except Exception as e:
-                safe_print(
-                    f"   ⚠️  Warning: Could not clean up Knowledge Base for Python {version}: {e}"
-                )
+                safe_print(f"   ⚠️  Warning: Could not clean up Knowledge Base for Python {version}: {e}")
         else:
-            safe_print(
-                "   ℹ️  Skipping Knowledge Base cleanup (cache not initialized in minimal mode)"
-            )
+            safe_print("   ℹ️  Skipping Knowledge Base cleanup (cache not initialized in minimal mode)")
 
         # Update registry
         safe_print(_("🔧 Rescanning interpreters to update the registry..."))
         self.rescan_interpreters()
 
-        safe_print(
-            _("✨ Python {} has been successfully removed from the environment.").format(version)
-        )
+        safe_print(_("✨ Python {} has been successfully removed from the environment.").format(version))
         return 0
 
     def check_package_installed_fast(
