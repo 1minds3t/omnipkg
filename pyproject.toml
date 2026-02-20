@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "omnipkg"
-version = "2.3.0"
+version = "2.3.1"
 authors = [
   { name = "1minds3t", email = "1minds3t@proton.me" },
 ]
@@ -77,13 +77,9 @@ dependencies = [
     #aiohttp-lts on to-do list for pythons 3.7 and 3.8
     
     # Security scanning
-    "safety>=3.7.0; python_version >= '3.10' and python_version < '3.14'",
-    "marshmallow>=4.1.2; python_version >= '3.10'",  # CVE-2025-68480 override
-    # will create safety-lts to patch this if not enforced by safety's toml soon
-
-    # pip-audit fallback (requires packaging>=21.0 on ALL versions)
-    "pip-audit; python_version < '3.9'",
-    "pip-audit>=2.6.0; python_version >= '3.14'",
+    # safety moved to optional 'audit' extra due to CVE-2025-14009 in nltk dependency
+    # pip-audit is now the primary default scanner for all versions
+    "pip-audit>=2.0.0",
     
     # uv
     "uv>=0.9.6; python_version >= '3.8'",
@@ -107,6 +103,9 @@ full = [
     "python-magic>=0.4.18",
     "redis>=4.0.0,<5.0; python_version == '3.7'",
     "redis>=5.0; python_version >= '3.8'",
+    # Includes audit tools
+    "safety>=3.7.0; python_version >= '3.10' and python_version < '3.14'",
+    "marshmallow>=4.1.2; python_version >= '3.10'",
 ]
 
 dev = [
