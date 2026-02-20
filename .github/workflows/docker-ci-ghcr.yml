@@ -2,8 +2,9 @@
 name: Build and Push to Docker Hub
 
 on:
-  release:
-    types: [published]
+  workflow_run:
+    workflows: ["Publish to PyPI (Trusted Publishing)"]
+    types: [completed]
   workflow_dispatch:
     inputs:
       tag:
@@ -13,6 +14,10 @@ on:
 
 jobs:
   build-and-push:
+    # Only run if PyPI publish succeeded, or if manually triggered
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -21,6 +26,9 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          # Pin to the exact commit that was published - not HEAD
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
       
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -41,20 +49,21 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       
-      - name: Extract version from release
+      - name: Extract version
         id: get_version
         run: |
-          if [ "${{ github.event_name }}" = "release" ]; then
-            VERSION=${GITHUB_REF#refs/tags/}
-            VERSION=${VERSION#v}  # Remove 'v' prefix if present
-            echo "tag=${VERSION}" >> $GITHUB_OUTPUT
-            echo "version=${VERSION}" >> $GITHUB_OUTPUT
-          else
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             TAG="${{ inputs.tag }}"
-            TAG=${TAG#v}  # Remove 'v' prefix if present
-            echo "tag=${TAG}" >> $GITHUB_OUTPUT
-            echo "version=${TAG}" >> $GITHUB_OUTPUT
+            TAG=${TAG#v}
+          else
+            # Get the tag pointing at the published commit
+            git fetch --tags origin
+            TAG=$(git tag --points-at ${{ github.event.workflow_run.head_sha }} | head -1)
+            TAG=${TAG#v}
           fi
+          echo "tag=${TAG}" >> $GITHUB_OUTPUT
+          echo "version=${TAG}" >> $GITHUB_OUTPUT
+          echo "Resolved version: ${TAG}"
       
       - name: Extract Docker metadata
         id: meta
@@ -77,16 +86,12 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: .
-          # Only build for architectures where we can verify it works
-          # amd64: Native support, tested in CI
-          # arm64: Verified via QEMU in CI
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          # Add build args for better caching
           build-args: |
             BUILDKIT_INLINE_CACHE=1
       
@@ -96,6 +101,7 @@ jobs:
             echo "## 🐋 Docker Images Published"
             echo ""
             echo "**Version:** \`${{ steps.get_version.outputs.version }}\`"
+            echo "**Triggered by:** PyPI publish success"
             echo ""
             echo "**Docker Hub:**"
             echo "\`\`\`bash"
@@ -112,8 +118,6 @@ jobs:
             echo "**Supported Platforms:**"
             echo "- ✅ linux/amd64 (x86_64)"
             echo "- ✅ linux/arm64 (aarch64)"
-            echo ""
-            echo "**Note:** Redis removed from container - omnipkg automatically uses SQLite backend"
           } >> $GITHUB_STEP_SUMMARY
       
       - name: Test image on amd64
