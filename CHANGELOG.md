@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [2.3.1] — 2026-02-20
+
+Security Mitigation (CVE-2025-14009) & Context Isolation Fixes
+
+This release addresses a critical upstream vulnerability and improves the reliability of the `swap` command.
+
+- **NLTK Vulnerability (CVE-2025-14009):** Removed `safety` from the default dependencies. This tool pulled in `nltk`, which contains a critical Remote Code Execution (RCE) vulnerability.
+- **New Default Scanner:** `pip-audit` is now the primary security scanner for all Python versions.
+- **Opt-in:** If you specifically require `safety`, you can now install it via the optional extra: `pip install omnipkg[audit]`.
+
+- **Swap Context Leaks:** Fixed a critical issue where `omnipkg swap` environments would leak into parent shells. This was caused by user-defined `exit` functions (common in Conda users' `.bashrc`) intercepting the shell termination signal.
+- **Shim Generation:** Fixed an issue where versioned shims were not being generated correctly on Unix systems.
+- **Dispatcher:** Resolved `UnboundLocalError` in the shim execution logic.
+
+- **Russian (ru):** Comprehensive update to Russian translations, resolving fuzzy entries and missing placeholders.
+
+---
+
+**⚙️ Configuration:**
+- pyproject.toml (15 lines)
+
+**Additional Changes:**
+- fix: security: make 'safety' optional to mitigate NLTK CVE-2025-14009
+- chore(locale): update Russian translations
+
+_6 files changed, 968 insertions(+), 735 deletions(-)_
+
 ## [2.3.0] — 2026-02-18
 
 Windows Daemon Stability, Strict Python Isolation & Swap Refactor
