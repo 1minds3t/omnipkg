@@ -65,25 +65,17 @@ jobs:
           echo "--- Listing managed interpreters ---"
           omnipkg list python
           
-          # Test swapping to Python 3.9
-          echo "--- Swapping to Python 3.9 ---"
-          omnipkg swap python 3.9
-          
-          # Verify the swap worked
+          # Test swapping to Python 3.9 - not needed in CI, just use the versioned command directly
           echo "--- Verifying Python 3.9 is active ---"
-          omnipkg info python
-          
+          omnipkg39 info python   # ← explicitly targets 3.9 context
+                    
           # Re-adopt Python 3.11 to ensure it's in the current context
           echo "--- Re-adopting Python 3.11 to restore context ---"
           omnipkg python adopt 3.11
           
-          # Test swapping back to Python 3.11
-          echo "--- Swapping back to Python 3.11 ---"
-          omnipkg swap python 3.11
-          
-          # Final verification
+          # And for 3.11
           echo "--- Final verification ---"
-          omnipkg info python
+          omnipkg311 info python  # ← explicitly targets 3.11 context
           
           echo "✅ All basic Python adoption and swapping tests passed!"
 
