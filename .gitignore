@@ -119,3 +119,4 @@ src/tests/debug_test*.py
 
 # Auto-generated license files
 licenses/
+.gitship/

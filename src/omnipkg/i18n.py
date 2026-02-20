@@ -248,8 +248,13 @@ class Translator:
             print(_('[DEBUG-I18N] current_lang before: {!r}').format(self.current_lang), file=sys.stderr)
         
         try:
-            with resources.path("omnipkg", "locale") as locale_dir_path:
-                localedir = str(locale_dir_path)
+            try:
+                # Python 3.9+: resources.files() handles directories correctly
+                localedir = str(resources.files("omnipkg") / "locale")
+            except AttributeError:
+                # Python 3.7-3.8 fallback
+                import pathlib
+                localedir = str(pathlib.Path(__file__).parent / "locale")
             
             if debug:
                 print(_('[DEBUG-I18N] localedir: {}').format(localedir), file=sys.stderr)
