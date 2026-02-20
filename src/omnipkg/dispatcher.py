@@ -488,9 +488,16 @@ def resolve_python_path(version: str) -> Path:
         if debug_mode:
             print(_('[DEBUG-DISPATCH] Found in PATH: {}').format(path_exe), file=sys.stderr)
         return Path(path_exe)
-    
+    if key in interpreters:
+    path = Path(interpreters[key])
+    if debug_mode:
+        print(f"[DEBUG-DISPATCH] Registry entry for {key}: {path} (exists={path.exists()})", file=sys.stderr)
+    if path.exists():
     # Not found
-    return Path(f"/path/to/python{major_minor}/NOT_FOUND")
+        raise FileNotFoundError(
+        f"Python {major_minor} not found. "
+        f"Registry path did not exist. Run: 8pkg python adopt {major_minor}"
+    )
 
 
 
