@@ -1,21 +1,29 @@
 name: Build Multi-Platform Docker Images
 
 on:
-  release:
-    types: [published]
+  workflow_run:
+    workflows: ["Publish to PyPI (Trusted Publishing)"]
+    types: [completed]
   workflow_dispatch:
     inputs:
       target_ref:
-        description: 'Git Ref (e.g. v2.0.8)'
+        description: 'Git tag to build (e.g. v2.0.8)'
         required: false
         type: string
         default: ''
+
+# Shared version resolution - used by all jobs via env
+# Each job re-resolves since jobs can't share steps, only needs/outputs
+# The logic: if workflow_dispatch use input, else find tag pointing at published SHA
 
 jobs:
   # ═══════════════════════════════════════════════════════════════════
   # BUILD DEBIAN BASE (Most compatible)
   # ═══════════════════════════════════════════════════════════════════
   build-debian:
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -26,7 +34,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.target_ref || github.ref }}
+          ref: ${{ github.event.workflow_run.head_sha || inputs.target_ref || github.sha }}
       
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -49,7 +57,18 @@ jobs:
       
       - name: Extract version
         id: version
-        run: echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "${{ inputs.target_ref }}" ]; then
+            VERSION="${{ inputs.target_ref }}"
+            VERSION=${VERSION#v}
+          else
+            git fetch --tags origin
+            TAG=$(git tag --points-at ${{ github.event.workflow_run.head_sha }} | head -1)
+            VERSION=${TAG#v}
+          fi
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "tag=v${VERSION}" >> $GITHUB_OUTPUT
+          echo "Resolved version: ${VERSION}"
       
       - name: Extract metadata
         id: meta
@@ -59,11 +78,10 @@ jobs:
             1minds3t/omnipkg
             ghcr.io/1minds3t/omnipkg
           tags: |
-            type=semver,pattern={{version}},enable=${{ startsWith(github.ref, 'refs/tags/') }}
-            type=semver,pattern={{major}}.{{minor}},enable=${{ startsWith(github.ref, 'refs/tags/') }}
-            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/') }}
+            type=raw,value=${{ steps.version.outputs.version }}
+            type=raw,value=latest
             type=raw,value=debian
-            type=raw,value=${{ steps.version.outputs.version }}-debian,enable=${{ startsWith(github.ref, 'refs/tags/') }}
+            type=raw,value=${{ steps.version.outputs.version }}-debian
       
       - name: Build and push
         uses: docker/build-push-action@v5
@@ -81,6 +99,9 @@ jobs:
   # BUILD ALPINE (Smallest - ~50MB)
   # ═══════════════════════════════════════════════════════════════════
   build-alpine:
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -91,7 +112,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.target_ref || github.ref }}
+          ref: ${{ github.event.workflow_run.head_sha || inputs.target_ref || github.sha }}
       
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -114,7 +135,17 @@ jobs:
       
       - name: Extract version
         id: version
-        run: echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "${{ inputs.target_ref }}" ]; then
+            VERSION="${{ inputs.target_ref }}"
+            VERSION=${VERSION#v}
+          else
+            git fetch --tags origin
+            TAG=$(git tag --points-at ${{ github.event.workflow_run.head_sha }} | head -1)
+            VERSION=${TAG#v}
+          fi
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "Resolved version: ${VERSION}"
       
       - name: Extract metadata
         id: meta
@@ -126,7 +157,7 @@ jobs:
           tags: |
             type=raw,value=alpine
             type=raw,value=slim
-            type=raw,value=${{ steps.version.outputs.version }}-alpine,enable=${{ startsWith(github.ref, 'refs/tags/') }}
+            type=raw,value=${{ steps.version.outputs.version }}-alpine
       
       - name: Build and push
         uses: docker/build-push-action@v5
@@ -144,6 +175,9 @@ jobs:
   # BUILD UBUNTU VARIANTS (20.04, 22.04, 24.04)
   # ═══════════════════════════════════════════════════════════════════
   build-ubuntu:
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -157,7 +191,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.target_ref || github.ref }}
+          ref: ${{ github.event.workflow_run.head_sha || inputs.target_ref || github.sha }}
       
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -180,7 +214,17 @@ jobs:
       
       - name: Extract version
         id: version
-        run: echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "${{ inputs.target_ref }}" ]; then
+            VERSION="${{ inputs.target_ref }}"
+            VERSION=${VERSION#v}
+          else
+            git fetch --tags origin
+            TAG=$(git tag --points-at ${{ github.event.workflow_run.head_sha }} | head -1)
+            VERSION=${TAG#v}
+          fi
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "Resolved version: ${VERSION}"
       
       - name: Extract metadata
         id: meta
@@ -191,7 +235,7 @@ jobs:
             ghcr.io/1minds3t/omnipkg
           tags: |
             type=raw,value=ubuntu-${{ matrix.ubuntu_version }}
-            type=raw,value=${{ steps.version.outputs.version }}-ubuntu-${{ matrix.ubuntu_version }},enable=${{ startsWith(github.ref, 'refs/tags/') }}
+            type=raw,value=${{ steps.version.outputs.version }}-ubuntu-${{ matrix.ubuntu_version }}
       
       - name: Build and push
         uses: docker/build-push-action@v5
@@ -211,6 +255,9 @@ jobs:
   # BUILD FEDORA/RHEL
   # ═══════════════════════════════════════════════════════════════════
   build-fedora:
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -221,7 +268,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.target_ref || github.ref }}
+          ref: ${{ github.event.workflow_run.head_sha || inputs.target_ref || github.sha }}
       
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -244,7 +291,17 @@ jobs:
       
       - name: Extract version
         id: version
-        run: echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "${{ inputs.target_ref }}" ]; then
+            VERSION="${{ inputs.target_ref }}"
+            VERSION=${VERSION#v}
+          else
+            git fetch --tags origin
+            TAG=$(git tag --points-at ${{ github.event.workflow_run.head_sha }} | head -1)
+            VERSION=${TAG#v}
+          fi
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "Resolved version: ${VERSION}"
       
       - name: Extract metadata
         id: meta
@@ -255,7 +312,7 @@ jobs:
             ghcr.io/1minds3t/omnipkg
           tags: |
             type=raw,value=fedora
-            type=raw,value=${{ steps.version.outputs.version }}-fedora,enable=${{ startsWith(github.ref, 'refs/tags/') }}
+            type=raw,value=${{ steps.version.outputs.version }}-fedora
       
       - name: Build and push
         uses: docker/build-push-action@v5
@@ -273,6 +330,9 @@ jobs:
   # BUILD CUDA IMAGE (NVIDIA GPU Support)
   # ═══════════════════════════════════════════════════════════════════
   build-cuda:
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -283,7 +343,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.target_ref || github.ref }}
+          ref: ${{ github.event.workflow_run.head_sha || inputs.target_ref || github.sha }}
       
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -306,7 +366,17 @@ jobs:
       
       - name: Extract version
         id: version
-        run: echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "${{ inputs.target_ref }}" ]; then
+            VERSION="${{ inputs.target_ref }}"
+            VERSION=${VERSION#v}
+          else
+            git fetch --tags origin
+            TAG=$(git tag --points-at ${{ github.event.workflow_run.head_sha }} | head -1)
+            VERSION=${TAG#v}
+          fi
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "Resolved version: ${VERSION}"
       
       - name: Extract metadata
         id: meta
@@ -318,7 +388,7 @@ jobs:
           tags: |
             type=raw,value=cuda
             type=raw,value=gpu
-            type=raw,value=${{ steps.version.outputs.version }}-cuda,enable=${{ startsWith(github.ref, 'refs/tags/') }}
+            type=raw,value=${{ steps.version.outputs.version }}-cuda
       
       - name: Build and push
         uses: docker/build-push-action@v5
@@ -336,6 +406,9 @@ jobs:
   # BUILD DEV IMAGE (with extra dev tools)
   # ═══════════════════════════════════════════════════════════════════
   build-dev:
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -346,7 +419,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.target_ref || github.ref }}
+          ref: ${{ github.event.workflow_run.head_sha || inputs.target_ref || github.sha }}
       
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -369,7 +442,17 @@ jobs:
       
       - name: Extract version
         id: version
-        run: echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "${{ inputs.target_ref }}" ]; then
+            VERSION="${{ inputs.target_ref }}"
+            VERSION=${VERSION#v}
+          else
+            git fetch --tags origin
+            TAG=$(git tag --points-at ${{ github.event.workflow_run.head_sha }} | head -1)
+            VERSION=${TAG#v}
+          fi
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "Resolved version: ${VERSION}"
       
       - name: Extract metadata
         id: meta
@@ -380,7 +463,7 @@ jobs:
             ghcr.io/1minds3t/omnipkg
           tags: |
             type=raw,value=dev
-            type=raw,value=${{ steps.version.outputs.version }}-dev,enable=${{ startsWith(github.ref, 'refs/tags/') }}
+            type=raw,value=${{ steps.version.outputs.version }}-dev
       
       - name: Build and push
         uses: docker/build-push-action@v5
