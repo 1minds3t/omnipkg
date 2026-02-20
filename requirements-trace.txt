@@ -5,7 +5,7 @@
 #    pip-compile --annotation-style=line --output-file=requirements-trace.txt pyproject.toml
 #
 aiohappyeyeballs==2.6.1   # via aiohttp
-aiohttp==3.13.2 ; python_version >= "3.9"  # via omnipkg (pyproject.toml)
+aiohttp==3.13.3 ; python_version >= "3.9"  # via omnipkg (pyproject.toml)
 aiosignal==1.4.0          # via aiohttp
 annotated-types==0.7.0    # via pydantic
 anyio==4.12.0             # via httpx
@@ -15,7 +15,7 @@ certifi==2025.11.12       # via httpcore, httpx, requests
 cffi==2.0.0               # via cryptography
 charset-normalizer==3.4.4  # via requests
 click==8.3.1              # via nltk, safety, typer
-cryptography==46.0.3      # via authlib
+cryptography==46.0.5      # via authlib
 dparse==0.6.4             # via safety, safety-schemas
 filelock==3.20.1 ; python_version >= "3.10"  # via omnipkg (pyproject.toml), safety
 frozenlist==1.8.0         # via aiohttp, aiosignal
@@ -52,6 +52,6 @@ tqdm==4.67.1              # via nltk
 typer==0.21.0             # via omnipkg (pyproject.toml), safety
 typing-extensions==4.15.0  # via aiosignal, anyio, pydantic, pydantic-core, safety, safety-schemas, typer, typing-inspection
 typing-inspection==0.4.2  # via pydantic
-urllib3==2.6.2            # via requests
+urllib3==2.6.3            # via requests
 uv==0.9.20 ; python_version >= "3.8"  # via omnipkg (pyproject.toml)
 yarl==1.22.0              # via aiohttp
