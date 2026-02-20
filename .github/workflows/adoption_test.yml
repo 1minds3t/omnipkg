@@ -10,6 +10,7 @@ on:
 jobs:
   test-python-adoption:
     runs-on: ubuntu-latest
+
     services:
       redis:
         image: redis:7
@@ -40,44 +41,52 @@ jobs:
         run: |
           set -e
           echo "=== Testing Basic Python Management ==="
-          
-          # Set consistent config path
-          export OMNIPKG_CONFIG_PATH="${{ github.workspace }}/.omnipkg_config/config.json"
-          echo "Config path: $OMNIPKG_CONFIG_PATH"
-          
-          # Initialize omnipkg config (let the CLI handle it)
-          echo "--- Initializing omnipkg ---"
-          echo "Omnipkg will auto-initialize on first command"
-          
-          # Adopt Python 3.11 (current)
+
+          # ── Adopt Python 3.11 (already active) ────────────────────────────
           echo "--- Adopting Python 3.11 ---"
           omnipkg python adopt 3.11
-          
-          # Check current status
+
           echo "--- Checking Python info ---"
           omnipkg info python
-          
-          # Adopt Python 3.9
+
+          # ── Adopt Python 3.9 ──────────────────────────────────────────────
+          # 'adopt' now:
+          #   1. Downloads + installs the interpreter
+          #   2. Creates omnipkg39 / 8pkg39 symlinks in $VENV/bin/
+          #   3. Writes OMNIPKG_PYTHON_39_PATH to .omnipkg/profile.d/omnipkg_pythons.sh
+          #   4. Patches $VENV/bin/activate to source that snippet
           echo "--- Adopting Python 3.9 ---"
           omnipkg python adopt 3.9
-          
-          # List available interpreters
+
+          # Source the profile snippet directly here so the env var is
+          # available in this step without relying on activate being re-sourced.
+          # (GitHub Actions does NOT re-source activate between run: blocks.)
+          PROFILE_SNIPPET="$(python -c "import sys,os; from pathlib import Path; print(Path(sys.prefix)/'.omnipkg'/'profile.d'/'omnipkg_pythons.sh')")"
+          if [ -f "$PROFILE_SNIPPET" ]; then
+            source "$PROFILE_SNIPPET"
+            echo "Sourced profile snippet: $PROFILE_SNIPPET"
+          fi
+
+          # ── List ──────────────────────────────────────────────────────────
           echo "--- Listing managed interpreters ---"
           omnipkg list python
-          
-          # Test swapping to Python 3.9 - not needed in CI, just use the versioned command directly
-          echo "--- Verifying Python 3.9 is active ---"
-          omnipkg39 info python   # ← explicitly targets 3.9 context
-                    
-          # Re-adopt Python 3.11 to ensure it's in the current context
-          echo "--- Re-adopting Python 3.11 to restore context ---"
+
+          # ── Versioned command: targets 3.9 context directly ───────────────
+          # Works because:
+          #   a) omnipkg39 symlink exists in PATH (created by adopt above)
+          #   b) OMNIPKG_PYTHON_39_PATH is set (sourced from profile snippet)
+          #   The dispatcher reads the env var at Priority 0.5 — no swap needed.
+          echo "--- Verifying Python 3.9 context (via omnipkg39) ---"
+          omnipkg39 info python
+
+          # ── Re-adopt 3.11 to ensure it is in context ──────────────────────
+          echo "--- Re-adopting Python 3.11 ---"
           omnipkg python adopt 3.11
-          
-          # And for 3.11
-          echo "--- Final verification ---"
-          omnipkg311 info python  # ← explicitly targets 3.11 context
-          
-          echo "✅ All basic Python adoption and swapping tests passed!"
+
+          echo "--- Final verification (via omnipkg311) ---"
+          omnipkg311 info python
+
+          echo "✅ All basic Python adoption and versioned-command tests passed!"
 
       - name: Test Summary
         if: always()
@@ -88,7 +97,7 @@ jobs:
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "Successfully tested:" >> $GITHUB_STEP_SUMMARY
             echo "- Python interpreter adoption (3.11 and 3.9)" >> $GITHUB_STEP_SUMMARY
-            echo "- Context switching between interpreters" >> $GITHUB_STEP_SUMMARY
+            echo "- Versioned commands (omnipkg39, omnipkg311) without swap" >> $GITHUB_STEP_SUMMARY
             echo "- Basic omnipkg info and list commands" >> $GITHUB_STEP_SUMMARY
           else
             echo "❌ **Simple Python Adoption Test: FAILED**" >> $GITHUB_STEP_SUMMARY
