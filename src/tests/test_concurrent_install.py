@@ -114,7 +114,7 @@ def adopt_if_needed(version: str, poll_interval: float = 5.0, timeout: float = 3
 
 def ensure_daemon_running() -> bool:
     try:
-        from omnipkg.isolation.worker_daemon import DaemonClient, WorkerPoolDaemon
+        from omnipkg.isolation.worker_daemon import DaemonClient, DAEMON_LOG_FILE
         client = DaemonClient()
         status = client.status()
         if status.get("success"):
@@ -123,14 +123,24 @@ def ensure_daemon_running() -> bool:
         
         safe_print("   🔄 Starting daemon...")
         
-        subprocess.Popen(
+        # Run synchronously with output visible so we can see what actually fails
+        result = subprocess.run(
             ["8pkg", "daemon", "start"],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            start_new_session=True
+            capture_output=False,  # let it print directly
+            timeout=30,
         )
+        safe_print(f"   [DEBUG] daemon start exited with code: {result.returncode}")
         
-        # Wait up to 30s, polling every 0.5s (was: 10×0.2s = 2s total)
+        # Dump the log file so CI shows exactly what happened
+        import os
+        if os.path.exists(DAEMON_LOG_FILE):
+            safe_print(f"   [DEBUG] === {DAEMON_LOG_FILE} ===")
+            with open(DAEMON_LOG_FILE, "r", errors="replace") as f:
+                safe_print(f.read())
+        else:
+            safe_print(f"   [DEBUG] No log file found at {DAEMON_LOG_FILE}")
+        
+        # Now check if it actually came up
         for _ in range(60):
             time.sleep(0.5)
             status = client.status()
@@ -141,7 +151,9 @@ def ensure_daemon_running() -> bool:
         safe_print("   ❌ Failed to start daemon")
         return False
     except Exception as e:
+        import traceback
         safe_print(f"   ❌ Daemon error: {e}")
+        safe_print(traceback.format_exc())
         return False
 
 def warmup_worker(config: tuple, thread_id: int) -> dict:
