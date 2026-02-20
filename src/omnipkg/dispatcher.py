@@ -410,6 +410,8 @@ def resolve_python_path(version: str) -> Path:
     if registry_path.exists():
         if debug_mode:
             print(f"[DEBUG-DISPATCH] Reading registry: {registry_path}", file=sys.stderr)
+            with open(registry_path, "r") as _dbg_f:
+                print(f"[DEBUG-DISPATCH] Registry contents: {_dbg_f.read()}", file=sys.stderr)
         
         try:
             with open(registry_path, "r") as f:
@@ -421,6 +423,8 @@ def resolve_python_path(version: str) -> Path:
             for key in [version, major_minor]:
                 if key in interpreters:
                     path = Path(interpreters[key])
+                    if debug_mode:
+                        print(f"[DEBUG-DISPATCH] Registry entry for {key}: {path} (exists={path.exists()})", file=sys.stderr)
                     if path.exists():
                         if debug_mode:
                             print(_('[DEBUG-DISPATCH] Registry hit ({}): {}').format(key, path), file=sys.stderr)
@@ -465,16 +469,9 @@ def resolve_python_path(version: str) -> Path:
         if debug_mode:
             print(_('[DEBUG-DISPATCH] Found in PATH: {}').format(path_exe), file=sys.stderr)
         return Path(path_exe)
-    if key in interpreters:
-    path = Path(interpreters[key])
-    if debug_mode:
-        print(f"[DEBUG-DISPATCH] Registry entry for {key}: {path} (exists={path.exists()})", file=sys.stderr)
-    if path.exists():
+    
     # Not found
-        raise FileNotFoundError(
-        f"Python {major_minor} not found. "
-        f"Registry path did not exist. Run: 8pkg python adopt {major_minor}"
-    )
+    return Path(f"/path/to/python{major_minor}/NOT_FOUND")
 
 
 
