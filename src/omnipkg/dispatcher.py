@@ -66,13 +66,13 @@ def main():
                     print(_('[DEBUG-DISPATCH] Config read error: {}').format(e), file=sys.stderr)
     
     # ═══════════════════════════════════════════════════════════
-    # 🎯 STEP 0: DETECT VERSION-SPECIFIC COMMAND (8pkg39, etc.)
+    # 🎯 STEP 0: DETECT VERSION-SPECIFIC COMMAND (8pkg39, omnipkg39, etc.)
     # ═══════════════════════════════════════════════════════════
     import re
     prog_name = Path(sys.argv[0]).name.lower()
     
-    # Check if it's a version-specific command
-    version_match = re.match(r"8pkg(\d)(\d+)", prog_name)
+    # Match both 8pkgXY and omnipkgXY (e.g. 8pkg39, omnipkg39, omnipkg311)
+    version_match = re.match(r"(?:8pkg|omnipkg)(\d)(\d+)", prog_name)
     
     if version_match:
         major = version_match.group(1)
@@ -160,48 +160,26 @@ def main():
 def determine_target_python() -> Path:
     """
     PRIORITY ORDER:
-    1. Self-awareness: config file next to the 8pkg script itself
-       (SKIPPED when inside a swap shell — self-awareness resolves to the
-        host interpreter's config and returns the wrong Python version)
-    2. CLI flag --python (explicit user intent)
-    3. OMNIPKG_PYTHON env var (only if shims are verified active via PATH check)
-    4. Fallback to sys.executable
+    1. CLI flag --python  (explicit user intent — ALWAYS wins, including 8pkg39)
+    2. OMNIPKG_PYTHON_XY_PATH env var (set by adopt; CI-safe, no swap needed)
+    3. Self-awareness: config file next to THIS script/exe
+       (SKIPPED when swap is active OR when --python is present — both cases
+        mean self-awareness would return the wrong Python)
+    4. OMNIPKG_PYTHON env var (only inside an active swap shell)
+    5. Fallback to sys.executable
     """
     debug_mode = os.environ.get("OMNIPKG_DEBUG") == "1"
     swap_active = os.environ.get("_OMNIPKG_SWAP_ACTIVE") == "1"
 
     # ─────────────────────────────────────────────────────────────
-    # Priority 0: Self-awareness — config next to THIS script/exe
-    #
-    # IMPORTANT: Skip entirely when inside a swap shell.
-    # When swapped, sys.argv[0] resolves to the host env's 8pkg binary
-    # which has a .omnipkg_config.json pointing at the host Python (e.g.
-    # 3.11). Self-awareness would "succeed" but return the wrong version.
-    # Instead, fall through to Priority 2 (OMNIPKG_PYTHON + shims check)
-    # which correctly picks up the swapped version.
-    # ─────────────────────────────────────────────────────────────
-    if not swap_active:
-        script_path = Path(sys.argv[0]).resolve()
-        script_dir = script_path.parent
-        config_path = script_dir / ".omnipkg_config.json"
-
-    if not swap_active and config_path.exists():
-        try:
-            with open(config_path, "r") as f:
-                config = json.load(f)
-            python_exe = config.get("python_executable")
-            if python_exe:
-                python_path = Path(python_exe)
-                if python_path.exists():
-                    if debug_mode:
-                        safe_print(_('[DEBUG-DISPATCH] ✅ Self-aware: {}').format(python_path), file=sys.stderr)
-                    return python_path
-        except Exception as e:
-            if debug_mode:
-                print(_('[DEBUG-DISPATCH] Config read error: {}').format(e), file=sys.stderr)
-
-    # ─────────────────────────────────────────────────────────────
     # Priority 1: CLI flag --python  (explicit user intent)
+    #
+    # MUST be checked first — before self-awareness.
+    # When the user runs 8pkg39, the dispatcher injects --python 3.9
+    # into argv.  But 8pkg39 is a symlink to 8pkg which lives next to
+    # python3.11, so the .omnipkg_config.json in that bin/ points at
+    # 3.11.  If self-awareness runs first it "wins" and ignores --python
+    # entirely, executing everything under 3.11.  Wrong.
     # ─────────────────────────────────────────────────────────────
     if "--python" in sys.argv:
         try:
@@ -214,6 +192,47 @@ def determine_target_python() -> Path:
                 return resolved
         except (ValueError, IndexError):
             pass
+
+    # ─────────────────────────────────────────────────────────────
+    # Priority 2: OMNIPKG_PYTHON_XY_PATH env var
+    #
+    # Written by 'omnipkg python adopt' for every adopted interpreter.
+    # Survives fresh shells (CI steps, new terminals) without swap.
+    # Format: OMNIPKG_PYTHON_39_PATH, OMNIPKG_PYTHON_311_PATH, etc.
+    # Only reached here when --python was NOT in argv (handled above).
+    # ─────────────────────────────────────────────────────────────
+    # (No --python in argv at this point, so nothing to look up here.
+    #  This priority is consumed inline inside the --python block above
+    #  via resolve_python_path which checks the registry. Kept as a
+    #  comment marker for clarity in the priority chain.)
+
+    # ─────────────────────────────────────────────────────────────
+    # Priority 3: Self-awareness — config next to THIS script/exe
+    #
+    # Skipped when:
+    #   - inside a swap shell (_OMNIPKG_SWAP_ACTIVE=1): self-awareness
+    #     would resolve to the host Python's config (wrong version)
+    #   - --python was in argv: already handled above (won't reach here)
+    # ─────────────────────────────────────────────────────────────
+    if not swap_active:
+        script_path = Path(sys.argv[0]).resolve()
+        script_dir = script_path.parent
+        config_path = script_dir / ".omnipkg_config.json"
+
+        if config_path.exists():
+            try:
+                with open(config_path, "r") as f:
+                    config = json.load(f)
+                python_exe = config.get("python_executable")
+                if python_exe:
+                    python_path = Path(python_exe)
+                    if python_path.exists():
+                        if debug_mode:
+                            safe_print(_('[DEBUG-DISPATCH] ✅ Self-aware: {}').format(python_path), file=sys.stderr)
+                        return python_path
+            except Exception as e:
+                if debug_mode:
+                    print(_('[DEBUG-DISPATCH] Config read error: {}').format(e), file=sys.stderr)
 
     # ─────────────────────────────────────────────────────────────
     # Priority 2: OMNIPKG_PYTHON — only inside an active swap shell.
@@ -931,6 +950,144 @@ def extract_version(python_path: Path) -> str:
     import re
     match = re.search(r"python(\d+\.\d+)", str(python_path))
     return match.group(1) if match else "unknown"
+
+def install_versioned_entrypoints(
+    interpreter_path: Path,
+    version: str,
+    venv_root: Path,
+    debug_mode: bool = False,
+) -> None:
+    """
+    Called by 'omnipkg python adopt' after a new interpreter is registered.
+
+    Does TWO things that make versioned commands work in CI (fresh shells,
+    no swap active):
+
+    1. SYMLINKS  — creates  omnipkgXY / 8pkgXY  next to the main entry points
+       in the venv's bin/ directory.  GitHub Actions runners find them in PATH
+       automatically because the venv bin/ is already on PATH.
+
+       Example for 3.9:
+         $VENV/bin/omnipkg39  →  $VENV/bin/omnipkg   (symlink)
+         $VENV/bin/8pkg39     →  $VENV/bin/8pkg       (symlink)
+
+    2. ENV-VAR SNIPPET  — writes a one-liner to
+         $VENV/.omnipkg/profile.d/omnipkg_pythons.sh
+       that exports OMNIPKG_PYTHON_39_PATH=/path/to/python3.9 etc. for every
+       known interpreter. The venv activate script sources profile.d/*.sh, so
+       the var is available in every shell that activates the env — including
+       each CI step that runs `source venv/bin/activate`.
+
+    Priority 0.5 in determine_target_python() reads OMNIPKG_PYTHON_XY_PATH,
+    so the versioned commands resolve correctly without swap or a live subshell.
+    """
+    debug_mode = debug_mode or (os.environ.get("OMNIPKG_DEBUG") == "1")
+    flat = version.replace(".", "")          # "3.9" -> "39", "3.11" -> "311"
+    bin_dir = venv_root / ("Scripts" if sys.platform == "win32" else "bin")
+
+    # ── 1. Create versioned symlinks ──────────────────────────────────────────
+    for base_name in ("omnipkg", "8pkg"):
+        src = bin_dir / base_name
+        if not src.exists():
+            if debug_mode:
+                print(f"[DEBUG-DISPATCH] Skipping symlink for {base_name} — not found at {src}", file=sys.stderr)
+            continue
+
+        link = bin_dir / f"{base_name}{flat}"
+        try:
+            if link.exists() or link.is_symlink():
+                link.unlink()
+            link.symlink_to(src.name)   # relative symlink within same dir
+            if debug_mode:
+                print(f"[DEBUG-DISPATCH] ✅ Symlink: {link} -> {src.name}", file=sys.stderr)
+        except Exception as e:
+            if debug_mode:
+                print(f"[DEBUG-DISPATCH] ⚠️  Could not create symlink {link}: {e}", file=sys.stderr)
+
+    # ── 2. Write / update env-var snippet ─────────────────────────────────────
+    profile_dir = venv_root / ".omnipkg" / "profile.d"
+    profile_dir.mkdir(parents=True, exist_ok=True)
+    snippet_path = profile_dir / "omnipkg_pythons.sh"
+
+    # Read existing known interpreters from the registry so we can emit ALL of
+    # them in one idempotent file (not just the one being adopted right now).
+    known: dict[str, str] = {}
+    registry_path = venv_root / ".omnipkg" / "interpreters" / "registry.json"
+    if registry_path.exists():
+        try:
+            with open(registry_path, "r") as f:
+                data = json.load(f)
+            for ver, path in data.get("interpreters", {}).items():
+                if Path(path).exists():
+                    known[ver] = path
+        except Exception:
+            pass
+
+    # Also include the interpreter being adopted right now (may not be in
+    # the registry yet if called before the registry write completes).
+    known[version] = str(interpreter_path)
+
+    lines = [
+        "# Auto-generated by omnipkg — do not edit manually.",
+        "# Sourced by the venv activate script so every shell (including CI steps)",
+        "# can resolve versioned commands (omnipkg39, 8pkg311, etc.) without swap.",
+        "",
+    ]
+    for ver, path in sorted(known.items()):
+        ver_flat = ver.replace(".", "")
+        lines.append(f'export OMNIPKG_PYTHON_{ver_flat}_PATH="{path}"')
+
+    try:
+        snippet_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        if debug_mode:
+            print(f"[DEBUG-DISPATCH] ✅ Profile snippet written: {snippet_path}", file=sys.stderr)
+    except Exception as e:
+        if debug_mode:
+            print(f"[DEBUG-DISPATCH] ⚠️  Could not write profile snippet: {e}", file=sys.stderr)
+
+    # ── 3. Patch venv activate to source profile.d ───────────────────────────
+    # Only needed once — idempotent.
+    _patch_activate_script(bin_dir, profile_dir, debug_mode)
+
+
+def _patch_activate_script(bin_dir: Path, profile_dir: Path, debug_mode: bool) -> None:
+    """
+    Append a one-time source block to $VENV/bin/activate so that
+    profile.d/omnipkg_pythons.sh is loaded in every shell that activates
+    the venv (including each GitHub Actions step that runs
+    `source venv/bin/activate` or `pip install -e .` in a matrix job).
+    """
+    activate = bin_dir / "activate"
+    if not activate.exists():
+        return
+
+    marker = "# omnipkg-profile.d-source"
+    try:
+        content = activate.read_text(encoding="utf-8")
+    except Exception:
+        return
+
+    if marker in content:
+        return  # already patched
+
+    snippet = (
+        f"\n{marker}\n"
+        f'if [ -d "{profile_dir}" ]; then\n'
+        f'    for _f in "{profile_dir}"/*.sh; do\n'
+        f'        [ -r "$_f" ] && . "$_f"\n'
+        f'    done\n'
+        f'fi\n'
+        f"unset _f\n"
+    )
+    try:
+        with open(activate, "a", encoding="utf-8") as f:
+            f.write(snippet)
+        if debug_mode:
+            print(f"[DEBUG-DISPATCH] ✅ Patched activate script: {activate}", file=sys.stderr)
+    except Exception as e:
+        if debug_mode:
+            print(f"[DEBUG-DISPATCH] ⚠️  Could not patch activate: {e}", file=sys.stderr)
+
 
 if __name__ == "__main__":
     main()

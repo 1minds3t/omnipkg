@@ -360,75 +360,71 @@ class ConfigManager:
 
     def _verify_version_symlinks_lazy(self):
         """
-        Lightweight check: if registry exists and has interpreters,
-        but version-specific symlinks are missing, create them.
-        
-        Uses a flag file to avoid checking on every single startup.
+        Lightweight startup check: if the registry has interpreters but their
+        versioned entry-point symlinks are missing or broken, recreate them.
+
+        Checks BOTH 8pkgXY AND omnipkgXY.
+        Uses a 24-hour flag file to avoid running on every startup.
+        Skipped on Windows (uses .bat shims instead, handled elsewhere).
         """
         if platform.system() == "Windows":
-            return  # Skip on Windows
-        
-        # Check flag: have we verified symlinks recently?
+            return
+
         symlinks_verified_flag = self.venv_path / ".omnipkg" / ".symlinks_verified"
-        
-        # If flag exists and is recent (within 24 hours), skip check
         if symlinks_verified_flag.exists():
-            file_age = time.time() - symlinks_verified_flag.stat().st_mtime
-            if file_age < 86400:  # 24 hours in seconds
-                return  # Symlinks were verified recently
-        
-        # Registry must exist
+            if time.time() - symlinks_verified_flag.stat().st_mtime < 86400:
+                return
+
         registry_path = self.venv_path / ".omnipkg" / "interpreters" / "registry.json"
         if not registry_path.exists():
             return
-        
-        # Check if 8pkg exists
+
         bin_dir = self.venv_path / "bin"
-        main_8pkg = bin_dir / "8pkg"
-        if not main_8pkg.exists():
+
+        # Need at least one base entry point to make symlinks from.
+        if not any((bin_dir / name).exists() for name in ("8pkg", "omnipkg")):
             return
-        
-        # Load registry and check for missing symlinks
+
         try:
             with open(registry_path, "r") as f:
                 data = json.load(f)
-            
+
             interpreters = data.get("interpreters", {})
             if not interpreters:
                 return
-            
-            missing_symlinks = []
-            
+
+            missing = []
             for version in interpreters.keys():
                 parts = version.split(".")
-                if len(parts) >= 2:
-                    alias_name = f"8pkg{parts[0]}{parts[1]}"
-                    alias_path = bin_dir / alias_name
-                    
-                    # Check if symlink is missing or broken
-                    if not alias_path.exists() and not alias_path.is_symlink():
-                        missing_symlinks.append(version)
-                    elif alias_path.is_symlink() and not alias_path.exists():
-                        # Broken symlink
-                        missing_symlinks.append(version)
-            
-            # Create missing symlinks
-            if missing_symlinks:
-                debug_mode = os.environ.get("OMNIPKG_DEBUG") == "1"
-                if debug_mode:
-                    print(_('[DEBUG] Creating {} missing symlinks').format(len(missing_symlinks)), file=sys.stderr)
-                
-                for version in missing_symlinks:
+                if len(parts) < 2:
+                    continue
+                mm = f"{parts[0]}{parts[1]}"   # "3.9"→"39"  "3.11"→"311"
+
+                for base in ("8pkg", "omnipkg"):
+                    src = bin_dir / base
+                    if not src.exists():
+                        continue    # this entry point isn't installed, skip
+                    link = bin_dir / f"{base}{mm}"
+                    broken = link.is_symlink() and not link.resolve().exists()
+                    if not link.exists() or broken:
+                        missing.append(version)
+                        break   # one bad link per version is enough to trigger recreate
+
+            if missing:
+                if os.environ.get("OMNIPKG_DEBUG") == "1":
+                    print(
+                        f"[DEBUG] Recreating symlinks for {len(missing)} interpreter(s): {missing}",
+                        file=sys.stderr,
+                    )
+                for version in missing:
                     self._create_symlink_for_version(version)
-            
-            # Update flag file to mark verification complete
+
             symlinks_verified_flag.parent.mkdir(parents=True, exist_ok=True)
             symlinks_verified_flag.touch()
-        
+
         except Exception as e:
-            # Fail silently - don't break initialization
             if os.environ.get("OMNIPKG_DEBUG") == "1":
-                print(_('[DEBUG] Symlink verification failed: {}').format(e), file=sys.stderr)
+                print(f"[DEBUG] Symlink verification failed: {e}", file=sys.stderr)
 
     def _set_rebuild_flag_for_version(self, version_str: str):
         """
@@ -2990,46 +2986,57 @@ class ConfigManager:
 
     def _create_symlink_for_version(self, version: str) -> bool:
         """
-        Creates a version-specific entry point (8pkg311, 8pkg312, etc.).
-        On Unix: symlink. On Windows: .bat shim (symlinks require admin rights).
+        Creates versioned entry points for ALL omnipkg commands:
+            Unix    → $VENV/bin/8pkgXY   (symlink → 8pkg)
+                    → $VENV/bin/omnipkgXY (symlink → omnipkg)
+            Windows → $VENV/Scripts/8pkgXY.bat
+                    → $VENV/Scripts/omnipkgXY.bat
         """
         parts = version.split(".")
         if len(parts) < 2:
             return False
 
-        alias_name = f"8pkg{parts[0]}{parts[1]}"
+        mm_nodot = f"{parts[0]}{parts[1]}"
         is_windows = platform.system() == "Windows"
 
         if is_windows:
             scripts_dir = self.venv_path / "Scripts"
-            bat_path = scripts_dir / f"{alias_name}.bat"
+            scripts_dir.mkdir(parents=True, exist_ok=True)
+            ok = True
+            for base_name in ("8pkg", "omnipkg"):
+                exe = scripts_dir / f"{base_name}.exe"
+                if not exe.exists():
+                    continue
+                bat = scripts_dir / f"{base_name}{mm_nodot}.bat"
+                try:
+                    bat.write_text(
+                        f'@echo off\n"{exe}" --python {version} %*\n',
+                        encoding="utf-8",
+                    )
+                except OSError as e:
+                    if os.environ.get("OMNIPKG_DEBUG") == "1":
+                        safe_print(f"[DEBUG] Failed to create {bat.name}: {e}")
+                    ok = False
+            return ok
+
+        # Unix — relative symlinks in $VENV/bin/
+        bin_dir = self.venv_path / "bin"
+        ok = True
+        for base_name in ("8pkg", "omnipkg"):
+            src = bin_dir / base_name
+            if not src.exists():
+                continue    # entry point not installed, skip silently
+            link = bin_dir / f"{base_name}{mm_nodot}"
             try:
-                scripts_dir.mkdir(parents=True, exist_ok=True)
-                # .bat shim: forwards all args to 8pkg --python <version>
-                bat_content = (
-                    f'@echo off\n'
-                    f'"{scripts_dir / "8pkg.exe"}" --python {version} %*\n'
-                )
-                bat_path.write_text(bat_content, encoding="utf-8")
-                return True
+                if link.exists() or link.is_symlink():
+                    link.unlink()
+                link.symlink_to(src.name)   # relative → stays valid if venv moves
             except OSError as e:
                 if os.environ.get("OMNIPKG_DEBUG") == "1":
-                    safe_print(f"[DEBUG] Failed to create {alias_name}.bat: {e}")
-                return False
-        else:
-            bin_dir = self.venv_path / "bin"
-            main_8pkg = bin_dir / "8pkg"
-            if not main_8pkg.exists():
-                return False
-            alias_path = bin_dir / alias_name
-            try:
-                if alias_path.exists() or alias_path.is_symlink():
-                    alias_path.unlink()
-                alias_path.symlink_to(main_8pkg)
-                return True
-            except OSError:
-                return False
-
+                    safe_print(f"[DEBUG] Failed to create {link.name}: {e}")
+                ok = False
+        return ok
+    
     def _ensure_shims_installed(self):
         """
         Creates a shim directory where 'python', 'python3', and 'pip' 
@@ -9793,25 +9800,55 @@ class omnipkg:
 
     def _create_shims_for_interpreter(self, python_exe: Path, version: str) -> None:
         """
-        On Windows only: create versioned .bat shims so python3.9, pip3.9, etc.
-        are directly addressable regardless of swap context.
-
-        On Unix: do NOTHING. Symlinks bleed into global shell state — every
-        session everywhere would see them regardless of swap context.
-        The swap rcfile injects shims into PATH for the duration of that shell
-        only, which is the correct per-session mechanism.
+        Create versioned entry-point symlinks / shims so that commands like
+        8pkg39, omnipkg39, 8pkg311, omnipkg311 work immediately after adoption —
+        without requiring a swap shell.
+    
+        Unix
+        ────
+        Creates ONLY versioned symlinks in $VENV/bin/ (already on PATH):
+            8pkg39     → 8pkg
+            omnipkg39  → omnipkg
+        These are permanent, harmless, and survive across fresh shells / CI steps.
+    
+        We deliberately do NOT create generic python/pip shims on Unix at adopt
+        time — those bleed into global PATH state and belong to swap only.
+    
+        Windows
+        ───────
+        Creates .bat shims for python, pip, and versioned 8pkg (unchanged behaviour).
         """
         import sys as _sys
-        if os.name != "nt":
-            # Unix: no persistent shims at adopt time. swap handles this.
+    
+        parts = version.split(".")
+        if len(parts) < 2:
             return
-
+        mm_nodot = f"{parts[0]}{parts[1]}"   # "3.9" → "39",  "3.11" → "311"
+    
+        if os.name != "nt":
+            # ── Unix: versioned symlinks only ──────────────────────────────────
+            bin_dir = self.config_manager.venv_path / "bin"
+    
+            for base_name in ("8pkg", "omnipkg"):
+                src = bin_dir / base_name
+                if not src.exists():
+                    continue  # entry point not installed — skip silently
+    
+                link = bin_dir / f"{base_name}{mm_nodot}"
+                try:
+                    if link.exists() or link.is_symlink():
+                        link.unlink()
+                    link.symlink_to(src.name)   # relative symlink, stays valid if venv moves
+                    safe_print(_("   - 🔗 Symlink: {} → {}").format(link.name, src.name))
+                except OSError as e:
+                    safe_print(_("   - ⚠️  Could not create symlink {}: {}").format(link.name, e))
+            return  # done on Unix — no PATH-bleeding python/pip shims
+    
+        # ── Windows: .bat shims (original behaviour, unchanged) ────────────────
         shims_dir = self.config_manager.venv_path / ".omnipkg" / "shims"
         shims_dir.mkdir(parents=True, exist_ok=True)
-
+    
         major_minor = version
-        mm_nodot = major_minor.replace(".", "")
-
         shim_map = {
             f"python{major_minor}.bat": f'@echo off\r\n"{python_exe}" %*\r\n',
             f"python{mm_nodot}.bat":    f'@echo off\r\n"{python_exe}" %*\r\n',
@@ -9825,20 +9862,21 @@ class omnipkg:
                 safe_print(_("   - 🔧 Shim: {}").format(name))
             except OSError as e:
                 safe_print(_("   - ⚠️  Could not write shim {}: {}").format(name, e))
-
+    
         scripts_dir = self.config_manager.venv_path / "Scripts"
-        pkg8_exe = scripts_dir / "8pkg.exe"
-        if pkg8_exe.exists():
-            bat = scripts_dir / f"8pkg{mm_nodot}.bat"
-            try:
-                bat.write_text(
-                    f'@echo off\r\n"{pkg8_exe}" --python {major_minor} %*\r\n',
-                    encoding="utf-8",
-                )
-                safe_print(_("   - 🔧 Shim: 8pkg{}.bat").format(mm_nodot))
-            except OSError:
-                pass
-
+        for base_name in ("8pkg", "omnipkg"):
+            exe = scripts_dir / f"{base_name}.exe"
+            if exe.exists():
+                bat = scripts_dir / f"{base_name}{mm_nodot}.bat"
+                try:
+                    bat.write_text(
+                        f'@echo off\r\n"{exe}" --python {major_minor} %*\r\n',
+                        encoding="utf-8",
+                    )
+                    safe_print(_("   - 🔧 Shim: {}{}.bat").format(base_name, mm_nodot))
+                except OSError:
+                    pass
+    
     def adopt_interpreter(self, version: str) -> int:
         """
         Safely adopts a Python version by checking the registry, then trying to copy
