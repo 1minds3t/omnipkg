@@ -36,10 +36,25 @@ import sys
 from pathlib import Path
 
 try:
-    # Prefer importlib.metadata (works in installed packages)
+    # Prefer importlib.metadata (built-in from Python 3.8+)
     from importlib.metadata import PackageNotFoundError, metadata, version
-except ImportError:  # Python < 3.8 fallback
-    from importlib_metadata import PackageNotFoundError, metadata, version
+except ImportError:
+    try:
+        # Python < 3.8 fallback — requires: pip install importlib_metadata
+        from importlib_metadata import PackageNotFoundError, metadata, version
+    except ImportError:
+        # importlib_metadata not yet installed in this interpreter (e.g. freshly
+        # adopted Python 3.7 before bootstrap has run).  Provide no-op stubs so
+        # the module loads; version/dependency detection will fall back to
+        # pyproject.toml or the hardcoded defaults below.
+        class PackageNotFoundError(Exception):  # type: ignore[no-redef]
+            pass
+
+        def metadata(name):  # type: ignore[misc]
+            raise PackageNotFoundError(name)
+
+        def version(name):  # type: ignore[misc]
+            raise PackageNotFoundError(name)
 
 # --- THIS IS THE FIX ---
 # This block makes the code compatible with both modern and older Python.
