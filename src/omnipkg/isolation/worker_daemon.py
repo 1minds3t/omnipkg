@@ -2249,6 +2249,7 @@ class WorkerPoolDaemon:
         Starts the daemon, handling platform differences and waiting logic.
         """
         # 🔥 DEBUG
+        os.makedirs(os.path.dirname(DAEMON_LOG_FILE), exist_ok=True)
         with open(DAEMON_LOG_FILE, "a", encoding="utf-8") as f:
             f.write(f"[DEBUG] WorkerPoolDaemon.start() called - daemonize={daemonize}, wait_for_ready={wait_for_ready}\n")
             f.write(f"[DEBUG] IS_WINDOWS={IS_WINDOWS}, is_running={self.is_running()}\n")
