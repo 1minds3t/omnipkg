@@ -3872,7 +3872,7 @@ class DaemonClient:
                 # Try to auto-start daemon
                 self._spawn_daemon()
                 
-                if self._wait_for_socket(timeout=5.0):
+                if self._wait_for_socket(timeout=30.0):
                     attempts = 0
                     self.auto_start = False
                     continue
