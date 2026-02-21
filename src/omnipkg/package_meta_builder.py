@@ -284,7 +284,10 @@ class omnipkgMetadataGatherer:
         If metadata is corrupt, attempts emergency repair before giving up.
         """
         try:
-            from importlib.metadata import PathDistribution
+            try:
+                from importlib.metadata import PathDistribution
+            except ImportError:
+                from importlib_metadata import PathDistribution
 
             dist = PathDistribution(dist_info_path)
 
@@ -464,7 +467,10 @@ class omnipkgMetadataGatherer:
                             continue
                         try:
                             # Must use PathDistribution for paths outside sys.path
-                            from importlib.metadata import PathDistribution
+                            try:
+                                from importlib.metadata import PathDistribution
+                            except ImportError:
+                                from importlib_metadata import PathDistribution
 
                             dist = PathDistribution(dist_info_path)
 
@@ -562,7 +568,10 @@ class omnipkgMetadataGatherer:
                     safe_print(f"         -> Checking {search_path}")
 
                 # Get all distributions from this specific path
-                from importlib.metadata import distributions
+                try:
+                    from importlib.metadata import distributions
+                except ImportError:
+                    from importlib_metadata import distributions
 
                 for dist in distributions(path=[str(search_path)]):
                     dist_name = dist.metadata.get("Name", "")
@@ -617,7 +626,10 @@ class omnipkgMetadataGatherer:
 
                         try:
                             # Use PathDistribution for isolation
-                            from importlib.metadata import PathDistribution
+                            try:
+                                from importlib.metadata import PathDistribution
+                            except ImportError:
+                                from importlib_metadata import PathDistribution
 
                             dist = PathDistribution(dist_info_path)
 
@@ -886,7 +898,10 @@ class omnipkgMetadataGatherer:
                 dist_info = list(bubble_path.glob("*.dist-info"))
                 if dist_info:
                     try:
-                        from importlib.metadata import PathDistribution
+                        try:
+                            from importlib.metadata import PathDistribution
+                        except ImportError:
+                            from importlib_metadata import PathDistribution
 
                         dist = PathDistribution(dist_info[0])
                         found_dists.append(dist)
@@ -903,7 +918,10 @@ class omnipkgMetadataGatherer:
                 dist_infos = list(expected_bubble.glob("*.dist-info"))
                 if dist_infos:
                     try:
-                        from importlib.metadata import PathDistribution
+                        try:
+                            from importlib.metadata import PathDistribution
+                        except ImportError:
+                            from importlib_metadata import PathDistribution
 
                         dist = PathDistribution(dist_infos[0])
                         found_dists.append(dist)
@@ -943,7 +961,10 @@ class omnipkgMetadataGatherer:
                         if verbose:
                             safe_print(_('   ✅ Found nested: {}').format(matches[0]))
                         try:
-                            from importlib.metadata import PathDistribution
+                            try:
+                                from importlib.metadata import PathDistribution
+                            except ImportError:
+                                from importlib_metadata import PathDistribution
 
                             dist = PathDistribution(matches[0])
                             found_dists.append(dist)
@@ -995,7 +1016,10 @@ class omnipkgMetadataGatherer:
                 dist_info = next(bubble_dir.glob("*.dist-info"), None)
                 if dist_info:
                     try:
-                        from importlib.metadata import PathDistribution
+                        try:
+                            from importlib.metadata import PathDistribution
+                        except ImportError:
+                            from importlib_metadata import PathDistribution
 
                         dist = PathDistribution(dist_info)
                         pkg_name = canonicalize_name(dist.metadata.get("Name", ""))
@@ -1579,7 +1603,10 @@ class omnipkgMetadataGatherer:
                 if self._emergency_heal_metadata(dist._path):
                     # Reload the distribution after healing
                     try:
-                        from importlib.metadata import PathDistribution
+                        try:
+                            from importlib.metadata import PathDistribution
+                        except ImportError:
+                            from importlib_metadata import PathDistribution
 
                         healed_dist = PathDistribution(dist._path)
                         if healed_dist.metadata.get("Name"):
@@ -1853,7 +1880,10 @@ class omnipkgMetadataGatherer:
             for dist_info in search_path.glob(f"{name_variant}-{version}*.dist-info"):
                 if dist_info.is_dir():
                     try:
-                        from importlib.metadata import PathDistribution
+                        try:
+                            from importlib.metadata import PathDistribution
+                        except ImportError:
+                            from importlib_metadata import PathDistribution
 
                         dist = PathDistribution(dist_info)
                         metadata_name = dist.metadata.get("Name", "")
