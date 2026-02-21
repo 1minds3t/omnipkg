@@ -53,115 +53,108 @@ jobs:
             done
         shell: bash
 
-      - name: Start daemon manually and capture output
+      - name: Start daemon
         run: |
-          echo "=== Starting daemon ==="
           omnipkg daemon start
-          echo "=== Daemon started ==="
           sleep 2
-          echo "=== Daemon log ==="
           find "${TMPDIR}" /tmp -name "omnipkg_daemon.log" 2>/dev/null \
-            | head -3 | while read f; do
-              echo "📄 $f"
-              cat "$f"
-            done
+            | head -3 | while read f; do echo "📄 $f"; cat "$f"; done
         shell: bash
 
-      - name: Spawn a single worker (Python 3.9) and capture crash
+      # ── DIAGNOSTIC: does the loader even work directly in 3.9? ──
+      - name: Direct loader test (Python 3.9)
+        continue-on-error: true
+        run: |
+          PYTHON39="/Library/Frameworks/Python.framework/Versions/3.11/.omnipkg/interpreters/cpython-3.9.23/bin/python3.9"
+          echo "=== pip dry-run ==="
+          $PYTHON39 -m pip install "rich==13.4.2" --dry-run -v 2>&1 || true
+          echo ""
+          echo "=== direct loader test ==="
+          $PYTHON39 - <<'EOF' 2>&1 || true
+          import sys
+          sys.path.insert(0, "src")
+          from omnipkg.loader import omnipkgLoader
+          with omnipkgLoader("rich==13.4.2", quiet=False):
+              import rich
+              print("rich version:", rich.__version__)
+          EOF
+        shell: bash
+
+      # ── WORKER TESTS: continue-on-error so we always get the dump ──
+      - name: Spawn worker (Python 3.9)
+        continue-on-error: true
         run: |
           python - <<'EOS'
           import sys
-          import os
           sys.path.insert(0, "src")
           from omnipkg.isolation.worker_daemon import DaemonClient
           from omnipkg.core import ConfigManager
           import traceback
-
           print("--- Test: Python 3.9 Worker ---")
-          try:
-              cm = ConfigManager()
-              # Explicitly resolve the interpreter path
-              python_exe = cm.get_interpreter_for_version("3.9")
-              print(f"🎯 Resolved Python 3.9: {python_exe}")
-              
-              if not python_exe:
-                  print("❌ Failed to resolve Python 3.9 interpreter")
-                  sys.exit(1)
-
-              client = DaemonClient()
-              # FIX: Use keyword arguments to ensure correct mapping
-              result = client.execute(
-                  spec="rich==13.4.2", 
-                  code="import rich; print(f'Rich version: {rich.__version__}')",
-                  python_exe=str(python_exe)
-              )
-              print(f"✅ Result: {result}")
-              
-              if not result.get("success"):
-                  print(f"❌ Worker reported failure: {result.get('error')}")
-                  sys.exit(1)
-                  
-          except Exception as e:
-              print(f"❌ Failed: {e}")
-              traceback.print_exc()
-              sys.exit(1)
+          cm = ConfigManager()
+          python_exe = cm.get_interpreter_for_version("3.9")
+          print(f"🎯 Resolved Python 3.9: {python_exe}")
+          client = DaemonClient()
+          result = client.execute(
+              spec="rich==13.4.2",
+              code="import rich; print(f'Rich version: {rich.__version__}')",
+              python_exe=str(python_exe)
+          )
+          print(f"Result: {result}")
+          if not result.get("success"):
+              print(f"❌ FAILED: {result.get('error', '')[:300]}")
+          else:
+              print("✅ SUCCESS")
           EOS
         shell: bash
 
-      - name: Spawn a single worker (Python 3.10) and capture crash
+      - name: Spawn worker (Python 3.10)
+        continue-on-error: true
         run: |
           python - <<'EOS'
           import sys
-          import os
           sys.path.insert(0, "src")
           from omnipkg.isolation.worker_daemon import DaemonClient
           from omnipkg.core import ConfigManager
           import traceback
-
           print("--- Test: Python 3.10 Worker ---")
-          try:
-              cm = ConfigManager()
-              python_exe = cm.get_interpreter_for_version("3.10")
-              print(f"🎯 Resolved Python 3.10: {python_exe}")
-              
-              if not python_exe:
-                  print("❌ Failed to resolve Python 3.10 interpreter")
-                  sys.exit(1)
-
-              client = DaemonClient()
-              result = client.execute(
-                  spec="rich==13.6.0", 
-                  code="import rich; print(f'Rich version: {rich.__version__}')",
-                  python_exe=str(python_exe)
-              )
-              print(f"✅ Result: {result}")
-              
-              if not result.get("success"):
-                  print(f"❌ Worker reported failure: {result.get('error')}")
-                  sys.exit(1)
-
-          except Exception as e:
-              print(f"❌ Failed: {e}")
-              traceback.print_exc()
-              sys.exit(1)
+          cm = ConfigManager()
+          python_exe = cm.get_interpreter_for_version("3.10")
+          print(f"🎯 Resolved Python 3.10: {python_exe}")
+          client = DaemonClient()
+          result = client.execute(
+              spec="rich==13.6.0",
+              code="import rich; print(f'Rich version: {rich.__version__}')",
+              python_exe=str(python_exe)
+          )
+          print(f"Result: {result}")
+          if not result.get("success"):
+              print(f"❌ FAILED: {result.get('error', '')[:300]}")
+          else:
+              print("✅ SUCCESS")
           EOS
         shell: bash
 
-      - name: Dump full daemon log
+      # ── ALWAYS RUNS: full dump ──
+      - name: Dump daemon log + worker stderr
         if: always()
         run: |
           echo "=== Full Daemon Log ==="
           find "${TMPDIR}" /tmp -name "omnipkg_daemon.log" 2>/dev/null \
-            | while read f; do
-              echo "📄 $f"
-              cat "$f"
-            done
+            | while read f; do echo "📄 $f"; cat "$f"; done
           echo ""
-          echo "=== Worker temp scripts ==="
-          find "${TMPDIR}" /tmp -name "*.py" -newer /tmp 2>/dev/null \
+          echo "=== Worker temp scripts (last 50 lines each) ==="
+          find "${TMPDIR}" /tmp -name "*_idle.py" 2>/dev/null \
             | head -5 | while read f; do
-              echo "📄 $f (last 30 lines):"
-              tail -30 "$f"
+              echo "📄 $f:"
+              tail -50 "$f"
               echo ""
             done
+          echo ""
+          echo "=== omnipkg bubble dirs for 3.9 ==="
+          PYTHON39="/Library/Frameworks/Python.framework/Versions/3.11/.omnipkg/interpreters/cpython-3.9.23"
+          find "$PYTHON39" -name ".omnipkg_versions" 2>/dev/null | head -3 | while read d; do
+            echo "📁 $d:"
+            ls -la "$d" 2>/dev/null || true
+          done
         shell: bash
