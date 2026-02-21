@@ -2,12 +2,10 @@ name: Omnipkg True First-Run Test (Windows)
 on:
   push:
     branches:
-      - development
-      - main
+      - development          # only runs on push to development
   pull_request:
     branches:
-      - development
-      - main
+      - development          # only runs for PRs targeting development
   workflow_dispatch:
     inputs:
       branch:
@@ -18,7 +16,7 @@ on:
         options:
           - development
           - main
-
+          
 jobs:
   true-first-run-test-windows:
     runs-on: windows-latest
