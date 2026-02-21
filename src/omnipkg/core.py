@@ -2262,7 +2262,6 @@ class ConfigManager:
             "uv_executable": "uv",
             "paths_to_index": self._get_bin_paths(),
             "language": self._get_system_lang_code(),
-            "enable_python_hotswap": True,
         }
 
     def get_actual_current_site_packages(self) -> Path:
@@ -2514,17 +2513,11 @@ class ConfigManager:
         # ============================================================================
         # CRITICAL: Auto-detect non-interactive environments
         # ============================================================================
-        is_docker = os.path.exists("/.dockerenv") or os.path.exists("/run/.containerenv")
-        no_tty = not sys.stdin.isatty()
-        forced_noninteractive = os.environ.get("OMNIPKG_NONINTERACTIVE")
-        in_ci = os.environ.get("CI")
-        
-        # WINDOWS: ALWAYS force non-interactive mode - input() is fundamentally broken
+        # WINDOWS: ALWAYS force non-interactive mode
         if platform.system() == "Windows":
             interactive = False
             safe_print(_("🪟 Windows detected - using non-interactive setup"))
-        # If ANY of these conditions are true, force non-interactive mode
-        elif interactive and (in_ci or forced_noninteractive or no_tty or is_docker):
+        elif interactive and not is_interactive_session():
             interactive = False
             safe_print(_("🤖 Non-interactive environment detected - using defaults"))
         
@@ -2756,10 +2749,6 @@ class ConfigManager:
                     or defaults["redis_port"]
                 )
 
-            hotswap_choice = (
-                input(_("Enable Python interpreter hotswapping? (y/n) [y]: ")).strip().lower()
-            )
-            final_config["enable_python_hotswap"] = hotswap_choice != "n"
         else:
             # Non-interactive: use all defaults
             safe_print(_("   ✅ Using default configuration (non-interactive mode)"))
@@ -2964,90 +2953,19 @@ class ConfigManager:
         return shims_dir
 
     def _write_interpreter_config(self, interpreter_path: Path, version: str) -> Optional[Path]:
-        """
-        Write a .omnipkg_config.json file next to the interpreter's executable.
-        This makes each 8pkg installation self-aware of which Python it belongs to.
-        
-        IMPORTANT: This creates a FULL config, not just metadata!
-        """
-        debug_mode = os.environ.get("OMNIPKG_DEBUG") == "1"
-        
-        # Get the bin directory where the interpreter lives
         bin_dir = interpreter_path.parent
-        
-        # Create config in the same directory
         config_path = bin_dir / ".omnipkg_config.json"
         
-        # Extract major.minor version
-        version_parts = version.split(".")
-        major_minor = f"{version_parts[0]}.{version_parts[1]}" if len(version_parts) >= 2 else version
-        
-        # Get paths for this specific Python
-        paths = self._get_paths_for_interpreter(str(interpreter_path))
-        
-        if not paths:
-            # Fallback to calculating paths manually
-            if os.name == "nt":
-                site_packages = bin_dir.parent / "Lib" / "site-packages"
-            else:
-                site_packages = bin_dir.parent / "lib" / f"python{major_minor}" / "site-packages"
-            
-            paths = {
-                "site_packages_path": str(site_packages),
-                "multiversion_base": str(site_packages / ".omnipkg_versions"),
-                "python_executable": str(interpreter_path.resolve()),
-            }
-        
-        # Create FULL config data (same structure as _get_sensible_defaults)
-        config_data = {
-            # Core paths
-            "python_executable": str(interpreter_path.resolve()),
-            "site_packages_path": paths.get("site_packages_path"),
-            "multiversion_base": paths.get("multiversion_base"),
-            
-            # Version info
+        # Get the canonical defaults, then override with interpreter-specific paths
+        config_data = self._get_sensible_defaults(python_exe_override=str(interpreter_path))
+        config_data.update({
             "python_version": version,
             "python_version_short": major_minor,
-            "preferred_python_version": major_minor,
-            
-            # Metadata
             "bin_directory": str(bin_dir.resolve()),
             "created_at": datetime.now().isoformat(),
             "managed_by_omnipkg": True,
             "venv_root": str(self.venv_path.resolve()),
-            
-            # Default settings (same as _get_sensible_defaults)
-            "install_strategy": "stable-main",
-            "redis_enabled": True,
-            "redis_host": "localhost",
-            "redis_port": 6379,
-            "redis_key_prefix": "omnipkg:pkg:",
-            "enable_python_hotswap": True,
-            "language": self._get_system_lang_code() if hasattr(self, '_get_system_lang_code') else "en",
-            "builder_script_path": str(Path(__file__).parent / "package_meta_builder.py"),
-            "uv_executable": "uv",
-            "paths_to_index": self._get_bin_paths() if hasattr(self, '_get_bin_paths') else [],
-            
-            # Python interpreters (registry reference)
-            # We must populate this with ALL known interpreters so the swapped context
-            # knows about its siblings.
-            "python_interpreters": self._get_all_interpreters_for_config(major_minor, interpreter_path),
-        }
-        
-        try:
-            config_path.parent.mkdir(parents=True, exist_ok=True)
-            with open(config_path, "w") as f:
-                json.dump(config_data, f, indent=2)
-            
-            if debug_mode:
-                safe_print(_('[DEBUG-CONFIG-WRITE] ✅ Wrote config to: {}').format(config_path), file=sys.stderr)
-            
-            return config_path
-        
-        except Exception as e:
-            if debug_mode:
-                safe_print(_('[DEBUG-CONFIG-WRITE] ❌ Failed to write config: {}').format(e), file=sys.stderr)
-            return None
+        })
 
     def _get_all_interpreters_for_config(self, current_version: str, current_path: Path) -> Dict[str, str]:
         """
