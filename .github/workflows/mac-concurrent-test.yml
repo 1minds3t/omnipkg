@@ -1,5 +1,4 @@
 name: "🍎 macOS - Omnipkg Demo Test (CI - No Redis)"
-
 on:
   push:
     branches: [ development ]
@@ -11,65 +10,94 @@ jobs:
   test:
     runs-on: macos-latest
     timeout-minutes: 30
-    
+    env:
+      PYTHONIOENCODING: "utf-8"
+      PYTHONUTF8: "1"
+      LANG: "en_US.UTF-8"
+      LC_ALL: "en_US.UTF-8"
+      OMNIPKG_NONINTERACTIVE: "1"
+      OMNIPKG_DEBUG: "1"
+      CI: "true"
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          path: src  # Clean path structure: /Users/runner/work/omnipkg/omnipkg/src
-      
-      - name: Set up Python (3.11)
+          path: src
+
+      - name: Set up Python 3.11
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      
-      # macOS-specific: Ensure UTF-8 locale is set
-      - name: Configure UTF-8 encoding (macOS)
-        run: |
-          echo "LANG=en_US.UTF-8" >> $GITHUB_ENV
-          echo "LC_ALL=en_US.UTF-8" >> $GITHUB_ENV
-          echo "PYTHONIOENCODING=utf-8" >> $GITHUB_ENV
-        shell: bash
-      
+
       - name: Install omnipkg
         run: |
           python -m pip install --upgrade pip
           pip install -e src
         shell: bash
-      
-      - name: Configure omnipkg for non-interactive use
+
+      # No manual config.json needed - OMNIPKG_NONINTERACTIVE handles it
+      - name: Verify omnipkg installed correctly
         run: |
-          CONFIG_DIR="$HOME/.config/omnipkg"
-          mkdir -p "$CONFIG_DIR"
-          
-          cat > "$CONFIG_DIR/config.json" << 'EOF'
-          {
-            "interactive": false,
-            "auto_confirm": true
-          }
-          EOF
-          
-          echo "✅ Omnipkg configured"
-          cat "$CONFIG_DIR/config.json"
-        shell: bash
-      
-      - name: Run Demo (Option 8 - Quantum Multiverse)
-        # Use direct ID '8' and --non-interactive to bypass the menu and safe_input defaults.
-        run: omnipkg demo 8 --non-interactive
+          omnipkg --version || true
+          omnipkg status
         shell: bash
         working-directory: src
-      
-      - name: Run Demo (Option 8 - Quantum Multiverse - Second Run)
-        run: omnipkg demo 8 --non-interactive
+
+      - name: Run Demo - Run 1
+        run: |
+          echo "=== Demo Run 1 ===" 
+          omnipkg demo 8 --non-interactive
+          echo "=== Run 1 complete ==="
         shell: bash
         working-directory: src
-      
-      - name: Run Demo (Option 8 - Quantum Multiverse - Third Run)
-        run: omnipkg demo 8 --non-interactive
+
+      - name: Run Demo - Run 2 (warm workers)
+        run: |
+          echo "=== Demo Run 2 ==="
+          omnipkg demo 8 --non-interactive
+          echo "=== Run 2 complete ==="
         shell: bash
         working-directory: src
-      
-      # Optional: Display system info for debugging
+
+      - name: Run Demo - Run 3 (warm workers)
+        run: |
+          echo "=== Demo Run 3 ==="
+          omnipkg demo 8 --non-interactive
+          echo "=== Run 3 complete ==="
+        shell: bash
+        working-directory: src
+
+      - name: Display daemon log
+        if: always()
+        run: |
+          echo "=== Omnipkg Daemon Log ==="
+          # Find wherever DAEMON_LOG_FILE points
+          LOG_CANDIDATES=(
+            "/tmp/omnipkg_daemon.log"
+            "$HOME/.config/omnipkg/daemon.log"
+            "/tmp/omnipkg/daemon.log"
+          )
+          FOUND=false
+          for log in "${LOG_CANDIDATES[@]}"; do
+            if [ -f "$log" ]; then
+              echo "📄 Found log at: $log"
+              echo "--- Last 200 lines ---"
+              tail -200 "$log"
+              FOUND=true
+            fi
+          done
+          if [ "$FOUND" = false ]; then
+            echo "⚠️  No daemon log found. Searched:"
+            for log in "${LOG_CANDIDATES[@]}"; do
+              echo "   - $log"
+            done
+            # Try to find it
+            find /tmp -name "*.log" -newer /tmp 2>/dev/null | head -10 || true
+            find $HOME -name "*omnipkg*log*" 2>/dev/null | head -10 || true
+          fi
+        shell: bash
+
       - name: Display system information
         if: always()
         run: |
@@ -82,4 +110,15 @@ jobs:
           echo ""
           echo "=== Omnipkg Installation ==="
           pip show omnipkg
+          echo ""
+          echo "=== Omnipkg Interpreter Registry ==="
+          # Show what interpreters omnipkg knows about
+          find / -name "registry.json" -path "*omnipkg*" 2>/dev/null | head -5 | while read f; do
+            echo "📄 $f:"
+            cat "$f"
+            echo ""
+          done || true
+          echo ""
+          echo "=== Temp Worker Scripts ==="
+          ls /tmp/*.py 2>/dev/null || echo "No temp scripts found"
         shell: bash
