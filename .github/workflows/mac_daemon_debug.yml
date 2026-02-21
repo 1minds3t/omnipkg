@@ -1,0 +1,123 @@
+name: "🍎 macOS - Daemon Debug"
+on:
+  workflow_dispatch:
+
+jobs:
+  daemon-debug:
+    runs-on: macos-latest
+    timeout-minutes: 20
+    env:
+      PYTHONIOENCODING: "utf-8"
+      PYTHONUTF8: "1"
+      OMNIPKG_NONINTERACTIVE: "1"
+      OMNIPKG_DEBUG: "1"
+      CI: "true"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          path: src
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install omnipkg
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e src
+        shell: bash
+
+      - name: Adopt Python 3.9
+        run: omnipkg python adopt 3.9
+        shell: bash
+
+      - name: Adopt Python 3.10
+        run: omnipkg python adopt 3.10
+        shell: bash
+
+      - name: Show interpreter registry
+        run: |
+          echo "=== TMPDIR ==="
+          echo "$TMPDIR"
+          echo ""
+          echo "=== Registry ==="
+          find "${TMPDIR}" "$HOME" /Library/Frameworks \
+            -name "registry.json" -path "*omnipkg*" 2>/dev/null \
+            | head -5 | while read f; do
+              echo "📄 $f:"
+              cat "$f"
+              echo ""
+            done
+        shell: bash
+
+      - name: Start daemon manually and capture output
+        run: |
+          echo "=== Starting daemon ==="
+          omnipkg daemon start
+          echo "=== Daemon started ==="
+          sleep 2
+          echo "=== Daemon log ==="
+          find "${TMPDIR}" /tmp -name "omnipkg_daemon.log" 2>/dev/null \
+            | head -3 | while read f; do
+              echo "📄 $f"
+              cat "$f"
+            done
+        shell: bash
+
+      - name: Spawn a single worker (Python 3.9) and capture crash
+        run: |
+          python - <<'EOF'
+          import sys
+          sys.path.insert(0, "src")
+          from omnipkg.isolation.worker_daemon import DaemonClient
+          import traceback
+
+          client = DaemonClient()
+          try:
+              result = client.execute("rich==13.4.2", "3.9", "import rich; print(rich.__version__)")
+              print(f"✅ Result: {result}")
+          except Exception as e:
+              print(f"❌ Failed: {e}")
+              traceback.print_exc()
+          EOF
+        shell: bash
+
+      - name: Spawn a single worker (Python 3.10) and capture crash
+        run: |
+          python - <<'EOF'
+          import sys
+          sys.path.insert(0, "src")
+          from omnipkg.isolation.worker_daemon import DaemonClient
+          import traceback
+
+          client = DaemonClient()
+          try:
+              result = client.execute("rich==13.6.0", "3.10", "import rich; print(rich.__version__)")
+              print(f"✅ Result: {result}")
+          except Exception as e:
+              print(f"❌ Failed: {e}")
+              traceback.print_exc()
+          EOF
+        shell: bash
+
+      - name: Dump full daemon log
+        if: always()
+        run: |
+          echo "=== Full Daemon Log ==="
+          find "${TMPDIR}" /tmp -name "omnipkg_daemon.log" 2>/dev/null \
+            | while read f; do
+              echo "📄 $f"
+              cat "$f"
+            done
+          echo ""
+          echo "=== Worker temp scripts ==="
+          find "${TMPDIR}" /tmp -name "*.py" -newer /tmp 2>/dev/null \
+            | head -5 | while read f; do
+              echo "📄 $f (last 30 lines):"
+              tail -30 "$f"
+              echo ""
+            done
+        shell: bash
