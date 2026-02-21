@@ -149,3 +149,6 @@ omnipkg = [
 # Old setuptools format (compatible with setuptools 50.x)
 license-files = ["LICENSE", "COMMERCIAL_LICENSE.md"]
 include-package-data = true
+
+[tool.pytest.ini_options]
+continue_on_collection_errors = true

@@ -17,8 +17,10 @@ import concurrent.futures
 import hashlib
 try:
     import importlib.metadata as importlib_metadata
+    from importlib.metadata import PathDistribution, distributions
 except ImportError:
     import importlib_metadata
+    from importlib_metadata import PathDistribution, distributions
 import json
 import os
 import re
@@ -284,10 +286,6 @@ class omnipkgMetadataGatherer:
         If metadata is corrupt, attempts emergency repair before giving up.
         """
         try:
-            try:
-                from importlib.metadata import PathDistribution
-            except ImportError:
-                from importlib_metadata import PathDistribution
 
             dist = PathDistribution(dist_info_path)
 
@@ -467,10 +465,6 @@ class omnipkgMetadataGatherer:
                             continue
                         try:
                             # Must use PathDistribution for paths outside sys.path
-                            try:
-                                from importlib.metadata import PathDistribution
-                            except ImportError:
-                                from importlib_metadata import PathDistribution
 
                             dist = PathDistribution(dist_info_path)
 
@@ -568,10 +562,6 @@ class omnipkgMetadataGatherer:
                     safe_print(f"         -> Checking {search_path}")
 
                 # Get all distributions from this specific path
-                try:
-                    from importlib.metadata import distributions
-                except ImportError:
-                    from importlib_metadata import distributions
 
                 for dist in distributions(path=[str(search_path)]):
                     dist_name = dist.metadata.get("Name", "")
@@ -626,10 +616,6 @@ class omnipkgMetadataGatherer:
 
                         try:
                             # Use PathDistribution for isolation
-                            try:
-                                from importlib.metadata import PathDistribution
-                            except ImportError:
-                                from importlib_metadata import PathDistribution
 
                             dist = PathDistribution(dist_info_path)
 
@@ -898,10 +884,6 @@ class omnipkgMetadataGatherer:
                 dist_info = list(bubble_path.glob("*.dist-info"))
                 if dist_info:
                     try:
-                        try:
-                            from importlib.metadata import PathDistribution
-                        except ImportError:
-                            from importlib_metadata import PathDistribution
 
                         dist = PathDistribution(dist_info[0])
                         found_dists.append(dist)
@@ -918,10 +900,6 @@ class omnipkgMetadataGatherer:
                 dist_infos = list(expected_bubble.glob("*.dist-info"))
                 if dist_infos:
                     try:
-                        try:
-                            from importlib.metadata import PathDistribution
-                        except ImportError:
-                            from importlib_metadata import PathDistribution
 
                         dist = PathDistribution(dist_infos[0])
                         found_dists.append(dist)
@@ -961,10 +939,6 @@ class omnipkgMetadataGatherer:
                         if verbose:
                             safe_print(_('   ✅ Found nested: {}').format(matches[0]))
                         try:
-                            try:
-                                from importlib.metadata import PathDistribution
-                            except ImportError:
-                                from importlib_metadata import PathDistribution
 
                             dist = PathDistribution(matches[0])
                             found_dists.append(dist)
@@ -1016,10 +990,6 @@ class omnipkgMetadataGatherer:
                 dist_info = next(bubble_dir.glob("*.dist-info"), None)
                 if dist_info:
                     try:
-                        try:
-                            from importlib.metadata import PathDistribution
-                        except ImportError:
-                            from importlib_metadata import PathDistribution
 
                         dist = PathDistribution(dist_info)
                         pkg_name = canonicalize_name(dist.metadata.get("Name", ""))
@@ -1297,35 +1267,15 @@ class omnipkgMetadataGatherer:
                     "--json",
                 ]
                 safe_print("   🔍 Running safety vulnerability scan...", flush=True)
-                is_windows = platform.system() == "Windows"
-                creationflags = subprocess.CREATE_NO_WINDOW if is_windows else 0
-                # WINDOWS FIX: Use Popen+communicate() — subprocess.run(capture_output=True)
-                # deadlocks on Windows when stdout/stderr pipes fill before being drained.
-                proc = subprocess.Popen(
-                    cmd,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
+                creationflags = subprocess.CREATE_NO_WINDOW if platform.system() == "Windows" else 0
+                result = subprocess.run(
+                    cmd, 
+                    capture_output=True,
+                    text=True,
+                    encoding="utf-8",
+                    errors="replace",
+                    timeout=180,
                     creationflags=creationflags,
-                    env={**os.environ, "PYTHONIOENCODING": "utf-8", "PYTHONUTF8": "1"},
-                )
-                try:
-                    raw_stdout, raw_stderr = proc.communicate(timeout=180)
-                except subprocess.TimeoutExpired:
-                    proc.kill()
-                    proc.communicate()
-                    safe_print("   ⚠️ Safety scan timed out after 180s, skipping.")
-                    self.security_report = {}
-                    return
-                # Build a result-like object so downstream code is unchanged
-                class _Result:
-                    def __init__(self, stdout, stderr, returncode):
-                        self.stdout = stdout
-                        self.stderr = stderr
-                        self.returncode = returncode
-                result = _Result(
-                    stdout=raw_stdout.decode("utf-8", errors="replace"),
-                    stderr=raw_stderr.decode("utf-8", errors="replace"),
-                    returncode=proc.returncode,
                 )
                 safe_print("   ✓ Scan complete", flush=True)
 
@@ -1623,10 +1573,6 @@ class omnipkgMetadataGatherer:
                 if self._emergency_heal_metadata(dist._path):
                     # Reload the distribution after healing
                     try:
-                        try:
-                            from importlib.metadata import PathDistribution
-                        except ImportError:
-                            from importlib_metadata import PathDistribution
 
                         healed_dist = PathDistribution(dist._path)
                         if healed_dist.metadata.get("Name"):
@@ -1900,10 +1846,6 @@ class omnipkgMetadataGatherer:
             for dist_info in search_path.glob(f"{name_variant}-{version}*.dist-info"):
                 if dist_info.is_dir():
                     try:
-                        try:
-                            from importlib.metadata import PathDistribution
-                        except ImportError:
-                            from importlib_metadata import PathDistribution
 
                         dist = PathDistribution(dist_info)
                         metadata_name = dist.metadata.get("Name", "")

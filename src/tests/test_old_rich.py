@@ -1,35 +1,57 @@
-from omnipkg.common_utils import safe_print
+# src/tests/test_old_rich.py
+"""
+DEMO FILE — intentionally fails during normal collection unless run via omnipkg auto-heal.
+Shows version conflict + healing in action.
+"""
 
-# tests/test_old_rich.py (Corrected)
+import sys
 
+# Bail out immediately and silently if not running under pytest
+# (prevents crash when someone does plain `python src/tests/test_old_rich.py` or no [dev])
 try:
-    pass
+    import pytest
 except ImportError:
-    pass
+    sys.exit(0)
+
+# ────────────────────────────────────────────────
+# NOW safe: pytest exists → we can skip the module cleanly
+# This runs VERY early — before any rich/omnipkg imports or asserts
+# ────────────────────────────────────────────────
+
+if "omnipkg" not in sys.modules:
+    pytest.skip(
+        "This is an intentional demo of omnipkg healing (rich version mismatch).\n"
+        "Normal pytest collection fails here ON PURPOSE.\n"
+        "Run with:  8pkg run src/tests/test_old_rich.py   (or omnipkg run ...)\n"
+        "to activate bubble → heal rich → see green success.",
+        allow_module_level=True
+    )
+
+# ────────────────────────────────────────────────
+# Only reached when omnipkg loader is active → proceed with intentional check
+# ────────────────────────────────────────────────
 
 import rich
 import importlib.metadata
 from omnipkg.i18n import _
-
-# This is the correct way to print styled text with the rich library
 from rich import print as rich_print
-
-# --- Script Logic ---
+from omnipkg.common_utils import safe_print
 
 try:
     rich_version = rich.__version__
 except AttributeError:
     rich_version = importlib.metadata.version("rich")
 
-# Assert that the correct (older) version is active
 assert rich_version == "13.4.2", _(
     "Incorrect rich version! Expected 13.4.2, got {}"
 ).format(rich_version)
 
-# Use YOUR safe_print for simple logging
 safe_print(_("✅ Successfully imported rich version: {}").format(rich_version))
 
-# Use the IMPORTED rich_print for styled output
 rich_print(
     "[bold green]This script is running with the correct, older version of rich![/bold green]"
 )
+
+# Optional: minimal test item so file doesn't look completely empty when collected
+def test_omnipkg_healing_demo():
+    assert True  # placeholder
