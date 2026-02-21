@@ -1297,15 +1297,35 @@ class omnipkgMetadataGatherer:
                     "--json",
                 ]
                 safe_print("   🔍 Running safety vulnerability scan...", flush=True)
-                creationflags = subprocess.CREATE_NO_WINDOW if platform.system() == "Windows" else 0
-                result = subprocess.run(
-                    cmd, 
-                    capture_output=True,
-                    text=True,
-                    encoding="utf-8",
-                    errors="replace",
-                    timeout=180,
+                is_windows = platform.system() == "Windows"
+                creationflags = subprocess.CREATE_NO_WINDOW if is_windows else 0
+                # WINDOWS FIX: Use Popen+communicate() — subprocess.run(capture_output=True)
+                # deadlocks on Windows when stdout/stderr pipes fill before being drained.
+                proc = subprocess.Popen(
+                    cmd,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
                     creationflags=creationflags,
+                    env={**os.environ, "PYTHONIOENCODING": "utf-8", "PYTHONUTF8": "1"},
+                )
+                try:
+                    raw_stdout, raw_stderr = proc.communicate(timeout=180)
+                except subprocess.TimeoutExpired:
+                    proc.kill()
+                    proc.communicate()
+                    safe_print("   ⚠️ Safety scan timed out after 180s, skipping.")
+                    self.security_report = {}
+                    return
+                # Build a result-like object so downstream code is unchanged
+                class _Result:
+                    def __init__(self, stdout, stderr, returncode):
+                        self.stdout = stdout
+                        self.stderr = stderr
+                        self.returncode = returncode
+                result = _Result(
+                    stdout=raw_stdout.decode("utf-8", errors="replace"),
+                    stderr=raw_stderr.decode("utf-8", errors="replace"),
+                    returncode=proc.returncode,
                 )
                 safe_print("   ✓ Scan complete", flush=True)
 
