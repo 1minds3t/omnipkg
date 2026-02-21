@@ -1825,17 +1825,38 @@ class ConfigManager:
             safe_print(_("   - URL: {}").format(url))
             try:
                 safe_print(_("   - Attempting download..."))
-                urllib.request.urlretrieve(url, archive_path)
-                if not archive_path.exists():
-                    raise OSError(_("Download failed: file does not exist"))
-                file_size = archive_path.stat().st_size
-                if file_size < 1000000:
-                    raise OSError(
-                        _(
-                            "Downloaded file is too small ({} bytes), likely incomplete or invalid"
-                        ).format(file_size)
-                    )
-                safe_print(_("✅ Downloaded {} bytes").format(file_size))
+                
+                max_retries = 3
+                last_error = None
+                for attempt in range(max_retries):
+                    try:
+                        if attempt > 0:
+                            wait = 2 ** attempt  # 2s, 4s
+                            safe_print(f"   - Retry {attempt}/{max_retries - 1} after {wait}s...")
+                            time.sleep(wait)
+                        urllib.request.urlretrieve(url, archive_path)
+                        if not archive_path.exists():
+                            raise OSError(_("Download failed: file does not exist"))
+                        file_size = archive_path.stat().st_size
+                        if file_size < 1000000:
+                            raise OSError(_("Downloaded file is too small ({} bytes), likely incomplete or invalid").format(file_size))
+                        safe_print(_("✅ Downloaded {} bytes").format(file_size))
+                        break  # success
+                    except urllib.error.HTTPError as e:
+                        last_error = e
+                        if e.code in (502, 503, 504):
+                            safe_print(f"   - ⚠️  Transient HTTP {e.code}, will retry...")
+                            continue
+                        raise OSError(_("HTTP error downloading Python: {} - {}").format(e.code, e.reason))
+                    except OSError:
+                        raise  # don't retry our own validation errors
+                    except Exception as e:
+                        last_error = e
+                        safe_print(f"   - ⚠️  Download error: {e}, will retry...")
+                        continue
+                else:
+                    raise OSError(_("Failed to download after {} attempts: {}").format(max_retries, last_error))
+
                 safe_print(_("   - Extracting archive..."))
 
                 extract_path = Path(temp_dir) / "extracted"
