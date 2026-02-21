@@ -3038,10 +3038,16 @@ def _run_script_logic(
         start_time_ns = time.perf_counter_ns()
 
         # 1. Run interactively attached to terminal
+        # In non-interactive mode, don't inherit stdin — use DEVNULL
+        _is_noninteractive = (
+            not is_interactive_session()
+            or os.environ.get("OMNIPKG_NONINTERACTIVE")
+        )
+
         try:
             direct_process = subprocess.Popen(
                 initial_cmd,
-                stdin=sys.stdin,
+                stdin=subprocess.DEVNULL if _is_noninteractive else sys.stdin,
                 stdout=sys.stdout,
                 stderr=sys.stderr,
                 cwd=Path.cwd(),
@@ -3052,9 +3058,10 @@ def _run_script_logic(
             if initial_cmd[0] == "uv":
                 safe_print("⚠️  'uv' not found, falling back to direct python execution...")
                 initial_cmd = [python_exe] + safe_cmd_args
+                
                 direct_process = subprocess.Popen(
                     initial_cmd,
-                    stdin=sys.stdin,
+                    stdin=subprocess.DEVNULL if _is_noninteractive else sys.stdin,
                     stdout=sys.stdout,
                     stderr=sys.stderr,
                     cwd=Path.cwd(),
