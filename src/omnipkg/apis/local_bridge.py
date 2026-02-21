@@ -11,6 +11,55 @@ import re
 from pathlib import Path
 from contextlib import closing
 from omnipkg.i18n import _
+from omnipkg.common_utils import safe_print
+try:
+    from .common_utils import safe_print
+except ImportError:
+    pass
+
+
+def _open_browser_silently(url: str):
+    """
+    Open a URL in the default browser without letting Chrome/Chromium
+    spew GPU errors and session noise into the terminal.
+    Launches detached with stdout+stderr redirected to /dev/null.
+    Falls back to stdlib webbrowser on Windows or if all else fails.
+    """
+    import shutil as _shutil
+    if os.name == 'nt':
+        import webbrowser
+        webbrowser.open(url)
+        return
+
+    browsers = [
+        os.environ.get('BROWSER'),
+        'xdg-open',
+        'open',
+        'google-chrome', 'google-chrome-stable',
+        'chromium', 'chromium-browser',
+        'firefox',
+    ]
+    with open(os.devnull, 'wb') as devnull:
+        for browser in browsers:
+            if not browser:
+                continue
+            try:
+                if not _shutil.which(browser):
+                    continue
+                subprocess.Popen(
+                    [browser, url],
+                    stdout=devnull,
+                    stderr=devnull,
+                    start_new_session=True,
+                    close_fds=True,
+                )
+                return
+            except Exception:
+                continue
+
+    import webbrowser
+    webbrowser.open(url)
+
 
 # --- Dependency Checks ---
 try:
@@ -621,7 +670,14 @@ class WebBridgeManager:
                 safe_print(_('📊 PID: {}').format(process.pid))
                 safe_print(_('🌍 Dashboard: {}').format(url))
                 print("="*60)
-                webbrowser.open(url)
+                safe_print(_(''))
+                safe_print(_('⚠️  BROWSER PERMISSION REQUIRED'))
+                safe_print(_('   Chrome will show a one-time prompt:'))
+                safe_print(_('   "Allow access to local network resources?"'))
+                safe_print(_('   → Click "Allow" or "Always allow" to continue'))
+                safe_print(_('   → If you accidentally clicked Block, run: 8pkg web fix-permission'))
+                safe_print(_(''))
+                _open_browser_silently(url)
                 return 0
             else:
                 safe_print(_('❌ Failed to start. Check logs.'))
@@ -737,6 +793,54 @@ class WebBridgeManager:
                     all_lines = f.readlines()
                     print("".join(all_lines[-lines:]))
             return 0
+
+    def fix_permission(self):
+        """Guide the user through resolving the Chrome Local Network Access permission."""
+        safe_print(_(''))
+        safe_print(_('=' * 60))
+        safe_print(_('🔒 CHROME LOCAL NETWORK ACCESS PERMISSION'))
+        safe_print(_('=' * 60))
+        safe_print(_(''))
+        safe_print(_('Chrome 138+ requires sites to ask permission before'))
+        safe_print(_('connecting to localhost or local network services.'))
+        safe_print(_('This is a Chrome security feature — it cannot be bypassed.'))
+        safe_print(_(''))
+        safe_print(_('--- OPTION 1: Reset a blocked permission (quickest) -----'))
+        safe_print(_(''))
+        safe_print(_('  1. Open Chrome and go to:'))
+        safe_print(_('     chrome://settings/content/insecureContent'))
+        safe_print(_(''))
+        safe_print(_('  2. Under "Not allowed to show insecure content",'))
+        safe_print(_('     find: https://1minds3t.echo-universe.ts.net'))
+        safe_print(_('     Click the ✕ to remove the block.'))
+        safe_print(_(''))
+        safe_print(_('  3. Restart: 8pkg web stop && 8pkg web start'))
+        safe_print(_('     Then click "Allow" when the prompt appears.'))
+        safe_print(_(''))
+        safe_print(_('--- OPTION 2: Lock it in permanently (recommended) ------'))
+        safe_print(_(''))
+        safe_print(_('  When the prompt appears, click "Always allow"'))
+        safe_print(_('  Chrome will never ask again for this site.'))
+        safe_print(_(''))
+        safe_print(_('--- OPTION 3: Managed/enterprise Chrome -----------------'))
+        safe_print(_(''))
+        safe_print(_('  If your Chrome is managed (work/school), ask your IT'))
+        safe_print(_('  admin to add this to the Chrome policy:'))
+        safe_print(_(''))
+        safe_print(_('    LocalNetworkAccessAllowedForUrls:'))
+        safe_print(_('      - https://1minds3t.echo-universe.ts.net'))
+        safe_print(_('    LocalNetworkAccessRestrictionsEnabled: true'))
+        safe_print(_(''))
+        safe_print(_('  This pre-grants the permission and skips the prompt.'))
+        safe_print(_(''))
+        safe_print(_('--- NOT USING CHROME? ------------------------------------'))
+        safe_print(_(''))
+        safe_print(_('  Firefox: no prompt needed, localhost access works by default.'))
+        safe_print(_('  Safari: similar prompt, allow it when asked.'))
+        safe_print(_(''))
+        safe_print(_('=' * 60))
+        safe_print(_(''))
+        return 0
 
     def is_running(self):
         """Check if web bridge is running."""
