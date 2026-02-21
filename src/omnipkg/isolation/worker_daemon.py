@@ -599,7 +599,7 @@ try:
     loaders = []
     
     for s in specs:
-        l = omnipkgLoader(s, isolation_mode='overlay', quiet=True)
+        l = omnipkgLoader(s, isolation_mode='overlay', quiet=False)
         l.__enter__()
         loaders.append(l)
 
@@ -1825,7 +1825,7 @@ class PersistentWorker:
             # Import here to avoid circular dependency
             from omnipkg.loader import omnipkgLoader
 
-            loader = omnipkgLoader(package_spec=self.package_spec, quiet=True)
+            loader = omnipkgLoader(package_spec=self.package_spec, quiet=False)
             multiversion_base = loader.multiversion_base
         except Exception:
             import site
