@@ -97,7 +97,7 @@ jobs:
           client = DaemonClient()
           result = client.execute(
               spec="rich==13.4.2",
-              code="import rich; print(f'Rich version: {rich.__version__}')",
+              code="import importlib.metadata; print(importlib.metadata.version('rich'))",
               python_exe=str(python_exe)
           )
           print(f"Result: {result}")
@@ -124,7 +124,7 @@ jobs:
           client = DaemonClient()
           result = client.execute(
               spec="rich==13.6.0",
-              code="import rich; print(f'Rich version: {rich.__version__}')",
+              code="import importlib.metadata; print(importlib.metadata.version('rich'))",
               python_exe=str(python_exe)
           )
           print(f"Result: {result}")
