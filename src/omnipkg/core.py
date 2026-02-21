@@ -292,24 +292,21 @@ class ConfigManager:
     """
 
     def __init__(self, suppress_init_messages=False):
-        """
-        Initializes the ConfigManager with per-interpreter configuration support.
-        """
         self.venv_path = self._get_venv_root()
         
-        # Generate env_id (UNCHANGED FORMAT - just venv hash, no python version)
         env_id_override = os.environ.get("OMNIPKG_ENV_ID_OVERRIDE")
         if env_id_override:
             self.env_id = env_id_override
         else:
             self.env_id = hashlib.md5(str(self.venv_path.resolve()).encode()).hexdigest()[:8]
         
-        # NEW: Per-Python config path
-        self.config_dir = Path.home() / ".config" / "omnipkg" # Fallback dir
-        self.config_path = self._get_our_config_path()
+        self.config_dir = Path.home() / ".config" / "omnipkg"
         
+        # ✅ MUST be before _get_our_config_path() which can trigger _find_python_interpreters()
         self._python_cache = {}
         self._preferred_version = (3, 11)
+        
+        self.config_path = self._get_our_config_path()
         
         # Load config (UPDATED to handle flat structure)
         self.config = self._load_or_create_config(interactive=not suppress_init_messages)
