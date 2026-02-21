@@ -279,14 +279,6 @@ def _get_core_dependencies(target_python_version: str = None) -> set:
         return minimal_deps
 
 class ConfigManager:
-    def _get_interpreter_dest_path(self, p):
-        return p
-
-    def _install_python311_in_venv(self):
-        return None
-
-    def _existing_adopt_logic(self):
-        return None
 
     logger = None
     config = {}
@@ -579,103 +571,6 @@ class ConfigManager:
                 json.dump(full_config, f, indent=4)
         except (IOError, json.JSONDecodeError) as e:
             safe_print(_("   ⚠️  Could not reset setup flag in config file: {}").format(e))
-
-    def _trigger_hotswap_relaunch(self):
-        """
-        Handles the user interaction and download process for an environment that needs to be upgraded.
-        This function is self-contained and does not depend on self.config. It ends with an execv call.
-        """
-        safe_print("\n" + "=" * 60)
-        safe_print(_("  🚀 Environment Hotswap to a Managed Python 3.11"))
-        safe_print("=" * 60)
-        safe_print(
-            f"omnipkg works best with Python 3.11. Your version is {sys.version_info.major}.{sys.version_info.minor}."
-        )
-        safe_print(
-            _("\nTo ensure everything 'just works', omnipkg will now perform a one-time setup:")
-        )
-        safe_print(_("  1. Download a self-contained Python 3.11 into your virtual environment."))
-        safe_print("  2. Relaunch seamlessly to continue your command.")
-        try:
-            choice = input("\nDo you want to proceed with the automatic setup? (y/n): ")
-            if choice.lower() == "y":
-                self._install_python311_in_venv()
-            else:
-                safe_print("🛑 Setup cancelled. Aborting, as a managed Python 3.11 is required.")
-                sys.exit(1)
-        except (KeyboardInterrupt, EOFError):
-            safe_print(_("\n🛑 Operation cancelled. Aborting."))
-            sys.exit(1)
-
-    def _has_suitable_python311(self) -> bool:
-        """
-        Comprehensive check for existing suitable Python 3.11 installations.
-        Returns True if we already have a usable Python 3.11 setup.
-        """
-        if sys.version_info[:2] == (3, 11) and sys.executable.startswith(str(self.venv_path)):
-            return True
-        registry_path = self.venv_path / ".omnipkg" / "interpreters" / "registry.json"
-        if registry_path.exists():
-            try:
-                with open(registry_path, "r") as f:
-                    registry = json.load(f)
-                python_311_path = registry.get("interpreters", {}).get("3.11")
-                if python_311_path and Path(python_311_path).exists():
-                    try:
-                        result = subprocess.run(
-                            [
-                                python_311_path,
-                                "-c",
-                                "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')",
-                            ],
-                            capture_output=True,
-                            text=True,
-                            timeout=5,
-                        )
-                        if result.returncode == 0 and result.stdout.strip() == "3.11":
-                            return True
-                    except:
-                        pass
-            except:
-                pass
-        expected_exe_path = self._get_interpreter_dest_path(self.venv_path) / (
-            "python.exe" if platform.system() == "Windows" else "bin/python3.11"
-        )
-        if expected_exe_path.exists():
-            try:
-                result = subprocess.run(
-                    [str(expected_exe_path), "--version"],
-                    capture_output=True,
-                    text=True,
-                    timeout=5,
-                )
-                if result.returncode == 0 and "Python 3.11" in result.stdout:
-                    return True
-            except:
-                pass
-        bin_dir = self.venv_path / ("Scripts" if platform.system() == "Windows" else "bin")
-        if bin_dir.exists():
-            for possible_name in ["python3.11", "python"]:
-                exe_path = bin_dir / (
-                    f"{possible_name}.exe" if platform.system() == "Windows" else possible_name
-                )
-                if exe_path.exists():
-                    try:
-                        result = subprocess.run(
-                            [
-                                str(exe_path),
-                                "-c",
-                                "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')",
-                            ],
-                            capture_output=True,
-                            text=True,
-                            timeout=5,
-                        )
-                        if result.returncode == 0 and result.stdout.strip() == "3.11":
-                            return True
-                    except:
-                        pass
-        return False
 
     def _align_config_to_interpreter(self, python_exe_path_str: str):
         """
@@ -1188,17 +1083,6 @@ class ConfigManager:
             safe_print("   🔓 Released registry write lock")
             if platform.system() != "Windows":
                 self._create_version_symlinks()
-
-    def _find_existing_python311(self) -> Optional[Path]:
-        """Checks if a managed Python 3.11 interpreter already exists."""
-        venv_path = Path(sys.prefix)
-        expected_exe_path = self._get_interpreter_dest_path(venv_path) / (
-            "python.exe" if platform.system() == "windows" else "bin/python3.11"
-        )
-        if expected_exe_path.exists() and expected_exe_path.is_file():
-            safe_print(_("✅ Found existing Python 3.11 interpreter."))
-            return expected_exe_path
-        return None
 
     def get_interpreter_for_version(self, version: str) -> Optional[Path]:
         """
@@ -9617,7 +9501,10 @@ class omnipkg:
             command_list = full_command  # shell=True will be used for this simple case
 
         try:
-            # --- FIX: Adjust prompt text for clarity ---
+            if not is_interactive_session():
+                safe_print(_("\n   Skipping raw data view (non-interactive mode)."))
+                return
+
             prompt_text = _("\n   Do you want to run the formatted view command now? (y/N): ")
             if not is_using_redis:
                 prompt_text = _(
