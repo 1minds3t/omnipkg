@@ -108,6 +108,21 @@ jobs:
           EOS
         shell: bash
 
+      - name: Test direct install in Python 3.9
+        run: |
+          PYTHON39="/Library/Frameworks/Python.framework/Versions/3.11/.omnipkg/interpreters/cpython-3.9.23/bin/python3.9"
+          $PYTHON39 -m pip install "rich==13.4.2" --dry-run -v
+          # Also test if omnipkg loader works directly
+          $PYTHON39 -c "
+          import sys
+          sys.path.insert(0, 'src')
+          from omnipkg.loader import omnipkgLoader
+          with omnipkgLoader('rich==13.4.2', quiet=False):
+              import rich
+              print('rich version:', rich.__version__)
+          "
+        shell: bash
+
       - name: Spawn a single worker (Python 3.10) and capture crash
         run: |
           python - <<'EOS'
