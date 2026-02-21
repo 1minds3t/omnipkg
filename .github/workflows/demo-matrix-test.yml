@@ -7,7 +7,6 @@ on:
   workflow_dispatch:
 
 jobs:
-  # Quick syntax check for Python 3.8+ (native runner support)
   syntax-check:
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -15,23 +14,23 @@ jobs:
       fail-fast: false
       matrix:
         python: ['3.8', '3.9', '3.10', '3.11', '3.12', '3.13', '3.14']
-    
+
     name: "Syntax Check - Python ${{ matrix.python }}"
-    
+
     steps:
     - uses: actions/checkout@v3
-    
+
     - name: Set up Python ${{ matrix.python }}
       uses: actions/setup-python@v4
       with:
         python-version: ${{ matrix.python }}
         allow-prereleases: true
-    
+
     - name: Install omnipkg
       run: |
         python -m pip install --upgrade pip
         pip install -e .
-    
+
     - name: Basic imports (catch syntax errors)
       run: |
         python -c "import omnipkg"
@@ -39,36 +38,25 @@ jobs:
         omnipkg --version
         8pkg --version
 
-  # Python 3.7 syntax check in Docker (EOL, needs container)
   syntax-check-py37:
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    
+
     name: "Syntax Check - Python 3.7 (Docker)"
-    
+
     steps:
     - uses: actions/checkout@v3
-    
-    - name: Run Demo ${{ matrix.demo }} in Python 3.7 Docker
+
+    - name: Syntax check in Python 3.7 Docker
       run: |
         docker run --rm -v $(pwd):/workspace -w /workspace python:3.7-slim bash -c "
           python -m pip install --upgrade pip
           pip install -e .
-          
-          # Create config directory and set non-interactive mode
-          mkdir -p ~/.config/omnipkg
-          echo '{\"interactive\": false, \"auto_confirm\": true}' > ~/.config/omnipkg/config.json
-          
-          8pkg daemon start
-          sleep 5
-          8pkg daemon status
-          
-          echo '${{ matrix.demo }}' | 8pkg demo --verbose || true
-          
-          8pkg daemon stop || true
+          python -c 'import omnipkg'
+          python -c 'from omnipkg import cli'
+          8pkg --version
         "
 
-  # Full demo suite on key Python versions
   demo-matrix:
     needs: [syntax-check, syntax-check-py37]
     runs-on: ubuntu-latest
@@ -77,70 +65,48 @@ jobs:
       fail-fast: false
       matrix:
         python: ['3.8', '3.11', '3.14']
-        demo: [
-          {num: 1, name: "Rich Module Switching"},
-          {num: 2, name: "UV Binary Switching"},
-          {num: 3, name: "NumPy+SciPy C-Extension"},
-          {num: 4, name: "TensorFlow Complex Deps"},
-          {num: 5, name: "Multiverse Healing"},
-          {num: 6, name: "Old Flask Legacy Healing"},
-          {num: 7, name: "Script Healing"},
-          {num: 8, name: "Quantum Multiverse Warp"},
-          {num: 9, name: "Flask Port Finder"},
-          {num: 10, name: "CLI Healing"}
-        ]
-    
-    name: "Demo ${{ matrix.demo.num }} - Py${{ matrix.python }}"
-    
+        demo: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+
+    name: "Demo ${{ matrix.demo }} - Py${{ matrix.python }}"
+
     steps:
     - uses: actions/checkout@v3
-    
-    # 💥 AGGRESSIVE CLEANUP STEP 💥
+
     - name: 🧨 Nuke Build Artifacts & Previous Cache
       run: |
-        echo "💥 Nuking local build artifacts..."
         sudo rm -rf dist/ build/ *.egg-info src/*.egg-info .omnipkg .pytest_cache
-        
-        echo "💥 Nuking user configurations..."
         rm -rf ~/.local/omnipkg ~/.config/omnipkg
-        
-        echo "💥 Nuking cached omnipkg environments in hostedtoolcache..."
-        # This recursively finds and deletes .omnipkg folders hidden inside the runner's python cache
-        # This guarantees that 'Found existing Python 3.11' ONLY happens if we just built it.
         sudo find /opt/hostedtoolcache -name ".omnipkg" -type d -exec rm -rf {} + 2>/dev/null || true
-        
         echo "✅ Environment is 100% sterile."
-    
+
     - name: Set up Python ${{ matrix.python }}
       uses: actions/setup-python@v4
       with:
         python-version: ${{ matrix.python }}
         allow-prereleases: true
-    
+
     - name: Install omnipkg
       run: |
         python -m pip install --upgrade pip
         pip install -e .
-    
-    - name: Start daemon in background
+
+    - name: Start daemon
       run: |
         8pkg daemon start
         sleep 5
         8pkg daemon status
-    
-    - name: Run Demo ${{ matrix.demo.num }}
+
+    - name: Run Demo ${{ matrix.demo }}
       timeout-minutes: 10
-      run: |
-        echo "${{ matrix.demo.num }}" | 8pkg demo --verbose
       continue-on-error: true
-    
-    - name: Show logs/Stop daemon
+      run: 8pkg demo ${{ matrix.demo }} --verbose
+
+    - name: Show logs / Stop daemon
       if: always()
       run: |
         8pkg daemon logs --lines 100 || true
         8pkg daemon stop || true
 
-  # Python 3.7 full demo test in Docker
   demo-matrix-py37:
     needs: syntax-check-py37
     runs-on: ubuntu-latest
@@ -149,34 +115,28 @@ jobs:
       fail-fast: false
       matrix:
         demo: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
-    
+
     name: "Demo ${{ matrix.demo }} - Py3.7 (Docker)"
-    
+
     steps:
     - uses: actions/checkout@v3
-    
+
     - name: Run Demo ${{ matrix.demo }} in Python 3.7 Docker
       run: |
         docker run --rm -e CI=true -v $(pwd):/workspace -w /workspace python:3.7-slim bash -c "
           python -m pip install --upgrade pip
           pip install -e .
-          
-          # Configure omnipkg for non-interactive use BEFORE any omnipkg commands
           mkdir -p ~/.config/omnipkg
           echo '{\"interactive\": false, \"auto_confirm\": true}' > ~/.config/omnipkg/config.json
-          
           8pkg daemon start
           sleep 5
           8pkg daemon status
-          
-          echo '${{ matrix.demo }}' | 8pkg demo --verbose || true
-          
+          8pkg demo ${{ matrix.demo }} --verbose || true
           echo '=== Daemon Status ==='
           8pkg daemon status || true
           8pkg daemon stop || true
         "
 
-  # Chaos scenarios - only on Python 3.11 (they already cover edge cases)
   chaos-individual:
     needs: [syntax-check, syntax-check-py37]
     runs-on: ubuntu-latest
@@ -185,32 +145,32 @@ jobs:
       fail-fast: false
       matrix:
         scenario: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 14, 16, 17, 18, 19, 20, 21, 22, 23]
-        # REMOVED 13 - runs out of space on GitHub runners
-    
+        # 13 removed - runs out of space on GitHub runners
+        # 15 runs on self-hosted
+
     name: "Chaos ${{ matrix.scenario }} - Py3.11"
-    
+
     steps:
     - uses: actions/checkout@v3
-    
+
     - name: Set up Python 3.11
       uses: actions/setup-python@v4
       with:
         python-version: '3.11'
-    
+
     - name: Install omnipkg
       run: pip install -e .
-    
-    - name: Start fresh daemon for this scenario
+
+    - name: Start daemon
       run: |
         8pkg daemon start
         sleep 3
-    
+
     - name: Run Chaos Scenario ${{ matrix.scenario }}
       timeout-minutes: 8
-      run: |
-        (echo "11"; sleep 2; echo "${{ matrix.scenario }}") | 8pkg demo --verbose
       continue-on-error: true
-    
+      run: 8pkg stress-test ${{ matrix.scenario }} --verbose
+
     - name: Daemon status after test
       if: always()
       run: |
@@ -218,42 +178,38 @@ jobs:
         8pkg daemon status
         echo "=== Logs (last 50 lines) ==="
         8pkg daemon logs --lines 50
-    
+
     - name: Stop and cleanup
       if: always()
       run: |
         8pkg daemon stop
         pkill -f "omnipkg" || true
 
-  # Test 13 in Docker with more space (workflow_dispatch only)
   chaos-13-docker:
     if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    
+
     name: "Chaos 13 (Docker - Needs Space)"
-    
+
     steps:
     - uses: actions/checkout@v3
-    
+
     - name: Free up disk space
       run: |
-        sudo rm -rf /usr/share/dotnet
-        sudo rm -rf /opt/ghc
-        sudo rm -rf /usr/local/share/boost
+        sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost
         df -h
-    
+
     - name: Run in Docker with Python 3.11
       run: |
         docker run --rm -v $(pwd):/workspace:z -w /workspace python:3.11-slim bash -c "
           pip install -e .
           8pkg daemon start
           sleep 3
-          (echo '11'; sleep 2; echo '13') | 8pkg demo --verbose
+          8pkg stress-test 13 --verbose
           8pkg daemon stop
         "
 
-  # Chaos scenarios that need more disk space - run on self-hosted
   chaos-heavy-self-hosted:
     needs: [syntax-check, syntax-check-py37]
     runs-on: [self-hosted, linux, x64]
@@ -262,52 +218,48 @@ jobs:
       fail-fast: false
       matrix:
         scenario: [13, 15]
-    
+
     name: "Chaos ${{ matrix.scenario }} - Py3.11 (Self-Hosted)"
-    
+
     steps:
     - uses: actions/checkout@v3
-    
-    # Use the dedicated GitHub runner environment
+
     - name: Use dedicated runner Python environment
       run: |
-        # Activate the github_runner_env conda environment
         source $HOME/miniconda3/etc/profile.d/conda.sh
         conda activate github_runner_env
         echo "PATH=$PATH" >> $GITHUB_ENV
         echo "CONDA_PREFIX=$CONDA_PREFIX" >> $GITHUB_ENV
-    
+
     - name: Install omnipkg
       run: |
         source $HOME/miniconda3/etc/profile.d/conda.sh
         conda activate github_runner_env
         python -m pip install -e .
-    
-    - name: Start fresh daemon for this scenario
+
+    - name: Start daemon
       run: |
         source $HOME/miniconda3/etc/profile.d/conda.sh
         conda activate github_runner_env
         8pkg daemon start
         sleep 3
-    
+
     - name: Run Chaos Scenario ${{ matrix.scenario }}
       timeout-minutes: 15
+      continue-on-error: true
       run: |
         source $HOME/miniconda3/etc/profile.d/conda.sh
         conda activate github_runner_env
-        (echo "11"; sleep 2; echo "${{ matrix.scenario }}") | 8pkg demo --verbose
-      continue-on-error: true
-    
+        8pkg stress-test ${{ matrix.scenario }} --verbose
+
     - name: Daemon status after test
       if: always()
       run: |
         source $HOME/miniconda3/etc/profile.d/conda.sh
         conda activate github_runner_env
-        echo "=== Status ==="
         8pkg daemon status || true
-        echo "=== Logs (last 50 lines) ==="
         8pkg daemon logs --lines 50 || true
-    
+
     - name: Stop and cleanup
       if: always()
       run: |
@@ -316,7 +268,6 @@ jobs:
         8pkg daemon stop || true
         pkill -f "omnipkg" || true
 
-  # PyPI release gate - requires all demos to pass on key Python versions
   pypi-gate:
     name: "✅ PyPI Release Gate"
     needs: [syntax-check, syntax-check-py37, demo-matrix, demo-matrix-py37, chaos-individual, chaos-heavy-self-hosted]
