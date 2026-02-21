@@ -28,6 +28,12 @@ jobs:
         with:
           ref: ${{ github.event.inputs.branch || github.ref }}
 
+      - name: Show checked out branch
+        run: |
+          Write-Host "Currently on branch: $(git rev-parse --abbrev-ref HEAD)"
+          Write-Host "Commit SHA: $(git rev-parse HEAD)"
+        shell: pwsh
+
       - name: Display test info
         run: |
           Write-Host "Testing on: Windows"
@@ -70,8 +76,6 @@ jobs:
           PYTHONUNBUFFERED: "1"
           PYTHONIOENCODING: "utf-8"
 
-      # Use the versioned shim omnipkg311 — exactly like a user would.
-      # No swap needed, no registry parsing, no env var tricks.
       - name: Trigger 3.11 KB first-use build via shim
         run: omnipkg311 status
         shell: pwsh
