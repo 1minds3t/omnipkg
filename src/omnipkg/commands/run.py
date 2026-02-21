@@ -3156,16 +3156,6 @@ def _run_script_logic(
         # Basic Success Check
         if return_code == 0:
             safe_print("\n✅ Script executed successfully.")
-            # On Windows in non-interactive mode (e.g. CI demo runner), omnipkg
-            # background threads (Redis, KB rebuild, PyPI cache) are non-daemon and
-            # will keep this process alive indefinitely after we return — which means
-            # the demo handler's `for line in process.stdout` never gets EOF and hangs
-            # forever.  os._exit() terminates immediately without waiting for threads,
-            # which is safe here because we've already flushed all output above.
-            if os.name == "nt" and not is_interactive_session():
-                sys.stdout.flush()
-                sys.stderr.flush()
-                os._exit(0)
             return 0
 
         safe_print("🤖 [AI-INFO] Script execution failed. Analyzing for auto-healing...")
