@@ -10,6 +10,7 @@ try:
     from .common_utils import print_header, safe_print
 except ImportError:
     from omnipkg.common_utils import print_header
+from omnipkg.common_utils import is_interactive_session
 import importlib
 
 import hashlib
@@ -9419,7 +9420,6 @@ class omnipkg:
             command_list = full_command  # shell=True will be used for this simple case
 
         try:
-            from omnipkg.common_utils import is_interactive_session
             if not is_interactive_session():
                 safe_print(_("\n   Skipping raw data view (non-interactive mode)."))
                 return
