@@ -92,6 +92,8 @@ except ImportError:
     magic = None
     HAS_MAGIC = False
 
+SUPPORTED_IMPLEMENTATIONS = {"cpython"}  # Future: add "pypy", "graalpy", etc.
+
 def _get_dynamic_omnipkg_version():
     """
     Gets the omnipkg version, prioritizing pyproject.toml in developer mode.
@@ -9553,9 +9555,6 @@ class omnipkg:
 
         should_reverse = strategy == "stable-main"
         return sorted(packages, key=get_version_key, reverse=should_reverse)
-
-    # At the top of the class or module
-    SUPPORTED_IMPLEMENTATIONS = {"cpython"}  # Future: add "pypy", "graalpy", etc.
 
     def _ensure_deps_in_interpreter(self, python_exe: Path, version: str) -> None:
         """
