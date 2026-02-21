@@ -9422,6 +9422,7 @@ class omnipkg:
             command_list = full_command  # shell=True will be used for this simple case
 
         try:
+            from omnipkg.common_utils import is_interactive_session
             if not is_interactive_session():
                 safe_print(_("\n   Skipping raw data view (non-interactive mode)."))
                 return
