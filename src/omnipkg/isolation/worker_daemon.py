@@ -3641,6 +3641,190 @@ class IPCCapabilities:
 # ═══════════════════════════════════════════════════════════════
 
 
+# ═══════════════════════════════════════════════════════════════
+# DIRTY PACKAGE REGISTRY
+# Packages that permanently contaminate sys.modules on import.
+# A worker that has loaded one of these can NEVER be reassigned
+# to a different version — it must be pinned to its exact spec.
+# ═══════════════════════════════════════════════════════════════
+_DIRTY_PACKAGE_ROOTS = frozenset({
+    "torch",
+    "tensorflow",
+    "tf",
+    "jax",
+    "jaxlib",
+})
+
+def _spec_is_dirty(spec: str) -> bool:
+    """Return True if spec contains a package that can't be version-switched."""
+    name = spec.split("==")[0].split(">=")[0].split("<=")[0].strip().lower()
+    # torch covers torchvision, torchaudio, etc.
+    return any(name == root or name.startswith(root) for root in _DIRTY_PACKAGE_ROOTS)
+
+
+# ═══════════════════════════════════════════════════════════════
+# WORKER POOL  (in-process fallback when daemon is unavailable)
+#
+# Mirrors WorkerPoolDaemon behaviour but lives in the calling
+# process.  Simpler, higher startup latency, same isolation.
+#
+# Worker lifecycle:
+#   idle >5 min  → reaped automatically
+#   dirty spec   → pinned, never reassigned
+#   clean spec   → reused across requests (assign_spec guards re-init)
+# ═══════════════════════════════════════════════════════════════
+class WorkerPool:
+    """
+    Singleton in-process pool of PersistentWorkers.
+    Used as a fallback when the daemon socket is unavailable.
+
+    Usage:
+        result = WorkerPool.get_instance().execute("rich==13.4.2", code, python_exe)
+    """
+
+    _instance: "WorkerPool | None" = None
+    _instance_lock = threading.Lock()
+
+    IDLE_TTL = 300.0          # seconds before an idle worker is reaped
+    REAP_INTERVAL = 60.0      # how often the reaper thread wakes up
+    MAX_WORKERS = 20          # hard cap to prevent runaway memory
+
+    def __init__(self):
+        # workers keyed by "spec::python_exe"
+        self._workers: Dict[str, dict] = {}
+        self._lock = threading.RLock()
+        self._start_reaper()
+
+    # ── singleton ────────────────────────────────────────────────
+    @classmethod
+    def get_instance(cls) -> "WorkerPool":
+        if cls._instance is None:
+            with cls._instance_lock:
+                if cls._instance is None:
+                    cls._instance = cls()
+        return cls._instance
+
+    # ── public API ───────────────────────────────────────────────
+    def execute(self, spec: str, code: str, python_exe: str = None) -> dict:
+        """
+        Run *code* inside an isolated worker that has *spec* installed.
+        Worker is created on first call and reused on subsequent calls.
+
+        For dirty packages (torch/tf/jax) the worker is pinned to the
+        exact spec and python_exe — it will never be reassigned.
+        """
+        python_exe = str(Path(python_exe or sys.executable).resolve())
+        worker_key = f"{spec}::{python_exe}"
+        dirty = _spec_is_dirty(spec)
+
+        worker = self._get_or_create(worker_key, spec, python_exe, dirty)
+        try:
+            result = worker["worker"].execute_shm_task(
+                task_id=f"pool-{int(time.time()*1000)}",
+                code=code,
+                shm_in={},
+                shm_out={},
+                timeout=300.0,
+            )
+            with self._lock:
+                worker["last_used"] = time.time()
+            return result
+        except Exception as e:
+            # Worker probably crashed — remove it so next call gets a fresh one
+            with self._lock:
+                self._workers.pop(worker_key, None)
+            return {"success": False, "error": str(e), "status": "ERROR"}
+
+    # ── internals ────────────────────────────────────────────────
+    def _get_or_create(self, key: str, spec: str, python_exe: str, dirty: bool) -> dict:
+        with self._lock:
+            if key in self._workers:
+                entry = self._workers[key]
+                entry["last_used"] = time.time()
+                return entry
+
+            # Enforce cap — evict the stalest non-dirty worker
+            if len(self._workers) >= self.MAX_WORKERS:
+                self._evict_one()
+
+            sys.stderr.write(
+                f"   🔧 [WorkerPool] Creating {'pinned' if dirty else 'reusable'} "
+                f"worker for {spec} ({Path(python_exe).name})\n"
+            )
+            pw = PersistentWorker(
+                package_spec=spec,
+                python_exe=python_exe,
+            )
+            entry = {
+                "worker": pw,
+                "spec": spec,
+                "python_exe": python_exe,
+                "dirty": dirty,
+                "created": time.time(),
+                "last_used": time.time(),
+            }
+            self._workers[key] = entry
+            return entry
+
+    def _evict_one(self):
+        """Evict the longest-idle non-dirty worker. Call with self._lock held."""
+        candidates = [
+            (k, v) for k, v in self._workers.items() if not v["dirty"]
+        ]
+        if not candidates:
+            # All workers are dirty — evict the oldest dirty one (last resort)
+            candidates = list(self._workers.items())
+        if candidates:
+            oldest_key = min(candidates, key=lambda kv: kv[1]["last_used"])[0]
+            entry = self._workers.pop(oldest_key)
+            try:
+                entry["worker"].force_shutdown()
+            except Exception:
+                pass
+            sys.stderr.write(
+                f"   🗑️  [WorkerPool] Evicted idle worker: {entry['spec']}\n"
+            )
+
+    def _reap_stale(self):
+        """Remove workers idle longer than IDLE_TTL."""
+        now = time.time()
+        with self._lock:
+            stale = [
+                k for k, v in self._workers.items()
+                if (now - v["last_used"]) > self.IDLE_TTL
+            ]
+            for k in stale:
+                entry = self._workers.pop(k)
+                try:
+                    entry["worker"].force_shutdown()
+                except Exception:
+                    pass
+                sys.stderr.write(
+                    f"   💤 [WorkerPool] TTL-reaped idle worker: {entry['spec']}\n"
+                )
+
+    def _start_reaper(self):
+        def _loop():
+            while True:
+                time.sleep(self.REAP_INTERVAL)
+                try:
+                    self._reap_stale()
+                except Exception:
+                    pass
+        t = threading.Thread(target=_loop, daemon=True, name="WorkerPool-Reaper")
+        t.start()
+
+    def shutdown_all(self):
+        """Forcefully shut down every worker. Call on process exit if needed."""
+        with self._lock:
+            for entry in self._workers.values():
+                try:
+                    entry["worker"].force_shutdown()
+                except Exception:
+                    pass
+            self._workers.clear()
+
+
 class DaemonClient:
     def __init__(
         self,
@@ -3651,6 +3835,36 @@ class DaemonClient:
         self.socket_path = socket_path
         self.timeout = timeout
         self.auto_start = auto_start
+
+    def execute(self, spec: str, code: str, python_exe: str = None) -> dict:
+        """
+        Simple entrypoint. Run code in an isolated worker with spec installed.
+
+        Args:
+            spec:       Package spec, e.g. "rich==13.4.2"
+            code:       Python code to run inside the worker
+            python_exe: Path to the interpreter (default: current Python)
+
+        Returns:
+            dict with keys: success, stdout, stderr, (error on failure)
+
+        Falls back to WorkerPool (in-process PersistentWorkers) if the daemon
+        is unreachable.
+        """
+        result = self.execute_shm(
+            spec=spec,
+            code=code,
+            shm_in={},
+            shm_out={},
+            python_exe=python_exe or sys.executable,
+        )
+        # Daemon returned a connection-level failure → fall back to WorkerPool
+        if not result.get("success") and "Daemon not running" in result.get("error", ""):
+            sys.stderr.write(
+                f"⚠️  [DaemonClient] Daemon unavailable, falling back to WorkerPool for {spec}\n"
+            )
+            return WorkerPool.get_instance().execute(spec, code, python_exe)
+        return result
 
     def execute_shm(self, spec, code, shm_in, shm_out, python_exe=None):
         if not python_exe:
