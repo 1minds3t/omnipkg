@@ -3072,87 +3072,33 @@ def _run_script_logic(
             or os.environ.get("OMNIPKG_NONINTERACTIVE")
         )
 
-        # ── Windows inherited-handle deadlock fix ────────────────────────────────
-        # Problem: on Windows every handle is inheritable by default.  When the
-        # demo runner spawns "omnipkg run" with stdout=PIPE, that pipe write-end is
-        # inherited by direct_process, and then by *every grandchild* that
-        # direct_process spawns (worker threads, benchmark sub-interpreters, daemon
-        # processes, etc.).  The demo runner's `for line in process.stdout` loop
-        # blocks until ALL holders of the write end close it — which never happens
-        # because long-lived grandchildren keep it open even after the benchmark
-        # prints "COMPLETE!" and direct_process exits.
-        #
-        # Fix: on Windows in non-interactive mode use a NEW pipe whose write end we
-        # mark non-inheritable immediately after creation, so grandchildren can never
-        # acquire it.  We stream that pipe to sys.stdout ourselves.  On Linux the
-        # normal path is unchanged (POSIX close-on-exec semantics handle this).
-        # ─────────────────────────────────────────────────────────────────────────
-        _use_pipe_for_output = _is_noninteractive and os.name == "nt"
-
-        if _use_pipe_for_output:
-            import msvcrt
-            import _winapi
-
-            # Create a pipe with the READ end inheritable (child writes to us via
-            # the non-inheritable write end we own; we read from the read end).
-            # Actually we want: child gets write end, we read from read end.
-            # _winapi.CreatePipe returns (read, write) as Windows HANDLEs.
-            r_handle, w_handle = _winapi.CreatePipe(None, 0)
-
-            # Make the write end NON-inheritable so grandchildren can't grab it.
-            _winapi.SetHandleInformation(w_handle, 1, 0)  # HANDLE_FLAG_INHERIT=1, clear it
-
-            # Wrap the Windows HANDLE into a Python file object the child can use
-            # as its stdout fd.
-            w_fd = msvcrt.open_osfhandle(w_handle, os.O_WRONLY | os.O_BINARY)
-            r_fd = msvcrt.open_osfhandle(r_handle, os.O_RDONLY | os.O_BINARY)
-            pipe_write = open(w_fd, "wb", buffering=0)
-            pipe_read  = open(r_fd, "rb", buffering=0)
-
-        def _spawn_direct(cmd):
-            if _use_pipe_for_output:
-                return subprocess.Popen(
-                    cmd,
-                    stdin=subprocess.DEVNULL,
-                    stdout=pipe_write,   # non-inheritable write end
-                    stderr=pipe_write,   # merge stderr too
-                    cwd=Path.cwd(),
-                    env=env,
-                )
-            else:
-                return subprocess.Popen(
-                    cmd,
+        try:
+            direct_process = subprocess.Popen(
+                initial_cmd,
+                stdin=subprocess.DEVNULL if _is_noninteractive else sys.stdin,
+                stdout=sys.stdout,
+                stderr=sys.stderr,
+                cwd=Path.cwd(),
+                env=env,
+            )
+        except FileNotFoundError:
+            # Fallback for when 'uv' command fails completely (e.g. not in path)
+            if initial_cmd[0] == "uv":
+                safe_print("⚠️  'uv' not found, falling back to direct python execution...")
+                initial_cmd = [python_exe] + safe_cmd_args
+                
+                direct_process = subprocess.Popen(
+                    initial_cmd,
                     stdin=subprocess.DEVNULL if _is_noninteractive else sys.stdin,
                     stdout=sys.stdout,
                     stderr=sys.stderr,
                     cwd=Path.cwd(),
                     env=env,
                 )
-
-        try:
-            direct_process = _spawn_direct(initial_cmd)
-        except FileNotFoundError:
-            # Fallback for when 'uv' command fails completely (e.g. not in path)
-            if initial_cmd[0] == "uv":
-                safe_print("⚠️  'uv' not found, falling back to direct python execution...")
-                initial_cmd = [python_exe] + safe_cmd_args
-                direct_process = _spawn_direct(initial_cmd)
             else:
                 raise
 
         try:
-            if _use_pipe_for_output:
-                # Close OUR copy of the write end NOW — direct_process has its own
-                # copy (inherited at Popen time).  Once direct_process exits, the
-                # write end is fully closed and our read loop below will see EOF.
-                pipe_write.close()
-
-                # Stream output to sys.stdout in real-time.
-                for _raw in iter(lambda: pipe_read.read(4096), b""):
-                    sys.stdout.buffer.write(_raw)
-                    sys.stdout.flush()
-                pipe_read.close()
-
             return_code = direct_process.wait()
             end_time_ns = time.perf_counter_ns()
             failure_duration_ns = end_time_ns - start_time_ns
@@ -3210,6 +3156,16 @@ def _run_script_logic(
         # Basic Success Check
         if return_code == 0:
             safe_print("\n✅ Script executed successfully.")
+            # On Windows in non-interactive mode (e.g. CI demo runner), omnipkg
+            # background threads (Redis, KB rebuild, PyPI cache) are non-daemon and
+            # will keep this process alive indefinitely after we return — which means
+            # the demo handler's `for line in process.stdout` never gets EOF and hangs
+            # forever.  os._exit() terminates immediately without waiting for threads,
+            # which is safe here because we've already flushed all output above.
+            if os.name == "nt" and not is_interactive_session():
+                sys.stdout.flush()
+                sys.stderr.flush()
+                os._exit(0)
             return 0
 
         safe_print("🤖 [AI-INFO] Script execution failed. Analyzing for auto-healing...")
