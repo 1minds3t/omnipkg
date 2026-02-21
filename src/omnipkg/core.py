@@ -2956,11 +2956,10 @@ class ConfigManager:
         bin_dir = interpreter_path.parent
         config_path = bin_dir / ".omnipkg_config.json"
         
-        # Get the canonical defaults, then override with interpreter-specific paths
         config_data = self._get_sensible_defaults(python_exe_override=str(interpreter_path))
         config_data.update({
             "python_version": version,
-            "python_version_short": major_minor,
+            "python_version_short": version,   # ← was `major_minor`, which doesn't exist
             "bin_directory": str(bin_dir.resolve()),
             "created_at": datetime.now().isoformat(),
             "managed_by_omnipkg": True,
