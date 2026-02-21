@@ -73,10 +73,12 @@ jobs:
         run: |
           echo "=== Omnipkg Daemon Log ==="
           # Find wherever DAEMON_LOG_FILE points
+          # macOS uses $TMPDIR (/var/folders/...), not /tmp
           LOG_CANDIDATES=(
+            "${TMPDIR}omnipkg/omnipkg_daemon.log"
+            "/tmp/omnipkg/omnipkg_daemon.log"
             "/tmp/omnipkg_daemon.log"
             "$HOME/.config/omnipkg/daemon.log"
-            "/tmp/omnipkg/daemon.log"
           )
           FOUND=false
           for log in "${LOG_CANDIDATES[@]}"; do
@@ -88,13 +90,14 @@ jobs:
             fi
           done
           if [ "$FOUND" = false ]; then
-            echo "⚠️  No daemon log found. Searched:"
-            for log in "${LOG_CANDIDATES[@]}"; do
-              echo "   - $log"
+            echo "⚠️  No daemon log found. Searching dynamically..."
+            # macOS TMPDIR is /var/folders/... - search there first
+            find "${TMPDIR}" /tmp -name "omnipkg_daemon.log" 2>/dev/null | head -5 | while read f; do
+              echo "📄 Found: $f"
+              tail -200 "$f"
+              FOUND=true
             done
-            # Try to find it
-            find /tmp -name "*.log" -newer /tmp 2>/dev/null | head -10 || true
-            find $HOME -name "*omnipkg*log*" 2>/dev/null | head -10 || true
+            find "$HOME" -name "*omnipkg*log*" 2>/dev/null | head -10 || true
           fi
         shell: bash
 
@@ -113,7 +116,7 @@ jobs:
           echo ""
           echo "=== Omnipkg Interpreter Registry ==="
           # Show what interpreters omnipkg knows about
-          find / -name "registry.json" -path "*omnipkg*" 2>/dev/null | head -5 | while read f; do
+          find "${TMPDIR}" "$HOME" /Library/Frameworks -name "registry.json" -path "*omnipkg*" 2>/dev/null | head -5 | while read f; do
             echo "📄 $f:"
             cat "$f"
             echo ""
