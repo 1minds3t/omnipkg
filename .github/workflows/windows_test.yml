@@ -37,8 +37,6 @@ jobs:
         shell: pwsh
         
       # Step 1: ENSURE A CLEAN SLATE
-      # This is the most critical fix. It deletes any leftover config or
-      # interpreters from previous runs, guaranteeing a true first-time setup.
       - name: Wipe previous omnipkg config
         run: |
           if (Test-Path ~\.config\omnipkg) {
@@ -49,8 +47,7 @@ jobs:
           }
         shell: pwsh
         
-      # Step 2: Set up a non-3.11 Python environment to start.
-      # Using 3.9 makes it a more distinct test.
+      # Step 2: Set up Python 3.9 as the base interpreter.
       - name: Set up Python 3.9
         uses: actions/setup-python@v5
         with:
@@ -58,7 +55,6 @@ jobs:
           
       - name: Install omnipkg in editable mode
         run: |
-          # Force unbuffered output
           $env:PYTHONUNBUFFERED = "1"
           pip install -e . 2>&1 | ForEach-Object { 
             Write-Host $_ 
@@ -66,12 +62,11 @@ jobs:
           }
         shell: pwsh
         
-      # Step 3: Trigger the REAL first-time setup and 3.11 download.
-      # This MUST now perform the full download and bootstrap of 3.11,
-      # including installing omnipkg's dependencies into it.
-      - name: Trigger first-time setup and Python 3.11 download
+      # Step 3: Trigger first-time setup. This just initializes the config and
+      # registers the current Python 3.9 interpreter. No automatic 3.11 download.
+      - name: Trigger first-time setup
         run: |
-          Write-Host "=== Starting omnipkg status with debug mode ===" -ForegroundColor Green
+          Write-Host "=== Starting omnipkg status ===" -ForegroundColor Green
           omnipkg status 2>&1 | ForEach-Object { 
             Write-Host $_ 
             [Console]::Out.Flush()
@@ -83,10 +78,27 @@ jobs:
           PYTHONUNBUFFERED: "1"
           PYTHONIOENCODING: "utf-8"
           OMNIPKG_DEBUG: "1"
-          # Prevent subprocess output buffering issues on Windows
+          PYTHONLEGACYWINDOWSSTDIO: "0"
+
+      # Step 4: Explicitly adopt Python 3.11. This is the real user workflow -
+      # additional Python versions are adopted on demand, not auto-downloaded.
+      - name: Adopt Python 3.11
+        run: |
+          Write-Host "=== Adopting Python 3.11 ===" -ForegroundColor Green
+          omnipkg python adopt 3.11 2>&1 | ForEach-Object { 
+            Write-Host $_ 
+            [Console]::Out.Flush()
+          }
+          Write-Host "=== Adopt completed ===" -ForegroundColor Green
+        shell: pwsh
+        env:
+          PYTHONUTF8: "1"
+          PYTHONUNBUFFERED: "1"
+          PYTHONIOENCODING: "utf-8"
+          OMNIPKG_DEBUG: "1"
           PYTHONLEGACYWINDOWSSTDIO: "0"
           
-      # Step 4: Swap the active context to the newly downloaded 3.11.
+      # Step 5: Swap the active context to the newly adopted 3.11.
       - name: Swap the active context to Python 3.11
         run: |
           Write-Host "=== Swapping to Python 3.11 ===" -ForegroundColor Green
@@ -103,7 +115,7 @@ jobs:
           OMNIPKG_DEBUG: "1"
           PYTHONLEGACYWINDOWSSTDIO: "0"
         
-      # Step 5: Install a test package in the new 3.11 context.
+      # Step 6: Install a test package in the new 3.11 context.
       - name: Install a package in the new 3.11 context
         run: |
           Write-Host "=== Installing six==1.16.0 ===" -ForegroundColor Green
@@ -120,7 +132,7 @@ jobs:
           OMNIPKG_DEBUG: "1"
           PYTHONLEGACYWINDOWSSTDIO: "0"
           
-      # Step 6: Verify the knowledge base was updated correctly post-swap.
+      # Step 7: Verify the knowledge base was updated correctly post-swap.
       - name: Verify package info is in the knowledge base
         run: |
           Write-Host "=== Verifying package info ===" -ForegroundColor Green
