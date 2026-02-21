@@ -69,38 +69,82 @@ jobs:
 
       - name: Spawn a single worker (Python 3.9) and capture crash
         run: |
-          python - <<'EOF'
+          python - <<'EOS'
           import sys
+          import os
           sys.path.insert(0, "src")
           from omnipkg.isolation.worker_daemon import DaemonClient
+          from omnipkg.core import ConfigManager
           import traceback
 
-          client = DaemonClient()
+          print("--- Test: Python 3.9 Worker ---")
           try:
-              result = client.execute("rich==13.4.2", "3.9", "import rich; print(rich.__version__)")
+              cm = ConfigManager()
+              # Explicitly resolve the interpreter path
+              python_exe = cm.get_interpreter_for_version("3.9")
+              print(f"🎯 Resolved Python 3.9: {python_exe}")
+              
+              if not python_exe:
+                  print("❌ Failed to resolve Python 3.9 interpreter")
+                  sys.exit(1)
+
+              client = DaemonClient()
+              # FIX: Use keyword arguments to ensure correct mapping
+              result = client.execute(
+                  spec="rich==13.4.2", 
+                  code="import rich; print(f'Rich version: {rich.__version__}')",
+                  python_exe=str(python_exe)
+              )
               print(f"✅ Result: {result}")
+              
+              if not result.get("success"):
+                  print(f"❌ Worker reported failure: {result.get('error')}")
+                  sys.exit(1)
+                  
           except Exception as e:
               print(f"❌ Failed: {e}")
               traceback.print_exc()
-          EOF
+              sys.exit(1)
+          EOS
         shell: bash
 
       - name: Spawn a single worker (Python 3.10) and capture crash
         run: |
-          python - <<'EOF'
+          python - <<'EOS'
           import sys
+          import os
           sys.path.insert(0, "src")
           from omnipkg.isolation.worker_daemon import DaemonClient
+          from omnipkg.core import ConfigManager
           import traceback
 
-          client = DaemonClient()
+          print("--- Test: Python 3.10 Worker ---")
           try:
-              result = client.execute("rich==13.6.0", "3.10", "import rich; print(rich.__version__)")
+              cm = ConfigManager()
+              python_exe = cm.get_interpreter_for_version("3.10")
+              print(f"🎯 Resolved Python 3.10: {python_exe}")
+              
+              if not python_exe:
+                  print("❌ Failed to resolve Python 3.10 interpreter")
+                  sys.exit(1)
+
+              client = DaemonClient()
+              result = client.execute(
+                  spec="rich==13.6.0", 
+                  code="import rich; print(f'Rich version: {rich.__version__}')",
+                  python_exe=str(python_exe)
+              )
               print(f"✅ Result: {result}")
+              
+              if not result.get("success"):
+                  print(f"❌ Worker reported failure: {result.get('error')}")
+                  sys.exit(1)
+
           except Exception as e:
               print(f"❌ Failed: {e}")
               traceback.print_exc()
-          EOF
+              sys.exit(1)
+          EOS
         shell: bash
 
       - name: Dump full daemon log
