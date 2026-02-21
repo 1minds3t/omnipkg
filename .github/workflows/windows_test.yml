@@ -33,7 +33,6 @@ jobs:
           Write-Host "Testing on: Windows"
           Write-Host "Branch: ${{ github.ref_name }}"
           Write-Host "Commit: ${{ github.sha }}"
-          Write-Host "PowerShell Version: $($PSVersionTable.PSVersion)"
         shell: pwsh
 
       - name: Wipe previous omnipkg config
@@ -42,7 +41,7 @@ jobs:
             Remove-Item ~\.config\omnipkg -Recurse -Force
             Write-Host "Previous omnipkg config wiped."
           } else {
-            Write-Host "No previous omnipkg config found. Starting fresh."
+            Write-Host "No previous config found. Starting fresh."
           }
         shell: pwsh
 
@@ -52,93 +51,51 @@ jobs:
           python-version: '3.9'
 
       - name: Install omnipkg in editable mode
-        run: |
-          $env:PYTHONUNBUFFERED = "1"
-          pip install -e . 2>&1 | ForEach-Object { Write-Host $_; [Console]::Out.Flush() }
+        run: pip install -e .
         shell: pwsh
 
       - name: Trigger first-time setup (3.9)
-        run: |
-          Write-Host "=== Starting omnipkg status ===" -ForegroundColor Green
-          omnipkg status 2>&1 | ForEach-Object { Write-Host $_; [Console]::Out.Flush() }
-          Write-Host "=== omnipkg status completed ===" -ForegroundColor Green
+        run: omnipkg status
         shell: pwsh
         env:
           PYTHONUTF8: "1"
           PYTHONUNBUFFERED: "1"
           PYTHONIOENCODING: "utf-8"
-          OMNIPKG_DEBUG: "1"
 
       - name: Adopt Python 3.11
-        run: |
-          Write-Host "=== Adopting Python 3.11 ===" -ForegroundColor Green
-          omnipkg python adopt 3.11 2>&1 | ForEach-Object { Write-Host $_; [Console]::Out.Flush() }
-          Write-Host "=== Adopt completed ===" -ForegroundColor Green
+        run: omnipkg python adopt 3.11
         shell: pwsh
         env:
           PYTHONUTF8: "1"
           PYTHONUNBUFFERED: "1"
           PYTHONIOENCODING: "utf-8"
-          OMNIPKG_DEBUG: "1"
 
-      # KEY FIX: Don't use 'swap' in CI - swap only affects the current process's env vars.
-      # Instead, find the 3.11 executable directly from the registry and use it explicitly.
-      # We store it as a step output so all subsequent steps can use it.
-      - name: Locate adopted Python 3.11 executable
-        id: find_py311
-        run: |
-          $registryPath = (python -c "import sys; print(sys.prefix)") + "\.omnipkg\interpreters\registry.json"
-          Write-Host "Registry path: $registryPath"
-          $registry = Get-Content $registryPath | ConvertFrom-Json
-          $py311 = $registry.interpreters.'3.11'
-          if (-not $py311 -or -not (Test-Path $py311)) {
-            Write-Host "❌ Could not find Python 3.11 in registry" -ForegroundColor Red
-            exit 1
-          }
-          Write-Host "✅ Found Python 3.11: $py311"
-          # Export for subsequent steps
-          echo "py311=$py311" >> $env:GITHUB_OUTPUT
-          echo "PY311=$py311" >> $env:GITHUB_ENV
-        shell: pwsh
-        env:
-          PYTHONUTF8: "1"
-          PYTHONIOENCODING: "utf-8"
-
-      # Trigger the first-use KB build for 3.11 explicitly before installing anything.
-      # This ensures the KB is fully built before we try to query it.
-      - name: Trigger 3.11 KB first-use build
-        run: |
-          Write-Host "=== Building 3.11 knowledge base ===" -ForegroundColor Green
-          & "$env:PY311" -m omnipkg.cli status 2>&1 | ForEach-Object { Write-Host $_; [Console]::Out.Flush() }
-          Write-Host "=== KB build completed ===" -ForegroundColor Green
+      # Use the versioned shim omnipkg311 — exactly like a user would.
+      # No swap needed, no registry parsing, no env var tricks.
+      - name: Trigger 3.11 KB first-use build via shim
+        run: omnipkg311 status
         shell: pwsh
         env:
           PYTHONUTF8: "1"
           PYTHONUNBUFFERED: "1"
           PYTHONIOENCODING: "utf-8"
-          OMNIPKG_DEBUG: "1"
 
-      - name: Install six==1.16.0 via Python 3.11 directly
-        run: |
-          Write-Host "=== Installing six==1.16.0 ===" -ForegroundColor Green
-          & "$env:PY311" -m omnipkg.cli install six==1.16.0 2>&1 | ForEach-Object { Write-Host $_; [Console]::Out.Flush() }
-          Write-Host "=== Installation completed ===" -ForegroundColor Green
+      - name: Install six==1.16.0 via 3.11 shim
+        run: omnipkg311 install six==1.16.0
         shell: pwsh
         env:
           PYTHONUTF8: "1"
           PYTHONUNBUFFERED: "1"
           PYTHONIOENCODING: "utf-8"
-          OMNIPKG_DEBUG: "1"
 
-      - name: Verify package info is in the knowledge base
+      - name: Verify six is in the 3.11 knowledge base
         run: |
-          Write-Host "=== Verifying package info ===" -ForegroundColor Green
-          $output = & "$env:PY311" -m omnipkg.cli info six 2>&1 | Out-String
+          $output = omnipkg311 info six 2>&1 | Out-String
           Write-Host $output
           if ($output -match "1\.16\.0") {
-            Write-Host "✅ SUCCESS: Found version 1.16.0 in knowledge base" -ForegroundColor Green
+            Write-Host "SUCCESS: Found version 1.16.0 in knowledge base"
           } else {
-            Write-Host "❌ FAILURE: Version 1.16.0 not found in knowledge base" -ForegroundColor Red
+            Write-Host "FAILURE: Version 1.16.0 not found in knowledge base"
             exit 1
           }
         shell: pwsh
@@ -146,4 +103,3 @@ jobs:
           PYTHONUTF8: "1"
           PYTHONUNBUFFERED: "1"
           PYTHONIOENCODING: "utf-8"
-          OMNIPKG_DEBUG: "1"
