@@ -51,16 +51,17 @@ jobs:
           Write-Host "✅ Omnipkg configured"
         shell: pwsh
       
-      - name: Run Demo (Option 8 - Quantum Multiverse)
-        run: omnipkg demo 8 --non-interactive
-        shell: pwsh
-
-      - name: Run Demo Again (Verify Caching)
+      - name: Run Demo (Option 8 - First Run)
         continue-on-error: true
         run: omnipkg demo 8 --non-interactive
         shell: pwsh
-      
-      - name: Run Demo Again (Verify Caching)
+
+      - name: Run Demo (Option 8 - Second Run, Verify Caching)
+        continue-on-error: true
+        run: omnipkg demo 8 --non-interactive
+        shell: pwsh
+
+      - name: Run Demo (Option 8 - Third Run, Verify Caching)
         continue-on-error: true
         run: omnipkg demo 8 --non-interactive
         shell: pwsh
