@@ -92,11 +92,6 @@ except ImportError:
     magic = None
     HAS_MAGIC = False
 
-_DBG = os.environ.get("OMNIPKG_DEBUG", "0") == "1"
-def _dbg(msg: str):
-    if _DBG:
-        print(f"[DEBUG-REBUILD] {msg}", file=sys.stderr, flush=True)
-
 SUPPORTED_IMPLEMENTATIONS = {"cpython"}  # Future: add "pypy", "graalpy", etc.
 
 def _get_dynamic_omnipkg_version():
@@ -7249,162 +7244,100 @@ class omnipkg:
         safe_print(_("\n🎉 Pruning complete for '{}'.").format(c_name))
         return 0
 
+
     def _check_and_run_pending_rebuild(self) -> bool:
         """
         Checks for a flag file indicating a new interpreter needs its KB built.
-        If the currently running Python matches a version in the flag, runs the build.
+        If the currently running Python matches a version in the flag, it runs the build.
         Returns True if a rebuild was run, False otherwise.
         """
         flag_file = self.config_manager.venv_path / ".omnipkg" / ".needs_kb_rebuild"
-        lock_file = self.config_manager.venv_path / ".omnipkg" / ".needs_kb_rebuild.lock"
-
-        _dbg(f"Entering _check_and_run_pending_rebuild")
-        _dbg(f"  flag_file = {flag_file}  exists={flag_file.exists()}")
-        _dbg(f"  lock_file = {lock_file}  exists={lock_file.exists()}")
-        _dbg(f"  sys.version_info = {sys.version_info.major}.{sys.version_info.minor}")
-        _dbg(f"  sys.executable   = {sys.executable}")
-
         if not flag_file.exists():
-            _dbg("  No flag file found — nothing to do")
             return False
 
         current_version_str = f"{sys.version_info.major}.{sys.version_info.minor}"
 
-        # Fast path: check flag contents before touching the lock
+        # Fast path: peek without touching the lock.
         try:
             with open(flag_file, "r") as f:
                 versions_to_rebuild = json.load(f)
-            _dbg(f"  Flag file contents: {versions_to_rebuild}")
             if current_version_str not in versions_to_rebuild:
-                _dbg(f"  Current version {current_version_str!r} not in flag list — skipping")
                 return False
-        except (json.JSONDecodeError, IOError) as e:
-            _dbg(f"  Could not read flag file: {e} — aborting")
+        except (json.JSONDecodeError, IOError):
             return False
 
-        # ── Stale lock detection ──────────────────────────────────────────────────
-        # REDUCED from 300 s → 60 s.  A real KB build completes in well under a
-        # minute; anything older is definitely from a dead process.
-        _STALE_LOCK_SECONDS = 60
+        lock_file = self.config_manager.venv_path / ".omnipkg" / ".needs_kb_rebuild.lock"
+        _STALE_LOCK_SECONDS = 300
 
+        # ── Attempt to become the owner ──────────────────────────────────────
+        # We are the owner if EITHER:
+        #   (a) no lock exists and we create it atomically, OR
+        #   (b) the existing lock is stale and we replace it atomically.
+        #
+        # Use os.open with O_CREAT|O_EXCL for a true atomic create on all
+        # platforms (FileLock itself uses this internally).  If the file already
+        # exists and is fresh, someone else is genuinely working — skip.
         we_own_lock = False
         try:
             if lock_file.exists():
-                try:
-                    age = time.time() - lock_file.stat().st_mtime
-                    _dbg(f"  Lock file exists — age = {age:.1f}s  threshold = {_STALE_LOCK_SECONDS}s")
-                    if age <= _STALE_LOCK_SECONDS:
-                        # Read the PID from the lock to see if the process is alive
-                        try:
-                            with open(lock_file, "r") as f:
-                                lock_pid = int(f.read().strip())
-                            _dbg(f"  Lock held by PID {lock_pid}")
-                            # Check if that PID is actually running
-                            try:
-                                os.kill(lock_pid, 0)   # signal 0 = existence check
-                                _dbg(f"  PID {lock_pid} is alive — genuinely in progress, skipping")
-                                safe_print(
-                                    _("⚠️  KB rebuild already in progress (PID {}) for {}. Skipping.").format(
-                                        lock_pid, current_version_str)
-                                )
-                                return False
-                            except (ProcessLookupError, OSError):
-                                # PID does not exist — lock is stale despite being recent
-                                _dbg(f"  PID {lock_pid} is DEAD — treating lock as stale")
-                                # Fall through to delete and take over
-                        except (ValueError, IOError) as e:
-                            _dbg(f"  Could not read PID from lock: {e} — treating as stale")
-                            # Fall through to delete and take over
-                    else:
-                        _dbg(f"  Lock is older than {_STALE_LOCK_SECONDS}s — treating as stale")
-                except OSError as e:
-                    _dbg(f"  Could not stat lock file: {e} — treating as stale")
+                age = time.time() - lock_file.stat().st_mtime
+                if age <= _STALE_LOCK_SECONDS:
+                    # Live process holds it — don't wait, just skip.
+                    safe_print(_("⚠️  KB rebuild already in progress for {}. Skipping.").format(
+                        current_version_str))
+                    return False
+                # Stale — atomically replace it by deleting then exclusive-creating.
+                if lock_file.exists(): lock_file.unlink()
 
-                # Delete the stale lock before atomic re-create
-                try:
-                    lock_file.unlink()
-                    _dbg("  Deleted stale lock file")
-                except OSError as e:
-                    _dbg(f"  Could not delete stale lock: {e}")
-
-            # Atomic exclusive create — fails if another process beat us here
+            # Atomic exclusive create — fails if another process beat us here.
             fd = os.open(str(lock_file), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
             os.write(fd, str(os.getpid()).encode())
             os.close(fd)
             we_own_lock = True
-            _dbg(f"  Acquired lock (PID {os.getpid()})")
 
         except FileExistsError:
-            _dbg("  Lost the race for the lock to another process — skipping")
+            # Another process won the race for the lock — skip silently.
             return False
-        except OSError as e:
-            _dbg(f"  OSError acquiring lock: {e} — skipping")
+        except OSError:
             return False
 
         if not we_own_lock:
             return False
 
-        # ── We own the lock — run the rebuild ────────────────────────────────────
+        # ── We own the lock — do the rebuild ─────────────────────────────────
         try:
-            # Re-read flag under ownership (concurrent process may have finished)
+            # Re-read flag under ownership (another process may have finished already).
             try:
                 with open(flag_file, "r") as f:
                     versions_to_rebuild = json.load(f)
-                _dbg(f"  Re-read flag under lock: {versions_to_rebuild}")
-            except (json.JSONDecodeError, IOError) as e:
-                _dbg(f"  Could not re-read flag: {e} — aborting")
-                if flag_file.exists():
-                    flag_file.unlink()
+            except (json.JSONDecodeError, IOError):
+                if flag_file.exists(): flag_file.unlink()
                 return False
 
             if current_version_str not in versions_to_rebuild:
-                _dbg("  Version already handled by concurrent process — nothing to do")
-                return False
+                return False  # Already handled by a concurrent process
 
-            safe_print(
-                _("💡 First use of Python {} detected. Building knowledge base...").format(
-                    current_version_str)
-            )
+            safe_print(_("💡 First use of Python {} detected. Building knowledge base...").format(
+                current_version_str))
 
-            _dbg("  Calling rebuild_knowledge_base(force=True)")
             rebuild_status = self.rebuild_knowledge_base(force=True)
-            _dbg(f"  rebuild_knowledge_base returned: {rebuild_status!r}")
 
             if rebuild_status == 0:
                 versions_to_rebuild.remove(current_version_str)
                 if not versions_to_rebuild:
-                    if flag_file.exists():
-                        flag_file.unlink()
-                    _dbg("  Flag file deleted (no more pending versions)")
+                    if flag_file.exists(): flag_file.unlink()
                 else:
                     with open(flag_file, "w") as f:
                         json.dump(versions_to_rebuild, f)
-                    _dbg(f"  Flag file updated: {versions_to_rebuild}")
-                safe_print(
-                    _("✅ Knowledge base for Python {} is ready.").format(current_version_str)
-                )
+                safe_print(_("✅ Knowledge base for Python {} is ready.").format(current_version_str))
                 return True
             else:
-                _dbg(f"  rebuild_knowledge_base returned non-zero ({rebuild_status}) — flag preserved for retry")
                 safe_print(_("❌ Failed to build knowledge base. Will retry on next run."))
                 return False
 
-        except Exception as e:
-            _dbg(f"  EXCEPTION during rebuild: {e}")
-            import traceback
-            if _DBG:
-                traceback.print_exc(file=sys.stderr)
-            safe_print(_("❌ Knowledge base build raised an exception. Will retry on next run."))
-            return False
-
         finally:
-            # Always release our lock
-            try:
-                if lock_file.exists():
-                    lock_file.unlink()
-                    _dbg("  Lock file released in finally block")
-            except OSError as e:
-                _dbg(f"  Could not release lock in finally: {e}")
+            # Always release our lock, even if rebuild raised an exception.
+            if lock_file.exists(): lock_file.unlink()
 
     def _repair_manifest_context_mismatch(
         self, dist: importlib.metadata.Distribution, current_python_version: str
@@ -9519,23 +9452,11 @@ class omnipkg:
             choice = input(prompt_text).strip().lower()
             if choice == "y":
                 if not shutil.which(tool_name):
-                    if is_using_redis:
-                        safe_print(
-                            _("\n   ❌ '{}' is not installed. Install it to query Redis directly.").format(tool_name)
-                        )
-                    else:
-                        # sqlite3 CLI missing — but we already have all the data in memory, just print it
-                        safe_print(_("\n   ℹ️  'sqlite3' CLI not found — showing in-memory data instead:"))
-                        safe_print("   " + "-" * 56)
-                        # Sort and print every field we have, truncating long values
-                        for field, value in sorted(data.items()):
-                            if value is None or str(value).strip() == "":
-                                continue
-                            val_str = str(value)
-                            if len(val_str) > 80:
-                                val_str = val_str[:77] + "..."
-                            safe_print("   {:<30} {}".format(field, val_str))
-                        safe_print("   " + "-" * 56)
+                    safe_print(
+                        _(
+                            "\n   ❌ Command failed: '{}' is not installed or not in your PATH."
+                        ).format(tool_name)
+                    )
                     return
 
                 safe_print(_("   ---[ Running Command ]---"))
