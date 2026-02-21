@@ -305,6 +305,8 @@ class omnipkgMetadataGatherer:
                         folder_name = dist_info_path.name
                         if folder_name.endswith(".dist-info"):
                             folder_name = folder_name[:-10]
+                        elif folder_name.endswith(".egg-info"):
+                            folder_name = folder_name[:-9]
 
                         # Parse name-version format
                         parts = folder_name.rsplit("-", 1)
@@ -766,7 +768,7 @@ class omnipkgMetadataGatherer:
                 safe_print("🔍 Running AUTHORITATIVE full discovery scan (no context bleed)...")
 
             # [ The existing code for the full discovery 'else' block remains exactly the same ]
-            # Phase 1: Rapidly locate all potential package metadata files
+            # Phase 1: Rapidly locating all potential package metadata files
             safe_print("   - Phase 1: Rapidly locating all potential package metadata files...")
             all_dist_info_paths = []
 
@@ -774,17 +776,19 @@ class omnipkgMetadataGatherer:
                 if verbose:
                     safe_print(_('      -> Authoritative scan of: {}').format(path))
                 try:
-                    for dist_info_path in path.rglob("*.dist-info"):
-                        try:
-                            if (
-                                dist_info_path.name.startswith("~")
-                                or not dist_info_path.exists()
-                                or not dist_info_path.is_dir()
-                            ):
+                    # Scan both .dist-info (modern pip) and .egg-info (Python 3.7 old pip)
+                    for pattern in ("*.dist-info", "*.egg-info"):
+                        for dist_info_path in path.rglob(pattern):
+                            try:
+                                if (
+                                    dist_info_path.name.startswith("~")
+                                    or not dist_info_path.exists()
+                                    or not dist_info_path.is_dir()
+                                ):
+                                    continue
+                                all_dist_info_paths.append(dist_info_path)
+                            except (OSError, FileNotFoundError, PermissionError):
                                 continue
-                            all_dist_info_paths.append(dist_info_path)
-                        except (OSError, FileNotFoundError, PermissionError):
-                            continue
                 except (OSError, FileNotFoundError, PermissionError) as e:
                     safe_print(_('   - ⚠️  Could not scan {}: {}').format(path, e))
                     continue

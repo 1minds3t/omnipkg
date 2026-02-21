@@ -4,7 +4,10 @@ import subprocess
 import traceback
 import json
 from pathlib import Path
-from importlib.metadata import version, PackageNotFoundError
+try:
+    from importlib.metadata import version, PackageNotFoundError
+except ImportError:
+    from importlib_metadata import version, PackageNotFoundError
 
 # Setup project path
 project_root = Path(__file__).resolve().parent.parent
@@ -100,6 +103,7 @@ def test_version_via_daemon(target_version: str, client: DaemonClient, is_bubble
         proxy = DaemonProxy(client, spec)
 
     code = "from importlib.metadata import version; import rich; print(f'VERSION={version(\"rich\")}|PATH={rich.__file__}')"
+
 
     start = time.perf_counter()
     result = proxy.execute(code)
