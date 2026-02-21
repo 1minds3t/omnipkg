@@ -6,6 +6,7 @@ from omnipkg.core import ConfigManager
 from omnipkg.core import omnipkg as OmnipkgCore
 from omnipkg.i18n import _
 from omnipkg.utils.ai_import_healer import heal_code_string
+from omnipkg.common_utils import is_interactive_session
 
 # omnipkg/commands/run.py
 try:
