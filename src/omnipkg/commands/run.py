@@ -3156,6 +3156,16 @@ def _run_script_logic(
         # Basic Success Check
         if return_code == 0:
             safe_print("\n✅ Script executed successfully.")
+            # Watchdog: on Windows non-interactive, background threads (Redis, cache,
+            # KB rebuild) prevent normal interpreter exit, hanging the parent pipe reader.
+            # Give them 10s to finish cleanly, then force exit.
+            if os.name == "nt" and not is_interactive_session():
+                import threading
+                sys.stdout.flush()
+                sys.stderr.flush()
+                t = threading.Timer(10.0, os._exit, args=[0])
+                t.daemon = True
+                t.start()
             return 0
 
         safe_print("🤖 [AI-INFO] Script execution failed. Analyzing for auto-healing...")
