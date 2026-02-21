@@ -3010,15 +3010,25 @@ def _run_script_logic(
         )
 
         # === EXECUTION STRATEGY SELECTION ===
+        # Strategy A: Use 'uv run' if on Python 3.8+ (fast, isolated)
+        # Strategy B: Use direct 'python' if on Python < 3.8 (uv not supported)
+        
         initial_cmd = []
-
+        
         if sys.version_info >= (3, 8):
+            # Try using uv if available
             uv_path = shutil.which("uv")
             if uv_path:
                 initial_cmd = [
-                    "uv", "run", "--no-project", "--python", python_exe, "--",
+                    "uv",
+                    "run",
+                    "--no-project",
+                    "--python",
+                    python_exe,
+                    "--",
                 ] + safe_cmd_args
-
+        
+        # Fallback if uv not used/available
         if not initial_cmd:
             initial_cmd = [python_exe] + safe_cmd_args
 
@@ -3028,30 +3038,36 @@ def _run_script_logic(
         safe_print(_("🚀 Executing script directly..."))
         start_time_ns = time.perf_counter_ns()
 
-        # In non-interactive mode: use DEVNULL for stdin and CREATE_NEW_PROCESS_GROUP
-        # on Windows so child processes don't keep the step alive after script exits.
+        # 1. Run interactively attached to terminal
+        # In non-interactive mode, don't inherit stdin — use DEVNULL
         _is_noninteractive = (
             not is_interactive_session()
-            or bool(os.environ.get("OMNIPKG_NONINTERACTIVE"))
+            or os.environ.get("OMNIPKG_NONINTERACTIVE")
         )
-
-        _popen_kwargs = dict(
-            stdin=subprocess.DEVNULL if _is_noninteractive else sys.stdin,
-            stdout=sys.stdout,
-            stderr=sys.stderr,
-            cwd=Path.cwd(),
-            env=env,
-        )
-        if _is_noninteractive and sys.platform == "win32":
-            _popen_kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
 
         try:
-            direct_process = subprocess.Popen(initial_cmd, **_popen_kwargs)
+            direct_process = subprocess.Popen(
+                initial_cmd,
+                stdin=subprocess.DEVNULL if _is_noninteractive else sys.stdin,
+                stdout=sys.stdout,
+                stderr=sys.stderr,
+                cwd=Path.cwd(),
+                env=env,
+            )
         except FileNotFoundError:
+            # Fallback for when 'uv' command fails completely (e.g. not in path)
             if initial_cmd[0] == "uv":
                 safe_print("⚠️  'uv' not found, falling back to direct python execution...")
                 initial_cmd = [python_exe] + safe_cmd_args
-                direct_process = subprocess.Popen(initial_cmd, **_popen_kwargs)
+                
+                direct_process = subprocess.Popen(
+                    initial_cmd,
+                    stdin=subprocess.DEVNULL if _is_noninteractive else sys.stdin,
+                    stdout=sys.stdout,
+                    stderr=sys.stderr,
+                    cwd=Path.cwd(),
+                    env=env,
+                )
             else:
                 raise
 
@@ -3062,7 +3078,7 @@ def _run_script_logic(
 
             full_output = ""
 
-            # If failed, re-run in capture mode to get error for Healer
+            # 2. If failed, re-run in capture mode (Silent) to get error for Healer
             if return_code != 0:
                 safe_print(f"\n❌ Script exited with code: {return_code}")
                 safe_print("🤖 [AI-INFO] Attempting to capture error log for healing...")
@@ -3071,7 +3087,7 @@ def _run_script_logic(
                     initial_cmd,
                     stdout=subprocess.PIPE,
                     stderr=subprocess.STDOUT,
-                    stdin=subprocess.DEVNULL,
+                    stdin=subprocess.PIPE,  # Pipe empty stdin to prevent hangs
                     text=True,
                     encoding="utf-8",
                     errors="replace",
@@ -3096,6 +3112,7 @@ def _run_script_logic(
         # ANALYSIS & HEALING
         # =========================================================================
 
+        # Cleanup output for analysis
         filtered_lines = []
         skip_next = False
         for line in full_output.split("\n"):
@@ -3109,6 +3126,7 @@ def _run_script_logic(
             filtered_lines.append(line)
         cleaned_output = "\n".join(filtered_lines)
 
+        # Basic Success Check
         if return_code == 0:
             safe_print("\n✅ Script executed successfully.")
             return 0
