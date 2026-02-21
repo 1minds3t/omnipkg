@@ -3072,33 +3072,49 @@ def _run_script_logic(
             or os.environ.get("OMNIPKG_NONINTERACTIVE")
         )
 
-        try:
-            direct_process = subprocess.Popen(
-                initial_cmd,
+        # Windows pipe-handle deadlock fix:
+        # When the parent process has redirected our stdout to a PIPE (e.g. the demo
+        # runner does `Popen(..., stdout=PIPE)`), passing `stdout=sys.stdout` to a
+        # child Popen duplicates the pipe's write handle into the grandchild process.
+        # The parent reader then never sees EOF until the grandchild also exits, which
+        # deadlocks the whole chain on Windows (Linux handles this differently via fd
+        # inheritance semantics).  Fix: on Windows in non-interactive mode, always
+        # capture with PIPE and stream lines manually so we never leak the write handle.
+        _use_pipe_for_output = _is_noninteractive and os.name == "nt"
+
+        def _spawn_direct(cmd):
+            return subprocess.Popen(
+                cmd,
                 stdin=subprocess.DEVNULL if _is_noninteractive else sys.stdin,
-                stdout=sys.stdout,
-                stderr=sys.stderr,
+                stdout=subprocess.PIPE if _use_pipe_for_output else sys.stdout,
+                stderr=subprocess.STDOUT if _use_pipe_for_output else sys.stderr,
+                text=_use_pipe_for_output,
+                encoding="utf-8" if _use_pipe_for_output else None,
+                errors="replace" if _use_pipe_for_output else None,
                 cwd=Path.cwd(),
                 env=env,
             )
+
+        try:
+            direct_process = _spawn_direct(initial_cmd)
         except FileNotFoundError:
             # Fallback for when 'uv' command fails completely (e.g. not in path)
             if initial_cmd[0] == "uv":
                 safe_print("⚠️  'uv' not found, falling back to direct python execution...")
                 initial_cmd = [python_exe] + safe_cmd_args
-                
-                direct_process = subprocess.Popen(
-                    initial_cmd,
-                    stdin=subprocess.DEVNULL if _is_noninteractive else sys.stdin,
-                    stdout=sys.stdout,
-                    stderr=sys.stderr,
-                    cwd=Path.cwd(),
-                    env=env,
-                )
+                direct_process = _spawn_direct(initial_cmd)
             else:
                 raise
 
         try:
+            if _use_pipe_for_output:
+                # Drain the pipe line-by-line, forwarding to our own stdout.
+                # This ensures the grandchild's write handle is consumed in real-time
+                # and the outer demo-runner pipe never fills/deadlocks.
+                for _line in iter(direct_process.stdout.readline, ""):
+                    sys.stdout.write(_line)
+                    sys.stdout.flush()
+                direct_process.stdout.close()
             return_code = direct_process.wait()
             end_time_ns = time.perf_counter_ns()
             failure_duration_ns = end_time_ns - start_time_ns
