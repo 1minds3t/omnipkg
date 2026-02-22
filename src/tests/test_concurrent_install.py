@@ -120,46 +120,98 @@ def adopt_if_needed(version: str, poll_interval: float = 5.0, timeout: float = 3
     return False
 
 
-def ensure_daemon_running(interpreter_paths: list) -> bool:
+def daemon_restart() -> bool:
     """
-    Start daemon if not running, then wait until it has spawned idle workers
-    for ALL of the given interpreter paths. Must be called AFTER all pythons
-    are adopted so the daemon registry sees them on startup.
+    Stop and restart the daemon so the next run gets cold worker spawn times
+    but NOT cold install times (packages already on disk from the discard run).
+    This gives us a fair, reproducible cold-spawn baseline.
     """
+    safe_print("   🔄 Restarting daemon for cold-spawn baseline...")
     try:
-        from omnipkg.isolation.worker_daemon import DaemonClient, DAEMON_LOG_FILE
+        subprocess.run(["omnipkg", "daemon", "stop"], capture_output=True, **_SP, timeout=15)
+        time.sleep(1)
+        subprocess.run(["omnipkg", "daemon", "start"], capture_output=True, **_SP, timeout=15)
+        # Wait for it to come up
+        from omnipkg.isolation.worker_daemon import DaemonClient
+        client = DaemonClient()
+        for i in range(20):
+            time.sleep(0.5)
+            try:
+                status = client.status()
+                if status.get("success"):
+                    safe_print(f"   ✅ Daemon restarted after {(i+1)*0.5:.1f}s")
+                    return True
+            except Exception:
+                pass
+        safe_print("   ❌ Daemon never came back up after restart")
+        return False
+    except Exception as e:
+        safe_print(f"   ❌ Daemon restart failed: {e}")
+        return False
+
+
+def ensure_daemon_running() -> bool:
+    """Start daemon if not running, wait for it to be ready."""
+    try:
+        from omnipkg.isolation.worker_daemon import DaemonClient
         client = DaemonClient()
         status = client.status()
 
         if status.get("success"):
             safe_print("   ✅ Daemon already running")
-        else:
-            safe_print("   🔄 Starting daemon (all pythons already adopted)...")
-            # Use Popen so we don't block — daemon start detaches itself on Windows
-            proc = subprocess.Popen(
-                ["8pkg", "daemon", "start"],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-            )
-            # Give it a moment to detach then check if it came up
-            for i in range(60):
-                time.sleep(0.5)
-                status = client.status()
-                if status.get("success"):
-                    safe_print(f"   ✅ Daemon up after {(i+1)*0.5:.1f}s")
-                    break
-            else:
-                safe_print("   ❌ Daemon never came up")
-                dump_daemon_log("DAEMON LOG ON FAILURE")
-                return False
+            return True
 
-        return True
+        safe_print("   🔄 Starting daemon...")
+        proc = subprocess.Popen(
+            ["omnipkg", "daemon", "start"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        for i in range(60):
+            time.sleep(0.5)
+            status = client.status()
+            if status.get("success"):
+                safe_print(f"   ✅ Daemon up after {(i+1)*0.5:.1f}s")
+                return True
+
+        safe_print("   ❌ Daemon never came up")
+        dump_daemon_log("DAEMON LOG ON FAILURE")
+        return False
 
     except Exception as e:
         import traceback
         safe_print(f"   ❌ Daemon error: {e}")
         safe_print(traceback.format_exc())
         return False
+
+
+def run_concurrent_warmup(test_configs: list, label: str) -> list:
+    """
+    Concurrently warm up (or re-warm) all workers.
+    Returns list of result dicts, or exits on failure.
+    """
+    safe_print(f"\n🔥 {label}")
+    safe_print("-" * 100)
+
+    results = []
+    with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
+        futures = {
+            executor.submit(warmup_worker, config, i + 1): config
+            for i, config in enumerate(test_configs)
+        }
+        for future in concurrent.futures.as_completed(futures):
+            result = future.result()
+            if result:
+                results.append(result)
+
+    if len(results) != len(test_configs):
+        safe_print(f"\n❌ {label} failed — dumping full daemon log")
+        dump_daemon_log(f"DAEMON LOG AFTER {label} FAILURE")
+        sys.exit(1)
+
+    results.sort(key=lambda x: x["thread_id"])
+    safe_print(f"\n✅ All workers ready!")
+    return results
 
 
 def warmup_worker(config: tuple, thread_id: int) -> dict:
@@ -179,7 +231,6 @@ def warmup_worker(config: tuple, thread_id: int) -> dict:
         safe_print(f"{prefix} 🔥 Warming up...")
         start = time.perf_counter()
 
-        # NOTE: rich.__version__ does NOT exist in rich>=13 — must use importlib.metadata
         warmup_code = f"""
 import sys, importlib.metadata
 print(f"[WORKER:{thread_id}] exe={{sys.executable}}")
@@ -207,7 +258,6 @@ with omnipkgLoader("rich=={rich_version}"):
 
         elapsed = (time.perf_counter() - start) * 1000
 
-        # Print every field — nothing hidden
         safe_print(f"{prefix} 📥 status : {result.get('status')}")
         safe_print(f"{prefix} 📥 success: {result.get('success')}")
         if result.get("stdout"):
@@ -298,7 +348,6 @@ def verify_execution(config: tuple, thread_id: int) -> dict:
         from omnipkg.isolation.worker_daemon import DaemonClient
         client = DaemonClient()
 
-        # importlib.metadata — not rich.__version__
         verify_code = f"""
 import sys, json, importlib.metadata
 from omnipkg.loader import omnipkgLoader
@@ -333,27 +382,41 @@ with omnipkgLoader("rich=={rich_version}"):
         return None
 
 
-def print_benchmark_summary(results: list, total_time: float):
+def print_benchmark_summary(cold_results: list, hot_results: list):
     safe_print("\n" + "=" * 100)
-    safe_print("📊 PRODUCTION BENCHMARK RESULTS")
+    safe_print("📊 BENCHMARK RESULTS")
     safe_print("=" * 100)
-    safe_print(f"{'Thread':<8} {'Python':<12} {'Rich':<10} {'Warmup':<15} {'Benchmark':<15}")
+    safe_print(f"{'Thread':<8} {'Python':<12} {'Rich':<10} {'Cold (restart)':<18} {'Hot (cached)':<15} {'Speedup':<10}")
     safe_print("-" * 100)
-    for r in sorted(results, key=lambda x: x["thread_id"]):
+
+    for cold, hot in zip(
+        sorted(cold_results, key=lambda x: x["thread_id"]),
+        sorted(hot_results,  key=lambda x: x["thread_id"]),
+    ):
+        speedup = cold["warmup_time"] / hot["benchmark_time"] if hot["benchmark_time"] > 0 else 0
         safe_print(
-            f"T{r['thread_id']:<7} "
-            f"{r['python_version']:<12} "
-            f"{r['rich_version']:<10} "
-            f"{format_duration(r['warmup_time']):<15} "
-            f"{format_duration(r['benchmark_time']):<15}"
+            f"T{cold['thread_id']:<7} "
+            f"{cold['python_version']:<12} "
+            f"{cold['rich_version']:<10} "
+            f"{format_duration(cold['warmup_time']):<18} "
+            f"{format_duration(hot['benchmark_time']):<15} "
+            f"{speedup:.0f}x"
         )
+
     safe_print("-" * 100)
-    bt = [r["benchmark_time"] for r in results]
-    wt = [r["warmup_time"] for r in results]
-    seq = sum(bt)
-    conc = max(bt)
-    safe_print(f"⏱️  Sequential: {format_duration(seq)}  |  Concurrent: {format_duration(conc)}  |  Speedup: {seq/conc:.2f}x")
-    safe_print(f"   Warmup avg: {format_duration(sum(wt)/len(wt))}  |  Bench avg: {format_duration(sum(bt)/len(bt))}  |  Warmup→Hot: {sum(wt)/len(wt)/(sum(bt)/len(bt)):.1f}x")
+    cold_times = [r["warmup_time"]    for r in cold_results]
+    hot_times  = [r["benchmark_time"] for r in hot_results]
+    cold_conc  = max(cold_times)
+    hot_conc   = max(hot_times)
+    safe_print(
+        f"⏱️  Cold concurrent: {format_duration(cold_conc)}  "
+        f"Hot concurrent: {format_duration(hot_conc)}  "
+        f"Speedup: {cold_conc/hot_conc:.0f}x"
+    )
+    safe_print(
+        f"   Cold avg: {format_duration(sum(cold_times)/len(cold_times))}  "
+        f"Hot avg: {format_duration(sum(hot_times)/len(hot_times))}"
+    )
     safe_print("=" * 100)
 
 
@@ -370,7 +433,9 @@ def main():
         ("3.11", "13.7.1"),
     ]
 
-    # Phase 1: Setup
+    # ─────────────────────────────────────────────────────────────────────────
+    # Phase 1: Setup — adopt interpreters
+    # ─────────────────────────────────────────────────────────────────────────
     safe_print("\n📥 Phase 1: Setup")
     safe_print("-" * 100)
     for version, _ in test_configs:
@@ -378,16 +443,6 @@ def main():
             safe_print(f"❌ Failed to adopt Python {version}")
             sys.exit(1)
 
-    # Print resolved interpreter paths — catch any wrong resolution immediately
-    safe_print("\n🐍 Resolved interpreter paths:")
-    for version, _ in test_configs:
-        try:
-            path = get_interpreter_path(version)
-            safe_print(f"   Python {version} → {path}")
-        except Exception as e:
-            safe_print(f"   Python {version} → ❌ ERROR: {e}")
-
-    # Resolve all interpreter paths AFTER adoption so daemon sees them all on start
     safe_print("\n🐍 Resolved interpreter paths:")
     interpreter_paths = []
     for version, _ in test_configs:
@@ -399,58 +454,74 @@ def main():
             safe_print(f"   Python {version} → ❌ ERROR: {e}")
             sys.exit(1)
 
-    if not ensure_daemon_running(interpreter_paths):
+    # ─────────────────────────────────────────────────────────────────────────
+    # Phase 2: DISCARD RUN — first-ever run includes package install time.
+    # We run it to get packages on disk, but discard the numbers as unfair.
+    # ─────────────────────────────────────────────────────────────────────────
+    safe_print("\n🗑️  Phase 2: Discard Run (first install — numbers not representative)")
+    safe_print("-" * 100)
+    safe_print("   ℹ️  This run installs packages into each interpreter's bubble.")
+    safe_print("   ℹ️  Numbers are discarded — only used to prime the package cache.")
+
+    if not ensure_daemon_running():
         safe_print("❌ Failed to start daemon")
         dump_daemon_log("DAEMON LOG ON STARTUP FAILURE")
         sys.exit(1)
 
-    # Phase 2: Warmup
-    safe_print("\n🔥 Phase 2: Warmup (concurrent)")
+    run_concurrent_warmup(test_configs, "Discard Run (concurrent install + warmup)")
+    dump_daemon_log("DAEMON LOG AFTER DISCARD RUN")
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # Phase 3: DAEMON RESTART — clear worker pool so next run pays cold spawn
+    # cost only (packages already on disk, no install overhead).
+    # ─────────────────────────────────────────────────────────────────────────
+    safe_print("\n🔁 Phase 3: Daemon Restart (cold-spawn baseline)")
     safe_print("-" * 100)
-    warmup_results = []
+    safe_print("   ℹ️  Packages are already installed. Restarting daemon clears")
+    safe_print("   ℹ️  the worker pool so Phase 4 measures pure spawn time only.")
+
+    if not daemon_restart():
+        safe_print("❌ Failed to restart daemon — cannot produce fair benchmark")
+        dump_daemon_log("DAEMON LOG AFTER RESTART FAILURE")
+        sys.exit(1)
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # Phase 4: COLD BENCHMARK — spawn fresh workers (no install), measure that
+    # ─────────────────────────────────────────────────────────────────────────
+    cold_results = run_concurrent_warmup(
+        test_configs,
+        "Phase 4: Cold Benchmark (concurrent, workers fresh after restart)"
+    )
+    dump_daemon_log("DAEMON LOG AFTER COLD BENCHMARK")
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # Phase 5: HOT BENCHMARK — workers already warm, measure dispatch overhead
+    # ─────────────────────────────────────────────────────────────────────────
+    safe_print("\n⚡ Phase 5: Hot Benchmark (workers already warm)")
+    safe_print("-" * 100)
+
+    hot_results = []
     with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
         futures = {
-            executor.submit(warmup_worker, config, i + 1): config
+            executor.submit(benchmark_execution, config, i + 1, cold_results[i]): config
             for i, config in enumerate(test_configs)
         }
         for future in concurrent.futures.as_completed(futures):
             result = future.result()
             if result:
-                warmup_results.append(result)
+                hot_results.append(result)
 
-    if len(warmup_results) != len(test_configs):
-        safe_print("\n❌ Warmup failed — dumping full daemon log")
-        dump_daemon_log("DAEMON LOG AFTER WARMUP FAILURE")
+    if len(hot_results) != len(test_configs):
+        safe_print("\n❌ Hot benchmark failed")
+        dump_daemon_log("DAEMON LOG AFTER HOT BENCHMARK FAILURE")
         sys.exit(1)
 
-    warmup_results.sort(key=lambda x: x["thread_id"])
-    safe_print("\n✅ All workers warmed up!")
+    # ─────────────────────────────────────────────────────────────────────────
+    # Phase 6: Results + Verification
+    # ─────────────────────────────────────────────────────────────────────────
+    print_benchmark_summary(cold_results, hot_results)
 
-    # Phase 3: Benchmark
-    safe_print("\n⚡ Phase 3: Benchmark (hot workers)")
-    safe_print("-" * 100)
-    benchmark_results = []
-    benchmark_start = time.perf_counter()
-    with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
-        futures = {
-            executor.submit(benchmark_execution, config, i + 1, warmup_results[i]): config
-            for i, config in enumerate(test_configs)
-        }
-        for future in concurrent.futures.as_completed(futures):
-            result = future.result()
-            if result:
-                benchmark_results.append(result)
-
-    if len(benchmark_results) != len(test_configs):
-        safe_print("\n❌ Benchmark failed")
-        dump_daemon_log("DAEMON LOG AFTER BENCHMARK FAILURE")
-        sys.exit(1)
-
-    benchmark_total = (time.perf_counter() - benchmark_start) * 1000
-    print_benchmark_summary(benchmark_results, benchmark_total)
-
-    # Phase 4: Verification
-    safe_print("\n🔍 Phase 4: Verification (not timed)")
+    safe_print("\n🔍 Phase 6: Verification (proving correctness — not timed)")
     safe_print("-" * 100)
     verify_results = []
     with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
@@ -475,7 +546,6 @@ def main():
     total_time = (time.perf_counter() - start_time) * 1000
     safe_print(f"\n🎉 DONE  total={format_duration(total_time)}")
 
-    # Always dump daemon log at end so CI always has full picture
     dump_daemon_log("DAEMON LOG AT END OF RUN")
 
     sys.exit(0)
