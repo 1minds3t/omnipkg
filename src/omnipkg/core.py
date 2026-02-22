@@ -9114,6 +9114,8 @@ class omnipkg:
                 safe_print(f"  {idx}) v{version} ({install_type})")
 
         # Interactive selection
+        if not is_interactive_session():
+            return
         try:
             safe_print(_("\n💡 Want details on a specific version?"))
             choice = input(
@@ -9146,11 +9148,10 @@ class omnipkg:
                     self._show_version_details(selected_inst)
                 else:
                     safe_print(_("❌ Invalid selection."))
-        except (ValueError, KeyboardInterrupt):
+        except (ValueError, KeyboardInterrupt, EOFError):
             safe_print(_("\n✅ Skipping detailed view."))
         except Exception as e:
             safe_print(_("❌ Error during selection: {}").format(e))
-
             traceback.print_exc()
 
     def _clean_and_format_dependencies(self, raw_deps_json: str) -> str:
@@ -9245,6 +9246,8 @@ class omnipkg:
             safe_print(_("  {}) v{}{}".format(i, detail.get("Version", "?"), status_str)))
 
         # Handle user interaction
+        if not is_interactive_session():
+            return
         safe_print(_("\n💡 Want details on a specific version?"))
         try:
             choice = input(

@@ -120,3 +120,6 @@ src/tests/debug_test*.py
 # Auto-generated license files
 licenses/
 .gitship/
+
+# gitship diff exports (auto-added by gitship)
+gitship_exports/

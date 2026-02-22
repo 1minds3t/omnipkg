@@ -11,56 +11,148 @@ jobs:
   test:
     runs-on: windows-latest
     timeout-minutes: 30
-    
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-        # NO path parameter - checks out to D:\a\omnipkg\omnipkg
-      
+
       - name: Set up Python (3.11)
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      
+
       - name: Configure UTF-8 encoding and unbuffered output (Windows fix)
         run: |
           echo "PYTHONIOENCODING=utf-8" >> $env:GITHUB_ENV
-          echo "PYTHONUTF8=1" >> $env:GITHUB_ENV
-          echo "PYTHONUNBUFFERED=1" >> $env:GITHUB_ENV
-          echo "OMNIPKG_DEBUG=1" >> $env:GITHUB_ENV
-          # Force immediate flush for all streams
+          echo "PYTHONUTF8=1"           >> $env:GITHUB_ENV
+          echo "PYTHONUNBUFFERED=1"     >> $env:GITHUB_ENV
+          echo "OMNIPKG_DEBUG=1"        >> $env:GITHUB_ENV
           echo "PYTHONDONTWRITEBYTECODE=1" >> $env:GITHUB_ENV
         shell: pwsh
-            
+
       - name: Install omnipkg
         run: |
           python -m pip install --upgrade pip
           pip install -e .
         shell: pwsh
-      
+
       - name: Configure omnipkg for non-interactive use
         run: |
           $configDir = "$HOME\.config\omnipkg"
           New-Item -ItemType Directory -Force -Path $configDir | Out-Null
-          
-          @{
-            interactive = $false
-            auto_confirm = $true
-          } | ConvertTo-Json | Out-File -FilePath "$configDir\config.json" -Encoding utf8
-          
+          @{ interactive = $false; auto_confirm = $true } | ConvertTo-Json |
+            Out-File -FilePath "$configDir\config.json" -Encoding utf8
           Write-Host "✅ Omnipkg configured"
         shell: pwsh
-      
-      - name: Run Demo (Option 8 - Quantum Multiverse)
-        run: omnipkg demo 8 --non-interactive
-        shell: cmd
 
-      - name: Run Demo Again (Verify Caching)
+      # ── Run 1 ────────────────────────────────────────────────────────────────
+      - name: Run Demo 8 - First Run (cold start)
+        id: demo1
         continue-on-error: true
-        run: omnipkg demo 8 --non-interactive
-        shell: cmd
-      
-      - name: Run Demo Again (Verify Caching)
+        timeout-minutes: 8
+        run: |
+          $job = Start-Job { omnipkg demo 8 --non-interactive 2>&1 }
+          # Stream output while enforcing a hard 5-minute wall-clock kill
+          $deadline = (Get-Date).AddMinutes(5)
+          while ($job.State -eq 'Running') {
+            Receive-Job $job
+            if ((Get-Date) -gt $deadline) {
+              Write-Host "⏰ HARD TIMEOUT: killing demo after 5 minutes"
+              Stop-Job $job
+              Remove-Job $job -Force
+              break
+            }
+            Start-Sleep -Milliseconds 500
+          }
+          if ($job.State -ne 'Removed') {
+            Receive-Job $job   # flush remaining output
+            Remove-Job $job -Force
+          }
+        shell: pwsh
+
+      - name: Dump daemon log after Run 1
+        if: always()
+        run: |
+          $log = "$env:TEMP\omnipkg_worker_daemon.log"
+          if (Test-Path $log) {
+            Write-Host "=== DAEMON LOG ($log) ==="
+            Get-Content $log -Tail 100
+          } else {
+            Write-Host "(no daemon log found at $log)"
+          }
+          # Also check common alt locations
+          Get-ChildItem "$env:TEMP" -Filter "*omnipkg*" -ErrorAction SilentlyContinue |
+            ForEach-Object { Write-Host "Found: $_" }
+        shell: pwsh
+
+      # ── Run 2 ────────────────────────────────────────────────────────────────
+      - name: Run Demo 8 - Second Run (verify caching)
+        id: demo2
         continue-on-error: true
-        run: omnipkg demo 8 --non-interactive
+        timeout-minutes: 8
+        run: |
+          $job = Start-Job { omnipkg demo 8 --non-interactive 2>&1 }
+          $deadline = (Get-Date).AddMinutes(5)
+          while ($job.State -eq 'Running') {
+            Receive-Job $job
+            if ((Get-Date) -gt $deadline) {
+              Write-Host "⏰ HARD TIMEOUT: killing demo after 5 minutes"
+              Stop-Job $job
+              Remove-Job $job -Force
+              break
+            }
+            Start-Sleep -Milliseconds 500
+          }
+          if ($job.State -ne 'Removed') {
+            Receive-Job $job
+            Remove-Job $job -Force
+          }
+        shell: pwsh
+
+      - name: Dump daemon log after Run 2
+        if: always()
+        run: |
+          $log = "$env:TEMP\omnipkg_worker_daemon.log"
+          if (Test-Path $log) {
+            Write-Host "=== DAEMON LOG ($log) ==="
+            Get-Content $log -Tail 100
+          } else {
+            Write-Host "(no daemon log found at $log)"
+          }
+        shell: pwsh
+
+      # ── Run 3 ────────────────────────────────────────────────────────────────
+      - name: Run Demo 8 - Third Run (verify caching)
+        id: demo3
+        continue-on-error: true
+        timeout-minutes: 8
+        run: |
+          $job = Start-Job { omnipkg demo 8 --non-interactive 2>&1 }
+          $deadline = (Get-Date).AddMinutes(5)
+          while ($job.State -eq 'Running') {
+            Receive-Job $job
+            if ((Get-Date) -gt $deadline) {
+              Write-Host "⏰ HARD TIMEOUT: killing demo after 5 minutes"
+              Stop-Job $job
+              Remove-Job $job -Force
+              break
+            }
+            Start-Sleep -Milliseconds 500
+          }
+          if ($job.State -ne 'Removed') {
+            Receive-Job $job
+            Remove-Job $job -Force
+          }
+        shell: pwsh
+
+      - name: Dump daemon log after Run 3
+        if: always()
+        run: |
+          $log = "$env:TEMP\omnipkg_worker_daemon.log"
+          if (Test-Path $log) {
+            Write-Host "=== DAEMON LOG ($log) ==="
+            Get-Content $log -Tail 100
+          } else {
+            Write-Host "(no daemon log found at $log)"
+          }
         shell: pwsh

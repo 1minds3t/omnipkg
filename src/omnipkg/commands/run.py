@@ -6,6 +6,7 @@ from omnipkg.core import ConfigManager
 from omnipkg.core import omnipkg as OmnipkgCore
 from omnipkg.i18n import _
 from omnipkg.utils.ai_import_healer import heal_code_string
+from omnipkg.common_utils import is_interactive_session
 
 # omnipkg/commands/run.py
 try:
@@ -1362,6 +1363,8 @@ def convert_module_to_package_name(module_name: str, error_message: str = None) 
         "knowhere_art": "knowhere-art-python",
         "delphi_digital": "delphi-digital-python",
         "galactic_punks": "galactic-punks-python",
+        "ruamel.yaml": "ruamel.yaml",
+        "ruamel": "ruamel.yaml",
     }
 
     # Check for direct mapping first
@@ -1402,8 +1405,33 @@ def convert_module_to_package_name(module_name: str, error_message: str = None) 
         )
         return namespace_package_name
 
-    # Step 5: FINAL FALLBACK
-    # The simplest case: if no other rules match, assume the module name is the package name.
+    # Step 5: PYPI LOOKUP
+    # Ask PyPI if the module name (or namespace-guessed name) is a real package.
+    # Tries the raw module name first, then the dotted->dashed variant.
+    candidates = [module_name]
+    if "." in module_name:
+        candidates.append(module_name.replace(".", "-"))  # e.g. ruamel-yaml
+        candidates.append(module_name.replace(".", "."))  # keep as-is (ruamel.yaml)
+
+    for candidate in candidates:
+        try:
+            import urllib.request
+            import json as _json
+            url = f"https://pypi.org/pypi/{candidate}/json"
+            req = urllib.request.Request(url, headers={"User-Agent": "omnipkg-dep-scanner/1.0"})
+            with urllib.request.urlopen(req, timeout=3) as resp:
+                if resp.status == 200:
+                    data = _json.loads(resp.read())
+                    pypi_name = data["info"]["name"]
+                    safe_print(
+                        f"INFO: PyPI confirmed '{module_name}' → '{pypi_name}'"
+                    )
+                    return pypi_name
+        except Exception:
+            continue  # timeout, 404, no network — just keep going
+
+    # Step 6: FINAL FALLBACK
+    # Nothing worked. Return the raw module name and let pip complain if it's wrong.
     safe_print(
         f"INFO: No specific rule matched. Falling back to module name '{module_name}' as the package name."
     )
@@ -3038,10 +3066,16 @@ def _run_script_logic(
         start_time_ns = time.perf_counter_ns()
 
         # 1. Run interactively attached to terminal
+        # In non-interactive mode, don't inherit stdin — use DEVNULL
+        _is_noninteractive = (
+            not is_interactive_session()
+            or os.environ.get("OMNIPKG_NONINTERACTIVE")
+        )
+
         try:
             direct_process = subprocess.Popen(
                 initial_cmd,
-                stdin=sys.stdin,
+                stdin=subprocess.DEVNULL if _is_noninteractive else sys.stdin,
                 stdout=sys.stdout,
                 stderr=sys.stderr,
                 cwd=Path.cwd(),
@@ -3052,9 +3086,10 @@ def _run_script_logic(
             if initial_cmd[0] == "uv":
                 safe_print("⚠️  'uv' not found, falling back to direct python execution...")
                 initial_cmd = [python_exe] + safe_cmd_args
+                
                 direct_process = subprocess.Popen(
                     initial_cmd,
-                    stdin=sys.stdin,
+                    stdin=subprocess.DEVNULL if _is_noninteractive else sys.stdin,
                     stdout=sys.stdout,
                     stderr=sys.stderr,
                     cwd=Path.cwd(),
