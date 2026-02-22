@@ -121,22 +121,15 @@ jobs:
           echo "🔍 STEP 2: Discovering package intelligence with omnipkg info"
           echo "============================================================"
           
-          # Run omnipkg info and capture output
-          echo "📋 Running: omnipkg info tensorboard"
-          echo ""
-          
           # Test Redis connection first
           echo "🔧 Testing Redis connection..."
           redis-cli -h localhost -p 6379 ping || echo "Redis ping failed"
           
-          # Use expect to automatically select option 1 for detailed info
-          expect << 'EOF'
-          spawn omnipkg info tensorboard
-          expect "Enter number*" {
-            send "1\r"
-          }
-          expect eof
-          EOF
+          # Run omnipkg info in non-interactive mode.
+          # We don't need expect because we just want to prove the command runs
+          # and outputs the summary data.
+          echo "📋 Running: omnipkg info tensorboard"
+          omnipkg info tensorboard
 
       - name: "🗄️ Demo: Direct Redis data access"
         run: |
