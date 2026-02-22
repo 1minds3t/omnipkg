@@ -137,29 +137,27 @@ jobs:
           echo "💾 STEP 3: Raw package metadata from Redis"
           echo "============================================================"
           
-          echo "🔑 Checking Redis for tensorboard package data..."
+          # Dynamically find the instance-aware key for tensorboard
+          REDIS_KEY=$(redis-cli -h localhost -p 6379 KEYS "*tensorboard*" | grep "inst:tensorboard" | head -n 1)
+          
+          if [ -z "$REDIS_KEY" ]; then
+            echo "❌ Could not find tensorboard key in Redis. Dumping all keys:"
+            redis-cli -h localhost -p 6379 KEYS "*"
+            exit 1
+          fi
+          
+          echo "🔑 Found dynamic Redis key: $REDIS_KEY"
+          # Export it so subsequent steps can use it!
+          echo "REDIS_KEY=$REDIS_KEY" >> $GITHUB_ENV
           echo ""
           
-          # Verify Redis connection and CLI availability
-          echo "📡 Testing Redis CLI and connection..."
-          which redis-cli || echo "redis-cli not found in PATH"
-          redis-cli --version || echo "redis-cli version check failed"
-          redis-cli -h localhost -p 6379 ping || echo "Redis connection failed"
-          echo ""
-          
-          # Show Redis key structure
-          echo "📋 Available tensorboard keys in Redis:"
-          redis-cli -h localhost -p 6379 KEYS "omnipkg:pkg:tensorboard:*" || echo "No keys found or Redis connection failed"
-          echo ""
-          
-          # Get the version and show detailed data
-          VERSION=$(redis-cli -h localhost -p 6379 HGET omnipkg:pkg:tensorboard:2.20.0 Version 2>/dev/null || echo "2.20.0")
+          VERSION=$(redis-cli -h localhost -p 6379 HGET "$REDIS_KEY" Version)
           echo "🏷️ Found version: $VERSION"
           echo ""
           
           echo "📦 Complete metadata for tensorboard v$VERSION:"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          redis-cli -h localhost -p 6379 HGETALL omnipkg:pkg:tensorboard:$VERSION || echo "Failed to retrieve metadata from Redis"
+          redis-cli -h localhost -p 6379 HGETALL "$REDIS_KEY"
 
       - name: "🛡️ Demo: Security & Health Analysis"
         run: |
@@ -167,16 +165,14 @@ jobs:
           echo "🔒 STEP 4: Package Security & Health Intelligence"
           echo "============================================================"
           
-          VERSION="2.20.0"
-          
           echo "🔍 Security Analysis Results:"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           
-          # Extract security information
-          SECURITY_ISSUES=$(redis-cli -h localhost -p 6379 HGET omnipkg:pkg:tensorboard:$VERSION security.issues_found)
-          AUDIT_STATUS=$(redis-cli -h localhost -p 6379 HGET omnipkg:pkg:tensorboard:$VERSION security.audit_status)
-          IMPORTABLE=$(redis-cli -h localhost -p 6379 HGET omnipkg:pkg:tensorboard:$VERSION health.import_check.importable)
-          IMPORT_VERSION=$(redis-cli -h localhost -p 6379 HGET omnipkg:pkg:tensorboard:$VERSION health.import_check.version)
+          # Extract security information using the dynamic key
+          SECURITY_ISSUES=$(redis-cli -h localhost -p 6379 HGET "$REDIS_KEY" security.issues_found)
+          AUDIT_STATUS=$(redis-cli -h localhost -p 6379 HGET "$REDIS_KEY" security.audit_status)
+          IMPORTABLE=$(redis-cli -h localhost -p 6379 HGET "$REDIS_KEY" health.import_check.importable)
+          IMPORT_VERSION=$(redis-cli -h localhost -p 6379 HGET "$REDIS_KEY" health.import_check.version)
           
           echo "🛡️ Security Issues Found: $SECURITY_ISSUES"
           echo "✅ Security Audit Status: $AUDIT_STATUS"
@@ -184,13 +180,12 @@ jobs:
           echo "🏷️ Import Check Version: $IMPORT_VERSION"
           echo ""
           
-          # Show binary analysis if available
           echo "⚙️ Binary Analysis Results:"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           
-          BINARY_EXISTS=$(redis-cli -h localhost -p 6379 HGET omnipkg:pkg:tensorboard:$VERSION health.binary_checks.tensorboard.exists 2>/dev/null || echo "N/A")
-          BINARY_SIZE=$(redis-cli -h localhost -p 6379 HGET omnipkg:pkg:tensorboard:$VERSION health.binary_checks.tensorboard.size 2>/dev/null || echo "N/A")
-          VALID_SHEBANG=$(redis-cli -h localhost -p 6379 HGET omnipkg:pkg:tensorboard:$VERSION health.binary_checks.tensorboard.valid_shebang 2>/dev/null || echo "N/A")
+          BINARY_EXISTS=$(redis-cli -h localhost -p 6379 HGET "$REDIS_KEY" health.binary_checks.tensorboard.exists 2>/dev/null || echo "N/A")
+          BINARY_SIZE=$(redis-cli -h localhost -p 6379 HGET "$REDIS_KEY" health.binary_checks.tensorboard.size 2>/dev/null || echo "N/A")
+          VALID_SHEBANG=$(redis-cli -h localhost -p 6379 HGET "$REDIS_KEY" health.binary_checks.tensorboard.valid_shebang 2>/dev/null || echo "N/A")
           
           echo "📁 Binary Exists: $BINARY_EXISTS"
           echo "📏 Binary Size: $BINARY_SIZE bytes"
@@ -202,13 +197,11 @@ jobs:
           echo "🔗 STEP 5: Advanced Dependency Intelligence"
           echo "============================================================"
           
-          VERSION="2.20.0"
-          
           echo "📋 Analyzing tensorboard dependencies..."
           echo ""
           
           # Get and format dependencies
-          DEPENDENCIES=$(redis-cli -h localhost -p 6379 HGET omnipkg:pkg:tensorboard:$VERSION dependencies)
+          DEPENDENCIES=$(redis-cli -h localhost -p 6379 HGET "$REDIS_KEY" dependencies)
           echo "🔗 Runtime Dependencies:"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           
@@ -221,12 +214,10 @@ jobs:
           
           echo ""
           
-          # Show Python requirements
-          PYTHON_REQ=$(redis-cli -h localhost -p 6379 HGET omnipkg:pkg:tensorboard:$VERSION Requires-Python)
+          PYTHON_REQ=$(redis-cli -h localhost -p 6379 HGET "$REDIS_KEY" Requires-Python)
           echo "🐍 Python Version Requirement: $PYTHON_REQ"
           
-          # Show additional package info
-          KEYWORDS=$(redis-cli -h localhost -p 6379 HGET omnipkg:pkg:tensorboard:$VERSION Keywords)
+          KEYWORDS=$(redis-cli -h localhost -p 6379 HGET "$REDIS_KEY" Keywords)
           echo "🏷️ Package Keywords: $KEYWORDS"
 
       - name: "📈 Summary: Package Intelligence Report"
@@ -238,31 +229,21 @@ jobs:
           echo "✨ What we discovered about tensorboard:"
           echo ""
           echo "🔍 PACKAGE OVERVIEW:"
-          echo "  • Name: $(redis-cli -h localhost -p 6379 HGET omnipkg:pkg:tensorboard:2.20.0 Name)"
-          echo "  • Version: $(redis-cli -h localhost -p 6379 HGET omnipkg:pkg:tensorboard:2.20.0 Version)"
-          echo "  • Author: $(redis-cli -h localhost -p 6379 HGET omnipkg:pkg:tensorboard:2.20.0 Author)"
-          echo "  • License: $(redis-cli -h localhost -p 6379 HGET omnipkg:pkg:tensorboard:2.20.0 License)"
+          echo "  • Name: $(redis-cli -h localhost -p 6379 HGET "$REDIS_KEY" Name)"
+          echo "  • Version: $(redis-cli -h localhost -p 6379 HGET "$REDIS_KEY" Version)"
+          echo "  • Author: $(redis-cli -h localhost -p 6379 HGET "$REDIS_KEY" Author)"
+          echo "  • License: $(redis-cli -h localhost -p 6379 HGET "$REDIS_KEY" License)"
           echo ""
           echo "🛡️ SECURITY & HEALTH:"
-          echo "  • Security Issues: $(redis-cli -h localhost -p 6379 HGET omnipkg:pkg:tensorboard:2.20.0 security.issues_found) found"
-          echo "  • Import Status: $(redis-cli -h localhost -p 6379 HGET omnipkg:pkg:tensorboard:2.20.0 health.import_check.importable)"
-          echo "  • Audit Status: $(redis-cli -h localhost -p 6379 HGET omnipkg:pkg:tensorboard:2.20.0 security.audit_status)"
+          echo "  • Security Issues: $(redis-cli -h localhost -p 6379 HGET "$REDIS_KEY" security.issues_found) found"
+          echo "  • Import Status: $(redis-cli -h localhost -p 6379 HGET "$REDIS_KEY" health.import_check.importable)"
+          echo "  • Audit Status: $(redis-cli -h localhost -p 6379 HGET "$REDIS_KEY" security.audit_status)"
           echo ""
           echo "💾 DATA PERSISTENCE:"
-          echo "  • All metadata stored in Redis"
+          echo "  • All metadata stored in Redis (Key: $REDIS_KEY)"
           echo "  • Queryable via redis-cli commands"
           echo "  • Accessible through omnipkg API"
-          echo ""
-          echo "🚀 KEY FEATURES DEMONSTRATED:"
-          echo "  ✅ Smart package installation"
-          echo "  ✅ Comprehensive metadata analysis"
-          echo "  ✅ Security vulnerability scanning"
-          echo "  ✅ Dependency tree analysis"
-          echo "  ✅ Binary health checks"
-          echo "  ✅ Redis-backed intelligence storage"
-          echo ""
-          echo "💡 Users can now discover everything about their packages!"
-
+          
       - name: Archive Demo Results
         if: always()
         uses: actions/upload-artifact@v4
