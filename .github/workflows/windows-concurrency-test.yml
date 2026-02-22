@@ -27,7 +27,7 @@ jobs:
         shell: cmd
         run: |
           echo Workflow ref: ${{ github.ref }}
-          echo Code branch:  ${{ github.event.inputs.code_branch || github.ref }}
+          echo Code branch: ${{ github.event.inputs.code_branch || github.ref }}
 
       - name: Set up Python (3.11)
         uses: actions/setup-python@v5
@@ -37,10 +37,10 @@ jobs:
       - name: Configure UTF-8 encoding and unbuffered output
         shell: pwsh
         run: |
-          echo "PYTHONIOENCODING=utf-8"    >> $env:GITHUB_ENV
-          echo "PYTHONUTF8=1"              >> $env:GITHUB_ENV
-          echo "PYTHONUNBUFFERED=1"        >> $env:GITHUB_ENV
-          echo "OMNIPKG_DEBUG=1"           >> $env:GITHUB_ENV
+          echo "PYTHONIOENCODING=utf-8" >> $env:GITHUB_ENV
+          echo "PYTHONUTF8=1" >> $env:GITHUB_ENV
+          echo "PYTHONUNBUFFERED=1" >> $env:GITHUB_ENV
+          echo "OMNIPKG_DEBUG=1" >> $env:GITHUB_ENV
           echo "PYTHONDONTWRITEBYTECODE=1" >> $env:GITHUB_ENV
 
       - name: Install omnipkg
@@ -48,7 +48,6 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -e .
-
 
       - name: Configure omnipkg for non-interactive use
         shell: pwsh
@@ -58,7 +57,6 @@ jobs:
           @{ interactive = $false; auto_confirm = $true } | ConvertTo-Json | Out-File -FilePath "$configDir\config.json" -Encoding utf8
           Write-Host "✅ Omnipkg configured"
 
-
       - name: Run Demo (Option 8 - Quantum Multiverse)
         shell: cmd
         run: omnipkg demo 8 --non-interactive
@@ -67,11 +65,6 @@ jobs:
         if: always()
         shell: pwsh
         run: type "$env:TEMP\omnipkg\omnipkg_daemon.log"
-
-      - name: Dump daemon log after demo run 1
-        if: always()
-        run: python dump_daemon_log.py "AFTER DEMO RUN 1"
-        shell: cmd
 
       - name: Run Demo Again (Verify Caching)
         shell: cmd
