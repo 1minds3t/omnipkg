@@ -37,6 +37,11 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e .
         shell: pwsh
+
+      - name: Set debug environment
+        run: |
+          echo "OMNIPKG_DEBUG=1" >> $env:GITHUB_ENV
+          echo "OMNIPKG_LOG_LEVEL=DEBUG" >> $env:GITHUB_ENV
       
       - name: Configure omnipkg for non-interactive use
         run: |
