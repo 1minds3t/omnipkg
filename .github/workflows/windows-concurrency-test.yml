@@ -23,11 +23,11 @@ jobs:
         with:
           ref: ${{ github.event.inputs.code_branch || github.ref }}
 
-      - name: Show which branch we are running
+      - name: Show branch info
         shell: cmd
         run: |
-          echo Running workflow from ref: ${{ github.ref }}
-          echo Checked out code branch: ${{ github.event.inputs.code_branch || github.ref }}
+          echo Workflow ref: ${{ github.ref }}
+          echo Code branch:  ${{ github.event.inputs.code_branch || github.ref }}
 
       - name: Set up Python (3.11)
         uses: actions/setup-python@v5
@@ -64,32 +64,7 @@ jobs:
       - name: Dump daemon log after start
         if: always()
         shell: pwsh
-        run: |
-          $tmp = "$env:TEMP\dump_log.py"
-          @'
-import os, sys
-candidates = []
-try:
-    from omnipkg.isolation.worker_daemon import DAEMON_LOG_FILE
-    candidates.append(DAEMON_LOG_FILE)
-except Exception as e:
-    print(f"[WARN] {e}")
-for var in ("TEMP", "TMP"):
-    base = os.environ.get(var, "C:\\Temp")
-    candidates.append(os.path.join(base, "omnipkg", "omnipkg_daemon.log"))
-print("=" * 80)
-for path in candidates:
-    if os.path.exists(path):
-        print(f"[LOG FILE] {path}")
-        with open(path, encoding="utf-8", errors="replace") as f:
-            for i, line in enumerate(f, 1):
-                print(f"[{i:04d}] {line}", end="")
-        sys.exit(0)
-print("Log not found. Tried:")
-for p in candidates:
-    print(f"  {p}")
-'@ | Out-File -FilePath $tmp -Encoding utf8
-          python $tmp
+        run: type "$env:TEMP\omnipkg\omnipkg_daemon.log"
 
       - name: Run Demo (Option 8 - Quantum Multiverse)
         shell: cmd
@@ -98,9 +73,7 @@ for p in candidates:
       - name: Dump daemon log after demo run 1
         if: always()
         shell: pwsh
-        run: |
-          $tmp = "$env:TEMP\dump_log.py"
-          if (Test-Path $tmp) { python $tmp } else { Write-Host "dump_log.py not found" }
+        run: type "$env:TEMP\omnipkg\omnipkg_daemon.log"
 
       - name: Run Demo Again (Verify Caching)
         shell: cmd
@@ -110,9 +83,7 @@ for p in candidates:
       - name: Dump daemon log after demo run 2
         if: always()
         shell: pwsh
-        run: |
-          $tmp = "$env:TEMP\dump_log.py"
-          if (Test-Path $tmp) { python $tmp } else { Write-Host "dump_log.py not found" }
+        run: type "$env:TEMP\omnipkg\omnipkg_daemon.log"
 
       - name: Run Demo Again (Verify Caching)
         shell: cmd
@@ -122,6 +93,4 @@ for p in candidates:
       - name: Dump daemon log after demo run 3
         if: always()
         shell: pwsh
-        run: |
-          $tmp = "$env:TEMP\dump_log.py"
-          if (Test-Path $tmp) { python $tmp } else { Write-Host "dump_log.py not found" }
+        run: type "$env:TEMP\omnipkg\omnipkg_daemon.log"
