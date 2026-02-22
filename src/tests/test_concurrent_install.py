@@ -120,34 +120,69 @@ def adopt_if_needed(version: str, poll_interval: float = 5.0, timeout: float = 3
     return False
 
 
-def ensure_daemon_running() -> bool:
+def ensure_daemon_running(interpreter_paths: list) -> bool:
+    """
+    Start daemon if not running, then wait until it has spawned idle workers
+    for ALL of the given interpreter paths. Must be called AFTER all pythons
+    are adopted so the daemon registry sees them on startup.
+    """
     try:
         from omnipkg.isolation.worker_daemon import DaemonClient, DAEMON_LOG_FILE
         client = DaemonClient()
         status = client.status()
+
         if status.get("success"):
             safe_print("   ✅ Daemon already running")
-            dump_daemon_log("DAEMON LOG AT STARTUP")
-            return True
+        else:
+            safe_print("   🔄 Starting daemon (all pythons already adopted)...")
+            # Use Popen so we don't block — daemon start detaches itself on Windows
+            proc = subprocess.Popen(
+                ["8pkg", "daemon", "start"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            # Give it a moment to detach then check if it came up
+            for i in range(60):
+                time.sleep(0.5)
+                status = client.status()
+                if status.get("success"):
+                    safe_print(f"   ✅ Daemon up after {(i+1)*0.5:.1f}s")
+                    break
+            else:
+                safe_print("   ❌ Daemon never came up")
+                dump_daemon_log("DAEMON LOG ON FAILURE")
+                return False
 
-        safe_print("   🔄 Starting daemon...")
-        result = subprocess.run(
-            ["8pkg", "daemon", "start"],
-            capture_output=False,
-            timeout=30,
-        )
-        safe_print(f"   [DEBUG] daemon start rc={result.returncode}")
         dump_daemon_log("DAEMON LOG AFTER START")
 
-        for _ in range(60):
-            time.sleep(0.5)
-            status = client.status()
-            if status.get("success"):
-                safe_print("   ✅ Daemon started successfully")
+        # Now wait until the daemon has spawned idle workers for every interpreter
+        # we need. Without this the workers for 3.9/3.10 may not exist yet.
+        safe_print(f"   ⏳ Waiting for idle workers for {len(interpreter_paths)} interpreter(s)...")
+        for exe in interpreter_paths:
+            safe_print(f"      checking: {exe}")
+
+        deadline = time.monotonic() + 60.0
+        while time.monotonic() < deadline:
+            try:
+                pool_status = client.pool_status() if hasattr(client, 'pool_status') else {}
+                workers = pool_status.get("workers", [])
+                worker_exes = [w.get("python_exe", "") for w in workers]
+            except Exception:
+                worker_exes = []
+
+            missing = [exe for exe in interpreter_paths if not any(exe in w for w in worker_exes)]
+
+            if not missing:
+                safe_print("   ✅ All interpreter workers ready")
                 return True
 
-        safe_print("   ❌ Daemon never came up")
-        return False
+            safe_print(f"   ⏳ Still waiting for workers: {missing}")
+            time.sleep(2.0)
+
+        # pool_status may not be implemented — fall back to just trusting the daemon is up
+        safe_print("   ⚠️  Could not confirm per-interpreter workers via pool_status — daemon is up, proceeding")
+        return True
+
     except Exception as e:
         import traceback
         safe_print(f"   ❌ Daemon error: {e}")
@@ -380,7 +415,19 @@ def main():
         except Exception as e:
             safe_print(f"   Python {version} → ❌ ERROR: {e}")
 
-    if not ensure_daemon_running():
+    # Resolve all interpreter paths AFTER adoption so daemon sees them all on start
+    safe_print("\n🐍 Resolved interpreter paths:")
+    interpreter_paths = []
+    for version, _ in test_configs:
+        try:
+            path = get_interpreter_path(version)
+            interpreter_paths.append(path)
+            safe_print(f"   Python {version} → {path}")
+        except Exception as e:
+            safe_print(f"   Python {version} → ❌ ERROR: {e}")
+            sys.exit(1)
+
+    if not ensure_daemon_running(interpreter_paths):
         safe_print("❌ Failed to start daemon")
         dump_daemon_log("DAEMON LOG ON STARTUP FAILURE")
         sys.exit(1)
