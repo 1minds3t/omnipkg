@@ -9051,6 +9051,8 @@ class omnipkg:
         self,
         pkg_name: str,
         pre_discovered_dists: Optional[List[importlib.metadata.Distribution]] = None,
+        selection: Optional[int] = None,  # <-- ADD THIS
+        force: bool = False,              # <-- ADD THIS
     ):
         """
         Enhanced package data display with interactive selection.
@@ -9113,19 +9115,29 @@ class omnipkg:
             else:
                 safe_print(f"  {idx}) v{version} ({install_type})")
 
-        # Interactive selection
-        if not is_interactive_session():
-            return
-        try:
-            safe_print(_("\n💡 Want details on a specific version?"))
-            choice = input(
-                _("Enter number (1-{}) or press Enter to skip: ").format(len(installations))
-            )
+        # --- FIX: Check selection before prompting! ---
+        if selection is not None:
+            choice = str(selection)
+        elif not is_interactive_session():
+            # In CI/non-interactive, auto-select the first one so logs aren't empty
+            safe_print(_("\n🤖 Non-interactive mode: Auto-selecting installation 1."))
+            choice = "1"
+        else:
+            # Only prompt if we are interactive AND no flag was passed
+            try:
+                safe_print(_("\n💡 Want details on a specific version?"))
+                choice = input(
+                    _("Enter number (1-{}) or press Enter to skip: ").format(len(installations))
+                )
+            except (ValueError, KeyboardInterrupt, EOFError):
+                safe_print(_("\n✅ Skipping detailed view."))
+                return
 
-            if choice.strip():
-                selection = int(choice.strip())
-                if 1 <= selection <= len(installations):
-                    selected_inst = installations[selection - 1]
+        if choice.strip():
+            try:
+                selection_idx = int(choice.strip())  # renamed to selection_idx
+                if 1 <= selection_idx <= len(installations):
+                    selected_inst = installations[selection_idx - 1]
 
                     # === FIX: Normalize the version key ===
                     # Ensure 'Version' key exists (with capital V)
@@ -9144,15 +9156,12 @@ class omnipkg:
                     )
                     safe_print("=" * 60)
 
-                    # Pass to detailed display
-                    self._show_version_details(selected_inst)
+                    # Pass to detailed display WITH the force flag!
+                    self._show_version_details(selected_inst, force=force)
                 else:
                     safe_print(_("❌ Invalid selection."))
-        except (ValueError, KeyboardInterrupt, EOFError):
-            safe_print(_("\n✅ Skipping detailed view."))
-        except Exception as e:
-            safe_print(_("❌ Error during selection: {}").format(e))
-            traceback.print_exc()
+            except ValueError:
+                pass
 
     def _clean_and_format_dependencies(self, raw_deps_json: str) -> str:
         """Parses the raw dependency JSON, filters out noise, and formats it for humans."""
@@ -9299,7 +9308,7 @@ class omnipkg:
         except Exception as e:
             safe_print(_("   ⚠️ Could not save environment snapshot: {}").format(e))
 
-    def _show_version_details(self, data: Dict):
+    def _show_version_details(self, data: Dict, force: bool = False): # <-- ADD force
         """
         (FIXED) Displays detailed information from a pre-loaded dictionary...
         """
@@ -9442,17 +9451,19 @@ class omnipkg:
             command_list = full_command  # shell=True will be used for this simple case
 
         try:
-            if not is_interactive_session():
-                safe_print(_("\n   Skipping raw data view (non-interactive mode)."))
-                return
+            # If user passed -y OR we are in CI, auto-expand the table!
+            if force or not is_interactive_session():
+                if not is_interactive_session():
+                    safe_print(_("\n🤖 Non-interactive mode: Auto-expanding raw data view."))
+                choice = "y"
+            else:
+                prompt_text = _("\n   Do you want to run the formatted view command now? (y/N): ")
+                if not is_using_redis:
+                    prompt_text = _(
+                        "\n   Do you want to run this command now to see the raw data? (y/N): "
+                    )
+                choice = input(prompt_text).strip().lower()
 
-            prompt_text = _("\n   Do you want to run the formatted view command now? (y/N): ")
-            if not is_using_redis:
-                prompt_text = _(
-                    "\n   Do you want to run this command now to see the raw data? (y/N): "
-                )
-
-            choice = input(prompt_text).strip().lower()
             if choice == "y":
                 if not shutil.which(tool_name):
                     safe_print(
