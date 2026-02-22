@@ -131,7 +131,6 @@ def ensure_daemon_running() -> bool:
                 pass
             return True
         
-        # In ensure_daemon_running(), replace the subprocess.run block with:
         safe_print("   🔄 Starting daemon...")
 
         # Use Popen with pipes and consume output in real-time
@@ -161,6 +160,23 @@ def ensure_daemon_running() -> bool:
         if returncode != 0:
             safe_print(f"   ❌ Daemon start failed with code {returncode}")
             return False
+            
+        # Now check if it actually came up
+        for _ in range(60):
+            time.sleep(0.5)
+            status = client.status()
+            if status.get("success"):
+                safe_print("   ✅ Daemon started successfully")
+                return True
+        
+        safe_print("   ❌ Failed to start daemon")
+        return False
+        
+    except Exception as e:
+        import traceback
+        safe_print(f"   ❌ Daemon error: {e}")
+        safe_print(traceback.format_exc())
+        return False
 
 def warmup_worker(config: tuple, thread_id: int) -> dict:
     """
