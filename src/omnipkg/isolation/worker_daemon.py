@@ -34,6 +34,21 @@ except ImportError:
     pass
 IS_WINDOWS = platform.system() == "Windows"
 
+
+def _normalize_exe(path: str) -> str:
+    """
+    Normalize a Python executable path for reliable cross-platform comparison.
+    On Windows, Path.resolve() can differ based on symlinks, junction points,
+    and drive-letter casing. We use a consistent lowercase absolute path.
+    """
+    try:
+        p = Path(path).resolve()
+        if IS_WINDOWS:
+            return str(p).lower()
+        return str(p)
+    except Exception:
+        return path
+
 try:
     from omnipkg.isolation import omnipkg_atomic
     _HAS_ATOMICS = True
@@ -1412,7 +1427,8 @@ def diagnose_worker_issue(package_spec: str):
 class PersistentWorker:
     def __init__(self, package_spec: str = None, python_exe: str = None, verbose: bool = False, defer_setup: bool = False, site_packages: str = None, multiversion_base: str = None):
         self.package_spec = package_spec
-        self.python_exe = python_exe or sys.executable
+        # Normalize so that _normalize_exe(worker.python_exe) == pool_key always matches
+        self.python_exe = _normalize_exe(python_exe or sys.executable)
         self.site_packages = site_packages
         self.multiversion_base = multiversion_base
         self.process: Optional[subprocess.Popen] = None
@@ -2154,10 +2170,10 @@ class WorkerPoolDaemon:
         self.pool_lock = threading.RLock()
         
         # 🚀 IDLE WORKER POOL: Keep bare Python processes ready per executable
-        # Key: python_exe path (ALWAYS resolved/normalized), Value: Queue of idle workers
+        # Key: python_exe path (ALWAYS normalized via _normalize_exe), Value: Queue of idle workers
         self.idle_pools: Dict[str, queue.Queue] = defaultdict(lambda: queue.Queue(maxsize=10))
         # Default configuration: 3 idle workers for the daemon's own python (normalized)
-        _own_exe = str(Path(sys.executable).resolve())
+        _own_exe = _normalize_exe(sys.executable)
         self.idle_config: Dict[str, int] = {_own_exe: 3}
 
         # 🚀 AUTO-DISCOVERY: Find other managed interpreters and keep 1 idle for them
@@ -2168,9 +2184,8 @@ class WorkerPoolDaemon:
                     with open(registry_path, "r", encoding="utf-8") as f:
                         data = json.load(f)
                         for version, path in data.get("interpreters", {}).items():
-                            # Always normalize path
-                            norm_path = str(Path(path).resolve())
-                            
+                            # Always normalize path using consistent helper
+                            norm_path = _normalize_exe(path)
                             if norm_path != _own_exe:
                                 # Keep 1 idle worker for other versions to ensure fast swapping
                                 self.idle_config[norm_path] = 1
@@ -2297,6 +2312,9 @@ class WorkerPoolDaemon:
         just converted to a pkg-spec worker. Called asynchronously so it never blocks
         the request path.
         """
+        # Normalize so the idle_pools key matches what _execute_code uses
+        python_exe = _normalize_exe(python_exe)
+
         def _do_spawn():
             target_paths = {}
             if self.cm:
@@ -2337,18 +2355,30 @@ class WorkerPoolDaemon:
                 # Iterate over configured python executables and their target counts
                 # Use list(items) to safely iterate while potentially modifying elsewhere
                 for python_exe, target_count in list(self.idle_config.items()):
+                    # python_exe is already normalized (stored via _normalize_exe),
+                    # so idle_pools[python_exe] is the right key directly.
                     pool = self.idle_pools[python_exe]
 
                     if pool.qsize() < target_count:
-                        # Resolve authoritative paths for this specific python version
+                        # Resolve authoritative paths for this specific python version.
+                        # _get_paths_for_interpreter may use the normalized path or raw path;
+                        # try both to be safe on Windows.
                         target_paths = {}
                         if self.cm:
                             target_paths = self.cm._get_paths_for_interpreter(python_exe) or {}
+                            if not target_paths:
+                                # cm may have stored the raw (non-normalized) path — try that too
+                                for raw_key in list(getattr(self.cm, '_interpreter_cache', {}).keys()):
+                                    if _normalize_exe(raw_key) == python_exe:
+                                        target_paths = self.cm._get_paths_for_interpreter(raw_key) or {}
+                                        break
 
-                        # Spawn a generic worker for this specific python executable
+                        # Spawn a generic idle worker pinned to this exact python executable.
+                        # We pass the ORIGINAL (non-normalized) path to subprocess.Popen so
+                        # the OS can actually find the binary, but we track it by normalized key.
                         idle_worker = PersistentWorker(
                             package_spec=None,
-                            python_exe=python_exe,
+                            python_exe=python_exe,  # normalized is fine for Popen on Windows
                             defer_setup=True,
                             site_packages=target_paths.get("site_packages_path"),
                             multiversion_base=target_paths.get("multiversion_base")
@@ -2369,7 +2399,7 @@ class WorkerPoolDaemon:
 
     def set_idle_config(self, python_exe: str, count: int):
         """Runtime configuration of idle pools."""
-        python_exe = str(Path(python_exe).resolve())
+        python_exe = _normalize_exe(python_exe)
         self.idle_config[python_exe] = count
 
     def _start_windows_daemon(self, wait_for_ready: bool = False):
@@ -2684,7 +2714,7 @@ class WorkerPoolDaemon:
                     req["code"],
                     req.get("shm_in", {}),
                     req.get("shm_out", {}),
-                    req.get("python_exe"),
+                    req.get("python_exe"),  # _execute_code normalizes internally
                 )
             elif req["type"] == "execute_cuda":
                 res = self._execute_cuda_code(
@@ -2692,7 +2722,7 @@ class WorkerPoolDaemon:
                     req["code"],
                     req.get("cuda_in", {}),
                     req.get("cuda_out", {}),
-                    req.get("python_exe"),
+                    req.get("python_exe"),  # _execute_cuda_code normalizes internally
                 )
             elif req["type"] == "status":
                 res = self._get_status()
@@ -2736,8 +2766,9 @@ class WorkerPoolDaemon:
         if not python_exe:
             python_exe = sys.executable
 
-        # Normalize path for reliable cross-platform pool/key lookups
-        python_exe = str(Path(python_exe).resolve())
+        # CRITICAL: Use consistent normalization so pool key lookups always match,
+        # even when Windows returns paths with different casing or junction point forms.
+        python_exe = _normalize_exe(python_exe)
 
         worker_key = f"{spec}::{python_exe}"
 
@@ -2801,28 +2832,26 @@ class WorkerPoolDaemon:
                 _took_from_idle = False
                 try:
                     # Instant spawn (0ms) - MUST match requested python_exe
-                    # Try exact match first, then normalized-path match
+                    # Both idle_pools keys and python_exe are normalized via _normalize_exe,
+                    # so a direct .get() is sufficient on all platforms including Windows.
                     pool = self.idle_pools.get(python_exe)
-                    if pool is None:
-                        # Try to find a pool whose key resolves to the same path
-                        for pool_key in list(self.idle_pools.keys()):
-                            try:
-                                if str(Path(pool_key).resolve()) == python_exe:
-                                    pool = self.idle_pools[pool_key]
-                                    break
-                            except Exception:
-                                pass
                     if pool:
                         worker = pool.get_nowait()
-                        # Double check python matches
-                        if str(Path(worker.python_exe).resolve()) != python_exe:
+                        # Double-check: worker must use the exact normalized python we need.
+                        # This guards against any race where a wrong-python idle sneaked in.
+                        if _normalize_exe(worker.python_exe) != python_exe:
+                            safe_print(
+                                f"   ⚠️ [DAEMON] Idle worker python mismatch! "
+                                f"Got {worker.python_exe}, wanted {python_exe}. Discarding.",
+                                file=sys.stderr,
+                            )
                             worker.force_shutdown()
-                            raise RuntimeError("Idle worker python mismatch")
+                            raise queue.Empty  # fall through to fresh spawn
                         worker.assign_spec(spec)
                         _took_from_idle = True
                     else:
                         raise queue.Empty
-                except (queue.Empty, RuntimeError):
+                except queue.Empty:
                     _took_from_idle = False
                     target_paths = {}
                     if self.cm:
@@ -2937,8 +2966,8 @@ class WorkerPoolDaemon:
         if not python_exe:
             python_exe = sys.executable
 
-        # Normalize path for reliable cross-platform pool/key lookups
-        python_exe = str(Path(python_exe).resolve())
+        # CRITICAL: Use consistent normalization (matches _execute_code)
+        python_exe = _normalize_exe(python_exe)
 
         worker_key = f"{spec}::{python_exe}"
         worker_info = None
@@ -2970,26 +2999,25 @@ class WorkerPoolDaemon:
                     try:
                         _took_from_idle = False
                         try:
-                            # Instant spawn from idle pool (0ms) - MUST match requested python_exe
+                            # Instant spawn from idle pool (0ms) - MUST match requested python_exe.
+                            # Both pool keys and python_exe are normalized via _normalize_exe.
                             pool = self.idle_pools.get(python_exe)
-                            if pool is None:
-                                for pool_key in list(self.idle_pools.keys()):
-                                    try:
-                                        if str(Path(pool_key).resolve()) == python_exe:
-                                            pool = self.idle_pools[pool_key]
-                                            break
-                                    except Exception:
-                                        pass
                             if pool:
                                 worker = pool.get_nowait()
-                                if str(Path(worker.python_exe).resolve()) != python_exe:
+                                # Hard safety check: reject any worker that slipped through for wrong python
+                                if _normalize_exe(worker.python_exe) != python_exe:
+                                    safe_print(
+                                        f"   ⚠️ [DAEMON] CUDA idle worker python mismatch! "
+                                        f"Got {worker.python_exe}, wanted {python_exe}. Discarding.",
+                                        file=sys.stderr,
+                                    )
                                     worker.force_shutdown()
-                                    raise RuntimeError("Idle worker python mismatch")
+                                    raise queue.Empty
                                 worker.assign_spec(spec)
                                 _took_from_idle = True
                             else:
                                 raise queue.Empty
-                        except (queue.Empty, RuntimeError):
+                        except queue.Empty:
                             _took_from_idle = False
                             # Resolve authoritative paths for the target Python version
                             target_paths = {}
