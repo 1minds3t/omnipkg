@@ -11,61 +11,173 @@ jobs:
   test:
     runs-on: windows-latest
     timeout-minutes: 30
-    
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-        # NO path parameter - checks out to D:\a\omnipkg\omnipkg
-      
+
       - name: Set up Python (3.11)
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      
-      - name: Configure UTF-8 encoding and unbuffered output (Windows fix)
+
+      - name: Configure UTF-8 encoding and unbuffered output
         run: |
-          echo "PYTHONIOENCODING=utf-8" >> $env:GITHUB_ENV
-          echo "PYTHONUTF8=1" >> $env:GITHUB_ENV
-          echo "PYTHONUNBUFFERED=1" >> $env:GITHUB_ENV
-          echo "OMNIPKG_DEBUG=1" >> $env:GITHUB_ENV
-          # Force immediate flush for all streams
+          echo "PYTHONIOENCODING=utf-8"    >> $env:GITHUB_ENV
+          echo "PYTHONUTF8=1"              >> $env:GITHUB_ENV
+          echo "PYTHONUNBUFFERED=1"        >> $env:GITHUB_ENV
+          echo "OMNIPKG_DEBUG=1"           >> $env:GITHUB_ENV
           echo "PYTHONDONTWRITEBYTECODE=1" >> $env:GITHUB_ENV
         shell: pwsh
-            
+
       - name: Install omnipkg
         run: |
           python -m pip install --upgrade pip
           pip install -e .
         shell: pwsh
 
-      - name: Set debug environment
-        run: |
-          echo "OMNIPKG_DEBUG=1" >> $env:GITHUB_ENV
-          echo "OMNIPKG_LOG_LEVEL=DEBUG" >> $env:GITHUB_ENV
-      
       - name: Configure omnipkg for non-interactive use
         run: |
           $configDir = "$HOME\.config\omnipkg"
           New-Item -ItemType Directory -Force -Path $configDir | Out-Null
-          
-          @{
-            interactive = $false
-            auto_confirm = $true
-          } | ConvertTo-Json | Out-File -FilePath "$configDir\config.json" -Encoding utf8
-          
+          @{ interactive = $false; auto_confirm = $true } | ConvertTo-Json | Out-File -FilePath "$configDir\config.json" -Encoding utf8
           Write-Host "✅ Omnipkg configured"
         shell: pwsh
-      
+
+      - name: Start daemon
+        run: omnipkg daemon start
+        shell: cmd
+
+      - name: Dump daemon log after start
+        if: always()
+        shell: pwsh
+        run: |
+          $code = @'
+          import os, sys
+          label = "AFTER DAEMON START"
+          candidates = []
+          try:
+              from omnipkg.isolation.worker_daemon import DAEMON_LOG_FILE
+              candidates.append(DAEMON_LOG_FILE)
+          except Exception as e:
+              print(f"[WARN] {e}")
+          for var in ("TEMP", "TMP"):
+              base = os.environ.get(var, "C:\\Temp")
+              candidates.append(os.path.join(base, "omnipkg", "omnipkg_daemon.log"))
+          print("=" * 80)
+          print(f"DAEMON LOG: {label}")
+          print("=" * 80)
+          for path in candidates:
+              if os.path.exists(path):
+                  print(f"[FILE] {path}")
+                  with open(path, encoding="utf-8", errors="replace") as f:
+                      for i, line in enumerate(f, 1):
+                          print(f"[{i:04d}] {line}", end="")
+                  sys.exit(0)
+          print("Log not found. Tried: " + str(candidates))
+          '@
+          python -c $code
+
       - name: Run Demo (Option 8 - Quantum Multiverse)
         run: omnipkg demo 8 --non-interactive
         shell: cmd
 
+      - name: Dump daemon log after demo run 1
+        if: always()
+        shell: pwsh
+        run: |
+          $code = @'
+          import os, sys
+          label = "AFTER DEMO RUN 1"
+          candidates = []
+          try:
+              from omnipkg.isolation.worker_daemon import DAEMON_LOG_FILE
+              candidates.append(DAEMON_LOG_FILE)
+          except Exception as e:
+              print(f"[WARN] {e}")
+          for var in ("TEMP", "TMP"):
+              base = os.environ.get(var, "C:\\Temp")
+              candidates.append(os.path.join(base, "omnipkg", "omnipkg_daemon.log"))
+          print("=" * 80)
+          print(f"DAEMON LOG: {label}")
+          print("=" * 80)
+          for path in candidates:
+              if os.path.exists(path):
+                  print(f"[FILE] {path}")
+                  with open(path, encoding="utf-8", errors="replace") as f:
+                      for i, line in enumerate(f, 1):
+                          print(f"[{i:04d}] {line}", end="")
+                  sys.exit(0)
+          print("Log not found. Tried: " + str(candidates))
+          '@
+          python -c $code
+
       - name: Run Demo Again (Verify Caching)
-        continue-on-error: true
         run: omnipkg demo 8 --non-interactive
         shell: cmd
-      
-      - name: Run Demo Again (Verify Caching)
         continue-on-error: true
+
+      - name: Dump daemon log after demo run 2
+        if: always()
+        shell: pwsh
+        run: |
+          $code = @'
+          import os, sys
+          label = "AFTER DEMO RUN 2"
+          candidates = []
+          try:
+              from omnipkg.isolation.worker_daemon import DAEMON_LOG_FILE
+              candidates.append(DAEMON_LOG_FILE)
+          except Exception as e:
+              print(f"[WARN] {e}")
+          for var in ("TEMP", "TMP"):
+              base = os.environ.get(var, "C:\\Temp")
+              candidates.append(os.path.join(base, "omnipkg", "omnipkg_daemon.log"))
+          print("=" * 80)
+          print(f"DAEMON LOG: {label}")
+          print("=" * 80)
+          for path in candidates:
+              if os.path.exists(path):
+                  print(f"[FILE] {path}")
+                  with open(path, encoding="utf-8", errors="replace") as f:
+                      for i, line in enumerate(f, 1):
+                          print(f"[{i:04d}] {line}", end="")
+                  sys.exit(0)
+          print("Log not found. Tried: " + str(candidates))
+          '@
+          python -c $code
+
+      - name: Run Demo Again (Verify Caching)
         run: omnipkg demo 8 --non-interactive
         shell: cmd
+        continue-on-error: true
+
+      - name: Dump daemon log after demo run 3
+        if: always()
+        shell: pwsh
+        run: |
+          $code = @'
+          import os, sys
+          label = "AFTER DEMO RUN 3"
+          candidates = []
+          try:
+              from omnipkg.isolation.worker_daemon import DAEMON_LOG_FILE
+              candidates.append(DAEMON_LOG_FILE)
+          except Exception as e:
+              print(f"[WARN] {e}")
+          for var in ("TEMP", "TMP"):
+              base = os.environ.get(var, "C:\\Temp")
+              candidates.append(os.path.join(base, "omnipkg", "omnipkg_daemon.log"))
+          print("=" * 80)
+          print(f"DAEMON LOG: {label}")
+          print("=" * 80)
+          for path in candidates:
+              if os.path.exists(path):
+                  print(f"[FILE] {path}")
+                  with open(path, encoding="utf-8", errors="replace") as f:
+                      for i, line in enumerate(f, 1):
+                          print(f"[{i:04d}] {line}", end="")
+                  sys.exit(0)
+          print("Log not found. Tried: " + str(candidates))
+          '@
+          python -c $code
