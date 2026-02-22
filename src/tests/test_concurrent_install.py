@@ -131,40 +131,36 @@ def ensure_daemon_running() -> bool:
                 pass
             return True
         
+        # In ensure_daemon_running(), replace the subprocess.run block with:
         safe_print("   🔄 Starting daemon...")
-        
-        # Run synchronously with output visible so we can see what actually fails
-        result = subprocess.run(
+
+        # Use Popen with pipes and consume output in real-time
+        import subprocess
+        proc = subprocess.Popen(
             ["8pkg", "daemon", "start"],
-            capture_output=False,  # let it print directly
-            timeout=30,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            bufsize=1  # line buffered
         )
-        safe_print(f"   [DEBUG] daemon start exited with code: {result.returncode}")
-        
-        # Dump the log file so CI shows exactly what happened
-        import os
-        if os.path.exists(DAEMON_LOG_FILE):
-            safe_print(f"   [DEBUG] === {DAEMON_LOG_FILE} ===")
-            with open(DAEMON_LOG_FILE, "r", errors="replace") as f:
-                safe_print(f.read())
-        else:
-            safe_print(f"   [DEBUG] No log file found at {DAEMON_LOG_FILE}")
-        
-        # Now check if it actually came up
-        for _ in range(60):
-            time.sleep(0.5)
-            status = client.status()
-            if status.get("success"):
-                safe_print("   ✅ Daemon started successfully")
-                return True
-        
-        safe_print("   ❌ Failed to start daemon")
-        return False
-    except Exception as e:
-        import traceback
-        safe_print(f"   ❌ Daemon error: {e}")
-        safe_print(traceback.format_exc())
-        return False
+
+        # Consume output to prevent pipe blocking
+        for line in proc.stdout:
+            safe_print(f"   [daemon] {line.rstrip()}")
+
+        # Wait for process to complete
+        try:
+            returncode = proc.wait(timeout=30)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            safe_print("   ❌ Daemon start timed out after 30s")
+            return False
+
+        if returncode != 0:
+            safe_print(f"   ❌ Daemon start failed with code {returncode}")
+            return False
 
 def warmup_worker(config: tuple, thread_id: int) -> dict:
     """
