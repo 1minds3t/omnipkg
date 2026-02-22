@@ -119,6 +119,16 @@ def ensure_daemon_running() -> bool:
         status = client.status()
         if status.get("success"):
             safe_print("   ✅ Daemon already running")
+            # Dump log so CI always has context
+            try:
+                import os
+                if os.path.exists(DAEMON_LOG_FILE):
+                    safe_print(f"   [DAEMON LOG tail] {DAEMON_LOG_FILE}")
+                    with open(DAEMON_LOG_FILE, "r", errors="replace") as f:
+                        tail = f.read()[-2000:]
+                    safe_print(tail)
+            except Exception:
+                pass
             return True
         
         safe_print("   🔄 Starting daemon...")
@@ -191,6 +201,20 @@ with omnipkgLoader("rich=={rich_version}"):
         
         if not result.get("success"):
             safe_print(_('{} ❌ Failed: {}').format(prefix, result.get('error')))
+            # Dump everything we know about the failure
+            safe_print(f"{prefix} === FULL RESULT DUMP ===")
+            for k, v in result.items():
+                safe_print(f"{prefix}   {k}: {v}")
+            # Dump worker log if available
+            try:
+                from omnipkg.isolation.worker_daemon import DAEMON_LOG_FILE
+                import os
+                if os.path.exists(DAEMON_LOG_FILE):
+                    safe_print(f"{prefix} === DAEMON LOG ({DAEMON_LOG_FILE}) ===")
+                    with open(DAEMON_LOG_FILE, "r", errors="replace") as f:
+                        safe_print(f.read()[-3000:])  # last 3000 chars
+            except Exception as log_err:
+                safe_print(f"{prefix} (could not read daemon log: {log_err})")
             return None
         
         safe_print(_('{} ✅ Warmed up in {} (discarded)').format(prefix, format_duration(elapsed)))
