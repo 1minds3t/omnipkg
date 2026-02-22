@@ -153,34 +153,6 @@ def ensure_daemon_running(interpreter_paths: list) -> bool:
                 dump_daemon_log("DAEMON LOG ON FAILURE")
                 return False
 
-        dump_daemon_log("DAEMON LOG AFTER START")
-
-        # Now wait until the daemon has spawned idle workers for every interpreter
-        # we need. Without this the workers for 3.9/3.10 may not exist yet.
-        safe_print(f"   ⏳ Waiting for idle workers for {len(interpreter_paths)} interpreter(s)...")
-        for exe in interpreter_paths:
-            safe_print(f"      checking: {exe}")
-
-        deadline = time.monotonic() + 60.0
-        while time.monotonic() < deadline:
-            try:
-                pool_status = client.pool_status() if hasattr(client, 'pool_status') else {}
-                workers = pool_status.get("workers", [])
-                worker_exes = [w.get("python_exe", "") for w in workers]
-            except Exception:
-                worker_exes = []
-
-            missing = [exe for exe in interpreter_paths if not any(exe in w for w in worker_exes)]
-
-            if not missing:
-                safe_print("   ✅ All interpreter workers ready")
-                return True
-
-            safe_print(f"   ⏳ Still waiting for workers: {missing}")
-            time.sleep(2.0)
-
-        # pool_status may not be implemented — fall back to just trusting the daemon is up
-        safe_print("   ⚠️  Could not confirm per-interpreter workers via pool_status — daemon is up, proceeding")
         return True
 
     except Exception as e:
