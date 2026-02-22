@@ -113,69 +113,26 @@ def adopt_if_needed(version: str, poll_interval: float = 5.0, timeout: float = 3
     return False
 
 def ensure_daemon_running() -> bool:
-    try:
-        from omnipkg.isolation.worker_daemon import DaemonClient, DAEMON_LOG_FILE
-        client = DaemonClient()
-        status = client.status()
-        if status.get("success"):
-            safe_print("   ✅ Daemon already running")
-            # Dump log so CI always has context
-            try:
-                import os
-                if os.path.exists(DAEMON_LOG_FILE):
-                    safe_print(f"   [DAEMON LOG tail] {DAEMON_LOG_FILE}")
-                    with open(DAEMON_LOG_FILE, "r", errors="replace") as f:
-                        tail = f.read()[-2000:]
-                    safe_print(tail)
-            except Exception:
-                pass
-            return True
-        
-        safe_print("   🔄 Starting daemon...")
-
-        # Use Popen with pipes and consume output in real-time
-        import subprocess
-        proc = subprocess.Popen(
-            ["8pkg", "daemon", "start"],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            bufsize=1  # line buffered
-        )
-
-        # Consume output to prevent pipe blocking
-        for line in proc.stdout:
-            safe_print(f"   [daemon] {line.rstrip()}")
-
-        # Wait for process to complete
-        try:
-            returncode = proc.wait(timeout=30)
-        except subprocess.TimeoutExpired:
-            proc.kill()
-            safe_print("   ❌ Daemon start timed out after 30s")
-            return False
-
-        if returncode != 0:
-            safe_print(f"   ❌ Daemon start failed with code {returncode}")
-            return False
-            
-        # Now check if it actually came up
-        for _ in range(60):
-            time.sleep(0.5)
-            status = client.status()
-            if status.get("success"):
-                safe_print("   ✅ Daemon started successfully")
-                return True
-        
-        safe_print("   ❌ Failed to start daemon")
-        return False
-        
-    except Exception as e:
-        import traceback
-        safe_print(f"   ❌ Daemon error: {e}")
-        safe_print(traceback.format_exc())
+    """Use the proper CLI command to ensure daemon is running."""
+    import subprocess
+    
+    safe_print("   🔄 Ensuring daemon is running...")
+    
+    # Let the CLI command handle all the complexity
+    result = subprocess.run(
+        ["8pkg", "daemon", "start"],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace"
+    )
+    
+    # If it returns 0, daemon is running (either already was or just started)
+    if result.returncode == 0:
+        safe_print("   ✅ Daemon is running")
+        return True
+    else:
+        safe_print(f"   ❌ Failed to start daemon: {result.stderr}")
         return False
 
 def warmup_worker(config: tuple, thread_id: int) -> dict:
