@@ -167,27 +167,43 @@ def ensure_daemon_running() -> bool:
         return False
 
 def warmup_worker(config: tuple, thread_id: int) -> dict:
-    """
-    Warmup run - spawn worker and install packages if needed.
-    This timing is discarded (includes spawn + install overhead).
-    """
     py_version, rich_version = config
     prefix = f"[T{thread_id}|Warmup]"
     
     try:
         python_exe = get_interpreter_path(py_version)
         
+        # 🔥 DEBUG: Show exactly what we're doing
+        safe_print(f"{prefix} 🔍 Using interpreter: {python_exe}")
+        safe_print(f"{prefix} 🔍 Target: Python {py_version} + Rich {rich_version}")
+        
+        # Show environment for this worker
+        import os
+        worker_env = {k: v for k, v in os.environ.items() 
+                     if k.startswith(('PYTHON', 'OMNIPKG'))}
+        safe_print(f"{prefix} 🔍 Environment: {worker_env}")
+        
         from omnipkg.isolation.worker_daemon import DaemonClient
         client = DaemonClient()
         
-        safe_print(_('{} 🔥 Warming up Python {} + Rich {}...').format(prefix, py_version, rich_version))
+        safe_print(_('{} 🔥 Warming up...').format(prefix))
         start = time.perf_counter()
         
         warmup_code = f"""
+import sys, os
+print(f"[WORKER:{thread_id}] Starting with interpreter: {{sys.executable}}")
+print(f"[WORKER:{thread_id}] Python version: {{sys.version}}")
+print(f"[WORKER:{thread_id}] Rich version to load: {rich_version}")
+
 from omnipkg.loader import omnipkgLoader
 with omnipkgLoader("rich=={rich_version}"):
     import rich
+    print(f"[WORKER:{thread_id}] Loaded Rich from: {{rich.__file__}}")
+    print(f"[WORKER:{thread_id}] Rich version: {{rich.__version__}}")
 """
+        
+        # 🔥 DEBUG: Show the code being executed
+        safe_print(f"{prefix} 🔍 Executing code:\n{warmup_code}")
         
         result = client.execute_shm(
             spec=f"rich=={rich_version}",
@@ -199,23 +215,22 @@ with omnipkgLoader("rich=={rich_version}"):
         
         elapsed = (time.perf_counter() - start) * 1000
         
+        # 🔥 DEBUG: Show full result
+        safe_print(f"{prefix} 🔍 Result: {json.dumps(result, indent=2)}")
+        
         if not result.get("success"):
             safe_print(_('{} ❌ Failed: {}').format(prefix, result.get('error')))
-            # Dump everything we know about the failure
+            # Dump everything
             safe_print(f"{prefix} === FULL RESULT DUMP ===")
             for k, v in result.items():
                 safe_print(f"{prefix}   {k}: {v}")
-            # Dump worker log if available
-            try:
-                from omnipkg.isolation.worker_daemon import DAEMON_LOG_FILE
-                import os
-                if os.path.exists(DAEMON_LOG_FILE):
-                    safe_print(f"{prefix} === DAEMON LOG ({DAEMON_LOG_FILE}) ===")
-                    with open(DAEMON_LOG_FILE, "r", errors="replace") as f:
-                        safe_print(f.read()[-3000:])  # last 3000 chars
-            except Exception as log_err:
-                safe_print(f"{prefix} (could not read daemon log: {log_err})")
             return None
+        
+        # Show stdout from the worker
+        if result.get("stdout"):
+            safe_print(f"{prefix} 📤 Worker output:")
+            for line in result["stdout"].splitlines():
+                safe_print(f"{prefix}   {line}")
         
         safe_print(_('{} ✅ Warmed up in {} (discarded)').format(prefix, format_duration(elapsed)))
         
@@ -228,6 +243,8 @@ with omnipkgLoader("rich=={rich_version}"):
         
     except Exception as e:
         safe_print(_('{} ❌ {}').format(prefix, e))
+        import traceback
+        safe_print(traceback.format_exc())
         return None
 
 
