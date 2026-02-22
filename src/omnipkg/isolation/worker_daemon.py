@@ -49,6 +49,120 @@ def _normalize_exe(path: str) -> str:
     except Exception:
         return path
 
+
+def _derive_paths_for_exe(python_exe: str) -> dict:
+    """
+    Compute site_packages_path and multiversion_base directly from a Python
+    executable path, without relying on ConfigManager lookup.
+
+    This is a reliable fallback for managed interpreters where the ConfigManager
+    may fail to match due to path normalization differences (especially on Windows).
+
+    For a managed interpreter like:
+      C:\\...\\cpython-3.9.23\\python.exe
+    The site-packages is:
+      C:\\...\\cpython-3.9.23\\Lib\\site-packages   (Windows)
+      .../cpython-3.9.23/lib/pythonX.Y/site-packages  (Unix)
+
+    For the NATIVE interpreter (3.11 daemon), omnipkg uses the DAEMON's own
+    site-packages which is already correct — we only need this for managed ones.
+    """
+    try:
+        exe_path = Path(python_exe).resolve()
+        exe_dir = exe_path.parent
+
+        # Strategy 1: Run the target interpreter to ask it directly (most reliable)
+        # We do this lazily only when needed to avoid subprocess overhead at startup.
+        # Strategy 2: Derive from known directory layout of python-build-standalone
+        if IS_WINDOWS:
+            # Windows layout: <install_dir>\python.exe  → <install_dir>\Lib\site-packages
+            candidate = exe_dir / "Lib" / "site-packages"
+        else:
+            # Unix layout: <install_dir>/bin/python → <install_dir>/lib/pythonX.Y/site-packages
+            # Find the lib/pythonX.Y directory
+            candidate = None
+            lib_dir = exe_dir.parent / "lib"
+            if lib_dir.exists():
+                for d in sorted(lib_dir.iterdir()):
+                    if d.name.startswith("python") and (d / "site-packages").exists():
+                        candidate = d / "site-packages"
+                        break
+
+        if candidate and Path(candidate).exists():
+            multiversion_base = str(Path(candidate) / ".omnipkg_versions")
+            return {
+                "site_packages_path": str(candidate),
+                "multiversion_base": multiversion_base,
+            }
+    except Exception:
+        pass
+    return {}
+
+
+def _resolve_target_paths(cm, python_exe_normalized: str) -> dict:
+    """
+    Get site_packages_path and multiversion_base for the given interpreter.
+
+    Tries ConfigManager._get_paths_for_interpreter() with multiple path variants
+    (normalized, original-case, registry scan) to handle Windows case-sensitivity
+    issues. Falls back to _derive_paths_for_exe() which reads the filesystem
+    layout directly from the interpreter directory — this ALWAYS works for
+    python-build-standalone managed interpreters regardless of cm state.
+    """
+    if cm is not None:
+        # Try 1: normalized (lowercase) path
+        try:
+            paths = cm._get_paths_for_interpreter(python_exe_normalized) or {}
+            if paths:
+                return paths
+        except Exception:
+            pass
+
+        # Try 2: original-case resolved path (without lowercasing)
+        try:
+            raw_path = str(Path(python_exe_normalized).resolve())
+            paths = cm._get_paths_for_interpreter(raw_path) or {}
+            if paths:
+                return paths
+        except Exception:
+            pass
+
+        # Try 3: scan interpreter registry for a case-insensitive match
+        try:
+            reg_path = getattr(cm, 'venv_path', None)
+            if reg_path:
+                reg_file = Path(reg_path) / ".omnipkg" / "interpreters" / "registry.json"
+                if reg_file.exists():
+                    with open(reg_file, "r", encoding="utf-8") as f:
+                        reg_data = json.load(f)
+                    for raw_key in reg_data.get("interpreters", {}).values():
+                        if _normalize_exe(str(raw_key)) == python_exe_normalized:
+                            paths = cm._get_paths_for_interpreter(raw_key) or {}
+                            if paths:
+                                return paths
+        except Exception:
+            pass
+
+    # Fallback: derive directly from filesystem layout of the interpreter.
+    # For python-build-standalone managed interpreters this is always reliable:
+    #   Windows: <install_dir>\Lib\site-packages
+    #   Unix:    <install_dir>/lib/pythonX.Y/site-packages
+    paths = _derive_paths_for_exe(python_exe_normalized)
+    if paths:
+        safe_print(
+            f"   📂 [DAEMON] Using filesystem-derived paths for {python_exe_normalized}: "
+            f"site_packages={paths.get('site_packages_path')}",
+            file=sys.stderr,
+        )
+    else:
+        safe_print(
+            f"   ⚠️ [DAEMON] Could not resolve paths for {python_exe_normalized} — "
+            f"OMNIPKG_MULTIVERSION_BASE will NOT be set. Package may install to wrong location!",
+            file=sys.stderr,
+        )
+    return paths
+
+
 try:
     from omnipkg.isolation import omnipkg_atomic
     _HAS_ATOMICS = True
@@ -2316,12 +2430,7 @@ class WorkerPoolDaemon:
         python_exe = _normalize_exe(python_exe)
 
         def _do_spawn():
-            target_paths = {}
-            if self.cm:
-                try:
-                    target_paths = self.cm._get_paths_for_interpreter(python_exe) or {}
-                except Exception:
-                    pass
+            target_paths = _resolve_target_paths(self.cm, python_exe)
             try:
                 idle_worker = PersistentWorker(
                     package_spec=None,
@@ -2361,17 +2470,8 @@ class WorkerPoolDaemon:
 
                     if pool.qsize() < target_count:
                         # Resolve authoritative paths for this specific python version.
-                        # _get_paths_for_interpreter may use the normalized path or raw path;
-                        # try both to be safe on Windows.
-                        target_paths = {}
-                        if self.cm:
-                            target_paths = self.cm._get_paths_for_interpreter(python_exe) or {}
-                            if not target_paths:
-                                # cm may have stored the raw (non-normalized) path — try that too
-                                for raw_key in list(getattr(self.cm, '_interpreter_cache', {}).keys()):
-                                    if _normalize_exe(raw_key) == python_exe:
-                                        target_paths = self.cm._get_paths_for_interpreter(raw_key) or {}
-                                        break
+                        # _resolve_target_paths handles cm lookup + filesystem fallback.
+                        target_paths = _resolve_target_paths(self.cm, python_exe)
 
                         # Spawn a generic idle worker pinned to this exact python executable.
                         # We pass the ORIGINAL (non-normalized) path to subprocess.Popen so
@@ -2855,7 +2955,7 @@ class WorkerPoolDaemon:
                     _took_from_idle = False
                     target_paths = {}
                     if self.cm:
-                        target_paths = self.cm._get_paths_for_interpreter(python_exe) or {}
+                        target_paths = _resolve_target_paths(self.cm, python_exe)
 
                     # Fallback if queue empty or no pool exists for this exe (~30ms)
                     # Note: PersistentWorker constructor calls assign_spec if spec is provided
@@ -3022,7 +3122,7 @@ class WorkerPoolDaemon:
                             # Resolve authoritative paths for the target Python version
                             target_paths = {}
                             if self.cm:
-                                target_paths = self.cm._get_paths_for_interpreter(python_exe) or {}
+                                target_paths = _resolve_target_paths(self.cm, python_exe)
 
                             # Fallback if idle pool is empty (~30ms)
                             worker = PersistentWorker(
