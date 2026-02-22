@@ -68,7 +68,7 @@ jobs:
             Receive-Job $job   # flush remaining output
             Remove-Job $job -Force
           }
-        shell: pwsh
+        shell: cmd
 
       - name: Dump daemon log after Run 1
         if: always()
@@ -107,7 +107,7 @@ jobs:
             Receive-Job $job
             Remove-Job $job -Force
           }
-        shell: pwsh
+        shell: cmd
 
       - name: Dump daemon log after Run 2
         if: always()
@@ -143,7 +143,7 @@ jobs:
             Receive-Job $job
             Remove-Job $job -Force
           }
-        shell: pwsh
+        shell: cmd
 
       - name: Dump daemon log after Run 3
         if: always()
