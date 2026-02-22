@@ -3156,6 +3156,9 @@ def _run_script_logic(
         # Basic Success Check
         if return_code == 0:
             safe_print("\n✅ Script executed successfully.")
+            # In CI/non-interactive mode, exit immediately to avoid hanging
+            if _is_noninteractive:
+                sys.exit(0)
             return 0
 
         safe_print("🤖 [AI-INFO] Script execution failed. Analyzing for auto-healing...")
