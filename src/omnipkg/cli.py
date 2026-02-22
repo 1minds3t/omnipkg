@@ -726,13 +726,27 @@ def create_parser():
         epilog=_(
             "Examples:\n"
             "  omnipkg info requests\n"
-            "  omnipkg info requests==2.28.1\n"
+            "  omnipkg info requests 1        # Automatically select the first installation\n"
+            "  omnipkg info requests 1 -y     # Select first and auto-expand raw data\n"
             "  omnipkg info python            # Show managed Python interpreters\n"
         ),
     )
     info_parser.add_argument(
         "package_spec",
         help=_('Package to inspect (e.g., "requests" or "requests==2.28.1" or "python")'),
+    )
+    # 👇 Add these two arguments 👇
+    info_parser.add_argument(
+        "selection",
+        nargs="?",
+        type=int,
+        help=_("Optional: Directly select an installation index to skip the prompt (e.g., 1)"),
+    )
+    info_parser.add_argument(
+        "--yes", "-y",
+        dest="force",
+        action="store_true",
+        help=_("Skip confirmation prompts and auto-expand raw data"),
     )
 
     # ── revert ────────────────────────────────────────────────────────────────
@@ -1862,7 +1876,11 @@ def main():
                 )
                 return 0
             else:
-                return pkg_instance.show_package_info(args.package_spec)
+                return pkg_instance.show_package_info(
+                    args.package_spec,
+                    selection=args.selection,  # Pass the positional index
+                    force=args.force           # Pass the -y flag
+                )
 
         elif args.command == "list":
             return pkg_instance.list_packages(args.filter)
