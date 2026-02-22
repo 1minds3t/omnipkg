@@ -1704,6 +1704,9 @@ def main():
                 safe_print("-" * 60)
                 if returncode == 0:
                     safe_print(_("🎉 Demo completed successfully!"))
+                    # In non‑interactive mode, exit immediately to avoid hanging
+                    if non_interactive:
+                        sys.exit(0)
                 else:
                     safe_print(_("❌ Demo failed with return code {}").format(returncode))
                 return returncode
