@@ -40,8 +40,7 @@ jobs:
         run: |
           $configDir = "$HOME\.config\omnipkg"
           New-Item -ItemType Directory -Force -Path $configDir | Out-Null
-          @{ interactive = $false; auto_confirm = $true } | ConvertTo-Json |
-            Out-File -FilePath "$configDir\config.json" -Encoding utf8
+          @{ interactive = $false; auto_confirm = $true } | ConvertTo-Json | Out-File -FilePath "$configDir\config.json" -Encoding utf8
           Write-Host "✅ Omnipkg configured"
         shell: pwsh
 
@@ -49,67 +48,18 @@ jobs:
         run: omnipkg daemon start
         shell: cmd
 
-      # Dump daemon log immediately after start so we see what workers it spawned
-      - name: "[DEBUG] Dump daemon log after start"
+      - name: Dump daemon log after start
         if: always()
-        run: |
-          python -c "
-import os, sys
-candidates = [
-    os.path.join(os.environ.get('TEMP','C:\\\\Temp'), 'omnipkg', 'omnipkg_daemon.log'),
-    os.path.join(os.environ.get('TMP', 'C:\\\\Temp'), 'omnipkg', 'omnipkg_daemon.log'),
-]
-try:
-    from omnipkg.isolation.worker_daemon import DAEMON_LOG_FILE
-    candidates.insert(0, DAEMON_LOG_FILE)
-except Exception as e:
-    print(f'[WARN] Could not import DAEMON_LOG_FILE: {e}')
-
-found = False
-for path in candidates:
-    if os.path.exists(path):
-        print(f'=== DAEMON LOG: {path} ===')
-        with open(path, encoding='utf-8', errors='replace') as f:
-            for i, line in enumerate(f, 1):
-                print(f'[{i:04d}] {line}', end='')
-        found = True
-        break
-
-if not found:
-    print('❌ Daemon log not found. Tried:')
-    for p in candidates:
-        print(f'  {p}')
-"
+        run: python dump_daemon_log.py "AFTER DAEMON START"
         shell: cmd
 
       - name: Run Demo (Option 8 - Quantum Multiverse)
         run: omnipkg demo 8 --non-interactive
         shell: cmd
 
-      # Dump daemon log after every run so we always have it in CI artifacts
-      - name: "[DEBUG] Dump daemon log after Demo run 1"
+      - name: Dump daemon log after demo run 1
         if: always()
-        run: |
-          python -c "
-import os, sys
-candidates = [
-    os.path.join(os.environ.get('TEMP','C:\\\\Temp'), 'omnipkg', 'omnipkg_daemon.log'),
-    os.path.join(os.environ.get('TMP', 'C:\\\\Temp'), 'omnipkg', 'omnipkg_daemon.log'),
-]
-try:
-    from omnipkg.isolation.worker_daemon import DAEMON_LOG_FILE
-    candidates.insert(0, DAEMON_LOG_FILE)
-except Exception as e:
-    print(f'[WARN] Could not import DAEMON_LOG_FILE: {e}')
-
-for path in candidates:
-    if os.path.exists(path):
-        print(f'=== DAEMON LOG: {path} ===')
-        with open(path, encoding='utf-8', errors='replace') as f:
-            for i, line in enumerate(f, 1):
-                print(f'[{i:04d}] {line}', end='')
-        break
-"
+        run: python dump_daemon_log.py "AFTER DEMO RUN 1"
         shell: cmd
 
       - name: Run Demo Again (Verify Caching)
@@ -117,29 +67,9 @@ for path in candidates:
         shell: cmd
         continue-on-error: true
 
-      - name: "[DEBUG] Dump daemon log after Demo run 2"
+      - name: Dump daemon log after demo run 2
         if: always()
-        run: |
-          python -c "
-import os
-candidates = [
-    os.path.join(os.environ.get('TEMP','C:\\\\Temp'), 'omnipkg', 'omnipkg_daemon.log'),
-    os.path.join(os.environ.get('TMP', 'C:\\\\Temp'), 'omnipkg', 'omnipkg_daemon.log'),
-]
-try:
-    from omnipkg.isolation.worker_daemon import DAEMON_LOG_FILE
-    candidates.insert(0, DAEMON_LOG_FILE)
-except Exception as e:
-    print(f'[WARN] {e}')
-
-for path in candidates:
-    if os.path.exists(path):
-        print(f'=== DAEMON LOG: {path} ===')
-        with open(path, encoding='utf-8', errors='replace') as f:
-            for i, line in enumerate(f, 1):
-                print(f'[{i:04d}] {line}', end='')
-        break
-"
+        run: python dump_daemon_log.py "AFTER DEMO RUN 2"
         shell: cmd
 
       - name: Run Demo Again (Verify Caching)
@@ -147,27 +77,7 @@ for path in candidates:
         shell: cmd
         continue-on-error: true
 
-      - name: "[DEBUG] Dump daemon log after Demo run 3"
+      - name: Dump daemon log after demo run 3
         if: always()
-        run: |
-          python -c "
-import os
-candidates = [
-    os.path.join(os.environ.get('TEMP','C:\\\\Temp'), 'omnipkg', 'omnipkg_daemon.log'),
-    os.path.join(os.environ.get('TMP', 'C:\\\\Temp'), 'omnipkg', 'omnipkg_daemon.log'),
-]
-try:
-    from omnipkg.isolation.worker_daemon import DAEMON_LOG_FILE
-    candidates.insert(0, DAEMON_LOG_FILE)
-except Exception as e:
-    print(f'[WARN] {e}')
-
-for path in candidates:
-    if os.path.exists(path):
-        print(f'=== DAEMON LOG: {path} ===')
-        with open(path, encoding='utf-8', errors='replace') as f:
-            for i, line in enumerate(f, 1):
-                print(f'[{i:04d}] {line}', end='')
-        break
-"
+        run: python dump_daemon_log.py "AFTER DEMO RUN 3"
         shell: cmd
