@@ -57,15 +57,6 @@ jobs:
           @{ interactive = $false; auto_confirm = $true } | ConvertTo-Json | Out-File -FilePath "$configDir\config.json" -Encoding utf8
           Write-Host "✅ Omnipkg configured"
 
-      - name: Start daemon
-        shell: cmd
-        run: omnipkg daemon start
-
-      - name: Dump daemon log after start
-        if: always()
-        shell: pwsh
-        run: type "$env:TEMP\omnipkg\omnipkg_daemon.log"
-
       - name: Run Demo (Option 8 - Quantum Multiverse)
         shell: cmd
         run: omnipkg demo 8 --non-interactive
