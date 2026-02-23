@@ -225,6 +225,35 @@ LANG_INFO = AVAILABLE_LANGUAGES
 # This is the variable that your cli.py is trying to import
 SUPPORTED_LANGUAGES = {code: data["native"] for code, data in LANG_INFO.items()}
 
+# --- Case-insensitive language code normalization ---
+# Build a lowercase lookup: "zh_cn" -> "zh_CN", "pt_br" -> "pt_BR", etc.
+_LANG_CODE_LOWER: "dict[str, str]" = {k.lower(): k for k in SUPPORTED_LANGUAGES}
+
+
+def normalize_language_code(code: str) -> "str | None":
+    """
+    Normalize a user-supplied language code to its canonical form.
+
+    Handles:
+      - Wrong case:           "zh_cn"  -> "zh_CN"
+      - Hyphen vs underscore: "zh-CN"  -> "zh_CN"
+      - Already correct:      "zh_CN"  -> "zh_CN"
+      - Unknown code:         returns None
+
+    Use this everywhere a language code comes in from user input or env vars.
+    """
+    if not code:
+        return None
+    # Exact match
+    if code in SUPPORTED_LANGUAGES:
+        return code
+    # Normalise separators then do a case-insensitive lookup
+    for variant in (code.replace("-", "_"), code.replace("_", "-")):
+        canonical = _LANG_CODE_LOWER.get(variant.lower())
+        if canonical:
+            return canonical
+    return None
+
 
 # --- Step 2: Define the Translator class that solves the PyTorch conflict ---
 class Translator:
@@ -272,15 +301,8 @@ class Translator:
                 if debug:
                     print(_('[DEBUG-I18N] Using system locale: {!r}').format(lang_code), file=sys.stderr)
 
-            # Normalize language codes (handle both underscore and hyphen variants)
-            if lang_code in LANGUAGE_CODE_MAP:
-                normalized_code = lang_code
-            elif lang_code.replace("-", "_") in LANGUAGE_CODE_MAP:
-                normalized_code = lang_code.replace("-", "_")
-            elif lang_code.replace("_", "-") in LANGUAGE_CODE_MAP:
-                normalized_code = lang_code.replace("_", "-")
-            else:
-                normalized_code = lang_code
+            # Normalize: handles wrong case, hyphen/underscore, etc.
+            normalized_code = normalize_language_code(lang_code) or lang_code
 
             langs_to_try = [normalized_code]
             if "_" in normalized_code:
@@ -361,6 +383,10 @@ _ = Translator()
 
 # CRITICAL: Initialize with environment variable if set
 _initial_lang = os.environ.get("OMNIPKG_LANG")
+if _initial_lang:
+    # Normalize at the source so everything downstream gets the canonical code
+    _initial_lang = normalize_language_code(_initial_lang) or _initial_lang
+    os.environ["OMNIPKG_LANG"] = _initial_lang
 if debug:
     print(f"[DEBUG-I18N] _initial_lang from env: {_initial_lang!r}", file=sys.stderr)
 
