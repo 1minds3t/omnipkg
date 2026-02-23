@@ -7,6 +7,138 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [2.4.0] — 2026-02-23
+
+Multi-Package Activation, Windows Stability & CLI Overhaul
+
+**Massive Architectural Update**
+**Base:** `v2.3.1` | **Patch Level:** `2.4.0`
+
+This major release brings deep architectural improvements to the omnipkg core engine, complete stabilization of the Windows concurrent daemon, a completely overhauled CLI experience, and critical CVE dependency backports.
+
+*   **Multi-Package Activation:** The `omnipkgLoader` and `8pkg run` now support activating multiple packages simultaneously (via lists, dicts, or comma-separated strings).
+*   **CLI & UX Overhaul:** Completely rewrote the CLI utilizing `RawTextHelpFormatter` for detailed, real-world examples.
+*   **Interactive Config Wizard:** Added `8pkg config` interactive menu for setting system language, overriding install strategies, and diagnosing environment paths.
+*   **In-Process WorkerPool Fallback:** Removed the fake Windows daemon compatibility layer. The system now features a robust, native, in-process `WorkerPool` fallback if the background daemon socket is unreachable.
+*   **Automated Stdlib Injection:** The `8pkg run` command now heuristically injects forgotten standard library imports (e.g., `sys`, `json`, `pathlib`) when running inline `-c` code or piping from `stdin`.
+
+*   **Windows Path Case Resolution:** Fixed deep Windows `pip` bugs where lowercased `site-packages` paths caused `ModuleNotFoundError` during installation.
+*   **Stricter Runner Isolation:** The `8pkg run` wrapper no longer leaks the parent `PYTHONPATH` to child environments, preventing interpreter pollution when using versioned aliases (e.g., `8pkg38`).
+*   **"Dirty" Spec Detection:** Large, side-effect-heavy libraries (like `torch` and `tensorflow`) are now pinned to specific workers to prevent `sys.modules` cross-contamination.
+
+*   **Deadlock Prevention:** Fixed a 3-process handle inheritance deadlock on Windows that caused `8pkg run` to hang indefinitely in non-interactive CI environments.
+*   **Safety Scanner Deadlock:** Replaced `subprocess.run` with `Popen.communicate()` to prevent buffer-fill deadlocks during vulnerability scans.
+*   **Py3.7 Compatibility:** Restored and hardened Python 3.7 support within the package metadata builder (`importlib_metadata` fallbacks, `.egg-info` scanning).
+*   **I18n Normalization:** Fixed case-sensitivity bugs in the language detection engine (e.g., `zh-CN` vs `zh_cn` vs `ZH_CN`).
+
+*   **Dependency CVE Floors:** Enforced strict minimum versions in requirements to resolve upstream vulnerabilities (CVE-2026-22701, CVE-2026-27205, CVE-2026-27199, CVE-2026-21860).
+*   **LTS Backports:** Integrated updated CVE-safe backports for `urllib3-lts` and `filelock-lts` on Python versions < 3.10.
+
+---
+*Generated via `gitship release`.*
+
+---
+
+**📝 Code Changes:**
+- UPDATE: src/omnipkg/apis/local_bridge.py (106 lines changed)
+- UPDATE: src/omnipkg/cli.py (1384 lines changed)
+- UPDATE: src/omnipkg/commands/run.py (302 lines changed)
+- UPDATE: src/omnipkg/common_utils.py (1 lines changed)
+- UPDATE: src/omnipkg/core.py (979 lines changed)
+- UPDATE: src/omnipkg/dispatcher.py (252 lines changed)
+- UPDATE: src/omnipkg/i18n.py (53 lines changed)
+- UPDATE: src/omnipkg/installation/dependency_constraints.py (76 lines changed)
+- UPDATE: src/omnipkg/isolation/worker_daemon.py (536 lines changed)
+- UPDATE: src/omnipkg/loader.py (137 lines changed)
+- UPDATE: src/omnipkg/package_meta_builder.py (38 lines changed)
+- UPDATE: src/omnipkg/utils/flask_port_finder.py
+
+**🧪 Tests:**
+- NEW: conftest.py (25 lines)
+- NEW: pytest.ini (3 lines)
+- NEW: src/tests/conftest.py (33 lines)
+- UPDATE: src/tests/test_concurrent_install.py (444 lines)
+- UPDATE: src/tests/test_old_rich.py (70 lines)
+- UPDATE: src/tests/test_rich_switching.py (6 lines)
+
+**📚 Documentation:**
+- requirements-trace.txt (196 lines)
+- requirements.txt (137 lines)
+
+**⚙️ Configuration:**
+- .github/workflows/mac_daemon_debug.yml (162 lines)
+- pyproject.toml (24 lines)
+
+**Additional Changes:**
+- fix: add missing import
+- Update 1 code files
+- fix(i18n): normalize language codes consistently everywhere
+- fix: correct dep version in toml
+- docs(cli): expand run command help with real-world examples
+- fix(deps): enforce secure dependency floors for CVE compliance
+- refactor(core): streamline package info display and fix dependencies
+- fix(toml): correct toml dependencies
+- i18n: Update translations [ja]
+- fix: revert changes to flask port finder.
+- feat(core): add multi-package activation and harden execution isolation
+- test: improve concurrent benchmark with fair cold-start measurement
+- fix(isolation): resolve Windows path casing and worker config fallback
+- fix: fixing concurrent windows ci test
+- fix: fix concurrent test for windows
+- fix: fix concurrent install test
+- test: add debug output to concurrent install test to expose Windows daemon behavior
+- feat: add non-interactive support and direct selection flags to info command
+- fix: improving daemon startup in ci concurrent test on windows
+- fix(test): delegate daemon startup to CLI command to prevent first-run hang
+- fix: restore exceptions for ensure_daemon_running
+- fix: consume daemon output to prevent Windows pipe buffer hang on first run
+- fix: force early exit after successful demo in non‑interactive mode
+- fix: force early exit after successful script in non‑interactive mode
+- debug concurrent demo for windows ci
+- revert to 16804f5
+- fix: attempt to fix windows ci non-interactive run commmand returning on execution completion
+- fix: attempt #2 to fix windows non-interactive run command
+- fix: attempting to fix windows ci non-interactive for the run command
+- fix(runner): resolve Windows pipe handle inheritance deadlock in CI
+- feat: improve dependency resolution with ruamel mapping and PyPI lookup
+- fix: prevent process hangs in non-interactive/CI execution
+- fix: add missing interactive_session import
+- fix: use DEVNULL for stdin in non-interactive run sessions
+- fix: skip interactive prompts in non-interactive sessions
+- Restoring 3.7 support for package metadata building.
+- fix: fix Windows parallel import deadlock and exclude demo crash from pytest
+- fix: prevent subprocess deadlock in safety scan
+- feat(cli): overhaul CLI UX, add config wizard and web permission fix
+- fix: resolve Py3.7 ModuleNotFoundError and improve KB rebuild reliability
+- fix: enable .egg-info detection to support Python 3.7 and legacy installs
+- fix: fix importlib.metadata compatibility in rich switching test
+- fix: add retries to python download to handle transient HTTP 502/503 errors
+- fix: Fixing python cache init order.
+- feat: remove fake Windows daemon and add in-process WorkerPool fallback
+- chore: sync dev changes (core refactor, CI fixes, dispatcher logic)
+- fix: fix scoping of SUPPORTED_IMPLEMENTATIONS and add macOS debug workflow
+- refactor: remove dead hotswap config and cleanup setup logic
+- refactor: remove legacy Python 3.11 hotswap code and fix non-interactive info prompt
+- fix: Python 3.7-3.9 compatibility for importlib.resources + omnipkgXY symlinks
+- fix: Fix daemon log file creation.
+
+**Bug Fixes:**
+- fix: revert regression hunks to state at c7b7924a
+- fix: revert regression hunks to state at c33c39ff
+
+**Updates:**
+- Update README.md
+- Update publish.yml
+- Update demo-matrix-test.yml
+- Update windows-concurrency-test.yml
+- Update worker_daemon.py
+- Update test_concurrent_install.py
+- Update Redis key usage in knowledge_base_check.yml
+- Update rich version retrieval method in workflow
+- Update Docker CI workflow for PyPI integration
+
+_36 files changed, 5077 insertions(+), 3830 deletions(-)_
+
 ## [2.3.1] — 2026-02-20
 
 Security Mitigation (CVE-2025-14009) & Context Isolation Fixes
