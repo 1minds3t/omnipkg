@@ -9050,118 +9050,96 @@ class omnipkg:
     def show_package_info(
         self,
         pkg_name: str,
-        pre_discovered_dists: Optional[List[importlib.metadata.Distribution]] = None,
-        selection: Optional[int] = None,  # <-- ADD THIS
-        force: bool = False,              # <-- ADD THIS
+        pre_discovered_dists=None,
+        selection: Optional[int] = None,
+        force: bool = False,
     ):
-        """
-        Enhanced package data display with interactive selection.
-        """
-        c_name = canonicalize_name(pkg_name)
+        # Use existing method — handles "rich==13.7.1" → ("rich", "13.7.1")
+        c_name, requested_version = self._parse_package_spec(pkg_name)
+        from packaging.utils import canonicalize_name
+        c_name = canonicalize_name(c_name)
 
-        # Find all installations
         installations = self._find_package_installations(c_name)
-
         if not installations:
-            safe_print(_("❌ No installations found for package: {}").format(pkg_name))
+            safe_print(_("❌ No installations found for package: {}").format(c_name))
             return
 
-        # Categorize installations
-        active_installs = [i for i in installations if i.get("install_type") == "active"]
-        bubble_installs = [i for i in installations if i.get("install_type") == "bubble"]
-        nested_installs = [i for i in installations if i.get("install_type") == "nested"]
+        active_installs   = [i for i in installations if i.get("install_type") == "active"]
+        bubble_installs   = [i for i in installations if i.get("install_type") == "bubble"]
+        nested_installs   = [i for i in installations if i.get("install_type") == "nested"]
         vendored_installs = [i for i in installations if i.get("install_type") == "vendored"]
 
-        safe_print("\n" + _("📋 KEY DATA for '{}':\n").format(pkg_name) + "-" * 40)
+        safe_print("\n" + _("📋 KEY DATA for '{}':\n").format(c_name) + "-" * 40)
 
-        # Show active version
         if active_installs:
-            active_ver = active_installs[0].get("Version") or active_installs[0].get(
-                "version", "unknown"
-            )
+            active_ver = active_installs[0].get("Version") or active_installs[0].get("version", "unknown")
             safe_print(_("🎯 Active Version: {} (active)").format(active_ver))
-
-        # Show bubbled versions
         if bubble_installs:
-            bubble_versions = ", ".join(
-                [i.get("Version") or i.get("version", "?") for i in bubble_installs]
-            )
-            safe_print(_("🫧 Bubbled Versions: {}").format(bubble_versions))
-
-        # Show nested versions
+            safe_print(_("🫧 Bubbled Versions: {}").format(
+                ", ".join(i.get("Version") or i.get("version", "?") for i in bubble_installs)
+            ))
         if nested_installs:
-            safe_print(
-                _("📦 Nested Versions: {} found inside other bubbles").format(len(nested_installs))
-            )
-
-        # Show vendored versions
+            safe_print(_("📦 Nested Versions: {} found inside other bubbles").format(len(nested_installs)))
         if vendored_installs:
-            safe_print(
-                _("📦 Vendored Versions: {} found inside parent packages").format(
-                    len(vendored_installs)
-                )
-            )
+            safe_print(_("📦 Vendored Versions: {} found inside parent packages").format(len(vendored_installs)))
 
-        # List all installations for selection
         safe_print("\n" + _("📦 Available Installations:"))
         for idx, install in enumerate(installations, 1):
-            version = install.get("Version") or install.get("version", "?")
+            ver          = install.get("Version") or install.get("version", "?")
             install_type = install.get("install_type", "unknown")
-            owner = install.get("owner_package")
-
-            # Only add owner info if it's a meaningful value
+            owner        = install.get("owner_package")
             if owner and str(owner) != "None":
-                safe_print(f"  {idx}) v{version} ({install_type} in {owner})")
+                safe_print(f"  {idx}) v{ver} ({install_type} in {owner})")
             else:
-                safe_print(f"  {idx}) v{version} ({install_type})")
+                safe_print(f"  {idx}) v{ver} ({install_type})")
 
-        # --- FIX: Check selection before prompting! ---
+        # Resolve which entry to drill into
         if selection is not None:
             choice = str(selection)
+
+        elif requested_version is not None:
+            matched_idx = next(
+                (idx for idx, i in enumerate(installations, 1)
+                if (i.get("Version") or i.get("version", "")) == requested_version),
+                None
+            )
+            if matched_idx is None:
+                safe_print(_("\n⚠️  v{} is not installed (see available versions above).").format(
+                    requested_version))
+                return
+            safe_print(_("\n🎯 Auto-selecting v{} (from spec)").format(requested_version))
+            choice = str(matched_idx)
+
         elif not is_interactive_session():
-            # In CI/non-interactive, auto-select the first one so logs aren't empty
-            safe_print(_("\n🤖 Non-interactive mode: Auto-selecting installation 1."))
+            safe_print(_("\n🤖 Non-interactive: auto-selecting installation 1."))
             choice = "1"
+
         else:
-            # Only prompt if we are interactive AND no flag was passed
             try:
                 safe_print(_("\n💡 Want details on a specific version?"))
-                choice = input(
-                    _("Enter number (1-{}) or press Enter to skip: ").format(len(installations))
-                )
+                choice = input(_("Enter number (1-{}) or press Enter to skip: ").format(len(installations)))
             except (ValueError, KeyboardInterrupt, EOFError):
                 safe_print(_("\n✅ Skipping detailed view."))
                 return
 
-        if choice.strip():
-            try:
-                selection_idx = int(choice.strip())  # renamed to selection_idx
-                if 1 <= selection_idx <= len(installations):
-                    selected_inst = installations[selection_idx - 1]
+        if not choice.strip():
+            return
 
-                    # === FIX: Normalize the version key ===
-                    # Ensure 'Version' key exists (with capital V)
-                    if "Version" not in selected_inst and "version" in selected_inst:
-                        selected_inst["Version"] = selected_inst["version"]
-                    elif "Version" not in selected_inst:
-                        selected_inst["Version"] = "?"
-
-                    safe_print("\n" + "=" * 60)
-                    safe_print(
-                        _("📄 Detailed info for {} v{} ({})").format(
-                            c_name,
-                            selected_inst["Version"],
-                            selected_inst.get("install_type", "unknown"),
-                        )
-                    )
-                    safe_print("=" * 60)
-
-                    # Pass to detailed display WITH the force flag!
-                    self._show_version_details(selected_inst, force=force)
-                else:
-                    safe_print(_("❌ Invalid selection."))
-            except ValueError:
-                pass
+        try:
+            idx = int(choice.strip())
+            if 1 <= idx <= len(installations):
+                selected = installations[idx - 1]
+                if "Version" not in selected:
+                    selected["Version"] = selected.get("version", "?")
+                safe_print("\n" + "=" * 60)
+                safe_print(_("📄 Detailed info for {} v{} ({})").format(
+                    c_name, selected["Version"], selected.get("install_type", "unknown")))
+                safe_print("=" * 60)
+                self._show_version_details(selected, force=force)
+            else:
+                safe_print(_("❌ Invalid selection."))
+        except ValueError:
+            pass
 
     def _clean_and_format_dependencies(self, raw_deps_json: str) -> str:
         """Parses the raw dependency JSON, filters out noise, and formats it for humans."""
@@ -9180,25 +9158,19 @@ class omnipkg:
     def _show_enhanced_package_data(
         self,
         package_name: str,
-        pre_discovered_dists: Optional[List[importlib.metadata.Distribution]] = None,
+        pre_discovered_dists=None,
     ):
-        """
-        (REWRITTEN for INSTANCE-AWARE data) Displays a clear summary of all
-        package installations, correctly distinguishing between all unique instances.
-        Now accepts pre-discovered distributions to avoid re-scanning the filesystem.
-        """
-        c_name = canonicalize_name(package_name)
+        c_name, requested_version = self._parse_package_spec(package_name)
+        from packaging.utils import canonicalize_name
+        c_name = canonicalize_name(c_name)
 
-        # --- FIX: Pass the pre-discovered distributions to avoid a rescan ---
         all_installations = self._find_package_installations(
             c_name, pre_discovered_dists=pre_discovered_dists
         )
-
         if not all_installations:
-            safe_print(_("\n📋 KEY DATA: No installations found for '{}'").format(package_name))
+            safe_print(_("\n📋 KEY DATA: No installations found for '{}'").format(c_name))
             return
 
-        # Sort for predictable display
         all_installations.sort(
             key=lambda x: (
                 not x.get("is_active", False),
@@ -9208,55 +9180,59 @@ class omnipkg:
             reverse=True,
         )
 
-        # Present the KEY DATA summary
-        safe_print(_("\n📋 KEY DATA for '{}':").format(package_name))
+        safe_print(_("\n📋 KEY DATA for '{}':").format(c_name))
         print("-" * 40)
 
-        active_detail = next((inst for inst in all_installations if inst.get("is_active")), None)
+        active_detail = next((i for i in all_installations if i.get("is_active")), None)
         if active_detail:
-            safe_print(
-                _("🎯 Active Version: {} ({})").format(
-                    active_detail["Version"], active_detail["install_type"]
-                )
-            )
+            safe_print(_("🎯 Active Version: {} ({})").format(
+                active_detail["Version"], active_detail["install_type"]))
         else:
             safe_print(_("🎯 Active Version: Not Set"))
 
-        bubbled_versions = sorted(
-            list(
-                set(
-                    inst["Version"]
-                    for inst in all_installations
-                    if inst.get("install_type") == "bubble"
-                )
-            )
-        )
-        if bubbled_versions:
-            safe_print(_("🫧 Bubbled Versions: {}").format(", ".join(bubbled_versions)))
+        bubbled = sorted(set(
+            i["Version"] for i in all_installations if i.get("install_type") == "bubble"
+        ))
+        if bubbled:
+            safe_print(_("🫧 Bubbled Versions: {}").format(", ".join(bubbled)))
 
-        nested_count = sum(1 for inst in all_installations if inst.get("install_type") == "nested")
-        if nested_count > 0:
+        nested_count = sum(1 for i in all_installations if i.get("install_type") == "nested")
+        if nested_count:
             safe_print(_("📦 Nested Versions: {} found inside other bubbles").format(nested_count))
 
-        # Build and display the interactive list
         safe_print(_("\n📦 Available Installations:"))
         for i, detail in enumerate(all_installations, 1):
             status_parts = []
             if detail.get("is_active"):
                 status_parts.append("active")
-
             install_type = detail.get("install_type", "unknown")
             if install_type == "bubble":
                 status_parts.append("bubble")
             elif install_type == "nested":
                 status_parts.append(f"nested in {detail.get('owner_package', 'Unknown')}")
-
             status_str = f" ({', '.join(status_parts)})" if status_parts else ""
-            safe_print(_("  {}) v{}{}".format(i, detail.get("Version", "?"), status_str)))
+            safe_print(f"  {i}) v{detail.get('Version', '?')}{status_str}")
 
-        # Handle user interaction
+        # Auto-select if version was specified
+        if requested_version is not None:
+            matched = next(
+                (i for i in all_installations if i.get("Version") == requested_version), None
+            )
+            if not matched:
+                safe_print(_("\n⚠️  v{} is not installed (see available versions above).").format(
+                    requested_version))
+                return
+            safe_print(_("\n🎯 Auto-selecting v{} (from spec)").format(requested_version))
+            safe_print("\n" + "=" * 60)
+            safe_print(_("📄 Detailed info for {} v{} ({})").format(
+                c_name, matched["Version"], matched["install_type"]))
+            safe_print("=" * 60)
+            self._show_version_details(matched)
+            return
+
         if not is_interactive_session():
             return
+
         safe_print(_("\n💡 Want details on a specific version?"))
         try:
             choice = input(
@@ -9265,17 +9241,12 @@ class omnipkg:
             if choice:
                 idx = int(choice) - 1
                 if 0 <= idx < len(all_installations):
-                    selected_inst = all_installations[idx]
+                    selected = all_installations[idx]
                     print("\n" + "=" * 60)
-                    safe_print(
-                        _("📄 Detailed info for {} v{} ({})").format(
-                            c_name,
-                            selected_inst["Version"],
-                            selected_inst["install_type"],
-                        )
-                    )
+                    safe_print(_("📄 Detailed info for {} v{} ({})").format(
+                        c_name, selected["Version"], selected["install_type"]))
                     print("=" * 60)
-                    self._show_version_details(selected_inst)
+                    self._show_version_details(selected)
                 else:
                     safe_print(_("❌ Invalid selection."))
         except (ValueError, KeyboardInterrupt, EOFError):
@@ -9308,192 +9279,94 @@ class omnipkg:
         except Exception as e:
             safe_print(_("   ⚠️ Could not save environment snapshot: {}").format(e))
 
-    def _show_version_details(self, data: Dict, force: bool = False): # <-- ADD force
-        """
-        (FIXED) Displays detailed information from a pre-loaded dictionary...
-        """
+    def _show_version_details(self, data: Dict, force: bool = False):
         package_name = data.get("Name")
-        version = data.get("Version")
-        cache_key = data.get("redis_key", "(unknown key)")
+        version      = data.get("Version")
 
         if not package_name or not version:
-            safe_print(
-                _(
-                    "❌ Cannot display details: package name or version not found in the provided data."
-                )
-            )
+            safe_print(_("❌ Cannot display details: Name or Version missing from data."))
             return
 
-        # --- CORRECT FIX HERE ---
-        connection_status = getattr(self, '_cache_connection_status', None)
-        is_using_redis = (connection_status == "redis_ok")
-        # ------------------------
-
-        if is_using_redis:
-            safe_print(_("The data is from Redis key: {}").format(cache_key))
-        else:
-            safe_print(_("The data is from SQLite cache (key: {})").format(cache_key))
-
         important_fields = [
-            ("Name", "📦 Package"),
-            ("Version", "🏷️  Version"),
-            ("install_type", "Status"),
+            ("Name",          "📦 Package"),
+            ("Version",       "🏷️  Version"),
+            ("install_type",  "Status"),
             ("owner_package", "Owner"),
-            ("Summary", "📝 Summary"),
-            ("Author", "👤 Author"),
-            ("Author-email", "📧 Email"),
-            ("License", "⚖️  License"),
-            ("Home-page", "🌐 Homepage"),
-            ("path", "📂 Path"),
-            ("Platform", "💻 Platform"),
-            ("dependencies", "🔗 Dependencies"),
+            ("Summary",       "📝 Summary"),
+            ("Author",        "👤 Author"),
+            ("Author-email",  "📧 Email"),
+            ("License",       "⚖️  License"),
+            ("Home-page",     "🌐 Homepage"),
+            ("path",          "📂 Path"),
+            ("Platform",      "💻 Platform"),
+            ("dependencies",  "🔗 Dependencies"),
             ("Requires-Dist", "📋 Requires"),
         ]
 
         for field_name, display_name in important_fields:
-            if field_name in data:
-                value = data.get(field_name)
+            if field_name not in data:
+                continue
+            value = data[field_name]
 
-                # --- FIX: Hide 'Owner' field if there is no owner ---
-                if field_name == "owner_package" and (not value or str(value).lower() == "none"):
-                    continue  # Skip printing this line entirely
+            if field_name == "owner_package" and (not value or str(value).lower() == "none"):
+                continue
+            if field_name == "License" and value and len(value) > 100:
+                value = value.split("\n")[0] + "... (truncated)"
+            elif field_name == "Description" and value and len(value) > 200:
+                value = value[:200].replace("\n", " ") + "... (truncated)"
+            elif field_name in ("dependencies", "Requires-Dist") and value:
+                try:
+                    dep_list = json.loads(value)
+                    value = ", ".join(dep_list) if dep_list else "None"
+                except (json.JSONDecodeError, TypeError):
+                    pass
 
-                # FIXED: Changed from 'if' to 'elif' to maintain proper chain
-                if field_name == "License" and value and len(value) > 100:
-                    value = value.split("\n")[0] + "... (truncated)"
-                    safe_print(_("{}: {}").format(display_name.ljust(18), value))
-                elif field_name == "Description" and value and len(value) > 200:
-                    value = value[:200].replace("\n", " ") + "... (truncated)"
-                    safe_print(_("{}: {}").format(display_name.ljust(18), value))
-                elif field_name in ["dependencies", "Requires-Dist"] and value:
-                    try:
-                        dep_list = json.loads(value)
-                        safe_print(
-                            _("{}: {}").format(
-                                display_name.ljust(18),
-                                ", ".join(dep_list) if dep_list else "None",
-                            )
-                        )
-                    except (json.JSONDecodeError, TypeError):
-                        safe_print(_("{}: {}").format(display_name.ljust(18), value))
-                else:
-                    safe_print(_("{}: {}").format(display_name.ljust(18), value or "N/A"))
+            safe_print(_("{}: {}").format(display_name.ljust(18), value or "N/A"))
 
-        # --- Health & Security and Build Info sections (unchanged) ---
-        security_fields = [
-            ("security.issues_found", "🔒 Security Issues"),
-            ("security.audit_status", "🛡️  Audit Status"),
-            ("health.import_check.importable", "✅ Importable"),
-        ]
         safe_print(_("\n---[ Health & Security ]---"))
-        for field_name, display_name in security_fields:
-            value = data.get(field_name, "N/A")
-            safe_print(_("   {}: {}").format(display_name.ljust(18), value))
+        for field_name, display_name in [
+            ("security.issues_found",          "🔒 Security Issues"),
+            ("security.audit_status",          "🛡️  Audit Status"),
+            ("health.import_check.importable", "✅ Importable"),
+        ]:
+            safe_print(_("   {}: {}").format(display_name.ljust(18), data.get(field_name, "N/A")))
 
-        meta_fields = [
-            ("last_indexed", "⏰ Last Indexed"),
-            ("installation_hash", "🔐 Checksum"),
-            ("Metadata-Version", "📋 Metadata Version"),
-        ]
         safe_print(_("\n---[ Build Info ]---"))
-        for field_name, display_name in meta_fields:
+        for field_name, display_name in [
+            ("last_indexed",      "⏰ Last Indexed"),
+            ("installation_hash", "🔐 Checksum"),
+            ("Metadata-Version",  "📋 Metadata Version"),
+        ]:
             value = data.get(field_name, "N/A")
-            if field_name == "installation_hash" and value and len(value) > 24:
+            if field_name == "installation_hash" and value and len(str(value)) > 24:
                 value = f"{value[:12]}...{value[-12:]}"
             safe_print(_("   {}: {}").format(display_name.ljust(18), value))
 
-        # --- NEW: Interactive prompt to run raw data command ---
-        safe_print(_("\n💡 For all raw data:"))
+        # Any remaining fields not already shown above
+        already_shown = {
+            "Name", "Version", "install_type", "owner_package", "Summary", "Author",
+            "Author-email", "License", "Home-page", "path", "Platform", "dependencies",
+            "Requires-Dist", "Description", "security.issues_found", "security.audit_status",
+            "health.import_check.importable", "last_indexed", "installation_hash",
+            "Metadata-Version",
+        }
+        extra = {k: v for k, v in data.items() if k not in already_shown and v not in (None, "", "None")}
+        if extra:
+            show = force or not is_interactive_session()
+            if not show:
+                try:
+                    safe_print(_("\n💡 {} more field(s) available. Show all? (y/N): ").format(len(extra)), end="")
+                    show = input().strip().lower() == "y"
+                except (EOFError, KeyboardInterrupt):
+                    pass
+            if show:
+                safe_print(_("\n---[ All Stored Fields ]---"))
+                for k, v in sorted(extra.items()):
+                    v_str = str(v)
+                    if len(v_str) > 120:
+                        v_str = v_str[:120] + "..."
+                    safe_print(f"   {k.ljust(30)} {v_str}")
 
-        command_list = None
-        tool_name = None
-
-        if is_using_redis:
-            tool_name = "redis-cli"
-
-            # --- FIX: Display simple, user-friendly commands ---
-            safe_print(_("   # Option 1: View raw key-value pairs"))
-            safe_print(f'   redis-cli HGETALL "{cache_key}"')
-            safe_print(
-                _(
-                    "\n   # Option 2: The prompt below will run a command for a formatted table view."
-                )
-            )
-
-            # The clean Lua script for background execution (unchanged)
-            lua_script = (
-                "local data = redis.call('HGETALL', KEYS[1]); "
-                "local result = {}; "
-                "local max_key_len = 0; "
-                "for i = 1, #data, 2 do "
-                "  if string.len(data[i]) > max_key_len then max_key_len = string.len(data[i]); end; "
-                "  table.insert(result, {key=data[i], value=data[i+1]}); "
-                "end; "
-                "table.sort(result, function(a,b) return a.key < b.key end); "
-                "local output = ''; "
-                "for _, pair in ipairs(result) do "
-                "  local val = pair.value; "
-                "  if string.len(val) > 100 then val = string.sub(val, 1, 100) .. '...'; end; "
-                "  output = output .. string.format('%-' .. max_key_len + 4 .. 's%s\\n', pair.key, val); "
-                "end; "
-                "return output"
-            )
-
-            # --- FIX: Use --raw to get clean output with newlines ---
-            command_list = ["redis-cli", "--raw", "EVAL", lua_script, "1", cache_key]
-
-        else:  # SQLite block remains the same
-            tool_name = "sqlite3"
-            db_path = self.config_manager.config_dir / f"cache_{self.env_id}.sqlite"
-            full_command = f"sqlite3 -column -header \"{db_path}\" \"SELECT field, SUBSTR(value, 1, 80) || CASE WHEN LENGTH(value) > 80 THEN '...' ELSE '' END as value FROM hash_store WHERE key = '{cache_key}' ORDER BY field;\""
-            safe_print(_("   # To see all raw data, the following command would be run:"))
-            safe_print(f"   {full_command}")
-            command_list = full_command  # shell=True will be used for this simple case
-
-        try:
-            # If user passed -y OR we are in CI, auto-expand the table!
-            if force or not is_interactive_session():
-                if not is_interactive_session():
-                    safe_print(_("\n🤖 Non-interactive mode: Auto-expanding raw data view."))
-                choice = "y"
-            else:
-                prompt_text = _("\n   Do you want to run the formatted view command now? (y/N): ")
-                if not is_using_redis:
-                    prompt_text = _(
-                        "\n   Do you want to run this command now to see the raw data? (y/N): "
-                    )
-                choice = input(prompt_text).strip().lower()
-
-            if choice == "y":
-                if not shutil.which(tool_name):
-                    safe_print(
-                        _(
-                            "\n   ❌ Command failed: '{}' is not installed or not in your PATH."
-                        ).format(tool_name)
-                    )
-                    return
-
-                safe_print(_("   ---[ Running Command ]---"))
-
-                use_shell = not isinstance(command_list, list)
-                process = subprocess.run(
-                    command_list,
-                    shell=use_shell,
-                    capture_output=True,
-                    text=True,
-                    check=False,
-                )
-
-                if process.returncode == 0:
-                    safe_print(process.stdout.strip())
-                else:
-                    safe_print(_("   ❌ Command execution failed."))
-                    error_output = process.stderr.strip() or process.stdout.strip()
-                    safe_print(f"   Error:\n{error_output}")
-                safe_print(_("   ---[ End of Command Output ]---"))
-
-        except (KeyboardInterrupt, EOFError):
-            safe_print(_("\n   Skipping raw data view."))
 
     def _handle_quantum_healing(
         self,
