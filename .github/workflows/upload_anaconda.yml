@@ -1,53 +1,59 @@
-name: Upload to Anaconda.org (minds3t channel)
+name: Build and Upload to Anaconda.org (minds3t channel)
 
 on:
+  # Auto-trigger when PyPI publish workflow completes successfully
+  workflow_run:
+    workflows: ["Publish to PyPI"]
+    types: [completed]
+  # Manual trigger with optional version override
   workflow_dispatch:
     inputs:
       version:
-        description: 'Package version to build and upload (e.g., 2.4.0)'
-        required: true
+        description: 'Package version (e.g., 2.4.0) — leave empty to detect from pyproject.toml'
+        required: false
         type: string
 
 jobs:
-  upload-anaconda:
-    name: Build & Upload (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: ubuntu-latest
-            platform: linux-64
-          - os: macos-14
-            platform: osx-arm64
-          - os: windows-latest
-            platform: win-64
-
+  # ═══════════════════════════════════════════════════════════════════
+  # 1. WAIT FOR PYPI + GET VERSION/SHA256
+  # ═══════════════════════════════════════════════════════════════════
+  wait-for-pypi:
+    name: "⏳ Wait for PyPI"
+    runs-on: ubuntu-latest
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+    outputs:
+      version: ${{ steps.get-version.outputs.version }}
+      sha256: ${{ steps.get-sha.outputs.sha256 }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          ref: "v${{ github.event.inputs.version }}"
 
-      - name: Set up Miniconda
-        uses: conda-incubator/setup-miniconda@v3
-        with:
-          auto-update-conda: true
-          python-version: "3.11"
-          channels: conda-forge,defaults
-
-      - name: Install build tools
-        shell: bash -el {0}
+      - name: Determine version
+        id: get-version
         run: |
-          conda install -y conda-build anaconda-client
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+            VERSION="${VERSION#v}"
+          else
+            VERSION=$(grep -oP '(?<=^version = ")[^"]+' pyproject.toml || echo "")
+            if [ -z "$VERSION" ]; then
+              echo "❌ Could not detect version — pass it via workflow_dispatch"
+              exit 1
+            fi
+          fi
+          echo "🎯 Target version: $VERSION"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
 
       - name: Wait for PyPI and get SHA256
         id: get-sha
-        shell: bash -el {0}
         run: |
-          VERSION="${{ github.event.inputs.version }}"
+          VERSION="${{ steps.get-version.outputs.version }}"
           echo "⏳ Waiting for omnipkg $VERSION on PyPI..."
+          ATTEMPT=0
           while true; do
+            ATTEMPT=$((ATTEMPT + 1))
             HTTP_CODE=$(curl -s -o pypi.json -w "%{http_code}" \
               "https://pypi.org/pypi/omnipkg/$VERSION/json")
             if [ "$HTTP_CODE" = "200" ]; then
@@ -58,33 +64,57 @@ jobs:
                 break
               fi
             fi
-            echo "⏳ Not ready yet, retrying in 60s..."
-            sleep 60
+            if [ $((ATTEMPT % 15)) -eq 0 ]; then
+              echo "🕐 Still waiting... $((ATTEMPT * 2)) minutes elapsed"
+            fi
+            sleep 120
           done
           rm -f pypi.json
 
-      - name: Prepare meta.yaml
+  # ═══════════════════════════════════════════════════════════════════
+  # 2. NOARCH BUILD (Build 0) — always runs first
+  # ═══════════════════════════════════════════════════════════════════
+  build-noarch:
+    name: "📦 Noarch (Build 0)"
+    needs: wait-for-pypi
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Miniconda
+        uses: conda-incubator/setup-miniconda@v3
+        with:
+          auto-update-conda: true
+          python-version: "3.11"
+          channels: conda-forge,defaults
+
+      - name: Install build tools
+        shell: bash -el {0}
+        run: conda install -y conda-build anaconda-client
+
+      - name: Prepare noarch meta.yaml
         shell: bash -el {0}
         run: |
-          VERSION="${{ github.event.inputs.version }}"
-          SHA256="${{ steps.get-sha.outputs.sha256 }}"
-          mkdir -p conda-build-recipe
+          VERSION="${{ needs.wait-for-pypi.outputs.version }}"
+          SHA256="${{ needs.wait-for-pypi.outputs.sha256 }}"
+          mkdir -p conda-build-noarch
           sed \
             -e "s/{% set version = \".*\" %}/{% set version = \"$VERSION\" %}/" \
             -e "s/sha256: .*/sha256: $SHA256/" \
             -e "s/number: .*/number: 0/" \
-            src/omnipkg/conda-recipes/meta-platforms.yaml > conda-build-recipe/meta.yaml
+            src/omnipkg/conda-recipes/meta-noarch.yaml > conda-build-noarch/meta.yaml
           echo "📋 meta.yaml:"
-          cat conda-build-recipe/meta.yaml
+          cat conda-build-noarch/meta.yaml
 
-      - name: Build conda package
+      - name: Build noarch package
         shell: bash -el {0}
         run: |
-          conda build conda-build-recipe/ --output-folder conda-dist/ --no-test
-          echo "📦 Built packages:"
+          conda build conda-build-noarch/ --output-folder conda-dist/ --no-test
+          echo "📦 Built:"
           find conda-dist/ -name "*.conda" -o -name "*.tar.bz2"
 
-      - name: Upload to anaconda.org
+      - name: Upload noarch to anaconda.org
         shell: bash -el {0}
         env:
           ANACONDA_API_TOKEN: ${{ secrets.ANACONDA_TOKEN }}
@@ -94,4 +124,203 @@ jobs:
             --label main \
             --force \
             $(find conda-dist/ -name "*.conda" -o -name "*.tar.bz2")
-          echo "✅ Uploaded to https://anaconda.org/minds3t/omnipkg"
+          echo "✅ Noarch uploaded to https://anaconda.org/minds3t/omnipkg"
+
+  # ═══════════════════════════════════════════════════════════════════
+  # 3. PLATFORM BUILDS (Build 1) — run after noarch
+  # ═══════════════════════════════════════════════════════════════════
+  build-linux-64:
+    name: "🐧 linux-64 - Py${{ matrix.python }}"
+    needs: [wait-for-pypi, build-noarch]
+    runs-on: [self-hosted, linux, x64]
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ['3.10', '3.11', '3.12', '3.13']
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Miniconda
+        uses: conda-incubator/setup-miniconda@v3
+        with:
+          auto-update-conda: true
+          python-version: ${{ matrix.python }}
+          channels: conda-forge,defaults
+      - name: Install build tools
+        shell: bash -el {0}
+        run: conda install -y conda-build anaconda-client
+      - name: Build and upload
+        shell: bash -el {0}
+        env:
+          ANACONDA_API_TOKEN: ${{ secrets.ANACONDA_TOKEN }}
+        run: |
+          VERSION="${{ needs.wait-for-pypi.outputs.version }}"
+          SHA256="${{ needs.wait-for-pypi.outputs.sha256 }}"
+          mkdir -p conda-build-platform
+          sed \
+            -e "s/{% set version = \".*\" %}/{% set version = \"$VERSION\" %}/" \
+            -e "s/sha256: .*/sha256: $SHA256/" \
+            -e "s/number: .*/number: 1/" \
+            src/omnipkg/conda-recipes/meta-platforms.yaml > conda-build-platform/meta.yaml
+          conda build conda-build-platform/ \
+            --output-folder conda-dist/ \
+            --no-test \
+            --python ${{ matrix.python }}
+          anaconda -t "$ANACONDA_API_TOKEN" upload \
+            --user minds3t --label main --force \
+            $(find conda-dist/ -name "*.conda" -o -name "*.tar.bz2")
+          echo "✅ linux-64 py${{ matrix.python }} uploaded"
+
+  build-osx-arm64:
+    name: "🍎 osx-arm64 - Py${{ matrix.python }}"
+    needs: [wait-for-pypi, build-noarch]
+    runs-on: macos-14
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ['3.10', '3.11', '3.12', '3.13']
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Miniconda
+        uses: conda-incubator/setup-miniconda@v3
+        with:
+          auto-update-conda: true
+          python-version: ${{ matrix.python }}
+          channels: conda-forge,defaults
+      - name: Install build tools
+        shell: bash -el {0}
+        run: conda install -y conda-build anaconda-client
+      - name: Build and upload
+        shell: bash -el {0}
+        env:
+          ANACONDA_API_TOKEN: ${{ secrets.ANACONDA_TOKEN }}
+        run: |
+          VERSION="${{ needs.wait-for-pypi.outputs.version }}"
+          SHA256="${{ needs.wait-for-pypi.outputs.sha256 }}"
+          mkdir -p conda-build-platform
+          sed \
+            -e "s/{% set version = \".*\" %}/{% set version = \"$VERSION\" %}/" \
+            -e "s/sha256: .*/sha256: $SHA256/" \
+            -e "s/number: .*/number: 1/" \
+            src/omnipkg/conda-recipes/meta-platforms.yaml > conda-build-platform/meta.yaml
+          conda build conda-build-platform/ \
+            --output-folder conda-dist/ \
+            --no-test \
+            --python ${{ matrix.python }}
+          anaconda -t "$ANACONDA_API_TOKEN" upload \
+            --user minds3t --label main --force \
+            $(find conda-dist/ -name "*.conda" -o -name "*.tar.bz2")
+          echo "✅ osx-arm64 py${{ matrix.python }} uploaded"
+
+  build-osx-64:
+    name: "🍏 osx-64 - Py${{ matrix.python }}"
+    needs: [wait-for-pypi, build-noarch]
+    runs-on: [self-hosted, macos, x64]
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ['3.10', '3.11', '3.12', '3.13']
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Miniconda
+        uses: conda-incubator/setup-miniconda@v3
+        with:
+          auto-update-conda: true
+          python-version: ${{ matrix.python }}
+          channels: conda-forge,defaults
+      - name: Install build tools
+        shell: bash -el {0}
+        run: conda install -y conda-build anaconda-client
+      - name: Build and upload
+        shell: bash -el {0}
+        env:
+          ANACONDA_API_TOKEN: ${{ secrets.ANACONDA_TOKEN }}
+        run: |
+          VERSION="${{ needs.wait-for-pypi.outputs.version }}"
+          SHA256="${{ needs.wait-for-pypi.outputs.sha256 }}"
+          mkdir -p conda-build-platform
+          sed \
+            -e "s/{% set version = \".*\" %}/{% set version = \"$VERSION\" %}/" \
+            -e "s/sha256: .*/sha256: $SHA256/" \
+            -e "s/number: .*/number: 1/" \
+            src/omnipkg/conda-recipes/meta-platforms.yaml > conda-build-platform/meta.yaml
+          conda build conda-build-platform/ \
+            --output-folder conda-dist/ \
+            --no-test \
+            --python ${{ matrix.python }}
+          anaconda -t "$ANACONDA_API_TOKEN" upload \
+            --user minds3t --label main --force \
+            $(find conda-dist/ -name "*.conda" -o -name "*.tar.bz2")
+          echo "✅ osx-64 py${{ matrix.python }} uploaded"
+
+  build-win-64:
+    name: "🪟 win-64 - Py${{ matrix.python }}"
+    needs: [wait-for-pypi, build-noarch]
+    runs-on: [self-hosted, windows, x64]
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ['3.10', '3.11', '3.12', '3.13']
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Miniconda
+        uses: conda-incubator/setup-miniconda@v3
+        with:
+          auto-update-conda: true
+          python-version: ${{ matrix.python }}
+          channels: conda-forge,defaults
+      - name: Install build tools
+        shell: bash -el {0}
+        run: conda install -y conda-build anaconda-client
+      - name: Build and upload
+        shell: bash -el {0}
+        env:
+          ANACONDA_API_TOKEN: ${{ secrets.ANACONDA_TOKEN }}
+        run: |
+          VERSION="${{ needs.wait-for-pypi.outputs.version }}"
+          SHA256="${{ needs.wait-for-pypi.outputs.sha256 }}"
+          mkdir -p conda-build-platform
+          sed \
+            -e "s/{% set version = \".*\" %}/{% set version = \"$VERSION\" %}/" \
+            -e "s/sha256: .*/sha256: $SHA256/" \
+            -e "s/number: .*/number: 1/" \
+            src/omnipkg/conda-recipes/meta-platforms.yaml > conda-build-platform/meta.yaml
+          conda build conda-build-platform/ \
+            --output-folder conda-dist/ \
+            --no-test \
+            --python ${{ matrix.python }}
+          anaconda -t "$ANACONDA_API_TOKEN" upload \
+            --user minds3t --label main --force \
+            $(find conda-dist/ -name "*.conda" -o -name "*.tar.bz2")
+          echo "✅ win-64 py${{ matrix.python }} uploaded"
+
+  # ═══════════════════════════════════════════════════════════════════
+  # 4. SUMMARY
+  # ═══════════════════════════════════════════════════════════════════
+  summary:
+    name: "✅ Upload Complete"
+    needs: [wait-for-pypi, build-noarch, build-linux-64, build-osx-arm64, build-osx-64, build-win-64]
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Summary
+        run: |
+          VERSION="${{ needs.wait-for-pypi.outputs.version }}"
+          echo "🎉 omnipkg $VERSION upload complete"
+          echo ""
+          echo "📦 https://anaconda.org/minds3t/omnipkg"
+          echo ""
+          echo "Install with:"
+          echo "  conda install -c minds3t omnipkg"
+          echo ""
+          echo "Platforms built:"
+          echo "  noarch (build 0) — fallback for any platform"
+          echo "  linux-64  × 4 Python versions (build 1)"
+          echo "  osx-arm64 × 4 Python versions (build 1)"
+          echo "  osx-64    × 4 Python versions (build 1)"
+          echo "  win-64    × 4 Python versions (build 1)"
+          echo ""
+          echo "Total packages: 17 (1 noarch + 16 platform-specific)"
