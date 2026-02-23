@@ -531,18 +531,20 @@ def run_config_wizard(cm: ConfigManager, parser_prog: str) -> int:
 
     elif choice == "2":
         _print_language_table()
-        val = safe_input(_("  Enter language code (e.g. en, es, de): "), default="").strip().lower()
+        val = safe_input(_("  Enter language code (e.g. en, es, de): "), default="").strip()
         if not val:
             safe_print(_("❌ No input. No changes made."))
             return 1
-        if val not in SUPPORTED_LANGUAGES:
+        # Case-insensitive match — "zh_cn", "ZH_CN", "zh_CN" all work
+        normalized = next((k for k in SUPPORTED_LANGUAGES if k.lower() == val.lower()), None)
+        if normalized is None:
             safe_print(_("❌ Unknown language code '{}'. Available codes shown above.").format(val))
             safe_print(_("   Example: {} config set language es").format(parser_prog))
             return 1
-        cm.set("language", val)
-        _.set_language(val)
-        os.environ["OMNIPKG_LANG"] = val
-        safe_print(_("✅ Language set to: {} ({})").format(val, SUPPORTED_LANGUAGES[val]))
+        cm.set("language", normalized)
+        _.set_language(normalized)
+        os.environ["OMNIPKG_LANG"] = normalized
+        safe_print(_("✅ Language set to: {} ({})").format(normalized, SUPPORTED_LANGUAGES[normalized]))
 
     elif choice in ("q", ""):
         safe_print(_("  No changes made."))

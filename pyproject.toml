@@ -85,7 +85,8 @@ dependencies = [
     "uv>=0.9.6; python_version >= '3.8'",
 
     # CVE-safe urllib3
-    "urllib3-lts>=2026.21441", 
+    "urllib3-lts>=2026.21441; python_version < '3.10'",
+    "urllib3>=2.6.3; python_version >= '3.10'",
 
     # flask for interactive docs
     "flask>=2.0,<3.0; python_version < '3.8'",
