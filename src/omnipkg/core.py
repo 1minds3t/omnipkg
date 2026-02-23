@@ -14360,7 +14360,7 @@ print(json.dumps(results))
     ):
         """
         Orchestrator for the Dependency Time Machine logic, run as an automatic fallback.
-        Only activates for TRULY OLD packages (pre-2020).
+        Attempts to reconstruct the exact dependency environment from the package's release date.
         """
         # Get release date first
         release_date = self._get_historical_release_date(target_pkg, target_ver)
@@ -14371,15 +14371,8 @@ print(json.dumps(results))
         release_datetime = datetime.fromisoformat(release_date.replace("Z", "+00:00"))
         release_year = release_datetime.year
 
-        # CRITICAL: Only use Time Machine for packages released before 2020
-        # Modern packages (2020+) should not need ancient setuptools
-        if release_year >= 2020:
-            safe_print(f"   - ℹ️  Package released in {release_year} - too modern for Time Machine.")
-            safe_print("   - 💡 This is likely a dependency issue, not a build tool issue.")
-            return False
-
         safe_print(
-            f"   - Attempting to rebuild {target_pkg}=={target_ver} (released {release_year}) from the past..."
+            f"   - 🕰️  Attempting historical rebuild for {target_pkg}=={target_ver} (released {release_year})..."
         )
 
         dep_names = self._get_historical_dependency_names(target_pkg, target_ver)
@@ -14389,7 +14382,6 @@ print(json.dumps(results))
 
         if not dep_names:
             safe_print("   - ℹ️ No dependencies found. Attempting a direct simple install.")
-            # --- [FIX] Pass the override to the execution function ---
             return self._execute_historical_install(
                 target_pkg,
                 target_ver,
