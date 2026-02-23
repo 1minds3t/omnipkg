@@ -68,7 +68,7 @@
 <p align="center">
   <!-- Key Features -->
     <a href="https://github.com/1minds3t/omnipkg/actions/workflows/multiverse_test.yml">
-    <img src="https://img.shields.io/badge/<600ms 3 Py Interps 1 Script 1 Env-passing-success?logo=python&logoColor=white" alt="Concurrent Python Interpreters">
+    <img src="https://img.shields.io/badge/<3ms 3 Py Interps 1 Script 1 Env-passing-success?logo=python&logoColor=white" alt="Concurrent Python Interpreters">
   </a>
   <a href="https://github.com/1minds3t/omnipkg/actions/workflows/numpy_scipy_test.yml">
     <img src="https://img.shields.io/badge/🚀0.25s_Live_NumPy+SciPy_Hot--Swapping-passing-success?logo=github-actions" alt="Hot-Swapping">
@@ -77,7 +77,7 @@
   <img src="https://img.shields.io/badge/🔥_0.25s_Python_Interpreter_Hot--Swapping-Live-orange?logo=python&logoColor=white" alt="Python Hot-Swapping">
 </a>
   <a href="https://github.com/1minds3t/omnipkg/actions/workflows/old_rich_test.yml">
-  <img src="https://img.shields.io/badge/⚡_Auto--Healing-7.76x_Faster_than_UV-gold?logo=lightning&logoColor=white" alt="Auto-Healing Performance">
+  <img src="https://img.shields.io/badge/⚡_Auto--Healing-8x_Faster_than_UV-gold?logo=lightning&logoColor=white" alt="Auto-Healing Performance">
 </a>
     <a href="https://github.com/1minds3t/omnipkg/actions/workflows/language_test.yml">
     <img src="https://img.shields.io/badge/💥_Breaking_Language_Barriers-24_Languages-success?logo=babel&logoColor=white" alt="24 Languages">
