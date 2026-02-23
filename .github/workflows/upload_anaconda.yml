@@ -1,0 +1,97 @@
+name: Upload to Anaconda.org (minds3t channel)
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Package version to build and upload (e.g., 2.4.0)'
+        required: true
+        type: string
+
+jobs:
+  upload-anaconda:
+    name: Build & Upload (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: linux-64
+          - os: macos-14
+            platform: osx-arm64
+          - os: windows-latest
+            platform: win-64
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: "v${{ github.event.inputs.version }}"
+
+      - name: Set up Miniconda
+        uses: conda-incubator/setup-miniconda@v3
+        with:
+          auto-update-conda: true
+          python-version: "3.11"
+          channels: conda-forge,defaults
+
+      - name: Install build tools
+        shell: bash -el {0}
+        run: |
+          conda install -y conda-build anaconda-client
+
+      - name: Wait for PyPI and get SHA256
+        id: get-sha
+        shell: bash -el {0}
+        run: |
+          VERSION="${{ github.event.inputs.version }}"
+          echo "⏳ Waiting for omnipkg $VERSION on PyPI..."
+          while true; do
+            HTTP_CODE=$(curl -s -o pypi.json -w "%{http_code}" \
+              "https://pypi.org/pypi/omnipkg/$VERSION/json")
+            if [ "$HTTP_CODE" = "200" ]; then
+              SHA256=$(jq -r '.urls[] | select(.filename | endswith(".tar.gz")) | .digests.sha256' pypi.json)
+              if [ -n "$SHA256" ] && [ "$SHA256" != "null" ]; then
+                echo "✅ SHA256: $SHA256"
+                echo "sha256=$SHA256" >> $GITHUB_OUTPUT
+                break
+              fi
+            fi
+            echo "⏳ Not ready yet, retrying in 60s..."
+            sleep 60
+          done
+          rm -f pypi.json
+
+      - name: Prepare meta.yaml
+        shell: bash -el {0}
+        run: |
+          VERSION="${{ github.event.inputs.version }}"
+          SHA256="${{ steps.get-sha.outputs.sha256 }}"
+          mkdir -p conda-build-recipe
+          sed \
+            -e "s/{% set version = \".*\" %}/{% set version = \"$VERSION\" %}/" \
+            -e "s/sha256: .*/sha256: $SHA256/" \
+            -e "s/number: .*/number: 0/" \
+            src/omnipkg/conda-recipes/meta-platforms.yaml > conda-build-recipe/meta.yaml
+          echo "📋 meta.yaml:"
+          cat conda-build-recipe/meta.yaml
+
+      - name: Build conda package
+        shell: bash -el {0}
+        run: |
+          conda build conda-build-recipe/ --output-folder conda-dist/ --no-test
+          echo "📦 Built packages:"
+          find conda-dist/ -name "*.conda" -o -name "*.tar.bz2"
+
+      - name: Upload to anaconda.org
+        shell: bash -el {0}
+        env:
+          ANACONDA_API_TOKEN: ${{ secrets.ANACONDA_API_TOKEN }}
+        run: |
+          anaconda -t "$ANACONDA_API_TOKEN" upload \
+            --user minds3t \
+            --label main \
+            --force \
+            $(find conda-dist/ -name "*.conda" -o -name "*.tar.bz2")
+          echo "✅ Uploaded to https://anaconda.org/minds3t/omnipkg"
