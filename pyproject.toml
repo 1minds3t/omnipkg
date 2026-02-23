@@ -44,8 +44,8 @@ dependencies = [
     "rich>=10.0.0",
 
     # Filelock: LTS backport for <3.10, official for >=3.10
-    "filelock-lts>=2026.22701; python_version < '3.10'",   # covers 3.7, 3.8, 3.9
-    "filelock>=3.20.3; python_version >= '3.10'",           # bump to 3.20.3 for CVE-2026-22701
+    "filelock-lts>=2025.68146.2; python_version < '3.10'",
+    "filelock>=3.16.1; python_version >= '3.10'",
     
     # Packaging version splits - CRITICAL: pip-audit needs >=21.0 on ALL versions
     "packaging>=21.0,<22.0; python_version < '3.10'",
