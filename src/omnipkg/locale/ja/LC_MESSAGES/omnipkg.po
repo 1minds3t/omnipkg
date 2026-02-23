@@ -1647,6 +1647,8 @@ msgstr "omnipkg デモ # バージョンスイッチデモを試す"
 #  (Validation Failed: proper_noun_mismatch_stress-test)
 #  (Validation Failed: proper_noun_mismatch_stress-test)
 #  (Validation Failed: proper_noun_mismatch_stress-test)
+#  (Validation Failed: proper_noun_mismatch_stress-test)
+#  (Validation Failed: proper_noun_mismatch_stress-test)
 # Lollama: Skipped (Validation Failed: proper_noun_mismatch_stress-test)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:546
 #, fuzzy
@@ -1673,6 +1675,8 @@ msgstr "omnipkg インストール リクエスト numpy>=1.20"
 #  (Validation Failed: translation_artifact_english)
 #  (Validation Failed: translation_artifact_english)
 #  (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
 # Lollama: Skipped (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:550
 #, fuzzy
@@ -1689,13 +1693,17 @@ msgstr ""
 #  (Validation Failed: identical_to_original)
 #  (Validation Failed: identical_to_original)
 #  (Validation Failed: identical_to_original)
-# Lollama: Skipped (Validation Failed: identical_to_original)
+#  (Validation Failed: identical_to_original)
+#  (Validation Failed: identical_to_original)
+# Lollama: Skipped (Validation Failed: proper_noun_mismatch_TensorFlow)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:551
 #, fuzzy
 msgid "  omnipkg info tensorflow==2.13.0"
 msgstr ""
 
 # (Empty Chain Output)
+#  (Validation Failed: identical_to_original)
+#  (Validation Failed: identical_to_original)
 #  (Validation Failed: identical_to_original)
 #  (Validation Failed: identical_to_original)
 #  (Validation Failed: identical_to_original)
@@ -1757,9 +1765,8 @@ msgid "Force complete rebuild"
 msgstr "強制完全再構築"
 
 # (Empty Chain Output)
-# Lollama: Skipped (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:701
-#, fuzzy
 msgid "Delete config file for fresh setup"
 msgstr "Config ファイルを新鮮な設定に削除する"
 
@@ -2667,6 +2674,8 @@ msgstr "site-packages の設定: {}"
 #  (Validation Failed: translation_artifact_english)
 #  (Validation Failed: translation_artifact_english)
 #  (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
 # Lollama: Skipped (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/omnipkg/commands/run.py:2331
 #, fuzzy
@@ -2689,7 +2698,9 @@ msgstr "📦 パッケージは次の場所にあります: {}"
 #  (Validation Failed: translation_artifact_english)
 #  (Validation Failed: translation_artifact_english)
 #  (Validation Failed: translation_artifact_english)
-# Lollama: Skipped (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
+# Lollama: Skipped (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/commands/run.py:2359
 #, fuzzy
 msgid "   ❌ site-packages path doesn't exist: {}"
@@ -3469,6 +3480,8 @@ msgstr "実行中:{}"
 #  (Validation Failed: translation_artifact)
 #  (Validation Failed: translation_artifact)
 #  (Validation Failed: translation_artifact)
+#  (Validation Failed: translation_artifact)
+#  (Validation Failed: translation_artifact)
 # Lollama: Skipped (Validation Failed: translation_artifact)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:14658
 #, fuzzy
@@ -3661,6 +3674,8 @@ msgid "Requirement already satisfied:\\s+{}==([^\\s]+)"
 msgstr "Requirement already satisfied:\\s+{}==([^\\s]+)"
 
 # (Empty Chain Output)
+#  (Validation Failed: placeholder_mismatch)
+#  (Validation Failed: placeholder_mismatch)
 #  (Validation Failed: placeholder_mismatch)
 #  (Validation Failed: placeholder_mismatch)
 #  (Validation Failed: placeholder_mismatch)
@@ -3940,6 +3955,8 @@ msgstr "1. 新しい Python 3.7 または 3.8 環境にインストールして�
 #  (Validation Failed: translation_artifact_english)
 #  (Validation Failed: translation_artifact_english)
 #  (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
 # Lollama: Skipped (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/omnipkg/deptimemachine.py:226
 #, fuzzy
@@ -4001,6 +4018,8 @@ msgid "ℹ️ No dependencies found to process."
 msgstr "ℹ️ 処理する依存関係が見つかりません。"
 
 # (Empty Chain Output)
+#  (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
 #  (Validation Failed: translation_artifact_english)
 #  (Validation Failed: translation_artifact_english)
 #  (Validation Failed: translation_artifact_english)
@@ -4125,14 +4144,15 @@ msgstr "[omnipkg ローダー] バブルディレクトリを作成しました:
 #  (Validation Failed: placeholder_mismatch)
 #  (Validation Failed: placeholder_mismatch)
 #  (Validation Failed: placeholder_mismatch)
-# Lollama: Skipped (Validation Failed: translation_artifact)
+#  (Validation Failed: translation_artifact)
+#  (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:722
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:1000
-#, fuzzy
 msgid ""
 "🚫 [omnipkg loader] Rejecting incompatible path (contains python{}) for "
 "context python{}: {}"
 msgstr ""
+"🚫 [omnipkg loader] コンテキスト python{} に対して互換性のないパス (python{} を含む) を拒否します: {}"
 
 # (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:738
@@ -4265,7 +4285,9 @@ msgstr "❌ ビルダーはキャッシュ クライアントを使用できま�
 #  (Validation Failed: translation_artifact_english)
 #  (Validation Failed: translation_artifact_english)
 #  (Validation Failed: translation_artifact_english)
-# Lollama: Skipped (Validation Failed: suspicious_length_ratio_10.45)
+#  (Validation Failed: suspicious_length_ratio_10.45)
+#  (Validation Failed: translation_artifact_english)
+# Lollama: Skipped (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:4383
 #: /home/minds3t/omnipkg/src/omnipkg/package_meta_builder.py:2031
 #, fuzzy
@@ -4277,7 +4299,9 @@ msgstr ""
 #  (Validation Failed: translation_artifact_english)
 #  (Validation Failed: translation_artifact_english)
 #  (Validation Failed: translation_artifact_english)
-# Lollama: Skipped (Validation Failed: suspicious_length_ratio_9.86)
+#  (Validation Failed: suspicious_length_ratio_9.86)
+#  (Validation Failed: translation_artifact_english)
+# Lollama: Skipped (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:4387
 #, fuzzy
 msgid "    results.append(('{}', False, str(e)))"
@@ -4288,7 +4312,9 @@ msgstr ""
 #  (Validation Failed: translation_artifact_english)
 #  (Validation Failed: translation_artifact_english)
 #  (Validation Failed: translation_artifact_english)
-# Lollama: Skipped (Validation Failed: suspicious_length_ratio_9.86)
+#  (Validation Failed: suspicious_length_ratio_9.86)
+#  (Validation Failed: translation_artifact_english)
+# Lollama: Skipped (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:4385
 #, fuzzy
 msgid "    results.append(('{}', True, version))"
@@ -4312,7 +4338,9 @@ msgstr "サブプロセスが失敗しました:{}"
 #  (Validation Failed: translation_artifact_english)
 #  (Validation Failed: translation_artifact_english)
 #  (Validation Failed: translation_artifact_english)
-# Lollama: Skipped (Validation Failed: suspicious_length_ratio_5.31)
+#  (Validation Failed: suspicious_length_ratio_5.31)
+#  (Validation Failed: translation_artifact_english)
+# Lollama: Skipped (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/omnipkg/package_meta_builder.py:2421
 #, fuzzy
 msgid "🚀 Starting omnipkg Metadata Builder v12 (SQLite/Redis Edition)..."
@@ -4472,7 +4500,9 @@ msgstr "致命的なブートストラップエラー: Python 3.11 を再起動�
 #  (Validation Failed: proper_noun_mismatch_omnipkg)
 #  (Validation Failed: proper_noun_mismatch_omnipkg)
 #  (Validation Failed: proper_noun_mismatch_omnipkg)
-# Lollama: Skipped (Validation Failed: language_mismatch_detected_pt)
+#  (Validation Failed: language_mismatch_detected_pt)
+#  (Validation Failed: proper_noun_mismatch_omnipkg)
+# Lollama: Skipped (Validation Failed: proper_noun_mismatch_omnipkg)
 #: /home/minds3t/omnipkg/src/tests/test_multiverse_healing.py:86
 #, fuzzy
 msgid ""
@@ -4498,7 +4528,9 @@ msgstr " | {}"
 #  (Validation Failed: translation_artifact_english)
 #  (Validation Failed: translation_artifact_english)
 #  (Validation Failed: translation_artifact_english)
-# Lollama: Skipped (Validation Failed: suspicious_length_ratio_20.29)
+#  (Validation Failed: suspicious_length_ratio_20.29)
+#  (Validation Failed: translation_artifact_english)
+# Lollama: Skipped (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/tests/test_multiverse_healing.py:245
 #, fuzzy
 msgid "DEBUG: Exit code: {}"
@@ -4514,6 +4546,8 @@ msgstr "DEBUG: Stdout: '{}'"
 #  (Validation Failed: translation_artifact_english)
 #  (Validation Failed: translation_artifact_english)
 #  (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
 # Lollama: Skipped (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/tests/test_multiverse_healing.py:247
 #, fuzzy
@@ -4521,6 +4555,8 @@ msgid "DEBUG: Stderr: '{}'"
 msgstr ""
 
 # (Empty Chain Output)
+#  (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
 #  (Validation Failed: translation_artifact_english)
 #  (Validation Failed: translation_artifact_english)
 #  (Validation Failed: translation_artifact_english)
@@ -4591,6 +4627,8 @@ msgstr "❌ サブプロセスで重大なエラーが発生しました。"
 #  (Validation Failed: identical_to_original)
 #  (Validation Failed: identical_to_original)
 #  (Validation Failed: identical_to_original)
+#  (Validation Failed: identical_to_original)
+#  (Validation Failed: identical_to_original)
 # Lollama: Skipped (Validation Failed: identical_to_original)
 #: /home/minds3t/omnipkg/src/tests/test_swap_install.py:429
 #, fuzzy
@@ -4598,6 +4636,8 @@ msgid "STDOUT:"
 msgstr ""
 
 # (Empty Chain Output)
+#  (Validation Failed: identical_to_original)
+#  (Validation Failed: identical_to_original)
 #  (Validation Failed: identical_to_original)
 #  (Validation Failed: identical_to_original)
 #  (Validation Failed: identical_to_original)
@@ -4815,9 +4855,9 @@ msgstr "💡 開始: 8pkg Web スタート"
 # (Empty Chain Output)
 #  (Validation Failed: translation_artifact_english)
 #  (Validation Failed: translation_artifact_english)
-# Lollama: Skipped (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/omnipkg/apis/local_bridge.py:677
-#, fuzzy
 msgid "⚠️  'psutil' not installed. Limited status info available."
 msgstr "⚠ ️ 'psutil'はインストールされていない. 状況情報制限が利用可能."
 
@@ -4828,9 +4868,8 @@ msgstr "✅ 実行中 (PID:{},\\、ポート:{})"
 
 # (Empty Chain Output)
 #  (Validation Failed: translation_artifact_english)
-# Lollama: Skipped (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/omnipkg/apis/local_bridge.py:692
-#, fuzzy
 msgid "✅ Web Bridge Status: RUNNING"
 msgstr "✅ Web Bridge Status:RUNNING ランニング"
 
@@ -4903,6 +4942,8 @@ msgstr "{}"
 #  (Validation Failed: translation_artifact_english)
 #  (Validation Failed: translation_artifact_english)
 #  (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
 # Lollama: Skipped (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:69
 #: /home/minds3t/omnipkg/src/omnipkg/common_utils.py:373
@@ -4911,6 +4952,8 @@ msgid "📍 sys.executable:        {}"
 msgstr ""
 
 # (Empty Chain Output)
+#  (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
 #  (Validation Failed: translation_artifact_english)
 #  (Validation Failed: translation_artifact_english)
 #  (Validation Failed: translation_artifact_english)
@@ -4929,6 +4972,8 @@ msgid "📍 sys.version_info:      {}.{}.{}"
 msgstr "📍 sys.version_info: {}.{}.{}"
 
 # (Empty Chain Output)
+#  (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
 #  (Validation Failed: translation_artifact_english)
 #  (Validation Failed: translation_artifact_english)
 #  (Validation Failed: translation_artifact_english)
@@ -5424,6 +5469,8 @@ msgstr "🔍 omnipkgLoader 欠けている依存を要求しました: {}"
 #  (Validation Failed: translation_artifact_english)
 #  (Validation Failed: translation_artifact_english)
 #  (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
 # Lollama: Skipped (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/omnipkg/commands/run.py:103
 #, fuzzy
@@ -5431,6 +5478,8 @@ msgid "   - Main environment has: jaxlib=={}"
 msgstr ""
 
 # (Empty Chain Output)
+#  (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
 #  (Validation Failed: translation_artifact_english)
 #  (Validation Failed: translation_artifact_english)
 #  (Validation Failed: translation_artifact_english)
@@ -5449,7 +5498,9 @@ msgstr "- 🛡️ 利用可能な最小値への強制アップグレード: {}"
 # (Empty Chain Output)
 #  (Validation Failed: translation_artifact_english)
 #  (Validation Failed: translation_artifact_english)
+# Lollama: Skipped (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/omnipkg/commands/run.py:128
+#, fuzzy
 msgid "   - 📦 Added to healing plan: jax=={}, jaxlib=={}"
 msgstr "- 📦 治癒計画に追加: jax=={}, jaxlib=={}"
 
@@ -5473,6 +5524,8 @@ msgstr "- 見つかった: {}"
 #  (Validation Failed: translation_artifact_english)
 #  (Validation Failed: translation_artifact_english)
 #  (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
 # Lollama: Skipped (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/omnipkg/commands/run.py:231
 #: /home/minds3t/omnipkg/src/omnipkg/commands/run.py:759
@@ -5484,7 +5537,10 @@ msgstr ""
 #  (Validation Failed: translation_artifact_english)
 #  (Validation Failed: translation_artifact_english)
 #  (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
+# Lollama: Skipped (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/omnipkg/commands/run.py:262
+#, fuzzy
 msgid ""
 "\n"
 "🔍 Loader reported missing bubble: {}"
@@ -5572,6 +5628,8 @@ msgstr "- 失踪パッケージをインストール: {}"
 #  (Validation Failed: translation_artifact_english)
 #  (Validation Failed: translation_artifact_english)
 #  (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
 # Lollama: Skipped (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/omnipkg/commands/run.py:661
 #, fuzzy
@@ -5579,6 +5637,8 @@ msgid "   🔧 Auto-added jaxlib=={} to match jax"
 msgstr ""
 
 # (Empty Chain Output)
+#  (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
 #  (Validation Failed: translation_artifact_english)
 #  (Validation Failed: translation_artifact_english)
 #  (Validation Failed: translation_artifact_english)
@@ -5684,6 +5744,8 @@ msgstr "🛠 ️ 次の分離戦略を解決します:{}"
 #  (Validation Failed: placeholder_mismatch)
 #  (Validation Failed: placeholder_mismatch)
 #  (Validation Failed: placeholder_mismatch)
+#  (Validation Failed: placeholder_mismatch)
+#  (Validation Failed: placeholder_mismatch)
 # Lollama: Skipped (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/commands/run.py:1567
 #, fuzzy
@@ -5780,6 +5842,8 @@ msgstr "{}失敗した実行"
 #  (Validation Failed: placeholder_mismatch)
 #  (Validation Failed: placeholder_mismatch)
 #  (Validation Failed: placeholder_mismatch)
+#  (Validation Failed: placeholder_mismatch)
+#  (Validation Failed: placeholder_mismatch)
 # Lollama: Skipped (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/commands/run.py:2219
 #, fuzzy
@@ -5854,6 +5918,8 @@ msgid "   🐍 Target Python: {}"
 msgstr "🐍 ターゲット Python:{}"
 
 # (Empty Chain Output)
+#  (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
 #  (Validation Failed: translation_artifact_english)
 #  (Validation Failed: translation_artifact_english)
 #  (Validation Failed: translation_artifact_english)
@@ -6420,6 +6486,8 @@ msgid "      ⚠️ Transplant failed: {}"
 msgstr "⚠️ 移植失敗: {}"
 
 # (Empty Chain Output)
+#  (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
 #  (Validation Failed: translation_artifact_english)
 #  (Validation Failed: translation_artifact_english)
 #  (Validation Failed: translation_artifact_english)
@@ -7555,6 +7623,8 @@ msgstr "🛡️ 自動修復: 破損を検出しました（試行 {}/{}）"
 #  (Validation Failed: emoji_mismatch)
 #  (Validation Failed: emoji_mismatch)
 #  (Validation Failed: emoji_mismatch)
+#  (Validation Failed: emoji_mismatch)
+#  (Validation Failed: emoji_mismatch)
 # Lollama: Skipped (Validation Failed: emoji_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:12120
 #, fuzzy
@@ -7877,6 +7947,8 @@ msgstr "-   エラー：{}:{}"
 #  (Validation Failed: translation_artifact_english)
 #  (Validation Failed: translation_artifact_english)
 #  (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
 # Lollama: Skipped (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:13714
 #, fuzzy
@@ -7909,6 +7981,8 @@ msgid "      - 📥 Downloading {}..."
 msgstr "- 📥ダウンロード中{}..."
 
 # (Empty Chain Output)
+#  (Validation Failed: placeholder_mismatch)
+#  (Validation Failed: placeholder_mismatch)
 #  (Validation Failed: placeholder_mismatch)
 #  (Validation Failed: placeholder_mismatch)
 #  (Validation Failed: placeholder_mismatch)
@@ -8046,11 +8120,10 @@ msgstr "⚠️ キャッシュの非互換性: {} は Python {} を必要とし�
 #  (Validation Failed: placeholder_mismatch)
 #  (Validation Failed: placeholder_mismatch)
 #  (Validation Failed: placeholder_mismatch)
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+#  (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:15903
-#, fuzzy
 msgid "Cached: Package '{}' requires Python {}"
-msgstr ""
+msgstr "キャッシュ済み: パッケージ '{}' Python が必要です {}"
 
 # (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:15974
@@ -8196,6 +8269,7 @@ msgstr "- テストグループ '{}' ({} パッケージをまとめて)..."
 # (Empty Chain Output)
 #  (Validation Failed: translation_artifact_english)
 #  (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
 # Lollama: Skipped (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/omnipkg/installation/verification_strategy.py:255
 #, fuzzy
@@ -8224,6 +8298,7 @@ msgstr "(環境は {} で存在する)"
 # (Empty Chain Output)
 #  (Validation Failed: translation_artifact_english)
 #  (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
 # Lollama: Skipped (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/omnipkg/integration/ci_integration.py:108
 #, fuzzy
@@ -8231,6 +8306,7 @@ msgid "   Run: 8pkg activate"
 msgstr ""
 
 # (Empty Chain Output)
+#  (Validation Failed: translation_artifact_english)
 # Lollama: Skipped (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/omnipkg/integration/ci_integration.py:110
 #, fuzzy
@@ -8297,6 +8373,7 @@ msgstr "例："
 # (Empty Chain Output)
 #  (Validation Failed: identical_to_original)
 #  (Validation Failed: identical_to_original)
+#  (Validation Failed: identical_to_original)
 # Lollama: Skipped (Validation Failed: identical_to_original)
 #: /home/minds3t/omnipkg/src/omnipkg/integration/cli_executor.py:216
 #, fuzzy
@@ -8304,6 +8381,7 @@ msgid "  8pkg run lollama start-mining"
 msgstr ""
 
 # (Empty Chain Output)
+#  (Validation Failed: identical_to_original)
 #  (Validation Failed: identical_to_original)
 #  (Validation Failed: identical_to_original)
 # Lollama: Skipped (Validation Failed: identical_to_original)
@@ -8346,7 +8424,9 @@ msgid ""
 msgstr "起動すると,すべての CLI コマンドは,自動的に衝突を治します."
 
 # (Empty Chain Output)
+# Lollama: Skipped (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/omnipkg/integration/environment.py:163
+#, fuzzy
 msgid "  lollama start-mining  # Just works!"
 msgstr "lollama start-mining # うまくいきます!"
 
@@ -8382,6 +8462,7 @@ msgid "Open Handle Failed: {}"
 msgstr "ハンドルを開けませんでした: {}"
 
 # (Empty Chain Output)
+#  (Validation Failed: translation_artifact_english)
 #  (Validation Failed: translation_artifact_english)
 #  (Validation Failed: translation_artifact_english)
 # Lollama: Skipped (Validation Failed: translation_artifact_english)
@@ -8590,6 +8671,7 @@ msgstr "🔍 DEBUG: Worker script written to: {}"
 # (Empty Chain Output)
 #  (Validation Failed: translation_artifact_english)
 #  (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
 # Lollama: Skipped (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/omnipkg/isolation/worker_daemon.py:1602
 #, fuzzy
@@ -8617,6 +8699,7 @@ msgid "Failed to send setup: {}"
 msgstr "セットアップの送信に失敗しました:{}"
 
 # (Empty Chain Output)
+#  (Validation Failed: translation_artifact_english)
 #  (Validation Failed: translation_artifact_english)
 #  (Validation Failed: translation_artifact_english)
 # Lollama: Skipped (Validation Failed: translation_artifact_english)
@@ -8681,6 +8764,7 @@ msgid "🔥 GPU IPC Mode: {}"
 msgstr "🔥 GPU IPC モード:{}"
 
 # (Empty Chain Output)
+#  (Validation Failed: translation_artifact_english)
 #  (Validation Failed: translation_artifact_english)
 #  (Validation Failed: translation_artifact_english)
 # Lollama: Skipped (Validation Failed: translation_artifact_english)
@@ -8796,6 +8880,7 @@ msgid "   (The daemon might not have started yet)"
 msgstr "(デーモンがまだ起動していない可能性があります)"
 
 # (Empty Chain Output)
+#  (Validation Failed: translation_artifact_english)
 #  (Validation Failed: translation_artifact_english)
 #  (Validation Failed: translation_artifact_english)
 # Lollama: Skipped (Validation Failed: translation_artifact_english)
@@ -8990,7 +9075,9 @@ msgstr "❌ ワーカーの作成に失敗しました:{}"
 # (Empty Chain Output)
 #  (Validation Failed: translation_artifact_english)
 #  (Validation Failed: translation_artifact_english)
+# Lollama: Skipped (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:502
+#, fuzzy
 msgid "   🛑 Shutting down worker pool ({} workers)..."
 msgstr "🛑 ワーカープールを閉鎖する ({} workers)..."
 
@@ -9249,11 +9336,10 @@ msgid "   📊 Bubble: {} packages, {} conflicts"
 msgstr "📊 バブル: {} パッケージ, {} 競合"
 
 # (Empty Chain Output)
-# Lollama: Skipped (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:2427
-#, fuzzy
 msgid "   ⏭️  Skipping module purge (nested overlay, depth={})"
-msgstr ""
+msgstr "⏭️ モジュールのパージをスキップ (ネストされたオーバーレイ、depth={})"
 
 # (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:2479
@@ -9356,6 +9442,7 @@ msgid "   📊 Restoration: {} restored, {} failed"
 msgstr "📊 復元：{}復元され、{}失敗した"
 
 # (Empty Chain Output)
+#  (Validation Failed: placeholder_mismatch)
 # Lollama: Skipped (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:3051
 #, fuzzy
@@ -9666,6 +9753,7 @@ msgid ""
 msgstr "Redis に {} を保存中にエラーが発生しました: {}"
 
 # (Empty Chain Output)
+#  (Validation Failed: translation_artifact_english)
 # Lollama: Skipped (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/omnipkg/package_meta_builder.py:2023
 #, fuzzy
@@ -9673,6 +9761,7 @@ msgid "results.append(('{}', False, 'Skipped: Not a valid identifier'))"
 msgstr ""
 
 # (Empty Chain Output)
+#  (Validation Failed: translation_artifact_english)
 # Lollama: Skipped (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/omnipkg/package_meta_builder.py:2033
 #, fuzzy
@@ -9738,6 +9827,7 @@ msgid "  ✅ {}\n"
 msgstr "  ✅ {}\n"
 
 # (Empty Chain Output)
+#  (Validation Failed: translation_artifact_english)
 # Lollama: Skipped (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/omnipkg/utils/flask_port_finder.py:201
 #, fuzzy
