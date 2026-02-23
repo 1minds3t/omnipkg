@@ -19,7 +19,6 @@ Add these functions to /home/minds3t/omnipkg/src/omnipkg/common_utils.py
 They provide standardized, bulletproof solutions for subprocess config passing and printing.
 """
 
-
 # Keep a reference to the original print
 _builtin_print = print
 
