@@ -390,11 +390,18 @@ def handle_shim_execution(prog_name: str, debug: bool):
         # Execute the target Python directly
         os.execv(str(target_python), [str(target_python)] + sys.argv[1:])
     elif prog_name == "pip":
-        # Execute pip via the target Python
         os.execv(str(target_python), [str(target_python), "-m", "pip"] + sys.argv[1:])
     else:
-        # Fallback: shouldn't happen, but handle it
-        sys.exit(1)
+        # For any other command (pytest, black, mypy, etc.), try running it
+        # as a module via the target Python first, then fall back to finding
+        # the binary in the same bin/ dir as the target interpreter
+        target_bin_dir = target_python.parent
+        target_cmd = target_bin_dir / prog_name
+        if target_cmd.exists():
+            os.execv(str(target_cmd), [str(target_cmd)] + sys.argv[1:])
+        else:
+            # Fall back to running as -m module (works for pytest, coverage, etc.)
+            os.execv(str(target_python), [str(target_python), "-m", prog_name] + sys.argv[1:])
 
 def resolve_python_path(version: str) -> Path:
     """

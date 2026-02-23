@@ -531,18 +531,20 @@ def run_config_wizard(cm: ConfigManager, parser_prog: str) -> int:
 
     elif choice == "2":
         _print_language_table()
-        val = safe_input(_("  Enter language code (e.g. en, es, de): "), default="").strip().lower()
+        val = safe_input(_("  Enter language code (e.g. en, es, de): "), default="").strip()
         if not val:
             safe_print(_("❌ No input. No changes made."))
             return 1
-        if val not in SUPPORTED_LANGUAGES:
+        # Case-insensitive match — "zh_cn", "ZH_CN", "zh_CN" all work
+        normalized = next((k for k in SUPPORTED_LANGUAGES if k.lower() == val.lower()), None)
+        if normalized is None:
             safe_print(_("❌ Unknown language code '{}'. Available codes shown above.").format(val))
             safe_print(_("   Example: {} config set language es").format(parser_prog))
             return 1
-        cm.set("language", val)
-        _.set_language(val)
-        os.environ["OMNIPKG_LANG"] = val
-        safe_print(_("✅ Language set to: {} ({})").format(val, SUPPORTED_LANGUAGES[val]))
+        cm.set("language", normalized)
+        _.set_language(normalized)
+        os.environ["OMNIPKG_LANG"] = normalized
+        safe_print(_("✅ Language set to: {} ({})").format(normalized, SUPPORTED_LANGUAGES[normalized]))
 
     elif choice in ("q", ""):
         safe_print(_("  No changes made."))
@@ -726,13 +728,27 @@ def create_parser():
         epilog=_(
             "Examples:\n"
             "  omnipkg info requests\n"
-            "  omnipkg info requests==2.28.1\n"
+            "  omnipkg info requests 1        # Automatically select the first installation\n"
+            "  omnipkg info requests 1 -y     # Select first and auto-expand raw data\n"
             "  omnipkg info python            # Show managed Python interpreters\n"
         ),
     )
     info_parser.add_argument(
         "package_spec",
         help=_('Package to inspect (e.g., "requests" or "requests==2.28.1" or "python")'),
+    )
+    # 👇 Add these two arguments 👇
+    info_parser.add_argument(
+        "selection",
+        nargs="?",
+        type=int,
+        help=_("Optional: Directly select an installation index to skip the prompt (e.g., 1)"),
+    )
+    info_parser.add_argument(
+        "--yes", "-y",
+        dest="force",
+        action="store_true",
+        help=_("Skip confirmation prompts and auto-expand raw data"),
     )
 
     # ── revert ────────────────────────────────────────────────────────────────
@@ -1704,6 +1720,9 @@ def main():
                 safe_print("-" * 60)
                 if returncode == 0:
                     safe_print(_("🎉 Demo completed successfully!"))
+                    # In non‑interactive mode, exit immediately to avoid hanging
+                    if non_interactive:
+                        sys.exit(0)
                 else:
                     safe_print(_("❌ Demo failed with return code {}").format(returncode))
                 return returncode
@@ -1859,7 +1878,11 @@ def main():
                 )
                 return 0
             else:
-                return pkg_instance.show_package_info(args.package_spec)
+                return pkg_instance.show_package_info(
+                    args.package_spec,
+                    selection=args.selection,  # Pass the positional index
+                    force=args.force           # Pass the -y flag
+                )
 
         elif args.command == "list":
             return pkg_instance.list_packages(args.filter)
@@ -1931,6 +1954,7 @@ def main():
                 cm,
                 verbose=args.verbose,
                 omnipkg_core=pkg_instance,
+                python_version=getattr(args, "python", None),  # ← add this
             )
 
         elif args.command == "upgrade":

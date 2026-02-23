@@ -55,31 +55,45 @@ def _derive_paths_for_exe(python_exe: str) -> dict:
     Compute site_packages_path and multiversion_base directly from a Python
     executable path, without relying on ConfigManager lookup.
 
-    This is a reliable fallback for managed interpreters where the ConfigManager
-    may fail to match due to path normalization differences (especially on Windows).
+    IMPORTANT: Always pass the ORIGINAL-CASE path (not normalized/lowercased),
+    because the returned paths are passed to pip/subprocess which need real
+    filesystem paths. On Windows, lowercased paths cause pip to fail writing
+    temp files even though the FS is case-insensitive.
 
     For a managed interpreter like:
       C:\\...\\cpython-3.9.23\\python.exe
     The site-packages is:
       C:\\...\\cpython-3.9.23\\Lib\\site-packages   (Windows)
       .../cpython-3.9.23/lib/pythonX.Y/site-packages  (Unix)
-
-    For the NATIVE interpreter (3.11 daemon), omnipkg uses the DAEMON's own
-    site-packages which is already correct — we only need this for managed ones.
     """
     try:
-        exe_path = Path(python_exe).resolve()
+        # Use the path as-is for filesystem operations to preserve case on Windows.
+        # If the path is already normalized/lowercased, try to resolve to original case.
+        exe_path = Path(python_exe)
+
+        # On Windows, if the path doesn't exist as-is (e.g. it was lowercased),
+        # try to find the actual mixed-case path by resolving via the OS.
+        if IS_WINDOWS and not exe_path.exists():
+            # Try to restore original case by asking the OS
+            try:
+                import ctypes
+                buf = ctypes.create_unicode_buffer(32768)
+                get_long = ctypes.windll.kernel32.GetLongPathNameW
+                if get_long(str(exe_path), buf, 32768):
+                    exe_path = Path(buf.value)
+            except Exception:
+                pass
+
+        if not exe_path.exists():
+            return {}
+
         exe_dir = exe_path.parent
 
-        # Strategy 1: Run the target interpreter to ask it directly (most reliable)
-        # We do this lazily only when needed to avoid subprocess overhead at startup.
-        # Strategy 2: Derive from known directory layout of python-build-standalone
         if IS_WINDOWS:
             # Windows layout: <install_dir>\python.exe  → <install_dir>\Lib\site-packages
             candidate = exe_dir / "Lib" / "site-packages"
         else:
             # Unix layout: <install_dir>/bin/python → <install_dir>/lib/pythonX.Y/site-packages
-            # Find the lib/pythonX.Y directory
             candidate = None
             lib_dir = exe_dir.parent / "lib"
             if lib_dir.exists():
@@ -144,10 +158,18 @@ def _resolve_target_paths(cm, python_exe_normalized: str) -> dict:
             pass
 
     # Fallback: derive directly from filesystem layout of the interpreter.
-    # For python-build-standalone managed interpreters this is always reliable:
-    #   Windows: <install_dir>\Lib\site-packages
-    #   Unix:    <install_dir>/lib/pythonX.Y/site-packages
-    paths = _derive_paths_for_exe(python_exe_normalized)
+    # IMPORTANT: Pass the original-case path, not the lowercased normalized key,
+    # because pip needs real filesystem paths on Windows.
+    # Try to reconstruct original case from the normalized path.
+    original_case_path = python_exe_normalized  # start with what we have
+    try:
+        raw = str(Path(python_exe_normalized).resolve())
+        if Path(raw).exists():
+            original_case_path = raw
+    except Exception:
+        pass
+
+    paths = _derive_paths_for_exe(original_case_path)
     if paths:
         safe_print(
             f"   📂 [DAEMON] Using filesystem-derived paths for {python_exe_normalized}: "
@@ -161,6 +183,55 @@ def _resolve_target_paths(cm, python_exe_normalized: str) -> dict:
             file=sys.stderr,
         )
     return paths
+
+
+def _ensure_worker_config(python_exe: str, site_packages: str, multiversion_base: str) -> None:
+    """
+    Write a minimal .omnipkg_config.json next to the worker's Python executable
+    so ConfigManager._get_our_config_path() finds it and doesn't fall back to
+    the global config (which has the wrong multiversion_base for managed interpreters).
+
+    This is intentionally lightweight — no imports from omnipkg core, no subprocesses.
+    Idempotent: will not overwrite an existing config.
+    """
+    try:
+        exe_path = Path(python_exe)
+        if not exe_path.exists():
+            return
+
+        config_path = exe_path.parent / ".omnipkg_config.json"
+        if config_path.exists():
+            # Validate it has the keys we need — patch if missing
+            try:
+                with open(config_path, "r", encoding="utf-8") as f:
+                    existing = json.load(f)
+                if ("multiversion_base" in existing and "site_packages_path" in existing
+                        and existing["multiversion_base"] == multiversion_base):
+                    return  # Already correct
+            except Exception:
+                pass  # Fall through to rewrite
+
+        config_data = {
+            "python_executable": str(exe_path.resolve()),
+            "site_packages_path": site_packages,
+            "multiversion_base": multiversion_base,
+            "install_strategy": "stable-main",
+            "redis_enabled": True,
+            "redis_host": "localhost",
+            "redis_port": 6379,
+            "enable_python_hotswap": True,
+            "managed_by_omnipkg": True,
+            "_auto_generated_by": "worker_daemon",
+        }
+
+        config_path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = config_path.with_suffix(".tmp")
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(config_data, f, indent=2)
+        tmp.replace(config_path)
+
+    except Exception:
+        pass  # Non-fatal — env var OMNIPKG_MULTIVERSION_BASE is still the safety net
 
 
 try:
@@ -1622,6 +1693,14 @@ class PersistentWorker:
         # Inject the correct multiversion base so omnipkgLoader knows exactly where bubbles are
         if self.multiversion_base:
             env["OMNIPKG_MULTIVERSION_BASE"] = self.multiversion_base
+        if self.site_packages:
+            env["OMNIPKG_SITE_PACKAGES"] = self.site_packages
+
+        # 🔑 ENSURE per-interpreter config file exists next to this interpreter.
+        # Without this, the worker falls back to global config (wrong multiversion_base).
+        # _ensure_worker_config writes a lightweight JSON that ConfigManager finds first.
+        if self.site_packages and self.python_exe:
+            _ensure_worker_config(self.python_exe, self.site_packages, self.multiversion_base)
 
         # SMART PYTHONPATH INJECTION:
         # Only inject PYTHONPATH if we are running from source (Dev Mode).
