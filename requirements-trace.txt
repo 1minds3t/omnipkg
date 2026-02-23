@@ -38,7 +38,7 @@ cyclonedx-python-lib==11.6.0
     # via pip-audit
 defusedxml==0.7.1
     # via py-serializable
-filelock==3.20.1 ; python_version >= "3.10"
+filelock==3.24.3 ; python_version >= "3.10"
     # via
     #   cachecontrol
     #   omnipkg (pyproject.toml)
@@ -131,18 +131,17 @@ typing-extensions==4.15.0
     #   aiosignal
     #   cyclonedx-python-lib
     #   typer
-urllib3==2.6.3
+urllib3==2.6.3 ; python_version >= "3.10"
     # via
+    #   omnipkg (pyproject.toml)
     #   requests
-    #   urllib3-lts
-urllib3-lts==2025.66471.3
-    # via omnipkg (pyproject.toml)
 uv==0.9.20 ; python_version >= "3.8"
     # via omnipkg (pyproject.toml)
-werkzeug==3.1.6
+werkzeug==3.1.6 ; python_version >= "3.8"
     # via
     #   flask
     #   flask-cors
+    #   omnipkg (pyproject.toml)
 yarl==1.22.0
     # via aiohttp
 

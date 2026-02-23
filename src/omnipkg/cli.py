@@ -14,6 +14,7 @@ import os
 import re
 import time
 import subprocess
+import textwrap
 import sys
 import tempfile
 from contextlib import contextmanager
@@ -1023,12 +1024,42 @@ def create_parser():
     # ── run ───────────────────────────────────────────────────────────────────
     run_parser = subparsers.add_parser(
         "run",
-        help=_("Run a script with auto-healing for version conflicts"),
+        help=_("Run a script, CLI command, or inline Python with auto-healing"),
+        description=_(
+            "Execute a Python script, inline code, or CLI command (e.g., pytest) within "
+            "omnipkg's auto-healing environment. Missing dependencies, version conflicts, "
+            "and ABI errors will be automatically intercepted and resolved."
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=textwrap.dedent(_("""\
+            EXAMPLES:
+              1. Run a Python script (with its own arguments)
+                 $ 8pkg run my_script.py --arg 1
+
+              2. Run a standard CLI tool (auto-heals missing packages/plugins)
+                 $ 8pkg run pytest tests/
+                 $ 8pkg run uvicorn main:app --reload
+
+              3. Execute inline Python code (-c)
+                 $ 8pkg run python -c "import pandas as pd; print(pd.__version__)"
+
+              4. Read from stdin (pipes or heredocs)
+                 $ echo "import requests; print('ok')" | 8pkg run python -
+                 $ 8pkg run python - <<EOF
+                   import numpy as np
+                   print(np.zeros(5))
+                   EOF
+
+              5. Target a specific Python version (via flag or aliases)
+                 $ 8pkg --python 3.8 run pytest
+                 $ 8pkg38 run pytest
+                 $ 8pkg39 run python -m uvicorn main:app
+        """))
     )
     run_parser.add_argument(
         "script_and_args",
         nargs=argparse.REMAINDER,
-        help=_("The script to run, followed by its arguments"),
+        help=_("The target script, command, or code, followed by any arguments"),
     )
 
     # ── daemon ────────────────────────────────────────────────────────────────

@@ -9075,7 +9075,9 @@ msgstr "❌ ワーカーの作成に失敗しました:{}"
 # (Empty Chain Output)
 #  (Validation Failed: translation_artifact_english)
 #  (Validation Failed: translation_artifact_english)
+# Lollama: Skipped (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:502
+#, fuzzy
 msgid "   🛑 Shutting down worker pool ({} workers)..."
 msgstr "🛑 ワーカープールを閉鎖する ({} workers)..."
 
@@ -9334,11 +9336,10 @@ msgid "   📊 Bubble: {} packages, {} conflicts"
 msgstr "📊 バブル: {} パッケージ, {} 競合"
 
 # (Empty Chain Output)
-# Lollama: Skipped (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:2427
-#, fuzzy
 msgid "   ⏭️  Skipping module purge (nested overlay, depth={})"
-msgstr ""
+msgstr "⏭️ モジュールのパージをスキップ (ネストされたオーバーレイ、depth={})"
 
 # (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:2479
@@ -9441,6 +9442,7 @@ msgid "   📊 Restoration: {} restored, {} failed"
 msgstr "📊 復元：{}復元され、{}失敗した"
 
 # (Empty Chain Output)
+#  (Validation Failed: placeholder_mismatch)
 # Lollama: Skipped (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:3051
 #, fuzzy
@@ -9751,6 +9753,7 @@ msgid ""
 msgstr "Redis に {} を保存中にエラーが発生しました: {}"
 
 # (Empty Chain Output)
+#  (Validation Failed: translation_artifact_english)
 # Lollama: Skipped (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/omnipkg/package_meta_builder.py:2023
 #, fuzzy
@@ -9758,6 +9761,7 @@ msgid "results.append(('{}', False, 'Skipped: Not a valid identifier'))"
 msgstr ""
 
 # (Empty Chain Output)
+#  (Validation Failed: translation_artifact_english)
 # Lollama: Skipped (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/omnipkg/package_meta_builder.py:2033
 #, fuzzy
@@ -9823,6 +9827,7 @@ msgid "  ✅ {}\n"
 msgstr "  ✅ {}\n"
 
 # (Empty Chain Output)
+#  (Validation Failed: translation_artifact_english)
 # Lollama: Skipped (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/omnipkg/utils/flask_port_finder.py:201
 #, fuzzy
