@@ -1404,7 +1404,7 @@ msgstr "✅ '{}' に泡が見つかりません。プルーニングするもの
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:6770
 msgid "❌ 'keep-latest' must be a non-negative number."
-msgstr "❌ '' keep-latest 'は非陰性の数字でなければなりません。"
+msgstr "'keep-latest' は非負の数でなければなりません."
 
 # (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:6775
@@ -1641,6 +1641,12 @@ msgstr "omnipkg デモ # バージョンスイッチデモを試す"
 #  (Validation Failed: proper_noun_mismatch_stress-test)
 #  (Validation Failed: proper_noun_mismatch_stress-test)
 #  (Validation Failed: proper_noun_mismatch_stress-test)
+#  (Validation Failed: proper_noun_mismatch_stress-test)
+#  (Validation Failed: proper_noun_mismatch_stress-test)
+#  (Validation Failed: proper_noun_mismatch_stress-test)
+#  (Validation Failed: proper_noun_mismatch_stress-test)
+#  (Validation Failed: proper_noun_mismatch_stress-test)
+#  (Validation Failed: proper_noun_mismatch_stress-test)
 # Lollama: Skipped (Validation Failed: proper_noun_mismatch_stress-test)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:546
 #, fuzzy
@@ -1661,6 +1667,12 @@ msgstr "omnipkg インストール リクエスト numpy>=1.20"
 #  (Validation Failed: translation_artifact_english)
 #  (Validation Failed: translation_artifact_english)
 #  (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
 # Lollama: Skipped (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:550
 #, fuzzy
@@ -1671,6 +1683,12 @@ msgstr ""
 #  (Validation Failed: identical_to_original)
 #  (Validation Failed: identical_to_original)
 #  (Validation Failed: identical_to_original)
+#  (Validation Failed: identical_to_original)
+#  (Validation Failed: identical_to_original)
+#  (Validation Failed: identical_to_original)
+#  (Validation Failed: identical_to_original)
+#  (Validation Failed: identical_to_original)
+#  (Validation Failed: identical_to_original)
 # Lollama: Skipped (Validation Failed: identical_to_original)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:551
 #, fuzzy
@@ -1678,6 +1696,12 @@ msgid "  omnipkg info tensorflow==2.13.0"
 msgstr ""
 
 # (Empty Chain Output)
+#  (Validation Failed: identical_to_original)
+#  (Validation Failed: identical_to_original)
+#  (Validation Failed: identical_to_original)
+#  (Validation Failed: identical_to_original)
+#  (Validation Failed: identical_to_original)
+#  (Validation Failed: identical_to_original)
 #  (Validation Failed: identical_to_original)
 #  (Validation Failed: identical_to_original)
 #  (Validation Failed: identical_to_original)
@@ -1733,7 +1757,9 @@ msgid "Force complete rebuild"
 msgstr "強制完全再構築"
 
 # (Empty Chain Output)
+# Lollama: Skipped (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:701
+#, fuzzy
 msgid "Delete config file for fresh setup"
 msgstr "Config ファイルを新鮮な設定に削除する"
 
@@ -2635,6 +2661,12 @@ msgid "   Config site-packages: {}"
 msgstr "site-packages の設定: {}"
 
 # (Empty Chain Output)
+#  (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
 # Lollama: Skipped (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/omnipkg/commands/run.py:2331
 #, fuzzy
@@ -2652,11 +2684,16 @@ msgid "   📦 packaging found in: {}"
 msgstr "📦 パッケージは次の場所にあります: {}"
 
 # (Empty Chain Output)
+#  (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
 # Lollama: Skipped (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/omnipkg/commands/run.py:2359
 #, fuzzy
 msgid "   ❌ site-packages path doesn't exist: {}"
-msgstr ""
+msgstr "❌ site-packages パスが存在しません: {}"
 
 # (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/commands/run.py:2573
@@ -3426,6 +3463,12 @@ msgid "    Running: {}"
 msgstr "実行中:{}"
 
 # (Empty Chain Output)
+#  (Validation Failed: translation_artifact)
+#  (Validation Failed: translation_artifact)
+#  (Validation Failed: translation_artifact)
+#  (Validation Failed: translation_artifact)
+#  (Validation Failed: translation_artifact)
+#  (Validation Failed: translation_artifact)
 # Lollama: Skipped (Validation Failed: translation_artifact)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:14658
 #, fuzzy
@@ -3618,6 +3661,11 @@ msgid "Requirement already satisfied:\\s+{}==([^\\s]+)"
 msgstr "Requirement already satisfied:\\s+{}==([^\\s]+)"
 
 # (Empty Chain Output)
+#  (Validation Failed: placeholder_mismatch)
+#  (Validation Failed: placeholder_mismatch)
+#  (Validation Failed: placeholder_mismatch)
+#  (Validation Failed: placeholder_mismatch)
+#  (Validation Failed: placeholder_mismatch)
 # Lollama: Skipped (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:15275
 #, fuzzy
@@ -3888,6 +3936,10 @@ msgid "  1. Try installing in a fresh Python 3.7 or 3.8 environment"
 msgstr "1. 新しい Python 3.7 または 3.8 環境にインストールしてみてください。"
 
 # (Empty Chain Output)
+#  (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
 # Lollama: Skipped (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/omnipkg/deptimemachine.py:226
 #, fuzzy
@@ -3949,6 +4001,10 @@ msgid "ℹ️ No dependencies found to process."
 msgstr "ℹ️ 処理する依存関係が見つかりません。"
 
 # (Empty Chain Output)
+#  (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
 # Lollama: Skipped (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/omnipkg/deptimemachine.py:296
 #, fuzzy
@@ -4065,7 +4121,11 @@ msgid "✅ [omnipkg loader] Created bubble directory: {}"
 msgstr "[omnipkg ローダー] バブルディレクトリを作成しました:{}"
 
 # (Empty Chain Output)
-# Lollama: Skipped (Validation Failed: placeholder_mismatch)
+#  (Validation Failed: placeholder_mismatch)
+#  (Validation Failed: placeholder_mismatch)
+#  (Validation Failed: placeholder_mismatch)
+#  (Validation Failed: placeholder_mismatch)
+# Lollama: Skipped (Validation Failed: translation_artifact)
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:722
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:1000
 #, fuzzy
@@ -4201,7 +4261,11 @@ msgid "❌ Cache client not available to the builder. Aborting."
 msgstr "❌ ビルダーはキャッシュ クライアントを使用できません。中止中。"
 
 # (Empty Chain Output)
-# Lollama: Skipped (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
+# Lollama: Skipped (Validation Failed: suspicious_length_ratio_10.45)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:4383
 #: /home/minds3t/omnipkg/src/omnipkg/package_meta_builder.py:2031
 #, fuzzy
@@ -4209,14 +4273,22 @@ msgid "    mod = importlib.import_module('{}')"
 msgstr ""
 
 # (Empty Chain Output)
-# Lollama: Skipped (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
+# Lollama: Skipped (Validation Failed: suspicious_length_ratio_9.86)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:4387
 #, fuzzy
 msgid "    results.append(('{}', False, str(e)))"
 msgstr ""
 
 # (Empty Chain Output)
-# Lollama: Skipped (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
+# Lollama: Skipped (Validation Failed: suspicious_length_ratio_9.86)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:4385
 #, fuzzy
 msgid "    results.append(('{}', True, version))"
@@ -4236,7 +4308,11 @@ msgid "Subprocess failed: {}"
 msgstr "サブプロセスが失敗しました:{}"
 
 # (Empty Chain Output)
-# Lollama: Skipped (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
+# Lollama: Skipped (Validation Failed: suspicious_length_ratio_5.31)
 #: /home/minds3t/omnipkg/src/omnipkg/package_meta_builder.py:2421
 #, fuzzy
 msgid "🚀 Starting omnipkg Metadata Builder v12 (SQLite/Redis Edition)..."
@@ -4392,7 +4468,11 @@ msgid "FATAL BOOTSTRAP ERROR: Could not relaunch into Python 3.11. Error: {}"
 msgstr "致命的なブートストラップエラー: Python 3.11 を再起動できませんでした。エラー: {}"
 
 # (Empty Chain Output)
-# Lollama: Skipped (Validation Failed: proper_noun_mismatch_omnipkg)
+#  (Validation Failed: proper_noun_mismatch_omnipkg)
+#  (Validation Failed: proper_noun_mismatch_omnipkg)
+#  (Validation Failed: proper_noun_mismatch_omnipkg)
+#  (Validation Failed: proper_noun_mismatch_omnipkg)
+# Lollama: Skipped (Validation Failed: language_mismatch_detected_pt)
 #: /home/minds3t/omnipkg/src/tests/test_multiverse_healing.py:86
 #, fuzzy
 msgid ""
@@ -4414,7 +4494,11 @@ msgid " | {}"
 msgstr " | {}"
 
 # (Empty Chain Output)
-# Lollama: Skipped (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
+# Lollama: Skipped (Validation Failed: suspicious_length_ratio_20.29)
 #: /home/minds3t/omnipkg/src/tests/test_multiverse_healing.py:245
 #, fuzzy
 msgid "DEBUG: Exit code: {}"
@@ -4426,6 +4510,10 @@ msgid "DEBUG: Stdout: '{}'"
 msgstr "DEBUG: Stdout: '{}'"
 
 # (Empty Chain Output)
+#  (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
 # Lollama: Skipped (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/tests/test_multiverse_healing.py:247
 #, fuzzy
@@ -4433,6 +4521,10 @@ msgid "DEBUG: Stderr: '{}'"
 msgstr ""
 
 # (Empty Chain Output)
+#  (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
 # Lollama: Skipped (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/tests/test_multiverse_healing.py:253
 #, fuzzy
@@ -4495,6 +4587,10 @@ msgid ""
 msgstr "❌ サブプロセスで重大なエラーが発生しました。"
 
 # (Empty Chain Output)
+#  (Validation Failed: identical_to_original)
+#  (Validation Failed: identical_to_original)
+#  (Validation Failed: identical_to_original)
+#  (Validation Failed: identical_to_original)
 # Lollama: Skipped (Validation Failed: identical_to_original)
 #: /home/minds3t/omnipkg/src/tests/test_swap_install.py:429
 #, fuzzy
@@ -4502,6 +4598,10 @@ msgid "STDOUT:"
 msgstr ""
 
 # (Empty Chain Output)
+#  (Validation Failed: identical_to_original)
+#  (Validation Failed: identical_to_original)
+#  (Validation Failed: identical_to_original)
+#  (Validation Failed: identical_to_original)
 # Lollama: Skipped (Validation Failed: identical_to_original)
 #: /home/minds3t/omnipkg/src/tests/test_swap_install.py:431
 #, fuzzy
@@ -4713,7 +4813,11 @@ msgid ""
 msgstr "💡 開始: 8pkg Web スタート"
 
 # (Empty Chain Output)
+#  (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
+# Lollama: Skipped (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/omnipkg/apis/local_bridge.py:677
+#, fuzzy
 msgid "⚠️  'psutil' not installed. Limited status info available."
 msgstr "⚠ ️ 'psutil'はインストールされていない. 状況情報制限が利用可能."
 
@@ -4723,7 +4827,10 @@ msgid "✅ Running (PID: {}, Port: {})"
 msgstr "✅ 実行中 (PID:{},\\、ポート:{})"
 
 # (Empty Chain Output)
+#  (Validation Failed: translation_artifact_english)
+# Lollama: Skipped (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/omnipkg/apis/local_bridge.py:692
+#, fuzzy
 msgid "✅ Web Bridge Status: RUNNING"
 msgstr "✅ Web Bridge Status:RUNNING ランニング"
 
@@ -4792,6 +4899,10 @@ msgid "{}"
 msgstr "{}"
 
 # (Empty Chain Output)
+#  (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
 # Lollama: Skipped (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:69
 #: /home/minds3t/omnipkg/src/omnipkg/common_utils.py:373
@@ -4800,6 +4911,10 @@ msgid "📍 sys.executable:        {}"
 msgstr ""
 
 # (Empty Chain Output)
+#  (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
 # Lollama: Skipped (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:70
 #: /home/minds3t/omnipkg/src/omnipkg/common_utils.py:374
@@ -4814,6 +4929,10 @@ msgid "📍 sys.version_info:      {}.{}.{}"
 msgstr "📍 sys.version_info: {}.{}.{}"
 
 # (Empty Chain Output)
+#  (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
 # Lollama: Skipped (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:74
 #: /home/minds3t/omnipkg/src/omnipkg/common_utils.py:378
@@ -4858,91 +4977,80 @@ msgid "🔄 Upgrading '{}' to latest version..."
 msgstr "🔄 '{}' を最新版にアップグレード中..."
 
 # (Empty Chain Output)
-# Lollama: Skipped (Validation Failed: suspicious_length_ratio_21.51)
+#  (Validation Failed: suspicious_length_ratio_21.51)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:211
-#, fuzzy
 msgid "❌ Error: Source test file {} not found."
-msgstr ""
+msgstr "❌ エラー: ソーステストファイル {} が見つかりません。"
 
 # (Empty Chain Output)
-# Lollama: Skipped (Validation Failed: suspicious_length_ratio_22.11)
+#  (Validation Failed: suspicious_length_ratio_22.11)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:217
-#, fuzzy
 msgid "❌ Python {} is not managed by omnipkg."
-msgstr ""
+msgstr "Python {} は omnipkg によって管理されていません."
 
 # (Empty Chain Output)
-# Lollama: Skipped (Validation Failed: suspicious_length_ratio_22.11)
+#  (Validation Failed: suspicious_length_ratio_22.11)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:218
-#, fuzzy
 msgid "   Please adopt it first: {} python adopt {}"
-msgstr ""
+msgstr "最初に採用してください: {} Python Adopt {}"
 
 # (Empty Chain Output)
-# Lollama: Skipped (Validation Failed: suspicious_length_ratio_28.43)
+#  (Validation Failed: suspicious_length_ratio_28.43)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:232
-#, fuzzy
 msgid "   - Sterile script created at: {}"
-msgstr ""
+msgstr "- 不毛なスクリプトが次の場所に作成されました: {}"
 
 # (Empty Chain Output)
-# Lollama: Skipped (Validation Failed: suspicious_length_ratio_18.51)
+#  (Validation Failed: suspicious_length_ratio_18.51)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:261
-#, fuzzy
 msgid "  - Diagnosis: This operation requires Python {}"
-msgstr ""
+msgstr "- 診断: この操作には Python {} が必要です"
 
 # (Empty Chain Output)
-# Lollama: Skipped (Validation Failed: suspicious_length_ratio_29.48)
+#  (Validation Failed: suspicious_length_ratio_29.48)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:263
-#, fuzzy
 msgid "  - Current Context: Python {}.{}"
-msgstr ""
+msgstr "- 現在のコンテキスト: Python{}.{}"
 
 # (Empty Chain Output)
-# Lollama: Skipped (Validation Failed: suspicious_length_ratio_9.26)
+#  (Validation Failed: suspicious_length_ratio_9.26)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:268
-#, fuzzy
 msgid ""
 "  - Action: omnipkg will now attempt to automatically configure the correct "
 "interpreter."
-msgstr ""
+msgstr "- アクション:omnipkg は、正しいインタープリタを自動的に構成しようとします。"
 
 # (Empty Chain Output)
-# Lollama: Skipped (Validation Failed: suspicious_length_ratio_13.49)
+#  (Validation Failed: suspicious_length_ratio_13.49)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:277
-#, fuzzy
 msgid ""
 "\n"
 "   - Step 1: Adopting Python {}... (This may trigger a download)"
-msgstr ""
+msgstr "- ステップ 1: Python {} を採用する... (これによりダウンロードがトリガーされる可能性があります)"
 
 # (Empty Chain Output)
-# Lollama: Skipped (Validation Failed: suspicious_length_ratio_13.96)
+#  (Validation Failed: suspicious_length_ratio_13.96)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:283
-#, fuzzy
 msgid "   - ❌ Failed to adopt Python {}. Cannot proceed with healing."
-msgstr ""
+msgstr "- ❌ Python {} の採用に失敗しました。治癒を進めることができません。"
 
 # (Empty Chain Output)
-# Lollama: Skipped (Validation Failed: suspicious_length_ratio_24.12)
+#  (Validation Failed: suspicious_length_ratio_24.12)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:288
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:9131
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:9158
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:9180
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:9195
-#, fuzzy
 msgid "   - ✅ Successfully adopted Python {}."
-msgstr ""
+msgstr "- Python {} の採用に成功しました。"
 
 # (Empty Chain Output)
-# Lollama: Skipped (Validation Failed: suspicious_length_ratio_16.94)
+#  (Validation Failed: suspicious_length_ratio_16.94)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:291
-#, fuzzy
 msgid ""
 "\n"
 "   - Step 2: Swapping active context to Python {}..."
-msgstr ""
+msgstr "- ステップ 2: アクティブなコンテキストを Python {}...\", \"score\": 9.18}"
 
 # (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:295
@@ -5312,6 +5420,10 @@ msgid ""
 msgstr "🔍 omnipkgLoader 欠けている依存を要求しました: {}"
 
 # (Empty Chain Output)
+#  (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
 # Lollama: Skipped (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/omnipkg/commands/run.py:103
 #, fuzzy
@@ -5319,6 +5431,10 @@ msgid "   - Main environment has: jaxlib=={}"
 msgstr ""
 
 # (Empty Chain Output)
+#  (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
 # Lollama: Skipped (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/omnipkg/commands/run.py:104
 #, fuzzy
@@ -5331,11 +5447,11 @@ msgid "   - 🛡️  Force upgrading to minimum available: {}"
 msgstr "- 🛡️ 利用可能な最小値への強制アップグレード: {}"
 
 # (Empty Chain Output)
-# Lollama: Skipped (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/omnipkg/commands/run.py:128
-#, fuzzy
 msgid "   - 📦 Added to healing plan: jax=={}, jaxlib=={}"
-msgstr ""
+msgstr "- 📦 治癒計画に追加: jax=={}, jaxlib=={}"
 
 # (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/commands/run.py:179
@@ -5353,6 +5469,10 @@ msgid "   - Found: {}"
 msgstr "- 見つかった: {}"
 
 # (Empty Chain Output)
+#  (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
 # Lollama: Skipped (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/omnipkg/commands/run.py:231
 #: /home/minds3t/omnipkg/src/omnipkg/commands/run.py:759
@@ -5361,13 +5481,14 @@ msgid "♻️  Loading: {}"
 msgstr ""
 
 # (Empty Chain Output)
-# Lollama: Skipped (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/omnipkg/commands/run.py:262
-#, fuzzy
 msgid ""
 "\n"
 "🔍 Loader reported missing bubble: {}"
-msgstr ""
+msgstr "🔍 Loader reported missing bubble: {}"
 
 # (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/commands/run.py:305
@@ -5447,6 +5568,10 @@ msgid "   - Installing missing package: {}"
 msgstr "- 失踪パッケージをインストール: {}"
 
 # (Empty Chain Output)
+#  (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
 # Lollama: Skipped (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/omnipkg/commands/run.py:661
 #, fuzzy
@@ -5454,6 +5579,10 @@ msgid "   🔧 Auto-added jaxlib=={} to match jax"
 msgstr ""
 
 # (Empty Chain Output)
+#  (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
 # Lollama: Skipped (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/omnipkg/commands/run.py:668
 #, fuzzy
@@ -5551,6 +5680,10 @@ msgid "🛠️  Resolving isolation strategy for: {}"
 msgstr "🛠 ️ 次の分離戦略を解決します:{}"
 
 # (Empty Chain Output)
+#  (Validation Failed: placeholder_mismatch)
+#  (Validation Failed: placeholder_mismatch)
+#  (Validation Failed: placeholder_mismatch)
+#  (Validation Failed: placeholder_mismatch)
 # Lollama: Skipped (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/commands/run.py:1567
 #, fuzzy
@@ -5643,6 +5776,10 @@ msgid "{} Failed Run"
 msgstr "{}失敗した実行"
 
 # (Empty Chain Output)
+#  (Validation Failed: placeholder_mismatch)
+#  (Validation Failed: placeholder_mismatch)
+#  (Validation Failed: placeholder_mismatch)
+#  (Validation Failed: placeholder_mismatch)
 # Lollama: Skipped (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/commands/run.py:2219
 #, fuzzy
@@ -5717,6 +5854,10 @@ msgid "   🐍 Target Python: {}"
 msgstr "🐍 ターゲット Python:{}"
 
 # (Empty Chain Output)
+#  (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
 # Lollama: Skipped (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:233
 #, fuzzy
@@ -6279,6 +6420,10 @@ msgid "      ⚠️ Transplant failed: {}"
 msgstr "⚠️ 移植失敗: {}"
 
 # (Empty Chain Output)
+#  (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
 # Lollama: Skipped (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:4577
 #, fuzzy
@@ -7406,6 +7551,10 @@ msgid ""
 msgstr "🛡️ 自動修復: 破損を検出しました（試行 {}/{}）"
 
 # (Empty Chain Output)
+#  (Validation Failed: emoji_mismatch)
+#  (Validation Failed: emoji_mismatch)
+#  (Validation Failed: emoji_mismatch)
+#  (Validation Failed: emoji_mismatch)
 # Lollama: Skipped (Validation Failed: emoji_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:12120
 #, fuzzy
@@ -7584,537 +7733,470 @@ msgstr "- 利用可能なバージョン:{}"
 msgid "   ✅ Managed interpreter: {}"
 msgstr "マネージドインタープリタ:{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:13280
-#, fuzzy
 msgid "   🔧 Updating configuration..."
-msgstr ""
+msgstr "🔧 設定を更新する..."
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:13287
-#, fuzzy
 msgid "   🧹 Windows: Clearing module cache..."
-msgstr ""
+msgstr "🧹 Windows: モジュール キャッシュをクリアしています..."
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:13293
-#, fuzzy
 msgid "   🔗 Updating symlinks..."
-msgstr ""
+msgstr "🔗 シンボリックリンクを更新しています..."
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:13300
-#, fuzzy
 msgid "   ⚠️  Symlink update failed: {}"
-msgstr ""
+msgstr "⚠️ シンボリックリンクの更新に失敗しました: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:13301
-#, fuzzy
 msgid "   - Continuing with config-only switch..."
-msgstr ""
+msgstr "- 設定のみのスイッチを継続して..."
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:13303
-#, fuzzy
 msgid "   ✅ Configuration updated (Windows uses direct paths)"
-msgstr ""
+msgstr "✅ 設定更新(Windows は直行パスを使用)"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:13308
-#, fuzzy
 msgid ""
 "\n"
 "🎉 Switched to Python {}!"
-msgstr ""
+msgstr "🎉 Python {} に切り替えました。"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:13312
-#, fuzzy
 msgid "   To activate in your shell, run: source {}/bin/activate"
-msgstr ""
+msgstr "シェルでアクティブ化するには、source {}/bin/activate を実行します。"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:13316
-#, fuzzy
 msgid ""
 "\n"
 "   Just kidding, omnipkg handled it for you automatically!"
-msgstr ""
+msgstr "冗談はさておき、omnipkg が自動的に処理してくれました。"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:13357
-#, fuzzy
 msgid "   📦 Cleared {} cached modules: {}"
-msgstr ""
+msgstr "📦 クリア済み{}キャッシュされたモジュール:{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:13371
-#, fuzzy
 msgid "    -> Resolving complex specifier: '{}'"
-msgstr ""
+msgstr "-> 複雑な指定子の解決: '{}'"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:13379
-#, fuzzy
 msgid "    -> Detected environment marker: '{}'"
-msgstr ""
+msgstr "検出された環境マーカー: '{}'"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:13389
-#, fuzzy
 msgid "    -> Marker: {}"
-msgstr ""
+msgstr "-> マーカー:{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:13390
-#, fuzzy
 msgid "    -> Current Python: {}"
-msgstr ""
+msgstr "-> 現在の Python:{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:13394
-#, fuzzy
 msgid "    ⚠️  Could not evaluate environment marker: {}"
-msgstr ""
+msgstr "⚠️ 環境マーカーを評価できませんでした:{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:13452
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:13524
-#, fuzzy
 msgid "Package '{}' requires Python {}, current is {}"
-msgstr ""
+msgstr "パッケージ '{}' Python が必要です{},現在は{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:13457
-#, fuzzy
 msgid "    ⚠️ Could not determine compatible Python version: {}"
-msgstr ""
+msgstr "⚠️ 互換性のある Python バージョンを特定できませんでした: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:13462
-#, fuzzy
 msgid "    ✅ Pip found compatible version: {}"
-msgstr ""
+msgstr "✅ Pip found compatible version: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:13467
-#, fuzzy
 msgid "    ⚠️ Compatible version {} does NOT satisfy constraint '{}'"
-msgstr ""
+msgstr "⚠️ 互換性のあるバージョン {} は制約 '{}' を満たしていません"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:13490
-#, fuzzy
 msgid "    💡 Latest version matching '{}': {}"
-msgstr ""
+msgstr "💡 一致する最新バージョン '{}':{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:13529
-#, fuzzy
 msgid "    ⚠️ Could not determine required Python version: {}"
-msgstr ""
+msgstr "⚠️ 必要なPythonバージョンを特定できませんでした: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:13544
-#, fuzzy
 msgid "    ❌ Failed to resolve complex specifier '{}': {}"
-msgstr ""
+msgstr "❌ 複雑な指定子を解決できませんでした '{}':{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:13560
-#, fuzzy
 msgid "🔍 DEBUG: Processing '{}'"
-msgstr ""
+msgstr "🔍 DEBUG: '{}'の処理について"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:13578
-#, fuzzy
 msgid "    ⚠️  Could not resolve '{}'. Skipping."
-msgstr ""
+msgstr "⚠️ '{}' を解決できませんでした。スキップします。"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:13593
-#, fuzzy
 msgid "    ❌ CRITICAL: Could not resolve a version for '{}' via PyPI."
-msgstr ""
+msgstr "❌ 重大: PyPI を通して '{}' のバージョンを解決できませんでした。"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:13597
-#, fuzzy
 msgid "Package '{}' not found or could not be resolved."
-msgstr ""
+msgstr "パッケージ '{}' が見つからないか、解決できませんでした。"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:13707
-#, fuzzy
 msgid "   -   Error: {}: {}"
-msgstr ""
+msgstr "-   エラー：{}:{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
+#  (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
+# Lollama: Skipped (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:13714
 #, fuzzy
 msgid "   -   STDERR: {}"
 msgstr ""
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:13824
-#, fuzzy
 msgid "      ✅ Successfully imported main package: {}"
-msgstr ""
+msgstr "✅ メインパッケージが正常にインポートされました:{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:13827
-#, fuzzy
 msgid "      ❌ Main package '{}' failed to import"
-msgstr ""
+msgstr "メインパッケージ '{}' インポートに失敗しました"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:14087
-#, fuzzy
 msgid "      - 🖥️  Platform: Python {} on {} ({})"
-msgstr ""
+msgstr "- 🖥️ プラッフォーム: Python{}の上{}({})"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:14089
-#, fuzzy
 msgid "      - 🎯 Install Target: {}"
-msgstr ""
+msgstr "- 🎯 インストールターゲット:{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:14147
-#, fuzzy
 msgid "      - 📥 Downloading {}..."
-msgstr ""
+msgstr "- 📥ダウンロード中{}..."
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
+#  (Validation Failed: placeholder_mismatch)
+#  (Validation Failed: placeholder_mismatch)
+#  (Validation Failed: placeholder_mismatch)
+# Lollama: Skipped (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:14164
 #, fuzzy
 msgid "      - ❌ Failed to install {}=={}"
 msgstr ""
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:14169
-#, fuzzy
 msgid "      - ❌ Error processing {}=={}: {}"
-msgstr ""
+msgstr "- ❌ エラー処理{}=={}:{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:14177
-#, fuzzy
 msgid ""
 "      - 📥 Downloading {} (installing LAST to ensure single-file version)..."
-msgstr ""
+msgstr "- 📥ダウンロード中{}(単一ファイル バージョンを確保するために LAST をインストールします)..."
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:14229
-#, fuzzy
 msgid ""
 "\n"
 "      - ⚙️ Stage 3: Building {}=={}..."
-msgstr ""
+msgstr "- ⚙️ ステージ 3: {}=={}..."
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:14263
-#, fuzzy
 msgid "      - ✓ Found release date: {}"
-msgstr ""
+msgstr "- ✓ 判明したリリース日:{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:14311
-#, fuzzy
 msgid "      - ✓ Discovered dependencies: {}"
-msgstr ""
+msgstr "- ✓ 検出された依存関係:{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:14358
-#, fuzzy
 msgid "      - ✓ Resolved historical versions: {}"
-msgstr ""
+msgstr "- ✓ 解決済み履歴バージョン: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:14477
-#, fuzzy
 msgid "💡 Package: {}"
-msgstr ""
+msgstr "💡 パッケージ: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:14478
-#, fuzzy
 msgid "💡 Requested: {}"
-msgstr ""
+msgstr "💡 リクエスト: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:14480
-#, fuzzy
 msgid "💡 Searched in: {}"
-msgstr ""
+msgstr "💡 検索対象:{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:15011
-#, fuzzy
 msgid "    ⚠️  Error finding compatible version: {}"
-msgstr ""
+msgstr "⚠️ 互換性のあるバージョンが見つかりません: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:15041
-#, fuzzy
 msgid "    🎯 Found compatible version: {}"
-msgstr ""
+msgstr "🎯 互換性のあるバージョンが見つかりました:{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:15083
-#, fuzzy
 msgid "    ⚠️  Incompatible: {} v{} requires {}"
-msgstr ""
+msgstr "⚠️ 非互換: {} v{} は {} を必要とします"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:15092
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:15395
-#, fuzzy
 msgid "Package '{}' v{} requires Python {}, current is {}"
-msgstr ""
+msgstr "パッケージ '{}' v{} は Python {}, を必要とします。現在のバージョンは {} です。"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:15171
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:15559
-#, fuzzy
 msgid "    🎯 Found compatible version {} - caching and returning!"
-msgstr ""
+msgstr "🎯 互換性のあるバージョン {} - キャッシュして返します。"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:15252
-#, fuzzy
 msgid "    ✅ Found compatible Python version: {}"
-msgstr ""
+msgstr "✅ 互換性のある Python バージョンが見つかりました:{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:15266
-#, fuzzy
 msgid "Package '{}' v{} requires Python {}, but current Python is {}"
-msgstr ""
+msgstr "パッケージ '{}' v{} には Python {} が必要ですが、現在の Python は {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:15384
-#, fuzzy
 msgid " ✅ {} v{} requires Python {}"
-msgstr ""
+msgstr "{} v{} は Python {} を必要とします"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:15416
-#, fuzzy
 msgid " ❌ An unexpected error occurred: {}"
-msgstr ""
+msgstr "❌ 予期しないエラーが発生しました:{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:15678
-#, fuzzy
 msgid "📋 Found {} matching package(s) for Python context {}:"
-msgstr ""
+msgstr "📋 Python コンテキスト {} に一致するパッケージ {} が見つかりました:"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:15726
 msgid "✅ {}"
 msgstr "✅ {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:15734
-#, fuzzy
 msgid ", ... ({} more)"
-msgstr ""
+msgstr "...({} もっと)"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:15853
-#, fuzzy
 msgid "⚠️ Warning: Could not save cache to file: {}"
-msgstr ""
+msgstr "⚠️ 警告: キャッシュをファイルに保存できませんでした: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:15874
-#, fuzzy
 msgid "    ⚠️ Redis cache read error: {}"
-msgstr ""
+msgstr "⚠️ Redisキャッシュ読み取りエラー: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:15896
-#, fuzzy
 msgid "    ⚠️  Cached incompatibility: {} requires Python {}"
-msgstr ""
+msgstr "⚠️ キャッシュの非互換性: {} は Python {} を必要とします"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
+#  (Validation Failed: placeholder_mismatch)
+#  (Validation Failed: placeholder_mismatch)
+#  (Validation Failed: placeholder_mismatch)
+# Lollama: Skipped (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:15903
 #, fuzzy
 msgid "Cached: Package '{}' requires Python {}"
 msgstr ""
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:15974
-#, fuzzy
 msgid "    💾 Cached incompatibility: {} needs Python {} (Redis)"
-msgstr ""
+msgstr "💾 キャッシュされた非互換性: {} には Python {} (Redis) が必要です"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:15977
-#, fuzzy
 msgid "    ⚠️ Redis cache write error: {}"
-msgstr ""
+msgstr "⚠️ Redisキャッシュ書き込みエラー:{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:15989
-#, fuzzy
 msgid "    💾 Cached incompatibility: {} needs Python {} (file)"
-msgstr ""
+msgstr "💾 キャッシュされた非互換性: {} には Python {} (ファイル) が必要です"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/installation/metadata_cache.py:73
-#, fuzzy
 msgid "⚠ Package {} not in GitHub metadata repo"
-msgstr ""
+msgstr "⚠ パッケージ{}GitHub メタデーATA リポジトリにない"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/installation/metadata_cache.py:75
-#, fuzzy
 msgid "✗ Failed to fetch metadata: HTTP {}"
-msgstr ""
+msgstr "✗ HTTP {} のメタデータを取得できなかった。"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/installation/metadata_cache.py:78
-#, fuzzy
 msgid "✗ Error fetching metadata: {}"
-msgstr ""
+msgstr "✗ メタデータの取得エラー: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/installation/metadata_cache.py:244
-#, fuzzy
 msgid ""
 "\n"
 "Package: {}"
-msgstr ""
+msgstr "パッケージ：{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/installation/metadata_cache.py:245
-#, fuzzy
 msgid "Latest Version: {}"
-msgstr ""
+msgstr "最新バージョン:{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/installation/metadata_cache.py:246
-#, fuzzy
 msgid "Summary: {}"
-msgstr ""
+msgstr "概要: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/installation/metadata_cache.py:247
-#, fuzzy
 msgid "Source: {}"
-msgstr ""
+msgstr "ソース：{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/installation/metadata_cache.py:253
-#, fuzzy
 msgid "  Install Success: {}"
-msgstr ""
+msgstr "インストール成功:{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/installation/metadata_cache.py:255
-#, fuzzy
 msgid "  Install Time: {}s"
-msgstr ""
+msgstr "インストール時間:{}s"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/installation/metadata_cache.py:257
-#, fuzzy
 msgid "  ⚠ Known Issues: {}"
-msgstr ""
+msgstr "Identified text {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/installation/metadata_cache.py:261
-#, fuzzy
 msgid ""
 "\n"
 "Cache Stats:"
-msgstr ""
+msgstr "キャッシュ統計:"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/installation/metadata_cache.py:262
-#, fuzzy
 msgid "  Total Packages: {}"
-msgstr ""
+msgstr "Identified text {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/installation/metadata_cache.py:263
 #: /home/minds3t/omnipkg/src/omnipkg/isolation/worker_daemon.py:3646
-#, fuzzy
 msgid "  Cache Hits: {}"
-msgstr ""
+msgstr "Identified text {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/installation/metadata_cache.py:264
-#, fuzzy
 msgid "  Expired Entries: {}"
-msgstr ""
+msgstr "終了したエントリー: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/installation/verification_hooks.py:96
-#, fuzzy
 msgid "      ⚠️  Hook '{}' returned False, aborting"
-msgstr ""
+msgstr "⚠ ️ Hook '{}' returned False, aborting"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/installation/verification_hooks.py:99
-#, fuzzy
 msgid "      ❌ Hook '{}' failed: {}"
-msgstr ""
+msgstr "❌ フック '{}' が失敗しました: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/installation/verification_hooks.py:169
-#, fuzzy
 msgid "      📸 Time machine snapshot: {}"
-msgstr ""
+msgstr "📸 タイムマシンのスナップショット:{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/installation/verification_hooks.py:173
-#, fuzzy
 msgid "      ⚠️  Time machine snapshot failed: {}"
-msgstr ""
+msgstr "⚠️ タイムマシンのスナップショットに失敗しました: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/installation/verification_hooks.py:194
-#, fuzzy
 msgid "      ❌ Time machine restore failed: {}"
-msgstr ""
+msgstr "❌ Time machine restore failed: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/installation/verification_hooks.py:223
-#, fuzzy
 msgid "      ❌ {} critical function test failed: {}"
-msgstr ""
+msgstr "❌ {}重要な機能テストが失敗しました:{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/installation/verification_strategy.py:116
-#, fuzzy
 msgid "      Found {} package(s) in staging area"
-msgstr ""
+msgstr "ステージング領域で {} 個のパッケージが見つかりました"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/installation/verification_strategy.py:118
-#, fuzzy
 msgid "      Organized into {} verification group(s)"
-msgstr ""
+msgstr "{} 検証グループに編成"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/installation/verification_strategy.py:174
-#, fuzzy
 msgid ""
 "   ⚠️  Note: {} dependency/dependencies failed, but main package is OK."
-msgstr ""
+msgstr "⚠️ 注意: {} 依存関係は失敗しましたが、メイン パッケージは OK です。"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/installation/verification_strategy.py:227
-#, fuzzy
 msgid "      - Testing group '{}' ({} packages together)..."
-msgstr ""
+msgstr "- テストグループ '{}' ({} パッケージをまとめて)..."
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
+#  (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
+# Lollama: Skipped (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/omnipkg/installation/verification_strategy.py:255
 #, fuzzy
 msgid "         🟡 Skipping {}: No importable modules"
@@ -8124,244 +8206,224 @@ msgstr ""
 msgid "      {} {}: {}"
 msgstr "      {} {}: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/integration/ci_integration.py:96
-#, fuzzy
 msgid "   Wrappers directory: {}"
-msgstr ""
+msgstr "ラッパーディレクトリ:{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/integration/ci_integration.py:102
-#, fuzzy
 msgid "   Active wrappers: {}"
-msgstr ""
+msgstr "アクティブなラッパー:{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/integration/ci_integration.py:107
-#, fuzzy
 msgid "   (Environment exists at {})"
-msgstr ""
+msgstr "(環境は {} で存在する)"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
+#  (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
+# Lollama: Skipped (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/omnipkg/integration/ci_integration.py:108
 #, fuzzy
 msgid "   Run: 8pkg activate"
 msgstr ""
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
+# Lollama: Skipped (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/omnipkg/integration/ci_integration.py:110
 #, fuzzy
 msgid "   Run: 8pkg activate  # to create environment"
-msgstr ""
+msgstr "実行: 8pkg activate # 環境を作成する"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/integration/cli_executor.py:66
-#, fuzzy
 msgid "⚠️  Error scanning entry points: {}"
-msgstr ""
+msgstr "⚠️ エントリポイントのスキャン中にエラーが発生しました:{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/integration/cli_executor.py:91
-#, fuzzy
 msgid "⚠️  Error checking dependencies: {}"
-msgstr ""
+msgstr "⚠️ 依存関係チェッKエラー: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/integration/cli_executor.py:100
-#, fuzzy
 msgid "🐍 Detected Python script: {}"
-msgstr ""
+msgstr "🐍 検出された Python スクリプト:{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/integration/cli_executor.py:109
-#, fuzzy
 msgid "❌ Error: Command not found: {}"
-msgstr ""
+msgstr "❌ エラー:コマンドが見つかりませんでした: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/integration/cli_executor.py:112
-#, fuzzy
 msgid "🔧 Detected CLI command: {}"
-msgstr ""
+msgstr "🔧 検出された CLI コマンド:{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/integration/cli_executor.py:124
-#, fuzzy
 msgid "📦 CLI provided by: {}=={}"
-msgstr ""
+msgstr "📦 CLI の提供元:{}=={}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/integration/cli_executor.py:132
-#, fuzzy
 msgid "🔍 Detected {} dependency conflicts:"
-msgstr ""
+msgstr "🔍 {}依存関係の競合が検出されました:"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/integration/cli_executor.py:134
-#, fuzzy
 msgid "   - {}: need {}, found {}"
-msgstr ""
+msgstr "- {}: {}が必要、{}が見つかりました"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/integration/cli_executor.py:197
-#, fuzzy
 msgid "🐍 Executing Python script: {}"
-msgstr ""
+msgstr "🐍 Python スクリプトの実行:{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/integration/cli_executor.py:213
-#, fuzzy
 msgid "Usage: 8pkg run <command> [args...]"
-msgstr ""
+msgstr "使用法: 8pkg run <コマンド> [引数...]"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/integration/cli_executor.py:214
-#, fuzzy
 msgid ""
 "\n"
 "Examples:"
-msgstr ""
+msgstr "例："
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
+#  (Validation Failed: identical_to_original)
+#  (Validation Failed: identical_to_original)
+# Lollama: Skipped (Validation Failed: identical_to_original)
 #: /home/minds3t/omnipkg/src/omnipkg/integration/cli_executor.py:216
 #, fuzzy
 msgid "  8pkg run lollama start-mining"
 msgstr ""
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
+#  (Validation Failed: identical_to_original)
+#  (Validation Failed: identical_to_original)
+# Lollama: Skipped (Validation Failed: identical_to_original)
 #: /home/minds3t/omnipkg/src/omnipkg/integration/cli_executor.py:217
 #, fuzzy
 msgid "  8pkg run black --check ."
 msgstr ""
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/integration/environment.py:44
-#, fuzzy
 msgid "✅ Created omnipkg environment at: {}"
-msgstr ""
+msgstr "Omnipkg環境を作成しました: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/integration/environment.py:136
-#, fuzzy
 msgid "📦 Found {} CLI tools"
-msgstr ""
+msgstr "📦 {} CLI ツールが見つかりました"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/integration/environment.py:148
-#, fuzzy
 msgid "✅ Created {} wrappers"
-msgstr ""
+msgstr "✅ {} ラッパーを作成しました"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/integration/environment.py:160
-#, fuzzy
 msgid ""
 "\n"
 "To activate, run:"
-msgstr ""
+msgstr "アクティブするには,実行します:"
 
 #: /home/minds3t/omnipkg/src/omnipkg/integration/environment.py:161
 msgid "  source {}"
 msgstr "  source {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/integration/environment.py:162
-#, fuzzy
 msgid ""
 "\n"
 "Once activated, ALL CLI commands will auto-heal conflicts:"
-msgstr ""
+msgstr "起動すると,すべての CLI コマンドは,自動的に衝突を治します."
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/integration/environment.py:163
-#, fuzzy
 msgid "  lollama start-mining  # Just works!"
-msgstr ""
+msgstr "lollama start-mining # うまくいきます!"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/integration/environment.py:164
-#, fuzzy
 msgid "  black --check .        # Just works!"
-msgstr ""
+msgstr "- ブラックチェック. # ただ機能する!"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/integration/environment.py:165
-#, fuzzy
 msgid "  pytest                 # Just works!"
-msgstr ""
+msgstr "pytest # うまくいきました!"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/integration/environment.py:217
-#, fuzzy
 msgid "Unsupported shell: {}"
-msgstr ""
+msgstr "サポートされていないシェル:{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/integration/environment.py:247
-#, fuzzy
 msgid "Usage: 8pkg activate [shell]"
-msgstr ""
+msgstr "使用方法: 8pkg activate [シェル]"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/integration/environment.py:258
 #: /home/minds3t/omnipkg/src/omnipkg/isolation/worker_daemon.py:3763
-#, fuzzy
 msgid "Unknown command: {}"
-msgstr ""
+msgstr "未知のコマンド: {}\", score: 7.55}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/isolation/gpu_ipc.py:108
-#, fuzzy
 msgid "Open Handle Failed: {}"
-msgstr ""
+msgstr "ハンドルを開けませんでした: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
+#  (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
+# Lollama: Skipped (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/omnipkg/isolation/gpu_ipc.py:195
 #, fuzzy
 msgid "   ... (Runs 6-99 hidden) ..."
 msgstr ""
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/isolation/patchers.py:88
-#, fuzzy
 msgid "⚠️  [OMNIPKG] Could not apply NumPy recursion patch: {}"
-msgstr ""
+msgstr "⚠️ [OMNIPKG] NumPy recursion patch は適用できません: {}\", \"score\": 9.65}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/isolation/patchers.py:451
-#, fuzzy
 msgid "🔄 [OMNIPKG] Healed circular imports: {}"
-msgstr ""
+msgstr "🔄 [OMNIPKG] 修復された循環インポート: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/isolation/resource_monitor.py:152
-#, fuzzy
 msgid "\\033[2J\\033[H"
-msgstr ""
+msgstr "☆033 ☆(☆)"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/isolation/resource_monitor.py:183
-#, fuzzy
 msgid "❌ No omnipkg daemon workers found!"
-msgstr ""
+msgstr "Omnipkg デモン労働者が見つかりません!"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/isolation/resource_monitor.py:206
-#, fuzzy
 msgid "🎛️  DAEMON MANAGER:"
-msgstr ""
+msgstr "🎛️ デーモン マネージャー"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/isolation/resource_monitor.py:218
-#, fuzzy
 msgid "🔄 PERSISTENT WORKERS (Long-lived daemon processes):"
-msgstr ""
+msgstr "🔄 持続的ワーカー（長寿命デーモンプロセス）："
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/isolation/resource_monitor.py:230
-#, fuzzy
 msgid "⚙️  ACTIVE WORKERS (Package-specific bubbles):"
-msgstr ""
+msgstr "⚙️ アクティブワーカー（パッケージ固有のバブル）："
 
 #: /home/minds3t/omnipkg/src/omnipkg/isolation/resource_monitor.py:243
 msgid ""
@@ -8371,1514 +8433,1301 @@ msgstr ""
 "\n"
 "📦 {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/isolation/resource_monitor.py:261
-#, fuzzy
 msgid "📊 WORKER SUMMARY STATISTICS"
-msgstr ""
+msgstr "📊 従業員の概要統計"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/isolation/resource_monitor.py:263
-#, fuzzy
 msgid "  Active Workers:         {}"
-msgstr ""
+msgstr "アクティブな労働者: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/isolation/resource_monitor.py:274
-#, fuzzy
 msgid "🎯 EFFICIENCY METRICS:"
-msgstr ""
+msgstr "🎯 効率のメトリック:"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/isolation/resource_monitor.py:294
-#, fuzzy
 msgid "Starting watch mode (Ctrl+C to exit)..."
-msgstr ""
+msgstr "ウォッチモードを起動する (Ctrl+Cで終了する)..."
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/isolation/resource_monitor.py:301
-#, fuzzy
 msgid ""
 "\n"
 "\n"
 "Exiting watch mode..."
-msgstr ""
+msgstr "ウォッチモードを終了しています..."
 
 #: /home/minds3t/omnipkg/src/omnipkg/isolation/runners.py:78
 msgid "--- {} STDERR ---"
 msgstr "--- {} STDERR ---"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/isolation/runners.py:86
-#, fuzzy
 msgid "❌ {} timed out after {}s"
-msgstr ""
+msgstr "{}は {} 秒後にタイムアウトしました"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/isolation/switchers.py:44
-#, fuzzy
 msgid "Forked task failed: {}\n"
-msgstr ""
+msgstr "フォークされたタスクが失敗しました:{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/isolation/worker_controller.py:101
-#, fuzzy
 msgid "Worker spawn timed out: {}"
-msgstr ""
+msgstr "ワーカーのスポーンがタイムアウトしました: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/isolation/worker_controller.py:105
-#, fuzzy
 msgid "Worker spawn failed: {}"
-msgstr ""
+msgstr "ワーカーの生成に失敗しました:{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/isolation/worker_controller.py:199
-#, fuzzy
 msgid "⚠️  [SPAWN] Phase 2 timeout: {} (worker functional but slower)"
-msgstr ""
+msgstr "⚠️ [SPAWN] フェーズ2タイムアウト: {} (ワーカーは機能しているが、動作が遅い)"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/isolation/worker_controller.py:207
-#, fuzzy
 msgid "❌ [SPAWN] Failed: {} - {}"
-msgstr ""
+msgstr "[スポーン] 失敗: {} - {}\", score: 9.5}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/isolation/worker_controller.py:310
-#, fuzzy
 msgid "   ❌ Failed to spawn {}: {}"
-msgstr ""
+msgstr "❌ {}のスポーンに失敗しました: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/isolation/worker_controller.py:330
-#, fuzzy
 msgid "   - Total workers: {}"
-msgstr ""
+msgstr "- 従業員の合計:{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/isolation/worker_daemon.py:40
-#, fuzzy
 msgid "✅ [DAEMON] Hardware Atomics LOADED: {}\n"
-msgstr ""
+msgstr "✅ [DAEMON] ハードウェア アトミックスがロードされました:{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/isolation/worker_daemon.py:43
-#, fuzzy
 msgid "⚠️ [DAEMON] Hardware Atomics FAILED: {}\n"
-msgstr ""
+msgstr "⚠ ️ [DAEMON] ハードウェア アトミックスが失敗しました: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/isolation/worker_daemon.py:94
-#, fuzzy
 msgid "Failed to attach control block {}: {}"
-msgstr ""
+msgstr "制御ブロックの接続に失敗しました{}:{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/isolation/worker_daemon.py:1238
-#, fuzzy
 msgid ""
 "\n"
 "🔍 Diagnosing worker issue for: {}"
-msgstr ""
+msgstr "🔍 ワーカーの問題を診断:{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/isolation/worker_daemon.py:1256
-#, fuzzy
 msgid "   ✅ Found version: {}"
-msgstr ""
+msgstr "✅ 見つかったバージョン:{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/isolation/worker_daemon.py:1260
-#, fuzzy
 msgid "      Expected: {}"
-msgstr ""
+msgstr "予想: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/isolation/worker_daemon.py:1261
-#, fuzzy
 msgid "      Got: {}"
-msgstr ""
+msgstr "Got: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/isolation/worker_daemon.py:1276
-#, fuzzy
 msgid ""
 "\n"
 "3. Bubble check:"
-msgstr ""
+msgstr "3. バブルチェック:"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/isolation/worker_daemon.py:1277
-#, fuzzy
 msgid "   Path: {}"
-msgstr ""
+msgstr "パス: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/isolation/worker_daemon.py:1278
-#, fuzzy
 msgid "   Exists: {}"
-msgstr ""
+msgstr "存在します:{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/isolation/worker_daemon.py:1281
-#, fuzzy
 msgid "   Contents: {}"
-msgstr ""
+msgstr "内容: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/isolation/worker_daemon.py:1337
-#, fuzzy
 msgid "Worker crashed during startup. Stderr: {}"
-msgstr ""
+msgstr "起動中にワーカーがクラッシュしました。標準誤差:{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/isolation/worker_daemon.py:1584
-#, fuzzy
 msgid ""
 "\n"
 "🔍 DEBUG: _DAEMON_SCRIPT length: {} chars"
-msgstr ""
+msgstr "🔍 DEBUG: _DAEMON_SCRIPT length: {} chars"
 
 #: /home/minds3t/omnipkg/src/omnipkg/isolation/worker_daemon.py:1588
 msgid "   '{}'"
 msgstr "   '{}'"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/isolation/worker_daemon.py:1600
-#, fuzzy
 msgid ""
 "\n"
 "🔍 DEBUG: Worker script written to: {}"
-msgstr ""
+msgstr "🔍 DEBUG: Worker script written to: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
+#  (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
+# Lollama: Skipped (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/omnipkg/isolation/worker_daemon.py:1602
 #, fuzzy
 msgid "🔍 DEBUG: File size: {} bytes"
 msgstr ""
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/isolation/worker_daemon.py:1614
-#, fuzzy
 msgid "   File: {}"
-msgstr ""
+msgstr "ファイル：{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/isolation/worker_daemon.py:1615
-#, fuzzy
 msgid "   Line {}: {}"
-msgstr ""
+msgstr "Line {}: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/isolation/worker_daemon.py:1644
-#, fuzzy
 msgid "🔧 [WORKER] Injecting {} CUDA paths into environment"
-msgstr ""
+msgstr "🔧 [WORKER] {} CUDA パスを環境に挿入しています"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/isolation/worker_daemon.py:1671
-#, fuzzy
 msgid "Failed to send setup: {}"
-msgstr ""
+msgstr "セットアップの送信に失敗しました:{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
+#  (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
+# Lollama: Skipped (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/omnipkg/isolation/worker_daemon.py:1698
 #, fuzzy
 msgid "Worker sent invalid READY JSON: {}: {}"
 msgstr ""
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/isolation/worker_daemon.py:1701
-#, fuzzy
 msgid "Worker failed to initialize: {}"
-msgstr ""
+msgstr "ワーカーが初期化に失敗しました:{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/isolation/worker_daemon.py:1709
 #: /home/minds3t/omnipkg/src/omnipkg/isolation/workers.py:187
-#, fuzzy
 msgid "Worker initialization failed: {}"
-msgstr ""
+msgstr "ワーカーの初期化に失敗しました:{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/isolation/worker_daemon.py:1889
 #: /home/minds3t/omnipkg/src/omnipkg/isolation/worker_daemon.py:1915
-#, fuzzy
 msgid "✅ Daemon started successfully (PID: {})"
-msgstr ""
+msgstr "✅ デーモンが正常に開始されました (PID:{})"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/isolation/worker_daemon.py:1895
-#, fuzzy
 msgid "❌ Daemon failed to start (check {})"
-msgstr ""
+msgstr "❌ デーモンは起動できなかった (チェック {})"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/isolation/worker_daemon.py:1901
-#, fuzzy
 msgid "❌ Failed to start daemon: {}"
-msgstr ""
+msgstr "❌ デーモン起動に失敗しました: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/isolation/worker_daemon.py:1918
-#, fuzzy
 msgid "fork #1 failed: {}\n"
-msgstr ""
+msgstr "フォーク #1 が失敗しました:{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/isolation/worker_daemon.py:1931
-#, fuzzy
 msgid "fork #2 failed: {}\n"
-msgstr ""
+msgstr "フォーク #2 が失敗しました:{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/isolation/worker_daemon.py:2108
 #: /home/minds3t/omnipkg/src/omnipkg/isolation/worker_daemon.py:2289
-#, fuzzy
 msgid ""
 "Worker creation failed: {}\n"
 "{}"
-msgstr ""
+msgstr "ワーカーの作成に失敗しました:{} {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/isolation/worker_daemon.py:2168
-#, fuzzy
 msgid "   ❌ [DAEMON] Installation failed: {}"
-msgstr ""
+msgstr "❌ [DAEMON] インストールに失敗しました:{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/isolation/worker_daemon.py:2720
-#, fuzzy
 msgid "🔥 GPU IPC Mode: {}"
-msgstr ""
+msgstr "🔥 GPU IPC モード:{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
+#  (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
+# Lollama: Skipped (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/omnipkg/isolation/worker_daemon.py:2840
 #, fuzzy
 msgid "Universal IPC unavailable, using {}"
 msgstr ""
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/isolation/worker_daemon.py:2847
-#, fuzzy
 msgid "PyTorch native unavailable, using {}"
-msgstr ""
+msgstr "PyTorch ネイティブは利用できません。{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/isolation/worker_daemon.py:2859
-#, fuzzy
 msgid "Unknown mode, using {}"
-msgstr ""
+msgstr "不明なモード、{} を使用"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/isolation/worker_daemon.py:2969
-#, fuzzy
 msgid "Communication error: {}"
-msgstr ""
+msgstr "通信エラー:{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/isolation/worker_daemon.py:3063
-#, fuzzy
 msgid "⚠️  Invalid IPC mode '{}', using auto"
-msgstr ""
+msgstr "⚠ ️ 無効な IPC モード '{}', 自動を使用"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/isolation/worker_daemon.py:3069
-#, fuzzy
 msgid "   🎯 IPC Mode: {}"
-msgstr ""
+msgstr "🎯 IPCモード:{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/isolation/worker_daemon.py:3145
 #: /home/minds3t/omnipkg/src/omnipkg/isolation/worker_daemon.py:3207
 #: /home/minds3t/omnipkg/src/omnipkg/isolation/worker_daemon.py:3318
 #: /home/minds3t/omnipkg/src/omnipkg/isolation/worker_daemon.py:3387
 #: /home/minds3t/omnipkg/src/omnipkg/isolation/worker_daemon.py:3451
-#, fuzzy
 msgid "Worker Error: {}"
-msgstr ""
+msgstr "ワーカーエラー:{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/isolation/worker_daemon.py:3158
-#, fuzzy
 msgid "   ⚠️  CPU SHM failed: {}"
-msgstr ""
+msgstr "⚠️ CPU SHM 失敗: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/isolation/worker_daemon.py:3213
 #: /home/minds3t/omnipkg/src/omnipkg/isolation/worker_daemon.py:3324
-#, fuzzy
 msgid "   ⚠️  Worker fell back to {}"
-msgstr ""
+msgstr "⚠️ 作業員が{}に後退した"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/isolation/worker_daemon.py:3218
-#, fuzzy
 msgid "   ⚠️  Universal IPC failed: {}"
-msgstr ""
+msgstr "⚠️ ユニバーサル IPC が失敗しました: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/isolation/worker_daemon.py:3329
-#, fuzzy
 msgid "   ⚠️  PyTorch native IPC failed: {}"
-msgstr ""
+msgstr "⚠ ️ PyTorch native IPC 失敗: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/isolation/worker_daemon.py:3603
-#, fuzzy
 msgid ""
 "\n"
 "❌ Failed to start: {}"
-msgstr ""
+msgstr "❌ 開始に失敗しました:{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/isolation/worker_daemon.py:3617
-#, fuzzy
 msgid "❌ Failed to stop: {}"
-msgstr ""
+msgstr "❌ 停止に失敗しました:{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/isolation/worker_daemon.py:3630
-#, fuzzy
 msgid "❌ Error: {}"
-msgstr ""
+msgstr "エラー：{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/isolation/worker_daemon.py:3636
-#, fuzzy
 msgid "  Workers: {}"
-msgstr ""
+msgstr "労働者：{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/isolation/worker_daemon.py:3643
-#, fuzzy
 msgid "  Memory Usage: N/A (psutil not installed)"
-msgstr ""
+msgstr "メモリー使用: N/A (psutil not installed)"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/isolation/worker_daemon.py:3645
-#, fuzzy
 msgid "  Total Requests: {}"
-msgstr ""
+msgstr "リクエスト総数: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/isolation/worker_daemon.py:3647
-#, fuzzy
 msgid "  Errors: {}"
-msgstr ""
+msgstr "エラー:{}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/isolation/worker_daemon.py:3653
 msgid "    - {}"
 msgstr "    - {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/isolation/worker_daemon.py:3667
-#, fuzzy
 msgid "❌ Log file not found at: {}"
-msgstr ""
+msgstr "❌ ログファイルが見つかりません: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/isolation/worker_daemon.py:3668
-#, fuzzy
 msgid "   (The daemon might not have started yet)"
-msgstr ""
+msgstr "(デーモンがまだ起動していない可能性があります)"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
+#  (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
+# Lollama: Skipped (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/omnipkg/isolation/worker_daemon.py:3671
 #, fuzzy
 msgid "📄 Tailing {} (last {} lines)..."
 msgstr ""
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/isolation/worker_daemon.py:3711
-#, fuzzy
 msgid ""
 "\n"
 "❌ Error reading logs: {}"
-msgstr ""
+msgstr "❌ ログの読み取りエラー:{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/isolation/worker_daemon.py:3722
-#, fuzzy
 msgid ""
 "Usage: python -m omnipkg.isolation.worker_daemon {start|stop|status|logs}"
-msgstr ""
+msgstr "Python -m omnipkg.isolation.worker_daemon {start|stop|status|logs}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/isolation/worker_daemon.py:3759
-#, fuzzy
 msgid "❌ resource_monitor module not found."
-msgstr ""
+msgstr "resource_monitor モジュールが見つかりません。"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/isolation/workers.py:190
-#, fuzzy
 msgid "Handshake failed: {}"
-msgstr ""
+msgstr "ハンドシェイクが失敗しました:{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/libresolver.py:104
-#, fuzzy
 msgid "⚠️  Error loading compatibility DB: {}"
-msgstr ""
+msgstr "⚠️ 互換性データベースの読み込み中にエラーが発生しました: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/libresolver.py:130
-#, fuzzy
 msgid ""
 "\n"
 "🔧 Ensuring {} {} is available..."
-msgstr ""
+msgstr "🔧 確保する{} {}利用可能です..."
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/libresolver.py:135
-#, fuzzy
 msgid "✅ {} {} already available"
-msgstr ""
+msgstr "✅ {} {} はすでに利用可能です"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/libresolver.py:141
-#, fuzzy
 msgid "❌ Unknown library: {}"
-msgstr ""
+msgstr "❌ 未知のライブラリ: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/libresolver.py:152
-#, fuzzy
 msgid "📦 Building {} {}..."
-msgstr ""
+msgstr "📦 建物 {} {}..."
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/libresolver.py:165
-#, fuzzy
 msgid "❌ Failed to build {} {}"
-msgstr ""
+msgstr "❌ ビルドに失敗しました{} {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/libresolver.py:195
-#, fuzzy
 msgid "⬇️  Downloading {}..."
-msgstr ""
+msgstr "⬇️ {} をダウンロード中..."
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/libresolver.py:202
-#, fuzzy
 msgid "❌ Download failed: {}"
-msgstr ""
+msgstr "ダウンロードに失敗しました: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/libresolver.py:222
-#, fuzzy
 msgid "❌ Extraction failed: {}"
-msgstr ""
+msgstr "❌ 抽出に失敗しました:{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/libresolver.py:252
-#, fuzzy
 msgid "Build error: {}"
-msgstr ""
+msgstr "ビルドエラー:{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/libresolver.py:319
-#, fuzzy
 msgid ""
 "\n"
 "🌍 Creating runtime environment with: {}"
-msgstr ""
+msgstr "🌍 ランタイム環境の作成: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/libresolver.py:326
-#, fuzzy
 msgid "Failed to ensure {} {}"
-msgstr ""
+msgstr "{} {} を確保できませんでした"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/libresolver.py:386
-#, fuzzy
 msgid ""
 "\n"
 "🧪 Testing compatibility: {}=={}"
-msgstr ""
+msgstr "🧪 互換性のテスト:{}=={}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/libresolver.py:387
-#, fuzzy
 msgid "    System libs: {}"
-msgstr ""
+msgstr "システムライブラリ:{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/libresolver.py:409
-#, fuzzy
 msgid "Environment setup failed: {}"
-msgstr ""
+msgstr "環境セットアップに失敗しました:{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/libresolver.py:528
-#, fuzzy
 msgid "Test script failed: {}"
-msgstr ""
+msgstr "テストスクリプトが失敗しました:{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/libresolver.py:547
-#, fuzzy
 msgid "Test execution failed: {}"
-msgstr ""
+msgstr "テスト実行失敗: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/libresolver.py:581
-#, fuzzy
 msgid "    Syslib combinations: {}"
-msgstr ""
+msgstr "Syslib の組み合わせ: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/libresolver.py:582
-#, fuzzy
 msgid "    Total tests: {}"
-msgstr ""
+msgstr "合計テスト:{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/libresolver.py:583
-#, fuzzy
 msgid "    Estimated time: {} seconds"
-msgstr ""
+msgstr "推定時間: {} 秒"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/libresolver.py:588
-#, fuzzy
 msgid ""
 "\n"
 "[{}/{}] Testing {}=={}"
-msgstr ""
+msgstr "[{}/{}] テスト{}=={}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/libresolver.py:615
-#, fuzzy
 msgid ""
 "\n"
 "🔧 HEALING: {} failed with: {}"
-msgstr ""
+msgstr "🔧 ヒーリング：{}失敗しました:{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/libresolver.py:711
-#, fuzzy
 msgid "  Total combinations tested: {}"
-msgstr ""
+msgstr "テストされた総組み合わせ: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/libresolver.py:712
-#, fuzzy
 msgid "  Working combinations: {}"
-msgstr ""
+msgstr "有効な組み合わせ:{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/libresolver.py:754
-#, fuzzy
 msgid "🎯 Identified problematic package: {}"
-msgstr ""
+msgstr "🎯 特定された問題のあるパッケージ:{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/libresolver.py:764
-#, fuzzy
 msgid "💊 Found healing combination: {}"
-msgstr ""
+msgstr "💊 発見された治癒の組み合わせ: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:82
-#, fuzzy
 msgid "Unexpected error loading patcher: {}"
-msgstr ""
+msgstr "パッチャーの読み込み中に予期しないエラーが発生しました:{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:362
-#, fuzzy
 msgid "   ⚠️ Cache init failed: {}"
-msgstr ""
+msgstr "⚠️ キャッシュ初期化に失敗しました:{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:411
-#, fuzzy
 msgid "No profiling data collected"
-msgstr ""
+msgstr "プロファイリンGデータは収集されません"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:485
-#, fuzzy
 msgid "   ❌ Worker creation failed: {}"
-msgstr ""
+msgstr "❌ ワーカーの作成に失敗しました:{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
+#  (Validation Failed: translation_artifact_english)
+#  (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:502
-#, fuzzy
 msgid "   🛑 Shutting down worker pool ({} workers)..."
-msgstr ""
+msgstr "🛑 ワーカープールを閉鎖する ({} workers)..."
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:508
-#, fuzzy
 msgid "      ✅ Shutdown: {}"
-msgstr ""
+msgstr "✅ シャットダウン:{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:511
-#, fuzzy
 msgid "      ⚠️  Failed to shutdown {}: {}"
-msgstr ""
+msgstr "⚠️ {}: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:564
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:4158
-#, fuzzy
 msgid "   ⚠️  Daemon connection failed: {}. Falling back to local."
-msgstr ""
+msgstr "⚠️ Daemon 接続が失敗しました: {}. 地元に戻ります。"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:593
-#, fuzzy
 msgid "   🔄 Daemon Uncloak: {} items restored"
-msgstr ""
+msgstr "🔄 Daemon Uncloak: {} アイテムが復元されました"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:786
-#, fuzzy
 msgid "🧹 [omnipkg loader] Filtered out {} incompatible paths from sys.path"
-msgstr ""
+msgstr "🧹 [omnipkg ローダー] {} 個の互換性のないパスを sys.path から除外しました"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:916
-#, fuzzy
 msgid "   🚑 RESURRECTING critical package: {} (Found {} cloaks)"
-msgstr ""
+msgstr "🚑 重要なパッケージを復活中: {} ({} のマントが見つかりました)"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:943
-#, fuzzy
 msgid "      ✅ Resurrected and loaded: {}"
-msgstr ""
+msgstr "✅ 復活してロードされました:{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:948
-#, fuzzy
 msgid "      ❌ Failed to resurrect {}: {}"
-msgstr ""
+msgstr "{} の復活に失敗しました: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:1075
-#, fuzzy
 msgid "🔗 [omnipkg loader] Linked {} compatible dependencies to bubble"
-msgstr ""
+msgstr "🔗 [omnipkg ローダー] {} 互換依存関係をバブルにリンクしました"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:1169
-#, fuzzy
 msgid "   - 🔍 Will cloak files for: {}"
-msgstr ""
+msgstr "- 🔍 以下のファイルをクロークします:{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:1205
-#, fuzzy
 msgid "      ✅ Cloaked: {}"
-msgstr ""
+msgstr "✅ クローク:{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:1215
-#, fuzzy
 msgid "      ❌ Failed to cloak {}: {}"
-msgstr ""
+msgstr "❌ {} のクロークに失敗しました: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:1247
-#, fuzzy
 msgid "   📦 Found cloak: {}"
-msgstr ""
+msgstr "📦 見つかったマント:{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:1253
-#, fuzzy
 msgid ""
 "\n"
 "💥 NUKING {} cloak(s)..."
-msgstr ""
+msgstr "💥 NUKING {} cloak(s)..."
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:1263
-#, fuzzy
 msgid "   ☠️  Destroyed: {}"
-msgstr ""
+msgstr "☠️ 破壊されました:{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:1265
-#, fuzzy
 msgid "   ❌ Failed to destroy {}: {}"
-msgstr ""
+msgstr "❌ {}を破壊できなかった: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:1380
-#, fuzzy
 msgid "   ⏭️  Skipping restore (target exists): {}"
-msgstr ""
+msgstr "⏭️ 復元のスキップ (ターゲットが存在する):{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:1388
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:3015
-#, fuzzy
 msgid "   ✅ Restored: {}"
-msgstr ""
+msgstr "✅ 復元済み:{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:1395
-#, fuzzy
 msgid "   ⚠️  Failed to restore {}: {}"
-msgstr ""
+msgstr "⚠️ {} の復元に失敗しました: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:1426
-#, fuzzy
 msgid "      [Strategy 0/6] Found CLOAKED version: {}"
-msgstr ""
+msgstr "[戦略 0/6] CLOAKED バージョンが見つかりました:{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:1435
-#, fuzzy
 msgid "      ✅ [Strategy 1/6] Found at exact path: {}"
-msgstr ""
+msgstr "✅ [戦略 1/6] 正確なパスで見つかりました:{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:1448
-#, fuzzy
 msgid "      ✅ [Strategy 2/6] Found via importlib.metadata: {}"
-msgstr ""
+msgstr "[戦略 2/6] importlib.metadata 経由で見つかりました:{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:1454
-#, fuzzy
 msgid "      ℹ️  [Strategy 2/6] Found {} but version mismatch: {} != {}"
-msgstr ""
+msgstr "i️ [Strategy 2/6] Found {} but version mismatch: {} != {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:1458
-#, fuzzy
 msgid "      ⚠️  [Strategy 2/6] importlib.metadata failed: {}"
-msgstr ""
+msgstr "⚠️ [戦略 2/6] importlib.metadata が失敗しました:{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:1472
-#, fuzzy
 msgid "      ✅ [Strategy 3/6] Found via glob: {}"
-msgstr ""
+msgstr "✅ [戦略 3/6] glob 経由で見つかりました:{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:1480
-#, fuzzy
 msgid "      ❌ All strategies exhausted. {}=={} not found."
-msgstr ""
+msgstr "❌ すべての戦略を使い果たしました。{}=={}が見つかりません。"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:1484
-#, fuzzy
 msgid "      ⚠️  WARNING: Found {} cloaked versions but none match {}"
-msgstr ""
+msgstr "⚠ ️ 警告: {} のクローキングされたバージョンが見つかりましたが、{} に一致するものはありません"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:1522
-#, fuzzy
 msgid "      ⚠️ Failed to restore {}: {}"
-msgstr ""
+msgstr "⚠️ {} の復元に失敗しました: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:1546
-#, fuzzy
 msgid "      ✅ Restored cloaked '{}' in main environment"
-msgstr ""
+msgstr "✅ クロークを復元しました '{}' メイン環境で"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:1563
-#, fuzzy
 msgid "   🧠 Proactive worker mode: {} already loaded"
-msgstr ""
+msgstr "🧠 プロアクティブ ワーカー モード: {} はすでにロードされています"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:1601
-#, fuzzy
 msgid "OMNIPKG_EVENT:{}"
-msgstr ""
+msgstr "OMNIPKG_EVENT:{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:1784
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:4169
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:4192
-#, fuzzy
 msgid "Invalid package_spec format: '{}'"
-msgstr ""
+msgstr "無効な package_spec 形式: '{}'"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:1855
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:1919
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:2123
-#, fuzzy
 msgid "         - ⚠️ Failed to cloak {}: {}"
-msgstr ""
+msgstr "- ⚠️ {} をクロークできませんでした: {}\", \"score\": 9.26}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:1954
-#, fuzzy
 msgid "   ✅ Already in {}=={} bubble"
-msgstr ""
+msgstr "✅ すでに {}=={} バブルに入っています"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:1974
-#, fuzzy
 msgid "   🔄 Version mismatch: have {}, need {}"
-msgstr ""
+msgstr "🔄 バージョンの不一致: {} があり、{} が必要です"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:1985
-#, fuzzy
 msgid "🚀 Fast-activating {} ..."
-msgstr ""
+msgstr "🚀 高速活性化 {} ..."
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:1999
-#, fuzzy
 msgid "   🔓 Found CLOAKED bubble {}, restoring..."
-msgstr ""
+msgstr "🔓 CLOAKED バブル {} が見つかりました。復元中です..."
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:2004
-#, fuzzy
 msgid "      ⚠️ Failed to restore cloaked bubble: {}"
-msgstr ""
+msgstr "⚠ ️ 隠されたバブルを復元できませんでした:{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:2018
-#, fuzzy
 msgid "   ✅ Bubble found: {}"
-msgstr ""
+msgstr "✅ バブルが見つかりました:{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:2104
-#, fuzzy
 msgid "      - 🔒 Cloaking {} conflicting bubble(s)."
-msgstr ""
+msgstr "- 🔒 {} の競合するバブルをクローキングします。"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:2119
-#, fuzzy
 msgid "         - Cloaked: {}"
-msgstr ""
+msgstr "- クローク:{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:2224
-#, fuzzy
 msgid "   - 🔧 Auto-creating bubble for: {}"
-msgstr ""
+msgstr "- 🔧 バブルの自動作成:{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:2229
-#, fuzzy
 msgid "Failed to install {}"
-msgstr ""
+msgstr "{}をインストールできませんでした"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:2265
-#, fuzzy
 msgid "      🔗 Found dependency bubble: {}"
-msgstr ""
+msgstr "🔗 依存関係バブルが見つかりました:{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:2269
-#, fuzzy
 msgid "   📦 Activating {} dependency bubbles (CUDA/NVIDIA libs)..."
-msgstr ""
+msgstr "📦 {} 依存関係バブル (CUDA/NVIDIA ライブラリ) をアクティブ化しています..."
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:2293
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:2455
-#, fuzzy
 msgid "   🔒 Cloaked {} conflicting packages"
-msgstr ""
+msgstr "🔒 クロークされた {} の競合するパッケージ"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:2367
-#, fuzzy
 msgid "   - ✅ Confirmed {}=={} in main environment"
-msgstr ""
+msgstr "- ✅メイン環境で {}=={} を確認"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:2390
-#, fuzzy
 msgid "Installation reported success but {}=={} not found. Found version: {}"
-msgstr ""
+msgstr "インストールは成功したと報告されましたが、{}=={}見つかりません。見つかったバージョン:{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:2417
-#, fuzzy
 msgid "   📊 Bubble: {} packages, {} conflicts"
-msgstr ""
+msgstr "📊 バブル: {} パッケージ, {} 競合"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
+# Lollama: Skipped (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:2427
 #, fuzzy
 msgid "   ⏭️  Skipping module purge (nested overlay, depth={})"
 msgstr ""
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:2479
-#, fuzzy
 msgid "   - 🔩 Activating binary path: {}"
-msgstr ""
+msgstr "- 🔩 バイナリ パスをアクティブ化: {}\", \"score\": 9.35}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:2503
-#, fuzzy
 msgid "   ❌ Activation failed: {}"
-msgstr ""
+msgstr "❌ アクティベーションが失敗しました: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:2543
-#, fuzzy
 msgid "   ⚠️ Conflict (Redis): {} (main: {} vs bubble: {})"
-msgstr ""
+msgstr "⚠️ 競合 (Redis): {} (main: {} vs bubble: {})"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:2549
-#, fuzzy
 msgid "   ⚠️ Redis conflict check failed ({}), falling back to disk..."
-msgstr ""
+msgstr "⚠️ Redis の競合チェックに失敗しました ({})、ディスクにフォールバックします..."
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:2570
-#, fuzzy
 msgid "🚨 Emergency cloak restoration in progress..."
-msgstr ""
+msgstr "🚨 緊急クローク修復中..."
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:2583
-#, fuzzy
 msgid "   ✅ Emergency cleanup removed {} orphaned cloaks"
-msgstr ""
+msgstr "✅ 緊急クリーンアップにより{}孤立したマントが削除されました"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:2637
-#, fuzzy
 msgid "      ❌ Auto-install exception: {}"
-msgstr ""
+msgstr "❌ 自動インストール例外: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:2669
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:4295
-#, fuzzy
 msgid "   ⚠️  Worker shutdown warning: {}"
-msgstr ""
+msgstr "⚠️ ワーカーのシャットダウン警告: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:2682
-#, fuzzy
 msgid "🌀 omnipkg loader: Deactivating {}{}..."
-msgstr ""
+msgstr "🌀 omnipkg loader: Deactivating {}{}..."
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:2705
-#, fuzzy
 msgid "   - 🔓 Restoring {} cloaked main env package(s)..."
-msgstr ""
+msgstr "- 🔓 {} のクロークされたメイン環境パッケージを復元中..."
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:2797
-#, fuzzy
 msgid "   ✅ Cleaned up {} orphaned cloaks"
-msgstr ""
+msgstr "✅ {} 個の孤立したマントをクリーンアップしました"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:2819
-#, fuzzy
 msgid "   ⚠️  WARNING: {} cloaks still remaining!"
-msgstr ""
+msgstr "⚠️ 警告：{}のクロークがまだ残っています！"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:2853
-#, fuzzy
 msgid "         ⚠️  Can't parse cloak name: {}"
-msgstr ""
+msgstr "⚠️ クラーク名 {} を解析できません"
 
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:2874
 msgid "         ✅ {}"
 msgstr "         ✅ {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:2878
-#, fuzzy
 msgid "         ❌ Failed: {}: {}"
-msgstr ""
+msgstr "❌ 失敗: {}: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:2940
-#, fuzzy
 msgid "   🧹 Force-restoring {} owned cloaks..."
-msgstr ""
+msgstr "🧹 {} 個のマントを強制的に復元しています..."
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:2958
-#, fuzzy
 msgid "      ✅ Restored: {}"
-msgstr ""
+msgstr "✅ 復元済み:{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:2966
-#, fuzzy
 msgid "      ⚠️ Failed to force-restore {}: {}"
-msgstr ""
+msgstr "⚠️ {}: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:3025
-#, fuzzy
 msgid "   ❌ Failed to restore {}: {}"
-msgstr ""
+msgstr "{}の復元に失敗しました: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:3031
-#, fuzzy
 msgid "   📊 Restoration: {} restored, {} failed"
-msgstr ""
+msgstr "📊 復元：{}復元され、{}失敗した"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
+# Lollama: Skipped (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:3051
 #, fuzzy
 msgid "   🔍 Found {} cloaked version(s) of {}:"
 msgstr ""
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:3053
-#, fuzzy
 msgid "      - {} (timestamp: {})"
-msgstr ""
+msgstr "-{}(タイムスタンプ:{})"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:3572
-#, fuzzy
 msgid "      ⚠️  Failed to read {}: {}"
-msgstr ""
+msgstr "⚠️ {} の読み込みに失敗しました: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:3593
-#, fuzzy
 msgid "      📦 Using known mapping: {} -> {}"
-msgstr ""
+msgstr "📦 既知のマッピングを使用すると、次のようになります。{}->{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:3601
-#, fuzzy
 msgid "      📦 Using transformed name: {} -> {}"
-msgstr ""
+msgstr "📦 変換された名前を使用: {} -> {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:3718
-#, fuzzy
 msgid "Package {} imported but failed sanity check (Zombie State detected!)"
-msgstr ""
+msgstr "パッケージ{}インポートされましたが、健全性チェックに失敗しました (ゾンビ状態が検出されました!)"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:3745
-#, fuzzy
 msgid "      ⚠️  Attempt {} failed: {}"
-msgstr ""
+msgstr "⚠️ {} の試行が失敗しました: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:3834
-#, fuzzy
 msgid "      ❌ Subprocess validation error: {}"
-msgstr ""
+msgstr "❌ サブプロセス検証エラー:{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:3852
-#, fuzzy
 msgid "   🔄 INITIATING PROCESS RE-EXECUTION (Attempt {}/3)..."
-msgstr ""
+msgstr "🔄 プロセスの再実行を開始しています (試行 {}/3)..."
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:3926
-#, fuzzy
 msgid "      📦 Reinstalling {}..."
-msgstr ""
+msgstr "📦 再インストール {}..."
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:3956
-#, fuzzy
 msgid "      ❌ Auto-heal failed: {}"
-msgstr ""
+msgstr "❌ 自動修復に失敗しました:{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:4096
-#, fuzzy
 msgid "   🚨 C++ collision risk: {} already loaded"
-msgstr ""
+msgstr "🚨 C++ 衝突リスク: {} が既に読み込まれています"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:4103
-#, fuzzy
 msgid "   🚨 C++ collision risk: {} detected"
-msgstr ""
+msgstr "🚨 C++ 衝突リスク:{}検出されました"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:4125
-#, fuzzy
 msgid "   🚨 C++ version conflict: {} ({} vs {})"
-msgstr ""
+msgstr "🚨 C++ バージョンの競合: {} ({} 対 {})"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:4227
-#, fuzzy
 msgid ""
 "✅ System version already matches requested version ({}). No bubble needed."
-msgstr ""
+msgstr "✅ システムバージョンは既に要求されたバージョン（{}）と一致しています。"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:4259
-#, fuzzy
 msgid "      Original error: {}"
-msgstr ""
+msgstr "元のエラー: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/lockmanager.py:41
-#, fuzzy
 msgid "Failed to acquire '{}' lock after {}s"
-msgstr ""
+msgstr "{}秒後に '{}' ロックの取得に失敗しました"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/package_meta_builder.py:480
-#, fuzzy
 msgid "         Found {} in nested dir, but version mismatch ({} != {})"
-msgstr ""
+msgstr "ネストされたディレクトリで {} が見つかりましたが、バージョンが一致しません ({} != {})"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/package_meta_builder.py:513
-#, fuzzy
 msgid "         Found {} unique dist-info directories to check"
-msgstr ""
+msgstr "チェックすべき {} の固有の dist-info ディレクトリが見つかりました"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/package_meta_builder.py:564
-#, fuzzy
 msgid "✅ Found AUTHORITATIVE {} v{} at {}"
-msgstr ""
+msgstr "✅ {} で正規の {} v{} が見つかりました"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/package_meta_builder.py:568
-#, fuzzy
 msgid "      -> ⚠️  Strategy 5 failed: {}"
-msgstr ""
+msgstr "⚠️ 戦略 5 は失敗しました:{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/package_meta_builder.py:621
-#, fuzzy
 msgid "✅ Found DEEP NESTED {} v{} at {}"
-msgstr ""
+msgstr "✅ {} v{} の深いネストを {} で検出"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/package_meta_builder.py:650
-#, fuzzy
 msgid "   - STRATEGY: Constrained search. ONLY this path will be used: {}"
-msgstr ""
+msgstr "- 戦略: 制限された検索。このパスのみが使用されます: {}\", \"score\": 9.35}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/package_meta_builder.py:702
-#, fuzzy
 msgid "      ✅ Found via FAST-PATH 1 (bubble): {}"
-msgstr ""
+msgstr "✅ FAST-PATH 1 (バブル) で見つかりました: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/package_meta_builder.py:724
-#, fuzzy
 msgid "      ✅ Found via FAST-PATH 2 (site-packages): {}"
-msgstr ""
+msgstr "✅ FAST-PATH 2 (サイトパッケージ) で見つかりました: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/package_meta_builder.py:799
-#, fuzzy
 msgid "   -> Found {} unique instance(s) across {} target(s)."
-msgstr ""
+msgstr "-> {} ターゲット全体で {} の一意のインスタンスが見つかりました。"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/package_meta_builder.py:815
-#, fuzzy
 msgid "      -> Authoritative scan of: {}"
-msgstr ""
+msgstr "-> 権限のあるスキャン: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/package_meta_builder.py:829
-#, fuzzy
 msgid "   - ⚠️  Could not scan {}: {}"
-msgstr ""
+msgstr "- ⚠️ {} をスキャンできませんでした: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/package_meta_builder.py:833
-#, fuzzy
 msgid "   - Phase 2: Parsing {} metadata files in parallel..."
-msgstr ""
+msgstr "- フェーズ 2: {} メタデータ ファイルを並行して解析します..."
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/package_meta_builder.py:870
-#, fuzzy
 msgid "✅ Authoritative discovery complete. Found {} total package versions."
-msgstr ""
+msgstr "権威ある証拠開示が完了しました。見つかった{}パッケージの合計バージョン。"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/package_meta_builder.py:908
-#, fuzzy
 msgid "   ⚠️  Skipping '{}' - no version specified"
-msgstr ""
+msgstr "⚠ ️ '{}' をスキップ - バージョンが指定されていません"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/package_meta_builder.py:934
-#, fuzzy
 msgid "   🎯 Found expected bubble: {}"
-msgstr ""
+msgstr "🎯 予想されたバブルが見つかりました: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/package_meta_builder.py:955
-#, fuzzy
 msgid "   ✅ Found in main env: {}"
-msgstr ""
+msgstr "✅ メイン環境で見つかりました:{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/package_meta_builder.py:977
-#, fuzzy
 msgid "   ✅ Found nested: {}"
-msgstr ""
+msgstr "✅ ネストされたものが見つかりました: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/package_meta_builder.py:989
-#, fuzzy
 msgid "   ✅ Fast discovery complete: {}/{} packages found"
-msgstr ""
+msgstr "✅ 高速検出が完了しました:{}/{}パッケージが見つかりました"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/package_meta_builder.py:1110
-#, fuzzy
 msgid "    ⚠️  Safety tool outdated: v{} (latest: v{})"
-msgstr ""
+msgstr "⚠️ 安全ツールが古い: v{}(最新: v{})"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/package_meta_builder.py:1122
-#, fuzzy
 msgid "    Current: safety v{}"
-msgstr ""
+msgstr "現在: 安全 v{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/package_meta_builder.py:1123
-#, fuzzy
 msgid "    Latest:  safety v{}"
-msgstr ""
+msgstr "最新: セキュリティ v{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/package_meta_builder.py:1192
-#, fuzzy
 msgid " - No packages found to scan."
-msgstr ""
+msgstr "- スキャンするパッケージが見つかりません。"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/package_meta_builder.py:1222
-#, fuzzy
 msgid "   -> Found existing 'safety' tool bubble: v{}"
-msgstr ""
+msgstr "-> 既存の「セキュリティ」ツールバブルを見つけました: v{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/package_meta_builder.py:1248
-#, fuzzy
 msgid "📦 Upgrading safety tool: v{} → v{}"
-msgstr ""
+msgstr "📦 安全ツールのアップグレード: v{}→ v{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/package_meta_builder.py:1259
-#, fuzzy
 msgid "   -> Removing old tool bubble: {}"
-msgstr ""
+msgstr "-> 古いツールバブルの削除: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/package_meta_builder.py:1291
-#, fuzzy
 msgid "🌀 Force-activating '{}' context to run scan..."
-msgstr ""
+msgstr "🌀 '{}'コンテキスTSを強制的にアクティブ化してスキャンを実行..."
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/package_meta_builder.py:1328
-#, fuzzy
 msgid " ⚠️ Safety tool produced errors:"
-msgstr ""
+msgstr "⚠️ 安全ツールがエラーを発生させました："
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/package_meta_builder.py:1332
-#, fuzzy
 msgid "    → Trying pip-audit fallback..."
-msgstr ""
+msgstr "→ pip-audit フォールバックを試行しています..."
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/package_meta_builder.py:1340
-#, fuzzy
 msgid ""
 " ⚠️ An error occurred during isolated security scan. Trying pip-audit "
 "fallback: {}"
-msgstr ""
+msgstr "⚠ ️ 分離セキュリティ スキャン中にエラーが発生しました。pip-audit フォールバックを試しています:{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/package_meta_builder.py:1392
-#, fuzzy
 msgid "✅ Security scan complete (via pip audit). Found {} potential issues."
-msgstr ""
+msgstr "✅ セキュリティ スキャンが完了しました (pip 監査経由)。{} 個の潜在的な問題が見つかりました。"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/package_meta_builder.py:1402
-#, fuzzy
 msgid " ⚠️ An error occurred during the pip audit fallback scan: {}"
-msgstr ""
+msgstr "⚠ ️ pip 監査フォールバック スキャン中にエラーが発生しました:{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/package_meta_builder.py:1460
-#, fuzzy
 msgid "      -> Could not parse package name from: {}"
-msgstr ""
+msgstr "-> パッケージ名を解析できませんでした:{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/package_meta_builder.py:1482
-#, fuzzy
 msgid "      -> Injected 'Name: {}' into METADATA"
-msgstr ""
+msgstr "-> 'Name: {}'をMETADATAに注入しました."
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/package_meta_builder.py:1491
-#, fuzzy
 msgid "      -> Write failed: {}"
-msgstr ""
+msgstr "-> 書き込みに失敗しました:{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/package_meta_builder.py:1498
-#, fuzzy
 msgid "      -> Emergency healing failed: {}"
-msgstr ""
+msgstr "-> 緊急回復失敗: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/package_meta_builder.py:1566
-#, fuzzy
 msgid "   -> Found {} packages belonging to this context."
-msgstr ""
+msgstr "-> この文脈に属する {} パッケージを見つけました。"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/package_meta_builder.py:1570
-#, fuzzy
 msgid "✅ No packages found for the current context to process."
-msgstr ""
+msgstr "✅ 現在のコンテキストで処理するパッケージが見つかりません。"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/package_meta_builder.py:1582
-#, fuzzy
 msgid "🔧 Detected corrupt metadata at: {}"
-msgstr ""
+msgstr "🔧 次の場所で破損したメタデータが検出されました:{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/package_meta_builder.py:1598
-#, fuzzy
 msgid "   ⚠️  Could not reload after healing: {}"
-msgstr ""
+msgstr "⚠️ 回復後に再ロードできませんでした: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/package_meta_builder.py:1626
-#, fuzzy
 msgid "   🔄 Processing {} packages in parallel..."
-msgstr ""
+msgstr "🔄 {} パッケージを並列処理中..."
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/package_meta_builder.py:1650
 #: /home/minds3t/omnipkg/src/omnipkg/package_meta_builder.py:1752
-#, fuzzy
 msgid ""
 "\n"
 "❌ Error processing {}: {}"
-msgstr ""
+msgstr "❌ エラー処理{}:{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/package_meta_builder.py:1663
-#, fuzzy
 msgid "🎉 Metadata building complete! Updated {} package(s) for this context."
-msgstr ""
+msgstr "🎉 メタデータの構築が完了しました。更新されました{}このコンテキストのパッケージ。"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/package_meta_builder.py:1967
-#, fuzzy
 msgid ""
 "\n"
 "❌ Error storing {} in Redis: {}"
-msgstr ""
+msgstr "Redis に {} を保存中にエラーが発生しました: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
+# Lollama: Skipped (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/omnipkg/package_meta_builder.py:2023
 #, fuzzy
 msgid "results.append(('{}', False, 'Skipped: Not a valid identifier'))"
 msgstr ""
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
+# Lollama: Skipped (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/omnipkg/package_meta_builder.py:2033
 #, fuzzy
 msgid "    results.append(('{}', True, str(version)))"
 msgstr ""
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/package_meta_builder.py:2035
-#, fuzzy
 msgid "    results.append(('{}', False, traceback.format_exc()))"
-msgstr ""
+msgstr "results.append(('{}', False, traceback.format_exc()))"
 
 #: /home/minds3t/omnipkg/src/omnipkg/utils/ai_import_healer.py:233
 #: /home/minds3t/omnipkg/src/omnipkg/utils/ai_import_healer.py:238
 msgid "🔧 {}"
 msgstr "🔧 {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/utils/ai_import_healer.py:292
-#, fuzzy
 msgid "   ⚠️  Skipping (appears safe): {}"
-msgstr ""
+msgstr "⚠️ スキップ（安全と思われる）： {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/utils/ai_import_healer.py:298
-#, fuzzy
 msgid "   Removing [{}]: {}"
-msgstr ""
+msgstr "[{}]を削除中: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/utils/ai_import_healer.py:307
-#, fuzzy
 msgid "✅ Healed {} hallucinated import(s)"
-msgstr ""
+msgstr "治癒した {} 幻覚インポート"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/utils/ai_import_healer.py:324
-#, fuzzy
 msgid "📄 Scanning: {}"
-msgstr ""
+msgstr "📄 スキャン中: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/utils/ai_import_healer.py:333
-#, fuzzy
 msgid "💾 Backup saved: {}"
-msgstr ""
+msgstr "💾 バックアップが保存されました:{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/utils/ai_import_healer.py:337
-#, fuzzy
 msgid "💾 Saved healed code to: {}"
-msgstr ""
+msgstr "💾 修復されたコードを次の場所に保存しました:{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/utils/ai_import_healer.py:342
-#, fuzzy
 msgid "Healed {}: removed {} hallucination(s)"
-msgstr ""
+msgstr "治癒しました {}: {} 幻覚が除去されました"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/utils/ai_import_healer.py:357
-#, fuzzy
 msgid "Total hallucinations healed: {}\n"
-msgstr ""
+msgstr "治癒した幻覚の合計: {}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/utils/ai_import_healer.py:362
 msgid "  ❌ {}\n"
@@ -9888,264 +9737,244 @@ msgstr "  ❌ {}\n"
 msgid "  ✅ {}\n"
 msgstr "  ✅ {}\n"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
+# Lollama: Skipped (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/omnipkg/utils/flask_port_finder.py:201
 #, fuzzy
 msgid "Flask validation failed details: {}"
 msgstr ""
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/utils/flask_port_finder.py:207
-#, fuzzy
 msgid "Flask validation error: {}"
-msgstr ""
+msgstr "フラスコ検証エラー:{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
+# Lollama: Skipped (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/omnipkg/utils/flask_port_finder.py:232
 #: /home/minds3t/omnipkg/src/omnipkg/utils/flask_port_finder.py:438
 #, fuzzy
 msgid "🔍 Validating Flask app on port {}..."
 msgstr ""
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/utils/flask_port_finder.py:279
 #: /home/minds3t/omnipkg/src/omnipkg/utils/flask_port_finder.py:481
-#, fuzzy
 msgid "✅ Flask app started on port {} (PID: {})"
-msgstr ""
+msgstr "✅ Flask アプリがポート {} で開始されました (PID: {})"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/utils/flask_port_finder.py:280
 #: /home/minds3t/omnipkg/src/omnipkg/utils/flask_port_finder.py:482
-#, fuzzy
 msgid "🌐 Access at: http://127.0.0.1:{}"
-msgstr ""
+msgstr "🌐 アクセス: http://127.0.0.1:{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/utils/flask_port_finder.py:281
 #: /home/minds3t/omnipkg/src/omnipkg/utils/flask_port_finder.py:484
-#, fuzzy
 msgid "🛑 To stop: FlaskAppManager.shutdown() or delete {}"
-msgstr ""
+msgstr "🛑 停止するには: FlaskAppManager.shutdown() または削除 {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/utils/flask_port_finder.py:285
-#, fuzzy
 msgid "❌ Failed to start Flask app: {}"
-msgstr ""
+msgstr "❌ Flask アプリの起動に失敗しました:{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/utils/flask_port_finder.py:304
-#, fuzzy
 msgid "✅ Flask app (PID {}) shut down gracefully"
-msgstr ""
+msgstr "Flask アプリ (PID{}) が正常にシャットダウンされました"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
+# Lollama: Skipped (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/omnipkg/utils/flask_port_finder.py:311
 #, fuzzy
 msgid "⚠️  Flask app (PID {}) force killed"
 msgstr ""
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/utils/flask_port_finder.py:319
-#, fuzzy
 msgid "⚠️  Error during shutdown: {}"
-msgstr ""
+msgstr "⚠️ シャットダウン中にエラーが発生しました: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/utils/flask_port_finder.py:331
-#, fuzzy
 msgid "✅ Flask app is ready on port {}"
-msgstr ""
+msgstr "✅ Flask アプリはポート上で準備ができています{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/utils/flask_port_finder.py:337
-#, fuzzy
 msgid "⚠️  Flask app did not become ready within {}s"
-msgstr ""
+msgstr "⚠️ Flaskアプリは {} 秒以内に準備が整いませんでした"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
+# Lollama: Skipped (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/omnipkg/utils/flask_port_finder.py:364
 #, fuzzy
 msgid "app.run(port={}, debug=False, use_reloader=False)"
 msgstr ""
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
+# Lollama: Skipped (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/omnipkg/utils/flask_port_finder.py:384
 #, fuzzy
 msgid "🔧 Flask app running on port {}"
 msgstr ""
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/utils/flask_port_finder.py:388
-#, fuzzy
 msgid "🔧 Auto-patched Flask app to use port {}"
-msgstr ""
+msgstr "🔧 ポートを使用するように自動パッチされた Flask アプリ{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/utils/flask_port_finder.py:400
-#, fuzzy
 msgid "✅ Found and reserved free port: {}"
-msgstr ""
+msgstr "✅ 見つかって予約された空きポート:{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
+# Lollama: Skipped (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/omnipkg/utils/flask_port_finder.py:416
 #, fuzzy
 msgid "✅ All {} ports unique: {}"
 msgstr ""
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/utils/flask_port_finder.py:421
-#, fuzzy
 msgid "✅ Port {} found, demonstrating platform-agnostic socket operations."
-msgstr ""
+msgstr "✅ ポート {} が見つかり、プラッフォームに依存しないソケット操作が示されました。"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/utils/flask_port_finder.py:458
-#, fuzzy
 msgid "✅ Code patched successfully to use port {}."
-msgstr ""
+msgstr "✅ ポート {} を使用するようにコードが正常にパッチされました."
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/tests/quantum_chaos.py:24
 #: /home/minds3t/omnipkg/src/tests/quantum_chaos.py:51
-#, fuzzy
 msgid "   TensorFlow version: {}"
-msgstr ""
+msgstr "TensorFlow バージョン:{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/tests/quantum_chaos.py:25
 #: /home/minds3t/omnipkg/src/tests/quantum_chaos.py:52
 #: /home/minds3t/omnipkg/src/tests/quantum_chaos.py:87
 #: /home/minds3t/omnipkg/src/tests/quantum_chaos.py:112
-#, fuzzy
 msgid "   NumPy version: {}"
-msgstr ""
+msgstr "NumPy バージョン:{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/tests/quantum_chaos.py:26
 #: /home/minds3t/omnipkg/src/tests/quantum_chaos.py:53
-#, fuzzy
 msgid "Wrong TF version: {}"
-msgstr ""
+msgstr "間違った TF バージョン:{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/tests/quantum_chaos.py:27
 #: /home/minds3t/omnipkg/src/tests/quantum_chaos.py:54
-#, fuzzy
 msgid "Wrong numpy version: {}"
-msgstr ""
+msgstr "誤ったnumpyバージョon {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/tests/quantum_chaos.py:86
 #: /home/minds3t/omnipkg/src/tests/quantum_chaos.py:111
-#, fuzzy
 msgid "   SciPy version: {}"
-msgstr ""
+msgstr "SciPy バージョン: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/tests/quantum_chaos.py:89
 #: /home/minds3t/omnipkg/src/tests/quantum_chaos.py:120
-#, fuzzy
 msgid "Wrong scipy: {}"
-msgstr ""
+msgstr "間違った scipy: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
+# Lollama: Skipped (Validation Failed: proper_noun_mismatch_NumPy)
 #: /home/minds3t/omnipkg/src/tests/quantum_chaos.py:90
 #: /home/minds3t/omnipkg/src/tests/quantum_chaos.py:121
 #, fuzzy
 msgid "Wrong numpy: {}"
 msgstr ""
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
+# Lollama: Skipped (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/tests/quantum_chaos.py:99
 #, fuzzy
 msgid "   ✅ Sparse sum={}, det={}"
 msgstr ""
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
+# Lollama: Skipped (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/tests/quantum_chaos.py:100
 #, fuzzy
 msgid "✅ SciPy 1.12 + numpy 1.26: sparse_sum={}, det={}"
 msgstr ""
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/tests/quantum_chaos.py:139
 #: /home/minds3t/omnipkg/src/tests/quantum_chaos.py:157
-#, fuzzy
 msgid "   Rich version: {}"
-msgstr ""
+msgstr "豊かなバージョン: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/tests/quantum_chaos.py:140
 #: /home/minds3t/omnipkg/src/tests/quantum_chaos.py:158
-#, fuzzy
 msgid "Wrong Rich: {}"
-msgstr ""
+msgstr "間違った金持ち: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/tests/quantum_chaos.py:223
-#, fuzzy
 msgid "   SciPy 1.12 results: {}"
-msgstr ""
+msgstr "SciPy 1.12 results: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/tests/quantum_chaos.py:225
-#, fuzzy
 msgid "   SciPy results: {}, {}"
-msgstr ""
+msgstr "SciPy の結果: {}, {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/tests/test_cli_healing.py:90
 #: /home/minds3t/omnipkg/src/tests/test_cli_healing.py:111
-#, fuzzy
 msgid "Command failed with exit code {}"
-msgstr ""
+msgstr "コマンドが終了コードで失敗しました{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/tests/test_cli_healing.py:136
-#, fuzzy
 msgid ""
 "\n"
 "🧪 Testing: http --version (raw shell command)"
-msgstr ""
+msgstr "テスト: http --version (raw shell コマンド)"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/tests/test_cli_healing.py:137
-#, fuzzy
 msgid "   Showing FULL error output for transparency..."
-msgstr ""
+msgstr "透明性を確保するため、エラー出力を完全表示..."
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/tests/test_cli_healing.py:155
 #: /home/minds3t/omnipkg/src/tests/test_cli_healing.py:196
-#, fuzzy
 msgid ""
 "\n"
 "❌ Exit code: {}"
-msgstr ""
+msgstr "❌ 終了コード: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/tests/test_cli_healing.py:156
-#, fuzzy
 msgid "💥 As expected, http command is BROKEN!"
-msgstr ""
+msgstr "💥 予想どおり、http コマンドは壊れています。"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/tests/test_cli_healing.py:157
-#, fuzzy
 msgid "   ImportError: cannot import SKIP_HEADER from urllib3.util"
-msgstr ""
+msgstr "ImportError: urllib3.util から SKIP_HEADER をインポートできません"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/tests/test_cli_healing.py:160
-#, fuzzy
 msgid ""
 "\n"
 "✅ Exit code: 0"
-msgstr ""
+msgstr "✅ 出口コード: 0"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
+# Lollama: Skipped (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/tests/test_cli_healing.py:166
 #, fuzzy
 msgid ""
@@ -10153,132 +9982,117 @@ msgid ""
 "🧪 Testing: 8pkg run http --version"
 msgstr ""
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/tests/test_cli_healing.py:167
-#, fuzzy
 msgid "   Showing FULL output - error detection, healing, stats..."
-msgstr ""
+msgstr "FULL output を表示する - エラー検出,ヒーリング,統計..."
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/tests/test_cli_healing.py:186
-#, fuzzy
 msgid ""
 "\n"
 "✅ 8pkg run succeeded! Exit code: 0"
-msgstr ""
+msgstr "✅ 8pkg の実行に成功しました！終了コード: 0"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/tests/test_cli_healing.py:187
-#, fuzzy
 msgid "🎯 Key observations:"
-msgstr ""
+msgstr "🎯 主な所見:"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/tests/test_cli_healing.py:188
-#, fuzzy
 msgid "   • Detected the error from broken urllib3"
-msgstr ""
+msgstr "• 壊れた urllib3 からエラーが検出されました"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/tests/test_cli_healing.py:189
-#, fuzzy
 msgid "   • Auto-healed by loading urllib3 from bubble"
-msgstr ""
+msgstr "• バブルから urllib3 をロードすることで自動修復されます。"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/tests/test_cli_healing.py:190
-#, fuzzy
 msgid "   • Command executed successfully with healed environment"
-msgstr ""
+msgstr "• 修復された環境でコマンドが正常に実行されました。"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/tests/test_cli_healing.py:192
-#, fuzzy
 msgid ""
 "   • Main environment UNCHANGED - bubbles used as first-class citizens!"
-msgstr ""
+msgstr "• メイン環境は変更なし - バブルを第一級市民として扱います！"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/tests/test_cli_healing.py:214
-#, fuzzy
 msgid "This demo shows automatic dependency healing for CLI tools."
-msgstr ""
+msgstr "このデモでは、CLI ツールの依存関係の自動修復を示します。"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/tests/test_cli_healing.py:221
-#, fuzzy
 msgid ""
 "\n"
 "💡 Key insight: 8pkg run makes bubbled versions work as first-class"
-msgstr ""
+msgstr "💡 重要な洞察: 8pkg の実行により、バブルバージョンがファーストクラスとして機能する"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/tests/test_cli_healing.py:223
-#, fuzzy
 msgid "   citizens WITHOUT modifying main env. This is the future! 🚀"
 msgstr ""
+"市民のメイン環境を修正することなく,これが未来です!\n"
+" 🚀"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/tests/test_cli_healing.py:233
-#, fuzzy
 msgid "   This will be restored after the demo"
-msgstr ""
+msgstr "これはデモ後に復元されます"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/tests/test_cli_healing.py:249
-#, fuzzy
 msgid "📦 Making sure httpie (http command) is available..."
-msgstr ""
+msgstr "📦 httpie (http コマンド) が使用可能であることを確認しています..."
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/tests/test_cli_healing.py:259
-#, fuzzy
 msgid "   This will force the BROKEN version into main environment"
-msgstr ""
+msgstr "これにより、BROKEN バージョンがメイン環境に強制的に導入されます。"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/tests/test_cli_healing.py:260
-#, fuzzy
 msgid "   Breaking the http command in the process!"
-msgstr ""
+msgstr "プロセス内で http コマンドを中断しています。"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/tests/test_cli_healing.py:272
-#, fuzzy
 msgid "✅ Successfully broke the environment!"
-msgstr ""
+msgstr "✅ 環境破壊に成功しました！"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
+# Lollama: Skipped (Validation Failed: emoji_mismatch)
 #: /home/minds3t/omnipkg/src/tests/test_cli_healing.py:274
 #, fuzzy
 msgid "   💀 httpie will now fail with ImportError"
 msgstr ""
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/tests/test_cli_healing.py:278
-#, fuzzy
 msgid "🔥 Watch the RAW error from the broken http command..."
-msgstr ""
+msgstr "🔥 壊れた http コマンドから RAW エラーを見てください..."
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/tests/test_cli_healing.py:285
-#, fuzzy
 msgid "🚀 Now let's see the FULL 8pkg run healing process..."
-msgstr ""
+msgstr "🚀 次に、完全な 8pkg 実行修復プロセスを見てみましょう..."
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/tests/test_cli_healing.py:287
-#, fuzzy
 msgid "   Watch it detect the error, heal it, and show performance stats!"
-msgstr ""
+msgstr "誤りを検出し,修復し,パフォーマンス統計を表示する!"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/tests/test_cli_healing.py:295
-#, fuzzy
 msgid "🔍 Let's see what versions omnipkg is managing..."
-msgstr ""
+msgstr "🔍 omnipkg が管理しているバージョンを見てみましょう..."
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
+# Lollama: Skipped (Validation Failed: identical_to_original)
 #: /home/minds3t/omnipkg/src/tests/test_cli_healing.py:299
 #, fuzzy
 msgid ""
@@ -10286,31 +10100,28 @@ msgid ""
 "$ 8pkg info urllib3"
 msgstr ""
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/tests/test_cli_healing.py:300
-#, fuzzy
 msgid "   (Automatically pressing Enter to skip interactive prompt)"
-msgstr ""
+msgstr "Selezionato testo"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/tests/test_cli_healing.py:323
-#, fuzzy
 msgid "   Using latest-active to force the original version back..."
-msgstr ""
+msgstr "最新アクティブを使用して,元のバージョンを強制的に戻す..."
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/tests/test_cli_healing.py:324
-#, fuzzy
 msgid "   (This is ONLY for the demo - normally you keep bubbles!)"
-msgstr ""
+msgstr "(これはデモのみです.通常は泡を保持します!)"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/tests/test_cli_healing.py:345
-#, fuzzy
 msgid "🧪 Confirming http works with the restored version..."
-msgstr ""
+msgstr "http が復元されたバージョンで動作することを確認しています..."
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
+# Lollama: Skipped (Validation Failed: identical_to_original)
 #: /home/minds3t/omnipkg/src/tests/test_cli_healing.py:352
 #, fuzzy
 msgid ""
@@ -10318,53 +10129,51 @@ msgid ""
 "$ http --version"
 msgstr ""
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/tests/test_cli_healing.py:354
-#, fuzzy
 msgid ""
 "\n"
 "✅ http command works with your original urllib3 version!"
-msgstr ""
+msgstr "Selezionato testo"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/tests/test_cli_healing.py:355
-#, fuzzy
 msgid "   Environment fully restored to original state."
-msgstr ""
+msgstr "Identified translation with the highest score:"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/tests/test_cli_healing.py:357
-#, fuzzy
 msgid ""
 "\n"
 "⚠️  http command still having issues"
-msgstr ""
+msgstr "Identified translation with the highest score:"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
+# Lollama: Skipped (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/tests/test_cli_healing.py:363
 #, fuzzy
 msgid "🎉🎉🎉 AUTO-HEALING DEMO COMPLETE! 🎉🎉🎉"
 msgstr ""
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
+# Lollama: Skipped (Validation Failed: emoji_mismatch)
 #: /home/minds3t/omnipkg/src/tests/test_cli_healing.py:365
 #, fuzzy
 msgid "📚 What you witnessed:"
 msgstr ""
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/tests/test_cli_healing.py:370
-#, fuzzy
 msgid "   ❌ Step 4: http command failed - RAW ImportError shown"
-msgstr ""
+msgstr "Selezionato testo"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/tests/test_cli_healing.py:372
-#, fuzzy
 msgid "   🦸‍♂️ Step 5: 8pkg run detected, healed, and executed successfully"
-msgstr ""
+msgstr "Selected text"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
+# Lollama: Skipped (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/tests/test_cli_healing.py:382
 #, fuzzy
 msgid ""
@@ -10372,7 +10181,8 @@ msgid ""
 "💡 THE KEY INSIGHT:"
 msgstr ""
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
+# Lollama: Skipped (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/tests/test_cli_healing.py:383
 #, fuzzy
 msgid "   8pkg run doesn't \"fix\" your main environment!"

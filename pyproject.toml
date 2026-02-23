@@ -43,9 +43,9 @@ dependencies = [
     "typer>=0.4.0",
     "rich>=10.0.0",
 
-    # Filelock: LTS backport for <3.10, official for >=3.10 (CVE-2025-68146)
-    "filelock-lts>=2025.68146; python_version < '3.10'",
-    "filelock>=3.20.1; python_version >= '3.10'",
+    # Filelock: LTS backport for <3.10, official for >=3.10
+    "filelock-lts>=2025.68146.2; python_version < '3.10'",
+    "filelock>=3.16.1; python_version >= '3.10'",
     
     # Packaging version splits - CRITICAL: pip-audit needs >=21.0 on ALL versions
     "packaging>=21.0,<22.0; python_version < '3.10'",
@@ -85,7 +85,8 @@ dependencies = [
     "uv>=0.9.6; python_version >= '3.8'",
 
     # CVE-safe urllib3
-    "urllib3-lts>=2025.66471.3",
+    "urllib3-lts>=2026.21441; python_version < '3.10'",
+    "urllib3>=2.6.3; python_version >= '3.10'",
 
     # flask for interactive docs
     "flask>=2.0,<3.0; python_version < '3.8'",

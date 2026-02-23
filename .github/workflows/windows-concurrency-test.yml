@@ -27,7 +27,7 @@ jobs:
         shell: cmd
         run: |
           echo Workflow ref: ${{ github.ref }}
-          echo Code branch:  ${{ github.event.inputs.code_branch || github.ref }}
+          echo Code branch: ${{ github.event.inputs.code_branch || github.ref }}
 
       - name: Set up Python (3.11)
         uses: actions/setup-python@v5
@@ -37,10 +37,10 @@ jobs:
       - name: Configure UTF-8 encoding and unbuffered output
         shell: pwsh
         run: |
-          echo "PYTHONIOENCODING=utf-8"    >> $env:GITHUB_ENV
-          echo "PYTHONUTF8=1"              >> $env:GITHUB_ENV
-          echo "PYTHONUNBUFFERED=1"        >> $env:GITHUB_ENV
-          echo "OMNIPKG_DEBUG=1"           >> $env:GITHUB_ENV
+          echo "PYTHONIOENCODING=utf-8" >> $env:GITHUB_ENV
+          echo "PYTHONUTF8=1" >> $env:GITHUB_ENV
+          echo "PYTHONUNBUFFERED=1" >> $env:GITHUB_ENV
+          echo "OMNIPKG_DEBUG=1" >> $env:GITHUB_ENV
           echo "PYTHONDONTWRITEBYTECODE=1" >> $env:GITHUB_ENV
 
       - name: Install omnipkg

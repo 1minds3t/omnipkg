@@ -237,7 +237,7 @@ class omnipkgLoader:
 
     def __init__(
         self,
-        package_spec: str = None,
+        package_spec: Union[str, list, tuple, dict] = None,
         config: dict = None,
         quiet: bool = False,
         force_activation: bool = False,
@@ -294,7 +294,21 @@ class omnipkgLoader:
             )
         self._initialize_version_aware_paths()
         self._store_clean_original_state()
-        self._current_package_spec = package_spec
+        # NEW
+        # Normalize all input formats to an internal list
+        if isinstance(package_spec, dict):
+            self._package_specs = [f"{k}=={v}" for k, v in package_spec.items()]
+        elif isinstance(package_spec, (list, tuple)):
+            self._package_specs = [p.strip() for p in package_spec]
+        elif isinstance(package_spec, str) and ',' in package_spec:
+            self._package_specs = [p.strip() for p in package_spec.split(',')]
+        elif package_spec is not None:
+            self._package_specs = [package_spec]
+        else:
+            self._package_specs = []
+
+        # Keep _current_package_spec pointing to first for all existing single-pkg logic
+        self._current_package_spec = self._package_specs[0] if self._package_specs else None
         self._activated_bubble_path = None
         self._cloaked_main_modules = []
         self._cloaked_bubbles = []  # To track bubbles we cloak when activating main env
@@ -326,7 +340,9 @@ class omnipkgLoader:
         self._total_activation_time_ns = None
         self._total_deactivation_time_ns = None
         self._omnipkg_dependencies = self._get_omnipkg_dependencies()
+        # NEW
         self._activated_bubble_dependencies = []  # To track everything we need to exorcise
+        self._active_sub_loaders = []  # Sub-loaders for multi-package mode
 
         if omnipkgLoader._locks_dir is None:
             omnipkgLoader._locks_dir = self.multiversion_base / ".locks"
@@ -1438,9 +1454,32 @@ class omnipkgLoader:
         # STRATEGY 2: importlib.metadata (Strictly scoped to main site-packages)
         # ═══════════════════════════════════════════════════════════
         try:
-            # FIX: Only pass the main site-packages path
-            for dist in importlib.metadata.distributions(path=[str(site_packages)]):
-                if canonicalize_name(dist.name) == canonical_target:
+            # FIX: Use the correct API for Python 3.8+
+            from importlib.metadata import distributions, Distribution
+            
+            for dist in distributions(path=[str(site_packages)]):
+                # Get the package name using the proper metadata API
+                try:
+                    # This is the standard way that works across versions
+                    dist_name = dist.metadata['Name']
+                except (AttributeError, KeyError):
+                    # Fallback for older versions
+                    try:
+                        dist_name = dist.name
+                    except AttributeError:
+                        # Last resort: parse from the distribution path
+                        import os
+                        dist_path = getattr(dist, '_path', None) or getattr(dist, 'locate_file', lambda: '')('')
+                        if dist_path:
+                            dist_info_dir = os.path.basename(str(dist_path))
+                            if dist_info_dir.endswith('.dist-info'):
+                                dist_name = dist_info_dir.split('-')[0]
+                            else:
+                                continue
+                        else:
+                            continue
+                
+                if canonicalize_name(dist_name) == canonical_target:
                     if dist.version == requested_version:
                         if not self.quiet:
                             safe_print(
@@ -1769,7 +1808,37 @@ class omnipkgLoader:
             return self._check_version_via_importlib(pkg_name, requested_version)
 
     def __enter__(self):
-        """Enhanced activation with detailed profiling."""
+        """Activation entry point - dispatches to multi or single package logic."""
+        if len(self._package_specs) > 1:
+            return self._enter_multi()
+        return self._enter_single()
+
+    def _enter_multi(self):
+        """Activate multiple packages sequentially, sharing all constructor settings."""
+        if not self.quiet:
+            safe_print(f"📦 Multi-package activation: {len(self._package_specs)} packages")
+
+        for i, spec in enumerate(self._package_specs, 1):
+            if not self.quiet:
+                safe_print(f"   [{i}/{len(self._package_specs)}] Activating {spec}...")
+
+            loader = omnipkgLoader(
+                spec,
+                config=self.config,
+                quiet=self.quiet,
+                force_activation=self.force_activation,
+                isolation_mode=self.isolation_mode,
+                cache_client=self.cache_client,
+                redis_key_prefix=self.redis_key_prefix,
+            )
+            loader.__enter__()
+            self._active_sub_loaders.append(loader)
+
+        self._activation_successful = True
+        return self
+
+    def _enter_single(self):
+        """Original single-package activation logic (formerly __enter__)."""
         self._profile_start("TOTAL_ACTIVATION")
         self._activation_start_time = time.perf_counter_ns()
 
@@ -1987,22 +2056,30 @@ class omnipkgLoader:
 
         # Profile: Find bubble
         self._profile_start("find_bubble")
-        bubble_path = self.multiversion_base / f"{pkg_name}-{requested_version}"
 
-        # Check for cloaked bubbles
+        # Normalize version FIRST (add this line)
+        from packaging.version import Version
+        canonical_version = str(Version(requested_version))  # 0.15 -> 0.15.0
+        # Use canonical version for the path
+        bubble_path = self.multiversion_base / f"{pkg_name}-{canonical_version}"
+
+        # Check for cloaked bubbles (use both forms for backward compatibility)
         if not bubble_path.exists():
-            cloaked_bubbles = list(
-                self.multiversion_base.glob(f"{pkg_name}-{requested_version}.*_omnipkg_cloaked")
-            )
-            if cloaked_bubbles:
-                target = sorted(cloaked_bubbles, key=lambda p: str(p), reverse=True)[0]
-                if not self.quiet:
-                    safe_print(_('   🔓 Found CLOAKED bubble {}, restoring...').format(target.name))
-                try:
-                    shutil.move(str(target), str(bubble_path))
-                except Exception as e:
+            # Try both the requested and canonical versions for cloaked bubbles
+            for version_form in [requested_version, canonical_version]:
+                cloaked_bubbles = list(
+                    self.multiversion_base.glob(f"{pkg_name}-{version_form}.*_omnipkg_cloaked")
+                )
+                if cloaked_bubbles:
+                    target = sorted(cloaked_bubbles, key=lambda p: str(p), reverse=True)[0]
                     if not self.quiet:
-                        safe_print(_('      ⚠️ Failed to restore cloaked bubble: {}').format(e))
+                        safe_print(_('   🔓 Found CLOAKED bubble {}, restoring...').format(target.name))
+                    try:
+                        shutil.move(str(target), str(bubble_path))
+                    except Exception as e:
+                        if not self.quiet:
+                            safe_print(_('      ⚠️ Failed to restore cloaked bubble: {}').format(e))
+                    break
 
         self._profile_end("find_bubble", print_now=self._profiling_enabled)
 
@@ -2674,6 +2751,19 @@ class omnipkgLoader:
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         """Enhanced deactivation with COMPLETE profiling visibility."""
+        if self._active_sub_loaders:
+            # Multi-package mode: exit sub-loaders in reverse order (LIFO)
+            # Let each sub-loader handle its own nesting depth correctly
+            exc_info = (exc_type, exc_val, exc_tb)
+            for loader in reversed(self._active_sub_loaders):
+                try:
+                    loader.__exit__(*exc_info)
+                except Exception as e:
+                    if not self.quiet:
+                        safe_print(f"   ⚠️ Cleanup error ({loader._current_package_spec}): {e}")
+            self._active_sub_loaders.clear()
+            return False  # Never suppress exceptions
+
         self._profile_start("TOTAL_DEACTIVATION")
 
         # Nesting management
@@ -4195,6 +4285,10 @@ class WorkerDelegationMixin:
             return None
 
     def __enter__(self):
+        # Multi-package: delegate to base which handles _enter_multi / _enter_single
+        if hasattr(self, '_package_specs') and len(self._package_specs) > 1:
+            return super().__enter__()
+
         self._activation_start_time = time.perf_counter_ns()
         if not self._current_package_spec:
             raise ValueError("Package spec required")
@@ -4320,6 +4414,11 @@ class WorkerDelegationMixin:
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         """Enhanced deactivation with worker cleanup."""
+        # Multi-package: each sub-loader handles its own worker cleanup
+        if self._active_sub_loaders:
+            super().__exit__(exc_type, exc_val, exc_tb)
+            return
+
         if self._worker_mode and self._active_worker:
             if not self.quiet:
                 safe_print(f"   🛑 Shutting down worker for {self._current_package_spec}...")
