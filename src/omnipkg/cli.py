@@ -1361,6 +1361,7 @@ def main():
                 return 0
 
             elif args.config_command == "set":
+                from omnipkg.i18n import normalize_language_code  # Add this line!
                 if args.key == "language":
                     normalized = normalize_language_code(args.value.strip())
                     if normalized is None:
