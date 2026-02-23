@@ -202,12 +202,15 @@ def analyze_runtime_failure_and_heal(
     retry_count=0,
     attempted_fixes=None,
     initial_failure_duration_ns=0,
+    python_executable: str = None,
 ):
     """
     Analyzes runtime failures and attempts to heal them automatically.
     Tracks attempted fixes to prevent infinite loops.
     PRESERVES ALL ORIGINAL ROBUST LOGIC + adds JAX/bubble detection.
     """
+    print(f"[DEBUG-HEAL] called, retry={retry_count}, stderr[:200]={stderr[:200]!r}", file=sys.stderr)
+
     # Initialize tracking
     if attempted_fixes is None:
         attempted_fixes = set()
@@ -226,17 +229,6 @@ def analyze_runtime_failure_and_heal(
     if not omnipkg_instance:
         omnipkg_instance = OmnipkgCore(config_manager)
 
-    if cli_owner_spec:
-        command = cmd_args[0] if cmd_args else None
-        if command and final_specs:
-            safe_print(_('♻️  Loading: {}').format(final_specs))
-            return run_cli_with_healing_wrapper(
-                final_specs,
-                command,
-                cmd_args[1:],
-                config_manager,
-                initial_failure_duration_ns=initial_failure_duration_ns,
-            )
 
     # ============================================================================
     # NEW PRIORITY LISTENERS - Check omnipkg-specific issues first
@@ -574,6 +566,8 @@ def analyze_runtime_failure_and_heal(
                         omnipkg_instance=omnipkg_instance,
                         attempted_fixes=attempted_fixes,
                         error_context=stderr,  # <--- PASS STDERR HERE
+                        cli_owner_spec=cli_owner_spec,
+                        python_executable=python_executable,
                     )
 
             # -------------------------------
@@ -587,6 +581,8 @@ def analyze_runtime_failure_and_heal(
                 is_context_aware_run,
                 omnipkg_instance=omnipkg_instance,
                 attempted_fixes=attempted_fixes,
+                cli_owner_spec=cli_owner_spec,
+                python_executable=python_executable,
             )
 
     # Pattern 5: Handle missing required packages
@@ -602,6 +598,16 @@ def analyze_runtime_failure_and_heal(
         ),
         (r"requires (\w+) to be installed", 1, "Dependency requirement"),
     ]
+
+    # Known version constraints: when a package causes an ImportError due to a
+    # breaking API change in a newer version, pin to the last known-good version.
+    # Format: pkg_name -> constraint string (appended to pkg_name)
+    KNOWN_VERSION_CONSTRAINTS = {
+        # h11 0.15+ removed Headers from h11._headers, breaking wsproto/hypercorn
+        "h11": "==0.15.0",
+        # Add more as discovered:
+        # "somelib": "<X.Y",
+    }
 
     for regex, pkg_group, description in missing_package_patterns:
         match = re.search(regex, stderr)
@@ -623,7 +629,11 @@ def analyze_runtime_failure_and_heal(
                 "PIL": "Pillow",
             }
             pkg_name = package_map.get(pkg_name, pkg_name)
-            failed_spec = pkg_name
+
+            # Apply known version constraints to avoid installing broken versions
+            constraint = KNOWN_VERSION_CONSTRAINTS.get(pkg_name, "")
+            failed_spec = f"{pkg_name}{constraint}" if constraint else pkg_name
+
             safe_print(f"\n🔍 {description} detected. Auto-healing with omnipkg bubbles...")
             safe_print(_("   - Installing missing package: {}").format(failed_spec))
             healing_plan.add(failed_spec)
@@ -758,9 +768,27 @@ def analyze_runtime_failure_and_heal(
             command = cmd_args[0] if cmd_args else None
             if command and final_specs:
                 safe_print(_('♻️  Loading: {}').format(final_specs))
-                return run_cli_with_healing_wrapper(
-                    final_specs, command, cmd_args[1:], config_manager
+                exit_code, heal_stats, wrapper_output = run_cli_with_healing_wrapper(
+                    final_specs, command, cmd_args[1:], config_manager,
+                    python_executable=python_executable,
                 )
+                if exit_code != 0 and wrapper_output and wrapper_output.strip():
+                    safe_print(_("⚠️  Healed run still failed — continuing healing loop..."))
+                    return analyze_runtime_failure_and_heal(
+                        wrapper_output,
+                        cmd_args,
+                        original_script_path_for_analysis,
+                        config_manager,
+                        is_context_aware_run=is_context_aware_run,
+                        cli_owner_spec=cli_owner_spec,
+                        omnipkg_instance=omnipkg_instance,
+                        verbose=verbose,
+                        retry_count=retry_count + 1,
+                        attempted_fixes=attempted_fixes,
+                        initial_failure_duration_ns=initial_failure_duration_ns,
+                        python_executable=python_executable,
+                    )
+                return exit_code, heal_stats
 
         # If it's a script run
         if final_specs:
@@ -986,6 +1014,9 @@ def convert_module_to_package_name(module_name: str, error_message: str = None) 
         "yaml": "pyyaml",
         "cv2": "opencv-python",
         "PIL": "pillow",
+        "brotli": "brotlicffi",
+        "OpenSSL": "pyOpenSSL",
+        "socks": "PySocks",
         "sklearn": "scikit-learn",
         "bs4": "beautifulsoup4",
         "requests_oauthlib": "requests-oauthlib",
@@ -1448,6 +1479,8 @@ def heal_with_missing_package(
     omnipkg_instance=None,
     attempted_fixes=None,
     error_context=None,
+    cli_owner_spec: str = None,   # <-- add this
+    python_executable: str = None,
 ):
     """Installs/upgrades a package. Escalates to force_reinstall if needed, then aborts to prevent loops."""
 
@@ -1520,9 +1553,36 @@ def heal_with_missing_package(
         return 1, None
 
     safe_print(_("\n✅ Package operation successful for: {}").format(pkg_name))
-    safe_print(_("🚀 Re-running script..."))
+    safe_print(_("🚀 Re-running..."))
 
-    # Pass the history (attempted_fixes) to the next run so it remembers!
+    if cli_owner_spec:
+        # Re-run as CLI inside a bubble, preserving the original python interpreter.
+        command = temp_script_path.name if isinstance(temp_script_path, Path) else str(temp_script_path)
+        exit_code, heal_stats, wrapper_output = run_cli_with_healing_wrapper(
+            [cli_owner_spec],
+            command,
+            list(temp_script_args),
+            config_manager,
+            python_executable=python_executable,
+        )
+
+        if exit_code != 0 and wrapper_output and wrapper_output.strip():
+            safe_print(_("⚠️  Healed run still failed — continuing healing loop..."))
+            return analyze_runtime_failure_and_heal(
+                wrapper_output,
+                [command] + list(temp_script_args),
+                original_script_path_for_analysis,
+                config_manager,
+                is_context_aware_run=is_context_aware_run,
+                cli_owner_spec=cli_owner_spec,
+                omnipkg_instance=omnipkg_instance,
+                verbose=False,
+                attempted_fixes=attempted_fixes,
+                python_executable=python_executable,
+            )
+
+        return exit_code, heal_stats
+
     return _run_script_with_healing(
         temp_script_path,
         temp_script_args,
@@ -1914,96 +1974,100 @@ def _auto_inject_stdlibs(code: str) -> str:
     return code
 
 
+_initial_run_time_ns = None
+
+
 def _handle_cli_execution(command, args, config_manager, omnipkg_core):
     """Enhanced CLI execution with unified healing analysis and performance stats."""
+
+    # Normalise: command may be a full path (/path/to/bin/pytest) or a bare
+    # name (pytest). Keep both — use the path for execution, the name for
+    # KB lookups and error messages so the healer can find the owning package.
+    command_path = Path(command)
+    command_name = command_path.name  # bare name, e.g. "pytest"
+    executable   = command if command_path.exists() else shutil.which(command_name)
 
     # 1. Try to run the command
     error_output = ""
     start_time_ns = time.perf_counter_ns()
 
-    if shutil.which(command):
+    if executable:
         try:
             result = subprocess.run(
-                [command] + args,
+                [executable] + args,          # ← was [command]
                 capture_output=True,
                 text=True,
                 encoding="utf-8",
                 errors="replace",
             )
 
-            # If success, just print output and exit
             if result.returncode == 0:
                 print(result.stdout, end="")
                 return 0
 
-            # If failed, capture output for analysis
             print(result.stdout, end="")
             print(result.stderr, end="", file=sys.stderr)
-            error_output = result.stderr + "\n" + result.stdout
+            error_output = ((result.stderr or "") + "\n" + (result.stdout or "")).strip()
             safe_print(
-                _("\n⚠️  Command '{}' failed (exit code {}). Starting Auto-Healer...").format(command, result.returncode)
+                _("\n⚠️  Command '{}' failed (exit code {}). Starting Auto-Healer...").format(command_name, result.returncode)
             )
 
         except Exception as e:
             safe_print(_('\n⚠️  Execution failed: {}').format(e))
             return 1
     else:
-        # Command not found in PATH
-        safe_print(_("🔍 Command '{}' not found in PATH. Checking Knowledge Base...").format(command))
+        safe_print(_("🔍 Command '{}' not found in PATH. Checking Knowledge Base...").format(command_name))
 
-    # Stop the timer for the failed run
     end_time_ns = time.perf_counter_ns()
     initial_failure_duration_ns = end_time_ns - start_time_ns
 
-    # 2. Identify owner package
-    owning_package = omnipkg_core.get_package_for_command(command)
+    ## 2. Identify owner package — use bare name, not full path
+    owning_package = omnipkg_core.get_package_for_command(command_name)
     if not owning_package:
-        safe_print(_("❌ Unknown command '{}'.").format(command))
-        return 1
-
-    # 3. Build initial healing plan with owner package
-    active_version = omnipkg_core.get_active_version(owning_package)
-    owner_spec = f"{owning_package}=={active_version}" if active_version else owning_package
-
-    # 4. Analyze error, heal, and re-run
-    if error_output:
-        safe_print("🔍 Analyzing error output to build comprehensive healing plan...")
-
-        # ✅ Pass empty set for initial CLI run and omnipkg_core instance
-        exit_code, heal_stats = analyze_runtime_failure_and_heal(
-            error_output,
-            [command] + args,
-            Path.cwd(),
-            config_manager,
-            is_context_aware_run=False,
-            cli_owner_spec=owner_spec,
-            omnipkg_instance=omnipkg_core,  # ✅ Pass the omnipkg instance
-            verbose=False,
-            attempted_fixes=set(),  # ✅ Initialize with empty set
-            initial_failure_duration_ns=initial_failure_duration_ns,
-        )
-
-        # ✅ FIX: If healing failed, show the user the error output
-        if exit_code != 0:
-            safe_print(f"\n❌ Auto-healing failed for command '{command}'.")
-            safe_print("\n📄 ERROR OUTPUT:")
-            print(error_output)
-        else:
-            # Print performance stats if healing succeeded
-            if heal_stats:
-                # DETECT SHELL HERE
-                shell_name = _detect_shell_name()
-                _print_performance_comparison(
-                    initial_failure_duration_ns, heal_stats, runner_name=shell_name
-                )
-
-        return exit_code
+        if not error_output:
+            safe_print(_("❌ Unknown command '{}'.").format(command_name))
+            return 1
+        # Don't bail — we have error output to analyze even without a known owner
+        safe_print(_("⚠️  Command '{}' not in KB, but analyzing error output...").format(command_name))
+        owner_spec = None
     else:
-        safe_print("❌ Command failed but no error output to analyze.")
+        active_version = omnipkg_core.get_active_version(owning_package)
+        owner_spec = f"{owning_package}=={active_version}" if active_version else owning_package
+
+    # 3. Analyze error output and heal
+    if not error_output:
+        safe_print(_("❌ Command '{}' failed but produced no output to analyze.").format(command_name))
         return 1
 
+    # Use python from the same bin/ dir as the command (preserves 3.8 when using 8pkg38)
+    executable_path = Path(executable) if executable else None
+    if executable_path and executable_path.parent:
+        candidate_python = executable_path.parent / "python3"
+        if not candidate_python.exists():
+            candidate_python = executable_path.parent / "python"
+        python_exe = str(candidate_python) if candidate_python.exists() else config_manager.config.get("python_executable", sys.executable)
+    else:
+        python_exe = config_manager.config.get("python_executable", sys.executable)
 
-_initial_run_time_ns = None
+    safe_print(_("🔍 Analyzing error output to build comprehensive healing plan..."))
+    exit_code, heal_stats = analyze_runtime_failure_and_heal(
+        error_output,
+        [executable] + args,
+        Path.cwd(),
+        config_manager,
+        is_context_aware_run=False,
+        cli_owner_spec=owner_spec,
+        omnipkg_instance=omnipkg_core,
+        verbose=False,
+        attempted_fixes=set(),
+        initial_failure_duration_ns=initial_failure_duration_ns,
+        python_executable=python_exe,
+    )
+
+    if heal_stats:
+        _print_performance_comparison(initial_failure_duration_ns, heal_stats)
+
+    return exit_code
 
 
 def _run_script_with_healing(
@@ -2654,6 +2718,7 @@ def execute_run_command(
     config_manager: ConfigManager,
     verbose: bool = False,
     omnipkg_core=None,
+    python_version: str = None,   # ← add this
 ):
     """
     Enhanced to properly handle Python stdin mode and ensure healing works correctly.
@@ -2677,6 +2742,21 @@ def execute_run_command(
 
     target = cmd_args[0]
     target_path = Path(target)
+
+    # BRANCH -1: Explicit interpreter + -m module (e.g. python3.8 -m pytest ...)
+    if target_path.exists() and target_path.is_file() and "-m" in cmd_args:
+        m_index = cmd_args.index("-m")
+        if m_index + 1 < len(cmd_args):
+            interpreter = str(target_path)
+            module_name = cmd_args[m_index + 1]
+            module_args = cmd_args[m_index + 2:]
+            
+            # Run directly with the specified interpreter, no routing needed
+            result = subprocess.run(
+                [interpreter, "-m", module_name] + module_args,
+                cwd=Path.cwd(),
+            )
+            return result.returncode
 
     # BRANCH 0: Python Inline Command (-c flag)
     if target in ["python", "python3", "python.exe"] and "-c" in cmd_args:
@@ -2780,6 +2860,16 @@ def execute_run_command(
 
     # BRANCH 2: CLI Command (executables in PATH or registered with omnipkg)
     elif shutil.which(target) or omnipkg_core.get_package_for_command(target):
+        # If a specific Python version was requested, prefer that interpreter's
+        # own bin/ directory over whatever shutil.which finds on PATH
+        if python_version:
+            from omnipkg.dispatcher import resolve_python_path
+            interp = resolve_python_path(python_version)
+            versioned_cmd = interp.parent / target
+            if versioned_cmd.exists():
+                return _handle_cli_execution(
+                    str(versioned_cmd), cmd_args[1:], config_manager, omnipkg_core
+                )
         return _handle_cli_execution(target, cmd_args[1:], config_manager, omnipkg_core)
 
     else:
@@ -2792,7 +2882,8 @@ def execute_run_command(
 
 
 def run_cli_with_healing_wrapper(
-    required_specs, command, command_args, config_manager, initial_failure_duration_ns=0
+    required_specs, command, command_args, config_manager, initial_failure_duration_ns=0,
+    python_executable: str = None,
 ):
     """
     Like run_with_healing_wrapper, but for CLI binaries instead of Python scripts.
@@ -2843,8 +2934,9 @@ try:
 except ImportError:
     def safe_print(msg, **kwargs): print(msg, **kwargs)
 
-env = os.environ.copy()
-env['PYTHONPATH'] = os.pathsep.join(sys.path)
+# Do NOT inherit wrapper's sys.path as PYTHONPATH — it contains the wrong
+# interpreter's site-packages (e.g. 3.11 paths when relaunching 3.8 pytest).
+env = {{k: v for k, v in os.environ.items() if k != 'PYTHONPATH'}}
 
 cmd_path = shutil.which({command!r}) or {command!r}
 full_cmd = [cmd_path] + {command_args!r}
@@ -2947,7 +3039,7 @@ safe_print("✅ CLI command completed successfully inside omnipkg bubble.")
             temp_script_path = f.name
 
         heal_command = [
-            config_manager.config.get("python_executable", sys.executable),
+            python_executable or config_manager.config.get("python_executable", sys.executable),
             temp_script_path,
         ]
 
@@ -2978,7 +3070,7 @@ safe_print("✅ CLI command completed successfully inside omnipkg bubble.")
                 except:
                     pass
 
-        return return_code, heal_stats
+        return return_code, heal_stats, full_output
     finally:
         if temp_script_path and os.path.exists(temp_script_path):
             os.unlink(temp_script_path)
@@ -2999,6 +3091,22 @@ def _run_script_logic(
         return 1
 
     temp_script_path = None
+    # Guard: if the target is a binary executable, don't try to read it as Python source.
+    # This happens when a CLI command (e.g. pytest) is routed here by mistake.
+    if source_script_path.exists() and not source_script_path.suffix == ".py":
+        try:
+            chunk = source_script_path.read_bytes()[:4]
+            if chunk[:2] == b'#!' or chunk[:4] == b'\x7fELF':
+                # It's a shell script or ELF binary — hand off to CLI handler
+                from omnipkg.commands.run import _handle_cli_execution
+                return _handle_cli_execution(
+                    str(source_script_path),
+                    script_args,
+                    config_manager,
+                    omnipkg_core,
+                )
+        except (OSError, PermissionError):
+            pass
     try:
         # 1. Read the original code
         code_str = source_script_path.read_text(encoding="utf-8")

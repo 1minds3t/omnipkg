@@ -1952,6 +1952,7 @@ def main():
                 cm,
                 verbose=args.verbose,
                 omnipkg_core=pkg_instance,
+                python_version=getattr(args, "python", None),  # ← add this
             )
 
         elif args.command == "upgrade":
