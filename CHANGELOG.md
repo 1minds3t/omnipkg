@@ -67,9 +67,11 @@ This major release brings deep architectural improvements to the omnipkg core en
 
 **⚙️ Configuration:**
 - .github/workflows/mac_daemon_debug.yml (162 lines)
-- pyproject.toml (24 lines)
+- pyproject.toml (31 lines)
 
 **Additional Changes:**
+- fix(toml): apply correct flask per python in deps
+- fix(toml): correctly assign werkzeug deps based on python
 - fix: add missing import
 - Update 1 code files
 - fix(i18n): normalize language codes consistently everywhere
@@ -127,9 +129,9 @@ This major release brings deep architectural improvements to the omnipkg core en
 - fix: revert regression hunks to state at c33c39ff
 
 **Updates:**
+- Update demo-matrix-test.yml
 - Update README.md
 - Update publish.yml
-- Update demo-matrix-test.yml
 - Update windows-concurrency-test.yml
 - Update worker_daemon.py
 - Update test_concurrent_install.py
@@ -137,7 +139,7 @@ This major release brings deep architectural improvements to the omnipkg core en
 - Update rich version retrieval method in workflow
 - Update Docker CI workflow for PyPI integration
 
-_36 files changed, 5077 insertions(+), 3830 deletions(-)_
+_37 files changed, 5216 insertions(+), 3832 deletions(-)_
 
 ## [2.3.1] — 2026-02-20
 
