@@ -227,45 +227,41 @@ class FlaskAppManager:
         atexit.register(self.shutdown)
 
     def start(self) -> bool:
-        """Start the Flask app with proper process tracking."""
+        """Start the Flask app (or just validate it)."""
         if self.validate_only:
             safe_print(_('🔍 Validating Flask app on port {}...').format(self.port))
             return validate_flask_app(self.code, self.port)
 
-        # Force no reloader and no debug
-        forced_code = re.sub(
-            r"app\.run\(([^)]*)\)",
-            r'app.run(\1, use_reloader=False, debug=False)',
-            self.code
-        )
-        
         wrapper_code = f"""
-    import signal
-    import sys
-    import time
-    import os
-    from pathlib import Path
-    try:
-        from .common_utils import safe_print
-    except ImportError:
-        from omnipkg.common_utils import safe_print
+import signal
+import sys
+import time
+from pathlib import Path
+try:
+    from .common_utils import safe_print
+except ImportError:
+    from omnipkg.common_utils import safe_print
+shutdown_file = Path("{self.shutdown_file}")
 
-    shutdown_file = Path("{self.shutdown_file}")
+def check_shutdown_signal(signum=None, frame=None):
+    if shutdown_file.exists():
+        # safe_print("\\n🛑 Shutdown signal received, stopping Flask app...")
+        sys.exit(0)
 
-    def check_shutdown_signal(signum=None, frame=None):
-        if shutdown_file.exists():
-            sys.exit(0)
+signal.signal(signal.SIGTERM, check_shutdown_signal)
+if hasattr(signal, 'SIGBREAK'):  # Windows
+    signal.signal(signal.SIGBREAK, check_shutdown_signal)
 
-    signal.signal(signal.SIGTERM, check_shutdown_signal)
-    if hasattr(signal, 'SIGBREAK'):  # Windows
-        signal.signal(signal.SIGBREAK, check_shutdown_signal)
+import threading
+def periodic_check():
+    while True:
+        time.sleep(0.5)
+        check_shutdown_signal()
 
-    # Write PID file for process tracking
-    pid_file = Path("{self.shutdown_file}.pid")
-    pid_file.write_text(str(os.getpid()))
+threading.Thread(target=periodic_check, daemon=True).start()
 
-    {forced_code}
-    """
+{self.code}
+"""
 
         try:
             with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
@@ -277,38 +273,13 @@ class FlaskAppManager:
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,
-                # Make sure we can kill the whole process tree
-                start_new_session=True,
-            )
-            # 1. Run the test with more verbose output to see Flask's stderr
-            # Add this to your FlaskAppManager.start() method:
-
-            self.process = subprocess.Popen(
-                [sys.executable, temp_file],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,  # Capture stderr
-                text=True,
-                start_new_session=True,
             )
 
-            # Then after starting, read stderr in a thread:
-            def read_stderr():
-                for line in self.process.stderr:
-                    print(f"FLASK ERROR: {line.strip()}")
-
-            threading.Thread(target=read_stderr, daemon=True).start()
-            # Wait for PID file to appear (confirms script started)
-            pid_file = Path(f"{self.shutdown_file}.pid")
-            for attempt in range(10):  # Use 'attempt' instead of '_'
-                if pid_file.exists():
-                    break
-                time.sleep(0.1)
-
-            
             self.is_running = True
             safe_print(_('✅ Flask app started on port {} (PID: {})').format(self.port, self.process.pid))
             safe_print(_('🌐 Access at: http://127.0.0.1:{}').format(self.port))
-            
+            safe_print(_('🛑 To stop: FlaskAppManager.shutdown() or delete {}').format(self.shutdown_file))
+
             return True
         except Exception as e:
             safe_print(_('❌ Failed to start Flask app: {}').format(e))
@@ -348,33 +319,21 @@ class FlaskAppManager:
             safe_print(_('⚠️  Error during shutdown: {}').format(e))
             release_port(self.port)  # Always release port
 
-    def is_process_alive(self):
-        """Check if the Flask process is still running"""
-        if hasattr(self, 'process') and self.process:
-            return self.process.poll() is None
-        return False
-
     def wait_for_ready(self, timeout: float = 10.0) -> bool:
-        """Wait for Flask app to be ready AND stay alive"""
+        """Wait for Flask app to be ready to accept connections."""
         start_time = time.time()
-        import requests
-        
         while time.time() - start_time < timeout:
-            # Check if process died
-            if not self.is_process_alive():
-                safe_print(_('❌ Flask process died during startup'))
-                return False
-                
             try:
-                # Test actual HTTP connection
-                response = requests.get(f"http://127.0.0.1:{self.port}", timeout=0.5)
-                if response.status_code == 200:
-                    safe_print(_('✅ Flask app is ready on port {}').format(self.port))
-                    return True
-            except (requests.ConnectionError, requests.Timeout):
-                time.sleep(0.2)
-                continue
-                
+                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+                    sock.settimeout(0.5)
+                    result = sock.connect_ex(("127.0.0.1", self.port))
+                    if result == 0:
+                        safe_print(_('✅ Flask app is ready on port {}').format(self.port))
+                        return True
+            except:
+                pass
+            time.sleep(0.2)
+
         safe_print(_('⚠️  Flask app did not become ready within {}s').format(timeout))
         return False
 
