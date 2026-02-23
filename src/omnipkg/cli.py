@@ -492,6 +492,7 @@ def run_config_wizard(cm: ConfigManager, parser_prog: str) -> int:
     Falls back gracefully to non-interactive (just prints config).
     """
     from omnipkg.common_utils import is_interactive_session, safe_input
+    from omnipkg.i18n import normalize_language_code  # IMPORT AT THE TOP!
 
     # Always print current config
     print_header(_("omnipkg Configuration"))
@@ -536,10 +537,9 @@ def run_config_wizard(cm: ConfigManager, parser_prog: str) -> int:
         if not val:
             safe_print(_("❌ No input. No changes made."))
             return 1
-        # Case-insensitive match — "zh_cn", "ZH_CN", "zh_CN" all work
-        normalized = next((k for k in SUPPORTED_LANGUAGES if k.lower() == val.lower()), None)
+        normalized = normalize_language_code(val)
         if normalized is None:
-            safe_print(_("❌ Unknown language code '{}'. Available codes shown above.").format(val))
+            safe_print(_("❌ Unknown language '{}'. Run 'omnipkg config' to see all options.").format(val))
             safe_print(_("   Example: {} config set language es").format(parser_prog))
             return 1
         cm.set("language", normalized)
@@ -554,7 +554,6 @@ def run_config_wizard(cm: ConfigManager, parser_prog: str) -> int:
         return 1
 
     return 0
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # PARSER CREATION
@@ -1363,20 +1362,20 @@ def main():
 
             elif args.config_command == "set":
                 if args.key == "language":
-                    val = args.value.strip().lower()
-                    if val not in SUPPORTED_LANGUAGES:
+                    normalized = normalize_language_code(args.value.strip())
+                    if normalized is None:
                         safe_print(
                             _("❌ Unknown language '{}'. Run '{} config' to see all options.").format(
-                                val, parser.prog
+                                args.value.strip(), parser.prog
                             )
                         )
                         _print_language_table()
                         return 1
-                    cm.set("language", val)
-                    _.set_language(val)
-                    os.environ["OMNIPKG_LANG"] = val
-                    lang_name = SUPPORTED_LANGUAGES.get(val, val)
-                    safe_print(_("✅ Language set to: {} ({})").format(val, lang_name))
+                    cm.set("language", normalized)
+                    _.set_language(normalized)
+                    os.environ["OMNIPKG_LANG"] = normalized
+                    lang_name = SUPPORTED_LANGUAGES.get(normalized, normalized)
+                    safe_print(_("✅ Language set to: {} ({})").format(normalized, lang_name))
 
                 elif args.key == "install_strategy":
                     valid_strategies = ["stable-main", "latest-active"]
