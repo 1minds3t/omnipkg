@@ -983,7 +983,7 @@ yay -S python-omnipkg
 
 ### 🐍 Python Version Support
 
-**Supported:** Python 3.7 - 3.14 (including beta/rc releases)
+**Supported:** Python 3.7 - 3.15 (including beta/rc releases)
 
 **Architecture:** `noarch` (pure Python, no compiled extensions)
 
