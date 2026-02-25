@@ -148,12 +148,21 @@ def main():
     
     exec_args = [str(target_python), "-m", "omnipkg.cli"] + sys.argv[1:]
     
-    if debug_mode:
+    f debug_mode:
         print(f'[DEBUG-DISPATCH] Executing: {" ".join(exec_args)}', file=sys.stderr)
     
-    import platform
-    if platform.system() == "Windows":
+    # --- BROKEN CODE ---
+    # import platform
+    # if platform.system() == "Windows":
+    #     # Windows: Use subprocess instead of execv to avoid handle inheritance issues
+    #     sys.exit(subprocess.call(exec_args))  <-- subprocess not defined!
+    # else:
+    #     os.execv(str(target_python), exec_args)
+
+    # --- FIXED CODE ---
+    if sys.platform == "win32":
         # Windows: Use subprocess instead of execv to avoid handle inheritance issues
+        import subprocess
         sys.exit(subprocess.call(exec_args))
     else:
         os.execv(str(target_python), exec_args)
@@ -507,9 +516,9 @@ def _shims_are_active_in_path(debug_mode: bool = False) -> bool:
 
 def _verify_python_version(python_path: Path, claimed_version: str, debug_mode: bool = False) -> bool:
     """
-    Ask the actual Python executable what version it is and check it matches
-    the claimed major.minor. This is the ground truth — no env var guessing.
+    Ask the actual Python executable what version it is...
     """
+    import subprocess  # <--- ADD THIS LINE
     try:
         result = subprocess.run(
             [str(python_path), "-c", "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')"],
@@ -534,6 +543,7 @@ def test_active_python_version() -> str:
     Kept only so external callers don't break.
     Returns the major.minor of whatever `python` resolves to in PATH.
     """
+    import subprocess  # <--- ADD THIS LINE
     try:
         result = subprocess.run(
             ["python", "--version"],
@@ -1016,7 +1026,7 @@ def spawn_swap_shell(version: str, python_path: Path, pkg_instance) -> int:
             safe_print(_("   🔍 To debug path/pip issues, run before swapping:"))
             safe_print(_("      set OMNIPKG_DEBUG=1        (Command Prompt)"))
             safe_print(_("      $env:OMNIPKG_DEBUG = '1'   (PowerShell)"))
-
+        import subprocess  # <--- ADD THIS LINE
         try:
             proc = subprocess.Popen([shell, "/K"], env=new_env)
             proc.wait()
