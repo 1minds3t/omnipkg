@@ -24,6 +24,7 @@ RUN chown omnipkg:omnipkg /home/omnipkg
 COPY --chown=omnipkg:omnipkg pyproject.toml poetry.lock* ./
 COPY --chown=omnipkg:omnipkg src/ ./src/
 COPY --chown=omnipkg:omnipkg README.md ./
+COPY --chown=omnipkg:omnipkg pyproject.toml poetry.lock* build_hooks.py ./
 
 # Install Python dependencies AS ROOT (needed for pip)
 RUN pip install --no-cache-dir .
