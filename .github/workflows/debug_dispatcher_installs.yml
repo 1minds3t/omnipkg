@@ -1,0 +1,72 @@
+name: Test Python Adoption + 8pkg Install
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  test-adopt-and-install:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.9", "3.10", "3.11", "3.12"]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ────────────────────────────────────────────────
+      #  Install omnipkg + dependencies
+      # ────────────────────────────────────────────────
+      - name: Set up Python ${{ matrix.python }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: Install uv (fast installer)
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+
+      - name: Install omnipkg via uv
+        run: |
+          uv pip install --upgrade omnipkg
+
+      # ────────────────────────────────────────────────
+      #  Test adoption of the current Python version
+      # ────────────────────────────────────────────────
+      - name: Adopt Python ${{ matrix.python }}
+        run: |
+          8pkg python adopt ${{ matrix.python }}
+          8pkg info python | grep -A 3 "Python ${{ matrix.python }}"
+
+      # ────────────────────────────────────────────────
+      #  Install a test package (e.g. rich) using 8pkg<XY>
+      # ────────────────────────────────────────────────
+      - name: Install rich using 8pkg${{ matrix.python }}
+        run: |
+          # Remove dots from version (3.9 → 39, 3.10 → 310, etc.)
+          cmd_version=$(echo "${{ matrix.python }}" | tr -d '.')
+          echo "Running: 8pkg${cmd_version} install rich==13.7.1"
+          8pkg${cmd_version} install rich==13.7.1
+
+      # ────────────────────────────────────────────────
+      #  Verify installation worked
+      # ────────────────────────────────────────────────
+      - name: Verify rich version in adopted environment
+        run: |
+          cmd_version=$(echo "${{ matrix.python }}" | tr -d '.')
+          echo "Checking rich version with 8pkg${cmd_version} run"
+          8pkg${cmd_version} run python -c "
+          import rich; 
+          from importlib.metadata import version; 
+          print('rich version:', version('rich'))
+          print('rich location:', rich.__file__)
+          "
+
+      # Optional: Show daemon status (useful for debugging)
+      - name: Show daemon status (if running)
+        run: |
+          8pkg daemon status || echo "Daemon not running (expected in CI)"
