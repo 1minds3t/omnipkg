@@ -256,9 +256,7 @@ def install_one(py_version: str, pkg_spec: str) -> dict:
     """
     start = time.perf_counter()
     flat = py_version.replace(".", "")
-    # On Windows shims are .bat files; on POSIX they are symlinks with no extension.
-    ext = ".bat" if sys.platform == "win32" else ""
-    cmd = f"8pkg{flat}{ext}"
+    cmd = _find_entry_point(f"8pkg{flat}")
     result = subprocess.run([cmd, "install", pkg_spec], capture_output=True, **_SP)
     elapsed_ms = (time.perf_counter() - start) * 1000
     success = result.returncode == 0
@@ -358,10 +356,31 @@ def phase_install(configs: list):
 #   want to apply a timeout or show a progress indicator.
 # ─────────────────────────────────────────────────────────────────────────────
 
+def _find_entry_point(name: str) -> str:
+    """
+    Return the full path to an omnipkg entry point (omnipkg, 8pkg, 8pkg310, etc.).
+    Looks in the same Scripts/bin directory as sys.executable so it works
+    regardless of whether the venv is activated or what's on PATH.
+    On Windows tries .exe first, then .bat, then bare name.
+    """
+    scripts_dir = Path(sys.executable).parent
+    if sys.platform == "win32":
+        for ext in (".exe", ".bat", ""):
+            candidate = scripts_dir / f"{name}{ext}"
+            if candidate.exists():
+                return str(candidate)
+    else:
+        candidate = scripts_dir / name
+        if candidate.exists():
+            return str(candidate)
+    # Last resort: hope it's on PATH
+    return name
+
+
 def adopt_if_needed(version: str, timeout: float = 300.0) -> bool:
     """
     Ensure Python `version` is adopted.  Checks the registry first (free),
-    then falls back to the CLI subprocess which is the confirmed working path.
+    then invokes `omnipkg python adopt` via subprocess.
     """
     _invalidate_registry_cache()
     if is_adopted(version):
@@ -370,10 +389,8 @@ def adopt_if_needed(version: str, timeout: float = 300.0) -> bool:
 
     safe_print(f"  🔄 Adopting Python {version}…")
 
-    # Use Popen + polling so we can honour the timeout even on slow downloads.
-    # On Windows, shims are .bat files.
-    ext = ".bat" if sys.platform == "win32" else ""
-    proc = subprocess.Popen([f"omnipkg{ext}", "python", "adopt", version], env=_ENV)
+    omnipkg_exe = _find_entry_point("omnipkg")
+    proc = subprocess.Popen([omnipkg_exe, "python", "adopt", version], env=_ENV)
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         if proc.poll() is not None:
@@ -455,7 +472,7 @@ def phase_daemon(interpreter_paths: list):
 
         safe_print("  🔄 Starting daemon…")
         subprocess.Popen(
-            ["8pkg" + (".bat" if sys.platform == "win32" else ""), "daemon", "start"],
+            [_find_entry_point("8pkg"), "daemon", "start"],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
@@ -531,7 +548,7 @@ def prime_interpreter_cache(configs: list):
         # One-shot fallback: parse `omnipkg info python` for missing entries.
         # Costs one subprocess but only runs when the direct read missed something.
         safe_print(f"  ⚠️  {missing} not found in direct registry read — checking omnipkg info python…")
-        result = subprocess.run(["omnipkg" + (".bat" if sys.platform == "win32" else ""), "info", "python"], capture_output=True, **_SP)
+        result = subprocess.run([_find_entry_point("omnipkg"), "info", "python"], capture_output=True, **_SP)
         for line in result.stdout.splitlines():
             for ver in list(missing):
                 if f"Python {ver}:" in line:
