@@ -3565,6 +3565,7 @@ class BubbleIsolationManager:
                     from omnipkg.installation.verification_strategy import verify_bubble_with_smart_strategy
                     from omnipkg.package_meta_builder import omnipkgMetadataGatherer
                 
+                from .package_meta_builder import omnipkgMetadataGatherer
                 gatherer = omnipkgMetadataGatherer(
                     config=self.parent_omnipkg.config,
                     env_id=self.parent_omnipkg.env_id,
@@ -3628,6 +3629,7 @@ class BubbleIsolationManager:
                     from omnipkg.installation.verification_strategy import verify_bubble_with_smart_strategy
                     from omnipkg.package_meta_builder import omnipkgMetadataGatherer
                     
+                from .package_meta_builder import omnipkgMetadataGatherer
                 gatherer = omnipkgMetadataGatherer(
                     config=self.parent_omnipkg.config,
                     env_id=self.parent_omnipkg.env_id,
@@ -7164,6 +7166,7 @@ class omnipkg:
             safe_print(
                 f"   🐍 Rebuilding knowledge base for Python {current_python_version} context..."
             )
+            from .package_meta_builder import omnipkgMetadataGatherer
             gatherer = omnipkgMetadataGatherer(
                 config=self.config,
                 env_id=self.env_id,
@@ -7443,6 +7446,7 @@ class omnipkg:
 
         from .package_meta_builder import omnipkgMetadataGatherer
 
+        from .package_meta_builder import omnipkgMetadataGatherer
         gatherer = omnipkgMetadataGatherer(
             config=self.config, env_id=self.env_id, omnipkg_instance=self
         )
@@ -7654,6 +7658,7 @@ class omnipkg:
             # If a rebuild was just run, the KB is perfectly in sync.
             # We can return early to avoid redundant work.
             safe_print("   ✅ First-use KB build complete. Synchronization is guaranteed.")
+            from .package_meta_builder import omnipkgMetadataGatherer
             gatherer = omnipkgMetadataGatherer(
                 config=self.config, env_id=self.env_id, omnipkg_instance=self
             )
@@ -7678,6 +7683,7 @@ class omnipkg:
         if not self.cache_client:
             return []
 
+        from .package_meta_builder import omnipkgMetadataGatherer
         gatherer = omnipkgMetadataGatherer(
             config=self.config,
             env_id=self.env_id,
@@ -7854,6 +7860,7 @@ class omnipkg:
         """
         from .package_meta_builder import omnipkgMetadataGatherer
 
+        from .package_meta_builder import omnipkgMetadataGatherer
         gatherer = omnipkgMetadataGatherer(
             config=self.config,
             env_id=self.env_id,
@@ -7926,6 +7933,7 @@ class omnipkg:
         from .package_meta_builder import omnipkgMetadataGatherer
 
         # 2. Create a new gatherer instance, passing the current omnipkg instance (`self`) to it.
+        from .package_meta_builder import omnipkgMetadataGatherer
         gatherer = omnipkgMetadataGatherer(
             config=self.config,
             env_id=self.env_id,
@@ -9028,6 +9036,7 @@ class omnipkg:
                     )
                 )
                 # --- PASS THE CONTEXT TO THE GATHERER ---
+                from .package_meta_builder import omnipkgMetadataGatherer
                 gatherer = omnipkgMetadataGatherer(
                     config=self.config,
                     env_id=self.env_id,
@@ -12027,6 +12036,7 @@ class omnipkg:
             try:
                 from .package_meta_builder import omnipkgMetadataGatherer
                 
+                from .package_meta_builder import omnipkgMetadataGatherer
                 gatherer = omnipkgMetadataGatherer(
                     config=self.config,
                     env_id=self.env_id,
@@ -13101,6 +13111,7 @@ class omnipkg:
 
             # --- FIX END ---
 
+            from .package_meta_builder import omnipkgMetadataGatherer
             gatherer = omnipkgMetadataGatherer(
                 config=self.config,
                 env_id=self.env_id,
@@ -13205,6 +13216,7 @@ class omnipkg:
 
         from .package_meta_builder import omnipkgMetadataGatherer
 
+        from .package_meta_builder import omnipkgMetadataGatherer
         gatherer = omnipkgMetadataGatherer(
             config=self.config, env_id=self.env_id, omnipkg_instance=self
         )
