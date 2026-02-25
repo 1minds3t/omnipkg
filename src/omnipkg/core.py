@@ -43,29 +43,15 @@ from pathlib import Path
 from typing import Dict, List, Optional, Set, Tuple
 from omnipkg.i18n import _, SUPPORTED_LANGUAGES
 try:
-    import redis
-
-    REDIS_AVAILABLE = True
-except ImportError:
-    redis = None
-    REDIS_AVAILABLE = False
-# Handle importlib.metadata for Python 3.7 compatibility
-try:
     from importlib.metadata import version
 except ImportError:
     from importlib_metadata import version
-
-import requests as http_requests
 from filelock import FileLock, Timeout
 from packaging.utils import canonicalize_name
 from packaging.version import InvalidVersion
 from packaging.version import parse as parse_version
-
 from .cache import SQLiteCacheClient
 from .i18n import _
-from .loader import omnipkgLoader  # <--- ADD THIS LINE
-from .package_meta_builder import omnipkgMetadataGatherer
-
 try:
     import tomllib
 
@@ -3312,6 +3298,7 @@ class BubbleIsolationManager:
         self.package_path_registry = {}
         self.registry_lock = FileLock(self.multiversion_base / "registry.lock")
         self._load_path_registry()
+        import requests as http_requests
         self.http_session = http_requests.Session()
 
     def _load_path_registry(self):
@@ -5625,6 +5612,7 @@ class ImportHookManager:
         self.hook_installed = False
         self.cache_client = cache_client
         self.config = config
+        import requests as http_requests
         self.http_session = http_requests.Session()
 
     def load_version_map(self):
@@ -5763,6 +5751,7 @@ class MultiversionFinder:
 
     def __init__(self, hook_manager: ImportHookManager):
         self.hook_manager = hook_manager
+        import requests as http_requests
         self.http_session = http_requests.Session()
 
     def find_spec(self, fullname, path, target=None):
@@ -5909,6 +5898,7 @@ class omnipkg:
             self._check_and_run_pending_rebuild()
         self._info_cache = {}
         self._installed_packages_cache = None
+        import requests as http_requests
         self.http_session = http_requests.Session()
         self.multiversion_base.mkdir(parents=True, exist_ok=True)
 
@@ -6067,6 +6057,7 @@ class omnipkg:
         if found_cloaks:
             safe_print(_('      🔍 Found {} potential main env cloaks').format(len(found_cloaks)))
 
+            from omnipkg.loader import omnipkgLoader
             with omnipkgLoader._active_cloaks_lock:
                 for cloak_path in found_cloaks:
                     # (The logic for processing each cloak is complex but correct, so it remains)
@@ -6801,9 +6792,13 @@ class omnipkg:
         # This is the defensive check:
         # 1. First, check if the 'redis' module was successfully imported (is not None).
         # 2. Then, check if a cache_client has even been configured on the instance.
-        if redis and self.cache_client:
+        try:
+            import redis as _redis_mod
+        except ImportError:
+            _redis_mod = None
+        if _redis_mod and self.cache_client:
             # ONLY if both of the above are true, is it safe to check the instance type.
-            if isinstance(self.cache_client, redis.Redis):
+            if isinstance(self.cache_client, _redis_mod.Redis):
                 redis_instance = self.cache_client
 
         # Now, instantiate the cache. redis_instance is guaranteed to be either a
@@ -6863,6 +6858,12 @@ class omnipkg:
             # The user wants Redis. Now, we check if we CAN use it.
 
             # CRITICAL CHECK 1: Is the 'redis' Python package actually installed?
+            try:
+                import redis
+                REDIS_AVAILABLE = True
+            except ImportError:
+                redis = None
+                REDIS_AVAILABLE = False
             if not REDIS_AVAILABLE:
                 safe_print("\n" + "⚠️ " * 35)
                 safe_print("CONFIGURATION AUTO-CORRECTION: Redis package not found")
@@ -10429,6 +10430,9 @@ class omnipkg:
         """
         Disk-cached site-packages lookup - only used as last resort fallback.
         """
+        # Config already has this — no subprocess, no disk cache needed
+        if "site_packages_path" in self.config:
+            return Path(self.config["site_packages_path"])
         cache_dir = Path.home() / ".config" / "omnipkg" / "site_packages_cache"
         cache_dir.mkdir(parents=True, exist_ok=True)
 
@@ -10559,7 +10563,8 @@ class omnipkg:
                     install_plan = report.get("install", [])
                     if not install_plan:
                         return None, pip_user_error_output
-                    req_name = self._parse_package_spec(package_spec)[0]
+                    req_name_full = self._parse_package_spec(package_spec)[0]   # "botocore[crt]"
+                    req_name = self._bare_name(req_name_full)                   # "botocore"
 
                     for item in install_plan:
                         metadata = item.get("metadata", {})
@@ -10571,7 +10576,7 @@ class omnipkg:
                                 and version
                                 and canonicalize_name(pkg_name) == canonicalize_name(req_name)
                             ):
-                                return f"{pkg_name}=={version}", pip_user_error_output
+                                return f"{req_name_full}=={version}", pip_user_error_output
                     return None, pip_user_error_output
                 except json.JSONDecodeError as e:
                     safe_print(_('   ⚠️  Failed to parse pip JSON: {}').format(e))
@@ -10584,7 +10589,8 @@ class omnipkg:
             )
 
             if is_no_match_error:
-                pkg_name_to_check, requested_version = self._parse_package_spec(package_spec)
+                pkg_name_to_check_full, requested_version = self._parse_package_spec(package_spec)
+                pkg_name_to_check = self._bare_name(pkg_name_to_check_full)
                 try:
                     response = http_requests.get(
                         f"https://pypi.org/pypi/{pkg_name_to_check}/json", timeout=10
@@ -11032,7 +11038,7 @@ class omnipkg:
                             )
                     else:
                         try:
-                            latest_version = self._get_latest_version_from_pypi(pkg_name)
+                            latest_version = self._get_latest_version_from_pypi(self._bare_name(pkg_name))
                         except NoCompatiblePythonError as e:
                             return self._handle_quantum_healing(
                                 e,
@@ -11051,7 +11057,7 @@ class omnipkg:
                             continue
 
                 is_installed, duration_ns = self.check_package_installed_fast(
-                    configured_exe, pkg_name, version
+                    configured_exe, self._bare_name(pkg_name), version
                 )
 
                 if duration_ns < 1_000:
@@ -13029,6 +13035,11 @@ class omnipkg:
                         return (pkg_name, None)
         return (pkg_spec.strip(), None)
 
+    def _bare_name(self, pkg_name: str) -> str:
+        """'botocore[crt]' -> 'botocore'  (for API/metadata lookups)"""
+        bracket = pkg_name.find('[')
+        return pkg_name[:bracket] if bracket != -1 else pkg_name
+
     def rebuild_package_kb(
         self,
         packages: List[str],
@@ -13796,7 +13807,7 @@ class omnipkg:
             spec_str = match.group(2).strip()
 
             if not spec_str:
-                return self._get_latest_version_from_pypi(pkg_name)
+                return self._get_latest_version_from_pypi(self._bare_name(pkg_name))
 
             # 2. Fetch ALL versions from PyPI
             # 2. Let pip tell us what's actually compatible in the current Python context
@@ -13975,7 +13986,7 @@ class omnipkg:
             pkg_name, _version = self._parse_package_spec(pkg_spec)  # Unpack the tuple directly
 
             safe_print(_("    -> Finding latest version for '{}'...").format(pkg_name))
-            target_version = self._get_latest_version_from_pypi(pkg_name)
+            target_version = self._get_latest_version_from_pypi(self._bare_name(pkg_name))
             if target_version:
                 new_spec = f"{pkg_name}=={target_version}"
                 safe_print(_("    ✅ Resolved '{}' to '{}'").format(pkg_name, new_spec))
@@ -15343,15 +15354,16 @@ print(json.dumps(results))
                         )
                     )
 
-    def _quick_compatibility_check(
-        self, package_name: str, version_to_test: str = None
-    ) -> Optional[str]:
-        """
-        Quickly test if a specific version (or latest) is compatible by attempting
-        a pip install and parsing any compatibility errors for available versions.
-
-        Returns the latest compatible version found, or None if can't determine.
-        """
+    def _quick_compatibility_check(self, package_name: str, version_to_test: str = None) -> Optional[str]:
+    # Fast path: if it's already installed, return that version immediately
+    # No subprocess needed — importlib.metadata is a stdlib filesystem read
+        try:
+            import importlib.metadata
+            installed_ver = importlib.metadata.version(package_name)
+            if version_to_test is None or installed_ver == version_to_test:
+                return installed_ver
+        except importlib.metadata.PackageNotFoundError:
+            pass  # Not installed — fall through to pip check
         safe_print(
             f"   💫 Quick compatibility check for {package_name}"
             + (f"=={version_to_test}" if version_to_test else "")
@@ -15511,8 +15523,10 @@ print(json.dumps(results))
 
         cached_version = self.pypi_cache.get_cached_version(package_name, py_context)
         if cached_version:
-            safe_print(f"    💾 Using cached version for {py_context}: {cached_version}")
-            self._start_background_cache_refresh(package_name, py_context)
+            # Only refresh in background if entry is stale (> 1hr old)
+            # NOT on every single hit — this was spawning pip on every invocation
+            if self.pypi_cache.is_cache_entry_stale(package_name, py_context, max_age_seconds=3600):
+                self._start_background_cache_refresh(package_name, py_context)
             return cached_version
 
         # USE THE ROBUST TEST INSTALLATION APPROACH FIRST
@@ -16511,3 +16525,34 @@ class PyPIVersionCache:
                 safe_print(f"    🧹 Cleared {len(expired_keys)} expired entries from file cache")
 
         # Redis entries expire automatically due to TTL
+
+    def is_cache_entry_stale(
+        self, package_name: str, python_context: str, max_age_seconds: int = 3600
+    ) -> bool:
+        """
+        Returns True if the cache entry is older than max_age_seconds (default 1hr).
+        Returns True (stale) if entry doesn't exist — caller should refresh.
+        Used to gate background refreshes so pip isn't spawned on every cache hit.
+        """
+        cache_key = self._get_cache_key(package_name, python_context)
+
+        # Check Redis TTL — if remaining TTL is less than (24hr - max_age), it's stale
+        if self.redis_client:
+            try:
+                ttl = self.redis_client.ttl(cache_key)
+                if ttl < 0:
+                    return True  # Key missing or no TTL set
+                age_seconds = self.cache_ttl - ttl
+                return age_seconds >= max_age_seconds
+            except Exception:
+                pass  # Fall through to file cache check
+
+        # Check file cache timestamp directly
+        if hasattr(self, "_file_cache"):
+            entry = self._file_cache.get(cache_key)
+            if not entry:
+                return True  # No entry = stale
+            cached_time = entry.get("timestamp", 0)
+            return (time.time() - cached_time) >= max_age_seconds
+
+        return True  # Can't determine — assume stale

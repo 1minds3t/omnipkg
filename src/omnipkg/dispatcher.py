@@ -10,15 +10,75 @@ import os
 import sys
 import json
 from pathlib import Path
-from omnipkg.i18n import _
-from omnipkg.common_utils import safe_print  # ← Should be here
-import platform
-import subprocess
+# NOTE: No omnipkg imports at top level — importing omnipkg.i18n triggers the
+# full package boot (gettext init, locale detection, file I/O) which costs
+# ~60-80ms even when the dispatcher does nothing but find a Python path and
+# os.execv().  All omnipkg imports are now lazy (inside the functions that
+# actually need them — error paths only, never the happy path).
+
+def _i18n():
+    """Lazy accessor for the _ translation function."""
+    from omnipkg.i18n import _ as _gettext
+    return _gettext
+
+def _safe_print(msg, **kwargs):
+    """Lazy safe_print — only imported on error paths."""
+    from omnipkg.common_utils import safe_print
+    safe_print(msg, **kwargs)
 
 def main():
     """
     Omnipkg Unified Dispatcher.
     """
+
+def _maybe_install_c_dispatcher():
+    """
+    On first run after a pip install, replace ourselves with the C binary.
+    Subsequent runs skip this entirely (binary doesn't call us).
+    Cost: one stat() call = ~1µs. Only actually compiles once.
+    """
+    import sys, os, subprocess, shutil
+    from pathlib import Path
+
+    # Already a binary? (C dispatcher never calls dispatcher.py on happy path)
+    # This runs only when Python dispatcher is invoked — i.e. pip just reinstalled us.
+    c_source = Path(__file__).parent.parent.parent / "tools" / "dispatcher_bin" / "dispatcher.c"
+    if not c_source.exists():
+        return  # not a dev install, skip
+
+    if not shutil.which("gcc"):
+        return  # no compiler, skip silently
+
+    bin_dir = Path(sys.executable).parent
+    marker = bin_dir / ".omnipkg_dispatch_compiled"
+
+    # Check if already installed (marker file = binary is in place)
+    # Recompile if source is newer than marker
+    if marker.exists() and marker.stat().st_mtime >= c_source.stat().st_mtime:
+        return
+
+    binary_tmp = bin_dir / "_omnipkg_dispatch_tmp"
+    try:
+        r = subprocess.run(
+            ["gcc", "-O2", "-o", str(binary_tmp), str(c_source)],
+            capture_output=True, timeout=15
+        )
+        if r.returncode != 0:
+            return
+
+        for name in ("8pkg", "omnipkg", "OMNIPKG", "8PKG"):
+            target = bin_dir / name
+            if target.exists():
+                shutil.copy2(str(binary_tmp), str(target))
+                os.chmod(str(target), 0o755)
+
+        binary_tmp.unlink()
+        marker.touch()  # record that binary is installed
+        # Note: no print here — this is silent. The NEXT invocation will be fast.
+    except Exception:
+        if binary_tmp.exists():
+            try: binary_tmp.unlink()
+            except: pass
     # ============================================================================
     # WINDOWS CONSOLE FIX: Enable proper UTF-8 and ANSI handling FIRST
     # ============================================================================
@@ -63,51 +123,40 @@ def main():
                         print(f"[DEBUG-DISPATCH] Set OMNIPKG_LANG={language} from config", file=sys.stderr)
             except Exception as e:
                 if debug_mode:
-                    print(_('[DEBUG-DISPATCH] Config read error: {}').format(e), file=sys.stderr)
-    
+                    print(f'[DEBUG-DISPATCH] Config read error: {e}', file=sys.stderr)
+
     # ═══════════════════════════════════════════════════════════
     # 🎯 STEP 0: DETECT VERSION-SPECIFIC COMMAND (8pkg39, omnipkg39, etc.)
     # ═══════════════════════════════════════════════════════════
     import re
     prog_name = Path(sys.argv[0]).name.lower()
-    
+
     # Match both 8pkgXY and omnipkgXY (e.g. 8pkg39, omnipkg39, omnipkg311)
     version_match = re.match(r"(?:8pkg|omnipkg)(\d)(\d+)", prog_name)
-    
+
     if version_match:
         major = version_match.group(1)
         minor = version_match.group(2)
         forced_version = f"{major}.{minor}"
-        
+
         # Inject --python flag if not already present
         if "--python" not in sys.argv:
             sys.argv.insert(1, "--python")
             sys.argv.insert(2, forced_version)
-        
+
         if debug_mode:
-            print(_('[DEBUG-DISPATCH] Detected version-specific command: {}').format(prog_name), file=sys.stderr)
-            print(_('[DEBUG-DISPATCH] Injected --python {}').format(forced_version), file=sys.stderr)
-            print(_('[DEBUG-DISPATCH] Modified argv: {}').format(sys.argv), file=sys.stderr)
-    
+            print(f'[DEBUG-DISPATCH] Detected version-specific command: {prog_name}', file=sys.stderr)
+            print(f'[DEBUG-DISPATCH] Injected --python {forced_version}', file=sys.stderr)
+            print(f'[DEBUG-DISPATCH] Modified argv: {sys.argv}', file=sys.stderr)
+
     # ═══════════════════════════════════════════════════════════
     # STEP 1: Identify how we were called
     # ═══════════════════════════════════════════════════════════
-    
+
     # If called as 'python', 'python3', or 'pip' -> ACT AS SHIM
     if prog_name.startswith("python") or prog_name == "pip":
         if debug_mode:
-            print(_("[DEBUG-SHIM] Intercepted call to '{}'").format(prog_name), file=sys.stderr)
-        handle_shim_execution(prog_name, debug_mode)
-        return
-    debug_mode = os.environ.get("OMNIPKG_DEBUG") == "1"
-    
-    # 1. Identify how we were called
-    prog_name = Path(sys.argv[0]).name.lower()
-    
-    # If called as 'python', 'python3', or 'pip' -> ACT AS SHIM
-    if prog_name.startswith("python") or prog_name == "pip":
-        if debug_mode:
-            print(_("[DEBUG-SHIM] Intercepted call to '{}'").format(prog_name), file=sys.stderr)
+            print(f"[DEBUG-SHIM] Intercepted call to '{prog_name}'", file=sys.stderr)
         handle_shim_execution(prog_name, debug_mode)
         return
     
@@ -121,10 +170,11 @@ def main():
     # the host env and should always be invoked from there.
     argv_commands = [a for a in sys.argv[1:] if not a.startswith("-")]
     is_swap_command = len(argv_commands) >= 1 and argv_commands[0] == "swap"
-    if is_swap_command and os.environ.get("_OMNIPKG_SWAP_ACTIVE") == "1":
-        # Force host Python by temporarily clearing the swap env vars for
-        # determine_target_python(), then restore them so the spawned shell
-        # inherits the correct environment.
+    is_swap_python = is_swap_command and len(argv_commands) >= 2 and argv_commands[1].lower().startswith("python")
+    if is_swap_python and os.environ.get("_OMNIPKG_SWAP_ACTIVE") == "1":
+        # Force host Python ONLY for 'swap python' — the shell-spawning machinery
+        # lives in the host env. Package swaps (e.g. 'swap numpy==1.26.4') must
+        # run under the active context Python so they target the right site-packages.
         _saved = {k: os.environ.pop(k, None)
                   for k in ("OMNIPKG_PYTHON", "OMNIPKG_ACTIVE_PYTHON", "_OMNIPKG_SWAP_ACTIVE")}
         target_python = determine_target_python()
@@ -132,27 +182,88 @@ def main():
             if v is not None:
                 os.environ[k] = v
         if debug_mode:
-            print("[DEBUG-DISPATCH] swap command inside swap shell — forcing host Python", file=sys.stderr)
+            print("[DEBUG-DISPATCH] swap python inside swap shell — forcing host Python", file=sys.stderr)
     else:
         target_python = determine_target_python()
+        if is_swap_command and not is_swap_python and os.environ.get("_OMNIPKG_SWAP_ACTIVE") == "1":
+            if debug_mode:
+                print("[DEBUG-DISPATCH] swap package inside swap shell — using active context Python", file=sys.stderr)
     
-    if debug_mode:
-        print(_('[DEBUG-DISPATCH] Using Python: {}').format(target_python), file=sys.stderr)
-        print(_('[DEBUG-DISPATCH] Current executable: {}').format(sys.executable), file=sys.stderr)
-    
+    # ═══════════════════════════════════════════════════════════
+    # STEP 3: Gate on validity — reject fantasy versions like 3.20
+    # ═══════════════════════════════════════════════════════════
+    # Determine which version was requested (if any) so we can give
+    # a precise error and optionally auto-adopt.
+    _requested_version: str | None = None
+    if "--python" in sys.argv:
+        try:
+            _idx = sys.argv.index("--python")
+            if _idx + 1 < len(sys.argv):
+                _requested_version = sys.argv[_idx + 1]
+        except (ValueError, IndexError):
+            pass
+
     if not target_python.exists():
-        safe_print(_('❌ Python interpreter not found: {}').format(target_python), file=sys.stderr)
-        print(_('   Run: 8pkg python adopt {}').format(extract_version(target_python)), file=sys.stderr)
-        sys.exit(1)
-    
+        if _requested_version:
+            # ── Validate that the requested version is plausible ────────────
+            # Reject versions that cannot exist (e.g. 3.20, 2.5) or that the
+            # user simply mistyped.  We do this BEFORE trying to adopt so we
+            # don't burn 30 s trying to download a non-existent interpreter.
+            _known = _get_known_versions()
+            _is_valid = (
+                _requested_version in _known
+                or _is_plausible_python_version(_requested_version)
+            )
+            if not _is_valid:
+                # Error path — safe to lazy-import now
+                _safe_print(
+                    f'❌ Unknown Python version "{_requested_version}". '
+                    f'Known adopted versions: {", ".join(sorted(_known)) or "none yet"}',
+                    file=sys.stderr,
+                )
+                _safe_print(
+                    '   Run: omnipkg info python   to see what is available',
+                    file=sys.stderr,
+                )
+                sys.exit(1)
+
+            # ── Auto-adopt: interpreter not found but version looks valid ───
+            # Instead of dying with "run adopt yourself", do it right now.
+            print(f'⚡ Python {_requested_version} not yet adopted — adopting automatically…')
+            import subprocess as _sp
+            _adopt_rc = _sp.call(
+                [sys.executable, "-m", "omnipkg.cli",
+                 "python", "adopt", _requested_version],
+                env=os.environ,
+            )
+            if _adopt_rc != 0:
+                _safe_print(
+                    f'❌ Auto-adopt of Python {_requested_version} failed (exit {_adopt_rc}).',
+                    file=sys.stderr,
+                )
+                _safe_print(
+                    f'   Try manually: omnipkg python adopt {_requested_version}',
+                    file=sys.stderr,
+                )
+                sys.exit(1)
+
+            # Re-resolve after adoption
+            target_python = determine_target_python()
+
+        if not target_python.exists():
+            _safe_print(f'❌ Python interpreter not found: {target_python}', file=sys.stderr)
+            print(f'   Run: 8pkg python adopt {extract_version(target_python)}', file=sys.stderr)
+            sys.exit(1)
+
     exec_args = [str(target_python), "-m", "omnipkg.cli"] + sys.argv[1:]
-    
+
     if debug_mode:
-        print(_('[DEBUG-DISPATCH] Executing: {}').format(' '.join(exec_args)), file=sys.stderr)
-    
-    if platform.system() == "Windows":
+        print(f'[DEBUG-DISPATCH] Executing: {" ".join(exec_args)}', file=sys.stderr)
+
+    if sys.platform == "win32":
         # Windows: Use subprocess instead of execv to avoid handle inheritance issues
-        sys.exit(subprocess.call(exec_args))
+        import subprocess as _sp
+        sys.exit(_sp.call(exec_args))
     else:
         os.execv(str(target_python), exec_args)
 
@@ -188,7 +299,7 @@ def determine_target_python() -> Path:
                 version = sys.argv[idx + 1]
                 resolved = resolve_python_path(version)
                 if debug_mode:
-                    safe_print(_('[DEBUG-DISPATCH] ✅ CLI flag: --python {} -> {}').format(version, resolved), file=sys.stderr)
+                    print(f'[DEBUG-DISPATCH] ✅ CLI flag: --python {version} -> {resolved}', file=sys.stderr)
                 return resolved
         except (ValueError, IndexError):
             pass
@@ -228,11 +339,11 @@ def determine_target_python() -> Path:
                     python_path = Path(python_exe)
                     if python_path.exists():
                         if debug_mode:
-                            safe_print(_('[DEBUG-DISPATCH] ✅ Self-aware: {}').format(python_path), file=sys.stderr)
+                            print(f'[DEBUG-DISPATCH] ✅ Self-aware: {python_path}', file=sys.stderr)
                         return python_path
             except Exception as e:
                 if debug_mode:
-                    print(_('[DEBUG-DISPATCH] Config read error: {}').format(e), file=sys.stderr)
+                    print(f'[DEBUG-DISPATCH] Config read error: {e}', file=sys.stderr)
 
     # ─────────────────────────────────────────────────────────────
     # Priority 2: OMNIPKG_PYTHON — only inside an active swap shell.
@@ -258,7 +369,7 @@ def determine_target_python() -> Path:
     # Fallback: whatever Python is running this script
     # ─────────────────────────────────────────────────────────────
     if debug_mode:
-        print(_('[DEBUG-DISPATCH] Fallback to sys.executable: {}').format(sys.executable), file=sys.stderr)
+        print(f'[DEBUG-DISPATCH] Fallback to sys.executable: {sys.executable}', file=sys.stderr)
     return Path(sys.executable)
 
 
@@ -320,10 +431,10 @@ def handle_shim_execution(prog_name: str, debug: bool):
     conda_prefix = os.environ.get("CONDA_PREFIX")
 
     if debug:
-        print(_("[DEBUG-SHIM] Intercepted call to '{}'").format(prog_name), file=sys.stderr)
-        print(_('[DEBUG-SHIM] OMNIPKG_PYTHON={}').format(target_version), file=sys.stderr)
-        print(_('[DEBUG-SHIM] CONDA_PREFIX={}').format(conda_prefix), file=sys.stderr)
-        print(_('[DEBUG-SHIM] OMNIPKG_VENV_ROOT={}').format(venv_root), file=sys.stderr)
+        print(f"[DEBUG-SHIM] Intercepted call to '{prog_name}'", file=sys.stderr)
+        print(f'[DEBUG-SHIM] OMNIPKG_PYTHON={target_version}', file=sys.stderr)
+        print(f'[DEBUG-SHIM] CONDA_PREFIX={conda_prefix}', file=sys.stderr)
+        print(f'[DEBUG-SHIM] OMNIPKG_VENV_ROOT={venv_root}', file=sys.stderr)
 
     # ─────────────────────────────────────────────
     # 1) Validate swap context
@@ -343,11 +454,29 @@ def handle_shim_execution(prog_name: str, debug: bool):
 
     if target_version and venv_root:
         candidate = resolve_python_path(target_version)
-        if not candidate.exists() or not _verify_python_version(candidate, target_version, debug):
+        # Fast path: trust the registry path — it encodes major.minor
+        # (e.g. cpython-3.8.20/bin/python3.8). No subprocess needed.
+        if not candidate.exists():
             if debug:
-                print(f"[DEBUG-SHIM] Exe version mismatch — ignoring OMNIPKG_PYTHON={target_version}",
-                      file=sys.stderr)
+                print(f"[DEBUG-SHIM] Candidate not found: {candidate}", file=sys.stderr)
             target_version = None
+        else:
+            major_minor = ".".join(str(target_version).split(".")[:2])
+            path_str = str(candidate)
+            path_has_version = (
+                f"python{major_minor}" in path_str
+                or f"cpython-{major_minor}" in path_str
+                or f"python{major_minor.replace('.', '')}" in path_str
+            )
+            if not path_has_version:
+                # Path doesn't encode version — last resort subprocess check
+                if not _verify_python_version(candidate, target_version, debug):
+                    if debug:
+                        print(f"[DEBUG-SHIM] Exe version mismatch — ignoring OMNIPKG_PYTHON={target_version}",
+                              file=sys.stderr)
+                    target_version = None
+            elif debug:
+                print(f"[DEBUG-SHIM] ✅ Version {major_minor} confirmed from path (no subprocess)", file=sys.stderr)
 
     # ─────────────────────────────────────────────
     # 2) If no valid swap, pass-through to real tool
@@ -364,14 +493,14 @@ def handle_shim_execution(prog_name: str, debug: bool):
             real_exe = Path(path_dir) / prog_name
             if real_exe.exists() and os.access(real_exe, os.X_OK):
                 if debug:
-                    print(_('[DEBUG-SHIM] Found: {}').format(real_exe), file=sys.stderr)
+                    print(f'[DEBUG-SHIM] Found: {real_exe}', file=sys.stderr)
                 os.execv(str(real_exe), [str(real_exe)] + sys.argv[1:])
 
         # Nothing found → behave like a real shell command-not-found
         if debug:
-            print(_('[DEBUG-SHIM] No {} found in PATH').format(prog_name), file=sys.stderr)
+            print(f'[DEBUG-SHIM] No {prog_name} found in PATH', file=sys.stderr)
 
-        print(_("Command '{}' not found, did you mean:").format(prog_name), file=sys.stderr)
+        print(f"Command '{prog_name}' not found, did you mean:", file=sys.stderr)
         print("  command 'python3' from deb python3", file=sys.stderr)
         print("  command 'python' from deb python-is-python3", file=sys.stderr)
         sys.exit(127)
@@ -383,7 +512,7 @@ def handle_shim_execution(prog_name: str, debug: bool):
     target_python = candidate
 
     if debug:
-        print(_('[DEBUG-SHIM] Executing: {} {}').format(target_python, ' '.join(sys.argv[1:])), file=sys.stderr)
+        print(f'[DEBUG-SHIM] Executing: {target_python} {" ".join(sys.argv[1:])}', file=sys.stderr)
 
     # Direct execution - no daemon needed for simple commands
     if prog_name.startswith("python"):
@@ -426,7 +555,7 @@ def resolve_python_path(version: str) -> Path:
     venv_root = find_absolute_venv_root()
     
     if debug_mode:
-        print(_('[DEBUG-DISPATCH] Absolute Venv Root: {}').format(venv_root), file=sys.stderr)
+        print(f'[DEBUG-DISPATCH] Absolute Venv Root: {venv_root}', file=sys.stderr)
     
     # ═══════════════════════════════════════════════════════════
     # STEP 2: Check the master registry
@@ -453,7 +582,7 @@ def resolve_python_path(version: str) -> Path:
                         print(f"[DEBUG-DISPATCH] Registry entry for {key}: {path} (exists={path.exists()})", file=sys.stderr)
                     if path.exists():
                         if debug_mode:
-                            print(_('[DEBUG-DISPATCH] Registry hit ({}): {}').format(key, path), file=sys.stderr)
+                            print(f'[DEBUG-DISPATCH] Registry hit ({key}): {path}', file=sys.stderr)
                         # AUTO-CREATE config for this interpreter if missing.
                         # Without this, managed interpreters (cpython-3.11.9 etc)
                         # have no .omnipkg_config.json and fall back to the global
@@ -463,7 +592,7 @@ def resolve_python_path(version: str) -> Path:
         
         except Exception as e:
             if debug_mode:
-                print(_('[DEBUG-DISPATCH] Registry read error: {}').format(e), file=sys.stderr)
+                print(f'[DEBUG-DISPATCH] Registry read error: {e}', file=sys.stderr)
     
     # ═══════════════════════════════════════════════════════════
     # STEP 3: FALLBACK - Check Native Venv Binaries
@@ -482,7 +611,7 @@ def resolve_python_path(version: str) -> Path:
     for candidate in candidates:
         if candidate.exists():
             if debug_mode:
-                print(_('[DEBUG-DISPATCH] Found native: {}').format(candidate), file=sys.stderr)
+                print(f'[DEBUG-DISPATCH] Found native: {candidate}', file=sys.stderr)
             return candidate
     
     # ═══════════════════════════════════════════════════════════
@@ -493,7 +622,7 @@ def resolve_python_path(version: str) -> Path:
     
     if path_exe:
         if debug_mode:
-            print(_('[DEBUG-DISPATCH] Found in PATH: {}').format(path_exe), file=sys.stderr)
+            print(f'[DEBUG-DISPATCH] Found in PATH: {path_exe}', file=sys.stderr)
         return Path(path_exe)
     
     # Not found
@@ -883,7 +1012,7 @@ def find_absolute_venv_root(ignore_env_override: bool = False) -> Path:
         override = os.environ.get("OMNIPKG_VENV_ROOT")
         if override:
             if debug_mode:
-                print(_('[DEBUG-DISPATCH] Using OMNIPKG_VENV_ROOT override: {}').format(override), file=sys.stderr)
+                print(f'[DEBUG-DISPATCH] Using OMNIPKG_VENV_ROOT override: {override}', file=sys.stderr)
             return Path(override)
     
     # CRITICAL: When running as a shim/dispatcher, sys.executable is the python interpreter
@@ -915,7 +1044,7 @@ def find_absolute_venv_root(ignore_env_override: bool = False) -> Path:
             # Verify this is actually a venv by checking for pyvenv.cfg
             if (original_venv / "pyvenv.cfg").exists():
                 if debug_mode:
-                    print(_('[DEBUG-DISPATCH] Found venv via .omnipkg split: {}').format(original_venv), file=sys.stderr)
+                    print(f'[DEBUG-DISPATCH] Found venv via .omnipkg split: {original_venv}', file=sys.stderr)
                 return original_venv
 
             # If no pyvenv.cfg at that level, search upward from there
@@ -923,14 +1052,14 @@ def find_absolute_venv_root(ignore_env_override: bool = False) -> Path:
             while search_dir != search_dir.parent:
                 if (search_dir / "pyvenv.cfg").exists():
                     if debug_mode:
-                        print(_('[DEBUG-DISPATCH] Found venv via upward search: {}').format(search_dir), file=sys.stderr)
+                        print(f'[DEBUG-DISPATCH] Found venv via upward search: {search_dir}', file=sys.stderr)
                     return search_dir
                 search_dir = search_dir.parent
 
             # Last resort: if we can't find pyvenv.cfg, just use the directory
             # before .omnipkg as it's definitely the venv root
             if debug_mode:
-                print(_('[DEBUG-DISPATCH] Using pre-.omnipkg path: {}').format(original_venv), file=sys.stderr)
+                print(f'[DEBUG-DISPATCH] Using pre-.omnipkg path: {original_venv}', file=sys.stderr)
             return original_venv
 
     # --- Standard upward search for non-managed interpreters ---
@@ -939,13 +1068,13 @@ def find_absolute_venv_root(ignore_env_override: bool = False) -> Path:
     while search_dir != search_dir.parent:  # Stop at the filesystem root
         if (search_dir / "pyvenv.cfg").exists():
             if debug_mode:
-                print(_('[DEBUG-DISPATCH] Found venv via standard search: {}').format(search_dir), file=sys.stderr)
+                print(f'[DEBUG-DISPATCH] Found venv via standard search: {search_dir}', file=sys.stderr)
             return search_dir
         search_dir = search_dir.parent
 
     # Only use sys.prefix as a last resort if all else fails.
     if debug_mode:
-        print(_('[DEBUG-DISPATCH] Using sys.prefix fallback: {}').format(sys.prefix), file=sys.stderr)
+        print(f'[DEBUG-DISPATCH] Using sys.prefix fallback: {sys.prefix}', file=sys.stderr)
     return Path(sys.prefix)
 
 def find_venv_root() -> Path:
@@ -957,6 +1086,50 @@ def extract_version(python_path: Path) -> str:
     import re
     match = re.search(r"python(\d+\.\d+)", str(python_path))
     return match.group(1) if match else "unknown"
+
+def _get_known_versions() -> set:
+    """
+    Return the set of Python version strings currently registered in the
+    omnipkg interpreter registry (e.g. {'3.9', '3.10', '3.11'}).
+
+    Used by main() to distinguish "not adopted yet" from "completely invalid
+    version that can never exist", so we can auto-adopt the former and
+    immediately reject the latter.
+
+    This is intentionally self-contained — no imports from core.py or cli.py
+    because it runs before we have a target Python to delegate to.
+    """
+    try:
+        venv_root = find_absolute_venv_root()
+        registry_path = venv_root / ".omnipkg" / "interpreters" / "registry.json"
+        if not registry_path.exists():
+            return set()
+        with open(registry_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        return set(data.get("interpreters", {}).keys())
+    except Exception:
+        return set()
+
+
+def _is_plausible_python_version(version: str) -> bool:
+    """
+    Return True if `version` *could* be a real CPython release, i.e. the
+    major is 3 and the minor is in a sensible range (0-99).
+
+    This gates the auto-adopt flow so that typos like "3.200" or "4.0" are
+    caught early with a clear error instead of a 30-second download attempt.
+    We deliberately allow future minors (e.g. 3.15) — we can't know what
+    Python releases will exist; the actual download will fail if unavailable.
+
+    Version 2.x is excluded because omnipkg only manages CPython 3.x.
+    """
+    import re as _re
+    m = _re.fullmatch(r"(\d+)\.(\d+)(?:\.\d+)?", version.strip())
+    if not m:
+        return False
+    major, minor = int(m.group(1)), int(m.group(2))
+    return major == 3 and 0 <= minor <= 99
+
 
 def install_versioned_entrypoints(
     interpreter_path: Path,
