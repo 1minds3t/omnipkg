@@ -7,6 +7,61 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [2.4.1] — 2026-02-25
+
+C-Dispatcher Integration, GPU IPC Overhaul & Perf Boost
+
+🚀 **Performance & Core Architecture**
+- Integrated native C-dispatcher compilation via `build_hooks.py` and `setup.py`. It now transparently replaces the slow pip-generated `8pkg` wrapper with a microsecond-fast native C binary.
+- Massive CLI startup speedup via lazy imports. Heavy modules (requests, redis, asyncio, i18n) are no longer eagerly loaded.
+- Reduced redundant `ConfigManager` instantiations during package installs, saving unnecessary disk I/O.
+
+🛠️ **Daemon & GPU IPC Fixes**
+- Repaired the broken Universal CUDA IPC layer. Cross-process zero-copy tensor sharing now correctly utilizes `ctypes` without PyTorch dependency conflicts, achieving ~2.4ms transfer times.
+- Fixed a major race condition in `worker_daemon.py` by forcing reads from `stdout_queue` instead of raw `process.stdout`, preventing desyncs and deadlocks.
+- Added automatic injection of `numpy==1.26.4` into the daemon worker when `torch` or `tensorflow` is requested to bridge ABI breakages caused by NumPy 2.x.
+
+🐛 **Bug Fixes & Compatibility**
+- Fixed `pyproject.toml` path resolution and rewrote `get_version()` to correctly detect the package version on fresh Python 3.7 interpreters.
+- Fixed `_get_core_dependencies()` to properly evaluate PEP 508 `python_version` markers, preventing duplicate variants (e.g., both `filelock` and `filelock.asyncio`) from colliding.
+- Restored missing fallback logic in `dispatcher.py`.
+
+⚙️ **CI & Distribution**
+- Added and refined GitHub Actions workflows to automatically build and upload multi-platform packages to Anaconda.org (`minds3t` channel) upon PyPI publish.
+
+🧪 **Testing**
+- Completely overhauled `test_concurrent_install.py` and `test_tensorflow_switching.py` to benchmark true concurrent execution, cold vs. hot daemon workers, and demonstrate C-extension swap limitations.
+
+---
+
+**📝 Code Changes:**
+- NEW: build_hooks.py (52 lines changed)
+- UPDATE: setup.py (85 lines changed)
+- UPDATE: src/omnipkg/cli.py (54 lines changed)
+- UPDATE: src/omnipkg/core.py (243 lines changed)
+- UPDATE: src/omnipkg/dispatcher.py (395 lines changed)
+- UPDATE: src/omnipkg/isolation/worker_daemon.py (247 lines changed)
+
+**🧪 Tests:**
+- UPDATE: src/tests/test_concurrent_install.py (1193 lines)
+- UPDATE: src/tests/test_tensorflow_switching.py (953 lines)
+
+**⚙️ Configuration:**
+- .github/workflows/upload_anaconda.yml (326 lines)
+- pyproject.toml (5 lines)
+
+**Additional Changes:**
+- fix(resolve pyproject.toml path depth and Python 3.7 version detection): - Fix parent.parent → parent.parent.parent in core.py and cli.py so
+- perf: reduce ConfigManager instantiations during install
+- perf(C-dispatcher integration, lazy imports, and GPU IPC fixes): This commit introduces massive performance improvements to the startup
+- fix(ci): correct token name for anaconda
+- ci: add Anaconda.org upload workflow for minds3t channel
+
+**Updates:**
+- Update upload_anaconda.yml
+
+_14 files changed, 3194 insertions(+), 1388 deletions(-)_
+
 ## [2.4.0] — 2026-02-23
 
 Multi-Package Activation, Windows Stability & CLI Overhaul
