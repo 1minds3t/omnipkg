@@ -3,8 +3,8 @@ name: Test Python Adoption + 8pkg Install
 on:
   push:
     branches:
-      - development           # ← auto-runs ONLY on development pushes
-  workflow_dispatch:          # ← manual trigger allowed on ANY branch (incl. main)
+      - development           # auto-runs ONLY on pushes to development
+  workflow_dispatch:          # manual trigger allowed on ANY branch (incl. main)
 
 jobs:
   test-adopt-and-install:
@@ -28,19 +28,17 @@ jobs:
           curl -LsSf https://astral.sh/uv/install.sh | sh
           echo "$HOME/.cargo/bin" >> $GITHUB_PATH
 
-      # ────────────────────────────────────────────────
-      #  Create venv + activate it → fixes uv venv error
-      # ────────────────────────────────────────────────
+      # Create and activate venv — fixes "No virtual environment found" error
       - name: Create and activate virtual environment
         run: |
           uv venv .venv
           echo "VIRTUAL_ENV=$PWD/.venv" >> $GITHUB_ENV
           echo "$PWD/.venv/bin" >> $GITHUB_PATH
-          # Verify activation
+          # Verify
           which python
           python --version
 
-      - name: Upgrade pip and install omnipkg in venv
+      - name: Upgrade pip and install omnipkg
         run: |
           uv pip install --upgrade pip
           uv pip install omnipkg
@@ -60,11 +58,11 @@ jobs:
         run: |
           cmd_version=$(echo "${{ matrix.python }}" | tr -d '.')
           8pkg${cmd_version} run python -c "
-import rich
-from importlib.metadata import version
-print('rich version:', version('rich'))
-print('rich location:', rich.__file__)
-"
+          import rich
+          from importlib.metadata import version
+          print('rich version:', version('rich'))
+          print('rich location:', rich.__file__)
+          "
 
       - name: Show daemon status (non-fatal)
         run: |
