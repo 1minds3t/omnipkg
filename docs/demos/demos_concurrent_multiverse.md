@@ -143,7 +143,7 @@ from omnipkg.loader import omnipkgLoader
 with omnipkgLoader("rich=={rich_version}"):
     import rich, importlib.metadata
     actual_version = importlib.metadata.version('rich')
-    print(json.dumps({{"success": True, "rich_version": actual_version}}))
+    print(json.dumps({"success": True, "rich_version": actual_version}))
 """
     
     result = subprocess.run([python_exe, "-c", test_script], ...)
