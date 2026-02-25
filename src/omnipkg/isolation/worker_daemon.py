@@ -2877,8 +2877,17 @@ class WorkerPoolDaemon:
         """Handle client request with timeout protection."""
         conn.settimeout(30.0)
         try:
-            req = recv_json(conn, timeout=30.0)
+            # 1. Receive Request
+            try:
+                req = recv_json(conn, timeout=30.0)
+            except (ConnectionResetError, BrokenPipeError, EOFError):
+                # Client disconnected abruptly (common on Windows during teardown)
+                # Just return silently to avoid log noise.
+                return
+
             self.stats["total_requests"] += 1
+
+            # 2. Process Logic
             if req["type"] == "execute":
                 res = self._execute_code(
                     req["spec"],
@@ -2897,17 +2906,17 @@ class WorkerPoolDaemon:
                 )
             elif req["type"] == "status":
                 res = self._get_status()
-            elif req["type"] == "configure_idle":  # ✅ Fixed
+            elif req["type"] == "configure_idle":
                 p_exe = req.get("python_exe", sys.executable)
                 count = req.get("count", 3)
                 self.set_idle_config(p_exe, count)
                 res = {"success": True, "config": dict(self.idle_config)}
-            elif req["type"] == "get_idle_config":  # ✅ Fixed
+            elif req["type"] == "get_idle_config":
                 res = {
                     "success": True,
                     "config": dict(self.idle_config)
                 }
-            elif req["type"] == "set_idle_config":  # ✅ Fixed
+            elif req["type"] == "set_idle_config":
                 python_exe = req.get("python_exe")
                 count = req.get("count", 0)
                 if python_exe:
@@ -2915,19 +2924,32 @@ class WorkerPoolDaemon:
                     res = {"success": True}
                 else:
                     res = {"success": False, "error": "python_exe required"}
-            elif req["type"] == "shutdown":  # ✅ Fixed
+            elif req["type"] == "shutdown":
                 self.running = False
                 res = {"success": True}
             else:
-                res = {"success": False, "error": f"Unknown type: {req['type']}"}  # ✅ Fixed
-            send_json(conn, res)
+                res = {"success": False, "error": f"Unknown type: {req['type']}"}
+
+            # 3. Send Response
+            try:
+                send_json(conn, res)
+            except (ConnectionResetError, BrokenPipeError):
+                # Client disconnected before we could send response - ignore
+                pass
+
         except Exception as e:
+            # 4. Handle Actual Logic Errors (Log these!)
             import traceback
             safe_print(f"❌ [DAEMON] _handle_client exception: {e}\n{traceback.format_exc()}", file=sys.stderr)
             try:
                 send_json(conn, {"success": False, "error": str(e)})
-            except Exception as e2:
-                safe_print(f"❌ [DAEMON] send_json also failed: {e2}", file=sys.stderr)
+            except Exception:
+                pass
+        finally:
+            try:
+                conn.close()
+            except Exception:
+                pass
 
     def _execute_code(
         self, spec: str, code: str, shm_in: dict, shm_out: dict, python_exe: str = None
