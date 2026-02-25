@@ -1235,8 +1235,10 @@ def install_versioned_entrypoints(
     for base_name in ("omnipkg", "8pkg"):
         if sys.platform == "win32":
             # Windows: the entry point is a .exe or .bat script.
-            # We create a versioned .bat that delegates to the base command
-            # so that e.g. `8pkg311` works in CMD and PowerShell.
+            # CRITICAL: we must inject --python X.Y explicitly in the .bat so
+            # that sys.argv[0] being "8pkg" (not "8pkg310") doesn't lose the
+            # version. Delegating bare to 8pkg.exe strips the version suffix
+            # and the dispatcher falls back to sys.executable (always 3.11).
             src_bat = None
             for ext in (".exe", ".bat", ".cmd", ""):
                 candidate = bin_dir / f"{base_name}{ext}"
@@ -1248,12 +1250,17 @@ def install_versioned_entrypoints(
                     print(f"[DEBUG-DISPATCH] Skipping Windows shim for {base_name} — not found in {bin_dir}", file=sys.stderr)
                 continue
             link_bat = bin_dir / f"{base_name}{flat}.bat"
+            # Derive major.minor from flat ("310" -> "3.10", "39" -> "3.9")
+            _maj = flat[0]
+            _min = flat[1:]
+            _ver = f"{_maj}.{_min}"
             try:
-                # .bat that forwards all args to the base command using its full path
-                bat_content = f'@echo off\r\n"{src_bat}" %*\r\n'
+                # Inject --python X.Y as first arg so dispatcher version detection
+                # works even though sys.argv[0] will be "8pkg" not "8pkg310"
+                bat_content = f'@echo off\r\n"{src_bat}" --python {_ver} %*\r\n'
                 link_bat.write_text(bat_content, encoding="ascii")
                 if debug_mode:
-                    print(f"[DEBUG-DISPATCH] ✅ Windows .bat shim: {link_bat} -> {src_bat.name}", file=sys.stderr)
+                    print(f"[DEBUG-DISPATCH] ✅ Windows .bat shim: {link_bat} -> {src_bat.name} --python {_ver}", file=sys.stderr)
             except Exception as e:
                 if debug_mode:
                     print(f"[DEBUG-DISPATCH] ⚠️  Could not create Windows shim {link_bat}: {e}", file=sys.stderr)
