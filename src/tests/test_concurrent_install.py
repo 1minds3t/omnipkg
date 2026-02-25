@@ -74,6 +74,25 @@ _SP = dict(encoding="utf-8", errors="replace", env=_ENV)
 
 print_lock = threading.Lock()
 
+
+def _cmd(*parts: str) -> list:
+    """
+    Build a subprocess arg list that works on Windows and POSIX.
+
+    On Windows, omnipkg shims are installed as .bat files (e.g. omnipkg.bat,
+    8pkg310.bat).  subprocess.run/Popen with a *list* does NOT search for .bat
+    extensions — it needs shell=True or an explicit .bat suffix.  We add the
+    suffix on Windows so callers can always use a plain list + shell=False.
+
+    Usage:
+        subprocess.run(_cmd("omnipkg", "info", "python"), ...)
+        subprocess.Popen(_cmd("8pkg", "daemon", "start"), ...)
+    """
+    if sys.platform == "win32":
+        cmd_name = parts[0] + ".bat"
+        return [cmd_name, *parts[1:]]
+    return list(parts)
+
 # ── Test matrix ──────────────────────────────────────────────────────────────
 # Each entry is (python_version, rich_version).
 # Intentionally different rich versions per Python to prove isolation.
@@ -287,8 +306,9 @@ def install_one(py_version: str, pkg_spec: str) -> dict:
             }
 
     # ── Fallback: CLI subprocess (8pkg39 install rich==13.4.2) ──────────
-    cmd = "8pkg" + py_version.replace(".", "")
-    result = subprocess.run([cmd, "install", pkg_spec], capture_output=True, **_SP)
+    flat = py_version.replace(".", "")
+    cmd_name = "8pkg" + flat
+    result = subprocess.run(_cmd(cmd_name, "install", pkg_spec), capture_output=True, **_SP)
     elapsed_ms = (time.perf_counter() - start) * 1000
     success = result.returncode == 0
     noop = success and elapsed_ms < INSTALL_NOOP_THRESHOLD_MS
@@ -428,7 +448,7 @@ def adopt_if_needed(version: str, timeout: float = 300.0) -> bool:
                 # prime_interpreter_cache will use omnipkg info python fallback.
                 safe_print(f"  ✅ Python {version}  adopted (registry path mismatch — using CLI to verify)")
                 result = subprocess.run(
-                    ["omnipkg", "info", "python"], capture_output=True, **_SP
+                    _cmd("omnipkg", "info", "python"), capture_output=True, **_SP
                 )
                 if f"Python {version}:" in result.stdout:
                     # Parse the path out of info output as a one-time fallback
@@ -445,7 +465,7 @@ def adopt_if_needed(version: str, timeout: float = 300.0) -> bool:
 
     # ── CLI subprocess fallback ──────────────────────────────────────────
     # Use Popen + polling so we can honour the timeout even on slow downloads.
-    proc = subprocess.Popen(["omnipkg", "python", "adopt", version], env=_ENV)
+    proc = subprocess.Popen(_cmd("omnipkg", "python", "adopt", version), env=_ENV)
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         if proc.poll() is not None:
@@ -527,7 +547,7 @@ def phase_daemon(interpreter_paths: list):
 
         safe_print("  🔄 Starting daemon…")
         subprocess.Popen(
-            ["8pkg", "daemon", "start"],
+            _cmd("8pkg", "daemon", "start"),
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
@@ -603,7 +623,7 @@ def prime_interpreter_cache(configs: list):
         # One-shot fallback: parse `omnipkg info python` for missing entries.
         # Costs one subprocess but only runs when the direct read missed something.
         safe_print(f"  ⚠️  {missing} not found in direct registry read — checking omnipkg info python…")
-        result = subprocess.run(["omnipkg", "info", "python"], capture_output=True, **_SP)
+        result = subprocess.run(_cmd("omnipkg", "info", "python"), capture_output=True, **_SP)
         for line in result.stdout.splitlines():
             for ver in list(missing):
                 if f"Python {ver}:" in line:
