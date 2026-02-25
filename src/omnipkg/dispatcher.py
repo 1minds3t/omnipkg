@@ -54,7 +54,43 @@ def main():
             pass
     
     debug_mode = os.environ.get("OMNIPKG_DEBUG") == "1"
-    
+
+    if debug_mode:
+        print(f'[DEBUG-DISPATCH] ════════════════════════════════════════════════', file=sys.stderr)
+        print(f'[DEBUG-DISPATCH] omnipkg dispatcher startup', file=sys.stderr)
+        print(f'[DEBUG-DISPATCH] sys.argv           : {sys.argv}', file=sys.stderr)
+        print(f'[DEBUG-DISPATCH] sys.executable     : {sys.executable}', file=sys.stderr)
+        print(f'[DEBUG-DISPATCH] sys.prefix         : {sys.prefix}', file=sys.stderr)
+        _argv0_path = Path(sys.argv[0])
+        try:
+            _argv0_resolved = _argv0_path.resolve()
+            _is_symlink = _argv0_path.is_symlink()
+            _symlink_target = os.readlink(str(_argv0_path)) if _is_symlink else "n/a"
+        except Exception as _e:
+            _argv0_resolved, _is_symlink, _symlink_target = "err", False, str(_e)
+        print(f'[DEBUG-DISPATCH] argv[0] resolved   : {_argv0_resolved}', file=sys.stderr)
+        print(f'[DEBUG-DISPATCH] argv[0] is_symlink : {_is_symlink} -> {_symlink_target}', file=sys.stderr)
+        _search = Path(sys.argv[0]).resolve().parent
+        _pyvenv_found = "NOT FOUND (will fall back to sys.prefix)"
+        while _search != _search.parent:
+            if (_search / "pyvenv.cfg").exists():
+                _pyvenv_found = str(_search / "pyvenv.cfg")
+                break
+            _search = _search.parent
+        print(f'[DEBUG-DISPATCH] pyvenv.cfg search  : {_pyvenv_found}', file=sys.stderr)
+        print(f'[DEBUG-DISPATCH] OMNIPKG_VENV_ROOT  : {os.environ.get("OMNIPKG_VENV_ROOT", "NOT SET")}', file=sys.stderr)
+        print(f'[DEBUG-DISPATCH] OMNIPKG_PYTHON     : {os.environ.get("OMNIPKG_PYTHON", "NOT SET")}', file=sys.stderr)
+        print(f'[DEBUG-DISPATCH] _OMNIPKG_SWAP_ACTIVE: {os.environ.get("_OMNIPKG_SWAP_ACTIVE", "NOT SET")}', file=sys.stderr)
+        _bin_dir = Path(sys.argv[0]).resolve().parent
+        try:
+            _shims = sorted(f.name for f in _bin_dir.iterdir() if f.name.startswith(("8pkg", "omnipkg")))
+            print(f'[DEBUG-DISPATCH] shims in argv[0] bin/  : {_shims}', file=sys.stderr)
+        except Exception as _le:
+            print(f'[DEBUG-DISPATCH] could not list argv[0] bin/: {_le}', file=sys.stderr)
+        _reg = Path(sys.prefix) / ".omnipkg" / "interpreters" / "registry.json"
+        print(f'[DEBUG-DISPATCH] registry @ sys.prefix  : {_reg} (exists={_reg.exists()})', file=sys.stderr)
+        print(f'[DEBUG-DISPATCH] ════════════════════════════════════════════════', file=sys.stderr)
+
     # ═══════════════════════════════════════════════════════════
     # 🌍 STEP -1: PROPAGATE LANGUAGE BEFORE ANYTHING ELSE
     # ═══════════════════════════════════════════════════════════
@@ -212,116 +248,6 @@ def _maybe_install_c_dispatcher():
         if binary_tmp.exists():
             try: binary_tmp.unlink()
             except: pass
-
-    
-    # 2. Determine which Python interpreter to use
-    #
-    # SPECIAL CASE: The 'swap' command itself must ALWAYS run via the host/native
-    # Python, never via a currently-swapped interpreter.  If we are inside a swap
-    # shell and the user runs '8pkg swap python X', routing it through the swapped
-    # interpreter (e.g. 3.7) will fail if that interpreter is missing deps needed
-    # by the swap command (e.g. importlib.metadata).  The swap machinery lives in
-    # the host env and should always be invoked from there.
-    argv_commands = [a for a in sys.argv[1:] if not a.startswith("-")]
-    is_swap_command = len(argv_commands) >= 1 and argv_commands[0] == "swap"
-    is_swap_python = is_swap_command and len(argv_commands) >= 2 and argv_commands[1].lower().startswith("python")
-    if is_swap_python and os.environ.get("_OMNIPKG_SWAP_ACTIVE") == "1":
-        # Force host Python ONLY for 'swap python' — the shell-spawning machinery
-        # lives in the host env. Package swaps (e.g. 'swap numpy==1.26.4') must
-        # run under the active context Python so they target the right site-packages.
-        _saved = {k: os.environ.pop(k, None)
-                  for k in ("OMNIPKG_PYTHON", "OMNIPKG_ACTIVE_PYTHON", "_OMNIPKG_SWAP_ACTIVE")}
-        target_python = determine_target_python()
-        for k, v in _saved.items():
-            if v is not None:
-                os.environ[k] = v
-        if debug_mode:
-            print("[DEBUG-DISPATCH] swap python inside swap shell — forcing host Python", file=sys.stderr)
-    else:
-        target_python = determine_target_python()
-        if is_swap_command and not is_swap_python and os.environ.get("_OMNIPKG_SWAP_ACTIVE") == "1":
-            if debug_mode:
-                print("[DEBUG-DISPATCH] swap package inside swap shell — using active context Python", file=sys.stderr)
-    
-    # ═══════════════════════════════════════════════════════════
-    # STEP 3: Gate on validity — reject fantasy versions like 3.20
-    # ═══════════════════════════════════════════════════════════
-    # Determine which version was requested (if any) so we can give
-    # a precise error and optionally auto-adopt.
-    _requested_version: str | None = None
-    if "--python" in sys.argv:
-        try:
-            _idx = sys.argv.index("--python")
-            if _idx + 1 < len(sys.argv):
-                _requested_version = sys.argv[_idx + 1]
-        except (ValueError, IndexError):
-            pass
-
-    if not target_python.exists():
-        if _requested_version:
-            # ── Validate that the requested version is plausible ────────────
-            # Reject versions that cannot exist (e.g. 3.20, 2.5) or that the
-            # user simply mistyped.  We do this BEFORE trying to adopt so we
-            # don't burn 30 s trying to download a non-existent interpreter.
-            _known = _get_known_versions()
-            _is_valid = (
-                _requested_version in _known
-                or _is_plausible_python_version(_requested_version)
-            )
-            if not _is_valid:
-                # Error path — safe to lazy-import now
-                _safe_print(
-                    f'❌ Unknown Python version "{_requested_version}". '
-                    f'Known adopted versions: {", ".join(sorted(_known)) or "none yet"}',
-                    file=sys.stderr,
-                )
-                _safe_print(
-                    '   Run: omnipkg info python   to see what is available',
-                    file=sys.stderr,
-                )
-                sys.exit(1)
-
-            # ── Auto-adopt: interpreter not found but version looks valid ───
-            # Instead of dying with "run adopt yourself", do it right now.
-            print(f'⚡ Python {_requested_version} not yet adopted — adopting automatically…')
-            import subprocess as _sp
-            _adopt_rc = _sp.call(
-                [sys.executable, "-m", "omnipkg.cli",
-                 "python", "adopt", _requested_version],
-                env=os.environ,
-            )
-            if _adopt_rc != 0:
-                _safe_print(
-                    f'❌ Auto-adopt of Python {_requested_version} failed (exit {_adopt_rc}).',
-                    file=sys.stderr,
-                )
-                _safe_print(
-                    f'   Try manually: omnipkg python adopt {_requested_version}',
-                    file=sys.stderr,
-                )
-                sys.exit(1)
-
-            # Re-resolve after adoption
-            target_python = determine_target_python()
-
-        if not target_python.exists():
-            _safe_print(f'❌ Python interpreter not found: {target_python}', file=sys.stderr)
-            print(f'   Run: 8pkg python adopt {extract_version(target_python)}', file=sys.stderr)
-            sys.exit(1)
-
-    exec_args = [str(target_python), "-m", "omnipkg.cli"] + sys.argv[1:]
-
-    if debug_mode:
-        print(f'[DEBUG-DISPATCH] Executing: {" ".join(exec_args)}', file=sys.stderr)
-
-    if sys.platform == "win32":
-        # Windows: Use subprocess instead of execv to avoid handle inheritance issues
-        import subprocess as _sp
-        sys.exit(_sp.call(exec_args))
-    else:
-        os.execv(str(target_python), exec_args)
-
-
 def determine_target_python() -> Path:
     """
     PRIORITY ORDER:
