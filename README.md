@@ -1249,6 +1249,7 @@ pixi global install omnipkg
 ```
 
 #### 🏠 Conda & prefix.dev
+```
 
 <a href="https://anaconda.org/conda-forge/omnipkg">
 <img src="https://anaconda.org/conda-forge/omnipkg/badges/platforms.svg" alt="Platforms / Noarch">
