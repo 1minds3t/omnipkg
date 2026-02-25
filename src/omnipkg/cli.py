@@ -266,19 +266,23 @@ def handle_python_requirement(
 
 def get_version():
     """Get version from package metadata."""
+    import re as _re
+    # Try pyproject.toml first (works in dev mode and fresh interpreters)
+    try:
+        toml_path = Path(__file__).parent.parent.parent / "pyproject.toml"
+        if toml_path.exists():
+            text = toml_path.read_text()
+            m = _re.search(r'^\s*version\s*=\s*"([^"]+)"', text, _re.MULTILINE)
+            if m:
+                return m.group(1)
+    except Exception:
+        pass
+    # Fallback: installed metadata
     try:
         from importlib.metadata import version
         return version("omnipkg")
     except Exception:
-        try:
-            import tomllib
-            toml_path = Path(__file__).parent.parent / "pyproject.toml"
-            if toml_path.exists():
-                with open(toml_path, "rb") as f:
-                    data = tomllib.load(f)
-                    return data.get("project", {}).get("version", "unknown")
-        except (ImportError, Exception):
-            pass
+        pass
     return "unknown"
 
 

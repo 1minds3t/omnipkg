@@ -75,7 +75,7 @@ def main():
                         print(f"[DEBUG-DISPATCH] Set OMNIPKG_LANG={language} from config", file=sys.stderr)
             except Exception as e:
                 if debug_mode:
-                    print(_('[DEBUG-DISPATCH] Config read error: {}').format(e), file=sys.stderr)
+                    print(f'[DEBUG-DISPATCH] Config read error: {e}', file=sys.stderr)
     
     # ═══════════════════════════════════════════════════════════
     # 🎯 STEP 0: DETECT VERSION-SPECIFIC COMMAND (8pkg39, omnipkg39, etc.)
@@ -97,9 +97,9 @@ def main():
             sys.argv.insert(2, forced_version)
         
         if debug_mode:
-            print(_('[DEBUG-DISPATCH] Detected version-specific command: {}').format(prog_name), file=sys.stderr)
-            print(_('[DEBUG-DISPATCH] Injected --python {}').format(forced_version), file=sys.stderr)
-            print(_('[DEBUG-DISPATCH] Modified argv: {}').format(sys.argv), file=sys.stderr)
+            print(f'[DEBUG-DISPATCH] Detected version-specific command: {prog_name}', file=sys.stderr)
+            print(f'[DEBUG-DISPATCH] Injected --python {forced_version}', file=sys.stderr)
+            print(f'[DEBUG-DISPATCH] Modified argv: {sys.argv}', file=sys.stderr)
     
     # ═══════════════════════════════════════════════════════════
     # STEP 1: Identify how we were called
@@ -108,7 +108,7 @@ def main():
     # If called as 'python', 'python3', or 'pip' -> ACT AS SHIM
     if prog_name.startswith("python") or prog_name == "pip":
         if debug_mode:
-            print(_("[DEBUG-SHIM] Intercepted call to '{}'").format(prog_name), file=sys.stderr)
+            print("[DEBUG-SHIM] Intercepted call to '{}'".format(prog_name), file=sys.stderr)
         handle_shim_execution(prog_name, debug_mode)
         return
     
@@ -138,8 +138,8 @@ def main():
         target_python = determine_target_python()
     
     if debug_mode:
-        print(_('[DEBUG-DISPATCH] Using Python: {}').format(target_python), file=sys.stderr)
-        print(_('[DEBUG-DISPATCH] Current executable: {}').format(sys.executable), file=sys.stderr)
+        print(f'[DEBUG-DISPATCH] Using Python: {target_python}', file=sys.stderr)
+        print(f'[DEBUG-DISPATCH] Current executable: {sys.executable}', file=sys.stderr)
     
     if not target_python.exists():
         safe_print(_('❌ Python interpreter not found: {}').format(target_python), file=sys.stderr)
@@ -149,8 +149,9 @@ def main():
     exec_args = [str(target_python), "-m", "omnipkg.cli"] + sys.argv[1:]
     
     if debug_mode:
-        print(_('[DEBUG-DISPATCH] Executing: {}').format(' '.join(exec_args)), file=sys.stderr)
+        print(f'[DEBUG-DISPATCH] Executing: {" ".join(exec_args)}', file=sys.stderr)
     
+    import platform
     if platform.system() == "Windows":
         # Windows: Use subprocess instead of execv to avoid handle inheritance issues
         sys.exit(subprocess.call(exec_args))
@@ -205,7 +206,6 @@ def _maybe_install_c_dispatcher():
         if binary_tmp.exists():
             try: binary_tmp.unlink()
             except: pass
-    # ============================================================================
     if sys.platform == 'win32':
         try:
             import ctypes

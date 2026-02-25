@@ -122,7 +122,7 @@ def _get_dynamic_omnipkg_version():
 
     # Try pyproject.toml first (developer mode)
     try:
-        pyproject_path = Path(__file__).parent.parent / "pyproject.toml"
+        pyproject_path = Path(__file__).parent.parent.parent / "pyproject.toml"
         if pyproject_path.exists():
             with pyproject_path.open("rb") as f:
                 data = tomllib.load(f)
@@ -144,110 +144,138 @@ def _get_core_dependencies(target_python_version: str = None) -> set:
     """
     Reads omnipkg's DIRECT production dependencies from pyproject.toml,
     filtered for the target Python version.
-    
+
     Args:
         target_python_version: Version string like "3.9" or "3.14"
     """
     if target_python_version is None:
         target_python_version = f"{sys.version_info.major}.{sys.version_info.minor}"
-    
+
     try:
         major, minor = map(int, target_python_version.split("."))
     except (ValueError, AttributeError):
         major, minor = sys.version_info.major, sys.version_info.minor
-    
+
     try:
-        # Try to find pyproject.toml relative to this file
-        pyproject_path = Path(__file__).parent.parent / "pyproject.toml"
+        pyproject_path = Path(__file__).parent.parent.parent / "pyproject.toml"
 
         if not pyproject_path.exists():
-            # Fallback: try current working directory
             pyproject_path = Path.cwd() / "pyproject.toml"
 
         if pyproject_path.exists():
             # Read the toml file
             if sys.version_info >= (3, 11):
                 import tomllib
-
                 with pyproject_path.open("rb") as f:
                     pyproject_data = tomllib.load(f)
             else:
                 try:
                     import tomli
-
                     with pyproject_path.open("rb") as f:
                         pyproject_data = tomli.load(f)
                 except ImportError:
-                    # If tomli not available, fall through to metadata fallback
-                    raise
+                    # tomli not available — parse toml line by line
+                    import re as _re
+                    text = pyproject_path.read_text()
+                    deps_found = []
+                    in_deps = False
+                    for _line in text.splitlines():
+                        _s = _line.strip()
+                        if not in_deps:
+                            if _s.startswith("dependencies") and "=[" in _s.replace(" ", ""):
+                                in_deps = True
+                            continue
+                        if _s.startswith("]"):
+                            break
+                        if not _s or _s.startswith("#"):
+                            continue
+                        _m = _re.search(r'"([^"]+)"', _s)
+                        if _m:
+                            deps_found.append(_m.group(1))
+                    pyproject_data = {"project": {"dependencies": deps_found}}
 
-            # Get ONLY direct dependencies (no optional, no dev)
             deps = pyproject_data.get("project", {}).get("dependencies", [])
 
-            # Extract package names, filtering for target Python version
             core_deps = set()
-            seen_filelock = False  # Track if we've added filelock already
-            
+            seen_filelock = False
+
             for dep in deps:
                 dep_lower = dep.lower()
-                
-                # SPECIAL HANDLING: filelock dependencies
-                # Only include ONE filelock package based on Python version
-                if "filelock" in dep_lower and not seen_filelock:
-                    if major == 3 and minor < 10:
-                        # Python 3.7-3.9: use filelock-lts
-                        if "filelock-lts" in dep_lower:
-                            core_deps.add("filelock-lts")
-                            seen_filelock = True
-                    else:
-                        # Python 3.10+: use upstream filelock
-                        if "filelock-lts" not in dep_lower:
-                            core_deps.add("filelock")
-                            seen_filelock = True
-                    continue  # Skip adding both
-                
-                # Skip filelock variants after we've added one
+
+                # Split off PEP 508 marker
+                pkg_part = dep
+                marker_str = None
+                if ";" in dep:
+                    pkg_part, marker_str = dep.split(";", 1)
+                    marker_str = marker_str.strip()
+
+                # Evaluate python_version marker against target version
+                if marker_str:
+                    marker_match = re.search(
+                        r"python_version\s*(==|!=|>=|<=|>|<)\s*['\"]([0-9]+\.[0-9]+)['\"]",
+                        marker_str
+                    )
+                    if marker_match:
+                        op = marker_match.group(1)
+                        ver_str = marker_match.group(2)
+                        mv_major, mv_minor = map(int, ver_str.split("."))
+                        t = (major, minor)
+                        th = (mv_major, mv_minor)
+                        include = {
+                            "==": t == th,
+                            "!=": t != th,
+                            ">=": t >= th,
+                            "<=": t <= th,
+                            ">":  t > th,
+                            "<":  t < th,
+                        }[op]
+                        if not include:
+                            continue
+
+                # SPECIAL HANDLING: filelock — only one variant per Python version
                 if "filelock" in dep_lower:
+                    if not seen_filelock:
+                        if major == 3 and minor < 10:
+                            if "filelock-lts" in dep_lower:
+                                core_deps.add("filelock-lts")
+                                seen_filelock = True
+                        else:
+                            if "filelock-lts" not in dep_lower:
+                                core_deps.add("filelock")
+                                seen_filelock = True
                     continue
-                
-                # Match package name before any version specifier
-                match = re.match(r"^([a-zA-Z0-9\-_.]+)", dep)
+
+                match = re.match(r"^([a-zA-Z0-9\-_.]+)", pkg_part.strip())
                 if match:
                     pkg_name = canonicalize_name(match.group(1))
                     core_deps.add(pkg_name)
 
-            safe_print(_('   📋 Found {} direct dependencies in pyproject.toml').format(len(core_deps)))
-            safe_print(_('   🐍 Target Python: {}').format(target_python_version))
-            safe_print(_('   📦 Filelock variant: {}').format('filelock-lts' if major == 3 and minor < 10 else 'filelock'))
+            safe_print(_("   📋 Found {} direct dependencies in pyproject.toml").format(len(core_deps)))
+            safe_print(_("   🐍 Target Python: {}").format(target_python_version))
+            safe_print(_("   📦 Filelock variant: {}").format("filelock-lts" if major == 3 and minor < 10 else "filelock"))
             return core_deps
 
-        # If no pyproject.toml found, try to get from installed metadata
         safe_print("   ⚠️  No pyproject.toml found, trying installed metadata...")
 
     except Exception as e:
-        safe_print(_('   ⚠️  Could not read pyproject.toml: {}').format(e))
+        safe_print(_("   ⚠️  Could not read pyproject.toml: {}").format(e))
         safe_print("   📋 Falling back to installed metadata...")
 
-    # Fallback: Get from installed metadata
+    # Fallback: installed metadata
     try:
-        from importlib.metadata import metadata
-
-        pkg_meta = metadata("omnipkg")
+        from importlib.metadata import metadata as _metadata
+        pkg_meta = _metadata("omnipkg")
         reqs = pkg_meta.get_all("Requires-Dist") or []
 
-        # Only get DIRECT dependencies (no extras, no conditionals)
         dependencies = set()
         for req in reqs:
-            # Skip conditional dependencies (extras like [dev], [test], etc.)
             if "extra ==" in req:
                 continue
-
             match = re.match(r"^([a-zA-Z0-9\-_.]+)", req)
             if match:
                 pkg_name = canonicalize_name(match.group(1))
                 dependencies.add(pkg_name)
 
-        # Add tomli for Python < 3.11 if not already present
         if sys.version_info < (3, 11):
             dependencies.add("tomli")
 
@@ -258,13 +286,9 @@ def _get_core_dependencies(target_python_version: str = None) -> set:
         safe_print(f"   ⚠️  Could not determine dependencies from metadata: {e}")
         safe_print("   📦 Using minimal essential fallback set")
 
-        # Absolute minimal fallback - just what omnipkg absolutely needs
         minimal_deps = {"redis", "rich", "requests"}
-
-        # Add tomli for older Python versions
         if sys.version_info < (3, 11):
             minimal_deps.add("tomli")
-
         return minimal_deps
 
 class ConfigManager:
@@ -9461,6 +9485,7 @@ class omnipkg:
         should_reverse = strategy == "stable-main"
         return sorted(packages, key=get_version_key, reverse=should_reverse)
 
+    
     def _ensure_deps_in_interpreter(self, python_exe: Path, version: str) -> None:
         """
         Ensure critical omnipkg runtime deps are installed in a newly adopted interpreter.
@@ -15516,6 +15541,7 @@ print(json.dumps(results))
         safe_print(
             f" -> Finding latest COMPATIBLE version for '{package_name}' using background caching..."
         )
+        import requests as http_requests
         py_context = python_context_version or self.current_python_context
 
         if not hasattr(self, "pypi_cache"):
