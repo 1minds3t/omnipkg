@@ -17,7 +17,7 @@ RUN addgroup -g 1000 -S omnipkg && \
 WORKDIR $OMNIPKG_HOME
 COPY --chown=omnipkg:omnipkg pyproject.toml README.md ./
 COPY --chown=omnipkg:omnipkg src/ ./src/
-
+COPY --chown=omnipkg:omnipkg pyproject.toml README.md build_hooks.py ./
 # Security fix: Upgrade pip to >=25.3 (CVE-2025-8869)
 RUN pip install --no-cache-dir --upgrade "pip>=25.3" && \
     pip install --no-cache-dir . && \
