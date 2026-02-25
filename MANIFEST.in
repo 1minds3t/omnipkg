@@ -19,4 +19,4 @@ recursive-include src/omnipkg/locale *.pot
 recursive-include src/tests *.py
 
 # Top-level module list
-include top_level.txt
+include top_level.txtinclude build_hooks.py
