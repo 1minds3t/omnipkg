@@ -20,19 +20,10 @@ import tempfile
 from contextlib import contextmanager
 from pathlib import Path
 
-from omnipkg.isolation.worker_daemon import cli_logs  # <--- NEW IMPORT
-from omnipkg.isolation.worker_daemon import (
-    cli_start,
-    cli_status,
-    cli_stop,
-    cli_idle_config
-)
-try:
-    from omnipkg.apis.local_bridge import WebBridgeManager
-except ImportError:
-    run_bridge_logic = None
-
-from .commands.run import execute_run_command
+# NOTE: worker_daemon, local_bridge, and commands.run are intentionally NOT
+# imported here. Each was costing 29ms, 64ms, and 99ms respectively on EVERY
+# invocation — including `8pkg install rich` which never touches any of them.
+# They are now lazy-loaded inside the specific command handlers that need them.
 from .common_utils import print_header
 from .core import ConfigManager
 from .core import omnipkg as OmnipkgCore
@@ -1937,6 +1928,9 @@ def main():
             return pkg_instance.reset_configuration(force=args.force)
 
         elif args.command == "daemon":
+            from omnipkg.isolation.worker_daemon import (
+                cli_start, cli_stop, cli_status, cli_logs, cli_idle_config
+            )
             if args.daemon_command == "start":
                 cli_start()
             elif args.daemon_command == "stop":
@@ -1980,6 +1974,7 @@ def main():
                 return manager.fix_permission()
 
         elif args.command == "run":
+            from .commands.run import execute_run_command
             return execute_run_command(
                 args.script_and_args,
                 cm,

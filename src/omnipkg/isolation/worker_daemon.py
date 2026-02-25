@@ -856,7 +856,22 @@ try:
         sys.stderr.flush()
     
     globals()['_omnipkg_loaders'] = loaders
-    
+
+    # ═══════════════════════════════════════════════════════════════
+    # STEP 3b: NUMPY COMPATIBILITY SIDECAR
+    # torch/tensorflow need a numpy ABI-compatible with their build.
+    # Loader auto-installs if missing. Activating before the bare
+    # numpy import ensures the right one wins sys.path precedence.
+    # ═══════════════════════════════════════════════════════════════
+    if any(fw in PKG_SPEC for fw in ('torch', 'tensorflow')):
+        try:
+            _np_loader = omnipkgLoader('numpy==1.26.4', isolation_mode='overlay', quiet=True)
+            _np_loader.__enter__()
+            loaders.append(_np_loader)
+        except Exception as _np_err:
+            sys.stderr.write(f'⚠️  [DAEMON] numpy sidecar failed: {_np_err}\\n')
+            sys.stderr.flush()
+
     # ═══════════════════════════════════════════════════════════════
     # STEP 4: CLEANUP CLOAKS (Critical - must happen before imports)
     # ═══════════════════════════════════════════════════════════════
@@ -1151,10 +1166,15 @@ try:
             sys.stderr.flush()
 
     
-    # If neither is available, Universal IPC might still work via ctypes
-    # (We check this lazily now, so assume True for capability reporting if not failed)
-    if _universal_gpu_ipc_available is not False:
+    # Eagerly resolve Universal IPC at startup — True/False before first request.
+    try:
+        UniversalGpuIpc.get_lib()
+        _universal_gpu_ipc_available = True
         _gpu_ipc_available = True
+        sys.stderr.write('🔥🔥🔥 [DAEMON] UNIVERSAL CUDA IPC ENABLED (ctypes - NO PYTORCH NEEDED)\\n')
+        sys.stderr.flush()
+    except Exception:
+        _universal_gpu_ipc_available = False
 
 finally:
     # 🔥 RESTORE STDOUT and log any captured output to stderr
@@ -1217,39 +1237,22 @@ sys.stderr.flush()
 # MAIN EXECUTION LOOP
 # ═══════════════════════════════════════════════════════════════
 
+_last_ipc_tensor = None
+
 while True:
     try:
-        sys.stderr.write('📥 [WORKER] Waiting for command...\\n')
-        sys.stderr.flush()
-        
         command_line = sys.stdin.readline()
-        
-        sys.stderr.write(f'📨 [WORKER] Received: {command_line[:100] if command_line else \"EOF\"}...\\n')
-        sys.stderr.flush()
-        
         if not command_line:
             sys.stderr.write('🛑 [WORKER] EOF received, exiting\\n')
             sys.stderr.flush()
             break
-        
         command_line = command_line.strip()
         if not command_line:
-            sys.stderr.write('⚠️  [WORKER] Empty line, continuing\\n')
-            sys.stderr.flush()
             continue
-        
         command = json.loads(command_line)
-        sys.stderr.write(f'✅ [WORKER] Parsed command type: {command.get(\"type\")}\\n')
-        sys.stderr.flush()
-        
         if command.get('type') == 'shutdown':
-            sys.stderr.write('🛑 [WORKER] Shutdown requested\\n')
-            sys.stderr.flush()
             break
-        
         task_id = command.get('task_id', 'UNKNOWN')
-        sys.stderr.write(f'🎯 [WORKER] Processing task {task_id}\\n')
-        sys.stderr.flush()
         
         worker_code = command.get('code', '')
         exec_scope = {'input_data': command}
@@ -1258,15 +1261,10 @@ while True:
         is_cuda_request = command.get('type') == 'execute_cuda'
         in_meta = command.get('cuda_in') if is_cuda_request else command.get('shm_in')
         out_meta = command.get('cuda_out') if is_cuda_request else command.get('shm_out')
-        
         actual_cuda_method = 'hybrid'
-        
         # ═══════════════════════════════════════════════════════════
         # INPUT HANDLING - UNIVERSAL IPC FIRST!
         # ═══════════════════════════════════════════════════════════
-        # Check/Load CUDA support lazily if this is a CUDA request
-        if is_cuda_request and _universal_gpu_ipc_available is None:
-            ensure_gpu_ipc()
 
         if in_meta and is_cuda_request and _universal_gpu_ipc_available and 'universal_ipc' in in_meta:
             try:
@@ -1365,21 +1363,16 @@ while True:
         # ═══════════════════════════════════════════════════════════
         arr_out = None
         
-        # UNIVERSAL IPC OUTPUT
+        # UNIVERSAL IPC OUTPUT — client pre-allocated, worker just opens handle
         if out_meta and is_cuda_request and _universal_gpu_ipc_available and 'universal_ipc' in out_meta:
             try:
-                # Load tensor using universal IPC
                 tensor = UniversalGpuIpc.load(out_meta['universal_ipc'])
-                
                 if tensor is None:
                     raise RuntimeError("Same process - cannot IPC to self")
-                
                 exec_scope['tensor_out'] = tensor
                 actual_cuda_method = 'universal_ipc'
-                
                 sys.stderr.write(f'🔥 [TASK {task_id}] UNIVERSAL IPC output (TRUE ZERO-COPY)\\n')
                 sys.stderr.flush()
-                
             except Exception as e:
                 import traceback
                 sys.stderr.write(f'⚠️  [TASK {task_id}] Universal IPC output failed: {e}\\n')
@@ -1440,6 +1433,8 @@ while True:
             if np is None:
                 raise RuntimeError("NumPy is required for SHM outputs but is not available")
             shm_name = out_meta.get('shm_name') or out_meta.get('name')
+            if not shm_name:
+                raise RuntimeError(f"[TASK {task_id}] Output IPC failed and no SHM fallback available.")
             shm_out = shared_memory.SharedMemory(name=shm_name)
             shm_blocks.append(shm_out)
             
@@ -1499,20 +1494,8 @@ while True:
             result['stdout'] = stdout_buffer.getvalue()
             result['stderr'] = stderr_buffer.getvalue()
             result['cuda_method'] = actual_cuda_method
-
-            # ADD THESE:
-            if _torch_available:
-                import torch
-                result['worker_torch_version'] = torch.__version__
-                result['worker_python_version'] = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
-            
-            # CRITICAL FIX: Write to _original_stdout, not sys.stdout (which is /dev/null)
-            sys.stderr.write(f'🔍 [DAEMON] Sending result for task {task_id}, status={result.get(\"status\")}\\n')
-            sys.stderr.flush()
             _original_stdout.write(json.dumps(result) + '\\n')
             _original_stdout.flush()
-            sys.stderr.write(f'✅ [DAEMON] Result sent for task {task_id}\\n')
-            sys.stderr.flush()
             
         except Exception as e:
             import traceback
@@ -1944,25 +1927,34 @@ class PersistentWorker:
             if time.time() - start_time > max_total_time:
                 raise TimeoutError(f"Task exceeded maximum time limit ({max_total_time}s)")
 
-            # Check for response (non-blocking)
-            response_line = None
-            if IS_WINDOWS:
-                # Threading approach for Windows
-                result = [None]
-                def try_read():
-                    try: result[0] = worker_process.stdout.readline()
-                    except: pass
-                t = threading.Thread(target=try_read, daemon=True)
-                t.start()
-                t.join(timeout=0.1)
-                response_line = result[0]
-            else:
-                ready, unused, unused = select.select([worker_process.stdout], [], [], 0.1)
-                if ready:
-                    response_line = worker_process.stdout.readline()
-                    
-            if response_line:
-                return json.loads(response_line.strip())
+            # CRITICAL: Must use stdout_queue, NOT process.stdout directly.
+            # The _reader_thread in _spawn_process() continuously drains
+            # process.stdout into stdout_queue. Reading process.stdout directly
+            # races with that thread and leaves stale responses in the queue,
+            # permanently desyncing the request/response protocol.
+            # CRITICAL: Must use stdout_queue, NOT process.stdout directly.
+            # The _reader_thread in _spawn_process() continuously drains
+            # process.stdout into stdout_queue. Reading process.stdout directly
+            # races with that thread and leaves stale responses in the queue,
+            # permanently desyncing the request/response protocol.
+            # CRITICAL: Must use stdout_queue, NOT process.stdout directly.
+            # The _reader_thread in _spawn_process() continuously drains
+            # process.stdout into stdout_queue. Reading process.stdout directly
+            # races with that thread and leaves stale responses in the queue,
+            # permanently desyncing the request/response protocol.
+            import queue as _queue
+            try:
+                safe_print(f"⏱️  [DAEMON] Waiting for response from queue...", file=sys.stderr)
+                t = time.perf_counter()
+                response_line = self.stdout_queue.get(timeout=60.0)
+                safe_print(f"⏱️  [DAEMON] Got response in {(time.perf_counter()-t)*1000:.1f}ms", file=sys.stderr)
+            except _queue.Empty:
+                response_line = None
+
+            if not response_line:
+                raise TimeoutError("Task timed out after 60s")
+
+            return json.loads(response_line.strip())
 
             # Monitor activity
             try:
@@ -2930,10 +2922,12 @@ class WorkerPoolDaemon:
                 res = {"success": False, "error": f"Unknown type: {req['type']}"}  # ✅ Fixed
             send_json(conn, res)
         except Exception as e:
+            import traceback
+            safe_print(f"❌ [DAEMON] _handle_client exception: {e}\n{traceback.format_exc()}", file=sys.stderr)
             try:
                 send_json(conn, {"success": False, "error": str(e)})
-            except:
-                pass
+            except Exception as e2:
+                safe_print(f"❌ [DAEMON] send_json also failed: {e2}", file=sys.stderr)
 
     def _execute_code(
         self, spec: str, code: str, shm_in: dict, shm_out: dict, python_exe: str = None
@@ -3249,21 +3243,13 @@ class WorkerPoolDaemon:
             worker_info["worker"].process.stdin.write(json.dumps(command) + "\n")
             worker_info["worker"].process.stdin.flush()
             
-            # Windows-compatible response reading
-            response_line = None
-            if IS_WINDOWS:
-                result = [None]
-                def try_read():
-                    try: result[0] = worker_info["worker"].process.stdout.readline()
-                    except: pass
-                t = threading.Thread(target=try_read, daemon=True)
-                t.start()
-                t.join(timeout=60.0)
-                response_line = result[0]
-            else:
-                readable, unused, unused = select.select([worker_info["worker"].process.stdout], [], [], 60.0)
-                if readable:
-                    response_line = worker_info["worker"].process.stdout.readline()
+            # CRITICAL FIX: Read from stdout_queue, NOT process.stdout directly.
+            # _reader_thread is constantly draining process.stdout into stdout_queue.
+            import queue
+            try:
+                response_line = worker_info["worker"].stdout_queue.get(timeout=60.0)
+            except queue.Empty:
+                response_line = None
 
             if not response_line:
                 raise TimeoutError("CUDA task timed out after 60s")
@@ -4575,59 +4561,46 @@ class DaemonClient:
     def _execute_universal_ipc(
         self, spec, code, input_tensor, output_shape, output_dtype, python_exe
     ):
-        """Universal CUDA IPC using ctypes (fastest, most compatible)."""
+        """Universal CUDA IPC - client pre-allocates both buffers, worker just opens handles."""
         import torch
-
         from omnipkg.isolation.worker_daemon import UniversalGpuIpc
 
         try:
-            # Share input tensor using Universal IPC
-            cuda_in_meta = {
-                "universal_ipc": UniversalGpuIpc.share(input_tensor),
-                "device": input_tensor.device.index,
-            }
+            try:
+                ipc_meta = UniversalGpuIpc.share(input_tensor)
+            except RuntimeError as e:
+                if "code 1" in str(e):
+                    input_tensor = input_tensor.clone()
+                    ipc_meta = UniversalGpuIpc.share(input_tensor)
+                else:
+                    raise
 
-            # Create output tensor and share it
-            dtype_map = {
-                "float32": torch.float32,
-                "float64": torch.float64,
-                "float16": torch.float16,
-                "int32": torch.int32,
-                "int64": torch.int64,
-            }
-            torch_dtype = dtype_map.get(output_dtype, torch.float32)
-            output_tensor = torch.empty(output_shape, dtype=torch_dtype, device=input_tensor.device)
+            cuda_in_meta = {"universal_ipc": ipc_meta, "device": input_tensor.device.index}
 
-            cuda_out_meta = {
-                "universal_ipc": UniversalGpuIpc.share(output_tensor),
-                "device": output_tensor.device.index,
-            }
+            dtype_map = {"float32": torch.float32, "float64": torch.float64,
+                         "float16": torch.float16, "int32": torch.int32, "int64": torch.int64}
+            output_tensor = torch.empty(output_shape, dtype=dtype_map.get(output_dtype, torch.float32),
+                                        device=input_tensor.device)
+            cuda_out_meta = {"universal_ipc": UniversalGpuIpc.share(output_tensor),
+                             "device": output_tensor.device.index}
 
-            # Send to daemon
-            response = self._send(
-                {
-                    "type": "execute_cuda",
-                    "spec": spec,
-                    "code": code,
-                    "cuda_in": cuda_in_meta,
-                    "cuda_out": cuda_out_meta,
-                    "python_exe": python_exe or sys.executable,
-                }
-            )
+            response = self._send({
+                "type": "execute_cuda", "spec": spec, "code": code,
+                "cuda_in": cuda_in_meta, "cuda_out": cuda_out_meta,
+                "python_exe": python_exe or sys.executable,
+            })
 
             if not response.get("success"):
                 raise RuntimeError(_('Worker Error: {}').format(response.get('error')))
 
             actual_method = response.get("cuda_method", "unknown")
-            if actual_method == "universal_ipc":
-                safe_print("   🔥 Worker confirmed UNIVERSAL IPC (true zero-copy)!")
-            else:
+            if actual_method != "universal_ipc":
                 safe_print(_('   ⚠️  Worker fell back to {}').format(actual_method))
 
             return output_tensor, response
 
         except Exception as e:
-            safe_print(_('   ⚠️  Universal IPC failed: {}').format(e))
+            safe_print(f"   ❌ [UNIVERSAL IPC] Failed: {e}", file=sys.stderr)
             raise
 
     def _execute_pytorch_native_ipc(
@@ -4640,17 +4613,33 @@ class DaemonClient:
 
         try:
             # Share input tensor via native CUDA IPC
-            input_storage = input_tensor.storage()
-            (
-                storage_device,
-                storage_handle,
-                storage_size_bytes,
-                storage_offset_bytes,
-                ref_counter_handle,
-                ref_counter_offset,
-                event_handle,
-                event_sync_required,
-            ) = input_storage._share_cuda_()
+            try:
+                input_storage = input_tensor.storage()
+                (
+                    storage_device,
+                    storage_handle,
+                    storage_size_bytes,
+                    storage_offset_bytes,
+                    ref_counter_handle,
+                    ref_counter_offset,
+                    event_handle,
+                    event_sync_required,
+                ) = input_storage._share_cuda_()
+            except RuntimeError as e:
+                # Same issue: Cannot export memory that was imported from another process.
+                safe_print(f"   ⚠️ [NATIVE IPC] Cannot re-export imported IPC memory. Cloning tensor...", file=sys.stderr)
+                input_tensor = input_tensor.clone()
+                input_storage = input_tensor.storage()
+                (
+                    storage_device,
+                    storage_handle,
+                    storage_size_bytes,
+                    storage_offset_bytes,
+                    ref_counter_handle,
+                    ref_counter_offset,
+                    event_handle,
+                    event_sync_required,
+                ) = input_storage._share_cuda_()
 
             cuda_in_meta = {
                 "ipc_data": {

@@ -1,15 +1,82 @@
 #!/usr/bin/env python
 """
 Minimal setup.py bridge for Python 3.7 compatibility.
-Python 3.7's pip doesn't support PEP 660 editable installs from pyproject.toml alone.
-This file bridges to pyproject.toml for metadata while supporting legacy editable installs.
 """
 from setuptools import setup, Extension
 from setuptools.command.build_ext import build_ext
+from setuptools.command.install import install
+from setuptools.command.develop import develop
 import os
+import sys
+import subprocess
+import shutil
+from pathlib import Path
 
-# Check if we should skip C extensions (for noarch builds)
 SKIP_C_EXTENSIONS = os.environ.get('OMNIPKG_SKIP_C_EXT', '0') == '1'
+
+# ── Dispatcher binary install (shared by both install and develop commands) ──
+
+def _install_dispatcher_binary(install_dir=None):
+    """
+    Compile the C dispatcher and overwrite the pip-generated 8pkg/omnipkg
+    wrapper scripts with the fast binary.
+    Silently skips if gcc isn't available or compilation fails.
+    """
+    repo_root = Path(__file__).parent
+    c_source = repo_root / "tools" / "dispatcher_bin" / "dispatcher.c"
+
+    if not c_source.exists():
+        print("  [dispatcher] No C source found, skipping binary install")
+        return
+
+    if not shutil.which("gcc"):
+        print("  [dispatcher] gcc not found, skipping binary install (Python dispatcher will be used)")
+        return
+
+    # Where to put the binary — same dir as the 8pkg wrapper script
+    if install_dir is None:
+        install_dir = Path(sys.executable).parent  # $VENV/bin
+
+    binary_out = Path(install_dir) / "_omnipkg_dispatch_bin"
+
+    try:
+        result = subprocess.run(
+            ["gcc", "-O2", "-o", str(binary_out), str(c_source)],
+            capture_output=True, text=True
+        )
+        if result.returncode != 0:
+            print(f"  [dispatcher] Compilation failed, using Python dispatcher:")
+            print(f"  {result.stderr.strip()}")
+            return
+
+        # Overwrite the pip-generated wrapper scripts
+        for name in ("8pkg", "omnipkg", "OMNIPKG", "8PKG"):
+            target = Path(install_dir) / name
+            if target.exists():
+                shutil.copy2(str(binary_out), str(target))
+                os.chmod(str(target), 0o755)
+
+        binary_out.unlink()  # clean up temp, the copies are the real ones
+        print(f"  [dispatcher] ✅ Fast C dispatcher installed in {install_dir}")
+
+    except Exception as e:
+        print(f"  [dispatcher] Skipping C dispatcher: {e}")
+
+
+class InstallWithDispatcher(install):
+    def run(self):
+        super().run()
+        _install_dispatcher_binary(self.install_scripts)
+
+
+class DevelopWithDispatcher(develop):
+    def run(self):
+        super().run()
+        # In editable installs, scripts go next to sys.executable
+        _install_dispatcher_binary(Path(sys.executable).parent)
+
+
+# ── Existing C extension setup (unchanged) ──────────────────────────────────
 
 if SKIP_C_EXTENSIONS:
     print("=" * 60)
@@ -19,17 +86,13 @@ if SKIP_C_EXTENSIONS:
     ext_modules = []
     cmdclass = {}
 else:
-    # 1. Define the Optional Extension
-    # We point to the source in src/
     atomic_extension = Extension(
         name="omnipkg.isolation.omnipkg_atomic",
         sources=["src/omnipkg/isolation/atomic_ops.c"],
         extra_compile_args=["-O3", "-march=native"],
-        optional=True  # Tells setuptools: "If this fails, don't crash the install"
+        optional=True,
     )
 
-    # 2. Custom Build Command for Graceful Failure
-    # (Standard setuptools 'optional=True' handles most cases, but this adds user visibility)
     class OptionalBuildExt(build_ext):
         def build_extension(self, ext):
             try:
@@ -44,8 +107,10 @@ else:
     ext_modules = [atomic_extension]
     cmdclass = {'build_ext': OptionalBuildExt}
 
-# 3. Call setup()
-# It will pull name, version, deps from pyproject.toml
+# Inject dispatcher commands (always, regardless of SKIP_C_EXTENSIONS)
+cmdclass['install'] = InstallWithDispatcher
+cmdclass['develop'] = DevelopWithDispatcher
+
 setup(
     ext_modules=ext_modules,
     cmdclass=cmdclass,
