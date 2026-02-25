@@ -10626,6 +10626,7 @@ class omnipkg:
                 pkg_name_to_check_full, requested_version = self._parse_package_spec(package_spec)
                 pkg_name_to_check = self._bare_name(pkg_name_to_check_full)
                 try:
+                    import requests as http_requests
                     response = http_requests.get(
                         f"https://pypi.org/pypi/{pkg_name_to_check}/json", timeout=10
                     )
@@ -12984,7 +12985,7 @@ class omnipkg:
                 )
             )
             return True
-        except http_requests.exceptions.RequestException as e:
+        except Exception as e:  # requests.exceptions.RequestException
             safe_print(_("❌ Failed to download wheel from {}: {}").format(wheel_url, e))
             return False
         except zipfile.BadZipFile:
@@ -13036,7 +13037,7 @@ class omnipkg:
                 )
             )
             return None
-        except http_requests.exceptions.RequestException as e:
+        except Exception as e:
             safe_print(
                 _("❌ Failed to fetch PyPI data for {}=={}: {}").format(pkg_name, pkg_version, e)
             )
@@ -13867,6 +13868,7 @@ class omnipkg:
                 # Try to determine what Python version IS compatible
                 safe_print("    🔍 Checking PyPI metadata to find compatible Python version...")
                 try:
+                    import requests as http_requests
                     response = http_requests.get(
                         f"https://pypi.org/pypi/{pkg_name}/json", timeout=10
                     )
@@ -13978,7 +13980,7 @@ class omnipkg:
 
         except NoCompatiblePythonError:
             raise  # Re-raise to trigger quantum healing
-        except http_requests.RequestException as e:
+        except Exception as e:
             safe_print(f"    ❌ Network error while resolving '{pkg_name}': {e}")
             return None
         except Exception as e:
@@ -14543,6 +14545,7 @@ print(json.dumps(results))
             # Skip itsdangerous for now
             if pkg_name == "itsdangerous" and pkg_ver == "0.24":
                 url = f"https://pypi.org/pypi/{pkg_name}/{pkg_ver}/json"
+                import requests as http_requests
                 response = http_requests.get(url, timeout=10)
                 response.raise_for_status()
                 data = response.json()
@@ -14682,6 +14685,7 @@ print(json.dumps(results))
         safe_print(f"      - Getting release date for {package_name}=={version}...")
         try:
             url = f"https://pypi.org/pypi/{package_name}/{version}/json"
+            import requests as http_requests
             response = http_requests.get(url, timeout=10)
             response.raise_for_status()
             data = response.json()
@@ -14758,6 +14762,7 @@ print(json.dumps(results))
         for dep_name in dependencies:
             try:
                 url = f"https://pypi.org/pypi/{dep_name}/json"
+                import requests as http_requests
                 response = http_requests.get(url, timeout=10)
                 response.raise_for_status()
                 dep_data = response.json()
@@ -15685,7 +15690,7 @@ print(json.dumps(results))
                 safe_print("    🧪 Falling back to test installation approach...")
         except NoCompatiblePythonError:
             raise  # Re-raise immediately, don't catch it
-        except http_requests.exceptions.RequestException as e:
+        except Exception as e:
             safe_print(_('    ❌ Network error checking PyPI: {}').format(e))
             safe_print("    🧪 Falling back to test installation approach...")
         except Exception as e:
@@ -15994,6 +15999,7 @@ print(json.dumps(results))
         Used for background cache refreshes.
         """
         try:
+            import requests as http_requests
             response = http_requests.get(f"https://pypi.org/pypi/{package_name}/json", timeout=5)
             if response.status_code == 200:
                 pypi_data = response.json()
@@ -16012,6 +16018,7 @@ print(json.dumps(results))
 
         try:
             safe_print(f"    🌐 Fetching latest version from PyPI for '{package_name}'...")
+            import requests as http_requests
             response = http_requests.get(f"https://pypi.org/pypi/{package_name}/json", timeout=10)
             if response.status_code == 200:
                 pypi_data = response.json()
@@ -16075,7 +16082,7 @@ print(json.dumps(results))
                 safe_print(_('    ❌ Could not fetch PyPI data (status: {})').format(response.status_code))
                 safe_print("    🧪 Falling back to test installation approach...")
 
-        except http_requests.exceptions.RequestException as e:
+        except Exception as e:
             safe_print(_('    ❌ Network error checking PyPI: {}').format(e))
             safe_print("    🧪 Falling back to test installation approach...")
         except Exception as e:
