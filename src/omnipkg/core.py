@@ -12312,6 +12312,7 @@ class omnipkg:
         safe_print(f"   - 🐍 Searching PyPI for Python requirements for '{package_name}'...")
         try:
             from packaging.specifiers import SpecifierSet
+            import requests as http_requests
 
             response = http_requests.get(f"https://pypi.org/pypi/{package_name}/json", timeout=15)
             response.raise_for_status()
