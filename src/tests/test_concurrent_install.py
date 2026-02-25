@@ -933,11 +933,8 @@ def main():
     safe_print("  all three running simultaneously, fully isolated")
     safe_print("=" * 80)
 
-    # Phase 0: install packages concurrently — direct Python API, no subprocess
-    install_results = phase_install(TEST_CONFIGS)
-
-    # Phase 1: adopt interpreters — direct Python API, no subprocess
-    phase_adopt(TEST_CONFIGS)
+    phase_adopt(TEST_CONFIGS)        # ← move this FIRST
+    install_results = phase_install(TEST_CONFIGS)   # ← then install
 
     # Cache interpreter paths ONCE via Python API (dict read, zero subprocess).
     # Must happen after adopt so all versions are in the registry.

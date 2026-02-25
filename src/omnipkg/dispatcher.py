@@ -148,7 +148,7 @@ def main():
     
     exec_args = [str(target_python), "-m", "omnipkg.cli"] + sys.argv[1:]
     
-    f debug_mode:
+    if debug_mode:
         print(f'[DEBUG-DISPATCH] Executing: {" ".join(exec_args)}', file=sys.stderr)
     
     # --- BROKEN CODE ---
