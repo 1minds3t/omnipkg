@@ -31,6 +31,7 @@ def main():
     Omnipkg Unified Dispatcher.
     """
     _maybe_install_c_dispatcher()
+    _ensure_native_shims()  # idempotent: ~1µs if shim exists, heals native Python shim if missing
     # ============================================================================
     # WINDOWS CONSOLE FIX: Enable proper UTF-8 and ANSI handling FIRST
     # ============================================================================
@@ -1121,6 +1122,81 @@ def _is_plausible_python_version(version: str) -> bool:
     return major == 3 and 0 <= minor <= 99
 
 
+
+def _ensure_native_shims() -> None:
+    """
+    Self-healing shim check for the native/primary Python.
+
+    The adoption path short-circuits with "already available" for the native
+    interpreter and skips install_versioned_entrypoints, leaving no 8pkg311
+    (or 8pkg3X for whatever is native). This function runs at dispatcher
+    startup and fixes that in ~1µs on the happy path (shim already exists).
+
+    Logic:
+      1. Derive the running Python version from sys.version_info (no subprocess).
+      2. Check whether the versioned shim already exists next to argv[0].
+      3. If missing, call install_versioned_entrypoints() for the native version.
+         That function is fully idempotent and handles both Unix symlinks and
+         Windows .bat shims.
+    """
+    debug_mode = os.environ.get("OMNIPKG_DEBUG") == "1"
+
+    # Derive version from the running interpreter — no subprocess needed.
+    vi = sys.version_info
+    version = f"{vi.major}.{vi.minor}"
+    flat = f"{vi.major}{vi.minor}"          # "3.11" -> "311"
+
+    # Find the bin dir where our entry points live (next to argv[0] or sys.executable)
+    argv0 = Path(sys.argv[0]).resolve()
+    bin_dir = argv0.parent
+
+    # Quick exit: shim already exists — this is the common case after first run.
+    if sys.platform == "win32":
+        shim_path = bin_dir / f"8pkg{flat}.bat"
+    else:
+        shim_path = bin_dir / f"8pkg{flat}"
+
+    if shim_path.exists():
+        return  # already installed, nothing to do
+
+    # Shim is missing — this is the native Python that adoption skipped.
+    if debug_mode:
+        print(f"[DEBUG-DISPATCH] _ensure_native_shims: 8pkg{flat} missing — creating shims for native Python {version}", file=sys.stderr)
+
+    # We need venv_root to call install_versioned_entrypoints.
+    venv_root = find_absolute_venv_root()
+
+    # Confirm this interpreter is actually registered (or is the primary).
+    # If it's not registered at all we don't want to create phantom shims.
+    registry_path = venv_root / ".omnipkg" / "interpreters" / "registry.json"
+    if registry_path.exists():
+        try:
+            with open(registry_path, "r") as f:
+                data = json.load(f)
+            interpreters = data.get("interpreters", {})
+            primary = data.get("primary_version", "")
+            # Accept if it's the primary OR explicitly registered
+            if version not in interpreters and version != primary:
+                if debug_mode:
+                    print(f"[DEBUG-DISPATCH] _ensure_native_shims: {version} not in registry, skipping", file=sys.stderr)
+                return
+        except Exception as e:
+            if debug_mode:
+                print(f"[DEBUG-DISPATCH] _ensure_native_shims: registry read error: {e}", file=sys.stderr)
+            return
+    else:
+        # No registry yet (pre-first-adopt). Don't create phantom shims.
+        if debug_mode:
+            print(f"[DEBUG-DISPATCH] _ensure_native_shims: no registry yet, skipping", file=sys.stderr)
+        return
+
+    # Call the canonical shim installer — handles Unix symlinks and Windows .bat
+    interpreter_path = Path(sys.executable)
+    install_versioned_entrypoints(interpreter_path, version, venv_root, debug_mode)
+    if debug_mode:
+        print(f"[DEBUG-DISPATCH] _ensure_native_shims: ✅ shims installed for native Python {version}", file=sys.stderr)
+
+
 def install_versioned_entrypoints(
     interpreter_path: Path,
     version: str,
@@ -1155,24 +1231,49 @@ def install_versioned_entrypoints(
     flat = version.replace(".", "")          # "3.9" -> "39", "3.11" -> "311"
     bin_dir = venv_root / ("Scripts" if sys.platform == "win32" else "bin")
 
-    # ── 1. Create versioned symlinks ──────────────────────────────────────────
+    # ── 1. Create versioned shims (symlinks on Unix, .bat wrappers on Windows) ──
     for base_name in ("omnipkg", "8pkg"):
-        src = bin_dir / base_name
-        if not src.exists():
-            if debug_mode:
-                print(f"[DEBUG-DISPATCH] Skipping symlink for {base_name} — not found at {src}", file=sys.stderr)
-            continue
-
-        link = bin_dir / f"{base_name}{flat}"
-        try:
-            if link.exists() or link.is_symlink():
-                link.unlink()
-            link.symlink_to(src.name)   # relative symlink within same dir
-            if debug_mode:
-                print(f"[DEBUG-DISPATCH] ✅ Symlink: {link} -> {src.name}", file=sys.stderr)
-        except Exception as e:
-            if debug_mode:
-                print(f"[DEBUG-DISPATCH] ⚠️  Could not create symlink {link}: {e}", file=sys.stderr)
+        if sys.platform == "win32":
+            # Windows: the entry point is a .exe or .bat script.
+            # We create a versioned .bat that delegates to the base command
+            # so that e.g. `8pkg311` works in CMD and PowerShell.
+            src_bat = None
+            for ext in (".exe", ".bat", ".cmd", ""):
+                candidate = bin_dir / f"{base_name}{ext}"
+                if candidate.exists():
+                    src_bat = candidate
+                    break
+            if src_bat is None:
+                if debug_mode:
+                    print(f"[DEBUG-DISPATCH] Skipping Windows shim for {base_name} — not found in {bin_dir}", file=sys.stderr)
+                continue
+            link_bat = bin_dir / f"{base_name}{flat}.bat"
+            try:
+                # .bat that forwards all args to the base command using its full path
+                bat_content = f'@echo off\r\n"{src_bat}" %*\r\n'
+                link_bat.write_text(bat_content, encoding="ascii")
+                if debug_mode:
+                    print(f"[DEBUG-DISPATCH] ✅ Windows .bat shim: {link_bat} -> {src_bat.name}", file=sys.stderr)
+            except Exception as e:
+                if debug_mode:
+                    print(f"[DEBUG-DISPATCH] ⚠️  Could not create Windows shim {link_bat}: {e}", file=sys.stderr)
+        else:
+            # Unix: relative symlink within same directory
+            src = bin_dir / base_name
+            if not src.exists():
+                if debug_mode:
+                    print(f"[DEBUG-DISPATCH] Skipping symlink for {base_name} — not found at {src}", file=sys.stderr)
+                continue
+            link = bin_dir / f"{base_name}{flat}"
+            try:
+                if link.exists() or link.is_symlink():
+                    link.unlink()
+                link.symlink_to(src.name)
+                if debug_mode:
+                    print(f"[DEBUG-DISPATCH] ✅ Symlink: {link} -> {src.name}", file=sys.stderr)
+            except Exception as e:
+                if debug_mode:
+                    print(f"[DEBUG-DISPATCH] ⚠️  Could not create symlink {link}: {e}", file=sys.stderr)
 
     # ── 1b. ALSO symlink next to the actual running entry point ─────────────────
     # When omnipkg is installed with `pip install --user`, the 8pkg entry point
