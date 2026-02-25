@@ -30,6 +30,132 @@ def main():
     """
     Omnipkg Unified Dispatcher.
     """
+    _maybe_install_c_dispatcher()
+    # ============================================================================
+    # WINDOWS CONSOLE FIX: Enable proper UTF-8 and ANSI handling FIRST
+    # ============================================================================
+    if sys.platform == 'win32':
+        try:
+            import ctypes
+            kernel32 = ctypes.windll.kernel32
+            # Enable ANSI escape sequences for stdout
+            kernel32.SetConsoleMode(kernel32.GetStdHandle(-11), 7)
+            
+            # Force UTF-8 encoding
+            if hasattr(sys.stdout, 'reconfigure'):
+                sys.stdout.reconfigure(encoding='utf-8', line_buffering=True)
+                sys.stderr.reconfigure(encoding='utf-8', line_buffering=True)
+            if hasattr(sys.stdin, 'reconfigure'):
+                sys.stdin.reconfigure(encoding='utf-8')
+                
+            os.environ['PYTHONIOENCODING'] = 'utf-8'
+            os.environ['PYTHONUNBUFFERED'] = '1'
+        except Exception:
+            pass
+    
+    debug_mode = os.environ.get("OMNIPKG_DEBUG") == "1"
+    
+    # ═══════════════════════════════════════════════════════════
+    # 🌍 STEP -1: PROPAGATE LANGUAGE BEFORE ANYTHING ELSE
+    # ═══════════════════════════════════════════════════════════
+    # Check if language is set in config and propagate to env var
+    # This ensures subprocesses inherit the language setting
+    if "OMNIPKG_LANG" not in os.environ:
+        venv_root = find_absolute_venv_root()
+        config_path = venv_root / ".omnipkg_config.json"
+        
+        if config_path.exists():
+            try:
+                with open(config_path, "r") as f:
+                    config = json.load(f)
+                language = config.get("language")
+                if language:
+                    os.environ["OMNIPKG_LANG"] = language
+                    if debug_mode:
+                        print(f"[DEBUG-DISPATCH] Set OMNIPKG_LANG={language} from config", file=sys.stderr)
+            except Exception as e:
+                if debug_mode:
+                    print(_('[DEBUG-DISPATCH] Config read error: {}').format(e), file=sys.stderr)
+    
+    # ═══════════════════════════════════════════════════════════
+    # 🎯 STEP 0: DETECT VERSION-SPECIFIC COMMAND (8pkg39, omnipkg39, etc.)
+    # ═══════════════════════════════════════════════════════════
+    import re
+    prog_name = Path(sys.argv[0]).name.lower()
+    
+    # Match both 8pkgXY and omnipkgXY (e.g. 8pkg39, omnipkg39, omnipkg311)
+    version_match = re.match(r"(?:8pkg|omnipkg)(\d)(\d+)", prog_name)
+    
+    if version_match:
+        major = version_match.group(1)
+        minor = version_match.group(2)
+        forced_version = f"{major}.{minor}"
+        
+        # Inject --python flag if not already present
+        if "--python" not in sys.argv:
+            sys.argv.insert(1, "--python")
+            sys.argv.insert(2, forced_version)
+        
+        if debug_mode:
+            print(_('[DEBUG-DISPATCH] Detected version-specific command: {}').format(prog_name), file=sys.stderr)
+            print(_('[DEBUG-DISPATCH] Injected --python {}').format(forced_version), file=sys.stderr)
+            print(_('[DEBUG-DISPATCH] Modified argv: {}').format(sys.argv), file=sys.stderr)
+    
+    # ═══════════════════════════════════════════════════════════
+    # STEP 1: Identify how we were called
+    # ═══════════════════════════════════════════════════════════
+    
+    # If called as 'python', 'python3', or 'pip' -> ACT AS SHIM
+    if prog_name.startswith("python") or prog_name == "pip":
+        if debug_mode:
+            print(_("[DEBUG-SHIM] Intercepted call to '{}'").format(prog_name), file=sys.stderr)
+        handle_shim_execution(prog_name, debug_mode)
+        return
+    
+    # 2. Determine which Python interpreter to use
+    #
+    # SPECIAL CASE: The 'swap' command itself must ALWAYS run via the host/native
+    # Python, never via a currently-swapped interpreter.  If we are inside a swap
+    # shell and the user runs '8pkg swap python X', routing it through the swapped
+    # interpreter (e.g. 3.7) will fail if that interpreter is missing deps needed
+    # by the swap command (e.g. importlib.metadata).  The swap machinery lives in
+    # the host env and should always be invoked from there.
+    argv_commands = [a for a in sys.argv[1:] if not a.startswith("-")]
+    is_swap_command = len(argv_commands) >= 1 and argv_commands[0] == "swap"
+    if is_swap_command and os.environ.get("_OMNIPKG_SWAP_ACTIVE") == "1":
+        # Force host Python by temporarily clearing the swap env vars for
+        # determine_target_python(), then restore them so the spawned shell
+        # inherits the correct environment.
+        _saved = {k: os.environ.pop(k, None)
+                  for k in ("OMNIPKG_PYTHON", "OMNIPKG_ACTIVE_PYTHON", "_OMNIPKG_SWAP_ACTIVE")}
+        target_python = determine_target_python()
+        for k, v in _saved.items():
+            if v is not None:
+                os.environ[k] = v
+        if debug_mode:
+            print("[DEBUG-DISPATCH] swap command inside swap shell — forcing host Python", file=sys.stderr)
+    else:
+        target_python = determine_target_python()
+    
+    if debug_mode:
+        print(_('[DEBUG-DISPATCH] Using Python: {}').format(target_python), file=sys.stderr)
+        print(_('[DEBUG-DISPATCH] Current executable: {}').format(sys.executable), file=sys.stderr)
+    
+    if not target_python.exists():
+        safe_print(_('❌ Python interpreter not found: {}').format(target_python), file=sys.stderr)
+        print(_('   Run: 8pkg python adopt {}').format(extract_version(target_python)), file=sys.stderr)
+        sys.exit(1)
+    
+    exec_args = [str(target_python), "-m", "omnipkg.cli"] + sys.argv[1:]
+    
+    if debug_mode:
+        print(_('[DEBUG-DISPATCH] Executing: {}').format(' '.join(exec_args)), file=sys.stderr)
+    
+    if platform.system() == "Windows":
+        # Windows: Use subprocess instead of execv to avoid handle inheritance issues
+        sys.exit(subprocess.call(exec_args))
+    else:
+        os.execv(str(target_python), exec_args)
 
 def _maybe_install_c_dispatcher():
     """
@@ -79,8 +205,6 @@ def _maybe_install_c_dispatcher():
         if binary_tmp.exists():
             try: binary_tmp.unlink()
             except: pass
-    # ============================================================================
-    # WINDOWS CONSOLE FIX: Enable proper UTF-8 and ANSI handling FIRST
     # ============================================================================
     if sys.platform == 'win32':
         try:
