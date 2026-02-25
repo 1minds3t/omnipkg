@@ -48,11 +48,12 @@ def _dbg(msg: str):
         print(f"[DEBUG-CLI] {msg}", file=sys.stderr, flush=True)
 
 
-def get_actual_python_version():
+def get_actual_python_version(cm=None):
     """Get the actual Python version being used by omnipkg, not just sys.version_info."""
-    from omnipkg.core import ConfigManager
     try:
-        cm = ConfigManager(suppress_init_messages=True)
+        if cm is None:
+            from omnipkg.core import ConfigManager
+            cm = ConfigManager(suppress_init_messages=True)
         configured_exe = cm.config.get("python_executable")
         if configured_exe:
             version_tuple = cm._verify_python_version(configured_exe)
@@ -1777,7 +1778,7 @@ def main():
             return subprocess.call(cmd)
 
         elif args.command == "install":
-            original_python_tuple = get_actual_python_version()
+            original_python_tuple = get_actual_python_version(cm)
             original_python_str = f"{original_python_tuple[0]}.{original_python_tuple[1]}"
             exit_code = 1
 
@@ -1825,7 +1826,7 @@ def main():
                 return exit_code
 
             finally:
-                current_version_after_install_tuple = get_actual_python_version()
+                current_version_after_install_tuple = get_actual_python_version(cm)
                 current_version_after_install_str = (
                     f"{current_version_after_install_tuple[0]}.{current_version_after_install_tuple[1]}"
                 )
