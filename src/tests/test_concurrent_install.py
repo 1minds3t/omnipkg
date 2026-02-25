@@ -901,7 +901,7 @@ def main():
     phase_verify(TEST_CONFIGS)
 
     total_ms = (time.perf_counter() - total_start) * 1000
-    safe_print(f"\n🎉  Total time: {fmt(total_ms)}")
+    safe_print(f"\n🎉  Total non cached time: {fmt(total_ms)}")
 
     safe_print(API_CHEATSHEET)
 
