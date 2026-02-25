@@ -1,0 +1,5 @@
+nav:
+- index.md
+- architecture_performance_deep_dive_the_daemon.md
+- architecture_performance_benchmarking_vs_the_world.md
+title: Architecture & Performance
