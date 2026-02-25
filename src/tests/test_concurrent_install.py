@@ -342,7 +342,7 @@ def phase_install(configs: list):
         elif r["success"]:
             safe_print(f"  ✅ Python {ver:5}  {r['spec']:20}  installed in {fmt(r['elapsed_ms'])}")
         else:
-            safe_print(f"  ❌ Python {ver:5}  {r['spec']:20}  FAILED: {r['stderr'][:120]}")
+            safe_print(f"  ❌ Python {ver:5}  {r['spec']:20}  FAILED: {r['stderr'][:500]}")
             all_ok = False
 
     if not all_ok:
