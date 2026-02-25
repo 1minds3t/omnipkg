@@ -1,10 +1,9 @@
 name: Test Omnipkg Adoption + Install (CI)
-
 on:
   push:
     branches:
-      - development           # only auto-run on development pushes
-  workflow_dispatch:          # manual trigger allowed on any branch
+      - development
+  workflow_dispatch:
 
 jobs:
   test-omnipkg:
@@ -23,18 +22,32 @@ jobs:
         with:
           python-version: ${{ matrix.python }}
 
-      - name: Install omnipkg globally with pip
+      - name: Install omnipkg
         run: |
           python -m pip install --upgrade pip
-          python -m pip install --user omnipkg
+          # Do NOT use --user: entry points must land in the same bin/ as
+          # the hostedtoolcache Python so that install_versioned_entrypoints
+          # creates valid symlinks (it symlinks relative to venv_root/bin,
+          # which resolves to the hostedtoolcache bin — same dir as 8pkg).
+          python -m pip install omnipkg
 
       - name: Adopt Python ${{ matrix.python }}
         run: |
+          export OMNIPKG_DEBUG=1
           8pkg python adopt ${{ matrix.python }}
+
+          # Verify the symlink was actually created in the right place
+          cmd_version=$(echo "${{ matrix.python }}" | tr -d '.')
+          EIGHT_PKG_DIR=$(dirname $(which 8pkg))
+          echo "=== 8pkg lives in: $EIGHT_PKG_DIR ==="
+          echo "=== Looking for 8pkg${cmd_version} ==="
+          ls -la "$EIGHT_PKG_DIR"/8pkg* 2>/dev/null || echo "❌ No 8pkg* shims found in $EIGHT_PKG_DIR"
+
           8pkg info python | grep -A 3 "Python ${{ matrix.python }}" || echo "Adoption check failed (non-fatal)"
 
-      - name: Install rich==13.7.1 using 8pkg${{ matrix.python }}
+      - name: Install rich==13.7.1 via versioned command
         run: |
+          export OMNIPKG_DEBUG=1
           cmd_version=$(echo "${{ matrix.python }}" | tr -d '.')
           echo "Running: 8pkg${cmd_version} install rich==13.7.1"
           8pkg${cmd_version} install rich==13.7.1
