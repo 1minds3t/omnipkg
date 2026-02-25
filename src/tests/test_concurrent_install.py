@@ -248,16 +248,16 @@ except ImportError as _e:
 
 def install_one(py_version: str, pkg_spec: str) -> dict:
     """
-    Install pkg_spec for py_version using the versioned CLI entry point
-    (e.g. 8pkg39, 8pkg310).  This is the correct mechanism for targeting a
-    specific interpreter — OmnipkgCore.smart_install() reads its target
-    Python from config and always installs into the host interpreter, so it
-    cannot be used for cross-version installs from a single host process.
+    Install pkg_spec for py_version via `python -m omnipkg.cli --python X.Y install`.
+    Using sys.executable + -m omnipkg.cli is the safest cross-platform approach —
+    no entry-point lookup, no .bat/.exe extension guessing, works everywhere.
+    The --python flag tells the dispatcher to target the correct interpreter.
     """
     start = time.perf_counter()
-    flat = py_version.replace(".", "")
-    cmd = _find_entry_point(f"8pkg{flat}")
-    result = subprocess.run([cmd, "install", pkg_spec], capture_output=True, **_SP)
+    result = subprocess.run(
+        [sys.executable, "-m", "omnipkg.cli", "--python", py_version, "install", pkg_spec],
+        capture_output=True, **_SP
+    )
     elapsed_ms = (time.perf_counter() - start) * 1000
     success = result.returncode == 0
     noop = success and elapsed_ms < INSTALL_NOOP_THRESHOLD_MS
@@ -356,31 +356,10 @@ def phase_install(configs: list):
 #   want to apply a timeout or show a progress indicator.
 # ─────────────────────────────────────────────────────────────────────────────
 
-def _find_entry_point(name: str) -> str:
-    """
-    Return the full path to an omnipkg entry point (omnipkg, 8pkg, 8pkg310, etc.).
-    Looks in the same Scripts/bin directory as sys.executable so it works
-    regardless of whether the venv is activated or what's on PATH.
-    On Windows tries .exe first, then .bat, then bare name.
-    """
-    scripts_dir = Path(sys.executable).parent
-    if sys.platform == "win32":
-        for ext in (".exe", ".bat", ""):
-            candidate = scripts_dir / f"{name}{ext}"
-            if candidate.exists():
-                return str(candidate)
-    else:
-        candidate = scripts_dir / name
-        if candidate.exists():
-            return str(candidate)
-    # Last resort: hope it's on PATH
-    return name
-
-
 def adopt_if_needed(version: str, timeout: float = 300.0) -> bool:
     """
     Ensure Python `version` is adopted.  Checks the registry first (free),
-    then invokes `omnipkg python adopt` via subprocess.
+    then invokes `python -m omnipkg.cli python adopt` via subprocess.
     """
     _invalidate_registry_cache()
     if is_adopted(version):
@@ -389,8 +368,10 @@ def adopt_if_needed(version: str, timeout: float = 300.0) -> bool:
 
     safe_print(f"  🔄 Adopting Python {version}…")
 
-    omnipkg_exe = _find_entry_point("omnipkg")
-    proc = subprocess.Popen([omnipkg_exe, "python", "adopt", version], env=_ENV)
+    proc = subprocess.Popen(
+        [sys.executable, "-m", "omnipkg.cli", "python", "adopt", version],
+        env=_ENV
+    )
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         if proc.poll() is not None:
@@ -472,7 +453,7 @@ def phase_daemon(interpreter_paths: list):
 
         safe_print("  🔄 Starting daemon…")
         subprocess.Popen(
-            [_find_entry_point("8pkg"), "daemon", "start"],
+            [sys.executable, "-m", "omnipkg.cli", "daemon", "start"],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
@@ -548,7 +529,7 @@ def prime_interpreter_cache(configs: list):
         # One-shot fallback: parse `omnipkg info python` for missing entries.
         # Costs one subprocess but only runs when the direct read missed something.
         safe_print(f"  ⚠️  {missing} not found in direct registry read — checking omnipkg info python…")
-        result = subprocess.run([_find_entry_point("omnipkg"), "info", "python"], capture_output=True, **_SP)
+        result = subprocess.run([sys.executable, "-m", "omnipkg.cli", "info", "python"], capture_output=True, **_SP)
         for line in result.stdout.splitlines():
             for ver in list(missing):
                 if f"Python {ver}:" in line:
@@ -901,7 +882,7 @@ def main():
     phase_verify(TEST_CONFIGS)
 
     total_ms = (time.perf_counter() - total_start) * 1000
-    safe_print(f"\n🎉  Total non cached time: {fmt(total_ms)}")
+    safe_print(f"\n🎉  Total time: {fmt(total_ms)}")
 
     safe_print(API_CHEATSHEET)
 
