@@ -1,5 +1,11 @@
-# Use newest Alpine with Python 3.14 to minimize CVEs
-FROM python:3.14-alpine AS builder
+# Use Python 3.13 Alpine - the latest STABLE version to avoid Python 3.14 Alpha bugs
+FROM python:3.13-alpine AS builder
+
+# Set environment variables to force UTF-8 and avoid locale issues common in Alpine
+ENV LANG=C.UTF-8 \
+    LC_ALL=C.UTF-8 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
 
 # Install build dependencies
 RUN apk add --no-cache gcc musl-dev linux-headers python3-dev
@@ -8,24 +14,28 @@ RUN apk add --no-cache gcc musl-dev linux-headers python3-dev
 RUN python3 -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
-# Upgrade pip to fix CVE-2025-8869 (requires pip >=25.3)
-RUN pip install --no-cache-dir --upgrade "pip>=25.3"
+# Upgrade build tools to latest versions (pip >= 25.0 avoids CVE-2025-8869)
+RUN pip install --no-cache-dir --upgrade pip setuptools wheel
 
 # Copy and install omnipkg
 COPY . /build
 WORKDIR /build
+# Install in editable or standard mode; ensure dependencies are resolved
 RUN pip install --no-cache-dir .
 
-# Runtime stage - use same base for consistency
-FROM python:3.14-alpine
+# Runtime stage
+FROM python:3.13-alpine
+
+# Set environment variables
+ENV PATH="/opt/venv/bin:$PATH" \
+    PYTHONUTF8=1
 
 # Install runtime dependencies and apply security updates
-RUN apk add --no-cache python3 && \
+RUN apk add --no-cache libgcc && \
     apk upgrade --no-cache
 
 # Copy venv from builder
 COPY --from=builder /opt/venv /opt/venv
-ENV PATH="/opt/venv/bin:$PATH"
 
 WORKDIR /workspace
 
