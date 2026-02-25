@@ -25,6 +25,12 @@ nav:
 - Platform Support:
   - Overview: platform_support/index.md
   - CI Verification: platform_support/platform_support_ci_verification.md
+- Architecture & Performance:
+  - Overview: architecture_performance/index.md
+  - 'Benchmarking vs The World': 
+      architecture_performance/architecture_performance_benchmarking_vs_the_world.md
+  - 'Deep Dive: The Daemon': 
+      architecture_performance/architecture_performance_deep_dive_the_daemon.md
 - Demos:
   - Overview: demos/index.md
   - C Extension Switching: demos/demos_c_extension_switching.md
