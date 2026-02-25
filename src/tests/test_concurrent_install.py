@@ -30,23 +30,29 @@ def format_duration(ms: float) -> str:
         return f"{ms/1000:.2f}s"
 
 
-def dump_daemon_log(label: str = "DAEMON LOG DUMP"):
-    """Dump the FULL daemon log to stdout, line by line, nothing hidden, no truncation."""
+def dump_daemon_log(label: str = "DAEMON LOG DUMP", only_on_error: bool = True, max_lines: int = 50):
+    """Dump last max_lines of daemon log. By default only prints if the log contains ERROR/EXCEPTION."""
     try:
         from omnipkg.isolation.worker_daemon import DAEMON_LOG_FILE
-        safe_print(f"\n{'='*80}")
-        safe_print(f"📋 {label}")
-        safe_print(f"{'='*80}")
-        safe_print(f"[LOG FILE PATH] {DAEMON_LOG_FILE}")
         if not _os.path.exists(DAEMON_LOG_FILE):
-            safe_print(f"[LOG FILE] ❌ DOES NOT EXIST: {DAEMON_LOG_FILE}")
+            if not only_on_error:
+                safe_print(f"[DAEMON LOG] ❌ DOES NOT EXIST: {DAEMON_LOG_FILE}")
             return
         with open(DAEMON_LOG_FILE, "r", errors="replace") as f:
             lines = f.readlines()
-        safe_print(f"[LOG FILE] {len(lines)} lines total")
-        safe_print(f"{'─'*80}")
-        for i, line in enumerate(lines, 1):
-            safe_print(f"[LOG:{i:04d}] {line.rstrip()}")
+        # In only_on_error mode, skip dump entirely if no errors in last max_lines
+        tail = lines[-max_lines:]
+        has_error = any(
+            any(kw in ln for kw in ("ERROR", "EXCEPTION", "Traceback", "❌"))
+            for ln in tail
+        )
+        if only_on_error and not has_error:
+            return
+        safe_print(f"\n{'='*80}")
+        safe_print(f"📋 {label}  [{len(lines)} total lines, showing last {len(tail)}]")
+        safe_print(f"{'='*80}")
+        for ln in tail:
+            safe_print(f"[DAEMON] {ln.rstrip()}")
         safe_print(f"{'='*80}\n")
     except Exception as e:
         safe_print(f"[LOG DUMP ERROR] {e}")
@@ -135,6 +141,7 @@ def ensure_daemon_running(interpreter_paths: list) -> bool:
             safe_print("   ✅ Daemon already running")
         else:
             safe_print("   🔄 Starting daemon (all pythons already adopted)...")
+            _daemon_start = time.perf_counter()
             # Use Popen so we don't block — daemon start detaches itself on Windows
             proc = subprocess.Popen(
                 ["8pkg", "daemon", "start"],
@@ -146,11 +153,12 @@ def ensure_daemon_running(interpreter_paths: list) -> bool:
                 time.sleep(0.5)
                 status = client.status()
                 if status.get("success"):
-                    safe_print(f"   ✅ Daemon up after {(i+1)*0.5:.1f}s")
+                    _daemon_elapsed = (time.perf_counter() - _daemon_start) * 1000
+                    safe_print(f"   ✅ Daemon up after {format_duration(_daemon_elapsed)}")
                     break
             else:
                 safe_print("   ❌ Daemon never came up")
-                dump_daemon_log("DAEMON LOG ON FAILURE")
+                dump_daemon_log("DAEMON LOG ON FAILURE", only_on_error=False)
                 return False
 
         return True
@@ -399,13 +407,114 @@ def main():
             safe_print(f"   Python {version} → ❌ ERROR: {e}")
             sys.exit(1)
 
+    # Phase 0: Install via versioned dispatcher (8pkg39, 8pkg310, etc.)
+    # This is the key test — does 8pkg3X actually install into the RIGHT interpreter?
+    safe_print("\n📦 Phase 0: Install via versioned dispatcher (OMNIPKG_DEBUG=1)")
+    safe_print("-" * 100)
+
+    def _versioned_cmd(version: str) -> str:
+        """Return the versioned command name: 3.9 -> 8pkg39, 3.10 -> 8pkg310, etc."""
+        flat = version.replace(".", "")
+        # On Windows the shim is a .bat or .exe; on Unix it is a plain symlink.
+        # subprocess will find it via PATH on both platforms.
+        return f"8pkg{flat}"
+
+    def _install_via_dispatcher(version: str, pkg_spec: str, thread_id: int) -> dict:
+        prefix = f"[T{thread_id}|Install|{version}]"
+        cmd_name = _versioned_cmd(version)
+
+        # Build the command.  On Windows 'shell=True' is needed so .bat shims resolve.
+        if sys.platform == "win32":
+            cmd = f"{cmd_name} install {pkg_spec}"
+            use_shell = True
+        else:
+            cmd = [cmd_name, "install", pkg_spec]
+            use_shell = False
+
+        env = {**_WIN_ENV, "OMNIPKG_DEBUG": "1"}
+
+        with print_lock:
+            safe_print(f"{prefix} ▶ {cmd_name} install {pkg_spec}")
+
+        t0 = time.perf_counter()
+        try:
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                shell=use_shell,
+                env=env,
+                encoding="utf-8",
+                errors="replace",
+                timeout=300,
+            )
+        except FileNotFoundError:
+            elapsed = (time.perf_counter() - t0) * 1000
+            with print_lock:
+                safe_print(f"{prefix} ❌ COMMAND NOT FOUND: {cmd_name}  ({format_duration(elapsed)})")
+                safe_print(f"{prefix}    PATH={env.get('PATH', '(not set)')}")
+            return {"version": version, "pkg": pkg_spec, "ok": False,
+                    "error": f"FileNotFoundError: {cmd_name}", "elapsed_ms": elapsed}
+        except subprocess.TimeoutExpired:
+            elapsed = (time.perf_counter() - t0) * 1000
+            with print_lock:
+                safe_print(f"{prefix} ❌ TIMEOUT after {format_duration(elapsed)}")
+            return {"version": version, "pkg": pkg_spec, "ok": False,
+                    "error": "TimeoutExpired", "elapsed_ms": elapsed}
+
+        elapsed = (time.perf_counter() - t0) * 1000
+        ok = result.returncode == 0
+
+        with print_lock:
+            status = "✅" if ok else "❌"
+            safe_print(f"{prefix} {status} rc={result.returncode}  time={format_duration(elapsed)}")
+            # Always show stdout/stderr — this is the dispatcher debug output
+            # showing WHICH interpreter actually got targeted
+            if result.stdout:
+                for line in result.stdout.splitlines():
+                    safe_print(f"{prefix} [stdout] {line}")
+            if result.stderr:
+                for line in result.stderr.splitlines():
+                    safe_print(f"{prefix} [stderr] {line}")
+            if not ok:
+                safe_print(f"{prefix} ⚠️  Install failed — daemon phase will still run so we can see where it installs")
+
+        return {
+            "version": version,
+            "pkg": pkg_spec,
+            "ok": ok,
+            "returncode": result.returncode,
+            "elapsed_ms": elapsed,
+            "stdout": result.stdout,
+            "stderr": result.stderr,
+        }
+
+    # Run installs concurrently — one per Python version
+    install_configs = [(v, f"rich=={r}") for v, r in test_configs]
+    install_results = []
+    with concurrent.futures.ThreadPoolExecutor(max_workers=len(install_configs)) as executor:
+        futs = {
+            executor.submit(_install_via_dispatcher, ver, pkg, i + 1): (ver, pkg)
+            for i, (ver, pkg) in enumerate(install_configs)
+        }
+        for fut in concurrent.futures.as_completed(futs):
+            install_results.append(fut.result())
+
+    # Summary
+    safe_print("\n📦 Install summary:")
+    for r in sorted(install_results, key=lambda x: x["version"]):
+        status = "✅" if r["ok"] else "❌"
+        safe_print(f"   {status} Python {r['version']} — {r['pkg']}  ({format_duration(r['elapsed_ms'])})")
+    all_installed = all(r["ok"] for r in install_results)
+    if not all_installed:
+        safe_print("\n⚠️  Some installs failed — continuing to daemon phase to capture behaviour")
+
     if not ensure_daemon_running(interpreter_paths):
         safe_print("❌ Failed to start daemon")
         dump_daemon_log("DAEMON LOG ON STARTUP FAILURE")
         sys.exit(1)
 
-    # Phase 2: Warmup
-    safe_print("\n🔥 Phase 2: Warmup (concurrent)")
+    # Phase 2: Cold run (first call = daemon worker spawn + import)
+    safe_print("\n🔥 Phase 2: Cold run — daemon worker spawn + first import (concurrent)")
     safe_print("-" * 100)
     warmup_results = []
     with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
@@ -426,8 +535,8 @@ def main():
     warmup_results.sort(key=lambda x: x["thread_id"])
     safe_print("\n✅ All workers warmed up!")
 
-    # Phase 3: Benchmark
-    safe_print("\n⚡ Phase 3: Benchmark (hot workers)")
+    # Phase 3: Warm run (worker already live, import already cached)
+    safe_print("\n⚡ Phase 3: Warm run — hot worker, import already cached (concurrent)")
     safe_print("-" * 100)
     benchmark_results = []
     benchmark_start = time.perf_counter()
@@ -474,9 +583,6 @@ def main():
 
     total_time = (time.perf_counter() - start_time) * 1000
     safe_print(f"\n🎉 DONE  total={format_duration(total_time)}")
-
-    # Always dump daemon log at end so CI always has full picture
-    dump_daemon_log("DAEMON LOG AT END OF RUN")
 
     sys.exit(0)
 
