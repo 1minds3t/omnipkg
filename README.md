@@ -1233,7 +1233,22 @@ uv pip install omnipkg
 pip install omnipkg
 ```
 
-#### 🏠 Conda (Two Channels Available)
+```markdown
+#### 📦 Pixi (Recommended for Modern Workflows)
+
+<a href="https://pixi.sh">
+<img src="https://img.shields.io/badge/pixi-install-yellow?logo=pixi&logoColor=white" alt="Pixi Install">
+</a>
+
+```bash
+# Add to your project
+pixi add omnipkg
+
+# Run globally without installation
+pixi global install omnipkg
+```
+
+#### 🏠 Conda & prefix.dev
 
 <a href="https://anaconda.org/conda-forge/omnipkg">
 <img src="https://anaconda.org/conda-forge/omnipkg/badges/platforms.svg" alt="Platforms / Noarch">
@@ -1245,13 +1260,18 @@ pip install omnipkg
 <img src="https://img.shields.io/badge/conda--channel-minds3t-blue?logo=anaconda&logoColor=white" alt="Minds3t Conda Channel">
 </a>
 
+```markdown
 **Official conda-forge (Recommended):**
 ```bash
-# Using conda
+# Using prefix.dev (Ultra-fast resolver)
+conda install -c https://prefix.dev/conda-forge omnipkg
+
+# Standard conda-forge
 conda install -c conda-forge omnipkg
 
-# Using mamba (faster)
+# Using mamba
 mamba install -c conda-forge omnipkg
+```
 ```
 
 **Personal minds3t channel (Latest features first):**
