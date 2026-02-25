@@ -74,24 +74,10 @@ _SP = dict(encoding="utf-8", errors="replace", env=_ENV)
 
 print_lock = threading.Lock()
 
+def _w(cmd: str) -> str:
+    """Return cmd + '.bat' on Windows (shims are installed as .bat files)."""
+    return cmd + ".bat" if sys.platform == "win32" else cmd
 
-def _cmd(*parts: str) -> list:
-    """
-    Build a subprocess arg list that works on Windows and POSIX.
-
-    On Windows, omnipkg shims are installed as .bat files (e.g. omnipkg.bat,
-    8pkg310.bat).  subprocess.run/Popen with a *list* does NOT search for .bat
-    extensions — it needs shell=True or an explicit .bat suffix.  We add the
-    suffix on Windows so callers can always use a plain list + shell=False.
-
-    Usage:
-        subprocess.run(_cmd("omnipkg", "info", "python"), ...)
-        subprocess.Popen(_cmd("8pkg", "daemon", "start"), ...)
-    """
-    if sys.platform == "win32":
-        cmd_name = parts[0] + ".bat"
-        return [cmd_name, *parts[1:]]
-    return list(parts)
 
 # ── Test matrix ──────────────────────────────────────────────────────────────
 # Each entry is (python_version, rich_version).
@@ -228,9 +214,41 @@ def get_interpreter_path(version: str) -> str:
 # in try/except so the file can still be imported in envs without omnipkg.core.
 
 try:
-    from omnipkg.core import OmnipkgCore
-except ImportError:
-    OmnipkgCore = None  # adopt_if_needed and install_one will fall back to CLI
+    from omnipkg.core import ConfigManager
+    from omnipkg.core import omnipkg as OmnipkgCore
+    _OMNIPKGCORE_IMPORT_ERROR: Exception | None = None
+except ImportError as _e:
+    ConfigManager = None
+    OmnipkgCore = None
+    _OMNIPKGCORE_IMPORT_ERROR = _e
+
+
+# ConfigManager is expensive to construct (triggers interpreter discovery).
+# Build it once per python_version and reuse across calls.
+_config_manager_cache: dict = {}
+_config_manager_lock = threading.Lock()
+
+
+def _get_config_manager(python_version=None):
+    """
+    Return a cached ConfigManager for the given python_version (or host if None).
+    Thread-safe: concurrent calls for the same version block until the first
+    construction completes, then all share the result.
+    """
+    key = python_version or "__host__"
+    if key in _config_manager_cache:
+        return _config_manager_cache[key]
+    with _config_manager_lock:
+        if key not in _config_manager_cache:
+            cm = ConfigManager(python_version=python_version)
+            _config_manager_cache[key] = cm
+        return _config_manager_cache[key]
+
+
+def _make_core(python_version=None, minimal=False):
+    """Construct OmnipkgCore correctly: ConfigManager first, then the class."""
+    cm = _get_config_manager(python_version)
+    return OmnipkgCore(config_manager=cm, minimal_mode=minimal)
 
 
 # ── Phase 0: Install ─────────────────────────────────────────────────────────
@@ -271,7 +289,7 @@ def install_one(py_version: str, pkg_spec: str) -> dict:
     if OmnipkgCore is not None:
         # ── Preferred path: direct Python API ───────────────────────────
         try:
-            core = OmnipkgCore(python_version=py_version)
+            core = _make_core(python_version=py_version)
             # Capture preflight timing with nanosecond precision.
             # perf_counter_ns() has no floating-point rounding — the number
             # you see is exact.  We call it immediately before and after
@@ -306,9 +324,8 @@ def install_one(py_version: str, pkg_spec: str) -> dict:
             }
 
     # ── Fallback: CLI subprocess (8pkg39 install rich==13.4.2) ──────────
-    flat = py_version.replace(".", "")
-    cmd_name = "8pkg" + flat
-    result = subprocess.run(_cmd(cmd_name, "install", pkg_spec), capture_output=True, **_SP)
+    cmd = _w("8pkg" + py_version.replace(".", ""))
+    result = subprocess.run([cmd, "install", pkg_spec], capture_output=True, **_SP)
     elapsed_ms = (time.perf_counter() - start) * 1000
     success = result.returncode == 0
     noop = success and elapsed_ms < INSTALL_NOOP_THRESHOLD_MS
@@ -402,7 +419,7 @@ def phase_install(configs: list):
 #   (e.g. pre-warming all versions at the start of a CI job).
 #
 # ── Fallback: CLI via subprocess ─────────────────────────────────────────────
-#   subprocess.Popen(["omnipkg", "python", "adopt", "3.10"])
+#   subprocess.Popen([_w("omnipkg"), "python", "adopt", "3.10"])
 #   Use Popen + polling (not run) when the download may take minutes and you
 #   want to apply a timeout or show a progress indicator.
 # ─────────────────────────────────────────────────────────────────────────────
@@ -434,7 +451,7 @@ def adopt_if_needed(version: str, timeout: float = 300.0) -> bool:
 
     if OmnipkgCore is not None:
         try:
-            core = OmnipkgCore()
+            core = _make_core(minimal=True)
             rc = core.adopt_interpreter(version)
             _invalidate_registry_cache()    # force fresh read after adoption
             if rc == 0:
@@ -448,7 +465,7 @@ def adopt_if_needed(version: str, timeout: float = 300.0) -> bool:
                 # prime_interpreter_cache will use omnipkg info python fallback.
                 safe_print(f"  ✅ Python {version}  adopted (registry path mismatch — using CLI to verify)")
                 result = subprocess.run(
-                    _cmd("omnipkg", "info", "python"), capture_output=True, **_SP
+                    [_w("omnipkg"), "info", "python"], capture_output=True, **_SP
                 )
                 if f"Python {version}:" in result.stdout:
                     # Parse the path out of info output as a one-time fallback
@@ -465,7 +482,7 @@ def adopt_if_needed(version: str, timeout: float = 300.0) -> bool:
 
     # ── CLI subprocess fallback ──────────────────────────────────────────
     # Use Popen + polling so we can honour the timeout even on slow downloads.
-    proc = subprocess.Popen(_cmd("omnipkg", "python", "adopt", version), env=_ENV)
+    proc = subprocess.Popen([_w("omnipkg"), "python", "adopt", version], env=_ENV)
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         if proc.poll() is not None:
@@ -524,7 +541,7 @@ def phase_adopt(configs: list):
 #      "error": str | None, "traceback": str | None}
 #
 #   Starting the daemon (still a subprocess — the daemon must detach itself):
-#     subprocess.Popen(["8pkg", "daemon", "start"],
+#     subprocess.Popen([_w("8pkg"), "daemon", "start"],
 #                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 #     Use Popen, NOT run.  Do NOT call "daemon stop" in CI — hangs Windows.
 # ─────────────────────────────────────────────────────────────────────────────
@@ -547,7 +564,7 @@ def phase_daemon(interpreter_paths: list):
 
         safe_print("  🔄 Starting daemon…")
         subprocess.Popen(
-            _cmd("8pkg", "daemon", "start"),
+            [_w("8pkg"), "daemon", "start"],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
@@ -623,7 +640,7 @@ def prime_interpreter_cache(configs: list):
         # One-shot fallback: parse `omnipkg info python` for missing entries.
         # Costs one subprocess but only runs when the direct read missed something.
         safe_print(f"  ⚠️  {missing} not found in direct registry read — checking omnipkg info python…")
-        result = subprocess.run(_cmd("omnipkg", "info", "python"), capture_output=True, **_SP)
+        result = subprocess.run([_w("omnipkg"), "info", "python"], capture_output=True, **_SP)
         for line in result.stdout.splitlines():
             for ver in list(missing):
                 if f"Python {ver}:" in line:
