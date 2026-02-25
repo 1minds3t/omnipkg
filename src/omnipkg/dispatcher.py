@@ -112,20 +112,24 @@ def main():
         handle_shim_execution(prog_name, debug_mode)
         return
     
-    # 2. Determine which Python interpreter to use
+    # ═══════════════════════════════════════════════════════════
+    # STEP 2: Determine which Python interpreter to use
+    # ═══════════════════════════════════════════════════════════
     #
-    # SPECIAL CASE: The 'swap' command itself must ALWAYS run via the host/native
-    # Python, never via a currently-swapped interpreter.  If we are inside a swap
-    # shell and the user runs '8pkg swap python X', routing it through the swapped
-    # interpreter (e.g. 3.7) will fail if that interpreter is missing deps needed
-    # by the swap command (e.g. importlib.metadata).  The swap machinery lives in
-    # the host env and should always be invoked from there.
+    # SPECIAL CASE: 'swap python X' must ALWAYS run via the host/native Python.
+    # Routing it through a swapped interpreter (e.g. 3.7) can fail if that
+    # interpreter is missing deps (e.g. importlib.metadata).
+    # Package swaps (e.g. 'swap numpy==1.26.4') MUST use the active context Python.
     argv_commands = [a for a in sys.argv[1:] if not a.startswith("-")]
     is_swap_command = len(argv_commands) >= 1 and argv_commands[0] == "swap"
-    if is_swap_command and os.environ.get("_OMNIPKG_SWAP_ACTIVE") == "1":
-        # Force host Python by temporarily clearing the swap env vars for
-        # determine_target_python(), then restore them so the spawned shell
-        # inherits the correct environment.
+    is_swap_python = is_swap_command and len(argv_commands) >= 2 and argv_commands[1].lower().startswith("python")
+
+    if debug_mode:
+        print(f'[DEBUG-DISPATCH] argv_commands: {argv_commands}', file=sys.stderr)
+        print(f'[DEBUG-DISPATCH] is_swap_python: {is_swap_python}', file=sys.stderr)
+        print(f'[DEBUG-DISPATCH] _OMNIPKG_SWAP_ACTIVE: {os.environ.get("_OMNIPKG_SWAP_ACTIVE")}', file=sys.stderr)
+
+    if is_swap_python and os.environ.get("_OMNIPKG_SWAP_ACTIVE") == "1":
         _saved = {k: os.environ.pop(k, None)
                   for k in ("OMNIPKG_PYTHON", "OMNIPKG_ACTIVE_PYTHON", "_OMNIPKG_SWAP_ACTIVE")}
         target_python = determine_target_python()
@@ -133,35 +137,28 @@ def main():
             if v is not None:
                 os.environ[k] = v
         if debug_mode:
-            print("[DEBUG-DISPATCH] swap command inside swap shell — forcing host Python", file=sys.stderr)
+            print("[DEBUG-DISPATCH] swap python inside swap shell — forcing host Python", file=sys.stderr)
     else:
         target_python = determine_target_python()
+        if is_swap_command and not is_swap_python and os.environ.get("_OMNIPKG_SWAP_ACTIVE") == "1":
+            if debug_mode:
+                print("[DEBUG-DISPATCH] swap package inside swap shell — using active context Python", file=sys.stderr)
     
     if debug_mode:
         print(f'[DEBUG-DISPATCH] Using Python: {target_python}', file=sys.stderr)
         print(f'[DEBUG-DISPATCH] Current executable: {sys.executable}', file=sys.stderr)
     
     if not target_python.exists():
-        safe_print(_('❌ Python interpreter not found: {}').format(target_python), file=sys.stderr)
-        print(_('   Run: 8pkg python adopt {}').format(extract_version(target_python)), file=sys.stderr)
+        _safe_print(f'❌ Python interpreter not found: {target_python}', file=sys.stderr)
+        print(f'   Run: 8pkg python adopt {extract_version(target_python)}', file=sys.stderr)
         sys.exit(1)
-    
+
     exec_args = [str(target_python), "-m", "omnipkg.cli"] + sys.argv[1:]
-    
+
     if debug_mode:
         print(f'[DEBUG-DISPATCH] Executing: {" ".join(exec_args)}', file=sys.stderr)
-    
-    # --- BROKEN CODE ---
-    # import platform
-    # if platform.system() == "Windows":
-    #     # Windows: Use subprocess instead of execv to avoid handle inheritance issues
-    #     sys.exit(subprocess.call(exec_args))  <-- subprocess not defined!
-    # else:
-    #     os.execv(str(target_python), exec_args)
 
-    # --- FIXED CODE ---
     if sys.platform == "win32":
-        # Windows: Use subprocess instead of execv to avoid handle inheritance issues
         import subprocess
         sys.exit(subprocess.call(exec_args))
     else:
@@ -215,83 +212,7 @@ def _maybe_install_c_dispatcher():
         if binary_tmp.exists():
             try: binary_tmp.unlink()
             except: pass
-    if sys.platform == 'win32':
-        try:
-            import ctypes
-            kernel32 = ctypes.windll.kernel32
-            # Enable ANSI escape sequences for stdout
-            kernel32.SetConsoleMode(kernel32.GetStdHandle(-11), 7)
-            
-            # Force UTF-8 encoding
-            if hasattr(sys.stdout, 'reconfigure'):
-                sys.stdout.reconfigure(encoding='utf-8', line_buffering=True)
-                sys.stderr.reconfigure(encoding='utf-8', line_buffering=True)
-            if hasattr(sys.stdin, 'reconfigure'):
-                sys.stdin.reconfigure(encoding='utf-8')
-                
-            os.environ['PYTHONIOENCODING'] = 'utf-8'
-            os.environ['PYTHONUNBUFFERED'] = '1'
-        except Exception:
-            pass
-    
-    debug_mode = os.environ.get("OMNIPKG_DEBUG") == "1"
-    
-    # ═══════════════════════════════════════════════════════════
-    # 🌍 STEP -1: PROPAGATE LANGUAGE BEFORE ANYTHING ELSE
-    # ═══════════════════════════════════════════════════════════
-    # Check if language is set in config and propagate to env var
-    # This ensures subprocesses inherit the language setting
-    if "OMNIPKG_LANG" not in os.environ:
-        venv_root = find_absolute_venv_root()
-        config_path = venv_root / ".omnipkg_config.json"
-        
-        if config_path.exists():
-            try:
-                with open(config_path, "r") as f:
-                    config = json.load(f)
-                language = config.get("language")
-                if language:
-                    os.environ["OMNIPKG_LANG"] = language
-                    if debug_mode:
-                        print(f"[DEBUG-DISPATCH] Set OMNIPKG_LANG={language} from config", file=sys.stderr)
-            except Exception as e:
-                if debug_mode:
-                    print(f'[DEBUG-DISPATCH] Config read error: {e}', file=sys.stderr)
 
-    # ═══════════════════════════════════════════════════════════
-    # 🎯 STEP 0: DETECT VERSION-SPECIFIC COMMAND (8pkg39, omnipkg39, etc.)
-    # ═══════════════════════════════════════════════════════════
-    import re
-    prog_name = Path(sys.argv[0]).name.lower()
-
-    # Match both 8pkgXY and omnipkgXY (e.g. 8pkg39, omnipkg39, omnipkg311)
-    version_match = re.match(r"(?:8pkg|omnipkg)(\d)(\d+)", prog_name)
-
-    if version_match:
-        major = version_match.group(1)
-        minor = version_match.group(2)
-        forced_version = f"{major}.{minor}"
-
-        # Inject --python flag if not already present
-        if "--python" not in sys.argv:
-            sys.argv.insert(1, "--python")
-            sys.argv.insert(2, forced_version)
-
-        if debug_mode:
-            print(f'[DEBUG-DISPATCH] Detected version-specific command: {prog_name}', file=sys.stderr)
-            print(f'[DEBUG-DISPATCH] Injected --python {forced_version}', file=sys.stderr)
-            print(f'[DEBUG-DISPATCH] Modified argv: {sys.argv}', file=sys.stderr)
-
-    # ═══════════════════════════════════════════════════════════
-    # STEP 1: Identify how we were called
-    # ═══════════════════════════════════════════════════════════
-
-    # If called as 'python', 'python3', or 'pip' -> ACT AS SHIM
-    if prog_name.startswith("python") or prog_name == "pip":
-        if debug_mode:
-            print(f"[DEBUG-SHIM] Intercepted call to '{prog_name}'", file=sys.stderr)
-        handle_shim_execution(prog_name, debug_mode)
-        return
     
     # 2. Determine which Python interpreter to use
     #
@@ -502,7 +423,10 @@ def determine_target_python() -> Path:
     # Fallback: whatever Python is running this script
     # ─────────────────────────────────────────────────────────────
     if debug_mode:
-        print(f'[DEBUG-DISPATCH] Fallback to sys.executable: {sys.executable}', file=sys.stderr)
+        print(f'[DEBUG-DISPATCH] ⚠️  All resolution strategies exhausted — fallback to sys.executable', file=sys.stderr)
+        print(f'[DEBUG-DISPATCH]    Cause: no --python flag, no self-aware config found, no active swap.', file=sys.stderr)
+        print(f'[DEBUG-DISPATCH]    In CI this usually means adopt did not run or venv_root resolved wrong.', file=sys.stderr)
+        print(f'[DEBUG-DISPATCH]    sys.executable: {sys.executable}', file=sys.stderr)
     return Path(sys.executable)
 
 
@@ -1207,8 +1131,14 @@ def find_absolute_venv_root(ignore_env_override: bool = False) -> Path:
         search_dir = search_dir.parent
 
     # Only use sys.prefix as a last resort if all else fails.
+    # In CI (GitHub Actions hostedtoolcache), there is no pyvenv.cfg so this
+    # is the normal path — registry and symlinks will be under sys.prefix/.omnipkg/
     if debug_mode:
-        print(f'[DEBUG-DISPATCH] Using sys.prefix fallback: {sys.prefix}', file=sys.stderr)
+        print(f'[DEBUG-DISPATCH] ⚠️  sys.prefix fallback — no pyvenv.cfg found walking up from argv[0]', file=sys.stderr)
+        print(f'[DEBUG-DISPATCH]    Expected in CI / hostedtoolcache environments.', file=sys.stderr)
+        print(f'[DEBUG-DISPATCH]    venv_root => sys.prefix = {sys.prefix}', file=sys.stderr)
+        _reg_chk = Path(sys.prefix) / ".omnipkg" / "interpreters" / "registry.json"
+        print(f'[DEBUG-DISPATCH]    registry exists: {_reg_chk.exists()} @ {_reg_chk}', file=sys.stderr)
     return Path(sys.prefix)
 
 def find_venv_root() -> Path:
@@ -1317,6 +1247,38 @@ def install_versioned_entrypoints(
         except Exception as e:
             if debug_mode:
                 print(f"[DEBUG-DISPATCH] ⚠️  Could not create symlink {link}: {e}", file=sys.stderr)
+
+    # ── 1b. ALSO symlink next to the actual running entry point ─────────────────
+    # When omnipkg is installed with `pip install --user`, the 8pkg entry point
+    # lands in ~/.local/bin — NOT in venv_root/bin. The block above only covers
+    # venv_root/bin. This covers wherever `8pkg` actually lives so that `8pkg310`
+    # is always findable in the same directory as the `8pkg` that was invoked.
+    actual_entry = Path(sys.argv[0]).resolve()
+    actual_bin_dir = actual_entry.parent
+    if actual_bin_dir.resolve() != bin_dir.resolve():
+        if debug_mode:
+            print(f"[DEBUG-DISPATCH] Entry point dir differs from venv bin/", file=sys.stderr)
+            print(f"[DEBUG-DISPATCH]   venv bin/   : {bin_dir}", file=sys.stderr)
+            print(f"[DEBUG-DISPATCH]   actual bin/ : {actual_bin_dir}", file=sys.stderr)
+        for base_name in ("omnipkg", "8pkg"):
+            src = actual_bin_dir / base_name
+            if not src.exists():
+                if debug_mode:
+                    print(f"[DEBUG-DISPATCH] Skipping extra symlink: {src} not found", file=sys.stderr)
+                continue
+            link = actual_bin_dir / f"{base_name}{flat}"
+            try:
+                if link.exists() or link.is_symlink():
+                    link.unlink()
+                link.symlink_to(src.name)
+                if debug_mode:
+                    print(f"[DEBUG-DISPATCH] ✅ Extra symlink (entry-point dir): {link} -> {src.name}", file=sys.stderr)
+            except Exception as e:
+                if debug_mode:
+                    print(f"[DEBUG-DISPATCH] ⚠️  Could not create extra symlink {link}: {e}", file=sys.stderr)
+    else:
+        if debug_mode:
+            print(f"[DEBUG-DISPATCH] Entry point dir == venv bin/ — no extra symlinks needed", file=sys.stderr)
 
     # ── 2. Write / update env-var snippet ─────────────────────────────────────
     profile_dir = venv_root / ".omnipkg" / "profile.d"
