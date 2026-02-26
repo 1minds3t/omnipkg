@@ -7,6 +7,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [2.4.2] — 2026-02-25
+
+Fix missing native versioned shims and implement Windows .bat shim factory
+
+**Core Fixes:**
+*   **Dispatcher Self-Healing:** Added `_ensure_native_shims()` to the dispatcher startup. This ensures that the native/primary Python interpreter receives versioned shims (e.g., `8pkg311`) even when the standard adoption path short-circuits.
+*   **Windows Shim Factory:** Overhauled `install_versioned_entrypoints` to create functional `.bat` wrappers on Windows. Previously, it attempted to create Unix-style symlinks which are unsupported/unrecognized as commands in Windows CMD/PowerShell.
+*   **Version Injection:** Windows shims now explicitly inject the `--python X.Y` flag to ensure the dispatcher correctly routes commands even when the calling process name is ambiguous.
+
+**CI & Testing:**
+*   **New Workflow:** Added `debug_dispatcher_installs.yml` to verify versioned command routing in clean environments.
+*   **Concurrency Stress Test:** Updated `test_concurrent_install.py` with "Phase 0" to validate that versioned dispatchers correctly target independent interpreters simultaneously.
+
+**Maintenance:**
+*   **Dockerfile:** Reverted Alpine base to `3.13` (stable) to avoid alpha-build bugs in `3.14`, while ensuring `pip >= 25.0` to mitigate CVE-2025-8869.
+*   **Docs:** Updated support matrix for Python 3.15 and added installation instructions for `pixi` and `prefix.dev`.
+
+---
+
+**📝 Code Changes:**
+- UPDATE: src/omnipkg/dispatcher.py (462 lines changed)
+
+**🧪 Tests:**
+- UPDATE: src/tests/test_concurrent_install.py (146 lines)
+
+**⚙️ Configuration:**
+- .github/workflows/debug_dispatcher_installs.yml (67 lines)
+- pyproject.toml (2 lines)
+
+**Additional Changes:**
+- fix(ci): Update 1 code files
+- fix(windows): ensure .bat exists for windows native pythons
+- Update tests; Update configuration
+- fix(dispatcher): Update 1 code files
+- Update 1 code files
+- Update configuration
+- fix: Update configuration
+- Update tests
+- test: Update tests
+
+**Updates:**
+- Update debug_dispatcher_installs.yml
+- Update README.md
+- Update Dockerfile.alpine
+
+_6 files changed, 463 insertions(+), 267 deletions(-)_
+
 ## [2.4.1] — 2026-02-25
 
 Faster Startup, GPU IPC Fixes, and Architecture Updates

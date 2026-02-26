@@ -6,7 +6,7 @@ backend-path = ["."]
 
 [project]
 name = "omnipkg"
-version = "2.4.1"
+version = "2.4.2"
 authors = [
   { name = "1minds3t", email = "1minds3t@proton.me" },
 ]
