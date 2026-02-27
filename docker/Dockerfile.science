@@ -8,7 +8,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl git build-essential libmagic1 zstd xz-utils gfortran \
-    && rm -rf /var/lib/apt/lists/
+    && rm -rf /var/lib/apt/lists/*
 
 RUN groupadd --system --gid 1000 omnipkg && \
     useradd --system --uid 1000 --gid omnipkg --create-home --home-dir $OMNIPKG_HOME omnipkg
@@ -25,8 +25,8 @@ COPY --chown=omnipkg:omnipkg src/ ./src/
 RUN /opt/venv/bin/pip install --no-cache-dir .
 
 # Pre-bake multi-version scientific stack via omnipkg
-COPY --chown=omnipkg:omnipkg docker/requirements.science.txt ./
-RUN omnipkg install -r requirements.science.txt -y
+COPY --chown=omnipkg:omnipkg docker/requirements-science.txt ./
+RUN omnipkg install -r requirements-science.txt -y
 
 RUN mkdir -p $OMNIPKG_HOME/.omnipkg && \
     chown -R omnipkg:omnipkg $OMNIPKG_HOME
