@@ -1,5 +1,7 @@
-# Use Python 3.13 Alpine - the latest STABLE version to avoid Python 3.14 Alpha bugs
-FROM python:3.13-alpine AS builder
+# Use Python 3.12 Alpine - 3.13 breaks on Alpine/musl due to locale.getencoding()
+# being called via subprocess._text_encoding() in the packaging/wheel stack.
+# Pinned to 3.12 until upstream packaging fixes musl compatibility.
+FROM python:3.12-alpine AS builder
 
 # Set environment variables to force UTF-8 and avoid locale issues common in Alpine
 ENV LANG=C.UTF-8 \
@@ -20,11 +22,12 @@ RUN pip install --no-cache-dir --upgrade pip setuptools wheel
 # Copy and install omnipkg
 COPY . /build
 WORKDIR /build
+
 # Install in editable or standard mode; ensure dependencies are resolved
 RUN pip install --no-cache-dir .
 
 # Runtime stage
-FROM python:3.13-alpine
+FROM python:3.12-alpine
 
 # Set environment variables
 ENV PATH="/opt/venv/bin:$PATH" \
