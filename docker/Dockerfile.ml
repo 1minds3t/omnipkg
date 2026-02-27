@@ -31,8 +31,8 @@ RUN /opt/venv/bin/pip install --no-cache-dir .
 
 # Pre-bake multi-version ML packages via omnipkg
 # This is the demo: conflicting versions coexisting, zero compromise
-COPY --chown=omnipkg:omnipkg docker/requirements.ml.txt ./
-RUN omnipkg install -r requirements.ml.txt -y
+COPY --chown=omnipkg:omnipkg docker/requirements-ml.txt ./
+RUN omnipkg install -r requirements-ml.txt -y
 
 RUN mkdir -p $OMNIPKG_HOME/.omnipkg && \
     chown -R omnipkg:omnipkg $OMNIPKG_HOME
