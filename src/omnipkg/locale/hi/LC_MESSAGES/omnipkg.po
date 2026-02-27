@@ -1583,32 +1583,28 @@ msgid "Failed to clean up backup '{}': {}"
 msgstr "बैकअप साफ़ करने में विफल '{}':{}"
 
 # (Empty Chain Output)
-# Lollama: Skipped (Empty Chain Output)
+#  (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/CondaGuard.py:140
-#, fuzzy
 msgid "--- Running Standalone Conda Corruption Check & Fix ---"
-msgstr ""
+msgstr "--- स्टैंडअलोन कोंडा भ्रष्टाचार जांच और समाधान चलाना ---"
 
 # (Empty Chain Output)
-# Lollama: Skipped (Empty Chain Output)
+#  (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/CondaGuard.py:146
-#, fuzzy
 msgid "🔧 Fix applied. Restored files: {}"
-msgstr ""
+msgstr "🔧 फिक्स लागू किया गया.पुनर्स्थापित फ़ाइलें: {}"
 
 # (Empty Chain Output)
-# Lollama: Skipped (Empty Chain Output)
+#  (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/CondaGuard.py:149
-#, fuzzy
 msgid "✅ No corruption found in protected files."
-msgstr ""
+msgstr "सुरक्षित फाइलों में कोई भ्रष्टाचार नहीं मिला।"
 
 # (Empty Chain Output)
-# Lollama: Skipped (Empty Chain Output)
+#  (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/CondaGuard.py:159
-#, fuzzy
 msgid "-> Running a risky function that might corrupt Conda..."
-msgstr ""
+msgstr "-> एक जोखिम भरा कार्य चलाना जो कॉनडा को भ्रष्ट कर सकता है..."
 
 # (Empty Chain Output)
 # Lollama: Skipped (Empty Chain Output)
