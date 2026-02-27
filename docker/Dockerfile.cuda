@@ -3,7 +3,8 @@ FROM nvidia/cuda:12.6.3-runtime-ubuntu24.04
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     OMNIPKG_HOME=/home/omnipkg \
-    DEBIAN_FRONTEND=noninteractive
+    DEBIAN_FRONTEND=noninteractive \
+    PATH="/opt/venv/bin:$PATH"
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 python3-pip python3-venv python3-dev \
@@ -11,23 +12,22 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/* \
     && ln -sf /usr/bin/python3 /usr/bin/python
 
-# nvidia/cuda base images ship with GID 1000 already taken.
-# Use 1001 to avoid conflict, or delete the conflicting group first.
-
+# nvidia/cuda base ships with GID+UID 1000 (ubuntu user) - rename and reuse both
 RUN (getent group 1000 && groupmod -n omnipkg $(getent group 1000 | cut -d: -f1)) || \
     groupadd --system --gid 1000 omnipkg && \
     (getent passwd 1000 && usermod -l omnipkg -d $OMNIPKG_HOME -m $(getent passwd 1000 | cut -d: -f1)) || \
     useradd --system --uid 1000 --gid omnipkg --create-home --home-dir $OMNIPKG_HOME omnipkg
 
+# Create venv to satisfy PEP 668 (Ubuntu 24.04 blocks system pip installs)
+RUN python3 -m venv /opt/venv && \
+    /opt/venv/bin/pip install --no-cache-dir --upgrade "pip>=25.3"
+
 WORKDIR $OMNIPKG_HOME
 
-COPY --chown=omnipkg:omnipkg pyproject.toml README.md ./
-COPY --chown=omnipkg:omnipkg src/ ./src/
 COPY --chown=omnipkg:omnipkg pyproject.toml README.md build_hooks.py ./
+COPY --chown=omnipkg:omnipkg src/ ./src/
 
-# Security fix: Upgrade pip to >=25.3 (CVE-2025-8869)
-RUN pip3 install --no-cache-dir --upgrade "pip>=25.3" && \
-    pip3 install --no-cache-dir .
+RUN /opt/venv/bin/pip install --no-cache-dir .
 
 RUN mkdir -p $OMNIPKG_HOME/.omnipkg && \
     chown -R omnipkg:omnipkg $OMNIPKG_HOME
@@ -36,5 +36,6 @@ COPY --chown=omnipkg:omnipkg docker-entrypoint.sh ./
 RUN chmod +x docker-entrypoint.sh
 
 USER omnipkg
+
 ENTRYPOINT ["./docker-entrypoint.sh"]
 CMD ["/bin/bash"]
