@@ -6,15 +6,10 @@ on:
     types: [completed]
   workflow_dispatch:
     inputs:
-      target_ref:
-        description: 'Git tag to build (e.g. v2.0.8)'
-        required: false
+      version_tag:
+        description: 'Version tag to publish as (e.g. v2.4.2) - code will be checked out at this tag'
+        required: true
         type: string
-        default: ''
-
-# Shared version resolution - used by all jobs via env
-# Each job re-resolves since jobs can't share steps, only needs/outputs
-# The logic: if workflow_dispatch use input, else find tag pointing at published SHA
 
 jobs:
   # ═══════════════════════════════════════════════════════════════════
@@ -31,45 +26,48 @@ jobs:
       attestations: write
       id-token: write
     steps:
-      - name: Checkout
+      - name: Checkout code at tag
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.workflow_run.head_sha || inputs.target_ref || github.sha }}
-      
+          ref: ${{ github.event.workflow_run.head_sha || inputs.version_tag || github.sha }}
+
+      - name: Overlay Dockerfiles from main
+        run: |
+          git fetch origin main
+          git checkout origin/main -- docker/
+
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
-      
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-      
+
       - name: Login to Docker Hub
         uses: docker/login-action@v3
         with:
           username: 1minds3t
           password: ${{ secrets.DOCKERHUB_TOKEN }}
-      
+
       - name: Login to GHCR
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      
+
       - name: Extract version
         id: version
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "${{ inputs.target_ref }}" ]; then
-            VERSION="${{ inputs.target_ref }}"
-            VERSION=${VERSION#v}
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ inputs.version_tag }}"
           else
             git fetch --tags origin
-            TAG=$(git tag --points-at ${{ github.event.workflow_run.head_sha }} | head -1)
-            VERSION=${TAG#v}
+            VERSION=$(git tag --points-at ${{ github.event.workflow_run.head_sha }} | head -1)
           fi
+          VERSION=${VERSION#v}
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
-          echo "tag=v${VERSION}" >> $GITHUB_OUTPUT
           echo "Resolved version: ${VERSION}"
-      
+
       - name: Extract metadata
         id: meta
         uses: docker/metadata-action@v5
@@ -82,7 +80,7 @@ jobs:
             type=raw,value=latest
             type=raw,value=debian
             type=raw,value=${{ steps.version.outputs.version }}-debian
-      
+
       - name: Build and push
         uses: docker/build-push-action@v5
         with:
@@ -109,44 +107,48 @@ jobs:
       attestations: write
       id-token: write
     steps:
-      - name: Checkout
+      - name: Checkout code at tag
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.workflow_run.head_sha || inputs.target_ref || github.sha }}
-      
+          ref: ${{ github.event.workflow_run.head_sha || inputs.version_tag || github.sha }}
+
+      - name: Overlay Dockerfiles from main
+        run: |
+          git fetch origin main
+          git checkout origin/main -- docker/
+
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
-      
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-      
+
       - name: Login to Docker Hub
         uses: docker/login-action@v3
         with:
           username: 1minds3t
           password: ${{ secrets.DOCKERHUB_TOKEN }}
-      
+
       - name: Login to GHCR
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      
+
       - name: Extract version
         id: version
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "${{ inputs.target_ref }}" ]; then
-            VERSION="${{ inputs.target_ref }}"
-            VERSION=${VERSION#v}
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ inputs.version_tag }}"
           else
             git fetch --tags origin
-            TAG=$(git tag --points-at ${{ github.event.workflow_run.head_sha }} | head -1)
-            VERSION=${TAG#v}
+            VERSION=$(git tag --points-at ${{ github.event.workflow_run.head_sha }} | head -1)
           fi
+          VERSION=${VERSION#v}
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
           echo "Resolved version: ${VERSION}"
-      
+
       - name: Extract metadata
         id: meta
         uses: docker/metadata-action@v5
@@ -158,7 +160,7 @@ jobs:
             type=raw,value=alpine
             type=raw,value=slim
             type=raw,value=${{ steps.version.outputs.version }}-alpine
-      
+
       - name: Build and push
         uses: docker/build-push-action@v5
         with:
@@ -188,44 +190,48 @@ jobs:
       matrix:
         ubuntu_version: ['20.04', '22.04', '24.04']
     steps:
-      - name: Checkout
+      - name: Checkout code at tag
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.workflow_run.head_sha || inputs.target_ref || github.sha }}
-      
+          ref: ${{ github.event.workflow_run.head_sha || inputs.version_tag || github.sha }}
+
+      - name: Overlay Dockerfiles from main
+        run: |
+          git fetch origin main
+          git checkout origin/main -- docker/
+
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
-      
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-      
+
       - name: Login to Docker Hub
         uses: docker/login-action@v3
         with:
           username: 1minds3t
           password: ${{ secrets.DOCKERHUB_TOKEN }}
-      
+
       - name: Login to GHCR
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      
+
       - name: Extract version
         id: version
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "${{ inputs.target_ref }}" ]; then
-            VERSION="${{ inputs.target_ref }}"
-            VERSION=${VERSION#v}
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ inputs.version_tag }}"
           else
             git fetch --tags origin
-            TAG=$(git tag --points-at ${{ github.event.workflow_run.head_sha }} | head -1)
-            VERSION=${TAG#v}
+            VERSION=$(git tag --points-at ${{ github.event.workflow_run.head_sha }} | head -1)
           fi
+          VERSION=${VERSION#v}
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
           echo "Resolved version: ${VERSION}"
-      
+
       - name: Extract metadata
         id: meta
         uses: docker/metadata-action@v5
@@ -236,7 +242,7 @@ jobs:
           tags: |
             type=raw,value=ubuntu-${{ matrix.ubuntu_version }}
             type=raw,value=${{ steps.version.outputs.version }}-ubuntu-${{ matrix.ubuntu_version }}
-      
+
       - name: Build and push
         uses: docker/build-push-action@v5
         with:
@@ -265,44 +271,48 @@ jobs:
       attestations: write
       id-token: write
     steps:
-      - name: Checkout
+      - name: Checkout code at tag
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.workflow_run.head_sha || inputs.target_ref || github.sha }}
-      
+          ref: ${{ github.event.workflow_run.head_sha || inputs.version_tag || github.sha }}
+
+      - name: Overlay Dockerfiles from main
+        run: |
+          git fetch origin main
+          git checkout origin/main -- docker/
+
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
-      
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-      
+
       - name: Login to Docker Hub
         uses: docker/login-action@v3
         with:
           username: 1minds3t
           password: ${{ secrets.DOCKERHUB_TOKEN }}
-      
+
       - name: Login to GHCR
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      
+
       - name: Extract version
         id: version
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "${{ inputs.target_ref }}" ]; then
-            VERSION="${{ inputs.target_ref }}"
-            VERSION=${VERSION#v}
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ inputs.version_tag }}"
           else
             git fetch --tags origin
-            TAG=$(git tag --points-at ${{ github.event.workflow_run.head_sha }} | head -1)
-            VERSION=${TAG#v}
+            VERSION=$(git tag --points-at ${{ github.event.workflow_run.head_sha }} | head -1)
           fi
+          VERSION=${VERSION#v}
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
           echo "Resolved version: ${VERSION}"
-      
+
       - name: Extract metadata
         id: meta
         uses: docker/metadata-action@v5
@@ -313,7 +323,7 @@ jobs:
           tags: |
             type=raw,value=fedora
             type=raw,value=${{ steps.version.outputs.version }}-fedora
-      
+
       - name: Build and push
         uses: docker/build-push-action@v5
         with:
@@ -340,44 +350,48 @@ jobs:
       attestations: write
       id-token: write
     steps:
-      - name: Checkout
+      - name: Checkout code at tag
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.workflow_run.head_sha || inputs.target_ref || github.sha }}
-      
+          ref: ${{ github.event.workflow_run.head_sha || inputs.version_tag || github.sha }}
+
+      - name: Overlay Dockerfiles from main
+        run: |
+          git fetch origin main
+          git checkout origin/main -- docker/
+
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
-      
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-      
+
       - name: Login to Docker Hub
         uses: docker/login-action@v3
         with:
           username: 1minds3t
           password: ${{ secrets.DOCKERHUB_TOKEN }}
-      
+
       - name: Login to GHCR
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      
+
       - name: Extract version
         id: version
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "${{ inputs.target_ref }}" ]; then
-            VERSION="${{ inputs.target_ref }}"
-            VERSION=${VERSION#v}
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ inputs.version_tag }}"
           else
             git fetch --tags origin
-            TAG=$(git tag --points-at ${{ github.event.workflow_run.head_sha }} | head -1)
-            VERSION=${TAG#v}
+            VERSION=$(git tag --points-at ${{ github.event.workflow_run.head_sha }} | head -1)
           fi
+          VERSION=${VERSION#v}
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
           echo "Resolved version: ${VERSION}"
-      
+
       - name: Extract metadata
         id: meta
         uses: docker/metadata-action@v5
@@ -389,7 +403,7 @@ jobs:
             type=raw,value=cuda
             type=raw,value=gpu
             type=raw,value=${{ steps.version.outputs.version }}-cuda
-      
+
       - name: Build and push
         uses: docker/build-push-action@v5
         with:
@@ -416,44 +430,48 @@ jobs:
       attestations: write
       id-token: write
     steps:
-      - name: Checkout
+      - name: Checkout code at tag
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.workflow_run.head_sha || inputs.target_ref || github.sha }}
-      
+          ref: ${{ github.event.workflow_run.head_sha || inputs.version_tag || github.sha }}
+
+      - name: Overlay Dockerfiles from main
+        run: |
+          git fetch origin main
+          git checkout origin/main -- docker/
+
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
-      
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-      
+
       - name: Login to Docker Hub
         uses: docker/login-action@v3
         with:
           username: 1minds3t
           password: ${{ secrets.DOCKERHUB_TOKEN }}
-      
+
       - name: Login to GHCR
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      
+
       - name: Extract version
         id: version
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "${{ inputs.target_ref }}" ]; then
-            VERSION="${{ inputs.target_ref }}"
-            VERSION=${VERSION#v}
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ inputs.version_tag }}"
           else
             git fetch --tags origin
-            TAG=$(git tag --points-at ${{ github.event.workflow_run.head_sha }} | head -1)
-            VERSION=${TAG#v}
+            VERSION=$(git tag --points-at ${{ github.event.workflow_run.head_sha }} | head -1)
           fi
+          VERSION=${VERSION#v}
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
           echo "Resolved version: ${VERSION}"
-      
+
       - name: Extract metadata
         id: meta
         uses: docker/metadata-action@v5
@@ -464,7 +482,7 @@ jobs:
           tags: |
             type=raw,value=dev
             type=raw,value=${{ steps.version.outputs.version }}-dev
-      
+
       - name: Build and push
         uses: docker/build-push-action@v5
         with:
