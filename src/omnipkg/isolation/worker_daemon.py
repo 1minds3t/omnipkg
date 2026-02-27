@@ -50,6 +50,43 @@ def _normalize_exe(path: str) -> str:
         return path
 
 
+def _resolve_python_exe(python_exe: str | None) -> str:
+    """
+    Resolve a Python interpreter reference to its full absolute path.
+
+    Accepts any of:
+      - None / ""          → returns sys.executable (current interpreter)
+      - Full path          → returned as-is after normalization
+                             e.g. "/home/user/miniforge3/.../python3.11"
+      - Short version      → resolved via omnipkg's interpreter registry
+                             e.g. "3.11", "3.11.2", "py311", "python3.11"
+
+    This means callers never have to know the full path.  The daemon and
+    DaemonClient both call this before building the worker_key, so the
+    resolved path is always what ends up in the key — consistent everywhere.
+
+    Raises nothing: if resolution fails it falls back to the input string
+    so existing code that passes bad-but-working paths continues to work.
+    """
+    if not python_exe:
+        return sys.executable
+
+    # Already a usable path — don't touch it.
+    if os.path.isabs(python_exe) and os.path.exists(python_exe):
+        return python_exe
+
+    # Try omnipkg's own resolver (the same one used by `8pkg daemon idle`).
+    try:
+        from omnipkg.dispatcher import resolve_python_path
+        resolved = str(resolve_python_path(python_exe))
+        if resolved and os.path.exists(resolved):
+            return resolved
+    except Exception:
+        pass
+
+    # Unrecognised string — return as-is and let the OS complain later.
+    return python_exe
+
 def _derive_paths_for_exe(python_exe: str) -> dict:
     """
     Compute site_packages_path and multiversion_base directly from a Python
@@ -1234,6 +1271,26 @@ sys.stderr.write('🎯 [WORKER] READY signal sent, entering main execution loop.
 sys.stderr.flush()
 
 # ═══════════════════════════════════════════════════════════════
+# PERSISTENT GLOBALS — survives across all task executions
+# This is what makes model caching work: globals()["_CACHED_MODEL"]
+# set on call 1 is still there on call 2, 3, ... N.
+# Per-task transient values (tensor_in, arr_in, etc.) are injected
+# fresh each call but do NOT leak back into this dict.
+# ═══════════════════════════════════════════════════════════════
+_worker_globals = {
+    '__builtins__': __builtins__,
+    'sys': sys,
+    'os': os,
+    'json': json,
+}
+# Pre-populate with already-imported heavy modules so worker code
+# can use them without re-importing (torch, np already loaded above).
+if _torch_available:
+    _worker_globals['torch'] = torch
+if np is not None:
+    _worker_globals['np'] = np
+
+# ═══════════════════════════════════════════════════════════════
 # MAIN EXECUTION LOOP
 # ═══════════════════════════════════════════════════════════════
 
@@ -1255,7 +1312,15 @@ while True:
         task_id = command.get('task_id', 'UNKNOWN')
         
         worker_code = command.get('code', '')
-        exec_scope = {'input_data': command}
+        # Per-task transient scope: IPC handles, arr_in/out, input_data.
+        # This is SEPARATE from _worker_globals so transient objects don't
+        # accumulate across calls (e.g. large tensors freed after each task).
+        task_scope = {'input_data': command}
+        # exec_scope merges persistent globals + task-local — code sees both.
+        # We pass _worker_globals as the globals dict so that assignments like
+        #   globals()["_CACHED_MODEL"] = ...
+        # persist into _worker_globals and survive to the next call.
+        exec_scope = _worker_globals
         shm_blocks = []
         
         is_cuda_request = command.get('type') == 'execute_cuda'
@@ -1463,9 +1528,12 @@ while True:
         stdout_buffer = io.StringIO()
         stderr_buffer = io.StringIO()
         
+        # torch/np already in _worker_globals from startup — no-op reassign is fine
         if _torch_available:
             exec_scope['torch'] = torch
         exec_scope['np'] = np
+        # Make current task's input_data visible (overwritten each call, not persisted)
+        exec_scope['input_data'] = command
         
         try:
             with redirect_stdout(stdout_buffer), redirect_stderr(stderr_buffer):
@@ -1487,7 +1555,6 @@ while True:
             if not isinstance(result, dict):
                 result = {}
             
-            # In _DAEMON_SCRIPT, around line 800 where the result is built:
             result['task_id'] = task_id
             result['status'] = 'COMPLETED'
             result['success'] = True
@@ -1517,6 +1584,12 @@ while True:
                     shm.close()
                 except:
                     pass
+            # Remove per-task transient keys from the persistent globals dict.
+            # This releases tensor/array references immediately so memory is freed,
+            # while user-defined globals (_CACHED_MODEL etc.) remain untouched.
+            for _transient_key in ('tensor_in', 'tensor_out', 'arr_in', 'arr_out',
+                                   'input_data', 'worker_result'):
+                _worker_globals.pop(_transient_key, None)
     except KeyboardInterrupt:
         break
     except Exception as e:
@@ -2285,10 +2358,14 @@ class PersistentWorker:
                 raise
 
     def health_check(self) -> bool:
-        """Check if worker is responsive."""
+        """Check if worker is responsive. Skips check if worker is mid-task."""
+        if getattr(self, '_is_executing', False):
+            # Worker is busy — count as healthy, don't interrupt it
+            self.last_health_check = time.time()
+            return True
         try:
             result = self.execute_shm_task(
-                "health_check", "result = {'status': 'ok'}", {}, {}, timeout=5.0
+                "health_check", "result = {'status': 'ok'}", {}, {}, timeout=15.0
             )
             self.last_health_check = time.time()
             self.health_check_failures = 0
@@ -2894,7 +2971,9 @@ class WorkerPoolDaemon:
                     req["code"],
                     req.get("shm_in", {}),
                     req.get("shm_out", {}),
-                    req.get("python_exe"),  # _execute_code normalizes internally
+                    python_exe     = req.get("python_exe"),
+                    worker_tag     = req.get("worker_tag"),      # NEW (optional)
+                    max_memory_mb  = req.get("max_memory_mb"),   # NEW (optional)
                 )
             elif req["type"] == "execute_cuda":
                 res = self._execute_cuda_code(
@@ -2902,7 +2981,9 @@ class WorkerPoolDaemon:
                     req["code"],
                     req.get("cuda_in", {}),
                     req.get("cuda_out", {}),
-                    req.get("python_exe"),  # _execute_cuda_code normalizes internally
+                    python_exe     = req.get("python_exe"),
+                    worker_tag     = req.get("worker_tag"),      # NEW (optional)
+                    max_memory_mb  = req.get("max_memory_mb"),   # NEW (optional)
                 )
             elif req["type"] == "status":
                 res = self._get_status()
@@ -2952,20 +3033,75 @@ class WorkerPoolDaemon:
                 pass
 
     def _execute_code(
-        self, spec: str, code: str, shm_in: dict, shm_out: dict, python_exe: str = None
+        self,
+        spec: str,
+        code: str,
+        shm_in: dict,
+        shm_out: dict,
+        python_exe: str = None,
+        worker_tag: str = None,
+        max_memory_mb: float = None,
     ) -> dict:
         """
-        SIMPLIFIED: Just pass through to worker, let loader handle ALL locking.
-        Daemon only blocks on worker creation (fast), not on filesystem ops.
+        Execute Python code inside a persistent isolated worker process.
+
+        The daemon keeps one worker process alive per (spec, python, tag) triplet
+        and routes subsequent calls to that same process — so model weights,
+        loaded tokenizers, and any other globals stay warm across calls.
+
+        Parameters
+        ----------
+        spec : str
+            Package requirement, e.g. ``"torch==2.9.1"`` or ``"rich>=13"``.
+            This is what pip resolves; it must not contain the tag suffix.
+        code : str
+            Python source to execute inside the worker.  The worker's globals
+            persist between calls, so you can cache expensive objects::
+
+                if "_model" not in globals():
+                    globals()["_model"] = load_heavy_model()
+                result = globals()["_model"].predict(arr_in)
+                print(json.dumps(result))
+
+        shm_in / shm_out : dict
+            Shared-memory metadata for zero-copy array handoff.  Pass ``{}``
+            for the JSON (small-data) path — execute_smart handles this for you.
+
+        python_exe : str, optional
+            Interpreter to use.  Accepts:
+              - ``None``         → current interpreter (sys.executable)
+              - Full path        → ``"/home/user/.omnipkg/.../python3.11"``
+              - Short version    → ``"3.11"``, ``"py311"``, ``"python3.11"``
+            The short-version form is resolved via the omnipkg interpreter registry
+            (same versions listed by ``8pkg info python``).
+
+        worker_tag : str, optional
+            Opaque string that makes this call land on its own dedicated worker,
+            separate from other calls with the same spec+python.
+
+            Use this when you load large models and want process-level isolation::
+
+                # nllb and seedx each get their own process → no RAM sharing
+                client.execute_smart(spec="torch==2.9.1", worker_tag="nllb-600m", ...)
+                client.execute_smart(spec="torch==2.9.1", worker_tag="seedx-7b",  ...)
+
+            The tag is NEVER passed to pip; it only affects which worker bucket
+            this call routes to.  If omitted, behaviour is identical to before.
+
+        max_memory_mb : float, optional
+            If set, the daemon will evict this worker (and restart it fresh on the
+            next call) whenever its RSS exceeds this many megabytes.  Useful for
+            guarding against accumulation when running many large models.
+            Example: ``max_memory_mb=18_000`` for an ~18 GB model cap.
         """
-        if not python_exe:
-            python_exe = sys.executable
+        # ── Resolve interpreter (accepts short versions like "3.11") ──────────
+        python_exe = _normalize_exe(_resolve_python_exe(python_exe))
 
-        # CRITICAL: Use consistent normalization so pool key lookups always match,
-        # even when Windows returns paths with different casing or junction point forms.
-        python_exe = _normalize_exe(python_exe)
-
-        worker_key = f"{spec}::{python_exe}"
+        # ── Build worker key ───────────────────────────────────────────────────
+        # The tag (if any) is appended to the key so this call gets its own
+        # worker bucket, but the raw spec is kept clean for pip installs.
+        key_spec   = f"{spec}#{worker_tag}" if worker_tag else spec
+        worker_key = f"{key_spec}::{python_exe}"
 
         # ═══════════════════════════════════════════════════════════════
         # FAST PATH: Worker exists, execute immediately
@@ -3072,6 +3208,12 @@ class WorkerPoolDaemon:
                         "last_used": time.time(),
                         "request_count": 0,
                         "memory_mb": 0.0,
+                        # Optional RSS cap in MB; enforced by _memory_manager.
+                        # None means no cap (default, same as before).
+                        "max_memory_mb": max_memory_mb,
+                        # Store the clean pip-installable spec separately so
+                        # status / health-monitor code can show it without the tag.
+                        "pip_spec": spec,
                     }
                     self.stats["workers_created"] += 1
                     worker_info = self.workers[worker_key]
@@ -3156,15 +3298,16 @@ class WorkerPoolDaemon:
         cuda_in: dict,
         cuda_out: dict,
         python_exe: str = None,
+        worker_tag: str = None,
+        max_memory_mb: float = None,
     ) -> dict:
         """Execute code with CUDA IPC tensors."""
-        if not python_exe:
-            python_exe = sys.executable
+        # ── Resolve interpreter (accepts short versions like "3.11") ──────────
+        python_exe = _normalize_exe(_resolve_python_exe(python_exe))
 
-        # CRITICAL: Use consistent normalization (matches _execute_code)
-        python_exe = _normalize_exe(python_exe)
-
-        worker_key = f"{spec}::{python_exe}"
+        # ── Build worker key ───────────────────────────────────────────────────
+        key_spec   = f"{spec}#{worker_tag}" if worker_tag else spec
+        worker_key = f"{key_spec}::{python_exe}"
         worker_info = None
 
         # FAST PATH: Worker already exists for this spec
@@ -3240,6 +3383,8 @@ class WorkerPoolDaemon:
                                 "memory_mb": 0.0,
                                 "is_gpu_worker": True,
                                 "gpu_timeout": 60,
+                                "max_memory_mb": max_memory_mb,
+                                "pip_spec": spec,
                             }
                             self.stats["workers_created"] += 1
                             worker_info = self.workers[worker_key]
@@ -3331,15 +3476,64 @@ class WorkerPoolDaemon:
                             worker_info["worker"].force_shutdown()
 
     def _memory_manager(self):
-        """Enhanced with optional psutil monitoring."""
+        """
+        Background thread that enforces two levels of memory policy:
+
+        1. Per-worker cap (``max_memory_mb`` set at call time):
+           A specific worker is evicted the moment its RSS crosses the cap.
+           The next call for that spec will start a fresh worker.  This is
+           how you prevent a 7B-param model from accumulating 60 GB after
+           many iterations — set ``max_memory_mb=20_000`` and the worker is
+           recycled before it can balloon.
+
+        2. System-wide emergency eviction (85% RAM used):
+           Kill the oldest half of all workers indiscriminately.  Last resort.
+
+        3. Idle-timeout eviction (always active, no psutil required):
+           Workers idle longer than ``max_idle_time`` are reaped.
+        """
         while self.running:
             time.sleep(60)
             now = time.time()
 
-            # 🔥 FIX: Safe psutil import - won't crash if missing
             try:
                 import psutil
 
+                # ── Level 1: per-worker RSS cap ───────────────────────────
+                with self.pool_lock:
+                    keys_to_check = list(self.workers.keys())
+
+                for wkey in keys_to_check:
+                    with self.pool_lock:
+                        info = self.workers.get(wkey)
+                        if info is None:
+                            continue
+                        cap = info.get("max_memory_mb")
+                        pid = info["worker"].process.pid if info["worker"].process else None
+
+                    if cap and pid:
+                        try:
+                            rss_mb = psutil.Process(pid).memory_info().rss / 1_048_576
+                            with self.pool_lock:
+                                if wkey in self.workers:
+                                    self.workers[wkey]["memory_mb"] = rss_mb
+                            if rss_mb > cap:
+                                safe_print(
+                                    f"   🧹[DAEMON] Worker '{wkey}' RSS {rss_mb:.0f} MB "
+                                    f"> cap {cap:.0f} MB — evicting for next call",
+                                    file=sys.stderr,
+                                )
+                                with self.pool_lock:
+                                    evicted = self.workers.pop(wkey, None)
+                                if evicted:
+                                    self.stats["workers_killed"] += 1
+                                    threading.Thread(
+                                        target=evicted["worker"].force_shutdown, daemon=True
+                                    ).start()
+                        except (psutil.NoSuchProcess, psutil.AccessDenied):
+                            pass
+
+                # ── Level 2: system-wide emergency eviction ───────────────
                 mem = psutil.virtual_memory()
 
                 if mem.percent > 85:
@@ -4081,19 +4275,39 @@ class DaemonClient:
             return WorkerPool.get_instance().execute(spec, code, python_exe)
         return result
 
-    def execute_shm(self, spec, code, shm_in, shm_out, python_exe=None):
-        if not python_exe:
-            python_exe = sys.executable
-        return self._send(
-            {
-                "type": "execute",
-                "spec": spec,
-                "code": code,
-                "shm_in": shm_in,
-                "shm_out": shm_out,
-                "python_exe": python_exe,
-            }
-        )
+    def execute_shm(
+        self,
+        spec: str,
+        code: str,
+        shm_in: dict,
+        shm_out: dict,
+        python_exe: str = None,
+        worker_tag: str = None,
+        max_memory_mb: float = None,
+    ):
+        """
+        Low-level execute with explicit SHM metadata.
+        Prefer execute_smart() for all normal use — it picks the right transport
+        automatically (CUDA IPC → CPU SHM → JSON).
+
+        worker_tag and max_memory_mb are forwarded to the daemon unchanged;
+        see _execute_code docstring for full semantics.
+        """
+        python_exe = _resolve_python_exe(python_exe)
+        payload = {
+            "type":       "execute",
+            "spec":       spec,
+            "code":       code,
+            "shm_in":     shm_in,
+            "shm_out":    shm_out,
+            "python_exe": python_exe,
+        }
+        # Only include optional fields when set — keeps wire format backward-compat
+        if worker_tag is not None:
+            payload["worker_tag"] = worker_tag
+        if max_memory_mb is not None:
+            payload["max_memory_mb"] = max_memory_mb
+        return self._send(payload)
 
     def status(self):
         old_auto = self.auto_start
@@ -4463,6 +4677,8 @@ class DaemonClient:
         output_dtype: str,
         python_exe: str = None,
         ipc_mode: str = "auto",
+        worker_tag: str = None,
+        max_memory_mb: float = None,
     ):
         """
         Execute code with GPU IPC using specified mode.
@@ -4495,7 +4711,8 @@ class DaemonClient:
         # ═══════════════════════════════════════════════════════════
         if actual_mode == IPCMode.UNIVERSAL:
             return self._execute_universal_ipc(
-                spec, code, input_tensor, output_shape, output_dtype, python_exe
+                spec, code, input_tensor, output_shape, output_dtype, python_exe,
+                worker_tag=worker_tag, max_memory_mb=max_memory_mb
             )
 
         # ═══════════════════════════════════════════════════════════
@@ -4503,7 +4720,8 @@ class DaemonClient:
         # ═══════════════════════════════════════════════════════════
         if actual_mode == IPCMode.PYTORCH_NATIVE:
             return self._execute_pytorch_native_ipc(
-                spec, code, input_tensor, output_shape, output_dtype, python_exe
+                spec, code, input_tensor, output_shape, output_dtype, python_exe,
+                worker_tag=worker_tag, max_memory_mb=max_memory_mb
             )
 
         # ═══════════════════════════════════════════════════════════
@@ -4511,17 +4729,19 @@ class DaemonClient:
         # ═══════════════════════════════════════════════════════════
         if actual_mode == IPCMode.CPU_SHM:
             return self._execute_cpu_shm(
-                spec, code, input_tensor, output_shape, output_dtype, python_exe
+                spec, code, input_tensor, output_shape, output_dtype, python_exe,
+                worker_tag=worker_tag, max_memory_mb=max_memory_mb
             )
 
         # ═══════════════════════════════════════════════════════════
         # ROUTE 4: HYBRID (CPU SHM + GPU COPIES - SLOWEST)
         # ═══════════════════════════════════════════════════════════
         return self._execute_hybrid_ipc(
-            spec, code, input_tensor, output_shape, output_dtype, python_exe
+            spec, code, input_tensor, output_shape, output_dtype, python_exe,
+            worker_tag=worker_tag, max_memory_mb=max_memory_mb
         )
 
-    def _execute_cpu_shm(self, spec, code, input_tensor, output_shape, output_dtype, python_exe):
+    def _execute_cpu_shm(self, spec, code, input_tensor, output_shape, output_dtype, python_exe, worker_tag=None, max_memory_mb=None):
         """
         CPU-only mode: Run computation on CPU without any GPU transfers.
         Uses zero-copy SHM like Test 17.
@@ -4561,6 +4781,8 @@ class DaemonClient:
                 output_shape=output_shape,
                 output_dtype=np_dtype,
                 python_exe=python_exe or sys.executable,
+                worker_tag=worker_tag,
+                max_memory_mb=max_memory_mb,
             )
 
             if not response.get("success"):
@@ -4581,7 +4803,7 @@ class DaemonClient:
             raise
 
     def _execute_universal_ipc(
-        self, spec, code, input_tensor, output_shape, output_dtype, python_exe
+        self, spec, code, input_tensor, output_shape, output_dtype, python_exe, worker_tag=None, max_memory_mb=None
     ):
         """Universal CUDA IPC - client pre-allocates both buffers, worker just opens handles."""
         import torch
@@ -4606,11 +4828,16 @@ class DaemonClient:
             cuda_out_meta = {"universal_ipc": UniversalGpuIpc.share(output_tensor),
                              "device": output_tensor.device.index}
 
-            response = self._send({
+            payload = {
                 "type": "execute_cuda", "spec": spec, "code": code,
                 "cuda_in": cuda_in_meta, "cuda_out": cuda_out_meta,
                 "python_exe": python_exe or sys.executable,
-            })
+            }
+            if worker_tag is not None:
+                payload["worker_tag"] = worker_tag
+            if max_memory_mb is not None:
+                payload["max_memory_mb"] = max_memory_mb
+            response = self._send(payload)
 
             if not response.get("success"):
                 raise RuntimeError(_('Worker Error: {}').format(response.get('error')))
@@ -4626,7 +4853,7 @@ class DaemonClient:
             raise
 
     def _execute_pytorch_native_ipc(
-        self, spec, code, input_tensor, output_shape, output_dtype, python_exe
+        self, spec, code, input_tensor, output_shape, output_dtype, python_exe, worker_tag=None, max_memory_mb=None
     ):
         """PyTorch 1.x native IPC (framework-managed)."""
         import torch
@@ -4726,16 +4953,19 @@ class DaemonClient:
                 "device": output_tensor.device.index,
             }
 
-            response = self._send(
-                {
-                    "type": "execute_cuda",
-                    "spec": spec,
-                    "code": code,
-                    "cuda_in": cuda_in_meta,
-                    "cuda_out": cuda_out_meta,
-                    "python_exe": python_exe or sys.executable,
-                }
-            )
+            payload = {
+                "type": "execute_cuda",
+                "spec": spec,
+                "code": code,
+                "cuda_in": cuda_in_meta,
+                "cuda_out": cuda_out_meta,
+                "python_exe": python_exe or sys.executable,
+            }
+            if worker_tag is not None:
+                payload["worker_tag"] = worker_tag
+            if max_memory_mb is not None:
+                payload["max_memory_mb"] = max_memory_mb
+            response = self._send(payload)
 
             if not response.get("success"):
                 raise RuntimeError(_('Worker Error: {}').format(response.get('error')))
@@ -4752,7 +4982,7 @@ class DaemonClient:
             safe_print(_('   ⚠️  PyTorch native IPC failed: {}').format(e))
             raise
 
-    def _execute_hybrid_ipc(self, spec, code, input_tensor, output_shape, output_dtype, python_exe):
+    def _execute_hybrid_ipc(self, spec, code, input_tensor, output_shape, output_dtype, python_exe, worker_tag=None, max_memory_mb=None):
         """
         Hybrid mode: Copy to CPU SHM, worker copies to GPU.
 
@@ -4795,16 +5025,19 @@ class DaemonClient:
                 "device": input_tensor.device.index,
             }
 
-            response = self._send(
-                {
-                    "type": "execute_cuda",
-                    "spec": spec,
-                    "code": code,
-                    "cuda_in": cuda_in_meta,
-                    "cuda_out": cuda_out_meta,
-                    "python_exe": python_exe or sys.executable,
-                }
-            )
+            payload = {
+                "type": "execute_cuda",
+                "spec": spec,
+                "code": code,
+                "cuda_in": cuda_in_meta,
+                "cuda_out": cuda_out_meta,
+                "python_exe": python_exe or sys.executable,
+            }
+            if worker_tag is not None:
+                payload["worker_tag"] = worker_tag
+            if max_memory_mb is not None:
+                payload["max_memory_mb"] = max_memory_mb
+            response = self._send(payload)
 
             if not response.get("success"):
                 raise RuntimeError(_('Worker Error: {}').format(response.get('error')))
@@ -4837,6 +5070,8 @@ class DaemonClient:
         output_shape,
         output_dtype,
         python_exe=None,
+        worker_tag: str = None,
+        max_memory_mb: float = None,
     ):
         """
         🚀 HFT MODE: Zero-Copy Tensor Handoff via Shared Memory.
@@ -4868,7 +5103,12 @@ class DaemonClient:
             }
 
             # Pass python_exe to execute_shm
-            response = self.execute_shm(spec, code, in_meta, out_meta, python_exe=python_exe)
+            response = self.execute_shm(
+                spec, code, in_meta, out_meta,
+                python_exe=python_exe,
+                worker_tag=worker_tag,
+                max_memory_mb=max_memory_mb,
+            )
 
             if not response.get("success"):
                 raise RuntimeError(_('Worker Error: {}').format(response.get('error')))
@@ -4888,60 +5128,118 @@ class DaemonClient:
             except:
                 pass
 
-    def execute_smart(self, spec: str, code: str, data=None, python_exe=None):
+    def execute_smart(
+        self,
+        spec: str,
+        code: str,
+        data=None,
+        python_exe: str = None,
+        worker_tag: str = None,
+        max_memory_mb: float = None,
+    ):
         """
-        🧠 INTELLIGENT DISPATCH:
-        - GPU Tensor → CUDA IPC (fastest, <5µs)
-        - Large CPU Array → CPU SHM (fast, ~5ms)
-        - Small Data → JSON (acceptable, ~10ms)
+        ✨ THE ONE METHOD YOU NORMALLY CALL.
+
+        Runs ``code`` inside a persistent worker that has ``spec`` installed,
+        automatically choosing the fastest transport for ``data``.
+
+        Quick-start examples
+        --------------------
+        # Simplest: no data, just run code in an isolated env
+        res = client.execute_smart("rich==13.4", "from rich import print; print('hi')")
+
+        # Pass a small list/dict (JSON path, ~10ms overhead)
+        res = client.execute_smart("mylib==1.0", "print(arr_in[0])", data=[1, 2, 3])
+        output = res["result"]   # stdout string
+
+        # Pass a large numpy array (zero-copy SHM, ~5ms)
+        import numpy as np
+        arr = np.random.rand(1_000_000).astype(np.float32)
+        res = client.execute_smart("scipy==1.13", "arr_out = arr_in * 2", data=arr)
+
+        # Pass a CUDA tensor (CUDA IPC, <5µs — near-zero overhead)
+        import torch
+        gpu_t = torch.randn(1024, device="cuda")
+        res = client.execute_smart("torch==2.9.1", "arr_out = arr_in * 2", data=gpu_t)
+
+        # Isolate heavy models in separate workers (prevents RAM accumulation)
+        # Each tag → its own dedicated process; models never share memory.
+        client.execute_smart("torch==2.9.1", nllb_code,  worker_tag="nllb-600m")
+        client.execute_smart("torch==2.9.1", seedx_code, worker_tag="seedx-7b",
+                             max_memory_mb=20_000)   # auto-evict if RSS > 20 GB
+
+        # Use a different Python version — short form accepted
+        client.execute_smart("torch==2.9.1", code, python_exe="3.11")
+
+        Parameters
+        ----------
+        spec : str
+            pip-style package requirement.  Must NOT include the worker_tag —
+            that is handled separately so pip only sees the clean spec.
+        code : str
+            Python source to execute.  Globals persist across calls to the same
+            worker, so cache expensive objects in globals()::
+
+                if "_model" not in globals():
+                    globals()["_model"] = AutoModel.from_pretrained(...)
+                result = globals()["_model"](arr_in)
+                print(json.dumps(result))    # ← worker captures stdout as result
+
+        data : optional
+            Input data for the code.  Available inside the worker as ``arr_in``.
+            Accepted types and the transport chosen:
+              - ``None``              → JSON path, no arr_in set
+              - ``list`` / ``dict``   → JSON path  (~10ms)
+              - ``np.ndarray`` ≥ 64KB → CPU shared memory (~5ms)
+              - CUDA ``torch.Tensor`` → CUDA IPC (<5µs)
+
+        python_exe : str, optional
+            Which Python to use.  Accepts short forms (``"3.11"``) in addition
+            to full paths.  Defaults to the current interpreter.
+
+        worker_tag : str, optional
+            Route this call to a private worker bucket.  Two calls with the
+            same (spec, python) but different tags get separate processes.
+            Use this for model isolation — see example above.
+
+        max_memory_mb : float, optional
+            RSS ceiling in megabytes for this worker's process.  When the
+            worker exceeds the cap it is evicted, and the next call spawns a
+            fresh replacement.  Has no effect if psutil is not installed.
+
+        Returns
+        -------
+        dict with keys:
+          ``success`` bool
+          ``result``  stdout string (JSON path) or numpy/torch array (SHM/CUDA)
+          ``transport`` one of ``"JSON"``, ``"SHM"``, ``"CUDA_IPC"``
+          ``error``   present only on failure
         """
         import numpy as np
 
-        # ═══════════════════════════════════════════════════════
-        # GPU FAST PATH - CUDA IPC
-        # ═══════════════════════════════════════════════════════
+        # ── CUDA IPC path ──────────────────────────────────────────────────
         if data is not None and hasattr(data, "is_cuda") and data.is_cuda:
-
-            # Assume code modifies tensor in-place or returns same shape/dtype
             output_shape = data.shape
-            output_dtype = str(data.dtype).split(".")[-1]  # "float32"
-
+            output_dtype = str(data.dtype).split(".")[-1]
             result_tensor, meta = self.execute_cuda_ipc(
-                spec, code, data, output_shape, output_dtype, python_exe
+                spec, code, data, output_shape, output_dtype,
+                python_exe, worker_tag=worker_tag, max_memory_mb=max_memory_mb,
             )
+            return {"success": True, "result": result_tensor, "meta": meta,
+                    "transport": "CUDA_IPC"}
 
-            return {
-                "success": True,
-                "result": result_tensor,
-                "meta": meta,
-                "transport": "CUDA_IPC",
-                "latency_us": "<5",  # Sub-microsecond handoff
-            }
-
-        # ═══════════════════════════════════════════════════════
-        # CPU SHM PATH (Large Arrays)
-        # ═══════════════════════════════════════════════════════
-        SMART_THRESHOLD = 1024 * 64  # 64KB
-
+        # ── CPU SHM path (large arrays) ────────────────────────────────────
+        SMART_THRESHOLD = 1024 * 64   # 64 KB
         if data is not None and isinstance(data, np.ndarray) and data.nbytes >= SMART_THRESHOLD:
             output_shape = data.shape
             output_dtype = data.dtype
-
             result, meta = self.execute_zero_copy(
-                spec, code, data, output_shape, output_dtype, python_exe
+                spec, code, data, output_shape, output_dtype,
+                python_exe, worker_tag=worker_tag, max_memory_mb=max_memory_mb,
             )
+            return {"success": True, "result": result, "meta": meta, "transport": "SHM"}
 
-            return {
-                "success": True,
-                "result": result,
-                "meta": meta,
-                "transport": "SHM",
-                "latency_ms": "~5",
-            }
-
-        # ═══════════════════════════════════════════════════════
-        # JSON PATH (Small Data)
-        # ═══════════════════════════════════════════════════════
+        # ── JSON path (small / no data) ────────────────────────────────────
         prefix = ""
         if data is not None:
             if isinstance(data, np.ndarray):
@@ -4949,17 +5247,17 @@ class DaemonClient:
             else:
                 prefix = f"arr_in = {json.dumps(data)}\n"
 
-        response = self.execute_shm(spec, prefix + code, {}, {}, python_exe=python_exe)
-
+        response = self.execute_shm(
+            spec, prefix + code, {}, {},
+            python_exe=python_exe,
+            worker_tag=worker_tag,
+            max_memory_mb=max_memory_mb,
+        )
         if response.get("success"):
-            return {
-                "success": True,
-                "result": response.get("stdout", "").strip(),
-                "meta": response,
-                "transport": "JSON",
-                "latency_ms": "~10",
-            }
-
+            return {"success": True,
+                    "result": response.get("stdout", "").strip(),
+                    "meta": response,
+                    "transport": "JSON"}
         return response
 
 
