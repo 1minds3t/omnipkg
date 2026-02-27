@@ -10,6 +10,11 @@ on:
         description: 'Version tag to publish as (e.g. v2.4.2) - code will be checked out at this tag'
         required: true
         type: string
+      force_rebuild:
+        description: 'Force rebuild all variants even if tags already exist on Docker Hub'
+        required: false
+        type: boolean
+        default: false
 
 jobs:
   # ═══════════════════════════════════════════════════════════════════
@@ -68,8 +73,21 @@ jobs:
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
           echo "Resolved version: ${VERSION}"
 
+      - name: Check if tag exists
+        id: check
+        run: |
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            "https://hub.docker.com/v2/repositories/1minds3t/omnipkg/tags/${{ steps.version.outputs.version }}-debian")
+          if [ "$STATUS" = "200" ] && [ "${{ inputs.force_rebuild }}" != "true" ]; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "Tag ${{ steps.version.outputs.version }}-debian already exists, skipping."
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
       - name: Extract metadata
         id: meta
+        if: steps.check.outputs.exists == 'false'
         uses: docker/metadata-action@v5
         with:
           images: |
@@ -82,6 +100,7 @@ jobs:
             type=raw,value=${{ steps.version.outputs.version }}-debian
 
       - name: Build and push
+        if: steps.check.outputs.exists == 'false'
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -149,8 +168,21 @@ jobs:
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
           echo "Resolved version: ${VERSION}"
 
+      - name: Check if tag exists
+        id: check
+        run: |
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            "https://hub.docker.com/v2/repositories/1minds3t/omnipkg/tags/${{ steps.version.outputs.version }}-alpine")
+          if [ "$STATUS" = "200" ] && [ "${{ inputs.force_rebuild }}" != "true" ]; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "Tag ${{ steps.version.outputs.version }}-alpine already exists, skipping."
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
       - name: Extract metadata
         id: meta
+        if: steps.check.outputs.exists == 'false'
         uses: docker/metadata-action@v5
         with:
           images: |
@@ -162,6 +194,7 @@ jobs:
             type=raw,value=${{ steps.version.outputs.version }}-alpine
 
       - name: Build and push
+        if: steps.check.outputs.exists == 'false'
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -232,8 +265,21 @@ jobs:
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
           echo "Resolved version: ${VERSION}"
 
+      - name: Check if tag exists
+        id: check
+        run: |
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            "https://hub.docker.com/v2/repositories/1minds3t/omnipkg/tags/${{ steps.version.outputs.version }}-ubuntu-${{ matrix.ubuntu_version }}")
+          if [ "$STATUS" = "200" ] && [ "${{ inputs.force_rebuild }}" != "true" ]; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "Tag ${{ steps.version.outputs.version }}-ubuntu-${{ matrix.ubuntu_version }} already exists, skipping."
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
       - name: Extract metadata
         id: meta
+        if: steps.check.outputs.exists == 'false'
         uses: docker/metadata-action@v5
         with:
           images: |
@@ -244,6 +290,7 @@ jobs:
             type=raw,value=${{ steps.version.outputs.version }}-ubuntu-${{ matrix.ubuntu_version }}
 
       - name: Build and push
+        if: steps.check.outputs.exists == 'false'
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -313,8 +360,21 @@ jobs:
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
           echo "Resolved version: ${VERSION}"
 
+      - name: Check if tag exists
+        id: check
+        run: |
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            "https://hub.docker.com/v2/repositories/1minds3t/omnipkg/tags/${{ steps.version.outputs.version }}-fedora")
+          if [ "$STATUS" = "200" ] && [ "${{ inputs.force_rebuild }}" != "true" ]; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "Tag ${{ steps.version.outputs.version }}-fedora already exists, skipping."
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
       - name: Extract metadata
         id: meta
+        if: steps.check.outputs.exists == 'false'
         uses: docker/metadata-action@v5
         with:
           images: |
@@ -325,6 +385,7 @@ jobs:
             type=raw,value=${{ steps.version.outputs.version }}-fedora
 
       - name: Build and push
+        if: steps.check.outputs.exists == 'false'
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -392,8 +453,21 @@ jobs:
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
           echo "Resolved version: ${VERSION}"
 
+      - name: Check if tag exists
+        id: check
+        run: |
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            "https://hub.docker.com/v2/repositories/1minds3t/omnipkg/tags/${{ steps.version.outputs.version }}-cuda")
+          if [ "$STATUS" = "200" ] && [ "${{ inputs.force_rebuild }}" != "true" ]; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "Tag ${{ steps.version.outputs.version }}-cuda already exists, skipping."
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
       - name: Extract metadata
         id: meta
+        if: steps.check.outputs.exists == 'false'
         uses: docker/metadata-action@v5
         with:
           images: |
@@ -405,6 +479,7 @@ jobs:
             type=raw,value=${{ steps.version.outputs.version }}-cuda
 
       - name: Build and push
+        if: steps.check.outputs.exists == 'false'
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -417,9 +492,9 @@ jobs:
           cache-to: type=gha,mode=max,scope=cuda
 
   # ═══════════════════════════════════════════════════════════════════
-  # BUILD DEV IMAGE (with extra dev tools)
+  # BUILD ML IMAGE (CUDA + torch/tensorflow multi-version prebaked)
   # ═══════════════════════════════════════════════════════════════════
-  build-dev:
+  build-ml:
     if: >
       github.event_name == 'workflow_dispatch' ||
       github.event.workflow_run.conclusion == 'success'
@@ -472,25 +547,132 @@ jobs:
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
           echo "Resolved version: ${VERSION}"
 
+      - name: Check if tag exists
+        id: check
+        run: |
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            "https://hub.docker.com/v2/repositories/1minds3t/omnipkg/tags/${{ steps.version.outputs.version }}-ml")
+          if [ "$STATUS" = "200" ] && [ "${{ inputs.force_rebuild }}" != "true" ]; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "Tag ${{ steps.version.outputs.version }}-ml already exists, skipping."
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
       - name: Extract metadata
         id: meta
+        if: steps.check.outputs.exists == 'false'
         uses: docker/metadata-action@v5
         with:
           images: |
             1minds3t/omnipkg
             ghcr.io/1minds3t/omnipkg
           tags: |
-            type=raw,value=dev
-            type=raw,value=${{ steps.version.outputs.version }}-dev
+            type=raw,value=ml
+            type=raw,value=${{ steps.version.outputs.version }}-ml
 
       - name: Build and push
+        if: steps.check.outputs.exists == 'false'
         uses: docker/build-push-action@v5
         with:
           context: .
-          file: docker/Dockerfile.dev
+          file: docker/Dockerfile.ml
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=ml
+          cache-to: type=gha,mode=max,scope=ml
+
+  # ═══════════════════════════════════════════════════════════════════
+  # BUILD SCIENCE IMAGE (numpy/scipy/pandas multi-version prebaked)
+  # ═══════════════════════════════════════════════════════════════════
+  build-science:
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      attestations: write
+      id-token: write
+    steps:
+      - name: Checkout code at tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || inputs.version_tag || github.sha }}
+
+      - name: Overlay Dockerfiles from main
+        run: |
+          git fetch origin main
+          git checkout origin/main -- docker/
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: 1minds3t
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ inputs.version_tag }}"
+          else
+            git fetch --tags origin
+            VERSION=$(git tag --points-at ${{ github.event.workflow_run.head_sha }} | head -1)
+          fi
+          VERSION=${VERSION#v}
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "Resolved version: ${VERSION}"
+
+      - name: Check if tag exists
+        id: check
+        run: |
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            "https://hub.docker.com/v2/repositories/1minds3t/omnipkg/tags/${{ steps.version.outputs.version }}-science")
+          if [ "$STATUS" = "200" ] && [ "${{ inputs.force_rebuild }}" != "true" ]; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "Tag ${{ steps.version.outputs.version }}-science already exists, skipping."
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Extract metadata
+        id: meta
+        if: steps.check.outputs.exists == 'false'
+        uses: docker/metadata-action@v5
+        with:
+          images: |
+            1minds3t/omnipkg
+            ghcr.io/1minds3t/omnipkg
+          tags: |
+            type=raw,value=science
+            type=raw,value=${{ steps.version.outputs.version }}-science
+
+      - name: Build and push
+        if: steps.check.outputs.exists == 'false'
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: docker/Dockerfile.science
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha,scope=dev
-          cache-to: type=gha,mode=max,scope=dev
+          cache-from: type=gha,scope=science
+          cache-to: type=gha,mode=max,scope=science
