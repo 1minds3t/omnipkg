@@ -6,6 +6,8 @@ FROM python:3.12-alpine AS builder
 # Set environment variables to force UTF-8 and avoid locale issues common in Alpine
 ENV LANG=C.UTF-8 \
     LC_ALL=C.UTF-8 \
+    PYTHONUTF8=1 \
+    PYTHONIOENCODING=utf-8 \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
@@ -16,14 +18,13 @@ RUN apk add --no-cache gcc musl-dev linux-headers python3-dev
 RUN python3 -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
-# Upgrade build tools to latest versions (pip >= 25.0 avoids CVE-2025-8869)
-RUN pip install --no-cache-dir --upgrade pip setuptools wheel
+# Upgrade build tools - pin packaging>=24 avoids the musl locale.getencoding() crash
+# pip>=25.3 avoids CVE-2025-8869
+RUN pip install --no-cache-dir --upgrade "pip>=25.3" "setuptools>=70" "wheel>=0.43" "packaging>=24"
 
 # Copy and install omnipkg
 COPY . /build
 WORKDIR /build
-
-# Install in editable or standard mode; ensure dependencies are resolved
 RUN pip install --no-cache-dir .
 
 # Runtime stage
