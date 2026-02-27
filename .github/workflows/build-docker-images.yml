@@ -534,6 +534,13 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Login to DHI (hardened base image registry)
+        uses: docker/login-action@v3
+        with:
+          registry: dhi.io
+          username: 1minds3t
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
       - name: Extract version
         id: version
         run: |
