@@ -1607,599 +1607,532 @@ msgid "-> Running a risky function that might corrupt Conda..."
 msgstr "-> एक जोखिम भरा कार्य चलाना जो कॉनडा को भ्रष्ट कर सकता है..."
 
 # (Empty Chain Output)
-# Lollama: Skipped (Empty Chain Output)
+#  (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/CondaGuard.py:162
-#, fuzzy
 msgid "   ...simulating corruption of '{}'"
-msgstr ""
+msgstr "...'{}' के भ्रष्टाचार का अनुकरण"
 
 # (Empty Chain Output)
-# Lollama: Skipped (Empty Chain Output)
+#  (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/CondaGuard.py:165
-#, fuzzy
 msgid "-> Risky function finished."
-msgstr ""
+msgstr "-> जोखिम भरा कार्य समाप्त."
 
 # (Empty Chain Output)
-# Lollama: Skipped (Empty Chain Output)
+#  (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/CondaGuard.py:167
-#, fuzzy
 msgid "🧪 Testing decorator..."
-msgstr ""
+msgstr "🧪डेकोरेटर का परीक्षण..."
 
 # (Empty Chain Output)
-# Lollama: Skipped (Empty Chain Output)
+#  (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/CondaGuard.py:172
-#, fuzzy
 msgid "🧪 Testing context manager..."
-msgstr ""
+msgstr "🧪 संदर्भ प्रबंधक का परीक्षण..."
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/CondaGuard.py:178
-#, fuzzy
 msgid "   ...simulating deletion of '{}'"
-msgstr ""
+msgstr "...'{}' को हटाने का अनुकरण"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/CondaGuard.py:180
-#, fuzzy
 msgid "-> Leaving safe context..."
-msgstr ""
+msgstr "->सुरक्षित संदर्भ छोड़ा जा रहा है..."
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/CondaGuard.py:181
-#, fuzzy
 msgid ""
 "\n"
 "✅ Demo finished."
-msgstr ""
+msgstr "✅ डेमो समाप्त हो गया है।"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:971
-#, fuzzy
 msgid "✅ Install strategy permanently set to: {}"
-msgstr ""
+msgstr "✅ इंस्टॉल रणनीति स्थायी रूप से इस पर सेट है:{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/common_utils.py:758
-#, fuzzy
 msgid "🛡️ ConfigGuard: Activated temporary test configuration."
-msgstr ""
+msgstr "🛡 ️ ConfigGuard: सक्रिय अस्थायी परीक्षण कॉन्फィगरेशन."
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/common_utils.py:768
-#, fuzzy
 msgid "🛡️ ConfigGuard: Restored original user configuration."
-msgstr ""
+msgstr "🛡 ️ ConfigGuard: मूल उपयोगकर्ता कॉन्फिगरेशन को पुनर्स्थापित किया गया।"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/loader.py:3192
-#, fuzzy
 msgid " ⚠️ Warning: Could not remove existing cloak {}: {}"
-msgstr ""
+msgstr "⚠ ️ चेतावनी: मौजूदा लबादा नहीं हटाया जा सका{}:{}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/isolation/worker_daemon.py:1648
 msgid "   - {}"
 msgstr "   - {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:965
-#, fuzzy
 msgid "❌ Error: Invalid install strategy. Must be one of: {}"
-msgstr ""
+msgstr "❌ त्रुटि: अमान्य इंस्टॉल रणनीति.इनमें से एक होना चाहिए:{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:536
-#, fuzzy
 msgid "🔥 Key Features:"
-msgstr ""
+msgstr "🔥 प्रमुख विशेषताऐं"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:537
-#, fuzzy
 msgid "  • Runtime version switching without environment restart"
-msgstr ""
+msgstr "• पर्यावरण पुनरारंभ के बिना रनटाइम संस्करण स्विचिंग"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:538
-#, fuzzy
 msgid "  • Automatic conflict resolution with intelligent bubbling"
-msgstr ""
+msgstr "• बुद्धिमान बुलबुले के साथ स्वचालित संघर्ष समाधान"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:541
-#, fuzzy
 msgid "💡 Quick Start:"
-msgstr ""
+msgstr "💡 त्वरित शुरूआत"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
+# Lollama: Skipped (Validation Failed: translation_artifact)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:542
 #, fuzzy
 msgid ""
 "  omnipkg install <package>      # Smart install with conflict resolution"
 msgstr ""
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
+# Lollama: Skipped (Validation Failed: translation_artifact)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:543
 #, fuzzy
 msgid "  omnipkg list                   # View installed packages and status"
 msgstr ""
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:544
-#, fuzzy
 msgid "  omnipkg info <package>         # Interactive package explorer"
-msgstr ""
+msgstr "omnipkg जानकारी <पैकेज> # इंटरएक्षप्लोरर पैकेज"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:545
-#, fuzzy
 msgid "  omnipkg demo                   # Try version-switching demos"
-msgstr ""
+msgstr "omnipkg डेमो # संस्करण-बदलाव डेमो का प्रयास करें"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:546
-#, fuzzy
 msgid "  omnipkg stress-test            # See the magic in action"
-msgstr ""
+msgstr "omnipkg तनाव-परीक्षण # जादू को कार्यान्वित होते हुए देखें"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:548
-#, fuzzy
 msgid "🛠️ Examples:"
-msgstr ""
+msgstr "🛠 ️ उदाहरण:"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
+# Lollama: Skipped (Validation Failed: identical_to_original)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:549
 #, fuzzy
 msgid "  omnipkg install requests numpy>=1.20"
 msgstr ""
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
+# Lollama: Skipped (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:550
 #, fuzzy
 msgid "  omnipkg install uv==0.7.13 uv==0.7.14  # Multiple versions!"
 msgstr ""
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
+# Lollama: Skipped (Validation Failed: identical_to_original)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:551
 #, fuzzy
 msgid "  omnipkg info tensorflow==2.13.0"
 msgstr ""
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
+# Lollama: Skipped (Validation Failed: identical_to_original)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:552
 #, fuzzy
 msgid "  omnipkg config set language es"
 msgstr ""
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:589
-#, fuzzy
 msgid "Install from requirements file"
-msgstr ""
+msgstr "आवश्यकता फ़ाइल से इंस्टॉल करें"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:616
-#, fuzzy
 msgid "Packages to uninstall"
-msgstr ""
+msgstr "Uninstall करने के लिए Packages"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:629
-#, fuzzy
 msgid "Package to inspect (e.g., \"requests\" or \"requests==2.28.1\")"
 msgstr ""
+"निरीक्षण करने के लिए पैकेज (उदाहरण के लिए, 'अनुरोध' या 'प्ररोध==2.28.1')"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:631
-#, fuzzy
 msgid "Revert to last known good environment"
-msgstr ""
+msgstr "पिछले ज्ञात अच्छे वातावरण में वापस जाएं"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:641
-#, fuzzy
 msgid "View all installed packages and their status"
-msgstr ""
+msgstr "सभी स्थापित पैकेज और उनकी स्थिति देखें"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:671
-#, fuzzy
 msgid "Environment health dashboard"
-msgstr ""
+msgstr "पर्यावरण स्वास्थ्य डैशबोर्ड"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:684
-#, fuzzy
 msgid "Ultimate demonstration with heavy packages"
-msgstr ""
+msgstr "भारी पैकेज के साथ अंतिम प्रदर्शन"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:690
-#, fuzzy
 msgid "Rebuild the omnipkg knowledge base"
-msgstr ""
+msgstr "Omnipkg ज्ञानकोष का पुनर्निर्माण करें"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:698
-#, fuzzy
 msgid "Force complete rebuild"
-msgstr ""
+msgstr "बलपूर्वक पूर्ण पुनर्निर्माण करें"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:701
-#, fuzzy
 msgid "Delete config file for fresh setup"
-msgstr ""
+msgstr "ताजा सेटअप के लिए कॉन्फ़िग फ़ाइल हटाएँ"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:706
-#, fuzzy
 msgid "View or edit omnipkg configuration"
-msgstr ""
+msgstr "omnipkg कॉन्फ़िगरेशन देखें या संपादित करें"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:715
-#, fuzzy
 msgid "Configuration key to set"
-msgstr ""
+msgstr "सेट करने के लिए कॉन्फ़िगरेशन कुंजी"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:824
-#, fuzzy
 msgid "Package whose bubbles to prune"
-msgstr ""
+msgstr "पैकेज जिसके बुलबुले छाँटना है"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
+# Lollama: Skipped (Validation Failed: identical_to_original)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:829
 #, fuzzy
 msgid "Keep N most recent bubbled versions"
 msgstr ""
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:13045
-#, fuzzy
 msgid ""
 "   ⚙️  Temporarily setting install strategy to latest-active for revert..."
 msgstr ""
+"⚙️ Temporarily setting install strategy to latest-active for revert..."
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:13061
-#, fuzzy
 msgid "   ✅ Install strategy temporarily set to latest-active"
-msgstr ""
+msgstr "✅ इंस्टॉल रणनीति अस्थायी रूप से नवीनतम-सक्रिय पर सेट है"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:13067
-#, fuzzy
 msgid "   ⚠️  Failed to set install strategy to latest-active: {}"
-msgstr ""
+msgstr "⚠ ️ इंस्टॉल रणनीति को नवीनतम-सक्रिय पर सेट करने में विफल: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:13070
-#, fuzzy
 msgid "   ℹ️  Continuing with current strategy: {}"
-msgstr ""
+msgstr "ℹ️ वर्तमान रणनीति को जारी रखें: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:13073
-#, fuzzy
 msgid "   ℹ️  Install strategy already set to latest-active"
-msgstr ""
+msgstr "ℹ️ इंस्टॉल रणनीति पहले से ही नवीनतम-सक्रिय पर सेट है"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:13084
-#, fuzzy
 msgid "   🔄 Restoring original install strategy: {}"
-msgstr ""
+msgstr "🔄 मूल इंस्टॉल रणनीति को पुनर्स्थापित करना:{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:13100
-#, fuzzy
 msgid "   ✅ Install strategy restored to: {}"
-msgstr ""
+msgstr "✅ इंस्टॉल रणनीति को यहां पुनर्स्थापित किया गया:{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:13107
-#, fuzzy
 msgid "   ⚠️  Failed to restore install strategy to {}: {}"
-msgstr ""
+msgstr "⚠ ️ इंस्टॉल रणनीति को पुनर्स्थापित करने में विफल:{} {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:13112
-#, fuzzy
 msgid ""
 "   💡 You may need to manually restore it with: omnipkg config set "
 "install_strategy {}"
 msgstr ""
+"💡 आपको इसे मैन्युअल रूप से पुनर्स्थापित करने की आवश्यकता हो सकती है: omnipkg"
+" config set install_strategy{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:13117
-#, fuzzy
 msgid "   ℹ️  Install strategy unchanged: {}"
-msgstr ""
+msgstr "ℹ️ इंस्टॉल रणनीति अपरिवर्तित: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/tests/test_uv_switching.py:232
-#, fuzzy
 msgid "   ℹ️  Current install strategy: {}"
-msgstr ""
+msgstr "ℹ️ वर्तमान इंस्टॉल रणनीति:{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:524
-#, fuzzy
 msgid ""
 "🚀 The intelligent Python package manager that eliminates dependency hell "
 "(8pkg = ∞pkg)"
 msgstr ""
+"🚀 बुद्धिमान पायथन पैकेज प्रबंधक जो निर्भरता नरक को समाप्त करता है (8pkg = "
+"∞pkg)"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:634
-#, fuzzy
 msgid "Swap Python versions or package environments"
-msgstr ""
+msgstr "Python संस्करण या पैकेज वातावरण स्विप करें"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:639
-#, fuzzy
 msgid "Specific version to swap to"
-msgstr ""
+msgstr "स्वैप करने के लिए विशिष्ट संस्करण"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:645
-#, fuzzy
 msgid "Manage Python interpreters for the environment"
-msgstr ""
+msgstr "पर्यावरण के लिए Python व्याख्याकारों का प्रबंधन"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:648
-#, fuzzy
 msgid "Available subcommands:"
-msgstr ""
+msgstr "उपलब्ध उपकमांड:"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:655
-#, fuzzy
 msgid "Switch the active Python interpreter for this environment"
-msgstr ""
+msgstr "इस वातावरण के लिए सक्रिय Python अनुवादक स्विच करें"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:1000
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:1007
-#, fuzzy
 msgid "   • Python {}: {}"
-msgstr ""
+msgstr "• अजगर{}\\\\{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:1027
-#, fuzzy
 msgid "❌ Error: You must specify what to swap."
-msgstr ""
+msgstr "❌ त्रुटि: आपको क्या स्वैप करना है।"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:1028
-#, fuzzy
 msgid "Examples:"
-msgstr ""
+msgstr "उदाहरण:"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:1030
-#, fuzzy
 msgid "  {} swap python           # Interactive Python version picker"
-msgstr ""
+msgstr "{} स्वैप पायथन # इंटरएक्षटिव पायथन संस्करण पिकर"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:1035
-#, fuzzy
 msgid "  {} swap python 3.11      # Switch to Python 3.11"
-msgstr ""
+msgstr "{} स्वैप पायथन 3.11 # पायथन 3.11 पर स्विच करें"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:1059
-#, fuzzy
 msgid "❌ No Python interpreters found."
-msgstr ""
+msgstr "❌ कोई Python अनुवादक नहीं मिला."
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:1061
-#, fuzzy
 msgid "🐍 Available Python versions:"
-msgstr ""
+msgstr "🐍 उपलब्ध Python संस्करण,"
 
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:1064
 msgid "  {}. Python {}"
 msgstr "  {}. Python {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:1068
-#, fuzzy
 msgid "Select version (1-{}): "
-msgstr ""
+msgstr "चयनित संस्करण (1-{}):"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:1359
-#, fuzzy
 msgid "Python Interpreter Information"
-msgstr ""
+msgstr "Python अनुवादक जानकारी"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:1363
-#, fuzzy
 msgid "🐍 Managed Python Versions (available for swapping):"
-msgstr ""
+msgstr "🐍 प्रबंधित Python संस्करण (विनिमय के लिए उपलब्ध)"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:1370
-#, fuzzy
 msgid "   • Python {}: {}{}"
-msgstr ""
+msgstr "• पायथन {}{} {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:1372
-#, fuzzy
 msgid ""
 "\n"
 "🎯 Active Context: Python {}"
-msgstr ""
+msgstr "🎯 Active Context: Python {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:1373
-#, fuzzy
 msgid "📍 Configured Path: {}"
-msgstr ""
+msgstr "📍 कॉन्फ़िगर किया गया पथ:{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:1377
-#, fuzzy
 msgid ""
 "\n"
 "💡 To switch context, use: {} swap python <version>"
-msgstr ""
+msgstr "💡 संदर्भ बदलने के लिए, {} Python <संस्करण"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:524
-#, fuzzy
 msgid "   ⚠️  Could not reset setup flag in config file: {}"
-msgstr ""
+msgstr "⚠ ️ Config फाइल में सेटअप झंडा पुनर्स्थापित नहीं किया जा सकता: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:532
-#, fuzzy
 msgid "  🚀 Environment Hotswap to a Managed Python 3.11"
-msgstr ""
+msgstr "🚀 Hotswap to a Managed Python 3.11"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:538
-#, fuzzy
 msgid ""
 "\n"
 "To ensure everything 'just works', omnipkg will now perform a one-time setup:"
 msgstr ""
+"यह सुनिश्चित करने के लिए कि सब कुछ 'बस काम करता है', omnipkg अब एक बार का "
+"सेटअप निष्पादित करेगा"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:540
-#, fuzzy
 msgid ""
 "  1. Download a self-contained Python 3.11 into your virtual environment."
-msgstr ""
+msgstr "1. अपने वर्चुअल वातावरण में एक स्वतंत्र पायथन 3.11 डाउनलोड करें。"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:550
-#, fuzzy
 msgid ""
 "\n"
 "🛑 Operation cancelled. Aborting."
-msgstr ""
+msgstr "🛑 ऑपरेशन रद्द कर दिया गया."
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:629
-#, fuzzy
 msgid "🔧 Aligning configuration to use Python interpreter: {}"
-msgstr ""
+msgstr "🔧 Python अनुवादक का उपयोग करने के लिए समायोजन सेटिंग: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:637
-#, fuzzy
 msgid "   - New site-packages path: {}"
-msgstr ""
+msgstr "- नया साइट-पैकेज पथ: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:638
-#, fuzzy
 msgid "   - New Python executable: {}"
-msgstr ""
+msgstr "- नया पायथन निष्पादित: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:644
-#, fuzzy
 msgid "   ✅ Configuration updated and saved successfully."
-msgstr ""
+msgstr "कॉन्फ़िगरेशन अद्यतन किया गया और सफलतापूर्वक सहेजा गया."
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:722
-#, fuzzy
 msgid "✅ Detected a suitable Python 3.11 within your virtual environment."
-msgstr ""
+msgstr "अपने वर्चुअल वातावरण में एक उपयुक्त Python 3.11 का पता लगाएं."
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:732
-#, fuzzy
 msgid ""
 "⚠️ Warning: Could not find registered Python 3.11 path after setup. Config "
 "may be incorrect."
 msgstr ""
+"⚠ ️ चेतावनी: स्थापना के बाद पंजीकृत Python 3.11 मार्ग नहीं पाया जा सकता. "
+"Config गलत हो सकता है."
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:737
-#, fuzzy
 msgid ""
 "\n"
 "✅ Environment setup is complete!"
-msgstr ""
+msgstr "✅ पर्यावरण सेटअप पूरा हो गया है!"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:761
-#, fuzzy
 msgid "   - Registering current Python 3.11..."
-msgstr ""
+msgstr "- वर्तमान Python 3.11 रजिस्टर करने के लिए ..."
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:813
-#, fuzzy
 msgid "   - ✅ Created symlink: {} -> {}"
-msgstr ""
+msgstr "- Created symlink: {} -> {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:918
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:1608
-#, fuzzy
 msgid "🔧 Registering all managed Python interpreters..."
-msgstr ""
+msgstr "🔧 सभी प्रबंधित Python अनुवादकों को रजिस्टर करने के लिए"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:1691
-#, fuzzy
 msgid "   ✅ Registered {} managed Python interpreters."
-msgstr ""
+msgstr "✅ पंजीकृत {} प्रबंधित पायथन दुभाषिए."
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:1856
-#, fuzzy
 msgid "Unsupported operating system: {}"
-msgstr ""
+msgstr "असमर्थित ऑपरेटिंग सिस्टम:{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:1136
-#, fuzzy
 msgid "✅ Found existing Python 3.11 interpreter."
-msgstr ""
+msgstr "Python 3.11 अनुवादक की खोज की गई है."
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:1444
-#, fuzzy
 msgid "🔧 Creating new omnipkg executable..."
-msgstr ""
+msgstr "🔧 नया omnipkg निष्पादनयोग्य बनाया जा रहा है..."
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:1457
-#, fuzzy
 msgid "   ✅ New omnipkg executable created."
-msgstr ""
+msgstr "✅ नया omnipkg निष्पादित करने योग्य बनाया गया।"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:1461
-#, fuzzy
 msgid "🔧 Updating default Python links..."
-msgstr ""
+msgstr "🔧 डिफ़ॉल्ट Python लिंक अद्यतन ..."
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:1479
-#, fuzzy
 msgid "   ✅ Default Python links updated to use Python {}."
 msgstr ""
+"✅ डिफ़ॉल्ट Python लिंक Python {} का उपयोग करने के लिए अपडेट किया गया है।"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
+# Lollama: Skipped (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:1708
 #, fuzzy
 msgid ""
@@ -2207,223 +2140,193 @@ msgid ""
 "🚀 Installing managed Python {}..."
 msgstr ""
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:1719
-#, fuzzy
 msgid "Unsupported architecture: {}"
-msgstr ""
+msgstr "असमर्थित आर्किटेक्चर: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:1863
-#, fuzzy
 msgid "   - URL: {}"
-msgstr ""
+msgstr "- यूआरएल: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:1876
-#, fuzzy
 msgid "✅ Downloaded {} bytes"
-msgstr ""
+msgstr "✅ डाउンलोड{}बाइट्स"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:2007
-#, fuzzy
 msgid "   - Installing to: {}"
-msgstr ""
+msgstr "- स्थापित करने के लिए: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:2073
-#, fuzzy
 msgid "Python executable test failed: {}"
-msgstr ""
+msgstr "Python निष्पादित परीक्षण विफल: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:2733
-#, fuzzy
 msgid "🌍 Welcome to omnipkg! Let's get you configured."
-msgstr ""
+msgstr "🌍 Omnipkg में आपका स्वागत है! आइए आपको कॉन्फ़िगर करें。"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:2738
-#, fuzzy
 msgid "🐍 Discovered Python interpreters:"
-msgstr ""
+msgstr "🐍 खोजे गए पायथन दुभाषिए:"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:2741
-#, fuzzy
 msgid "   Python {}: {}{}"
-msgstr ""
+msgstr "Python {}: {}{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:2762
-#, fuzzy
 msgid "Python executable path [{}]: "
-msgstr ""
+msgstr "Python executable path [{}] :"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:2800
-#, fuzzy
 msgid "Enable Python interpreter hotswapping? (y/n) [y]: "
-msgstr ""
+msgstr "पायथन इंटरप्रेटर hotswapping को सक्षम करें? (y/n) [y]:"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:2823
-#, fuzzy
 msgid ""
 "\n"
 "✅ Configuration saved to {}."
-msgstr ""
+msgstr "✅ कॉन्फ़िगरेशन {} पर सहेजा गया."
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:2883
-#, fuzzy
 msgid "⚠️ Warning: Global config file is corrupted. Starting fresh."
-msgstr ""
+msgstr "⚠ ️ चेतावनी: वैश्विक कॉन्फ़िगरेशन फ़ाइल दूषित है।नए सिरे से शुरुआत."
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:2889
-#, fuzzy
 msgid "👋 New environment detected (ID: {}). Starting first-time setup."
 msgstr ""
+"👋 नए वातावरण का पता लगाया गया (ID: {}). पहली बार सेटअप शुरू करने के लिए।"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:2974
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:2982
-#, fuzzy
 msgid "Python {} interpreter not found"
-msgstr ""
+msgstr "Python {} व्याख्याता नहीं मिला"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:6612
-#, fuzzy
 msgid ""
 "   This will DELETE all data for the current environment (matching '{}')"
-msgstr ""
+msgstr "यह वर्तमान परिवेश के लिए सभी डेटा को हटा देगा ('{}')"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:6616
-#, fuzzy
 msgid ""
 "   It will ALSO delete any legacy global data from older omnipkg versions."
 msgstr ""
+"यह पुराने omnipkg संस्करणों से किसी भी विरासती वैश्विक डेटा को भी हटा देगा."
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:12005
-#, fuzzy
 msgid "    ❌ Failed to remove bubble directory: {}"
-msgstr ""
+msgstr "❌ बबल निर्देशिका को हटाने में विफल: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:13242
-#, fuzzy
 msgid "🐍 Switching active Python context to version {}..."
-msgstr ""
+msgstr "🐍 सक्रिय Python संदर्भ को संस्करण {} में स्विच करें..."
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:1582
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:9107
-#, fuzzy
 msgid "🐍 Attempting to adopt Python {} into the environment..."
-msgstr ""
+msgstr "🐍 Python {} को पर्यावरण में अपनाने का प्रयास करें ..."
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:1597
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:9821
-#, fuzzy
 msgid "   You can now use 'omnipkg swap python {}'"
-msgstr ""
+msgstr "अब आप 'omnipkg swap python {}' का उपयोग कर सकते हैं।"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:344
-#, fuzzy
 msgid "1. Switch to Python 3.11: omnipkg swap python 3.11"
-msgstr ""
+msgstr "Python 3.11 पर स्विच करें: omnipkg स्वैप पायथन 3.11"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:345
-#, fuzzy
 msgid "2. If not available, adopt it first: omnipkg python adopt 3.11"
-msgstr ""
+msgstr "2. यदि उपलब्ध नहीं है, तो पहले इसे अपनाएं: omnipkg Python 3.11 अपनाएं"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:332
-#, fuzzy
 msgid "  🚀 OMNIPKG ONE-TIME ENVIRONMENT SETUP"
-msgstr ""
+msgstr "🚀 OMNIPKG एक-समय पर्यावरण सेट"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:336
-#, fuzzy
 msgid "   - Step 1: Registering the native Python interpreter..."
-msgstr ""
+msgstr "- चरण 1: मूल Python अनुवादक को पंजीकृत करें ..."
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:346
-#, fuzzy
 msgid ""
 "\n"
 "   - Step 2: Setting up the required Python 3.11 control plane..."
-msgstr ""
+msgstr "- चरण 2: आवश्यक Python 3.11 नियंत्रण विमान की स्थापना..."
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:356
-#, fuzzy
 msgid "  ✅ SETUP COMPLETE"
-msgstr ""
+msgstr "✅ सेटअप पूर्ण"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:358
-#, fuzzy
 msgid "Your environment is now fully managed by omnipkg."
-msgstr ""
+msgstr "आपका पर्यावरण अब Omnipkg द्वारा पूरी तरह से प्रबंधित है."
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:363
-#, fuzzy
 msgid "❌ A critical error occurred during one-time setup: {}"
-msgstr ""
+msgstr "एक बार सेटअप के दौरान एक महत्वपूर्ण त्रुटि हुई: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:323
-#, fuzzy
 msgid "⚠️ CRITICAL Warning: Config failed to load, omnipkg may not function."
 msgstr ""
+"⚠ ️ CRITICAL WARNING: Config fail to load, omnipkg काम नहीं कर सकता है."
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:976
-#, fuzzy
 msgid "   ⚠️  Managed interpreters directory not found."
-msgstr ""
+msgstr "⚠ ️ प्रबंधित दुभाषियों की निर्देशिका नहीं मिली."
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:1013
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:1625
-#, fuzzy
 msgid "   -> Scanning directory: {}"
-msgstr ""
+msgstr "-> स्कैनिंग निर्देशिका: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:1072
-#, fuzzy
 msgid "      ✅ Found valid executable: {}"
-msgstr ""
+msgstr "✅ मान्य निष्पादन योग्य पाया गयाः {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:1185
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:1190
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:1202
-#, fuzzy
 msgid "     (Found project root: {})"
-msgstr ""
+msgstr "(Found project root: {})"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:1207
-#, fuzzy
 msgid "     (No project root found)"
-msgstr ""
+msgstr "(कोई प्रोजेक्ट रूट नहीं मिला)"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
+# Lollama: Skipped (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:1220
 #, fuzzy
 msgid "   🔩 Running: {}"
@@ -2433,389 +2336,328 @@ msgstr ""
 msgid "   ❌ {}"
 msgstr "   ❌ {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:1307
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:1409
-#, fuzzy
 msgid "     (Developer mode detected: performing editable install)"
-msgstr ""
+msgstr "(डेवलपर मोड का पता चला: संपादन योग्य इंस्टाल करना)"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:1486
-#, fuzzy
 msgid "🔍 Auto-detecting original Python interpreter..."
-msgstr ""
+msgstr "🔍 मूल पायथन दुभाषिया का स्वतः पता लगाना..."
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:1492
-#, fuzzy
 msgid "   - Detected: Python {} at {}"
-msgstr ""
+msgstr "- पता चला: पायथन{}पर {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:1505
-#, fuzzy
 msgid "   ✅ Python {} already registered at: {}"
-msgstr ""
+msgstr "Python {} पहले से ही यहां पंजीकृत है: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:1521
-#, fuzzy
 msgid "   📝 Registering Python {} (original) without copying..."
-msgstr ""
+msgstr "📝 पायथन {} (मूल) को बिना कॉपी किए पंजीकृत किया जा रहा है..."
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:1529
-#, fuzzy
 msgid "      ✅ Created symlink: {} -> {}"
-msgstr ""
+msgstr "Created symlink: {} -> {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:1531
-#, fuzzy
 msgid "      ⚠️  Could not create symlink {}: {}"
-msgstr ""
+msgstr "⚠ ️ सिम्लिंक नहीं बनाया जा सका {}: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:1543
-#, fuzzy
 msgid "      ✅ Created pip symlink: {}"
-msgstr ""
+msgstr "Created pip symlink: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:1546
-#, fuzzy
 msgid "      ⚠️  Could not create pip symlink: {}"
-msgstr ""
+msgstr "⚠ ️ Pip symlink नहीं बना सका: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:1559
-#, fuzzy
 msgid "   ✅ Registered Python {} in registry"
-msgstr ""
+msgstr "✅ पंजीकृत Python {} रजिस्ट्री में"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:1585
-#, fuzzy
 msgid "   🎯 Requested version matches current Python {}.{}"
-msgstr ""
+msgstr "🎯 अनुरोधित संस्करण वर्तमान पायथन से मेल खाता है{}.{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:1589
-#, fuzzy
 msgid "   📋 Auto-registering current interpreter instead of downloading..."
-msgstr ""
+msgstr "📋 ऑटो-रजिस्टर करंट इंटरप्रेटर..."
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:1593
-#, fuzzy
 msgid "🎉 Successfully registered Python {} (original interpreter)!"
-msgstr ""
+msgstr "🎉 सफलतापूर्वक पंजीकृत Python {} (मूल दुभाषिया)!"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:1600
-#, fuzzy
 msgid "   ❌ Auto-registration failed: {}"
-msgstr ""
+msgstr "स्वचालित पंजीकरण विफल रहा: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:1601
-#, fuzzy
 msgid "   🔄 Falling back to download strategy..."
-msgstr ""
+msgstr "🔄 रणनीति डाउンलोड करने के लिए वापस आ रहा हूँ..."
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:1611
-#, fuzzy
 msgid "   ℹ️  No interpreters directory found."
-msgstr ""
+msgstr "ℹ️ कोई दुभाषिया निर्देशिका नहीं मिली."
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:1628
-#, fuzzy
 msgid "      ⚠️  No bin/ directory found in {}"
-msgstr ""
+msgstr "⚠ ️ कोई बिन/निर्देशिका नहीं मिली {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:1637
-#, fuzzy
 msgid "      ⚠️  No valid Python executable found in {}"
-msgstr ""
+msgstr "⚠ ️ कोई वैध Python executable {} में पाया नहीं गया"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:1667
-#, fuzzy
 msgid "      ✅ Found valid executable: {} ({})"
-msgstr ""
+msgstr "✅ वैध निष्पादन योग्य पाया गया:{}({})"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:1673
-#, fuzzy
 msgid "      ⚠️  Could not parse version from: {}"
-msgstr ""
+msgstr "⚠ ️ {} से संस्करण नहीं पार्स कर सका"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:1679
-#, fuzzy
 msgid "      ⚠️  Failed to get version: {}"
-msgstr ""
+msgstr "⚠ ️ संस्करण प्राप्त करने में विफल: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:1682
-#, fuzzy
 msgid "      ⚠️  Error testing executable: {}"
-msgstr ""
+msgstr "⚠ ️ निष्पादन योग्य त्रुटि परीक्षण: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:1697
-#, fuzzy
 msgid "      - Python {}: {} ({})"
-msgstr ""
+msgstr "Python {}: {} ({})"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:1699
-#, fuzzy
 msgid "   ℹ️  No managed interpreters found."
-msgstr ""
+msgstr "ℹ️ कोई प्रबंधित दुभाषिया नहीं मिला."
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:2108
-#, fuzzy
 msgid "Failed to download or extract Python: {}"
-msgstr ""
+msgstr "पायथन को डाउンलोड करने या निकालने में विफल: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:2577
-#, fuzzy
 msgid "💡 Grounding configuration in the current active environment..."
-msgstr ""
+msgstr "💡 वर्तमान सक्रिय वातावरण में ग्राउंडिंग कॉन्फ़िगरेशन..."
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:2825
-#, fuzzy
 msgid "🧠 Initializing omnipkg knowledge base..."
-msgstr ""
+msgstr "🧠 omnipkg ज्ञान आधार आरंभ किया जा रहा है..."
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:2827
-#, fuzzy
 msgid "   💡 Future startups will be instant!"
-msgstr ""
+msgstr "💡 भविष्य के स्टार्टअप तुरंत होंगे!"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:2856
-#, fuzzy
 msgid ""
 "   ⚠️  Knowledge base initialization encountered issues but continuing..."
-msgstr ""
+msgstr "⚠ ️ ज्ञान आधार को प्रारंभ करने में समस्याएं आईं, लेकिन जारी..."
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:2864
-#, fuzzy
 msgid "   ⚠️  Knowledge base will be built on first command usage instead."
-msgstr ""
+msgstr "⚠ ️ ज्ञान आधार पहले कमांड उपयोग के बजाय बनाया जाएगा."
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:5503
-#, fuzzy
 msgid "✅ Omnipkg core initialized successfully."
-msgstr ""
+msgstr "Omnipkg कोर सफलतापूर्वक आरंभ किया गया है."
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:9121
-#, fuzzy
 msgid "   - No local Python {} found. Falling back to download strategy."
-msgstr ""
+msgstr "- कोई स्थानीय Python {} नहीं मिला. डाउनलोड रणनीति पर वापस गिर गया."
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:9170
-#, fuzzy
 msgid "   - Starting safe copy operation..."
-msgstr ""
+msgstr "- सुरक्षित कॉपी ऑपरेशन शुरू हो रहा है..."
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:9825
-#, fuzzy
 msgid "   - ❌ Copy operation failed: {}"
-msgstr ""
+msgstr "- कॉपी ऑपरेशन विफल रहा: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
+# Lollama: Skipped (Validation Failed: placeholder_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:9784
 #, fuzzy
 msgid "   - Copying {} -> {}"
 msgstr ""
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:9795
-#, fuzzy
 msgid "   - ❌ Copy completed but Python executable not found in destination"
-msgstr ""
+msgstr "- कॉपी पूरा हो गया लेकिन Python निष्पादित नहीं किया गया"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:9803
-#, fuzzy
 msgid "   - ❌ Copied Python executable failed basic test"
-msgstr ""
+msgstr "- कॉपी किया Python निष्पादित असफल बुनियादी परीक्षण"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:9807
-#, fuzzy
 msgid "   - ✅ Copy successful and verified!"
-msgstr ""
+msgstr "- कॉपी सफल एवं सत्यापित!"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/package_meta_builder.py:1362
-#, fuzzy
 msgid " - No active packages found to scan."
-msgstr ""
+msgstr "- स्कैन करने के लिए कोई सक्रिय पैकेज नहीं मिला।"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/package_meta_builder.py:1357
-#, fuzzy
 msgid "✅ Security scan complete. Found {} potential issues."
-msgstr ""
+msgstr "✅ सुरक्षा स्कैन पूर्ण.{} संभावित मुद्दे मिले।"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/package_meta_builder.py:2460
-#, fuzzy
 msgid ""
 "\n"
 "🎉 Metadata building complete!"
-msgstr ""
+msgstr "🎉 मेटाडेटा निर्माण पूरा!"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/package_meta_builder.py:2465
-#, fuzzy
 msgid ""
 "\n"
 "❌ An unexpected error occurred during metadata build: {}"
-msgstr ""
+msgstr "❌ मेटाडेटा निर्माण के दौरान एक अप्रत्याशित त्रुटि उत्पन्न हुई:{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/tests/test_tensorflow_switching.py:54
-#, fuzzy
 msgid "   📦 Ensuring TensorFlow bubbles exist..."
-msgstr ""
+msgstr "📦 यह सुनिश्चित करना कि TensorFlow बुलबुले मौजूद हैं..."
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/tests/test_tensorflow_switching.py:87
-#, fuzzy
 msgid "   ✅ Created {}=={} bubble"
-msgstr ""
+msgstr "✅ बनाया था{}=={}बुलबुला"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/tests/test_tensorflow_switching.py:106
-#, fuzzy
 msgid "   ✅ {}=={} bubble already exists"
-msgstr ""
+msgstr "✅ {}=={} बुलबुला पहले से मौजूद है"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/tests/test_tensorflow_switching.py:115
-#, fuzzy
 msgid "   🧹 Cleaning up any test artifacts..."
-msgstr ""
+msgstr "🧹 किसी भी परीक्षण कलाकृतियों की सफाई..."
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/tests/test_tensorflow_switching.py:163
-#, fuzzy
 msgid "❌ Test execution failed: {}"
-msgstr ""
+msgstr "❌ परीक्षण निष्पादन विफल: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/tests/test_tensorflow_switching.py:304
-#, fuzzy
 msgid "Test 1 (TensorFlow 2.13.0 Bubble): {}"
-msgstr ""
+msgstr "परीक्षण 1 (टेन्सरफ़्लो 2.13.0 बबल):{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/tests/test_tensorflow_switching.py:307
-#, fuzzy
 msgid "Test 2 (Dependency Switching): {}"
-msgstr ""
+msgstr "टेस्ट 2 (निर्भरता स्विचिंग): {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/tests/test_tensorflow_switching.py:310
-#, fuzzy
 msgid "Test 3 (Nested Loaders): {}"
-msgstr ""
+msgstr "टेस्ट 3 (निस्ट लोडर): {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/tests/test_tensorflow_switching.py:316
-#, fuzzy
 msgid "\\n❌ Critical error during testing: {}"
-msgstr ""
+msgstr "परीक्षण के दौरान महत्वपूर्ण त्रुटि: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/tests/test_uv_switching.py:248
-#, fuzzy
 msgid "Testing Main Environment (uv=={})"
-msgstr ""
+msgstr "मुख्य वातावरण का परीक्षण (uv=={})"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:260
-#, fuzzy
 msgid "Python Version Requirement"
-msgstr ""
+msgstr "Python संस्करण आवश्यकताएँ"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:651
-#, fuzzy
 msgid "Copy or download a Python version into the environment"
-msgstr ""
+msgstr "पर्यावरण में एक Python संस्करण को कॉपी या डाउनलोड करें"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:653
-#, fuzzy
 msgid "The version to adopt (e.g., \"3.9\")"
-msgstr ""
+msgstr "अपनाने योग्य संस्करण (उदाहरण '3.9')"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:657
-#, fuzzy
 msgid "The version to switch to (e.g., \"3.10\")"
-msgstr ""
+msgstr "जिस संस्करण पर स्विच करना है (उदाहरण के लिए, '3.10')"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:659
-#, fuzzy
 msgid "Force a re-scan and repair of the interpreter registry"
-msgstr ""
+msgstr "दुभाषिया रजिस्ट्री को पुनः स्कैन और मरम्मत के लिए बाध्य करें"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:709
-#, fuzzy
 msgid "Display the current configuration for this environment"
-msgstr ""
+msgstr "इस वातावरण के लिए वर्तमान कॉन्फ़िगरेशन दिखाएं"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:717
-#, fuzzy
 msgid "Value to set for the key"
-msgstr ""
+msgstr "कुंजी के लिए निर्धारित मूल्य"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:719
-#, fuzzy
 msgid "Reset a specific configuration key to its default"
-msgstr ""
+msgstr "किसी विशिष्ट कॉन्फ़िगरेशन कुंजी को उसके डिफ़ॉल्ट पर रीसेट करें"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:724
-#, fuzzy
 msgid "Configuration key to reset (e.g., interpreters)"
-msgstr ""
+msgstr "पुन: सेट करने के लिए कॉन्फ़िगरेशन कुंजी (उदाहरण के लिए, अनुवादक)"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:771
-#, fuzzy
 msgid "Run a script with auto-healing for version conflicts"
-msgstr ""
+msgstr "संस्करण विरोधों के लिए ऑटो-हीलिंग के साथ एक स्क्रिप्ट चलाएँ"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:776
-#, fuzzy
 msgid "The script to run, followed by its arguments"
-msgstr ""
+msgstr "चलाने के लिए स्क्रिप्ट, उसके तर्कों के बाद"
 
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:897
 msgid "omnipkg {}"
@@ -2825,863 +2667,777 @@ msgstr "omnipkg {}"
 msgid "  - {}: {}"
 msgstr "  - {}: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:978
-#, fuzzy
 msgid "Resetting managed interpreters registry..."
-msgstr ""
+msgstr "प्रबंधित दुभाषियों की रजिस्ट्री को रीसेट किया जा रहा है..."
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/commands/run.py:401
-#, fuzzy
 msgid "   - Conflict identified for: {}"
-msgstr ""
+msgstr "- Conflict identified for: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/commands/run.py:522
-#, fuzzy
 msgid ""
 "\n"
 "🔍 {} detected. Auto-healing by installing missing package..."
-msgstr ""
+msgstr "🔍 {}पता चला.गुम पैकेज स्थापित करके स्वतः-उपचार..."
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/commands/run.py:1485
-#, fuzzy
 msgid ""
 "\n"
 "❌ Auto-install failed for {}."
-msgstr ""
+msgstr "❌ {} के लिए स्वतः-इंस्टॉल विफल रहा।"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/commands/run.py:2987
-#, fuzzy
 msgid "✅ Context synchronized."
-msgstr ""
+msgstr "✅ संदर्भ सिंक्रनाइज़ किया"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/commands/run.py:2304
-#, fuzzy
 msgid "   Current Python executable: {}"
-msgstr ""
+msgstr "वर्तमान Python executable: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/commands/run.py:2305
-#, fuzzy
 msgid "   Current working directory: {}"
-msgstr ""
+msgstr "वर्तमान कार्यशील निर्देशिका: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/commands/run.py:2306
-#, fuzzy
 msgid "   Project root: {}"
-msgstr ""
+msgstr "प्रोजेक्ट रूट:{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/commands/run.py:2312
-#, fuzzy
 msgid "   ✅ packaging found at: {}"
-msgstr ""
+msgstr "✅ पैकेजिंग found at: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/commands/run.py:2314
-#, fuzzy
 msgid "   ❌ packaging not available in current process: {}"
-msgstr ""
+msgstr "❌ वर्तमान प्रक्रिया में पैकेजिंग उपलब्ध नहीं है: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/commands/run.py:2324
-#, fuzzy
 msgid "   Config site-packages: {}"
-msgstr ""
+msgstr "Config site-packages: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
+# Lollama: Skipped (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/omnipkg/commands/run.py:2331
 #, fuzzy
 msgid "   Site getsitepackages: {}"
 msgstr ""
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/commands/run.py:2338
-#, fuzzy
 msgid "   Site USER_SITE: {}"
-msgstr ""
+msgstr "साइट USER_SITE:{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/commands/run.py:2356
-#, fuzzy
 msgid "   📦 packaging found in: {}"
-msgstr ""
+msgstr "📦 पैकेजिंग में पाया गया:{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/commands/run.py:2359
-#, fuzzy
 msgid "   ❌ site-packages path doesn't exist: {}"
-msgstr ""
+msgstr "❌ साइट-पैकेज पथ मौजूद नहीं है: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/commands/run.py:2573
-#, fuzzy
 msgid "   💾 Temporary wrapper script: {}"
-msgstr ""
+msgstr "💾 अस्थायी रैपर स्क्रिप्टः {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/commands/run.py:2579
-#, fuzzy
 msgid ""
 "\n"
 "🚀 Re-running with omnipkg auto-heal..."
-msgstr ""
+msgstr "🚀 omnipkg ऑटो-हील के साथ पुनः चल रहा है..."
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/common_utils.py:423
-#, fuzzy
 msgid "🔄 Forcing omnipkg context to match script Python version: {}..."
 msgstr ""
+"🔄 स्क्रिप्ट पायथन संस्करण से मेल करने के लिए omnipkg संदर्भ को बाध्य करना: "
+"{}..."
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/common_utils.py:445
-#, fuzzy
 msgid "❌ A critical error occurred during context synchronization: {}"
-msgstr ""
+msgstr "❌ संदर्भ सिंक्रनाइज़ेशन के दौरान एक गंभीर त्रुटि उत्पन्न हुई: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/common_utils.py:466
-#, fuzzy
 msgid ""
 "❌ FATAL ERROR: Relaunch attempted, but still not on Python {}. Aborting."
-msgstr ""
+msgstr "FATAL ERROR: रिलाउंच ने कोशिश की, लेकिन अभी भी Python {} पर नहीं."
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/common_utils.py:472
-#, fuzzy
 msgid "  🚀 AUTOMATIC CONTEXT RELAUNCH REQUIRED"
-msgstr ""
+msgstr "🚀 स्वचालित संदर्भ पुन: लॉन्च की आवश्यकता है"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/common_utils.py:474
-#, fuzzy
 msgid "   - Script requires:   Python {}"
-msgstr ""
+msgstr "- स्क्रिप्ट की आवश्यकता होती है: Python {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/common_utils.py:476
-#, fuzzy
 msgid "   - Currently running: Python {}.{}"
-msgstr ""
+msgstr "- वर्तमान में चल रहा है: पायथन{}.{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/common_utils.py:480
-#, fuzzy
 msgid "   - Relaunching into the correct context..."
-msgstr ""
+msgstr "- सही संदर्भ में पुनः लॉन्च करना ..."
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/common_utils.py:493
-#, fuzzy
 msgid "   -> Target interpreter not yet managed. Attempting to adopt..."
 msgstr ""
+"-> लक्ष्य अनुवादक अभी तक प्रबंधित नहीं किया है. अपनाने की कोशिश करने के लिए "
+"..."
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/common_utils.py:496
 #: /home/minds3t/omnipkg/src/omnipkg/common_utils.py:629
-#, fuzzy
 msgid "Failed to adopt required Python version {}"
-msgstr ""
+msgstr "आवश्यक पायथन संस्करण {} अपनाने में विफल"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/common_utils.py:505
 #: /home/minds3t/omnipkg/src/omnipkg/common_utils.py:638
-#, fuzzy
 msgid "Could not find Python {} even after adoption."
-msgstr ""
+msgstr "अपनाने के बाद भी Python {} नहीं मिल सकता."
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/common_utils.py:507
 #: /home/minds3t/omnipkg/src/omnipkg/common_utils.py:640
-#, fuzzy
 msgid "   ✅ Target interpreter found at: {}"
-msgstr ""
+msgstr "✅ लक्ष्य अनुवादक पर पाया गया: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/common_utils.py:513
-#, fuzzy
 msgid "   ❌ FATAL ERROR during context relaunch."
-msgstr ""
+msgstr "❌ प्रसंग पुनः लॉन्च के दौरान घातक त्रुटि."
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/common_utils.py:514
 #: /home/minds3t/omnipkg/src/omnipkg/common_utils.py:646
-#, fuzzy
 msgid "   -> Error: {}"
-msgstr ""
+msgstr "-> त्रुटि:{}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/common_utils.py:531
 msgid "🚀 {}"
 msgstr "🚀 {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/common_utils.py:561
-#, fuzzy
 msgid "🎉 Command completed successfully!"
-msgstr ""
+msgstr "🎉 आदेश सफलतापूर्वक पूरा हुआ!"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/common_utils.py:563
-#, fuzzy
 msgid "❌ Command failed with return code {}"
-msgstr ""
+msgstr "❌ रिटर्न कोड {} के साथ कमांड विफल हो गया"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/common_utils.py:566
-#, fuzzy
 msgid ""
 "\n"
 "⚠️  Command cancelled by user (Ctrl+C)"
-msgstr ""
+msgstr "⚠ ️ उपयोगकर्ता द्वारा आदेश रद्द किया गया (Ctrl+C)"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/common_utils.py:572
-#, fuzzy
 msgid "❌ Error: Command not found. Ensure \"{}\" is installed and in your PATH."
 msgstr ""
+"❌ त्रुटि: आदेश नहीं मिला.सुनिश्चित करें कि '{}' स्थापित है और आपके PATH में "
+"है।"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/common_utils.py:578
-#, fuzzy
 msgid "❌ Command failed with an unexpected error: {}"
-msgstr ""
+msgstr "एक अप्रत्याशित त्रुटि के साथ कमांड विफल: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
+# Lollama: Skipped (Validation Failed: identical_to_original)
 #: /home/minds3t/omnipkg/src/omnipkg/common_utils.py:606
 #, fuzzy
 msgid "  🚀 AUTOMATIC DIMENSION JUMP REQUIRED"
 msgstr ""
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/common_utils.py:609
-#, fuzzy
 msgid "   - Current Dimension: Python {}.{}"
-msgstr ""
+msgstr "- वर्तमान आयाम: पायथन{}.{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/common_utils.py:613
-#, fuzzy
 msgid "   - Target Dimension:  Python {}"
-msgstr ""
+msgstr "- लक्ष्य आयाम: Python {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/common_utils.py:614
-#, fuzzy
 msgid "   - Re-calibrating multiverse coordinates and relaunching..."
-msgstr ""
+msgstr "- मल्टीवर्स निर्देशांक को पुनः अंशांकित करना और फिर से लॉन्च करना..."
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/common_utils.py:626
-#, fuzzy
 msgid "   -> Target dimension not yet managed. Attempting to adopt..."
-msgstr ""
+msgstr "-> लक्ष्य आयाम अभी तक प्रबंधित नहीं है."
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/common_utils.py:645
-#, fuzzy
 msgid "   ❌ FATAL ERROR during dimension jump."
-msgstr ""
+msgstr "आयाम कूद के दौरान घातक त्रुटि."
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:393
-#, fuzzy
 msgid "   🚩 Flag set: Python {} will build its knowledge base on first use."
-msgstr ""
+msgstr "🚩 फ़्लैग सेट: Python {} पहले उपयोग पर अपना ज्ञान आधार तैयार करेगा."
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:1146
-#, fuzzy
 msgid "   [DEBUG] Interpreter registry not found at: {}"
-msgstr ""
+msgstr "[DEBUG] दुभाषिया रजिस्ट्री यहां नहीं मिली: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:1298
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:1400
-#, fuzzy
 msgid "   ✅ Core dependencies installed."
-msgstr ""
+msgstr "✅ कोर निर्भरताएँ स्थापित।"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:1304
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:1406
-#, fuzzy
 msgid "   - Installing omnipkg application layer..."
-msgstr ""
+msgstr "- omnipkg आवेदन परत स्थापित करना..."
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:1330
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:1432
-#, fuzzy
 msgid "   ✅ Omnipkg bootstrapped successfully!"
-msgstr ""
+msgstr "Omnipkg सफलतापूर्वक बूटस्ट्रैप किया गया है!"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:1801
-#, fuzzy
 msgid "❌ No known standalone build for Python version {}."
-msgstr ""
+msgstr "Python संस्करण {} के लिए कोई ज्ञात अकेले निर्माण नहीं है।"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:1803
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:9304
-#, fuzzy
 msgid "   Available versions: {}"
-msgstr ""
+msgstr "उपलब्ध संस्करण:{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:1865
-#, fuzzy
 msgid "   - Attempting download..."
-msgstr ""
+msgstr "- डाウनलोड करने का प्रयास किया जा रहा है..."
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:1868
-#, fuzzy
 msgid "Download failed: file does not exist"
-msgstr ""
+msgstr "डाउンलोड विफल: फ़ाइल मौजूद नहीं है"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:1872
-#, fuzzy
 msgid "Downloaded file is too small ({} bytes), likely incomplete or invalid"
-msgstr ""
+msgstr "डाउनलोड की गई फ़ाइल बहुत छोटी है ({}बाइट्स), संभवतः अपूर्ण या अमान्य"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:1877
-#, fuzzy
 msgid "   - Extracting archive..."
-msgstr ""
+msgstr "- अभिलेखागार निकालने..."
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:2004
-#, fuzzy
 msgid "Could not find python directory in extracted archive"
-msgstr ""
+msgstr "पायथन निर्देशिका को निकाले गए संग्रह में नहीं पाया जा सकता"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:2035
-#, fuzzy
 msgid "Python executable not found in expected locations: {}"
-msgstr ""
+msgstr "Python executable अप्रत्याशित स्थानों में नहीं पाया गया: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:2062
-#, fuzzy
 msgid "   - Warning: Could not create versioned symlink: {}"
-msgstr ""
+msgstr "- चेतावनी: संस्करण simlink नहीं बनाया जा सकता है: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:2065
-#, fuzzy
 msgid "   - Testing installation..."
-msgstr ""
+msgstr "- परीक्षण स्थापना..."
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:2074
-#, fuzzy
 msgid "   - ✅ Python version: {}"
-msgstr ""
+msgstr "- Python संस्करण: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:2078
-#, fuzzy
 msgid ""
 "\n"
 "✨ New interpreter bootstrapped."
-msgstr ""
+msgstr "✨ नया दुभाषिया बूटस्ट्रैप किया गया।"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:2080
-#, fuzzy
 msgid "🔧 Forcing rescan to register the new interpreter..."
 msgstr ""
+"🔧 नए दुभाषिया को पंजीकृत करने के लिए पुनः स्कैन करने पर बाध्य किया जा रहा "
+"है..."
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:2082
-#, fuzzy
 msgid "   ✅ New interpreter registered successfully."
-msgstr ""
+msgstr "✅ नया अनुवादक सफलतापूर्वक पंजीकृत है"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:2084
-#, fuzzy
 msgid "   ⚠️  Interpreter registration failed: {}"
-msgstr ""
+msgstr "⚠ ️ अनुवादक पंजीकरण विफल रहा: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:2096
-#, fuzzy
 msgid "❌ Python {} not found in python-build-standalone releases."
-msgstr ""
+msgstr "Python {} python-build-standalone releases में नहीं मिला।"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:2101
-#, fuzzy
 msgid ""
 "   This might be a very new version. Check "
 "https://github.com/indygreg/python-build-standalone/releases"
 msgstr ""
+"यह बिल्कुल नया संस्करण हो सकता है.https://github.com/indygreg/python-build-"
+"standalone/releases जांचें"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:2105
-#, fuzzy
 msgid "   for available versions."
-msgstr ""
+msgstr "उपलब्ध संस्करणों के लिए."
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:2106
-#, fuzzy
 msgid "HTTP error downloading Python: {} - {}"
-msgstr ""
+msgstr "पाइथॉन डाउनलोड करने में HTTP त्रुटि:{}-{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:3944
-#, fuzzy
 msgid ""
 "⚠️  Warning: 'python-magic' not installed. Using enhanced binary detection."
 msgstr ""
+"⚠ ️ चेतावनी: 'पायथन-मैजिक' स्थापित नहीं है।उन्नत बाइनरी डिटेक्शन का उपयोग "
+"करना"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:4797
-#, fuzzy
 msgid "    📦 Attempting fast indexing via isolated subprocess..."
 msgstr ""
+"📦 त्वरित सूचकांक को अलग-अलग उप-प्रक्रिया के माध्यम से करने का प्रयास करें "
+"..."
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:4801
-#, fuzzy
 msgid "    ✅ No packages found in the main environment to index."
-msgstr ""
+msgstr "✅ अनुक्रमणिका के लिए मुख्य परिवेश में कोई पैकेज नहीं मिला"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:4824
-#, fuzzy
 msgid "    ✅ Successfully indexed {} files from {} packages via subprocess."
 msgstr ""
+"✅ उपप्रक्रिया के माध्यम से {} पैकेजों से {} फ़ाइलों को सफलतापूर्वक अनुक्रमित"
+" किया गया।"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:4830
-#, fuzzy
 msgid ""
 "    ⚠️ Isolated subprocess indexing failed ({}), trying metadata approach..."
 msgstr ""
+"⚠ ️ Isolated subprocess indexing failed ({}), trying metadata approach..."
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:4835
-#, fuzzy
 msgid "    📦 Attempting indexing via package metadata..."
-msgstr ""
+msgstr "📦 पैकेज मेटाडेटा के माध्यम से अनुक्रमणिका का प्रयास किया जा रहा है..."
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:4914
-#, fuzzy
 msgid ""
 "    ⚠️ Metadata approach also failed ({}), falling back to full filesystem "
 "scan..."
 msgstr ""
+"⚠ ️ मेटाडेटा दृष्टिकोण भी विफल रहा ({}), पूर्ण फ़ाइल सिस्टम स्कैन करने के "
+"लिए वापस गिर रहा है ..."
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:6692
-#, fuzzy
 msgid ""
 "   ❌ CRITICAL: Could not determine configured Python version. Aborting "
 "rebuild."
 msgstr ""
+"महत्वपूर्ण: Python संस्करण को परिभाषित करने में सक्षम नहीं था. एबर्टिंग "
+"पुनर्निर्माण."
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:6836
-#, fuzzy
 msgid "💡 First use of Python {} detected."
-msgstr ""
+msgstr "💡 Python {} का प्रथम प्रयोग पता चला"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:7598
-#, fuzzy
 msgid " ⚠️ Site-packages path does not exist: {}"
-msgstr ""
+msgstr "⚠ ️ साइट-पैकेज पथ मौजूद नहीं है: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:7634
-#, fuzzy
 msgid " ❌ Error scanning site-packages: {}"
-msgstr ""
+msgstr "त्रुटि स्कैन साइट पैकेज: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:7637
-#, fuzzy
 msgid "    ✅ Found {} packages total"
-msgstr ""
+msgstr "✅ कुल {} पैकेज मिले"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:7639
-#, fuzzy
 msgid " 📊 Package Scan Summary:"
-msgstr ""
+msgstr "📊 पैकेज स्कैन सारांश:"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:7648
 msgid "    📦 {}: {} ({})"
 msgstr "    📦 {}: {} ({})"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:7654
-#, fuzzy
 msgid "    📦 Other packages: {}"
-msgstr ""
+msgstr "📦 अन्य पैकेज:{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:7656
-#, fuzzy
 msgid "    ⚠️  Failed to process {} packages"
-msgstr ""
+msgstr "⚠ ️ प्रोसेस करने में विफल{}संकुल"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:7668
-#, fuzzy
 msgid " ⚠️ Multiversion base does not exist: {}"
-msgstr ""
+msgstr "⚠ ️ मल्टीवर्जन आधार मौजूद नहीं है:{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:7744
-#, fuzzy
 msgid "    ✅ Matching Python {} packages: {}"
-msgstr ""
+msgstr "Python {} पैकेजः {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:7749
-#, fuzzy
 msgid " 🫧 Bubble Package Scan Summary:"
-msgstr ""
+msgstr "Bubble Package स्कैनिंग सारांश:"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:7755
-#, fuzzy
 msgid "        • Python {}: {} packages"
-msgstr ""
+msgstr "• पायथन {}: {} पैकेज"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:7765
-#, fuzzy
 msgid "    📦 {}: {} instances ({})"
-msgstr ""
+msgstr "📦 {}:{}उदाहरण ({})"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:7771
-#, fuzzy
 msgid "    📦 Other packages: {} unique types"
-msgstr ""
+msgstr "📦 अन्य पैकेज:{}अद्वितीय प्रकार"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:7773
-#, fuzzy
 msgid "    ⚠️  Failed to process {} bubbles"
-msgstr ""
+msgstr "⚠ ️ process करने में विफल {} बुलबुले"
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:7776
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:7785
 msgid "        • {}: {}"
 msgstr "        • {}: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:9113
-#, fuzzy
 msgid "   - ✅ Python {} is already adopted and managed."
-msgstr ""
+msgstr "- Python{}पहले से ही अपनाया गया है और प्रबंधित किया गया है।"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:9151
-#, fuzzy
 msgid ""
 "   - ⚠️  Safety checks failed for local copy. Falling back to download."
 msgstr ""
+"- ️ सुरक्षा चेक स्थानीय प्रतिलिपि के लिए विफल हो गया. डाउनलोड करने के लिए "
+"वापस गिर गया."
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:9175
-#, fuzzy
 msgid "🔧 Forcing rescan to register the copied interpreter..."
 msgstr ""
+"🔧 कॉपी किए गए दुभाषिया को पंजीकृत करने के लिए बाध्य किया जा रहा है...\", "
+"\"reasoning\": \"highest score: 8.9"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:9186
-#, fuzzy
 msgid ""
 "   - ❌ An error occurred during the copy attempt: {}. Falling back to "
 "download."
 msgstr ""
+"- ❌ प्रतिलिपि प्रयास के दौरान एक त्रुटि उत्पन्न हुई:{}.डाउनलोड करने के लिए "
+"वापस आ रहा हूँ。"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:9288
-#, fuzzy
 msgid ""
 "\n"
 "--- Running robust download strategy ---"
-msgstr ""
+msgstr "---\\u00A0मजबूत\\u00A0डाउनलोड\\u00A0रणनीति\\u00A0चलाना---"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:9334
-#, fuzzy
 msgid "   - Found existing directory for Python {}. Verifying integrity..."
-msgstr ""
+msgstr "- Python {} के लिए मौजूदा निर्देशिका पाया।"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:9337
-#, fuzzy
 msgid "   - ✅ Integrity check passed. Installation is valid and complete."
-msgstr ""
+msgstr "- ईमानदारी की जांच पारित. स्थापना वैध और पूर्ण है."
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:9341
-#, fuzzy
 msgid ""
 "   - ⚠️  Integrity check failed: Incomplete installation detected (missing "
 "or broken executable)."
 msgstr ""
+"- ⚠️ अखंडता जांच विफल: अपूर्ण स्थापना का पता चला (निष्पादन योग्य गुम या टूटा"
+" हुआ)।"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:9349
-#, fuzzy
 msgid ""
 "   - ❌ CRITICAL ERROR: The broken interpreter is the currently active one!"
-msgstr ""
+msgstr "- महत्वपूर्ण त्रुटि: टूटा हुआ दुभाषिया वर्तमान में सक्रिय है!"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:9352
-#, fuzzy
 msgid ""
 "   - Aborting to prevent self-destruction. Please fix the environment "
 "manually."
-msgstr ""
+msgstr "- आत्म-विनाश को रोकने के लिए गर्भपात करना."
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:9358
-#, fuzzy
 msgid "   - Preparing to clean up broken directory..."
-msgstr ""
+msgstr "- टूटी हुई निर्देशिका को साफ़ करने की तैयारी..."
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:9361
-#, fuzzy
 msgid "   - ✅ Removed broken directory successfully."
-msgstr ""
+msgstr "- सफलतापूर्वक टूटी हुई निर्देशिका हटा दी गई."
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:9364
-#, fuzzy
 msgid "   - ❌ FATAL: Failed to remove existing broken directory: {}"
-msgstr ""
+msgstr "- FATAL: मौजूदा टूटे हुए निर्देशिका को हटाने में विफल रहा: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:9368
-#, fuzzy
 msgid "   - Starting fresh download and installation..."
-msgstr ""
+msgstr "- नए सिरे से डाउンलोड और इंस्टालेशन शुरू हो रहा है..."
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:9373
-#, fuzzy
 msgid "   - Using python-build-standalone for Python 3.13..."
-msgstr ""
+msgstr "- Python-build-standalone के लिए Python 3.13 का उपयोग करके..."
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:9402
-#, fuzzy
 msgid "   - Warning: _install_managed_python failed: {}"
-msgstr ""
+msgstr "- चेतावनी: _install_managed_python विफल: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:9408
-#, fuzzy
 msgid "   - Warning: install_managed_python failed: {}"
-msgstr ""
+msgstr "- चेतावनी: install_managed_python विफल: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:9414
-#, fuzzy
 msgid "   - Warning: download_python failed: {}"
-msgstr ""
+msgstr "- चेतावनी: download_python विफल रहा: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:9417
-#, fuzzy
 msgid "❌ Error: All download methods failed for Python {}"
-msgstr ""
+msgstr "Python के लिए सभी डाउनलोड विधियां विफल हो गईं {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:9436
-#, fuzzy
 msgid "   - ✅ Download and installation completed successfully."
-msgstr ""
+msgstr "- डाउンलोड और इंस्टॉलेशन सफलतापूर्वक पूरा हुआ."
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:9440
-#, fuzzy
 msgid "   - ❌ Installation completed but integrity check still fails."
-msgstr ""
+msgstr "- स्थापना पूरी हो गई है लेकिन अखंडता जांच अभी भी विफल है."
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:9446
-#, fuzzy
 msgid "❌ Download and installation process failed: {}"
-msgstr ""
+msgstr "❌ डाउनलोड और इंस्टॉलेशन प्रक्रिया विफल: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:9480
-#, fuzzy
 msgid "   - Attempting Python 3.13 download from python-build-standalone..."
 msgstr ""
+"- Python 3.13 डाउनलोड करने का प्रयास करें Python-build-standalone से..."
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:9564
-#, fuzzy
 msgid "   - ❌ Could not determine appropriate build for platform: {} {}"
 msgstr ""
+"- ❌ प्लेटफ़ॉर्म के लिए उपयुक्त निर्माण निर्धारित नहीं किया जा सका: {} {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:9570
-#, fuzzy
 msgid "   - Selected build: {}"
-msgstr ""
+msgstr "- चयनित निर्माण:{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:9571
-#, fuzzy
 msgid "   - Downloading from: {}"
-msgstr ""
+msgstr "- यहां से डाウनलोड किया जा रहा है: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:9582
-#, fuzzy
 msgid "   - Download progress: {}%"
-msgstr ""
+msgstr "- Download progress: {}%"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:9587
-#, fuzzy
 msgid ""
 "\n"
 "   - Download completed, extracting..."
-msgstr ""
+msgstr "- डाउンलोड पूरा, निकालने के लिए ..."
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:9607
-#, fuzzy
 msgid "   - Extraction completed"
-msgstr ""
+msgstr "-निकासी पूरी हुई"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:9615
-#, fuzzy
 msgid "   - ✅ Python 3.13.1 installation completed successfully"
-msgstr ""
+msgstr "- Python 3.13.1 स्थापना सफलतापूर्वक समाप्त"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:9616
-#, fuzzy
 msgid "   - Bootstrapping the new Python 3.13 environment..."
-msgstr ""
+msgstr "- नए Python 3.13 वातावरण को बूटस्ट्रेप करना..."
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:9620
-#, fuzzy
 msgid ""
 "   - ❌ CRITICAL: Could not find Python executable in {} after extraction."
 msgstr ""
+"- महत्वपूर्ण: निकालने के बाद {} में Python को निष्पादित नहीं किया जा सकता "
+"था."
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:9627
-#, fuzzy
 msgid "   - ✅ Alternative Python 3.13 download and bootstrap completed"
-msgstr ""
+msgstr "- ✅ वैकल्पिक पायथन 3.13 डाउンलोड और बूटस्ट्रैप पूरा हुआ"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:9632
-#, fuzzy
 msgid "   - ❌ Python 3.13 download failed: {}"
-msgstr ""
+msgstr "- Python 3.13 डाउनलोड विफल: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:9635
-#, fuzzy
 msgid "   - Error details: {}"
-msgstr ""
+msgstr "- त्रुटि विवरण:{}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:9643
-#, fuzzy
 msgid "Performing a full re-scan of managed interpreters..."
-msgstr ""
+msgstr "प्रबंधित व्याख्याकारों के पूर्ण पुन: स्कैन करने के लिए ..."
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:9651
-#, fuzzy
 msgid ""
 "\n"
 "✅ Interpreter registry successfully rebuilt."
-msgstr ""
+msgstr "✅ दुभाषिया रजिस्ट्री का सफलतापूर्वक पुनर्निर्माण किया गया."
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:9654
-#, fuzzy
 msgid ""
 "\n"
 "❌ An error occurred during the re-scan: {}"
-msgstr ""
+msgstr "❌ फिर से स्कैन के दौरान एक त्रुटि हुई: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:9844
-#, fuzzy
 msgid "🔥 Attempting to remove managed Python interpreter: {}"
-msgstr ""
+msgstr "🔥 प्रबंधित Python अनुवादक को हटाने का प्रयास: {}"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:9861
-#, fuzzy
 msgid ""
 "❌ SAFETY LOCK: Cannot remove the currently active Python interpreter ({})."
 msgstr ""
+"SAFETY LOCK: वर्तमान में सक्रिय Python अनुवादक ({}) को हटाया नहीं जा सकता "
+"है."
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:9866
-#, fuzzy
 msgid ""
 "   Switch to a different Python version first using 'omnipkg swap python "
 "<other_version>'."
 msgstr ""
+"'omnipkg swap python <other_version>' का उपयोग करके एक अलग Python संस्करण "
+"में स्विच करें。"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
+# Lollama: Skipped (Validation Failed: proper_noun_mismatch_Python)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:9878
 #, fuzzy
 msgid "🤷 Error: Python version {} is not a known managed interpreter."
 msgstr ""
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:9911
-#, fuzzy
 msgid "   Directory does not exist. It may have already been cleaned up."
-msgstr ""
+msgstr "Selezionato testo"
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
+# Lollama: Skipped (Validation Failed: translation_artifact_english)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:9921
 #, fuzzy
 msgid "🚫 Removal cancelled."
 msgstr ""
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
+# Lollama: Skipped (Validation Failed: emoji_mismatch)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:9926
 #, fuzzy
 msgid "🗑️ Deleting directory: {}"
 msgstr ""
 
-# Lollama: Skipped (Empty Chain Output)
+# (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:9928
-#, fuzzy
 msgid "✅ Directory removed successfully."
-msgstr ""
+msgstr "Selezionato testo"
 
 # Lollama: Skipped (Empty Chain Output)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:9930
