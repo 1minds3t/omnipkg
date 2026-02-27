@@ -7,6 +7,134 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [2.5.0] — 2026-02-27
+
+Smart Worker Isolation, Active Memory Control, and Multi-Version ML/Science Docker Images
+
+## Overview
+
+v2.5.0 introduces process-level worker isolation, enforceable memory budgets, and officially supported multi-version ML/Science Docker environments.
+
+This release upgrades how OmniPkg handles large AI workloads, persistent state management, and container reproducibility.
+
+---
+
+## 🚀 Worker Tags: Process-Level Isolation
+
+The daemon now supports `worker_tag` in `execute_smart`, enabling explicit routing to dedicated, persistent worker processes.
+
+Previously, heavy models loaded under the same package spec shared a single interpreter process. Loading multiple large models (e.g., translation + speech recognition) could cause uncontrolled RAM growth due to shared residency.
+
+```python
+execute_smart(..., worker_tag="nllb")
+execute_smart(..., worker_tag="whisper")
+```
+
+Each tag creates (or reuses) a distinct persistent process.
+
+- No cross-model memory stacking
+- Warm model reuse with deterministic isolation
+- Predictable system resource behavior
+- Clean horizontal scaling patterns
+
+---
+
+## 🧠 Active Memory Management
+
+Workers now support `max_memory_mb`. If a worker exceeds its configured memory budget:
+
+- It is recycled cleanly
+- A fresh process is spawned
+- The daemon remains stable
+
+This eliminates long-lived memory bloat and "zombie" accumulation scenarios.
+
+---
+
+Internal state now distinguishes:
+
+- **Persistent globals** (e.g., cached model weights)
+- **Transient task data** (e.g., input tensors)
+
+Transient keys are explicitly cleaned post-execution, preventing input-size-dependent memory growth while keeping heavy models hot in memory.
+
+---
+
+## 🐳 Official Multi-Version Docker Images
+
+OmniPkg now ships production-ready Docker images demonstrating true multi-version coexistence.
+
+Preconfigured AI environment with:
+
+- Torch 2.1 / 2.2 / 2.9
+- TensorFlow 2.13 / 2.20
+- Multiple NumPy versions
+- CUDA-enabled variants
+- Hardened non-root runtime
+
+This container demonstrates conflicting ML stacks coexisting cleanly without downgrades or environment duplication.
+
+---
+
+A reproducible scientific stack including:
+
+- NumPy 1.x and 2.x
+- Multiple SciPy versions
+- Pandas
+- Scikit-Learn
+
+Designed for regression testing and scientific reproducibility across dependency boundaries.
+
+---
+
+## 🛠 Developer Experience Improvements
+
+- Short-form Python resolution (`"3.11"`, `"py39"`)
+- Improved worker health checks (busy vs hung distinction)
+- Unified interpreter resolution via `_resolve_python_exe`
+- Alpine builds pinned to 3.12 to avoid musl + Python 3.13 locale regressions
+
+---
+
+## 🧪 Testing & Stability
+
+- Added `test_daemon_tags.py`
+  - Validates tag isolation
+  - Validates warm reuse behavior
+  - Benchmarks persistence characteristics
+- Explicit cleanup of transient `_worker_globals` keys
+- Improved daemon lifecycle handling
+
+---
+
+## 🌍 Internationalization
+
+- Updated Hindi, Russian, and Japanese translations
+- Regenerated compiled catalogs
+- Placeholder consistency corrections
+
+---
+
+**📝 Code Changes:**
+- UPDATE: src/omnipkg/isolation/worker_daemon.py (532 lines changed)
+
+**🧪 Tests:**
+- NEW: src/tests/test_daemon_tags.py (212 lines)
+
+**Additional Changes:**
+- chore(i18n): update Hindi, Japanese, and Russian translations
+- feat(daemon): implement worker isolation tags, memory caps, and persistent globals
+
+**Updates:**
+- Update requirements-science.txt
+- Update Dockerfile.ml
+- Update build-docker-images.yml
+- Update Dockerfile.science
+- Update Dockerfile.cuda
+- Update Dockerfile.alpine
+
+_14 files changed, 5216 insertions(+), 1380 deletions(-)_
+
 ## [2.4.2] — 2026-02-25
 
 Fix missing native versioned shims and implement Windows .bat shim factory
