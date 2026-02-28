@@ -123,3 +123,72 @@ licenses/
 
 # gitship diff exports (auto-added by gitship)
 gitship_exports/
+
+# Python compiled
+*.py[cod]
+
+# Python compiled
+*$py.class
+
+# Python
+.Python
+
+# Build artifacts
+develop-eggs/
+
+# Distribution
+dist/
+
+# Build artifacts
+downloads/
+
+# Build artifacts
+eggs/
+
+# Build artifacts
+.eggs/
+
+# Build artifacts
+lib/
+
+# Build artifacts
+lib64/
+
+# Build artifacts
+parts/
+
+# Build artifacts
+sdist/
+
+# Build artifacts
+var/
+
+# Build artifacts
+wheels/
+
+# Build artifacts
+.installed.cfg
+
+# Python package
+*.egg
+
+# Testing
+.pytest_cache/
+
+# Virtual environment
+.venv
+
+# Dependencies
+node_modules/
+
+# Logs
+npm-debug.log*
+
+# Logs
+yarn-debug.log*
+
+# Logs
+yarn-error.log*
+
+# npm
+.npm
