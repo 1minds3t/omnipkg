@@ -710,7 +710,19 @@ def spawn_swap_shell(version: str, python_path: Path, pkg_instance) -> int:
     # ── 1. Ensure shims dir exists ────────────────────────────────────────────
     shims_dir = pkg_instance.config_manager._ensure_shims_installed()
     original_venv = pkg_instance.config_manager.venv_path
-
+    # ── 1b. Auto-adopt if interpreter not yet available ───────────────────────
+    if not python_path.exists():
+        safe_print(_("⚠️  Python {} is not adopted yet — adopting now...").format(version))
+        adopt_result = pkg_instance.adopt_interpreter(version)
+        if adopt_result != 0:
+            safe_print(_("❌ Failed to adopt Python {}.").format(version))
+            safe_print(_("   Try manually: 8pkg python adopt {}").format(version))
+            return 1
+        python_path = resolve_python_path(version)
+        if not python_path.exists():
+            safe_print(_("❌ Adoption succeeded but interpreter still not found at: {}").format(python_path))
+            return 1
+        safe_print(_("✅ Python {} adopted — continuing with swap...").format(version))
     # ── 2. Build environment ──────────────────────────────────────────────────
     # IMPORTANT: OMNIPKG_PYTHON, OMNIPKG_VENV_ROOT, and _OMNIPKG_SWAP_ACTIVE are
     # intentionally NOT set in new_env. new_env is the inherited process environment
@@ -992,7 +1004,11 @@ def spawn_swap_shell(version: str, python_path: Path, pkg_instance) -> int:
         conda_env = os.environ.get("CONDA_DEFAULT_ENV", "")
         env_prefix = f"({conda_env}) " if conda_env else ""
         _tf.write(f'\n# Show conda env + python version in prompt\n')
-        _tf.write(f'export PS1="{env_prefix}(py{version}) \\u@\\h:\\w\\$ "\n')
+        _# NEW
+        if "zsh" in shell_name:
+            _tf.write(f'export PROMPT="{env_prefix}(py{version}) %n@%m:%~%# "\n')
+        else:
+            _tf.write(f'export PS1="{env_prefix}(py{version}) \\u@\\h:\\w\\$ "\n')
         # Cleanup on exit — trap fires when the bash process actually terminates
         _tf.write(f'\ntrap \'\n')
         _tf.write(f'    unset OMNIPKG_PYTHON OMNIPKG_ACTIVE_PYTHON OMNIPKG_VENV_ROOT _OMNIPKG_SWAP_ACTIVE\n')
