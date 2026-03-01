@@ -81,9 +81,13 @@ def get_daemon_worker_info():
             if m:
                 py_ver = m.group(1)
                 break
-            m = re.search(r"python3?[\.\-_]?(\d+)", str(search_str), re.IGNORECASE)
+            m = re.search(r"python(3\.\d+)", str(search_str), re.IGNORECASE)
             if m:
-                py_ver = "3." + m.group(1) if "." not in m.group(0) else m.group(0).lstrip("python").lstrip("3.")
+                py_ver = m.group(1)
+                break
+            m = re.search(r"python3[\.\-_](\d+)", str(search_str), re.IGNORECASE)
+            if m:
+                py_ver = "3." + m.group(1)
                 break
 
         pid_map[str(pid)] = f"{pkg_spec} (py{py_ver})"
@@ -103,7 +107,8 @@ def get_processes():
         procs = []
         now = time.time()
         for p in psutil.process_iter(["pid", "ppid", "cmdline", "create_time",
-                                       "cpu_percent", "memory_info", "memory_percent"]):
+                                       "cpu_percent", "memory_info", "memory_percent",
+                                       "exe"]):
             try:
                 info = p.info
                 cmdline = info["cmdline"] or []
@@ -122,6 +127,7 @@ def get_processes():
                     "vsz":     vsz_kb,
                     "elapsed": elapsed,
                     "cmd":     " ".join(cmdline),
+                    "exe":     info.get("exe") or "",
                 })
             except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
                 continue
@@ -206,8 +212,12 @@ def _extract_python_version(cmd: str, exe: str = "") -> str:
         m = re.search(r"cpython[\-_](3\.\d+)", s, re.IGNORECASE)
         if m:
             return m.group(1)
-        # python3.9, python3.11 in command name
-        m = re.search(r"python3\.(\d+)", s, re.IGNORECASE)
+        # python3.11 or python3.9 with explicit minor version
+        m = re.search(r"python(3\.\d+)", s, re.IGNORECASE)
+        if m:
+            return m.group(1)
+        # python3-11 or python3_11 style separators
+        m = re.search(r"python3[\-_](\d+)", s, re.IGNORECASE)
         if m:
             return "3." + m.group(1)
     return "3.x"
