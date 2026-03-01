@@ -61,7 +61,7 @@ def _import_fpf():
     # Fallback: load from file directly (dev layout)
     import importlib.util
     candidates = [
-        Path(__file__).parent.parent / "src" / "omnipkg" / "flask_port_finder.py",
+        Path(__file__).parent.parent / "src" / "omnipkg" / "utils" / "flask_port_finder.py",
         Path(__file__).parent.parent / "flask_port_finder.py",
         Path(__file__).parent / "flask_port_finder.py",
     ]

@@ -3124,10 +3124,22 @@ class ConfigManager:
         
         # Priority 3: Global config (backward compatibility)
         global_config = Path.home() / ".config" / "omnipkg" / f"{self.env_id}.json"
-        
+
+        if global_config.exists():
+            try:
+                import json as _json
+                _gc = _json.loads(global_config.read_text(encoding="utf-8"))
+                _gc_exe = Path(_gc.get("python_executable", "")).resolve()
+                if _gc_exe != exe_path:
+                    if debug_mode:
+                        print(f"[DEBUG-CONFIG] ⚠️  Global config points to {_gc_exe} but we are {exe_path} — ignoring stale global config", file=sys.stderr)
+                    self._write_interpreter_config(exe_path, f"{sys.version_info.major}.{sys.version_info.minor}")
+                    return per_python_config
+            except Exception:
+                pass
+
         if debug_mode:
             print(_('[DEBUG-CONFIG] Fallback to global config: {}').format(global_config), file=sys.stderr)
-        
         return global_config
 
     def _load_or_create_config(self, interactive: bool = True) -> Dict:
