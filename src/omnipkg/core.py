@@ -10004,6 +10004,9 @@ class omnipkg:
                     )
                     if self._is_interpreter_directory_valid(dest_path):
                         safe_print(_("   - ✅ Integrity check passed. Installation is valid and complete."))
+                        # REGISTER IT before returning — caller cannot do this without a valid path
+                        self.interpreter_manager.refresh_registry()
+                        self.rescan_interpreters()
                         return 0
                     else:
                         safe_print(
@@ -10102,6 +10105,8 @@ class omnipkg:
                 if dest_path.exists() and self._is_interpreter_directory_valid(dest_path):
                     safe_print(_("   - ✅ Download and installation completed successfully."))
                     self.config_manager._set_rebuild_flag_for_version(version)
+                    self.interpreter_manager.refresh_registry()
+                    self.rescan_interpreters()
                     return 0
                 else:
                     safe_print(_('   - ❌ Installation completed but integrity check still fails.'))
