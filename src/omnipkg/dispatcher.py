@@ -710,19 +710,23 @@ def spawn_swap_shell(version: str, python_path: Path, pkg_instance) -> int:
     # ── 1. Ensure shims dir exists ────────────────────────────────────────────
     shims_dir = pkg_instance.config_manager._ensure_shims_installed()
     original_venv = pkg_instance.config_manager.venv_path
-    # ── 1b. Auto-adopt if interpreter not yet available ───────────────────────
-    if not python_path.exists():
-        safe_print(_("⚠️  Python {} is not adopted yet — adopting now...").format(version))
+    
+    # ── 1b. Ensure python_path is managed (not a system fallback) ────────────
+    venv_str = str(original_venv.resolve())
+    is_managed = str(python_path.resolve()).startswith(venv_str)
+    if not is_managed:
+        safe_print(_("⚠️  Python {} is not adopted yet (found system python at {}) — adopting now...").format(version, python_path))
         adopt_result = pkg_instance.adopt_interpreter(version)
         if adopt_result != 0:
             safe_print(_("❌ Failed to adopt Python {}.").format(version))
             safe_print(_("   Try manually: 8pkg python adopt {}").format(version))
             return 1
         python_path = resolve_python_path(version)
-        if not python_path.exists():
-            safe_print(_("❌ Adoption succeeded but interpreter still not found at: {}").format(python_path))
+        if not str(python_path.resolve()).startswith(venv_str):
+            safe_print(_("❌ Adoption succeeded but interpreter still not managed: {}").format(python_path))
             return 1
         safe_print(_("✅ Python {} adopted — continuing with swap...").format(version))
+
     # ── 2. Build environment ──────────────────────────────────────────────────
     # IMPORTANT: OMNIPKG_PYTHON, OMNIPKG_VENV_ROOT, and _OMNIPKG_SWAP_ACTIVE are
     # intentionally NOT set in new_env. new_env is the inherited process environment
