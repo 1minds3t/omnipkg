@@ -66,7 +66,8 @@ msgstr "• 스위칭 버전에는 환경이 다시 시작되어야합니다"
 msgid "   • Dependency conflicts prevent coexistence"
 msgstr "• 의존성 충돌은 공존을 방지합니다"
 
-# Lollama: Skipped (API Error)
+# (API Error)
+# Lollama: Skipped (Validation Failed: translation_artifact)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:367
 #, fuzzy
 msgid "✨ omnipkg does this LIVE, in the same Python process!"
@@ -86,18 +87,16 @@ msgid ""
 "packages)..."
 msgstr "📡 라이브 스트리밍 출력 (무거운 패키지의 경우 몇 분이 걸릴 수 있습니다) ..."
 
-# Lollama: Skipped (API Error)
+# (API Error)
 #: /home/minds3t/omnipkg/src/omnipkg/common_utils.py:534
-#, fuzzy
 msgid "🛑 Press Ctrl+C to safely cancel if needed"
-msgstr "ctrl+c를 눌러 필요한 경우 안전하게 취소하십시오"
+msgstr "🛑 필요한 경우 Ctrl+C를 눌러 안전하게 취소하세요"
 
-# Lollama: Skipped (API Error)
+# (API Error)
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:503
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:1235
-#, fuzzy
 msgid "🎉 Demo completed successfully!"
-msgstr "demo가 성공적으로 완료되었습니다!"
+msgstr "🎉 데모가 성공적으로 완료되었습니다!"
 
 #: /home/minds3t/omnipkg/src/tests/test_old_flask.py:27
 #: /home/minds3t/omnipkg/src/tests/test_old_flask.py:29
@@ -121,7 +120,7 @@ msgstr "│ • 현대 앱을 파괴하십시오"
 
 #: /home/minds3t/omnipkg/src/tests/test_old_flask.py:43
 msgid "│      • Welcome you to dependency hell 🔥                │"
-msgstr "│ • 의존성 지옥에 오신 것을 환영합니다"
+msgstr "│ • 의존성 지옥에 오신 것을 환영합니다 🔥 │"
 
 #: /home/minds3t/omnipkg/src/tests/test_old_flask.py:45
 msgid "│  [Y]es, I want chaos | [N]o, save me omnipkg! 🦸‍♂️        │"
@@ -133,7 +132,7 @@ msgstr "\\ ^__ ^"
 
 #: /home/minds3t/omnipkg/src/tests/test_old_flask.py:49
 msgid "         \\  (💀💀)\\______   <- This is your environment"
-msgstr "\\ () \\ ______ <- 이것은 당신의 환경입니다"
+msgstr "\\ (💀💀)\\______ <- 이것이 귀하의 환경입니다"
 
 #: /home/minds3t/omnipkg/src/tests/test_old_flask.py:50
 msgid "            (__)\\       )\\/\\   after using pip"
@@ -228,7 +227,7 @@ msgstr "✅ 언어는 영구적으로 설정합니다. {lang}"
 
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:1108
 msgid "🎪 Omnipkg supports version switching for:"
-msgstr "OMNIPKG는 버전 전환을 지원합니다."
+msgstr "🎪 Omnipkg는 다음 버전 전환을 지원합니다."
 
 #: /home/minds3t/omnipkg/src/omnipkg/cli.py:1113
 msgid ""
@@ -328,9 +327,11 @@ msgstr "🚫 재설정 취소."
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:6583
 msgid "✅ Configuration file deleted successfully."
-msgstr "configuration 파일이 성공적으로 삭제되었습니다."
+msgstr "✅ 구성 파일은 성공적으로 삭제되었습니다."
 
+# Lollama: Skipped (Validation Failed: translation_artifact)
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:6586
+#, fuzzy
 msgid ""
 "🚀 The next time you run `omnipkg`, you will be guided through the first-time"
 " setup."
@@ -356,7 +357,7 @@ msgstr "✅ 지식 기반이 성공적으로 재건되었습니다."
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:6738
 msgid "   🔄 Rebuilding core package metadata..."
-msgstr "Core 핵심 패키지 메타 데이터 재건 ..."
+msgstr "🔄 핵심 패키지 메타데이터 재구축 중..."
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:6746
 msgid "   ✅ Core metadata rebuilt."
@@ -364,7 +365,7 @@ msgstr "core 핵심 메타 데이터 재건."
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:8393
 msgid "🔄 Updating cached file hash index..."
-msgstr "CACHED 파일 해시 색인 업데이트 ..."
+msgstr "🔄 캐시된 파일 해시 인덱스 업데이트 중..."
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:8424
 msgid "✅ Hash index updated."
@@ -407,7 +408,7 @@ msgstr "🎉 모든 패키지 작업이 완료됩니다."
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:12430
 msgid "🔄 Restoring main environment from snapshot..."
-msgstr "snapshot에서 주요 환경 복원 ..."
+msgstr "🔄 스냅샷에서 메인 환경을 복원하는 것..."
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:12440
 msgid "   ✅ Environment is already in its original state."
