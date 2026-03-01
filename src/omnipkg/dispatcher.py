@@ -185,10 +185,25 @@ def main():
         print(f'[DEBUG-DISPATCH] Using Python: {target_python}', file=sys.stderr)
         print(f'[DEBUG-DISPATCH] Current executable: {sys.executable}', file=sys.stderr)
     
-    if not target_python.exists():
-        _safe_print(f'❌ Python interpreter not found: {target_python}', file=sys.stderr)
-        print(f'   Run: 8pkg python adopt {extract_version(target_python)}', file=sys.stderr)
-        sys.exit(1)
+    # NEW
+    venv_root = find_absolute_venv_root()
+    is_managed = str(target_python.resolve()).startswith(str(venv_root.resolve()))
+    if not target_python.exists() or not is_managed:
+        # Lazy import — only needed on this path
+        import subprocess
+        version_str = os.environ.get("OMNIPKG_PYTHON") or extract_version(target_python)
+        print(f'⚠️  Python {version_str} not adopted — adopting now...', file=sys.stderr)
+        adopt_result = subprocess.call(
+            [sys.executable, "-m", "omnipkg.cli", "python", "adopt", version_str]
+        )
+        if adopt_result != 0:
+            print(f'❌ Failed to adopt Python {version_str}.', file=sys.stderr)
+            sys.exit(1)
+        # Re-resolve after adoption and fall through to re-exec
+        target_python = resolve_python_path(version_str)
+        if not target_python.exists():
+            print(f'❌ Adoption succeeded but interpreter still not found.', file=sys.stderr)
+            sys.exit(1)
 
     exec_args = [str(target_python), "-m", "omnipkg.cli"] + sys.argv[1:]
 
@@ -710,7 +725,7 @@ def spawn_swap_shell(version: str, python_path: Path, pkg_instance) -> int:
     # ── 1. Ensure shims dir exists ────────────────────────────────────────────
     shims_dir = pkg_instance.config_manager._ensure_shims_installed()
     original_venv = pkg_instance.config_manager.venv_path
-    
+
     # ── 1b. Ensure python_path is managed (not a system fallback) ────────────
     venv_str = str(original_venv.resolve())
     is_managed = str(python_path.resolve()).startswith(venv_str)
