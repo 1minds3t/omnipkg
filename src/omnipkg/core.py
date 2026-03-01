@@ -833,7 +833,7 @@ class ConfigManager:
             # MIGRATION STEP 1: Detect and fix the native Python issue
             # ═══════════════════════════════════════════════════════════════
             current_version = f"{sys.version_info.major}.{sys.version_info.minor}"
-            native_python = Path(sys.executable).resolve()
+            native_python = Path(sys.executable).absolute()
             
             # Check if native Python is actually OUTSIDE .omnipkg/interpreters/
             if ".omnipkg/interpreters" not in str(native_python):
@@ -918,7 +918,7 @@ class ConfigManager:
             # STEP 2: Force-preserve current native Python
             # ═══════════════════════════════════════════════════════════════
             current_version = f"{sys.version_info.major}.{sys.version_info.minor}"
-            current_exe = Path(sys.executable).resolve()
+            current_exe = Path(sys.executable).absolute()
             
             # Only add if it's truly not in managed directory
             if ".omnipkg/interpreters" not in str(current_exe):
