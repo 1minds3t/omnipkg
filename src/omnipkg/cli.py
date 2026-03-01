@@ -1866,7 +1866,7 @@ def main():
 
         elif args.command == "info":
             if args.package_spec.lower() == "python":
-                current_python = Path(sys.executable).resolve()
+                current_python = Path(sys.executable)
                 active_version_tuple = (sys.version_info.major, sys.version_info.minor)
                 active_version_str = f"{active_version_tuple[0]}.{active_version_tuple[1]}"
 
@@ -1876,7 +1876,7 @@ def main():
                 )
                 safe_print(_("🐍 Managed Python Versions (available for swapping):"))
                 for ver, path in sorted(managed_interpreters.items()):
-                    path_obj = Path(path).resolve()
+                    path_obj = Path(path)
                     is_current = (path_obj == current_python)
                     marker = " ⭐ (currently active)" if is_current else ""
                     safe_print(_("   • Python {}: {}{}").format(ver, path, marker))
