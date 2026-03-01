@@ -85,6 +85,10 @@ def get_daemon_worker_info():
             if m:
                 py_ver = m.group(1)
                 break
+            m = re.search(r"/Versions/(3\.\d+)/", str(search_str))
+            if m:
+                py_ver = m.group(1)
+                break
             m = re.search(r"python3[\-_](\d+)", str(search_str), re.IGNORECASE)
             if m:
                 py_ver = "3." + m.group(1)
@@ -107,8 +111,7 @@ def get_processes():
         procs = []
         now = time.time()
         for p in psutil.process_iter(["pid", "ppid", "cmdline", "create_time",
-                                       "cpu_percent", "memory_info", "memory_percent",
-                                       "exe"]):
+                                       "cpu_percent", "memory_info", "memory_percent"]):
             try:
                 info = p.info
                 cmdline = info["cmdline"] or []
@@ -127,7 +130,6 @@ def get_processes():
                     "vsz":     vsz_kb,
                     "elapsed": elapsed,
                     "cmd":     " ".join(cmdline),
-                    "exe":     info.get("exe") or "",
                 })
             except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
                 continue
@@ -202,17 +204,22 @@ def get_gpu_summary():
 def _extract_python_version(cmd: str, exe: str = "") -> str:
     """
     Pull pythonX.Y or cpython-X.Y out of a command string or exe path.
-    Checks exe first (cleaner signal), then full cmd string.
+    Handles macOS framework paths like Python.app/Contents/MacOS/Python
+    by parsing the Versions/X.Y segment in the path.
     """
-    for s in [exe, cmd]:  # exe first — full path, less noise
+    for s in [exe, cmd]:
         if not s:
             continue
         # cpython-3.9.23 or cpython-3.11.9 style (managed interpreter paths)
         m = re.search(r"cpython[\-_](3\.\d+)", s, re.IGNORECASE)
         if m:
             return m.group(1)
-        # python3.11 with explicit minor — matches both path and argv
+        # python3.11 with explicit minor version
         m = re.search(r"python(3\.\d+)", s, re.IGNORECASE)
+        if m:
+            return m.group(1)
+        # macOS framework path: .../Versions/3.11/...
+        m = re.search(r"/Versions/(3\.\d+)/", s)
         if m:
             return m.group(1)
         # python3-11 or python3_11 separator style
@@ -224,27 +231,16 @@ def _extract_python_version(cmd: str, exe: str = "") -> str:
 def identify_worker_type(proc, pid_map):
     pid = proc["pid"]
     cmd = proc["cmd"]
-    exe = proc.get("exe", "")
-
-    # Last-resort: if exe is empty (macOS SIP can block it), try psutil directly
-    if not exe and HAS_PSUTIL:
-        try:
-            exe = psutil.Process(int(pid)).exe() or ""
-        except Exception:
-            pass
-
     if pid in pid_map:
         return pid_map[pid]
     cmd_low = cmd.lower()
-    if ("worker_daemon" in cmd_low and "start" in cmd_low) or \
-            ("omnipkg.isolation.worker_daemon" in cmd_low and "start" in cmd_low) or \
-            "8pkg daemon start" in cmd_low:
+    if ("worker_daemon" in cmd_low and "start" in cmd_low) or        ("omnipkg.isolation.worker_daemon" in cmd_low and "start" in cmd_low) or        "8pkg daemon start" in cmd_low:
         return "DAEMON_MANAGER"
     if "_idle" in cmd_low:
-        return "IDLE_WORKER_PY" + _extract_python_version(cmd, exe)
+        return "IDLE_WORKER_PY" + _extract_python_version(cmd, proc.get("exe", ""))
     m = re.search(r"tmp\w+_(.*?)__(.*?)\.py", cmd)
     if m:
-        return f"{m.group(1).replace('_','=')}=={m.group(2)} (py{_extract_python_version(cmd, exe)})"
+        return f"{m.group(1).replace('_','=')}=={m.group(2)} (py{_extract_python_version(cmd)})"
     return "OTHER"
 
 
