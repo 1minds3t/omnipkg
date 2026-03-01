@@ -7080,6 +7080,14 @@ class omnipkg:
         if per_python_config.exists() and per_python_config != global_config:
             configs_to_delete.append(per_python_config)
 
+        # Registry and setup flags so interpreter re-registers on next run
+        registry = self.config_manager.venv_path / ".omnipkg" / "interpreters" / "registry.json"
+        setup_flag = self.config_manager.venv_path / ".omnipkg" / ".setup_complete"
+        symlinks_flag = self.config_manager.venv_path / ".omnipkg" / ".symlinks_verified"
+        for p in [registry, setup_flag, symlinks_flag]:
+            if p.exists():
+                configs_to_delete.append(p)
+
         if not configs_to_delete:
             safe_print(_("✅ No configuration files found. Nothing to do."))
             return 0
