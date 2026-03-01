@@ -724,18 +724,13 @@ class ConfigManager:
                 self._register_all_interpreters(self.venv_path)
 
     def _ensure_interpreter_registered(self, interpreter_path: Path, version: str):
-        """
-        Simple registration of an interpreter without symlinking or moving files.
-        Used by the new dispatcher architecture.
-        """
         managed_interpreters_dir = self.venv_path / ".omnipkg" / "interpreters"
         managed_interpreters_dir.mkdir(parents=True, exist_ok=True)
         registry_path = managed_interpreters_dir / "registry.json"
-        
-        # Determine actual path (resolve symlinks if needed, but keep original location)
-        interpreter_resolved = interpreter_path.resolve()
-        
-        # Load registry
+
+        # Keep original path — do NOT resolve symlinks (breaks macOS venv/framework separation)
+        interpreter_stored = interpreter_path
+
         registry_data = {"interpreters": {}}
         if registry_path.exists():
             try:
@@ -743,13 +738,11 @@ class ConfigManager:
                     registry_data = json.load(f)
             except (json.JSONDecodeError, IOError):
                 pass
-        
-        # Update registry if missing or changed
+
         current_entry = registry_data["interpreters"].get(version)
-        if current_entry != str(interpreter_resolved):
-            registry_data["interpreters"][version] = str(interpreter_resolved)
+        if current_entry != str(interpreter_stored):
+            registry_data["interpreters"][version] = str(interpreter_stored)
             registry_data["last_updated"] = datetime.now().isoformat()
-            
             with open(registry_path, "w") as f:
                 json.dump(registry_data, f, indent=4)
                 
