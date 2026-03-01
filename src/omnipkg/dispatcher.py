@@ -941,16 +941,26 @@ def spawn_swap_shell(version: str, python_path: Path, pkg_instance) -> int:
     elif "zsh" in shell_name:
         user_rc = Path.home() / ".zshrc"
         system_rc = Path("/etc/zshrc")
+    # NEW
     else:
-        # fish, sh, etc. — fall back to simple interactive execle
-        safe_print(_("🐚 Spawning shell... (Type 'exit' to return)"))
-        safe_print(f"   🐍 Python {version} context active (via shims)")
+        # fish: has its own config mechanism, -i is enough since env is inherited
+        # git bash (MINGW): IS bash under the hood — shell_name will be "bash",
+        #   so it won't reach here. But MSYS2/cygwin bash also resolves to "bash".
+        # sh / dash / ksh: no rcfile concept, -i + inherited env is the best we can do.
+        # tcsh / csh: sourcing works differently, -i is safest fallback.
+        if "fish" in shell_name:
+            safe_print(_("🐚 Entering Python {} swap context (fish)...").format(version))
+            safe_print(f"   🐍 Python {version} active — type 'exit' to return")
+            safe_print(f"   ⚠️  Fish shell: aliases may not load. Run 'source ~/.config/fish/config.fish' if needed.")
+        else:
+            safe_print(_("🐚 Entering Python {} swap context...").format(version))
+            safe_print(f"   🐍 Python {version} active — type 'exit' to return")
+            safe_print(f"   ⚠️  Shell '{shell_name}' not fully supported — env vars active but aliases may not load.")
         try:
-            # For non-bash/zsh, just set env and exec interactive
             os.execle(shell, shell_name, "-i", new_env)
         except Exception as e:
             safe_print(_("❌ Failed to spawn shell: {}").format(e))
-        return 1  # Only reached on execle failure
+        return 1
 
     # Write temp rcfile
     import tempfile as _tempfile
@@ -998,10 +1008,24 @@ def spawn_swap_shell(version: str, python_path: Path, pkg_instance) -> int:
     safe_print(_(f"🐚 Entering Python {version} swap context..."))
     safe_print(f"   🐍 Python {version} active — type 'exit' to return")
 
+    # NEW — zsh uses ZDOTDIR trick; bash keeps --rcfile
     try:
-        # --rcfile loads ONLY our file (which sources user rc first).
-        # This is the correct way to get both user aliases AND our injected env.
-        os.execle(shell, shell_name, "--rcfile", rcfile_path, new_env)
+        if "zsh" in shell_name:
+            import tempfile as _td, shutil as _shutil
+            zdotdir = _td.mkdtemp(prefix="omnipkg_zdot_")
+            zshrc = Path(zdotdir) / ".zshrc"
+            _shutil.copy2(rcfile_path, str(zshrc))
+            os.unlink(rcfile_path)
+            content = zshrc.read_text()
+            content = content.replace(
+                f'rm -f "{rcfile_path}" 2>/dev/null',
+                f'rm -rf "{zdotdir}" 2>/dev/null'
+            )
+            zshrc.write_text(content)
+            new_env["ZDOTDIR"] = zdotdir
+            os.execle(shell, shell_name, "-i", new_env)
+        else:
+            os.execle(shell, shell_name, "--rcfile", rcfile_path, new_env)
     except Exception as e:
         safe_print(_("❌ Failed to spawn shell: {}").format(e))
         try:
