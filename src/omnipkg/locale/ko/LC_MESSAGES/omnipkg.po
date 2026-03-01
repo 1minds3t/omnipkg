@@ -456,7 +456,7 @@ msgstr "📝 환경을 복원하기 위해 다음 조치가 취해집니다."
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:13037
 msgid "🚫 Revert cancelled."
-msgstr "∎ 취소되었습니다."
+msgstr "🚫 취소된 복원."
 
 #: /home/minds3t/omnipkg/src/omnipkg/core.py:13039
 msgid ""
