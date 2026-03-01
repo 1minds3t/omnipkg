@@ -227,9 +227,11 @@ def _maybe_install_c_dispatcher():
 
     # Already a binary? (C dispatcher never calls dispatcher.py on happy path)
     # This runs only when Python dispatcher is invoked — i.e. pip just reinstalled us.
-    c_source = Path(__file__).parent.parent.parent / "tools" / "dispatcher_bin" / "dispatcher.c"
+    # NEW — also check next to this file (works when installed as package data)
+    _here = Path(__file__).parent
+    c_source = _here / "dispatcher.c"
     if not c_source.exists():
-        return  # not a dev install, skip
+        return
 
     if not shutil.which("gcc"):
         return  # no compiler, skip silently
@@ -264,6 +266,7 @@ def _maybe_install_c_dispatcher():
         if binary_tmp.exists():
             try: binary_tmp.unlink()
             except: pass
+
 def determine_target_python() -> Path:
     """
     PRIORITY ORDER:

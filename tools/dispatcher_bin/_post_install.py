@@ -48,7 +48,22 @@ def install_dispatcher_binary(install_dir: Path = None) -> bool:
                 replaced.append(name)
 
         binary_tmp.unlink()
-
+        # After the binary is installed, pre-create all versioned shims
+        ALL_VERSIONS = ["37","38","39","310","311","312","313","314","315"]
+        for flat in ALL_VERSIONS:
+            for base in ("8pkg", "omnipkg"):
+                src = install_dir / base
+                if not src.exists():
+                    continue
+                if sys.platform == "win32":
+                    link = install_dir / f"{base}{flat}.bat"
+                    maj, min_ = flat[0], flat[1:]
+                    link.write_text(f'@echo off\r\n"{src}" --python {maj}.{min_} %*\r\n', encoding="ascii")
+                else:
+                    link = install_dir / f"{base}{flat}"
+                    if link.exists() or link.is_symlink():
+                        link.unlink()
+                    link.symlink_to(src.name)
         if replaced:
             print(f"  [dispatcher] ✅ C dispatcher installed → {', '.join(replaced)} in {install_dir}")
             return True
@@ -61,7 +76,7 @@ def install_dispatcher_binary(install_dir: Path = None) -> bool:
             binary_tmp.unlink()
         print(f"  [dispatcher] Skipped: {e}")
         return False
-
+   
 
 if __name__ == "__main__":
     install_dispatcher_binary()
