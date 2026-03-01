@@ -228,7 +228,7 @@ class FlaskAppManager:
         self.validate_only = validate_only
         self.process: Optional[subprocess.Popen] = None
         self.is_running = False
-        self.shutdown_file = Path(tempfile.gettempdir()) / f"flask_shutdown_{port}.signal"
+        self.shutdown_file = Path(tempfile.gettempdir()).resolve() / f"flask_shutdown_{port}.signal"
 
         if self.shutdown_file.exists():
             self.shutdown_file.unlink()
