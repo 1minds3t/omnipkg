@@ -41,8 +41,21 @@ def build_editable(wheel_directory, config_settings=None, metadata_directory=Non
     from setuptools.build_meta import build_editable as _build_editable
     result = _build_editable(wheel_directory, config_settings, metadata_directory)
     _run_post_install()
+    _heal_entrypoints()  # add this
     return result
 
+def _heal_entrypoints():
+    """Ensure all entry point scripts exist after editable install."""
+    import shutil
+    bin_dir = Path(sys.executable).parent
+    base = bin_dir / "omnipkg"
+    if not base.exists():
+        return
+    for name in ["8pkg", "OMNIPKG", "8PKG"]:
+        target = bin_dir / name
+        if not target.exists():
+            shutil.copy2(str(base), str(target))
+            print(f"  [build_hooks] healed missing entrypoint: {name}")
 
 # Override build_wheel — this is what `pip install .` (non-editable) calls
 def build_wheel(wheel_directory, config_settings=None, metadata_directory=None):
