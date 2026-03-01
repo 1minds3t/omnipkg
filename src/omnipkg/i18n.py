@@ -265,16 +265,14 @@ class Translator:
     def __init__(self):
         self._translator = lambda s: s
         self.current_lang = "en"
+        self._debug_logged = False  # suppress repeat debug output
         # DON'T auto-call set_language here!
 
     def set_language(self, lang_code=None):
-        debug = os.environ.get("OMNIPKG_DEBUG") == "1"
-        
+        debug = os.environ.get("OMNIPKG_DEBUG") == "1" and not self._debug_logged
+
         if debug:
-            print(_('[DEBUG-I18N] ======== set_language() called ========'), file=sys.stderr)
-            print(_('[DEBUG-I18N] lang_code parameter: {!r}').format(lang_code), file=sys.stderr)
-            print(_('[DEBUG-I18N] OMNIPKG_LANG env var: {!r}').format(os.environ.get('OMNIPKG_LANG')), file=sys.stderr)
-            print(_('[DEBUG-I18N] current_lang before: {!r}').format(self.current_lang), file=sys.stderr)
+            print(f'[DEBUG-I18N] set_language({lang_code!r}) lang={os.environ.get("OMNIPKG_LANG")!r} current={self.current_lang!r}', file=sys.stderr)
         
         try:
             try:
@@ -285,21 +283,13 @@ class Translator:
                 import pathlib
                 localedir = str(pathlib.Path(__file__).parent / "locale")
             
-            if debug:
-                print(_('[DEBUG-I18N] localedir: {}').format(localedir), file=sys.stderr)
-
             # Priority order: passed lang_code > env var > system locale
             if lang_code is None:
                 lang_code = os.environ.get("OMNIPKG_LANG")
-                if debug:
-                    print(_('[DEBUG-I18N] After checking env, lang_code: {!r}').format(lang_code), file=sys.stderr)
-            
             if lang_code is None:
                 import locale
                 lang_env = locale.getlocale()[0] or "en_US"
                 lang_code = lang_env.split(".")[0]
-                if debug:
-                    print(_('[DEBUG-I18N] Using system locale: {!r}').format(lang_code), file=sys.stderr)
 
             # Normalize: handles wrong case, hyphen/underscore, etc.
             normalized_code = normalize_language_code(lang_code) or lang_code
@@ -312,8 +302,7 @@ class Translator:
             langs_to_try.append("en")
 
             if debug:
-                print(_('[DEBUG-I18N] normalized_code: {!r}').format(normalized_code), file=sys.stderr)
-                print(f"[DEBUG-I18N] langs_to_try: {langs_to_try}", file=sys.stderr)
+                print(f'[DEBUG-I18N] localedir={localedir} normalized={normalized_code!r} langs={langs_to_try}', file=sys.stderr)
 
             translation = gettext.translation(
                 "omnipkg", localedir=localedir, languages=langs_to_try, fallback=True
@@ -332,9 +321,8 @@ class Translator:
                 self.current_lang = "en"
             
             if debug:
-                print(_('[DEBUG-I18N] Translation loaded successfully'), file=sys.stderr)
-                print(_('[DEBUG-I18N] current_lang after: {!r}').format(self.current_lang), file=sys.stderr)
-                print(_('[DEBUG-I18N] ======== set_language() complete ========'), file=sys.stderr)
+                print(f'[DEBUG-I18N] set_language done -> {self.current_lang!r}', file=sys.stderr)
+                self._debug_logged = True
                 
         except Exception as e:
             if debug:
@@ -376,8 +364,7 @@ class Translator:
 # --- Step 3: Create the global instance that your app will import ---
 debug = os.environ.get("OMNIPKG_DEBUG") == "1"
 if debug:
-    print(f'[DEBUG-I18N] ======== Creating _ instance ========', file=sys.stderr)
-    print(f'[DEBUG-I18N] OMNIPKG_LANG at module load: {os.environ.get("OMNIPKG_LANG")!r}', file=sys.stderr)
+    print(f'[DEBUG-I18N] i18n init OMNIPKG_LANG={os.environ.get("OMNIPKG_LANG")!r}', file=sys.stderr)
 
 _ = Translator()
 
@@ -387,21 +374,10 @@ if _initial_lang:
     # Normalize at the source so everything downstream gets the canonical code
     _initial_lang = normalize_language_code(_initial_lang) or _initial_lang
     os.environ["OMNIPKG_LANG"] = _initial_lang
-if debug:
-    print(f"[DEBUG-I18N] _initial_lang from env: {_initial_lang!r}", file=sys.stderr)
-
-if _initial_lang:
-    if debug:
-        print(_('[DEBUG-I18N] Calling _.set_language({!r})').format(_initial_lang), file=sys.stderr)
-    _.set_language(_initial_lang)
-else:
-    if debug:
-        print(f"[DEBUG-I18N] No OMNIPKG_LANG set, calling _.set_language() with defaults", file=sys.stderr)
-    _.set_language()
+_.set_language(_initial_lang)
 
 if debug:
-    print(_('[DEBUG-I18N] Final _.current_lang: {!r}').format(_.current_lang), file=sys.stderr)
-    print(_('[DEBUG-I18N] ======== i18n module loaded ========'), file=sys.stderr)
+    print(f'[DEBUG-I18N] i18n loaded -> lang={_.current_lang!r}', file=sys.stderr)
 
 
 # Convenience function to get all supported language codes
