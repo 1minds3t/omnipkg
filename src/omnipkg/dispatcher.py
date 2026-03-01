@@ -887,6 +887,7 @@ def spawn_swap_shell(version: str, python_path: Path, pkg_instance) -> int:
             safe_print(_("      $env:OMNIPKG_DEBUG = '1'   (PowerShell)"))
         import subprocess  # <--- ADD THIS LINE
         try:
+            new_env["PATH"] = str(scripts_dir) + os.pathsep + new_env["PATH"]
             proc = subprocess.Popen([shell, "/K"], env=new_env)
             proc.wait()
         except Exception as e:
