@@ -309,22 +309,30 @@ def determine_target_python() -> Path:
     if not swap_active:
         script_path = Path(sys.argv[0]).resolve()
         script_dir = script_path.parent
-        config_path = script_dir / ".omnipkg_config.json"
 
-        if config_path.exists():
-            try:
-                with open(config_path, "r") as f:
-                    config = json.load(f)
-                python_exe = config.get("python_executable")
-                if python_exe:
-                    python_path = Path(python_exe)
-                    if python_path.exists():
-                        if debug_mode:
-                            print(f'[DEBUG-DISPATCH] ✅ Self-aware: {python_path}', file=sys.stderr)
-                        return python_path
-            except Exception as e:
-                if debug_mode:
-                    print(f'[DEBUG-DISPATCH] Config read error: {e}', file=sys.stderr)
+        # On Windows, 8pkg.exe lives in Scripts\ but the config is written
+        # one level up at the env root (debug\.omnipkg_config.json).
+        # Check both: Scripts\.omnipkg_config.json (Linux/managed interpreters)
+        # and Scripts\..\omnipkg_config.json (Windows conda/venv root).
+        config_candidates = [script_dir / ".omnipkg_config.json"]
+        if sys.platform == "win32":
+            config_candidates.append(script_dir.parent / ".omnipkg_config.json")
+
+        for config_path in config_candidates:
+            if config_path.exists():
+                try:
+                    with open(config_path, "r") as f:
+                        config = json.load(f)
+                    python_exe = config.get("python_executable")
+                    if python_exe:
+                        python_path = Path(python_exe)
+                        if python_path.exists():
+                            if debug_mode:
+                                print(f'[DEBUG-DISPATCH] ✅ Self-aware ({config_path}): {python_path}', file=sys.stderr)
+                            return python_path
+                except Exception as e:
+                    if debug_mode:
+                        print(f'[DEBUG-DISPATCH] Config read error ({config_path}): {e}', file=sys.stderr)
 
     # ─────────────────────────────────────────────────────────────
     # Priority 2: OMNIPKG_PYTHON — only inside an active swap shell.
