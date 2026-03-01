@@ -38,14 +38,23 @@ IS_WINDOWS = platform.system() == "Windows"
 def _normalize_exe(path: str) -> str:
     """
     Normalize a Python executable path for reliable cross-platform comparison.
-    On Windows, Path.resolve() can differ based on symlinks, junction points,
-    and drive-letter casing. We use a consistent lowercase absolute path.
+
+    On Windows, Path.resolve() is needed to canonicalize drive-letter casing,
+    junction points, and short 8.3 names — so we keep resolve() + lowercase.
+
+    On macOS/Linux we MUST NOT call resolve() because venv Python binaries are
+    symlinks to the system/framework interpreter (e.g. on macOS the venv's
+    python3.11 symlinks to /Library/Frameworks/Python.framework/.../python3.11).
+    resolve() would follow that symlink and return the framework path, causing
+    the daemon to spawn idle workers under the *system* Python rather than the
+    venv Python — workers that crash immediately because omnipkg isn't installed
+    there.  absolute() makes the path absolute without following symlinks.
     """
     try:
-        p = Path(path).resolve()
         if IS_WINDOWS:
-            return str(p).lower()
-        return str(p)
+            return str(Path(path).resolve()).lower()
+        # Non-Windows: make absolute but preserve symlinks so we keep the venv path.
+        return str(Path(path).absolute())
     except Exception:
         return path
 
@@ -169,9 +178,10 @@ def _resolve_target_paths(cm, python_exe_normalized: str) -> dict:
         except Exception:
             pass
 
-        # Try 2: original-case resolved path (without lowercasing)
+        # Try 2: original-case path without following symlinks (without lowercasing).
+        # Use absolute() not resolve() so we don't chase venv symlinks to system Python.
         try:
-            raw_path = str(Path(python_exe_normalized).resolve())
+            raw_path = str(Path(python_exe_normalized).absolute() if not IS_WINDOWS else Path(python_exe_normalized).resolve())
             paths = cm._get_paths_for_interpreter(raw_path) or {}
             if paths:
                 return paths
@@ -198,9 +208,10 @@ def _resolve_target_paths(cm, python_exe_normalized: str) -> dict:
     # IMPORTANT: Pass the original-case path, not the lowercased normalized key,
     # because pip needs real filesystem paths on Windows.
     # Try to reconstruct original case from the normalized path.
+    # Use absolute() not resolve() on non-Windows to avoid following venv symlinks.
     original_case_path = python_exe_normalized  # start with what we have
     try:
-        raw = str(Path(python_exe_normalized).resolve())
+        raw = str(Path(python_exe_normalized).resolve() if IS_WINDOWS else Path(python_exe_normalized).absolute())
         if Path(raw).exists():
             original_case_path = raw
     except Exception:
@@ -249,7 +260,7 @@ def _ensure_worker_config(python_exe: str, site_packages: str, multiversion_base
                 pass  # Fall through to rewrite
 
         config_data = {
-            "python_executable": str(exe_path.resolve()),
+            "python_executable": str(exe_path.resolve() if IS_WINDOWS else exe_path.absolute()),
             "site_packages_path": site_packages,
             "multiversion_base": multiversion_base,
             "install_strategy": "stable-main",
@@ -4122,7 +4133,7 @@ class WorkerPool:
         For dirty packages (torch/tf/jax) the worker is pinned to the
         exact spec and python_exe — it will never be reassigned.
         """
-        python_exe = str(Path(python_exe or sys.executable).resolve())
+        python_exe = str(Path(python_exe or sys.executable).resolve() if IS_WINDOWS else Path(python_exe or sys.executable).absolute())
         worker_key = f"{spec}::{python_exe}"
         dirty = _spec_is_dirty(spec)
 
