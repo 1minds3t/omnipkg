@@ -137,8 +137,6 @@ dev = [
 [project.scripts]
 omnipkg = "omnipkg.dispatcher:main"
 8pkg = "omnipkg.dispatcher:main"
-OMNIPKG = "omnipkg.dispatcher:main"
-8PKG = "omnipkg.dispatcher:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
