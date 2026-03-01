@@ -90,12 +90,13 @@ def release_port(port: int):
 def is_port_actually_free(port: int) -> bool:
     """
     Double-check if a port is actually free (not just unreserved).
+    NOTE: Do NOT set SO_REUSEADDR here — on Linux it allows double-binds,
+    making already-bound ports falsely appear free.
     """
     try:
         if is_windows():
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             try:
-                sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
                 sock.bind(("127.0.0.1", port))
                 sock.close()
                 return True
@@ -104,7 +105,6 @@ def is_port_actually_free(port: int) -> bool:
                 return False
         else:
             with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as sock:
-                sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
                 sock.bind(("127.0.0.1", port))
                 return True
     except OSError:
@@ -116,20 +116,25 @@ def is_port_actually_free(port: int) -> bool:
 def find_free_port(start_port=5000, max_attempts=100, reserve=True) -> int:
     """
     Find an available port with concurrent safety.
+    The reservation check-and-set must be atomic inside the lock to prevent
+    the TOCTOU race where multiple threads pass the free check simultaneously.
     """
     for port in range(start_port, start_port + max_attempts):
         with _port_lock:
             if port in _reserved_ports:
                 continue
-
-        if not is_port_actually_free(port):
-            continue
-
-        if reserve:
-            if not reserve_port(port, duration=10.0):
+            if not is_port_actually_free(port):
                 continue
+            if reserve:
+                _reserved_ports.add(port)
+                _port_pids[port] = os.getpid()
 
-        return port
+                def _release_later(p=port):
+                    time.sleep(10.0)
+                    release_port(p)
+
+                threading.Thread(target=_release_later, daemon=True).start()
+            return port
 
     raise RuntimeError(
         f"Could not find free port in range {start_port}-{start_port + max_attempts}"
