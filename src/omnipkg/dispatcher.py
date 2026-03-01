@@ -867,6 +867,28 @@ def spawn_swap_shell(version: str, python_path: Path, pkg_instance) -> int:
                 encoding="utf-8",
             )
 
+        # 8pkg / omnipkg shims — route ALL bare 8pkg/omnipkg calls through the
+        # swapped interpreter's own exe so the dispatcher sees the right Python.
+        # Without these, `8pkg info python` resolves to the conda Scripts\8pkg.exe
+        # (3.12) instead of the swapped interpreter's 8pkg (3.11).
+        for _shim_name in ["8pkg", "omnipkg"]:
+            _target_exe = python_path.parent / "Scripts" / f"{_shim_name}.exe"
+            if _target_exe.exists():
+                (scripts_dir / f"{_shim_name}.bat").write_text(
+                    f'@echo off\n"{_target_exe}" --python {version} %*\n',
+                    encoding="utf-8",
+                )
+
+        # CRITICAL: Set swap context vars in new_env so the dispatcher's
+        # Priority 4 (OMNIPKG_PYTHON) fires correctly inside the child shell.
+        # On Unix these are set inside the rcfile; on Windows they must be in
+        # the inherited environment since cmd.exe has no rcfile mechanism.
+        # _OMNIPKG_SWAP_ACTIVE is the gate that prevents stale OMNIPKG_PYTHON
+        # from leaking — both must be set together.
+        new_env["OMNIPKG_PYTHON"] = version
+        new_env["OMNIPKG_VENV_ROOT"] = str(original_venv)
+        new_env["_OMNIPKG_SWAP_ACTIVE"] = "1"
+
         if debug_mode:
             safe_print(f"[DEBUG-SWAP] Wrote python.bat  -> {scripts_dir / 'python.bat'}", file=sys.stderr)
             safe_print(f"[DEBUG-SWAP] Wrote python3.bat -> {scripts_dir / 'python3.bat'}", file=sys.stderr)
@@ -894,7 +916,7 @@ def spawn_swap_shell(version: str, python_path: Path, pkg_instance) -> int:
             safe_print(_("❌ Failed to spawn shell: {}").format(e))
             return 1
         finally:
-            for var in ["OMNIPKG_PYTHON", "OMNIPKG_ACTIVE_PYTHON", "OMNIPKG_VENV_ROOT"]:
+            for var in ["OMNIPKG_PYTHON", "OMNIPKG_ACTIVE_PYTHON", "OMNIPKG_VENV_ROOT", "_OMNIPKG_SWAP_ACTIVE"]:
                 os.environ.pop(var, None)
 
         return 0
