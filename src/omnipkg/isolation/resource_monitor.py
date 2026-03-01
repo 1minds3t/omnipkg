@@ -85,7 +85,7 @@ def get_daemon_worker_info():
             if m:
                 py_ver = m.group(1)
                 break
-            m = re.search(r"python3[\.\-_](\d+)", str(search_str), re.IGNORECASE)
+            m = re.search(r"python3[\-_](\d+)", str(search_str), re.IGNORECASE)
             if m:
                 py_ver = "3." + m.group(1)
                 break
@@ -202,21 +202,20 @@ def get_gpu_summary():
 def _extract_python_version(cmd: str, exe: str = "") -> str:
     """
     Pull pythonX.Y or cpython-X.Y out of a command string or exe path.
-    Checks all available strings so Windows native python.exe (no version in name)
-    is resolved via the cpython-X.Y.Z directory in its path.
+    Checks exe first (cleaner signal), then full cmd string.
     """
-    for s in [cmd, exe]:
+    for s in [exe, cmd]:  # exe first — full path, less noise
         if not s:
             continue
         # cpython-3.9.23 or cpython-3.11.9 style (managed interpreter paths)
         m = re.search(r"cpython[\-_](3\.\d+)", s, re.IGNORECASE)
         if m:
             return m.group(1)
-        # python3.11 or python3.9 with explicit minor version
+        # python3.11 with explicit minor — matches both path and argv
         m = re.search(r"python(3\.\d+)", s, re.IGNORECASE)
         if m:
             return m.group(1)
-        # python3-11 or python3_11 style separators
+        # python3-11 or python3_11 separator style
         m = re.search(r"python3[\-_](\d+)", s, re.IGNORECASE)
         if m:
             return "3." + m.group(1)
@@ -225,16 +224,27 @@ def _extract_python_version(cmd: str, exe: str = "") -> str:
 def identify_worker_type(proc, pid_map):
     pid = proc["pid"]
     cmd = proc["cmd"]
+    exe = proc.get("exe", "")
+
+    # Last-resort: if exe is empty (macOS SIP can block it), try psutil directly
+    if not exe and HAS_PSUTIL:
+        try:
+            exe = psutil.Process(int(pid)).exe() or ""
+        except Exception:
+            pass
+
     if pid in pid_map:
         return pid_map[pid]
     cmd_low = cmd.lower()
-    if ("worker_daemon" in cmd_low and "start" in cmd_low) or        ("omnipkg.isolation.worker_daemon" in cmd_low and "start" in cmd_low) or        "8pkg daemon start" in cmd_low:
+    if ("worker_daemon" in cmd_low and "start" in cmd_low) or \
+            ("omnipkg.isolation.worker_daemon" in cmd_low and "start" in cmd_low) or \
+            "8pkg daemon start" in cmd_low:
         return "DAEMON_MANAGER"
     if "_idle" in cmd_low:
-        return "IDLE_WORKER_PY" + _extract_python_version(cmd, proc.get("exe", ""))
+        return "IDLE_WORKER_PY" + _extract_python_version(cmd, exe)
     m = re.search(r"tmp\w+_(.*?)__(.*?)\.py", cmd)
     if m:
-        return f"{m.group(1).replace('_','=')}=={m.group(2)} (py{_extract_python_version(cmd)})"
+        return f"{m.group(1).replace('_','=')}=={m.group(2)} (py{_extract_python_version(cmd, exe)})"
     return "OTHER"
 
 
