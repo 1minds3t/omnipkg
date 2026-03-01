@@ -3095,6 +3095,17 @@ class ConfigManager:
             return path
         
         # Priority 2: Per-Python config next to the executable
+        # Check UNRESOLVED path first — on macOS, venv python is a symlink to the
+        # framework python. We want the config next to the symlink (venv), not the target.
+        exe_path_raw = Path(sys.executable)
+        per_python_config_raw = exe_path_raw.parent / ".omnipkg_config.json"
+        if per_python_config_raw.exists():
+            if debug_mode:
+                print(f'[DEBUG-CONFIG] Python exe: {exe_path_raw}', file=sys.stderr)
+                print(f"[DEBUG-CONFIG] Looking for config at: {per_python_config_raw}", file=sys.stderr)
+                safe_print(f'[DEBUG-CONFIG] ✅ Using per-Python config: {per_python_config_raw}', file=sys.stderr)
+            return per_python_config_raw
+
         exe_path = Path(sys.executable).resolve()
         exe_dir = exe_path.parent
         
