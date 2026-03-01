@@ -1106,53 +1106,33 @@ class ConfigManager:
         return None
 
     def _find_project_root(self):
-        """
-        Find the project root directory by looking for setup.py, pyproject.toml, or .git
-        """
         current_dir = Path.cwd()
         module_dir = Path(__file__).parent.parent
         search_paths = [current_dir, module_dir]
-
         for start_path in search_paths:
             for path in [start_path] + list(start_path.parents):
-                # Check for pyproject.toml or setup.py FIRST (actual Python projects)
                 if (path / "pyproject.toml").exists() or (path / "setup.py").exists():
-                    # Verify it's actually an omnipkg project
                     if (path / "pyproject.toml").exists():
-                        if (path / "pyproject.toml").exists():
-                            try:
-                                # Conditional import - handle both Python < 3.11 and >= 3.11
-                                if sys.version_info < (3, 11):
-                                    import tomli
-                                else:
-                                    import tomllib as tomli
-
-                                with open(path / "pyproject.toml", "rb") as f:
-                                    data = tomli.load(f)
-                                    if data.get("project", {}).get("name") == "omnipkg":
-                                        safe_print(_("     (Found project root: {})").format(path))
-                                        return path
-                            except (ImportError, ModuleNotFoundError):
-                                # tomli/tomllib not available - just check if file exists
-                                # Assume any pyproject.toml in the search path is omnipkg's
-                                safe_print(_("     (Found project root: {})").format(path))
+                        try:
+                            if sys.version_info < (3, 11):
+                                import tomli
+                            else:
+                                import tomllib as tomli
+                            with open(path / "pyproject.toml", "rb") as f:
+                                data = tomli.load(f)
+                            if data.get("project", {}).get("name") == "omnipkg":
                                 return path
-                            except Exception:
-                                # Any other error parsing - skip this candidate
-                                continue
-
-                    # If we have setup.py, assume it's valid
+                        except (ImportError, ModuleNotFoundError):
+                            return path
+                        except Exception:
+                            continue
                     elif (path / "setup.py").exists():
-                        # Quick heuristic: check if setup.py mentions omnipkg
                         try:
                             setup_content = (path / "setup.py").read_text()
                             if "omnipkg" in setup_content:
-                                safe_print(_("     (Found project root: {})").format(path))
                                 return path
                         except Exception:
                             continue
-
-        safe_print(_("     (No project root found)"))
         return None
 
     def _install_essential_packages(self, python_exe: Path):
@@ -2984,10 +2964,10 @@ class ConfigManager:
         config_data.update({
             "python_version": version,
             "python_version_short": version,   # ← was `major_minor`, which doesn't exist
-            "bin_directory": str(bin_dir.resolve()),
+            "bin_directory": str(bin_dir), 
             "created_at": datetime.now().isoformat(),
             "managed_by_omnipkg": True,
-            "venv_root": str(self.venv_path.resolve()),
+            "venv_root": str(self.venv_path), 
         })
         try:
             config_path.parent.mkdir(parents=True, exist_ok=True)
