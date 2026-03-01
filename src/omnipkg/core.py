@@ -7073,33 +7073,44 @@ class omnipkg:
 
     def reset_configuration(self, force: bool = False) -> int:
         """
-        Deletes the config.json file to allow for a fresh setup.
+        Deletes the config files to allow for a fresh setup.
         """
-        config_path = Path.home() / ".config" / "omnipkg" / "config.json"
-        if not config_path.exists():
-            safe_print(_("✅ Configuration file does not exist. Nothing to do."))
+        configs_to_delete = []
+
+        # Legacy global config
+        global_config = Path.home() / ".config" / "omnipkg" / "config.json"
+        if global_config.exists():
+            configs_to_delete.append(global_config)
+
+        # Per-python config (the one actually being used)
+        per_python_config = self.config_manager.config_path
+        if per_python_config.exists() and per_python_config != global_config:
+            configs_to_delete.append(per_python_config)
+
+        if not configs_to_delete:
+            safe_print(_("✅ No configuration files found. Nothing to do."))
             return 0
-        safe_print(_("🗑️  This will permanently delete your configuration file at:"))
-        safe_print(_("   {}").format(config_path))
+
+        safe_print(_("🗑️  This will permanently delete:"))
+        for p in configs_to_delete:
+            safe_print(_("   {}").format(p))
+
         if not force:
             confirm = input(_("\n🤔 Are you sure you want to proceed? (y/N): ")).lower().strip()
             if confirm != "y":
                 safe_print(_("🚫 Reset cancelled."))
                 return 1
+
         try:
-            config_path.unlink()
-            safe_print(_("✅ Configuration file deleted successfully."))
+            for p in configs_to_delete:
+                p.unlink()
+            safe_print(_("✅ Configuration files deleted successfully."))
             safe_print("\n" + "─" * 60)
-            safe_print(
-                _(
-                    "🚀 The next time you run `omnipkg`, you will be guided through the first-time setup."
-                )
-            )
+            safe_print(_("🚀 The next time you run `omnipkg`, you will be guided through the first-time setup."))
             safe_print("─" * 60)
             return 0
         except OSError as e:
             safe_print(_("❌ Error: Could not delete configuration file: {}").format(e))
-            safe_print(_("   Please check your file permissions for {}").format(config_path))
             return 1
 
     def reset_knowledge_base(self, force: bool = False) -> int:
