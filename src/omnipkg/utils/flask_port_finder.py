@@ -340,8 +340,13 @@ threading.Thread(target=periodic_check, daemon=True).start()
 
     def wait_for_ready(self, timeout: float = 10.0) -> bool:
         """Wait for Flask app to be ready to accept connections."""
+        import sys as _sys
         start_time = time.time()
         while time.time() - start_time < timeout:
+            # Check if process died early — no point waiting if it crashed
+            if self.process is not None and self.process.poll() is not None:
+                safe_print(_('⚠️  Flask process exited early with code {}').format(self.process.returncode))
+                return False
             try:
                 with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
                     sock.settimeout(0.5)
@@ -349,11 +354,15 @@ threading.Thread(target=periodic_check, daemon=True).start()
                     if result == 0:
                         safe_print(_('✅ Flask app is ready on port {}').format(self.port))
                         return True
-            except:
+            except Exception:
                 pass
             time.sleep(0.2)
 
         safe_print(_('⚠️  Flask app did not become ready within {}s').format(timeout))
+        # Log process state for debugging
+        if self.process is not None:
+            code = self.process.poll()
+            safe_print(f'   Process returncode: {code} (None=still running)')
         return False
 
 
