@@ -1057,6 +1057,29 @@ def find_absolute_venv_root(ignore_env_override: bool = False) -> Path:
             return search_dir
         search_dir = search_dir.parent
 
+    # --- Conda environment detection ---
+    # Conda envs never have pyvenv.cfg but have reliable markers:
+    #   1. $CONDA_PREFIX env var (set by `conda activate`)
+    #   2. conda-meta/ directory at the env root
+    # Check these before falling back to sys.prefix so we get the right
+    # root even when running inside a conda env that was never activated
+    # via `conda activate` (e.g. direct invocation in CI).
+    conda_prefix_env = os.environ.get("CONDA_PREFIX")
+    if conda_prefix_env:
+        conda_root = Path(conda_prefix_env)
+        if (conda_root / "conda-meta").is_dir():
+            if debug_mode:
+                print(f'[DEBUG-DISPATCH] ✅ Conda env via $CONDA_PREFIX: {conda_root}', file=sys.stderr)
+            return conda_root
+
+    # sys.prefix points at the conda env root for direct invocations
+    # (e.g. /path/to/envs/debug) — confirm it's actually conda before trusting it
+    sys_prefix_path = Path(sys.prefix)
+    if (sys_prefix_path / "conda-meta").is_dir():
+        if debug_mode:
+            print(f'[DEBUG-DISPATCH] ✅ Conda env via sys.prefix/conda-meta: {sys_prefix_path}', file=sys.stderr)
+        return sys_prefix_path
+
     # Only use sys.prefix as a last resort if all else fails.
     # In CI (GitHub Actions hostedtoolcache), there is no pyvenv.cfg so this
     # is the normal path — registry and symlinks will be under sys.prefix/.omnipkg/
