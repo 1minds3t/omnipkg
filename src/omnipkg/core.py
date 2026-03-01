@@ -1401,9 +1401,20 @@ class ConfigManager:
         safe_print(_("   ✅ New omnipkg executable created."))
 
     def _update_default_python_links(self, venv_path: Path, new_python_exe: Path):
-        """Updates the default python/python3 symlinks to point to Python 3.11."""
+        """Updates the default python/python3 to point to the venv Python."""
         safe_print(_("🔧 Updating default Python links..."))
+        safe_print(f"   [DEBUG] new_python_exe: {new_python_exe}")
+        safe_print(f"   [DEBUG] new_python_exe.resolve(): {new_python_exe.resolve()}")
+        
         bin_dir = venv_path / ("Scripts" if platform.system() == "Windows" else "bin")
+        
+        # Sanity check — refuse to link/copy a Python outside this venv
+        try:
+            new_python_exe.resolve().relative_to(venv_path.resolve())
+        except ValueError:
+            safe_print(f"   ⚠️  Refusing to update links: {new_python_exe} is outside venv {venv_path}")
+            return
+
         if platform.system() == "Windows":
             for name in ["python.exe", "python3.exe"]:
                 target = bin_dir / name
@@ -1415,7 +1426,9 @@ class ConfigManager:
                 target = bin_dir / name
                 if target.exists() or target.is_symlink():
                     target.unlink()
-                target.symlink_to(new_python_exe)
+                shutil.copy2(str(new_python_exe), str(target))
+                safe_print(f"   [DEBUG] copied {new_python_exe} -> {target}")
+
         version_tuple = self._verify_python_version(str(new_python_exe))
         version_str = (
             f"{version_tuple[0]}.{version_tuple[1]}" if version_tuple else "the new version"
