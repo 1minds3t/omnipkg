@@ -185,12 +185,16 @@ except Exception as e:
 """
 
     try:
+        env = os.environ.copy()
+        env["PYTHONIOENCODING"] = "utf-8"
+        env["PYTHONUTF8"] = "1"
         result = subprocess.run(
             [sys.executable, "-c", validation_code],
             capture_output=True,
             text=True,
+            encoding="utf-8",
             timeout=timeout,
-            env=os.environ.copy(),
+            env=env,
         )
 
         if result.returncode == 0 and "VALIDATION_SUCCESS" in result.stdout:
@@ -268,11 +272,16 @@ threading.Thread(target=periodic_check, daemon=True).start()
                 f.write(wrapper_code)
                 temp_file = f.name
 
+            popen_env = os.environ.copy()
+            popen_env["PYTHONIOENCODING"] = "utf-8"
+            popen_env["PYTHONUTF8"] = "1"
             self.process = subprocess.Popen(
                 [sys.executable, temp_file],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,
+                encoding="utf-8",
+                env=popen_env,
             )
 
             self.is_running = True
@@ -294,6 +303,12 @@ threading.Thread(target=periodic_check, daemon=True).start()
             return
 
         if self.process is None:
+            # Still clean up shutdown file even if no process (validate_only mode)
+            if self.shutdown_file.exists():
+                try:
+                    self.shutdown_file.unlink()
+                except OSError:
+                    pass
             release_port(self.port)
             return
 
