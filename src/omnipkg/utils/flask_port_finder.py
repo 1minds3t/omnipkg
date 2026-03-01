@@ -268,7 +268,7 @@ threading.Thread(target=periodic_check, daemon=True).start()
 """
 
         try:
-            with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
+            with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False, encoding="utf-8") as f:
                 f.write(wrapper_code)
                 temp_file = f.name
 
