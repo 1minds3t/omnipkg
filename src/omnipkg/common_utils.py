@@ -454,7 +454,7 @@ def sync_context_to_runtime():
 
     try:
         config_manager = ConfigManager(suppress_init_messages=True)
-        current_executable = str(Path(sys.executable).resolve())
+        current_executable = str(Path(sys.executable))
 
         if config_manager.config.get("python_executable") == current_executable:
             return  # Context is already synchronized.
