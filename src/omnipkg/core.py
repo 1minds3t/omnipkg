@@ -3108,6 +3108,13 @@ class ConfigManager:
 
         exe_path = Path(sys.executable).resolve()
         exe_dir = exe_path.parent
+        # If unresolved != resolved, we're a symlink (e.g. macOS venv -> framework python).
+        # Create a venv-specific config so we don't use the framework python's config.
+        if exe_path_raw.parent != exe_path.parent and not per_python_config_raw.exists():
+            version = f"{sys.version_info.major}.{sys.version_info.minor}"
+            self._write_interpreter_config(exe_path_raw, version)
+        if per_python_config_raw.exists():
+            return per_python_config_raw
         
         per_python_config = exe_dir / ".omnipkg_config.json"
         
