@@ -2996,6 +2996,15 @@ class ConfigManager:
             "managed_by_omnipkg": True,
             "venv_root": str(self.venv_path.resolve()),
         })
+        try:
+            config_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(config_path, "w") as _f:
+                import json as _json
+                _json.dump(config_data, _f, indent=2)
+            return config_path
+        except Exception as _e:
+            print(f"[DEBUG-CONFIG] Failed to write config to {config_path}: {_e}", file=sys.stderr)
+            return None
 
     def _get_all_interpreters_for_config(self, current_version: str, current_path: Path) -> Dict[str, str]:
         """
