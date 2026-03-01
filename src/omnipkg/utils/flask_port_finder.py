@@ -275,12 +275,11 @@ threading.Thread(target=periodic_check, daemon=True).start()
             popen_env = os.environ.copy()
             popen_env["PYTHONIOENCODING"] = "utf-8"
             popen_env["PYTHONUTF8"] = "1"
+            # Use DEVNULL not PIPE — on Windows unread PIPE buffers block the process
             self.process = subprocess.Popen(
                 [sys.executable, temp_file],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                encoding="utf-8",
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
                 env=popen_env,
             )
 
@@ -299,6 +298,11 @@ threading.Thread(target=periodic_check, daemon=True).start()
         if not self.is_running and self.process is None:
             if not self.validate_only:
                 safe_print("✅ No active process to shutdown")
+            if self.shutdown_file.exists():
+                try:
+                    self.shutdown_file.unlink()
+                except OSError:
+                    pass
             release_port(self.port)
             return
 
