@@ -38,16 +38,56 @@ IS_WINDOWS = platform.system() == "Windows"
 def _normalize_exe(path: str) -> str:
     """
     Normalize a Python executable path for reliable cross-platform comparison.
-    On Windows, Path.resolve() can differ based on symlinks, junction points,
-    and drive-letter casing. We use a consistent lowercase absolute path.
+    On Windows, Path.resolve() is needed for drive-letter/junction canonicalization.
+    On macOS/Linux we must NOT call resolve() — venv python binaries are symlinks
+    to the framework Python, so resolve() returns the framework path and loses
+    all venv context. absolute() makes the path absolute without following symlinks.
     """
     try:
-        p = Path(path).resolve()
         if IS_WINDOWS:
-            return str(p).lower()
-        return str(p)
+            return str(Path(path).resolve()).lower()
+        return str(Path(path).absolute())
     except Exception:
         return path
+
+
+def _venv_python_exe() -> str:
+    """
+    Return the venv-aware Python executable path on macOS/Linux.
+
+    Problem: when the daemon is forked, macOS resolves the venv symlink at the
+    OS level, so sys.executable becomes the framework path
+    (/Library/Frameworks/.../python3.11) and all workers get spawned with that,
+    losing venv context and causing omnipkg import failures.
+
+    Solution priority:
+      1. __PYVENV_LAUNCHER__ — set by macOS when a venv symlink was the entry point
+      2. sys.prefix / bin / pythonX.Y — reconstruct from the venv prefix
+      3. sys.executable — last resort (may be the framework path on macOS)
+    """
+    if IS_WINDOWS:
+        return sys.executable
+
+    # macOS sets this env var to the original symlink path when launching via venv
+    launcher = os.environ.get("__PYVENV_LAUNCHER__", "")
+    if launcher and os.path.exists(launcher):
+        return launcher
+
+    # Reconstruct from sys.prefix (the venv root is always correct)
+    try:
+        v = sys.version_info
+        candidates = [
+            os.path.join(sys.prefix, "bin", f"python{v.major}.{v.minor}"),
+            os.path.join(sys.prefix, "bin", f"python{v.major}"),
+            os.path.join(sys.prefix, "bin", "python"),
+        ]
+        for c in candidates:
+            if os.path.exists(c):
+                return c
+    except Exception:
+        pass
+
+    return sys.executable
 
 
 def _resolve_python_exe(python_exe: str | None) -> str:
@@ -69,7 +109,7 @@ def _resolve_python_exe(python_exe: str | None) -> str:
     so existing code that passes bad-but-working paths continues to work.
     """
     if not python_exe:
-        return sys.executable
+        return _venv_python_exe()
 
     # Already a usable path — don't touch it.
     if os.path.isabs(python_exe) and os.path.exists(python_exe):
@@ -1669,7 +1709,7 @@ class PersistentWorker:
     def __init__(self, package_spec: str = None, python_exe: str = None, verbose: bool = False, defer_setup: bool = False, site_packages: str = None, multiversion_base: str = None):
         self.package_spec = package_spec
         # Normalize so that _normalize_exe(worker.python_exe) == pool_key always matches
-        self.python_exe = _normalize_exe(python_exe or sys.executable)
+        self.python_exe = _normalize_exe(python_exe or _venv_python_exe())
         self.site_packages = site_packages
         self.multiversion_base = multiversion_base
         self.process: Optional[subprocess.Popen] = None
@@ -1745,15 +1785,6 @@ class PersistentWorker:
         # Scrub variables that cause cross-version contamination
         for var in ["PYTHONPATH", "PYTHONHOME", "PYTHONUSERBASE", "OMNIPKG_IS_DAEMON"]:
             env.pop(var, None)
-
-        # macOS VENV LAUNCHER FIX:
-        # On macOS, venv python binaries are symlinks that resolve all the way to
-        # Python.app/Contents/MacOS/Python — so Popen's cmdline[0] loses the venv path.
-        # __PYVENV_LAUNCHER__ is Apple's official mechanism: setting it to the venv
-        # python path tells the framework launcher to activate the correct venv,
-        # so sys.executable/sys.prefix point to the venv, not the framework.
-        if not IS_WINDOWS and self.python_exe:
-            env["__PYVENV_LAUNCHER__"] = self.python_exe
 
         # Inject the correct multiversion base so omnipkgLoader knows exactly where bubbles are
         if self.multiversion_base:
@@ -2443,8 +2474,11 @@ class WorkerPoolDaemon:
         # 🚀 IDLE WORKER POOL: Keep bare Python processes ready per executable
         # Key: python_exe path (ALWAYS normalized via _normalize_exe), Value: Queue of idle workers
         self.idle_pools: Dict[str, queue.Queue] = defaultdict(lambda: queue.Queue(maxsize=10))
-        # Default configuration: 3 idle workers for the daemon's own python (normalized)
-        _own_exe = _normalize_exe(sys.executable)
+        # Default configuration: 3 idle workers for the daemon's own python.
+        # Use _venv_python_exe() not sys.executable — on macOS the daemon is forked
+        # via a venv symlink so sys.executable resolves to the framework Python,
+        # causing workers to spawn without venv context and crash on omnipkg import.
+        _own_exe = _normalize_exe(_venv_python_exe())
         self.idle_config: Dict[str, int] = {_own_exe: 3}
 
         # 🚀 AUTO-DISCOVERY: Find other managed interpreters and keep 1 idle for them
