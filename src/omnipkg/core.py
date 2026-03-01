@@ -3150,7 +3150,7 @@ class ConfigManager:
                     return per_python_config
             except Exception:
                 pass
-
+        
         if debug_mode:
             print(_('[DEBUG-CONFIG] Fallback to global config: {}').format(global_config), file=sys.stderr)
         return global_config
@@ -7063,14 +7063,19 @@ class omnipkg:
         """
         configs_to_delete = []
 
-        # Legacy global config
-        global_config = Path.home() / ".config" / "omnipkg" / "config.json"
-        if global_config.exists():
-            configs_to_delete.append(global_config)
+        # Legacy global config (old single-file format)
+        legacy_global = Path.home() / ".config" / "omnipkg" / "config.json"
+        if legacy_global.exists():
+            configs_to_delete.append(legacy_global)
+
+        # Environment-specific global config (current format)
+        env_global = Path.home() / ".config" / "omnipkg" / f"{self.config_manager.env_id}.json"
+        if env_global.exists():
+            configs_to_delete.append(env_global)
 
         # Per-python config (the one actually being used)
         per_python_config = self.config_manager.config_path
-        if per_python_config.exists() and per_python_config != global_config:
+        if per_python_config.exists() and per_python_config != legacy_global and per_python_config != env_global:
             configs_to_delete.append(per_python_config)
 
         # Registry and setup flags so interpreter re-registers on next run
