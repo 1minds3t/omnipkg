@@ -187,7 +187,11 @@ def main():
     
     # NEW
     venv_root = find_absolute_venv_root()
-    is_managed = str(target_python.resolve()).startswith(str(venv_root.resolve()))
+    # NEW
+    is_managed = (
+        str(target_python).startswith(str(venv_root))
+        or str(target_python.resolve()).startswith(str(venv_root.resolve()))
+    )
     
     if debug_mode:
         print(f'[DEBUG-DISPATCH] is_managed check:', file=sys.stderr)
