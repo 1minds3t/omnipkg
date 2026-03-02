@@ -3,9 +3,9 @@ from setuptools import setup, Extension
 import platform
 
 # 🚀 Smart Flag Selection
-# Keep -march=native for Linux/Intel speed, but drop it for Apple Silicon/Windows
+# Only enable -march=native on Linux to avoid Universal build crashes on macOS
 _c_args = ["-O3"]
-if platform.system() != "Windows" and not (platform.system() == "Darwin" and platform.machine() == "arm64"):
+if platform.system() == "Linux":
     _c_args.append("-march=native")
 
 module = Extension(

@@ -88,17 +88,15 @@ if SKIP_C_EXTENSIONS:
 else:
     import platform
     
-    # 🚀 HFT OPTIMIZATION: Use hardware-specific instructions where supported
-    # Linux/Intel: -march=native enables AVX/AVX2/Atom
-    # Apple Silicon: -march=native is unsupported by Apple Clang (crashes build)
-    # Windows: Uses MSVC flags (handled separately, usually defaults are fine)
+    # Use hardware-specific instructions where supported
+    # Linux: -march=native enables AVX/AVX2/Atom
+    # macOS: -march=native fails on Universal (dual-arch) builds
+    # Windows: Uses MSVC flags (handled separately)
     
     _c_args = ["-O3"]
     
-    is_mac_arm = platform.system() == "Darwin" and platform.machine() == "arm64"
-    is_windows = platform.system() == "Windows"
-    
-    if not is_mac_arm and not is_windows:
+    # Only enable native optimization on Linux
+    if platform.system() == "Linux":
         _c_args.append("-march=native")
 
     atomic_extension = Extension(
