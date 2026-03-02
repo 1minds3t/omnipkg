@@ -32,7 +32,7 @@ def install_dispatcher_binary(install_dir: Path = None) -> bool:
     try:
         result = subprocess.run(
             ["gcc", "-O2", "-o", str(binary_tmp), str(c_source)],
-            capture_output=True, text=True
+            capture_output=True, encoding="utf-8", errors="replace"
         )
         if result.returncode != 0:
             print(f"  [dispatcher] Compile failed — using Python dispatcher")
