@@ -187,14 +187,16 @@ def main():
     
     # NEW
     venv_root = find_absolute_venv_root()
-    # NEW
-    venv_resolved = str(venv_root.resolve())
-    target_resolved = str(target_python.resolve())
-    is_managed = (
-        target_resolved.startswith(venv_resolved + "/")
-        or target_resolved.startswith(venv_resolved + os.sep)
-        or target_resolved == venv_resolved  # exact match edge case
-    )
+    is_managed = str(target_python.resolve()).startswith(str(venv_root.resolve()))
+    
+    if debug_mode:
+        print(f'[DEBUG-DISPATCH] is_managed check:', file=sys.stderr)
+        print(f'[DEBUG-DISPATCH]   target_python         : {target_python}', file=sys.stderr)
+        print(f'[DEBUG-DISPATCH]   target_python.resolve(): {target_python.resolve()}', file=sys.stderr)
+        print(f'[DEBUG-DISPATCH]   venv_root             : {venv_root}', file=sys.stderr)
+        print(f'[DEBUG-DISPATCH]   venv_root.resolve()   : {venv_root.resolve()}', file=sys.stderr)
+        print(f'[DEBUG-DISPATCH]   is_managed            : {is_managed}', file=sys.stderr)
+    
     if not target_python.exists() or not is_managed:
         # Lazy import — only needed on this path
         import subprocess
