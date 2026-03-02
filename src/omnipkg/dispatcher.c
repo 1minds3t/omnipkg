@@ -256,9 +256,6 @@ int main(int argc, char **argv) {
     int debug = (getenv("OMNIPKG_DEBUG") != NULL &&
                  strcmp(getenv("OMNIPKG_DEBUG"), "1") == 0);
 
-    if (debug)
-        fprintf(stderr, "[C-DISPATCH] ✅ C dispatcher active (built " __DATE__ ")\n");
-
     /* Force-fallback escape hatch */
     if (getenv("OMNIPKG_FORCE_PYTHON_DISPATCH")) {
         char self_real[MAX_PATH];

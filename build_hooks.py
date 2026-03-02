@@ -24,9 +24,13 @@ from setuptools.build_meta import (
 
 import sys
 from pathlib import Path
+import shutil
 
 
 def _run_post_install():
+    marker = Path(sys.executable).parent / ".omnipkg_dispatch_compiled"
+    if marker.exists():
+        marker.unlink()
     hook = Path(__file__).parent / "tools" / "dispatcher_bin" / "_post_install.py"
     if hook.exists():
         import importlib.util
@@ -54,9 +58,13 @@ def _heal_entrypoints():
         target = bin_dir / name
         # Skip if the target already exists *or* is the same file as base
         # (important on case-insensitive FS)
-        if target.exists() or target.samefile(base):
+        if target.exists():
+            if target.samefile(base):
+                continue
+            # If it exists but is different, assume it's valid and skip
             continue
-        shutil.copy2(base, target)
+
+        shutil.copy2(str(base), str(target))
         print(f" [build_hooks] healed missing entrypoint: {name}")
 
 # Override build_wheel — this is what `pip install .` (non-editable) calls
