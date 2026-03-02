@@ -152,7 +152,6 @@ exclude = [
 omnipkg = [
     "locale/**/*.mo",
     "locale/**/*.pot",
-    "dispatcher.c",       # ← add this
 ]
 
 [tool.setuptools]

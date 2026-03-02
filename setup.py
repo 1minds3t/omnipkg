@@ -86,10 +86,25 @@ if SKIP_C_EXTENSIONS:
     ext_modules = []
     cmdclass = {}
 else:
+    import platform
+    
+    # 🚀 HFT OPTIMIZATION: Use hardware-specific instructions where supported
+    # Linux/Intel: -march=native enables AVX/AVX2/Atom
+    # Apple Silicon: -march=native is unsupported by Apple Clang (crashes build)
+    # Windows: Uses MSVC flags (handled separately, usually defaults are fine)
+    
+    _c_args = ["-O3"]
+    
+    is_mac_arm = platform.system() == "Darwin" and platform.machine() == "arm64"
+    is_windows = platform.system() == "Windows"
+    
+    if not is_mac_arm and not is_windows:
+        _c_args.append("-march=native")
+
     atomic_extension = Extension(
         name="omnipkg.isolation.omnipkg_atomic",
         sources=["src/omnipkg/isolation/atomic_ops.c"],
-        extra_compile_args=["-O3", "-march=native"],
+        extra_compile_args=_c_args,
         optional=True,
     )
 
