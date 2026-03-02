@@ -187,7 +187,14 @@ def main():
     
     # NEW
     venv_root = find_absolute_venv_root()
-    is_managed = str(target_python.resolve()).startswith(str(venv_root.resolve()))
+    # NEW
+    venv_resolved = str(venv_root.resolve())
+    target_resolved = str(target_python.resolve())
+    is_managed = (
+        target_resolved.startswith(venv_resolved + "/")
+        or target_resolved.startswith(venv_resolved + os.sep)
+        or target_resolved == venv_resolved  # exact match edge case
+    )
     if not target_python.exists() or not is_managed:
         # Lazy import — only needed on this path
         import subprocess
