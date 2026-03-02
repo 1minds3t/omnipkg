@@ -230,55 +230,108 @@ def main():
         os.execv(str(target_python), exec_args)
 
 def _maybe_install_c_dispatcher():
-    """
-    On first run after a pip install, replace ourselves with the C binary.
-    Subsequent runs skip this entirely (binary doesn't call us).
-    Cost: one stat() call = ~1µs. Only actually compiles once.
-    """
     import sys, os, subprocess, shutil
     from pathlib import Path
 
-    # Already a binary? (C dispatcher never calls dispatcher.py on happy path)
-    # This runs only when Python dispatcher is invoked — i.e. pip just reinstalled us.
-    # NEW — also check next to this file (works when installed as package data)
-    _here = Path(__file__).parent
-    c_source = _here / "dispatcher.c"
-    if not c_source.exists():
+    debug = os.environ.get("OMNIPKG_DEBUG") == "1"
+
+    _here = Path(__file__).parent  # src/omnipkg/
+    if debug:
+        print(f"[C-INSTALL] __file__  = {__file__}", file=sys.stderr)
+        print(f"[C-INSTALL] _here     = {_here}", file=sys.stderr)
+
+    # Search every plausible location for dispatcher.c
+    candidates = [
+        _here / "dispatcher.c",                                              # packaged alongside dispatcher.py
+        _here.parent.parent / "tools" / "dispatcher_bin" / "dispatcher.c",  # editable: src/omnipkg/ -> repo root
+        _here.parent / "tools" / "dispatcher_bin" / "dispatcher.c",         # alternate layout
+        Path(sys.argv[0]).resolve().parent.parent / "tools" / "dispatcher_bin" / "dispatcher.c",  # relative to bin/
+    ]
+
+    c_source = None
+    for candidate in candidates:
+        if debug:
+            print(f"[C-INSTALL] checking candidate: {candidate} -> exists={candidate.exists()}", file=sys.stderr)
+        if candidate.exists():
+            c_source = candidate
+            break
+
+    if c_source is None:
+        if debug:
+            print(f"[C-INSTALL] dispatcher.c not found in any candidate — skipping", file=sys.stderr)
         return
 
-    if not shutil.which("gcc"):
-        return  # no compiler, skip silently
+    if debug:
+        print(f"[C-INSTALL] found dispatcher.c at: {c_source}", file=sys.stderr)
+
+    gcc = shutil.which("gcc")
+    if not gcc:
+        if debug:
+            print(f"[C-INSTALL] gcc not found in PATH — skipping", file=sys.stderr)
+        return
+
+    if debug:
+        print(f"[C-INSTALL] gcc = {gcc}", file=sys.stderr)
 
     bin_dir = Path(sys.executable).parent
     marker = bin_dir / ".omnipkg_dispatch_compiled"
 
-    # Check if already installed (marker file = binary is in place)
-    # Recompile if source is newer than marker
+    if debug:
+        print(f"[C-INSTALL] bin_dir = {bin_dir}", file=sys.stderr)
+        print(f"[C-INSTALL] marker  = {marker} -> exists={marker.exists()}", file=sys.stderr)
+        if marker.exists():
+            print(f"[C-INSTALL] marker mtime={marker.stat().st_mtime}  source mtime={c_source.stat().st_mtime}  up_to_date={marker.stat().st_mtime >= c_source.stat().st_mtime}", file=sys.stderr)
+
     if marker.exists() and marker.stat().st_mtime >= c_source.stat().st_mtime:
+        if debug:
+            print(f"[C-INSTALL] binary is up-to-date — skipping recompile", file=sys.stderr)
         return
 
     binary_tmp = bin_dir / "_omnipkg_dispatch_tmp"
+    if debug:
+        print(f"[C-INSTALL] compiling: gcc -O2 -o {binary_tmp} {c_source}", file=sys.stderr)
+
     try:
         r = subprocess.run(
             ["gcc", "-O2", "-o", str(binary_tmp), str(c_source)],
             capture_output=True, timeout=15
         )
+        if debug:
+            print(f"[C-INSTALL] gcc returncode={r.returncode}", file=sys.stderr)
+            if r.stdout:
+                print(f"[C-INSTALL] gcc stdout: {r.stdout.decode(errors='replace')}", file=sys.stderr)
+            if r.stderr:
+                print(f"[C-INSTALL] gcc stderr: {r.stderr.decode(errors='replace')}", file=sys.stderr)
+
         if r.returncode != 0:
+            if debug:
+                print(f"[C-INSTALL] compile FAILED — staying on Python dispatcher", file=sys.stderr)
             return
 
+        replaced = []
         for name in ("8pkg", "omnipkg", "OMNIPKG", "8PKG"):
             target = bin_dir / name
             if target.exists():
                 shutil.copy2(str(binary_tmp), str(target))
                 os.chmod(str(target), 0o755)
+                replaced.append(name)
 
         binary_tmp.unlink()
-        marker.touch()  # record that binary is installed
-        # Note: no print here — this is silent. The NEXT invocation will be fast.
-    except Exception:
+        if replaced:
+            marker.touch()
+
+        if debug:
+            print(f"[C-INSTALL] done. replaced={replaced}  marker touched={marker}", file=sys.stderr)
+            print(f"[C-INSTALL] ⚡ NEXT invocation will use the C dispatcher — re-exec now to use it immediately", file=sys.stderr)
+
+    except Exception as e:
+        if debug:
+            print(f"[C-INSTALL] EXCEPTION: {e}", file=sys.stderr)
         if binary_tmp.exists():
-            try: binary_tmp.unlink()
-            except: pass
+            try:
+                binary_tmp.unlink()
+            except Exception:
+                pass
 
 def determine_target_python() -> Path:
     """
