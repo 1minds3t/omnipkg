@@ -218,6 +218,71 @@ def main():
             print(f'❌ Adoption succeeded but interpreter still not found.', file=sys.stderr)
             sys.exit(1)
 
+    # Try daemon socket first (fast path)
+    if not is_swap_command:
+        try:
+            import socket
+            import tempfile
+            
+            sock_path = os.path.join(tempfile.gettempdir(), "omnipkg", "omnipkg_daemon.sock")
+            if sys.platform == "win32":
+                conn_file = os.path.join(tempfile.gettempdir(), "omnipkg", "daemon_connection.txt")
+                if os.path.exists(conn_file):
+                    with open(conn_file, "r") as f:
+                        conn_str = f.read().strip()
+                    if conn_str.startswith("tcp://"):
+                        host, port = conn_str[6:].split(":")
+                        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                        sock.connect((host, int(port)))
+                    else:
+                        raise ValueError()
+                else:
+                    raise ValueError()
+            else:
+                if os.path.exists(sock_path):
+                    sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+                    sock.connect(sock_path)
+                else:
+                    raise ValueError()
+                    
+            req = {
+                "type": "run_cli",
+                "argv":["omnipkg"] + sys.argv[1:],
+                "cwd": os.getcwd(),
+                "isatty": sys.stdout.isatty(),
+                "python_exe": str(target_python)
+            }
+            
+            req_bytes = json.dumps(req).encode("utf-8")
+            sock.sendall(len(req_bytes).to_bytes(8, "big") + req_bytes)
+            
+            while True:
+                len_bytes = sock.recv(8)
+                if not len_bytes:
+                    break
+                msg_len = int.from_bytes(len_bytes, "big")
+                data = bytearray()
+                while len(data) < msg_len:
+                    chunk = sock.recv(min(msg_len - len(data), 8192))
+                    if not chunk:
+                        break
+                    data.extend(chunk)
+                msg = json.loads(data.decode("utf-8"))
+                
+                if msg.get("stream") == "stdout":
+                    sys.stdout.write(msg.get("data", ""))
+                    sys.stdout.flush()
+                elif msg.get("stream") == "stderr":
+                    sys.stderr.write(msg.get("data", ""))
+                    sys.stderr.flush()
+                elif msg.get("status") == "COMPLETED":
+                    sys.exit(msg.get("exit_code", 0))
+                elif msg.get("status") == "ERROR":
+                    sys.stderr.write(msg.get("error", "") + "\n")
+                    sys.exit(msg.get("exit_code", 1))
+        except Exception:
+            pass
+
     exec_args = [str(target_python), "-m", "omnipkg.cli"] + sys.argv[1:]
 
     if debug_mode:

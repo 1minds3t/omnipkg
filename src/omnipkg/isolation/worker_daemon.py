@@ -837,8 +837,36 @@ def fatal_error(msg, error=None):
     sys.exit(1)
 
 # ═══════════════════════════════════════════════════════════════
-# STEP 1: READ PKG_SPEC (MUST BE FIRST)
+# STEP 1: PRE-WARM OMNIPKG CORE, THEN BLOCK FOR SPEC
 # ═══════════════════════════════════════════════════════════════
+import time as _wtime
+_t0 = _wtime.perf_counter()
+_preload_ok = False
+try:
+    import omnipkg.cli as _cli_mod
+    from omnipkg.core import ConfigManager
+    from omnipkg.core import omnipkg as OmnipkgCore
+    _pre_cm = ConfigManager(suppress_init_messages=True)
+    _pre_core = OmnipkgCore(_pre_cm)
+    _cli_mod._PRELOADED_CM = _pre_cm
+    _cli_mod._PRELOADED_CORE = _pre_core
+    # Pre-warm i18n cache so set_language() is a no-op in main()
+    from omnipkg.i18n import _
+    _.set_language(os.environ.get('OMNIPKG_LANG') or 'en')
+    # Pre-build parser so create_8pkg_parser() is a no-op in main()
+    _cli_mod.create_8pkg_parser()
+    _preload_ok = True
+    _t1 = _wtime.perf_counter()
+    sys.stderr.write('[WORKER-PRELOAD] CM+Core pre-warmed in ' + str(round((_t1-_t0)*1000,1)) + 'ms, ready for run_cli' + chr(10))
+    sys.stderr.flush()
+except Exception as _pre_ex:
+    sys.stderr.write('[WORKER-PRELOAD] pre-warm failed (' + str(_pre_ex) + '), main() will do full init' + chr(10))
+    sys.stderr.flush()
+    try:
+        import omnipkg.cli
+    except ImportError:
+        pass
+
 try:
     # An idle worker will block here until it's assigned a spec.
     input_line = sys.stdin.readline()
@@ -850,6 +878,93 @@ try:
         sys.exit(0)
     
     setup_data = json.loads(input_line.strip())
+    
+    if setup_data.get('type') == 'run_cli':
+        _t_req = _wtime.perf_counter()
+        ready_msg = {'status': 'READY', 'mode': 'cli'}
+        _original_stdout.write(json.dumps(ready_msg) + '\\n')
+        _original_stdout.flush()
+        _t_ready = _wtime.perf_counter()
+        sys.stderr.write(f'[WORKER-TIMING] req→READY: {(_t_ready-_t_req)*1000:.2f}ms\\n')
+        sys.stderr.flush()
+        
+        import io
+        class StreamRedirector(io.TextIOBase):
+            def __init__(self, stream_name):
+                self.stream_name = stream_name
+            def write(self, s):
+                if isinstance(s, bytes):
+                    s = s.decode('utf-8', 'replace')
+                msg = {'stream': self.stream_name, 'data': s}
+                _original_stdout.write(json.dumps(msg) + '\\n')
+                _original_stdout.flush()
+                return len(s)
+            def isatty(self):
+                return setup_data.get('isatty', False)
+            def flush(self):
+                pass
+            @property
+            def buffer(self):
+                class DummyBuffer:
+                    def write(self_buf, b):
+                        return self.write(b)
+                    def flush(self_buf):
+                        pass
+                return DummyBuffer()
+
+        old_stdout = sys.stdout
+        old_stderr = sys.stderr
+        sys.stdout = StreamRedirector('stdout')
+        sys.stderr = StreamRedirector('stderr')
+        
+        os.environ['_OMNIPKG_ISATTY'] = '1' if setup_data.get('isatty', False) else '0'
+        if 'cwd' in setup_data:
+            try: os.chdir(setup_data['cwd'])
+            except Exception: pass
+        if 'env' in setup_data:
+            os.environ.update(setup_data['env'])
+            
+        sys.argv = setup_data.get('argv', ['omnipkg'])
+        
+        exit_code = 0
+        try:
+            import omnipkg.cli as _run_cli_mod
+            _cm_ready   = getattr(_run_cli_mod, '_PRELOADED_CM',   None) is not None
+            _core_ready = getattr(_run_cli_mod, '_PRELOADED_CORE', None) is not None
+            if _cm_ready and _core_ready:
+                sys.stderr.write('[WORKER-PRELOAD] ✅ FAST PATH: consuming pre-warmed CM+Core\\n')
+            else:
+                sys.stderr.write(
+                    f'[WORKER-PRELOAD] ⚠️  SLOW PATH: CM={_cm_ready} Core={_core_ready}'
+                    f' — main() will do full init\\n'
+                )
+            sys.stderr.flush()
+            _t_main_start = _wtime.perf_counter()
+            _run_cli_mod.main()
+            _t_main_end = _wtime.perf_counter()
+            sys.stderr.write(f'[WORKER-TIMING] main() total: {(_t_main_end-_t_main_start)*1000:.2f}ms\\n')
+            sys.stderr.flush()
+        except SystemExit as e:
+            _t_main_end = _wtime.perf_counter()
+            sys.stderr.write(f'[WORKER-TIMING] main() total: {(_t_main_end-_t_main_start)*1000:.2f}ms (exit {e.code})\\n')
+            sys.stderr.flush()
+            exit_code = e.code if e.code is not None else 0
+        except Exception as e:
+            import traceback
+            sys.stderr.write(traceback.format_exc())
+            exit_code = 1
+            
+        sys.stdout = old_stdout
+        sys.stderr = old_stderr
+        
+        _t_done = _wtime.perf_counter()
+        sys.stderr.write(f'[WORKER-TIMING] worker total req→COMPLETED: {(_t_done-_t_req)*1000:.2f}ms\\n')
+        sys.stderr.flush()
+        result = {'status': 'COMPLETED', 'exit_code': exit_code}
+        _original_stdout.write(json.dumps(result) + '\\n')
+        _original_stdout.flush()
+        sys.exit(0)
+
     PKG_SPEC = setup_data.get('package_spec', '')
     
     if not PKG_SPEC:
@@ -1786,6 +1901,9 @@ class PersistentWorker:
         for var in ["PYTHONPATH", "PYTHONHOME", "PYTHONUSERBASE", "OMNIPKG_IS_DAEMON"]:
             env.pop(var, None)
 
+        # Tell the worker it's running inside the daemon so safe_input()
+        # activates the NEEDS_INPUT relay instead of calling input() directly.
+        env["OMNIPKG_DAEMON_WORKER"] = "1"          # ← ADD THIS LINE
         # Inject the correct multiversion base so omnipkgLoader knows exactly where bubbles are
         if self.multiversion_base:
             env["OMNIPKG_MULTIVERSION_BASE"] = self.multiversion_base
@@ -2419,8 +2537,14 @@ class PersistentWorker:
         with self.lock:
             if self.process:
                 try:
-                    self.process.stdin.write(json.dumps({"type": "shutdown"}) + "\n")
-                    self.process.stdin.flush()
+                    # First check if already dead (workers that ran run_cli call sys.exit)
+                    if self.process.poll() is None:
+                        # Still running — try graceful shutdown
+                        try:
+                            self.process.stdin.write(json.dumps({"type": "shutdown"}) + "\n")
+                            self.process.stdin.flush()
+                        except Exception:
+                            pass
                     self.process.wait(timeout=2)
                 except Exception:
                     try:
@@ -2433,7 +2557,6 @@ class PersistentWorker:
                 finally:
                     self.process = None
 
-            # 🔥 FIX: Close log file handle
             if hasattr(self, "log_file") and self.log_file:
                 try:
                     self.log_file.close()
@@ -2758,12 +2881,20 @@ class WorkerPoolDaemon:
             return False if wait_for_ready else sys.exit(1)
 
     def _wait_for_daemon_ready(self, timeout: int = 10) -> bool:
-        """Waits for the daemon's PID file to appear and be valid."""
+        """Waits until the daemon socket is actually accepting connections."""
+        import socket as _sock
         start_time = time.time()
         while time.time() - start_time < timeout:
-            if self.is_running():
-                return True
-            time.sleep(0.2)
+            if os.path.exists(DEFAULT_SOCKET):
+                try:
+                    s = _sock.socket(_sock.AF_UNIX, _sock.SOCK_STREAM)
+                    s.settimeout(0.5)
+                    s.connect(DEFAULT_SOCKET)
+                    s.close()
+                    return True
+                except Exception:
+                    pass
+            time.sleep(0.05)
         return False
 
     def _handle_parent_after_fork(self, child_pid: int, wait_for_ready: bool) -> bool:
@@ -2886,7 +3017,14 @@ class WorkerPoolDaemon:
             # ============================================================
             # UNIX/LINUX/MACOS: Use Unix domain socket
             # ============================================================
-            # Remove stale socket file if it exists
+            # Remove stale socket AND announcement files before binding.
+            # This prevents clients from finding and connecting to a socket
+            # that exists but isn't listening yet.
+            conn_file = Path(tempfile.gettempdir()) / 'omnipkg' / 'daemon_connection.txt'
+            try:
+                conn_file.unlink()
+            except Exception:
+                pass
             try:
                 os.unlink(self.socket_path)
             except OSError:
@@ -2902,6 +3040,16 @@ class WorkerPoolDaemon:
         
         # CRITICAL FIX: Increased backlog for high concurrency
         sock.listen(128)
+
+        # Write announcement file AFTER listen() so clients only discover us
+        # once we're actually ready to accept connections. Writing after bind()
+        # but before listen() caused the restart race: new daemon wrote the file
+        # before the old daemon finished dying, so the first connect attempt
+        # after restart hit a half-dead socket.
+        if not is_windows:
+            conn_file = Path(tempfile.gettempdir()) / 'omnipkg' / 'daemon_connection.txt'
+            conn_file.parent.mkdir(parents=True, exist_ok=True)
+            conn_file.write_text(f"unix://{self.socket_path}")
         
         print(_('[DAEMON] Server ready, entering accept loop'), flush=True)
         
@@ -3048,6 +3196,9 @@ class WorkerPoolDaemon:
                     res = {"success": True}
                 else:
                     res = {"success": False, "error": "python_exe required"}
+            elif req["type"] == "run_cli":
+                self._run_cli(req, conn)
+                return
             elif req["type"] == "shutdown":
                 self.running = False
                 res = {"success": True}
@@ -3074,6 +3225,150 @@ class WorkerPoolDaemon:
                 conn.close()
             except Exception:
                 pass
+
+    def _run_cli(self, req, conn):
+        import traceback as _rc_tb
+        import time as _rt
+        _t0 = _rt.perf_counter()
+        python_exe = _normalize_exe(_resolve_python_exe(req.get("python_exe")))
+        safe_print(f"[RUN-CLI] python_exe={python_exe}", file=sys.stderr)
+        worker = None
+        try:
+            pool = self.idle_pools.get(python_exe)
+            if pool:
+                worker = pool.get_nowait()
+                safe_print(f"[RUN-CLI] got idle worker pid={worker.process.pid}", file=sys.stderr)
+                if _normalize_exe(worker.python_exe) != python_exe:
+                    worker.force_shutdown()
+                    worker = None
+        except queue.Empty:
+            safe_print(f"[RUN-CLI] no idle worker in pool", file=sys.stderr)
+
+        if not worker:
+            target_paths = {}
+            if self.cm:
+                target_paths = _resolve_target_paths(self.cm, python_exe)
+            safe_print(f"[RUN-CLI] no idle worker — spawning fresh", file=sys.stderr)
+            worker = PersistentWorker(
+                package_spec=None,
+                python_exe=python_exe,
+                defer_setup=True,
+                site_packages=target_paths.get("site_packages_path"),
+                multiversion_base=target_paths.get("multiversion_base")
+            )
+            import time as _spawn_time; _spawn_time.sleep(0.05)
+
+        _t_got_worker = _rt.perf_counter()
+        safe_print(f"[RUN-CLI] worker acquired in {(_t_got_worker-_t0)*1000:.2f}ms", file=sys.stderr)
+
+        try:
+            safe_print(f"[RUN-CLI] sending req to worker", file=sys.stderr)
+            worker.process.stdin.write(json.dumps(req) + "\n")
+            worker.process.stdin.flush()
+
+            import queue
+            try:
+                ready_line = worker.stdout_queue.get(timeout=30.0)
+                _t_ready = _rt.perf_counter()
+                safe_print(f"[RUN-CLI] ready_line={repr(ready_line)} ({(_t_ready-_t_got_worker)*1000:.2f}ms)", file=sys.stderr)
+            except queue.Empty:
+                ready_line = None
+                safe_print(f"[RUN-CLI] TIMEOUT waiting for READY", file=sys.stderr)
+
+            if not ready_line:
+                raise RuntimeError("Worker failed to send READY (got None)")
+
+            try:
+                ready_parsed = json.loads(ready_line)
+            except Exception as _je:
+                raise RuntimeError(f"Worker READY parse failed: {_je!r}, raw={ready_line!r}")
+
+            if ready_parsed.get("status") != "READY":
+                raise RuntimeError(f"Worker bad READY status: {ready_parsed!r}")
+
+            while True:
+                try:
+                    # Use a short poll interval so we remain responsive.
+                    # safe_input() in the worker blocks until it gets a
+                    # stdin_line reply, so there's no busy-spin here —
+                    # the worker simply won't produce output until we
+                    # send the reply.
+                    line = worker.stdout_queue.get(timeout=86400.0)
+                except queue.Empty:
+                    break
+
+                if not line:
+                    break
+
+                msg = json.loads(line)
+
+                # ── stdout / stderr stream — forward to C dispatcher ──────
+                if msg.get("stream"):
+                    try:
+                        send_json(conn, msg)
+                    except Exception:
+                        break
+
+                # ── NEEDS_INPUT — relay prompt to C dispatcher, wait for
+                #    the user's reply, then send it back to the worker ──────
+                elif msg.get("status") == "NEEDS_INPUT":
+                    try:
+                        # 1. Forward the NEEDS_INPUT frame to the C dispatcher.
+                        #    It will print the prompt on the real terminal and
+                        #    send back {"type":"stdin_line","data":"<text>"}.
+                        send_json(conn, msg)
+
+                        # 2. Wait for the stdin_line reply from the C dispatcher.
+                        #    We read directly from conn (the socket) here.
+                        #    recv_json() must be your existing framed-read helper.
+                        reply = recv_json(conn)   # blocks until dispatcher replies
+
+                        if reply and reply.get("type") == "stdin_line":
+                            # 3. Forward the user's input to the worker over its stdin.
+                            worker.process.stdin.write(json.dumps(reply) + "\n")
+                            worker.process.stdin.flush()
+                        else:
+                            # Unexpected reply or closed conn — send empty line
+                            # so the worker doesn't hang forever.
+                            worker.process.stdin.write(
+                                json.dumps({"type": "stdin_line", "data": ""}) + "\n"
+                            )
+                            worker.process.stdin.flush()
+                    except Exception as _ni_err:
+                        safe_print(f"[RUN-CLI] NEEDS_INPUT relay failed: {_ni_err}", file=sys.stderr)
+                        # Send empty line — worker returns default and continues.
+                        try:
+                            worker.process.stdin.write(
+                                json.dumps({"type": "stdin_line", "data": ""}) + "\n"
+                            )
+                            worker.process.stdin.flush()
+                        except Exception:
+                            break
+                    # Continue the loop — worker resumes and will send more output.
+
+                # ── COMPLETED / ERROR — forward and finish ────────────────
+                elif msg.get("status") in ("COMPLETED", "ERROR"):
+                    _t_completed = _rt.perf_counter()
+                    safe_print(
+                        f"[RUN-CLI] COMPLETED in {(_t_completed-_t0)*1000:.2f}ms total "
+                        f"(worker→daemon→client relay)",
+                        file=sys.stderr
+                    )
+                    try:
+                        send_json(conn, msg)
+                    except Exception:
+                        pass
+                    break
+
+        except Exception as e:
+            try:
+                send_json(conn, {"status": "ERROR", "error": str(e), "exit_code": 1})
+            except Exception:
+                pass
+        finally:
+            if worker is not None:
+                worker.force_shutdown()
+            self._replenish_idle_pool(python_exe)
 
     def _execute_code(
         self,
@@ -3653,28 +3948,33 @@ class WorkerPoolDaemon:
             }
 
     def _handle_shutdown(self, signum, frame):
-        """CRITICAL FIX: Graceful shutdown with timeout."""
         self.running = False
-
-        # Shutdown executor first
         self.executor.shutdown(wait=False)
-
         deadline = time.time() + 5.0
 
         with self.pool_lock:
             workers_list = list(self.workers.values())
+            # drain idle pools
+            idle_workers_list = []
+            for pool in self.idle_pools.values():
+                while not pool.empty():
+                    try:
+                        idle_workers_list.append(pool.get_nowait())
+                    except Exception:
+                        pass
 
         for info in workers_list:
-            remaining = deadline - time.time()
-            if remaining <= 0:
+            try:
                 info["worker"].force_shutdown()
-            else:
-                try:
-                    info["worker"].force_shutdown()
-                except Exception:
-                    pass
+            except Exception:
+                pass
 
-        # Cleanup
+        for worker in idle_workers_list:
+            try:
+                worker.force_shutdown()
+            except Exception:
+                pass
+
         shm_registry.cleanup_orphans()
         try:
             os.unlink(self.socket_path)
@@ -5351,18 +5651,15 @@ def cli_start():
     """Start the daemon with status checks."""
     if WorkerPoolDaemon.is_running():
         safe_print("⚠️  Daemon is already running.")
-        # Optional: Print info about the running instance
         cli_status()
         return
 
     safe_print("🚀 Initializing OmniPkg Worker Daemon...", end=" ", flush=True)
 
-    # Initialize
     daemon = WorkerPoolDaemon(max_workers=10, max_idle_time=300, warmup_specs=[])
 
-    # Start (The parent process will print "✅" and exit inside this call)
     try:
-        daemon.start(daemonize=True)
+        daemon.start(daemonize=True, wait_for_ready=True)
     except Exception as e:
         safe_print(_('\n❌ Failed to start: {}').format(e))
 
@@ -5373,10 +5670,23 @@ def cli_stop():
     result = client.shutdown()
     if result.get("success"):
         safe_print("✅ Daemon stopped")
-        try:
-            os.unlink(PID_FILE)
-        except:
-            pass
+        # Clean up all files the C dispatcher uses to find the daemon.
+        # This prevents the next command from connecting to a dying/restarting
+        # daemon before it's ready to accept connections.
+        import time as _st
+        _deadline = _st.time() + 3.0
+        while _st.time() < _deadline:
+            if not os.path.exists(DEFAULT_SOCKET):
+                break
+            _st.sleep(0.02)
+        # Remove socket file, announcement file, and PID file
+        for f in (DEFAULT_SOCKET,
+                  os.path.join(tempfile.gettempdir(), "omnipkg", "daemon_connection.txt"),
+                  PID_FILE):
+            try:
+                os.unlink(f)
+            except Exception:
+                pass
     else:
         safe_print(_('❌ Failed to stop: {}').format(result.get('error', 'Unknown error')))
 

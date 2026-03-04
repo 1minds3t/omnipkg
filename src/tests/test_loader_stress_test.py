@@ -46,7 +46,6 @@ except ImportError:
     # Fallback for running directly without package installed
     sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
     from omnipkg.common_utils import ProcessCorruptedException
-    from omnipkg.loader import omnipkgLoader
     from omnipkg.isolation.runners import run_python_code_in_isolation
     from omnipkg.isolation.workers import PersistentWorker
 

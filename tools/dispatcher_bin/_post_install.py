@@ -39,13 +39,19 @@ def install_dispatcher_binary(install_dir: Path = None) -> bool:
             print(f"  {result.stderr.strip()}")
             return False
 
-        replaced = []
-        for name in ("8pkg", "omnipkg", "OMNIPKG", "8PKG"):
-            target = install_dir / name
-            if target.exists():
-                shutil.copy2(str(binary_tmp), str(target))
-                os.chmod(str(target), 0o755)
-                replaced.append(name)
+        import time
+
+        for attempt in range(10):
+            replaced = []
+            for name in ("8pkg", "omnipkg", "OMNIPKG", "8PKG"):
+                target = install_dir / name
+                if target.exists():
+                    shutil.copy2(str(binary_tmp), str(target))
+                    os.chmod(str(target), 0o755)
+                    replaced.append(name)
+            if replaced:
+                break
+            time.sleep(0.5)
 
         binary_tmp.unlink()
         # After the binary is installed, pre-create all versioned shims

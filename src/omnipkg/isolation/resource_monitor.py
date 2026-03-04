@@ -345,7 +345,12 @@ def print_stats(watch_mode=False):
                   f"VIRT: {format_memory(p['vsz']):>8} | {g} | Running: {format_time(p['elapsed'])}")
         print()
 
-    total_cpu = total_ram_mb = total_gpu_mb = worker_count = 0
+    total_cpu = total_ram_mb = total_gpu_mb = worker_count = idle_count = 0
+    for procs in idle_workers_by_version.values():
+        for p in procs:
+            idle_count   += 1
+            total_ram_mb += p["rss"] / 1024
+            total_gpu_mb += p["gpu_mb"]
     if workers:
         safe_print("⚙️  ACTIVE WORKERS (Package-specific bubbles):")
         print("-" * 120)
@@ -378,7 +383,7 @@ def print_stats(watch_mode=False):
     safe_print("📊 WORKER SUMMARY")
     print("=" * 120)
     print(f"  Active Workers:  {worker_count}")
-    print(f"  Idle Workers:    {len(idle_workers)}")
+    print(f"  Idle Workers:    {idle_count}")
     print(f"  Total CPU:       {total_cpu:.1f}%")
     print(f"  Total RAM:       {total_ram_mb:.1f}MB ({total_ram_mb/1024:.2f}GB)")
     print(f"  Total GPU VRAM:  {total_gpu_mb}MB")

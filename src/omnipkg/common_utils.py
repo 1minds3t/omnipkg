@@ -689,43 +689,123 @@ def ensure_python_or_relaunch(required_version: str):
 
 def is_interactive_session():
     """
-    Reusable version of the detection logic you already have in _first_time_setup.
-    Returns False for: CI, Docker, piped input, explicitly non-interactive envs.
+    Returns True only for real interactive terminal sessions.
+    Returns False for: CI, Docker, piped input, explicitly non-interactive envs,
+    and daemon workers (where stdin is the socket, not a tty).
+
+    NOTE: Use safe_input() for prompts in daemon workers — it handles the
+    NEEDS_INPUT socket relay protocol so interactive prompts work transparently
+    even when this function returns False.
     """
     from omnipkg.i18n import _
-    # Check all the conditions you're already using
     is_docker = os.path.exists("/.dockerenv") or os.path.exists("/run/.containerenv")
-    no_tty = not sys.stdin.isatty()
+    _isatty_override = os.environ.get('_OMNIPKG_ISATTY')
+    if _isatty_override is not None:
+        no_tty = _isatty_override != '1'
+    else:
+        no_tty = not sys.stdin.isatty()
     forced_noninteractive = os.environ.get("OMNIPKG_NONINTERACTIVE")
     in_ci = os.environ.get("CI")
     web_mode = os.environ.get("OMNIPKG_WEB_MODE")
-    
-    # If ANY of these are true, it's non-interactive
+
     if in_ci or forced_noninteractive or no_tty or is_docker or web_mode:
         return False
-    
+
     return True
 
-def safe_input(prompt: str, default: str = "", auto_value: str = None):
+
+# ── Daemon stdin relay ────────────────────────────────────────────────────────
+# When the CLI runs inside a PersistentWorker the transport is plain
+# line-delimited text JSON — exactly what _reader_thread already consumes
+# from the worker's stdout, and what the daemon writes to worker.process.stdin.
+#
+# Protocol (all messages are single-line JSON + "\n"):
+#
+#   worker stdout  →  daemon stdout_queue  →  conn  →  C dispatcher
+#   {"status":"NEEDS_INPUT","prompt":"..."}
+#
+#   C dispatcher  →  conn  →  daemon  →  worker stdin
+#   {"type":"stdin_line","data":"<text user typed>"}
+#
+# _DAEMON_WORKER_MODE is True when the env var OMNIPKG_DAEMON_WORKER=1 is set.
+# _spawn_process() sets this in the worker's env so safe_input() activates the
+# relay path automatically, with zero changes needed in the CLI command code.
+_DAEMON_WORKER_MODE: bool = os.environ.get("OMNIPKG_DAEMON_WORKER") == "1"
+
+
+def _worker_emit(obj: dict) -> None:
+    """Write one JSON line to worker stdout (the daemon channel).
+
+    Uses sys.stdout directly — the worker is spawned with text=True so this
+    is the correct transport.  The trailing newline is what _reader_thread
+    uses as a message boundary on the daemon side.
     """
-    Safe input wrapper that returns defaults in non-interactive environments.
-    Uses your existing detection logic.
-    
+    sys.stdout.write(json.dumps(obj, ensure_ascii=True) + "\n")
+    sys.stdout.flush()
+
+
+def _worker_read_reply() -> dict:
+    """Read one JSON line from worker stdin (the daemon reply channel).
+
+    The daemon writes to worker.process.stdin (also text mode) after
+    receiving the stdin_line from the C dispatcher.
+    """
+    line = sys.stdin.readline()
+    if not line:
+        raise EOFError("daemon closed stdin")
+    return json.loads(line.strip())
+
+
+def safe_input(prompt: str, default: str = "", auto_value: str = None) -> str:
+    """
+    Safe input wrapper with three operating modes:
+
+    1. **Daemon worker** (OMNIPKG_DAEMON_WORKER=1 in env, set by _spawn_process):
+       Emits {"status":"NEEDS_INPUT","prompt":"..."} as a JSON line to stdout.
+       The daemon's _reader_thread picks it up, forwards it through the socket
+       to the C dispatcher, which prints the prompt on the real terminal,
+       calls fgets(), and sends {"type":"stdin_line","data":"..."} back.
+       The daemon writes that JSON line to worker.process.stdin.
+       safe_input() reads it with readline() and returns the data value.
+       The daemon stays healthy; no 30 s timeout, no execv fallback.
+
+    2. **Real interactive session** (stdin is a tty, no CI/Docker/etc.):
+       Calls input(prompt) normally — user types at their terminal.
+
+    3. **Truly non-interactive** (CI, Docker, piped input, web mode):
+       Returns auto_value (if given) or default, with an auto-select notice.
+
     Args:
-        prompt: The prompt to show users
-        default: Default value for non-interactive (if auto_value not specified)
-        auto_value: Specific value to use in non-interactive mode (overrides default)
+        prompt:     The prompt string shown to the user.
+        default:    Return value when non-interactive and auto_value is None.
+        auto_value: Specific return value for non-interactive mode.
     """
     from omnipkg.i18n import _
-    if not is_interactive_session():
+
+    # --- Mode 1: inside a PersistentWorker — relay via line-JSON ---
+    if _DAEMON_WORKER_MODE:
+        try:
+            _worker_emit({"status": "NEEDS_INPUT", "prompt": prompt})
+            msg = _worker_read_reply()
+            if msg.get("type") == "stdin_line":
+                return msg.get("data", default).strip()
+        except Exception:
+            pass  # relay failed — fall through to non-interactive default
         result = auto_value if auto_value is not None else default
-        safe_print(_('🤖 Auto-selecting: {}').format(result))
+        safe_print(_("🤖 Auto-selecting: {}").format(result))
         return result
-    
-    try:
-        return input(prompt).strip()
-    except (EOFError, KeyboardInterrupt):
-        return default
+
+    # --- Mode 2: real interactive session ---
+    if is_interactive_session():
+        try:
+            return input(prompt).strip()
+        except (EOFError, KeyboardInterrupt):
+            return default
+
+    # --- Mode 3: truly non-interactive ---
+    result = auto_value if auto_value is not None else default
+    safe_print(_("🤖 Auto-selecting: {}").format(result))
+    return result
 
 def run_interactive_command(command_list, input_data, check=True):
     """Helper to run a command that requires stdin input."""

@@ -27,6 +27,10 @@
 #include <sys/stat.h>
 #include <libgen.h>
 #include <limits.h>
+#include <sys/socket.h>
+#include <sys/un.h>
+#include <stdint.h>
+#include <errno.h>
 
 #define MAX_PATH 4096
 #define MAX_VERSION 32
@@ -211,6 +215,377 @@ static int read_self_config(const char *self_dir, char *python_path, size_t n) {
 
 /* ── fallback to Python dispatcher ─────────────────────────────────────── */
 
+/* ── daemon socket communication ───────────────────────────────────────── */
+
+static int write_all(int fd, const void *buf, size_t count) {
+    const char *p = buf;
+    while (count > 0) {
+        ssize_t r = write(fd, p, count);
+        if (r <= 0) return 0;
+        p += r;
+        count -= r;
+    }
+    return 1;
+}
+
+static int send_json_msg(int sock, const char *json_str) {
+    uint64_t len = strlen(json_str);
+    uint64_t be_len = 0;
+    for (int i = 0; i < 8; i++) {
+        ((uint8_t*)&be_len)[7 - i] = (len >> (i * 8)) & 0xFF;
+    }
+    if (!write_all(sock, &be_len, 8)) return 0;
+    if (!write_all(sock, json_str, len)) return 0;
+    return 1;
+}
+
+static char* recv_json_msg(int sock) {
+    uint8_t be_len[8];
+    int n = 0;
+    while (n < 8) {
+        int r = read(sock, be_len + n, 8 - n);
+        if (r <= 0) return NULL;
+        n += r;
+    }
+    uint64_t len = 0;
+    for (int i = 0; i < 8; i++) {
+        len = (len << 8) | be_len[i];
+    }
+    if (len > 1024 * 1024 * 10) return NULL;
+    char *buf = malloc(len + 1);
+    if (!buf) return NULL;
+    uint64_t total = 0;
+    while (total < len) {
+        int r = read(sock, buf + total, len - total);
+        if (r <= 0) { free(buf); return NULL; }
+        total += r;
+    }
+    buf[len] = '\0';
+    return buf;
+}
+
+/* Encode a Unicode codepoint as UTF-8 and write to out. */
+static void emit_utf8(uint32_t cp, FILE *out) {
+    if (cp < 0x80) {
+        fputc((int)cp, out);
+    } else if (cp < 0x800) {
+        fputc(0xC0 | (cp >> 6), out);
+        fputc(0x80 | (cp & 0x3F), out);
+    } else if (cp < 0x10000) {
+        fputc(0xE0 | (cp >> 12), out);
+        fputc(0x80 | ((cp >> 6) & 0x3F), out);
+        fputc(0x80 | (cp & 0x3F), out);
+    } else {
+        fputc(0xF0 | (cp >> 18), out);
+        fputc(0x80 | ((cp >> 12) & 0x3F), out);
+        fputc(0x80 | ((cp >> 6) & 0x3F), out);
+        fputc(0x80 | (cp & 0x3F), out);
+    }
+}
+
+static uint32_t parse_hex4(const char *p) {
+    uint32_t v = 0;
+    for (int i = 0; i < 4; i++) {
+        char c = p[i];
+        v <<= 4;
+        if (c >= '0' && c <= '9') v |= c - '0';
+        else if (c >= 'a' && c <= 'f') v |= c - 'a' + 10;
+        else if (c >= 'A' && c <= 'F') v |= c - 'A' + 10;
+    }
+    return v;
+}
+
+static void print_unescaped(const char *str, FILE *out) {
+    while (*str) {
+        if (*str == '"') break;
+        if (*str == '\\') {
+            str++;
+            if (*str == 'n')       { fputc('\n', out); str++; }
+            else if (*str == 't')  { fputc('\t', out); str++; }
+            else if (*str == 'r')  { fputc('\r', out); str++; }
+            else if (*str == '"')  { fputc('"',  out); str++; }
+            else if (*str == '\\') { fputc('\\', out); str++; }
+            else if (*str == '/')  { fputc('/',  out); str++; }
+            else if (*str == 'b')  { fputc('\b', out); str++; }
+            else if (*str == 'f')  { fputc('\f', out); str++; }
+            else if (*str == 'u' && str[1] && str[2] && str[3] && str[4]) {
+                /* \uXXXX — decode and emit UTF-8.
+                 * Also handle surrogate pairs: \uD800–\uDBFF followed by \uDC00–\uDFFF */
+                uint32_t hi = parse_hex4(str + 1);
+                str += 5; /* consume 'u' + 4 hex digits */
+                if (hi >= 0xD800 && hi <= 0xDBFF &&
+                    str[0] == '\\' && str[1] == 'u' &&
+                    str[2] && str[3] && str[4] && str[5]) {
+                    /* High surrogate — look for low surrogate */
+                    uint32_t lo = parse_hex4(str + 2);
+                    if (lo >= 0xDC00 && lo <= 0xDFFF) {
+                        uint32_t cp = 0x10000 + ((hi - 0xD800) << 10) + (lo - 0xDC00);
+                        emit_utf8(cp, out);
+                        str += 6; /* consume second \uXXXX */
+                    } else {
+                        emit_utf8(hi, out); /* lone high surrogate — best effort */
+                    }
+                } else {
+                    emit_utf8(hi, out);
+                }
+            } else {
+                /* Unknown escape — pass through as-is */
+                fputc('\\', out);
+                if (*str) { fputc(*str, out); str++; }
+            }
+        } else {
+            /* Regular UTF-8 byte — pass through directly */
+            fputc((unsigned char)*str, out);
+            str++;
+        }
+    }
+    fflush(out);
+}
+
+static int json_get_raw_str(const char *json, const char *key, char **out_start) {
+    char needle[256];
+    snprintf(needle, sizeof(needle), "\"%s\"", key);
+    const char *p = strstr(json, needle);
+    if (!p) return 0;
+    p += strlen(needle);
+    while (*p == ' ' || *p == '\t' || *p == ':') p++;
+    if (*p != '"') return 0;
+    p++;
+    *out_start = (char*)p;
+    return 1;
+}
+
+static int json_get_int(const char *json, const char *key, int *out) {
+    char needle[256];
+    snprintf(needle, sizeof(needle), "\"%s\"", key);
+    const char *p = strstr(json, needle);
+    if (!p) return 0;
+    p += strlen(needle);
+    while (*p == ' ' || *p == '\t' || *p == ':') p++;
+    *out = atoi(p);
+    return 1;
+}
+
+static int try_daemon_cli(const char *target_python, int argc, char **argv, int version_injected, const char *forced_version) {
+    int debug = (getenv("OMNIPKG_DEBUG") != NULL &&
+                 strcmp(getenv("OMNIPKG_DEBUG"), "1") == 0);
+
+    /* ── Locate the socket ──────────────────────────────────────────────
+     * Strategy (same logic as DaemonClient in Python):
+     *   1. Read /tmp/omnipkg/daemon_connection.txt  (written at bind time)
+     *      Format: "unix:///path/to/socket"
+     *   2. Fall back to $TMPDIR/omnipkg/omnipkg_daemon.sock
+     *   3. Fall back to /tmp/omnipkg/omnipkg_daemon.sock
+     * Using a fixed /tmp prefix for the announcement file means we find
+     * the daemon even when TMPDIR differs between shell and daemon process.
+     * ─────────────────────────────────────────────────────────────────── */
+    char sock_path[MAX_PATH];
+    sock_path[0] = '\0';
+
+    /* Try announcement file first */
+    const char *ann_path = "/tmp/omnipkg/daemon_connection.txt";
+    FILE *af = fopen(ann_path, "r");
+    if (af) {
+        char line[MAX_PATH];
+        if (fgets(line, sizeof(line), af)) {
+            /* strip newline */
+            line[strcspn(line, "\r\n")] = '\0';
+            if (strncmp(line, "unix://", 7) == 0) {
+                strncpy(sock_path, line + 7, sizeof(sock_path) - 1);
+                sock_path[sizeof(sock_path) - 1] = '\0';
+                if (debug) fprintf(stderr, "[C-DISPATCH] found socket via announcement: %s\n", sock_path);
+            }
+        }
+        fclose(af);
+    }
+
+    /* Fall back to TMPDIR-based path */
+    if (!sock_path[0]) {
+        const char *tmpdir = getenv("TMPDIR");
+        if (!tmpdir) tmpdir = "/tmp";
+        snprintf(sock_path, sizeof(sock_path), "%s/omnipkg/omnipkg_daemon.sock", tmpdir);
+        if (debug) fprintf(stderr, "[C-DISPATCH] no announcement file, trying: %s\n", sock_path);
+    }
+
+    if (debug) fprintf(stderr, "[C-DISPATCH] try_daemon_cli: sock=%s\n", sock_path);
+
+    /* Quick existence check before paying the connect syscall */
+    struct stat st;
+    if (stat(sock_path, &st) != 0) {
+        if (debug) fprintf(stderr, "[C-DISPATCH] daemon socket not found — skipping\n");
+        return 0;
+    }
+
+    int sock = socket(AF_UNIX, SOCK_STREAM, 0);
+    if (sock < 0) return 0;
+
+    /* Short send timeout — if we can't write to the daemon in 2s something is wrong. */
+    struct timeval tv_send = { 2, 0 };
+    setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, &tv_send, sizeof(tv_send));
+    /* Recv timeout: generous for slow PyPI ops.  When the worker sends
+     * NEEDS_INPUT the C side reads from the terminal and replies; after that
+     * the worker resumes.  We reset the timeout after each message, so this
+     * is really "max idle time between any two messages", not a wall-clock
+     * limit for the whole command.  300 s covers the rare case where a human
+     * is very slow at typing a prompt answer.                               */
+    struct timeval tv_recv = { 300, 0 };
+    setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &tv_recv, sizeof(tv_recv));
+
+    struct sockaddr_un addr;
+    memset(&addr, 0, sizeof(addr));
+    addr.sun_family = AF_UNIX;
+    strncpy(addr.sun_path, sock_path, sizeof(addr.sun_path) - 1);
+    if (connect(sock, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
+        if (debug) fprintf(stderr, "[C-DISPATCH] daemon connect failed: %s\n", strerror(errno));
+        close(sock);
+        return 0;
+    }
+
+    if (debug) fprintf(stderr, "[C-DISPATCH] daemon connected — sending run_cli\n");
+    
+    char cwd[MAX_PATH];
+    if (!getcwd(cwd, sizeof(cwd))) cwd[0] = '\0';
+    
+    char *req = malloc(1024 * 1024);
+    if (!req) { close(sock); return 0; }
+    
+    int len = sprintf(req, "{\"type\":\"run_cli\",\"isatty\":%s", isatty(1) ? "true" : "false");
+    
+    if (target_python && target_python[0]) {
+        len += sprintf(req + len, ",\"python_exe\":\"%s\"", target_python);
+    }
+    
+    if (cwd[0]) {
+        len += sprintf(req + len, ",\"cwd\":\"%s\"", cwd);
+    }
+    
+    len += sprintf(req + len, ",\"argv\":[\"8pkg\"");
+    /* Do NOT forward --python <ver> to the daemon worker.  The worker is already
+     * running under the correct interpreter (target_python); passing --python
+     * causes cli.main() to call ensure_python_or_relaunch() which does execve
+     * and kills the worker without ever sending COMPLETED → "daemon unhealthy".
+     * The python_exe field in the request already tells the daemon which worker
+     * pool to use, so --python in argv is redundant and harmful here. */
+    for (int i = 1; i < argc; i++) {
+        /* skip --python and its argument */
+        if (strcmp(argv[i], "--python") == 0) { i++; continue; }
+        req[len++] = ',';
+        req[len++] = '"';
+        char *p = argv[i];
+        while (*p) {
+            if (*p == '"' || *p == '\\') {
+                req[len++] = '\\';
+                req[len++] = *p;
+            } else {
+                req[len++] = *p;
+            }
+            p++;
+        }
+        req[len++] = '"';
+    }
+    req[len++] = ']';
+    req[len++] = '}';
+    req[len] = '\0';
+    
+    if (!send_json_msg(sock, req)) {
+        free(req);
+        close(sock);
+        /* Stale socket — nuke announcement so next call doesn't hit it again */
+        remove(ann_path);
+        if (debug) fprintf(stderr, "[C-DISPATCH] daemon send failed — falling back to execv\n");
+        return 0;
+    }
+    free(req);
+    
+    int got_terminal_status = 0;
+    while (1) {
+        char *msg = recv_json_msg(sock);
+        if (!msg) break;
+        
+        char *stream_type;
+        if (json_get_raw_str(msg, "stream", &stream_type)) {
+            char *data_start;
+            if (json_get_raw_str(msg, "data", &data_start)) {
+                FILE *out = (strncmp(stream_type, "stderr", 6) == 0) ? stderr : stdout;
+                print_unescaped(data_start, out);
+            }
+        } else if (json_get_raw_str(msg, "status", &stream_type)) {
+            if (strncmp(stream_type, "COMPLETED", 9) == 0) {
+                int exit_code = 0;
+                json_get_int(msg, "exit_code", &exit_code);
+                free(msg);
+                close(sock);
+                exit(exit_code);
+            } else if (strncmp(stream_type, "NEEDS_INPUT", 11) == 0) {
+                /* Worker is blocking on input() — print the prompt to the real
+                 * terminal, read a line, and send it back as stdin_line. */
+                char *prompt_start;
+                if (json_get_raw_str(msg, "prompt", &prompt_start)) {
+                    print_unescaped(prompt_start, stdout);
+                }
+                free(msg);
+
+                /* Read one line from the real terminal (stdin fd 0). */
+                char input_buf[4096];
+                size_t ilen = 0;
+                input_buf[0] = '\0';
+                if (fgets(input_buf, sizeof(input_buf), stdin)) {
+                    /* Strip trailing newline — worker will add it back. */
+                    ilen = strlen(input_buf);
+                    if (ilen > 0 && input_buf[ilen - 1] == '\n')
+                        input_buf[--ilen] = '\0';
+                }
+                /* else: EOF/error — input_buf stays empty, ilen stays 0 */
+
+                /* Build {"type":"stdin_line","data":"<escaped>"} */
+                char *reply = malloc(ilen * 6 + 64); /* generous for JSON escaping */
+                if (!reply) { close(sock); return 0; }
+                int rlen = sprintf(reply, "{\"type\":\"stdin_line\",\"data\":\"");
+                for (size_t k = 0; k < ilen; k++) {
+                    unsigned char c = (unsigned char)input_buf[k];
+                    if      (c == '"')  { reply[rlen++] = '\\'; reply[rlen++] = '"'; }
+                    else if (c == '\\') { reply[rlen++] = '\\'; reply[rlen++] = '\\'; }
+                    else if (c == '\n') { reply[rlen++] = '\\'; reply[rlen++] = 'n'; }
+                    else if (c == '\r') { reply[rlen++] = '\\'; reply[rlen++] = 'r'; }
+                    else if (c == '\t') { reply[rlen++] = '\\'; reply[rlen++] = 't'; }
+                    else if (c < 0x20) {
+                        rlen += sprintf(reply + rlen, "\\u%04x", c);
+                    } else {
+                        reply[rlen++] = c;
+                    }
+                }
+                reply[rlen++] = '"';
+                reply[rlen++] = '}';
+                reply[rlen]   = '\0';
+
+                int ok = send_json_msg(sock, reply);
+                free(reply);
+                if (!ok) { close(sock); return 0; }
+                /* Continue the recv loop — worker will resume and send more output. */
+                continue;
+            } else if (strncmp(stream_type, "ERROR", 5) == 0) {
+                /* Daemon-side error (broken pipe, crash, etc.) — don't exit,
+                 * fall through so main() retries via execv Python fallback. */
+                got_terminal_status = 1;
+                free(msg);
+                break;
+            }
+        }
+        free(msg);
+    }
+    
+    close(sock);
+    /* If we got an ERROR status or recv loop broke without COMPLETED,
+     * the daemon is unhealthy. Nuke the announcement so the next call
+     * doesn't connect to a dead socket, then signal fallback. */
+    if (!got_terminal_status) {
+        /* recv loop broke unexpectedly — also nuke */
+    }
+    remove(ann_path);
+    if (debug) fprintf(stderr, "[C-DISPATCH] daemon unhealthy — falling back to execv\n");
+    return 0;
+}
+
 static void fallback_to_python(const char *self_dir, char **argv) {
     /*
      * Find the Python that owns this venv/bin dir and re-exec
@@ -348,9 +723,35 @@ int main(int argc, char **argv) {
                 fprintf(stderr, "[C-DISPATCH] registry hit %s → %s\n",
                         cli_version, target_python);
         } else {
-            /* Unknown version → Python fallback for proper error / auto-adopt */
-            if (debug) fprintf(stderr, "[C-DISPATCH] unknown version %s → fallback\n", cli_version);
-            fallback_to_python(self_dir, argv);
+            /* Registry miss — could be the native interpreter (not adopted, so not
+             * in registry.json).  Check if the self-aware config python matches the
+             * requested version before giving up and paying the Python fallback cost. */
+            char self_py[MAX_PATH] = "";
+            read_self_config(self_dir, self_py, sizeof(self_py));
+            if (self_py[0] && file_exists(self_py)) {
+                /* Extract version from the path, e.g. ".../bin/python3.11" → "3.11" */
+                const char *base = strrchr(self_py, '/');
+                base = base ? base + 1 : self_py;
+                /* skip "python" prefix */
+                const char *ver_in_path = base;
+                if (strncmp(ver_in_path, "python", 6) == 0) ver_in_path += 6;
+                if (strncmp(ver_in_path, "3.", 2) == 0 &&
+                    strcmp(ver_in_path, cli_version) == 0) {
+                    /* Native interpreter matches — use it directly, no fallback needed */
+                    strncpy(target_python, self_py, sizeof(target_python) - 1);
+                    target_python[sizeof(target_python) - 1] = '\0';
+                    if (debug)
+                        fprintf(stderr, "[C-DISPATCH] native match %s → %s\n",
+                                cli_version, target_python);
+                } else {
+                    /* Genuinely unknown version → Python fallback for auto-adopt */
+                    if (debug) fprintf(stderr, "[C-DISPATCH] unknown version %s → fallback\n", cli_version);
+                    fallback_to_python(self_dir, argv);
+                }
+            } else {
+                if (debug) fprintf(stderr, "[C-DISPATCH] unknown version %s → fallback\n", cli_version);
+                fallback_to_python(self_dir, argv);
+            }
         }
     }
 
@@ -386,9 +787,25 @@ int main(int argc, char **argv) {
     }
 
     /* ── 6. Build final argv and execv ───────────────────────── */
+
+    /* Skip the daemon for `swap python` and interactive commands.
+     * Interactive commands need a real TTY for user input — the NEEDS_INPUT
+     * relay through the daemon is unreliable. execv path handles these fine. */
+    int is_interactive_command = 0;
+    if (argc >= 2) {
+        is_interactive_command = (
+            strcmp(argv[1], "info")   == 0 ||
+            strcmp(argv[1], "config") == 0
+        );
+    }
+    if (!is_swap_python && !is_interactive_command) {
+        try_daemon_cli(target_python, argc, argv, version_injected, forced_version);
+        /* try_daemon_cli calls exit() on success. Reaching here means it failed. */
+        if (debug) fprintf(stderr, "[C-DISPATCH] daemon fast-path failed — falling back to execv\n");
+    }
+
     /*
-     * target_python -m omnipkg.cli [--python X] [original args]
-     *
+     * target_python -m omnipkg.cli[--python X] [original args]
      * If version was injected from command name, we must insert --python X
      * into the new argv (since original argv doesn't have it).
      */
@@ -418,6 +835,7 @@ int main(int argc, char **argv) {
         fprintf(stderr, "\n");
     }
 
+    putenv("_OMNIPKG_ISATTY=1");
     execv(target_python, new_argv);
 
     /* execv only returns on error */

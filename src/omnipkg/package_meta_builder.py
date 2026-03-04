@@ -33,6 +33,7 @@ import platform
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Set, Tuple
+from omnipkg.common_utils import safe_input
 
 from packaging.utils import canonicalize_name
 from packaging.version import parse as parse_version
@@ -642,6 +643,7 @@ class omnipkgMetadataGatherer:
         search_path_override: Optional[str] = None,
         skip_existing_checksums: bool = False,
         skip_nested_discovery: bool = False,
+        known_bubble_paths=None,
     ) -> List[importlib.metadata.Distribution]:
         """
         ULTRA-FAST targeted discovery for known packages.
@@ -699,6 +701,12 @@ class omnipkgMetadataGatherer:
                 surgical_roots.append(main_site_packages)
                 
                 expected_bubble = multiversion_base / f"{name}-{version}"
+                if os.environ.get("OMNIPKG_DEBUG") == "1":
+                    print(f"[DEBUG] surgical: looking for bubble at {expected_bubble} exists={expected_bubble.is_dir()}", flush=True)
+                if known_bubble_paths and name in known_bubble_paths:
+                    explicit_bp = known_bubble_paths[name]
+                    if explicit_bp.is_dir() and explicit_bp not in surgical_roots:
+                        surgical_roots.append(explicit_bp)
                 if expected_bubble.is_dir():
                     surgical_roots.append(expected_bubble)
 
@@ -860,91 +868,181 @@ class omnipkgMetadataGatherer:
         if verbose:
             safe_print(f"🚀 Fast targeted discovery for {len(targeted_packages)} package(s)")
 
+        _dbg = os.environ.get("OMNIPKG_DEBUG") == "1"
         main_site_packages = Path(self.config.get("site_packages_path")).resolve()
         multiversion_base = Path(self.config.get("multiversion_base")).resolve()
+
+        if _dbg:
+            print(f"[FAST-DISC] main_site_packages={main_site_packages} exists={main_site_packages.exists()}", flush=True)
+            print(f"[FAST-DISC] multiversion_base={multiversion_base} exists={multiversion_base.exists()}", flush=True)
+            print(f"[FAST-DISC] known_bubble_paths={known_bubble_paths}", flush=True)
 
         found_dists = []
 
         for pkg_spec in targeted_packages:
             pkg_name, version = self._parse_package_spec(pkg_spec)
-
             if not version:
-                if verbose:
-                    safe_print(_("   ⚠️  Skipping '{}' - no version specified").format(pkg_spec))
+                # No version specified - scan ALL bubble versions for this package
+                if _dbg:
+                    print(f"[FAST-DISC] {pkg_spec}: scanning all versions", flush=True)
+                canonical_name = canonicalize_name(pkg_name)
+                # Scan multiversion_base for all {pkg}-{version} directories
+                for bubble_dir in multiversion_base.glob(f"{canonical_name}-*"):
+                    if bubble_dir.is_dir():
+                        # Find the dist-info that matches THIS package, not its deps
+                        _target_di = None
+                        for di in bubble_dir.glob("*.dist-info"):
+                            di_name = di.name.lower()
+                            if di_name.startswith(f"{canonical_name}-") or di_name.startswith(f"{pkg_name.lower().replace('-', '_')}-"):
+                                _target_di = di
+                                break
+                        if _target_di:
+                            try:
+                                dist = PathDistribution(_target_di)
+                                found_dists.append(dist)
+                                if _dbg:
+                                    print(f"[FAST-DISC] found {dist.name} {dist.version} in {bubble_dir}", flush=True)
+                            except Exception as e:
+                                if _dbg:
+                                    print(f"[FAST-DISC] failed to load {bubble_dir}: {e}", flush=True)
+                # Also check underscore variant
+                for bubble_dir in multiversion_base.glob(f"{pkg_name.replace('-', '_')}-*"):
+                    if bubble_dir.is_dir() and bubble_dir not in [d._path.parent for d in found_dists]:
+                        _dist_infos = list(bubble_dir.glob("*.dist-info"))
+                        if _dist_infos:
+                            try:
+                                dist = PathDistribution(_dist_infos[0])
+                                found_dists.append(dist)
+                                if _dbg:
+                                    print(f"[FAST-DISC] found {dist.name} {dist.version} in {bubble_dir}", flush=True)
+                            except Exception as e:
+                                if _dbg:
+                                    print(f"[FAST-DISC] failed to load {bubble_dir}: {e}", flush=True)
+                continue
                 continue
 
             canonical_name = canonicalize_name(pkg_name)
+            if _dbg:
+                print(f"[FAST-DISC] --- {pkg_spec} (canonical={canonical_name}) ---", flush=True)
 
             # PRIORITY 1: Check if we already know the bubble location
-            if known_bubble_paths and canonical_name in known_bubble_paths:
-                bubble_path = known_bubble_paths[canonical_name]
-                if verbose:
-                    safe_print(f"   📍 Using known location for {pkg_spec}: {bubble_path}")
-
-                dist_info = list(bubble_path.glob("*.dist-info"))
-                if dist_info:
+            # known_bubble_paths may be keyed by raw pkg_name or canonical_name — try both
+            _known_key = canonical_name if canonical_name in (known_bubble_paths or {}) else (pkg_name if pkg_name in (known_bubble_paths or {}) else None)
+            if _dbg:
+                print(f"[FAST-DISC] P1: _known_key={_known_key}", flush=True)
+            if known_bubble_paths and _known_key:
+                bubble_path = known_bubble_paths[_known_key]
+                if _dbg:
+                    print(f"[FAST-DISC] P1: checking known path={bubble_path} exists={bubble_path.exists()}", flush=True)
+                # Find the specific dist-info for THIS package+version (bubble contains deps too)
+                _target_di = None
+                for _di in bubble_path.glob("*.dist-info"):
+                    _di_name = _di.name.lower()
+                    if _di_name.startswith(f"{canonical_name}-{version}") or                        _di_name.startswith(f"{pkg_name.lower()}-{version}") or                        _di_name.startswith(f"{pkg_name.lower().replace('-','_')}-{version}"):
+                        _target_di = _di
+                        break
+                if _dbg:
+                    print(f"[FAST-DISC] P1: target dist-info={_target_di}", flush=True)
+                if _target_di:
                     try:
+                        dist = PathDistribution(_target_di)
+                        if dist.version == version:
+                            found_dists.append(dist)
+                            if _dbg:
+                                print(f"[FAST-DISC] P1: ✅ found via known path", flush=True)
+                            continue
+                        else:
+                            if _dbg:
+                                print(f"[FAST-DISC] P1: version mismatch {dist.version} != {version}", flush=True)
+                    except Exception as e:
+                        if _dbg:
+                            print(f"[FAST-DISC] P1: PathDistribution failed: {e}", flush=True)
 
-                        dist = PathDistribution(dist_info[0])
-                        found_dists.append(dist)
-                        continue
-                    except Exception:
-                        pass
-
-            # PRIORITY 2: Check expected bubble location
-            expected_bubble = multiversion_base / f"{pkg_name}-{version}"
-            if expected_bubble.exists():
-                if verbose:
-                    safe_print(_('   🎯 Found expected bubble: {}').format(expected_bubble))
-
-                dist_infos = list(expected_bubble.glob("*.dist-info"))
-                if dist_infos:
-                    try:
-
-                        dist = PathDistribution(dist_infos[0])
-                        found_dists.append(dist)
-                        continue
-                    except Exception:
-                        pass
+            # PRIORITY 2: Check expected bubble location (try raw name, canonical, and underscore forms)
+            _bubble_candidates = dict.fromkeys([  # dedup, preserve order
+                multiversion_base / f"{pkg_name}-{version}",
+                multiversion_base / f"{canonical_name}-{version}",
+                multiversion_base / f"{pkg_name.replace('-', '_')}-{version}",
+            ])
+            if _dbg:
+                for _bc in _bubble_candidates:
+                    print(f"[FAST-DISC] P2: candidate={_bc} exists={_bc.exists()}", flush=True)
+            _bubble_found = False
+            for _expected_bubble in _bubble_candidates:
+                if _expected_bubble.exists():
+                    _dist_infos = list(_expected_bubble.glob("*.dist-info"))
+                    if _dbg:
+                        print(f"[FAST-DISC] P2: hit {_expected_bubble}, dist_infos={_dist_infos}", flush=True)
+                    if _dist_infos:
+                        try:
+                            dist = PathDistribution(_dist_infos[0])
+                            found_dists.append(dist)
+                            _bubble_found = True
+                            if _dbg:
+                                print(f"[FAST-DISC] P2: ✅ found via bubble", flush=True)
+                            break
+                        except Exception as e:
+                            if _dbg:
+                                print(f"[FAST-DISC] P2: PathDistribution failed: {e}", flush=True)
+            if _bubble_found:
+                continue
 
             # PRIORITY 3: Check main site-packages (for active installs)
             name_variants = self._get_package_name_variants(pkg_name)
+            _main_found = False
             for variant in name_variants:
+                if _main_found:
+                    break
                 pattern = f"{variant}-{version}.dist-info"
                 matches = list(main_site_packages.glob(pattern))
-
-                if matches:
-                    if verbose:
-                        safe_print(_('   ✅ Found in main env: {}').format(matches[0]))
+                if _dbg and matches:
+                    print(f"[FAST-DISC] P3: variant={variant} matches={matches}", flush=True)
+                for match in matches:
                     try:
-                        dist = importlib.metadata.Distribution.at(matches[0])
-                        found_dists.append(dist)
-                        break
-                    except Exception:
+                        dist = PathDistribution(match)
+                        if dist.metadata.get("Name"):  # basic validity check
+                            found_dists.append(dist)
+                            _main_found = True
+                            if _dbg:
+                                print(f"[FAST-DISC] P3: ✅ found in main env: {match}", flush=True)
+                            break
+                    except Exception as e:
+                        if _dbg:
+                            print(f"[FAST-DISC] P3: PathDistribution failed for {match}: {e}", flush=True)
                         continue
+            if _dbg and not _main_found:
+                print(f"[FAST-DISC] P3: ❌ not found in main env (tried {len(name_variants)} variants)", flush=True)
 
             # PRIORITY 4: Only if not found, do limited recursive search in multiversion_base
-            # (for nested packages inside bubbles)
             if not any(
-                d.metadata.get("Name") == pkg_name and d.version == version for d in found_dists
+                canonicalize_name(d.metadata.get("Name", "")) == canonical_name
+                and d.version == version
+                for d in found_dists
             ):
-                if verbose:
-                    safe_print(f"   🔍 Searching nested locations for {pkg_spec}...")
-
+                if _dbg:
+                    print(f"[FAST-DISC] P4: falling back to recursive search in {multiversion_base}", flush=True)
                 for variant in name_variants:
                     pattern = f"*/{variant}-{version}.dist-info"
                     matches = list(multiversion_base.glob(pattern))
-
+                    if _dbg:
+                        print(f"[FAST-DISC] P4: variant={variant} pattern={pattern} matches={matches}", flush=True)
                     if matches:
-                        if verbose:
-                            safe_print(_('   ✅ Found nested: {}').format(matches[0]))
                         try:
-
                             dist = PathDistribution(matches[0])
                             found_dists.append(dist)
+                            if _dbg:
+                                print(f"[FAST-DISC] P4: ✅ found nested: {matches[0]}", flush=True)
                             break
-                        except Exception:
+                        except Exception as e:
+                            if _dbg:
+                                print(f"[FAST-DISC] P4: PathDistribution failed: {e}", flush=True)
                             continue
+
+            if _dbg and not any(
+                canonicalize_name(d.metadata.get("Name", "")) == canonical_name and d.version == version
+                for d in found_dists
+            ):
+                print(f"[FAST-DISC] ❌ MISSED {pkg_spec} — not found anywhere", flush=True)
 
         if verbose:
             safe_print(
@@ -1490,7 +1588,9 @@ class omnipkgMetadataGatherer:
         search_path_override: Optional[str] = None,
         skip_existing_checksums: bool = False,
         pre_discovered_distributions: Optional[List[importlib.metadata.Distribution]] = None,
-        skip_nested_discovery: bool = False,  # NEW PARAMETER
+        skip_nested_discovery: bool = False,
+        known_bubble_paths=None,
+        skip_security_scan: bool = False,  # Set True for priority/incremental updates
     ):
         """
         (V5.4 - ON-THE-SPOT HEALING) The main execution loop with immediate corruption repair.
@@ -1508,6 +1608,7 @@ class omnipkgMetadataGatherer:
                 search_path_override=search_path_override,
                 skip_existing_checksums=skip_existing_checksums,
                 skip_nested_discovery=skip_nested_discovery,  # ADD THIS
+                        known_bubble_paths=known_bubble_paths,
             )
 
         distributions_to_process = []
@@ -1601,7 +1702,14 @@ class omnipkgMetadataGatherer:
                 all_packages_to_scan[c_name] = set()
             all_packages_to_scan[c_name].add(dist.version)
 
-        self._perform_security_scan(all_packages_to_scan)
+        if not skip_security_scan:
+            import threading
+            threading.Thread(
+                target=self._perform_security_scan,
+                args=(all_packages_to_scan,),
+                daemon=True
+            ).start()
+            # don't join, don't wait — results land in Redis whenever they land
 
         import time
 
@@ -1619,12 +1727,18 @@ class omnipkgMetadataGatherer:
         else:
             max_workers = (os.cpu_count() or 4) * 2
         total_packages = len(distributions_to_process)
+        # Cap to actual work — spinning up 32 idle threads to process 2 packages
+        # costs ~1.3s in ThreadPoolExecutor.__exit__ joining them all
+        max_workers = min(max_workers, max(1, total_packages))
         safe_print(_('   🔄 Processing {} packages in parallel...').format(total_packages), flush=True)
 
         # WINDOWS FIX: Per-future timeout so a single hung subprocess can't block
         # the entire build forever. 60s is generous for any single package.
         _FUTURE_TIMEOUT = 60  # seconds
 
+        _t_executor_enter = time.perf_counter()
+        if os.environ.get("OMNIPKG_DEBUG") == "1":
+            print(f"[TIMING] run(): entering executor (pre-executor elapsed={((_t_executor_enter - start_time)*1000):.1f}ms)", flush=True)
         with concurrent.futures.ThreadPoolExecutor(
             max_workers=max_workers, thread_name_prefix="omnipkg_builder"
         ) as executor:
@@ -1654,6 +1768,9 @@ class omnipkgMetadataGatherer:
                 except Exception as exc:
                     safe_print(_('\n❌ Error processing {}: {}').format(dist.metadata.get('Name', '?'), exc))
 
+        _t_executor_exit = time.perf_counter()
+        if os.environ.get("OMNIPKG_DEBUG") == "1":
+            print(f"[TIMING] run(): executor exited, elapsed since enter={((_t_executor_exit - _t_executor_enter)*1000):.1f}ms", flush=True)
         end_time = time.perf_counter()
         total_time = end_time - start_time
         pkgs_per_sec = total_packages / total_time if total_time > 0 else float("inf")
@@ -1890,17 +2007,12 @@ class omnipkgMetadataGatherer:
 
     def _get_instance_hash(self, dist: importlib.metadata.Distribution) -> str:
         """
-        (AUTHORITATIVE) Generates the one true, consistent instance hash for any
-        distribution by using its real, canonical path.
+        Generates a stable instance hash using the raw dist._path — no realpath/resolve.
+        realpath follows uv symlinks into its cache, giving a different path on every
+        reinstall and creating orphaned inst keys. Raw path is stable across reinstalls.
         """
-        # This is the single source of truth for a package's physical location.
-        # os.path.realpath resolves symlinks and gives the canonical path.
-        resolved_path_str = os.path.realpath(str(dist._path))
-
-        # The identifier is a combination of its true path and version.
-        unique_instance_identifier = f"{resolved_path_str}::{dist.version}"
-
-        # Return the deterministic hash.
+        raw_path_str = str(dist._path)
+        unique_instance_identifier = f"{raw_path_str}::{dist.version}"
         return hashlib.sha256(unique_instance_identifier.encode()).hexdigest()[:12]
 
     def _store_in_redis(
@@ -1917,8 +2029,7 @@ class omnipkgMetadataGatherer:
             # Compute hash from resolved path
             instance_hash = self._get_instance_hash(dist)
 
-            resolved_path_str = os.path.realpath(str(dist._path))
-            metadata["path"] = resolved_path_str
+            metadata["path"] = str(dist._path)
 
             instance_key = f"{self.redis_key_prefix.replace(':pkg:', ':inst:')}{package_name}:{version_str}:{instance_hash}"
 
