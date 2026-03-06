@@ -422,9 +422,13 @@ static int try_daemon_cli(const char *target_python, int argc, char **argv, int 
     /* Short send timeout — if we can't write to the daemon in 2s something is wrong. */
     struct timeval tv_send = { 2, 0 };
     setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, &tv_send, sizeof(tv_send));
-    /* Generous recv timeout — the worker needs time to run the command.
-     * 30 s covers even cold-start imports + slow network PyPI ops.   */
-    struct timeval tv_recv = { 30, 0 };
+    /* Recv timeout: generous for slow PyPI ops.  When the worker sends
+     * NEEDS_INPUT the C side reads from the terminal and replies; after that
+     * the worker resumes.  We reset the timeout after each message, so this
+     * is really "max idle time between any two messages", not a wall-clock
+     * limit for the whole command.  300 s covers the rare case where a human
+     * is very slow at typing a prompt answer.                               */
+    struct timeval tv_recv = { 300, 0 };
     setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &tv_recv, sizeof(tv_recv));
 
     struct sockaddr_un addr;
@@ -455,12 +459,16 @@ static int try_daemon_cli(const char *target_python, int argc, char **argv, int 
         len += sprintf(req + len, ",\"cwd\":\"%s\"", cwd);
     }
     
-    len += sprintf(req + len, ",\"argv\":[\"omnipkg\"");
-    if (version_injected) {
-        len += sprintf(req + len, ",\"--python\",\"%s\"", forced_version);
-    }
-    
+    len += sprintf(req + len, ",\"argv\":[\"8pkg\"");
+    /* Do NOT forward --python <ver> to the daemon worker.  The worker is already
+     * running under the correct interpreter (target_python); passing --python
+     * causes cli.main() to call ensure_python_or_relaunch() which does execve
+     * and kills the worker without ever sending COMPLETED → "daemon unhealthy".
+     * The python_exe field in the request already tells the daemon which worker
+     * pool to use, so --python in argv is redundant and harmful here. */
     for (int i = 1; i < argc; i++) {
+        /* skip --python and its argument */
+        if (strcmp(argv[i], "--python") == 0) { i++; continue; }
         req[len++] = ',';
         req[len++] = '"';
         char *p = argv[i];
@@ -508,6 +516,53 @@ static int try_daemon_cli(const char *target_python, int argc, char **argv, int 
                 free(msg);
                 close(sock);
                 exit(exit_code);
+            } else if (strncmp(stream_type, "NEEDS_INPUT", 11) == 0) {
+                /* Worker is blocking on input() — print the prompt to the real
+                 * terminal, read a line, and send it back as stdin_line. */
+                char *prompt_start;
+                if (json_get_raw_str(msg, "prompt", &prompt_start)) {
+                    print_unescaped(prompt_start, stdout);
+                }
+                free(msg);
+
+                /* Read one line from the real terminal (stdin fd 0). */
+                char input_buf[4096];
+                size_t ilen = 0;
+                input_buf[0] = '\0';
+                if (fgets(input_buf, sizeof(input_buf), stdin)) {
+                    /* Strip trailing newline — worker will add it back. */
+                    ilen = strlen(input_buf);
+                    if (ilen > 0 && input_buf[ilen - 1] == '\n')
+                        input_buf[--ilen] = '\0';
+                }
+                /* else: EOF/error — input_buf stays empty, ilen stays 0 */
+
+                /* Build {"type":"stdin_line","data":"<escaped>"} */
+                char *reply = malloc(ilen * 6 + 64); /* generous for JSON escaping */
+                if (!reply) { close(sock); return 0; }
+                int rlen = sprintf(reply, "{\"type\":\"stdin_line\",\"data\":\"");
+                for (size_t k = 0; k < ilen; k++) {
+                    unsigned char c = (unsigned char)input_buf[k];
+                    if      (c == '"')  { reply[rlen++] = '\\'; reply[rlen++] = '"'; }
+                    else if (c == '\\') { reply[rlen++] = '\\'; reply[rlen++] = '\\'; }
+                    else if (c == '\n') { reply[rlen++] = '\\'; reply[rlen++] = 'n'; }
+                    else if (c == '\r') { reply[rlen++] = '\\'; reply[rlen++] = 'r'; }
+                    else if (c == '\t') { reply[rlen++] = '\\'; reply[rlen++] = 't'; }
+                    else if (c < 0x20) {
+                        rlen += sprintf(reply + rlen, "\\u%04x", c);
+                    } else {
+                        reply[rlen++] = c;
+                    }
+                }
+                reply[rlen++] = '"';
+                reply[rlen++] = '}';
+                reply[rlen]   = '\0';
+
+                int ok = send_json_msg(sock, reply);
+                free(reply);
+                if (!ok) { close(sock); return 0; }
+                /* Continue the recv loop — worker will resume and send more output. */
+                continue;
             } else if (strncmp(stream_type, "ERROR", 5) == 0) {
                 /* Daemon-side error (broken pipe, crash, etc.) — don't exit,
                  * fall through so main() retries via execv Python fallback. */
@@ -668,9 +723,35 @@ int main(int argc, char **argv) {
                 fprintf(stderr, "[C-DISPATCH] registry hit %s → %s\n",
                         cli_version, target_python);
         } else {
-            /* Unknown version → Python fallback for proper error / auto-adopt */
-            if (debug) fprintf(stderr, "[C-DISPATCH] unknown version %s → fallback\n", cli_version);
-            fallback_to_python(self_dir, argv);
+            /* Registry miss — could be the native interpreter (not adopted, so not
+             * in registry.json).  Check if the self-aware config python matches the
+             * requested version before giving up and paying the Python fallback cost. */
+            char self_py[MAX_PATH] = "";
+            read_self_config(self_dir, self_py, sizeof(self_py));
+            if (self_py[0] && file_exists(self_py)) {
+                /* Extract version from the path, e.g. ".../bin/python3.11" → "3.11" */
+                const char *base = strrchr(self_py, '/');
+                base = base ? base + 1 : self_py;
+                /* skip "python" prefix */
+                const char *ver_in_path = base;
+                if (strncmp(ver_in_path, "python", 6) == 0) ver_in_path += 6;
+                if (strncmp(ver_in_path, "3.", 2) == 0 &&
+                    strcmp(ver_in_path, cli_version) == 0) {
+                    /* Native interpreter matches — use it directly, no fallback needed */
+                    strncpy(target_python, self_py, sizeof(target_python) - 1);
+                    target_python[sizeof(target_python) - 1] = '\0';
+                    if (debug)
+                        fprintf(stderr, "[C-DISPATCH] native match %s → %s\n",
+                                cli_version, target_python);
+                } else {
+                    /* Genuinely unknown version → Python fallback for auto-adopt */
+                    if (debug) fprintf(stderr, "[C-DISPATCH] unknown version %s → fallback\n", cli_version);
+                    fallback_to_python(self_dir, argv);
+                }
+            } else {
+                if (debug) fprintf(stderr, "[C-DISPATCH] unknown version %s → fallback\n", cli_version);
+                fallback_to_python(self_dir, argv);
+            }
         }
     }
 
@@ -706,16 +787,18 @@ int main(int argc, char **argv) {
     }
 
     /* ── 6. Build final argv and execv ───────────────────────── */
-    
-    int is_swap = 0;
-    for (int i = 1; i < argc; i++) {
-        if (strcmp(argv[i], "swap") == 0) {
-            is_swap = 1;
-            break;
-        }
-    }
 
-    if (!is_swap) {
+    /* Skip the daemon for `swap python` and interactive commands.
+     * Interactive commands need a real TTY for user input — the NEEDS_INPUT
+     * relay through the daemon is unreliable. execv path handles these fine. */
+    int is_interactive_command = 0;
+    if (argc >= 2) {
+        is_interactive_command = (
+            strcmp(argv[1], "info")   == 0 ||
+            strcmp(argv[1], "config") == 0
+        );
+    }
+    if (!is_swap_python && !is_interactive_command) {
         try_daemon_cli(target_python, argc, argv, version_injected, forced_version);
         /* try_daemon_cli calls exit() on success. Reaching here means it failed. */
         if (debug) fprintf(stderr, "[C-DISPATCH] daemon fast-path failed — falling back to execv\n");
@@ -752,6 +835,7 @@ int main(int argc, char **argv) {
         fprintf(stderr, "\n");
     }
 
+    putenv("_OMNIPKG_ISATTY=1");
     execv(target_python, new_argv);
 
     /* execv only returns on error */
