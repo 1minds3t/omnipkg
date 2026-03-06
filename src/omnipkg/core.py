@@ -14088,22 +14088,88 @@ print(json.dumps(results))
                 safe_print(_('   🔍 Auto-detected extra index: {}').format(detected_extra_index_url))
                 extra_index_url = detected_extra_index_url
 
-        # Try uv first if available (4x faster), fall back to pip
+        # ── UV INSTALL: FFI → daemon → subprocess → pip ──────────────
         import shutil as _shutil
+        import time as _time
         uv_exe = self.config.get("uv_executable") or _shutil.which("uv")
         if uv_exe and os.path.exists(uv_exe):
-            uv_cmd = [uv_exe, "pip", "install", "--cache-dir", "/home/minds3t/.cache/uv", "--link-mode", "symlink"]
+            # Build uv args once — reused by all three paths
+            _uv_args = ["pip", "install",
+                        "--cache-dir", "/home/minds3t/.cache/uv",
+                        "--link-mode", "symlink"]
             if index_url:
-                uv_cmd.extend(["--index-url", index_url])
+                _uv_args += ["--index-url", index_url]
             if extra_index_url:
-                uv_cmd.extend(["--extra-index-url", extra_index_url])
+                _uv_args += ["--extra-index-url", extra_index_url]
             if extra_flags:
-                uv_cmd.extend(extra_flags)
+                _uv_args += extra_flags
             if force_reinstall:
-                uv_cmd.append("--upgrade")
+                _uv_args.append("--upgrade")
             if target_directory:
-                uv_cmd.extend(["--target", str(target_directory)])
-            uv_cmd.extend(packages)
+                _uv_args += ["--target", str(target_directory)]
+            _uv_args += packages
+
+            # ── PATH 1: FFI in-process (~2ms) ──────────────────────────
+            _t0 = _time.perf_counter()
+            try:
+                from omnipkg._vendor.uv_ffi import run as _uv_ffi_run
+                _ffi_cmd = " ".join(_uv_args)
+                # FFI doesn't support --target (bubble installs) — fall through to subprocess
+                if "--target" in _uv_args:
+                    raise Exception("--target not supported in FFI")
+                safe_print(f"[UV-PATH] FFI in-process: uv {_ffi_cmd}", file=sys.stderr)
+                _ffi_rc, _ffi_out, _ffi_err = _uv_ffi_run(_ffi_cmd)
+                _ffi_ms = (_time.perf_counter() - _t0) * 1000
+                safe_print(f"[UV-TIMING] FFI: {_ffi_ms:.2f}ms rc={_ffi_rc}", file=sys.stderr)
+                safe_print(_ffi_out, end="")
+                safe_print(_ffi_err, end="", file=sys.stderr)
+                from omnipkg.common_utils import UVFailureDetector
+                if _ffi_rc == 0 and not UVFailureDetector().detect_failure(_ffi_err):
+                    return 0, {"stdout": _ffi_out, "stderr": _ffi_err}
+                safe_print(f"   ⚠️  FFI failed (rc={_ffi_rc}) — trying daemon", file=sys.stderr)
+            except Exception as _ffi_ex:
+                _ffi_ms = (_time.perf_counter() - _t0) * 1000
+                safe_print(f"[UV-PATH] FFI unavailable ({_ffi_ex}) after {_ffi_ms:.2f}ms — trying daemon", file=sys.stderr)
+
+            # ── PATH 2: daemon run_uv (~IPC overhead) ──────────────────
+            _t0 = _time.perf_counter()
+            try:
+                from omnipkg.isolation.worker_daemon import DaemonClient
+                _dc = DaemonClient(auto_start=False)
+                _req = {
+                    "type":       "run_uv",
+                    "uv_exe":     uv_exe,
+                    "uv_args":    _uv_args,
+                    "python_exe": self.config.get("python_executable"),
+                    "env": {k: os.environ[k] for k in
+                            ("UV_INDEX_URL", "UV_EXTRA_INDEX_URL",
+                             "SSL_CERT_FILE", "REQUESTS_CA_BUNDLE")
+                            if k in os.environ},
+                }
+                safe_print(f"[UV-PATH] daemon run_uv: uv {' '.join(_uv_args)}", file=sys.stderr)
+                _daemon_result = _dc._send(_req)
+                _daemon_ms = (_time.perf_counter() - _t0) * 1000
+                if _daemon_result.get("status") == "COMPLETED":
+                    _rc  = _daemon_result.get("exit_code", 0)
+                    _out = _daemon_result.get("stdout", "")
+                    _err = _daemon_result.get("stderr", "")
+                    safe_print(f"[UV-TIMING] daemon: {_daemon_ms:.2f}ms rc={_rc}", file=sys.stderr)
+                    safe_print(_out, end="")
+                    safe_print(_err, end="", file=sys.stderr)
+                    return _rc, {"stdout": _out, "stderr": _err}
+                safe_print(
+                    f"[UV-PATH] daemon failed ({_daemon_result.get('error')}) after {_daemon_ms:.2f}ms — subprocess fallback",
+                    file=sys.stderr,
+                )
+            except Exception as _de:
+                _daemon_ms = (_time.perf_counter() - _t0) * 1000
+                safe_print(f"[UV-PATH] daemon unavailable ({_de}) after {_daemon_ms:.2f}ms — subprocess fallback",
+                           file=sys.stderr)
+
+            # ── PATH 3: subprocess uv ───────────────────────────────────
+            _t0 = _time.perf_counter()
+            uv_cmd = [uv_exe] + _uv_args
+            safe_print(f"[UV-PATH] subprocess: {' '.join(uv_cmd)}", file=sys.stderr)
             try:
                 uv_proc = subprocess.Popen(
                     uv_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
@@ -14117,13 +14183,15 @@ print(json.dumps(results))
                     safe_print(line, end="", file=sys.stderr)
                     uv_err.append(line)
                 uv_proc.wait()
+                _sub_ms = (_time.perf_counter() - _t0) * 1000
                 uv_stderr_str = "".join(uv_err)
+                safe_print(f"[UV-TIMING] subprocess: {_sub_ms:.2f}ms rc={uv_proc.returncode}", file=sys.stderr)
                 from omnipkg.common_utils import UVFailureDetector
                 if uv_proc.returncode == 0 and not UVFailureDetector().detect_failure(uv_stderr_str):
                     return 0, {"stdout": "".join(uv_out), "stderr": uv_stderr_str}
-                safe_print("   ⚠️  uv failed, falling back to pip...")
-            except Exception:
-                safe_print("   ⚠️  uv unavailable, falling back to pip...")
+                safe_print("   ⚠️  uv subprocess failed, falling back to pip...")
+            except Exception as _sub_ex:
+                safe_print(f"   ⚠️  uv subprocess unavailable ({_sub_ex}), falling back to pip...")
 
         cmd = [self.config["python_executable"], "-u", "-m", "pip", "install"]
         cmd.append("--no-cache-dir")
