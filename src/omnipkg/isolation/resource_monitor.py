@@ -81,9 +81,17 @@ def get_daemon_worker_info():
             if m:
                 py_ver = m.group(1)
                 break
-            m = re.search(r"python3?[\.\-_]?(\d+)", str(search_str), re.IGNORECASE)
+            m = re.search(r"python(3\.\d+)", str(search_str), re.IGNORECASE)
             if m:
-                py_ver = "3." + m.group(1) if "." not in m.group(0) else m.group(0).lstrip("python").lstrip("3.")
+                py_ver = m.group(1)
+                break
+            m = re.search(r"/Versions/(3\.\d+)/", str(search_str))
+            if m:
+                py_ver = m.group(1)
+                break
+            m = re.search(r"python3[\-_](\d+)", str(search_str), re.IGNORECASE)
+            if m:
+                py_ver = "3." + m.group(1)
                 break
 
         pid_map[str(pid)] = f"{pkg_spec} (py{py_ver})"
@@ -196,18 +204,26 @@ def get_gpu_summary():
 def _extract_python_version(cmd: str, exe: str = "") -> str:
     """
     Pull pythonX.Y or cpython-X.Y out of a command string or exe path.
-    Checks all available strings so Windows native python.exe (no version in name)
-    is resolved via the cpython-X.Y.Z directory in its path.
+    Handles macOS framework paths like Python.app/Contents/MacOS/Python
+    by parsing the Versions/X.Y segment in the path.
     """
-    for s in [cmd, exe]:
+    for s in [exe, cmd]:
         if not s:
             continue
         # cpython-3.9.23 or cpython-3.11.9 style (managed interpreter paths)
         m = re.search(r"cpython[\-_](3\.\d+)", s, re.IGNORECASE)
         if m:
             return m.group(1)
-        # python3.9, python3.11 in command name
-        m = re.search(r"python3\.(\d+)", s, re.IGNORECASE)
+        # python3.11 with explicit minor version
+        m = re.search(r"python(3\.\d+)", s, re.IGNORECASE)
+        if m:
+            return m.group(1)
+        # macOS framework path: .../Versions/3.11/...
+        m = re.search(r"/Versions/(3\.\d+)/", s)
+        if m:
+            return m.group(1)
+        # python3-11 or python3_11 separator style
+        m = re.search(r"python3[\-_](\d+)", s, re.IGNORECASE)
         if m:
             return "3." + m.group(1)
     return "3.x"
@@ -329,7 +345,12 @@ def print_stats(watch_mode=False):
                   f"VIRT: {format_memory(p['vsz']):>8} | {g} | Running: {format_time(p['elapsed'])}")
         print()
 
-    total_cpu = total_ram_mb = total_gpu_mb = worker_count = 0
+    total_cpu = total_ram_mb = total_gpu_mb = worker_count = idle_count = 0
+    for procs in idle_workers_by_version.values():
+        for p in procs:
+            idle_count   += 1
+            total_ram_mb += p["rss"] / 1024
+            total_gpu_mb += p["gpu_mb"]
     if workers:
         safe_print("⚙️  ACTIVE WORKERS (Package-specific bubbles):")
         print("-" * 120)
@@ -362,7 +383,7 @@ def print_stats(watch_mode=False):
     safe_print("📊 WORKER SUMMARY")
     print("=" * 120)
     print(f"  Active Workers:  {worker_count}")
-    print(f"  Idle Workers:    {len(idle_workers)}")
+    print(f"  Idle Workers:    {idle_count}")
     print(f"  Total CPU:       {total_cpu:.1f}%")
     print(f"  Total RAM:       {total_ram_mb:.1f}MB ({total_ram_mb/1024:.2f}GB)")
     print(f"  Total GPU VRAM:  {total_gpu_mb}MB")

@@ -104,7 +104,6 @@ omnipkg/utils/emoji_print_fixer.py
 # Development tools (maintainer use only)
 dev_tools/
 omnipkg/!src/omnipkg/
-/omnipkg/
 src/build/
 build/
 *.egg-info/
@@ -123,3 +122,85 @@ licenses/
 
 # gitship diff exports (auto-added by gitship)
 gitship_exports/
+
+# Python compiled
+*.py[cod]
+
+# Python compiled
+*$py.class
+
+# Python
+.Python
+
+# Build artifacts
+develop-eggs/
+
+# Distribution
+dist/
+
+# Build artifacts
+downloads/
+
+# Build artifacts
+eggs/
+
+# Build artifacts
+.eggs/
+
+# Build artifacts
+lib/
+
+# Build artifacts
+lib64/
+
+# Build artifacts
+parts/
+
+# Build artifacts
+sdist/
+
+# Build artifacts
+var/
+
+# Build artifacts
+wheels/
+
+# Build artifacts
+.installed.cfg
+
+# Python package
+*.egg
+
+# Testing
+.pytest_cache/
+
+# Virtual environment
+.venv
+
+# Dependencies
+node_modules/
+
+# Logs
+npm-debug.log*
+
+# Logs
+yarn-debug.log*
+
+# Logs
+yarn-error.log*
+
+# npm
+.npm
+
+# --- Omnipkg UV FFI & Vendor Bloat ---
+# Ignore the massive test suite inside the vendored uv
+src/omnipkg/_vendor/uv/test/
+src/omnipkg/_vendor/uv/docs/
+
+# Ignore FFI compiled binaries and cache
+src/omnipkg/_vendor/uv_ffi/_native/
+src/omnipkg/_vendor/uv_ffi/__pycache__/
+
+# Ignore temporary root-level FFI source files
+/uv_ffi__init__.py
+/uv_ffi_lib.rs

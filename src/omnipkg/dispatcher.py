@@ -185,10 +185,103 @@ def main():
         print(f'[DEBUG-DISPATCH] Using Python: {target_python}', file=sys.stderr)
         print(f'[DEBUG-DISPATCH] Current executable: {sys.executable}', file=sys.stderr)
     
-    if not target_python.exists():
-        _safe_print(f'❌ Python interpreter not found: {target_python}', file=sys.stderr)
-        print(f'   Run: 8pkg python adopt {extract_version(target_python)}', file=sys.stderr)
-        sys.exit(1)
+    # NEW
+    venv_root = find_absolute_venv_root()
+    # NEW
+    is_managed = (
+        str(target_python).startswith(str(venv_root))
+        or str(target_python.resolve()).startswith(str(venv_root.resolve()))
+    )
+    
+    if debug_mode:
+        print(f'[DEBUG-DISPATCH] is_managed check:', file=sys.stderr)
+        print(f'[DEBUG-DISPATCH]   target_python         : {target_python}', file=sys.stderr)
+        print(f'[DEBUG-DISPATCH]   target_python.resolve(): {target_python.resolve()}', file=sys.stderr)
+        print(f'[DEBUG-DISPATCH]   venv_root             : {venv_root}', file=sys.stderr)
+        print(f'[DEBUG-DISPATCH]   venv_root.resolve()   : {venv_root.resolve()}', file=sys.stderr)
+        print(f'[DEBUG-DISPATCH]   is_managed            : {is_managed}', file=sys.stderr)
+    
+    if not target_python.exists() or not is_managed:
+        # Lazy import — only needed on this path
+        import subprocess
+        version_str = os.environ.get("OMNIPKG_PYTHON") or extract_version(target_python)
+        print(f'⚠️  Python {version_str} not adopted — adopting now...', file=sys.stderr)
+        adopt_result = subprocess.call(
+            [sys.executable, "-m", "omnipkg.cli", "python", "adopt", version_str]
+        )
+        if adopt_result != 0:
+            print(f'❌ Failed to adopt Python {version_str}.', file=sys.stderr)
+            sys.exit(1)
+        # Re-resolve after adoption and fall through to re-exec
+        target_python = resolve_python_path(version_str)
+        if not target_python.exists():
+            print(f'❌ Adoption succeeded but interpreter still not found.', file=sys.stderr)
+            sys.exit(1)
+
+    # Try daemon socket first (fast path)
+    if not is_swap_command:
+        try:
+            import socket
+            import tempfile
+            
+            sock_path = os.path.join(tempfile.gettempdir(), "omnipkg", "omnipkg_daemon.sock")
+            if sys.platform == "win32":
+                conn_file = os.path.join(tempfile.gettempdir(), "omnipkg", "daemon_connection.txt")
+                if os.path.exists(conn_file):
+                    with open(conn_file, "r") as f:
+                        conn_str = f.read().strip()
+                    if conn_str.startswith("tcp://"):
+                        host, port = conn_str[6:].split(":")
+                        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                        sock.connect((host, int(port)))
+                    else:
+                        raise ValueError()
+                else:
+                    raise ValueError()
+            else:
+                if os.path.exists(sock_path):
+                    sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+                    sock.connect(sock_path)
+                else:
+                    raise ValueError()
+                    
+            req = {
+                "type": "run_cli",
+                "argv":["omnipkg"] + sys.argv[1:],
+                "cwd": os.getcwd(),
+                "isatty": sys.stdout.isatty(),
+                "python_exe": str(target_python)
+            }
+            
+            req_bytes = json.dumps(req).encode("utf-8")
+            sock.sendall(len(req_bytes).to_bytes(8, "big") + req_bytes)
+            
+            while True:
+                len_bytes = sock.recv(8)
+                if not len_bytes:
+                    break
+                msg_len = int.from_bytes(len_bytes, "big")
+                data = bytearray()
+                while len(data) < msg_len:
+                    chunk = sock.recv(min(msg_len - len(data), 8192))
+                    if not chunk:
+                        break
+                    data.extend(chunk)
+                msg = json.loads(data.decode("utf-8"))
+                
+                if msg.get("stream") == "stdout":
+                    sys.stdout.write(msg.get("data", ""))
+                    sys.stdout.flush()
+                elif msg.get("stream") == "stderr":
+                    sys.stderr.write(msg.get("data", ""))
+                    sys.stderr.flush()
+                elif msg.get("status") == "COMPLETED":
+                    sys.exit(msg.get("exit_code", 0))
+                elif msg.get("status") == "ERROR":
+                    sys.stderr.write(msg.get("error", "") + "\n")
+                    sys.exit(msg.get("exit_code", 1))
+        except Exception:
+            pass
 
     exec_args = [str(target_python), "-m", "omnipkg.cli"] + sys.argv[1:]
 
@@ -202,53 +295,109 @@ def main():
         os.execv(str(target_python), exec_args)
 
 def _maybe_install_c_dispatcher():
-    """
-    On first run after a pip install, replace ourselves with the C binary.
-    Subsequent runs skip this entirely (binary doesn't call us).
-    Cost: one stat() call = ~1µs. Only actually compiles once.
-    """
     import sys, os, subprocess, shutil
     from pathlib import Path
 
-    # Already a binary? (C dispatcher never calls dispatcher.py on happy path)
-    # This runs only when Python dispatcher is invoked — i.e. pip just reinstalled us.
-    c_source = Path(__file__).parent.parent.parent / "tools" / "dispatcher_bin" / "dispatcher.c"
-    if not c_source.exists():
-        return  # not a dev install, skip
+    debug = os.environ.get("OMNIPKG_DEBUG") == "1"
 
-    if not shutil.which("gcc"):
-        return  # no compiler, skip silently
+    _here = Path(__file__).parent  # src/omnipkg/
+    if debug:
+        print(f"[C-INSTALL] __file__  = {__file__}", file=sys.stderr)
+        print(f"[C-INSTALL] _here     = {_here}", file=sys.stderr)
+
+    # Search every plausible location for dispatcher.c
+    candidates = [
+        _here / "dispatcher.c",                                              # packaged alongside dispatcher.py
+        _here.parent.parent / "tools" / "dispatcher_bin" / "dispatcher.c",  # editable: src/omnipkg/ -> repo root
+        _here.parent / "tools" / "dispatcher_bin" / "dispatcher.c",         # alternate layout
+        Path(sys.argv[0]).resolve().parent.parent / "tools" / "dispatcher_bin" / "dispatcher.c",  # relative to bin/
+    ]
+
+    c_source = None
+    for candidate in candidates:
+        if debug:
+            print(f"[C-INSTALL] checking candidate: {candidate} -> exists={candidate.exists()}", file=sys.stderr)
+        if candidate.exists():
+            c_source = candidate
+            break
+
+    if c_source is None:
+        if debug:
+            print(f"[C-INSTALL] dispatcher.c not found in any candidate — skipping", file=sys.stderr)
+        return
+
+    if debug:
+        print(f"[C-INSTALL] found dispatcher.c at: {c_source}", file=sys.stderr)
+
+    gcc = shutil.which("gcc")
+    if not gcc:
+        if debug:
+            print(f"[C-INSTALL] gcc not found in PATH — skipping", file=sys.stderr)
+        return
+
+    if debug:
+        print(f"[C-INSTALL] gcc = {gcc}", file=sys.stderr)
 
     bin_dir = Path(sys.executable).parent
     marker = bin_dir / ".omnipkg_dispatch_compiled"
 
-    # Check if already installed (marker file = binary is in place)
-    # Recompile if source is newer than marker
+    if debug:
+        print(f"[C-INSTALL] bin_dir = {bin_dir}", file=sys.stderr)
+        print(f"[C-INSTALL] marker  = {marker} -> exists={marker.exists()}", file=sys.stderr)
+        if marker.exists():
+            print(f"[C-INSTALL] marker mtime={marker.stat().st_mtime}  source mtime={c_source.stat().st_mtime}  up_to_date={marker.stat().st_mtime >= c_source.stat().st_mtime}", file=sys.stderr)
+
     if marker.exists() and marker.stat().st_mtime >= c_source.stat().st_mtime:
+        if debug:
+            print(f"[C-INSTALL] binary is up-to-date — skipping recompile", file=sys.stderr)
         return
 
     binary_tmp = bin_dir / "_omnipkg_dispatch_tmp"
+    if debug:
+        print(f"[C-INSTALL] compiling: gcc -O2 -o {binary_tmp} {c_source}", file=sys.stderr)
+
     try:
         r = subprocess.run(
             ["gcc", "-O2", "-o", str(binary_tmp), str(c_source)],
             capture_output=True, timeout=15
         )
+        if debug:
+            print(f"[C-INSTALL] gcc returncode={r.returncode}", file=sys.stderr)
+            if r.stdout:
+                print(f"[C-INSTALL] gcc stdout: {r.stdout.decode(errors='replace')}", file=sys.stderr)
+            if r.stderr:
+                print(f"[C-INSTALL] gcc stderr: {r.stderr.decode(errors='replace')}", file=sys.stderr)
+
         if r.returncode != 0:
+            if debug:
+                print(f"[C-INSTALL] compile FAILED — staying on Python dispatcher", file=sys.stderr)
             return
 
+        replaced = []
         for name in ("8pkg", "omnipkg", "OMNIPKG", "8PKG"):
             target = bin_dir / name
             if target.exists():
                 shutil.copy2(str(binary_tmp), str(target))
                 os.chmod(str(target), 0o755)
+                replaced.append(name)
 
         binary_tmp.unlink()
-        marker.touch()  # record that binary is installed
-        # Note: no print here — this is silent. The NEXT invocation will be fast.
-    except Exception:
+        if replaced:
+            marker.touch()
+
+        if debug:
+            print(f"[C-INSTALL] done. replaced={replaced}  marker touched={marker}", file=sys.stderr)
+            print(f"[C-INSTALL] ⚡ NEXT invocation will use the C dispatcher — re-exec now to use it immediately", file=sys.stderr)
+
+    except Exception as e:
+        if debug:
+            print(f"[C-INSTALL] EXCEPTION: {e}", file=sys.stderr)
         if binary_tmp.exists():
-            try: binary_tmp.unlink()
-            except: pass
+            try:
+                binary_tmp.unlink()
+            except Exception:
+                pass
+
 def determine_target_python() -> Path:
     """
     PRIORITY ORDER:
@@ -309,22 +458,30 @@ def determine_target_python() -> Path:
     if not swap_active:
         script_path = Path(sys.argv[0]).resolve()
         script_dir = script_path.parent
-        config_path = script_dir / ".omnipkg_config.json"
 
-        if config_path.exists():
-            try:
-                with open(config_path, "r") as f:
-                    config = json.load(f)
-                python_exe = config.get("python_executable")
-                if python_exe:
-                    python_path = Path(python_exe)
-                    if python_path.exists():
-                        if debug_mode:
-                            print(f'[DEBUG-DISPATCH] ✅ Self-aware: {python_path}', file=sys.stderr)
-                        return python_path
-            except Exception as e:
-                if debug_mode:
-                    print(f'[DEBUG-DISPATCH] Config read error: {e}', file=sys.stderr)
+        # On Windows, 8pkg.exe lives in Scripts\ but the config is written
+        # one level up at the env root (debug\.omnipkg_config.json).
+        # Check both: Scripts\.omnipkg_config.json (Linux/managed interpreters)
+        # and Scripts\..\omnipkg_config.json (Windows conda/venv root).
+        config_candidates = [script_dir / ".omnipkg_config.json"]
+        if sys.platform == "win32":
+            config_candidates.append(script_dir.parent / ".omnipkg_config.json")
+
+        for config_path in config_candidates:
+            if config_path.exists():
+                try:
+                    with open(config_path, "r") as f:
+                        config = json.load(f)
+                    python_exe = config.get("python_executable")
+                    if python_exe:
+                        python_path = Path(python_exe)
+                        if python_path.exists():
+                            if debug_mode:
+                                print(f'[DEBUG-DISPATCH] ✅ Self-aware ({config_path}): {python_path}', file=sys.stderr)
+                            return python_path
+                except Exception as e:
+                    if debug_mode:
+                        print(f'[DEBUG-DISPATCH] Config read error ({config_path}): {e}', file=sys.stderr)
 
     # ─────────────────────────────────────────────────────────────
     # Priority 2: OMNIPKG_PYTHON — only inside an active swap shell.
@@ -703,6 +860,22 @@ def spawn_swap_shell(version: str, python_path: Path, pkg_instance) -> int:
     shims_dir = pkg_instance.config_manager._ensure_shims_installed()
     original_venv = pkg_instance.config_manager.venv_path
 
+    # ── 1b. Ensure python_path is managed (not a system fallback) ────────────
+    venv_str = str(original_venv.resolve())
+    is_managed = str(python_path.resolve()).startswith(venv_str)
+    if not is_managed:
+        safe_print(_("⚠️  Python {} is not adopted yet (found system python at {}) — adopting now...").format(version, python_path))
+        adopt_result = pkg_instance.adopt_interpreter(version)
+        if adopt_result != 0:
+            safe_print(_("❌ Failed to adopt Python {}.").format(version))
+            safe_print(_("   Try manually: 8pkg python adopt {}").format(version))
+            return 1
+        python_path = resolve_python_path(version)
+        if not str(python_path.resolve()).startswith(venv_str):
+            safe_print(_("❌ Adoption succeeded but interpreter still not managed: {}").format(python_path))
+            return 1
+        safe_print(_("✅ Python {} adopted — continuing with swap...").format(version))
+
     # ── 2. Build environment ──────────────────────────────────────────────────
     # IMPORTANT: OMNIPKG_PYTHON, OMNIPKG_VENV_ROOT, and _OMNIPKG_SWAP_ACTIVE are
     # intentionally NOT set in new_env. new_env is the inherited process environment
@@ -859,6 +1032,28 @@ def spawn_swap_shell(version: str, python_path: Path, pkg_instance) -> int:
                 encoding="utf-8",
             )
 
+        # 8pkg / omnipkg shims — route ALL bare 8pkg/omnipkg calls through the
+        # swapped interpreter's own exe so the dispatcher sees the right Python.
+        # Without these, `8pkg info python` resolves to the conda Scripts\8pkg.exe
+        # (3.12) instead of the swapped interpreter's 8pkg (3.11).
+        for _shim_name in ["8pkg", "omnipkg"]:
+            _target_exe = python_path.parent / "Scripts" / f"{_shim_name}.exe"
+            if _target_exe.exists():
+                (scripts_dir / f"{_shim_name}.bat").write_text(
+                    f'@echo off\n"{_target_exe}" --python {version} %*\n',
+                    encoding="utf-8",
+                )
+
+        # CRITICAL: Set swap context vars in new_env so the dispatcher's
+        # Priority 4 (OMNIPKG_PYTHON) fires correctly inside the child shell.
+        # On Unix these are set inside the rcfile; on Windows they must be in
+        # the inherited environment since cmd.exe has no rcfile mechanism.
+        # _OMNIPKG_SWAP_ACTIVE is the gate that prevents stale OMNIPKG_PYTHON
+        # from leaking — both must be set together.
+        new_env["OMNIPKG_PYTHON"] = version
+        new_env["OMNIPKG_VENV_ROOT"] = str(original_venv)
+        new_env["_OMNIPKG_SWAP_ACTIVE"] = "1"
+
         if debug_mode:
             safe_print(f"[DEBUG-SWAP] Wrote python.bat  -> {scripts_dir / 'python.bat'}", file=sys.stderr)
             safe_print(f"[DEBUG-SWAP] Wrote python3.bat -> {scripts_dir / 'python3.bat'}", file=sys.stderr)
@@ -879,13 +1074,14 @@ def spawn_swap_shell(version: str, python_path: Path, pkg_instance) -> int:
             safe_print(_("      $env:OMNIPKG_DEBUG = '1'   (PowerShell)"))
         import subprocess  # <--- ADD THIS LINE
         try:
+            new_env["PATH"] = str(scripts_dir) + os.pathsep + new_env["PATH"]
             proc = subprocess.Popen([shell, "/K"], env=new_env)
             proc.wait()
         except Exception as e:
             safe_print(_("❌ Failed to spawn shell: {}").format(e))
             return 1
         finally:
-            for var in ["OMNIPKG_PYTHON", "OMNIPKG_ACTIVE_PYTHON", "OMNIPKG_VENV_ROOT"]:
+            for var in ["OMNIPKG_PYTHON", "OMNIPKG_ACTIVE_PYTHON", "OMNIPKG_VENV_ROOT", "_OMNIPKG_SWAP_ACTIVE"]:
                 os.environ.pop(var, None)
 
         return 0
@@ -910,16 +1106,26 @@ def spawn_swap_shell(version: str, python_path: Path, pkg_instance) -> int:
     elif "zsh" in shell_name:
         user_rc = Path.home() / ".zshrc"
         system_rc = Path("/etc/zshrc")
+    # NEW
     else:
-        # fish, sh, etc. — fall back to simple interactive execle
-        safe_print(_("🐚 Spawning shell... (Type 'exit' to return)"))
-        safe_print(f"   🐍 Python {version} context active (via shims)")
+        # fish: has its own config mechanism, -i is enough since env is inherited
+        # git bash (MINGW): IS bash under the hood — shell_name will be "bash",
+        #   so it won't reach here. But MSYS2/cygwin bash also resolves to "bash".
+        # sh / dash / ksh: no rcfile concept, -i + inherited env is the best we can do.
+        # tcsh / csh: sourcing works differently, -i is safest fallback.
+        if "fish" in shell_name:
+            safe_print(_("🐚 Entering Python {} swap context (fish)...").format(version))
+            safe_print(f"   🐍 Python {version} active — type 'exit' to return")
+            safe_print(f"   ⚠️  Fish shell: aliases may not load. Run 'source ~/.config/fish/config.fish' if needed.")
+        else:
+            safe_print(_("🐚 Entering Python {} swap context...").format(version))
+            safe_print(f"   🐍 Python {version} active — type 'exit' to return")
+            safe_print(f"   ⚠️  Shell '{shell_name}' not fully supported — env vars active but aliases may not load.")
         try:
-            # For non-bash/zsh, just set env and exec interactive
             os.execle(shell, shell_name, "-i", new_env)
         except Exception as e:
             safe_print(_("❌ Failed to spawn shell: {}").format(e))
-        return 1  # Only reached on execle failure
+        return 1
 
     # Write temp rcfile
     import tempfile as _tempfile
@@ -951,7 +1157,11 @@ def spawn_swap_shell(version: str, python_path: Path, pkg_instance) -> int:
         conda_env = os.environ.get("CONDA_DEFAULT_ENV", "")
         env_prefix = f"({conda_env}) " if conda_env else ""
         _tf.write(f'\n# Show conda env + python version in prompt\n')
-        _tf.write(f'export PS1="{env_prefix}(py{version}) \\u@\\h:\\w\\$ "\n')
+        _# NEW
+        if "zsh" in shell_name:
+            _tf.write(f'export PROMPT="{env_prefix}(py{version}) %n@%m:%~%# "\n')
+        else:
+            _tf.write(f'export PS1="{env_prefix}(py{version}) \\u@\\h:\\w\\$ "\n')
         # Cleanup on exit — trap fires when the bash process actually terminates
         _tf.write(f'\ntrap \'\n')
         _tf.write(f'    unset OMNIPKG_PYTHON OMNIPKG_ACTIVE_PYTHON OMNIPKG_VENV_ROOT _OMNIPKG_SWAP_ACTIVE\n')
@@ -967,10 +1177,24 @@ def spawn_swap_shell(version: str, python_path: Path, pkg_instance) -> int:
     safe_print(_(f"🐚 Entering Python {version} swap context..."))
     safe_print(f"   🐍 Python {version} active — type 'exit' to return")
 
+    # NEW — zsh uses ZDOTDIR trick; bash keeps --rcfile
     try:
-        # --rcfile loads ONLY our file (which sources user rc first).
-        # This is the correct way to get both user aliases AND our injected env.
-        os.execle(shell, shell_name, "--rcfile", rcfile_path, new_env)
+        if "zsh" in shell_name:
+            import tempfile as _td, shutil as _shutil
+            zdotdir = _td.mkdtemp(prefix="omnipkg_zdot_")
+            zshrc = Path(zdotdir) / ".zshrc"
+            _shutil.copy2(rcfile_path, str(zshrc))
+            os.unlink(rcfile_path)
+            content = zshrc.read_text()
+            content = content.replace(
+                f'rm -f "{rcfile_path}" 2>/dev/null',
+                f'rm -rf "{zdotdir}" 2>/dev/null'
+            )
+            zshrc.write_text(content)
+            new_env["ZDOTDIR"] = zdotdir
+            os.execle(shell, shell_name, "-i", new_env)
+        else:
+            os.execle(shell, shell_name, "--rcfile", rcfile_path, new_env)
     except Exception as e:
         safe_print(_("❌ Failed to spawn shell: {}").format(e))
         try:
@@ -1056,6 +1280,29 @@ def find_absolute_venv_root(ignore_env_override: bool = False) -> Path:
                 print(f'[DEBUG-DISPATCH] Found venv via standard search: {search_dir}', file=sys.stderr)
             return search_dir
         search_dir = search_dir.parent
+
+    # --- Conda environment detection ---
+    # Conda envs never have pyvenv.cfg but have reliable markers:
+    #   1. $CONDA_PREFIX env var (set by `conda activate`)
+    #   2. conda-meta/ directory at the env root
+    # Check these before falling back to sys.prefix so we get the right
+    # root even when running inside a conda env that was never activated
+    # via `conda activate` (e.g. direct invocation in CI).
+    conda_prefix_env = os.environ.get("CONDA_PREFIX")
+    if conda_prefix_env:
+        conda_root = Path(conda_prefix_env)
+        if (conda_root / "conda-meta").is_dir():
+            if debug_mode:
+                print(f'[DEBUG-DISPATCH] ✅ Conda env via $CONDA_PREFIX: {conda_root}', file=sys.stderr)
+            return conda_root
+
+    # sys.prefix points at the conda env root for direct invocations
+    # (e.g. /path/to/envs/debug) — confirm it's actually conda before trusting it
+    sys_prefix_path = Path(sys.prefix)
+    if (sys_prefix_path / "conda-meta").is_dir():
+        if debug_mode:
+            print(f'[DEBUG-DISPATCH] ✅ Conda env via sys.prefix/conda-meta: {sys_prefix_path}', file=sys.stderr)
+        return sys_prefix_path
 
     # Only use sys.prefix as a last resort if all else fails.
     # In CI (GitHub Actions hostedtoolcache), there is no pyvenv.cfg so this
