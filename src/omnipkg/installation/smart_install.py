@@ -848,6 +848,25 @@ class SmartInstaller:
                 "run_doctor": True,
             }
 
+            # ── Sentinel write: make packages visible instantly ──
+            # Writes active_version + bubble_version fields BEFORE fork so
+            # _find_package_installations() sees them without waiting for
+            # the background gatherer. Full inst: keys come later from BG.
+            try:
+                if hasattr(self, 'core') and getattr(self.core, 'cache_client', None):
+                    _prefix = self.core.redis_key_prefix
+                    with self.core.cache_client.pipeline() as _pipe:
+                        for _pkg, _ver in main_env_kb_updates.items():
+                            _pk = f"{_prefix}{_pkg}"
+                            _pipe.hset(_pk, "active_version", _ver)
+                        for _pkg, _ver in bubbled_kb_updates.items():
+                            _pk = f"{_prefix}{_pkg}"
+                            _pipe.hset(_pk, f"bubble_version:{_ver}", "true")
+                            _pipe.hset(_pk, "pending_bubble", _ver)
+                        _pipe.execute()
+            except Exception:
+                pass  # never block the foreground path
+
             os.environ["OMNIPKG_BG_WORKER"] = "1"
             _bg_log_path = "/tmp/omnipkg_bg_latest.log"
             print(f"   📋 BG log: cat {_bg_log_path}", flush=True)
