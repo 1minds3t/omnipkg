@@ -163,7 +163,6 @@ sdist/
 var/
 
 # Build artifacts
-wheels/
 
 # Build artifacts
 .installed.cfg
