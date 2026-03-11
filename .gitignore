@@ -203,3 +203,4 @@ src/omnipkg/_vendor/uv_ffi/__pycache__/
 # Ignore temporary root-level FFI source files
 /uv_ffi__init__.py
 /uv_ffi_lib.rs
+src/omnipkg/_vendor/wheels/
