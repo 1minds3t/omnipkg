@@ -14063,39 +14063,58 @@ print(json.dumps(results))
         if not packages:
             return 0, {"stdout": "", "stderr": ""}
 
-        # ✨ AUTO-DETECT INDEX URL if not explicitly provided
-        if not index_url and not extra_index_url and packages:
-            # Lazy-load the registry (only initialize once per instance)
+        # ✨ AUTO-DETECT INDEX URL — only when caller didn't provide one
+        # Registry lookup is skipped entirely when index_url/extra_index_url
+        # are already set (fast path for normal installs like rich, numpy etc).
+        # Only packages registered as special variants (torch cuda builds etc)
+        # will ever trigger this — and only once, result is NOT cached here
+        # because version/variant can differ per call.
+        if not index_url and not extra_index_url:
             if not hasattr(self, "package_index_registry"):
                 from .installation.package_index_registry import PackageIndexRegistry
-
-                config_base = self.multiversion_base.parent
-                self.package_index_registry = PackageIndexRegistry(config_base)
-
-            # Parse first package to detect variant
-            pkg_name, version = self._parse_package_spec(packages[0])
-
-            # Ask registry for index URL
-            detected_index_url, detected_extra_index_url = (
-                self.package_index_registry.detect_index_url(pkg_name, version)
+                self.package_index_registry = PackageIndexRegistry(
+                    self.multiversion_base.parent
+                )
+            _reg_name, _reg_ver = self._parse_package_spec(packages[0])
+            # detect_index_url returns (None, None) instantly for unknown packages
+            _det_idx, _det_extra = self.package_index_registry.detect_index_url(
+                _reg_name, _reg_ver
             )
-
-            if detected_index_url:
-                safe_print(f"   🔍 Auto-detected special variant for {pkg_name}")
-                safe_print(_('   🎯 Using index: {}').format(detected_index_url))
-                index_url = detected_index_url
-            if detected_extra_index_url:
-                safe_print(_('   🔍 Auto-detected extra index: {}').format(detected_extra_index_url))
-                extra_index_url = detected_extra_index_url
+            if _det_idx:
+                safe_print(f"   🔍 Auto-detected special variant for {_reg_name}")
+                safe_print(_('   🎯 Using index: {}').format(_det_idx))
+                index_url = _det_idx
+            if _det_extra:
+                safe_print(_('   🔍 Auto-detected extra index: {}').format(_det_extra))
+                extra_index_url = _det_extra
 
         # ── UV INSTALL: FFI → daemon → subprocess → pip ──────────────
-        import shutil as _shutil
-        import time as _time
-        uv_exe = self.config.get("uv_executable") or _shutil.which("uv")
-        if uv_exe and os.path.exists(uv_exe):
+        # Cache uv_exe and cache_dir on self — never pay for shutil.which() twice
+        if not hasattr(self, "_uv_exe_cached"):
+            import shutil as _shutil_init
+            _exe = self.config.get("uv_executable") or _shutil_init.which("uv") or ""
+            self._uv_exe_cached = _exe if (_exe and os.path.exists(_exe)) else ""
+            self._uv_cache_dir = (
+                self.config.get("uv_cache_dir")
+                or os.path.expanduser("~/.cache/uv")
+            )
+            # Pre-import and cache FFI + failure detector — never pay import cost on hot path
+            try:
+                from omnipkg._vendor.uv_ffi import run as _ffi_run
+                self._uv_ffi_run = _ffi_run
+            except ImportError:
+                self._uv_ffi_run = None
+            try:
+                from omnipkg.common_utils import UVFailureDetector
+                self._uv_failure_detector = UVFailureDetector()
+            except ImportError:
+                self._uv_failure_detector = None
+        uv_exe = self._uv_exe_cached
+        if uv_exe:
+            _t_wrapper_entry = time.perf_counter()
             # Build uv args once — reused by all three paths
             _uv_args = ["pip", "install",
-                        "--cache-dir", "/home/minds3t/.cache/uv",
+                        "--cache-dir", self._uv_cache_dir,
                         "--link-mode", "symlink"]
             if index_url:
                 _uv_args += ["--index-url", index_url]
@@ -14107,32 +14126,41 @@ print(json.dumps(results))
                 _uv_args.append("--upgrade")
             if target_directory:
                 _uv_args += ["--target", str(target_directory)]
+            # Always tell uv which Python to target — without this uv uses
+            # environment detection and installs into the wrong interpreter.
+            _py_exe = self.config.get("python_executable", "")
+            if _py_exe and os.path.exists(_py_exe) and "--python" not in _uv_args:
+                _uv_args += ["--python", _py_exe]
             _uv_args += packages
 
-            # ── PATH 1: FFI in-process (~2ms) ──────────────────────────
-            _t0 = _time.perf_counter()
-            try:
-                from omnipkg._vendor.uv_ffi import run as _uv_ffi_run
+            print(f"[WALL-CORE] args-build+exists: {(time.perf_counter()-_t_wrapper_entry)*1000:.3f}ms", flush=True)
+            # ── PATH 1: FFI in-process ─────────────────────────────────
+            if self._uv_ffi_run is not None and "--target" not in _uv_args:
                 _ffi_cmd = " ".join(_uv_args)
-                # FFI doesn't support --target (bubble installs) — fall through to subprocess
-                if "--target" in _uv_args:
-                    raise Exception("--target not supported in FFI")
+                import time as _t_imp
+                _t_pre_ffi = _t_imp.perf_counter()
                 safe_print(f"[UV-PATH] FFI in-process: uv {_ffi_cmd}", file=sys.stderr)
-                _ffi_rc, _ffi_out, _ffi_err = _uv_ffi_run(_ffi_cmd)
-                _ffi_ms = (_time.perf_counter() - _t0) * 1000
-                safe_print(f"[UV-TIMING] FFI: {_ffi_ms:.2f}ms rc={_ffi_rc}", file=sys.stderr)
-                safe_print(_ffi_out, end="")
-                safe_print(_ffi_err, end="", file=sys.stderr)
-                from omnipkg.common_utils import UVFailureDetector
-                if _ffi_rc == 0 and not UVFailureDetector().detect_failure(_ffi_err):
-                    return 0, {"stdout": _ffi_out, "stderr": _ffi_err}
-                safe_print(f"   ⚠️  FFI failed (rc={_ffi_rc}) — trying daemon", file=sys.stderr)
-            except Exception as _ffi_ex:
-                _ffi_ms = (_time.perf_counter() - _t0) * 1000
-                safe_print(f"[UV-PATH] FFI unavailable ({_ffi_ex}) after {_ffi_ms:.2f}ms — trying daemon", file=sys.stderr)
+                _t0 = _t_imp.perf_counter()
+                print(f"[WALL-CORE] pre-FFI overhead in wrapper: {(_t0-_t_pre_ffi)*1000:.3f}ms", flush=True)
+                try:
+                    _ffi_rc, _ffi_installed, _ffi_removed = self._uv_ffi_run(_ffi_cmd)
+                    _ffi_err = ""  # structured return — no stderr string
+                    _ffi_ms = (time.perf_counter() - _t0) * 1000
+                    # NOTE: stdout/stderr printing intentionally deferred to caller
+                    # safe_print here costs 3-4ms over daemon socket — caller prints instead
+                    print(f"[UV-TIMING] FFI: {_ffi_ms:.2f}ms rc={_ffi_rc}", flush=True)
+                    _det = self._uv_failure_detector
+                    if _ffi_rc == 0:
+                        return 0, {"stdout": "", "stderr": "", "ffi_installed": _ffi_installed, "ffi_removed": _ffi_removed, "from_ffi": True}
+                    safe_print(f"   ⚠️  FFI failed (rc={_ffi_rc}) — trying daemon", file=sys.stderr)
+                except Exception as _ffi_ex:
+                    _ffi_ms = (time.perf_counter() - _t0) * 1000
+                    safe_print(f"[UV-PATH] FFI error ({_ffi_ex}) after {_ffi_ms:.2f}ms — trying daemon", file=sys.stderr)
+            else:
+                safe_print(f"[UV-PATH] FFI skipped (unavailable or --target) — trying daemon", file=sys.stderr)
 
             # ── PATH 2: daemon run_uv (~IPC overhead) ──────────────────
-            _t0 = _time.perf_counter()
+            _t0 = time.perf_counter()
             try:
                 from omnipkg.isolation.worker_daemon import DaemonClient
                 _dc = DaemonClient(auto_start=False)
@@ -14148,7 +14176,7 @@ print(json.dumps(results))
                 }
                 safe_print(f"[UV-PATH] daemon run_uv: uv {' '.join(_uv_args)}", file=sys.stderr)
                 _daemon_result = _dc._send(_req)
-                _daemon_ms = (_time.perf_counter() - _t0) * 1000
+                _daemon_ms = (time.perf_counter() - _t0) * 1000
                 if _daemon_result.get("status") == "COMPLETED":
                     _rc  = _daemon_result.get("exit_code", 0)
                     _out = _daemon_result.get("stdout", "")
@@ -14162,12 +14190,12 @@ print(json.dumps(results))
                     file=sys.stderr,
                 )
             except Exception as _de:
-                _daemon_ms = (_time.perf_counter() - _t0) * 1000
+                _daemon_ms = (time.perf_counter() - _t0) * 1000
                 safe_print(f"[UV-PATH] daemon unavailable ({_de}) after {_daemon_ms:.2f}ms — subprocess fallback",
                            file=sys.stderr)
 
             # ── PATH 3: subprocess uv ───────────────────────────────────
-            _t0 = _time.perf_counter()
+            _t0 = time.perf_counter()
             uv_cmd = [uv_exe] + _uv_args
             safe_print(f"[UV-PATH] subprocess: {' '.join(uv_cmd)}", file=sys.stderr)
             try:
@@ -14183,11 +14211,10 @@ print(json.dumps(results))
                     safe_print(line, end="", file=sys.stderr)
                     uv_err.append(line)
                 uv_proc.wait()
-                _sub_ms = (_time.perf_counter() - _t0) * 1000
+                _sub_ms = (time.perf_counter() - _t0) * 1000
                 uv_stderr_str = "".join(uv_err)
                 safe_print(f"[UV-TIMING] subprocess: {_sub_ms:.2f}ms rc={uv_proc.returncode}", file=sys.stderr)
-                from omnipkg.common_utils import UVFailureDetector
-                if uv_proc.returncode == 0 and not UVFailureDetector().detect_failure(uv_stderr_str):
+                if uv_proc.returncode == 0 and not _uv_failure_detector.detect_failure(uv_stderr_str):
                     return 0, {"stdout": "".join(uv_out), "stderr": uv_stderr_str}
                 safe_print("   ⚠️  uv subprocess failed, falling back to pip...")
             except Exception as _sub_ex:

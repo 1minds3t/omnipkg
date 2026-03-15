@@ -19,7 +19,9 @@
  *   - auto-adopt needed
  *   - OMNIPKG_FORCE_PYTHON_DISPATCH=1 (escape hatch)
  */
-
+#include <dlfcn.h>
+#include <fcntl.h>
+#include <glob.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -366,6 +368,133 @@ static int json_get_int(const char *json, const char *key, int *out) {
     return 1;
 }
 
+/*
+ * try_daemon_uv — Phase 1 fast path.
+ *
+ * Sends a run_uv request directly to the daemon's dedicated UV worker.
+ * The worker has a warm Tokio runtime + cached site-packages — ~5ms.
+ * Returns 1 and populates out_json on success, 0 on failure/unavailable.
+ *
+ * Deliberately has a short timeout (5s) so we fall through to the dlopen
+ * path quickly if the daemon is unavailable.
+ */
+static int try_daemon_uv(
+    const char *target_python,
+    const char *pkg_spec,
+    char       *out_json,
+    int         max_out
+) {
+    int debug = (getenv("OMNIPKG_DEBUG") != NULL &&
+                 strcmp(getenv("OMNIPKG_DEBUG"), "1") == 0);
+
+    /* ── Locate socket (same logic as try_daemon_cli) ── */
+    char sock_path[MAX_PATH];
+    sock_path[0] = '\0';
+    const char *ann_path = "/tmp/omnipkg/daemon_connection.txt";
+    FILE *af = fopen(ann_path, "r");
+    if (af) {
+        char line[MAX_PATH];
+        if (fgets(line, sizeof(line), af)) {
+            line[strcspn(line, "\r\n")] = '\0';
+            if (strncmp(line, "unix://", 7) == 0) {
+                strncpy(sock_path, line + 7, sizeof(sock_path) - 1);
+                sock_path[sizeof(sock_path) - 1] = '\0';
+            }
+        }
+        fclose(af);
+    }
+    if (!sock_path[0]) {
+        const char *tmpdir = getenv("TMPDIR");
+        if (!tmpdir) tmpdir = "/tmp";
+        snprintf(sock_path, sizeof(sock_path), "%s/omnipkg/omnipkg_daemon.sock", tmpdir);
+    }
+
+    struct stat st;
+    if (stat(sock_path, &st) != 0) return 0;
+
+    int sock = socket(AF_UNIX, SOCK_STREAM, 0);
+    if (sock < 0) return 0;
+
+    /* Short timeouts — UV install is fast, bail quickly if something's wrong */
+    struct timeval tv = { 5, 0 };
+    setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
+    setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+
+    struct sockaddr_un addr;
+    memset(&addr, 0, sizeof(addr));
+    addr.sun_family = AF_UNIX;
+    strncpy(addr.sun_path, sock_path, sizeof(addr.sun_path) - 1);
+    if (connect(sock, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
+        close(sock);
+        return 0;
+    }
+
+    /* Build the home/cache dir */
+    char cache_dir[MAX_PATH];
+    const char *home = getenv("HOME");
+    snprintf(cache_dir, sizeof(cache_dir), "%s/.cache/uv", home ? home : "/tmp");
+
+    /* Build run_uv request JSON.
+     * uv_args: ["pip","install","--cache-dir","<dir>","--python","<exe>","--link-mode","symlink","<pkg>"]
+     */
+    char req[4096];
+    int rlen = snprintf(req, sizeof(req),
+        "{\"type\":\"run_uv\","
+        "\"python_exe\":\"%s\","
+        "\"uv_args\":[\"pip\",\"install\","
+        "\"--cache-dir\",\"%s\","
+        "\"--python\",\"%s\","
+        "\"--link-mode\",\"symlink\","
+        "\"%s\"]}",
+        target_python, cache_dir, target_python, pkg_spec);
+
+    if (rlen <= 0 || rlen >= (int)sizeof(req)) { close(sock); return 0; }
+
+    if (debug) fprintf(stderr, "[C-DISPATCH] try_daemon_uv: sending run_uv for %s\n", pkg_spec);
+
+    if (!send_json_msg(sock, req)) { close(sock); return 0; }
+
+    /* Drain frames until COMPLETED/ERROR */
+    while (1) {
+        char *msg = recv_json_msg(sock);
+        if (!msg) break;
+
+        char *status_start;
+        if (json_get_raw_str(msg, "status", &status_start)) {
+            if (strncmp(status_start, "COMPLETED", 9) == 0) {
+                int exit_code = 0;
+                json_get_int(msg, "exit_code", &exit_code);
+
+                if (exit_code == 0) {
+                    /* Build changelog JSON from installed/removed arrays in msg.
+                     * The daemon returns {"status":"COMPLETED","exit_code":0,
+                     * "installed":[["name","ver"],...],"removed":[...]} */
+                    /* Copy the full msg as out_json for the caller to use */
+                    strncpy(out_json, msg, max_out - 1);
+                    out_json[max_out - 1] = '\0';
+                    free(msg);
+                    close(sock);
+                    if (debug) fprintf(stderr, "[C-DISPATCH] try_daemon_uv: success\n");
+                    return 1;
+                }
+                free(msg);
+                close(sock);
+                return 0;
+            } else if (strncmp(status_start, "FFI_UNAVAILABLE", 15) == 0 ||
+                       strncmp(status_start, "ERROR", 5) == 0) {
+                free(msg);
+                close(sock);
+                return 0;
+            }
+        }
+        /* stream frames — ignore */
+        free(msg);
+    }
+
+    close(sock);
+    return 0;
+}
+
 static int try_daemon_cli(const char *target_python, int argc, char **argv, int version_injected, const char *forced_version) {
     int debug = (getenv("OMNIPKG_DEBUG") != NULL &&
                  strcmp(getenv("OMNIPKG_DEBUG"), "1") == 0);
@@ -579,10 +708,9 @@ static int try_daemon_cli(const char *target_python, int argc, char **argv, int 
      * the daemon is unhealthy. Nuke the announcement so the next call
      * doesn't connect to a dead socket, then signal fallback. */
     if (!got_terminal_status) {
-        /* recv loop broke unexpectedly — also nuke */
+        remove(ann_path);
+        if (debug) fprintf(stderr, "[C-DISPATCH] daemon unhealthy — falling back to execv\n");
     }
-    remove(ann_path);
-    if (debug) fprintf(stderr, "[C-DISPATCH] daemon unhealthy — falling back to execv\n");
     return 0;
 }
 
@@ -785,12 +913,170 @@ int main(int argc, char **argv) {
             fallback_to_python(self_dir, argv);
         }
     }
+    /* ── 6. Native FFI Fast-Path (Bypass Python IPC completely) ──────────── */
+    int is_swap = 0;
+    const char *pkg_spec = NULL;
+    if (argc >= 3 && strcmp(argv[1], "swap") == 0) {
+        is_swap = 1; pkg_spec = argv[2];
+    } else if (argc >= 4 && strcmp(argv[1], "pip") == 0 && strcmp(argv[2], "install") == 0) {
+        is_swap = 1; pkg_spec = argv[3];
+    }
 
-    /* ── 6. Build final argv and execv ───────────────────────── */
+    if (is_swap && pkg_spec && pkg_spec[0] != '-') {
+        if (debug) fprintf(stderr, "[C-DISPATCH] Fast-path evaluation started. pkg_spec=%s\n", pkg_spec);
 
-    /* Skip the daemon for `swap python` and interactive commands.
-     * Interactive commands need a real TTY for user input — the NEEDS_INPUT
-     * relay through the daemon is unreliable. execv path handles these fine. */
+        char venv_root[MAX_PATH];
+        find_venv_root(self_real, venv_root, sizeof(venv_root));
+
+        char cfg_path[MAX_PATH];
+        snprintf(cfg_path, sizeof(cfg_path), "%s/.omnipkg_config.json", self_dir);
+
+        char strategy[128] = "latest-active";
+        FILE *f = fopen(cfg_path, "r");
+        if (f) {
+            char buf[8192];
+            size_t n = fread(buf, 1, sizeof(buf)-1, f);
+            buf[n] = '\0';
+            json_get_str(buf, "install_strategy", strategy, sizeof(strategy));
+            fclose(f);
+        }
+
+        if (debug) fprintf(stderr, "[C-DISPATCH] Strategy detected: %s\n", strategy);
+
+        if (strcmp(strategy, "latest-active") == 0) {
+            char out_json[65536];
+            out_json[0] = '\0';
+            int ffi_rc = -1;
+
+            /* ── Phase 1a: try daemon UV worker (warm Tokio, ~5ms) ── */
+            if (try_daemon_uv(target_python, pkg_spec, out_json, sizeof(out_json))) {
+                ffi_rc = 0;
+                if (debug) fprintf(stderr, "[C-DISPATCH] daemon UV fast-path succeeded\n");
+            }
+
+            /* ── Phase 1b: dlopen fallback (cold, ~11ms) ── */
+            if (ffi_rc != 0) {
+                char pattern1[MAX_PATH];
+                char pattern2[MAX_PATH];
+                snprintf(pattern1, sizeof(pattern1),
+                    "%s/lib/python3.*/site-packages/omnipkg/_vendor/uv_ffi/_native/*.so", venv_root);
+                snprintf(pattern2, sizeof(pattern2),
+                    "/home/minds3t/omnipkg/src/omnipkg/_vendor/uv_ffi/_native/*.so");
+
+                glob_t globbuf;
+                int found = 0;
+                if (glob(pattern1, 0, NULL, &globbuf) == 0 && globbuf.gl_pathc > 0) {
+                    found = 1;
+                } else {
+                    globfree(&globbuf);
+                    if (glob(pattern2, 0, NULL, &globbuf) == 0 && globbuf.gl_pathc > 0)
+                        found = 1;
+                }
+
+                if (found) {
+                    if (debug) fprintf(stderr, "[C-DISPATCH] Found libuv_ffi.so at: %s\n", globbuf.gl_pathv[0]);
+
+                    const char *py_ver_ptr = strstr(target_python, "python3.");
+                    if (py_ver_ptr) {
+                        char py_ver[32];
+                        strncpy(py_ver, py_ver_ptr, sizeof(py_ver)-1);
+                        py_ver[sizeof(py_ver)-1] = '\0';
+                        char pylib[MAX_PATH];
+                        snprintf(pylib, sizeof(pylib), "%s/lib/lib%s.so", venv_root, py_ver);
+                        void *py_handle = dlopen(pylib, RTLD_LAZY | RTLD_GLOBAL);
+                        if (!py_handle) {
+                            snprintf(pylib, sizeof(pylib), "%s/lib/lib%s.so.1.0", venv_root, py_ver);
+                            py_handle = dlopen(pylib, RTLD_LAZY | RTLD_GLOBAL);
+                        }
+                        if (debug)
+                            fprintf(stderr, "[C-DISPATCH] Preloading %s -> %s\n", pylib,
+                                    py_handle ? "SUCCESS" : dlerror());
+                    }
+
+                    void *ffi_handle = dlopen(globbuf.gl_pathv[0], RTLD_LAZY);
+                    if (!ffi_handle) {
+                        if (debug) fprintf(stderr, "[C-DISPATCH] dlopen failed: %s\n", dlerror());
+                    } else {
+                        typedef int (*run_c_t)(const char*, char*, int);
+                        run_c_t run_fn = (run_c_t)dlsym(ffi_handle, "omnipkg_uv_run_c");
+                        if (run_fn) {
+                            char cache_dir[MAX_PATH];
+                            const char *home = getenv("HOME");
+                            snprintf(cache_dir, sizeof(cache_dir), "%s/.cache/uv",
+                                     home ? home : "/tmp");
+                            char cmd[MAX_PATH * 2];
+                            snprintf(cmd, sizeof(cmd),
+                                "pip install --cache-dir %s --python %s --link-mode symlink %s",
+                                cache_dir, target_python, pkg_spec);
+                            if (debug) fprintf(stderr, "[C-DISPATCH] Native FFI execute: %s\n", cmd);
+                            if (run_fn(cmd, out_json, sizeof(out_json)) == 0)
+                                ffi_rc = 0;
+                        } else {
+                            if (debug) fprintf(stderr, "[C-DISPATCH] dlsym failed: %s\n", dlerror());
+                        }
+                    }
+                    globfree(&globbuf);
+                }
+            }
+
+            /* ── Phase 2: on success, exit fast + fork background KB work ── */
+            if (ffi_rc == 0) {
+                if (debug) fprintf(stderr, "[C-DISPATCH] FFI returned 0. Changelog: %s\n", out_json);
+
+                /* Always return terminal to user immediately */
+                printf("🎉 Package operations complete.\n");
+                fflush(stdout);
+
+                /* Fork background Python only if something actually changed */
+                int has_changes = (strstr(out_json, "[\"") != NULL);
+                if (has_changes) {
+                    pid_t pid = fork();
+                    if (pid > 0) {
+                        /* parent — exit immediately, terminal is free */
+                        exit(0);
+                    } else if (pid == 0) {
+                        /* child — run KB/bubble work silently */
+                        setsid();
+                        /* redirect stdout/stderr to /dev/null */
+                        int devnull = open("/dev/null", O_WRONLY);
+                        if (devnull >= 0) {
+                            dup2(devnull, 1);
+                            dup2(devnull, 2);
+                            close(devnull);
+                        }
+                        char py_script[8192];
+                        snprintf(py_script, sizeof(py_script),
+                            "import json\n"
+                            "from omnipkg.core import ConfigManager, omnipkg\n"
+                            "core = omnipkg(ConfigManager())\n"
+                            "try:\n"
+                            "    cl = json.loads('''%s''')\n"
+                            "    inst = cl.get('installed', [])\n"
+                            "    rem  = cl.get('removed',   [])\n"
+                            "    for name, ver in rem:\n"
+                            "        core.bubble_manager.create_isolated_bubble(\n"
+                            "            name, ver,\n"
+                            "            python_context_version=core.python_context_version)\n"
+                            "    core._synchronize_knowledge_base_with_reality()\n"
+                            "except Exception:\n"
+                            "    pass\n",
+                            out_json);
+                        char *bg_argv[] = {
+                            (char *)target_python,
+                            (char *)"-c",
+                            py_script,
+                            NULL
+                        };
+                        execv(target_python, bg_argv);
+                        exit(0);
+                    }
+                }
+                /* No changes (already satisfied) or fork parent — exit cleanly */
+                exit(0);
+            }
+        }
+    }
+    /* ── 7. Build final argv and execv (or try daemon) ───────────────────────── */
     int is_interactive_command = 0;
     if (argc >= 2) {
         is_interactive_command = (
@@ -806,8 +1092,6 @@ int main(int argc, char **argv) {
 
     /*
      * target_python -m omnipkg.cli[--python X] [original args]
-     * If version was injected from command name, we must insert --python X
-     * into the new argv (since original argv doesn't have it).
      */
     int extra = version_injected ? 2 : 0;   /* "--python", "3.X" */
     char **new_argv = malloc((argc + 4 + extra) * sizeof(char *));
@@ -818,7 +1102,6 @@ int main(int argc, char **argv) {
     new_argv[idx++] = "omnipkg.cli";
 
     /* copy original args starting at 1 (skip argv[0]) */
-    /* but if version_injected, insert --python before them */
     if (version_injected) {
         new_argv[idx++] = "--python";
         new_argv[idx++] = forced_version;

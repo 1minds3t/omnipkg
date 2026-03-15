@@ -627,6 +627,91 @@ class SmartInstaller:
         packages_before: Dict[str, str] = {}
         _live_cache: Dict[str, str] = {}
 
+        # Cache uv path + cache dir on core once so _run_pip_install wrapper
+        # never pays for shutil.which() on the hot path again.
+        # NOTE: _run_pip_install guards its ENTIRE lazy-init block (including
+        # _uv_ffi_run and _uv_failure_detector) on hasattr(self, "_uv_exe_cached").
+        # Since smart_install sets _uv_exe_cached here first, that block is always
+        # skipped, leaving _uv_ffi_run and _uv_failure_detector unset → AttributeError.
+        # We must initialize all three attributes together.
+        if not hasattr(self.core, "_uv_cache_dir"):
+            import shutil as _shutil_once
+            self.core._uv_cache_dir = (
+                self.core.config.get("uv_cache_dir")
+                or os.path.expanduser("~/.cache/uv")
+            )
+            if not getattr(self.core, "_uv_exe_cached", None):
+                self.core._uv_exe_cached = (
+                    self.core.config.get("uv_executable") or _shutil_once.which("uv") or "uv"
+                )
+        if not hasattr(self.core, "_uv_ffi_run"):
+            try:
+                from omnipkg._vendor.uv_ffi import run as _ffi_run_init
+                self.core._uv_ffi_run = _ffi_run_init
+            except ImportError:
+                self.core._uv_ffi_run = None
+        if not hasattr(self.core, "_uv_failure_detector"):
+            try:
+                from omnipkg.common_utils import UVFailureDetector
+                self.core._uv_failure_detector = UVFailureDetector()
+            except ImportError:
+                self.core._uv_failure_detector = None
+
+        # ================================================================
+        # PRE-SPAWN: Fork the background grandchild NOW, before the UV FFI
+        # call, so its startup cost (~4ms) is hidden under UV's ~6-7ms.
+        # The grandchild blocks on a pipe read with no work to do yet.
+        # After UV finishes we JSON-encode _bg_data and write it to the
+        # pipe — the grandchild wakes up and runs _run_background.
+        # Pipe write cost: ~0.1ms vs 4ms for a cold fork after UV returns.
+        # ================================================================
+        _pipe_r, _pipe_w = os.pipe()
+        # Set write end non-blocking so a failed/empty send never stalls parent
+        import fcntl as _fcntl2
+        _fl = _fcntl2.fcntl(_pipe_w, _fcntl2.F_GETFL)
+        _fcntl2.fcntl(_pipe_w, _fcntl2.F_SETFL, _fl | os.O_NONBLOCK)
+
+        _prespawn_mid = os.fork()
+        if _prespawn_mid == 0:
+            # ── intermediate child ──────────────────────────────────────
+            os.close(_pipe_w)  # close write end — child only reads
+            _gc2_pid = os.fork()
+            if _gc2_pid == 0:
+                # ── grandchild: block until parent sends bg_data ────────
+                try:
+                    _chunks = []
+                    while True:
+                        try:
+                            _chunk = os.read(_pipe_r, 65536)
+                        except OSError:
+                            break
+                        if not _chunk:
+                            break
+                        _chunks.append(_chunk)
+                    os.close(_pipe_r)
+                    _raw = b"".join(_chunks)
+                    if _raw:
+                        _bg_data_gc = json.loads(_raw.decode())
+                        # Grandchild lost CoW access to live core after double-
+                        # fork so we rebuild a fresh core from scratch.
+                        import importlib as _imp
+                        _core_mod = _imp.import_module("omnipkg.core")
+                        _ConfigManager = _core_mod.ConfigManager
+                        _OmnipkgCore = _core_mod.omnipkg
+                        _new_core = _OmnipkgCore(_ConfigManager())
+                        _new_core._connect_cache()
+                        SmartInstaller(_new_core)._run_background(
+                            _bg_data_gc, _new_core
+                        )
+                except Exception:
+                    pass
+                finally:
+                    os._exit(0)
+            else:
+                os._exit(0)  # intermediate exits; grandchild reparented to init
+        # ── parent: close read end, keep write end for later send ───────
+        os.close(_pipe_r)
+
         # ================================================================
         # Main install loop — pip installs only, NO bubble creation here
         # ================================================================
@@ -655,21 +740,92 @@ class SmartInstaller:
                 # OPTIMIZATION: Reuse the cached state from the previous iteration (or initial scan)
                 packages_before = _live_cache.copy()
 
-                # ── BUBBLE HARD-LINK FAST-PATH ───────────────────────────
-                # 1. uv --dry-run to get exact +/- list (real deps, no guessing)
-                # 2. Check ALL + packages have bubbles
-                # 3. If yes: parse each bubble's RECORD, hard-link only that
-                #    package's own files (not bundled deps) into site-packages
-                # 4. If any bubble missing: fall back to real uv
                 t_pip = time.perf_counter()
 
-                return_code, pkg_install_output = self.core._run_pip_install(
-                    [package_spec],
-                    target_directory=target_directory,
-                    force_reinstall=force_reinstall,
-                    index_url=index_url,
-                    extra_index_url=extra_index_url,
+                # ── INLINE FFI FAST-PATH ─────────────────────────────────
+                # Bypasses _run_pip_install wrapper overhead (~1.4ms saved):
+                #   - skips package_index_registry.detect_index_url() per call
+                #   - skips inline `import shutil` + shutil.which("uv")
+                #   - skips UVFailureDetector import on success path
+                # Falls back to full _run_pip_install on any problem so
+                # CI / environments without uv_ffi are never broken.
+                #
+                # Only use this fast-path when:
+                #   - no target_directory (bubble installs need --target, FFI doesn't support it)
+                #   - no custom index URLs (registry detection lives in the wrapper)
+                #   - no extra_flags (e.g. --no-deps used in stable-main restore)
+                return_code = -1
+                pkg_install_output = {"stdout": "", "stderr": ""}
+                _used_ffi = False
+
+                _can_use_ffi = (
+                    not target_directory
+                    and not index_url
+                    and not extra_index_url
                 )
+
+                if _can_use_ffi:
+                    try:
+                        _uv_cache = getattr(self.core, "_uv_cache_dir", os.path.expanduser("~/.cache/uv"))
+                        _configured_py = self.core.config.get("python_executable") or ""
+                        _ffi_parts = [
+                            "pip", "install",
+                            "--cache-dir", _uv_cache,
+                            "--link-mode", "symlink",
+                        ]
+                        # Always tell uv which Python to target — without this uv
+                        # uses its own environment detection and may install into the
+                        # wrong interpreter (e.g. 3.11 when called from a 3.12 worker).
+                        if _configured_py and os.path.exists(_configured_py):
+                            _ffi_parts += ["--python", _configured_py]
+                        if force_reinstall:
+                            _ffi_parts.append("--upgrade")
+                        _ffi_parts.append(package_spec)
+                        print(f"[UV-PATH] FFI direct: uv {' '.join(_ffi_parts)}", flush=True)
+                        _in_worker = os.environ.get('OMNIPKG_IS_DAEMON_WORKER') == '1'
+                        if _in_worker:
+                            # Inside daemon worker — FFI is already warm in this process
+                            from omnipkg._vendor.uv_ffi import run as _uv_ffi_run
+                            _ffi_result    = _uv_ffi_run(' '.join(_ffi_parts))
+                            _ffi_rc        = _ffi_result[0] if isinstance(_ffi_result, tuple) else _ffi_result
+                            _ffi_installed = _ffi_result[1] if isinstance(_ffi_result, tuple) and len(_ffi_result) > 1 else []
+                            _ffi_removed   = _ffi_result[2] if isinstance(_ffi_result, tuple) and len(_ffi_result) > 2 else []
+                        else:
+                            # Outside worker — route to daemon's warm UV worker via socket
+                            from omnipkg.isolation.worker_daemon import DaemonClient as _DC
+                            _res           = _DC().run_uv(_ffi_parts, uv_exe=getattr(self.core, "_uv_exe_cached", None))
+                            _ffi_rc        = _res.get("exit_code", 1)
+                            _ffi_installed = _res.get("installed", [])
+                            _ffi_removed   = _res.get("removed", [])
+                        print(f"[WALL] FFI-returned: {(time.perf_counter()-t_install_start)*1000:.3f}ms elapsed", flush=True)
+                        print(f"[UV-TIMING] FFI: {(time.perf_counter()-t_pip)*1000:.2f}ms rc={_ffi_rc}", flush=True)
+                        if _ffi_rc == 0:
+                            return_code = 0
+                            pkg_install_output = {"stdout": "", "stderr": "", "ffi_installed": _ffi_installed, "ffi_removed": _ffi_removed, "from_ffi": True}
+                            _used_ffi = True
+                        else:
+                            print(f"[UV-PATH] FFI rc={_ffi_rc} — falling back to wrapper", flush=True)
+                    except ImportError:
+                        print("[UV-PATH] uv_ffi not available — falling back to wrapper", flush=True)
+                    except Exception as _ffi_ex:
+                        print(f"[UV-PATH] FFI error ({_ffi_ex}) — falling back to wrapper", flush=True)
+
+                if not _used_ffi:
+                    # Full wrapper: handles index registry, daemon, subprocess, pip fallback
+                    return_code, pkg_install_output = self.core._run_pip_install(
+                        [package_spec],
+                        target_directory=target_directory,
+                        force_reinstall=force_reinstall,
+                        index_url=index_url,
+                        extra_index_url=extra_index_url,
+                    )
+                    # Print captured output (wrapper no longer prints on FFI path)
+                    if pkg_install_output.get("stdout"):
+                        print(pkg_install_output["stdout"], end="", flush=True)
+                    if pkg_install_output.get("stderr"):
+                        print(pkg_install_output["stderr"], end="", flush=True)
+                    print(f"[WALL] FFI-returned: {(time.perf_counter()-t_install_start)*1000:.3f}ms elapsed", flush=True)
+
                 _tprint(f"pip_install:{pkg_name}", t_pip)
 
                 if return_code != 0:
@@ -689,29 +845,46 @@ class SmartInstaller:
                     continue
 
                 any_installations_made = True
-                t_get_after = time.perf_counter()
-                _uv_stderr = pkg_install_output.get("stderr", "")
-                if _uv_stderr and (" - " in _uv_stderr or " + " in _uv_stderr):
-                    # Reconstruct packages_before from uv "-" lines so bubble queuing works
-                    for _ul in _uv_stderr.splitlines():
-                        _ul = _ul.strip()
-                        if _ul.startswith("- ") and "==" in _ul:
-                            _up, _uv = _ul[2:].split("==", 1)
-                            packages_before[_up.strip().lower()] = _uv.strip()
-                    # Fast path: derive state from uv's own diff output — no filesystem scan
-                    packages_after = self._parse_uv_changes(_uv_stderr, packages_before)
-                    _tprint(f"get_installed_after:{pkg_name}(uv-fast)", t_get_after)
-                else:
-                    # No +/- diff from uv = infer (no changes, or pip fallback)
+                _t0 = time.perf_counter()
+
+                # ── step A: parse uv stderr / consume FFI struct ─────────
+                if pkg_install_output.get("from_ffi"):
+                    # Direct structured data — no parsing needed
                     packages_after = dict(packages_before)
-                    packages_after[pkg_name.lower()] = pkg_version
-                    _tprint(f"get_installed_after:{pkg_name}(inferred)", t_get_after)
+                    for _name, _ver in pkg_install_output.get("ffi_installed", []):
+                        packages_after[_name.lower()] = _ver
+                    for _name, _ver in pkg_install_output.get("ffi_removed", []):
+                        packages_before[_name.lower()] = _ver  # restore old ver for diff
+                    _parse_path = "ffi-struct"
+                else:
+                    _uv_stderr = pkg_install_output.get("stderr", "")
+                    if _uv_stderr and (" - " in _uv_stderr or " + " in _uv_stderr):
+                        for _ul in _uv_stderr.splitlines():
+                            _ul = _ul.strip()
+                            if _ul.startswith("- ") and "==" in _ul:
+                                _up, _uv2 = _ul[2:].split("==", 1)
+                                packages_before[_up.strip().lower()] = _uv2.strip()
+                        packages_after = self._parse_uv_changes(_uv_stderr, packages_before)
+                        _parse_path = "uv-fast"
+                    else:
+                        packages_after = dict(packages_before)
+                        packages_after[pkg_name.lower()] = pkg_version
+                        _parse_path = "inferred"
+                _ta = time.perf_counter()
+                print(f"[WALL-STEP] stderr-parse({_parse_path}): {(_ta-_t0)*1000:.3f}ms", flush=True)
+
+                # ── step B: copy state dicts ─────────────────────────────
                 final_main_state = packages_after.copy()
                 _live_cache = packages_after.copy()
-                t_detect = time.perf_counter()
-                all_changes = self.core._detect_all_changes(packages_before, packages_after)
-                _tprint(f"change_detection:{pkg_name}", t_detect)
+                _tb = time.perf_counter()
+                print(f"[WALL-STEP] dict-copy: {(_tb-_ta)*1000:.3f}ms", flush=True)
 
+                # ── step C: detect all changes ───────────────────────────
+                all_changes = self.core._detect_all_changes(packages_before, packages_after)
+                _tc = time.perf_counter()
+                print(f"[WALL-STEP] detect_all_changes: {(_tc-_tb)*1000:.3f}ms", flush=True)
+
+                # ── step D: safe_print change report ─────────────────────
                 if all_changes["downgrades"] or all_changes["upgrades"] or all_changes["removals"]:
                     total_changes = len(all_changes["downgrades"] + all_changes["upgrades"] + all_changes["removals"])
                     self._safe_print(f"\n⚠️  Detected {total_changes} dependency changes:")
@@ -721,10 +894,10 @@ class SmartInstaller:
                         self._safe_print(f"   ⬆️  {change['package']}: v{change['old_version']} → v{change['new_version']} (upgrade)")
                     for change in all_changes["removals"]:
                         self._safe_print(f"   🗑️  {change['package']}: v{change['version']} (removed)")
+                _td = time.perf_counter()
+                print(f"[WALL-STEP] print-changes: {(_td-_tc)*1000:.3f}ms", flush=True)
 
-                # --------------------------------------------------------
-                # Strategy: queue bubble work instead of blocking on it
-                # --------------------------------------------------------
+                # ── step E: strategy / bubble queuing ────────────────────
                 if install_strategy == "stable-main":
                     packages_to_bubble = []
                     for change in all_changes["downgrades"] + all_changes["upgrades"]:
@@ -737,10 +910,6 @@ class SmartInstaller:
                     if packages_to_bubble:
                         self._safe_print(f"\n🛡️ STABILITY PROTECTION: Queuing {len(packages_to_bubble)} bubble(s) for background")
 
-                        # We still need the restore-to-stable-version here because stable-main
-                        # MUST have the old version active. But bubble creation moves to bg.
-                        # Ordering guarantee: restore pip install runs now; bubble creation
-                        # in bg uses the already-installed new_version staging area.
                         restore_specs = [
                             f"{item['package']}=={item['old_version']}"
                             for item in packages_to_bubble
@@ -749,7 +918,7 @@ class SmartInstaller:
                         restore_code, _ = self.core._run_pip_install(
                             restore_specs, force_reinstall=True, extra_flags=["--no-deps"]
                         )
-                        _tprint(f"stable_restore:{pkg_name}", t_restore)
+                        print(f"[WALL-STEP] stable-restore-pip: {(time.perf_counter()-t_restore)*1000:.3f}ms", flush=True)
 
                         if restore_code == 0:
                             self._safe_print("   ✅ Stable versions restored to main env")
@@ -757,7 +926,6 @@ class SmartInstaller:
                                 main_env_kb_updates[item["package"]] = item["old_version"]
                                 protected_from_cleanup.add(canonicalize_name(item["package"]))
                                 bubbled_kb_updates[item["package"]] = item["new_version"]
-                                # Queue bubble task for background
                                 _pending_bubble_tasks.append({
                                     "type": "create_isolated_bubble",
                                     "pkg_name": item["package"],
@@ -791,7 +959,6 @@ class SmartInstaller:
                                 "python_context_version": python_context_version,
                                 "index_url": index_url,
                                 "extra_index_url": extra_index_url,
-                                # hook_manager refresh/validate also deferred to bg
                                 "do_hook_refresh": True,
                                 "version_staying_active": new_version,
                             })
@@ -801,6 +968,9 @@ class SmartInstaller:
                             )
                         elif not old_version and new_version:
                             main_env_kb_updates[pkg] = new_version
+                _te = time.perf_counter()
+                print(f"[WALL-STEP] strategy+queue: {(_te-_td)*1000:.3f}ms", flush=True)
+                print(f"[WALL-STEP] post-FFI subtotal: {(_te-_t0)*1000:.3f}ms", flush=True)
 
             except Exception as e:
                 if self._is_quantum_error(e):
@@ -827,6 +997,7 @@ class SmartInstaller:
         print(f"[WALL] pre-fork: {(time.perf_counter()-t_install_start)*1000:.1f}ms elapsed", flush=True)
 
         if any_installations_made or _pending_bubble_tasks:
+            _t_bgprep = time.perf_counter()
             _bg_data = {
                 "force_reinstall": force_reinstall,
                 "protected_from_cleanup": list(protected_from_cleanup),
@@ -847,11 +1018,10 @@ class SmartInstaller:
                 "pending_bubble_tasks": _pending_bubble_tasks,
                 "run_doctor": True,
             }
+            print(f"[WALL-STEP] bg_data-build: {(time.perf_counter()-_t_bgprep)*1000:.3f}ms", flush=True)
 
             # ── Sentinel write: make packages visible instantly ──
-            # Writes active_version + bubble_version fields BEFORE fork so
-            # _find_package_installations() sees them without waiting for
-            # the background gatherer. Full inst: keys come later from BG.
+            _t_sentinel = time.perf_counter()
             try:
                 if hasattr(self, 'core') and getattr(self.core, 'cache_client', None):
                     _prefix = self.core.redis_key_prefix
@@ -866,31 +1036,59 @@ class SmartInstaller:
                         _pipe.execute()
             except Exception:
                 pass  # never block the foreground path
+            print(f"[WALL-STEP] sentinel-redis-write: {(time.perf_counter()-_t_sentinel)*1000:.3f}ms", flush=True)
 
             os.environ["OMNIPKG_BG_WORKER"] = "1"
             _bg_log_path = "/tmp/omnipkg_bg_latest.log"
             print(f"   📋 BG log: cat {_bg_log_path}", flush=True)
 
-            # Double-fork: parent forks intermediate, intermediate forks grandchild
-            # then exits immediately. Parent never waits — intermediate becomes a
-            # brief zombie until the daemon's event loop reaps it naturally.
-            # Grandchild is reparented to init and runs freely.
-            _mid_pid = os.fork()
-            if _mid_pid == 0:
-                # intermediate child
-                _gc_pid = os.fork()
-                if _gc_pid == 0:
-                    # grandchild — do all the work
-                    try:
-                        self._run_background(_bg_data, self.core)
-                    except Exception:
-                        pass
-                    os._exit(0)
-                else:
-                    os._exit(0)  # intermediate exits, grandchild orphaned to init
+            # ── Send bg_data to the pre-spawned grandchild via pipe ─────
+            _t_pipe = time.perf_counter()
+            try:
+                _payload = json.dumps(_bg_data).encode()
+                print(f"[WALL-STEP] json-encode ({len(_payload)}B): {(time.perf_counter()-_t_pipe)*1000:.3f}ms", flush=True)
+                _t_write = time.perf_counter()
+                _offset = 0
+                while _offset < len(_payload):
+                    _fcntl2.fcntl(_pipe_w, _fcntl2.F_SETFL,
+                                  _fcntl2.fcntl(_pipe_w, _fcntl2.F_GETFL) & ~os.O_NONBLOCK)
+                    _sent = os.write(_pipe_w, _payload[_offset:_offset + 65536])
+                    _offset += _sent
+                print(f"[WALL-STEP] pipe-write: {(time.perf_counter()-_t_write)*1000:.3f}ms", flush=True)
+            except Exception as _pipe_err:
+                print(f"[WALL-STEP] pipe-write-FAILED ({_pipe_err}): falling back to cold fork", flush=True)
+                try:
+                    _fb_mid = os.fork()
+                    if _fb_mid == 0:
+                        _fb_gc = os.fork()
+                        if _fb_gc == 0:
+                            try:
+                                self._run_background(_bg_data, self.core)
+                            except Exception:
+                                pass
+                            os._exit(0)
+                        else:
+                            os._exit(0)
+                except Exception:
+                    pass
+            finally:
+                _t_pclose = time.perf_counter()
+                try:
+                    os.close(_pipe_w)
+                except OSError:
+                    pass
+                print(f"[WALL-STEP] pipe-close: {(time.perf_counter()-_t_pclose)*1000:.3f}ms", flush=True)
 
-            # parent continues immediately, never waits
+            # parent continues immediately
             self._safe_print(f"   🔄 Background tasks running")
+
+        else:
+            # No background work — close write end so pre-spawned grandchild
+            # sees EOF on its pipe read and exits cleanly (no zombie).
+            try:
+                os.close(_pipe_w)
+            except OSError:
+                pass
 
         return 0
 
@@ -955,6 +1153,22 @@ class SmartInstaller:
                     bg("WARNING: cold core init in background (preloaded core unavailable)")
 
             python_context_version = _bg_data["python_context_version"]
+
+            # ----------------------------------------------------------
+            # FIRST: Snapshot — must run before anything else so revert
+            # is always available immediately after foreground returns.
+            # This is cheap (~1ms Redis write) and has no dependencies.
+            # ----------------------------------------------------------
+            t0 = time.perf_counter()
+            bg("Saving snapshot (priority — before all other bg tasks)...")
+            try:
+                core._save_last_known_good_snapshot(
+                    known_state=_bg_data["final_main_state"] or None
+                )
+                bg("Snapshot saved")
+            except Exception as _e:
+                bg(f"Snapshot error: {_e}\n{traceback.format_exc()}")
+            timer.stage("snapshot_priority", t0)
 
             # ----------------------------------------------------------
             # -1. Doctor + heal (moved from foreground)
@@ -1158,18 +1372,9 @@ class SmartInstaller:
             timer.stage("kb_sync", t0)
 
             # ----------------------------------------------------------
-            # 5. Snapshot
+            # 5. Snapshot — moved to top of background, skipping here
             # ----------------------------------------------------------
-            t0 = time.perf_counter()
-            bg("Saving snapshot...")
-            try:
-                core._save_last_known_good_snapshot(
-                    known_state=_bg_data["final_main_state"] or None
-                )
-                bg("Snapshot saved")
-            except Exception as _e:
-                bg(f"Snapshot error: {_e}\n{traceback.format_exc()}")
-            timer.stage("snapshot", t0)
+            timer.stage("snapshot", 0.0)  # zero cost — already done above
 
             # ----------------------------------------------------------
             # 6. Hash index
