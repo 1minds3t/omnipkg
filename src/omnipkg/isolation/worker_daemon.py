@@ -861,11 +861,35 @@ try:
     sys.stderr.flush()
     try:
         from omnipkg._vendor.uv_ffi import run as _uv_ffi_run
-        _uv_ffi_run('pip freeze -q')
-        _worker_globals_preload = globals()
-        _worker_globals_preload['_UV_FFI_RUN'] = _uv_ffi_run
+        import os as _wpos
+        _wp_dn = _wpos.open(_wpos.devnull, _wpos.O_RDWR)
+        _wp_saved = _wpos.dup(1)
+        try:
+            _wpos.dup2(_wp_dn, 1)
+            _uv_ffi_run('pip freeze')
+        finally:
+            _wpos.dup2(_wp_saved, 1)
+            _wpos.close(_wp_saved)
+            _wpos.close(_wp_dn)
+        _UV_FFI_RUN = _uv_ffi_run
+        globals()['_UV_FFI_RUN'] = _uv_ffi_run
+        # ── FIX 1: wire FFI onto the pre-warmed core object so that
+        # core._run_pip_install() can find it via getattr(self, '_uv_ffi_run', None)
+        # instead of crashing with AttributeError, which kills the worker and
+        # forces the C dispatcher to fall back to a cold execv (~300ms).
+        try:
+            _pre_core._uv_ffi_run = _uv_ffi_run
+        except Exception:
+            pass
         sys.stderr.write('[WORKER-PRELOAD] ✅ uv FFI warmed' + chr(10))
         sys.stderr.flush()
+        # NOTE: No heartbeat thread. Tokio's background threads sleep at near-zero
+        # CPU cost and wake in nanoseconds when block_on() is called — there is no
+        # reinit penalty between calls. The old heartbeat loop was the ROOT CAUSE of
+        # Tokio runtime panics: if an external `uv` command deleted a .dist-info dir
+        # while the heartbeat's `pip freeze` was running inside the Tokio executor,
+        # the executor panicked and poisoned the static runtime for all future calls.
+        # One warm-up call at startup (above, the first _uv_ffi_run) is sufficient.
     except Exception as _ffi_ex:
         sys.stderr.write('[WORKER-PRELOAD] uv FFI unavailable: ' + str(_ffi_ex) + chr(10))
         sys.stderr.flush()
@@ -889,177 +913,217 @@ try:
     
     setup_data = json.loads(input_line.strip())
     
-    if setup_data.get('type') == 'run_cli':
-        _t_req = _wtime.perf_counter()
-        ready_msg = {'status': 'READY', 'mode': 'cli'}
-        _original_stdout.write(json.dumps(ready_msg) + '\\n')
-        _original_stdout.flush()
-        _t_ready = _wtime.perf_counter()
-        sys.stderr.write(f'[WORKER-TIMING] req→READY: {(_t_ready-_t_req)*1000:.2f}ms\\n')
-        sys.stderr.flush()
-        
-        import io
-        class StreamRedirector(io.TextIOBase):
-            def __init__(self, stream_name):
-                self.stream_name = stream_name
-            def write(self, s):
-                if isinstance(s, bytes):
-                    s = s.decode('utf-8', 'replace')
-                msg = {'stream': self.stream_name, 'data': s}
-                _original_stdout.write(json.dumps(msg) + '\\n')
-                _original_stdout.flush()
-                return len(s)
-            def isatty(self):
-                return setup_data.get('isatty', False)
-            def flush(self):
-                pass
-            @property
-            def buffer(self):
-                class DummyBuffer:
-                    def write(self_buf, b):
-                        return self.write(b)
-                    def flush(self_buf):
-                        pass
-                return DummyBuffer()
+    # ── Shared dispatch loop — one worker handles run_cli AND run_uv forever ──
+    import io
+    class StreamRedirector(io.TextIOBase):
+        def __init__(self, stream_name):
+            self.stream_name = stream_name
+        def write(self, s):
+            if isinstance(s, bytes):
+                s = s.decode('utf-8', 'replace')
+            msg = {'stream': self.stream_name, 'data': s}
+            _original_stdout.write(json.dumps(msg) + '\\n')
+            _original_stdout.flush()
+            return len(s)
+        def isatty(self):
+            return setup_data.get('isatty', False)
+        def flush(self):
+            pass
+        @property
+        def buffer(self):
+            class DummyBuffer:
+                def write(self_buf, b):
+                    return self.write(b)
+                def flush(self_buf):
+                    pass
+            return DummyBuffer()
 
-        old_stdout = sys.stdout
-        old_stderr = sys.stderr
-        sys.stdout = StreamRedirector('stdout')
-        sys.stderr = StreamRedirector('stderr')
-        
-        os.environ['_OMNIPKG_ISATTY'] = '1' if setup_data.get('isatty', False) else '0'
-        if 'cwd' in setup_data:
-            try: os.chdir(setup_data['cwd'])
-            except Exception: pass
-        if 'env' in setup_data:
-            os.environ.update(setup_data['env'])
-            
-        sys.argv = setup_data.get('argv', ['omnipkg'])
-        
-        exit_code = 0
-        try:
-            import omnipkg.cli as _run_cli_mod
-            _cm_ready   = getattr(_run_cli_mod, '_PRELOADED_CM',   None) is not None
-            _core_ready = getattr(_run_cli_mod, '_PRELOADED_CORE', None) is not None
-            if _cm_ready and _core_ready:
-                sys.stderr.write('[WORKER-PRELOAD] ✅ FAST PATH: consuming pre-warmed CM+Core\\n')
-            else:
-                sys.stderr.write(
-                    f'[WORKER-PRELOAD] ⚠️  SLOW PATH: CM={_cm_ready} Core={_core_ready}'
-                    f' — main() will do full init\\n'
-                )
-            sys.stderr.flush()
-            _t_main_start = _wtime.perf_counter()
-            _run_cli_mod.main()
-            _t_main_end = _wtime.perf_counter()
-            sys.stderr.write(f'[WORKER-TIMING] main() total: {(_t_main_end-_t_main_start)*1000:.2f}ms\\n')
-            sys.stderr.flush()
-        except SystemExit as e:
-            _t_main_end = _wtime.perf_counter()
-            sys.stderr.write(f'[WORKER-TIMING] main() total: {(_t_main_end-_t_main_start)*1000:.2f}ms (exit {e.code})\\n')
-            sys.stderr.flush()
-            exit_code = e.code if e.code is not None else 0
-        except Exception as e:
-            import traceback
-            sys.stderr.write(traceback.format_exc())
-            exit_code = 1
-            
-        sys.stdout = old_stdout
-        sys.stderr = old_stderr
-        
-        _t_done = _wtime.perf_counter()
-        sys.stderr.write(f'[WORKER-TIMING] worker total req→COMPLETED: {(_t_done-_t_req)*1000:.2f}ms\\n')
-        sys.stderr.flush()
-        result = {'status': 'COMPLETED', 'exit_code': exit_code}
-        _original_stdout.write(json.dumps(result) + '\\n')
-        _original_stdout.flush()
-        sys.exit(0)
+    old_stdout = sys.stdout
+    old_stderr = sys.stderr
 
-    elif setup_data.get('type') == 'run_uv':
-        _t_req = _wtime.perf_counter()
-        import subprocess as _sp, shutil as _sh
-        _uv_args = setup_data.get('uv_args', [])
-        _env = os.environ.copy()
-        _env.update(setup_data.get('env', {}))
+    while True:
+        _req_type = setup_data.get('type')
 
-        # ── FFI fast path disabled: repeat calls corrupt uv output ──
-        # FFI is used only for warmup (preload). Subprocess runs faster
-        # here because the .so is already mapped into this worker's memory.
-        _ffi_fn = None
-        if _ffi_fn is not None:
+        if _req_type == 'run_cli':
+            _t_req = _wtime.perf_counter()
+            _original_stdout.write(json.dumps({'status': 'READY', 'mode': 'cli'}) + '\\n')
+            _original_stdout.flush()
+            sys.stderr.write(f'[WORKER-TIMING] req\u2192READY: {(_wtime.perf_counter()-_t_req)*1000:.2f}ms\\n')
+            sys.stderr.flush()
+
+            sys.stdout = StreamRedirector('stdout')
+            sys.stderr = StreamRedirector('stderr')
+
+            os.environ['_OMNIPKG_ISATTY'] = '1' if setup_data.get('isatty', False) else '0'
+            if 'cwd' in setup_data:
+                try: os.chdir(setup_data['cwd'])
+                except Exception: pass
+            if 'env' in setup_data:
+                os.environ.update(setup_data['env'])
+            sys.argv = setup_data.get('argv', ['omnipkg'])
+
+            exit_code = 0
             try:
-                import os as _os
-                _out_r, _out_w = _os.pipe()
-                _err_r, _err_w = _os.pipe()
-                _old_out, _old_err = _os.dup(1), _os.dup(2)
-                _os.dup2(_out_w, 1); _os.close(_out_w)
-                _os.dup2(_err_w, 2); _os.close(_err_w)
-                try:
-                    _ffi_rc = _ffi_fn(' '.join(_uv_args))
-                finally:
-                    _os.dup2(_old_out, 1); _os.close(_old_out)
-                    _os.dup2(_old_err, 2); _os.close(_old_err)
-                def _drain(fd):
-                    _os.set_blocking(fd, False)
-                    buf = b''
-                    try:
-                        while True:
-                            chunk = _os.read(fd, 65536)
-                            if not chunk: break
-                            buf += chunk
-                    except BlockingIOError: pass
-                    _os.close(fd)
-                    return buf.decode(errors='replace')
-                _ffi_stdout = _drain(_out_r)
-                _ffi_stderr = _drain(_err_r)
-                # Filter clap reinit noise from stderr
-                _ffi_stderr = '\\n'.join(
-                    l for l in _ffi_stderr.splitlines()
-                    if 'Flags are already initialized' not in l
+                import omnipkg.cli as _run_cli_mod
+                _cm_ready   = getattr(_run_cli_mod, '_PRELOADED_CM',   None) is not None
+                _core_ready = getattr(_run_cli_mod, '_PRELOADED_CORE', None) is not None
+                if _cm_ready and _core_ready:
+                    sys.stderr.write('[WORKER-PRELOAD] \u2705 FAST PATH: consuming pre-warmed CM+Core\\n')
+                else:
+                    sys.stderr.write(f'[WORKER-PRELOAD] \u26a0\ufe0f  SLOW PATH: CM={_cm_ready} Core={_core_ready} \u2014 main() will do full init\\n')
+                sys.stderr.flush()
+                _t_main_start = _wtime.perf_counter()
+                _run_cli_mod.main()
+                _t_main_end = _wtime.perf_counter()
+                sys.stderr.write(f'[WORKER-TIMING] main() total: {(_t_main_end-_t_main_start)*1000:.2f}ms\\n')
+                sys.stderr.flush()
+            except SystemExit as e:
+                _t_main_end = _wtime.perf_counter()
+                sys.stderr.write(f'[WORKER-TIMING] main() total: {(_t_main_end-_t_main_start)*1000:.2f}ms (exit {e.code})\\n')
+                sys.stderr.flush()
+                exit_code = e.code if e.code is not None else 0
+            except Exception:
+                import traceback
+                sys.stderr.write(traceback.format_exc())
+                exit_code = 1
+
+            sys.stdout = old_stdout
+            sys.stderr = old_stderr
+
+            # Re-stash CM+Core so next job hits fast path
+            try:
+                import omnipkg.cli as _rcli
+                if getattr(_rcli, '_PRELOADED_CM', None) is None and '_pre_cm' in globals():
+                    _rcli._PRELOADED_CM = globals()['_pre_cm']
+                if getattr(_rcli, '_PRELOADED_CORE', None) is None and '_pre_core' in globals():
+                    _rcli._PRELOADED_CORE = globals()['_pre_core']
+                # ── FIX 2a: keep _uv_ffi_run wired on whatever core object is now
+                # stashed, in case main() replaced _PRELOADED_CORE with a fresh one.
+                _ffi_fn_rc = globals().get('_UV_FFI_RUN')
+                if _ffi_fn_rc is not None:
+                    _live_core = getattr(_rcli, '_PRELOADED_CORE', None)
+                    if _live_core is not None and not getattr(_live_core, '_uv_ffi_run', None):
+                        try:
+                            _live_core._uv_ffi_run = _ffi_fn_rc
+                        except Exception:
+                            pass
+                # NOTE: The old unconditional invalidate_site_packages_cache() call
+                # was removed here. It was firing after every run_cli job and undoing
+                # surgical patch_cache updates from the FS watcher. Cache coherency is
+                # now owned by the FS watcher (external writes) and install.rs's own
+                # post-install zero-disk update (our own FFI writes). No rescan needed.
+            except Exception:
+                pass
+
+            _t_done = _wtime.perf_counter()
+            sys.stderr.write(f'[WORKER-TIMING] worker total req\u2192COMPLETED: {(_t_done-_t_req)*1000:.2f}ms\\n')
+            sys.stderr.flush()
+            _original_stdout.write(json.dumps({'status': 'COMPLETED', 'exit_code': exit_code}) + '\\n')
+            _original_stdout.flush()
+
+        elif _req_type == 'run_uv':
+            _t_req = _wtime.perf_counter()
+            _uv_args = setup_data.get('uv_args', [])
+            _ffi_fn = globals().get('_UV_FFI_RUN')
+            if _ffi_fn is None:
+                sys.stderr.write('[RUN-UV] \u26a0\ufe0f  FFI unavailable on this interpreter\\n')
+                sys.stderr.flush()
+                _original_stdout.write(json.dumps({'status': 'FFI_UNAVAILABLE'}) + '\\n')
+                _original_stdout.flush()
+                sys.exit(0)
+            if '--python' not in _uv_args:
+                _pi_idx = next(
+                    (i for i, a in enumerate(_uv_args) if a == 'install'),
+                    None
                 )
+                if _pi_idx is not None:
+                    _uv_args = list(_uv_args)
+                    _uv_args.insert(_pi_idx + 1, '--python')
+                    _uv_args.insert(_pi_idx + 2, sys.executable)
+                    sys.stderr.write(f'[RUN-UV] --python {sys.executable}\\n')
+                    sys.stderr.flush()
+            try:
+                try:
+                    from omnipkg.isolation.fs_watcher import FfiWriteGuard as _FfiWG
+                    _ffi_guard = _FfiWG.attach()
+                except Exception:
+                    _ffi_guard = None
+                if _ffi_guard is not None:
+                    _ffi_guard.__enter__()
+                _ffi_result    = _ffi_fn(' '.join(_uv_args))
+                if _ffi_guard is not None:
+                    _ffi_guard.__exit__(None, None, None)
+                _ffi_rc        = _ffi_result[0] if isinstance(_ffi_result, tuple) else _ffi_result
+                _ffi_installed = _ffi_result[1] if isinstance(_ffi_result, tuple) and len(_ffi_result) > 1 else []
+                _ffi_removed   = _ffi_result[2] if isinstance(_ffi_result, tuple) and len(_ffi_result) > 2 else []
                 _t_done = _wtime.perf_counter()
                 _original_stdout.write(json.dumps({
                     'status': 'COMPLETED',
                     'exit_code': _ffi_rc,
-                    'stdout': _ffi_stdout,
-                    'stderr': _ffi_stderr,
+                    'installed': _ffi_installed,
+                    'removed': _ffi_removed,
                     'elapsed_ms': round((_t_done - _t_req) * 1000, 2),
                     'via': 'ffi',
                 }) + '\\n')
                 _original_stdout.flush()
-                sys.exit(0)
             except Exception as _ffi_ex:
-                sys.stderr.write(f'[RUN-UV] FFI failed ({_ffi_ex}), subprocess fallback\\n')
-        # ── subprocess fallback ────────────────────────────────────
-        _uv_exe = setup_data.get('uv_exe') or _sh.which('uv')
-        if not _uv_exe or not os.path.exists(_uv_exe):
-            _original_stdout.write(json.dumps({
-                'status': 'ERROR', 'error': 'uv not found', 'exit_code': 1,
-            }) + '\\n')
-            _original_stdout.flush()
-            sys.exit(1)
-        _uv_cmd = [_uv_exe] + _uv_args
-        _proc = _sp.Popen(
-            _uv_cmd, stdout=_sp.PIPE, stderr=_sp.PIPE,
-            text=True, encoding='utf-8', errors='replace', env=_env,
-        )
-        _stdout_lines, _stderr_lines = [], []
-        for _line in _proc.stdout:
-            _stdout_lines.append(_line)
-        for _line in _proc.stderr:
-            _stderr_lines.append(_line)
-        _rc = _proc.wait()
-        _t_done = _wtime.perf_counter()
-        _original_stdout.write(json.dumps({
-            'status': 'COMPLETED',
-            'exit_code': _rc,
-            'stdout': ''.join(_stdout_lines),
-            'stderr': ''.join(_stderr_lines),
-            'elapsed_ms': round((_t_done - _t_req) * 1000, 2),
-            'via': 'subprocess',
-        }) + '\\n')
-        _original_stdout.flush()
-        sys.exit(0)
+                if _ffi_guard is not None:
+                    try: _ffi_guard.__exit__(type(_ffi_ex), _ffi_ex, None)
+                    except Exception: pass
+                sys.stderr.write(f'[RUN-UV] FFI call failed: {_ffi_ex}\\n')
+                sys.stderr.flush()
+                _original_stdout.write(json.dumps({'status': 'ERROR', 'error': f'FFI call failed: {_ffi_ex}', 'exit_code': 1}) + '\\n')
+                _original_stdout.flush()
+
+        elif _req_type == 'patch_cache':
+            # Surgical zero-I/O cache update — apply exact delta from FS watcher.
+            # Calls Rust patch_site_packages_cache(installed, removed) which does
+            # the same sp.remove_packages()+sp.add_dist() as install.rs, no disk scan.
+            _inst = setup_data.get('installed', [])
+            _rem  = setup_data.get('removed',   [])
+            try:
+                import sys as _pc_sys, os as _pc_os
+                _pc_sys.path.insert(0, _pc_os.path.join(
+                    _pc_os.path.dirname(__import__('omnipkg._vendor.uv_ffi', fromlist=['']).__file__),
+                    '_native'
+                ))
+                from uv_ffi import patch_site_packages_cache as _pspc
+                # PyO3 Vec<(String,String)> requires tuples, not lists
+                _inst_t = [tuple(x) for x in _inst]
+                _rem_t  = [tuple(x) for x in _rem]
+                _patched = _pspc(_inst_t, _rem_t)
+                sys.stderr.write(f'[RUN-UV] patch_cache: patched={_patched} inst={_inst_t} rem={_rem_t}\\n')
+            except Exception as _pc_ex:
+                sys.stderr.write(f'[RUN-UV] patch_cache failed: {_pc_ex}\\n')
+            except Exception as _pc_ex:
+                sys.stderr.write(f'[RUN-UV] patch_cache failed: {_pc_ex}\\n')
+            sys.stderr.flush()
+
+        elif _req_type == 'invalidate_cache':
+            # Legacy fallback — forces full rescan on next install.
+            try:
+                import sys as _ic_sys, os as _ic_os
+                _ic_sys.path.insert(0, _ic_os.path.join(
+                    _ic_os.path.dirname(__import__('omnipkg._vendor.uv_ffi', fromlist=['']).__file__),
+                    '_native'
+                ))
+                from uv_ffi import invalidate_site_packages_cache as _ispc
+                _ispc()
+                sys.stderr.write('[RUN-UV] invalidate_cache: Rust FORCE_RESCAN set\\n')
+            except Exception as _ic_ex:
+                sys.stderr.write(f'[RUN-UV] invalidate_cache failed: {_ic_ex}\\n')
+            sys.stderr.flush()
+
+        else:
+            if setup_data.get('package_spec'):
+                break
+            sys.exit(0)
+
+        # Block for next request — same worker, same warm process
+        _next_line = sys.stdin.readline()
+        if not _next_line:
+            sys.exit(0)
+        setup_data = json.loads(_next_line.strip())
 
     PKG_SPEC = setup_data.get('package_spec', '')
     
@@ -1992,6 +2056,7 @@ class PersistentWorker:
 
         # 🔥 CRITICAL: Sanitize environment for the worker
         # We MUST NOT inherit PYTHONPATH from the daemon's environment (usually 3.11).
+
         env = os.environ.copy()
         
         # Scrub variables that cause cross-version contamination
@@ -2006,7 +2071,8 @@ class PersistentWorker:
             env["OMNIPKG_MULTIVERSION_BASE"] = self.multiversion_base
         if self.site_packages:
             env["OMNIPKG_SITE_PACKAGES"] = self.site_packages
-
+        if os.environ.get("UV_FFI_PROFILE"):
+            env["UV_FFI_PROFILE"] = "1"
         # 🔑 ENSURE per-interpreter config file exists next to this interpreter.
         # Without this, the worker falls back to global config (wrong multiversion_base).
         # _ensure_worker_config writes a lightweight JSON that ConfigManager finds first.
@@ -2699,7 +2765,7 @@ class WorkerPoolDaemon:
         # via a venv symlink so sys.executable resolves to the framework Python,
         # causing workers to spawn without venv context and crash on omnipkg import.
         _own_exe = _normalize_exe(_venv_python_exe())
-        self.idle_config: Dict[str, int] = {_own_exe: 3}
+        self.idle_config: Dict[str, int] = {_own_exe: 1}
 
         # 🚀 AUTO-DISCOVERY: Find other managed interpreters and keep 1 idle for them
         if self.cm:
@@ -2722,6 +2788,16 @@ class WorkerPoolDaemon:
         self.running = True
         self.socket_path = DEFAULT_SOCKET
         
+        # ── DEDICATED UV WORKERS: one PersistentWorker per Python exe ──────
+        # These are NEVER shared with idle_pools (run_cli).
+        # A per-python Lock serializes installs so site-packages is never
+        # corrupted by concurrent writes, and the in-process site-pkg cache
+        # inside the Tokio runtime is always coherent.
+        self.uv_workers: Dict[str, "PersistentWorker"] = {}
+        self.uv_worker_locks: Dict[str, threading.Lock] = defaultdict(threading.Lock)
+        self._uv_last_install_ts: Dict[str, float] = {}  # py_exe → monotonic time of last completed install
+        # ────────────────────────────────────────────────────────────────────
+
         self.running = True
         self.socket_path = DEFAULT_SOCKET
         self.stats = {
@@ -2885,6 +2961,10 @@ class WorkerPoolDaemon:
                     pool = self.idle_pools[python_exe]
 
                     if pool.qsize() < target_count:
+                        # Brief pause — let recycled workers land before spawning fresh ones
+                        time.sleep(0.1)
+                        if pool.qsize() >= target_count:
+                            continue  # A recycled worker filled the slot — no spawn needed
                         # Resolve authoritative paths for this specific python version.
                         # _resolve_target_paths handles cm lookup + filesystem fallback.
                         target_paths = _resolve_target_paths(self.cm, python_exe)
@@ -2917,6 +2997,26 @@ class WorkerPoolDaemon:
         """Runtime configuration of idle pools."""
         python_exe = _normalize_exe(python_exe)
         self.idle_config[python_exe] = count
+
+    def _collect_all_site_packages(self) -> List[str]:
+        dirs: List[str] = []
+        for python_exe in list(self.idle_config.keys()):
+            paths = _resolve_target_paths(self.cm, python_exe)
+            sp = paths.get("site_packages_path")
+            if sp and os.path.isdir(sp) and sp not in dirs:
+                dirs.append(sp)
+        return dirs
+
+    def _start_fs_watcher(self):
+        time.sleep(2.0)
+        try:
+            from omnipkg.isolation.fs_watcher import SitePackagesWatcher
+            sp_dirs = self._collect_all_site_packages()
+            safe_print(f"[FS-WATCHER] Starting watcher for {len(sp_dirs)} site-packages dir(s)", file=sys.stderr)
+            self._fs_watcher = SitePackagesWatcher(socket_path=self.socket_path, site_packages_dirs=sp_dirs)
+            self._fs_watcher.start()
+        except Exception as exc:
+            safe_print(f"[FS-WATCHER] Failed to start: {exc}", file=sys.stderr)
 
     def _start_windows_daemon(self, wait_for_ready: bool = False):
         """Start daemon on Windows using subprocess."""
@@ -3039,6 +3139,8 @@ class WorkerPoolDaemon:
         threading.Thread(target=self._memory_manager, daemon=True, name="memory-manager").start()
         threading.Thread(target=self._warmup_workers, daemon=True, name="warmup").start()
         threading.Thread(target=self._maintain_idle_pool, daemon=True, name="idle-pool").start()
+        self._fs_watcher = None
+        threading.Thread(target=self._start_fs_watcher, daemon=True, name="fs-watcher").start()
 
     def _daemonize(self):
         """Double-fork daemonization to fully detach the process."""
@@ -3304,6 +3406,72 @@ class WorkerPoolDaemon:
             elif req["type"] == "run_uv":
                 self._run_uv(req, conn)
                 return
+            elif req["type"] == "patch_site_packages_cache":
+                # Sent by the FS watcher with the exact delta from the external install.
+                # Forward to matching UV workers which call Rust patch_site_packages_cache()
+                # — zero disk I/O, surgically updates the in-memory SitePackages struct.
+                sp_path   = req.get("site_packages_path")
+                installed = req.get("installed", [])   # [[name, version], ...]
+                removed   = req.get("removed",   [])
+                now = time.monotonic()
+                GRACE_SECS = 3.0
+                forwarded = 0
+                suppressed = 0
+                for py_exe, uv_worker in list(self.uv_workers.items()):
+                    try:
+                        worker_sp = _resolve_target_paths(self.cm, py_exe).get("site_packages_path")
+                        if sp_path is not None and worker_sp != sp_path:
+                            continue
+                        lock = self.uv_worker_locks.get(py_exe)
+                        in_flight   = lock is not None and lock.locked()
+                        just_finished = (now - self._uv_last_install_ts.get(py_exe, 0.0)) < GRACE_SECS
+                        if in_flight or just_finished:
+                            suppressed += 1
+                            continue
+                        uv_worker.process.stdin.write(
+                            json.dumps({
+                                "type":      "patch_cache",
+                                "installed": installed,
+                                "removed":   removed,
+                            }) + "\n"
+                        )
+                        uv_worker.process.stdin.flush()
+                        forwarded += 1
+                    except Exception:
+                        pass
+                if forwarded:
+                    safe_print(
+                        f"[FS-WATCHER] External change — patched {forwarded} UV worker(s) "
+                        f"inst={installed} rem={removed}",
+                        file=sys.stderr,
+                    )
+                elif suppressed:
+                    safe_print(
+                        f"[FS-WATCHER] Suppressed patch (our own install, {suppressed} worker(s))",
+                        file=sys.stderr,
+                    )
+                res = {"success": True, "forwarded": forwarded, "suppressed": suppressed}
+            # Keep old invalidate message type as fallback for any stragglers
+            elif req["type"] == "invalidate_site_packages_cache":
+                sp_path = req.get("site_packages_path")
+                now = time.monotonic()
+                GRACE_SECS = 3.0
+                forwarded = 0
+                for py_exe, uv_worker in list(self.uv_workers.items()):
+                    try:
+                        worker_sp = _resolve_target_paths(self.cm, py_exe).get("site_packages_path")
+                        if sp_path is not None and worker_sp != sp_path:
+                            continue
+                        lock = self.uv_worker_locks.get(py_exe)
+                        if (lock and lock.locked()) or \
+                           (now - self._uv_last_install_ts.get(py_exe, 0.0)) < GRACE_SECS:
+                            continue
+                        uv_worker.process.stdin.write(json.dumps({"type": "invalidate_cache"}) + "\n")
+                        uv_worker.process.stdin.flush()
+                        forwarded += 1
+                    except Exception:
+                        pass
+                res = {"success": True, "forwarded": forwarded}
             elif req["type"] == "shutdown":
                 self.running = False
                 res = {"success": True}
@@ -3332,8 +3500,10 @@ class WorkerPoolDaemon:
                 pass
 
     def _run_cli(self, req, conn):
+        _completed_cleanly = False
         import traceback as _rc_tb
         import time as _rt
+        import queue
         _t0 = _rt.perf_counter()
         python_exe = _normalize_exe(_resolve_python_exe(req.get("python_exe")))
         safe_print(f"[RUN-CLI] python_exe={python_exe}", file=sys.stderr)
@@ -3341,7 +3511,27 @@ class WorkerPoolDaemon:
         try:
             pool = self.idle_pools.get(python_exe)
             if pool:
-                worker = pool.get_nowait()
+                # Prefer warm workers — scan pool for one with _is_warm set
+                all_workers = []
+                warm_worker = None
+                while not pool.empty():
+                    try:
+                        w = pool.get_nowait()
+                        if getattr(w, "_is_warm", False) and warm_worker is None:
+                            warm_worker = w
+                        else:
+                            all_workers.append(w)
+                    except: break
+                # Put non-selected workers back
+                selected = warm_worker or (all_workers.pop(0) if all_workers else None)
+                for w in all_workers: 
+                    try: pool.put_nowait(w)
+                    except: pass
+                if warm_worker: 
+                    try: pool.put_nowait(warm_worker)  # temp
+                    except: pass
+                worker = selected
+                if worker is None: raise queue.Empty()
                 safe_print(f"[RUN-CLI] got idle worker pid={worker.process.pid}", file=sys.stderr)
                 if _normalize_exe(worker.python_exe) != python_exe:
                     worker.force_shutdown()
@@ -3371,25 +3561,42 @@ class WorkerPoolDaemon:
             worker.process.stdin.write(json.dumps(req) + "\n")
             worker.process.stdin.flush()
 
-            import queue
-            try:
-                ready_line = worker.stdout_queue.get(timeout=30.0)
-                _t_ready = _rt.perf_counter()
-                safe_print(f"[RUN-CLI] ready_line={repr(ready_line)} ({(_t_ready-_t_got_worker)*1000:.2f}ms)", file=sys.stderr)
-            except queue.Empty:
-                ready_line = None
-                safe_print(f"[RUN-CLI] TIMEOUT waiting for READY", file=sys.stderr)
+            # Drain any queued stream frames from a previous recycled job,
+            # worker's previous pip/uv output) must be skipped, not treated as
+            # fatal — breaking on parse failure was causing "Worker failed to
+            # send READY" and forcing a cold execv fallback on every call.
+            ready_parsed = None
+            ready_line = None
+            _deadline = _rt.perf_counter() + 30.0
+            while _rt.perf_counter() < _deadline:
+                _remaining = _deadline - _rt.perf_counter()
+                try:
+                    ready_line = worker.stdout_queue.get(timeout=_remaining)
+                except queue.Empty:
+                    ready_line = None
+                    break
+                if not ready_line:
+                    break
+                try:
+                    _msg = json.loads(ready_line)
+                except Exception:
+                    # Stale non-JSON line from previous job — skip, keep draining
+                    safe_print(f"[RUN-CLI] skipping stale line: {ready_line[:80]!r}", file=sys.stderr)
+                    continue
+                if _msg.get("status") == "READY":
+                    ready_parsed = _msg
+                    break
+                # stream frame from previous job — forward to client and keep waiting
+                try:
+                    send_json(conn, _msg)
+                except Exception:
+                    pass
 
-            if not ready_line:
-                raise RuntimeError("Worker failed to send READY (got None)")
+            _t_ready = _rt.perf_counter()
+            safe_print(f"[RUN-CLI] ready_line={repr(ready_line)} ({(_t_ready-_t_got_worker)*1000:.2f}ms)", file=sys.stderr)
 
-            try:
-                ready_parsed = json.loads(ready_line)
-            except Exception as _je:
-                raise RuntimeError(f"Worker READY parse failed: {_je!r}, raw={ready_line!r}")
-
-            if ready_parsed.get("status") != "READY":
-                raise RuntimeError(f"Worker bad READY status: {ready_parsed!r}")
+            if ready_parsed is None:
+                raise RuntimeError("Worker failed to send READY")
 
             while True:
                 try:
@@ -3463,6 +3670,7 @@ class WorkerPoolDaemon:
                         send_json(conn, msg)
                     except Exception:
                         pass
+                    _completed_cleanly = True
                     break
 
         except Exception as e:
@@ -3472,49 +3680,79 @@ class WorkerPoolDaemon:
                 pass
         finally:
             if worker is not None:
-                worker.force_shutdown()
-            self._replenish_idle_pool(python_exe)
+                if _completed_cleanly and worker is not None:
+                    try:
+                        # Put at front so it gets reused immediately
+                        pool = self.idle_pools[python_exe]
+                        items = []
+                        while not pool.empty():
+                            try: items.append(pool.get_nowait())
+                            except: break
+                        pool.put_nowait(worker)
+                        for item in items: 
+                            try: pool.put_nowait(item)
+                            except: pass
+                        safe_print(f"[RUN-CLI] ♻️  Recycled worker pid={worker.process.pid}", file=sys.stderr)
+                        worker = None
+                    except Exception:
+                        pass
+                if worker is not None:
+                    worker.force_shutdown()
+            if worker is not None:  # worker is None = was recycled
+                self._replenish_idle_pool(python_exe)
 
     def _run_uv(self, req: dict, conn: socket.socket):
         """
-        Route a uv command through an idle worker instead of spawning a cold
-        subprocess from the calling process.  The worker runs uv as a child
-        from its already-warm address space — eliminates per-call Rust init
-        overhead (~20ms → ~3-5ms).
+        Run a uv install through the DEDICATED UV worker for this Python.
 
-        Request fields:
-            uv_exe   str          full path to the uv binary
-            uv_args  list[str]    argv to pass after the binary name
-            env      dict         extra env vars to set in the worker
-            python_exe str        which idle pool to pull from (optional)
+        Architecture:
+          - self.uv_workers[python_exe]      — one persistent worker per interpreter
+          - self.uv_worker_locks[python_exe] — serializes concurrent installs
 
-        Wire protocol mirrors _run_cli:
-            stream frames:  {'stream': 'stdout'|'stderr', 'data': '...'}
-            final frame:    {'status': 'COMPLETED'|'ERROR', 'exit_code': N,
-                             'stdout': '...', 'stderr': '...', 'elapsed_ms': N}
+        This guarantees:
+          1. Site-packages cache inside the Tokio runtime is always coherent
+             (same process = same cache, never stale across workers)
+          2. No concurrent writes to the same site-packages directory
+          3. Changelog dict returned directly — no stderr parsing needed
         """
         import time as _rt
+        import shutil as _sh
         _t0 = _rt.perf_counter()
+        _completed_cleanly = False
 
         python_exe = _normalize_exe(_resolve_python_exe(req.get("python_exe")))
         safe_print(f"[RUN-UV] python_exe={python_exe}", file=sys.stderr)
 
+        # Acquire the per-python serialization lock — blocks concurrent installs
+        # for the same interpreter but allows parallel installs across pythons.
+        uv_lock = self.uv_worker_locks[python_exe]
+        acquired = uv_lock.acquire(timeout=300.0)
+        if not acquired:
+            try:
+                send_json(conn, {"status": "ERROR", "error": "UV worker lock timeout", "exit_code": 1})
+            except Exception:
+                pass
+            return
+
         worker = None
         try:
-            pool = self.idle_pools.get(python_exe)
-            if pool:
+            # Get or create the dedicated UV worker for this Python
+            worker = self.uv_workers.get(python_exe)
+            if worker is not None and (
+                worker.process is None
+                or worker.process.poll() is not None
+            ):
+                safe_print(f"[RUN-UV] dedicated worker for {python_exe} died — respawning", file=sys.stderr)
                 try:
-                    worker = pool.get_nowait()
-                    safe_print(f"[RUN-UV] got idle worker pid={worker.process.pid}", file=sys.stderr)
-                    if _normalize_exe(worker.python_exe) != python_exe:
-                        worker.force_shutdown()
-                        worker = None
-                except queue.Empty:
-                    safe_print(f"[RUN-UV] no idle worker in pool", file=sys.stderr)
+                    worker.force_shutdown()
+                except Exception:
+                    pass
+                worker = None
+                del self.uv_workers[python_exe]
 
-            if not worker:
+            if worker is None:
                 target_paths = _resolve_target_paths(self.cm, python_exe) if self.cm else {}
-                safe_print(f"[RUN-UV] spawning fresh worker", file=sys.stderr)
+                safe_print(f"[RUN-UV] spawning dedicated UV worker for {python_exe}", file=sys.stderr)
                 worker = PersistentWorker(
                     package_spec=None,
                     python_exe=python_exe,
@@ -3522,7 +3760,10 @@ class WorkerPoolDaemon:
                     site_packages=target_paths.get("site_packages_path"),
                     multiversion_base=target_paths.get("multiversion_base"),
                 )
+                # Wait for the worker to be ready to accept requests
                 import time as _spawn_time; _spawn_time.sleep(0.05)
+                self.uv_workers[python_exe] = worker
+                safe_print(f"[RUN-UV] dedicated worker ready pid={worker.process.pid}", file=sys.stderr)
 
             _t_got = _rt.perf_counter()
             safe_print(f"[RUN-UV] worker acquired in {(_t_got-_t0)*1000:.2f}ms", file=sys.stderr)
@@ -3537,14 +3778,31 @@ class WorkerPoolDaemon:
                     break
                 if not line:
                     break
-
-                msg = json.loads(line)
+                try:
+                    msg = json.loads(line)
+                except Exception:
+                    # Non-JSON stale output — skip
+                    safe_print(f"[RUN-UV] skipping non-JSON: {line[:60]!r}", file=sys.stderr)
+                    continue
 
                 if msg.get("stream"):
                     try:
                         send_json(conn, msg)
                     except Exception:
                         break
+                elif msg.get("status") == "FFI_UNAVAILABLE":
+                    safe_print(
+                        f"[RUN-UV] FFI unavailable on {python_exe} — subprocess fallback",
+                        file=sys.stderr,
+                    )
+                    # Remove dead worker — will be respawned next call once FFI is installed
+                    try:
+                        worker.force_shutdown()
+                    except Exception:
+                        pass
+                    self.uv_workers.pop(python_exe, None)
+                    worker = None
+                    break
                 elif msg.get("status") in ("COMPLETED", "ERROR"):
                     _t_done = _rt.perf_counter()
                     safe_print(
@@ -3555,17 +3813,66 @@ class WorkerPoolDaemon:
                         send_json(conn, msg)
                     except Exception:
                         pass
+                    if msg.get("status") == "COMPLETED":
+                        _completed_cleanly = True
                     break
 
+            # ── Subprocess fallback when FFI unavailable on this interpreter ──
+            if not _completed_cleanly and worker is None:
+                _uv_exe = req.get("uv_exe") or _sh.which("uv")
+                _uv_args = req.get("uv_args", [])
+                _env = os.environ.copy()
+                _env.update(req.get("env", {}))
+                safe_print(f"[RUN-UV] subprocess fallback: uv {' '.join(_uv_args)}", file=sys.stderr)
+                if _uv_exe and os.path.exists(_uv_exe):
+                    import subprocess as _sp
+                    _proc = _sp.Popen(
+                        [_uv_exe] + _uv_args,
+                        stdout=_sp.PIPE, stderr=_sp.PIPE,
+                        text=True, encoding="utf-8", errors="replace", env=_env,
+                    )
+                    _out, _err = _proc.communicate()
+                    _t_done = _rt.perf_counter()
+                    result = {
+                        "status": "COMPLETED",
+                        "exit_code": _proc.returncode,
+                        "stdout": _out,
+                        "stderr": _err,
+                        "elapsed_ms": round((_t_done - _t0) * 1000, 2),
+                        "via": "subprocess_fallback",
+                    }
+                    try:
+                        send_json(conn, result)
+                        _completed_cleanly = True
+                    except Exception:
+                        pass
+                else:
+                    safe_print(f"[RUN-UV] uv binary not found, cannot fallback", file=sys.stderr)
+                    try:
+                        send_json(conn, {"status": "ERROR", "error": "uv not found", "exit_code": 1})
+                    except Exception:
+                        pass
+
         except Exception as e:
+            import traceback as _tb
+            safe_print(f"[RUN-UV] exception: {e}\n{_tb.format_exc()}", file=sys.stderr)
             try:
                 send_json(conn, {"status": "ERROR", "error": str(e), "exit_code": 1})
             except Exception:
                 pass
-        finally:
+            # If the worker crashed mid-request, evict it so next call gets a fresh one
             if worker is not None:
-                worker.force_shutdown()
-            self._replenish_idle_pool(python_exe)
+                try:
+                    worker.force_shutdown()
+                except Exception:
+                    pass
+                self.uv_workers.pop(python_exe, None)
+                worker = None
+        finally:
+            # Stamp the finish time so the FS-watcher handler can suppress
+            # inotify echoes of this install for the next few seconds.
+            self._uv_last_install_ts[python_exe] = time.monotonic()
+            uv_lock.release()
 
     def _execute_code(
         self,
@@ -4145,40 +4452,89 @@ class WorkerPoolDaemon:
             }
 
     def _handle_shutdown(self, signum, frame):
+        """
+        Handles shutdown signals by terminating all workers explicitly then exiting.
+        We kill workers directly by PID rather than relying on process-group signals,
+        which can fail if workers called setsid() or if the PGID doesn't match.
+        """
+        self.log("Shutdown signal received. Terminating all workers...")
         self.running = False
-        self.executor.shutdown(wait=False)
-        deadline = time.time() + 5.0
 
-        with self.pool_lock:
-            workers_list = list(self.workers.values())
-            # drain idle pools
-            idle_workers_list = []
-            for pool in self.idle_pools.values():
-                while not pool.empty():
-                    try:
-                        idle_workers_list.append(pool.get_nowait())
-                    except Exception:
-                        pass
+        # Collect every worker PID we know about
+        all_pids: List[int] = []
 
-        for info in workers_list:
+        # UV workers (dedicated per-python)
+        for py_exe, worker in list(self.uv_workers.items()):
             try:
-                info["worker"].force_shutdown()
+                if worker.process and worker.process.pid:
+                    all_pids.append(worker.process.pid)
+                    worker.process.terminate()
             except Exception:
                 pass
 
-        for worker in idle_workers_list:
-            try:
-                worker.force_shutdown()
-            except Exception:
-                pass
+        # Idle CLI workers
+        for py_exe, pool in list(self.idle_pools.items()):
+            while not pool.empty():
+                try:
+                    w = pool.get_nowait()
+                    if w.process and w.process.pid:
+                        all_pids.append(w.process.pid)
+                        w.process.terminate()
+                except Exception:
+                    pass
 
-        shm_registry.cleanup_orphans()
+        # Spec workers (execute pool)
         try:
-            os.unlink(self.socket_path)
-            os.unlink(PID_FILE)
-        except:
+            with self.pool_lock:
+                for spec, info in list(self.workers.items()):
+                    w = info.get("worker")
+                    if w and w.process and w.process.pid:
+                        all_pids.append(w.process.pid)
+                        try:
+                            w.process.terminate()
+                        except Exception:
+                            pass
+        except Exception:
             pass
 
+        # Wait up to 2s for graceful termination, then SIGKILL stragglers
+        import time as _st
+        deadline = _st.time() + 2.0
+        remaining = list(all_pids)
+        while remaining and _st.time() < deadline:
+            _st.sleep(0.05)
+            still_alive = []
+            for pid in remaining:
+                try:
+                    os.kill(pid, 0)  # 0 = check existence only
+                    still_alive.append(pid)
+                except OSError:
+                    pass  # already dead
+            remaining = still_alive
+
+        # SIGKILL anything still alive
+        for pid in remaining:
+            try:
+                os.kill(pid, signal.SIGKILL)
+                self.log(f"  SIGKILL sent to straggler PID {pid}")
+            except OSError:
+                pass
+
+        # Cleanup socket and PID files
+        for path in (self.socket_path, PID_FILE):
+            try:
+                os.unlink(path)
+            except OSError:
+                pass
+
+        # Stop the FS watcher and release shared memory before exit
+        try:
+            if self._fs_watcher is not None:
+                self._fs_watcher.stop()
+        except Exception:
+            pass
+
+        self.log(f"Shutdown complete. Killed {len(all_pids)} worker(s).")
         sys.exit(0)
 
     @classmethod
@@ -5071,6 +5427,56 @@ class DaemonClient:
         
         return {"success": False, "error": "Connection failed after retries"}
 
+    def run_uv(self, uv_args: list, uv_exe: str = None, python_exe: str = None, env: dict = None) -> dict:
+        """
+        Send a run_uv request to the daemon's dedicated UV worker pool.
+        The worker keeps Tokio warm across calls — subsequent calls are ~5ms.
+        Returns dict with keys: exit_code, installed, removed, stdout, stderr, elapsed_ms, via.
+        Falls back to direct subprocess if daemon is unreachable.
+        """
+        import shutil as _sh
+        req = {
+            "type":       "run_uv",
+            "uv_args":    uv_args,
+            "uv_exe":     uv_exe or _sh.which("uv") or "uv",
+            "python_exe": python_exe or sys.executable,
+            "env":        env or {},
+        }
+        try:
+            sock_family, address = self._get_connection_info()
+            sock = socket.socket(sock_family, socket.SOCK_STREAM)
+            sock.settimeout(self.timeout)
+            sock.connect(address)
+            send_json(sock, req, timeout=self.timeout)
+            # Drain frames until COMPLETED/ERROR
+            while True:
+                msg = recv_json(sock, timeout=self.timeout)
+                if msg.get("status") in ("COMPLETED", "ERROR", "FFI_UNAVAILABLE"):
+                    sock.close()
+                    return msg
+                # stream frames — ignore (caller gets structured result)
+        except (ConnectionRefusedError, FileNotFoundError):
+            pass
+        except Exception as _e:
+            sys.stderr.write(f"[DaemonClient.run_uv] error: {_e}\n")
+        # Fallback: direct subprocess
+        import shutil as _sh2, subprocess as _sp
+        _uv = uv_exe or _sh2.which("uv") or "uv"
+        _env = os.environ.copy()
+        if env:
+            _env.update(env)
+        proc = _sp.run([_uv] + uv_args, capture_output=True, text=True, env=_env)
+        installed, removed = [], []
+        for line in proc.stderr.splitlines():
+            l = line.strip()
+            if l.startswith("+ ") and "==" in l:
+                n, v = l[2:].split("==", 1); installed.append((n.strip(), v.strip()))
+            elif l.startswith("- ") and "==" in l:
+                n, v = l[2:].split("==", 1); removed.append((n.strip(), v.strip()))
+        return {"status": "COMPLETED", "exit_code": proc.returncode,
+                "installed": installed, "removed": removed,
+                "stdout": proc.stdout, "stderr": proc.stderr, "via": "subprocess_fallback"}
+
 
     # ============================================================
     # BONUS FIX: Check if daemon is running (for status command)
@@ -5863,20 +6269,44 @@ def cli_start():
 
 def cli_stop():
     """Stop the daemon."""
+    # Read the daemon PID before sending shutdown so we can wait for it to die
+    daemon_pid = None
+    try:
+        with open(PID_FILE, "r") as f:
+            daemon_pid = int(f.read().strip())
+    except Exception:
+        pass
+
     client = DaemonClient()
     result = client.shutdown()
     if result.get("success"):
         safe_print("✅ Daemon stopped")
-        # Clean up all files the C dispatcher uses to find the daemon.
-        # This prevents the next command from connecting to a dying/restarting
-        # daemon before it's ready to accept connections.
         import time as _st
-        _deadline = _st.time() + 3.0
+        # Wait for socket to disappear (daemon is shutting down)
+        _deadline = _st.time() + 5.0
         while _st.time() < _deadline:
             if not os.path.exists(DEFAULT_SOCKET):
                 break
-            _st.sleep(0.02)
-        # Remove socket file, announcement file, and PID file
+            _st.sleep(0.05)
+
+        # Also wait for daemon PID to actually exit so no zombie workers remain
+        if daemon_pid:
+            _deadline = _st.time() + 3.0
+            while _st.time() < _deadline:
+                try:
+                    os.kill(daemon_pid, 0)  # still alive?
+                    _st.sleep(0.05)
+                except OSError:
+                    break  # gone
+            else:
+                # Last resort: SIGKILL the daemon itself if it hasn't exited
+                try:
+                    os.kill(daemon_pid, signal.SIGKILL)
+                    safe_print(f"⚠️  Daemon PID {daemon_pid} force-killed")
+                except OSError:
+                    pass
+
+        # Remove all connection files so C dispatcher doesn't find stale socket
         for f in (DEFAULT_SOCKET,
                   os.path.join(tempfile.gettempdir(), "omnipkg", "daemon_connection.txt"),
                   PID_FILE):

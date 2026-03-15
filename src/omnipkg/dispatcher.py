@@ -358,7 +358,7 @@ def _maybe_install_c_dispatcher():
 
     try:
         r = subprocess.run(
-            ["gcc", "-O2", "-o", str(binary_tmp), str(c_source)],
+            ["gcc", "-O2", "-o", str(binary_tmp), str(c_source), "-ldl"],
             capture_output=True, timeout=15
         )
         if debug:
