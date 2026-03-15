@@ -25,6 +25,7 @@ class PackageIndexRegistry:
         self.omnipkg_home = Path(omnipkg_home)
         self.registry_file = self.omnipkg_home / "package_index_registry.json"
         self.registry = self._load_registry()
+        self._build_package_index()
 
     def _load_registry(self) -> Dict[str, Any]:
         """Load the package index registry from disk or use defaults."""
@@ -82,85 +83,40 @@ class PackageIndexRegistry:
             },
         }
 
+    def _build_package_index(self):
+        """Pre-build lowercase pkg->ecosystem map once. Makes detect_index_url O(1)."""
+        self._pkg_ecosystem = {}
+        for ecosystem_name, ecosystem_data in self.registry.items():
+            if ecosystem_name.startswith("_"):
+                continue
+            for pkg in ecosystem_data.get("packages", []):
+                self._pkg_ecosystem.setdefault(pkg.lower(), ecosystem_data)
+
     def detect_index_url(
         self, package_name: str, version: Optional[str]
     ) -> Tuple[Optional[str], Optional[str]]:
-        """
-        Detect the appropriate index URL for a package variant.
-
-        Returns:
-            Tuple of (index_url, extra_index_url)
-        """
+        """O(1) lookup — returns (None, None) instantly for normal packages."""
         if not version:
             return None, None
-
-        pkg_lower = package_name.lower()
-
-        # Check each ecosystem in the registry
-        for ecosystem_name, ecosystem_data in self.registry.items():
-            if ecosystem_name.startswith("_"): continue
-            if "packages" not in ecosystem_data: continue
-            if pkg_lower not in [p.lower() for p in ecosystem_data["packages"]]: continue
-
-            # Try to match against rules
-            for rule in ecosystem_data.get("rules", []):
-                pattern = rule.get("pattern", "")
-                if not pattern: continue
-
-                match = re.search(pattern, version)
-                if match:
-                    url_template = rule.get("url")
-                    if not url_template: continue
-
-                    if "{0}" in url_template:
-                        captured = match.group(1) if match.groups() else ""
-                        index_url = url_template.format(captured)
-                    else:
-                        index_url = url_template
-
-                    # CRITICAL CHANGE: Return as EXTRA index URL, not primary
-                    # This allows pip to find dependencies (like triton) on PyPI
-                    return None, index_url
-
-        return None, None
-
-        pkg_lower = package_name.lower()
-
-        # Check each ecosystem in the registry
-        for ecosystem_name, ecosystem_data in self.registry.items():
-            # Skip metadata fields
-            if ecosystem_name.startswith("_"):
+        if not hasattr(self, "_pkg_ecosystem"):
+            self._build_package_index()
+        ecosystem_data = self._pkg_ecosystem.get(package_name.lower())
+        if not ecosystem_data:
+            return None, None
+        for rule in ecosystem_data.get("rules", []):
+            pattern = rule.get("pattern", "")
+            if not pattern:
                 continue
-
-            # Check if package belongs to this ecosystem
-            if "packages" not in ecosystem_data:
-                continue
-
-            if pkg_lower not in [p.lower() for p in ecosystem_data["packages"]]:
-                continue
-
-            # Try to match against rules
-            for rule in ecosystem_data.get("rules", []):
-                pattern = rule.get("pattern", "")
-                if not pattern:
+            m = re.search(pattern, version)
+            if m:
+                url_template = rule.get("url", "")
+                if not url_template:
                     continue
-
-                match = re.search(pattern, version)
-                if match:
-                    url_template = rule.get("url")
-                    if not url_template:
-                        continue
-
-                    # Replace {0} with the captured group if present
-                    if "{0}" in url_template:
-                        captured = match.group(1) if match.groups() else ""
-                        index_url = url_template.format(captured)
-                    else:
-                        index_url = url_template
-
-                    # For now, we don't use extra_index_url, but the API supports it
-                    return index_url, None
-
+                if "{0}" in url_template:
+                    index_url = url_template.format(m.group(1) if m.groups() else "")
+                else:
+                    index_url = url_template
+                return None, index_url
         return None, None
 
     def create_default_config(self) -> bool:

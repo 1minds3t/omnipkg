@@ -48,7 +48,11 @@ _tf_circular_deps_known = {
 _recursion_guard = threading.local()
 
 
+_patch_numpy_guard = False
 def _patch_numpy_for_tf_recursion():
+    global _patch_numpy_guard
+    if _patch_numpy_guard: return
+    _patch_numpy_guard = True
     """
     Applies a patch to numpy.issubdtype to prevent infinite recursion
     when used with certain versions of TensorFlow.
@@ -167,6 +171,10 @@ def smart_tf_patcher():
         if not needs_special_handling:
             return _original_import_func(name, globals, locals, fromlist, level)
 
+
+        # Patch numpy after top-level import completes (submodules skipped)
+        if name == "numpy" and "numpy" in sys.modules:
+            _patch_numpy_for_tf_recursion()
         # Patch numpy AND opt_einsum BEFORE TensorFlow imports them
         if is_tf_import and "tensorflow" not in sys.modules:
             _patch_numpy_for_tf_recursion()
@@ -209,6 +217,10 @@ def smart_tf_patcher():
         if not needs_special_handling:
             return _original_import_func(name, globals, locals, fromlist, level)
 
+
+        # Patch numpy after top-level import completes (submodules skipped)
+        if name == "numpy" and "numpy" in sys.modules:
+            _patch_numpy_for_tf_recursion()
         # Patch numpy AND opt_einsum BEFORE TensorFlow imports them
         if is_tf_import and "tensorflow" not in sys.modules:
             _patch_numpy_for_tf_recursion()

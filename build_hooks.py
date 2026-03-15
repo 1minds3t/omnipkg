@@ -24,9 +24,13 @@ from setuptools.build_meta import (
 
 import sys
 from pathlib import Path
+import shutil
 
 
 def _run_post_install():
+    marker = Path(sys.executable).parent / ".omnipkg_dispatch_compiled"
+    if marker.exists():
+        marker.unlink()
     hook = Path(__file__).parent / "tools" / "dispatcher_bin" / "_post_install.py"
     if hook.exists():
         import importlib.util
@@ -41,8 +45,27 @@ def build_editable(wheel_directory, config_settings=None, metadata_directory=Non
     from setuptools.build_meta import build_editable as _build_editable
     result = _build_editable(wheel_directory, config_settings, metadata_directory)
     _run_post_install()
+    _heal_entrypoints()  # add this
     return result
 
+def _heal_entrypoints():
+    bin_dir = Path(sys.executable).parent
+    base = bin_dir / "omnipkg"
+    if not base.exists():
+        return
+
+    for name in ["8pkg", "OMNIPKG", "8PKG"]:
+        target = bin_dir / name
+        # Skip if the target already exists *or* is the same file as base
+        # (important on case-insensitive FS)
+        if target.exists():
+            if target.samefile(base):
+                continue
+            # If it exists but is different, assume it's valid and skip
+            continue
+
+        shutil.copy2(str(base), str(target))
+        print(f" [build_hooks] healed missing entrypoint: {name}")
 
 # Override build_wheel — this is what `pip install .` (non-editable) calls
 def build_wheel(wheel_directory, config_settings=None, metadata_directory=None):

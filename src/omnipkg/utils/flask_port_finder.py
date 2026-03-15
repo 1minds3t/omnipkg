@@ -90,12 +90,13 @@ def release_port(port: int):
 def is_port_actually_free(port: int) -> bool:
     """
     Double-check if a port is actually free (not just unreserved).
+    NOTE: Do NOT set SO_REUSEADDR here — on Linux it allows double-binds,
+    making already-bound ports falsely appear free.
     """
     try:
         if is_windows():
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             try:
-                sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
                 sock.bind(("127.0.0.1", port))
                 sock.close()
                 return True
@@ -104,7 +105,6 @@ def is_port_actually_free(port: int) -> bool:
                 return False
         else:
             with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as sock:
-                sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
                 sock.bind(("127.0.0.1", port))
                 return True
     except OSError:
@@ -116,20 +116,25 @@ def is_port_actually_free(port: int) -> bool:
 def find_free_port(start_port=5000, max_attempts=100, reserve=True) -> int:
     """
     Find an available port with concurrent safety.
+    The reservation check-and-set must be atomic inside the lock to prevent
+    the TOCTOU race where multiple threads pass the free check simultaneously.
     """
     for port in range(start_port, start_port + max_attempts):
         with _port_lock:
             if port in _reserved_ports:
                 continue
-
-        if not is_port_actually_free(port):
-            continue
-
-        if reserve:
-            if not reserve_port(port, duration=10.0):
+            if not is_port_actually_free(port):
                 continue
+            if reserve:
+                _reserved_ports.add(port)
+                _port_pids[port] = os.getpid()
 
-        return port
+                def _release_later(p=port):
+                    time.sleep(10.0)
+                    release_port(p)
+
+                threading.Thread(target=_release_later, daemon=True).start()
+            return port
 
     raise RuntimeError(
         f"Could not find free port in range {start_port}-{start_port + max_attempts}"
@@ -185,12 +190,16 @@ except Exception as e:
 """
 
     try:
+        env = os.environ.copy()
+        env["PYTHONIOENCODING"] = "utf-8"
+        env["PYTHONUTF8"] = "1"
         result = subprocess.run(
             [sys.executable, "-c", validation_code],
             capture_output=True,
             text=True,
+            encoding="utf-8",
             timeout=timeout,
-            env=os.environ.copy(),
+            env=env,
         )
 
         if result.returncode == 0 and "VALIDATION_SUCCESS" in result.stdout:
@@ -219,7 +228,7 @@ class FlaskAppManager:
         self.validate_only = validate_only
         self.process: Optional[subprocess.Popen] = None
         self.is_running = False
-        self.shutdown_file = Path(tempfile.gettempdir()) / f"flask_shutdown_{port}.signal"
+        self.shutdown_file = Path(tempfile.gettempdir()).resolve() / f"flask_shutdown_{port}.signal"
 
         if self.shutdown_file.exists():
             self.shutdown_file.unlink()
@@ -232,16 +241,14 @@ class FlaskAppManager:
             safe_print(_('🔍 Validating Flask app on port {}...').format(self.port))
             return validate_flask_app(self.code, self.port)
 
+        # Use forward slashes / raw string to avoid backslash corruption on Windows
+        _shutdown_file_str = str(self.shutdown_file).replace("\\", "/")
         wrapper_code = f"""
 import signal
 import sys
 import time
 from pathlib import Path
-try:
-    from .common_utils import safe_print
-except ImportError:
-    from omnipkg.common_utils import safe_print
-shutdown_file = Path("{self.shutdown_file}")
+shutdown_file = Path(r"{self.shutdown_file}")
 
 def check_shutdown_signal(signum=None, frame=None):
     if shutdown_file.exists():
@@ -264,15 +271,19 @@ threading.Thread(target=periodic_check, daemon=True).start()
 """
 
         try:
-            with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
+            with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False, encoding="utf-8") as f:
                 f.write(wrapper_code)
                 temp_file = f.name
 
+            popen_env = os.environ.copy()
+            popen_env["PYTHONIOENCODING"] = "utf-8"
+            popen_env["PYTHONUTF8"] = "1"
+            # Use DEVNULL not PIPE — on Windows unread PIPE buffers block the process
             self.process = subprocess.Popen(
                 [sys.executable, temp_file],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                env=popen_env,
             )
 
             self.is_running = True
@@ -290,10 +301,21 @@ threading.Thread(target=periodic_check, daemon=True).start()
         if not self.is_running and self.process is None:
             if not self.validate_only:
                 safe_print("✅ No active process to shutdown")
+            if self.shutdown_file.exists():
+                try:
+                    self.shutdown_file.unlink()
+                except OSError:
+                    pass
             release_port(self.port)
             return
 
         if self.process is None:
+            # Still clean up shutdown file even if no process (validate_only mode)
+            if self.shutdown_file.exists():
+                try:
+                    self.shutdown_file.unlink()
+                except OSError:
+                    pass
             release_port(self.port)
             return
 
@@ -321,8 +343,13 @@ threading.Thread(target=periodic_check, daemon=True).start()
 
     def wait_for_ready(self, timeout: float = 10.0) -> bool:
         """Wait for Flask app to be ready to accept connections."""
+        import sys as _sys
         start_time = time.time()
         while time.time() - start_time < timeout:
+            # Check if process died early — no point waiting if it crashed
+            if self.process is not None and self.process.poll() is not None:
+                safe_print(_('⚠️  Flask process exited early with code {}').format(self.process.returncode))
+                return False
             try:
                 with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
                     sock.settimeout(0.5)
@@ -330,16 +357,20 @@ threading.Thread(target=periodic_check, daemon=True).start()
                     if result == 0:
                         safe_print(_('✅ Flask app is ready on port {}').format(self.port))
                         return True
-            except:
+            except Exception:
                 pass
             time.sleep(0.2)
 
         safe_print(_('⚠️  Flask app did not become ready within {}s').format(timeout))
+        # Log process state for debugging
+        if self.process is not None:
+            code = self.process.poll()
+            safe_print(f'   Process returncode: {code} (None=still running)')
         return False
 
 
 def patch_flask_code(
-    code: str, interactive: bool = False, validate_only: bool = False
+    code: str, interactive: bool = False, validate_only: bool = False, port: int = None
 ) -> Tuple[str, int, Optional[FlaskAppManager]]:
     """
     Patch Flask code to use an available port with optional interactive mode.
@@ -348,11 +379,12 @@ def patch_flask_code(
         code: Python source code containing Flask app
         interactive: If True, returns a FlaskAppManager for controlled execution
         validate_only: If True (with interactive), only validates without running
+        port: If provided, use this port instead of finding a new one
 
     Returns:
         Tuple of (patched_code, port_number, optional_manager)
     """
-    free_port = find_free_port(reserve=True)
+    free_port = port if port is not None else find_free_port(reserve=True)
     pattern = r"app\.run\s*\([^)]*\)"
 
     if not re.search(pattern, code):
