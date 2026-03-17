@@ -215,8 +215,6 @@ static int read_self_config(const char *self_dir, char *python_path, size_t n) {
     return json_get_str(buf, "python_executable", python_path, n);
 }
 
-/* ── fallback to Python dispatcher ─────────────────────────────────────── */
-
 /* ── daemon socket communication ───────────────────────────────────────── */
 
 static int write_all(int fd, const void *buf, size_t count) {
@@ -753,6 +751,299 @@ static void fallback_to_python(const char *self_dir, char **argv) {
     exit(1);
 }
 
+/* ── stamp-file helpers ─────────────────────────────────────────────────── */
+/*
+ * Stamp file: /tmp/omnipkg/ffi_ok/<djb2hash>.stamp
+ * Presence = uv_ffi verified/installed for that interpreter.
+ * Check cost: one stat() call, ~2µs — replaces the old 60ms subprocess check.
+ */
+static void ffi_stamp_path(const char *python_exe, char *out, size_t n) {
+    unsigned long h = 5381;
+    const unsigned char *p = (const unsigned char *)python_exe;
+    while (*p) { h = h * 33 ^ *p++; }
+    snprintf(out, n, "/tmp/omnipkg/ffi_ok/%lu.stamp", h);
+}
+
+static int ffi_stamp_exists(const char *python_exe) {
+    char stamp[MAX_PATH];
+    ffi_stamp_path(python_exe, stamp, sizeof(stamp));
+    struct stat st;
+    return stat(stamp, &st) == 0;
+}
+
+static void ffi_stamp_write(const char *python_exe) {
+    mkdir("/tmp/omnipkg", 0755);
+    mkdir("/tmp/omnipkg/ffi_ok", 0755);
+    char stamp[MAX_PATH];
+    ffi_stamp_path(python_exe, stamp, sizeof(stamp));
+    FILE *f = fopen(stamp, "w");
+    if (f) { fputs(python_exe, f); fclose(f); }
+}
+
+/*
+ * ensure_uv_ffi_for_python — install uv_ffi into a non-main interpreter
+ * (e.g. cpython-3.9.23) if it is missing, then notify the daemon worker
+ * to reload its FFI handle so subsequent run_uv calls use FFI not subprocess.
+ *
+ * Fast path: stamp file exists → single stat(), ~2µs, no subprocess.
+ * Slow path: first call only → install (~1s one-time) → write stamp.
+ *
+ * Returns 1 if uv_ffi is available (either was already or just installed).
+ */
+static int ensure_uv_ffi_for_python(
+    const char *target_python,
+    const char *venv_root,
+    const char *sock_path,
+    int debug
+) {
+    /* Fast path — stamp present means already verified/installed */
+    if (ffi_stamp_exists(target_python)) {
+        if (debug) fprintf(stderr, "[C-DISPATCH] uv_ffi stamp hit for %s\n",
+                           target_python);
+        return 1;
+    }
+
+    if (debug) fprintf(stderr, "[C-DISPATCH] uv_ffi missing for %s — installing\n",
+                       target_python);
+
+    /* Find uv */
+    char uv_path[MAX_PATH];
+    const char *uv_exe = NULL;
+    snprintf(uv_path, sizeof(uv_path), "%s/bin/uv", venv_root);
+    if (file_exists(uv_path)) {
+        uv_exe = uv_path;
+    } else {
+        const char *path_env = getenv("PATH");
+        if (path_env) {
+            char path_copy[16384];
+            strncpy(path_copy, path_env, sizeof(path_copy) - 1);
+            path_copy[sizeof(path_copy) - 1] = '\0';
+            char *dir = strtok(path_copy, ":");
+            static char uv_found2[MAX_PATH];
+            while (dir) {
+                snprintf(uv_found2, sizeof(uv_found2), "%s/uv", dir);
+                if (file_exists(uv_found2)) { uv_exe = uv_found2; break; }
+                dir = strtok(NULL, ":");
+            }
+        }
+    }
+
+    char install_cmd[MAX_PATH * 4];
+    int rc = -1;
+    if (uv_exe) {
+        snprintf(install_cmd, sizeof(install_cmd),
+            "\"%s\" pip install --python \"%s\" uv_ffi",
+            uv_exe, target_python);
+        if (debug) fprintf(stderr, "[C-DISPATCH] uv_ffi install: %s\n", install_cmd);
+        rc = system(install_cmd);
+    }
+    if (rc != 0) {
+        snprintf(install_cmd, sizeof(install_cmd),
+            "\"%s\" -m pip install uv_ffi", target_python);
+        if (debug) fprintf(stderr, "[C-DISPATCH] uv_ffi pip fallback: %s\n", install_cmd);
+        rc = system(install_cmd);
+    }
+
+    if (rc != 0) {
+        if (debug) fprintf(stderr, "[C-DISPATCH] uv_ffi install failed rc=%d\n", rc);
+        return 0;
+    }
+
+    if (debug) fprintf(stderr, "[C-DISPATCH] uv_ffi installed for %s\n", target_python);
+    ffi_stamp_write(target_python);  /* fast path on all future calls */
+
+    /* Tell the daemon worker to reload its FFI handle for this interpreter.
+     * Fire-and-forget: we don't wait for a reply — the worker will reload
+     * asynchronously and the next run_uv call will use FFI instead of subprocess. */
+    if (sock_path && sock_path[0]) {
+        struct stat _st;
+        if (stat(sock_path, &_st) == 0) {
+            int _s = socket(AF_UNIX, SOCK_STREAM, 0);
+            if (_s >= 0) {
+                struct timeval _tv = { 1, 0 };
+                setsockopt(_s, SOL_SOCKET, SO_SNDTIMEO, &_tv, sizeof(_tv));
+                setsockopt(_s, SOL_SOCKET, SO_RCVTIMEO, &_tv, sizeof(_tv));
+                struct sockaddr_un _addr;
+                memset(&_addr, 0, sizeof(_addr));
+                _addr.sun_family = AF_UNIX;
+                strncpy(_addr.sun_path, sock_path, sizeof(_addr.sun_path) - 1);
+                if (connect(_s, (struct sockaddr*)&_addr, sizeof(_addr)) == 0) {
+                    char _msg[MAX_PATH + 64];
+                    snprintf(_msg, sizeof(_msg),
+                        "{\"type\":\"reload_ffi\",\"python_exe\":\"%s\"}", target_python);
+                    send_json_msg(_s, _msg);
+                    /* don't wait for reply — fire and forget */
+                    if (debug) fprintf(stderr,
+                        "[C-DISPATCH] sent reload_ffi to daemon for %s\n", target_python);
+                }
+                close(_s);
+            }
+        }
+    }
+
+    return 1;
+}
+
+/* ── find or auto-install uv_ffi .so ───────────────────────────────────── */
+
+static int find_or_install_uv_ffi_so(
+    const char *venv_root,
+    const char *target_python,
+    char *so_path_out,
+    size_t so_path_n
+) {
+    int debug = (getenv("OMNIPKG_DEBUG") != NULL &&
+                 strcmp(getenv("OMNIPKG_DEBUG"), "1") == 0);
+
+    /* ── 0. Ask Python directly — handles editable/dev/vendor installs ── */
+    {
+        char _py_cmd[MAX_PATH * 2];
+        char _py_out[MAX_PATH] = "";
+        snprintf(_py_cmd, sizeof(_py_cmd),
+            "\"%s\" -c \""
+            "import os\n"
+            "try:\n"
+            "    import omnipkg._vendor.uv_ffi as m\n"
+            "except: pass\n"
+            "else:\n"
+            "    d=os.path.dirname(m.__file__)\n"
+            "    [print(os.path.join(d,f)) for f in os.listdir(d) if f.endswith(chr(46)+chr(115)+chr(111))]\n"
+            "\" 2>/dev/null",
+            target_python);
+        FILE *_pp = popen(_py_cmd, "r");
+        if (_pp) {
+            if (fgets(_py_out, sizeof(_py_out), _pp)) {
+                _py_out[strcspn(_py_out, "\r\n")] = '\0';
+                if (_py_out[0] && file_exists(_py_out)) {
+                    strncpy(so_path_out, _py_out, so_path_n - 1);
+                    so_path_out[so_path_n - 1] = '\0';
+                    pclose(_pp);
+                    if (debug) fprintf(stderr, "[C-DISPATCH] Found uv_ffi.so via Python: %s\n", so_path_out);
+                    return 1;
+                }
+            }
+            pclose(_pp);
+        }
+    }
+
+    /* ── 1. Search known locations for an existing .so ── */
+    char patterns[8][MAX_PATH];
+    const char *home = getenv("HOME");
+    /* standard installed: uv_ffi/_native/ */
+    snprintf(patterns[0], MAX_PATH,
+        "%s/lib/python3.*/site-packages/uv_ffi/_native/*.so", venv_root);
+    snprintf(patterns[1], MAX_PATH,
+        "%s/lib/python3*/site-packages/uv_ffi/_native/*.so", venv_root);
+    /* flat install: uv_ffi/*.so */
+    snprintf(patterns[2], MAX_PATH,
+        "%s/lib/python3.*/site-packages/uv_ffi/*.so", venv_root);
+    snprintf(patterns[3], MAX_PATH,
+        "%s/lib/python3*/site-packages/uv_ffi/*.so", venv_root);
+    /* dev/vendor install: omnipkg/_vendor/uv_ffi/*.so */
+    snprintf(patterns[4], MAX_PATH,
+        "%s/lib/python3.*/site-packages/omnipkg/_vendor/uv_ffi/*.so", venv_root);
+    snprintf(patterns[5], MAX_PATH,
+        "%s/lib/python3*/site-packages/omnipkg/_vendor/uv_ffi/*.so", venv_root);
+    /* user local */
+    snprintf(patterns[6], MAX_PATH,
+        "%s/.local/lib/python3.*/site-packages/uv_ffi/_native/*.so",
+        home ? home : "/tmp");
+    snprintf(patterns[7], MAX_PATH,
+        "%s/.local/lib/python3.*/site-packages/uv_ffi/*.so",
+        home ? home : "/tmp");
+
+    glob_t globbuf;
+    for (int pi = 0; pi < 8; pi++) {
+        if (glob(patterns[pi], 0, NULL, &globbuf) == 0 && globbuf.gl_pathc > 0) {
+            strncpy(so_path_out, globbuf.gl_pathv[0], so_path_n - 1);
+            so_path_out[so_path_n - 1] = '\0';
+            globfree(&globbuf);
+            if (debug) fprintf(stderr, "[C-DISPATCH] Found uv_ffi.so: %s\n", so_path_out);
+            return 1;
+        }
+        globfree(&globbuf);
+    }
+
+    if (debug) fprintf(stderr, "[C-DISPATCH] uv_ffi.so not found — attempting auto-install\n");
+
+    /* ── 2. Not found: try to install uv_ffi from PyPI ── */
+    char py_ver_tag[16] = "";
+    const char *py_base = strrchr(target_python, '/');
+    py_base = py_base ? py_base + 1 : target_python;
+    if (strncmp(py_base, "python3.", 8) == 0) {
+        const char *minor_start = py_base + 8; /* skip "python3." */
+        size_t mlen = strlen(minor_start);
+        if (mlen == 1)
+            snprintf(py_ver_tag, sizeof(py_ver_tag), "cp3%c", minor_start[0]);
+        else if (mlen >= 2)
+            snprintf(py_ver_tag, sizeof(py_ver_tag), "cp3%c%c", minor_start[0], minor_start[1]);
+    }
+
+    if (!py_ver_tag[0]) {
+        if (debug) fprintf(stderr, "[C-DISPATCH] Could not determine Python ABI tag\n");
+        return 0;
+    }
+
+    if (debug) fprintf(stderr, "[C-DISPATCH] Auto-installing uv_ffi for %s\n", py_ver_tag);
+
+    /* Find uv */
+    char uv_path[MAX_PATH];
+    const char *uv_exe = NULL;
+    snprintf(uv_path, sizeof(uv_path), "%s/bin/uv", venv_root);
+    if (file_exists(uv_path)) {
+        uv_exe = uv_path;
+    } else {
+        const char *path_env = getenv("PATH");
+        if (path_env) {
+            char path_copy[16384];
+            strncpy(path_copy, path_env, sizeof(path_copy) - 1);
+            path_copy[sizeof(path_copy) - 1] = '\0';
+            char *dir = strtok(path_copy, ":");
+            static char uv_found[MAX_PATH];
+            while (dir) {
+                snprintf(uv_found, sizeof(uv_found), "%s/uv", dir);
+                if (file_exists(uv_found)) { uv_exe = uv_found; break; }
+                dir = strtok(NULL, ":");
+            }
+        }
+    }
+
+    char install_cmd[MAX_PATH * 4];
+    int install_rc = -1;
+    if (uv_exe) {
+        snprintf(install_cmd, sizeof(install_cmd),
+            "\"%s\" pip install --python \"%s\" uv_ffi",
+            uv_exe, target_python);
+        if (debug) fprintf(stderr, "[C-DISPATCH] uv_ffi install: %s\n", install_cmd);
+        install_rc = system(install_cmd);
+    }
+    if (install_rc != 0) {
+        snprintf(install_cmd, sizeof(install_cmd),
+            "\"%s\" -m pip install uv_ffi", target_python);
+        if (debug) fprintf(stderr, "[C-DISPATCH] uv_ffi pip fallback: %s\n", install_cmd);
+        install_rc = system(install_cmd);
+    }
+    if (install_rc != 0) {
+        if (debug) fprintf(stderr, "[C-DISPATCH] uv_ffi auto-install failed rc=%d\n", install_rc);
+        return 0;
+    }
+
+    /* ── 3. Re-glob after install ── */
+    for (int pi = 0; pi < 8; pi++) {
+        if (glob(patterns[pi], 0, NULL, &globbuf) == 0 && globbuf.gl_pathc > 0) {
+            strncpy(so_path_out, globbuf.gl_pathv[0], so_path_n - 1);
+            so_path_out[so_path_n - 1] = '\0';
+            globfree(&globbuf);
+            if (debug) fprintf(stderr, "[C-DISPATCH] uv_ffi.so post-install: %s\n", so_path_out);
+            return 1;
+        }
+        globfree(&globbuf);
+    }
+
+    if (debug) fprintf(stderr, "[C-DISPATCH] uv_ffi.so still missing after install\n");
+    return 0;
+}
+
 /* ════════════════════════════════════════════════════════════════════════ */
 
 int main(int argc, char **argv) {
@@ -913,13 +1204,21 @@ int main(int argc, char **argv) {
             fallback_to_python(self_dir, argv);
         }
     }
-    /* ── 6. Native FFI Fast-Path (Bypass Python IPC completely) ──────────── */
+
+    /* ── 6. Native FFI Fast-Path (swap + install) ── */
     int is_swap = 0;
     const char *pkg_spec = NULL;
+
     if (argc >= 3 && strcmp(argv[1], "swap") == 0) {
         is_swap = 1; pkg_spec = argv[2];
     } else if (argc >= 4 && strcmp(argv[1], "pip") == 0 && strcmp(argv[2], "install") == 0) {
         is_swap = 1; pkg_spec = argv[3];
+    } else if (argc >= 3 && strcmp(argv[1], "install") == 0) {
+        /* direct install fast-path — only single pinned specs (name==ver) */
+        const char *candidate = argv[2];
+        if (candidate[0] != '-' && strstr(candidate, "==") != NULL) {
+            is_swap = 1; pkg_spec = candidate;
+        }
     }
 
     if (is_swap && pkg_spec && pkg_spec[0] != '-') {
@@ -943,10 +1242,52 @@ int main(int argc, char **argv) {
 
         if (debug) fprintf(stderr, "[C-DISPATCH] Strategy detected: %s\n", strategy);
 
-        if (strcmp(strategy, "latest-active") == 0) {
+        if (1) { /* all strategies use FFI fast-path */
             char out_json[65536];
             out_json[0] = '\0';
             int ffi_rc = -1;
+
+            /* ── Pre-flight: resolve daemon socket path (reused below) ── */
+            char daemon_sock[MAX_PATH];
+            daemon_sock[0] = '\0';
+            {
+                const char *ann = "/tmp/omnipkg/daemon_connection.txt";
+                FILE *_af = fopen(ann, "r");
+                if (_af) {
+                    char _line[MAX_PATH];
+                    if (fgets(_line, sizeof(_line), _af)) {
+                        _line[strcspn(_line, "\r\n")] = '\0';
+                        if (strncmp(_line, "unix://", 7) == 0) {
+                            strncpy(daemon_sock, _line + 7, sizeof(daemon_sock) - 1);
+                            daemon_sock[sizeof(daemon_sock) - 1] = '\0';
+                        }
+                    }
+                    fclose(_af);
+                }
+                if (!daemon_sock[0]) {
+                    const char *_td = getenv("TMPDIR");
+                    if (!_td) _td = "/tmp";
+                    snprintf(daemon_sock, sizeof(daemon_sock),
+                             "%s/omnipkg/omnipkg_daemon.sock", _td);
+                }
+            }
+
+            /* ── Pre-flight: ensure uv_ffi is installed for target python ──
+             * If the target interpreter (e.g. cpython-3.9) is missing uv_ffi,
+             * install it now and tell the daemon worker to reload its FFI handle.
+             * This turns "via: subprocess_fallback" into "via: ffi" on next call.
+             * We only do this when target_python differs from the main env python
+             * (i.e. it's a managed interpreter, not the one omnipkg itself runs in). */
+            {
+                char main_py[MAX_PATH] = "";
+                read_self_config(self_dir, main_py, sizeof(main_py));
+                int is_foreign = (main_py[0] == '\0' ||
+                                  strcmp(main_py, target_python) != 0);
+                if (is_foreign) {
+                    ensure_uv_ffi_for_python(target_python, venv_root,
+                                             daemon_sock, debug);
+                }
+            }
 
             /* ── Phase 1a: try daemon UV worker (warm Tokio, ~5ms) ── */
             if (try_daemon_uv(target_python, pkg_spec, out_json, sizeof(out_json))) {
@@ -956,66 +1297,55 @@ int main(int argc, char **argv) {
 
             /* ── Phase 1b: dlopen fallback (cold, ~11ms) ── */
             if (ffi_rc != 0) {
-                char pattern1[MAX_PATH];
-                char pattern2[MAX_PATH];
-                snprintf(pattern1, sizeof(pattern1),
-                    "%s/lib/python3.*/site-packages/omnipkg/_vendor/uv_ffi/_native/*.so", venv_root);
-                snprintf(pattern2, sizeof(pattern2),
-                    "/home/minds3t/omnipkg/src/omnipkg/_vendor/uv_ffi/_native/*.so");
-
-                glob_t globbuf;
-                int found = 0;
-                if (glob(pattern1, 0, NULL, &globbuf) == 0 && globbuf.gl_pathc > 0) {
-                    found = 1;
-                } else {
-                    globfree(&globbuf);
-                    if (glob(pattern2, 0, NULL, &globbuf) == 0 && globbuf.gl_pathc > 0)
-                        found = 1;
-                }
-
-                if (found) {
-                    if (debug) fprintf(stderr, "[C-DISPATCH] Found libuv_ffi.so at: %s\n", globbuf.gl_pathv[0]);
-
+                char so_path[MAX_PATH];
+                if (find_or_install_uv_ffi_so(venv_root, target_python,
+                                               so_path, sizeof(so_path))) {
                     const char *py_ver_ptr = strstr(target_python, "python3.");
                     if (py_ver_ptr) {
                         char py_ver[32];
-                        strncpy(py_ver, py_ver_ptr, sizeof(py_ver)-1);
-                        py_ver[sizeof(py_ver)-1] = '\0';
+                        strncpy(py_ver, py_ver_ptr, sizeof(py_ver) - 1);
+                        py_ver[sizeof(py_ver) - 1] = '\0';
                         char pylib[MAX_PATH];
-                        snprintf(pylib, sizeof(pylib), "%s/lib/lib%s.so", venv_root, py_ver);
+                        snprintf(pylib, sizeof(pylib), "%s/lib/lib%s.so",
+                                 venv_root, py_ver);
                         void *py_handle = dlopen(pylib, RTLD_LAZY | RTLD_GLOBAL);
                         if (!py_handle) {
-                            snprintf(pylib, sizeof(pylib), "%s/lib/lib%s.so.1.0", venv_root, py_ver);
+                            snprintf(pylib, sizeof(pylib), "%s/lib/lib%s.so.1.0",
+                                     venv_root, py_ver);
                             py_handle = dlopen(pylib, RTLD_LAZY | RTLD_GLOBAL);
                         }
                         if (debug)
-                            fprintf(stderr, "[C-DISPATCH] Preloading %s -> %s\n", pylib,
-                                    py_handle ? "SUCCESS" : dlerror());
+                            fprintf(stderr, "[C-DISPATCH] Preloading %s -> %s\n",
+                                    pylib, py_handle ? "OK" : dlerror());
                     }
 
-                    void *ffi_handle = dlopen(globbuf.gl_pathv[0], RTLD_LAZY);
+                    void *ffi_handle = dlopen(so_path, RTLD_LAZY);
                     if (!ffi_handle) {
-                        if (debug) fprintf(stderr, "[C-DISPATCH] dlopen failed: %s\n", dlerror());
+                        if (debug) fprintf(stderr, "[C-DISPATCH] dlopen failed: %s\n",
+                                           dlerror());
                     } else {
                         typedef int (*run_c_t)(const char*, char*, int);
-                        run_c_t run_fn = (run_c_t)dlsym(ffi_handle, "omnipkg_uv_run_c");
+                        run_c_t run_fn = (run_c_t)dlsym(ffi_handle,
+                                                         "omnipkg_uv_run_c");
                         if (run_fn) {
                             char cache_dir[MAX_PATH];
-                            const char *home = getenv("HOME");
+                            const char *home2 = getenv("HOME");
                             snprintf(cache_dir, sizeof(cache_dir), "%s/.cache/uv",
-                                     home ? home : "/tmp");
+                                     home2 ? home2 : "/tmp");
                             char cmd[MAX_PATH * 2];
                             snprintf(cmd, sizeof(cmd),
-                                "pip install --cache-dir %s --python %s --link-mode symlink %s",
+                                "pip install --cache-dir %s --python %s"
+                                " --link-mode symlink %s",
                                 cache_dir, target_python, pkg_spec);
-                            if (debug) fprintf(stderr, "[C-DISPATCH] Native FFI execute: %s\n", cmd);
+                            if (debug)
+                                fprintf(stderr, "[C-DISPATCH] dlopen FFI: %s\n", cmd);
                             if (run_fn(cmd, out_json, sizeof(out_json)) == 0)
                                 ffi_rc = 0;
                         } else {
-                            if (debug) fprintf(stderr, "[C-DISPATCH] dlsym failed: %s\n", dlerror());
+                            if (debug) fprintf(stderr, "[C-DISPATCH] dlsym failed: %s\n",
+                                               dlerror());
                         }
                     }
-                    globfree(&globbuf);
                 }
             }
 
@@ -1037,30 +1367,66 @@ int main(int argc, char **argv) {
                     } else if (pid == 0) {
                         /* child — run KB/bubble work silently */
                         setsid();
-                        /* redirect stdout/stderr to /dev/null */
                         int devnull = open("/dev/null", O_WRONLY);
                         if (devnull >= 0) {
                             dup2(devnull, 1);
                             dup2(devnull, 2);
                             close(devnull);
                         }
+
+                        /* Extract "3.11" safely into a fixed buffer */
+                        char py_ctx_ver[16] = "3.11";
+                        const char *_pv = strstr(target_python, "python3.");
+                        if (_pv) {
+                            _pv += 7; /* skip "python" — points at "3.11" etc */
+                            size_t _vi = 0;
+                            while (_pv[_vi] &&
+                                   (_pv[_vi] == '.' ||
+                                    (_pv[_vi] >= '0' && _pv[_vi] <= '9')) &&
+                                   _vi < sizeof(py_ctx_ver) - 1) {
+                                py_ctx_ver[_vi] = _pv[_vi];
+                                _vi++;
+                            }
+                            py_ctx_ver[_vi] = '\0';
+                        }
+
                         char py_script[8192];
                         snprintf(py_script, sizeof(py_script),
-                            "import json\n"
+                            "import json, os, sys\n"
                             "from omnipkg.core import ConfigManager, omnipkg\n"
+                            "from omnipkg.installation.smart_install import SmartInstaller\n"
                             "core = omnipkg(ConfigManager())\n"
+                            "core._connect_cache()\n"
                             "try:\n"
                             "    cl = json.loads('''%s''')\n"
                             "    inst = cl.get('installed', [])\n"
                             "    rem  = cl.get('removed',   [])\n"
-                            "    for name, ver in rem:\n"
-                            "        core.bubble_manager.create_isolated_bubble(\n"
-                            "            name, ver,\n"
-                            "            python_context_version=core.python_context_version)\n"
-                            "    core._synchronize_knowledge_base_with_reality()\n"
+                            "    bg = {\n"
+                            "        'force_reinstall': False,\n"
+                            "        'protected_from_cleanup': [],\n"
+                            "        'initial_packages': {},\n"
+                            "        'final_main_state':    {n: v for n, v in inst},\n"
+                            "        'main_env_kb_updates': {n: v for n, v in inst},\n"
+                            "        'bubbled_kb_updates':  {n: v for n, v in rem},\n"
+                            "        'python_context_version': '%s',\n"
+                            "        'priority_specs': [f'{n}=={v}' for n, v in inst],\n"
+                            "        'bubble_paths_to_scan': {},\n"
+                            "        'pending_bubble_tasks': [\n"
+                            "            {'type': 'create_isolated_bubble',\n"
+                            "             'pkg_name': n, 'version': v,\n"
+                            "             'python_context_version': '%s'}\n"
+                            "            for n, v in rem\n"
+                            "        ],\n"
+                            "        'run_doctor': False,\n"
+                            "    }\n"
+                            "    SmartInstaller(core)._run_background(bg, core)\n"
                             "except Exception:\n"
                             "    pass\n",
-                            out_json);
+                            out_json,
+                            py_ctx_ver,
+                            py_ctx_ver
+                        );
+
                         char *bg_argv[] = {
                             (char *)target_python,
                             (char *)"-c",
@@ -1076,6 +1442,7 @@ int main(int argc, char **argv) {
             }
         }
     }
+
     /* ── 7. Build final argv and execv (or try daemon) ───────────────────────── */
     int is_interactive_command = 0;
     if (argc >= 2) {

@@ -801,6 +801,8 @@ class SmartInstaller:
                         print(f"[UV-TIMING] FFI: {(time.perf_counter()-t_pip)*1000:.2f}ms rc={_ffi_rc}", flush=True)
                         if _ffi_rc == 0:
                             return_code = 0
+                            self.core._last_ffi_installed = _ffi_installed
+                            self.core._last_ffi_removed   = _ffi_removed
                             pkg_install_output = {"stdout": "", "stderr": "", "ffi_installed": _ffi_installed, "ffi_removed": _ffi_removed, "from_ffi": True}
                             _used_ffi = True
                         else:
@@ -946,6 +948,11 @@ class SmartInstaller:
                                 self.core._safe_restore_from_snapshot(pkg_name, snapshot_state, force=True)
 
                 elif install_strategy == "latest-active":
+                    # If packages_before is empty (cold cache), reconstruct from FFI removed list
+                    if not packages_before and pkg_install_output.get("ffi_removed"):
+                        for name, ver in pkg_install_output["ffi_removed"]:
+                            packages_before[name.lower()] = ver
+
                     for pkg in set(packages_before.keys()) | set(packages_after.keys()):
                         old_version = packages_before.get(pkg)
                         new_version = packages_after.get(pkg)

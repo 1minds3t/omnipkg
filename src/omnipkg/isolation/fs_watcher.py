@@ -508,22 +508,29 @@ class DaemonPatchSender:
     def __init__(self, socket_path: str):
         self._socket_path = socket_path
 
-    def __call__(self, site_packages_path: str,
-                 installed: list, removed: list):
-        msg = json.dumps({
+    def __call__(self, site_packages_path: str, installed: list, removed: list):
+        # existing patch_cache message
+        patch_msg = json.dumps({
             "type": "patch_site_packages_cache",
             "site_packages_path": site_packages_path,
-            "installed": installed,   # [[name, version], ...]
+            "installed": installed,
+            "removed": removed,
+        })
+        # new sentinel piggyback — zero extra connections, worker has warm Redis
+        sentinel_msg = json.dumps({
+            "type": "kb_sentinel",
+            "installed": installed,   # [["numpy", "2.3.5"], ...]
             "removed":   removed,
         })
         try:
-            payload = len(msg).to_bytes(8, "big") + msg.encode()
-            if platform.system() == "Windows":
-                self._send_windows(payload)
-            else:
-                self._send_unix(payload)
+            for msg in (patch_msg, sentinel_msg):
+                payload = len(msg).to_bytes(8, "big") + msg.encode()
+                if platform.system() == "Windows":
+                    self._send_windows(payload)
+                else:
+                    self._send_unix(payload)
         except Exception as exc:
-            log.warning("[fs_watcher] daemon patch message failed: %s", exc)
+            log.warning("[fs_watcher] daemon message failed: %s", exc)
 
     def _send_unix(self, payload: bytes):
         with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as s:
@@ -708,65 +715,6 @@ class FfiWriteGuard:
             # Successful FFI write — suppress the echo FS event
             self._flag.record_our_write()
         return False   # don't suppress exceptions
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# WORKER_DAEMON.PY PATCH  (copy-paste into worker_daemon.py)
-# ═══════════════════════════════════════════════════════════════════════════════
-#
-# In worker_daemon.py, find the run_uv handler block (around line 1037):
-#
-#   elif _req_type == 'run_uv':
-#       _t_req = _wtime.perf_counter()
-#       _uv_args = setup_data.get('uv_args', [])
-#       _ffi_fn = globals().get('_UV_FFI_RUN')
-#       ...
-#       try:
-#           _ffi_result = _ffi_fn(' '.join(_uv_args))   # ← WRAP THIS
-#
-# Replace the FFI call section with:
-#
-#   elif _req_type == 'run_uv':
-#       _t_req = _wtime.perf_counter()
-#       _uv_args = setup_data.get('uv_args', [])
-#       _ffi_fn = globals().get('_UV_FFI_RUN')
-#       if _ffi_fn is None:
-#           ... (unchanged)
-#       if '--python' not in _uv_args:
-#           ... (unchanged)
-#       try:
-#           # ── NEW: block if an external write is in progress ──────────
-#           _ffi_guard = FfiWriteGuard.attach()
-#           with _ffi_guard:
-#               _ffi_result = _ffi_fn(' '.join(_uv_args))
-#           # ── END NEW ─────────────────────────────────────────────────
-#           _ffi_rc        = _ffi_result[0] if isinstance(_ffi_result, tuple) else _ffi_result
-#           ...
-#
-# That's it. Two lines changed, zero other modifications required.
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# DAEMON HANDLER  (add to WorkerPoolDaemon._handle_request)
-# ═══════════════════════════════════════════════════════════════════════════════
-#
-# In WorkerPoolDaemon._handle_request (the big if/elif chain), add:
-#
-#   elif req["type"] == "invalidate_site_packages_cache":
-#       sp_path = req.get("site_packages_path")
-#       # Forward to all UV workers whose site-packages match
-#       for py_exe, worker in list(self.uv_workers.items()):
-#           worker_sp = _resolve_target_paths(self.cm, py_exe).get("site_packages_path")
-#           if sp_path is None or worker_sp == sp_path:
-#               try:
-#                   worker.process.stdin.write(
-#                       json.dumps({"type": "invalidate_cache"}) + "\n"
-#                   )
-#                   worker.process.stdin.flush()
-#               except Exception:
-#                   pass
-#       send_json(conn, {"status": "OK"})
-
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # STANDALONE ENTRY POINT

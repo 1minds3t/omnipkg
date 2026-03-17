@@ -1,7 +1,7 @@
 #include <Python.h>
 
 // --------------------------------------------------------
-// HARDWARE ATOMICS FOR PYTHON (HFT GRADE)
+// HARDWARE ATOMICS FOR PYTHON
 // --------------------------------------------------------
 
 // 1. COMPARE AND SWAP (CAS)

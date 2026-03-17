@@ -455,6 +455,7 @@ class ConfigManager:
             )
         )
 
+
     def _clear_rebuild_flag_for_version(self, version_str: str):
         """
         Surgically removes a specific version from the .needs_kb_rebuild flag file.
@@ -7425,6 +7426,15 @@ class omnipkg:
                     with open(flag_file, "w") as f:
                         json.dump(versions_to_rebuild, f)
                 safe_print(_("✅ Knowledge base for Python {} is ready.").format(current_version_str))
+                
+                # First-use snapshot: KB is fresh, take a full env snapshot now
+                # so revert is available immediately on this interpreter's first install.
+                # self is already the omnipkg core instance — no import needed.
+                try:
+                    self._save_last_known_good_snapshot(known_state=None)
+                except Exception:
+                    pass
+                
                 return True
             else:
                 safe_print(_("❌ Failed to build knowledge base. Will retry on next run."))
@@ -9373,14 +9383,74 @@ class omnipkg:
         return sorted(versions, key=lambda v: v)
 
     def _save_last_known_good_snapshot(self, known_state=None):
-        """Saves the current environment state to Redis.
-        If known_state is provided, uses it directly — no disk rescan."""
+        """
+        Saves the current environment state as 'last known good'.
+    
+        State source priority:
+        1. uv-ffi get_site_packages_cache() direct import (~0ms) — if FFI loaded in-process
+        2. Daemon socket get_site_packages_state (~0.5ms) — if daemon running
+        3. known_state kwarg — only if it looks like a full env (>= 10 packages)
+        4. pip list subprocess (~200ms) — last resort
+        """
+        from omnipkg.i18n import safe_print, _
         safe_print(_("📸 Saving snapshot of the current environment as 'last known good'..."))
+    
+        current_state = None
+    
+        # ── 1. Direct FFI import — fastest, zero IPC ─────────────────────────────
+        # get_site_packages_cache() returns [(name, version), ...] — convert to dict
         try:
-            current_state = known_state if known_state is not None else self.get_installed_packages(live=True)
+            from omnipkg._vendor.uv_ffi import get_site_packages_cache
+            _pairs = get_site_packages_cache()
+            if _pairs:
+                current_state = {name.lower(): ver for name, ver in _pairs}
+                safe_print(_("   ⚡ Got state from FFI ({} pkgs)").format(len(current_state)))
+        except Exception:
+            pass
+    
+        # ── 2. Daemon socket ─────────────────────────────────────────────────────
+        if current_state is None:
+            try:
+                import socket, json as _json, os as _os, tempfile
+                _sock_path = _os.path.join(tempfile.gettempdir(), "omnipkg", "omnipkg_daemon.sock")
+                if _os.path.exists(_sock_path):
+                    with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as _s:
+                        _s.settimeout(1.0)
+                        _s.connect(_sock_path)
+                        _s.sendall((_json.dumps({"type": "get_site_packages_state"}) + "\n").encode())
+                        _buf = b""
+                        while True:
+                            _chunk = _s.recv(65536)
+                            if not _chunk:
+                                break
+                            _buf += _chunk
+                            if b"\n" in _buf:
+                                break
+                        _resp = _json.loads(_buf.split(b"\n")[0])
+                        # Response state is [(name, ver), ...] pairs or a dict
+                        _state = _resp.get("state")
+                        if _state:
+                            if isinstance(_state, list):
+                                current_state = {n.lower(): v for n, v in _state}
+                            elif isinstance(_state, dict):
+                                current_state = _state
+                            if current_state:
+                                safe_print(_("   📡 Got state from daemon ({} pkgs)").format(len(current_state)))
+            except Exception:
+                pass
+    
+        # ── 3. known_state — reject deltas (< 10 pkgs) ───────────────────────────
+        if current_state is None and known_state and len(known_state) >= 10:
+            current_state = known_state
+    
+        # ── 4. Full subprocess scan ───────────────────────────────────────────────
+        if current_state is None:
+            current_state = self.get_installed_packages(live=True)
+    
+        try:
             snapshot_key = f"{self.redis_key_prefix}snapshot:last_known_good"
-            self.cache_client.set(snapshot_key, json.dumps(current_state))
-            safe_print(_("   ✅ Snapshot saved."))
+            self.cache_client.set(snapshot_key, __import__("json").dumps(current_state))
+            safe_print(_("   ✅ Snapshot saved ({} packages).").format(len(current_state)))
         except Exception as e:
             safe_print(_("   ⚠️ Could not save environment snapshot: {}").format(e))
 
@@ -14182,9 +14252,11 @@ print(json.dumps(results))
                     _out = _daemon_result.get("stdout", "")
                     _err = _daemon_result.get("stderr", "")
                     safe_print(f"[UV-TIMING] daemon: {_daemon_ms:.2f}ms rc={_rc}", file=sys.stderr)
-                    safe_print(_out, end="")
-                    safe_print(_err, end="", file=sys.stderr)
-                    return _rc, {"stdout": _out, "stderr": _err}
+                    if _rc == 0:
+                        safe_print(_out, end="")
+                        safe_print(_err, end="", file=sys.stderr)
+                        return _rc, {"stdout": _out, "stderr": _err}
+                    safe_print(f"   ⚠️  daemon rc={_rc} — falling through to subprocess", file=sys.stderr)
                 safe_print(
                     f"[UV-PATH] daemon failed ({_daemon_result.get('error')}) after {_daemon_ms:.2f}ms — subprocess fallback",
                     file=sys.stderr,
@@ -14214,7 +14286,7 @@ print(json.dumps(results))
                 _sub_ms = (time.perf_counter() - _t0) * 1000
                 uv_stderr_str = "".join(uv_err)
                 safe_print(f"[UV-TIMING] subprocess: {_sub_ms:.2f}ms rc={uv_proc.returncode}", file=sys.stderr)
-                if uv_proc.returncode == 0 and not _uv_failure_detector.detect_failure(uv_stderr_str):
+                if uv_proc.returncode == 0 and (self._uv_failure_detector is None or not self._uv_failure_detector.detect_failure(uv_stderr_str)):
                     return 0, {"stdout": "".join(uv_out), "stderr": uv_stderr_str}
                 safe_print("   ⚠️  uv subprocess failed, falling back to pip...")
             except Exception as _sub_ex:
@@ -15854,6 +15926,17 @@ class PyPIVersionCache:
                     and time.time() - existing.get("timestamp", 0) < 300):  # same data, < 5min old
                 # Nothing changed — skip the write entirely
                 return
+        # Never cache a version older than what we already have
+        if hasattr(self, "_file_cache"):
+            existing = self._file_cache.get(cache_key, {})
+            existing_ver = existing.get("version")
+            if existing_ver and compatible:
+                try:
+                    from packaging.version import Version
+                    if Version(version) < Version(existing_ver):
+                        return  # never overwrite a newer known version with an older one
+                except Exception:
+                    pass
 
         cache_data = {
             "version": version,

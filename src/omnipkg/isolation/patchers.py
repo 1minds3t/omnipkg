@@ -36,6 +36,7 @@ _tf_module_cache = {}
 _original_import_func = builtins.__import__
 _circular_import_stats = {}
 _tf_loaded_pids = set()  # Track which PIDs have loaded TF
+_numpy_purge_retry_guard = threading.local()  # Prevents nested purge+retry
 
 _tf_circular_deps_known = {
     "module_util": "tensorflow.python.tools.module_util",
@@ -48,11 +49,7 @@ _tf_circular_deps_known = {
 _recursion_guard = threading.local()
 
 
-_patch_numpy_guard = False
 def _patch_numpy_for_tf_recursion():
-    global _patch_numpy_guard
-    if _patch_numpy_guard: return
-    _patch_numpy_guard = True
     """
     Applies a patch to numpy.issubdtype to prevent infinite recursion
     when used with certain versions of TensorFlow.
@@ -171,10 +168,6 @@ def smart_tf_patcher():
         if not needs_special_handling:
             return _original_import_func(name, globals, locals, fromlist, level)
 
-
-        # Patch numpy after top-level import completes (submodules skipped)
-        if name == "numpy" and "numpy" in sys.modules:
-            _patch_numpy_for_tf_recursion()
         # Patch numpy AND opt_einsum BEFORE TensorFlow imports them
         if is_tf_import and "tensorflow" not in sys.modules:
             _patch_numpy_for_tf_recursion()
@@ -196,31 +189,97 @@ def smart_tf_patcher():
                     message="A module that was compiled using NumPy 1.x cannot be run in NumPy 2.+",
                     category=UserWarning,
                 )
-                return _original_import_func(name, globals, locals, fromlist, level)
+                try:
+                    return _original_import_func(name, globals, locals, fromlist, level)
+                except RuntimeError as _e:
+                    # numpy 2.x: "CPU dispatcher tracer already initialized"
+                    # The C dispatcher singleton can't be re-initialized after a
+                    # bubble switch. The existing module object is still usable.
+                    if "dispatcher" in str(_e).lower():
+                        _existing = sys.modules.get(name)
+                        if _existing is not None:
+                            return _existing
+                    raise
+                except (ModuleNotFoundError, ImportError) as _mne:
+                    # numpy import failures — two cases:
+                    # 1. ModuleNotFoundError: stale C ext .so path (bubble was cloaked)
+                    # 2. ImportError: "partially initialized module" or "source directory"
+                    #    — main-env numpy/ leaked alongside a bubble causing mid-init conflict
+                    # Both: purge all numpy modules and retry once from the active bubble.
+                    _mne_str = str(_mne)
+                    _is_numpy_import = (name == "numpy" or (name and name.startswith("numpy.")))
+                    _is_numpy_err = "numpy" in _mne_str
+                    _is_partial = (
+                        "partially initialized" in _mne_str
+                        or "source directory" in _mne_str
+                        or "cannot import name" in _mne_str
+                    )
+                    if _is_numpy_import and (_is_numpy_err or _is_partial):
+                        # Guard: only do purge+retry at the TOP of the import chain.
+                        # If we're already inside a purge+retry, DON'T intercept —
+                        # let the import proceed naturally.  numpy's __init__.py imports
+                        # many C extension submodules (numpy.core._multiarray_tests etc.)
+                        # during its init sequence; if any of them fail and we intercept
+                        # them here, we break numpy's own error handling which gracefully
+                        # handles optional C-ext failures.
+                        # Only intercept if this is ALSO a top-level "numpy not found"
+                        # (not a submodule failure during an ongoing numpy init).
+                        if getattr(_numpy_purge_retry_guard, "active", False):
+                            # Let the exception propagate naturally without interference
+                            raise  # re-raise original exception unmodified
+
+                        _numpy_purge_retry_guard.active = True
+                        try:
+                            # Purge all numpy modules including any partial sentinel
+                            # left by an interrupted numpy.lib.__init__ execution.
+                            _stale = [k for k in list(sys.modules.keys())
+                                      if k == "numpy" or k.startswith("numpy.")]
+                            for _k in _stale:
+                                sys.modules.pop(_k, None)
+                            importlib.invalidate_caches()
+                            # Single retry from active bubble/site-packages path.
+                            try:
+                                return _original_import_func(name, globals, locals, fromlist, level)
+                            except Exception as _retry_err:
+                                # Purge any new partial sentinels the failed retry created
+                                _stale2 = [k for k in list(sys.modules.keys())
+                                           if k == "numpy" or k.startswith("numpy.")]
+                                for _k in _stale2:
+                                    sys.modules.pop(_k, None)
+                                importlib.invalidate_caches()
+                                # Diagnostic: show exactly what numpy dirs exist in sys.path
+                                # so we know whether the problem is filesystem or import state
+                                try:
+                                    import os as _os
+                                    from pathlib import Path as _Path
+                                    _diag_lines = [
+                                        f"[genius_import] retry failed: {_retry_err}",
+                                        f"[genius_import] name={name!r} sys.path={sys.path[:4]}",
+                                    ]
+                                    for _pp in sys.path[:6]:
+                                        _nd = _Path(_pp) / "numpy"
+                                        _diag_lines.append(
+                                            f"  {_pp}/numpy -> exists={_nd.exists()}"
+                                            + (f" init={(_nd/'__init__.py').exists()}" if _nd.exists() else "")
+                                        )
+                                    _diag_lines.append(f"  cwd={_os.getcwd()}")
+                                    sys.stderr.write("\n".join(_diag_lines) + "\n")
+                                    sys.stderr.flush()
+                                except Exception:
+                                    pass
+                                raise _mne
+                        finally:
+                            _numpy_purge_retry_guard.active = False
+                    raise
+
         # ═══════════════════════════════════════════════════════════
-        # NEW: Handle opt_einsum (used by both TF and PyTorch)
+        # Handle opt_einsum (used by both TF and PyTorch)
         # ═══════════════════════════════════════════════════════════
         is_opt_einsum = name and name.startswith("opt_einsum")
-        
-        # Be more specific about torch - don't catch safetensors.torch!
-        is_torch_or_numpy = name and (
-            (name == "torch" or name.startswith("torch.")) or 
-            (name == "numpy" or name.startswith("numpy."))
-        )
-        is_tf_import = name and (name == "tensorflow" or name.startswith("tensorflow."))
-        is_tf_submodule = (
-            fromlist and any("tensorflow" in str(f) for f in fromlist) if fromlist else False
-        )
 
-        needs_special_handling = is_torch_or_numpy or is_tf_import or is_tf_submodule or is_opt_einsum
-
-        if not needs_special_handling:
+        if not is_opt_einsum:
             return _original_import_func(name, globals, locals, fromlist, level)
 
-
-        # Patch numpy after top-level import completes (submodules skipped)
-        if name == "numpy" and "numpy" in sys.modules:
-            _patch_numpy_for_tf_recursion()
         # Patch numpy AND opt_einsum BEFORE TensorFlow imports them
         if is_tf_import and "tensorflow" not in sys.modules:
             _patch_numpy_for_tf_recursion()

@@ -1443,6 +1443,21 @@ def main():
                         return 1
                     cm.set("install_strategy", args.value)
                     safe_print(_("✅ install_strategy set to: {}").format(args.value))
+                    
+                    # Patch the live preloaded core so the daemon worker picks it up immediately
+                    # without a restart — cm.set() wrote to disk but the warm core has a stale dict.
+                    try:
+                        import omnipkg.cli as _cli_mod
+                        _live_core = getattr(_cli_mod, '_PRELOADED_CORE', None)
+                        if _live_core is not None:
+                            _live_core.config["install_strategy"] = args.value
+                        _live_cm = getattr(_cli_mod, '_PRELOADED_CM', None)
+                        if _live_cm is not None:
+                            _live_cm["install_strategy"] = args.value
+                    except Exception:
+                        pass
+                    cm.set("install_strategy", args.value)
+                    safe_print(_("✅ install_strategy set to: {}").format(args.value))
                 else:
                     parser.print_help()
                     return 1
@@ -2012,6 +2027,7 @@ def main():
             elif args.daemon_command == "stop":
                 cli_stop()
             elif args.daemon_command == "restart":
+                # Guard: if we're already in a re-seat cycle, just do one stop+start and exit.
                 if os.environ.get("_OMNIPKG_RESEAT"):
                     safe_print("🔄 Re-seating via C dispatcher...")
                     cli_stop()
@@ -2020,11 +2036,15 @@ def main():
                 safe_print("🔄 Restarting daemon...")
                 cli_stop()
                 cli_start()
-                # Second cycle ensures daemon spawns via C dispatcher.
-                # First start may have been launched from the Python fallback path.
-                safe_print("🔄 Re-seating via C dispatcher...")
-                cli_stop()
-                cli_start()
+                # Only re-seat if daemon didn't come up cleanly on first attempt
+                try:
+                    from omnipkg.isolation.worker_daemon import WorkerPoolDaemon as _WPD
+                    if not _WPD.is_running():
+                        safe_print("🔄 Re-seating via C dispatcher...")
+                        cli_stop()
+                        cli_start()
+                except Exception:
+                    pass
             elif args.daemon_command == "status":
                 cli_status()
             elif args.daemon_command == "logs":
