@@ -1,14 +1,11 @@
-# .github/workflows/windows_test.yml
 name: Omnipkg True First-Run Test (Windows)
 on:
   push:
     branches:
-      - development
-      - development
+      - development          # only runs on push to development
   pull_request:
     branches:
-      - development
-      - development
+      - development          # only runs for PRs targeting development
   workflow_dispatch:
     inputs:
       branch:
@@ -18,7 +15,8 @@ on:
         type: choice
         options:
           - development
-          - development
+          - main
+          
 jobs:
   true-first-run-test-windows:
     runs-on: windows-latest
@@ -27,64 +25,83 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event.inputs.branch || github.ref }}
-          
+
+      - name: Show checked out branch
+        run: |
+          Write-Host "Currently on branch: $(git rev-parse --abbrev-ref HEAD)"
+          Write-Host "Commit SHA: $(git rev-parse HEAD)"
+        shell: pwsh
+
       - name: Display test info
         run: |
           Write-Host "Testing on: Windows"
           Write-Host "Branch: ${{ github.ref_name }}"
           Write-Host "Commit: ${{ github.sha }}"
         shell: pwsh
-        
-      # Step 1: ENSURE A CLEAN SLATE
-      # This is the most critical fix. It deletes any leftover config or
-      # interpreters from previous runs, guaranteeing a true first-time setup.
+
       - name: Wipe previous omnipkg config
         run: |
           if (Test-Path ~\.config\omnipkg) {
             Remove-Item ~\.config\omnipkg -Recurse -Force
             Write-Host "Previous omnipkg config wiped."
           } else {
-            Write-Host "No previous omnipkg config found. Starting fresh."
+            Write-Host "No previous config found. Starting fresh."
           }
         shell: pwsh
-        
-      # Step 2: Set up a non-3.11 Python environment to start.
-      # Using 3.9 makes it a more distinct test.
+
       - name: Set up Python 3.9
         uses: actions/setup-python@v5
         with:
           python-version: '3.9'
-          
+
       - name: Install omnipkg in editable mode
         run: pip install -e .
         shell: pwsh
-        
-      # Step 3: Trigger the REAL first-time setup and 3.11 download.
-      # This MUST now perform the full download and bootstrap of 3.11,
-      # including installing omnipkg's dependencies into it.
-      - name: Trigger first-time setup and Python 3.11 download
+
+      - name: Trigger first-time setup (3.9)
         run: omnipkg status
         shell: pwsh
         env:
           PYTHONUTF8: "1"
-          
-      # Step 4: Swap the active context to the newly downloaded 3.11.
-      - name: Swap the active context to Python 3.11
-        run: omnipkg swap python 3.11
+          PYTHONUNBUFFERED: "1"
+          PYTHONIOENCODING: "utf-8"
+
+      - name: Adopt Python 3.11
+        run: omnipkg python adopt 3.11
         shell: pwsh
         env:
           PYTHONUTF8: "1"
-        
-      # Step 5: Install a test package in the new 3.11 context.
-      - name: Install a package in the new 3.11 context
-        run: omnipkg install six==1.16.0
+          PYTHONUNBUFFERED: "1"
+          PYTHONIOENCODING: "utf-8"
+
+      - name: Trigger 3.11 KB first-use build via shim
+        run: omnipkg311 status
         shell: pwsh
         env:
           PYTHONUTF8: "1"
-          
-      # Step 6: Verify the knowledge base was updated correctly post-swap.
-      - name: Verify package info is in the knowledge base
-        run: omnipkg info six | Select-String -Pattern "1.16.0"
+          PYTHONUNBUFFERED: "1"
+          PYTHONIOENCODING: "utf-8"
+
+      - name: Install six==1.16.0 via 3.11 shim
+        run: omnipkg311 install six==1.16.0
         shell: pwsh
         env:
           PYTHONUTF8: "1"
+          PYTHONUNBUFFERED: "1"
+          PYTHONIOENCODING: "utf-8"
+
+      - name: Verify six is in the 3.11 knowledge base
+        run: |
+          $output = omnipkg311 info six 2>&1 | Out-String
+          Write-Host $output
+          if ($output -match "1\.16\.0") {
+            Write-Host "SUCCESS: Found version 1.16.0 in knowledge base"
+          } else {
+            Write-Host "FAILURE: Version 1.16.0 not found in knowledge base"
+            exit 1
+          }
+        shell: pwsh
+        env:
+          PYTHONUTF8: "1"
+          PYTHONUNBUFFERED: "1"
+          PYTHONIOENCODING: "utf-8"

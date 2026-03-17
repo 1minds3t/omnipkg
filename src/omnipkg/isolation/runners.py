@@ -1,13 +1,13 @@
-import sys
-import os
 import subprocess
+import sys
 import textwrap
-from typing import Optional
+
+from omnipkg.common_utils import safe_print
+from omnipkg.i18n import _
+
 
 def run_python_code_in_isolation(
-    code: str, 
-    job_name: str = "Isolated Job", 
-    timeout: int = 30
+    code: str, job_name: str = "Isolated Job", timeout: int = 30
 ) -> bool:
     """
     Executes a block of Python code in a pristine subprocess.
@@ -16,12 +16,17 @@ def run_python_code_in_isolation(
     cleaned_code = code.strip()
 
     # The wrapper ensures we capture output cleanly and handle imports
-    full_code = textwrap.dedent(f"""
+    full_code = textwrap.dedent(
+        f"""
     import sys
     import os
     import traceback
-    
-    # 1. SETUP PATHS (So we can find omnipkg)
+    try:
+        from .common_utils import safe_print
+    except ImportError:
+        from omnipkg.common_utils import safe_print
+                            
+        # 1. SETUP PATHS (So we can find omnipkg)
     try:
         # Assuming this runs from site-packages or source
         import omnipkg
@@ -53,29 +58,30 @@ def run_python_code_in_isolation(
         safe_print(f"⚠️  {{job_name}} FAILED: {{e}}")
         traceback.print_exc()
         sys.exit(1)
-    """).replace("{job_name}", job_name)
-    
+    """
+    ).replace("{job_name}", job_name)
+
     try:
         result = subprocess.run(
             [sys.executable, "-c", full_code],
             capture_output=True,
             text=True,
-            timeout=timeout
+            timeout=timeout,
         )
-        
+
         # Pass stdout through to parent (optional, or log it)
         if result.stdout:
-            print(result.stdout, end='')
-        
+            print(result.stdout, end="")
+
         if result.returncode != 0:
             if result.stderr:
-                print(f"--- {job_name} STDERR ---")
+                print(_('--- {} STDERR ---').format(job_name))
                 print(result.stderr)
                 print("-------------------------")
             return False
-            
+
         return True
-        
+
     except subprocess.TimeoutExpired:
-        print(f"❌ {job_name} timed out after {timeout}s")
+        safe_print(_('❌ {} timed out after {}s').format(job_name, timeout))
         return False

@@ -1,11 +1,15 @@
 from __future__ import annotations  # Python 3.6+ compatibility
+
+from omnipkg.common_utils import safe_print
+
 try:
     from .common_utils import safe_print
 except ImportError:
-    from omnipkg.common_utils import safe_print
+    pass
 # In /home/minds3t/omnipkg/omnipkg/__init__.py
 
 from .i18n import _
+
 """
 omnipkg: Universal package manager
 
@@ -28,14 +32,29 @@ along with omnipkg. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing options or general inquiries, contact:
 📧 omnipkg@proton.me
 """
-from pathlib import Path
 import sys
+from pathlib import Path
 
 try:
-    # Prefer importlib.metadata (works in installed packages)
-    from importlib.metadata import version, metadata, PackageNotFoundError
-except ImportError:  # Python < 3.8 fallback
-    from importlib_metadata import version, metadata, PackageNotFoundError
+    # Prefer importlib.metadata (built-in from Python 3.8+)
+    from importlib.metadata import PackageNotFoundError, metadata, version
+except ImportError:
+    try:
+        # Python < 3.8 fallback — requires: pip install importlib_metadata
+        from importlib_metadata import PackageNotFoundError, metadata, version
+    except ImportError:
+        # importlib_metadata not yet installed in this interpreter (e.g. freshly
+        # adopted Python 3.7 before bootstrap has run).  Provide no-op stubs so
+        # the module loads; version/dependency detection will fall back to
+        # pyproject.toml or the hardcoded defaults below.
+        class PackageNotFoundError(Exception):  # type: ignore[no-redef]
+            pass
+
+        def metadata(name):  # type: ignore[misc]
+            raise PackageNotFoundError(name)
+
+        def version(name):  # type: ignore[misc]
+            raise PackageNotFoundError(name)
 
 # --- THIS IS THE FIX ---
 # This block makes the code compatible with both modern and older Python.
@@ -49,9 +68,8 @@ except ModuleNotFoundError:
     except ImportError:
         # If neither is available, create a dummy that will fail gracefully
         tomllib = None
-# --- END OF FIX ---
 
-__version__ = "0.0.0"   # fallback default
+__version__ = "0.0.0"  # fallback default
 __dependencies__ = {}
 
 _pkg_name = "omnipkg"
@@ -78,8 +96,9 @@ __all__ = [
     "cli",
     "loader",
     "activator",
-    "demo",
     "package_meta_builder",
-    "stress_test",
-    "common_utils",
+    "common_utils"
 ]
+if sys.version_info < (3, 10):
+    from omnipkg._vendor import filelock
+    sys.modules['filelock'] = filelock

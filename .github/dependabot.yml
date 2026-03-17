@@ -1,0 +1,3 @@
+ignore:
+  - dependency-name: "*"
+    update-types: ["version-update:semver-patch", "version-update:semver-minor", "version-update:semver-major"]

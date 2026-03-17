@@ -1,0 +1,19 @@
+github:
+  branch_name: main
+  tooling_branch_name: main
+
+conda_build:
+  error_overlinking: true
+
+conda_forge_output_validation: true
+
+provider:
+  linux_aarch64: azure
+  linux_ppc64le: azure
+  win: azure
+  osx_arm64: azure  # <--- ENABLE THIS
+
+build_platform:
+  linux_aarch64: linux_64
+  linux_ppc64le: linux_64
+  osx_arm64: osx_64  # <--- ADD THIS (Forces Cross-Compilation on Intel Runner)

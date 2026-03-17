@@ -90,8 +90,10 @@ jobs:
           echo "--- Running Omnipkg Demo for Flask Port Finder (Auto-Healing) ---"
           mkdir -p /tmp/omnipkg-artifacts
           
-          # Run demo #9 and capture output and the correct exit code from the omnipkg command
-          timeout 900 bash -c 'echo "9" | omnipkg demo 2>&1 | tee /tmp/omnipkg-artifacts/flask_demo_output.txt'
+          # Use the direct ID '9' and --non-interactive flag to skip the menu and force the correct test
+          timeout 900 bash -c 'omnipkg demo 9 --non-interactive 2>&1 | tee /tmp/omnipkg-artifacts/flask_demo_output.txt'
+          
+          # PIPESTATUS[0] captures the exit code of omnipkg, not tee.
           DEMO_EXIT_CODE=${PIPESTATUS[0]}
           
           # Save output to GitHub step summary for easy viewing

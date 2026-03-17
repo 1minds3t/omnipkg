@@ -1,51 +1,156 @@
 site_name: omnipkg
-site_description: 'The Ultimate Python Dependency Resolver. One environment. Infinite packages. Zero conflicts.'
-site_url: https://omnipkg.readthedocs.io/
+site_description: 'The Ultimate Python Dependency Resolver. One environment. Infinite
+  packages. Zero conflicts.'
+# CRITICAL: As requested
+site_url: https://omnipkg.pages.dev/
+use_directory_urls: true
 repo_url: https://github.com/1minds3t/omnipkg
 repo_name: 1minds3t/omnipkg
 
 # Navigation with tabs
 nav:
-  - Home: index.md
-  - Getting Started: getting_started.md
-  - CLI Commands: cli_commands_reference.md
-  - Advanced Features:
-      - Overview: advanced_management.md
-      - Python Hot-Swapping: python_hot_swapping.md
-      - Runtime Switching: runtime_switching.md
-      - System Libs (LibResolver): LIBRESOLVER.md
-  - Roadmap: future_roadmap.md
-
-# Material theme configuration
+- Home: index.md
+- Getting Started: getting_started.md
+- Advanced Features:
+  - Overview: advanced_management.md
+  - Python Hot-Swapping: python_hot_swapping.md
+  - Runtime Switching: runtime_switching.md
+  - System Libs (LibResolver): LIBRESOLVER.md
+- Roadmap: future_roadmap.md
+- CLI Commands:
+  - Overview: cli_commands/index.md
+  - Details: cli_commands/cli_commands_details.md
+  - Overview: cli_commands/cli_commands_overview.md
+  - Run: cli_commands/cli_commands_run.md
+- Platform Support:
+  - Overview: platform_support/index.md
+  - CI Verification: platform_support/platform_support_ci_verification.md
+- Architecture & Performance:
+  - Overview: architecture_performance/index.md
+  - 'Benchmarking vs The World': 
+      architecture_performance/architecture_performance_benchmarking_vs_the_world.md
+  - 'Deep Dive: The Daemon': 
+      architecture_performance/architecture_performance_deep_dive_the_daemon.md
+- Demos:
+  - Overview: demos/index.md
+  - C Extension Switching: demos/demos_c_extension_switching.md
+  - Concurrent Multiverse: demos/demos_concurrent_multiverse.md
+  - Multiverse Healing: demos/demos_multiverse_healing.md
+  - Rich Module Switching: demos/demos_rich_module_switching.md
+  - Script Healing: demos/demos_script_healing.md
+  - Tensorflow Dependency Switching: 
+      demos/demos_tensorflow_dependency_switching.md
+  - UV Binary Switching: demos/demos_uv_binary_switching.md
 theme:
   name: material
   logo: assets/logo.svg
-  favicon: assets/favicon.png  # Add this line!
+  favicon: assets/favicon.png
   palette:
-    # Light mode
-    - scheme: default
-      primary: indigo
-      accent: indigo
-      toggle:
-        icon: material/brightness-7
-        name: Switch to dark mode
-    # Dark mode
-    - scheme: slate
-      primary: black
-      accent: indigo
-      toggle:
-        icon: material/brightness-4
-        name: Switch to light mode
+  - scheme: default
+    primary: indigo
+    accent: indigo
+    toggle:
+      icon: material/brightness-7
+      name: Switch to dark mode
+  - scheme: slate
+    primary: black
+    accent: indigo
+    toggle:
+      icon: material/brightness-4
+      name: Switch to light mode
   features:
-    - navigation.tabs
-    - navigation.tabs.sticky
-    - navigation.top
-    - search.suggest
-    - search.highlight
-    - content.code.copy
-    - content.code.annotate
+    # Navigation Features (Merged)
+  - navigation.tabs
+  - navigation.tabs.sticky
+  - navigation.top
+  - navigation.instant        # Added: SPAs feel
+  - navigation.tracking       # Added: URL updates on scroll
+  - navigation.sections       # Added: Better sidebar grouping
+  - navigation.expand         # Added: Open details by default
+  - navigation.indexes        # Added: Clickable section headers
+  - toc.follow               # Added: TOC highlights as you scroll
+    # Content Features
+  - search.suggest
+  - search.highlight
+  - content.code.copy
+  - content.code.annotate
+  - content.tabs.link
   icon:
     repo: fontawesome/brands/github
 
+plugins:
+- search
+- awesome-pages
+- macros
+- minify:
+    minify_html: true
+- git-revision-date-localized:
+    enable_creation_date: true
+    type: timeago
+    fallback_to_build_date: true  # Add this line
+    enable_parallel_processing: false
+- redirects:
+    redirect_maps:
+
+
+markdown_extensions:
+- admonition
+- meta                        # ADD THIS LINE (parse YAML front matter)
+- codehilite
+- footnotes
+- tables                      # Added: Missing from original
+- toc:
+    permalink: true
+  # Advanced Fences (Updated for Mermaid)
+- pymdownx.superfences:
+    custom_fences:
+    - name: mermaid
+      class: mermaid
+      format: !!python/name:pymdownx.superfences.fence_code_format
+- pymdownx.tabbed:
+    alternate_style: true
+- pymdownx.details
+- pymdownx.highlight:
+    anchor_linenums: true
+    line_spans: __span
+    pygments_lang_class: true
+- pymdownx.inlinehilite
+- pymdownx.magiclink
+- pymdownx.snippets          # Added: Allows including files
+- pymdownx.betterem:
+    smart_enable: all
+- pymdownx.caret
+- pymdownx.emoji:
+    emoji_index: !!python/name:material.extensions.emoji.twemoji
+    emoji_generator: !!python/name:material.extensions.emoji.to_svg
+- pymdownx.keys
+- attr_list
+- def_list
+- md_in_html
+- smarty
+- wikilinks
+
 # Documentation directory
 docs_dir: docs
+
+# CRITICAL: Add custom CSS and JS for interactivity
+extra_css:
+- assets/css/interact.css
+- stylesheets/extra.css     # Added: To support any new styles
+
+extra_javascript:
+- assets/js/interact.js
+- assets/javascripts/trailing-slash.js
+
+# 🔒 SECURITY: Add Content Security Policy
+extra:
+  social:
+  - icon: fontawesome/brands/github
+    link: https://github.com/1minds3t/omnipkg
+  meta:
+  - name: "Content-Security-Policy"
+    content: "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com;
+      connect-src 'self' https://omnipkg.1minds3t.workers.dev https://*.ts.net http://127.0.0.1:*
+      http://localhost:*; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
+      font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; frame-ancestors
+      'none';"

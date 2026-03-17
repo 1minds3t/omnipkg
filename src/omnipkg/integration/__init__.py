@@ -7,13 +7,13 @@ This module provides tools for:
 - CI/CD integration helpers
 """
 
-from .environment import OmnipkgEnvironment, cmd_activate, cmd_deactivate
 from .cli_executor import CLIExecutor, handle_run_command
+from .environment import OmnipkgEnvironment, cmd_activate, cmd_deactivate
 
 __all__ = [
-    'OmnipkgEnvironment',
-    'CLIExecutor',
-    'cmd_activate',
-    'cmd_deactivate',
-    'handle_run_command',
+    "OmnipkgEnvironment",
+    "CLIExecutor",
+    "cmd_activate",
+    "cmd_deactivate",
+    "handle_run_command",
 ]

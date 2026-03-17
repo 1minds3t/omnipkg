@@ -6,8 +6,8 @@ ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
 # Install system dependencies
+# Note: redis-server removed - omnipkg uses SQLite fallback when Redis unavailable
 RUN apt-get update && apt-get install -y \
-    redis-server \
     libmagic1 \
     curl \
     && rm -rf /var/lib/apt/lists/*
@@ -24,6 +24,7 @@ RUN chown omnipkg:omnipkg /home/omnipkg
 COPY --chown=omnipkg:omnipkg pyproject.toml poetry.lock* ./
 COPY --chown=omnipkg:omnipkg src/ ./src/
 COPY --chown=omnipkg:omnipkg README.md ./
+COPY --chown=omnipkg:omnipkg pyproject.toml poetry.lock* build_hooks.py ./
 
 # Install Python dependencies AS ROOT (needed for pip)
 RUN pip install --no-cache-dir .
@@ -39,8 +40,8 @@ RUN mkdir -p /home/omnipkg/.omnipkg && \
 # NOW switch to non-root user
 USER omnipkg
 
-# Expose ports
-EXPOSE 6379 8000
+# Expose port (removed Redis port 6379 since we're not including Redis in container)
+EXPOSE 8000
 
 # Entry point
 ENTRYPOINT ["/home/omnipkg/docker-entrypoint.sh"]

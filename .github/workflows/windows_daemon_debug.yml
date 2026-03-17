@@ -1,0 +1,269 @@
+name: "Windows Daemon Test - Fire and Forget"
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ['**']
+    paths:
+      - 'omnipkg/**'
+      - '.github/workflows/windows_daemon.yml'
+
+jobs:
+  windows-daemon-test:
+    name: "Windows Daemon Diagnostic Test"
+    runs-on: windows-latest
+    timeout-minutes: 15
+    
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Configure UTF-8 Environment
+        shell: pwsh
+        run: |
+          # Force UTF-8 for all Python I/O operations
+          [System.Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+          [System.Console]::InputEncoding = [System.Text.Encoding]::UTF8
+          
+          echo "PYTHONIOENCODING=utf-8" >> $env:GITHUB_ENV
+          echo "PYTHONUTF8=1" >> $env:GITHUB_ENV
+          echo "PYTHONLEGACYWINDOWSSTDIO=utf-8" >> $env:GITHUB_ENV
+          
+          Write-Host "UTF-8 encoding configured"
+
+      - name: Install Omnipkg
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+          Write-Host "Omnipkg installed"
+          
+      - name: Generate Config (No Emojis)
+        shell: pwsh
+        run: |
+          $configDir = "$env:USERPROFILE\.config\omnipkg"
+          New-Item -ItemType Directory -Force -Path $configDir | Out-Null
+          
+          $config = @{
+              interactive = $false
+              auto_confirm = $true
+              daemon_port = 5678
+              log_level = "DEBUG"
+          }
+          
+          $config | ConvertTo-Json | Out-File -FilePath "$configDir\config.json" -Encoding utf8
+          Write-Host "Config created at: $configDir\config.json"
+          Get-Content "$configDir\config.json"
+
+      - name: Pre-create Log Directory
+        shell: pwsh
+        run: |
+          # Create potential log directories ahead of time
+          $logDirs = @(
+              "$env:USERPROFILE\.omnipkg\logs",
+              "$env:USERPROFILE\.config\omnipkg\logs",
+              "$env:LOCALAPPDATA\omnipkg\logs",
+              "$env:TEMP\omnipkg"
+          )
+          
+          foreach ($dir in $logDirs) {
+              New-Item -ItemType Directory -Force -Path $dir | Out-Null
+              Write-Host "Created: $dir"
+          }
+
+      - name: Start Daemon (Fire and Forget)
+        shell: pwsh
+        run: |
+          Write-Host "============================================"
+          Write-Host "Starting Omnipkg Daemon (Background Mode)"
+          Write-Host "============================================"
+          
+          # Fire and forget - truly detached background process
+          # Use Start-Job for PowerShell background execution
+          $job = Start-Job -ScriptBlock {
+              python -m omnipkg daemon start
+          }
+          
+          Write-Host "✅ Daemon start job initiated (Job ID: $($job.Id))"
+          Write-Host "Waiting 8 seconds for daemon initialization..."
+          Start-Sleep -Seconds 8
+          
+          # Check job state (it should still be running if daemon spawned)
+          $jobState = Get-Job -Id $job.Id | Select-Object -ExpandProperty State
+          Write-Host "Job state after 8 seconds: $jobState"
+
+      - name: Verify Daemon is Running
+        shell: pwsh
+        run: |
+          Write-Host "============================================"
+          Write-Host "Verifying Daemon Status"
+          Write-Host "============================================"
+          
+          omnipkg daemon status
+          
+          if ($LASTEXITCODE -ne 0) {
+              Write-Error "❌ Daemon status check failed"
+              exit 1
+          }
+          
+          Write-Host "✅ Daemon is confirmed running!"
+
+      - name: Test Daemon Functionality
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          Write-Host "============================================"
+          Write-Host "Testing Daemon with Simple Command"
+          Write-Host "============================================"
+          
+          omnipkg list --limit 5
+          
+          if ($LASTEXITCODE -eq 0) {
+              Write-Host "✅ Daemon functionality test passed"
+          } else {
+              Write-Host "⚠️  Daemon functionality test had issues"
+          }
+
+      - name: Monitor Daemon (Optional)
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          Write-Host "============================================"
+          Write-Host "Daemon Monitor Snapshot"
+          Write-Host "============================================"
+          
+          # Try to get daemon monitor info if available
+          omnipkg daemon monitor 2>&1 | Select-Object -First 20
+
+      - name: Stop Daemon
+        if: always()
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          Write-Host "============================================"
+          Write-Host "Stopping Daemon"
+          Write-Host "============================================"
+          
+          omnipkg daemon stop 2>&1
+          Start-Sleep -Seconds 2
+          
+          Write-Host "✅ Daemon stop command completed"
+
+      # ════════════════════════════════════════════════════════════════
+      # COMPREHENSIVE LOG COLLECTION
+      # ════════════════════════════════════════════════════════════════
+      
+      - name: Collect All Logs
+        if: always()
+        shell: pwsh
+        run: |
+          Write-Host "::group::Searching for Omnipkg Logs"
+          
+          $searchPaths = @(
+              "$env:USERPROFILE\.omnipkg\logs",
+              "$env:USERPROFILE\.config\omnipkg\logs",
+              "$env:LOCALAPPDATA\omnipkg\logs",
+              "$env:TEMP\omnipkg",
+              "$env:USERPROFILE\AppData\Local\Temp\omnipkg"
+          )
+          
+          $allLogs = @()
+          
+          foreach ($path in $searchPaths) {
+              if (Test-Path $path) {
+                  Write-Host "Checking: $path"
+                  $logs = Get-ChildItem -Path $path -Filter "*.log" -Recurse -ErrorAction SilentlyContinue
+                  if ($logs) {
+                      Write-Host "  Found $($logs.Count) log file(s)"
+                      $allLogs += $logs
+                  }
+              } else {
+                  Write-Host "  Path does not exist: $path"
+              }
+          }
+          
+          Write-Host "::endgroup::"
+          
+          if ($allLogs.Count -eq 0) {
+              Write-Host "::warning::No log files found!"
+              
+              # Try broader search as fallback
+              Write-Host "Attempting broader search in TEMP and AppData..."
+              $broadLogs = Get-ChildItem -Path $env:TEMP -Filter "*omnipkg*.log" -Recurse -ErrorAction SilentlyContinue
+              $allLogs += $broadLogs
+          }
+          
+          # Display all found logs
+          foreach ($log in $allLogs) {
+              Write-Host ""
+              Write-Host "================================================================"
+              Write-Host "LOG: $($log.FullName)"
+              Write-Host "SIZE: $($log.Length) bytes | MODIFIED: $($log.LastWriteTime)"
+              Write-Host "================================================================"
+              
+              try {
+                  $content = Get-Content $log.FullName -Raw -Encoding utf8 -ErrorAction Stop
+                  Write-Host $content
+              } catch {
+                  Write-Host "::error::Failed to read log: $_"
+              }
+              
+              Write-Host ""
+          }
+
+      - name: Show Process Information
+        if: always()
+        shell: pwsh
+        run: |
+          Write-Host "::group::Active Python Processes"
+          Get-Process | Where-Object {$_.ProcessName -like "*python*"} | Format-Table -AutoSize
+          Write-Host "::endgroup::"
+          
+          Write-Host "::group::Network Listeners on Port 5678"
+          netstat -ano | Select-String "5678"
+          Write-Host "::endgroup::"
+
+      - name: Copy Logs to Workspace
+        if: always()
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          # Create a logs directory in the workspace
+          $workspaceLogs = "$env:GITHUB_WORKSPACE\collected_logs"
+          New-Item -ItemType Directory -Force -Path $workspaceLogs | Out-Null
+          
+          # Copy all omnipkg logs to workspace
+          $searchPaths = @(
+              "$env:USERPROFILE\.omnipkg\logs",
+              "$env:USERPROFILE\.config\omnipkg\logs",
+              "$env:LOCALAPPDATA\omnipkg\logs",
+              "$env:TEMP\omnipkg"
+          )
+          
+          foreach ($path in $searchPaths) {
+              if (Test-Path $path) {
+                  $logs = Get-ChildItem -Path $path -Filter "*.log" -Recurse -ErrorAction SilentlyContinue
+                  foreach ($log in $logs) {
+                      $destName = "$($log.Directory.Name)_$($log.Name)"
+                      Copy-Item $log.FullName -Destination "$workspaceLogs\$destName" -ErrorAction SilentlyContinue
+                      Write-Host "Copied: $destName"
+                  }
+              }
+          }
+          
+          Write-Host "Logs copied to: $workspaceLogs"
+
+      - name: Upload Logs as Artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-daemon-logs
+          path: collected_logs/**/*.log
+          if-no-files-found: warn
+          retention-days: 7

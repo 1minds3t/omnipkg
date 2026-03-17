@@ -77,15 +77,18 @@ jobs:
           echo "--- Installing older version of requests (2.28.0) ---"
           mkdir -p /tmp/omnipkg-artifacts
           
+          # This is the first command requiring a daemon. 
+          # It will trigger the auto-start and relaunch logic.
+          # We use -y for non-interactive mode.
           omnipkg install requests==2.28.0 2>&1 | tee /tmp/omnipkg-artifacts/install_old_version.txt
           
-          echo "## Install requests 2.28.0 Output" >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          cat /tmp/omnipkg-artifacts/install_old_version.txt >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
+          # Capture the exit code of omnipkg, not tee
+          INSTALL_EXIT_CODE=${PIPESTATUS[0]}
           
-          # Verify installation
-          if grep -q "All package operations complete" /tmp/omnipkg-artifacts/install_old_version.txt; then
+          echo "## Install requests 2.28.0 Output" >> $GITHUB_STEP_SUMMARY
+          
+          # Verify installation and handle relaunch logs
+          if [ $INSTALL_EXIT_CODE -eq 0 ] && grep -q "All package operations complete" /tmp/omnipkg-artifacts/install_old_version.txt; then
             echo "✅ requests 2.28.0 installed successfully"
           else
             echo "❌ Failed to install requests 2.28.0"
@@ -119,13 +122,10 @@ jobs:
         run: |
           echo "--- Running omnipkg upgrade requests ---"
           
-          set -o pipefail
-          
-          if timeout 900 bash -c 'omnipkg upgrade requests' 2>&1 | tee /tmp/omnipkg-artifacts/upgrade_output.txt; then
-            UPGRADE_EXIT_CODE=0
-          else
-            UPGRADE_EXIT_CODE=$?
-          fi
+          # Use -y for non-interactive mode. 
+          # PIPESTATUS[0] ensures we get the exit code of the upgrade command.
+          timeout 900 bash -c 'omnipkg upgrade requests -y' 2>&1 | tee /tmp/omnipkg-artifacts/upgrade_output.txt
+          UPGRADE_EXIT_CODE=${PIPESTATUS[0]}
           
           echo "## Package Upgrade Output" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
@@ -207,8 +207,8 @@ jobs:
           # Get the active version number
           ACTIVE_VERSION=$(omnipkg info requests 2>/dev/null | grep "Active Version:" | awk '{print $3}')
           
-          # Try to swap to the bubbled version (2.28.0)
-          omnipkg install requests==2.28.0 2>&1 | tee /tmp/omnipkg-artifacts/swap_to_old.txt
+          # Try to swap to the bubbled version (2.28.0) using -y
+          omnipkg install requests==2.28.0 -y 2>&1 | tee /tmp/omnipkg-artifacts/swap_to_old.txt
           
           # Verify swap worked
           NEW_ACTIVE=$(omnipkg info requests 2>/dev/null | grep "Active Version:" | awk '{print $3}')

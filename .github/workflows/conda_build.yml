@@ -1,4 +1,4 @@
-name: Build and Upload Conda Package
+name: Build and Upload Conda Packages + Conda-Forge Automation
 
 on:
   release:
@@ -6,20 +6,22 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Package version to build'
+        description: 'Package version to build (e.g., 2.1.2)'
         required: true
         type: string
 
 jobs:
-  # First job: Wait for PyPI to have the package
+  # ═══════════════════════════════════════════════════════════════════
+  # JOB 1: Wait for PyPI and get SHA256
+  # ═══════════════════════════════════════════════════════════════════
   wait-for-pypi:
     runs-on: ubuntu-latest
-    timeout-minutes: 25 
+    timeout-minutes: 1440
     outputs:
       version: ${{ steps.get-version.outputs.version }}
       sha256: ${{ steps.get-sha.outputs.sha256 }}
     steps:
-    - name: Get version
+    - name: Get version from release or input
       id: get-version
       run: |
         if [ "${{ github.event_name }}" == "release" ]; then
@@ -27,205 +29,545 @@ jobs:
           VERSION="${VERSION#v}"
         else
           VERSION="${{ github.event.inputs.version }}"
+          VERSION="${VERSION#v}"
         fi
         echo "version=$VERSION" >> $GITHUB_OUTPUT
-        echo "Waiting for version: $VERSION"
-        
-    - name: Wait for PyPI package availability
-      id: wait-pypi
-      run: |
-        VERSION="${{ steps.get-version.outputs.version }}"
-        MAX_ATTEMPTS=40
-        SLEEP_TIME=30
-        
-        echo "Checking for omnipkg version $VERSION on PyPI (will try for up to 20 minutes)..."
-        
-        for i in $(seq 1 $MAX_ATTEMPTS); do
-          echo "Attempt $i/$MAX_ATTEMPTS..."
-          
-          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
-            "https://pypi.org/pypi/omnipkg/$VERSION/json")
-          
-          if [ "$HTTP_CODE" = "200" ]; then
-            echo "✓ Package version found on PyPI API!"
-            
-            DOWNLOAD_URL="https://files.pythonhosted.org/packages/source/o/omnipkg/omnipkg-$VERSION.tar.gz"
-            DOWNLOAD_CODE=$(curl -s -o /dev/null -w "%{http_code}" -I "$DOWNLOAD_URL")
-            
-            if [ "$DOWNLOAD_CODE" = "200" ] || [ "$DOWNLOAD_CODE" = "302" ]; then
-              echo "✓ Package file is downloadable! Proceeding."
-              sleep 5
-              break
-            else
-              echo "⚠ Package found in API but file not yet available on CDN (HTTP $DOWNLOAD_CODE)"
-            fi
-          else
-            echo "Package not yet available on API (HTTP $HTTP_CODE)"
-          fi
-          
-          if [ $i -eq $MAX_ATTEMPTS ]; then
-            echo "✗ Package not found after $MAX_ATTEMPTS attempts"
-            echo "Check: https://pypi.org/project/omnipkg/$VERSION/"
-            exit 1
-          fi
-          
-          echo "Waiting ${SLEEP_TIME}s before next attempt..."
-          sleep $SLEEP_TIME
-        done
-        
-    - name: Download and calculate SHA256
+        echo "🔍 Target version: $VERSION"
+      
+    - name: Wait for PyPI and extract SHA256
       id: get-sha
       run: |
         VERSION="${{ steps.get-version.outputs.version }}"
         
-        echo "Downloading package from PyPI..."
-        if ! curl -L -f -o "omnipkg-$VERSION.tar.gz" \
-          "https://files.pythonhosted.org/packages/source/o/omnipkg/omnipkg-$VERSION.tar.gz"; then
-          echo "CDN failed, trying pypi.org fallback..."
-          curl -L -f -o "omnipkg-$VERSION.tar.gz" \
-            "https://pypi.org/packages/source/o/omnipkg/omnipkg-$VERSION.tar.gz"
-        fi
+        echo "⏳ Waiting for omnipkg $VERSION on PyPI..."
         
-        FILE_SIZE=$(wc -c < "omnipkg-$VERSION.tar.gz")
-        echo "File size: $FILE_SIZE bytes"
-        if [ "$FILE_SIZE" -lt 10000 ]; then
-          echo "Error: Downloaded file is too small ($FILE_SIZE bytes), which is suspicious."
-          exit 1
-        fi
+        ATTEMPT=0
+        while true; do
+          ATTEMPT=$((ATTEMPT + 1))
+          ELAPSED=$((ATTEMPT * 2))
+          
+          if [ $((ATTEMPT % 30)) -eq 0 ]; then
+            echo "🕐 Still waiting... ${ELAPSED} minutes elapsed"
+          fi
+          
+          HTTP_CODE=$(curl -s -o pypi_response.json -w "%{http_code}" \
+            "https://pypi.org/pypi/omnipkg/$VERSION/json")
+          
+          if [ "$HTTP_CODE" = "200" ]; then
+            echo "✅ Package found on PyPI!"
+            
+            SHA256=$(jq -r '.urls[] | select(.filename | endswith(".tar.gz")) | .digests.sha256' pypi_response.json)
+            
+            if [ -n "$SHA256" ] && [ "$SHA256" != "null" ]; then
+              echo "✅ SHA256 extracted from PyPI: $SHA256"
+              echo "sha256=$SHA256" >> $GITHUB_OUTPUT
+              break
+            else
+              echo "⚠️  SHA256 not found in response, retrying..."
+            fi
+          fi
+          
+          sleep 120
+        done
         
-        echo "Calculating SHA256..."
-        SHA256=$(sha256sum "omnipkg-$VERSION.tar.gz" | cut -d' ' -f1)
-        
-        echo "sha256=$SHA256" >> $GITHUB_OUTPUT
-        echo "SHA256: $SHA256"
+        rm -f pypi_response.json
 
-  # Second job: Update conda-forge feedstock
-  update-feedstock:
+  # ═══════════════════════════════════════════════════════════════════
+  # JOB 2: Update local templates in main repo via PR
+  # ═══════════════════════════════════════════════════════════════════
+  update-local-templates:
     needs: wait-for-pypi
     runs-on: ubuntu-latest
-    timeout-minutes: 20 
-    if: github.event_name == 'release'
+    outputs:
+      pr_branch: ${{ steps.create-pr.outputs.pr_branch }}
     steps:
-    - name: Checkout your feedstock fork
+    - name: Checkout omnipkg repo
       uses: actions/checkout@v4
       with:
-        repository: 1minds3t/omnipkg-feedstock
         token: ${{ secrets.GITHUB_TOKEN }}
-        path: feedstock
+        ref: main
+        fetch-depth: 0
 
-    - name: Setup Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.11'
-
-    - name: Update feedstock meta.yaml
+    - name: Update both meta.yaml templates
+      id: update-templates
       run: |
-        cd feedstock
         VERSION="${{ needs.wait-for-pypi.outputs.version }}"
         SHA256="${{ needs.wait-for-pypi.outputs.sha256 }}"
         
-        echo "Updating recipe/meta.yaml to version $VERSION with SHA256: $SHA256"
+        echo "📝 Updating meta-noarch.yaml"
+        sed -i "s/{% set version = \".*\" %}/{% set version = \"$VERSION\" %}/" src/omnipkg/conda-recipes/meta-noarch.yaml
+        sed -i "s/sha256: .*/sha256: $SHA256/" src/omnipkg/conda-recipes/meta-noarch.yaml
         
-        sed -i "s/{% set version = \".*\" %}/{% set version = \"$VERSION\" %}/" recipe/meta.yaml
-        sed -i "s/sha256: .*/sha256: $SHA256/" recipe/meta.yaml
+        echo "📝 Updating meta-platforms.yaml"
+        sed -i "s/{% set version = \".*\" %}/{% set version = \"$VERSION\" %}/" src/omnipkg/conda-recipes/meta-platforms.yaml
+        sed -i "s/sha256: .*/sha256: $SHA256/" src/omnipkg/conda-recipes/meta-platforms.yaml
         
-        echo "=== Updated meta.yaml (first 30 lines) ==="
-        head -30 recipe/meta.yaml
+        echo "✅ Templates updated"
         
-    - name: Commit and push to fork
+    - name: Create PR with template updates
+      id: create-pr
       run: |
-        cd feedstock
         VERSION="${{ needs.wait-for-pypi.outputs.version }}"
+        BRANCH="auto-update-conda-meta-$VERSION"
         
+        git checkout -b "$BRANCH"
         git config --local user.email "action@github.com"
         git config --local user.name "GitHub Action"
-        git add recipe/meta.yaml
+        git add src/omnipkg/conda-recipes/meta-noarch.yaml src/omnipkg/conda-recipes/meta-platforms.yaml
         
         if git diff --staged --quiet; then
-          echo "No changes to commit"
+          echo "ℹ️  No changes to commit"
+          echo "pr_branch=" >> $GITHUB_OUTPUT
         else
-          git commit -m "Update omnipkg to version $VERSION"
-          git push
-          echo "✓ Changes pushed to fork"
-        fi
-        
-    - name: Create Pull Request to conda-forge
-      uses: peter-evans/create-pull-request@v5
-      with:
-        token: ${{ secrets.FEEDSTOCK_TOKEN }}
-        path: feedstock
-        commit-message: "Update omnipkg to version ${{ needs.wait-for-pypi.outputs.version }}"
-        title: "Update omnipkg to version ${{ needs.wait-for-pypi.outputs.version }}"
-        body: |
-          Automated update to omnipkg version ${{ needs.wait-for-pypi.outputs.version }}
+          git commit -m "chore: update conda meta files to version $VERSION"
+          git push -f origin "$BRANCH"
           
-          - Updated version in meta.yaml
-          - Updated SHA256 hash: ${{ needs.wait-for-pypi.outputs.sha256 }}
+          gh pr create \
+            --title "chore: update conda meta files to version $VERSION" \
+            --body "Automated update from release workflow" \
+            --base main \
+            --head "$BRANCH" || echo "ℹ️  PR already exists"
           
-          Changes were automatically generated by GitHub Actions after PyPI release.
-        branch: "update-v${{ needs.wait-for-pypi.outputs.version }}"
-        base: main
-        push-to-fork: 1minds3t/omnipkg-feedstock
-
-  # Third job: Build conda packages for your own channel
-  build-and-upload:
-    needs: wait-for-pypi
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 45
-    strategy:
-      matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
-        python-version: ['3.10', '3.11', '3.12']
-
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-
-    - name: Setup Miniconda
-      uses: conda-incubator/setup-miniconda@v3
-      with:
-        auto-update-conda: true
-        python-version: ${{ matrix.python-version }}
-        channels: conda-forge,defaults
-        channel-priority: strict
-
-    - name: Install conda-build and anaconda-client
-      shell: bash -l {0}
-      run: |
-        conda install conda-build anaconda-client -y
-        
-    - name: Update meta.yaml version and hash
-      shell: bash -l {0}
-      run: |
-        VERSION="${{ needs.wait-for-pypi.outputs.version }}"
-        SHA256="${{ needs.wait-for-pypi.outputs.sha256 }}"
-        
-        echo "Using version $VERSION with SHA256: $SHA256"
-        
-        # Fixed path: src/omnipkg/conda-recipe/meta.yaml
-        if [[ "$RUNNER_OS" == "macOS" ]]; then
-          sed -i '' "s/{% set version = \".*\" %}/{% set version = \"$VERSION\" %}/" src/omnipkg/conda-recipe/meta.yaml
-          sed -i '' "s/sha256: .*/sha256: $SHA256/" src/omnipkg/conda-recipe/meta.yaml
-        else
-          sed -i "s/{% set version = \".*\" %}/{% set version = \"$VERSION\" %}/" src/omnipkg/conda-recipe/meta.yaml
-          sed -i "s/sha256: .*/sha256: $SHA256/" src/omnipkg/conda-recipe/meta.yaml
+          echo "✅ Branch updated"
+          echo "pr_branch=$BRANCH" >> $GITHUB_OUTPUT
+          
         fi
-        
-        echo "Updated meta.yaml:"
-        head -30 src/omnipkg/conda-recipe/meta.yaml
-        
-    - name: Build conda package
-      shell: bash -l {0}
-      run: |
-        export PYTHONIOENCODING=UTF-8
-        conda build src/omnipkg/conda-recipe --output-folder ./conda-dist
-        
-    - name: Upload to Anaconda Cloud
-      shell: bash -l {0}
-      run: |
-        find ./conda-dist -name "*.conda" -o -name "*.tar.bz2" | while read file; do
-          echo "Uploading $file"
-          anaconda -t ${{ secrets.ANACONDA_TOKEN }} upload "$file" --force
-        done
       env:
-        ANACONDA_TOKEN: ${{ secrets.ANACONDA_TOKEN }}
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # ═══════════════════════════════════════════════════════════════════
+  # JOB 3: Conda-Forge NOARCH (Build 0)
+  # ═══════════════════════════════════════════════════════════════════
+  update-feedstock-noarch:
+    name: "🚀 Conda-Forge Noarch (Build 0)"
+    needs: [wait-for-pypi, update-local-templates]
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    outputs:
+      pr_number: ${{ steps.create-pr.outputs.pull-request-number }}
+    
+    steps:
+      - name: Checkout feedstock fork
+        uses: actions/checkout@v4
+        with:
+          repository: 1minds3t/omnipkg-feedstock
+          token: ${{ secrets.FEEDSTOCK_TOKEN }}
+          path: feedstock
+          fetch-depth: 0
+
+      - name: Sync fork with upstream
+        run: |
+          cd feedstock
+          git remote add upstream https://github.com/conda-forge/omnipkg-feedstock.git 2>/dev/null || true
+          git fetch upstream
+          git checkout main
+          git reset --hard upstream/main
+          git push -f origin main
+          echo "✅ Fork synced and reset to upstream"
+
+      - name: Determine build number
+        id: build-number
+        run: |
+          cd feedstock
+          VERSION="${{ needs.wait-for-pypi.outputs.version }}"
+          
+          CURRENT_VERSION=$(grep -oP '{% set version = "\K[^"]+' recipe/meta.yaml || echo "0.0.0")
+          CURRENT_BUILD=$(grep -oP 'number: \K\d+' recipe/meta.yaml || echo "0")
+          
+          echo "📊 Current feedstock state:"
+          echo "   Version: $CURRENT_VERSION"
+          echo "   Build: $CURRENT_BUILD"
+          echo "   Target Version: $VERSION"
+          
+          if [ "$CURRENT_VERSION" = "$VERSION" ]; then
+            NEW_BUILD=$((CURRENT_BUILD + 1))
+            echo "🔄 Version unchanged - incrementing build: $CURRENT_BUILD → $NEW_BUILD"
+          else
+            NEW_BUILD=0
+            echo "🆕 New version detected - resetting to build 0"
+          fi
+          
+          echo "build_number=$NEW_BUILD" >> $GITHUB_OUTPUT
+          echo "✅ Will use build number: $NEW_BUILD"
+
+      - name: Checkout main repo templates
+        uses: actions/checkout@v4
+        with:
+          path: main-repo
+          ref: ${{ needs.update-local-templates.outputs.pr_branch || 'main' }}
+
+      - name: Update feedstock with NOARCH template
+        run: |
+          cd feedstock
+          VERSION="${{ needs.wait-for-pypi.outputs.version }}"
+          SHA256="${{ needs.wait-for-pypi.outputs.sha256 }}"
+          BUILD_NUMBER="${{ steps.build-number.outputs.build_number }}"
+          
+          echo "📝 Copying NOARCH templates"
+          
+          cp ../main-repo/src/omnipkg/conda-recipes/meta-noarch.yaml recipe/meta.yaml
+          cp ../main-repo/src/omnipkg/conda-recipes/conda-forge-noarch.yml conda-forge.yml
+          
+          sed -i "s/{% set version = \".*\" %}/{% set version = \"$VERSION\" %}/" recipe/meta.yaml
+          sed -i "s/sha256: .*/sha256: $SHA256/" recipe/meta.yaml
+          sed -i "s/number: .*/number: $BUILD_NUMBER/" recipe/meta.yaml
+          
+          echo "✅ NOARCH files updated:"
+          echo "   Version: $VERSION"
+          echo "   SHA256: $SHA256"
+          echo "   Build: $BUILD_NUMBER"
+          head -25 recipe/meta.yaml
+          
+      - name: Create branch and commit
+        run: |
+          cd feedstock
+          VERSION="${{ needs.wait-for-pypi.outputs.version }}"
+          BRANCH="update-noarch-v$VERSION"
+          
+          git push origin --delete "$BRANCH" 2>/dev/null || true
+          
+          git checkout -b "$BRANCH"
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add recipe/meta.yaml conda-forge.yml
+          
+          if git diff --staged --quiet; then
+            echo "ℹ️  No changes to commit"
+            echo "skip_pr=true" >> $GITHUB_ENV
+          else
+            git commit -m "Update omnipkg to $VERSION (noarch)"
+            git push -f origin "$BRANCH"
+            echo "✅ Changes pushed to branch $BRANCH"
+            echo "skip_pr=false" >> $GITHUB_ENV
+          fi
+          
+      - name: Create PR to conda-forge
+        id: create-pr
+        if: env.skip_pr != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.FEEDSTOCK_TOKEN }}
+        run: |
+          cd feedstock
+          VERSION="${{ needs.wait-for-pypi.outputs.version }}"
+          BRANCH="update-noarch-v$VERSION"
+          SHA256="${{ needs.wait-for-pypi.outputs.sha256 }}"
+          BUILD_NUMBER="${{ steps.build-number.outputs.build_number }}"
+          
+          PR_BODY="🤖 Automated update to omnipkg version $VERSION (noarch build)
+
+          **Changes:**
+          - ✅ Version: $VERSION
+          - ✅ SHA256: $SHA256
+          - ✅ Build number: $BUILD_NUMBER
+          - ✅ Architecture: noarch
+          - ✅ Updated conda-forge.yml for noarch config
+
+          This PR updates the recipe for conda-forge distribution."
+          
+          PR_URL=$(gh pr create \
+            --repo conda-forge/omnipkg-feedstock \
+            --base main \
+            --head 1minds3t:$BRANCH \
+            --title "Update omnipkg to $VERSION (noarch, build $BUILD_NUMBER)" \
+            --body "$PR_BODY" || echo "")
+          
+          if [ -n "$PR_URL" ]; then
+            PR_NUMBER=$(echo "$PR_URL" | grep -oP '\d+$')
+            echo "✅ PR created: $PR_URL"
+          else
+            echo "⚠️  PR already exists, finding it..."
+            PR_NUMBER=$(gh pr list --repo conda-forge/omnipkg-feedstock --head 1minds3t:$BRANCH --json number --jq '.[0].number')
+            echo "✅ Found existing PR #$PR_NUMBER"
+          fi
+          echo "pull-request-number=$PR_NUMBER" >> $GITHUB_OUTPUT
+
+      - name: Request re-render
+        if: env.skip_pr != 'true' && steps.create-pr.outputs.pull-request-number != ''
+        env:
+          GH_TOKEN: ${{ secrets.FEEDSTOCK_TOKEN }}
+        run: |
+          PR_NUMBER="${{ steps.create-pr.outputs.pull-request-number }}"
+          
+          echo "🔄 Requesting re-render..."
+          gh pr comment $PR_NUMBER \
+            --repo conda-forge/omnipkg-feedstock \
+            --body "@conda-forge-admin, please rerender"
+          
+          sleep 600
+
+      - name: Wait for checks
+        if: env.skip_pr != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.FEEDSTOCK_TOKEN }}
+        run: |
+          PR_NUMBER="${{ steps.create-pr.outputs.pull-request-number }}"
+          
+          echo "⏳ Waiting for checks to start..."
+          sleep 120
+          
+          ATTEMPT=0
+          MAX_ATTEMPTS=60
+          
+          while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
+            ATTEMPT=$((ATTEMPT + 1))
+            
+            PENDING=$(gh pr view $PR_NUMBER \
+              --repo conda-forge/omnipkg-feedstock \
+              --json statusCheckRollup \
+              --jq '[.statusCheckRollup[] | select(.status == "IN_PROGRESS" or .status == "PENDING" or .status == "QUEUED")] | length')
+            
+            TOTAL=$(gh pr view $PR_NUMBER \
+              --repo conda-forge/omnipkg-feedstock \
+              --json statusCheckRollup \
+              --jq '.statusCheckRollup | length')
+            
+            FAILED=$(gh pr view $PR_NUMBER \
+              --repo conda-forge/omnipkg-feedstock \
+              --json statusCheckRollup \
+              --jq '[.statusCheckRollup[] | select(.conclusion == "FAILURE")] | length')
+            
+            echo "📊 Check status (Attempt $ATTEMPT): $((TOTAL - PENDING))/$TOTAL completed"
+            
+            if [ "$PENDING" -eq 0 ] && [ "$TOTAL" -gt 0 ]; then
+              if [ "$FAILED" -gt 0 ]; then
+                echo "❌ Some checks failed"
+                exit 1
+              else
+                echo "✅ All checks passed!"
+                break
+              fi
+            fi
+            
+            sleep 120
+          done
+
+      - name: Merge PR
+        env:
+          GH_TOKEN: ${{ secrets.FEEDSTOCK_TOKEN }}
+        run: |
+          PR_NUMBER="${{ steps.create-pr.outputs.pull-request-number }}"
+          VERSION="${{ needs.wait-for-pypi.outputs.version }}"
+          
+          echo "🎯 Merging PR #$PR_NUMBER..."
+          gh pr merge $PR_NUMBER \
+            --repo conda-forge/omnipkg-feedstock \
+            --squash \
+            --subject "Build for $VERSION (noarch)" \
+            --body ""
+          
+          echo "✅ Noarch build merged!"
+
+  # ═══════════════════════════════════════════════════════════════════
+  # JOB 4: Conda-Forge PLATFORMS (Build 1)
+  # ═══════════════════════════════════════════════════════════════════
+  update-feedstock-platforms:
+    name: "🚀 Conda-Forge Platforms (Build 1)"
+    needs: [wait-for-pypi, update-local-templates, update-feedstock-noarch]
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    
+    steps:
+      - name: Checkout feedstock fork
+        uses: actions/checkout@v4
+        with:
+          repository: 1minds3t/omnipkg-feedstock
+          token: ${{ secrets.FEEDSTOCK_TOKEN }}
+          path: feedstock
+          fetch-depth: 0
+
+      - name: Sync fork with upstream
+        run: |
+          cd feedstock
+          git remote add upstream https://github.com/conda-forge/omnipkg-feedstock.git 2>/dev/null || true
+          git fetch upstream
+          git checkout main
+          git reset --hard upstream/main
+          git push -f origin main
+          echo "✅ Fork synced and reset to upstream"
+
+      - name: Determine build number
+        id: build-number
+        run: |
+          cd feedstock
+          VERSION="${{ needs.wait-for-pypi.outputs.version }}"
+          
+          CURRENT_VERSION=$(grep -oP '{% set version = "\K[^"]+' recipe/meta.yaml || echo "0.0.0")
+          CURRENT_BUILD=$(grep -oP 'number: \K\d+' recipe/meta.yaml || echo "0")
+          
+          echo "📊 Current feedstock state:"
+          echo "   Version: $CURRENT_VERSION"
+          echo "   Build: $CURRENT_BUILD"
+          
+          if [ "$CURRENT_VERSION" = "$VERSION" ]; then
+            NEW_BUILD=$((CURRENT_BUILD + 1))
+            echo "🔄 Incrementing build: $CURRENT_BUILD → $NEW_BUILD"
+          else
+            NEW_BUILD=1
+            echo "🆕 New version - starting at build 1 (platforms)"
+          fi
+          
+          echo "build_number=$NEW_BUILD" >> $GITHUB_OUTPUT
+
+      - name: Checkout main repo templates
+        uses: actions/checkout@v4
+        with:
+          path: main-repo
+          ref: ${{ needs.update-local-templates.outputs.pr_branch || 'main' }}
+
+      - name: Update feedstock with PLATFORMS template
+        run: |
+          cd feedstock
+          VERSION="${{ needs.wait-for-pypi.outputs.version }}"
+          SHA256="${{ needs.wait-for-pypi.outputs.sha256 }}"
+          BUILD_NUMBER="${{ steps.build-number.outputs.build_number }}"
+          
+          echo "📝 Copying PLATFORMS templates"
+          
+          cp ../main-repo/src/omnipkg/conda-recipes/meta-platforms.yaml recipe/meta.yaml
+          cp ../main-repo/src/omnipkg/conda-recipes/conda-forge-platforms.yml conda-forge.yml
+          
+          sed -i "s/{% set version = \".*\" %}/{% set version = \"$VERSION\" %}/" recipe/meta.yaml
+          sed -i "s/sha256: .*/sha256: $SHA256/" recipe/meta.yaml
+          sed -i "s/number: .*/number: $BUILD_NUMBER/" recipe/meta.yaml
+          
+          echo "✅ PLATFORMS files updated (Build $BUILD_NUMBER)"
+          head -25 recipe/meta.yaml
+          
+      - name: Create branch and commit
+        run: |
+          cd feedstock
+          VERSION="${{ needs.wait-for-pypi.outputs.version }}"
+          BRANCH="update-platforms-v$VERSION"
+          
+          git push origin --delete "$BRANCH" 2>/dev/null || true
+          
+          git checkout -b "$BRANCH"
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add recipe/meta.yaml conda-forge.yml
+          
+          if git diff --staged --quiet; then
+            echo "ℹ️  No changes to commit"
+            echo "skip_pr=true" >> $GITHUB_ENV
+          else
+            git commit -m "Update omnipkg to $VERSION (platforms)"
+            git push -f origin "$BRANCH"
+            echo "✅ Changes pushed"
+            echo "skip_pr=false" >> $GITHUB_ENV
+          fi
+          
+      - name: Create PR to conda-forge
+        id: create-pr
+        if: env.skip_pr != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.FEEDSTOCK_TOKEN }}
+        run: |
+          cd feedstock
+          VERSION="${{ needs.wait-for-pypi.outputs.version }}"
+          BRANCH="update-platforms-v$VERSION"
+          SHA256="${{ needs.wait-for-pypi.outputs.sha256 }}"
+          BUILD_NUMBER="${{ steps.build-number.outputs.build_number }}"
+          
+          PR_BODY="🤖 Automated update to omnipkg version $VERSION (platform builds)
+
+          **Changes:**
+          - ✅ Version: $VERSION
+          - ✅ SHA256: $SHA256
+          - ✅ Build number: $BUILD_NUMBER
+          - ✅ Architectures: linux-64, linux-aarch64, linux-ppc64le, osx-64, osx-arm64, win-64
+          - ✅ Updated conda-forge.yml for cross-compilation
+
+          This PR updates the recipe for platform-specific builds."
+          
+          PR_URL=$(gh pr create \
+            --repo conda-forge/omnipkg-feedstock \
+            --base main \
+            --head 1minds3t:$BRANCH \
+            --title "Update omnipkg to $VERSION (platforms, build $BUILD_NUMBER)" \
+            --body "$PR_BODY" || echo "")
+          
+          if [ -n "$PR_URL" ]; then
+            PR_NUMBER=$(echo "$PR_URL" | grep -oP '\d+$')
+            echo "✅ PR created: $PR_URL"
+          else
+            echo "⚠️  PR already exists, finding it..."
+            PR_NUMBER=$(gh pr list --repo conda-forge/omnipkg-feedstock --head 1minds3t:$BRANCH --json number --jq '.[0].number')
+            echo "✅ Found existing PR #$PR_NUMBER"
+          fi
+          echo "pull-request-number=$PR_NUMBER" >> $GITHUB_OUTPUT
+
+      - name: Request re-render
+        if: env.skip_pr != 'true' && steps.create-pr.outputs.pull-request-number != ''
+        env:
+          GH_TOKEN: ${{ secrets.FEEDSTOCK_TOKEN }}
+        run: |
+          PR_NUMBER="${{ steps.create-pr.outputs.pull-request-number }}"
+          
+          gh pr comment $PR_NUMBER \
+            --repo conda-forge/omnipkg-feedstock \
+            --body "@conda-forge-admin, please rerender"
+          
+          sleep 600
+
+      - name: Wait for checks
+        if: env.skip_pr != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.FEEDSTOCK_TOKEN }}
+        run: |
+          PR_NUMBER="${{ steps.create-pr.outputs.pull-request-number }}"
+          
+          echo "⏳ Waiting for checks..."
+          sleep 300
+          
+          ATTEMPT=0
+          MAX_ATTEMPTS=60
+          
+          while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
+            ATTEMPT=$((ATTEMPT + 1))
+            
+            PENDING=$(gh pr view $PR_NUMBER \
+              --repo conda-forge/omnipkg-feedstock \
+              --json statusCheckRollup \
+              --jq '[.statusCheckRollup[] | select(.status == "IN_PROGRESS" or .status == "PENDING" or .status == "QUEUED")] | length')
+            
+            TOTAL=$(gh pr view $PR_NUMBER \
+              --repo conda-forge/omnipkg-feedstock \
+              --json statusCheckRollup \
+              --jq '.statusCheckRollup | length')
+            
+            FAILED=$(gh pr view $PR_NUMBER \
+              --repo conda-forge/omnipkg-feedstock \
+              --json statusCheckRollup \
+              --jq '[.statusCheckRollup[] | select(.conclusion == "FAILURE")] | length')
+            
+            echo "📊 Check status (Attempt $ATTEMPT): $((TOTAL - PENDING))/$TOTAL completed"
+            
+            if [ "$PENDING" -eq 0 ] && [ "$TOTAL" -gt 0 ]; then
+              if [ "$FAILED" -gt 0 ]; then
+                echo "❌ Some checks failed"
+                gh pr view $PR_NUMBER --repo conda-forge/omnipkg-feedstock --json statusCheckRollup
+                exit 1
+              else
+                echo "✅ All checks passed!"
+                break
+              fi
+            fi
+            
+            sleep 120
+          done
+
+      - name: Merge PR
+        if: env.skip_pr != 'true' && steps.create-pr.outputs.pull-request-number != ''
+        env:
+          GH_TOKEN: ${{ secrets.FEEDSTOCK_TOKEN }}
+        run: |
+          PR_NUMBER="${{ steps.create-pr.outputs.pull-request-number }}"
+          VERSION="${{ needs.wait-for-pypi.outputs.version }}"
+          
+          gh pr merge $PR_NUMBER \
+            --repo conda-forge/omnipkg-feedstock \
+            --squash \
+            --subject "Build for $VERSION (platforms)" \
+            --body ""
+          
+          echo "✅ Platforms build merged!"

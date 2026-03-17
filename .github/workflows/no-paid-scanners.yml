@@ -1,0 +1,55 @@
+name: 🛡️ Guardrail - Block Paid Security Scanners
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/*.yml'
+      - '.github/workflows/*.yaml'
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check for paid security scanners
+        run: |
+          # GITHUB_WORKFLOW_REF is the git ref, not the filename.
+          # GITHUB_WORKFLOW is the workflow name string, also not reliable for filename.
+          # The only reliable source is the workflow file path from the event itself.
+          CURRENT_FILE=$(basename "$GITHUB_WORKFLOW_REF" | sed 's/@.*//')
+          # Fallback: derive from the workflow file directly via env
+          # GITHUB_WORKFLOW_REF format: owner/repo/.github/workflows/filename.yml@refs/...
+          CURRENT_FILE=$(echo "$GITHUB_WORKFLOW_REF" | sed 's|.*/\.github/workflows/||' | sed 's|@.*||')
+
+          FORBIDDEN='snyk|veracode|black.duck|synopsys|jfrog|sonarqube|sonarcloud|checkmarx|anchore|sysdig|zscaler|endorlabs|ethicalcheck|crunch42|contrast|frogbot|mayhem|cloudrail|crda|kubesec|xanitizer|soos'
+
+          echo "🔍 Scanning for paid security scanners..."
+          echo "Current workflow file: $CURRENT_FILE"
+
+          SCANNER_FOUND=false
+          for file in .github/workflows/*.yml .github/workflows/*.yaml; do
+            if [[ -f "$file" ]]; then
+              if [[ "$(basename "$file")" == "$CURRENT_FILE" ]]; then
+                echo "⏭️ Skipping self: $(basename "$file")"
+                continue
+              fi
+              if grep -iE "$FORBIDDEN" "$file" > /dev/null; then
+                echo "❌ Found forbidden scanner in: $(basename "$file")"
+                SCANNER_FOUND=true
+              fi
+            fi
+          done
+
+          if [[ "$SCANNER_FOUND" == "true" ]]; then
+            echo ""
+            echo "🚫 BLOCKED: Paid security scanner detected!"
+            echo "These scanners require paid accounts and API keys."
+            echo ""
+            echo "Allowed free scanners:"
+            echo "  - codeql (GitHub), ossar (Microsoft), devskim (Microsoft)"
+            echo "  - bandit, semgrep, safety, pylint (Python)"
+            echo ""
+            echo "Remove the paid scanner or convert it to workflow_dispatch only."
+            exit 1
+          else
+            echo "✅ No paid security scanners found. PR approved!"
+          fi
+        shell: bash

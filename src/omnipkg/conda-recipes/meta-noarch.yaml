@@ -1,0 +1,98 @@
+{% set name = "omnipkg" %}
+{% set version = "2.2.2" %}
+{% set python_min = "3.10" %}
+
+package:
+  name: {{ name|lower }}
+  version: {{ version }}
+
+source:
+  url: https://pypi.org/packages/source/{{ name[0] }}/{{ name }}/{{ name }}-{{ version }}.tar.gz
+  sha256: ffc49b306dd7ba527a793481e8950919a2d4aa8b080b3af595491d0e3f04fcf8
+
+build:
+  number: 0
+  noarch: python
+  script: 
+    - export OMNIPKG_SKIP_C_EXT=1
+    - python -m pip install . --no-deps --no-build-isolation -vv
+  entry_points:
+  - omnipkg = omnipkg.dispatcher:main
+  - 8pkg = omnipkg.dispatcher:main
+  - 8PKG = omnipkg.dispatcher:main
+  - OMNIPKG = omnipkg.dispatcher:main
+
+requirements:
+  host:
+    - python {{ python_min }}
+    - pip
+    - setuptools >=61.0
+  run:
+    - python >={{ python_min }}
+    - requests >=2.20
+    - psutil >=5.9.0
+    - typer >=0.4.0
+    - rich >=10.0.0
+    - filelock >=3.20.1
+    - packaging >=23.0
+    - tomli
+    - authlib >=1.6.5
+    - aiohttp >=3.13.3
+    - safety >=3.7.0
+    - marshmallow >=4.1.2
+    - pip-audit >=2.6.0
+    - urllib3 >=1.26.19
+    - tqdm >=4.67.1
+    - typing-extensions >=4.0.0
+    - flask >=2.0
+    - flask-cors >=3.0
+    # NO uv - optional performance enhancement, installed separately
+
+test:
+  requires:
+    - python {{ python_min }}
+  imports:
+    - omnipkg
+  commands:
+    - omnipkg --version
+
+about:
+  home: https://github.com/1minds3t/omnipkg
+  license: AGPL-3.0-only
+  license_family: AGPL
+  license_file: LICENSE
+  summary: 'The Ultimate Python Dependency Resolver. One environment. Infinite packages. Zero conflicts.'
+  description: |
+    OmniPkg is a distributed Python runtime hypervisor enabling concurrent, 
+    zero-copy multi-framework orchestration.
+    
+    Platform Support:
+    - Linux: x86_64, aarch64/ARM64, ppc64le
+    - macOS: x86_64 (Intel), arm64 (Apple Silicon)
+    - Windows: x86_64, ARM64
+    
+    Key Features:
+    - Microsecond package activation (~50μs)
+    - Cross-platform daemon with native fork/no-fork modes
+    - Concurrent multi-version package loading
+    - Zero-copy multi-framework orchestration
+    - Smart dependency resolution with snapshot restoration
+    - Live daemon monitoring dashboard
+    - Interactive web-based documentation with real-time command execution
+    
+    Documentation:
+    - 📚 Static docs: https://omnipkg.pages.dev/
+    - 🎮 Interactive console: https://1minds3t.echo-universe.ts.net/omnipkg/
+    - Execute omnipkg commands in real-time through your browser
+    - Streaming output via public → CORS → Cloudflare → localhost bridge
+    - Runs commands locally on your machine (privacy-safe, GDPR compliant)
+    
+    Performance Note:
+    - Install 'uv' separately for 6x faster script execution with '8pkg run'
+    - Core functionality works with standard pip (already included)
+  doc_url: https://omnipkg.pages.dev/
+  dev_url: https://github.com/1minds3t/omnipkg
+
+extra:
+  recipe-maintainers:
+    - 1minds3t

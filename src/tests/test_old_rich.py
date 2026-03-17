@@ -1,30 +1,41 @@
-# tests/test_old_rich.py (Corrected)
+# src/tests/test_old_rich.py
+"""
+DEMO FILE — run via: 8pkg run src/tests/test_old_rich.py
+Shows omnipkg auto-healing a rich version conflict.
+"""
+import sys
+import importlib.metadata
+import rich
 
 try:
-    # This is your project's safe_print for standard, unstyled output
+    from omnipkg.i18n import _
     from omnipkg.common_utils import safe_print
 except ImportError:
-    # Fallback for different execution contexts
-    from omnipkg.common_utils import safe_print
+    _ = lambda s: s
+    safe_print = print
 
-import rich
-import importlib.metadata
-from omnipkg.i18n import _
-# This is the correct way to print styled text with the rich library
-from rich import print as rich_print
+def _get_rich_version():
+    try:
+        return rich.__version__
+    except AttributeError:
+        return importlib.metadata.version("rich")
 
-# --- Script Logic ---
+def test_omnipkg_healing_demo():
+    """Run via: 8pkg run src/tests/test_old_rich.py"""
+    rich_version = _get_rich_version()
+    assert rich_version == "13.4.2", _(
+        "Incorrect rich version! Expected 13.4.2, got {}"
+    ).format(rich_version)
+    safe_print(_("✅ Successfully imported rich version: {}").format(rich_version))
+    from rich import print as rich_print
+    rich_print("[bold green]Running with the correct older rich==13.4.2![/bold green]")
 
-try:
-    rich_version = rich.__version__
-except AttributeError:
-    rich_version = importlib.metadata.version('rich')
-
-# Assert that the correct (older) version is active
-assert rich_version == '13.4.2', _('Incorrect rich version! Expected 13.4.2, got {}').format(rich_version)
-
-# Use YOUR safe_print for simple logging
-safe_print(_('✅ Successfully imported rich version: {}').format(rich_version))
-
-# Use the IMPORTED rich_print for styled output
-rich_print('[bold green]This script is running with the correct, older version of rich![/bold green]')
+# Direct run via 8pkg run
+if "pytest" not in sys.modules:
+    rich_version = _get_rich_version()
+    assert rich_version == "13.4.2", _(
+        "Incorrect rich version! Expected 13.4.2, got {}"
+    ).format(rich_version)
+    safe_print(_("✅ Successfully imported rich version: {}").format(rich_version))
+    from rich import print as rich_print
+    rich_print("[bold green]Running with the correct older rich==13.4.2![/bold green]")

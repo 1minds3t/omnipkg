@@ -1,4 +1,4 @@
-name: Build and Push to Docker Hub
+name: Build and Push to Docker Hub & GHCR
 
 on:
   release:
@@ -10,6 +10,9 @@ on:
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write  # Required for GHCR
     
     steps:
       - name: Checkout repository
@@ -26,22 +29,32 @@ jobs:
           username: 1minds3t
           password: ${{ secrets.DOCKERHUB_TOKEN }}
       
-      # Extract metadata/tags
+      # Login to GitHub Container Registry
+      - name: Login to GitHub Container Registry
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      
+      # Extract metadata/tags for BOTH registries
       - name: Extract metadata (tags, labels)
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: 1minds3t/omnipkg
+          images: |
+            1minds3t/omnipkg
+            ghcr.io/${{ github.repository_owner }}/omnipkg
           tags: |
             type=ref,event=branch
             type=ref,event=pr
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=raw,value=latest,enable={{is_default_branch}}
-            type=sha
       
-      # Build and push
-      - name: Build and push to Docker Hub
+      # Build and push to BOTH registries
+      - name: Build and push to Docker Hub & GHCR
         uses: docker/build-push-action@v5
         with:
           context: .

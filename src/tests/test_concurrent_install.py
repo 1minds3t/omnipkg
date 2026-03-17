@@ -1,20 +1,27 @@
+from omnipkg.common_utils import safe_print
 import sys
 import subprocess
 import json
-from pathlib import Path
 import time
 import concurrent.futures
 import threading
+from omnipkg.i18n import _
 
 print_lock = threading.Lock()
-omnipkg_lock = threading.Lock()
 
-def safe_print(*args):
-    with print_lock:
-        print(*args, flush=True)
+import os as _os
+_WIN_ENV = {
+    **_os.environ,
+    "PYTHONIOENCODING": "utf-8",
+    "PYTHONUTF8": "1",
+    "PYTHONUNBUFFERED": "1",
+    "OMNIPKG_NONINTERACTIVE": "1",
+    "OMNIPKG_DEBUG": "1",
+}
+_SP = dict(encoding="utf-8", errors="replace", env=_WIN_ENV)
+
 
 def format_duration(ms: float) -> str:
-    """Format duration for readability."""
     if ms < 1:
         return f"{ms*1000:.1f}µs"
     elif ms < 1000:
@@ -22,322 +29,563 @@ def format_duration(ms: float) -> str:
     else:
         return f"{ms/1000:.2f}s"
 
-def run_omnipkg_cli(python_exe: str, args: list, thread_id: int) -> tuple[int, str, str, float]:
-    """Runs a non-install omnipkg command and captures output."""
-    prefix = f"[T{thread_id}]"
-    start = time.perf_counter()
-    
-    cmd = [python_exe, '-m', 'omnipkg.cli'] + args
-    
+
+def dump_daemon_log(label: str = "DAEMON LOG DUMP", only_on_error: bool = True, max_lines: int = 50):
+    """Dump last max_lines of daemon log. By default only prints if the log contains ERROR/EXCEPTION."""
+    try:
+        from omnipkg.isolation.worker_daemon import DAEMON_LOG_FILE
+        if not _os.path.exists(DAEMON_LOG_FILE):
+            if not only_on_error:
+                safe_print(f"[DAEMON LOG] ❌ DOES NOT EXIST: {DAEMON_LOG_FILE}")
+            return
+        with open(DAEMON_LOG_FILE, "r", errors="replace") as f:
+            lines = f.readlines()
+        # In only_on_error mode, skip dump entirely if no errors in last max_lines
+        tail = lines[-max_lines:]
+        has_error = any(
+            any(kw in ln for kw in ("ERROR", "EXCEPTION", "Traceback", "❌"))
+            for ln in tail
+        )
+        if only_on_error and not has_error:
+            return
+        safe_print(f"\n{'='*80}")
+        safe_print(f"📋 {label}  [{len(lines)} total lines, showing last {len(tail)}]")
+        safe_print(f"{'='*80}")
+        for ln in tail:
+            safe_print(f"[DAEMON] {ln.rstrip()}")
+        safe_print(f"{'='*80}\n")
+    except Exception as e:
+        safe_print(f"[LOG DUMP ERROR] {e}")
+        import traceback
+        safe_print(traceback.format_exc())
+
+
+def _run_info_python() -> str:
     result = subprocess.run(
-        cmd,
+        ["omnipkg", "info", "python"],
         capture_output=True,
-        text=True,
-        encoding='utf-8',
-        errors='replace'
+        **_SP,
     )
-    
-    duration_ms = (time.perf_counter() - start) * 1000
-    
-    status = "✅" if result.returncode == 0 else "❌"
-    safe_print(f"{prefix} {status} {' '.join(args[:2])} ({format_duration(duration_ms)})")
-    
-    if result.returncode != 0:
-        safe_print(f"{prefix} ❌ COMMAND FAILED: {' '.join(cmd)}")
-        if result.stdout:
-            safe_print(f"{prefix} STDOUT:\n{result.stdout.strip()}")
-        if result.stderr:
-            safe_print(f"{prefix} STDERR:\n{result.stderr.strip()}")
-    
-    return result.returncode, result.stdout, result.stderr, duration_ms
+    return result.stdout or ""
 
-def run_and_stream_install(python_exe: str, args: list, thread_id: int) -> tuple[int, float]:
-    """Runs `omnipkg install` and streams its output live."""
-    prefix = f"[T{thread_id}]"
-    install_prefix = f"  {prefix}|install"
-    safe_print(f"{prefix} 📦 Installing {' '.join(args[1:])} (Live Output Below)")
-    start_time = time.perf_counter()
-    
-    cmd = [python_exe, '-m', 'omnipkg.cli'] + args
-    
-    process = subprocess.Popen(
-        cmd, 
-        stdout=subprocess.PIPE, 
-        stderr=subprocess.STDOUT, 
-        text=True, 
-        encoding='utf-8', 
-        errors='replace'
-    )
-
-    if process.stdout:
-        for line in iter(process.stdout.readline, ''):
-            safe_print(f"{install_prefix} | {line.strip()}")
-    
-    returncode = process.wait()
-    duration_ms = (time.perf_counter() - start_time) * 1000
-    
-    status = "✅" if returncode == 0 else "❌"
-    safe_print(f"{prefix} {status} Install finished in {format_duration(duration_ms)} with code {returncode}")
-    
-    return returncode, duration_ms
 
 def verify_registry_contains(version: str) -> bool:
-    """Verify registry contains the version."""
     try:
-        result = subprocess.run(
-            ['omnipkg', 'info', 'python'],
-            capture_output=True, text=True, check=True
-        )
-        for line in result.stdout.splitlines():
-            if f'Python {version}:' in line:
+        output = _run_info_python()
+        for line in output.splitlines():
+            if f"Python {version}:" in line:
                 return True
-    except subprocess.CalledProcessError:
+    except Exception:
         return False
     return False
 
+
 def get_interpreter_path(version: str) -> str:
-    """Get interpreter path from omnipkg."""
-    result = subprocess.run(
-        ['omnipkg', 'info', 'python'],
-        capture_output=True, text=True, check=True
-    )
-    for line in result.stdout.splitlines():
-        if f'Python {version}:' in line:
-            parts = line.split(':', 1)
+    try:
+        output = _run_info_python()
+    except Exception as e:
+        raise RuntimeError(_('Failed to query omnipkg: {}').format(e)) from e
+    for line in output.splitlines():
+        if f"Python {version}:" in line:
+            parts = line.split(":", 1)
             if len(parts) == 2:
                 path_part = parts[1].strip().split()[0]
                 return path_part
-    raise RuntimeError(f"Python {version} not found in registry")
+    raise RuntimeError(_('Python {} not found in registry').format(version))
 
-def adopt_if_needed(version: str, thread_id: int) -> bool:
-    """Adopt Python version if not already present, with locking."""
-    prefix = f"[T{thread_id}|Adopt]"
+
+def adopt_if_needed(version: str, poll_interval: float = 5.0, timeout: float = 300.0) -> bool:
     if verify_registry_contains(version):
-        safe_print(f"{prefix} ✅ Python {version} already available.")
+        safe_print(_('   ✅ Python {} already available.').format(version))
         return True
-    
-    with omnipkg_lock:
+
+    safe_print(_('   🚀 Adopting Python {}...').format(version))
+    proc = subprocess.Popen(["omnipkg", "python", "adopt", version], env=_WIN_ENV)
+    deadline = time.monotonic() + timeout
+
+    while time.monotonic() < deadline:
+        rc = proc.poll()
         if verify_registry_contains(version):
-            safe_print(f"{prefix} ✅ Python {version} adopted by another thread.")
+            if rc is None:
+                proc.wait()
+            safe_print(_('   ✅ Python {} confirmed in registry.').format(version))
             return True
-        
-        safe_print(f"{prefix} 🚀 Adopting Python {version}...")
-        result = subprocess.run(
-            ['omnipkg', 'python', 'adopt', version],
-            capture_output=True, text=True
-        )
-        if result.returncode != 0:
-            safe_print(f"{prefix} ❌ Adoption failed")
-            safe_print(f"{prefix} STDOUT: {result.stdout}")
-            safe_print(f"{prefix} STDERR: {result.stderr}")
+        if rc is not None:
+            if rc == 0:
+                time.sleep(1)
+                if verify_registry_contains(version):
+                    safe_print(_('   ✅ Python {} confirmed in registry.').format(version))
+                    return True
+            safe_print(_('   ❌ Adopt exited (rc={}) but {} not in registry.').format(rc, version))
             return False
-        
-        safe_print(f"{prefix} ✅ Adopted and verified Python {version}")
+        safe_print(_('   ⏳ Waiting for Python {}...').format(version))
+        time.sleep(poll_interval)
+
+    proc.kill()
+    safe_print(_('   ❌ Adopt timed out after {}s').format(int(timeout)))
+    return False
+
+
+def ensure_daemon_running(interpreter_paths: list) -> bool:
+    """
+    Start daemon if not running, then wait until it has spawned idle workers
+    for ALL of the given interpreter paths. Must be called AFTER all pythons
+    are adopted so the daemon registry sees them on startup.
+    """
+    try:
+        from omnipkg.isolation.worker_daemon import DaemonClient, DAEMON_LOG_FILE
+        client = DaemonClient()
+        status = client.status()
+
+        if status.get("success"):
+            safe_print("   ✅ Daemon already running")
+        else:
+            safe_print("   🔄 Starting daemon (all pythons already adopted)...")
+            _daemon_start = time.perf_counter()
+            # Use Popen so we don't block — daemon start detaches itself on Windows
+            proc = subprocess.Popen(
+                ["8pkg", "daemon", "start"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            # Give it a moment to detach then check if it came up
+            for i in range(60):
+                time.sleep(0.5)
+                status = client.status()
+                if status.get("success"):
+                    _daemon_elapsed = (time.perf_counter() - _daemon_start) * 1000
+                    safe_print(f"   ✅ Daemon up after {format_duration(_daemon_elapsed)}")
+                    break
+            else:
+                safe_print("   ❌ Daemon never came up")
+                dump_daemon_log("DAEMON LOG ON FAILURE", only_on_error=False)
+                return False
+
         return True
 
-def test_dimension(config: tuple, thread_id: int) -> dict:
-    """Test one Python+Rich combination."""
-    py_version, rich_version = config
-    prefix = f"[T{thread_id}]"
-    
-    timings = {
-        'start': time.perf_counter(), 'wait_start': 0, 'lock_acquired': 0,
-        'lock_released': 0, 'test_start': 0, 'end': 0
-    }
-    
-    try:
-        safe_print(f"{prefix} 🚀 Testing Python {py_version} with Rich {rich_version}")
-        
-        python_exe = get_interpreter_path(py_version)
-        safe_print(f"{prefix} 📍 Using: {python_exe}")
-        
-        safe_print(f"{prefix} ⏳ Waiting for lock...")
-        timings['wait_start'] = time.perf_counter()
-        
-        with omnipkg_lock:
-            timings['lock_acquired'] = time.perf_counter()
-            safe_print(f"{prefix} 🔒 LOCK ACQUIRED")
-            
-            safe_print(f"{prefix} 🔄 Swapping to Python {py_version}")
-            swap_code, _, swap_stderr, swap_time = run_omnipkg_cli(
-                sys.executable, ['swap', 'python', py_version], thread_id
-            )
-            if swap_code != 0:
-                raise RuntimeError(f"Swap failed with exit code {swap_code}: {swap_stderr}")
-            
-            install_code, install_time = run_and_stream_install(
-                python_exe, ['install', f'rich=={rich_version}'], thread_id
-            )
-            if install_code != 0:
-                raise RuntimeError(f"omnipkg install failed with exit code {install_code}")
-            
-            safe_print(f"{prefix} 🔓 LOCK RELEASED")
-            timings['lock_released'] = time.perf_counter()
-        
-        safe_print(f"{prefix} 🧪 Testing Rich import...")
-        timings['test_start'] = time.perf_counter()
-        
-        # --- THE FIX: Define variables BEFORE the try block ---
-        test_script = f"""
-import sys, json, traceback
-from pathlib import Path
-
-# --- FIX: Define these variables BEFORE try block so they're always available ---
-bubble_path_str = "not determined"
-main_env_rich_version = "not-installed"
-
-try:
-    from omnipkg.core import ConfigManager
-    from omnipkg.loader import omnipkgLoader
-    
-    config_manager = ConfigManager(suppress_init_messages=True)
-    
-    # Check what's in the main environment for debugging
-    try:
-        import importlib.metadata
-        main_env_rich_version = importlib.metadata.version('rich')
-    except importlib.metadata.PackageNotFoundError:
-        pass
-
-    # Define the bubble path for the error message
-    bubble_path_str = str(Path(config_manager.config['multiversion_base']) / 'rich-{rich_version}')
-
-    with omnipkgLoader("rich=={rich_version}", config=config_manager.config):
-        import rich, importlib.metadata
-        
-        rich_version_actual = importlib.metadata.version('rich')
-        if rich_version_actual != "{rich_version}":
-            raise RuntimeError(f"Version mismatch: expected {rich_version}, but loaded {{rich_version_actual}}")
-        
-        result = {{
-            "success": True, "python_version": sys.version.split()[0],
-            "python_path": sys.executable, "rich_version": rich_version_actual,
-            "rich_file": rich.__file__
-        }}
-        print("JSON_START\\n" + json.dumps(result) + "\\nJSON_END")
-        
-except Exception as e:
-    error_message = str(e)
-    if "not available" in error_message: # Auto-enhance error
-        error_message = (f"Package rich=={rich_version} not available\\n"
-                         f"  Bubble not found: {{bubble_path_str}}\\n"
-                         f"  Main env has: {{main_env_rich_version}}\\n"
-                         f"  Hint: Try 'omnipkg install rich=={rich_version}'")
-    
-    error_result = {{"success": False, "error": error_message, "traceback": traceback.format_exc()}}
-    print("JSON_START\\n" + json.dumps(error_result) + "\\nJSON_END", file=sys.stderr)
-    sys.exit(1)
-"""
-        
-        cmd = [python_exe, '-c', test_script]
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
-        
-        json_output = None
-        output_source = result.stdout if result.returncode == 0 else result.stderr
-        
-        if "JSON_START" in output_source and "JSON_END" in output_source:
-            json_output = output_source.split("JSON_START")[1].split("JSON_END")[0].strip()
-        
-        if not json_output:
-            raise RuntimeError(f"Test failed to produce JSON. STDOUT: {result.stdout} STDERR: {result.stderr}")
-        
-        test_data = json.loads(json_output)
-        
-        if not test_data.get('success'):
-            raise RuntimeError(test_data.get('error'))
-        
-        timings['end'] = time.perf_counter()
-        
-        safe_print(f"{prefix} ✅ VERIFIED:")
-        safe_print(f"{prefix}    Python: {test_data['python_version']} ({test_data['python_path']})")
-        safe_print(f"{prefix}    Rich: {test_data['rich_version']} (from {test_data['rich_file']})")
-        
-        return {
-            'thread_id': thread_id, 'python_version': test_data['python_version'],
-            'python_path': test_data['python_path'], 'rich_version': test_data['rich_version'],
-            'rich_file': test_data['rich_file'],
-            'timings_ms': {'wait': (timings['lock_acquired'] - timings['wait_start']) * 1000,
-                           'swap': swap_time, 'install': install_time,
-                           'test': (timings['end'] - timings['test_start']) * 1000,
-                           'total': (timings['end'] - timings['start']) * 1000}
-        }
-        
     except Exception as e:
-        safe_print(f"{prefix} ❌ FAILED: {e}")
         import traceback
-        safe_print(f"{prefix} {traceback.format_exc()}")
+        safe_print(f"   ❌ Daemon error: {e}")
+        safe_print(traceback.format_exc())
+        return False
+
+
+def warmup_worker(config: tuple, thread_id: int) -> dict:
+    py_version, rich_version = config
+    prefix = f"[T{thread_id}|Warmup]"
+
+    try:
+        python_exe = get_interpreter_path(py_version)
+
+        safe_print(f"{prefix} 🐍 interpreter : {python_exe}")
+        safe_print(f"{prefix} 🎯 target      : Python {py_version} + rich=={rich_version}")
+        safe_print(f"{prefix} 🧵 thread ident: {threading.get_ident()}")
+
+        from omnipkg.isolation.worker_daemon import DaemonClient
+        client = DaemonClient()
+
+        safe_print(f"{prefix} 🔥 Warming up...")
+        start = time.perf_counter()
+
+        # NOTE: rich.__version__ does NOT exist in rich>=13 — must use importlib.metadata
+        warmup_code = f"""
+import sys, importlib.metadata
+print(f"[WORKER:{thread_id}] exe={{sys.executable}}")
+print(f"[WORKER:{thread_id}] py={{sys.version}}")
+print(f"[WORKER:{thread_id}] rich target={rich_version}")
+
+from omnipkg.loader import omnipkgLoader
+with omnipkgLoader("rich=={rich_version}"):
+    import rich
+    actual = importlib.metadata.version('rich')
+    print(f"[WORKER:{thread_id}] rich.__file__={{rich.__file__}}")
+    print(f"[WORKER:{thread_id}] rich version={{actual}}")
+    assert actual == "{rich_version}", f"VERSION MISMATCH: wanted {rich_version} got {{actual}} in {{sys.executable}}"
+"""
+
+        safe_print(f"{prefix} 📤 execute_shm spec=rich=={rich_version} python_exe={python_exe}")
+
+        result = client.execute_shm(
+            spec=f"rich=={rich_version}",
+            code=warmup_code,
+            shm_in={},
+            shm_out={},
+            python_exe=python_exe,
+        )
+
+        elapsed = (time.perf_counter() - start) * 1000
+
+        # Print every field — nothing hidden
+        safe_print(f"{prefix} 📥 status : {result.get('status')}")
+        safe_print(f"{prefix} 📥 success: {result.get('success')}")
+        if result.get("stdout"):
+            for line in result["stdout"].splitlines():
+                safe_print(f"{prefix} [stdout] {line}")
+        if result.get("stderr"):
+            for line in result["stderr"].splitlines():
+                safe_print(f"{prefix} [stderr] {line}")
+        if result.get("error"):
+            safe_print(f"{prefix} [error ] {result['error']}")
+        if result.get("traceback"):
+            for line in result["traceback"].splitlines():
+                safe_print(f"{prefix} [trace ] {line}")
+
+        if not result.get("success"):
+            safe_print(f"{prefix} ❌ FAILED — dumping full daemon log")
+            dump_daemon_log(f"DAEMON LOG AFTER T{thread_id} FAILURE")
+            return None
+
+        safe_print(f"{prefix} ✅ warmed up in {format_duration(elapsed)}")
+        return {
+            "thread_id": thread_id,
+            "python_version": py_version,
+            "rich_version": rich_version,
+            "warmup_time": elapsed,
+        }
+
+    except Exception as e:
+        safe_print(f"{prefix} ❌ EXCEPTION: {e}")
+        import traceback
+        safe_print(traceback.format_exc())
+        dump_daemon_log(f"DAEMON LOG AFTER T{thread_id} EXCEPTION")
         return None
 
-def print_summary(results: list, total_time: float):
-    """Print detailed summary table."""
+
+def benchmark_execution(config: tuple, thread_id: int, warmup_data: dict) -> dict:
+    py_version, rich_version = config
+    prefix = f"[T{thread_id}]"
+
+    try:
+        python_exe = get_interpreter_path(py_version)
+        safe_print(f"{prefix} ⚡ bench Python {py_version} + rich=={rich_version} via {python_exe}")
+
+        from omnipkg.isolation.worker_daemon import DaemonClient
+        client = DaemonClient()
+
+        benchmark_code = f"""
+from omnipkg.loader import omnipkgLoader
+with omnipkgLoader("rich=={rich_version}"):
+    import rich
+"""
+        start = time.perf_counter()
+        result = client.execute_shm(
+            spec=f"rich=={rich_version}",
+            code=benchmark_code,
+            shm_in={},
+            shm_out={},
+            python_exe=python_exe,
+        )
+        elapsed = (time.perf_counter() - start) * 1000
+
+        if not result.get("success"):
+            safe_print(f"{prefix} ❌ failed: {result.get('error')}")
+            dump_daemon_log(f"DAEMON LOG AFTER BENCH T{thread_id} FAILURE")
+            return None
+
+        safe_print(f"{prefix} ✅ {format_duration(elapsed)}")
+        return {
+            "thread_id": thread_id,
+            "python_version": py_version,
+            "rich_version": rich_version,
+            "warmup_time": warmup_data["warmup_time"],
+            "benchmark_time": elapsed,
+        }
+
+    except Exception as e:
+        safe_print(f"{prefix} ❌ {e}")
+        return None
+
+
+def verify_execution(config: tuple, thread_id: int) -> dict:
+    py_version, rich_version = config
+    prefix = f"[T{thread_id}|Verify]"
+
+    try:
+        python_exe = get_interpreter_path(py_version)
+
+        from omnipkg.isolation.worker_daemon import DaemonClient
+        client = DaemonClient()
+
+        # importlib.metadata — not rich.__version__
+        verify_code = f"""
+import sys, json, importlib.metadata
+from omnipkg.loader import omnipkgLoader
+with omnipkgLoader("rich=={rich_version}"):
+    import rich
+    print(json.dumps({{
+        "python_version": sys.version.split()[0],
+        "python_path": sys.executable,
+        "rich_version": importlib.metadata.version('rich'),
+        "rich_file": rich.__file__
+    }}))
+"""
+        result = client.execute_shm(
+            spec=f"rich=={rich_version}",
+            code=verify_code,
+            shm_in={},
+            shm_out={},
+            python_exe=python_exe,
+        )
+
+        if not result.get("success"):
+            raise RuntimeError(f"Verification failed: {result.get('error')}")
+
+        data = json.loads(result.get("stdout", "{}"))
+        safe_print(f"{prefix} ✅ Python {data['python_version']} + rich {data['rich_version']}")
+        safe_print(f"{prefix}    exe : {data['python_path']}")
+        safe_print(f"{prefix}    file: {data['rich_file']}")
+        return {"thread_id": thread_id, **data}
+
+    except Exception as e:
+        safe_print(f"{prefix} ❌ {e}")
+        return None
+
+
+def print_benchmark_summary(results: list, total_time: float):
     safe_print("\n" + "=" * 100)
-    safe_print("📊 DETAILED RESULTS")
+    safe_print("📊 PRODUCTION BENCHMARK RESULTS")
     safe_print("=" * 100)
-    
-    safe_print(f"{'Thread':<8} {'Python':<12} {'Rich':<10} {'Wait':<8} {'Swap':<8} {'Install':<10} {'Test':<8} {'Total':<10}")
+    safe_print(f"{'Thread':<8} {'Python':<12} {'Rich':<10} {'Warmup':<15} {'Benchmark':<15}")
     safe_print("-" * 100)
-    
-    for r in sorted(results, key=lambda x: x['thread_id']):
-        t = r['timings_ms']
+    for r in sorted(results, key=lambda x: x["thread_id"]):
         safe_print(
             f"T{r['thread_id']:<7} "
             f"{r['python_version']:<12} "
             f"{r['rich_version']:<10} "
-            f"{format_duration(t['wait']):<8} "
-            f"{format_duration(t['swap']):<8} "
-            f"{format_duration(t['install']):<10} "
-            f"{format_duration(t['test']):<8} "
-            f"{format_duration(t['total']):<10}"
+            f"{format_duration(r['warmup_time']):<15} "
+            f"{format_duration(r['benchmark_time']):<15}"
         )
-    
     safe_print("-" * 100)
-    safe_print(f"⏱️  Total concurrent runtime: {format_duration(total_time)}")
+    bt = [r["benchmark_time"] for r in results]
+    wt = [r["warmup_time"] for r in results]
+    seq = sum(bt)
+    conc = max(bt)
+    safe_print(f"⏱️  Sequential: {format_duration(seq)}  |  Concurrent: {format_duration(conc)}  |  Speedup: {seq/conc:.2f}x")
+    safe_print(f"   Warmup avg: {format_duration(sum(wt)/len(wt))}  |  Bench avg: {format_duration(sum(bt)/len(bt))}  |  Warmup→Hot: {sum(wt)/len(wt)/(sum(bt)/len(bt)):.1f}x")
     safe_print("=" * 100)
-    
-    safe_print("\n🔍 VERIFICATION - Actual Python Executables Used:")
-    safe_print("-" * 100)
-    for r in sorted(results, key=lambda x: x['thread_id']):
-        safe_print(f"T{r['thread_id']}: {r['python_path']}")
-        safe_print(f"     └─ Rich loaded from: {r['rich_file']}")
-    safe_print("-" * 100)
+
 
 def main():
-    """Main test orchestrator."""
     start_time = time.perf_counter()
-    
+
     safe_print("=" * 100)
-    safe_print("🚀 CONCURRENT RICH MULTIVERSE TEST")
+    safe_print("🚀 CONCURRENT RICH MULTIVERSE - PRODUCTION BENCHMARK")
     safe_print("=" * 100)
-    
-    test_configs = [('3.9', '13.4.2'), ('3.10', '13.6.0'), ('3.11', '13.7.1')]
-    
-    safe_print("\n📥 Phase 1: Adopting interpreters (sequential for safety)...")
+
+    test_configs = [
+        ("3.9",  "13.4.2"),
+        ("3.10", "13.6.0"),
+        ("3.11", "13.7.1"),
+    ]
+
+    # Phase 1: Setup
+    safe_print("\n📥 Phase 1: Setup")
+    safe_print("-" * 100)
     for version, _ in test_configs:
-        if not adopt_if_needed(version, 0):
+        if not adopt_if_needed(version):
             safe_print(f"❌ Failed to adopt Python {version}")
             sys.exit(1)
-    
-    safe_print("\n✅ All interpreters ready. Starting concurrent tests...\n")
-    
-    results = []
+
+    # Print resolved interpreter paths — catch any wrong resolution immediately
+    safe_print("\n🐍 Resolved interpreter paths:")
+    for version, _ in test_configs:
+        try:
+            path = get_interpreter_path(version)
+            safe_print(f"   Python {version} → {path}")
+        except Exception as e:
+            safe_print(f"   Python {version} → ❌ ERROR: {e}")
+
+    # Resolve all interpreter paths AFTER adoption so daemon sees them all on start
+    safe_print("\n🐍 Resolved interpreter paths:")
+    interpreter_paths = []
+    for version, _ in test_configs:
+        try:
+            path = get_interpreter_path(version)
+            interpreter_paths.append(path)
+            safe_print(f"   Python {version} → {path}")
+        except Exception as e:
+            safe_print(f"   Python {version} → ❌ ERROR: {e}")
+            sys.exit(1)
+
+    # Phase 0: Install via versioned dispatcher (8pkg39, 8pkg310, etc.)
+    # This is the key test — does 8pkg3X actually install into the RIGHT interpreter?
+    safe_print("\n📦 Phase 0: Install via versioned dispatcher (OMNIPKG_DEBUG=1)")
+    safe_print("-" * 100)
+
+    def _versioned_cmd(version: str) -> str:
+        """Return the versioned command name: 3.9 -> 8pkg39, 3.10 -> 8pkg310, etc."""
+        flat = version.replace(".", "")
+        # On Windows the shim is a .bat or .exe; on Unix it is a plain symlink.
+        # subprocess will find it via PATH on both platforms.
+        return f"8pkg{flat}"
+
+    def _install_via_dispatcher(version: str, pkg_spec: str, thread_id: int) -> dict:
+        prefix = f"[T{thread_id}|Install|{version}]"
+        cmd_name = _versioned_cmd(version)
+
+        # Build the command.  On Windows 'shell=True' is needed so .bat shims resolve.
+        if sys.platform == "win32":
+            cmd = f"{cmd_name} install {pkg_spec}"
+            use_shell = True
+        else:
+            cmd = [cmd_name, "install", pkg_spec]
+            use_shell = False
+
+        env = {**_WIN_ENV, "OMNIPKG_DEBUG": "1"}
+
+        with print_lock:
+            safe_print(f"{prefix} ▶ {cmd_name} install {pkg_spec}")
+
+        t0 = time.perf_counter()
+        try:
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                shell=use_shell,
+                env=env,
+                encoding="utf-8",
+                errors="replace",
+                timeout=300,
+            )
+        except FileNotFoundError:
+            elapsed = (time.perf_counter() - t0) * 1000
+            with print_lock:
+                safe_print(f"{prefix} ❌ COMMAND NOT FOUND: {cmd_name}  ({format_duration(elapsed)})")
+                safe_print(f"{prefix}    PATH={env.get('PATH', '(not set)')}")
+            return {"version": version, "pkg": pkg_spec, "ok": False,
+                    "error": f"FileNotFoundError: {cmd_name}", "elapsed_ms": elapsed}
+        except subprocess.TimeoutExpired:
+            elapsed = (time.perf_counter() - t0) * 1000
+            with print_lock:
+                safe_print(f"{prefix} ❌ TIMEOUT after {format_duration(elapsed)}")
+            return {"version": version, "pkg": pkg_spec, "ok": False,
+                    "error": "TimeoutExpired", "elapsed_ms": elapsed}
+
+        elapsed = (time.perf_counter() - t0) * 1000
+        ok = result.returncode == 0
+
+        with print_lock:
+            status = "✅" if ok else "❌"
+            safe_print(f"{prefix} {status} rc={result.returncode}  time={format_duration(elapsed)}")
+            # Always show stdout/stderr — this is the dispatcher debug output
+            # showing WHICH interpreter actually got targeted
+            if result.stdout:
+                for line in result.stdout.splitlines():
+                    safe_print(f"{prefix} [stdout] {line}")
+            if result.stderr:
+                for line in result.stderr.splitlines():
+                    safe_print(f"{prefix} [stderr] {line}")
+            if not ok:
+                safe_print(f"{prefix} ⚠️  Install failed — daemon phase will still run so we can see where it installs")
+
+        return {
+            "version": version,
+            "pkg": pkg_spec,
+            "ok": ok,
+            "returncode": result.returncode,
+            "elapsed_ms": elapsed,
+            "stdout": result.stdout,
+            "stderr": result.stderr,
+        }
+
+    # Run installs concurrently — one per Python version
+    install_configs = [(v, f"rich=={r}") for v, r in test_configs]
+    install_results = []
+    with concurrent.futures.ThreadPoolExecutor(max_workers=len(install_configs)) as executor:
+        futs = {
+            executor.submit(_install_via_dispatcher, ver, pkg, i + 1): (ver, pkg)
+            for i, (ver, pkg) in enumerate(install_configs)
+        }
+        for fut in concurrent.futures.as_completed(futs):
+            install_results.append(fut.result())
+
+    # Summary
+    safe_print("\n📦 Install summary:")
+    for r in sorted(install_results, key=lambda x: x["version"]):
+        status = "✅" if r["ok"] else "❌"
+        safe_print(f"   {status} Python {r['version']} — {r['pkg']}  ({format_duration(r['elapsed_ms'])})")
+    all_installed = all(r["ok"] for r in install_results)
+    if not all_installed:
+        safe_print("\n⚠️  Some installs failed — continuing to daemon phase to capture behaviour")
+
+    if not ensure_daemon_running(interpreter_paths):
+        safe_print("❌ Failed to start daemon")
+        dump_daemon_log("DAEMON LOG ON STARTUP FAILURE")
+        sys.exit(1)
+
+    # Phase 2: Cold run (first call = daemon worker spawn + import)
+    safe_print("\n🔥 Phase 2: Cold run — daemon worker spawn + first import (concurrent)")
+    safe_print("-" * 100)
+    warmup_results = []
     with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
         futures = {
-            executor.submit(test_dimension, config, i+1): config
+            executor.submit(warmup_worker, config, i + 1): config
             for i, config in enumerate(test_configs)
         }
-        
         for future in concurrent.futures.as_completed(futures):
             result = future.result()
             if result:
-                results.append(result)
-    
-    total_time = (time.perf_counter() - start_time) * 1000
-    
-    print_summary(results, total_time)
-    
-    success = len(results) == len(test_configs)
-    safe_print("\n" + ("🎉 ALL TESTS PASSED!" if success else "❌ SOME TESTS FAILED"))
-    sys.exit(0 if success else 1)
+                warmup_results.append(result)
 
-if __name__ == '__main__':
+    if len(warmup_results) != len(test_configs):
+        safe_print("\n❌ Warmup failed — dumping full daemon log")
+        dump_daemon_log("DAEMON LOG AFTER WARMUP FAILURE")
+        sys.exit(1)
+
+    warmup_results.sort(key=lambda x: x["thread_id"])
+    safe_print("\n✅ All workers warmed up!")
+
+    # Phase 3: Warm run (worker already live, import already cached)
+    safe_print("\n⚡ Phase 3: Warm run — hot worker, import already cached (concurrent)")
+    safe_print("-" * 100)
+    benchmark_results = []
+    benchmark_start = time.perf_counter()
+    with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
+        futures = {
+            executor.submit(benchmark_execution, config, i + 1, warmup_results[i]): config
+            for i, config in enumerate(test_configs)
+        }
+        for future in concurrent.futures.as_completed(futures):
+            result = future.result()
+            if result:
+                benchmark_results.append(result)
+
+    if len(benchmark_results) != len(test_configs):
+        safe_print("\n❌ Benchmark failed")
+        dump_daemon_log("DAEMON LOG AFTER BENCHMARK FAILURE")
+        sys.exit(1)
+
+    benchmark_total = (time.perf_counter() - benchmark_start) * 1000
+    print_benchmark_summary(benchmark_results, benchmark_total)
+
+    # Phase 4: Verification
+    safe_print("\n🔍 Phase 4: Verification (not timed)")
+    safe_print("-" * 100)
+    verify_results = []
+    with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
+        futures = {
+            executor.submit(verify_execution, config, i + 1): config
+            for i, config in enumerate(test_configs)
+        }
+        for future in concurrent.futures.as_completed(futures):
+            result = future.result()
+            if result:
+                verify_results.append(result)
+
+    if len(verify_results) == len(test_configs):
+        safe_print("\n" + "=" * 100)
+        safe_print("🔍 VERIFICATION RESULTS")
+        safe_print("=" * 100)
+        for r in sorted(verify_results, key=lambda x: x["thread_id"]):
+            safe_print(f"  T{r['thread_id']}: Python {r['python_version']}  rich={r['rich_version']}")
+            safe_print(f"         exe : {r['python_path']}")
+            safe_print(f"         file: {r['rich_file']}")
+
+    total_time = (time.perf_counter() - start_time) * 1000
+    safe_print(f"\n🎉 DONE  total={format_duration(total_time)}")
+
+    sys.exit(0)
+
+
+if __name__ == "__main__":
     main()

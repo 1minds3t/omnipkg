@@ -1,17 +1,18 @@
 [build-system]
 # Python 3.7 compatible setuptools (newer versions require Python 3.8+)
 requires = ["setuptools>=50.0,<70.0", "wheel"]
-build-backend = "setuptools.build_meta"
+build-backend = "build_hooks"
+backend-path = ["."]
 
 [project]
 name = "omnipkg"
-version = "2.0.1"
+version = "2.5.0"
 authors = [
   { name = "1minds3t", email = "1minds3t@proton.me" },
 ]
-description = "The Ultimate Python Dependency Resolver. One environment. Infinite packages. Zero conflicts."
+description = "Universal Python Runtime Orchestrator. One environment. Infinite Pythons and packages. Zero conflicts."
 readme = "README.md"
-requires-python = ">=3.7, <3.15"
+requires-python = ">=3.7, <3.16"
 
 # Use old-style license for Python 3.7 compatibility
 license = { text = "AGPL-3.0-only OR LicenseRef-Proprietary" }
@@ -31,60 +32,92 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
     "Programming Language :: Python :: 3.14",
+    "Programming Language :: Python :: 3.15",
     "Environment :: Console",
     "Topic :: Software Development :: Build Tools",
     "Topic :: System :: Software Distribution",
 ]
 
 dependencies = [
+    "uv_ffi",
     "requests>=2.20",
-    "filelock>=3.9",
     "psutil>=5.9.0",
     "typer>=0.4.0",
     "rich>=10.0.0",
+
+    # werkzeug - pinned to last available per Python, CVEs unresolved due to Python constraints
+    # TODO: werkzeug-lts needed for py37/py38 to backport CVE-2026-27199, CVE-2026-21860, CVE-2025-66221
+    "werkzeug>=3.0.6; python_version == '3.8'",  # stuck - upstream dropped 3.8 before 3.1.x
+    "werkzeug>=2.2.3; python_version == '3.7'",  # stuck - upstream dropped 3.7 before 3.1.x
+    "werkzeug>=3.1.6; python_version >= '3.9'",  # fully patched
+
+    # Filelock: LTS backport for <3.10, official for >=3.10
+    # Filelock CVE floor for CVE-2026-22701
+    "filelock>=3.20.3; python_version >= '3.10'",
+    "filelock-lts>=2025.68146.2; python_version < '3.10'",
     
-    # Python 3.7-3.9: Need older packaging + backports
-    "packaging>=20.0,<21.0; python_version < '3.8'",
-    "packaging>=21.0,<22.0; python_version >= '3.8' and python_version < '3.10'",
+    # Packaging version splits - CRITICAL: pip-audit needs >=21.0 on ALL versions
+    "packaging>=21.0,<22.0; python_version < '3.10'",
     "packaging>=23.0; python_version >= '3.10'",
     
-    # Python 3.7-3.10 need tomli (tomllib is built-in for 3.11+)
+    # tomli backport for Python < 3.11
     "tomli>=1.0.0; python_version < '3.11'",
     
-    # Python 3.7-3.9: Need typing extensions backports
+    # typing-extensions backport
     "typing-extensions>=4.0.0; python_version < '3.10'",
     
-    # importlib-metadata backport for Python < 3.8
+    # importlib-metadata backport
     "importlib-metadata>=1.0; python_version < '3.8'",
     
-    # dataclasses backport for Python 3.7
-    "dataclasses>=0.8; python_version == '3.7'",
+    # dataclasses backport
+    "dataclasses>=0.6; python_version == '3.7'",
     
-    # authlib with Python 3.7 compatibility
-    "authlib>=1.2.0; python_version >= '3.7'",
+    # Authlib - version split by Python
+    "authlib>=1.6.5; python_version >= '3.9'",        # Patched for recent CVEs
+    "authlib>=1.3.2,<1.4.0; python_version == '3.8'", # Max support for 3.8
+    "authlib>=1.2.1,<1.3.0; python_version == '3.7'", # Last known stable for 3.7
+    # TODO: Create authlib-lts to backport security fixes for Python 3.7-3.8
     
-    # aiohttp 3.13+ requires Python 3.8+, use older version for 3.7
-    "aiohttp>=3.7.0,<3.9.0; python_version == '3.7'",
-    "aiohttp>=3.13.1; python_version >= '3.8'",
+    # aiohttp - Best available versions per Python
+    # Note: Python 3.7-3.8 have known CVEs due to upstream EOL. See SECURITY.md
+    "aiohttp>=3.8.6,<3.9.0; python_version == '3.7'",    # Last Py3.7 version (20 known CVEs)
+    "aiohttp>=3.10.11,<3.11.0; python_version == '3.8'", # Last Py3.8 version (9 known CVEs)
+    "aiohttp>=3.13.3; python_version >= '3.9'",          # Latest with all patches
+    #aiohttp-lts on to-do list for pythons 3.7 and 3.8
     
-    # Safety: different versions for different Python versions
-    "safety>=2.0.0,<3.0; python_version < '3.10'",
-    "safety>=3.0; python_version >= '3.10' and python_version < '3.14'",
+    # Security scanning
+    # safety moved to optional 'audit' extra due to CVE-2025-14009 in nltk dependency
+    # pip-audit is now the primary default scanner for all versions
+    "pip-audit>=2.0.0",
     
-    # pip-audit only for 3.14+
-    "pip-audit>=2.6.0; python_version >= '3.14'",
-    
-    # uv: Check minimum Python version
+    # uv
     "uv>=0.9.6; python_version >= '3.8'",
+
+    # CVE-safe urllib3
+    "urllib3-lts>=2026.21441; python_version < '3.10'",
+    "urllib3>=2.6.3; python_version >= '3.10'",
+
+    # Flask CVE floor for CVE-2026-27205
+    # TODO: flask-lts needed for py37/py38 to backport CVE-2026-27205
+    "flask>=3.0.3; python_version == '3.8'",  # stuck - upstream dropped 3.8 before 3.1.x
+    "flask>=2.2.5; python_version == '3.7'",  # stuck - upstream dropped 3.7 before 3.1.x
+    "flask>=3.0.3; python_version >= '3.9'",  # latest available, CVE-2026-27205 unpatched until 3.1.3 lands
+
+    # Flask-CORS for interactive docs
+    "flask-cors>=3.0,<4.0; python_version < '3.8'",
+    "flask-cors>=3.0; python_version >= '3.8'",
+
 ]
 
 [project.optional-dependencies]
 full = [
-    "tqdm>=4.50.0",
+    "tqdm>=4.67.1",  # CVE-2024-34062 patched
     "python-magic>=0.4.18",
-    # Redis 5.0 requires Python 3.8+
     "redis>=4.0.0,<5.0; python_version == '3.7'",
     "redis>=5.0; python_version >= '3.8'",
+    # Includes audit tools
+    "safety>=3.7.0; python_version >= '3.10' and python_version < '3.14'",
+    "marshmallow>=4.1.2; python_version >= '3.10'",
 ]
 
 dev = [
@@ -95,17 +128,16 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/1minds3t/omnipkg"
+"Homepage" = "https://omnipkg.pages.dev/"
+"Repository" = "https://github.com/1minds3t/omnipkg"
+"Live Interactive Console" = "https://1minds3t.echo-universe.ts.net/omnipkg/"
 "Bug Tracker" = "https://github.com/1minds3t/omnipkg/issues"
-PyPi = "https://pypi.org/project/omnipkg/"
-Conda-Forge = "https://anaconda.org/conda-forge/omnipkg"
-Docs = "https://github.com/1minds3t/omnipkg/tree/main/docs"
+"Conda-Forge" = "https://anaconda.org/conda-forge/omnipkg"
+"Docker Hub" = "https://hub.docker.com/r/1minds3t/omnipkg"
 
 [project.scripts]
-omnipkg = "omnipkg.cli:main"
-8pkg = "omnipkg.cli:main"
-OMNIPKG = "omnipkg.cli:main"
-8PKG = "omnipkg.cli:main"
+omnipkg = "omnipkg.dispatcher:main"
+8pkg = "omnipkg.dispatcher:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
@@ -121,9 +153,13 @@ exclude = [
 omnipkg = [
     "locale/**/*.mo",
     "locale/**/*.pot",
+    "dispatcher.c",        # ← ADD THIS
 ]
 
 [tool.setuptools]
 # Old setuptools format (compatible with setuptools 50.x)
 license-files = ["LICENSE", "COMMERCIAL_LICENSE.md"]
 include-package-data = true
+
+[tool.pytest.ini_options]
+continue_on_collection_errors = true

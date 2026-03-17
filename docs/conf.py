@@ -1,30 +1,30 @@
 # Configuration file for the Sphinx documentation builder.
 
 # -- Project information -----------------------------------------------------
-project = 'omnipkg'
-copyright = '2025, 1minds3t'
-author = '1minds3t'
-release = '1.6.2'
+project = "omnipkg"
+copyright = "2025, 1minds3t"
+author = "1minds3t"
+release = "1.6.2"
 
 # -- General configuration ---------------------------------------------------
 extensions = [
-    'sphinx.ext.autodoc',
-    'sphinx.ext.napoleon',
-    'sphinx.ext.viewcode',
-    'sphinx.ext.githubpages',
-    'myst_parser',  # For markdown support
+    "sphinx.ext.autodoc",
+    "sphinx.ext.napoleon",
+    "sphinx.ext.viewcode",
+    "sphinx.ext.githubpages",
+    "myst_parser",  # For markdown support
 ]
 
-templates_path = ['_templates']
-exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
+templates_path = ["_templates"]
+exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
 
 # -- Options for HTML output -------------------------------------------------
 # Modern, beautiful theme - pick one:
-html_theme = 'furo'  # Recommended - clean, modern, mobile-friendly
+html_theme = "furo"  # Recommended - clean, modern, mobile-friendly
 # html_theme = 'sphinx_rtd_theme'  # Alternative - ReadTheDocs style
 # html_theme = 'pydata_sphinx_theme'  # Alternative - PyData style
 
-html_static_path = ['_static']
+html_static_path = ["_static"]
 
 # Theme options
 html_theme_options = {

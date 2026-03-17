@@ -1,8 +1,10 @@
+# .github/workflows/docker-push.yml
 name: Build and Push to Docker Hub
 
 on:
-  release:
-    types: [published]
+  workflow_run:
+    workflows: ["Publish to PyPI (Trusted Publishing)"]
+    types: [completed]
   workflow_dispatch:
     inputs:
       tag:
@@ -12,11 +14,24 @@ on:
 
 jobs:
   build-and-push:
+    # Only run if PyPI publish succeeded, or if manually triggered
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
     
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          # Pin to the exact commit that was published - not HEAD
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+      
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
       
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -27,22 +42,93 @@ jobs:
           username: 1minds3t
           password: ${{ secrets.DOCKERHUB_TOKEN }}
       
-      - name: Extract version from release
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Extract version
         id: get_version
         run: |
-          if [ "${{ github.event_name }}" = "release" ]; then
-            VERSION=${GITHUB_REF#refs/tags/}
-            echo "tag=${VERSION}" >> $GITHUB_OUTPUT
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TAG="${{ inputs.tag }}"
+            TAG=${TAG#v}
           else
-            echo "tag=${{ inputs.tag }}" >> $GITHUB_OUTPUT
+            # Get the tag pointing at the published commit
+            git fetch --tags origin
+            TAG=$(git tag --points-at ${{ github.event.workflow_run.head_sha }} | head -1)
+            TAG=${TAG#v}
           fi
+          echo "tag=${TAG}" >> $GITHUB_OUTPUT
+          echo "version=${TAG}" >> $GITHUB_OUTPUT
+          echo "Resolved version: ${TAG}"
+      
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: |
+            1minds3t/omnipkg
+            ghcr.io/1minds3t/omnipkg
+          tags: |
+            type=raw,value=${{ steps.get_version.outputs.tag }}
+            type=raw,value=latest
+          labels: |
+            org.opencontainers.image.title=omnipkg
+            org.opencontainers.image.description=The Ultimate Python Dependency Resolver
+            org.opencontainers.image.version=${{ steps.get_version.outputs.version }}
+            org.opencontainers.image.source=https://github.com/1minds3t/omnipkg
+            org.opencontainers.image.licenses=AGPL-3.0
       
       - name: Build and push
         uses: docker/build-push-action@v5
         with:
           context: .
-          platforms: linux/amd64,linux/arm64,linux/arm/v7,linux/arm64/v8,linux/ppc64le,linux/s390x
+          platforms: linux/amd64,linux/arm64
           push: true
-          tags: 1minds3t/omnipkg:${{ steps.get_version.outputs.tag }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          build-args: |
+            BUILDKIT_INLINE_CACHE=1
+      
+      - name: Generate summary
+        run: |
+          {
+            echo "## 🐋 Docker Images Published"
+            echo ""
+            echo "**Version:** \`${{ steps.get_version.outputs.version }}\`"
+            echo "**Triggered by:** PyPI publish success"
+            echo ""
+            echo "**Docker Hub:**"
+            echo "\`\`\`bash"
+            echo "docker pull 1minds3t/omnipkg:${{ steps.get_version.outputs.tag }}"
+            echo "docker pull 1minds3t/omnipkg:latest"
+            echo "\`\`\`"
+            echo ""
+            echo "**GitHub Container Registry:**"
+            echo "\`\`\`bash"
+            echo "docker pull ghcr.io/1minds3t/omnipkg:${{ steps.get_version.outputs.tag }}"
+            echo "docker pull ghcr.io/1minds3t/omnipkg:latest"
+            echo "\`\`\`"
+            echo ""
+            echo "**Supported Platforms:**"
+            echo "- ✅ linux/amd64 (x86_64)"
+            echo "- ✅ linux/arm64 (aarch64)"
+          } >> $GITHUB_STEP_SUMMARY
+      
+      - name: Test image on amd64
+        run: |
+          echo "Testing amd64 image..."
+          docker pull 1minds3t/omnipkg:${{ steps.get_version.outputs.tag }}
+          docker run --rm --platform linux/amd64 1minds3t/omnipkg:${{ steps.get_version.outputs.tag }} omnipkg --version
+          docker run --rm --platform linux/amd64 1minds3t/omnipkg:${{ steps.get_version.outputs.tag }} uname -m
+      
+      - name: Test image on arm64 (via QEMU)
+        run: |
+          echo "Testing arm64 image via QEMU..."
+          docker run --rm --platform linux/arm64 1minds3t/omnipkg:${{ steps.get_version.outputs.tag }} omnipkg --version
+          docker run --rm --platform linux/arm64 1minds3t/omnipkg:${{ steps.get_version.outputs.tag }} uname -m

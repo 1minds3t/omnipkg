@@ -1,0 +1,23 @@
+# numpy
+numpy==1.26.4
+numpy==2.2.6
+numpy==2.3.5
+
+# scipy
+scipy==1.12.0
+scipy==1.13.0
+scipy==1.15.0
+
+# pandas: 2.1 is first with cp312 wheels, then 2.2, 2.3
+pandas==2.2.1
+pandas==2.2.3
+pandas==2.3.3
+
+# scikit-learn
+scikit-learn==1.3.2
+scikit-learn==1.5.0
+scikit-learn==1.7.0
+
+# matplotlib
+matplotlib==3.8.0
+matplotlib==3.9.0

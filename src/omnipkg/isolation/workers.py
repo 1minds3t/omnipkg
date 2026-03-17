@@ -1,16 +1,18 @@
-import sys
-import os
 import json
-import subprocess
-import threading
+import os
 import queue
+import subprocess
+import sys
+import threading
 from pathlib import Path
+from omnipkg.i18n import _
 
 class PersistentWorker:
     """
     A persistent subprocess that acts as a specific package environment.
     Provides REAL-TIME output streaming.
     """
+
     def __init__(self, package_spec: str, verbose: bool = False):
         self.package_spec = package_spec
         self.verbose = verbose
@@ -23,10 +25,10 @@ class PersistentWorker:
         # Calculate root path FIRST
         current_file = Path(__file__).resolve()
         src_root = str(current_file.parent.parent.parent)
-        
+
         # Store package_spec in local variable for f-string
         package_spec = self.package_spec
-        
+
         # Build worker code WITH all variables available
         worker_code = f"""
 import sys
@@ -34,7 +36,10 @@ import os
 import json
 import traceback
 import io
-
+try:
+    from .common_utils import safe_print
+except ImportError:
+    from omnipkg.common_utils import safe_print
 # CRITICAL: Disable buffering on stderr for real-time output
 sys.stderr = open(sys.stderr.fileno(), 'w', buffering=1, closefd=False)
 
@@ -74,10 +79,6 @@ try:
     log(f"🐚 Worker initializing environment: {package_spec}...")
     loader = omnipkgLoader("{package_spec}", quiet=False, worker_fallback=False)
     loader.__enter__()
-    
-    # VERIFY the package is actually importable
-    pkg_name = package_spec.split("==")[0].replace("-", "_")
-    __import__(pkg_name)
     
     send_ipc({{"status": "ready"}})
     log(f"✅ Worker ready: {package_spec}")
@@ -156,10 +157,32 @@ except:
 
         # Setup environment with worker flag
         env = os.environ.copy()
-        env["OMNIPKG_IS_WORKER_PROCESS"] = "1"  # Prevent infinite worker recursion
+        # Prevent infinite worker recursion
+        env["OMNIPKG_IS_WORKER_PROCESS"] = "1"
+
+        # 🔥 CRITICAL: Sanitize environment to prevent contamination from the parent.
+        # This is the fix for the rapid switching failure. We must not inherit
+        # library paths from the parent's active torch environment.
+        for var in [
+            "PYTHONPATH", 
+            "PYTHONHOME", 
+            "LD_LIBRARY_PATH", 
+            "LD_PRELOAD",
+            # Add other potentially problematic vars if needed
+        ]:
+            env.pop(var, None)
 
         # CRITICAL: Disable buffering in subprocess
         # NOW worker_code is defined, so we can use it!
+        
+        # 🔥 WINDOWS FIX: Prevent visible console windows
+        import platform
+        creationflags = 0
+        if platform.system() == "Windows":
+            # CREATE_NO_WINDOW prevents console window from appearing
+            # This is the subprocess equivalent, not process detachment
+            creationflags = 0x08000000  # CREATE_NO_WINDOW
+        
         self.process = subprocess.Popen(
             [sys.executable, "-u", "-c", worker_code],
             stdin=subprocess.PIPE,
@@ -167,7 +190,8 @@ except:
             stderr=subprocess.PIPE,
             bufsize=0,
             text=True,
-            env=env
+            env=env,
+            creationflags=creationflags,
         )
 
         # Start logging thread
@@ -180,11 +204,11 @@ except:
             if not line:
                 raise RuntimeError("Worker process died immediately.")
             data = json.loads(line)
-            if data.get('status') != 'ready':
-                raise RuntimeError(f"Worker initialization failed: {data}")
+            if data.get("status") != "ready":
+                raise RuntimeError(_('Worker initialization failed: {}').format(data))
         except Exception as e:
             self._stop_logging.set()
-            raise RuntimeError(f"Handshake failed: {e}")
+            raise RuntimeError(_('Handshake failed: {}').format(e))
 
     def _stream_logs(self):
         """Streams stderr from worker to console in real-time."""
@@ -211,11 +235,11 @@ except:
     def _send(self, payload: dict) -> dict:
         if self.process.poll() is not None:
             return {"success": False, "error": "Process is dead"}
-        
+
         try:
             self.process.stdin.write(json.dumps(payload) + "\n")
             self.process.stdin.flush()
-            
+
             response = self.process.stdout.readline()
             if not response:
                 return {"success": False, "error": "No response"}

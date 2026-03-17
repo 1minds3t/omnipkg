@@ -1,22 +1,29 @@
-from __future__ import annotations  # Python 3.6+ compatibility
+from __future__ import annotations
+from omnipkg.common_utils import safe_print
 try:
     from .common_utils import safe_print
 except ImportError:
-    from omnipkg.common_utils import safe_print
+    pass
+
 import sys
+import os
+
 from .cli import main
-from .config_manager import ConfigManager
-from .i18n import setup_i18n
-from omnipkg.i18n import _
+from .core import ConfigManager
+from .i18n import _
 
 # Initialize the config manager
 config_manager = ConfigManager()
 
-# Use the language from the config to set up i18n
-# This is the crucial step. It must be done before anything else is printed.
-_ = setup_i18n(config_manager.get('language', 'en'))
+# Language priority: OMNIPKG_LANG env var > config file > default (en)
+language = os.environ.get("OMNIPKG_LANG") or config_manager.config.get("language", "en")
+
+# Set the language in the translator
+_.set_language(language)
+
+# ⚠️ CRITICAL: Set in os.environ so subprocesses inherit it!
+os.environ["OMNIPKG_LANG"] = language  # ← ADD THIS LINE IF MISSING!
 
 # This runs the main function and ensures the script exits with the correct status code.
 if __name__ == "__main__":
     sys.exit(main())
-

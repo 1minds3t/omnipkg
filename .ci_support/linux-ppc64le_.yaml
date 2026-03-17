@@ -1,0 +1,10 @@
+target_platform:
+- linux-ppc64le
+
+build_platform:
+  linux-ppc64le: linux-64
+
+python:
+- 3.10
+- 3.11
+- 3.12

@@ -1,0 +1,8 @@
+nav:
+- index.md
+- demos_rich_module_switching.md
+- demos_c_extension_switching.md
+- demos_tensorflow_dependency_switching.md
+- demos_multiverse_healing.md
+- demos_script_healing.md
+title: Demos

@@ -1,0 +1,67 @@
+name: Test Omnipkg Adoption + Install (CI)
+on:
+  push:
+    branches:
+      - development
+  workflow_dispatch:
+
+jobs:
+  test-omnipkg:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.9", "3.10", "3.11", "3.12"]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: Install omnipkg
+        run: |
+          python -m pip install --upgrade pip
+          # Do NOT use --user: entry points must land in the same bin/ as
+          # the hostedtoolcache Python so that install_versioned_entrypoints
+          # creates valid symlinks (it symlinks relative to venv_root/bin,
+          # which resolves to the hostedtoolcache bin — same dir as 8pkg).
+          python -m pip install omnipkg
+
+      - name: Adopt Python ${{ matrix.python }}
+        run: |
+          export OMNIPKG_DEBUG=1
+          8pkg python adopt ${{ matrix.python }}
+
+          # Verify the symlink was actually created in the right place
+          cmd_version=$(echo "${{ matrix.python }}" | tr -d '.')
+          EIGHT_PKG_DIR=$(dirname $(which 8pkg))
+          echo "=== 8pkg lives in: $EIGHT_PKG_DIR ==="
+          echo "=== Looking for 8pkg${cmd_version} ==="
+          ls -la "$EIGHT_PKG_DIR"/8pkg* 2>/dev/null || echo "❌ No 8pkg* shims found in $EIGHT_PKG_DIR"
+
+          8pkg info python | grep -A 3 "Python ${{ matrix.python }}" || echo "Adoption check failed (non-fatal)"
+
+      - name: Install rich==13.7.1 via versioned command
+        run: |
+          export OMNIPKG_DEBUG=1
+          cmd_version=$(echo "${{ matrix.python }}" | tr -d '.')
+          echo "Running: 8pkg${cmd_version} install rich==13.7.1"
+          8pkg${cmd_version} install rich==13.7.1
+
+      - name: Verify rich version
+        run: |
+          cmd_version=$(echo "${{ matrix.python }}" | tr -d '.')
+          8pkg${cmd_version} run python -c "
+          import rich
+          from importlib.metadata import version
+          print('rich version:', version('rich'))
+          print('rich location:', rich.__file__)
+          "
+
+      - name: Show daemon status (non-fatal)
+        run: |
+          8pkg daemon status || echo "Daemon not running (normal in CI)"

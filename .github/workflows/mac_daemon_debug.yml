@@ -1,0 +1,162 @@
+name: "🍎 macOS - Daemon Debug"
+on:
+  workflow_dispatch:
+
+jobs:
+  daemon-debug:
+    runs-on: macos-latest
+    timeout-minutes: 20
+    env:
+      PYTHONIOENCODING: "utf-8"
+      PYTHONUTF8: "1"
+      OMNIPKG_NONINTERACTIVE: "1"
+      OMNIPKG_DEBUG: "1"
+      CI: "true"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          path: src
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install omnipkg
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e src
+        shell: bash
+
+      - name: Adopt Python 3.9
+        run: omnipkg python adopt 3.9
+        shell: bash
+
+      - name: Adopt Python 3.10
+        run: omnipkg python adopt 3.10
+        shell: bash
+
+      - name: Show interpreter registry
+        run: |
+          echo "=== TMPDIR ==="
+          echo "$TMPDIR"
+          echo ""
+          echo "=== Registry ==="
+          find "${TMPDIR}" "$HOME" /Library/Frameworks \
+            -name "registry.json" -path "*omnipkg*" 2>/dev/null \
+            | head -5 | while read f; do
+              echo "📄 $f:"
+              cat "$f"
+              echo ""
+            done
+        shell: bash
+
+      - name: Start daemon
+        run: |
+          omnipkg daemon start
+          sleep 2
+          find "${TMPDIR}" /tmp -name "omnipkg_daemon.log" 2>/dev/null \
+            | head -3 | while read f; do echo "📄 $f"; cat "$f"; done
+        shell: bash
+
+      # ── DIAGNOSTIC: does the loader even work directly in 3.9? ──
+      - name: Direct loader test (Python 3.9)
+        continue-on-error: true
+        run: |
+          PYTHON39="/Library/Frameworks/Python.framework/Versions/3.11/.omnipkg/interpreters/cpython-3.9.23/bin/python3.9"
+          echo "=== pip dry-run ==="
+          $PYTHON39 -m pip install "rich==13.4.2" --dry-run -v 2>&1 || true
+          echo ""
+          echo "=== direct loader test ==="
+          $PYTHON39 - <<'EOF' 2>&1 || true
+          import sys
+          sys.path.insert(0, "src")
+          from omnipkg.loader import omnipkgLoader
+          with omnipkgLoader("rich==13.4.2", quiet=False):
+              import rich
+              print("rich version:", rich.__version__)
+          EOF
+        shell: bash
+
+      # ── WORKER TESTS: continue-on-error so we always get the dump ──
+      - name: Spawn worker (Python 3.9)
+        continue-on-error: true
+        run: |
+          python - <<'EOS'
+          import sys
+          sys.path.insert(0, "src")
+          from omnipkg.isolation.worker_daemon import DaemonClient
+          from omnipkg.core import ConfigManager
+          import traceback
+          print("--- Test: Python 3.9 Worker ---")
+          cm = ConfigManager()
+          python_exe = cm.get_interpreter_for_version("3.9")
+          print(f"🎯 Resolved Python 3.9: {python_exe}")
+          client = DaemonClient()
+          result = client.execute(
+              spec="rich==13.4.2",
+              code="import importlib.metadata; print(importlib.metadata.version('rich'))",
+              python_exe=str(python_exe)
+          )
+          print(f"Result: {result}")
+          if not result.get("success"):
+              print(f"❌ FAILED: {result.get('error', '')[:300]}")
+          else:
+              print("✅ SUCCESS")
+          EOS
+        shell: bash
+
+      - name: Spawn worker (Python 3.10)
+        continue-on-error: true
+        run: |
+          python - <<'EOS'
+          import sys
+          sys.path.insert(0, "src")
+          from omnipkg.isolation.worker_daemon import DaemonClient
+          from omnipkg.core import ConfigManager
+          import traceback
+          print("--- Test: Python 3.10 Worker ---")
+          cm = ConfigManager()
+          python_exe = cm.get_interpreter_for_version("3.10")
+          print(f"🎯 Resolved Python 3.10: {python_exe}")
+          client = DaemonClient()
+          result = client.execute(
+              spec="rich==13.6.0",
+              code="import importlib.metadata; print(importlib.metadata.version('rich'))",
+              python_exe=str(python_exe)
+          )
+          print(f"Result: {result}")
+          if not result.get("success"):
+              print(f"❌ FAILED: {result.get('error', '')[:300]}")
+          else:
+              print("✅ SUCCESS")
+          EOS
+        shell: bash
+
+      # ── ALWAYS RUNS: full dump ──
+      - name: Dump daemon log + worker stderr
+        if: always()
+        run: |
+          echo "=== Full Daemon Log ==="
+          find "${TMPDIR}" /tmp -name "omnipkg_daemon.log" 2>/dev/null \
+            | while read f; do echo "📄 $f"; cat "$f"; done
+
+          echo ""
+          echo "=== Worker temp scripts (last 50 lines each) ==="
+          find "${TMPDIR}" /tmp -name "*_idle.py" 2>/dev/null \
+            | head -5 | while read f; do
+              echo "📄 $f:"
+              tail -50 "$f"
+              echo ""
+            done
+
+          echo ""
+          echo "=== omnipkg bubble dirs for 3.9 ==="
+          PYTHON39="/Library/Frameworks/Python.framework/Versions/3.11/.omnipkg/interpreters/cpython-3.9.23"
+          find "$PYTHON39" -name ".omnipkg_versions" 2>/dev/null | head -3 | while read d; do
+            echo "📁 $d:"
+            ls -la "$d" 2>/dev/null || true
+          done
+        shell: bash

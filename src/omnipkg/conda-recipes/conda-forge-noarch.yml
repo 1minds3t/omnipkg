@@ -1,0 +1,11 @@
+github:
+  branch_name: main
+  tooling_branch_name: main
+conda_build:
+  error_overlinking: true
+conda_forge_output_validation: true
+# For noarch, just specify ONE build platform (typically linux_64)
+# The package will automatically work on all platforms
+provider:
+  linux: azure
+# No build_platform section needed for noarch
