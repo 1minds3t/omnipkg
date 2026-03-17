@@ -1319,7 +1319,22 @@ int main(int argc, char **argv) {
                                     pylib, py_handle ? "OK" : dlerror());
                     }
 
-                    void *ffi_handle = dlopen(so_path, RTLD_LAZY);
+                    void *ffi_handle = NULL;
+                    /* Retry up to 3 times with 5ms gaps.
+                     * On rapid back-to-back swaps the daemon worker may have the
+                     * .so open in another dlopen() call — the file exists but the
+                     * dynamic linker returns EBUSY / transient errors.  Three
+                     * retries adds at most 10ms and eliminates the false-missing
+                     * reports that triggered the expensive reinstall path. */
+                    for (int _retry = 0; _retry < 3 && !ffi_handle; _retry++) {
+                        ffi_handle = dlopen(so_path, RTLD_LAZY);
+                        if (!ffi_handle && _retry < 2) {
+                            if (debug) fprintf(stderr,
+                                "[C-DISPATCH] dlopen attempt %d failed: %s — retrying\n",
+                                _retry + 1, dlerror());
+                            usleep(5000);  /* 5ms */
+                        }
+                    }
                     if (!ffi_handle) {
                         if (debug) fprintf(stderr, "[C-DISPATCH] dlopen failed: %s\n",
                                            dlerror());
@@ -1356,6 +1371,93 @@ int main(int argc, char **argv) {
                 /* Always return terminal to user immediately */
                 printf("🎉 Package operations complete.\n");
                 fflush(stdout);
+
+                /* ── Extract installed/removed arrays from out_json ──────────
+                 * Used for BOTH the cache patch message and the kb_sentinel.
+                 * The changelog includes ALL packages uv touched (e.g. setuptools
+                 * that got co-upgraded), not just the originally requested pkg. */
+                char inst_buf[4096] = "[]";
+                char rem_buf[4096]  = "[]";
+                {
+                    const char *inst_start = strstr(out_json, "\"installed\":");
+                    const char *rem_start  = strstr(out_json, "\"removed\":");
+                    if (inst_start && rem_start) {
+                        const char *inst_arr = strchr(inst_start, '[');
+                        const char *rem_arr  = strchr(rem_start,  '[');
+                        if (inst_arr) {
+                            int depth = 0; size_t i = 0;
+                            for (const char *p = inst_arr; *p && i < sizeof(inst_buf)-1; p++) {
+                                inst_buf[i++] = *p;
+                                if (*p == '[') depth++;
+                                else if (*p == ']' && --depth == 0) break;
+                            }
+                            inst_buf[i] = '\0';
+                        }
+                        if (rem_arr) {
+                            int depth = 0; size_t i = 0;
+                            for (const char *p = rem_arr; *p && i < sizeof(rem_buf)-1; p++) {
+                                rem_buf[i++] = *p;
+                                if (*p == '[') depth++;
+                                else if (*p == ']' && --depth == 0) break;
+                            }
+                            rem_buf[i] = '\0';
+                        }
+                    }
+                }
+
+                /* ── Push cache patch + KB sentinel to daemon in ONE connection ──
+                 *
+                 * CRITICAL: send patch_site_packages_cache FIRST so every UV worker's
+                 * in-memory Rust cache is updated before the next run_uv call arrives.
+                 * Without this, the fs_watcher would have to notice the disk change
+                 * (~150ms debounce) before the next FFI call sees correct state.
+                 *
+                 * This replaces the old "wait for fs_watcher" path with an instant push
+                 * for ALL packages that changed (transitive deps included), then the
+                 * kb_sentinel for Redis/KB bookkeeping.
+                 */
+                if (daemon_sock[0]) {
+                    int _ds = socket(AF_UNIX, SOCK_STREAM, 0);
+                    if (_ds >= 0) {
+                        struct timeval _tv = {1, 0};
+                        setsockopt(_ds, SOL_SOCKET, SO_SNDTIMEO, &_tv, sizeof(_tv));
+                        struct sockaddr_un _da;
+                        memset(&_da, 0, sizeof(_da));
+                        _da.sun_family = AF_UNIX;
+                        strncpy(_da.sun_path, daemon_sock, sizeof(_da.sun_path)-1);
+                        if (connect(_ds, (struct sockaddr*)&_da, sizeof(_da)) == 0) {
+                            /* Message 1: patch cache (UV workers update Rust SITE_PACKAGES_CACHE) */
+                            char patch_msg[MAX_JSON];
+                            int patch_len = snprintf(patch_msg, sizeof(patch_msg),
+                                "{\"type\":\"patch_site_packages_cache\","
+                                "\"site_packages_path\":\"\","
+                                "\"installed\":%s,\"removed\":%s}",
+                                inst_buf, rem_buf);
+                            if (patch_len > 0) {
+                                uint64_t _plen = (uint64_t)patch_len;
+                                uint8_t _phdr[8];
+                                for (int _i = 0; _i < 8; _i++)
+                                    _phdr[7-_i] = (_plen >> (_i*8)) & 0xFF;
+                                write(_ds, _phdr, 8);
+                                write(_ds, patch_msg, _plen);
+                            }
+                            /* Message 2: kb_sentinel (Redis/KB bookkeeping) */
+                            char kb_msg[MAX_JSON];
+                            int kb_len = snprintf(kb_msg, sizeof(kb_msg),
+                                "{\"type\":\"kb_sentinel\",\"installed\":%s,\"removed\":%s}",
+                                inst_buf, rem_buf);
+                            if (kb_len > 0) {
+                                uint64_t _klen = (uint64_t)kb_len;
+                                uint8_t _khdr[8];
+                                for (int _i = 0; _i < 8; _i++)
+                                    _khdr[7-_i] = (_klen >> (_i*8)) & 0xFF;
+                                write(_ds, _khdr, 8);
+                                write(_ds, kb_msg, _klen);
+                            }
+                        }
+                        close(_ds);
+                    }
+                }
 
                 /* Fork background Python only if something actually changed */
                 int has_changes = (strstr(out_json, "[\"") != NULL);

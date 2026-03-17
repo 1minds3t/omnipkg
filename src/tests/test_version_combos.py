@@ -209,8 +209,11 @@ with omnipkgLoader(
         ms = (time.perf_counter() - combo_start) * 1000
         print_with_flush(f"   ⚡ Total time (incl. subprocess startup): {ms:.1f}ms")
         print_with_flush(f"   🎯 {'BOTH PASSED!' if success else 'FAILED'}")
-        if not success and stderr:
-            print_with_flush(f"   💥 {stderr.strip().splitlines()[-1][:120]}")
+        if stderr.strip():
+            print_with_flush("   📋 stderr:")
+            for line in stderr.strip().splitlines():
+                if line.strip():
+                    print_with_flush(f"      {line}")
         print_with_flush("")
 
     # ═══════════════════════════════════════════════════════════════════════

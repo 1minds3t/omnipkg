@@ -213,17 +213,24 @@ class SharedWatchFlag:
         """
         Called by the UV worker AFTER a successful FFI install so the watcher
         knows the next FS event for this install was OURS, not an external write.
-        We use a thread-local timestamp written into the 'watcher_pid' slot for
-        the duration of the write.  The watcher checks this before marking dirty.
 
-        In practice: the watcher suppresses events within OUR_WRITE_GRACE_MS of
-        a known worker write.  We communicate via the shared block:
-          [16:24] watcher_pid slot temporarily holds: OUR_WRITE_EPOCH_MS (int64)
-        The watcher reads this and skips dirtying if now - epoch < grace period.
+        NEW: uses a monotonically-incrementing sequence number stored in the
+        watcher_pid slot (as a negative value) rather than a wall-clock timestamp.
+        The watcher suppresses the SINGLE next event that matches our sequence,
+        then clears the sentinel immediately.  This means:
+
+          - Rapid back-to-back installs each get their own suppression token.
+          - A suppression from install N cannot accidentally suppress the
+            fs event from install N+1 that arrived within OUR_WRITE_GRACE_MS.
+
+        Encoding: negative value in watcher_pid slot = our sentinel.
+        The absolute value is a monotonic ms timestamp (as before, for the
+        grace-period check that remains as a secondary guard).
         """
         epoch_ms = int(time.monotonic() * 1000)
         ver, dirty, _ = self._read()
-        # Encode as: negative value = "our write" sentinel + timestamp
+        # Negative epoch_ms = "our write" sentinel.  Watcher checks _is_our_write()
+        # and clears the sentinel after suppressing exactly one event.
         struct.pack_into(_FLAG_STRUCT, self._shm.buf, 0, ver, dirty, -epoch_ms)
 
     # ── cleanup ──────────────────────────────────────────────────────────────
@@ -247,7 +254,10 @@ class SharedWatchFlag:
 
 #: Events younger than this (ms) that followed one of our own FFI writes are
 #: suppressed — they're echoes of our own install, not external changes.
-OUR_WRITE_GRACE_MS = 3000   # 3 seconds is generous; our installs are <10ms
+#: Keep this tight: our symlink installs complete in <10ms.  A 3-second window
+#: causes the watcher to suppress REAL external changes that arrive within 3s
+#: of any FFI write, making rapid back-to-back swaps appear as stale cache hits.
+OUR_WRITE_GRACE_MS = 100   # 100ms — generously covers <10ms install + inotify lag
 
 
 class SitePackagesEventHandler(FileSystemEventHandler):
@@ -276,13 +286,28 @@ class SitePackagesEventHandler(FileSystemEventHandler):
     # ── internal helpers ─────────────────────────────────────────────────────
 
     def _is_our_write(self) -> bool:
-        """Return True if the event looks like an echo of our own FFI install."""
-        _, _, pid_slot = struct.unpack(_FLAG_STRUCT, self._flag._shm.buf)
+        """
+        Return True if the event looks like an echo of our own FFI install,
+        and clear the sentinel immediately so the NEXT event is not suppressed.
+
+        One-shot suppression: the sentinel is consumed on first use.
+        This prevents a 100ms (OUR_WRITE_GRACE_MS) window from swallowing a
+        real external change that follows immediately after our own install.
+        """
+        ver, dirty, pid_slot = struct.unpack(_FLAG_STRUCT, self._flag._shm.buf)
         if pid_slot >= 0:
             return False     # positive → real watcher PID, not our sentinel
         our_write_ms = -pid_slot
         now_ms = int(time.monotonic() * 1000)
-        return (now_ms - our_write_ms) < OUR_WRITE_GRACE_MS
+        if (now_ms - our_write_ms) < OUR_WRITE_GRACE_MS:
+            # Consume the sentinel — restore real watcher PID so next event is NOT suppressed
+            struct.pack_into(_FLAG_STRUCT, self._flag._shm.buf, 0,
+                             ver, dirty, os.getpid())
+            return True
+        # Grace period expired — clear stale sentinel too
+        struct.pack_into(_FLAG_STRUCT, self._flag._shm.buf, 0,
+                         ver, dirty, os.getpid())
+        return False
 
     def _is_dist_info(self, path: str) -> bool:
         """Only care about .dist-info dirs at depth-1 — that's where name+version live."""
@@ -338,12 +363,24 @@ class SitePackagesEventHandler(FileSystemEventHandler):
     def _schedule_invalidation(self, path: str, created: bool):
         """
         Accumulate the delta and debounce rapid bursts.
-        Single lock covers both the accumulation AND the timer reset so two
-        concurrent events can't each spawn their own timer.
+
+        Two-tier debounce:
+          • dist-info events: fire after 5ms — they carry name+version immediately
+            and are the only thing we care about for cache patching.  No need to
+            wait for all the wheel files to land; the dist-info dir is written last
+            by uv after the package is fully installed.
+          • Everything else: 50ms — avoids hammering on noisy __pycache__ writes.
+
+        The lock covers both accumulation AND timer reset so concurrent events
+        from inotify can't each spawn their own timer.
         """
+        is_di = self._is_dist_info(path)
+        # Tighter window for dist-info (actionable immediately), wider for noise
+        debounce_s = 0.005 if is_di else 0.05
+
         with self._debounce_lock:
             # Accumulate .dist-info dirs only — they carry name+version for free
-            if self._is_dist_info(path):
+            if is_di:
                 p = Path(path).resolve()
                 if created:
                     self._pending_created.add(p)
@@ -355,7 +392,7 @@ class SitePackagesEventHandler(FileSystemEventHandler):
             # Reset the debounce timer — always inside the same lock
             if self._pending_timer is not None:
                 self._pending_timer.cancel()
-            self._pending_timer = threading.Timer(0.15, self._do_patch)
+            self._pending_timer = threading.Timer(debounce_s, self._do_patch)
             self._pending_timer.daemon = True
             self._pending_timer.start()
 
