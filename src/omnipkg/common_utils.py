@@ -651,7 +651,7 @@ def ensure_python_or_relaunch(required_version: str):
     safe_print(_("   - Target Dimension:  Python {}").format(required_version))
     safe_print(_("   - Re-calibrating multiverse coordinates and relaunching..."))
     try:
-        from .core import OmnipkgCore
+        from .core import omnipkg as OmnipkgCore
 
         cm = ConfigManager(suppress_init_messages=True)
         pkg_instance = OmnipkgCore(config_manager=cm)
