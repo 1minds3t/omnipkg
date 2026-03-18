@@ -52,6 +52,8 @@ def _install_dispatcher_binary(install_dir=None):
         # Overwrite the pip-generated wrapper scripts
         # Retry loop: editable installs may not have written scripts yet
         import time
+        print(f"  [dispatcher] Looking for scripts in: {install_dir}")
+        print(f"  [dispatcher] Files in dir: {list(Path(install_dir).glob('*pkg*'))}")
         for attempt in range(10):
             replaced = []
             for name in ("8pkg", "omnipkg", "OMNIPKG", "8PKG"):
