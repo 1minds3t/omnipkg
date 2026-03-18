@@ -61,6 +61,28 @@ jobs:
           with open(os.environ['GITHUB_ENV'], 'a') as f:
               f.write(f"OMNIPKG_ENV_ID_OVERRIDE={main_env_id}\n")
           EOF
+          
+      - name: Configure omnipkg
+        run: |
+          python - << 'EOF'
+          import json
+          from pathlib import Path
+
+          config_dir = Path.home() / '.config' / 'omnipkg'
+          config_dir.mkdir(parents=True, exist_ok=True)
+
+          config = {
+              "interactive": False,
+              "auto_confirm": True,
+              "redis_url": "redis://localhost:6379"
+          }
+          with open(config_dir / 'config.json', 'w') as f:
+              json.dump(config, f, indent=2)
+          print("✅ Omnipkg configured for non-interactive use")
+          EOF
+          mkdir -p /tmp/omnipkg-artifacts
+          omnipkg info python 2>&1 | tee /tmp/omnipkg-artifacts/bootstrap.txt
+          
       - name: Adopt and Switch to Python 3.14
         env:
           OMNIPKG_ENV_ID_OVERRIDE: ${{ env.OMNIPKG_ENV_ID_OVERRIDE }}
