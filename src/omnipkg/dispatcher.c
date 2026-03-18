@@ -272,7 +272,7 @@ int main(int argc, char **argv) {
         real_path(argv[0], self_real, sizeof(self_real));
         char self_dir[MAX_PATH];
         dir_of(self_real, self_dir, sizeof(self_dir));
-        fallback_to_python(self_dir, argv, forced_version[0] ? forced_version : NULL);
+        fallback_to_python(self_dir, argv, NULL);
     }
 
     /* ── 1. Resolve self ─────────────────────────────────────── */
@@ -293,7 +293,7 @@ int main(int argc, char **argv) {
     /* ── 2. Shim mode? Fall back immediately ──────────────────── */
     if (strncmp(prog, "python", 6) == 0 || strcmp(prog, "pip") == 0) {
         if (debug) fprintf(stderr, "[C-DISPATCH] shim mode → python fallback\n");
-        fallback_to_python(self_dir, argv, forced_version[0] ? forced_version : NULL);
+        fallback_to_python(self_dir, argv, NULL);
     }
 
     /* ── 3. Swap-python edge case → python fallback ───────────── */
@@ -307,7 +307,7 @@ int main(int argc, char **argv) {
     }
     if (is_swap_python && getenv("_OMNIPKG_SWAP_ACTIVE")) {
         if (debug) fprintf(stderr, "[C-DISPATCH] swap python in swap shell → python fallback\n");
-        fallback_to_python(self_dir, argv, forced_version[0] ? forced_version : NULL);
+        fallback_to_python(self_dir, argv, NULL);
     }
 
     /* ── 4. Detect version-specific command name ─────────────── */
@@ -352,7 +352,7 @@ int main(int argc, char **argv) {
             if (!file_exists(target_python)) {
                 /* Not adopted yet → fallback to Python for auto-adopt */
                 if (debug) fprintf(stderr, "[C-DISPATCH] %s not found → auto-adopt fallback\n", target_python);
-                fallback_to_python(self_dir, argv, forced_version[0] ? forced_version : NULL);
+                fallback_to_python(self_dir, argv, cli_version);
             }
             if (debug)
                 fprintf(stderr, "[C-DISPATCH] registry hit %s → %s\n",
@@ -360,7 +360,7 @@ int main(int argc, char **argv) {
         } else {
             /* Unknown version → Python fallback for proper error / auto-adopt */
             if (debug) fprintf(stderr, "[C-DISPATCH] unknown version %s → fallback\n", cli_version);
-            fallback_to_python(self_dir, argv, forced_version[0] ? forced_version : NULL);
+            fallback_to_python(self_dir, argv, cli_version);
         }
     }
 
@@ -391,7 +391,7 @@ int main(int argc, char **argv) {
         if (!read_self_config(self_dir, target_python, sizeof(target_python)) ||
             !file_exists(target_python)) {
             /* Really can't figure it out — hand off to Python */
-            fallback_to_python(self_dir, argv, forced_version[0] ? forced_version : NULL);
+            fallback_to_python(self_dir, argv, NULL);
         }
     }
 
