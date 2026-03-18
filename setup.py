@@ -120,6 +120,60 @@ else:
     ext_modules = [atomic_extension]
     cmdclass = {'build_ext': OptionalBuildExt}
 
+def _build_uv_ffi(install_dir=None):
+    """
+    Build the uv_ffi PyO3 extension via maturin and install the .so
+    into the active environment. Silently skips if Rust/maturin not available.
+    """
+    import shutil, subprocess, sys
+    from pathlib import Path
+
+    crate = Path(__file__).parent / "src/omnipkg/_vendor/uv/crates/uv-ffi"
+    if not crate.exists():
+        print("  [uv-ffi] crate not found, skipping")
+        return
+
+    if not shutil.which("cargo"):
+        print("  [uv-ffi] cargo not found — FFI unavailable, daemon path will be used")
+        return
+
+    if not shutil.which("maturin"):
+        # Try to install maturin quietly
+        try:
+            subprocess.run([sys.executable, "-m", "pip", "install", "maturin", "-q"],
+                           check=True)
+        except Exception:
+            print("  [uv-ffi] maturin not available — FFI unavailable, daemon path will be used")
+            return
+
+    try:
+        result = subprocess.run(
+            ["maturin", "develop", "--release", "--manifest-path", str(crate / "Cargo.toml")],
+            capture_output=True, text=True
+        )
+        if result.returncode == 0:
+            print("  [uv-ffi] ✅ PyO3 FFI extension built and installed")
+        else:
+            print(f"  [uv-ffi] build failed — FFI unavailable, daemon path will be used")
+            print(f"  {result.stderr[-500:].strip()}")
+    except Exception as e:
+        print(f"  [uv-ffi] Skipping: {e}")
+
+
+class InstallWithDispatcher(install):
+    def run(self):
+        super().run()
+        _install_dispatcher_binary(self.install_scripts)
+        _build_uv_ffi(self.install_scripts)
+
+
+class DevelopWithDispatcher(develop):
+    def run(self):
+        super().run()
+        _install_dispatcher_binary(Path(sys.executable).parent)
+        _build_uv_ffi(Path(sys.executable).parent)
+
+
 # Inject dispatcher commands (always, regardless of SKIP_C_EXTENSIONS)
 cmdclass['install'] = InstallWithDispatcher
 cmdclass['develop'] = DevelopWithDispatcher
