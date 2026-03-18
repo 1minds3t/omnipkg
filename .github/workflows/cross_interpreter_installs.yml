@@ -54,6 +54,27 @@ jobs:
           print("✅ Omnipkg configured for non-interactive use")
           EOF
 
+      - name: Configure omnipkg
+        run: |
+          python - << 'EOF'
+          import json
+          from pathlib import Path
+
+          config_dir = Path.home() / '.config' / 'omnipkg'
+          config_dir.mkdir(parents=True, exist_ok=True)
+
+          config = {
+              "interactive": False,
+              "auto_confirm": True,
+              "redis_url": "redis://localhost:6379"
+          }
+          with open(config_dir / 'config.json', 'w') as f:
+              json.dump(config, f, indent=2)
+          print("✅ Omnipkg configured for non-interactive use")
+          EOF
+          mkdir -p /tmp/omnipkg-artifacts
+          omnipkg info python 2>&1 | tee /tmp/omnipkg-artifacts/bootstrap.txt
+
       - name: Install TensorFlow via 8pkg314 (triggers auto-adopt 3.14 + Quantum Healing → 3.13)
         run: |
           echo "--- Calling 8pkg314 install tensorflow ---"
