@@ -546,7 +546,8 @@ def ensure_script_is_running_on_version(required_version: str):
         safe_print(_("   ✅ Target interpreter found at: {}").format(target_exe_path))
         new_env = os.environ.copy()
         new_env["OMNIPKG_RELAUNCHED"] = "1"
-        os.execve(str(target_exe_path), [str(target_exe_path)] + sys.argv, new_env)
+        new_args = [str(target_exe_path), "-m", "omnipkg.cli"] + sys.argv[1:]
+        os.execve(str(target_exe_path), new_args, new_env)
     except Exception as e:
         safe_print("\n" + "-" * 80)
         safe_print(_("   ❌ FATAL ERROR during context relaunch."))
@@ -677,7 +678,8 @@ def ensure_python_or_relaunch(required_version: str):
                 )
         safe_print(_("   ✅ Target interpreter found at: {}").format(target_exe_path))
         new_env = os.environ.copy()
-        os.execve(str(target_exe_path), [str(target_exe_path)] + sys.argv, new_env)
+        new_args = [str(target_exe_path), "-m", "omnipkg.cli"] + sys.argv[1:]
+        os.execve(str(target_exe_path), new_args, new_env)
     except Exception as e:
         safe_print("\n" + "-" * 80)
         safe_print(_("   ❌ FATAL ERROR during dimension jump."))
