@@ -381,6 +381,15 @@ def _maybe_install_c_dispatcher():
                 os.chmod(str(target), 0o755)
                 replaced.append(name)
 
+        # Create versioned shims 3.7-3.15 as copies of the C binary
+        for minor in range(7, 16):
+            for prefix in ("8pkg", "omnipkg"):
+                versioned = bin_dir / f"{prefix}3{minor}"
+                if not versioned.exists() or versioned.stat().st_mtime < binary_tmp.stat().st_mtime:
+                    shutil.copy2(str(binary_tmp), str(versioned))
+                    os.chmod(str(versioned), 0o755)
+                    replaced.append(f"{prefix}3{minor}")
+
         binary_tmp.unlink()
         if replaced:
             marker.touch()
@@ -1404,6 +1413,21 @@ def _ensure_native_shims() -> None:
         shim_path = bin_dir / f"8pkg{flat}"
 
     if shim_path.exists():
+        # Still proactively create all versioned shims 3.7-3.15 if any are missing
+        main_shim = bin_dir / "8pkg"
+        omni_shim = bin_dir / "omnipkg"
+        for minor in range(7, 16):
+            for prefix, target in [("8pkg", main_shim), ("omnipkg", omni_shim)]:
+                versioned = bin_dir / f"{prefix}3{minor}"
+                if not versioned.exists() and target.exists():
+                    try:
+                        os.link(str(target), str(versioned))
+                    except Exception:
+                        try:
+                            import shutil
+                            shutil.copy2(str(target), str(versioned))
+                        except Exception:
+                            pass
         return  # already installed, nothing to do
 
     # Shim is missing — this is the native Python that adoption skipped.
