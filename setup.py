@@ -50,14 +50,25 @@ def _install_dispatcher_binary(install_dir=None):
             return
 
         # Overwrite the pip-generated wrapper scripts
-        for name in ("8pkg", "omnipkg", "OMNIPKG", "8PKG"):
-            target = Path(install_dir) / name
-            if target.exists():
-                shutil.copy2(str(binary_out), str(target))
-                os.chmod(str(target), 0o755)
+        # Retry loop: editable installs may not have written scripts yet
+        import time
+        for attempt in range(10):
+            replaced = []
+            for name in ("8pkg", "omnipkg", "OMNIPKG", "8PKG"):
+                target = Path(install_dir) / name
+                if target.exists():
+                    shutil.copy2(str(binary_out), str(target))
+                    os.chmod(str(target), 0o755)
+                    replaced.append(name)
+            if replaced:
+                break
+            time.sleep(0.5)
 
         binary_out.unlink()  # clean up temp, the copies are the real ones
-        print(f"  [dispatcher] ✅ Fast C dispatcher installed in {install_dir}")
+        if replaced:
+            print(f"  [dispatcher] ✅ Fast C dispatcher installed in {install_dir}")
+        else:
+            print(f"  [dispatcher] No entry points found in {install_dir} — run after pip installs scripts")
 
     except Exception as e:
         print(f"  [dispatcher] Skipping C dispatcher: {e}")
