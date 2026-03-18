@@ -748,6 +748,13 @@ def resolve_python_path(version: str) -> Path:
     # ═══════════════════════════════════════════════════════════
     # STEP 3: FALLBACK - Check Native Venv Binaries
     # ═══════════════════════════════════════════════════════════
+    # If a specific version was requested but not found in registry,
+    # return a non-existent path so auto-adopt triggers in main().
+    if version and version != major_minor:
+        if debug_mode:
+            print(f'[DEBUG-DISPATCH] Version {version} not in registry — returning sentinel for auto-adopt', file=sys.stderr)
+        return venv_root / ".omnipkg" / "interpreters" / f"cpython-{version}" / "bin" / f"python{major_minor}"
+
     bin_dir = venv_root / ("Scripts" if os.name == "nt" else "bin")
     
     if os.name == "nt":
