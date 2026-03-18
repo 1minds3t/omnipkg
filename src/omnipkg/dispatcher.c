@@ -211,7 +211,7 @@ static int read_self_config(const char *self_dir, char *python_path, size_t n) {
 
 /* ── fallback to Python dispatcher ─────────────────────────────────────── */
 
-static void fallback_to_python(const char *self_dir, char **argv) {
+static void fallback_to_python(const char *self_dir, char **argv, const char *inject_version) {
     /*
      * Find the Python that owns this venv/bin dir and re-exec
      * the original dispatcher.py via  python -m omnipkg.dispatcher
@@ -234,16 +234,26 @@ static void fallback_to_python(const char *self_dir, char **argv) {
         }
     }
 
-    /* Build new argv: python -m omnipkg.dispatcher <original args> */
+    /* Build new argv: python -m omnipkg.dispatcher [--python <ver>] <original args> */
     int argc = 0;
     while (argv[argc]) argc++;
-    char **new_argv = malloc((argc + 4) * sizeof(char *));
+    int has_python_flag = 0;
+    for (int i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "--python") == 0) { has_python_flag = 1; break; }
+    }
+    int extra = (inject_version && !has_python_flag) ? 2 : 0;
+    char **new_argv = malloc((argc + 4 + extra) * sizeof(char *));
     new_argv[0] = py;
     new_argv[1] = "-m";
     new_argv[2] = "omnipkg.dispatcher";
+    int idx = 3;
+    if (inject_version && !has_python_flag) {
+        new_argv[idx++] = "--python";
+        new_argv[idx++] = (char *)inject_version;
+    }
     for (int i = 1; i < argc; i++)
-        new_argv[i + 2] = argv[i];
-    new_argv[argc + 2] = NULL;
+        new_argv[idx++] = argv[i];
+    new_argv[idx] = NULL;
 
     execv(py, new_argv);
     perror("omnipkg: execv fallback failed");
@@ -262,7 +272,7 @@ int main(int argc, char **argv) {
         real_path(argv[0], self_real, sizeof(self_real));
         char self_dir[MAX_PATH];
         dir_of(self_real, self_dir, sizeof(self_dir));
-        fallback_to_python(self_dir, argv);
+        fallback_to_python(self_dir, argv, forced_version[0] ? forced_version : NULL);
     }
 
     /* ── 1. Resolve self ─────────────────────────────────────── */
@@ -283,7 +293,7 @@ int main(int argc, char **argv) {
     /* ── 2. Shim mode? Fall back immediately ──────────────────── */
     if (strncmp(prog, "python", 6) == 0 || strcmp(prog, "pip") == 0) {
         if (debug) fprintf(stderr, "[C-DISPATCH] shim mode → python fallback\n");
-        fallback_to_python(self_dir, argv);
+        fallback_to_python(self_dir, argv, forced_version[0] ? forced_version : NULL);
     }
 
     /* ── 3. Swap-python edge case → python fallback ───────────── */
@@ -297,7 +307,7 @@ int main(int argc, char **argv) {
     }
     if (is_swap_python && getenv("_OMNIPKG_SWAP_ACTIVE")) {
         if (debug) fprintf(stderr, "[C-DISPATCH] swap python in swap shell → python fallback\n");
-        fallback_to_python(self_dir, argv);
+        fallback_to_python(self_dir, argv, forced_version[0] ? forced_version : NULL);
     }
 
     /* ── 4. Detect version-specific command name ─────────────── */
@@ -342,7 +352,7 @@ int main(int argc, char **argv) {
             if (!file_exists(target_python)) {
                 /* Not adopted yet → fallback to Python for auto-adopt */
                 if (debug) fprintf(stderr, "[C-DISPATCH] %s not found → auto-adopt fallback\n", target_python);
-                fallback_to_python(self_dir, argv);
+                fallback_to_python(self_dir, argv, forced_version[0] ? forced_version : NULL);
             }
             if (debug)
                 fprintf(stderr, "[C-DISPATCH] registry hit %s → %s\n",
@@ -350,7 +360,7 @@ int main(int argc, char **argv) {
         } else {
             /* Unknown version → Python fallback for proper error / auto-adopt */
             if (debug) fprintf(stderr, "[C-DISPATCH] unknown version %s → fallback\n", cli_version);
-            fallback_to_python(self_dir, argv);
+            fallback_to_python(self_dir, argv, forced_version[0] ? forced_version : NULL);
         }
     }
 
@@ -381,7 +391,7 @@ int main(int argc, char **argv) {
         if (!read_self_config(self_dir, target_python, sizeof(target_python)) ||
             !file_exists(target_python)) {
             /* Really can't figure it out — hand off to Python */
-            fallback_to_python(self_dir, argv);
+            fallback_to_python(self_dir, argv, forced_version[0] ? forced_version : NULL);
         }
     }
 
