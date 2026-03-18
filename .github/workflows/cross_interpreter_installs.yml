@@ -78,6 +78,8 @@ jobs:
           omnipkg info python 2>&1 | tee /tmp/omnipkg-artifacts/bootstrap.txt
 
       - name: Install TensorFlow via 8pkg314 (triggers auto-adopt 3.14 + Quantum Healing → 3.13)
+        env:
+          OMNIPKG_DEBUG: "1"
         run: |
           echo "--- Calling 8pkg314 install tensorflow ---"
           echo "C dispatcher will auto-adopt Python 3.14 if missing,"
