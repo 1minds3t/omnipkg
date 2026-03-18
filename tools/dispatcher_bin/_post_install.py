@@ -41,8 +41,6 @@ def install_dispatcher_binary(install_dir: Path = None) -> bool:
 
         import time
 
-        print(f"  [dispatcher] install_dir={install_dir}")
-        print(f"  [dispatcher] files in dir: {[f.name for f in install_dir.iterdir() if 'pkg' in f.name.lower() or 'omnipkg' in f.name.lower()]}")
         for attempt in range(10):
             replaced = []
             for name in ("8pkg", "omnipkg", "OMNIPKG", "8PKG"):
