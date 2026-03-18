@@ -55,6 +55,8 @@ jobs:
           EOF
 
       - name: Configure omnipkg
+        env:
+          OMNIPKG_DEBUG: "1"
         run: |
           python - << 'EOF'
           import json
