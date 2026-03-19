@@ -1,6 +1,8 @@
 from __future__ import annotations  # Python 3.6+ compatibility
 
 from omnipkg.common_utils import safe_print
+
+
 try:
     from .common_utils import safe_print
 except ImportError:
@@ -8,6 +10,7 @@ except ImportError:
 from omnipkg.i18n import _, SUPPORTED_LANGUAGES
 """omnipkg CLI - Enhanced with runtime interpreter switching and language support"""
 
+from omnipkg.common_utils import safe_input
 
 import argparse
 import os
@@ -48,18 +51,39 @@ def _dbg(msg: str):
         print(f"[DEBUG-CLI] {msg}", file=sys.stderr, flush=True)
 
 
+_VERSION_CACHE: dict = {}  # exe_path -> (major, minor)
+
 def get_actual_python_version(cm=None):
-    """Get the actual Python version being used by omnipkg, not just sys.version_info."""
+    """Get the actual Python version being used by omnipkg.
+
+    Fast path: if configured_exe == sys.executable (the common case inside a
+    daemon worker) we already know the version from sys.version_info — no
+    subprocess needed.  Results are also cached so repeated calls within the
+    same process (e.g. the install finally-block) cost nothing.
+    """
     try:
         if cm is None:
             from omnipkg.core import ConfigManager
             cm = ConfigManager(suppress_init_messages=True)
-        configured_exe = cm.config.get("python_executable")
-        if configured_exe:
-            version_tuple = cm._verify_python_version(configured_exe)
-            if version_tuple:
-                return version_tuple[:2]
-        return sys.version_info[:2]
+        configured_exe = cm.config.get("python_executable") or sys.executable
+
+        # Normalise to real path so symlink variants compare equal
+        configured_exe = os.path.realpath(configured_exe)
+        current_exe    = os.path.realpath(sys.executable)
+
+        # Fast path: same interpreter that's running right now
+        if configured_exe == current_exe:
+            return sys.version_info[:2]
+
+        # Cache: already paid the subprocess cost this process lifetime
+        if configured_exe in _VERSION_CACHE:
+            return _VERSION_CACHE[configured_exe]
+
+        # Slow path: genuinely different interpreter — ask it once, then cache
+        version_tuple = cm._verify_python_version(configured_exe)
+        result = version_tuple[:2] if version_tuple else sys.version_info[:2]
+        _VERSION_CACHE[configured_exe] = result
+        return result
     except Exception:
         return sys.version_info[:2]
 
@@ -556,7 +580,10 @@ def run_config_wizard(cm: ConfigManager, parser_prog: str) -> int:
 # ─────────────────────────────────────────────────────────────────────────────
 
 def create_8pkg_parser():
-    """Creates parser for the 8pkg alias (same as omnipkg but with different prog name)."""
+    """Creates parser for the 8pkg alias — cached after first build."""
+    import omnipkg.cli as _cli_mod
+    if _cli_mod._CACHED_8PKG_PARSER is not None:
+        return _cli_mod._CACHED_8PKG_PARSER
     parser = create_parser()
     parser.prog = "8pkg"
     parser.description = _(
@@ -565,11 +592,15 @@ def create_8pkg_parser():
     epilog_parts = parser.epilog.split("\n")
     updated_epilog = "\n".join([line.replace("omnipkg", "8pkg") for line in epilog_parts])
     parser.epilog = updated_epilog
+    _cli_mod._CACHED_8PKG_PARSER = parser
     return parser
 
 
 def create_parser():
-    """Creates and configures the argument parser."""
+    """Creates and configures the argument parser — cached after first build."""
+    import omnipkg.cli as _cli_mod
+    if _cli_mod._CACHED_PARSER is not None:
+        return _cli_mod._CACHED_PARSER
     epilog_parts = [
         _("🔥 Key Features:"),
         _("  • Runtime version switching without environment restart"),
@@ -1199,13 +1230,21 @@ def create_parser():
     )
     upgrade_parser.set_defaults(func=upgrade)
 
+    _cli_mod._CACHED_PARSER = parser
     return parser
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # MAIN
 # ─────────────────────────────────────────────────────────────────────────────
-
+# ── Daemon preload sentinels ──────────────────────────────────────────────
+# worker_daemon.py populates these before blocking on stdin so that the
+# first real command in a daemon worker skips OmnipkgCore.__init__ entirely.
+_PRELOADED_CM     = None   # pre-built ConfigManager instance
+_PRELOADED_CORE   = None   # pre-built OmnipkgCore instance
+_CACHED_PARSER    = None   # cached create_parser() result (~7ms to build)
+_CACHED_8PKG_PARSER = None # cached create_8pkg_parser() result
+# ─────────────────────────────────────────────────────────────────────────
 def main():
     """Main application entry point with pre-flight version check."""
     # ── Windows console fix (must be FIRST) ───────────────────────────────────
@@ -1256,23 +1295,35 @@ def main():
             remaining_args[0] if remaining_args and not remaining_args[0].startswith("-") else None
         )
 
+        # ── Early exits: no core init needed ──────────────────────────────────────
         if ("-v" in remaining_args or "--version" in remaining_args) and command != "run":
             safe_print(_("omnipkg {}").format(get_version()))
             return 0
 
-        os.environ["OMNIPKG_LANG"] = os.environ.get("OMNIPKG_LANG", "")
+        if command is None or "-h" in remaining_args or "--help" in remaining_args:
+            prog_name_lower = Path(sys.argv[0]).name.lower()
+            parser = create_8pkg_parser() if "8pkg" in prog_name_lower else create_parser()
+            parser.print_help()
+            return 0
 
-        cm = ConfigManager()
+        # ── Everything below here only runs for real commands ─────────────────────
+        os.environ["OMNIPKG_LANG"] = os.environ.get("OMNIPKG_LANG", "")
+        # Use pre-built ConfigManager from daemon preload if available
+        import omnipkg.cli as _cli_mod
+        if _cli_mod._PRELOADED_CM is not None:
+            cm = _cli_mod._PRELOADED_CM
+            _cli_mod._PRELOADED_CM = None   # consume once
+        else:
+            cm = ConfigManager()
         user_lang = global_args.lang or cm.config.get("language") or os.environ.get("OMNIPKG_LANG")
 
+        from omnipkg.i18n import _
         if user_lang:
-            import importlib
-            from omnipkg import i18n
-            importlib.reload(i18n)
-            _.set_language(user_lang)
+            if _.current_lang != user_lang:
+                _.set_language(user_lang)
             os.environ["OMNIPKG_LANG"] = user_lang
 
-        # ── Choose minimal vs full init ────────────────────────────────────
+        # ── Choose minimal vs full init ────────────────────────────────────────────
         use_minimal = False
         if command in {"config", "python"}:
             use_minimal = True
@@ -1280,7 +1331,13 @@ def main():
             if len(remaining_args) > 1 and remaining_args[1].lower() == "python":
                 use_minimal = True
 
-        pkg_instance = OmnipkgCore(config_manager=cm, minimal_mode=use_minimal)
+        # Use pre-built OmnipkgCore from daemon preload if available (full mode only)
+        import omnipkg.cli as _cli_mod
+        if not use_minimal and _cli_mod._PRELOADED_CORE is not None:
+            pkg_instance = _cli_mod._PRELOADED_CORE
+            _cli_mod._PRELOADED_CORE = None   # consume once
+        else:
+            pkg_instance = OmnipkgCore(config_manager=cm, minimal_mode=use_minimal)
 
         # ── Build parser ───────────────────────────────────────────────────
         prog_name_lower = Path(sys.argv[0]).name.lower()
@@ -1384,6 +1441,21 @@ def main():
                         )
                         _print_strategy_table()
                         return 1
+                    cm.set("install_strategy", args.value)
+                    safe_print(_("✅ install_strategy set to: {}").format(args.value))
+                    
+                    # Patch the live preloaded core so the daemon worker picks it up immediately
+                    # without a restart — cm.set() wrote to disk but the warm core has a stale dict.
+                    try:
+                        import omnipkg.cli as _cli_mod
+                        _live_core = getattr(_cli_mod, '_PRELOADED_CORE', None)
+                        if _live_core is not None:
+                            _live_core.config["install_strategy"] = args.value
+                        _live_cm = getattr(_cli_mod, '_PRELOADED_CM', None)
+                        if _live_cm is not None:
+                            _live_cm["install_strategy"] = args.value
+                    except Exception:
+                        pass
                     cm.set("install_strategy", args.value)
                     safe_print(_("✅ install_strategy set to: {}").format(args.value))
                 else:
@@ -1782,7 +1854,14 @@ def main():
             return subprocess.call(cmd)
 
         elif args.command == "install":
-            original_python_tuple = get_actual_python_version(cm)
+            # Fast path: skip subprocess version check when we're already on the
+            # configured interpreter (the normal case in a daemon worker).
+            _cfg_exe = os.path.realpath(cm.config.get("python_executable") or sys.executable)
+            _cur_exe = os.path.realpath(sys.executable)
+            if _cfg_exe == _cur_exe:
+                original_python_tuple = sys.version_info[:2]
+            else:
+                original_python_tuple = get_actual_python_version(cm)
             original_python_str = f"{original_python_tuple[0]}.{original_python_tuple[1]}"
             exit_code = 1
 
@@ -1830,15 +1909,22 @@ def main():
                 return exit_code
 
             finally:
-                current_version_after_install_tuple = get_actual_python_version(cm)
-                current_version_after_install_str = (
-                    f"{current_version_after_install_tuple[0]}.{current_version_after_install_tuple[1]}"
-                )
-                if original_python_str != current_version_after_install_str:
-                    print_header(_('Restoring original Python {} context').format(original_python_str))
-                    final_cm = ConfigManager(suppress_init_messages=True)
-                    final_pkg_instance = OmnipkgCore(config_manager=final_cm)
-                    final_pkg_instance.switch_active_python(original_python_str)
+                # Only check for Python context drift if we might have switched
+                # interpreters during install. When configured_exe == sys.executable
+                # (the normal daemon fast-path case) the version cannot have changed,
+                # so skip the second subprocess call entirely.
+                _configured = os.path.realpath(cm.config.get("python_executable") or sys.executable)
+                _current    = os.path.realpath(sys.executable)
+                if _configured != _current:
+                    current_version_after_install_tuple = get_actual_python_version(cm)
+                    current_version_after_install_str = (
+                        f"{current_version_after_install_tuple[0]}.{current_version_after_install_tuple[1]}"
+                    )
+                    if original_python_str != current_version_after_install_str:
+                        print_header(_('Restoring original Python {} context').format(original_python_str))
+                        final_cm = ConfigManager(suppress_init_messages=True)
+                        final_pkg_instance = OmnipkgCore(config_manager=final_cm)
+                        final_pkg_instance.switch_active_python(original_python_str)
 
         elif args.command == "install-with-deps":
             packages_to_process = [args.package] + args.dependency
@@ -1941,9 +2027,24 @@ def main():
             elif args.daemon_command == "stop":
                 cli_stop()
             elif args.daemon_command == "restart":
+                # Guard: if we're already in a re-seat cycle, just do one stop+start and exit.
+                if os.environ.get("_OMNIPKG_RESEAT"):
+                    safe_print("🔄 Re-seating via C dispatcher...")
+                    cli_stop()
+                    cli_start()
+                    return 0
                 safe_print("🔄 Restarting daemon...")
                 cli_stop()
                 cli_start()
+                # Only re-seat if daemon didn't come up cleanly on first attempt
+                try:
+                    from omnipkg.isolation.worker_daemon import WorkerPoolDaemon as _WPD
+                    if not _WPD.is_running():
+                        safe_print("🔄 Re-seating via C dispatcher...")
+                        cli_stop()
+                        cli_start()
+                except Exception:
+                    pass
             elif args.daemon_command == "status":
                 cli_status()
             elif args.daemon_command == "logs":
