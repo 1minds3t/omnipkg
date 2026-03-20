@@ -20,13 +20,20 @@
  *   - OMNIPKG_FORCE_PYTHON_DISPATCH=1 (escape hatch)
  */
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
+#ifdef _WIN32
+#include <windows.h>
+#include <direct.h>
+#define realpath(path, resolved) _fullpath(resolved, path, MAX_PATH)
+#define PATH_MAX MAX_PATH
+#else
 #include <unistd.h>
 #include <sys/stat.h>
 #include <libgen.h>
 #include <limits.h>
+#endif
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 #define MAX_PATH 4096
 #define MAX_VERSION 32
