@@ -381,14 +381,16 @@ def _maybe_install_c_dispatcher():
                 os.chmod(str(target), 0o755)
                 replaced.append(name)
 
-        # Create versioned shims 3.7-3.15 as copies of the C binary
-        for minor in range(7, 16):
-            for prefix in ("8pkg", "omnipkg"):
-                versioned = bin_dir / f"{prefix}3{minor}"
-                if not versioned.exists() or versioned.stat().st_mtime < binary_tmp.stat().st_mtime:
-                    shutil.copy2(str(binary_tmp), str(versioned))
-                    os.chmod(str(versioned), 0o755)
-                    replaced.append(f"{prefix}3{minor}")
+        # Create versioned shims 3.7-3.15 — Unix only (hardlinks to C binary)
+        # Windows uses .bat wrappers created lazily after adoption instead
+        if sys.platform != "win32":
+            for minor in range(7, 16):
+                for prefix in ("8pkg", "omnipkg"):
+                    versioned = bin_dir / f"{prefix}3{minor}"
+                    if not versioned.exists() or versioned.stat().st_mtime < binary_tmp.stat().st_mtime:
+                        shutil.copy2(str(binary_tmp), str(versioned))
+                        os.chmod(str(versioned), 0o755)
+                        replaced.append(f"{prefix}3{minor}")
 
         binary_tmp.unlink()
         if replaced:
