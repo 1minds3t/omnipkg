@@ -599,8 +599,9 @@ def create_8pkg_parser():
 def create_parser():
     """Creates and configures the argument parser — cached after first build."""
     import omnipkg.cli as _cli_mod
-    if _cli_mod._CACHED_PARSER is not None:
-        return _cli_mod._CACHED_PARSER
+    _lang_key = _.current_lang
+    if _lang_key in _cli_mod._CACHED_PARSER:
+        return _cli_mod._CACHED_PARSER[_lang_key]
     epilog_parts = [
         _("🔥 Key Features:"),
         _("  • Runtime version switching without environment restart"),
@@ -1230,7 +1231,7 @@ def create_parser():
     )
     upgrade_parser.set_defaults(func=upgrade)
 
-    _cli_mod._CACHED_PARSER = parser
+    _cli_mod._CACHED_PARSER[_.current_lang] = parser
     return parser
 
 
@@ -1242,7 +1243,7 @@ def create_parser():
 # first real command in a daemon worker skips OmnipkgCore.__init__ entirely.
 _PRELOADED_CM     = None   # pre-built ConfigManager instance
 _PRELOADED_CORE   = None   # pre-built OmnipkgCore instance
-_CACHED_PARSER    = None   # cached create_parser() result (~7ms to build)
+_CACHED_PARSER    = {}     # cached create_parser() result, keyed by lang
 _CACHED_8PKG_PARSER = None # cached create_8pkg_parser() result
 # ─────────────────────────────────────────────────────────────────────────
 def main():
@@ -1300,12 +1301,6 @@ def main():
             safe_print(_("omnipkg {}").format(get_version()))
             return 0
 
-        if command is None or "-h" in remaining_args or "--help" in remaining_args:
-            prog_name_lower = Path(sys.argv[0]).name.lower()
-            parser = create_8pkg_parser() if "8pkg" in prog_name_lower else create_parser()
-            parser.print_help()
-            return 0
-
         # ── Everything below here only runs for real commands ─────────────────────
         os.environ["OMNIPKG_LANG"] = os.environ.get("OMNIPKG_LANG", "")
         # Use pre-built ConfigManager from daemon preload if available
@@ -1322,6 +1317,15 @@ def main():
             if _.current_lang != user_lang:
                 _.set_language(user_lang)
             os.environ["OMNIPKG_LANG"] = user_lang
+
+        if command is None or "-h" in remaining_args or "--help" in remaining_args:
+            # Invalidate cached parser so it rebuilds with the correct language
+            _cli_mod._CACHED_PARSER = {}
+            _cli_mod._CACHED_8PKG_PARSER = None
+            prog_name_lower = Path(sys.argv[0]).name.lower()
+            parser = create_8pkg_parser() if "8pkg" in prog_name_lower else create_parser()
+            parser.print_help()
+            return 0
 
         # ── Choose minimal vs full init ────────────────────────────────────────────
         use_minimal = False
