@@ -39,7 +39,7 @@ classifiers = [
 ]
 
 dependencies = [
-    "uv_ffi",
+    "uv_ffi ; python_version >= '3.8' and python_version <= '3.14'",
     "requests>=2.20",
     "psutil>=5.9.0",
     "typer>=0.4.0",

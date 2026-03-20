@@ -1312,7 +1312,6 @@ def main():
             cm = ConfigManager()
         user_lang = global_args.lang or cm.config.get("language") or os.environ.get("OMNIPKG_LANG")
 
-        from omnipkg.i18n import _
         if user_lang:
             if _.current_lang != user_lang:
                 _.set_language(user_lang)
