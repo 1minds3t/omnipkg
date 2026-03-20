@@ -1287,6 +1287,7 @@ def main():
         global_parser = argparse.ArgumentParser(add_help=False)
         global_parser.add_argument("--lang", default=None)
         global_parser.add_argument("--verbose", "-V", action="store_true")
+        global_parser.add_argument("--python", default=None)
         global_args, remaining_args = global_parser.parse_known_args()
 
         if remaining_args and not remaining_args[0].startswith("-"):
