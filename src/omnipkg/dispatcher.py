@@ -352,7 +352,7 @@ def _maybe_install_c_dispatcher():
             print(f"[C-INSTALL] binary is up-to-date — skipping recompile", file=sys.stderr)
         return
 
-    binary_tmp = bin_dir / "_omnipkg_dispatch_tmp"
+    binary_tmp = bin_dir / ("_omnipkg_dispatch_tmp.exe" if sys.platform == "win32" else "_omnipkg_dispatch_tmp")
     if debug:
         print(f"[C-INSTALL] compiling: gcc -O2 -o {binary_tmp} {c_source}", file=sys.stderr)
 
