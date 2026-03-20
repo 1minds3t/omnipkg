@@ -352,13 +352,13 @@ def _maybe_install_c_dispatcher():
             print(f"[C-INSTALL] binary is up-to-date — skipping recompile", file=sys.stderr)
         return
 
-    binary_tmp = bin_dir / "_omnipkg_dispatch_tmp"
+    binary_tmp = bin_dir / ("_omnipkg_dispatch_tmp.exe" if sys.platform == "win32" else "_omnipkg_dispatch_tmp")
     if debug:
         print(f"[C-INSTALL] compiling: gcc -O2 -o {binary_tmp} {c_source}", file=sys.stderr)
 
     try:
         r = subprocess.run(
-            ["gcc", "-O2", "-o", str(binary_tmp), str(c_source), "-ldl"],
+            ["gcc", "-O2", "-o", str(binary_tmp), str(c_source)] + ([] if sys.platform == "win32" else ["-ldl"]),
             capture_output=True, timeout=15
         )
         if debug:
@@ -381,14 +381,26 @@ def _maybe_install_c_dispatcher():
                 os.chmod(str(target), 0o755)
                 replaced.append(name)
 
-        # Create versioned shims 3.7-3.15 as copies of the C binary
+        # Create versioned shims 3.7-3.15
+        # Unix: hardlinks to C binary (free, instant)
+        # Windows: .bat wrappers injecting --python X.Y (tiny, triggers auto-adopt)
         for minor in range(7, 16):
             for prefix in ("8pkg", "omnipkg"):
-                versioned = bin_dir / f"{prefix}3{minor}"
-                if not versioned.exists() or versioned.stat().st_mtime < binary_tmp.stat().st_mtime:
-                    shutil.copy2(str(binary_tmp), str(versioned))
-                    os.chmod(str(versioned), 0o755)
-                    replaced.append(f"{prefix}3{minor}")
+                if sys.platform == "win32":
+                    versioned = bin_dir / f"{prefix}3{minor}.bat"
+                    if not versioned.exists():
+                        try:
+                            bat_content = f'@echo off\r\n"{bin_dir}\\{prefix}.exe" --python 3.{minor} %*\r\n'
+                            versioned.write_text(bat_content)
+                            replaced.append(f"{prefix}3{minor}.bat")
+                        except Exception:
+                            pass
+                else:
+                    versioned = bin_dir / f"{prefix}3{minor}"
+                    if not versioned.exists() or versioned.stat().st_mtime < binary_tmp.stat().st_mtime:
+                        shutil.copy2(str(binary_tmp), str(versioned))
+                        os.chmod(str(versioned), 0o755)
+                        replaced.append(f"{prefix}3{minor}")
 
         binary_tmp.unlink()
         if replaced:
@@ -750,7 +762,7 @@ def resolve_python_path(version: str) -> Path:
     # ═══════════════════════════════════════════════════════════
     # If a specific version was requested but not found in registry,
     # return a non-existent path so auto-adopt triggers in main().
-    if version and version != major_minor:
+    if version:
         if debug_mode:
             print(f'[DEBUG-DISPATCH] Version {version} not in registry — returning sentinel for auto-adopt', file=sys.stderr)
         return venv_root / ".omnipkg" / "interpreters" / f"cpython-{version}" / "bin" / f"python{major_minor}"
