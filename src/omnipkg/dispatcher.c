@@ -242,9 +242,504 @@ static int read_self_config(const char *self_dir, char *python_path, size_t n) {
     return json_get_str(buf, "python_executable", python_path, n);
 }
 
-/* ── fallback to Python dispatcher ─────────────────────────────────────── */
+/* ── daemon socket communication ───────────────────────────────────────── */
 
-static void fallback_to_python(const char *self_dir, char **argv, const char *inject_version) {
+static int write_all(int fd, const void *buf, size_t count) {
+    const char *p = buf;
+    while (count > 0) {
+        ssize_t r = write(fd, p, count);
+        if (r <= 0) return 0;
+        p += r;
+        count -= r;
+    }
+    return 1;
+}
+
+static int send_json_msg(int sock, const char *json_str) {
+    uint64_t len = strlen(json_str);
+    uint64_t be_len = 0;
+    for (int i = 0; i < 8; i++) {
+        ((uint8_t*)&be_len)[7 - i] = (len >> (i * 8)) & 0xFF;
+    }
+    if (!write_all(sock, &be_len, 8)) return 0;
+    if (!write_all(sock, json_str, len)) return 0;
+    return 1;
+}
+
+static char* recv_json_msg(int sock) {
+    uint8_t be_len[8];
+    int n = 0;
+    while (n < 8) {
+        int r = read(sock, be_len + n, 8 - n);
+        if (r <= 0) return NULL;
+        n += r;
+    }
+    uint64_t len = 0;
+    for (int i = 0; i < 8; i++) {
+        len = (len << 8) | be_len[i];
+    }
+    if (len > 1024 * 1024 * 10) return NULL;
+    char *buf = malloc(len + 1);
+    if (!buf) return NULL;
+    uint64_t total = 0;
+    while (total < len) {
+        int r = read(sock, buf + total, len - total);
+        if (r <= 0) { free(buf); return NULL; }
+        total += r;
+    }
+    buf[len] = '\0';
+    return buf;
+}
+
+/* Encode a Unicode codepoint as UTF-8 and write to out. */
+static void emit_utf8(uint32_t cp, FILE *out) {
+    if (cp < 0x80) {
+        fputc((int)cp, out);
+    } else if (cp < 0x800) {
+        fputc(0xC0 | (cp >> 6), out);
+        fputc(0x80 | (cp & 0x3F), out);
+    } else if (cp < 0x10000) {
+        fputc(0xE0 | (cp >> 12), out);
+        fputc(0x80 | ((cp >> 6) & 0x3F), out);
+        fputc(0x80 | (cp & 0x3F), out);
+    } else {
+        fputc(0xF0 | (cp >> 18), out);
+        fputc(0x80 | ((cp >> 12) & 0x3F), out);
+        fputc(0x80 | ((cp >> 6) & 0x3F), out);
+        fputc(0x80 | (cp & 0x3F), out);
+    }
+}
+
+static uint32_t parse_hex4(const char *p) {
+    uint32_t v = 0;
+    for (int i = 0; i < 4; i++) {
+        char c = p[i];
+        v <<= 4;
+        if (c >= '0' && c <= '9') v |= c - '0';
+        else if (c >= 'a' && c <= 'f') v |= c - 'a' + 10;
+        else if (c >= 'A' && c <= 'F') v |= c - 'A' + 10;
+    }
+    return v;
+}
+
+static void print_unescaped(const char *str, FILE *out) {
+    while (*str) {
+        if (*str == '"') break;
+        if (*str == '\\') {
+            str++;
+            if (*str == 'n')       { fputc('\n', out); str++; }
+            else if (*str == 't')  { fputc('\t', out); str++; }
+            else if (*str == 'r')  { fputc('\r', out); str++; }
+            else if (*str == '"')  { fputc('"',  out); str++; }
+            else if (*str == '\\') { fputc('\\', out); str++; }
+            else if (*str == '/')  { fputc('/',  out); str++; }
+            else if (*str == 'b')  { fputc('\b', out); str++; }
+            else if (*str == 'f')  { fputc('\f', out); str++; }
+            else if (*str == 'u' && str[1] && str[2] && str[3] && str[4]) {
+                /* \uXXXX — decode and emit UTF-8.
+                 * Also handle surrogate pairs: \uD800–\uDBFF followed by \uDC00–\uDFFF */
+                uint32_t hi = parse_hex4(str + 1);
+                str += 5; /* consume 'u' + 4 hex digits */
+                if (hi >= 0xD800 && hi <= 0xDBFF &&
+                    str[0] == '\\' && str[1] == 'u' &&
+                    str[2] && str[3] && str[4] && str[5]) {
+                    /* High surrogate — look for low surrogate */
+                    uint32_t lo = parse_hex4(str + 2);
+                    if (lo >= 0xDC00 && lo <= 0xDFFF) {
+                        uint32_t cp = 0x10000 + ((hi - 0xD800) << 10) + (lo - 0xDC00);
+                        emit_utf8(cp, out);
+                        str += 6; /* consume second \uXXXX */
+                    } else {
+                        emit_utf8(hi, out); /* lone high surrogate — best effort */
+                    }
+                } else {
+                    emit_utf8(hi, out);
+                }
+            } else {
+                /* Unknown escape — pass through as-is */
+                fputc('\\', out);
+                if (*str) { fputc(*str, out); str++; }
+            }
+        } else {
+            /* Regular UTF-8 byte — pass through directly */
+            fputc((unsigned char)*str, out);
+            str++;
+        }
+    }
+    fflush(out);
+}
+
+static int json_get_raw_str(const char *json, const char *key, char **out_start) {
+    char needle[256];
+    snprintf(needle, sizeof(needle), "\"%s\"", key);
+    const char *p = strstr(json, needle);
+    if (!p) return 0;
+    p += strlen(needle);
+    while (*p == ' ' || *p == '\t' || *p == ':') p++;
+    if (*p != '"') return 0;
+    p++;
+    *out_start = (char*)p;
+    return 1;
+}
+
+static int json_get_int(const char *json, const char *key, int *out) {
+    char needle[256];
+    snprintf(needle, sizeof(needle), "\"%s\"", key);
+    const char *p = strstr(json, needle);
+    if (!p) return 0;
+    p += strlen(needle);
+    while (*p == ' ' || *p == '\t' || *p == ':') p++;
+    *out = atoi(p);
+    return 1;
+}
+
+/*
+ * try_daemon_uv — Phase 1 fast path.
+ *
+ * Sends a run_uv request directly to the daemon's dedicated UV worker.
+ * The worker has a warm Tokio runtime + cached site-packages — ~5ms.
+ * Returns 1 and populates out_json on success, 0 on failure/unavailable.
+ *
+ * Deliberately has a short timeout (5s) so we fall through to the dlopen
+ * path quickly if the daemon is unavailable.
+ */
+static int try_daemon_uv(
+    const char *target_python,
+    const char *pkg_spec,
+    char       *out_json,
+    int         max_out
+) {
+    int debug = (getenv("OMNIPKG_DEBUG") != NULL &&
+                 strcmp(getenv("OMNIPKG_DEBUG"), "1") == 0);
+
+    /* ── Locate socket (same logic as try_daemon_cli) ── */
+    char sock_path[MAX_PATH];
+    sock_path[0] = '\0';
+    const char *ann_path = "/tmp/omnipkg/daemon_connection.txt";
+    FILE *af = fopen(ann_path, "r");
+    if (af) {
+        char line[MAX_PATH];
+        if (fgets(line, sizeof(line), af)) {
+            line[strcspn(line, "\r\n")] = '\0';
+            if (strncmp(line, "unix://", 7) == 0) {
+                strncpy(sock_path, line + 7, sizeof(sock_path) - 1);
+                sock_path[sizeof(sock_path) - 1] = '\0';
+            }
+        }
+        fclose(af);
+    }
+    if (!sock_path[0]) {
+        const char *tmpdir = getenv("TMPDIR");
+        if (!tmpdir) tmpdir = "/tmp";
+        snprintf(sock_path, sizeof(sock_path), "%s/omnipkg/omnipkg_daemon.sock", tmpdir);
+    }
+
+    struct stat st;
+    if (stat(sock_path, &st) != 0) return 0;
+
+    int sock = socket(AF_UNIX, SOCK_STREAM, 0);
+    if (sock < 0) return 0;
+
+    /* Short timeouts — UV install is fast, bail quickly if something's wrong */
+    struct timeval tv = { 5, 0 };
+    setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
+    setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+
+    struct sockaddr_un addr;
+    memset(&addr, 0, sizeof(addr));
+    addr.sun_family = AF_UNIX;
+    strncpy(addr.sun_path, sock_path, sizeof(addr.sun_path) - 1);
+    if (connect(sock, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
+        close(sock);
+        return 0;
+    }
+
+    /* Build the home/cache dir */
+    char cache_dir[MAX_PATH];
+    const char *home = getenv("HOME");
+    snprintf(cache_dir, sizeof(cache_dir), "%s/.cache/uv", home ? home : "/tmp");
+
+    /* Build run_uv request JSON.
+     * uv_args: ["pip","install","--cache-dir","<dir>","--python","<exe>","--link-mode","symlink","<pkg>"]
+     */
+    char req[4096];
+    int rlen = snprintf(req, sizeof(req),
+        "{\"type\":\"run_uv\","
+        "\"python_exe\":\"%s\","
+        "\"uv_args\":[\"pip\",\"install\","
+        "\"--cache-dir\",\"%s\","
+        "\"--python\",\"%s\","
+        "\"--link-mode\",\"symlink\","
+        "\"%s\"]}",
+        target_python, cache_dir, target_python, pkg_spec);
+
+    if (rlen <= 0 || rlen >= (int)sizeof(req)) { close(sock); return 0; }
+
+    if (debug) fprintf(stderr, "[C-DISPATCH] try_daemon_uv: sending run_uv for %s\n", pkg_spec);
+
+    if (!send_json_msg(sock, req)) { close(sock); return 0; }
+
+    /* Drain frames until COMPLETED/ERROR */
+    while (1) {
+        char *msg = recv_json_msg(sock);
+        if (!msg) break;
+
+        char *status_start;
+        if (json_get_raw_str(msg, "status", &status_start)) {
+            if (strncmp(status_start, "COMPLETED", 9) == 0) {
+                int exit_code = 0;
+                json_get_int(msg, "exit_code", &exit_code);
+
+                if (exit_code == 0) {
+                    /* Build changelog JSON from installed/removed arrays in msg.
+                     * The daemon returns {"status":"COMPLETED","exit_code":0,
+                     * "installed":[["name","ver"],...],"removed":[...]} */
+                    /* Copy the full msg as out_json for the caller to use */
+                    strncpy(out_json, msg, max_out - 1);
+                    out_json[max_out - 1] = '\0';
+                    free(msg);
+                    close(sock);
+                    if (debug) fprintf(stderr, "[C-DISPATCH] try_daemon_uv: success\n");
+                    return 1;
+                }
+                free(msg);
+                close(sock);
+                return 0;
+            } else if (strncmp(status_start, "FFI_UNAVAILABLE", 15) == 0 ||
+                       strncmp(status_start, "ERROR", 5) == 0) {
+                free(msg);
+                close(sock);
+                return 0;
+            }
+        }
+        /* stream frames — ignore */
+        free(msg);
+    }
+
+    close(sock);
+    return 0;
+}
+
+static int try_daemon_cli(const char *target_python, int argc, char **argv, int version_injected, const char *forced_version) {
+    int debug = (getenv("OMNIPKG_DEBUG") != NULL &&
+                 strcmp(getenv("OMNIPKG_DEBUG"), "1") == 0);
+
+    /* ── Locate the socket ──────────────────────────────────────────────
+     * Strategy (same logic as DaemonClient in Python):
+     *   1. Read /tmp/omnipkg/daemon_connection.txt  (written at bind time)
+     *      Format: "unix:///path/to/socket"
+     *   2. Fall back to $TMPDIR/omnipkg/omnipkg_daemon.sock
+     *   3. Fall back to /tmp/omnipkg/omnipkg_daemon.sock
+     * Using a fixed /tmp prefix for the announcement file means we find
+     * the daemon even when TMPDIR differs between shell and daemon process.
+     * ─────────────────────────────────────────────────────────────────── */
+    char sock_path[MAX_PATH];
+    sock_path[0] = '\0';
+
+    /* Try announcement file first */
+    const char *ann_path = "/tmp/omnipkg/daemon_connection.txt";
+    FILE *af = fopen(ann_path, "r");
+    if (af) {
+        char line[MAX_PATH];
+        if (fgets(line, sizeof(line), af)) {
+            /* strip newline */
+            line[strcspn(line, "\r\n")] = '\0';
+            if (strncmp(line, "unix://", 7) == 0) {
+                strncpy(sock_path, line + 7, sizeof(sock_path) - 1);
+                sock_path[sizeof(sock_path) - 1] = '\0';
+                if (debug) fprintf(stderr, "[C-DISPATCH] found socket via announcement: %s\n", sock_path);
+            }
+        }
+        fclose(af);
+    }
+
+    /* Fall back to TMPDIR-based path */
+    if (!sock_path[0]) {
+        const char *tmpdir = getenv("TMPDIR");
+        if (!tmpdir) tmpdir = "/tmp";
+        snprintf(sock_path, sizeof(sock_path), "%s/omnipkg/omnipkg_daemon.sock", tmpdir);
+        if (debug) fprintf(stderr, "[C-DISPATCH] no announcement file, trying: %s\n", sock_path);
+    }
+
+    if (debug) fprintf(stderr, "[C-DISPATCH] try_daemon_cli: sock=%s\n", sock_path);
+
+    /* Quick existence check before paying the connect syscall */
+    struct stat st;
+    if (stat(sock_path, &st) != 0) {
+        if (debug) fprintf(stderr, "[C-DISPATCH] daemon socket not found — skipping\n");
+        return 0;
+    }
+
+    int sock = socket(AF_UNIX, SOCK_STREAM, 0);
+    if (sock < 0) return 0;
+
+    /* Short send timeout — if we can't write to the daemon in 2s something is wrong. */
+    struct timeval tv_send = { 2, 0 };
+    setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, &tv_send, sizeof(tv_send));
+    /* Recv timeout: generous for slow PyPI ops.  When the worker sends
+     * NEEDS_INPUT the C side reads from the terminal and replies; after that
+     * the worker resumes.  We reset the timeout after each message, so this
+     * is really "max idle time between any two messages", not a wall-clock
+     * limit for the whole command.  300 s covers the rare case where a human
+     * is very slow at typing a prompt answer.                               */
+    struct timeval tv_recv = { 300, 0 };
+    setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &tv_recv, sizeof(tv_recv));
+
+    struct sockaddr_un addr;
+    memset(&addr, 0, sizeof(addr));
+    addr.sun_family = AF_UNIX;
+    strncpy(addr.sun_path, sock_path, sizeof(addr.sun_path) - 1);
+    if (connect(sock, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
+        if (debug) fprintf(stderr, "[C-DISPATCH] daemon connect failed: %s\n", strerror(errno));
+        close(sock);
+        return 0;
+    }
+
+    if (debug) fprintf(stderr, "[C-DISPATCH] daemon connected — sending run_cli\n");
+
+    char cwd[MAX_PATH];
+    if (!getcwd(cwd, sizeof(cwd))) cwd[0] = '\0';
+
+    char *req = malloc(1024 * 1024);
+    if (!req) { close(sock); return 0; }
+
+    int len = sprintf(req, "{\"type\":\"run_cli\",\"isatty\":%s", isatty(1) ? "true" : "false");
+
+    if (target_python && target_python[0]) {
+        len += sprintf(req + len, ",\"python_exe\":\"%s\"", target_python);
+    }
+
+    if (cwd[0]) {
+        len += sprintf(req + len, ",\"cwd\":\"%s\"", cwd);
+    }
+
+    len += sprintf(req + len, ",\"argv\":[\"8pkg\"");
+    /* Do NOT forward --python <ver> to the daemon worker.  The worker is already
+     * running under the correct interpreter (target_python); passing --python
+     * causes cli.main() to call ensure_python_or_relaunch() which does execve
+     * and kills the worker without ever sending COMPLETED → "daemon unhealthy".
+     * The python_exe field in the request already tells the daemon which worker
+     * pool to use, so --python in argv is redundant and harmful here. */
+    for (int i = 1; i < argc; i++) {
+        /* skip --python and its argument */
+        if (strcmp(argv[i], "--python") == 0) { i++; continue; }
+        req[len++] = ',';
+        req[len++] = '"';
+        char *p = argv[i];
+        while (*p) {
+            if (*p == '"' || *p == '\\') {
+                req[len++] = '\\';
+                req[len++] = *p;
+            } else {
+                req[len++] = *p;
+            }
+            p++;
+        }
+        req[len++] = '"';
+    }
+    req[len++] = ']';
+    req[len++] = '}';
+    req[len] = '\0';
+
+    if (!send_json_msg(sock, req)) {
+        free(req);
+        close(sock);
+        /* Stale socket — nuke announcement so next call doesn't hit it again */
+        remove(ann_path);
+        if (debug) fprintf(stderr, "[C-DISPATCH] daemon send failed — falling back to execv\n");
+        return 0;
+    }
+    free(req);
+
+    int got_terminal_status = 0;
+    while (1) {
+        char *msg = recv_json_msg(sock);
+        if (!msg) break;
+
+        char *stream_type;
+        if (json_get_raw_str(msg, "stream", &stream_type)) {
+            char *data_start;
+            if (json_get_raw_str(msg, "data", &data_start)) {
+                FILE *out = (strncmp(stream_type, "stderr", 6) == 0) ? stderr : stdout;
+                print_unescaped(data_start, out);
+            }
+        } else if (json_get_raw_str(msg, "status", &stream_type)) {
+            if (strncmp(stream_type, "COMPLETED", 9) == 0) {
+                int exit_code = 0;
+                json_get_int(msg, "exit_code", &exit_code);
+                free(msg);
+                close(sock);
+                exit(exit_code);
+            } else if (strncmp(stream_type, "NEEDS_INPUT", 11) == 0) {
+                /* Worker is blocking on input() — print the prompt to the real
+                 * terminal, read a line, and send it back as stdin_line. */
+                char *prompt_start;
+                if (json_get_raw_str(msg, "prompt", &prompt_start)) {
+                    print_unescaped(prompt_start, stdout);
+                }
+                free(msg);
+
+                /* Read one line from the real terminal (stdin fd 0). */
+                char input_buf[4096];
+                size_t ilen = 0;
+                input_buf[0] = '\0';
+                if (fgets(input_buf, sizeof(input_buf), stdin)) {
+                    /* Strip trailing newline — worker will add it back. */
+                    ilen = strlen(input_buf);
+                    if (ilen > 0 && input_buf[ilen - 1] == '\n')
+                        input_buf[--ilen] = '\0';
+                }
+                /* else: EOF/error — input_buf stays empty, ilen stays 0 */
+
+                /* Build {"type":"stdin_line","data":"<escaped>"} */
+                char *reply = malloc(ilen * 6 + 64); /* generous for JSON escaping */
+                if (!reply) { close(sock); return 0; }
+                int rlen = sprintf(reply, "{\"type\":\"stdin_line\",\"data\":\"");
+                for (size_t k = 0; k < ilen; k++) {
+                    unsigned char c = (unsigned char)input_buf[k];
+                    if      (c == '"')  { reply[rlen++] = '\\'; reply[rlen++] = '"'; }
+                    else if (c == '\\') { reply[rlen++] = '\\'; reply[rlen++] = '\\'; }
+                    else if (c == '\n') { reply[rlen++] = '\\'; reply[rlen++] = 'n'; }
+                    else if (c == '\r') { reply[rlen++] = '\\'; reply[rlen++] = 'r'; }
+                    else if (c == '\t') { reply[rlen++] = '\\'; reply[rlen++] = 't'; }
+                    else if (c < 0x20) {
+                        rlen += sprintf(reply + rlen, "\\u%04x", c);
+                    } else {
+                        reply[rlen++] = c;
+                    }
+                }
+                reply[rlen++] = '"';
+                reply[rlen++] = '}';
+                reply[rlen]   = '\0';
+
+                int ok = send_json_msg(sock, reply);
+                free(reply);
+                if (!ok) { close(sock); return 0; }
+                /* Continue the recv loop — worker will resume and send more output. */
+                continue;
+            } else if (strncmp(stream_type, "ERROR", 5) == 0) {
+                /* Daemon-side error (broken pipe, crash, etc.) — don't exit,
+                 * fall through so main() retries via execv Python fallback. */
+                got_terminal_status = 1;
+                free(msg);
+                break;
+            }
+        }
+        free(msg);
+    }
+
+    close(sock);
+    /* If we got an ERROR status or recv loop broke without COMPLETED,
+     * the daemon is unhealthy. Nuke the announcement so the next call
+     * doesn't connect to a dead socket, then signal fallback. */
+    if (!got_terminal_status) {
+        remove(ann_path);
+        if (debug) fprintf(stderr, "[C-DISPATCH] daemon unhealthy — falling back to execv\n");
+    }
+    return 0;
+}
+
+static void fallback_to_python(const char *self_dir, char **argv) {
     /*
      * Find the Python that owns this venv/bin dir and re-exec
      * the original dispatcher.py via  python -m omnipkg.dispatcher
@@ -267,30 +762,313 @@ static void fallback_to_python(const char *self_dir, char **argv, const char *in
         }
     }
 
-    /* Build new argv: python -m omnipkg.dispatcher [--python <ver>] <original args> */
+    /* Build new argv: python -m omnipkg.dispatcher <original args> */
     int argc = 0;
     while (argv[argc]) argc++;
-    int has_python_flag = 0;
-    for (int i = 1; i < argc; i++) {
-        if (strcmp(argv[i], "--python") == 0) { has_python_flag = 1; break; }
-    }
-    int extra = (inject_version && !has_python_flag) ? 2 : 0;
-    char **new_argv = malloc((argc + 4 + extra) * sizeof(char *));
+    char **new_argv = malloc((argc + 4) * sizeof(char *));
     new_argv[0] = py;
     new_argv[1] = "-m";
     new_argv[2] = "omnipkg.dispatcher";
-    int idx = 3;
-    if (inject_version && !has_python_flag) {
-        new_argv[idx++] = "--python";
-        new_argv[idx++] = (char *)inject_version;
-    }
     for (int i = 1; i < argc; i++)
-        new_argv[idx++] = argv[i];
-    new_argv[idx] = NULL;
+        new_argv[i + 2] = argv[i];
+    new_argv[argc + 2] = NULL;
 
     execv(py, new_argv);
     perror("omnipkg: execv fallback failed");
     exit(1);
+}
+
+/* ── stamp-file helpers ─────────────────────────────────────────────────── */
+/*
+ * Stamp file: /tmp/omnipkg/ffi_ok/<djb2hash>.stamp
+ * Presence = uv_ffi verified/installed for that interpreter.
+ * Check cost: one stat() call, ~2µs — replaces the old 60ms subprocess check.
+ */
+static void ffi_stamp_path(const char *python_exe, char *out, size_t n) {
+    unsigned long h = 5381;
+    const unsigned char *p = (const unsigned char *)python_exe;
+    while (*p) { h = h * 33 ^ *p++; }
+    snprintf(out, n, "/tmp/omnipkg/ffi_ok/%lu.stamp", h);
+}
+
+static int ffi_stamp_exists(const char *python_exe) {
+    char stamp[MAX_PATH];
+    ffi_stamp_path(python_exe, stamp, sizeof(stamp));
+    struct stat st;
+    return stat(stamp, &st) == 0;
+}
+
+static void ffi_stamp_write(const char *python_exe) {
+    mkdir("/tmp/omnipkg", 0755);
+    mkdir("/tmp/omnipkg/ffi_ok", 0755);
+    char stamp[MAX_PATH];
+    ffi_stamp_path(python_exe, stamp, sizeof(stamp));
+    FILE *f = fopen(stamp, "w");
+    if (f) { fputs(python_exe, f); fclose(f); }
+}
+
+/*
+ * ensure_uv_ffi_for_python — install uv_ffi into a non-main interpreter
+ * (e.g. cpython-3.9.23) if it is missing, then notify the daemon worker
+ * to reload its FFI handle so subsequent run_uv calls use FFI not subprocess.
+ *
+ * Fast path: stamp file exists → single stat(), ~2µs, no subprocess.
+ * Slow path: first call only → install (~1s one-time) → write stamp.
+ *
+ * Returns 1 if uv_ffi is available (either was already or just installed).
+ */
+static int ensure_uv_ffi_for_python(
+    const char *target_python,
+    const char *venv_root,
+    const char *sock_path,
+    int debug
+) {
+    /* Fast path — stamp present means already verified/installed */
+    if (ffi_stamp_exists(target_python)) {
+        if (debug) fprintf(stderr, "[C-DISPATCH] uv_ffi stamp hit for %s\n",
+                           target_python);
+        return 1;
+    }
+
+    if (debug) fprintf(stderr, "[C-DISPATCH] uv_ffi missing for %s — installing\n",
+                       target_python);
+
+    /* Find uv */
+    char uv_path[MAX_PATH];
+    const char *uv_exe = NULL;
+    snprintf(uv_path, sizeof(uv_path), "%s/bin/uv", venv_root);
+    if (file_exists(uv_path)) {
+        uv_exe = uv_path;
+    } else {
+        const char *path_env = getenv("PATH");
+        if (path_env) {
+            char path_copy[16384];
+            strncpy(path_copy, path_env, sizeof(path_copy) - 1);
+            path_copy[sizeof(path_copy) - 1] = '\0';
+            char *dir = strtok(path_copy, ":");
+            static char uv_found2[MAX_PATH];
+            while (dir) {
+                snprintf(uv_found2, sizeof(uv_found2), "%s/uv", dir);
+                if (file_exists(uv_found2)) { uv_exe = uv_found2; break; }
+                dir = strtok(NULL, ":");
+            }
+        }
+    }
+
+    char install_cmd[MAX_PATH * 4];
+    int rc = -1;
+    if (uv_exe) {
+        snprintf(install_cmd, sizeof(install_cmd),
+            "\"%s\" pip install --python \"%s\" uv_ffi",
+            uv_exe, target_python);
+        if (debug) fprintf(stderr, "[C-DISPATCH] uv_ffi install: %s\n", install_cmd);
+        rc = system(install_cmd);
+    }
+    if (rc != 0) {
+        snprintf(install_cmd, sizeof(install_cmd),
+            "\"%s\" -m pip install uv_ffi", target_python);
+        if (debug) fprintf(stderr, "[C-DISPATCH] uv_ffi pip fallback: %s\n", install_cmd);
+        rc = system(install_cmd);
+    }
+
+    if (rc != 0) {
+        if (debug) fprintf(stderr, "[C-DISPATCH] uv_ffi install failed rc=%d\n", rc);
+        return 0;
+    }
+
+    if (debug) fprintf(stderr, "[C-DISPATCH] uv_ffi installed for %s\n", target_python);
+    ffi_stamp_write(target_python);  /* fast path on all future calls */
+
+    /* Tell the daemon worker to reload its FFI handle for this interpreter.
+     * Fire-and-forget: we don't wait for a reply — the worker will reload
+     * asynchronously and the next run_uv call will use FFI instead of subprocess. */
+    if (sock_path && sock_path[0]) {
+        struct stat _st;
+        if (stat(sock_path, &_st) == 0) {
+            int _s = socket(AF_UNIX, SOCK_STREAM, 0);
+            if (_s >= 0) {
+                struct timeval _tv = { 1, 0 };
+                setsockopt(_s, SOL_SOCKET, SO_SNDTIMEO, &_tv, sizeof(_tv));
+                setsockopt(_s, SOL_SOCKET, SO_RCVTIMEO, &_tv, sizeof(_tv));
+                struct sockaddr_un _addr;
+                memset(&_addr, 0, sizeof(_addr));
+                _addr.sun_family = AF_UNIX;
+                strncpy(_addr.sun_path, sock_path, sizeof(_addr.sun_path) - 1);
+                if (connect(_s, (struct sockaddr*)&_addr, sizeof(_addr)) == 0) {
+                    char _msg[MAX_PATH + 64];
+                    snprintf(_msg, sizeof(_msg),
+                        "{\"type\":\"reload_ffi\",\"python_exe\":\"%s\"}", target_python);
+                    send_json_msg(_s, _msg);
+                    /* don't wait for reply — fire and forget */
+                    if (debug) fprintf(stderr,
+                        "[C-DISPATCH] sent reload_ffi to daemon for %s\n", target_python);
+                }
+                close(_s);
+            }
+        }
+    }
+
+    return 1;
+}
+
+/* ── find or auto-install uv_ffi .so ───────────────────────────────────── */
+
+static int find_or_install_uv_ffi_so(
+    const char *venv_root,
+    const char *target_python,
+    char *so_path_out,
+    size_t so_path_n
+) {
+    int debug = (getenv("OMNIPKG_DEBUG") != NULL &&
+                 strcmp(getenv("OMNIPKG_DEBUG"), "1") == 0);
+
+    /* ── 0. Ask Python directly — handles editable/dev/vendor installs ── */
+    {
+        char _py_cmd[MAX_PATH * 2];
+        char _py_out[MAX_PATH] = "";
+        snprintf(_py_cmd, sizeof(_py_cmd),
+            "\"%s\" -c \""
+            "import os\n"
+            "try:\n"
+            "    import omnipkg._vendor.uv_ffi as m\n"
+            "except: pass\n"
+            "else:\n"
+            "    d=os.path.dirname(m.__file__)\n"
+            "    [print(os.path.join(d,f)) for f in os.listdir(d) if f.endswith(chr(46)+chr(115)+chr(111))]\n"
+            "\" 2>/dev/null",
+            target_python);
+        FILE *_pp = popen(_py_cmd, "r");
+        if (_pp) {
+            if (fgets(_py_out, sizeof(_py_out), _pp)) {
+                _py_out[strcspn(_py_out, "\r\n")] = '\0';
+                if (_py_out[0] && file_exists(_py_out)) {
+                    strncpy(so_path_out, _py_out, so_path_n - 1);
+                    so_path_out[so_path_n - 1] = '\0';
+                    pclose(_pp);
+                    if (debug) fprintf(stderr, "[C-DISPATCH] Found uv_ffi.so via Python: %s\n", so_path_out);
+                    return 1;
+                }
+            }
+            pclose(_pp);
+        }
+    }
+
+    /* ── 1. Search known locations for an existing .so ── */
+    char patterns[8][MAX_PATH];
+    const char *home = getenv("HOME");
+    /* standard installed: uv_ffi/_native/ */
+    snprintf(patterns[0], MAX_PATH,
+        "%s/lib/python3.*/site-packages/uv_ffi/_native/*.so", venv_root);
+    snprintf(patterns[1], MAX_PATH,
+        "%s/lib/python3*/site-packages/uv_ffi/_native/*.so", venv_root);
+    /* flat install: uv_ffi/*.so */
+    snprintf(patterns[2], MAX_PATH,
+        "%s/lib/python3.*/site-packages/uv_ffi/*.so", venv_root);
+    snprintf(patterns[3], MAX_PATH,
+        "%s/lib/python3*/site-packages/uv_ffi/*.so", venv_root);
+    /* dev/vendor install: omnipkg/_vendor/uv_ffi/*.so */
+    snprintf(patterns[4], MAX_PATH,
+        "%s/lib/python3.*/site-packages/omnipkg/_vendor/uv_ffi/*.so", venv_root);
+    snprintf(patterns[5], MAX_PATH,
+        "%s/lib/python3*/site-packages/omnipkg/_vendor/uv_ffi/*.so", venv_root);
+    /* user local */
+    snprintf(patterns[6], MAX_PATH,
+        "%s/.local/lib/python3.*/site-packages/uv_ffi/_native/*.so",
+        home ? home : "/tmp");
+    snprintf(patterns[7], MAX_PATH,
+        "%s/.local/lib/python3.*/site-packages/uv_ffi/*.so",
+        home ? home : "/tmp");
+
+    glob_t globbuf;
+    for (int pi = 0; pi < 8; pi++) {
+        if (glob(patterns[pi], 0, NULL, &globbuf) == 0 && globbuf.gl_pathc > 0) {
+            strncpy(so_path_out, globbuf.gl_pathv[0], so_path_n - 1);
+            so_path_out[so_path_n - 1] = '\0';
+            globfree(&globbuf);
+            if (debug) fprintf(stderr, "[C-DISPATCH] Found uv_ffi.so: %s\n", so_path_out);
+            return 1;
+        }
+        globfree(&globbuf);
+    }
+
+    if (debug) fprintf(stderr, "[C-DISPATCH] uv_ffi.so not found — attempting auto-install\n");
+
+    /* ── 2. Not found: try to install uv_ffi from PyPI ── */
+    char py_ver_tag[16] = "";
+    const char *py_base = strrchr(target_python, '/');
+    py_base = py_base ? py_base + 1 : target_python;
+    if (strncmp(py_base, "python3.", 8) == 0) {
+        const char *minor_start = py_base + 8; /* skip "python3." */
+        size_t mlen = strlen(minor_start);
+        if (mlen == 1)
+            snprintf(py_ver_tag, sizeof(py_ver_tag), "cp3%c", minor_start[0]);
+        else if (mlen >= 2)
+            snprintf(py_ver_tag, sizeof(py_ver_tag), "cp3%c%c", minor_start[0], minor_start[1]);
+    }
+
+    if (!py_ver_tag[0]) {
+        if (debug) fprintf(stderr, "[C-DISPATCH] Could not determine Python ABI tag\n");
+        return 0;
+    }
+
+    if (debug) fprintf(stderr, "[C-DISPATCH] Auto-installing uv_ffi for %s\n", py_ver_tag);
+
+    /* Find uv */
+    char uv_path[MAX_PATH];
+    const char *uv_exe = NULL;
+    snprintf(uv_path, sizeof(uv_path), "%s/bin/uv", venv_root);
+    if (file_exists(uv_path)) {
+        uv_exe = uv_path;
+    } else {
+        const char *path_env = getenv("PATH");
+        if (path_env) {
+            char path_copy[16384];
+            strncpy(path_copy, path_env, sizeof(path_copy) - 1);
+            path_copy[sizeof(path_copy) - 1] = '\0';
+            char *dir = strtok(path_copy, ":");
+            static char uv_found[MAX_PATH];
+            while (dir) {
+                snprintf(uv_found, sizeof(uv_found), "%s/uv", dir);
+                if (file_exists(uv_found)) { uv_exe = uv_found; break; }
+                dir = strtok(NULL, ":");
+            }
+        }
+    }
+
+    char install_cmd[MAX_PATH * 4];
+    int install_rc = -1;
+    if (uv_exe) {
+        snprintf(install_cmd, sizeof(install_cmd),
+            "\"%s\" pip install --python \"%s\" uv_ffi",
+            uv_exe, target_python);
+        if (debug) fprintf(stderr, "[C-DISPATCH] uv_ffi install: %s\n", install_cmd);
+        install_rc = system(install_cmd);
+    }
+    if (install_rc != 0) {
+        snprintf(install_cmd, sizeof(install_cmd),
+            "\"%s\" -m pip install uv_ffi", target_python);
+        if (debug) fprintf(stderr, "[C-DISPATCH] uv_ffi pip fallback: %s\n", install_cmd);
+        install_rc = system(install_cmd);
+    }
+    if (install_rc != 0) {
+        if (debug) fprintf(stderr, "[C-DISPATCH] uv_ffi auto-install failed rc=%d\n", install_rc);
+        return 0;
+    }
+
+    /* ── 3. Re-glob after install ── */
+    for (int pi = 0; pi < 8; pi++) {
+        if (glob(patterns[pi], 0, NULL, &globbuf) == 0 && globbuf.gl_pathc > 0) {
+            strncpy(so_path_out, globbuf.gl_pathv[0], so_path_n - 1);
+            so_path_out[so_path_n - 1] = '\0';
+            globfree(&globbuf);
+            if (debug) fprintf(stderr, "[C-DISPATCH] uv_ffi.so post-install: %s\n", so_path_out);
+            return 1;
+        }
+        globfree(&globbuf);
+    }
+
+    if (debug) fprintf(stderr, "[C-DISPATCH] uv_ffi.so still missing after install\n");
+    return 0;
 }
 
 /* ════════════════════════════════════════════════════════════════════════ */
@@ -305,7 +1083,7 @@ int main(int argc, char **argv) {
         real_path(argv[0], self_real, sizeof(self_real));
         char self_dir[MAX_PATH];
         dir_of(self_real, self_dir, sizeof(self_dir));
-        fallback_to_python(self_dir, argv, NULL);
+        fallback_to_python(self_dir, argv);
     }
 
     /* ── 1. Resolve self ─────────────────────────────────────── */
@@ -326,7 +1104,7 @@ int main(int argc, char **argv) {
     /* ── 2. Shim mode? Fall back immediately ──────────────────── */
     if (strncmp(prog, "python", 6) == 0 || strcmp(prog, "pip") == 0) {
         if (debug) fprintf(stderr, "[C-DISPATCH] shim mode → python fallback\n");
-        fallback_to_python(self_dir, argv, NULL);
+        fallback_to_python(self_dir, argv);
     }
 
     /* ── 3. Swap-python edge case → python fallback ───────────── */
@@ -340,7 +1118,7 @@ int main(int argc, char **argv) {
     }
     if (is_swap_python && getenv("_OMNIPKG_SWAP_ACTIVE")) {
         if (debug) fprintf(stderr, "[C-DISPATCH] swap python in swap shell → python fallback\n");
-        fallback_to_python(self_dir, argv, NULL);
+        fallback_to_python(self_dir, argv);
     }
 
     /* ── 4. Detect version-specific command name ─────────────── */
@@ -385,15 +1163,41 @@ int main(int argc, char **argv) {
             if (!file_exists(target_python)) {
                 /* Not adopted yet → fallback to Python for auto-adopt */
                 if (debug) fprintf(stderr, "[C-DISPATCH] %s not found → auto-adopt fallback\n", target_python);
-                fallback_to_python(self_dir, argv, cli_version);
+                fallback_to_python(self_dir, argv);
             }
             if (debug)
                 fprintf(stderr, "[C-DISPATCH] registry hit %s → %s\n",
                         cli_version, target_python);
         } else {
-            /* Unknown version → Python fallback for proper error / auto-adopt */
-            if (debug) fprintf(stderr, "[C-DISPATCH] unknown version %s → fallback\n", cli_version);
-            fallback_to_python(self_dir, argv, cli_version);
+            /* Registry miss — could be the native interpreter (not adopted, so not
+             * in registry.json).  Check if the self-aware config python matches the
+             * requested version before giving up and paying the Python fallback cost. */
+            char self_py[MAX_PATH] = "";
+            read_self_config(self_dir, self_py, sizeof(self_py));
+            if (self_py[0] && file_exists(self_py)) {
+                /* Extract version from the path, e.g. ".../bin/python3.11" → "3.11" */
+                const char *base = strrchr(self_py, '/');
+                base = base ? base + 1 : self_py;
+                /* skip "python" prefix */
+                const char *ver_in_path = base;
+                if (strncmp(ver_in_path, "python", 6) == 0) ver_in_path += 6;
+                if (strncmp(ver_in_path, "3.", 2) == 0 &&
+                    strcmp(ver_in_path, cli_version) == 0) {
+                    /* Native interpreter matches — use it directly, no fallback needed */
+                    strncpy(target_python, self_py, sizeof(target_python) - 1);
+                    target_python[sizeof(target_python) - 1] = '\0';
+                    if (debug)
+                        fprintf(stderr, "[C-DISPATCH] native match %s → %s\n",
+                                cli_version, target_python);
+                } else {
+                    /* Genuinely unknown version → Python fallback for auto-adopt */
+                    if (debug) fprintf(stderr, "[C-DISPATCH] unknown version %s → fallback\n", cli_version);
+                    fallback_to_python(self_dir, argv);
+                }
+            } else {
+                if (debug) fprintf(stderr, "[C-DISPATCH] unknown version %s → fallback\n", cli_version);
+                fallback_to_python(self_dir, argv);
+            }
         }
     }
 
@@ -444,7 +1248,6 @@ int main(int argc, char **argv) {
     new_argv[idx++] = "omnipkg.cli";
 
     /* copy original args starting at 1 (skip argv[0]) */
-    /* but if version_injected, insert --python before them */
     if (version_injected) {
         new_argv[idx++] = "--python";
         new_argv[idx++] = forced_version;
@@ -461,6 +1264,7 @@ int main(int argc, char **argv) {
         fprintf(stderr, "\n");
     }
 
+    putenv("_OMNIPKG_ISATTY=1");
     execv(target_python, new_argv);
 
     /* execv only returns on error */

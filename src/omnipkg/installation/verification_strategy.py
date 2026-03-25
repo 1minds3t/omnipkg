@@ -14,6 +14,7 @@ AND includes already-created dependency bubbles so keras can find tensorflow!
 
 import importlib
 import subprocess
+import os
 import json
 import sys
 from dataclasses import dataclass
@@ -342,32 +343,55 @@ class SmartVerificationStrategy:
         bubble_paths: List[str] = None
     ) -> List[VerificationResult]:
         if bubble_paths is None: bubble_paths = []
-        
-        # [CRITICAL FIX] Capture parent paths so dependencies like 'rich' are found
-        # We filter out 'omnipkg' source paths if needed, but keeping site-packages is crucial
-        parent_paths = [p for p in sys.path if p and p != staging_path]
+
+        # Determine the omnipkg src root so the worker can import omnipkg internals
+        # (e.g. rich, i18n) — but we deliberately EXCLUDE site-packages.
+        # Injecting site-packages causes ABI crashes: e.g. numpy 2.x C extensions
+        # get loaded alongside numpy 1.x pure-Python files from staging → instant ImportError.
+        _this_file = Path(__file__).resolve()
+        # Walk up to the 'src' directory (src/omnipkg/installation/verification_strategy.py)
+        _omnipkg_src = str(_this_file.parent.parent.parent)
+
+        # Only inject: stdlib entries (no path / zip files) + the omnipkg src root.
+        # Explicitly exclude anything that looks like a site-packages or dist-packages dir.
+        def _is_safe_path(p: str) -> bool:
+            if not p:
+                return False
+            pl = p.lower()
+            return "site-packages" not in pl and "dist-packages" not in pl
+
+        safe_parent_paths = [_omnipkg_src] + [
+            p for p in sys.path
+            if p and _is_safe_path(p) and p != staging_path and p not in bubble_paths
+        ]
+
+        # Filter bubble_paths: drop any bubble that shadows a package we're staging
+        _staged_names = {d.name for d in Path(staging_path).iterdir() if d.is_dir()} if Path(staging_path).exists() else set()
+        bubble_paths_filtered = [
+            p for p in bubble_paths
+            if not any((Path(p) / n).exists() for n in _staged_names)
+        ]
 
         worker_script = """
 import sys, json, importlib, traceback
 
-# Capture paths
 staging_path = {staging_path!r}
 bubble_paths = {bubble_paths!r}
-parent_paths = {parent_paths!r}
+safe_parent_paths = {safe_parent_paths!r}
 
-# --- CRITICAL FIX FOR RICH/SHARED LIBS ---
-# Ensure the worker sees the same site-packages as the parent
-for p in parent_paths:
-    if p not in sys.path:
-        sys.path.append(p)
+# Build sys.path from scratch:
+#   1. staging (highest priority — the version we just installed)
+#   2. dependency bubbles (already-built sibling packages)
+#   3. safe parent paths (stdlib, omnipkg src — NO site-packages)
+# This guarantees the staged package's C extensions and pure-Python files
+# are always loaded together, preventing numpy-style ABI mismatch crashes.
+sys.path = (
+    [staging_path]
+    + [p for p in bubble_paths if p]
+    + [p for p in safe_parent_paths if p and p not in ([staging_path] + bubble_paths)]
+)
 
-# --- OVERLAY STRATEGY ---
-# Prepend new paths to the existing sys.path.
-# The order is critical: staging is checked first, then bubbles, then the base env.
-all_new_paths = [staging_path] + bubble_paths
-for p in reversed(all_new_paths):
-    if p and p not in sys.path:
-        sys.path.insert(0, p)
+import sys as _dbg; print("DEBUG_SYSPATH=" + repr(_dbg.path), file=_dbg.stderr, flush=True)
 
 results = []
 packages_data = {packages_json}
@@ -382,16 +406,16 @@ for pkg in packages_data:
 
 print(json.dumps(results))
 """
-        # [CHANGE 4] Pass parent_paths to format
         script = worker_script.format(
             staging_path=staging_path,
-            bubble_paths=bubble_paths,
+            bubble_paths=bubble_paths_filtered,
+            safe_parent_paths=safe_parent_paths,
             packages_json=json.dumps(packages),
-            parent_paths=parent_paths
         )
 
         try:
-            proc = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=300)
+            _env = os.environ.copy(); _env["PYTHONNOUSERSITE"] = "1"; _env["PYTHONPATH"] = ""
+            proc = subprocess.run([sys.executable, "-I", "-c", script], env=_env, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=300)
             if proc.returncode != 0 and not proc.stdout.strip():
                 # Provide stderr in crash report
                 return [VerificationResult(p['name'], p['version'], False, f"Crash: {proc.stderr}") for p in packages]
