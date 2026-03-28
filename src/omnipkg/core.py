@@ -42,7 +42,6 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Set, Tuple
 from omnipkg.common_utils import safe_input
-from omnipkg.common_utils import safe_input
 from omnipkg.i18n import _, SUPPORTED_LANGUAGES
 try:
     from importlib.metadata import version

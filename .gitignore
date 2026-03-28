@@ -206,3 +206,4 @@ src/omnipkg/_vendor/uv_ffi/__pycache__/
 /uv_ffi_lib.rs
 src/omnipkg/_vendor/wheels/
 *hunk_merger*.json
+.hunk_merger_state.json

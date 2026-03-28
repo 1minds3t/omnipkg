@@ -3083,6 +3083,7 @@ class WorkerPoolDaemon:
         shm_out: dict,
         python_exe: str = None,
         worker_tag: str = None,
+            pin: bool = False,          # NEW: worker survives idle timeout indefinitely
         max_memory_mb: float = None,
     ) -> dict:
         """
@@ -3157,6 +3158,8 @@ class WorkerPoolDaemon:
         if worker_key in self.workers:
             worker_info["last_used"] = time.time()
             worker_info["request_count"] += 1
+            if pin and not worker_info.get("pinned"):   # upgrade to pinned, one-way
+                worker_info["pinned"] = True
 
             try:
                 result = worker_info["worker"].execute_shm_task(
@@ -3183,6 +3186,8 @@ class WorkerPoolDaemon:
 
                     worker_info["last_used"] = time.time()
                     worker_info["request_count"] += 1
+                    if pin and not worker_info.get("pinned"):   # upgrade to pinned, one-way
+                        worker_info["pinned"] = True
 
                     try:
                         result = worker_info["worker"].execute_shm_task(
@@ -3250,6 +3255,7 @@ class WorkerPoolDaemon:
                         "created": time.time(),
                         "last_used": time.time(),
                         "request_count": 0,
+                        "pinned": pin,
                         "memory_mb": 0.0,
                         # Optional RSS cap in MB; enforced by _memory_manager.
                         # None means no cap (default, same as before).
@@ -3270,6 +3276,8 @@ class WorkerPoolDaemon:
         # Execute (outside all locks)
         worker_info["last_used"] = time.time()
         worker_info["request_count"] += 1
+        if pin and not worker_info.get("pinned"):   # upgrade to pinned, one-way
+            worker_info["pinned"] = True
 
         try:
             # CRITICAL: Ensure worker is ready before executing
@@ -3342,6 +3350,7 @@ class WorkerPoolDaemon:
         cuda_out: dict,
         python_exe: str = None,
         worker_tag: str = None,
+            pin: bool = False,          # NEW: worker survives idle timeout indefinitely
         max_memory_mb: float = None,
     ) -> dict:
         """Execute code with CUDA IPC tensors."""
@@ -3362,6 +3371,8 @@ class WorkerPoolDaemon:
         if worker_info:
             worker_info["last_used"] = time.time()
             worker_info["request_count"] += 1
+            if pin and not worker_info.get("pinned"):   # upgrade to pinned, one-way
+                worker_info["pinned"] = True
         else:
             # SLOW PATH: No worker exists, need to create or assign one
             with self.worker_locks[worker_key]:
@@ -3423,6 +3434,7 @@ class WorkerPoolDaemon:
                                 "created": time.time(),
                                 "last_used": time.time(),
                                 "request_count": 0,
+                                "pinned": pin,
                                 "memory_mb": 0.0,
                                 "is_gpu_worker": True,
                                 "gpu_timeout": 60,
@@ -3440,6 +3452,8 @@ class WorkerPoolDaemon:
         # EXECUTE TASK (on either existing or newly acquired worker)
         worker_info["last_used"] = time.time()
         worker_info["request_count"] += 1
+        if pin and not worker_info.get("pinned"):   # upgrade to pinned, one-way
+            worker_info["pinned"] = True
 
         try:
             command = {
@@ -3474,8 +3488,13 @@ class WorkerPoolDaemon:
             if not self.workers:
                 return
 
-            oldest = min(self.workers.keys(), key=lambda k: self.workers[k]["last_used"])
-            worker_info = self.workers.pop(oldest)  # Remove from pool FIRST
+            # Pinned workers are never chosen as eviction victims.
+            candidates = {k: v for k, v in self.workers.items() if not v.get("pinned")}
+            if not candidates:
+                return   # all workers are pinned — nothing to evict
+
+            oldest = min(candidates.keys(), key=lambda k: self.workers[k]["last_used"])
+            worker_info = self.workers.pop(oldest)
             self.stats["workers_killed"] += 1
 
         # Shutdown in background thread (don't block)
@@ -3561,6 +3580,10 @@ class WorkerPoolDaemon:
                                 if wkey in self.workers:
                                     self.workers[wkey]["memory_mb"] = rss_mb
                             if rss_mb > cap:
+                                # Don't evict pinned workers even if over RSS cap — they'll be reused.
+                                with self.pool_lock:
+                                    if self.workers.get(wkey, {}).get("pinned"):
+                                        continue
                                 safe_print(
                                     f"   🧹[DAEMON] Worker '{wkey}' RSS {rss_mb:.0f} MB "
                                     f"> cap {cap:.0f} MB — evicting for next call",
@@ -3601,6 +3624,8 @@ class WorkerPoolDaemon:
             with self.pool_lock:
                 specs_to_remove = []
                 for spec, info in self.workers.items():
+                    if info.get("pinned"):
+                        continue                          # NEW: never idle-timeout a pinned worker
                     timeout = info.get("gpu_timeout", self.max_idle_time)
                     if now - info["last_used"] > timeout:
                         specs_to_remove.append(spec)
@@ -3620,12 +3645,13 @@ class WorkerPoolDaemon:
                 pkg_spec = parts[0] if parts else k
                 python_exe = parts[1] if len(parts) > 1 else ""
                 worker_details[k] = {
-                    "last_used": v["last_used"],
-                    "request_count": v["request_count"],
+                    "last_used":       v["last_used"],
+                    "request_count":   v["request_count"],
                     "health_failures": v["worker"].health_check_failures,
-                    "pid": pid,
-                    "pkg_spec": pkg_spec,
-                    "python_exe": python_exe,
+                    "pid":             pid,
+                    "pkg_spec":        pkg_spec,
+                    "python_exe":      python_exe,
+                    "pinned":          v.get("pinned", False),   # NEW
                 }
 
             # 🔥 FIX: Also report idle pool sizes
@@ -4214,6 +4240,7 @@ class WorkerPool:
                 "dirty": dirty,
                 "created": time.time(),
                 "last_used": time.time(),
+                    "pinned": pin,
             }
             self._workers[key] = entry
             return entry
@@ -4326,6 +4353,7 @@ class DaemonClient:
         shm_out: dict,
         python_exe: str = None,
         worker_tag: str = None,
+            pin: bool = False,          # NEW: worker survives idle timeout indefinitely
         max_memory_mb: float = None,
     ):
         """
@@ -4348,6 +4376,10 @@ class DaemonClient:
         # Only include optional fields when set — keeps wire format backward-compat
         if worker_tag is not None:
             payload["worker_tag"] = worker_tag
+        if pin:
+            payload["pin"] = True
+        if pin:
+            payload["pin"] = True
         if max_memory_mb is not None:
             payload["max_memory_mb"] = max_memory_mb
         return self._send(payload)
@@ -4720,6 +4752,7 @@ class DaemonClient:
         output_dtype: str,
         python_exe: str = None,
         ipc_mode: str = "auto",
+            pin: bool = False,          # NEW: worker survives idle timeout indefinitely
         worker_tag: str = None,
         max_memory_mb: float = None,
     ):
@@ -4878,6 +4911,8 @@ class DaemonClient:
             }
             if worker_tag is not None:
                 payload["worker_tag"] = worker_tag
+            if pin:
+                payload["pin"] = True
             if max_memory_mb is not None:
                 payload["max_memory_mb"] = max_memory_mb
             response = self._send(payload)
@@ -5006,6 +5041,8 @@ class DaemonClient:
             }
             if worker_tag is not None:
                 payload["worker_tag"] = worker_tag
+            if pin:
+                payload["pin"] = True
             if max_memory_mb is not None:
                 payload["max_memory_mb"] = max_memory_mb
             response = self._send(payload)
@@ -5078,6 +5115,9 @@ class DaemonClient:
             }
             if worker_tag is not None:
                 payload["worker_tag"] = worker_tag
+            if pin:
+                payload["pin"] = True
+            
             if max_memory_mb is not None:
                 payload["max_memory_mb"] = max_memory_mb
             response = self._send(payload)
@@ -5114,6 +5154,7 @@ class DaemonClient:
         output_dtype,
         python_exe=None,
         worker_tag: str = None,
+            pin: bool = False,          # NEW: worker survives idle timeout indefinitely
         max_memory_mb: float = None,
     ):
         """
@@ -5172,14 +5213,17 @@ class DaemonClient:
                 pass
 
     def execute_smart(
-        self,
-        spec: str,
-        code: str,
-        data=None,
-        python_exe: str = None,
-        worker_tag: str = None,
-        max_memory_mb: float = None,
-    ):
+    self,
+    spec: str,
+    code: str,
+    data=None,
+    output_shape=None,
+    output_dtype=None,
+    python_exe: str = None,
+    worker_tag: str = None,
+    max_memory_mb: int = None,
+    pin: bool = False,          # NEW: worker survives idle timeout indefinitely
+):
         """
         ✨ THE ONE METHOD YOU NORMALLY CALL.
 
