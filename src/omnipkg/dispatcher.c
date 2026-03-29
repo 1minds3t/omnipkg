@@ -19,16 +19,20 @@
  *   - auto-adopt needed
  *   - OMNIPKG_FORCE_PYTHON_DISPATCH=1 (escape hatch)
  */
+#include <stdint.h>
+#include <errno.h>
+#ifdef _WIN32
+#include <winsock2.h>
+#else
 #include <unistd.h>
 #include <sys/stat.h>
 #include <libgen.h>
 #include <limits.h>
 #include <sys/socket.h>
 #include <sys/un.h>
-#include <stdint.h>
-#include <errno.h>
-
-#ifdef _WIN32
+#include <dlfcn.h>
+#include <fcntl.h>
+#include <glob.h>
 #include <windows.h>
 #include <direct.h>
 #include <io.h>
