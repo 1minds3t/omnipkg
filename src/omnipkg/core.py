@@ -10382,7 +10382,7 @@ class omnipkg:
             # 🔥 CRITICAL FIX: Bootstrap omnipkg into the copied interpreter
             safe_print(_("   - Bootstrapping omnipkg into copied interpreter..."))
             try:
-                self._install_essential_packages(copied_python)
+                self.config_manager._install_essential_packages(copied_python)
             except Exception as e:
                 safe_print(_("   - ⚠️ Bootstrap failed: {}. Trying download fallback...").format(e))
                 shutil.rmtree(dest, ignore_errors=True)

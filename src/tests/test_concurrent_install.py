@@ -428,15 +428,6 @@ def main():
             safe_print(f"❌ Failed to adopt Python {version}")
             sys.exit(1)
 
-    # Print resolved interpreter paths — catch any wrong resolution immediately
-    safe_print("\n🐍 Resolved interpreter paths:")
-    for version, _ in test_configs:
-        try:
-            path = get_interpreter_path(version)
-            safe_print(f"   Python {version} → {path}")
-        except Exception as e:
-            safe_print(f"   Python {version} → ❌ ERROR: {e}")
-
     # Resolve all interpreter paths AFTER adoption so daemon sees them all on start
     safe_print("\n🐍 Resolved interpreter paths:")
     interpreter_paths = []
@@ -448,6 +439,12 @@ def main():
         except Exception as e:
             safe_print(f"   Python {version} → ❌ ERROR: {e}")
             sys.exit(1)
+
+    # Start daemon BEFORE installs so FFI in-process path is live during install phase
+    if not ensure_daemon_running(interpreter_paths):
+        safe_print("❌ Failed to start daemon")
+        dump_daemon_log("DAEMON LOG ON STARTUP FAILURE")
+        sys.exit(1)
 
     # Phase 0: Install via versioned dispatcher (8pkg39, 8pkg310, etc.)
     # This is the key test — does 8pkg3X actually install into the RIGHT interpreter?
@@ -548,22 +545,7 @@ def main():
         safe_print(f"   {status} Python {r['version']} — {r['pkg']}  ({format_duration(r['elapsed_ms'])})")
     all_installed = all(r["ok"] for r in install_results)
     if not all_installed:
-        safe_print("\n⚠️  Some installs failed — continuing to daemon phase to capture behaviour")
-
-    if not ensure_daemon_running(interpreter_paths):
-        safe_print("❌ Failed to start daemon")
-        dump_daemon_log("DAEMON LOG ON STARTUP FAILURE")
-        sys.exit(1)
-
-    # DEBUG: dump raw 'omnipkg info python' output so we can see exactly what
-    # registry the subprocess sees at this point in the run.
-    safe_print("\n[DEBUG] Raw 'omnipkg info python' subprocess output:")
-    _raw_info = _run_info_python()
-    for _line in _raw_info.splitlines():
-        safe_print(f"  [RAW-INFO] {_line}")
-    safe_print(f"[DEBUG] End raw output — {len(_raw_info.splitlines())} lines")
-    safe_print(f"[DEBUG] sys.executable = {sys.executable}")
-    safe_print(f"[DEBUG] PATH = {_os.environ.get('PATH', '(not set)')[:300]}")
+        safe_print("\n⚠️  Some installs failed — continuing to warmup phase to capture behaviour")
 
     # Phase 2: Cold run (first call = daemon worker spawn + import)
     safe_print("\n🔥 Phase 2: Cold run — daemon worker spawn + first import (concurrent)")
