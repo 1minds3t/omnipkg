@@ -751,7 +751,7 @@ static int try_daemon_cli(const char *target_python, int argc, char **argv,
     if (!getcwd(cwd, sizeof(cwd))) cwd[0] = '\0';
 
     char *req = malloc(1024 * 1024);
-    if (!req) { sock_close(sock); return 0; }
+    if (!req) { close(sock); return 0; }
 
     int len = sprintf(req, "{\"type\":\"run_cli\",\"isatty\":%s",
                       isatty(1) ? "true" : "false");
@@ -775,7 +775,9 @@ static int try_daemon_cli(const char *target_python, int argc, char **argv,
     req[len++] = ']'; req[len++] = '}'; req[len] = '\0';
 
     if (!send_json_msg(sock, req)) {
-        free(req); sock_close(sock);
+        free(req);
+        close(sock);
+        /* Stale socket — nuke announcement so next call doesn't hit it again */
         remove(ann_path);
         if (debug) fprintf(stderr, "[C-DISPATCH] daemon send failed — falling back to execv\n");
         return 0;
