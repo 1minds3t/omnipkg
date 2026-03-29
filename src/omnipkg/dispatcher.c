@@ -31,6 +31,7 @@
 #  include <io.h>
 #  include <process.h>
 #  include <sys/stat.h>
+#  include <stdio.h>   /* snprintf — must precede compat functions on MinGW */
 
 /* ── Windows compat macros ── */
 #  undef MAX_PATH
@@ -42,10 +43,16 @@
 #  define sock_close(s) closesocket(s)
 /* Windows Sleep() is milliseconds; usleep() is microseconds */
 #  define usleep(us)   Sleep((DWORD)((us) / 1000 ? (us) / 1000 : 1))
-/* ssize_t is not defined in MSVC/MinGW */
+/* ssize_t: MinGW (corecrt.h) already typedefs this as __int64; MSVC does not.
+ * Only define our own when the MinGW sentinel macros are absent. */
+#  if !defined(_SSIZE_T_DEFINED) && !defined(_SSIZE_T_)
 typedef int ssize_t;
-/* pid_t placeholder — fork is not used on Windows */
+#  endif
+/* pid_t: MinGW (sys/types.h via process.h) already defines this.
+ * Only define our placeholder when neither MinGW sentinel is present. */
+#  if !defined(_PID_T_) && !defined(__pid_t_defined)
 typedef int pid_t;
+#  endif
 /* PATH_MAX for popen redirect suppression */
 #  define PATH_SEPARATOR ";"
 /* Windows read/write on sockets must use recv/send */
@@ -1205,8 +1212,6 @@ static int find_or_install_uv_ffi_so(
 /* ════════════════════════════════════════════════════════════════════════ */
 
 int main(int argc, char **argv) {
-    winsock_init(); /* no-op on POSIX; initialises Winsock 2.2 on Windows */
-
     int debug = (getenv("OMNIPKG_DEBUG") != NULL &&
                  strcmp(getenv("OMNIPKG_DEBUG"), "1") == 0);
 
@@ -1598,6 +1603,60 @@ int main(int argc, char **argv) {
                 /* Fork background Python only if something actually changed */
                 int has_changes = (strstr(out_json, "[\"") != NULL);
                 if (has_changes) {
+                    /* Build script + argv here — shared by POSIX child and Windows inline path */
+                    char py_ctx_ver[16] = "3.11";
+                    {
+                        const char *_pv = strstr(target_python, "python3.");
+                        if (_pv) {
+                            _pv += 7;
+                            size_t _vi = 0;
+                            while (_pv[_vi] &&
+                                   (_pv[_vi] == '.' ||
+                                    (_pv[_vi] >= '0' && _pv[_vi] <= '9')) &&
+                                   _vi < sizeof(py_ctx_ver) - 1) {
+                                py_ctx_ver[_vi] = _pv[_vi]; _vi++;
+                            }
+                            py_ctx_ver[_vi] = '\0';
+                        }
+                    }
+                    char py_script[8192];
+                    snprintf(py_script, sizeof(py_script),
+                        "import json, os, sys\n"
+                        "from omnipkg.core import ConfigManager, omnipkg\n"
+                        "from omnipkg.installation.smart_install import SmartInstaller\n"
+                        "core = omnipkg(ConfigManager())\n"
+                        "core._connect_cache()\n"
+                        "try:\n"
+                        "    cl = json.loads('''%s''')\n"
+                        "    inst = cl.get('installed', [])\n"
+                        "    rem  = cl.get('removed',   [])\n"
+                        "    bg = {\n"
+                        "        'force_reinstall': False,\n"
+                        "        'protected_from_cleanup': [],\n"
+                        "        'initial_packages': {},\n"
+                        "        'final_main_state':    {n: v for n, v in inst},\n"
+                        "        'main_env_kb_updates': {n: v for n, v in inst},\n"
+                        "        'bubbled_kb_updates':  {n: v for n, v in rem},\n"
+                        "        'python_context_version': '%s',\n"
+                        "        'priority_specs': [f'{n}=={v}' for n, v in inst],\n"
+                        "        'bubble_paths_to_scan': {},\n"
+                        "        'pending_bubble_tasks': [\n"
+                        "            {'type': 'create_isolated_bubble',\n"
+                        "             'pkg_name': n, 'version': v,\n"
+                        "             'python_context_version': '%s'}\n"
+                        "            for n, v in rem\n"
+                        "        ],\n"
+                        "        'run_doctor': False,\n"
+                        "    }\n"
+                        "    SmartInstaller(core)._run_background(bg, core)\n"
+                        "except Exception:\n"
+                        "    pass\n",
+                        out_json, py_ctx_ver, py_ctx_ver
+                    );
+                    char *bg_argv[] = {
+                        (char *)target_python, (char *)"-c", py_script, NULL
+                    };
+
 #ifndef _WIN32
                     pid_t pid = fork();
                     if (pid > 0) {
@@ -1612,78 +1671,13 @@ int main(int argc, char **argv) {
                             dup2(devnull, 2);
                             close(devnull);
                         }
-#else
-                    /* Windows: no fork — run background work inline (fire-and-forget
-                     * via _spawnv would need a separate exe; just run inline for now). */
-                    if (1) {
-                        {
-#endif
-
-                        /* Extract "3.11" safely into a fixed buffer */
-                        char py_ctx_ver[16] = "3.11";
-                        const char *_pv = strstr(target_python, "python3.");
-                        if (_pv) {
-                            _pv += 7; /* skip "python" — points at "3.11" etc */
-                            size_t _vi = 0;
-                            while (_pv[_vi] &&
-                                   (_pv[_vi] == '.' ||
-                                    (_pv[_vi] >= '0' && _pv[_vi] <= '9')) &&
-                                   _vi < sizeof(py_ctx_ver) - 1) {
-                                py_ctx_ver[_vi] = _pv[_vi];
-                                _vi++;
-                            }
-                            py_ctx_ver[_vi] = '\0';
-                        }
-
-                        char py_script[8192];
-                        snprintf(py_script, sizeof(py_script),
-                            "import json, os, sys\n"
-                            "from omnipkg.core import ConfigManager, omnipkg\n"
-                            "from omnipkg.installation.smart_install import SmartInstaller\n"
-                            "core = omnipkg(ConfigManager())\n"
-                            "core._connect_cache()\n"
-                            "try:\n"
-                            "    cl = json.loads('''%s''')\n"
-                            "    inst = cl.get('installed', [])\n"
-                            "    rem  = cl.get('removed',   [])\n"
-                            "    bg = {\n"
-                            "        'force_reinstall': False,\n"
-                            "        'protected_from_cleanup': [],\n"
-                            "        'initial_packages': {},\n"
-                            "        'final_main_state':    {n: v for n, v in inst},\n"
-                            "        'main_env_kb_updates': {n: v for n, v in inst},\n"
-                            "        'bubbled_kb_updates':  {n: v for n, v in rem},\n"
-                            "        'python_context_version': '%s',\n"
-                            "        'priority_specs': [f'{n}=={v}' for n, v in inst],\n"
-                            "        'bubble_paths_to_scan': {},\n"
-                            "        'pending_bubble_tasks': [\n"
-                            "            {'type': 'create_isolated_bubble',\n"
-                            "             'pkg_name': n, 'version': v,\n"
-                            "             'python_context_version': '%s'}\n"
-                            "            for n, v in rem\n"
-                            "        ],\n"
-                            "        'run_doctor': False,\n"
-                            "    }\n"
-                            "    SmartInstaller(core)._run_background(bg, core)\n"
-                            "except Exception:\n"
-                            "    pass\n",
-                            out_json,
-                            py_ctx_ver,
-                            py_ctx_ver
-                        );
-
-                        char *bg_argv[] = {
-                            (char *)target_python,
-                            (char *)"-c",
-                            py_script,
-                            NULL
-                        };
                         execv(target_python, bg_argv);
                         exit(0);
                     }
-#ifdef _WIN32
-                    } /* close extra Windows block */
-#endif
+#else
+                    /* Windows: no fork() — run background KB work inline */
+                    execv(target_python, bg_argv);
+#endif /* _WIN32 */
                 }
                 /* No changes (already satisfied) or fork parent — exit cleanly */
                 exit(0);
