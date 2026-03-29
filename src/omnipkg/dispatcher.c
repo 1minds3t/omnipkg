@@ -23,16 +23,6 @@
 #include <errno.h>
 #ifdef _WIN32
 #include <winsock2.h>
-#else
-#include <unistd.h>
-#include <sys/stat.h>
-#include <libgen.h>
-#include <limits.h>
-#include <sys/socket.h>
-#include <sys/un.h>
-#include <dlfcn.h>
-#include <fcntl.h>
-#include <glob.h>
 #include <windows.h>
 #include <direct.h>
 #include <io.h>
@@ -68,10 +58,12 @@ static char *omnipkg_basename(char *path) {
 #include <sys/stat.h>
 #include <libgen.h>
 #include <limits.h>
-#endif
+#include <sys/socket.h>
+#include <sys/un.h>
 #include <dlfcn.h>
 #include <fcntl.h>
 #include <glob.h>
+#endif
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
