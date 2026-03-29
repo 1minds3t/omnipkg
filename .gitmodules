@@ -1,3 +1,4 @@
 [submodule "src/omnipkg/_vendor/uv"]
 	path = src/omnipkg/_vendor/uv
 	url = https://github.com/astral-sh/uv
+	branch = omnipkg-ffi-v0.10.8
