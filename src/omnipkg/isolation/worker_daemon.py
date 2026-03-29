@@ -882,10 +882,273 @@ try:
         sys.exit(0)
     
     setup_data = json.loads(input_line.strip())
+    
+    # ── Shared dispatch loop — one worker handles run_cli AND run_uv forever ──
+    import io
+    class StreamRedirector(io.TextIOBase):
+        def __init__(self, stream_name):
+            self.stream_name = stream_name
+        def write(self, s):
+            if isinstance(s, bytes):
+                s = s.decode('utf-8', 'replace')
+            msg = {'stream': self.stream_name, 'data': s}
+            _original_stdout.write(json.dumps(msg) + '\\n')
+            _original_stdout.flush()
+            return len(s)
+        def isatty(self):
+            return setup_data.get('isatty', False)
+        def flush(self):
+            pass
+        @property
+        def buffer(self):
+            class DummyBuffer:
+                def write(self_buf, b):
+                    return self.write(b)
+                def flush(self_buf):
+                    pass
+            return DummyBuffer()
+
+    old_stdout = sys.stdout
+    old_stderr = sys.stderr
+
+    while True:
+        _req_type = setup_data.get('type')
+
+        if _req_type == 'run_cli':
+            _t_req = _wtime.perf_counter()
+            _original_stdout.write(json.dumps({'status': 'READY', 'mode': 'cli'}) + '\\n')
+            _original_stdout.flush()
+            sys.stderr.write(f'[WORKER-TIMING] req\u2192READY: {(_wtime.perf_counter()-_t_req)*1000:.2f}ms\\n')
+            sys.stderr.flush()
+
+            sys.stdout = StreamRedirector('stdout')
+            sys.stderr = StreamRedirector('stderr')
+
+            os.environ['_OMNIPKG_ISATTY'] = '1' if setup_data.get('isatty', False) else '0'
+            if 'cwd' in setup_data:
+                try: os.chdir(setup_data['cwd'])
+                except Exception: pass
+            if 'env' in setup_data:
+                os.environ.update(setup_data['env'])
+            sys.argv = setup_data.get('argv', ['omnipkg'])
+
+            exit_code = 0
+            try:
+                import omnipkg.cli as _run_cli_mod
+                _cm_ready   = getattr(_run_cli_mod, '_PRELOADED_CM',   None) is not None
+                _core_ready = getattr(_run_cli_mod, '_PRELOADED_CORE', None) is not None
+                if _cm_ready and _core_ready:
+                    sys.stderr.write('[WORKER-PRELOAD] \u2705 FAST PATH: consuming pre-warmed CM+Core\\n')
+                else:
+                    sys.stderr.write(f'[WORKER-PRELOAD] \u26a0\ufe0f  SLOW PATH: CM={_cm_ready} Core={_core_ready} \u2014 main() will do full init\\n')
+                sys.stderr.flush()
+                _t_main_start = _wtime.perf_counter()
+                _run_cli_mod.main()
+                _t_main_end = _wtime.perf_counter()
+                sys.stderr.write(f'[WORKER-TIMING] main() total: {(_t_main_end-_t_main_start)*1000:.2f}ms\\n')
+                sys.stderr.flush()
+            except SystemExit as e:
+                _t_main_end = _wtime.perf_counter()
+                sys.stderr.write(f'[WORKER-TIMING] main() total: {(_t_main_end-_t_main_start)*1000:.2f}ms (exit {e.code})\\n')
+                sys.stderr.flush()
+                exit_code = e.code if e.code is not None else 0
+            except Exception:
+                import traceback
+                sys.stderr.write(traceback.format_exc())
+                exit_code = 1
+
+            sys.stdout = old_stdout
+            sys.stderr = old_stderr
+
+            # Re-stash CM+Core so next job hits fast path
+            try:
+                import omnipkg.cli as _rcli
+                if getattr(_rcli, '_PRELOADED_CM', None) is None and '_pre_cm' in globals():
+                    _rcli._PRELOADED_CM = globals()['_pre_cm']
+                if getattr(_rcli, '_PRELOADED_CORE', None) is None and '_pre_core' in globals():
+                    _rcli._PRELOADED_CORE = globals()['_pre_core']
+                # ── FIX 2a: keep _uv_ffi_run wired on whatever core object is now
+                # stashed, in case main() replaced _PRELOADED_CORE with a fresh one.
+                _ffi_fn_rc = globals().get('_UV_FFI_RUN')
+                if _ffi_fn_rc is not None:
+                    _live_core = getattr(_rcli, '_PRELOADED_CORE', None)
+                    if _live_core is not None and not getattr(_live_core, '_uv_ffi_run', None):
+                        try:
+                            _live_core._uv_ffi_run = _ffi_fn_rc
+                        except Exception:
+                            pass
+                # NOTE: The old unconditional invalidate_site_packages_cache() call
+                # was removed here. It was firing after every run_cli job and undoing
+                # surgical patch_cache updates from the FS watcher. Cache coherency is
+                # now owned by the FS watcher (external writes) and install.rs's own
+                # post-install zero-disk update (our own FFI writes). No rescan needed.
+            except Exception:
+                pass
+
+            _t_done = _wtime.perf_counter()
+            sys.stderr.write(f'[WORKER-TIMING] worker total req\u2192COMPLETED: {(_t_done-_t_req)*1000:.2f}ms\\n')
+            sys.stderr.flush()
+            _original_stdout.write(json.dumps({'status': 'COMPLETED', 'exit_code': exit_code}) + '\\n')
+            _original_stdout.flush()
+
+        elif _req_type == 'run_uv':
+            _t_req = _wtime.perf_counter()
+            _uv_args = setup_data.get('uv_args', [])
+            _ffi_fn = globals().get('_UV_FFI_RUN')
+            if _ffi_fn is None:
+                # C dispatcher may have just installed uv_ffi — retry import once before giving up
+                try:
+                    from omnipkg._vendor.uv_ffi import run as _retry_ffi
+                    # Warm it up the same way startup does
+                    import os as _retry_os
+                    _dn = _retry_os.open(_retry_os.devnull, _retry_os.O_RDWR)
+                    _sv = _retry_os.dup(1)
+                    try:
+                        _retry_os.dup2(_dn, 1)
+                        _retry_ffi('pip freeze')
+                    finally:
+                        _retry_os.dup2(_sv, 1)
+                        _retry_os.close(_sv)
+                        _retry_os.close(_dn)
+                    _ffi_fn = _retry_ffi
+                    globals()['_UV_FFI_RUN'] = _retry_ffi
+                    sys.stderr.write('[RUN-UV] ' + chr(0x2705) + ' FFI loaded on retry (just installed)\\n')
+                    sys.stderr.flush()
+                except Exception as _retry_ex:
+                    sys.stderr.write('[RUN-UV] ' + chr(0x26a0) + '  FFI unavailable on this interpreter: ' + str(_retry_ex) + '\\n')
+                    sys.stderr.flush()
+                    _original_stdout.write(json.dumps({'status': 'FFI_UNAVAILABLE'}) + '\\n')
+                    _original_stdout.flush()
+                    sys.exit(0)
+            if '--python' not in _uv_args:
+                _pi_idx = next(
+                    (i for i, a in enumerate(_uv_args) if a == 'install'),
+                    None
+                )
+                if _pi_idx is not None:
+                    _uv_args = list(_uv_args)
+                    _uv_args.insert(_pi_idx + 1, '--python')
+                    _uv_args.insert(_pi_idx + 2, sys.executable)
+                    sys.stderr.write(f'[RUN-UV] --python {sys.executable}\\n')
+                    sys.stderr.flush()
+            try:
+                try:
+                    from omnipkg.isolation.fs_watcher import FfiWriteGuard as _FfiWG
+                    _ffi_guard = _FfiWG.attach()
+                except Exception:
+                    _ffi_guard = None
+                if _ffi_guard is not None:
+                    _ffi_guard.__enter__()
+                _ffi_result    = _ffi_fn(' '.join(_uv_args))
+                if _ffi_guard is not None:
+                    _ffi_guard.__exit__(None, None, None)
+                _ffi_rc        = _ffi_result[0] if isinstance(_ffi_result, tuple) else _ffi_result
+                _ffi_installed = _ffi_result[1] if isinstance(_ffi_result, tuple) and len(_ffi_result) > 1 else []
+                _ffi_removed   = _ffi_result[2] if isinstance(_ffi_result, tuple) and len(_ffi_result) > 2 else []
+                _t_done = _wtime.perf_counter()
+                _original_stdout.write(json.dumps({
+                    'status': 'COMPLETED',
+                    'exit_code': _ffi_rc,
+                    'installed': _ffi_installed,
+                    'removed': _ffi_removed,
+                    'elapsed_ms': round((_t_done - _t_req) * 1000, 2),
+                    'via': 'ffi',
+                }) + '\\n')
+                _original_stdout.flush()
+            except Exception as _ffi_ex:
+                if _ffi_guard is not None:
+                    try: _ffi_guard.__exit__(type(_ffi_ex), _ffi_ex, None)
+                    except Exception: pass
+                sys.stderr.write(f'[RUN-UV] FFI call failed: {_ffi_ex}\\n')
+                sys.stderr.flush()
+                _original_stdout.write(json.dumps({'status': 'ERROR', 'error': f'FFI call failed: {_ffi_ex}', 'exit_code': 1}) + '\\n')
+                _original_stdout.flush()
+
+        elif _req_type == 'patch_cache':
+            # Surgical zero-I/O cache update — apply exact delta from FS watcher.
+            # Calls Rust patch_site_packages_cache(installed, removed) which does
+            # the same sp.remove_packages()+sp.add_dist() as install.rs, no disk scan.
+            _inst = setup_data.get('installed', [])
+            _rem  = setup_data.get('removed',   [])
+            try:
+                import sys as _pc_sys, os as _pc_os
+                _pc_sys.path.insert(0, _pc_os.path.join(
+                    _pc_os.path.dirname(__import__('omnipkg._vendor.uv_ffi', fromlist=['']).__file__),
+                    '_native'
+                ))
+                from uv_ffi import patch_site_packages_cache as _pspc
+                # PyO3 Vec<(String,String)> requires tuples, not lists
+                _inst_t = [tuple(x) for x in _inst]
+                _rem_t  = [tuple(x) for x in _rem]
+                _patched = _pspc(_inst_t, _rem_t)
+                sys.stderr.write(f'[RUN-UV] patch_cache: patched={_patched} inst={_inst_t} rem={_rem_t}\\n')
+            except Exception as _pc_ex:
+                sys.stderr.write(f'[RUN-UV] patch_cache failed: {_pc_ex}\\n')
+            except Exception as _pc_ex:
+                sys.stderr.write(f'[RUN-UV] patch_cache failed: {_pc_ex}\\n')
+            sys.stderr.flush()
+        elif _req_type == 'kb_sentinel':
+            _installed = setup_data.get('installed', [])
+            _removed   = setup_data.get('removed',   [])
+            try:
+                _prefix = _pre_core.redis_key_prefix
+                _cc     = _pre_core.cache_client
+                with _cc.pipeline() as _pipe:
+                    for _name, _ver in _installed:
+                        _pk = f"{_prefix}{_name}"
+                        _pipe.hset(_pk, "active_version", _ver)
+                        _pipe.sadd(f"{_pk}:installed_versions", _ver)
+                    for _name, _ver in _removed:
+                        _pk = f"{_prefix}{_name}"
+                        _cur = _cc.hget(_pk, "active_version")
+                        if _cur == _ver:
+                            _pipe.hdel(_pk, "active_version")
+                    _pipe.execute()
+                sys.stderr.write(f'[KB-SENTINEL] written inst={_installed} rem={_removed}\\n')
+            except Exception as _e:
+                sys.stderr.write(f'[KB-SENTINEL] failed: {_e}\\n')
+            _original_stdout.write(json.dumps({'status': 'COMPLETED', 'exit_code': 0}) + '\\n')
+            _original_stdout.flush()
+        elif _req_type == 'invalidate_cache':
+            # Legacy fallback — forces full rescan on next install.
+            try:
+                import sys as _ic_sys, os as _ic_os
+                _ic_sys.path.insert(0, _ic_os.path.join(
+                    _ic_os.path.dirname(__import__('omnipkg._vendor.uv_ffi', fromlist=['']).__file__),
+                    '_native'
+                ))
+                from uv_ffi import invalidate_site_packages_cache as _ispc
+                _ispc()
+                sys.stderr.write('[RUN-UV] invalidate_cache: Rust FORCE_RESCAN set\\n')
+            except Exception as _ic_ex:
+                sys.stderr.write(f'[RUN-UV] invalidate_cache failed: {_ic_ex}\\n')
+            sys.stderr.flush()
+        elif _req_type == 'get_cache_state':
+            # Pool daemon is asking for current in-memory site-packages state.
+            try:
+                from omnipkg._vendor.uv_ffi import get_site_packages_cache as _gspc
+                _cache = _gspc()  # [(name, ver), ...]
+            except Exception:
+                _cache = []
+            _original_stdout.write(json.dumps({'type': 'cache_state', 'state': _cache}) + '\\n')
+            _original_stdout.flush()
+        else:
+            if setup_data.get('package_spec'):
+                break
+            sys.exit(0)
+
+        # Block for next request — same worker, same warm process
+        _next_line = sys.stdin.readline()
+        if not _next_line:
+            sys.exit(0)
+        setup_data = json.loads(_next_line.strip())
+
     PKG_SPEC = setup_data.get('package_spec', '')
     
     if not PKG_SPEC:
         fatal_error('Missing package_spec')
+    if PKG_SPEC == '__cli__':
+        PKG_SPEC = None  # CLI mode — no package loading needed
 except Exception as e:
     fatal_error('Startup configuration failed', e)
 
@@ -3336,8 +3599,8 @@ class WorkerPoolDaemon:
 
         try:
             # If worker hasn't been assigned a spec yet (idle worker), send setup first
-            if not worker.package_spec:
-                pkg_spec = req.get("spec") or req.get("package_spec", "")
+            if not worker._is_ready:
+                pkg_spec = req.get("spec") or req.get("package_spec") or "__cli__"
                 safe_print(f"[RUN-CLI] assigning spec '{pkg_spec}' to idle worker", file=sys.stderr)
                 worker.assign_spec(pkg_spec)
             safe_print(f"[RUN-CLI] sending req to worker", file=sys.stderr)
