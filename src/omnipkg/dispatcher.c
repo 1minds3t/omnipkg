@@ -22,23 +22,57 @@
 #include <stdint.h>
 #include <errno.h>
 #ifdef _WIN32
-#include <winsock2.h>
-#include <windows.h>
-#include <direct.h>
-#include <io.h>
-#include <process.h>
-#include <sys/stat.h>
-#define realpath(path, resolved) _fullpath(resolved, path, 4096)
-#undef MAX_PATH
-#define MAX_PATH 4096
+#  ifndef WIN32_LEAN_AND_MEAN
+#    define WIN32_LEAN_AND_MEAN
+#  endif
+#  include <winsock2.h>
+#  include <windows.h>
+#  include <direct.h>
+#  include <io.h>
+#  include <process.h>
+#  include <sys/stat.h>
+
+/* ── Windows compat macros ── */
+#  undef MAX_PATH
+#  define MAX_PATH 4096
+#  define realpath(path, resolved) _fullpath(resolved, path, MAX_PATH)
+#  define isatty(fd)   _isatty(fd)
+#  define getcwd(buf, n) _getcwd(buf, n)
+/* Winsock: map POSIX socket close → closesocket (file descriptors use _close separately) */
+#  define sock_close(s) closesocket(s)
+/* Windows Sleep() is milliseconds; usleep() is microseconds */
+#  define usleep(us)   Sleep((DWORD)((us) / 1000 ? (us) / 1000 : 1))
+/* ssize_t is not defined in MSVC/MinGW */
+typedef int ssize_t;
+/* pid_t placeholder — fork is not used on Windows */
+typedef int pid_t;
+/* PATH_MAX for popen redirect suppression */
+#  define PATH_SEPARATOR ";"
+/* Windows read/write on sockets must use recv/send */
+static ssize_t win_sock_read(int s, void *buf, size_t n) {
+    return recv(s, (char*)buf, (int)n, 0);
+}
+static ssize_t win_sock_write(int s, const void *buf, size_t n) {
+    return send(s, (const char*)buf, (int)n, 0);
+}
+#  define sock_read(s,b,n)  win_sock_read(s,b,n)
+#  define sock_write(s,b,n) win_sock_write(s,b,n)
+
+/* Windows mkdir takes 1 arg (no mode) */
+static int win_mkdir(const char *path) { return _mkdir(path); }
+#  define mkdir_compat(path, mode) win_mkdir(path)
+
+/* execv → _spawnv(_P_WAIT) then exit with that code */
 static int win_execv(const char *path, char *const argv[]) {
     intptr_t r = _spawnv(_P_WAIT, path, (const char *const *)argv);
     if (r == -1) return -1;
     exit((int)r);
 }
-#define execv(p, a) win_execv(p, a)
+#  define execv(p, a) win_execv(p, a)
+
+/* dirname / basename for Windows paths */
 static char *omnipkg_dirname(char *path) {
-    static char buf[4096];
+    static char buf[MAX_PATH];
     char *p, *last = NULL;
     strncpy(buf, path, sizeof(buf)-1);
     buf[sizeof(buf)-1] = 0;
@@ -51,18 +85,108 @@ static char *omnipkg_basename(char *path) {
     for (p = path; *p; p++) { if (*p == 47 || *p == 92) last = p; }
     return last ? last + 1 : path;
 }
-#define dirname(p) omnipkg_dirname(p)
-#define basename(p) omnipkg_basename(p)
-#else
-#include <unistd.h>
-#include <sys/stat.h>
-#include <libgen.h>
-#include <limits.h>
-#include <sys/socket.h>
-#include <sys/un.h>
-#include <dlfcn.h>
-#include <fcntl.h>
-#include <glob.h>
+#  define dirname(p) omnipkg_dirname(p)
+#  define basename(p) omnipkg_basename(p)
+
+/* dlopen / dlsym / dlerror → LoadLibrary / GetProcAddress */
+static void *win_dlopen(const char *path) {
+    return (void *)LoadLibraryA(path);
+}
+static void *win_dlsym(void *handle, const char *sym) {
+    return (void *)GetProcAddress((HMODULE)handle, sym);
+}
+static const char *win_dlerror(void) {
+    static char buf[256];
+    DWORD err = GetLastError();
+    if (!FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+                        NULL, err, 0, buf, sizeof(buf)-1, NULL))
+        snprintf(buf, sizeof(buf), "error %lu", (unsigned long)err);
+    return buf;
+}
+#  define dlopen(path, flags) win_dlopen(path)
+#  define dlsym(h, sym)       win_dlsym(h, sym)
+#  define dlerror()           win_dlerror()
+
+/* glob() replacement using FindFirstFile — returns 0 on match, non-0 on miss.
+ * Only handles a single trailing wildcard (e.g. "dir\*.so" or "dir\*.pyd").
+ * For omnipkg's use-case (finding .so / .pyd files in a known dir) this is
+ * sufficient.  gl_pathv[0] points at a static buffer. */
+typedef struct {
+    size_t  gl_pathc;
+    char  **gl_pathv;
+    char   *_internal_path;  /* storage for the one result we care about */
+} glob_t;
+static int win_glob(const char *pattern, int flags, void *errfunc, glob_t *pglob) {
+    (void)flags; (void)errfunc;
+    pglob->gl_pathc = 0;
+    pglob->gl_pathv = NULL;
+    pglob->_internal_path = NULL;
+
+    /* Split pattern into directory and wildcard filename */
+    char dir[MAX_PATH], pat[MAX_PATH];
+    const char *last_sep = NULL;
+    for (const char *p = pattern; *p; p++)
+        if (*p == '/' || *p == '\\') last_sep = p;
+    if (!last_sep) {
+        strncpy(dir, ".", sizeof(dir)-1); dir[sizeof(dir)-1] = '\0';
+        strncpy(pat, pattern, sizeof(pat)-1); pat[sizeof(pat)-1] = '\0';
+    } else {
+        size_t dlen = last_sep - pattern;
+        if (dlen >= sizeof(dir)) dlen = sizeof(dir)-1;
+        strncpy(dir, pattern, dlen); dir[dlen] = '\0';
+        strncpy(pat, last_sep + 1, sizeof(pat)-1); pat[sizeof(pat)-1] = '\0';
+    }
+
+    /* Build search path = dir\wildcard */
+    char search[MAX_PATH];
+    snprintf(search, sizeof(search), "%s\\%s", dir, pat);
+
+    WIN32_FIND_DATAA fd;
+    HANDLE h = FindFirstFileA(search, &fd);
+    if (h == INVALID_HANDLE_VALUE) return 1; /* no match */
+
+    /* Store the first match */
+    char full[MAX_PATH];
+    snprintf(full, sizeof(full), "%s\\%s", dir, fd.cFileName);
+    FindClose(h);
+
+    pglob->_internal_path = _strdup(full);
+    if (!pglob->_internal_path) return 1;
+    pglob->gl_pathv = &pglob->_internal_path;
+    pglob->gl_pathc = 1;
+    return 0;
+}
+static void win_globfree(glob_t *pglob) {
+    if (pglob->_internal_path) { free(pglob->_internal_path); pglob->_internal_path = NULL; }
+    pglob->gl_pathc = 0;
+    pglob->gl_pathv = NULL;
+}
+#  define glob(pat, flags, err, pg)  win_glob(pat, flags, err, pg)
+#  define globfree(pg)               win_globfree(pg)
+
+/* Winsock startup helper — called once at program start */
+static void winsock_init(void) {
+    WSADATA wsa;
+    WSAStartup(MAKEWORD(2,2), &wsa);
+}
+
+#else /* ── POSIX ── */
+#  include <unistd.h>
+#  include <sys/stat.h>
+#  include <sys/time.h>
+#  include <libgen.h>
+#  include <limits.h>
+#  include <sys/socket.h>
+#  include <sys/un.h>
+#  include <dlfcn.h>
+#  include <fcntl.h>
+#  include <glob.h>
+#  define PATH_SEPARATOR ":"
+#  define sock_read(s,b,n)   read(s,b,n)
+#  define sock_write(s,b,n)  write(s,b,n)
+#  define sock_close(s)      close(s)
+#  define mkdir_compat(path, mode) mkdir(path, mode)
+#  define winsock_init() /* nothing */
 #endif
 #include <stdio.h>
 #include <stdlib.h>
@@ -90,7 +214,7 @@ static void real_path(const char *in, char *out, size_t n) {
             char path_copy[16384];
             strncpy(path_copy, path_env, sizeof(path_copy) - 1);
             path_copy[sizeof(path_copy) - 1] = '\0';
-            char *dir = strtok(path_copy, ":");
+            char *dir = strtok(path_copy, PATH_SEPARATOR);
             while (dir) {
                 char candidate[MAX_PATH];
                 snprintf(candidate, sizeof(candidate), "%s/%s", dir, in);
@@ -101,7 +225,7 @@ static void real_path(const char *in, char *out, size_t n) {
                         return;
                     }
                 }
-                dir = strtok(NULL, ":");
+                dir = strtok(NULL, PATH_SEPARATOR);
             }
         }
     }
@@ -250,25 +374,148 @@ static int read_self_config(const char *self_dir, char *python_path, size_t n) {
 
 /* ── daemon socket communication ───────────────────────────────────────── */
 
+/* Forward declaration — defined later in stamp-file helpers section */
+static const char *get_tmp_dir(void);
+
+/*
+ * daemon_connect — platform-transparent daemon connection.
+ *
+ * Reads daemon_connection.txt from the platform temp dir.
+ *   Unix:    "unix:///path/to/socket"  → AF_UNIX connect
+ *   Windows: "tcp://127.0.0.1:PORT"   → AF_INET TCP connect
+ *
+ * Falls back to Unix socket at $TMPDIR/omnipkg/omnipkg_daemon.sock on Unix
+ * and TCP 127.0.0.1:5678 on Windows if the file is missing.
+ *
+ * Returns a connected socket fd, or -1 on failure.
+ * Caller is responsible for sock_close().
+ *
+ * Writes the announcement path used into ann_path_out (may be NULL).
+ */
+static int daemon_connect(int debug, char *ann_path_out, size_t ann_path_n) {
+    char ann_path[MAX_PATH];
+    snprintf(ann_path, sizeof(ann_path), "%s/omnipkg/daemon_connection.txt",
+             get_tmp_dir());
+    if (ann_path_out)
+        snprintf(ann_path_out, ann_path_n, "%s", ann_path);
+
+    char conn_str[MAX_PATH] = "";
+    FILE *af = fopen(ann_path, "r");
+    if (af) {
+        if (fgets(conn_str, sizeof(conn_str), af))
+            conn_str[strcspn(conn_str, "\r\n")] = '\0';
+        fclose(af);
+    }
+
+    if (debug) fprintf(stderr, "[C-DISPATCH] daemon_connect: conn_str='%s'\n", conn_str);
+
+#ifndef _WIN32
+    /* ── Unix: AF_UNIX ── */
+    char sock_path[MAX_PATH];
+    if (strncmp(conn_str, "unix://", 7) == 0) {
+        strncpy(sock_path, conn_str + 7, sizeof(sock_path) - 1);
+        sock_path[sizeof(sock_path) - 1] = '\0';
+    } else {
+        /* fallback */
+        const char *td = getenv("TMPDIR");
+        if (!td) td = "/tmp";
+        snprintf(sock_path, sizeof(sock_path), "%s/omnipkg/omnipkg_daemon.sock", td);
+    }
+
+    struct stat st;
+    if (stat(sock_path, &st) != 0) {
+        if (debug) fprintf(stderr, "[C-DISPATCH] daemon socket not found: %s\n", sock_path);
+        return -1;
+    }
+
+    int sock = socket(AF_UNIX, SOCK_STREAM, 0);
+    if (sock < 0) return -1;
+
+    struct sockaddr_un addr;
+    memset(&addr, 0, sizeof(addr));
+    addr.sun_family = AF_UNIX;
+    strncpy(addr.sun_path, sock_path, sizeof(addr.sun_path) - 1);
+
+    if (connect(sock, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
+        if (debug) fprintf(stderr, "[C-DISPATCH] AF_UNIX connect failed: %s\n", strerror(errno));
+        sock_close(sock);
+        return -1;
+    }
+    if (debug) fprintf(stderr, "[C-DISPATCH] connected via AF_UNIX: %s\n", sock_path);
+    return sock;
+
+#else
+    /* ── Windows: AF_INET TCP ── */
+    char host[256] = "127.0.0.1";
+    int  port = 5678;
+
+    if (strncmp(conn_str, "tcp://", 6) == 0) {
+        char *colon = strrchr(conn_str + 6, ':');
+        if (colon) {
+            size_t hlen = (size_t)(colon - (conn_str + 6));
+            if (hlen < sizeof(host)) {
+                strncpy(host, conn_str + 6, hlen);
+                host[hlen] = '\0';
+            }
+            port = atoi(colon + 1);
+        }
+    }
+
+    if (debug) fprintf(stderr, "[C-DISPATCH] connecting TCP %s:%d\n", host, port);
+
+    SOCKET sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    if (sock == INVALID_SOCKET) return -1;
+
+    struct sockaddr_in addr;
+    memset(&addr, 0, sizeof(addr));
+    addr.sin_family = AF_INET;
+    addr.sin_port   = htons((unsigned short)port);
+    addr.sin_addr.s_addr = inet_addr(host);
+
+    if (connect(sock, (struct sockaddr*)&addr, sizeof(addr)) != 0) {
+        if (debug) fprintf(stderr, "[C-DISPATCH] TCP connect failed: %lu\n",
+                           (unsigned long)WSAGetLastError());
+        closesocket(sock);
+        return -1;
+    }
+    if (debug) fprintf(stderr, "[C-DISPATCH] connected via TCP %s:%d\n", host, port);
+    return (int)sock;
+#endif
+}
+
+/* Set send+recv timeouts on a connected daemon socket. */
+static void daemon_set_timeouts(int sock, int send_sec, int recv_sec) {
+#ifdef _WIN32
+    DWORD snd = (DWORD)(send_sec * 1000);
+    DWORD rcv = (DWORD)(recv_sec * 1000);
+    setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, (const char*)&snd, sizeof(snd));
+    setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (const char*)&rcv, sizeof(rcv));
+#else
+    struct timeval tv_snd = { send_sec, 0 };
+    struct timeval tv_rcv = { recv_sec, 0 };
+    setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, (const char*)&tv_snd, sizeof(tv_snd));
+    setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv_rcv, sizeof(tv_rcv));
+#endif
+}
+
 static int write_all(int fd, const void *buf, size_t count) {
-    const char *p = buf;
+    const char *p = (const char*)buf;
     while (count > 0) {
-        ssize_t r = write(fd, p, count);
+        ssize_t r = sock_write(fd, p, count);
         if (r <= 0) return 0;
         p += r;
-        count -= r;
+        count -= (size_t)r;
     }
     return 1;
 }
 
 static int send_json_msg(int sock, const char *json_str) {
-    uint64_t len = strlen(json_str);
-    uint64_t be_len = 0;
-    for (int i = 0; i < 8; i++) {
-        ((uint8_t*)&be_len)[7 - i] = (len >> (i * 8)) & 0xFF;
-    }
-    if (!write_all(sock, &be_len, 8)) return 0;
-    if (!write_all(sock, json_str, len)) return 0;
+    uint64_t len = (uint64_t)strlen(json_str);
+    uint8_t be_len[8];
+    for (int i = 0; i < 8; i++)
+        be_len[7 - i] = (uint8_t)((len >> (i * 8)) & 0xFF);
+    if (!write_all(sock, be_len, 8)) return 0;
+    if (!write_all(sock, json_str, (size_t)len)) return 0;
     return 1;
 }
 
@@ -276,7 +523,7 @@ static char* recv_json_msg(int sock) {
     uint8_t be_len[8];
     int n = 0;
     while (n < 8) {
-        int r = read(sock, be_len + n, 8 - n);
+        int r = (int)sock_read(sock, be_len + n, (size_t)(8 - n));
         if (r <= 0) return NULL;
         n += r;
     }
@@ -285,13 +532,13 @@ static char* recv_json_msg(int sock) {
         len = (len << 8) | be_len[i];
     }
     if (len > 1024 * 1024 * 10) return NULL;
-    char *buf = malloc(len + 1);
+    char *buf = (char*)malloc((size_t)(len + 1));
     if (!buf) return NULL;
     uint64_t total = 0;
     while (total < len) {
-        int r = read(sock, buf + total, len - total);
+        int r = (int)sock_read(sock, buf + total, (size_t)(len - total));
         if (r <= 0) { free(buf); return NULL; }
-        total += r;
+        total += (uint64_t)r;
     }
     buf[len] = '\0';
     return buf;
@@ -408,6 +655,8 @@ static int json_get_int(const char *json, const char *key, int *out) {
  *
  * Deliberately has a short timeout (5s) so we fall through to the dlopen
  * path quickly if the daemon is unavailable.
+ *
+ * Uses daemon_connect() which handles tcp:// (Windows) and unix:// (POSIX).
  */
 static int try_daemon_uv(
     const char *target_python,
@@ -418,56 +667,18 @@ static int try_daemon_uv(
     int debug = (getenv("OMNIPKG_DEBUG") != NULL &&
                  strcmp(getenv("OMNIPKG_DEBUG"), "1") == 0);
 
-    /* ── Locate socket (same logic as try_daemon_cli) ── */
-    char sock_path[MAX_PATH];
-    sock_path[0] = '\0';
-    const char *ann_path = "/tmp/omnipkg/daemon_connection.txt";
-    FILE *af = fopen(ann_path, "r");
-    if (af) {
-        char line[MAX_PATH];
-        if (fgets(line, sizeof(line), af)) {
-            line[strcspn(line, "\r\n")] = '\0';
-            if (strncmp(line, "unix://", 7) == 0) {
-                strncpy(sock_path, line + 7, sizeof(sock_path) - 1);
-                sock_path[sizeof(sock_path) - 1] = '\0';
-            }
-        }
-        fclose(af);
-    }
-    if (!sock_path[0]) {
-        const char *tmpdir = getenv("TMPDIR");
-        if (!tmpdir) tmpdir = "/tmp";
-        snprintf(sock_path, sizeof(sock_path), "%s/omnipkg/omnipkg_daemon.sock", tmpdir);
-    }
-
-    struct stat st;
-    if (stat(sock_path, &st) != 0) return 0;
-
-    int sock = socket(AF_UNIX, SOCK_STREAM, 0);
+    int sock = daemon_connect(debug, NULL, 0);
     if (sock < 0) return 0;
+    daemon_set_timeouts(sock, 5, 5);
 
-    /* Short timeouts — UV install is fast, bail quickly if something's wrong */
-    struct timeval tv = { 5, 0 };
-    setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
-    setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
-
-    struct sockaddr_un addr;
-    memset(&addr, 0, sizeof(addr));
-    addr.sun_family = AF_UNIX;
-    strncpy(addr.sun_path, sock_path, sizeof(addr.sun_path) - 1);
-    if (connect(sock, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
-        close(sock);
-        return 0;
-    }
-
-    /* Build the home/cache dir */
     char cache_dir[MAX_PATH];
     const char *home = getenv("HOME");
-    snprintf(cache_dir, sizeof(cache_dir), "%s/.cache/uv", home ? home : "/tmp");
+#ifdef _WIN32
+    if (!home) home = getenv("USERPROFILE");
+    if (!home) home = getenv("LOCALAPPDATA");
+#endif
+    snprintf(cache_dir, sizeof(cache_dir), "%s/.cache/uv", home ? home : get_tmp_dir());
 
-    /* Build run_uv request JSON.
-     * uv_args: ["pip","install","--cache-dir","<dir>","--python","<exe>","--link-mode","symlink","<pkg>"]
-     */
     char req[4096];
     int rlen = snprintf(req, sizeof(req),
         "{\"type\":\"run_uv\","
@@ -479,127 +690,53 @@ static int try_daemon_uv(
         "\"%s\"]}",
         target_python, cache_dir, target_python, pkg_spec);
 
-    if (rlen <= 0 || rlen >= (int)sizeof(req)) { close(sock); return 0; }
-
+    if (rlen <= 0 || rlen >= (int)sizeof(req)) { sock_close(sock); return 0; }
     if (debug) fprintf(stderr, "[C-DISPATCH] try_daemon_uv: sending run_uv for %s\n", pkg_spec);
+    if (!send_json_msg(sock, req)) { sock_close(sock); return 0; }
 
-    if (!send_json_msg(sock, req)) { close(sock); return 0; }
-
-    /* Drain frames until COMPLETED/ERROR */
     while (1) {
         char *msg = recv_json_msg(sock);
         if (!msg) break;
-
         char *status_start;
         if (json_get_raw_str(msg, "status", &status_start)) {
             if (strncmp(status_start, "COMPLETED", 9) == 0) {
                 int exit_code = 0;
                 json_get_int(msg, "exit_code", &exit_code);
-
                 if (exit_code == 0) {
-                    /* Build changelog JSON from installed/removed arrays in msg.
-                     * The daemon returns {"status":"COMPLETED","exit_code":0,
-                     * "installed":[["name","ver"],...],"removed":[...]} */
-                    /* Copy the full msg as out_json for the caller to use */
                     strncpy(out_json, msg, max_out - 1);
                     out_json[max_out - 1] = '\0';
-                    free(msg);
-                    close(sock);
+                    free(msg); sock_close(sock);
                     if (debug) fprintf(stderr, "[C-DISPATCH] try_daemon_uv: success\n");
                     return 1;
                 }
-                free(msg);
-                close(sock);
+                free(msg); sock_close(sock);
                 return 0;
             } else if (strncmp(status_start, "FFI_UNAVAILABLE", 15) == 0 ||
                        strncmp(status_start, "ERROR", 5) == 0) {
-                free(msg);
-                close(sock);
+                free(msg); sock_close(sock);
                 return 0;
             }
         }
-        /* stream frames — ignore */
         free(msg);
     }
-
-    close(sock);
+    sock_close(sock);
     return 0;
 }
 
-static int try_daemon_cli(const char *target_python, int argc, char **argv, int version_injected, const char *forced_version) {
+static int try_daemon_cli(const char *target_python, int argc, char **argv,
+                          int version_injected, const char *forced_version) {
     int debug = (getenv("OMNIPKG_DEBUG") != NULL &&
                  strcmp(getenv("OMNIPKG_DEBUG"), "1") == 0);
 
-    /* ── Locate the socket ──────────────────────────────────────────────
-     * Strategy (same logic as DaemonClient in Python):
-     *   1. Read /tmp/omnipkg/daemon_connection.txt  (written at bind time)
-     *      Format: "unix:///path/to/socket"
-     *   2. Fall back to $TMPDIR/omnipkg/omnipkg_daemon.sock
-     *   3. Fall back to /tmp/omnipkg/omnipkg_daemon.sock
-     * Using a fixed /tmp prefix for the announcement file means we find
-     * the daemon even when TMPDIR differs between shell and daemon process.
-     * ─────────────────────────────────────────────────────────────────── */
-    char sock_path[MAX_PATH];
-    sock_path[0] = '\0';
-
-    /* Try announcement file first */
-    const char *ann_path = "/tmp/omnipkg/daemon_connection.txt";
-    FILE *af = fopen(ann_path, "r");
-    if (af) {
-        char line[MAX_PATH];
-        if (fgets(line, sizeof(line), af)) {
-            /* strip newline */
-            line[strcspn(line, "\r\n")] = '\0';
-            if (strncmp(line, "unix://", 7) == 0) {
-                strncpy(sock_path, line + 7, sizeof(sock_path) - 1);
-                sock_path[sizeof(sock_path) - 1] = '\0';
-                if (debug) fprintf(stderr, "[C-DISPATCH] found socket via announcement: %s\n", sock_path);
-            }
-        }
-        fclose(af);
-    }
-
-    /* Fall back to TMPDIR-based path */
-    if (!sock_path[0]) {
-        const char *tmpdir = getenv("TMPDIR");
-        if (!tmpdir) tmpdir = "/tmp";
-        snprintf(sock_path, sizeof(sock_path), "%s/omnipkg/omnipkg_daemon.sock", tmpdir);
-        if (debug) fprintf(stderr, "[C-DISPATCH] no announcement file, trying: %s\n", sock_path);
-    }
-
-    if (debug) fprintf(stderr, "[C-DISPATCH] try_daemon_cli: sock=%s\n", sock_path);
-
-    /* Quick existence check before paying the connect syscall */
-    struct stat st;
-    if (stat(sock_path, &st) != 0) {
-        if (debug) fprintf(stderr, "[C-DISPATCH] daemon socket not found — skipping\n");
+    char ann_path[MAX_PATH];
+    int sock = daemon_connect(debug, ann_path, sizeof(ann_path));
+    if (sock < 0) {
+        if (debug) fprintf(stderr, "[C-DISPATCH] daemon not available — skipping\n");
         return 0;
     }
 
-    int sock = socket(AF_UNIX, SOCK_STREAM, 0);
-    if (sock < 0) return 0;
-
-    /* Short send timeout — if we can't write to the daemon in 2s something is wrong. */
-    struct timeval tv_send = { 2, 0 };
-    setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, &tv_send, sizeof(tv_send));
-    /* Recv timeout: generous for slow PyPI ops.  When the worker sends
-     * NEEDS_INPUT the C side reads from the terminal and replies; after that
-     * the worker resumes.  We reset the timeout after each message, so this
-     * is really "max idle time between any two messages", not a wall-clock
-     * limit for the whole command.  300 s covers the rare case where a human
-     * is very slow at typing a prompt answer.                               */
-    struct timeval tv_recv = { 300, 0 };
-    setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &tv_recv, sizeof(tv_recv));
-
-    struct sockaddr_un addr;
-    memset(&addr, 0, sizeof(addr));
-    addr.sun_family = AF_UNIX;
-    strncpy(addr.sun_path, sock_path, sizeof(addr.sun_path) - 1);
-    if (connect(sock, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
-        if (debug) fprintf(stderr, "[C-DISPATCH] daemon connect failed: %s\n", strerror(errno));
-        close(sock);
-        return 0;
-    }
+    /* Short send, generous recv (300s covers slow human at NEEDS_INPUT prompt) */
+    daemon_set_timeouts(sock, 2, 300);
 
     if (debug) fprintf(stderr, "[C-DISPATCH] daemon connected — sending run_cli\n");
 
@@ -607,50 +744,31 @@ static int try_daemon_cli(const char *target_python, int argc, char **argv, int 
     if (!getcwd(cwd, sizeof(cwd))) cwd[0] = '\0';
 
     char *req = malloc(1024 * 1024);
-    if (!req) { close(sock); return 0; }
+    if (!req) { sock_close(sock); return 0; }
 
-    int len = sprintf(req, "{\"type\":\"run_cli\",\"isatty\":%s", isatty(1) ? "true" : "false");
-
-    if (target_python && target_python[0]) {
+    int len = sprintf(req, "{\"type\":\"run_cli\",\"isatty\":%s",
+                      isatty(1) ? "true" : "false");
+    if (target_python && target_python[0])
         len += sprintf(req + len, ",\"python_exe\":\"%s\"", target_python);
-    }
-
-    if (cwd[0]) {
+    if (cwd[0])
         len += sprintf(req + len, ",\"cwd\":\"%s\"", cwd);
-    }
 
     len += sprintf(req + len, ",\"argv\":[\"8pkg\"");
-    /* Do NOT forward --python <ver> to the daemon worker.  The worker is already
-     * running under the correct interpreter (target_python); passing --python
-     * causes cli.main() to call ensure_python_or_relaunch() which does execve
-     * and kills the worker without ever sending COMPLETED → "daemon unhealthy".
-     * The python_exe field in the request already tells the daemon which worker
-     * pool to use, so --python in argv is redundant and harmful here. */
+    /* Do NOT forward --python to the daemon worker — python_exe already selects
+     * the right pool; passing --python causes the worker to execve and die. */
     for (int i = 1; i < argc; i++) {
-        /* skip --python and its argument */
         if (strcmp(argv[i], "--python") == 0) { i++; continue; }
-        req[len++] = ',';
-        req[len++] = '"';
-        char *p = argv[i];
-        while (*p) {
-            if (*p == '"' || *p == '\\') {
-                req[len++] = '\\';
-                req[len++] = *p;
-            } else {
-                req[len++] = *p;
-            }
-            p++;
+        req[len++] = ','; req[len++] = '"';
+        for (char *p = argv[i]; *p; p++) {
+            if (*p == '"' || *p == '\\') req[len++] = '\\';
+            req[len++] = *p;
         }
         req[len++] = '"';
     }
-    req[len++] = ']';
-    req[len++] = '}';
-    req[len] = '\0';
+    req[len++] = ']'; req[len++] = '}'; req[len] = '\0';
 
     if (!send_json_msg(sock, req)) {
-        free(req);
-        close(sock);
-        /* Stale socket — nuke announcement so next call doesn't hit it again */
+        free(req); sock_close(sock);
         remove(ann_path);
         if (debug) fprintf(stderr, "[C-DISPATCH] daemon send failed — falling back to execv\n");
         return 0;
@@ -673,59 +791,42 @@ static int try_daemon_cli(const char *target_python, int argc, char **argv, int 
             if (strncmp(stream_type, "COMPLETED", 9) == 0) {
                 int exit_code = 0;
                 json_get_int(msg, "exit_code", &exit_code);
-                free(msg);
-                close(sock);
+                free(msg); sock_close(sock);
                 exit(exit_code);
             } else if (strncmp(stream_type, "NEEDS_INPUT", 11) == 0) {
-                /* Worker is blocking on input() — print the prompt to the real
-                 * terminal, read a line, and send it back as stdin_line. */
                 char *prompt_start;
-                if (json_get_raw_str(msg, "prompt", &prompt_start)) {
+                if (json_get_raw_str(msg, "prompt", &prompt_start))
                     print_unescaped(prompt_start, stdout);
-                }
                 free(msg);
 
-                /* Read one line from the real terminal (stdin fd 0). */
                 char input_buf[4096];
                 size_t ilen = 0;
                 input_buf[0] = '\0';
                 if (fgets(input_buf, sizeof(input_buf), stdin)) {
-                    /* Strip trailing newline — worker will add it back. */
                     ilen = strlen(input_buf);
-                    if (ilen > 0 && input_buf[ilen - 1] == '\n')
+                    if (ilen > 0 && input_buf[ilen-1] == '\n')
                         input_buf[--ilen] = '\0';
                 }
-                /* else: EOF/error — input_buf stays empty, ilen stays 0 */
 
-                /* Build {"type":"stdin_line","data":"<escaped>"} */
-                char *reply = malloc(ilen * 6 + 64); /* generous for JSON escaping */
-                if (!reply) { close(sock); return 0; }
+                char *reply = malloc(ilen * 6 + 64);
+                if (!reply) { sock_close(sock); return 0; }
                 int rlen = sprintf(reply, "{\"type\":\"stdin_line\",\"data\":\"");
                 for (size_t k = 0; k < ilen; k++) {
                     unsigned char c = (unsigned char)input_buf[k];
-                    if      (c == '"')  { reply[rlen++] = '\\'; reply[rlen++] = '"'; }
-                    else if (c == '\\') { reply[rlen++] = '\\'; reply[rlen++] = '\\'; }
-                    else if (c == '\n') { reply[rlen++] = '\\'; reply[rlen++] = 'n'; }
-                    else if (c == '\r') { reply[rlen++] = '\\'; reply[rlen++] = 'r'; }
-                    else if (c == '\t') { reply[rlen++] = '\\'; reply[rlen++] = 't'; }
-                    else if (c < 0x20) {
-                        rlen += sprintf(reply + rlen, "\\u%04x", c);
-                    } else {
-                        reply[rlen++] = c;
-                    }
+                    if      (c == '"')  { reply[rlen++]='\\'; reply[rlen++]='"'; }
+                    else if (c == '\\') { reply[rlen++]='\\'; reply[rlen++]='\\'; }
+                    else if (c == '\n') { reply[rlen++]='\\'; reply[rlen++]='n'; }
+                    else if (c == '\r') { reply[rlen++]='\\'; reply[rlen++]='r'; }
+                    else if (c == '\t') { reply[rlen++]='\\'; reply[rlen++]='t'; }
+                    else if (c < 0x20)  { rlen += sprintf(reply+rlen,"\\u%04x",c); }
+                    else                { reply[rlen++] = c; }
                 }
-                reply[rlen++] = '"';
-                reply[rlen++] = '}';
-                reply[rlen]   = '\0';
-
+                reply[rlen++]='"'; reply[rlen++]='}'; reply[rlen]='\0';
                 int ok = send_json_msg(sock, reply);
                 free(reply);
-                if (!ok) { close(sock); return 0; }
-                /* Continue the recv loop — worker will resume and send more output. */
+                if (!ok) { sock_close(sock); return 0; }
                 continue;
             } else if (strncmp(stream_type, "ERROR", 5) == 0) {
-                /* Daemon-side error (broken pipe, crash, etc.) — don't exit,
-                 * fall through so main() retries via execv Python fallback. */
                 got_terminal_status = 1;
                 free(msg);
                 break;
@@ -734,10 +835,7 @@ static int try_daemon_cli(const char *target_python, int argc, char **argv, int 
         free(msg);
     }
 
-    close(sock);
-    /* If we got an ERROR status or recv loop broke without COMPLETED,
-     * the daemon is unhealthy. Nuke the announcement so the next call
-     * doesn't connect to a dead socket, then signal fallback. */
+    sock_close(sock);
     if (!got_terminal_status) {
         remove(ann_path);
         if (debug) fprintf(stderr, "[C-DISPATCH] daemon unhealthy — falling back to execv\n");
@@ -798,11 +896,26 @@ static void fallback_to_python(const char *self_dir, char **argv) {
  * Presence = uv_ffi verified/installed for that interpreter.
  * Check cost: one stat() call, ~2µs — replaces the old 60ms subprocess check.
  */
+/* Return platform temp dir, no trailing slash */
+static const char *get_tmp_dir(void) {
+#ifdef _WIN32
+    static char _tmpbuf[MAX_PATH];
+    /* TEMP > TMP > C:\Windows\Temp */
+    const char *t = getenv("TEMP");
+    if (!t) t = getenv("TMP");
+    if (t) { strncpy(_tmpbuf, t, sizeof(_tmpbuf)-1); _tmpbuf[sizeof(_tmpbuf)-1]='\0'; return _tmpbuf; }
+    return "C:\\Windows\\Temp";
+#else
+    const char *t = getenv("TMPDIR");
+    return t ? t : "/tmp";
+#endif
+}
+
 static void ffi_stamp_path(const char *python_exe, char *out, size_t n) {
     unsigned long h = 5381;
     const unsigned char *p = (const unsigned char *)python_exe;
     while (*p) { h = h * 33 ^ *p++; }
-    snprintf(out, n, "/tmp/omnipkg/ffi_ok/%lu.stamp", h);
+    snprintf(out, n, "%s/omnipkg/ffi_ok/%lu.stamp", get_tmp_dir(), h);
 }
 
 static int ffi_stamp_exists(const char *python_exe) {
@@ -813,8 +926,11 @@ static int ffi_stamp_exists(const char *python_exe) {
 }
 
 static void ffi_stamp_write(const char *python_exe) {
-    mkdir("/tmp/omnipkg", 0755);
-    mkdir("/tmp/omnipkg/ffi_ok", 0755);
+    char dir1[MAX_PATH], dir2[MAX_PATH];
+    snprintf(dir1, sizeof(dir1), "%s/omnipkg", get_tmp_dir());
+    snprintf(dir2, sizeof(dir2), "%s/omnipkg/ffi_ok", get_tmp_dir());
+    mkdir_compat(dir1, 0755);
+    mkdir_compat(dir2, 0755);
     char stamp[MAX_PATH];
     ffi_stamp_path(python_exe, stamp, sizeof(stamp));
     FILE *f = fopen(stamp, "w");
@@ -859,12 +975,12 @@ static int ensure_uv_ffi_for_python(
             char path_copy[16384];
             strncpy(path_copy, path_env, sizeof(path_copy) - 1);
             path_copy[sizeof(path_copy) - 1] = '\0';
-            char *dir = strtok(path_copy, ":");
+            char *dir = strtok(path_copy, PATH_SEPARATOR);
             static char uv_found2[MAX_PATH];
             while (dir) {
                 snprintf(uv_found2, sizeof(uv_found2), "%s/uv", dir);
                 if (file_exists(uv_found2)) { uv_exe = uv_found2; break; }
-                dir = strtok(NULL, ":");
+                dir = strtok(NULL, PATH_SEPARATOR);
             }
         }
     }
@@ -894,31 +1010,18 @@ static int ensure_uv_ffi_for_python(
     ffi_stamp_write(target_python);  /* fast path on all future calls */
 
     /* Tell the daemon worker to reload its FFI handle for this interpreter.
-     * Fire-and-forget: we don't wait for a reply — the worker will reload
-     * asynchronously and the next run_uv call will use FFI instead of subprocess. */
+     * Fire-and-forget via daemon_connect (handles tcp:// on Windows, unix:// on POSIX). */
     if (sock_path && sock_path[0]) {
-        struct stat _st;
-        if (stat(sock_path, &_st) == 0) {
-            int _s = socket(AF_UNIX, SOCK_STREAM, 0);
-            if (_s >= 0) {
-                struct timeval _tv = { 1, 0 };
-                setsockopt(_s, SOL_SOCKET, SO_SNDTIMEO, &_tv, sizeof(_tv));
-                setsockopt(_s, SOL_SOCKET, SO_RCVTIMEO, &_tv, sizeof(_tv));
-                struct sockaddr_un _addr;
-                memset(&_addr, 0, sizeof(_addr));
-                _addr.sun_family = AF_UNIX;
-                strncpy(_addr.sun_path, sock_path, sizeof(_addr.sun_path) - 1);
-                if (connect(_s, (struct sockaddr*)&_addr, sizeof(_addr)) == 0) {
-                    char _msg[MAX_PATH + 64];
-                    snprintf(_msg, sizeof(_msg),
-                        "{\"type\":\"reload_ffi\",\"python_exe\":\"%s\"}", target_python);
-                    send_json_msg(_s, _msg);
-                    /* don't wait for reply — fire and forget */
-                    if (debug) fprintf(stderr,
-                        "[C-DISPATCH] sent reload_ffi to daemon for %s\n", target_python);
-                }
-                close(_s);
-            }
+        int _s = daemon_connect(debug, NULL, 0);
+        if (_s >= 0) {
+            daemon_set_timeouts(_s, 1, 1);
+            char _msg[MAX_PATH + 64];
+            snprintf(_msg, sizeof(_msg),
+                "{\"type\":\"reload_ffi\",\"python_exe\":\"%s\"}", target_python);
+            send_json_msg(_s, _msg);
+            if (debug) fprintf(stderr,
+                "[C-DISPATCH] sent reload_ffi to daemon for %s\n", target_python);
+            sock_close(_s);
         }
     }
 
@@ -953,8 +1056,14 @@ static int find_or_install_uv_ffi_so(
             "else:\n"
             "    d=os.path.dirname(m.__file__)\n"
             "    [print(os.path.join(d,f)) for f in os.listdir(d) if f.endswith(chr(46)+chr(115)+chr(111))]\n"
-            "\" 2>/dev/null",
-            target_python);
+            "\" 2>%s",
+            target_python,
+#ifdef _WIN32
+            "NUL"
+#else
+            "/dev/null"
+#endif
+            );
         FILE *_pp = popen(_py_cmd, "r");
         if (_pp) {
             if (fgets(_py_out, sizeof(_py_out), _pp)) {
@@ -971,31 +1080,35 @@ static int find_or_install_uv_ffi_so(
         }
     }
 
-    /* ── 1. Search known locations for an existing .so ── */
+    /* ── 1. Search known locations for an existing .so / .pyd ── */
     char patterns[8][MAX_PATH];
+    /* Windows home: USERPROFILE or HOMEDRIVE+HOMEPATH */
     const char *home = getenv("HOME");
+#ifdef _WIN32
+    if (!home) home = getenv("USERPROFILE");
+#endif
     /* standard installed: uv_ffi/_native/ */
     snprintf(patterns[0], MAX_PATH,
-        "%s/lib/python3.*/site-packages/uv_ffi/_native/*.so", venv_root);
+        "%s/lib/python3.*/site-packages/uv_ffi/_native/*.pyd", venv_root);
     snprintf(patterns[1], MAX_PATH,
-        "%s/lib/python3*/site-packages/uv_ffi/_native/*.so", venv_root);
-    /* flat install: uv_ffi/*.so */
+        "%s/lib/python3.*/site-packages/uv_ffi/_native/*.so", venv_root);
+    /* flat install: uv_ffi/*.pyd / *.so */
     snprintf(patterns[2], MAX_PATH,
-        "%s/lib/python3.*/site-packages/uv_ffi/*.so", venv_root);
+        "%s/lib/python3.*/site-packages/uv_ffi/*.pyd", venv_root);
     snprintf(patterns[3], MAX_PATH,
-        "%s/lib/python3*/site-packages/uv_ffi/*.so", venv_root);
-    /* dev/vendor install: omnipkg/_vendor/uv_ffi/*.so */
+        "%s/lib/python3.*/site-packages/uv_ffi/*.so", venv_root);
+    /* dev/vendor install: omnipkg/_vendor/uv_ffi/ */
     snprintf(patterns[4], MAX_PATH,
-        "%s/lib/python3.*/site-packages/omnipkg/_vendor/uv_ffi/*.so", venv_root);
+        "%s/lib/python3.*/site-packages/omnipkg/_vendor/uv_ffi/*.pyd", venv_root);
     snprintf(patterns[5], MAX_PATH,
-        "%s/lib/python3*/site-packages/omnipkg/_vendor/uv_ffi/*.so", venv_root);
+        "%s/lib/python3.*/site-packages/omnipkg/_vendor/uv_ffi/*.so", venv_root);
     /* user local */
     snprintf(patterns[6], MAX_PATH,
-        "%s/.local/lib/python3.*/site-packages/uv_ffi/_native/*.so",
-        home ? home : "/tmp");
+        "%s/.local/lib/python3.*/site-packages/uv_ffi/_native/*.pyd",
+        home ? home : get_tmp_dir());
     snprintf(patterns[7], MAX_PATH,
-        "%s/.local/lib/python3.*/site-packages/uv_ffi/*.so",
-        home ? home : "/tmp");
+        "%s/.local/lib/python3.*/site-packages/uv_ffi/*.pyd",
+        home ? home : get_tmp_dir());
 
     glob_t globbuf;
     for (int pi = 0; pi < 8; pi++) {
@@ -1043,12 +1156,12 @@ static int find_or_install_uv_ffi_so(
             char path_copy[16384];
             strncpy(path_copy, path_env, sizeof(path_copy) - 1);
             path_copy[sizeof(path_copy) - 1] = '\0';
-            char *dir = strtok(path_copy, ":");
+            char *dir = strtok(path_copy, PATH_SEPARATOR);
             static char uv_found[MAX_PATH];
             while (dir) {
                 snprintf(uv_found, sizeof(uv_found), "%s/uv", dir);
                 if (file_exists(uv_found)) { uv_exe = uv_found; break; }
-                dir = strtok(NULL, ":");
+                dir = strtok(NULL, PATH_SEPARATOR);
             }
         }
     }
@@ -1092,6 +1205,8 @@ static int find_or_install_uv_ffi_so(
 /* ════════════════════════════════════════════════════════════════════════ */
 
 int main(int argc, char **argv) {
+    winsock_init(); /* no-op on POSIX; initialises Winsock 2.2 on Windows */
+
     int debug = (getenv("OMNIPKG_DEBUG") != NULL &&
                  strcmp(getenv("OMNIPKG_DEBUG"), "1") == 0);
 
@@ -1211,9 +1326,10 @@ int main(int argc, char **argv) {
                     /* Genuinely unknown version → Python fallback for auto-adopt */
                     if (debug) fprintf(stderr, "[C-DISPATCH] unknown version %s → fallback\n", cli_version);
                     fallback_to_python_v(self_dir, argv, cli_version);
-                } else {
-                    if (debug) fprintf(stderr, "[C-DISPATCH] unknown version %s → fallback\n", cli_version);
-                    fallback_to_python_v(self_dir, argv, cli_version);
+                }
+            } else {
+                if (debug) fprintf(stderr, "[C-DISPATCH] unknown version %s → fallback\n", cli_version);
+                fallback_to_python_v(self_dir, argv, cli_version);
             }
         }
     }
@@ -1291,28 +1407,23 @@ int main(int argc, char **argv) {
             out_json[0] = '\0';
             int ffi_rc = -1;
 
-            /* ── Pre-flight: resolve daemon socket path (reused below) ── */
+            /* ── Pre-flight: resolve daemon_sock (passed to ensure_uv_ffi) ── */
             char daemon_sock[MAX_PATH];
             daemon_sock[0] = '\0';
             {
-                const char *ann = "/tmp/omnipkg/daemon_connection.txt";
+                char ann[MAX_PATH];
+                snprintf(ann, sizeof(ann), "%s/omnipkg/daemon_connection.txt", get_tmp_dir());
                 FILE *_af = fopen(ann, "r");
                 if (_af) {
                     char _line[MAX_PATH];
                     if (fgets(_line, sizeof(_line), _af)) {
                         _line[strcspn(_line, "\r\n")] = '\0';
-                        if (strncmp(_line, "unix://", 7) == 0) {
-                            strncpy(daemon_sock, _line + 7, sizeof(daemon_sock) - 1);
-                            daemon_sock[sizeof(daemon_sock) - 1] = '\0';
-                        }
+                        /* Store the raw conn string — ensure_uv_ffi just uses it
+                         * as a non-empty sentinel; actual connect goes via daemon_connect() */
+                        strncpy(daemon_sock, _line, sizeof(daemon_sock) - 1);
+                        daemon_sock[sizeof(daemon_sock) - 1] = '\0';
                     }
                     fclose(_af);
-                }
-                if (!daemon_sock[0]) {
-                    const char *_td = getenv("TMPDIR");
-                    if (!_td) _td = "/tmp";
-                    snprintf(daemon_sock, sizeof(daemon_sock),
-                             "%s/omnipkg/omnipkg_daemon.sock", _td);
                 }
             }
 
@@ -1461,51 +1572,33 @@ int main(int argc, char **argv) {
                  * kb_sentinel for Redis/KB bookkeeping.
                  */
                 if (daemon_sock[0]) {
-                    int _ds = socket(AF_UNIX, SOCK_STREAM, 0);
+                    int _ds = daemon_connect(debug, NULL, 0);
                     if (_ds >= 0) {
-                        struct timeval _tv = {1, 0};
-                        setsockopt(_ds, SOL_SOCKET, SO_SNDTIMEO, &_tv, sizeof(_tv));
-                        struct sockaddr_un _da;
-                        memset(&_da, 0, sizeof(_da));
-                        _da.sun_family = AF_UNIX;
-                        strncpy(_da.sun_path, daemon_sock, sizeof(_da.sun_path)-1);
-                        if (connect(_ds, (struct sockaddr*)&_da, sizeof(_da)) == 0) {
-                            /* Message 1: patch cache (UV workers update Rust SITE_PACKAGES_CACHE) */
-                            char patch_msg[MAX_JSON];
-                            int patch_len = snprintf(patch_msg, sizeof(patch_msg),
-                                "{\"type\":\"patch_site_packages_cache\","
-                                "\"site_packages_path\":\"\","
-                                "\"installed\":%s,\"removed\":%s}",
-                                inst_buf, rem_buf);
-                            if (patch_len > 0) {
-                                uint64_t _plen = (uint64_t)patch_len;
-                                uint8_t _phdr[8];
-                                for (int _i = 0; _i < 8; _i++)
-                                    _phdr[7-_i] = (_plen >> (_i*8)) & 0xFF;
-                                write(_ds, _phdr, 8);
-                                write(_ds, patch_msg, _plen);
-                            }
-                            /* Message 2: kb_sentinel (Redis/KB bookkeeping) */
-                            char kb_msg[MAX_JSON];
-                            int kb_len = snprintf(kb_msg, sizeof(kb_msg),
-                                "{\"type\":\"kb_sentinel\",\"installed\":%s,\"removed\":%s}",
-                                inst_buf, rem_buf);
-                            if (kb_len > 0) {
-                                uint64_t _klen = (uint64_t)kb_len;
-                                uint8_t _khdr[8];
-                                for (int _i = 0; _i < 8; _i++)
-                                    _khdr[7-_i] = (_klen >> (_i*8)) & 0xFF;
-                                write(_ds, _khdr, 8);
-                                write(_ds, kb_msg, _klen);
-                            }
-                        }
-                        close(_ds);
+                        daemon_set_timeouts(_ds, 1, 1);
+                        /* Message 1: patch cache (UV workers update Rust SITE_PACKAGES_CACHE) */
+                        char patch_msg[MAX_JSON];
+                        int patch_len = snprintf(patch_msg, sizeof(patch_msg),
+                            "{\"type\":\"patch_site_packages_cache\","
+                            "\"site_packages_path\":\"\","
+                            "\"installed\":%s,\"removed\":%s}",
+                            inst_buf, rem_buf);
+                        if (patch_len > 0)
+                            send_json_msg(_ds, patch_msg);
+                        /* Message 2: kb_sentinel (Redis/KB bookkeeping) */
+                        char kb_msg[MAX_JSON];
+                        int kb_len = snprintf(kb_msg, sizeof(kb_msg),
+                            "{\"type\":\"kb_sentinel\",\"installed\":%s,\"removed\":%s}",
+                            inst_buf, rem_buf);
+                        if (kb_len > 0)
+                            send_json_msg(_ds, kb_msg);
+                        sock_close(_ds);
                     }
                 }
 
                 /* Fork background Python only if something actually changed */
                 int has_changes = (strstr(out_json, "[\"") != NULL);
                 if (has_changes) {
+#ifndef _WIN32
                     pid_t pid = fork();
                     if (pid > 0) {
                         /* parent — exit immediately, terminal is free */
@@ -1519,6 +1612,12 @@ int main(int argc, char **argv) {
                             dup2(devnull, 2);
                             close(devnull);
                         }
+#else
+                    /* Windows: no fork — run background work inline (fire-and-forget
+                     * via _spawnv would need a separate exe; just run inline for now). */
+                    if (1) {
+                        {
+#endif
 
                         /* Extract "3.11" safely into a fixed buffer */
                         char py_ctx_ver[16] = "3.11";
@@ -1582,6 +1681,9 @@ int main(int argc, char **argv) {
                         execv(target_python, bg_argv);
                         exit(0);
                     }
+#ifdef _WIN32
+                    } /* close extra Windows block */
+#endif
                 }
                 /* No changes (already satisfied) or fork parent — exit cleanly */
                 exit(0);
