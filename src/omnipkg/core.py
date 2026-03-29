@@ -15201,10 +15201,16 @@ print(json.dumps(results))
             import shutil as _shutil_init
             _exe = self.config.get("uv_executable") or _shutil_init.which("uv") or ""
             self._uv_exe_cached = _exe if (_exe and os.path.exists(_exe)) else ""
-            self._uv_cache_dir = (
+            import tempfile as _tf
+            _default_cache = (
                 self.config.get("uv_cache_dir")
-                or os.path.expanduser("~/.cache/uv")
+                or os.path.join(_tf.gettempdir(), "uv_cache")
             )
+            self._uv_cache_dir = _default_cache
+            # Ensure uv's internal temp dir (used for interpreter probes) also
+            # points somewhere that exists on all platforms including Windows CI.
+            if "UV_TMPDIR" not in os.environ:
+                os.environ["UV_TMPDIR"] = _tf.gettempdir()
             # Pre-import and cache FFI + failure detector — never pay import cost on hot path
             try:
                 from omnipkg._vendor.uv_ffi import run as _ffi_run
