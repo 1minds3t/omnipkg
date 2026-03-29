@@ -1242,12 +1242,362 @@ int main(int argc, char **argv) {
         }
     }
 
-    /* ── 6. Build final argv and execv ───────────────────────── */
+    /* ── 6. Native FFI Fast-Path (swap + install) ── */
+    int is_swap = 0;
+    const char *pkg_spec = NULL;
+
+    if (argc >= 3 && strcmp(argv[1], "swap") == 0) {
+        is_swap = 1; pkg_spec = argv[2];
+    } else if (argc >= 4 && strcmp(argv[1], "pip") == 0 && strcmp(argv[2], "install") == 0) {
+        is_swap = 1; pkg_spec = argv[3];
+    } else if (argc >= 3 && strcmp(argv[1], "install") == 0) {
+        /* direct install fast-path — only single pinned specs (name==ver) */
+        const char *candidate = argv[2];
+        if (candidate[0] != '-' && strstr(candidate, "==") != NULL) {
+            is_swap = 1; pkg_spec = candidate;
+        }
+    }
+
+    if (is_swap && pkg_spec && pkg_spec[0] != '-') {
+        if (debug) fprintf(stderr, "[C-DISPATCH] Fast-path evaluation started. pkg_spec=%s\n", pkg_spec);
+
+        char venv_root[MAX_PATH];
+        find_venv_root(self_real, venv_root, sizeof(venv_root));
+
+        char cfg_path[MAX_PATH];
+        snprintf(cfg_path, sizeof(cfg_path), "%s/.omnipkg_config.json", self_dir);
+
+        char strategy[128] = "latest-active";
+        FILE *f = fopen(cfg_path, "r");
+        if (f) {
+            char buf[8192];
+            size_t n = fread(buf, 1, sizeof(buf)-1, f);
+            buf[n] = '\0';
+            json_get_str(buf, "install_strategy", strategy, sizeof(strategy));
+            fclose(f);
+        }
+
+        if (debug) fprintf(stderr, "[C-DISPATCH] Strategy detected: %s\n", strategy);
+
+        if (1) { /* all strategies use FFI fast-path */
+            char out_json[65536];
+            out_json[0] = '\0';
+            int ffi_rc = -1;
+
+            /* ── Pre-flight: resolve daemon socket path (reused below) ── */
+            char daemon_sock[MAX_PATH];
+            daemon_sock[0] = '\0';
+            {
+                const char *ann = "/tmp/omnipkg/daemon_connection.txt";
+                FILE *_af = fopen(ann, "r");
+                if (_af) {
+                    char _line[MAX_PATH];
+                    if (fgets(_line, sizeof(_line), _af)) {
+                        _line[strcspn(_line, "\r\n")] = '\0';
+                        if (strncmp(_line, "unix://", 7) == 0) {
+                            strncpy(daemon_sock, _line + 7, sizeof(daemon_sock) - 1);
+                            daemon_sock[sizeof(daemon_sock) - 1] = '\0';
+                        }
+                    }
+                    fclose(_af);
+                }
+                if (!daemon_sock[0]) {
+                    const char *_td = getenv("TMPDIR");
+                    if (!_td) _td = "/tmp";
+                    snprintf(daemon_sock, sizeof(daemon_sock),
+                             "%s/omnipkg/omnipkg_daemon.sock", _td);
+                }
+            }
+
+            /* ── Pre-flight: ensure uv_ffi is installed for target python ──
+             * If the target interpreter (e.g. cpython-3.9) is missing uv_ffi,
+             * install it now and tell the daemon worker to reload its FFI handle.
+             * This turns "via: subprocess_fallback" into "via: ffi" on next call.
+             * We only do this when target_python differs from the main env python
+             * (i.e. it's a managed interpreter, not the one omnipkg itself runs in). */
+            {
+                char main_py[MAX_PATH] = "";
+                read_self_config(self_dir, main_py, sizeof(main_py));
+                int is_foreign = (main_py[0] == '\0' ||
+                                  strcmp(main_py, target_python) != 0);
+                if (is_foreign) {
+                    ensure_uv_ffi_for_python(target_python, venv_root,
+                                             daemon_sock, debug);
+                }
+            }
+
+            /* ── Phase 1a: try daemon UV worker (warm Tokio, ~5ms) ── */
+            if (try_daemon_uv(target_python, pkg_spec, out_json, sizeof(out_json))) {
+                ffi_rc = 0;
+                if (debug) fprintf(stderr, "[C-DISPATCH] daemon UV fast-path succeeded\n");
+            }
+
+            /* ── Phase 1b: dlopen fallback (cold, ~11ms) ── */
+            if (ffi_rc != 0) {
+                char so_path[MAX_PATH];
+                if (find_or_install_uv_ffi_so(venv_root, target_python,
+                                               so_path, sizeof(so_path))) {
+                    const char *py_ver_ptr = strstr(target_python, "python3.");
+                    if (py_ver_ptr) {
+                        char py_ver[32];
+                        strncpy(py_ver, py_ver_ptr, sizeof(py_ver) - 1);
+                        py_ver[sizeof(py_ver) - 1] = '\0';
+                        char pylib[MAX_PATH];
+                        snprintf(pylib, sizeof(pylib), "%s/lib/lib%s.so",
+                                 venv_root, py_ver);
+                        void *py_handle = dlopen(pylib, RTLD_LAZY | RTLD_GLOBAL);
+                        if (!py_handle) {
+                            snprintf(pylib, sizeof(pylib), "%s/lib/lib%s.so.1.0",
+                                     venv_root, py_ver);
+                            py_handle = dlopen(pylib, RTLD_LAZY | RTLD_GLOBAL);
+                        }
+                        if (debug)
+                            fprintf(stderr, "[C-DISPATCH] Preloading %s -> %s\n",
+                                    pylib, py_handle ? "OK" : dlerror());
+                    }
+
+                    void *ffi_handle = NULL;
+                    /* Retry up to 3 times with 5ms gaps.
+                     * On rapid back-to-back swaps the daemon worker may have the
+                     * .so open in another dlopen() call — the file exists but the
+                     * dynamic linker returns EBUSY / transient errors.  Three
+                     * retries adds at most 10ms and eliminates the false-missing
+                     * reports that triggered the expensive reinstall path. */
+                    for (int _retry = 0; _retry < 3 && !ffi_handle; _retry++) {
+                        ffi_handle = dlopen(so_path, RTLD_LAZY);
+                        if (!ffi_handle && _retry < 2) {
+                            if (debug) fprintf(stderr,
+                                "[C-DISPATCH] dlopen attempt %d failed: %s — retrying\n",
+                                _retry + 1, dlerror());
+                            usleep(5000);  /* 5ms */
+                        }
+                    }
+                    if (!ffi_handle) {
+                        if (debug) fprintf(stderr, "[C-DISPATCH] dlopen failed: %s\n",
+                                           dlerror());
+                    } else {
+                        typedef int (*run_c_t)(const char*, char*, int);
+                        run_c_t run_fn = (run_c_t)dlsym(ffi_handle,
+                                                         "omnipkg_uv_run_c");
+                        if (run_fn) {
+                            char cache_dir[MAX_PATH];
+                            const char *home2 = getenv("HOME");
+                            snprintf(cache_dir, sizeof(cache_dir), "%s/.cache/uv",
+                                     home2 ? home2 : "/tmp");
+                            char cmd[MAX_PATH * 2];
+                            snprintf(cmd, sizeof(cmd),
+                                "pip install --cache-dir %s --python %s"
+                                " --link-mode symlink %s",
+                                cache_dir, target_python, pkg_spec);
+                            if (debug)
+                                fprintf(stderr, "[C-DISPATCH] dlopen FFI: %s\n", cmd);
+                            if (run_fn(cmd, out_json, sizeof(out_json)) == 0)
+                                ffi_rc = 0;
+                        } else {
+                            if (debug) fprintf(stderr, "[C-DISPATCH] dlsym failed: %s\n",
+                                               dlerror());
+                        }
+                    }
+                }
+            }
+
+            /* ── Phase 2: on success, exit fast + fork background KB work ── */
+            if (ffi_rc == 0) {
+                if (debug) fprintf(stderr, "[C-DISPATCH] FFI returned 0. Changelog: %s\n", out_json);
+
+                /* Always return terminal to user immediately */
+                printf("🎉 Package operations complete.\n");
+                fflush(stdout);
+
+                /* ── Extract installed/removed arrays from out_json ──────────
+                 * Used for BOTH the cache patch message and the kb_sentinel.
+                 * The changelog includes ALL packages uv touched (e.g. setuptools
+                 * that got co-upgraded), not just the originally requested pkg. */
+                char inst_buf[4096] = "[]";
+                char rem_buf[4096]  = "[]";
+                {
+                    const char *inst_start = strstr(out_json, "\"installed\":");
+                    const char *rem_start  = strstr(out_json, "\"removed\":");
+                    if (inst_start && rem_start) {
+                        const char *inst_arr = strchr(inst_start, '[');
+                        const char *rem_arr  = strchr(rem_start,  '[');
+                        if (inst_arr) {
+                            int depth = 0; size_t i = 0;
+                            for (const char *p = inst_arr; *p && i < sizeof(inst_buf)-1; p++) {
+                                inst_buf[i++] = *p;
+                                if (*p == '[') depth++;
+                                else if (*p == ']' && --depth == 0) break;
+                            }
+                            inst_buf[i] = '\0';
+                        }
+                        if (rem_arr) {
+                            int depth = 0; size_t i = 0;
+                            for (const char *p = rem_arr; *p && i < sizeof(rem_buf)-1; p++) {
+                                rem_buf[i++] = *p;
+                                if (*p == '[') depth++;
+                                else if (*p == ']' && --depth == 0) break;
+                            }
+                            rem_buf[i] = '\0';
+                        }
+                    }
+                }
+
+                /* ── Push cache patch + KB sentinel to daemon in ONE connection ──
+                 *
+                 * CRITICAL: send patch_site_packages_cache FIRST so every UV worker's
+                 * in-memory Rust cache is updated before the next run_uv call arrives.
+                 * Without this, the fs_watcher would have to notice the disk change
+                 * (~150ms debounce) before the next FFI call sees correct state.
+                 *
+                 * This replaces the old "wait for fs_watcher" path with an instant push
+                 * for ALL packages that changed (transitive deps included), then the
+                 * kb_sentinel for Redis/KB bookkeeping.
+                 */
+                if (daemon_sock[0]) {
+                    int _ds = socket(AF_UNIX, SOCK_STREAM, 0);
+                    if (_ds >= 0) {
+                        struct timeval _tv = {1, 0};
+                        setsockopt(_ds, SOL_SOCKET, SO_SNDTIMEO, &_tv, sizeof(_tv));
+                        struct sockaddr_un _da;
+                        memset(&_da, 0, sizeof(_da));
+                        _da.sun_family = AF_UNIX;
+                        strncpy(_da.sun_path, daemon_sock, sizeof(_da.sun_path)-1);
+                        if (connect(_ds, (struct sockaddr*)&_da, sizeof(_da)) == 0) {
+                            /* Message 1: patch cache (UV workers update Rust SITE_PACKAGES_CACHE) */
+                            char patch_msg[MAX_JSON];
+                            int patch_len = snprintf(patch_msg, sizeof(patch_msg),
+                                "{\"type\":\"patch_site_packages_cache\","
+                                "\"site_packages_path\":\"\","
+                                "\"installed\":%s,\"removed\":%s}",
+                                inst_buf, rem_buf);
+                            if (patch_len > 0) {
+                                uint64_t _plen = (uint64_t)patch_len;
+                                uint8_t _phdr[8];
+                                for (int _i = 0; _i < 8; _i++)
+                                    _phdr[7-_i] = (_plen >> (_i*8)) & 0xFF;
+                                write(_ds, _phdr, 8);
+                                write(_ds, patch_msg, _plen);
+                            }
+                            /* Message 2: kb_sentinel (Redis/KB bookkeeping) */
+                            char kb_msg[MAX_JSON];
+                            int kb_len = snprintf(kb_msg, sizeof(kb_msg),
+                                "{\"type\":\"kb_sentinel\",\"installed\":%s,\"removed\":%s}",
+                                inst_buf, rem_buf);
+                            if (kb_len > 0) {
+                                uint64_t _klen = (uint64_t)kb_len;
+                                uint8_t _khdr[8];
+                                for (int _i = 0; _i < 8; _i++)
+                                    _khdr[7-_i] = (_klen >> (_i*8)) & 0xFF;
+                                write(_ds, _khdr, 8);
+                                write(_ds, kb_msg, _klen);
+                            }
+                        }
+                        close(_ds);
+                    }
+                }
+
+                /* Fork background Python only if something actually changed */
+                int has_changes = (strstr(out_json, "[\"") != NULL);
+                if (has_changes) {
+                    pid_t pid = fork();
+                    if (pid > 0) {
+                        /* parent — exit immediately, terminal is free */
+                        exit(0);
+                    } else if (pid == 0) {
+                        /* child — run KB/bubble work silently */
+                        setsid();
+                        int devnull = open("/dev/null", O_WRONLY);
+                        if (devnull >= 0) {
+                            dup2(devnull, 1);
+                            dup2(devnull, 2);
+                            close(devnull);
+                        }
+
+                        /* Extract "3.11" safely into a fixed buffer */
+                        char py_ctx_ver[16] = "3.11";
+                        const char *_pv = strstr(target_python, "python3.");
+                        if (_pv) {
+                            _pv += 7; /* skip "python" — points at "3.11" etc */
+                            size_t _vi = 0;
+                            while (_pv[_vi] &&
+                                   (_pv[_vi] == '.' ||
+                                    (_pv[_vi] >= '0' && _pv[_vi] <= '9')) &&
+                                   _vi < sizeof(py_ctx_ver) - 1) {
+                                py_ctx_ver[_vi] = _pv[_vi];
+                                _vi++;
+                            }
+                            py_ctx_ver[_vi] = '\0';
+                        }
+
+                        char py_script[8192];
+                        snprintf(py_script, sizeof(py_script),
+                            "import json, os, sys\n"
+                            "from omnipkg.core import ConfigManager, omnipkg\n"
+                            "from omnipkg.installation.smart_install import SmartInstaller\n"
+                            "core = omnipkg(ConfigManager())\n"
+                            "core._connect_cache()\n"
+                            "try:\n"
+                            "    cl = json.loads('''%s''')\n"
+                            "    inst = cl.get('installed', [])\n"
+                            "    rem  = cl.get('removed',   [])\n"
+                            "    bg = {\n"
+                            "        'force_reinstall': False,\n"
+                            "        'protected_from_cleanup': [],\n"
+                            "        'initial_packages': {},\n"
+                            "        'final_main_state':    {n: v for n, v in inst},\n"
+                            "        'main_env_kb_updates': {n: v for n, v in inst},\n"
+                            "        'bubbled_kb_updates':  {n: v for n, v in rem},\n"
+                            "        'python_context_version': '%s',\n"
+                            "        'priority_specs': [f'{n}=={v}' for n, v in inst],\n"
+                            "        'bubble_paths_to_scan': {},\n"
+                            "        'pending_bubble_tasks': [\n"
+                            "            {'type': 'create_isolated_bubble',\n"
+                            "             'pkg_name': n, 'version': v,\n"
+                            "             'python_context_version': '%s'}\n"
+                            "            for n, v in rem\n"
+                            "        ],\n"
+                            "        'run_doctor': False,\n"
+                            "    }\n"
+                            "    SmartInstaller(core)._run_background(bg, core)\n"
+                            "except Exception:\n"
+                            "    pass\n",
+                            out_json,
+                            py_ctx_ver,
+                            py_ctx_ver
+                        );
+
+                        char *bg_argv[] = {
+                            (char *)target_python,
+                            (char *)"-c",
+                            py_script,
+                            NULL
+                        };
+                        execv(target_python, bg_argv);
+                        exit(0);
+                    }
+                }
+                /* No changes (already satisfied) or fork parent — exit cleanly */
+                exit(0);
+            }
+        }
+    }
+
+    /* ── 7. Build final argv and execv (or try daemon) ───────────────────────── */
+    int is_interactive_command = 0;
+    if (argc >= 2) {
+        is_interactive_command = (
+            strcmp(argv[1], "info")   == 0 ||
+            strcmp(argv[1], "config") == 0
+        );
+    }
+    if (!is_swap_python && !is_interactive_command) {
+        try_daemon_cli(target_python, argc, argv, version_injected, forced_version);
+        /* try_daemon_cli calls exit() on success. Reaching here means it failed. */
+        if (debug) fprintf(stderr, "[C-DISPATCH] daemon fast-path failed — falling back to execv\n");
+    }
+
     /*
-     * target_python -m omnipkg.cli [--python X] [original args]
-     *
-     * If version was injected from command name, we must insert --python X
-     * into the new argv (since original argv doesn't have it).
+     * target_python -m omnipkg.cli[--python X] [original args]
      */
     int extra = version_injected ? 2 : 0;   /* "--python", "3.X" */
     char **new_argv = malloc((argc + 4 + extra) * sizeof(char *));
