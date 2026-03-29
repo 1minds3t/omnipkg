@@ -3350,7 +3350,7 @@ class WorkerPoolDaemon:
             # send READY" and forcing a cold execv fallback on every call.
             ready_parsed = None
             ready_line = None
-            _deadline = _rt.perf_counter() + 30.0
+            _deadline = _rt.perf_counter() + 10.0
             while _rt.perf_counter() < _deadline:
                 _remaining = _deadline - _rt.perf_counter()
                 try:
@@ -3379,7 +3379,31 @@ class WorkerPoolDaemon:
             safe_print(f"[RUN-CLI] ready_line={repr(ready_line)} ({(_t_ready-_t_got_worker)*1000:.2f}ms)", file=sys.stderr)
 
             if ready_parsed is None:
-                raise RuntimeError("Worker failed to send READY")
+                safe_print(f"[RUN-CLI] worker READY timeout — subprocess fallback", file=sys.stderr)
+                worker.force_shutdown()
+                try:
+                    _fb_python = req.get("python_exe") or sys.executable
+                    _fb_argv = req.get("argv", [])[1:]  # strip "8pkg", keep rest
+                    _fb_cmd = [_fb_python, "-m", "omnipkg.cli"] + _fb_argv
+                    _fb_cwd = req.get("cwd") or None
+                    safe_print(f"[RUN-CLI] fallback cmd: {_fb_cmd}", file=sys.stderr)
+                    _fb_result = subprocess.run(
+                        _fb_cmd,
+                        capture_output=True,
+                        text=True,
+                        timeout=120,
+                        cwd=_fb_cwd,
+                    )
+                    send_json(conn, {
+                        "status": "COMPLETED",
+                        "exit_code": _fb_result.returncode,
+                        "stdout": _fb_result.stdout,
+                        "stderr": _fb_result.stderr,
+                        "via": "subprocess_fallback",
+                    })
+                except Exception as _fb_err:
+                    send_json(conn, {"status": "ERROR", "error": str(_fb_err), "exit_code": 1})
+                return
 
             while True:
                 try:
