@@ -36,6 +36,7 @@ _tf_module_cache = {}
 _original_import_func = builtins.__import__
 _circular_import_stats = {}
 _tf_loaded_pids = set()  # Track which PIDs have loaded TF
+_numpy_purge_retry_guard = threading.local()  # Prevents nested purge+retry
 
 _tf_circular_deps_known = {
     "module_util": "tensorflow.python.tools.module_util",

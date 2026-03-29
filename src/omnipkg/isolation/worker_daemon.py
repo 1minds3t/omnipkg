@@ -818,6 +818,38 @@ except ImportError:
 os.environ['OMNIPKG_IS_DAEMON_WORKER'] = '1'
 os.environ['OMNIPKG_DISABLE_WORKER_POOL'] = '1'
 
+# ═══════════════════════════════════════════════════════════════
+# STEP 0: SCRUB INHERITED BUBBLE PATHS
+# The parent process may have an omnipkg bubble active when it
+# spawns this worker subprocess.  The bubble path leaks into the
+# child via:
+#   • os.environ["PYTHONPATH"] — prepended by bubble activation
+#   • sys.path itself (inherited via fork / execv with -c)
+# If we don't remove it now, Python will import numpy (or any
+# other bubble package) from the PARENT'S active bubble instead
+# of the bubble we are about to activate for this worker spec.
+# This causes "cannot import name 'index_tricks' from partially
+# initialized module 'numpy.lib'" and similar cross-version errors.
+# Scrub unconditionally — the worker will activate the correct
+# bubble in STEP 3.
+# ═══════════════════════════════════════════════════════════════
+def _scrub_bubble_paths():
+    _marker = '.omnipkg_versions'
+    # 1. Strip from sys.path
+    sys.path[:] = [p for p in sys.path if _marker not in p]
+    # 2. Strip from PYTHONPATH so any child subprocesses don't inherit it either
+    _pypath = os.environ.get('PYTHONPATH', '')
+    if _marker in _pypath:
+        _clean = os.pathsep.join(
+            p for p in _pypath.split(os.pathsep) if _marker not in p
+        )
+        if _clean:
+            os.environ['PYTHONPATH'] = _clean
+        else:
+            os.environ.pop('PYTHONPATH', None)
+
+_scrub_bubble_paths()
+
 # CRITICAL: Configure stdin/stdout/stderr for proper encoding and buffering
 sys.stdin.reconfigure(encoding='utf-8', errors='replace', line_buffering=True)
 sys.stderr.reconfigure(encoding='utf-8', errors='replace', line_buffering=True)

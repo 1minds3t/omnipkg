@@ -19,6 +19,14 @@
  *   - auto-adopt needed
  *   - OMNIPKG_FORCE_PYTHON_DISPATCH=1 (escape hatch)
  */
+#include <unistd.h>
+#include <sys/stat.h>
+#include <libgen.h>
+#include <limits.h>
+#include <sys/socket.h>
+#include <sys/un.h>
+#include <stdint.h>
+#include <errno.h>
 
 #ifdef _WIN32
 #include <windows.h>
@@ -57,10 +65,12 @@ static char *omnipkg_basename(char *path) {
 #include <libgen.h>
 #include <limits.h>
 #endif
+#include <dlfcn.h>
+#include <fcntl.h>
+#include <glob.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
 #define MAX_PATH 4096
 #define MAX_VERSION 32
 #define MAX_JSON 65536   /* registry.json is tiny */
@@ -1228,7 +1238,7 @@ int main(int argc, char **argv) {
         if (!read_self_config(self_dir, target_python, sizeof(target_python)) ||
             !file_exists(target_python)) {
             /* Really can't figure it out — hand off to Python */
-            fallback_to_python(self_dir, argv, NULL);
+            fallback_to_python(self_dir, argv);
         }
     }
 

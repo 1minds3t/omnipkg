@@ -12287,7 +12287,7 @@ class omnipkg:
 
         if not force:
             if (
-                input(
+                safe_input(
                     _('\n🤔 WARNING: This will irrevocably replace the current omnipkg installation. Proceed? (y/N): ')
                 )
                 .lower()
@@ -15222,7 +15222,7 @@ print(json.dumps(results))
             # Build uv args once — reused by all three paths
             _uv_args = ["pip", "install",
                         "--cache-dir", self._uv_cache_dir,
-                        "--link-mode", "symlink" if not target_directory else "copy"]
+                        "--link-mode", "symlink"]
             if index_url:
                 _uv_args += ["--index-url", index_url]
             if extra_index_url:
