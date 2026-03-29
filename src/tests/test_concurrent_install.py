@@ -87,7 +87,7 @@ def get_interpreter_path(version: str) -> str:
         raise RuntimeError(_('Failed to query omnipkg: {}').format(e)) from e
     for line in output.splitlines():
         if f"Python {version}:" in line:
-            parts = line.split(":", 1)
+            parts = line.split(": ", 1)
             if len(parts) == 2:
                 path_part = parts[1].strip().split()[0]
                 return path_part
