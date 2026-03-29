@@ -513,6 +513,16 @@ def main():
         dump_daemon_log("DAEMON LOG ON STARTUP FAILURE")
         sys.exit(1)
 
+    # DEBUG: dump raw 'omnipkg info python' output so we can see exactly what
+    # registry the subprocess sees at this point in the run.
+    safe_print("\n[DEBUG] Raw 'omnipkg info python' subprocess output:")
+    _raw_info = _run_info_python()
+    for _line in _raw_info.splitlines():
+        safe_print(f"  [RAW-INFO] {_line}")
+    safe_print(f"[DEBUG] End raw output — {len(_raw_info.splitlines())} lines")
+    safe_print(f"[DEBUG] sys.executable = {sys.executable}")
+    safe_print(f"[DEBUG] PATH = {_os.environ.get('PATH', '(not set)')[:300]}")
+
     # Phase 2: Cold run (first call = daemon worker spawn + import)
     safe_print("\n🔥 Phase 2: Cold run — daemon worker spawn + first import (concurrent)")
     safe_print("-" * 100)
