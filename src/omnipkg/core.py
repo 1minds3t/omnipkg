@@ -15266,7 +15266,7 @@ print(json.dumps(results))
                     if _ffi_rc == 0:
                         return 0, {"stdout": "", "stderr": "", "ffi_installed": _ffi_installed, "ffi_removed": _ffi_removed, "from_ffi": True}
                     safe_print(f"   ⚠️  FFI failed (rc={_ffi_rc}) — trying daemon", file=sys.stderr)
-                except Exception as _ffi_ex:
+                except BaseException as _ffi_ex:
                     _ffi_ms = (time.perf_counter() - _t0) * 1000
                     safe_print(f"[UV-PATH] FFI error ({_ffi_ex}) after {_ffi_ms:.2f}ms — trying daemon", file=sys.stderr)
             else:
