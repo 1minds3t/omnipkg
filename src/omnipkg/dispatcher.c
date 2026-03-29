@@ -745,7 +745,8 @@ static int try_daemon_cli(const char *target_python, int argc, char **argv, int 
     return 0;
 }
 
-static void fallback_to_python(const char *self_dir, char **argv) {
+static void fallback_to_python_v(const char *self_dir, char **argv,
+                                  const char *inject_version) {
     /*
      * Find the Python that owns this venv/bin dir and re-exec
      * the original dispatcher.py via  python -m omnipkg.dispatcher
@@ -775,13 +776,20 @@ static void fallback_to_python(const char *self_dir, char **argv) {
     new_argv[0] = py;
     new_argv[1] = "-m";
     new_argv[2] = "omnipkg.dispatcher";
+    int out = 3;
+    if (inject_version) {
+        new_argv[out++] = "--python";
+        new_argv[out++] = (char *)inject_version;
+    }
     for (int i = 1; i < argc; i++)
-        new_argv[i + 2] = argv[i];
-    new_argv[argc + 2] = NULL;
-
+        new_argv[i + out - 1] = argv[i];
+    new_argv[argc + out - 1] = NULL;
     execv(py, new_argv);
     perror("omnipkg: execv fallback failed");
     exit(1);
+}
+static void fallback_to_python(const char *self_dir, char **argv) {
+    fallback_to_python_v(self_dir, argv, NULL);
 }
 
 /* ── stamp-file helpers ─────────────────────────────────────────────────── */
@@ -1202,11 +1210,10 @@ int main(int argc, char **argv) {
                 } else {
                     /* Genuinely unknown version → Python fallback for auto-adopt */
                     if (debug) fprintf(stderr, "[C-DISPATCH] unknown version %s → fallback\n", cli_version);
-                    fallback_to_python(self_dir, argv);
-                }
-            } else {
-                if (debug) fprintf(stderr, "[C-DISPATCH] unknown version %s → fallback\n", cli_version);
-                fallback_to_python(self_dir, argv);
+                    fallback_to_python_v(self_dir, argv, cli_version);
+                } else {
+                    if (debug) fprintf(stderr, "[C-DISPATCH] unknown version %s → fallback\n", cli_version);
+                    fallback_to_python_v(self_dir, argv, cli_version);
             }
         }
     }
