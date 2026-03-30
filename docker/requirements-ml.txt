@@ -2,7 +2,7 @@
 # torch: 2.1 (cu121), 2.2 (cu121), 2.9 (latest stable)
 torch==2.1.0+cu121
 torch==2.2.0+cu121
-torch==2.9.1
+torch==2.8.0
 
 # tensorflow: 2.13, 2.20
 tensorflow==2.13.0
