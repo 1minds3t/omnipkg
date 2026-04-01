@@ -1,6 +1,6 @@
 # omnipkg ML requirements - multiple conflicting versions, zero compromise
 # torch: 2.1 (cu121), 2.2 (cu121), 2.9 (latest stable)
-torch==2.1.0+cu121
+torch==2.8.0
 torch==2.2.0+cu121
 torch==2.9.1
 
