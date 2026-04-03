@@ -2372,7 +2372,6 @@ class omnipkgLoader:
                     with omnipkgLoader._numpy_lock:
                         omnipkgLoader._numpy_version_history.append(requested_version)
 
-                self._check_numpy_abi_conflict(pkg_name, requested_version)
                 self._activation_successful = True
                 self._activation_end_time = time.perf_counter_ns()
                 self._total_activation_time_ns = (
@@ -3839,31 +3838,17 @@ class omnipkgLoader:
                     original_path = cloak_path.parent / original_name
 
                     try:
-                        from omnipkg.isolation.fs_lock_queue import safe_uncloak
-                        pkg_name_for_lock = original_name.split("-")[0]
-
-                        if original_path.exists():
-                            # Duplicate cloak: original is already there, safe to delete
-                            if cloak_path.is_dir():
-                                shutil.rmtree(str(cloak_path), ignore_errors=True)
-                            else:
-                                cloak_path.unlink(missing_ok=True)
+                    # holds the lock for this package, it owns the cloak — skip it.
+                    # Restoring it while the daemon worker needs it cloaked causes
+                    # ModuleNotFoundError in the worker on the next import.
+                    from omnipkg.isolation.fs_lock_queue import safe_uncloak
+                    
+                    if cloak_path.exists() and original_path.exists():
+                        # Duplicate cloak — original is already there, drop this
+                        try:
+                            shutil.rmtree(str(cloak_path), ignore_errors=True) if cloak_path.is_dir() else cloak_path.unlink(missing_ok=True)
                             total_cleaned += 1
-                        else:
-                            # Original missing: We MUST restore it.
-                            # Wait 5s; if it fails, CRASH (Strict Isolation).
-                            if not safe_uncloak(
-                                src=cloak_path,
-                                dst=original_path,
-                                locks_dir=omnipkgLoader._locks_dir,
-                                pkg_name=pkg_name_for_lock,
-                                active_cloaks=omnipkgLoader._active_cloaks,
-                                sentinel_base=self.multiversion_base,
-                                timeout=5.0
-                            ):
-                                raise SystemExit(f"STRICT ISOLATION FAILURE: Could not restore {original_name}")
-                            total_cleaned += 1
-
+                        total_cleaned += 1
                     except Exception:
                         pass
 
