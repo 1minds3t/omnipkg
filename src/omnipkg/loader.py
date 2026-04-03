@@ -1933,7 +1933,6 @@ class omnipkgLoader:
                 omnipkgLoader._active_main_env_packages.add(pkg_canonical)
                 self._my_main_env_package = pkg_canonical
 
-                self._check_numpy_abi_conflict(pkg_name, requested_version)
                 self._activation_successful = True
                 self._activation_end_time = time.perf_counter_ns()
                 self._total_activation_time_ns = (
@@ -2431,6 +2430,7 @@ class omnipkgLoader:
 
                 self._profile_end("unlocked_activation", print_now=self._profiling_enabled)
 
+                self._check_numpy_abi_conflict(pkg_name, requested_version)
                 self._activation_successful = True
                 self._activation_end_time = time.perf_counter_ns()
                 self._total_activation_time_ns = (
