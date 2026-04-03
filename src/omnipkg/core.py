@@ -13384,7 +13384,7 @@ class omnipkg:
         if not target_dists:
             return []
 
-        unique_dists = {str(dist._path): dist for dist in target_dists}.values()
+        unique_dists = {str(dist._path).lower(): dist for dist in target_dists}.values()
 
         keys_to_fetch = []
         dist_map = {}
