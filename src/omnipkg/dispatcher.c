@@ -812,7 +812,6 @@ static int try_daemon_cli(const char *target_python, int argc, char **argv,
                 size_t ilen = 0;
                 input_buf[0] = '\0';
                 if (fgets(input_buf, sizeof(input_buf), stdin)) {
-                    /* Strip trailing newline — worker will add it back. */
                     ilen = strlen(input_buf);
                     if (ilen > 0 && input_buf[ilen-1] == '\n')
                         input_buf[--ilen] = '\0';
@@ -1617,8 +1616,7 @@ int main(int argc, char **argv) {
                                    (_pv[_vi] == '.' ||
                                     (_pv[_vi] >= '0' && _pv[_vi] <= '9')) &&
                                    _vi < sizeof(py_ctx_ver) - 1) {
-                                py_ctx_ver[_vi] = _pv[_vi];
-                                _vi++;
+                                py_ctx_ver[_vi] = _pv[_vi]; _vi++;
                             }
                             py_ctx_ver[_vi] = '\0';
                         }
@@ -1655,9 +1653,7 @@ int main(int argc, char **argv) {
                         "    SmartInstaller(core)._run_background(bg, core)\n"
                         "except Exception:\n"
                         "    pass\n",
-                            py_ctx_ver,
-                            py_ctx_ver
-                        );
+                        out_json, py_ctx_ver, py_ctx_ver
                     );
                     char *bg_argv[] = {
                         (char *)target_python, (char *)"-c", py_script, NULL
