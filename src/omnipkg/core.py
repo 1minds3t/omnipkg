@@ -7772,14 +7772,14 @@ class omnipkg:
             targeted_packages=None, verbose=False
         )
 
-        _current_sp = str(Path(self.config["site_packages_path"]).resolve())
+        _current_sp = str(Path(self.config["site_packages_path"])).lower()
         _versions_dir = os.path.join(_current_sp, ".omnipkg_versions")
         active_dists_on_disk = {
             canonicalize_name(dist.metadata["Name"]): dist.version
             for dist in all_discovered_dists
             if dist.metadata.get("Name")
-            and str(Path(getattr(dist, "_path", "") or "").resolve()).startswith(_current_sp)
-            and not str(Path(getattr(dist, "_path", "") or "").resolve()).startswith(_versions_dir)
+            and str(Path(getattr(dist, "_path", "") or "")).lower().startswith(_current_sp)
+            and not str(Path(getattr(dist, "_path", "") or "")).lower().startswith(_versions_dir.lower())
         }
 
         disk_path_map = {os.path.realpath(str(dist._path)): dist for dist in all_discovered_dists}
