@@ -179,8 +179,8 @@ class omnipkgLoader:
     # ═══════════════════════════════════════════════════════════
     _worker_pool = {}  # {package_spec: PersistentWorker}
     _worker_pool_lock = threading.RLock()
-    __worker_pool_enabled = True  # Global toggle
-    # _cloak_locks is now managed globally by fs_lock_queue._pkg_lock_cache
+    _worker_pool_enabled = True  # Global toggle
+    _cloak_locks: Dict[str, filelock.FileLock] = {}
     # <-- NEW: Add install locks
     _install_locks: Dict[str, filelock.FileLock] = {}
     _locks_dir: Optional[Path] = None
@@ -378,22 +378,6 @@ class omnipkgLoader:
                 safe_print(_('   ⚠️ Cache init failed: {}').format(e))
             self.cache_client = None
             self.redis_key_prefix = "omnipkg:pkg:"
-
-    def _maybe_refresh_dependency_cache(self):
-        """
-        Drop the in-process _dependency_cache if the sentinel file is newer
-        than when the cache was built.  One stat() call per __enter__.
-        """
-        try:
-            from omnipkg.isolation.fs_lock_queue import DepCacheSentinel
-            if sentinel_is_dirty := DepCacheSentinel(self.multiversion_base).is_dirty_since(
-                omnipkgLoader._dep_cache_built_at
-            ):
-                if not self.quiet:
-                    safe_print("   ♻️  [cache] FS change detected — refreshing dep cache")
-                omnipkgLoader._dependency_cache = None
-        except Exception:
-            pass
 
     def _profile_start(self, label):
         """Start timing a profiled section"""
@@ -613,28 +597,6 @@ class omnipkgLoader:
             self._profile_end("daemon_uncloak")
             return
 
-        # DAEMON WORKER FAST PATH: Just uncloak in-process synchronously
-        if self._is_daemon_worker():
-            from omnipkg.isolation.fs_lock_queue import safe_uncloak
-            for s, d in moves:
-                pkg_name = Path(d).name.split("-")[0].split(".")[0]
-                safe_uncloak(
-                    src=Path(s),
-                    dst=Path(d),
-                    locks_dir=omnipkgLoader._locks_dir,
-                    pkg_name=pkg_name,
-                    active_cloaks=omnipkgLoader._active_cloaks,
-                    sentinel_base=self.multiversion_base,
-                    timeout=5.0,
-                )
-            self._cloaked_main_modules.clear()
-            self._cloaked_bubbles.clear()
-            # ── Signal immediately that FS is stable so other loaders
-            #    can proceed without waiting for full activation to finish ──
-            self._signal_daemon_lock_released()
-            self._profile_end("daemon_uncloak", print_now=self._profiling_enabled)
-            return
-
         # 2. Execute via Daemon (Preferred) or Fallback
         success = False
         if DAEMON_AVAILABLE:
@@ -706,47 +668,6 @@ class omnipkgLoader:
             )
 
         return omnipkgLoader._install_locks[lock_name]
-
-    def _cloak_bubble(self, bubble_path, suffix, timeout=10.0):
-        """
-        Atomically cloak a bubble directory. Returns (cloak_path, success).
-        timeout=0 → non-blocking try (returns False immediately if locked).
-        """
-        from omnipkg.isolation.fs_lock_queue import safe_cloak
-        pkg_name = bubble_path.name.split("-")[0]
-        cloak_path = bubble_path.with_name(bubble_path.name + suffix)
-        ok = safe_cloak(
-            src=bubble_path,
-            dst=cloak_path,
-            locks_dir=omnipkgLoader._locks_dir,
-            pkg_name=pkg_name,
-            active_cloaks=omnipkgLoader._active_cloaks,
-            owner_id=id(self),
-            sentinel_base=self.multiversion_base,
-            timeout=timeout,
-        )
-        return cloak_path, ok
-
-    def _uncloak_bubble(self, cloak_path, original_path, timeout=10.0):
-        """
-        Atomically restore a cloaked bubble. Returns True on success (including
-        "already restored by another process"). Returns False only on lock timeout.
-        """
-        from omnipkg.isolation.fs_lock_queue import safe_uncloak
-        pkg_name = original_path.name.split("-")[0]
-        ok = safe_uncloak(
-            src=cloak_path,
-            dst=original_path,
-            locks_dir=omnipkgLoader._locks_dir,
-            pkg_name=pkg_name,
-            active_cloaks=omnipkgLoader._active_cloaks,
-            sentinel_base=self.multiversion_base,
-            timeout=timeout,
-        )
-        # Always deregister regardless of outcome
-        with omnipkgLoader._active_cloaks_lock:
-            omnipkgLoader._active_cloaks.pop(str(cloak_path), None)
-        return ok
 
     def _initialize_version_aware_paths(self):
         """
@@ -1025,16 +946,13 @@ class omnipkgLoader:
                             target_path = newest_cloak.parent / original_name
 
                             # Nuke any empty directory blocking us
-                            from omnipkg.isolation.fs_lock_queue import safe_uncloak
-                            safe_uncloak(
-                                src=newest_cloak,
-                                dst=target_path,
-                                locks_dir=omnipkgLoader._locks_dir,
-                                pkg_name=canonical,
-                                active_cloaks=omnipkgLoader._active_cloaks,
-                                sentinel_base=self.multiversion_base,
-                                timeout=5.0
-                            )
+                            if target_path.exists():
+                                if target_path.is_dir():
+                                    shutil.rmtree(target_path)
+                                else:
+                                    target_path.unlink()
+
+                            shutil.move(str(newest_cloak), str(target_path))
 
                             # 🔄 RETRY IMPORT after healing
                             importlib.invalidate_caches()
@@ -1467,76 +1385,35 @@ class omnipkgLoader:
 
             target_path = cloak_path.parent / original_name
 
-            ok = safe_uncloak(
-                src=cloak_path,
-                dst=target_path,
-                locks_dir=omnipkgLoader._locks_dir,
-                pkg_name=pkg_name,
-                active_cloaks=omnipkgLoader._active_cloaks,
-                sentinel_base=self.multiversion_base,
-                timeout=5.0,
-            )
-            if ok:
+            try:
+                # Only restore if target doesn't exist or is empty
+                if target_path.exists():
+                    if target_path.is_dir() and not any(target_path.iterdir()):
+                        # Empty dir, safe to replace
+                        shutil.rmtree(target_path)
+                    elif target_path.is_dir():
+                        # Has content, skip this cloak
+                        if not self.quiet:
+                            safe_print(_('   ⏭️  Skipping restore (target exists): {}').format(original_name))
+                        continue
+                    else:
+                        # File exists, skip
+                        continue
+
+                shutil.move(str(cloak_path), str(target_path))
                 if not self.quiet:
                     safe_print(_('   ✅ Restored: {}').format(original_name))
-                return  # first success is enough
-            else:
+
+                # SUCCESS! Keep other cloaks as backups (don't delete)
+                return
+
+            except Exception as e:
                 if not self.quiet:
-                    safe_print(
-                        _('   ⏱️  Lock conflict on {}, trying next candidate').format(original_name)
-                    )
+                    safe_print(_('   ⚠️  Failed to restore {}: {}').format(cloak_path.name, e))
                 continue
 
         if not self.quiet:
             safe_print(f"   ❌ All restoration attempts failed for {pkg_name}")
-
-    def _restore_all_cloaks_for_pkg_unsafe(self, pkg_name):
-        """
-        Restore ALL cloaks (bubble + main-env) for pkg_name.
-        Called from ABI conflict paths. Uses safe_uncloak for every move.
-        """
-        from omnipkg.isolation.fs_lock_queue import safe_uncloak
-        canonical = pkg_name.lower().replace("-", "_")
-
-        # --- Bubble cloaks in multiversion_base ---
-        try:
-            for entry in os.scandir(str(self.multiversion_base)):
-                if not (entry.name.startswith(f"{pkg_name}-") and "_omnipkg_cloaked" in entry.name):
-                    continue
-                cp = Path(entry.path)
-                on = re.sub(r"\.\d+_\d+_omnipkg_cloaked.*$", "", cp.name)
-                if "_omnipkg_cloaked" in on:
-                    on = re.sub(r"\.\d+_omnipkg_cloaked.*$", "", cp.name)
-                op = cp.parent / on
-                safe_uncloak(
-                    src=cp, dst=op,
-                    locks_dir=omnipkgLoader._locks_dir,
-                    pkg_name=pkg_name,
-                    active_cloaks=omnipkgLoader._active_cloaks,
-                    sentinel_base=self.multiversion_base,
-                    timeout=3.0,
-                )
-                importlib.invalidate_caches()
-        except Exception:
-            pass
-
-        # --- Main-env cloaks in site_packages_root ---
-        try:
-            for me_cloak in list(self.site_packages_root.glob(f"{canonical}*_omnipkg_cloaked*")):
-                me_on = re.sub(r"\.\d+_\d+_omnipkg_cloaked.*$", "", me_cloak.name)
-                if "_omnipkg_cloaked" in me_on:
-                    me_on = re.sub(r"\.\d+_omnipkg_cloaked.*$", "", me_cloak.name)
-                me_op = me_cloak.parent / me_on
-                safe_uncloak(
-                    src=me_cloak, dst=me_op,
-                    locks_dir=omnipkgLoader._locks_dir,
-                    pkg_name=canonical,
-                    active_cloaks=omnipkgLoader._active_cloaks,
-                    sentinel_base=self.multiversion_base,
-                    timeout=3.0,
-                )
-        except Exception:
-            pass
 
     def _get_version_from_original_env(self, package_name: str, requested_version: str) -> tuple:
         """
@@ -2671,170 +2548,6 @@ class omnipkgLoader:
 
             if not self.quiet and cloaked_count > 0:
                 safe_print(_('   🔒 Cloaked {} conflicting packages').format(cloaked_count))
-
-            # Phase 4b: Cloak sibling bubbles in multiversion_base.
-            # _batch_cloak_packages only touches main site-packages.
-            # Other bubbles for the same package (numpy-2.3.5, numpy-1.26.4, ...)
-            # remain visible on sys.path from parent loaders and can cause
-            # _heal_numpy_python_layer to pick up the wrong __init__.py.
-            # Cloak all sibling bubbles that are a different version.
-            #
-            # DAEMON WORKER GUARD: If we are running inside a daemon worker
-            # (OMNIPKG_IS_DAEMON_WORKER=1), the worker's startup loader already
-            # activated a bubble via overlay mode (e.g. numpy-1.26.4).  Nested
-            # loader contexts spawned by user code running in the worker must NOT
-            # cloak that startup bubble — doing so breaks the worker's own import
-            # context and causes cross-version errors on subsequent imports.
-            # Collect the set of bubble paths currently active in sys.path so we
-            # can skip them in the scandir below.
-            _is_daemon_worker = bool(os.environ.get("OMNIPKG_IS_DAEMON_WORKER"))
-            _protected_bubble_paths: set = set()
-            if _is_daemon_worker:
-                _mvbase_str = str(self.multiversion_base)
-                for _sp_entry in sys.path:
-                    if _mvbase_str in _sp_entry and "_omnipkg_cloaked" not in _sp_entry:
-                        # This is an active bubble path — protect it from cloaking
-                        _protected_bubble_paths.add(os.path.normpath(_sp_entry))
-
-            try:
-                _sib_timestamp = int(time.time() * 1000000)
-                _sib_suffix = f".{_sib_timestamp}_{id(self)}_omnipkg_cloaked"
-                for _entry in os.scandir(str(self.multiversion_base)):
-                    if (
-                        _entry.is_dir()
-                        and _entry.name.startswith(f"{pkg_name}-")
-                        and "_omnipkg_cloaked" not in _entry.name
-                        and _entry.path != str(bubble_path)  # don't cloak ourselves
-                    ):
-                        # Skip any bubble that is currently active in sys.path
-                        # (protects the daemon worker's own startup bubble)
-                        if os.path.normpath(_entry.path) in _protected_bubble_paths:
-                            if not self.quiet:
-                                safe_print(
-                                    _('   ⏭️  Preserving parent bubble paths')
-                                )
-                            continue
-                        _sib_path = Path(_entry.path)
-                        # Use the locked _cloak_bubble helper with a short timeout.
-                        # If the lock can't be acquired (another process/loader is
-                        # actively using this bubble), skip it — cloaking a bubble
-                        # that's in another process's sys.path causes
-                        # ModuleNotFoundError when that process imports from it.
-                        # The key insight: if we CAN'T lock it, we DON'T need to
-                        # cloak it for OUR isolation — our sys.path is STRICT mode
-                        # and only has OUR bubble at [0], so the sibling is invisible
-                        # to us regardless.
-                        # Daemon workers use timeout=0 (never block — they work in-memory).
-                        # In-process loaders can wait briefly since they need the FS correct.
-                        _sib_timeout = 0 if _is_daemon_worker else 0.5
-                        _sib_cloak_p, _sib_ok = self._cloak_bubble(
-                            _sib_path, _sib_suffix, timeout=_sib_timeout)
-                        if _sib_ok:
-                            self._cloaked_bubbles.append((_sib_cloak_p, _sib_path))
-                            if not self.quiet:
-                                safe_print(_('   🔒 Cloaked sibling bubble: {}').format(_sib_path.name))
-                        elif not self.quiet:
-                            safe_print(_('   ⏭️  Skipping busy sibling bubble: {}').format(_sib_path.name))
-            except OSError:
-                pass
-
-            # Phase 4c: Cloak the main-env copy of pkg_name if it exists and
-            # is a DIFFERENT version from the bubble we're activating.
-            # _batch_cloak_packages (Phase 4) only cloaks packages whose version
-            # differs from bubble deps — it never cloaks pkg_name itself because
-            # the bubble manifest lists pkg_name as the package being installed,
-            # not as a "conflict".  Without this, numpy's main-env directory
-            # (e.g. site-packages/numpy/ @ 1.26.4) stays on disk while the bubble
-            # (e.g. numpy-1.24.3) is active, and Python's import machinery can still
-            # resolve it through the main site-packages fallback at the end of sys.path.
-            #
-            # DAEMON WORKER GUARD: Skip this phase inside a daemon worker.
-            # The worker's STEP 4 already restored all cloaks after startup bubble
-            # activation.  Nested loaders running user code should not re-cloak the
-            # main-env package — it is not in sys.path (the worker uses overlay mode
-            # with the bubble prepended), so cloaking it is unnecessary and only
-            # causes confusion in the worker's exit/cleanup path.
-            if not _is_daemon_worker:
-                try:
-                    _canonical_pkg = pkg_name.lower().replace("-", "_")
-                    _main_pkg_dir = self.site_packages_root / _canonical_pkg
-                    _main_dist_infos = list(
-                        self.site_packages_root.glob(f"{_canonical_pkg}-*.dist-info")
-                    )
-
-                    # Determine the main-env version (if any)
-                    # IMPORTANT: Do NOT use importlib.metadata.distributions() here —
-                    # it caches PathDistribution objects and the cache is NOT invalidated
-                    # by importlib.invalidate_caches().  After a cloak+uncloak cycle the
-                    # cache returns stale "not found" results.  Scan the dist-info
-                    # directories directly instead.
-                    _main_env_ver: Optional[str] = None
-                    for _di in self.site_packages_root.glob(f"{_canonical_pkg}-*.dist-info"):
-                        if not _di.is_dir():
-                            continue
-                        # Extract version from directory name: numpy-1.26.4.dist-info → 1.26.4
-                        _di_stem = _di.name[len(f"{_canonical_pkg}-"):]  # "1.26.4.dist-info"
-                        _di_ver = _di_stem.replace(".dist-info", "")
-                        if _di_ver:
-                            _main_env_ver = _di_ver
-                            break
-
-                    # Determine the bubble version from its path name
-                    _bubble_ver = str(bubble_path.name)
-                    if _bubble_ver.startswith(f"{pkg_name}-"):
-                        _bubble_ver = _bubble_ver[len(f"{pkg_name}-"):]
-                    else:
-                        _bubble_ver = None  # can't determine, skip safety check
-
-                    _should_cloak_main = (
-                        _main_env_ver is not None
-                        and _bubble_ver is not None
-                        and _main_env_ver != _bubble_ver
-                    )
-
-                    if _should_cloak_main:
-                        _me_timestamp = int(time.time() * 1000000)
-                        _me_suffix = f".{_me_timestamp}_{id(self)}_omnipkg_cloaked"
-                        lock = self._get_cloak_lock(_canonical_pkg)
-
-                        _paths_to_cloak_main = []
-                        if _main_pkg_dir.exists():
-                            _paths_to_cloak_main.append(_main_pkg_dir)
-                        _paths_to_cloak_main.extend(_main_dist_infos)
-                        # Also egg-info if present
-                        _paths_to_cloak_main.extend(
-                            self.site_packages_root.glob(f"{_canonical_pkg}-*.egg-info")
-                        )
-
-                        from omnipkg.isolation.fs_lock_queue import safe_cloak as _sc4c
-                        for _me_path in _paths_to_cloak_main:
-                            if not _me_path.exists():
-                                continue
-                            _me_cloak = _me_path.with_name(_me_path.name + _me_suffix)
-                            _ok = _sc4c(
-                                src=_me_path,
-                                dst=_me_cloak,
-                                locks_dir=omnipkgLoader._locks_dir,
-                                pkg_name=_canonical_pkg,
-                                active_cloaks=omnipkgLoader._active_cloaks,
-                                owner_id=id(self),
-                                sentinel_base=self.multiversion_base,
-                                timeout=5.0,
-                            )
-                            if _ok:
-                                self._cloaked_main_modules.append((_me_path, _me_cloak, True))
-                                if not self.quiet:
-                                    safe_print(_('   🔒 Cloaked main-env {}: {}').format(
-                                        pkg_name, _me_path.name))
-                            else:
-                                if not self.quiet:
-                                    safe_print(f"   ⏱️  Skipped/locked main-env cloak: {_me_path.name}")
-                except Exception as _me_outer_err:
-                    if not self.quiet:
-                        safe_print(
-                            _('   ⚠️  Main-env cloak phase error: {}').format(_me_outer_err)
-                        )
-
             self._profile_end("cloak_conflicts", print_now=self._profiling_enabled)
 
             # Phase 5: Setup sys.path
@@ -3835,19 +3548,17 @@ class omnipkgLoader:
                         match = re.search(r"^(.+?)(?:\.\d+)?_\d+_omnipkg_cloaked", cloak_path.name)
                         if match:
                             original_name = match.group(1)
+
                     original_path = cloak_path.parent / original_name
 
                     try:
-                    # holds the lock for this package, it owns the cloak — skip it.
-                    # Restoring it while the daemon worker needs it cloaked causes
-                    # ModuleNotFoundError in the worker on the next import.
-                    from omnipkg.isolation.fs_lock_queue import safe_uncloak
-                    
-                    if cloak_path.exists() and original_path.exists():
-                        # Duplicate cloak — original is already there, drop this
-                        try:
-                            shutil.rmtree(str(cloak_path), ignore_errors=True) if cloak_path.is_dir() else cloak_path.unlink(missing_ok=True)
-                            total_cleaned += 1
+                        if not original_path.exists():
+                            shutil.move(str(cloak_path), str(original_path))
+                        else:  # It's a duplicate, just delete it
+                            if cloak_path.is_dir():
+                                shutil.rmtree(cloak_path)
+                            else:
+                                cloak_path.unlink()
                         total_cleaned += 1
                     except Exception:
                         pass
