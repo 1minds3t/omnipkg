@@ -14926,7 +14926,7 @@ print(json.dumps(results))
         # Use the configured python executable, not the one running the script.
         # This prevents the Python 3.11 context from leaking into our 3.8 operation.
         configured_python_exe = self.config["python_executable"]
-        venv_python = os.path.join(venv_path, "bin", "python")
+        venv_python = os.path.join(venv_path, "Scripts" if platform.system() == "Windows" else "bin", "python" + (".exe" if platform.system() == "Windows" else ""))
 
         try:
             # Create the venv using the correct Python interpreter
