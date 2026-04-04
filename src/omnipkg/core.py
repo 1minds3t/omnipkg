@@ -14757,12 +14757,12 @@ print(json.dumps(results))
         safe_print("\n      - ⚙️ Stage 2: Downloading and installing historical package files...")
 
         itsdangerous_file = None  # Save this for last
+        import requests as http_requests
 
         for pkg_name, pkg_ver in historical_versions.items():
             # Skip itsdangerous for now
             if pkg_name == "itsdangerous" and pkg_ver == "0.24":
                 url = f"https://pypi.org/pypi/{pkg_name}/{pkg_ver}/json"
-                import requests as http_requests
                 response = http_requests.get(url, timeout=10)
                 response.raise_for_status()
                 data = response.json()
