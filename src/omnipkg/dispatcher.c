@@ -1476,6 +1476,40 @@ int main(int argc, char **argv) {
                                      venv_root, py_ver);
                             py_handle = dlopen(pylib, RTLD_LAZY | RTLD_GLOBAL);
                         }
+#ifndef _WIN32
+                        /* macOS: .dylib variant */
+                        if (!py_handle) {
+                            snprintf(pylib, sizeof(pylib), "%s/lib/lib%s.dylib",
+                                     venv_root, py_ver);
+                            py_handle = dlopen(pylib, RTLD_LAZY | RTLD_GLOBAL);
+                        }
+                        /* Ask target Python for its exact library name via sysconfig */
+                        if (!py_handle) {
+                            char _pylib_cmd[MAX_PATH * 2];
+                            char _pylib_out[MAX_PATH] = "";
+                            snprintf(_pylib_cmd, sizeof(_pylib_cmd),
+                                "\"%s\" -c \"import sysconfig; "
+                                "print(sysconfig.get_config_var('LDLIBRARY') or '')\""
+                                " 2>/dev/null",
+                                target_python);
+                            FILE *_pp = popen(_pylib_cmd, "r");
+                            if (_pp) {
+                                if (fgets(_pylib_out, sizeof(_pylib_out), _pp))
+                                    _pylib_out[strcspn(_pylib_out, "\r\n")] = '\0';
+                                pclose(_pp);
+                            }
+                            if (_pylib_out[0]) {
+                                snprintf(pylib, sizeof(pylib), "%s/lib/%s",
+                                         venv_root, _pylib_out);
+                                py_handle = dlopen(pylib, RTLD_LAZY | RTLD_GLOBAL);
+                                if (!py_handle)
+                                    py_handle = dlopen(_pylib_out, RTLD_LAZY | RTLD_GLOBAL);
+                            }
+                        }
+                        /* Last resort: libpython already loaded in this process */
+                        if (!py_handle)
+                            py_handle = dlopen(NULL, RTLD_LAZY | RTLD_GLOBAL);
+#endif
                         if (debug)
                             fprintf(stderr, "[C-DISPATCH] Preloading %s -> %s\n",
                                     pylib, py_handle ? "OK" : dlerror());
