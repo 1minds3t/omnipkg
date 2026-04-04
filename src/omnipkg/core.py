@@ -15233,9 +15233,11 @@ print(json.dumps(results))
         if uv_exe:
             _t_wrapper_entry = time.perf_counter()
             # Build uv args once — reused by all three paths
+            import platform as _plat
+            _link_mode = "symlink"
             _uv_args = ["pip", "install",
                         "--cache-dir", self._uv_cache_dir,
-                        "--link-mode", "symlink"]
+                        "--link-mode", _link_mode]
             if index_url:
                 _uv_args += ["--index-url", index_url]
             if extra_index_url:
@@ -15245,6 +15247,10 @@ print(json.dumps(results))
             if force_reinstall:
                 _uv_args.append("--upgrade")
             if target_directory:
+                # Windows symlinks in --target dirs cause broken metadata reads
+                if _plat.system() == "Windows" and "--link-mode" in _uv_args:
+                    _idx = _uv_args.index("--link-mode")
+                    _uv_args[_idx + 1] = "copy"
                 _uv_args += ["--target", str(target_directory)]
             # Always tell uv which Python to target — without this uv uses
             # environment detection and installs into the wrong interpreter.
