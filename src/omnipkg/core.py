@@ -13501,7 +13501,15 @@ class omnipkg:
                     found_installations.append(basic_info)
                     seen_versions.add(ver)
 
-        return found_installations
+        # Deduplicate — filesystem scan + Redis can both find the same active install
+        seen = set()
+        deduped = []
+        for inst in found_installations:
+            key = (inst.get("Version") or inst.get("version"), inst.get("install_type"), inst.get("path", ""))
+            if key not in seen:
+                seen.add(key)
+                deduped.append(inst)
+        return deduped
 
     def smart_uninstall(
         self,
