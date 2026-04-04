@@ -671,6 +671,15 @@ static int try_daemon_uv(
     char       *out_json,
     int         max_out
 ) {
+    /*
+     * DISABLED: fast-path uv FFI bypass is not yet safe.
+     * Re-enable when: split resolve/plan, concurrent bubble cloak,
+     * KB sync hidden under latency, Tokio runtime stable for rapid calls,
+     * sentinel written only after ALL background ops complete.
+     */
+    (void)target_python; (void)pkg_spec; (void)out_json; (void)max_out;
+    return 0;
+
     int debug = (getenv("OMNIPKG_DEBUG") != NULL &&
                  strcmp(getenv("OMNIPKG_DEBUG"), "1") == 0);
 
