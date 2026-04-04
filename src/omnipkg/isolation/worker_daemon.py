@@ -3598,11 +3598,6 @@ class WorkerPoolDaemon:
         safe_print(f"[RUN-CLI] worker acquired in {(_t_got_worker-_t0)*1000:.2f}ms", file=sys.stderr)
 
         try:
-            # If worker hasn't been assigned a spec yet (idle worker), send setup first
-            if not worker._is_ready:
-                pkg_spec = req.get("spec") or req.get("package_spec") or "__cli__"
-                safe_print(f"[RUN-CLI] assigning spec '{pkg_spec}' to idle worker", file=sys.stderr)
-                worker.assign_spec(pkg_spec)
             safe_print(f"[RUN-CLI] sending req to worker", file=sys.stderr)
             worker.process.stdin.write(json.dumps(req) + "\n")
             worker.process.stdin.flush()
