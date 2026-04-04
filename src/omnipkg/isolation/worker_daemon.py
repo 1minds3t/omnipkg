@@ -3073,12 +3073,30 @@ class WorkerPoolDaemon:
             return False if wait_for_ready else sys.exit(1)
 
     def _wait_for_daemon_ready(self, timeout: int = 10) -> bool:
-        """Waits for the daemon's PID file to appear and be valid."""
+        """Waits until the daemon is actually accepting connections (cross-platform)."""
+        import socket as _sock
         start_time = time.time()
         while time.time() - start_time < timeout:
-            if self.is_running():
-                return True
-            time.sleep(0.2)
+            if IS_WINDOWS:
+                try:
+                    s = _sock.socket(_sock.AF_INET, _sock.SOCK_STREAM)
+                    s.settimeout(0.5)
+                    s.connect(("127.0.0.1", getattr(self, "daemon_port", 5678)))
+                    s.close()
+                    return True
+                except Exception:
+                    pass
+            else:
+                if os.path.exists(DEFAULT_SOCKET):
+                    try:
+                        s = _sock.socket(_sock.AF_UNIX, _sock.SOCK_STREAM)
+                        s.settimeout(0.5)
+                        s.connect(DEFAULT_SOCKET)
+                        s.close()
+                        return True
+                    except Exception:
+                        pass
+            time.sleep(0.05)
         return False
 
     def _handle_parent_after_fork(self, child_pid: int, wait_for_ready: bool) -> bool:
@@ -6455,10 +6473,36 @@ class DaemonProxy:
         except Exception:
             pass
     def get_version(self, package_name):
+        import json as _json
+        code = (
+            f"import sys, json\n"
+            f"try:\n"
+            f"    import importlib.metadata as _meta\n"
+            f"except ImportError:\n"
+            f"    import importlib_metadata as _meta\n"
+            f"_ver = _meta.version(\'{package_name}\')\n"
+            f"_mod = __import__(\'{package_name}\')\n"
+            f"sys.stdout.write(json.dumps({{\'version\': _ver, \'path\': getattr(_mod, \'__file__\', \'\')}})+\'\\n\')\n"
+        )
         res = self.execute(code)
+        if res.get("success") and res.get("stdout", "").strip():
+            try:
+                _data = _json.loads(res["stdout"].strip().splitlines()[-1])
+                return {"success": True, "version": _data.get("version", "unknown"), "path": _data.get("path", "daemon")}
+            except Exception:
+                pass
+        return {"success": False, "error": res.get("error", "parse error")}
 
     def shutdown(self):
-        pass
+        try:
+            self.client._send({
+                "type": "evict_worker",
+                "spec": self.spec,
+                "python_exe": self.python_exe or "",
+                "worker_tag": "",
+            })
+        except Exception:
+            pass
 
 
 # ═══════════════════════════════════════════════════════════════
