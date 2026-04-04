@@ -908,6 +908,7 @@ try:
                     pass
             return DummyBuffer()
 
+    import time as _wtime  # guaranteed fallback if pre-warm failed
     old_stdout = sys.stdout
     old_stderr = sys.stderr
 
