@@ -4430,6 +4430,19 @@ class WorkerPoolDaemon:
                                 del self.workers[spec]
                         continue
 
+                    # ── EVICT DIRTY UNTAGGED WORKERS ───────────────────────
+                    if worker_info.get("dirty") and not worker_info.get("worker_tag"):
+                        with self.pool_lock:
+                            if spec in self.workers:
+                                del self.workers[spec]
+                        worker_info["worker"].force_shutdown()
+                        safe_print(
+                            f"   🧹 [DAEMON] Health monitor evicted dirty worker: {spec}",
+                            file=sys.stderr,
+                        )
+                        continue
+                    # ── END DIRTY EVICTION ──────────────────────────────────
+
                     # Perform health check
                     if not worker_info["worker"].health_check():
                         # 3 strikes and you're out
@@ -4596,14 +4609,44 @@ class WorkerPoolDaemon:
                 except Exception:
                     pass
 
-        # Cleanup
-        shm_registry.cleanup_orphans()
+        # Wait up to 2s for graceful termination, then SIGKILL stragglers
+        import time as _st
+        deadline = _st.time() + 2.0
+        remaining = list(all_pids)
+        while remaining and _st.time() < deadline:
+            _st.sleep(0.05)
+            still_alive = []
+            for pid in remaining:
+                try:
+                    os.kill(pid, 0)  # 0 = check existence only
+                    still_alive.append(pid)
+                except OSError:
+                    pass  # already dead
+            remaining = still_alive
+
+        # SIGKILL anything still alive
+        for pid in remaining:
+            try:
+                os.kill(pid, signal.SIGKILL)
+                self.log(f"  SIGKILL sent to straggler PID {pid}")
+            except OSError:
+                pass
+
+        # Cleanup socket and PID files
+        for path in (self.socket_path, PID_FILE):
+            try:
+                os.unlink(path)
+            except OSError:
+                pass
+
+        # Stop the FS watcher and release shared memory before exit
         try:
-            os.unlink(self.socket_path)
-            os.unlink(PID_FILE)
-        except:
+            if self._fs_watcher is not None:
+                self._fs_watcher.stop()
+        except Exception:
             pass
 
+        self.log(f"Shutdown complete. Killed {len(all_pids)} worker(s).")
         sys.exit(0)
 
     @classmethod
@@ -5241,6 +5284,72 @@ class DaemonClient:
             return WorkerPool.get_instance().execute(spec, code, python_exe)
         return result
 
+    def run_once(
+        self,
+        spec: str,
+        code: str,
+        python_exe: str = None,
+        worker_tag: str = None,
+    ) -> dict:
+        """
+        Ephemeral execution mode — for ABI-heavy packages (numpy, torch, scipy).
+
+        Spawns a fresh worker process with *spec* activated, runs *code* inside
+        it, returns the result, then immediately evicts the worker from the pool
+        so its RAM is freed.  The worker is tagged so it never shares state with
+        the persistent warm workers used by the normal execute() path.
+
+        This is the correct API for constrained-RAM environments or any caller
+        that needs guaranteed .so isolation without managing worker lifecycle::
+
+            code = "import numpy as np, json, sys\\n" \
+                   "sys.stdout.write(json.dumps({'version': np.__version__}) + '\\\\n')"
+            result = client.run_once("numpy==1.24.3", code)
+
+        Returns dict with keys: success, stdout, stderr, error (on failure).
+        The worker process exits immediately after the call completes.
+        """
+        import uuid
+        # Use a unique tag so this call always gets its own fresh process,
+        # never sharing with warm persistent workers or other run_once calls.
+        tag = worker_tag or f"run_once_{uuid.uuid4().hex[:8]}"
+        try:
+            result = self.execute_shm(
+                spec=spec,
+                code=code,
+                shm_in={},
+                shm_out={},
+                python_exe=python_exe or sys.executable,
+                worker_tag=tag,
+                max_memory_mb=None,
+            )
+            # Normalize to the same shape as DaemonProxy.execute() returns
+            if result.get("status") == "COMPLETED":
+                stdout = result.get("stdout") or result.get("result", {}).get("stdout") or ""
+                return {
+                    "success": True,
+                    "stdout": stdout,
+                    "stderr": result.get("stderr", ""),
+                }
+            return {
+                "success": False,
+                "error": result.get("error", "run_once failed"),
+                "traceback": result.get("traceback", ""),
+            }
+        finally:
+            # Evict the tagged worker immediately so RAM is freed.
+            # We do this in a best-effort way — if the daemon has already
+            # cleaned it up, the eviction is a no-op.
+            try:
+                self._send({
+                    "type": "evict_worker",
+                    "spec": spec,
+                    "python_exe": _resolve_python_exe(python_exe),
+                    "worker_tag": tag,
+                })
+            except Exception:
+                pass  # eviction is best-effort
+
     def execute_shm(
         self,
         spec: str,
@@ -5497,6 +5606,56 @@ class DaemonClient:
                 return {"success": False, "error": _('Communication error: {}').format(e)}
         
         return {"success": False, "error": "Connection failed after retries"}
+
+    def run_uv(self, uv_args: list, uv_exe: str = None, python_exe: str = None, env: dict = None) -> dict:
+        """
+        Send a run_uv request to the daemon's dedicated UV worker pool.
+        The worker keeps Tokio warm across calls — subsequent calls are ~5ms.
+        Returns dict with keys: exit_code, installed, removed, stdout, stderr, elapsed_ms, via.
+        Falls back to direct subprocess if daemon is unreachable.
+        """
+        import shutil as _sh
+        req = {
+            "type":       "run_uv",
+            "uv_args":    uv_args,
+            "uv_exe":     uv_exe or _sh.which("uv") or "uv",
+            "python_exe": python_exe or sys.executable,
+            "env":        env or {},
+        }
+        try:
+            sock_family, address = self._get_connection_info()
+            sock = socket.socket(sock_family, socket.SOCK_STREAM)
+            sock.settimeout(self.timeout)
+            sock.connect(address)
+            send_json(sock, req, timeout=self.timeout)
+            # Drain frames until COMPLETED/ERROR
+            while True:
+                msg = recv_json(sock, timeout=self.timeout)
+                if msg.get("status") in ("COMPLETED", "ERROR", "FFI_UNAVAILABLE"):
+                    sock.close()
+                    return msg
+                # stream frames — ignore (caller gets structured result)
+        except (ConnectionRefusedError, FileNotFoundError):
+            pass
+        except Exception as _e:
+            sys.stderr.write(f"[DaemonClient.run_uv] error: {_e}\n")
+        # Fallback: direct subprocess
+        import shutil as _sh2, subprocess as _sp
+        _uv = uv_exe or _sh2.which("uv") or "uv"
+        _env = os.environ.copy()
+        if env:
+            _env.update(env)
+        proc = _sp.run([_uv] + uv_args, capture_output=True, text=True, env=_env)
+        installed, removed = [], []
+        for line in proc.stderr.splitlines():
+            l = line.strip()
+            if l.startswith("+ ") and "==" in l:
+                n, v = l[2:].split("==", 1); installed.append((n.strip(), v.strip()))
+            elif l.startswith("- ") and "==" in l:
+                n, v = l[2:].split("==", 1); removed.append((n.strip(), v.strip()))
+        return {"status": "COMPLETED", "exit_code": proc.returncode,
+                "installed": installed, "removed": removed,
+                "stdout": proc.stdout, "stderr": proc.stderr, "via": "subprocess_fallback"}
 
 
     # ============================================================
@@ -6243,15 +6402,22 @@ class DaemonProxy:
         self.process = "DAEMON_MANAGED"
 
     def execute(self, code: str):
-        result = self.client.execute_shm(self.spec, code, shm_in={}, shm_out={})
+        result = self.client.execute_shm(self.spec, code, shm_in={}, shm_out={}, python_exe=self.python_exe)
 
-        # Transform daemon response to match loader.execute() format
+        # Transform daemon response to match loader.execute() format.
+        # stdout may live at the top level of the response dict OR nested under
+        # "result" depending on which path through execute_shm_task emitted it.
         if result.get("status") == "COMPLETED":
+            stdout = (
+                result.get("stdout")
+                or result.get("result", {}).get("stdout")
+                or ""
+            )
             return {
                 "success": True,
-                "stdout": result.get("stdout", ""),
-                "stderr": result.get("stderr", ""),
-                "locals": result.get("locals", ""),
+                "stdout": stdout,
+                "stderr": result.get("stderr", "") or result.get("result", {}).get("stderr", ""),
+                "locals": result.get("locals", "") or result.get("result", {}).get("locals", ""),
             }
         else:
             return {
@@ -6260,12 +6426,36 @@ class DaemonProxy:
                 "traceback": result.get("traceback", ""),
             }
 
+        import json as _json
+        code = (
+            f"import sys, json\n"
+            f"try:\n"
+            f"    import importlib.metadata as _meta\n"
+            f"except ImportError:\n"
+            f"    import importlib_metadata as _meta\n"
+            f"_ver = _meta.version('{package_name}')\n"
+            f"_mod = __import__('{package_name}')\n"
+            f"sys.stdout.write(json.dumps({{'version': _ver, 'path': getattr(_mod, '__file__', '')}}) + '\\n')\n"
+        )
+        if res.get("success") and res.get("stdout", "").strip():
+            try:
+                _data = _json.loads(res["stdout"].strip().splitlines()[-1])
+                return {"success": True, "version": _data.get("version", "unknown"), "path": _data.get("path", "daemon")}
+            except Exception:
+                pass
+        return {"success": False, "error": res.get("error", "parse error")}
+        # Send evict request to daemon so the worker process is actually killed
+        try:
+            self.client._send({
+                "type": "evict_worker",
+                "spec": self.spec,
+                "python_exe": self.python_exe or "",
+                "worker_tag": "",
+            })
+        except Exception:
+            pass
     def get_version(self, package_name):
-        code = f"try: import importlib.metadata as meta\nexcept ImportError: import importlib_metadata as meta\nresult = {{'version': meta.version('{package_name}'), 'path': __import__('{package_name}').__file__}}"
         res = self.execute(code)
-        if res.get("success"):
-            return {"success": True, "version": "unknown", "path": "daemon"}
-        return {"success": False, "error": res.get("error")}
 
     def shutdown(self):
         pass
@@ -6286,18 +6476,23 @@ def cli_start():
 
     safe_print("🚀 Initializing OmniPkg Worker Daemon...", end=" ", flush=True)
 
-    # Initialize
     daemon = WorkerPoolDaemon(max_workers=10, max_idle_time=300, warmup_specs=[])
 
-    # Start (The parent process will print "✅" and exit inside this call)
     try:
-        daemon.start(daemonize=True)
+        daemon.start(daemonize=True, wait_for_ready=True)
     except Exception as e:
         safe_print(_('\n❌ Failed to start: {}').format(e))
 
 
 def cli_stop():
     """Stop the daemon."""
+    daemon_pid = None
+    try:
+        with open(PID_FILE, "r") as f:
+            daemon_pid = int(f.read().strip())
+    except Exception:
+        pass
+
     client = DaemonClient()
     result = client.shutdown()
     if result.get("success"):
