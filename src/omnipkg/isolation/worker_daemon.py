@@ -2799,6 +2799,12 @@ class WorkerPoolDaemon:
         
         self.running = True
         self.socket_path = DEFAULT_SOCKET
+
+        # ── DEDICATED UV WORKERS: one PersistentWorker per Python exe ──────
+        self.uv_workers: Dict[str, "PersistentWorker"] = {}
+        self.uv_worker_locks: Dict[str, threading.Lock] = defaultdict(threading.Lock)
+        self._uv_last_install_ts: Dict[str, float] = {}
+
         self.stats = {
             "total_requests": 0,
             "cache_hits": 0,
