@@ -5272,10 +5272,6 @@ class DaemonClient:
         # Only include optional fields when set — keeps wire format backward-compat
         if worker_tag is not None:
             payload["worker_tag"] = worker_tag
-        if pin:
-            payload["pin"] = True
-        if pin:
-            payload["pin"] = True
         if max_memory_mb is not None:
             payload["max_memory_mb"] = max_memory_mb
         return self._send(payload)
@@ -5807,8 +5803,6 @@ class DaemonClient:
             }
             if worker_tag is not None:
                 payload["worker_tag"] = worker_tag
-            if pin:
-                payload["pin"] = True
             if max_memory_mb is not None:
                 payload["max_memory_mb"] = max_memory_mb
             response = self._send(payload)
@@ -5937,8 +5931,6 @@ class DaemonClient:
             }
             if worker_tag is not None:
                 payload["worker_tag"] = worker_tag
-            if pin:
-                payload["pin"] = True
             if max_memory_mb is not None:
                 payload["max_memory_mb"] = max_memory_mb
             response = self._send(payload)
@@ -6011,9 +6003,6 @@ class DaemonClient:
             }
             if worker_tag is not None:
                 payload["worker_tag"] = worker_tag
-            if pin:
-                payload["pin"] = True
-            
             if max_memory_mb is not None:
                 payload["max_memory_mb"] = max_memory_mb
             response = self._send(payload)
