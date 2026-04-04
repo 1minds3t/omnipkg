@@ -854,6 +854,28 @@ def simulate_user_choice(choice, message):
     safe_print(_("💭 {}").format(message))
     return choice.lower()
 
+def _is_relative_to_win(path: Path, base: Path) -> bool:
+    """Case-insensitive relative_to for Windows path safety."""
+    try:
+        path.resolve().relative_to(base.resolve())
+        return True
+    except ValueError:
+        # Fallback: case-insensitive string comparison for Windows drive letter normalization
+        try:
+            str(path.resolve()).lower().startswith(str(base.resolve()).lower())
+            path.resolve().relative_to(Path(str(base.resolve()).lower()))
+        except ValueError:
+            pass
+        return str(path.resolve()).lower().startswith(str(base.resolve()).lower())
+
+def _relative_to_win(path: Path, base: Path) -> Path:
+    """Case-insensitive relative_to that works across Windows drive letter normalization."""
+    p = str(path.resolve()).lower()
+    b = str(base.resolve()).lower()
+    if p.startswith(b):
+        return Path(str(path.resolve())[len(str(base.resolve())):].lstrip('/\\'))
+    raise ValueError(f"{path} is not relative to {base}")
+
 class ConfigGuard:
     """
     A context manager to safely and temporarily override omnipkg's configuration

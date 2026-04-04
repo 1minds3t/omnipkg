@@ -1,6 +1,6 @@
 from __future__ import annotations  # Python 3.6+ compatibility
 
-from omnipkg.common_utils import safe_print
+from omnipkg.common_utils import safe_print, _is_relative_to_win, _relative_to_win
 from omnipkg.i18n import _
 
 try:
@@ -262,7 +262,7 @@ class omnipkgMetadataGatherer:
         if install_type in ["bubble", "nested"]:
             multiversion_base_path = Path(self.config.get("multiversion_base", "/dev/null"))
             try:
-                relative_to_base = dist._path.relative_to(multiversion_base_path)
+                relative_to_base = _relative_to_win(dist._path, multiversion_base_path)
                 bubble_root_name = relative_to_base.parts[0]
                 bubble_root_path = multiversion_base_path / bubble_root_name
                 manifest_file = bubble_root_path / ".omnipkg_manifest.json"
@@ -882,14 +882,12 @@ class omnipkgMetadataGatherer:
         for pkg_spec in targeted_packages:
             pkg_name, version = self._parse_package_spec(pkg_spec)
             if not version:
-                # No version specified - scan ALL bubble versions for this package
-                if _dbg:
-                    print(f"[FAST-DISC] {pkg_spec}: scanning all versions", flush=True)
                 canonical_name = canonicalize_name(pkg_name)
-                # Scan multiversion_base for all {pkg}-{version} directories
+                found_any = False
+
+                # existing bubble scan
                 for bubble_dir in multiversion_base.glob(f"{canonical_name}-*"):
                     if bubble_dir.is_dir():
-                        # Find the dist-info that matches THIS package, not its deps
                         _target_di = None
                         for di in bubble_dir.glob("*.dist-info"):
                             di_name = di.name.lower()
@@ -900,12 +898,14 @@ class omnipkgMetadataGatherer:
                             try:
                                 dist = PathDistribution(_target_di)
                                 found_dists.append(dist)
+                                found_any = True
                                 if _dbg:
                                     print(f"[FAST-DISC] found {dist.name} {dist.version} in {bubble_dir}", flush=True)
                             except Exception as e:
                                 if _dbg:
                                     print(f"[FAST-DISC] failed to load {bubble_dir}: {e}", flush=True)
-                # Also check underscore variant
+
+                # underscore variant bubble scan (existing)
                 for bubble_dir in multiversion_base.glob(f"{pkg_name.replace('-', '_')}-*"):
                     if bubble_dir.is_dir() and bubble_dir not in [d._path.parent for d in found_dists]:
                         _dist_infos = list(bubble_dir.glob("*.dist-info"))
@@ -913,13 +913,36 @@ class omnipkgMetadataGatherer:
                             try:
                                 dist = PathDistribution(_dist_infos[0])
                                 found_dists.append(dist)
+                                found_any = True
                                 if _dbg:
                                     print(f"[FAST-DISC] found {dist.name} {dist.version} in {bubble_dir}", flush=True)
                             except Exception as e:
                                 if _dbg:
                                     print(f"[FAST-DISC] failed to load {bubble_dir}: {e}", flush=True)
-                continue
-                continue
+
+                # ✅ NEW: fallback to main site-packages for directly-installed packages
+                if not found_any:
+                    name_variants = self._get_package_name_variants(pkg_name)
+                    if _dbg:
+                        print(f"[FAST-DISC] {pkg_spec}: not in bubbles, scanning main site-packages", flush=True)
+                    for variant in name_variants:
+                        # glob without version — match any version
+                        for match in main_site_packages.glob(f"{variant}-*.dist-info"):
+                            try:
+                                dist = PathDistribution(match)
+                                if dist.metadata.get("Name"):
+                                    found_dists.append(dist)
+                                    found_any = True
+                                    if _dbg:
+                                        print(f"[FAST-DISC] found {dist.name} {dist.version} in main env: {match}", flush=True)
+                                    break
+                            except Exception as e:
+                                if _dbg:
+                                    print(f"[FAST-DISC] main site-packages PathDistribution failed: {match}: {e}", flush=True)
+                        if found_any:
+                            break
+
+                continue  # single continue, dead one removed
 
             canonical_name = canonicalize_name(pkg_name)
             if _dbg:
@@ -1629,7 +1652,7 @@ class omnipkgMetadataGatherer:
                 multiversion_base_path = Path(self.config.get("multiversion_base", "/dev/null"))
 
                 try:
-                    relative_to_base = dist._path.relative_to(multiversion_base_path)
+                    relative_to_base = _relative_to_win(dist._path, multiversion_base_path)
                     bubble_root_name = relative_to_base.parts[0]
                     bubble_root_path = multiversion_base_path / bubble_root_name
                     manifest_file = bubble_root_path / ".omnipkg_manifest.json"
@@ -1822,7 +1845,7 @@ class omnipkgMetadataGatherer:
 
         # Check if in multiversion_base
         try:
-            relative_path = dist_path.relative_to(multiversion_base)
+            relative_path = _relative_to_win(dist_path, multiversion_base)
             bubble_dir_name = relative_path.parts[0]
 
             # Get the package's own name and version
@@ -1844,7 +1867,7 @@ class omnipkgMetadataGatherer:
 
         # Active check
         try:
-            dist_path.relative_to(site_packages)
+            if not _is_relative_to_win(dist_path, site_packages): raise ValueError("not relative")
             return {"install_type": "active", "owner_package": None}
         except ValueError:
             pass

@@ -1,4 +1,4 @@
-from omnipkg.common_utils import safe_print
+from omnipkg.common_utils import safe_print, _is_relative_to_win, _relative_to_win
 
 """
 omnipkg
@@ -2301,7 +2301,7 @@ class ConfigManager:
                     sp_path = Path(sp)
                     try:
                         # Check if this site-packages is under our Python installation
-                        sp_path.relative_to(current_python_dir)
+                        _relative_to_win(sp_path, current_python_dir)
                         # Additional validation: check if it actually contains packages
                         if sp_path.exists():
                             return sp_path
@@ -6764,7 +6764,7 @@ class omnipkg:
                     owner_package = None
 
                     try:
-                        relative_to_bubbles = path_obj.relative_to(multiversion_base)
+                        relative_to_bubbles = _relative_to_win(path_obj, multiversion_base)
                         bubble_dir_name = relative_to_bubbles.parts[0]
 
                         expected_bubble_name = f"{canonicalize_name(pkg_name)}-{version}"
@@ -6776,10 +6776,9 @@ class omnipkg:
                             owner_package = bubble_dir_name
 
                     except ValueError:
-                        try:
-                            path_obj.relative_to(site_packages)
+                        if _is_relative_to_win(path_obj, site_packages):
                             install_type = "active"
-                        except ValueError:
+                        else:
                             install_type = "unknown"
 
                     pipe.hset(version_key, "install_type", install_type)
@@ -7454,7 +7453,7 @@ class omnipkg:
             multiversion_base_path = Path(self.config.get("multiversion_base", "/dev/null"))
 
             # Robustly find the bubble's root directory and its manifest file
-            relative_to_base = dist._path.relative_to(multiversion_base_path)
+            relative_to_base = _relative_to_win(dist._path, multiversion_base_path)
             bubble_root_name = relative_to_base.parts[0]
             bubble_root_path = multiversion_base_path / bubble_root_name
             manifest_file = bubble_root_path / ".omnipkg_manifest.json"
@@ -7967,7 +7966,7 @@ class omnipkg:
 
                     # --- THIS IS THE ROBUST FIX (MIRRORS THE BUILDER) ---
                     try:
-                        relative_to_base = dist._path.relative_to(multiversion_base_path)
+                        relative_to_base = _relative_to_win(dist._path, multiversion_base_path)
                         bubble_root_name = relative_to_base.parts[0]
                         bubble_root_path = multiversion_base_path / bubble_root_name
                         manifest_file = bubble_root_path / ".omnipkg_manifest.json"
@@ -15111,7 +15110,7 @@ print(json.dumps(results))
                             continue
                         # Destination mirrors relative path from site_packages
                         try:
-                            rel = src.relative_to(site_packages)
+                            rel = _relative_to_win(src, site_packages)
                         except ValueError:
                             continue
                         dst = bubble_path / rel

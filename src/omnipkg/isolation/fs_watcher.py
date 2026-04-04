@@ -88,6 +88,7 @@ import sys
 import threading
 import time
 from pathlib import Path
+from omnipkg.common_utils import _is_relative_to_win, _relative_to_win
 from typing import Dict, List, Optional, Set
 
 # ── Optional watchdog (install with: pip install watchdog) ──────────────────
@@ -313,7 +314,7 @@ class SitePackagesEventHandler(FileSystemEventHandler):
         """Only care about .dist-info dirs at depth-1 — that's where name+version live."""
         try:
             p = Path(path).resolve()
-            rel = p.relative_to(self._sp_path)
+            rel = _relative_to_win(p, self._sp_path)
             parts = rel.parts
             return len(parts) == 1 and parts[0].endswith(".dist-info")
         except ValueError:
@@ -326,7 +327,7 @@ class SitePackagesEventHandler(FileSystemEventHandler):
         """
         try:
             p = Path(path).resolve()
-            rel = p.relative_to(self._sp_path)
+            rel = _relative_to_win(p, self._sp_path)
             parts = rel.parts
             if not parts:
                 return False
