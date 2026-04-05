@@ -2857,8 +2857,14 @@ class PersistentWorker:
         with self.lock:
             if self.process:
                 try:
-                    self.process.stdin.write(json.dumps({"type": "shutdown"}) + "\n")
-                    self.process.stdin.flush()
+                    # First check if already dead (workers that ran run_cli call sys.exit)
+                    if self.process.poll() is None:
+                        # Still running — try graceful shutdown
+                        try:
+                            self.process.stdin.write(json.dumps({"type": "shutdown"}) + "\n")
+                            self.process.stdin.flush()
+                        except Exception:
+                            pass
                     self.process.wait(timeout=2)
                 except Exception:
                     try:
@@ -2917,7 +2923,7 @@ class WorkerPoolDaemon:
         # via a venv symlink so sys.executable resolves to the framework Python,
         # causing workers to spawn without venv context and crash on omnipkg import.
         _own_exe = _normalize_exe(_venv_python_exe())
-        self.idle_config: Dict[str, int] = {_own_exe: 3}
+        self.idle_config: Dict[str, int] = {_own_exe: 1}
 
         # 🚀 AUTO-DISCOVERY: Find other managed interpreters and keep 1 idle for them
         if self.cm:
@@ -4273,8 +4279,20 @@ class WorkerPoolDaemon:
         # ═══════════════════════════════════════════════════════════════
         with self.pool_lock:
             if worker_key in self.workers:
-                self.stats["cache_hits"] += 1
-                worker_info = self.workers[worker_key]
+                # ── DIRTY WORKER EVICTION (untagged only) ──────────────────
+                if self.workers[worker_key].get("dirty") and not worker_tag:
+                    _old = self.workers.pop(worker_key)
+                    threading.Thread(
+                        target=_old["worker"].force_shutdown, daemon=True
+                    ).start()
+                    safe_print(
+                        f"   🔄 [DAEMON] Evicted dirty worker on reuse: {worker_key}",
+                        file=sys.stderr,
+                    )
+                # ── END DIRTY EVICTION ──────────────────────────────────────
+                else:
+                    self.stats["cache_hits"] += 1
+                    worker_info = self.workers[worker_key]
 
         if worker_key in self.workers:
             worker_info["last_used"] = time.time()
