@@ -1258,9 +1258,10 @@ int main(int argc, char **argv) {
         /* In swap context, execv directly to the swapped Python — don't wrap in dispatcher */
         const char *swap_active = getenv("_OMNIPKG_SWAP_ACTIVE");
         const char *swap_ver    = getenv("OMNIPKG_PYTHON");
-        if (swap_active && swap_ver && venv_root[0]) {
+        const char *_swap_venv = getenv("OMNIPKG_VENV_ROOT");
+        if (swap_active && swap_ver && _swap_venv && _swap_venv[0]) {
             char swap_py[MAX_PATH] = "";
-            registry_lookup(venv_root, swap_ver, swap_py, sizeof(swap_py));
+            registry_lookup(_swap_venv, swap_ver, swap_py, sizeof(swap_py));
             if (swap_py[0] && file_exists(swap_py)) {
                 if (debug) fprintf(stderr, "[C-DISPATCH] swap shim → execv %s\n", swap_py);
                 argv[0] = swap_py;
