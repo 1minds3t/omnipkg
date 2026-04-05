@@ -1036,10 +1036,6 @@ try:
                 if _ffi_fn_rc is not None:
                     _live_core = getattr(_rcli, '_PRELOADED_CORE', None)
                     if _live_core is not None and not getattr(_live_core, '_uv_ffi_run', None):
-                try:
-                    # First check if already dead (workers that ran run_cli call sys.exit)
-                    if self.process.poll() is None:
-                        # Still running — try graceful shutdown
                         try:
                             _live_core._uv_ffi_run = _ffi_fn_rc
                         except Exception:
