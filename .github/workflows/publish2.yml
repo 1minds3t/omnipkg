@@ -83,8 +83,7 @@ jobs:
           - runner: windows-latest
             platform: win_amd64
             cibw_archs: AMD64
-            skip_c: "1" # <--- Tell this specific job to skip C
-
+            
           # ─────────────────────────────────────────────────────────
           # Windows ARM64 — Copilot+ / Snapdragon PCs
           # Cross-compiled on x86_64 runner, no special runner needed.
@@ -123,15 +122,23 @@ jobs:
       - name: Build wheels via cibuildwheel
         uses: pypa/cibuildwheel@v2.20.0
         env:
-          # Use the skip_c variable from the matrix
-          CIBW_ENVIRONMENT: "OMNIPKG_SKIP_C_EXT=${{ matrix.skip_c || '0' }}"
-
+          CIBW_ENVIRONMENT: "OMNIPKG_SKIP_C_EXT=0"  # Always TRY to build C
           CIBW_BUILD_VERBOSITY: 1
 
           CIBW_TEST_ENVIRONMENT: "OMNIPKG_DEBUG=1"
-          # Fix the smoke test to NOT fail if C is missing
+          
+          # ⬇️ THE SELF-HEALING TEST ⬇️
+          # This tries to import the C module. If it fails, it prints a warning
+          # but DOES NOT fail the build. It then proceeds to verify that 
+          # omnipkg --version and omnipkg list work perfectly.
           CIBW_TEST_COMMAND: >
-            python -c "try: from omnipkg.isolation import omnipkg_atomic; print('C OK'); except ImportError: print('Python Fallback OK')" &&
+            python -c "
+            try:
+                from omnipkg.isolation import omnipkg_atomic
+                print('✅ Hardware Atomics: ENABLED')
+            except ImportError:
+                print('⚠️ Hardware Atomics: DISABLED (Using Python Fallback)')
+            " &&
             omnipkg --version &&
             omnipkg list
           
