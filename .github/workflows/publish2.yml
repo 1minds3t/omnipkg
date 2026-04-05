@@ -122,21 +122,19 @@ jobs:
       - name: Build wheels via cibuildwheel
         uses: pypa/cibuildwheel@v2.20.0
         env:
-          # --- Build Configuration ---
-          CIBW_ENVIRONMENT: "OMNIPKG_SKIP_C_EXT=0"  # Compile the C code
-          CIBW_BUILD_VERBOSITY: 1                  # Show compiler output
-
-          # --- The Combined, Ultimate Test ---
-          # 1. Set environment variables for the test commands
-          CIBW_TEST_ENVIRONMENT: "OMNIPKG_DEBUG=1"
+          # --- OPTION A: Build everything (Use this first) ---
+          CIBW_ENVIRONMENT: "OMNIPKG_SKIP_C_EXT=0"
           
-          # 2. Run a chain of commands. The '&&' means if any command fails,
-          #    the entire chain stops and the test fails. This is a single, valid key.
+          # --- OPTION B: Skip C if you are in a rush and A still fails ---
+          # CIBW_ENVIRONMENT: "OMNIPKG_SKIP_C_EXT=1"
+
+          CIBW_BUILD_VERBOSITY: 1
+
+          CIBW_TEST_ENVIRONMENT: "OMNIPKG_DEBUG=1"
           CIBW_TEST_COMMAND: >
-            python -c "import omnipkg_atomic; print('omnipkg_atomic OK')" &&
+            python -c "from omnipkg.isolation import omnipkg_atomic; print('omnipkg_atomic OK')" &&
             omnipkg --version &&
             omnipkg list
-          # ---
           
           CIBW_ARCHS: ${{ matrix.cibw_archs }}
           CIBW_BUILD: ${{ env.CIBW_BUILD }}
