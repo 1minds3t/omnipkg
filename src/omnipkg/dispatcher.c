@@ -1264,8 +1264,22 @@ int main(int argc, char **argv) {
             registry_lookup(_swap_venv, swap_ver, swap_py, sizeof(swap_py));
             if (swap_py[0] && file_exists(swap_py)) {
                 if (debug) fprintf(stderr, "[C-DISPATCH] swap shim → execv %s\n", swap_py);
-                argv[0] = swap_py;
-                execv(swap_py, argv);
+                if (strcmp(prog, "pip") == 0) {
+                    /* pip: execv python -m pip <args> */
+                    int argc = 0;
+                    while (argv[argc]) argc++;
+                    char **new_argv = malloc((argc + 3) * sizeof(char *));
+                    new_argv[0] = swap_py;
+                    new_argv[1] = "-m";
+                    new_argv[2] = "pip";
+                    for (int i = 1; i < argc; i++)
+                        new_argv[i + 2] = argv[i];
+                    new_argv[argc + 2] = NULL;
+                    execv(swap_py, new_argv);
+                } else {
+                    argv[0] = swap_py;
+                    execv(swap_py, argv);
+                }
                 perror("omnipkg: execv swap python failed");
                 exit(1);
             }
