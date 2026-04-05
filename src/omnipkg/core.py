@@ -15234,7 +15234,7 @@ print(json.dumps(results))
             _t_wrapper_entry = time.perf_counter()
             # Build uv args once — reused by all three paths
             import platform as _plat
-            _link_mode = "symlink"
+            _link_mode = "copy" if _plat.system() == "Windows" else "symlink"
             _uv_args = ["pip", "install",
                         "--cache-dir", self._uv_cache_dir,
                         "--link-mode", _link_mode]
