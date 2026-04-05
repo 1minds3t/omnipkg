@@ -122,17 +122,25 @@ jobs:
       - name: Build wheels via cibuildwheel
         uses: pypa/cibuildwheel@v2.20.0
         env:
+          # --- Build Configuration ---
+          CIBW_ENVIRONMENT: "OMNIPKG_SKIP_C_EXT=0"  # Compile the C code
+          CIBW_BUILD_VERBOSITY: 1                  # Show compiler output
+
+          # --- The Combined, Ultimate Test ---
+          # 1. Set environment variables for the test commands
+          CIBW_TEST_ENVIRONMENT: "OMNIPKG_DEBUG=1"
+          
+          # 2. Run a chain of commands. The '&&' means if any command fails,
+          #    the entire chain stops and the test fails. This is a single, valid key.
+          CIBW_TEST_COMMAND: >
+            python -c "import omnipkg_atomic; print('omnipkg_atomic OK')" &&
+            omnipkg --version &&
+            omnipkg list
+          # ---
+          
           CIBW_ARCHS: ${{ matrix.cibw_archs }}
           CIBW_BUILD: ${{ env.CIBW_BUILD }}
-
-          # PyPy skipped — omnipkg targets CPython only.
-          # musllinux NOT skipped — Alpine users get pre-built wheels
-          # instead of needing gcc + musl-dev at install time.
-          # If ppc64le musllinux fails, publish still runs via if: always().
           CIBW_SKIP: "pp*"
-
-          # Smoke-test: C extension must import cleanly in the built wheel.
-          CIBW_TEST_COMMAND: "python -c \"import omnipkg_atomic; print('omnipkg_atomic OK')\""
 
       - name: Upload wheels as artifacts
         uses: actions/upload-artifact@v4
