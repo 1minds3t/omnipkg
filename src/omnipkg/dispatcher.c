@@ -1073,7 +1073,9 @@ static int find_or_install_uv_ffi_so(
             "except: pass\n"
             "else:\n"
             "    d=os.path.dirname(m.__file__)\n"
-            "    [print(os.path.join(d,f)) for f in os.listdir(d) if f.endswith(chr(46)+chr(115)+chr(111))]\n"
+            "    import glob as _g\n"
+            "    hits=_g.glob(os.path.join(d,'*.so'))+_g.glob(os.path.join(d,'_native','*.so'))+_g.glob(os.path.join(d,'_native','*.pyd'))\n"
+            "    [print(h) for h in hits]\n"
             "\" 2>%s",
             target_python,
 #ifdef _WIN32
@@ -1467,7 +1469,10 @@ int main(int argc, char **argv) {
             }
 
             /* ── Phase 1b: dlopen fallback (cold, ~11ms) ── */
-            if (ffi_rc != 0) {
+            /* DISABLED: bypasses KB/bubble/strategy logic in Python core.
+             * Re-enable when daemon run_uv handles KB sync + bubble preservation.
+             * Until then all installs must go through run_cli Python path. */
+            if (0 && ffi_rc != 0) {
                 char so_path[MAX_PATH];
                 if (find_or_install_uv_ffi_so(venv_root, target_python,
                                                so_path, sizeof(so_path))) {

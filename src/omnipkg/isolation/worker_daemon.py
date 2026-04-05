@@ -869,8 +869,70 @@ def fatal_error(msg, error=None):
     sys.exit(1)
 
 # ═══════════════════════════════════════════════════════════════
-# STEP 1: READ PKG_SPEC (MUST BE FIRST)
+# STEP 1: PRE-WARM OMNIPKG CORE, THEN BLOCK FOR SPEC
 # ═══════════════════════════════════════════════════════════════
+import time as _wtime
+_t0 = _wtime.perf_counter()
+_preload_ok = False
+try:
+    import omnipkg.cli as _cli_mod
+    from omnipkg.core import ConfigManager
+    from omnipkg.core import omnipkg as OmnipkgCore
+    _pre_cm = ConfigManager(suppress_init_messages=True)
+    _pre_core = OmnipkgCore(_pre_cm)
+    _cli_mod._PRELOADED_CM = _pre_cm
+    _cli_mod._PRELOADED_CORE = _pre_core
+    # Pre-warm i18n cache so set_language() is a no-op in main()
+    from omnipkg.i18n import _
+    _.set_language(os.environ.get('OMNIPKG_LANG') or 'en')
+    # Pre-build parser so create_8pkg_parser() is a no-op in main()
+    _cli_mod.create_8pkg_parser()
+    _preload_ok = True
+    _t1 = _wtime.perf_counter()
+    sys.stderr.write('[WORKER-PRELOAD] CM+Core pre-warmed in ' + str(round((_t1-_t0)*1000,1)) + 'ms, ready for run_cli' + chr(10))
+    sys.stderr.flush()
+    try:
+        from omnipkg._vendor.uv_ffi import run as _uv_ffi_run
+        import os as _wpos
+        _wp_dn = _wpos.open(_wpos.devnull, _wpos.O_RDWR)
+        _wp_saved = _wpos.dup(1)
+        try:
+            _wpos.dup2(_wp_dn, 1)
+            _uv_ffi_run('pip freeze')
+        finally:
+            _wpos.dup2(_wp_saved, 1)
+            _wpos.close(_wp_saved)
+            _wpos.close(_wp_dn)
+        _UV_FFI_RUN = _uv_ffi_run
+        globals()['_UV_FFI_RUN'] = _uv_ffi_run
+        # ── FIX 1: wire FFI onto the pre-warmed core object so that
+        # core._run_pip_install() can find it via getattr(self, '_uv_ffi_run', None)
+        # instead of crashing with AttributeError, which kills the worker and
+        # forces the C dispatcher to fall back to a cold execv (~300ms).
+        try:
+            _pre_core._uv_ffi_run = _uv_ffi_run
+        except Exception:
+            pass
+        sys.stderr.write('[WORKER-PRELOAD] ✅ uv FFI warmed' + chr(10))
+        sys.stderr.flush()
+        # NOTE: No heartbeat thread. Tokio's background threads sleep at near-zero
+        # CPU cost and wake in nanoseconds when block_on() is called — there is no
+        # reinit penalty between calls. The old heartbeat loop was the ROOT CAUSE of
+        # Tokio runtime panics: if an external `uv` command deleted a .dist-info dir
+        # while the heartbeat's `pip freeze` was running inside the Tokio executor,
+        # the executor panicked and poisoned the static runtime for all future calls.
+        # One warm-up call at startup (above, the first _uv_ffi_run) is sufficient.
+    except Exception as _ffi_ex:
+        sys.stderr.write('[WORKER-PRELOAD] uv FFI unavailable: ' + str(_ffi_ex) + chr(10))
+        sys.stderr.flush()
+except Exception as _pre_ex:
+    sys.stderr.write('[WORKER-PRELOAD] pre-warm failed (' + str(_pre_ex) + '), main() will do full init' + chr(10))
+    sys.stderr.flush()
+    try:
+        import omnipkg.cli
+    except ImportError:
+        pass
+
 try:
     # An idle worker will block here until it's assigned a spec.
     input_line = sys.stdin.readline()
