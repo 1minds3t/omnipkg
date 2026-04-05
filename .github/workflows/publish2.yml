@@ -131,14 +131,9 @@ jobs:
           # This tries to import the C module. If it fails, it prints a warning
           # but DOES NOT fail the build. It then proceeds to verify that 
           # omnipkg --version and omnipkg list work perfectly.
+          # We use bash (||) to catch the import error safely without breaking the build.
           CIBW_TEST_COMMAND: >
-            python -c "
-            try:
-                from omnipkg.isolation import omnipkg_atomic
-                print('✅ Hardware Atomics: ENABLED')
-            except ImportError:
-                print('⚠️ Hardware Atomics: DISABLED (Using Python Fallback)')
-            " &&
+            (python -c "import omnipkg.isolation.omnipkg_atomic" >/dev/null 2>&1 && echo "✅ Hardware Atomics: ENABLED" || echo "⚠️ Hardware Atomics: DISABLED (Using Python Fallback)") &&
             omnipkg --version &&
             omnipkg list
           
