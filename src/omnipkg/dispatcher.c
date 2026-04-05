@@ -1513,11 +1513,34 @@ int main(int argc, char **argv) {
                                 pclose(_pp);
                             }
                             if (_pylib_out[0]) {
+                                /* Try venv/lib/filename first */
                                 snprintf(pylib, sizeof(pylib), "%s/lib/%s",
                                          venv_root, _pylib_out);
                                 py_handle = dlopen(pylib, RTLD_LAZY | RTLD_GLOBAL);
+                                /* Try as absolute path (framework Python returns full rel path) */
                                 if (!py_handle)
                                     py_handle = dlopen(_pylib_out, RTLD_LAZY | RTLD_GLOBAL);
+                                /* Try LIBDIR + LDLIBRARY (framework Python canonical path) */
+                                if (!py_handle) {
+                                    char _pylib_cmd2[MAX_PATH * 2];
+                                    char _libdir[MAX_PATH] = "";
+                                    snprintf(_pylib_cmd2, sizeof(_pylib_cmd2),
+                                        "\"%s\" -c \"import sysconfig; "
+                                        "print(sysconfig.get_config_var('LIBDIR') or '')\""
+                                        " 2>/dev/null",
+                                        target_python);
+                                    FILE *_pp2 = popen(_pylib_cmd2, "r");
+                                    if (_pp2) {
+                                        if (fgets(_libdir, sizeof(_libdir), _pp2))
+                                            _libdir[strcspn(_libdir, "\r\n")] = '\0';
+                                        pclose(_pp2);
+                                    }
+                                    if (_libdir[0]) {
+                                        snprintf(pylib, sizeof(pylib), "%s/%s",
+                                                 _libdir, _pylib_out);
+                                        py_handle = dlopen(pylib, RTLD_LAZY | RTLD_GLOBAL);
+                                    }
+                                }
                             }
                         }
                         /* Last resort: libpython already loaded in this process */
@@ -1537,7 +1560,7 @@ int main(int argc, char **argv) {
                      * retries adds at most 10ms and eliminates the false-missing
                      * reports that triggered the expensive reinstall path. */
                     for (int _retry = 0; _retry < 3 && !ffi_handle; _retry++) {
-                        ffi_handle = dlopen(so_path, RTLD_LAZY);
+                        ffi_handle = dlopen(so_path, RTLD_LAZY | RTLD_GLOBAL);
                         if (!ffi_handle && _retry < 2) {
                             if (debug) fprintf(stderr,
                                 "[C-DISPATCH] dlopen attempt %d failed: %s — retrying\n",
