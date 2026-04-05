@@ -869,8 +869,70 @@ def fatal_error(msg, error=None):
     sys.exit(1)
 
 # ═══════════════════════════════════════════════════════════════
-# STEP 1: READ PKG_SPEC (MUST BE FIRST)
+# STEP 1: PRE-WARM OMNIPKG CORE, THEN BLOCK FOR SPEC
 # ═══════════════════════════════════════════════════════════════
+import time as _wtime
+_t0 = _wtime.perf_counter()
+_preload_ok = False
+try:
+    import omnipkg.cli as _cli_mod
+    from omnipkg.core import ConfigManager
+    from omnipkg.core import omnipkg as OmnipkgCore
+    _pre_cm = ConfigManager(suppress_init_messages=True)
+    _pre_core = OmnipkgCore(_pre_cm)
+    _cli_mod._PRELOADED_CM = _pre_cm
+    _cli_mod._PRELOADED_CORE = _pre_core
+    # Pre-warm i18n cache so set_language() is a no-op in main()
+    from omnipkg.i18n import _
+    _.set_language(os.environ.get('OMNIPKG_LANG') or 'en')
+    # Pre-build parser so create_8pkg_parser() is a no-op in main()
+    _cli_mod.create_8pkg_parser()
+    _preload_ok = True
+    _t1 = _wtime.perf_counter()
+    sys.stderr.write('[WORKER-PRELOAD] CM+Core pre-warmed in ' + str(round((_t1-_t0)*1000,1)) + 'ms, ready for run_cli' + chr(10))
+    sys.stderr.flush()
+    try:
+        from omnipkg._vendor.uv_ffi import run as _uv_ffi_run
+        import os as _wpos
+        _wp_dn = _wpos.open(_wpos.devnull, _wpos.O_RDWR)
+        _wp_saved = _wpos.dup(1)
+        try:
+            _wpos.dup2(_wp_dn, 1)
+            _uv_ffi_run('pip freeze')
+        finally:
+            _wpos.dup2(_wp_saved, 1)
+            _wpos.close(_wp_saved)
+            _wpos.close(_wp_dn)
+        _UV_FFI_RUN = _uv_ffi_run
+        globals()['_UV_FFI_RUN'] = _uv_ffi_run
+        # ── FIX 1: wire FFI onto the pre-warmed core object so that
+        # core._run_pip_install() can find it via getattr(self, '_uv_ffi_run', None)
+        # instead of crashing with AttributeError, which kills the worker and
+        # forces the C dispatcher to fall back to a cold execv (~300ms).
+        try:
+            _pre_core._uv_ffi_run = _uv_ffi_run
+        except Exception:
+            pass
+        sys.stderr.write('[WORKER-PRELOAD] ✅ uv FFI warmed' + chr(10))
+        sys.stderr.flush()
+        # NOTE: No heartbeat thread. Tokio's background threads sleep at near-zero
+        # CPU cost and wake in nanoseconds when block_on() is called — there is no
+        # reinit penalty between calls. The old heartbeat loop was the ROOT CAUSE of
+        # Tokio runtime panics: if an external `uv` command deleted a .dist-info dir
+        # while the heartbeat's `pip freeze` was running inside the Tokio executor,
+        # the executor panicked and poisoned the static runtime for all future calls.
+        # One warm-up call at startup (above, the first _uv_ffi_run) is sufficient.
+    except Exception as _ffi_ex:
+        sys.stderr.write('[WORKER-PRELOAD] uv FFI unavailable: ' + str(_ffi_ex) + chr(10))
+        sys.stderr.flush()
+except Exception as _pre_ex:
+    sys.stderr.write('[WORKER-PRELOAD] pre-warm failed (' + str(_pre_ex) + '), main() will do full init' + chr(10))
+    sys.stderr.flush()
+    try:
+        import omnipkg.cli
+    except ImportError:
+        pass
+
 try:
     # An idle worker will block here until it's assigned a spec.
     input_line = sys.stdin.readline()
@@ -974,6 +1036,10 @@ try:
                 if _ffi_fn_rc is not None:
                     _live_core = getattr(_rcli, '_PRELOADED_CORE', None)
                     if _live_core is not None and not getattr(_live_core, '_uv_ffi_run', None):
+                try:
+                    # First check if already dead (workers that ran run_cli call sys.exit)
+                    if self.process.poll() is None:
+                        # Still running — try graceful shutdown
                         try:
                             _live_core._uv_ffi_run = _ffi_fn_rc
                         except Exception:
@@ -1148,8 +1214,6 @@ try:
     
     if not PKG_SPEC:
         fatal_error('Missing package_spec')
-    if PKG_SPEC == '__cli__':
-        PKG_SPEC = None  # CLI mode — no package loading needed
 except Exception as e:
     fatal_error('Startup configuration failed', e)
 
@@ -1897,6 +1961,18 @@ while True:
             result['stdout'] = stdout_buffer.getvalue()
             result['stderr'] = stderr_buffer.getvalue()
             result['cuda_method'] = actual_cuda_method
+            # ── DIRTY DETECTION: report if nested version switching occurred ──
+            try:
+                _loader_mod = sys.modules.get('omnipkg.loader')
+                _cls = getattr(_loader_mod, 'omnipkgLoader', None)
+                _did_switch = getattr(_cls, '_daemon_did_version_switch', False)
+                result['_worker_did_nesting'] = _did_switch
+                # Reset for next task
+                if _cls:
+                    _cls._daemon_did_version_switch = False
+            except Exception:
+                result['_worker_did_nesting'] = False
+            # ── END DIRTY DETECTION ──
             _original_stdout.write(json.dumps(result) + '\\n')
             _original_stdout.flush()
             
@@ -2082,12 +2158,16 @@ class PersistentWorker:
         for var in ["PYTHONPATH", "PYTHONHOME", "PYTHONUSERBASE", "OMNIPKG_IS_DAEMON"]:
             env.pop(var, None)
 
+        # Tell the worker it's running inside the daemon so safe_input()
+        # activates the NEEDS_INPUT relay instead of calling input() directly.
+        env["OMNIPKG_DAEMON_WORKER"] = "1"          # ← ADD THIS LINE
         # Inject the correct multiversion base so omnipkgLoader knows exactly where bubbles are
         if self.multiversion_base:
             env["OMNIPKG_MULTIVERSION_BASE"] = self.multiversion_base
         if self.site_packages:
             env["OMNIPKG_SITE_PACKAGES"] = self.site_packages
-
+        if os.environ.get("UV_FFI_PROFILE"):
+            env["UV_FFI_PROFILE"] = "1"
         # 🔑 ENSURE per-interpreter config file exists next to this interpreter.
         # Without this, the worker falls back to global config (wrong multiversion_base).
         # _ensure_worker_config writes a lightweight JSON that ConfigManager finds first.
@@ -2684,6 +2764,68 @@ class PersistentWorker:
                 safe_print(f"✅ [DAEMON] Got response: {response_line[:200]}...", file=sys.stderr)
                 parsed = json.loads(response_line.strip())
                 safe_print(f"✅ [DAEMON] Parsed response status: {parsed.get('status')}", file=sys.stderr)
+                # On ERROR: dump full traceback + worker state so failures are debuggable
+                if parsed.get("status") == "ERROR":
+                    tb = parsed.get("traceback", "")
+                    err = parsed.get("error", "")
+                    safe_print(f"❌ [DAEMON] Task {task_id} FAILED: {err}", file=sys.stderr)
+                    if tb:
+                        safe_print(f"❌ [DAEMON] Traceback:\n{tb}", file=sys.stderr)
+                    # Dump comprehensive worker state for diagnosis
+                    try:
+                        diag_code = (
+                            "import sys, os, json, importlib\n"
+                            "from pathlib import Path\n"
+                            "_sp = [p for p in sys.path if 'site-packages' in p or '.omnipkg' in p or 'local' in p]\n"
+                            "_mvbase = os.environ.get('OMNIPKG_MULTIVERSION_BASE', '')\n"
+                            "_bubbles = []\n"
+                            "if _mvbase and Path(_mvbase).exists():\n"
+                            "    _bubbles = [e.name for e in Path(_mvbase).iterdir()]\n"
+                            "# Check what numpy-related entries are in sys.modules\n"
+                            "_np_mods = [k for k in sys.modules if k == 'numpy' or k.startswith('numpy.')]\n"
+                            "# Check if site-packages/numpy/ dir exists and is accessible\n"
+                            "_sp_numpy = []\n"
+                            "for _p in sys.path:\n"
+                            "    _np_dir = Path(_p) / 'numpy'\n"
+                            "    if _np_dir.exists():\n"
+                            "        _init = _np_dir / '__init__.py'\n"
+                            "        _sp_numpy.append({'path': str(_np_dir), 'has_init': _init.exists()})\n"
+                            "# Check FileFinder cache state for numpy\n"
+                            "importlib.invalidate_caches()\n"
+                            "_finder_info = []\n"
+                            "for _finder in sys.path_hooks:\n"
+                            "    _finder_info.append(str(type(_finder).__name__))\n"
+                            "sys.stdout.write(json.dumps({"
+                            "'sys_path': _sp, 'bubbles': _bubbles, "
+                            "'numpy_in_sys_modules': _np_mods[:10], "
+                            "'numpy_dirs_in_path': _sp_numpy, "
+                            "'cwd': os.getcwd()"
+                            "}) + '\\n')\n"
+                        )
+                        self.process.stdin.write(json.dumps({
+                            "type": "execute",
+                            "task_id": f"{task_id}_diag",
+                            "code": diag_code,
+                            "shm_in": {}, "shm_out": {}
+                        }) + "\n")
+                        self.process.stdin.flush()
+                        import queue as _q
+                        try:
+                            _diag_line = self.stdout_queue.get(timeout=5.0)
+                            _diag = json.loads(_diag_line.strip())
+                            _diag_out = _diag.get("stdout", "") or _diag.get("result", {}).get("stdout", "")
+                            if _diag_out.strip():
+                                import json as _j2
+                                _state = _j2.loads(_diag_out.strip().splitlines()[-1])
+                                safe_print(f"🔍 [DAEMON] Worker sys.path (relevant): {_state.get('sys_path')}", file=sys.stderr)
+                                safe_print(f"🔍 [DAEMON] Worker cwd: {_state.get('cwd')}", file=sys.stderr)
+                                safe_print(f"🔍 [DAEMON] numpy dirs visible in sys.path: {_state.get('numpy_dirs_in_path')}", file=sys.stderr)
+                                safe_print(f"🔍 [DAEMON] numpy in sys.modules: {_state.get('numpy_in_sys_modules')}", file=sys.stderr)
+                                safe_print(f"🔍 [DAEMON] Worker visible bubbles: {_state.get('bubbles')}", file=sys.stderr)
+                        except (_q.Empty, Exception) as _de:
+                            safe_print(f"🔍 [DAEMON] Diagnostic query failed: {_de}", file=sys.stderr)
+                    except Exception as _diag_err:
+                        safe_print(f"🔍 [DAEMON] Could not query worker state: {_diag_err}", file=sys.stderr)
                 return parsed
 
             except Exception as e:
@@ -2798,14 +2940,18 @@ class WorkerPoolDaemon:
         self.running = True
         self.socket_path = DEFAULT_SOCKET
         
-        self.running = True
-        self.socket_path = DEFAULT_SOCKET
-
         # ── DEDICATED UV WORKERS: one PersistentWorker per Python exe ──────
+        # These are NEVER shared with idle_pools (run_cli).
+        # A per-python Lock serializes installs so site-packages is never
+        # corrupted by concurrent writes, and the in-process site-pkg cache
+        # inside the Tokio runtime is always coherent.
         self.uv_workers: Dict[str, "PersistentWorker"] = {}
         self.uv_worker_locks: Dict[str, threading.Lock] = defaultdict(threading.Lock)
-        self._uv_last_install_ts: Dict[str, float] = {}
+        self._uv_last_install_ts: Dict[str, float] = {}  # py_exe → monotonic time of last completed install
+        # ────────────────────────────────────────────────────────────────────
 
+        self.running = True
+        self.socket_path = DEFAULT_SOCKET
         self.stats = {
             "total_requests": 0,
             "cache_hits": 0,
@@ -2819,6 +2965,14 @@ class WorkerPoolDaemon:
         """Clean up old temporary files from previous runs."""
         import shutil
         safe_print("   🧹 [DAEMON] Cleaning up stale temporary files...", file=sys.stderr)
+        # Nuke stale locks and claim markers
+        import glob as _glob
+        import platform as _pl
+        _lock_base = os.path.join(tempfile.gettempdir(), "omnipkg")
+        for _f in _glob.glob(os.path.join(_lock_base, "locks", "*.lock")) + \
+                  _glob.glob(os.path.join(_lock_base, "bubble_tasks", "claimed_*.marker")):
+            try: os.unlink(_f)
+            except Exception: pass
         script_count = 0
         pip_dir_count = 0
         
@@ -2914,15 +3068,17 @@ class WorkerPoolDaemon:
         self._run_socket_server()  # This is a blocking call that starts the server loop.
 
     def _replenish_idle_pool(self, python_exe: str):
-        """
-        Spawn ONE new idle worker for the given python_exe to replace one that was
-        just converted to a pkg-spec worker. Called asynchronously so it never blocks
-        the request path.
-        """
-        # Normalize so the idle_pools key matches what _execute_code uses
         python_exe = _normalize_exe(python_exe)
 
+        # Don't over-spawn — check target before spawning
+        _target = self.idle_config.get(python_exe, 0)
+        if self.idle_pools[python_exe].qsize() >= _target:
+            return
+
         def _do_spawn():
+            # Re-check inside thread since multiple replenish calls may race
+            if self.idle_pools[python_exe].qsize() >= _target:
+                return
             target_paths = _resolve_target_paths(self.cm, python_exe)
             try:
                 idle_worker = PersistentWorker(
@@ -2962,6 +3118,10 @@ class WorkerPoolDaemon:
                     pool = self.idle_pools[python_exe]
 
                     if pool.qsize() < target_count:
+                        # Brief pause — let recycled workers land before spawning fresh ones
+                        time.sleep(0.1)
+                        if pool.qsize() >= target_count:
+                            continue  # A recycled worker filled the slot — no spawn needed
                         # Resolve authoritative paths for this specific python version.
                         # _resolve_target_paths handles cm lookup + filesystem fallback.
                         target_paths = _resolve_target_paths(self.cm, python_exe)
@@ -3080,7 +3240,7 @@ class WorkerPoolDaemon:
             return False if wait_for_ready else sys.exit(1)
 
     def _wait_for_daemon_ready(self, timeout: int = 10) -> bool:
-        """Waits until the daemon is actually accepting connections (cross-platform)."""
+        """Waits until the daemon socket is actually accepting connections."""
         import socket as _sock
         start_time = time.time()
         while time.time() - start_time < timeout:
@@ -3146,6 +3306,8 @@ class WorkerPoolDaemon:
         threading.Thread(target=self._memory_manager, daemon=True, name="memory-manager").start()
         threading.Thread(target=self._warmup_workers, daemon=True, name="warmup").start()
         threading.Thread(target=self._maintain_idle_pool, daemon=True, name="idle-pool").start()
+        self._fs_watcher = None
+        threading.Thread(target=self._start_fs_watcher, daemon=True, name="fs-watcher").start()
 
     def _daemonize(self):
         """Double-fork daemonization to fully detach the process."""
@@ -3226,7 +3388,14 @@ class WorkerPoolDaemon:
             # ============================================================
             # UNIX/LINUX/MACOS: Use Unix domain socket
             # ============================================================
-            # Remove stale socket file if it exists
+            # Remove stale socket AND announcement files before binding.
+            # This prevents clients from finding and connecting to a socket
+            # that exists but isn't listening yet.
+            conn_file = Path(tempfile.gettempdir()) / 'omnipkg' / 'daemon_connection.txt'
+            try:
+                conn_file.unlink()
+            except Exception:
+                pass
             try:
                 os.unlink(self.socket_path)
             except OSError:
@@ -3242,7 +3411,17 @@ class WorkerPoolDaemon:
         
         # CRITICAL FIX: Increased backlog for high concurrency
         sock.listen(128)
-        
+
+        # Write announcement file AFTER listen() so clients only discover us
+        # once we're actually ready to accept connections. Writing after bind()
+        # but before listen() caused the restart race: new daemon wrote the file
+        # before the old daemon finished dying, so the first connect attempt
+        # after restart hit a half-dead socket.
+        if not is_windows:
+            conn_file = Path(tempfile.gettempdir()) / 'omnipkg' / 'daemon_connection.txt'
+            conn_file.parent.mkdir(parents=True, exist_ok=True)
+            conn_file.write_text(f"unix://{self.socket_path}")
+
         print(_('[DAEMON] Server ready, entering accept loop'), flush=True)
         
         while self.running:
@@ -3633,7 +3812,7 @@ class WorkerPoolDaemon:
             # send READY" and forcing a cold execv fallback on every call.
             ready_parsed = None
             ready_line = None
-            _deadline = _rt.perf_counter() + 10.0
+            _deadline = _rt.perf_counter() + 30.0
             while _rt.perf_counter() < _deadline:
                 _remaining = _deadline - _rt.perf_counter()
                 try:
@@ -4109,6 +4288,22 @@ class WorkerPoolDaemon:
                     shm_out,
                     timeout=60.0,
                 )
+                # ── IMMEDIATE EVICTION IF NESTED SWITCHING OCCURRED ────────
+                _has_tag = bool(worker_tag)
+                if not _has_tag and result.get("_worker_did_nesting"):
+                    with self.pool_lock:
+                        _dirty_entry = self.workers.pop(worker_key, None)
+                    if _dirty_entry:
+                        threading.Thread(
+                            target=_dirty_entry["worker"].force_shutdown,
+                            daemon=True,
+                        ).start()
+                        self._replenish_idle_pool(python_exe)
+                        safe_print(
+                            f"   🔄 [DAEMON] Immediately evicted dirty worker: {spec}",
+                            file=sys.stderr,
+                        )
+                # ── END IMMEDIATE EVICTION ──────────────────────────────────
                 return result
             except Exception as e:
                 return {"success": False, "error": str(e)}
@@ -4186,21 +4381,18 @@ class WorkerPoolDaemon:
                 # Once an idle worker is taken and assigned a spec, spawn a replacement
                 if _took_from_idle:
                     self._replenish_idle_pool(python_exe)
-
                 with self.pool_lock:
                     self.workers[worker_key] = {
                         "worker": worker,
+			"pinned": pin,
                         "created": time.time(),
                         "last_used": time.time(),
                         "request_count": 0,
-                        "pinned": pin,
                         "memory_mb": 0.0,
-                        # Optional RSS cap in MB; enforced by _memory_manager.
-                        # None means no cap (default, same as before).
                         "max_memory_mb": max_memory_mb,
-                        # Store the clean pip-installable spec separately so
-                        # status / health-monitor code can show it without the tag.
                         "pip_spec": spec,
+                        "dirty": False,           # ← ADD THIS
+                        "worker_tag": worker_tag, # ← ADD THIS
                     }
                     self.stats["workers_created"] += 1
                     worker_info = self.workers[worker_key]
@@ -6451,6 +6643,7 @@ class DaemonProxy:
                 "traceback": result.get("traceback", ""),
             }
 
+    def get_version(self, package_name):
         import json as _json
         code = (
             f"import sys, json\n"
@@ -6501,6 +6694,7 @@ class DaemonProxy:
         return {"success": False, "error": res.get("error", "parse error")}
 
     def shutdown(self):
+        # Send evict request to daemon so the worker process is actually killed
         try:
             self.client._send({
                 "type": "evict_worker",
