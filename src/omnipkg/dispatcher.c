@@ -1255,6 +1255,20 @@ int main(int argc, char **argv) {
     /* ── 2. Shim mode? Fall back immediately ──────────────────── */
     if (strncmp(prog, "python", 6) == 0 || strcmp(prog, "pip") == 0) {
         if (debug) fprintf(stderr, "[C-DISPATCH] shim mode → python fallback\n");
+        /* In swap context, execv directly to the swapped Python — don't wrap in dispatcher */
+        const char *swap_active = getenv("_OMNIPKG_SWAP_ACTIVE");
+        const char *swap_ver    = getenv("OMNIPKG_PYTHON");
+        if (swap_active && swap_ver && venv_root[0]) {
+            char swap_py[MAX_PATH] = "";
+            registry_lookup(venv_root, swap_ver, swap_py, sizeof(swap_py));
+            if (swap_py[0] && file_exists(swap_py)) {
+                if (debug) fprintf(stderr, "[C-DISPATCH] swap shim → execv %s\n", swap_py);
+                argv[0] = swap_py;
+                execv(swap_py, argv);
+                perror("omnipkg: execv swap python failed");
+                exit(1);
+            }
+        }
         fallback_to_python(self_dir, argv);
     }
 

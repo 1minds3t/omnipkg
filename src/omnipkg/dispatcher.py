@@ -869,7 +869,6 @@ def _ensure_interpreter_config(interpreter_path: Path, version: str, venv_root: 
             print(f"[DEBUG-DISPATCH] ⚠️  Could not write config for {version}: {e}", file=sys.stderr)
         # Non-fatal — _load_or_create_config will handle it via fallback
 
-
 def spawn_swap_shell(version: str, python_path: Path, pkg_instance) -> int:
     """
     Spawn an interactive sub-shell with the swapped Python context.
