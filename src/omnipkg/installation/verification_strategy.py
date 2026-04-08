@@ -451,45 +451,62 @@ print(json.dumps(results))
 # INTEGRATION HELPER
 # ============================================================================
 
-
 def verify_bubble_with_smart_strategy(
     parent_omnipkg, 
     package_name: str, 
     version: str, 
     staging_path: Path, 
     gatherer,
-    existing_bubble_paths: List[Path] = None  # NEW!
+    existing_bubble_paths: List[Path] = None
 ) -> bool:
-    """
-    Verify a bubble using the smart strategy.
-
-    This is the main entry point for integration with existing code.
-
-    Args:
-        parent_omnipkg: OmnipkgCore instance
-        package_name: Name of primary package
-        version: Version of primary package
-        staging_path: Path to staging directory
-        gatherer: omnipkgMetadataGatherer instance
-        existing_bubble_paths: Paths to dependency bubbles (NEW!)
-
-    Returns:
-        True if verification passed, False otherwise
-    """
     if existing_bubble_paths is None:
         existing_bubble_paths = []
-        
-    all_dists = gatherer._discover_distributions(
-        targeted_packages=None, search_path_override=str(staging_path)
-    )
 
+    staging_path = Path(staging_path)
+
+    # ── Binary-only package fast path ─────────────────────────────────────
+    # Some packages (e.g. uv, ruff) install only a binary + .dist-info with
+    # no importable Python module. _discover_distributions returns empty for
+    # these because there is nothing to import-verify. Instead, confirm that:
+    #   1. The .dist-info directory exists in staging
+    #   2. At least one executable file exists (in bin/ or at root)
+    dist_info_dirs = list(staging_path.glob(f"{package_name}-*.dist-info"))
+    if not dist_info_dirs:
+        # normalise underscores/hyphens
+        dist_info_dirs = list(staging_path.glob(
+            f"{package_name.replace('-', '_')}-*.dist-info"
+        )) + list(staging_path.glob(
+            f"{package_name.replace('_', '-')}-*.dist-info"
+        ))
+
+    if dist_info_dirs:
+        # Look for an executable: bin/<name> or <name> at root
+        bin_candidates = [
+            staging_path / "bin" / package_name,
+            staging_path / package_name,
+            staging_path / "bin" / f"{package_name}.exe",
+            staging_path / f"{package_name}.exe",
+        ]
+        has_binary = any(
+            p.exists() and os.access(str(p), os.X_OK)
+            for p in bin_candidates
+        )
+        if has_binary:
+            # dist-info present + executable present = valid binary package
+            return True
+        # dist-info present but no binary — fall through to normal verification
+        # (pure-Python package whose dist-info happened to match the glob)
+
+    all_dists = gatherer._discover_distributions(
+        targeted_packages=[f"{package_name}=={version}"],
+        search_path_override=str(staging_path)
+    )
     strategy = SmartVerificationStrategy(parent_omnipkg, gatherer)
     success, results = strategy.verify_packages_in_staging(
         staging_path,
         package_name,
         all_dists,
         target_version=version,
-        existing_bubble_paths=existing_bubble_paths,  # NEW!
+        existing_bubble_paths=existing_bubble_paths,
     )
-
     return success

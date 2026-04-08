@@ -204,6 +204,108 @@ static void winsock_init(void) {
 
 /* ── tiny helpers ──────────────────────────────────────────────────────── */
 
+
+/* ── minimal MD5 — RFC 1321, no external deps ───────────────────────────── */
+typedef struct {
+    uint32_t state[4];
+    uint32_t count[2];
+    unsigned char buf[64];
+} md5_ctx;
+
+static const uint32_t md5_T[64] = {
+    0xd76aa478,0xe8c7b756,0x242070db,0xc1bdceee,0xf57c0faf,0x4787c62a,
+    0xa8304613,0xfd469501,0x698098d8,0x8b44f7af,0xffff5bb1,0x895cd7be,
+    0x6b901122,0xfd987193,0xa679438e,0x49b40821,0xf61e2562,0xc040b340,
+    0x265e5a51,0xe9b6c7aa,0xd62f105d,0x02441453,0xd8a1e681,0xe7d3fbc8,
+    0x21e1cde6,0xc33707d6,0xf4d50d87,0x455a14ed,0xa9e3e905,0xfcefa3f8,
+    0x676f02d9,0x8d2a4c8a,0xfffa3942,0x8771f681,0x6d9d6122,0xfde5380c,
+    0xa4beea44,0x4bdecfa9,0xf6bb4b60,0xbebfbc70,0x289b7ec6,0xeaa127fa,
+    0xd4ef3085,0x04881d05,0xd9d4d039,0xe6db99e5,0x1fa27cf8,0xc4ac5665,
+    0xf4292244,0x432aff97,0xab9423a7,0xfc93a039,0x655b59c3,0x8f0ccc92,
+    0xffeff47d,0x85845dd1,0x6fa87e4f,0xfe2ce6e0,0xa3014314,0x4e0811a1,
+    0xf7537e82,0xbd3af235,0x2ad7d2bb,0xeb86d391
+};
+static const int md5_S[64] = {
+    7,12,17,22,7,12,17,22,7,12,17,22,7,12,17,22,
+    5, 9,14,20,5, 9,14,20,5, 9,14,20,5, 9,14,20,
+    4,11,16,23,4,11,16,23,4,11,16,23,4,11,16,23,
+    6,10,15,21,6,10,15,21,6,10,15,21,6,10,15,21
+};
+#define MD5_ROL(x,n) (((x)<<(n))|((x)>>(32-(n))))
+static void md5_transform(uint32_t s[4], const unsigned char *blk) {
+    uint32_t a=s[0],b=s[1],c=s[2],d=s[3],x[16],f,g,tmp;
+    int i;
+    for(i=0;i<16;i++) {
+        x[i]=(uint32_t)blk[i*4]|((uint32_t)blk[i*4+1]<<8)|
+              ((uint32_t)blk[i*4+2]<<16)|((uint32_t)blk[i*4+3]<<24);
+    }
+    for(i=0;i<64;i++){
+        if(i<16){f=(b&c)|(~b&d);g=i;}
+        else if(i<32){f=(d&b)|(~d&c);g=(5*i+1)%16;}
+        else if(i<48){f=b^c^d;g=(3*i+5)%16;}
+        else{f=c^(b|~d);g=(7*i)%16;}
+        tmp=d;d=c;c=b;
+        b=b+MD5_ROL(a+f+x[g]+md5_T[i],md5_S[i]);
+        a=tmp;
+    }
+    s[0]+=a;s[1]+=b;s[2]+=c;s[3]+=d;
+}
+static void md5_init(md5_ctx *ctx) {
+    ctx->state[0]=0x67452301;ctx->state[1]=0xefcdab89;
+    ctx->state[2]=0x98badcfe;ctx->state[3]=0x10325476;
+    ctx->count[0]=ctx->count[1]=0;
+}
+static void md5_update(md5_ctx *ctx, const unsigned char *data, size_t len) {
+    size_t i,idx=(ctx->count[0]>>3)&0x3f;
+    ctx->count[0]+=(uint32_t)(len<<3);
+    if(ctx->count[0]<(uint32_t)(len<<3)) ctx->count[1]++;
+    ctx->count[1]+=(uint32_t)(len>>29);
+    size_t part=64-idx;
+    if(len>=part){
+        memcpy(&ctx->buf[idx],data,part);
+        md5_transform(ctx->state,ctx->buf);
+        for(i=part;i+63<len;i+=64) md5_transform(ctx->state,data+i);
+        idx=0;
+    } else { i=0; }
+    memcpy(&ctx->buf[idx],data+i,len-i);
+}
+static void md5_final(md5_ctx *ctx, unsigned char digest[16]) {
+    unsigned char pad[64]={0x80};
+    unsigned char bits[8];
+    int i;
+    for(i=0;i<4;i++){
+        bits[i]=(unsigned char)(ctx->count[0]>>(i*8));
+        bits[i+4]=(unsigned char)(ctx->count[1]>>(i*8));
+    }
+    size_t idx=(ctx->count[0]>>3)&0x3f;
+    size_t padlen=(idx<56)?56-idx:120-idx;
+    md5_update(ctx,pad,padlen);
+    md5_update(ctx,bits,8);
+    for(i=0;i<4;i++){
+        digest[i*4]=(unsigned char)(ctx->state[i]);
+        digest[i*4+1]=(unsigned char)(ctx->state[i]>>8);
+        digest[i*4+2]=(unsigned char)(ctx->state[i]>>16);
+        digest[i*4+3]=(unsigned char)(ctx->state[i]>>24);
+    }
+}
+
+/* md5_file: compute hex MD5 of a file into out (33 bytes incl NUL).
+ * Returns 1 on success, 0 on error. */
+static int md5_file(const char *path, char out[33]) {
+    FILE *f = fopen(path, "rb");
+    if (!f) return 0;
+    md5_ctx ctx; md5_init(&ctx);
+    unsigned char buf[8192]; size_t n;
+    while ((n = fread(buf, 1, sizeof(buf), f)) > 0)
+        md5_update(&ctx, buf, n);
+    fclose(f);
+    unsigned char digest[16]; md5_final(&ctx, digest);
+    for (int i = 0; i < 16; i++)
+        snprintf(out + i*2, 3, "%02x", digest[i]);
+    out[32] = '\0';
+    return 1;
+}
+
 static int file_exists(const char *path) {
     struct stat st;
     return stat(path, &st) == 0;
@@ -1252,6 +1354,115 @@ int main(int argc, char **argv) {
     if (debug)
         fprintf(stderr, "[C-DISPATCH] self=%s prog=%s\n", self_real, prog);
 
+    /* ── 1b. Self-staleness check ────────────────────────────────
+     *
+     * The C dispatcher cannot call _maybe_install_c_dispatcher() because
+     * that lives in Python.  Instead we check whether dispatcher.c has
+     * changed since we were last compiled by comparing the MD5 hash stored
+     * in the marker file against the current file mtime.
+     *
+     * We avoid MD5 in C (no stdlib) and instead compare mtime of
+     * dispatcher.c against mtime of the marker file — same signal, zero
+     * extra dependencies.  If dispatcher.c is newer → wipe the marker →
+     * fallback_to_python() → Python sees no marker → recompiles → re-execs
+     * back as the updated C binary on the very next invocation.
+     *
+     * Candidate search mirrors _maybe_install_c_dispatcher() in Python:
+     *   1. <self_dir>/../src/omnipkg/dispatcher.c   (editable install)
+     *   2. <self_dir>/../dispatcher.c               (alt layout)
+     *   3. <self_dir>/../../src/omnipkg/dispatcher.c
+     * We skip this check when OMNIPKG_FORCE_PYTHON_DISPATCH is set (already
+     * handled above) and when we can't find dispatcher.c at all (installed
+     * binary with no source — nothing to compare against).
+     */
+    {
+        char c_src[MAX_PATH] = "";
+        /* candidate 1: <bin>/../src/omnipkg/dispatcher.c */
+        char vr_tmp[MAX_PATH];
+        dir_of(self_dir, vr_tmp, sizeof(vr_tmp));  /* one level up from bin/ */
+        char cand[MAX_PATH];
+        snprintf(cand, sizeof(cand), "%s/src/omnipkg/dispatcher.c", vr_tmp);
+        if (file_exists(cand)) {
+            strncpy(c_src, cand, sizeof(c_src) - 1);
+        }
+        /* candidate 2: <bin>/../dispatcher.c */
+        if (!c_src[0]) {
+            snprintf(cand, sizeof(cand), "%s/dispatcher.c", vr_tmp);
+            if (file_exists(cand)) strncpy(c_src, cand, sizeof(c_src) - 1);
+        }
+        /* candidate 3: <bin>/../../src/omnipkg/dispatcher.c */
+        if (!c_src[0]) {
+            char vr2[MAX_PATH];
+            dir_of(vr_tmp, vr2, sizeof(vr2));
+            snprintf(cand, sizeof(cand), "%s/src/omnipkg/dispatcher.c", vr2);
+            if (file_exists(cand)) strncpy(c_src, cand, sizeof(c_src) - 1);
+        }
+
+        if (debug)
+            fprintf(stderr, "[C-STALE] c_src found=%s path=%s\n",
+                    c_src[0] ? "yes" : "no", c_src[0] ? c_src : "(none)");
+
+        /* Read marker — format written by Python: "<md5>:<abs/path/to/dispatcher.c>" */
+        char marker_path[MAX_PATH];
+        snprintf(marker_path, sizeof(marker_path),
+                 "%s/.omnipkg_dispatch_compiled", self_dir);
+
+        char stored_hash[33] = "";
+        int marker_found = 0;
+        FILE *mf = fopen(marker_path, "r");
+        if (mf) {
+            marker_found = 1;
+            char marker_content[MAX_PATH * 2];
+            if (fgets(marker_content, sizeof(marker_content), mf)) {
+                marker_content[strcspn(marker_content, "\r\n")] = '\0';
+                char *colon = strchr(marker_content, ':');
+                if (colon) {
+                    size_t hlen = (size_t)(colon - marker_content);
+                    if (hlen < sizeof(stored_hash)) {
+                        memcpy(stored_hash, marker_content, hlen);
+                        stored_hash[hlen] = '\0';
+                    }
+                    strncpy(c_src, colon + 1, sizeof(c_src) - 1);
+                }
+            }
+            fclose(mf);
+        }
+
+        if (debug)
+            fprintf(stderr, "[C-STALE] marker=%s stored_hash=%s c_src=%s\n",
+                    marker_found ? marker_path : "(missing)",
+                    stored_hash[0] ? stored_hash : "(none)",
+                    c_src[0] ? c_src : "(none)");
+
+        if (c_src[0]) {
+            /* Compare stored MD5 hash against current file — mtime is unreliable
+             * (pip installs, adopt operations, and file copies all reset it).
+             * If the path from the marker doesn't exist, treat as stale too. */
+            char current_hash[33] = "";
+            int src_ok = md5_file(c_src, current_hash);
+
+            /* stored_hash was parsed from marker content above */
+            int hash_match = (src_ok && stored_hash[0] &&
+                              strcmp(current_hash, stored_hash) == 0);
+
+            if (debug)
+                fprintf(stderr,
+                    "[C-STALE] stored=%s current=%s match=%s\n",
+                    stored_hash[0] ? stored_hash : "(none)",
+                    src_ok         ? current_hash : "(unreadable)",
+                    hash_match     ? "yes" : "NO — stale");
+
+            if (!hash_match) {
+                remove(marker_path);
+                if (debug)
+                    fprintf(stderr,
+                        "[C-STALE] dispatcher.c changed — wiping marker, "
+                        "falling back to Python for recompile\n");
+                fallback_to_python(self_dir, argv);
+            }
+        }
+    }
+
     /* ── 2. Shim mode? Fall back immediately ──────────────────── */
     if (strncmp(prog, "python", 6) == 0 || strcmp(prog, "pip") == 0) {
         if (debug) fprintf(stderr, "[C-DISPATCH] shim mode → python fallback\n");
@@ -1790,10 +2001,15 @@ int main(int argc, char **argv) {
     /* ── 7. Build final argv and execv (or try daemon) ───────────────────────── */
     int is_interactive_command = 0;
     if (argc >= 2) {
-        is_interactive_command = (
-            strcmp(argv[1], "info")   == 0 ||
-            strcmp(argv[1], "config") == 0
-        );
+        int is_info   = (strcmp(argv[1], "info")   == 0);
+        int is_config = (strcmp(argv[1], "config") == 0);
+        /* "info python" (exactly) is non-interactive — let daemon handle it.
+         * Any other "info <arg>" or bare "info" stays interactive.
+         * Match argv[2] == "python" exactly to avoid catching package names
+         * that contain the word python (e.g. "info python-dotenv"). */
+        int info_python = (is_info && argc >= 3 &&
+                           strcmp(argv[2], "python") == 0);
+        is_interactive_command = ((is_info && !info_python) || is_config);
     }
     if (!is_swap_python && !is_interactive_command) {
         try_daemon_cli(target_python, argc, argv, version_injected, forced_version);

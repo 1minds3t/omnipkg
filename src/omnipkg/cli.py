@@ -580,19 +580,20 @@ def run_config_wizard(cm: ConfigManager, parser_prog: str) -> int:
 # ─────────────────────────────────────────────────────────────────────────────
 
 def create_8pkg_parser():
-    """Creates parser for the 8pkg alias — cached after first build."""
     import omnipkg.cli as _cli_mod
-    if _cli_mod._CACHED_8PKG_PARSER is not None:
-        return _cli_mod._CACHED_8PKG_PARSER
+    _lang_key = _.current_lang
+    if _lang_key in (_cli_mod._CACHED_8PKG_PARSER or {}):
+        return _cli_mod._CACHED_8PKG_PARSER[_lang_key]
+    if _cli_mod._CACHED_8PKG_PARSER is None:
+        _cli_mod._CACHED_8PKG_PARSER = {}
     parser = create_parser()
     parser.prog = "8pkg"
     parser.description = _(
         "🚀 The intelligent Python package manager that eliminates dependency hell (8pkg = ∞pkg)"
     )
     epilog_parts = parser.epilog.split("\n")
-    updated_epilog = "\n".join([line.replace("omnipkg", "8pkg") for line in epilog_parts])
-    parser.epilog = updated_epilog
-    _cli_mod._CACHED_8PKG_PARSER = parser
+    parser.epilog = "\n".join(line.replace("omnipkg", "8pkg") for line in epilog_parts)
+    _cli_mod._CACHED_8PKG_PARSER[_lang_key] = parser
     return parser
 
 
@@ -1019,6 +1020,11 @@ def create_parser():
         help=_("Diagnose only — show the healing plan without making any changes"),
     )
     doctor_parser.add_argument(
+        "--rebuild",
+        action="store_true",
+        help=_("Nuclear option: dump active packages to requirements, wipe broken bubbles, reinstall everything clean"),
+    )
+    doctor_parser.add_argument(
         "--yes", "-y",
         dest="force",
         action="store_true",
@@ -1203,6 +1209,83 @@ def create_parser():
         "--yes", "-y", dest="force", action="store_true", help=_("Skip confirmation")
     )
 
+    # --- export ---
+    export_parser = subparsers.add_parser(
+        "export",
+        help=_("Snapshot current environment to a reproducible lock file"),
+        formatter_class=argparse.RawTextHelpFormatter,
+        epilog=_(
+            "Writes to <venv_root>/.omnipkg/omnipkg.lock by default.\n"
+            "Use --output to override, e.g. for sharing or CI artifacts.\n\n"
+            "Examples:\n"
+            "  8pkg export                        # write to default location\n"
+            "  8pkg export -o /tmp/my.lock        # explicit path\n"
+            "  8pkg export --python 3.11          # only capture python 3.11\n"
+        ),
+    )
+    export_parser.add_argument(
+        "--output", "-o",
+        metavar="FILE",
+        help=_("Override default lock file location"),
+    )
+    export_parser.add_argument(
+        "--python", "-p",
+        metavar="VER",
+        action="append",
+        dest="pythons",
+        help=_("Only export this python version (repeatable: -p 3.11 -p 3.10)"),
+    )
+    export_parser.add_argument(
+        "--venv-root",
+        metavar="PATH",
+        help=_("Override venv root detection"),
+    )
+    
+    # --- sync ---
+    sync_parser = subparsers.add_parser(
+        "sync",
+        help=_("Rebuild environment from lock file (DESTRUCTIVE)"),
+        formatter_class=argparse.RawTextHelpFormatter,
+        epilog=_(
+            "Reads from <venv_root>/.omnipkg/omnipkg.lock by default.\n"
+            "Clears and reinstalls all packages for each python in the lock file.\n\n"
+            "Examples:\n"
+            "  8pkg sync                          # sync from default lock file\n"
+            "  8pkg sync /path/to/other.lock      # explicit lock file\n"
+            "  8pkg sync --python 3.11            # only sync python 3.11\n"
+            "  8pkg sync --yes                    # skip confirmation (CI/Docker)\n"
+        ),
+    )
+    sync_parser.add_argument(
+        "lock_file",
+        metavar="LOCK_FILE",
+        nargs="?",                  # optional — defaults to canonical path
+        default=None,
+        help=_("Lock file to sync from (default: <venv_root>/.omnipkg/omnipkg.lock)"),
+    )
+    sync_parser.add_argument(
+        "--yes", "-y",
+        action="store_true",
+        help=_("Skip confirmation prompt (for CI / Docker)"),
+    )
+    sync_parser.add_argument(
+        "--python", "-p",
+        metavar="VER",
+        action="append",
+        dest="pythons",
+        help=_("Only sync this python version (repeatable)"),
+    )
+    sync_parser.add_argument(
+        "--dry-run", "-n",
+        action="store_true",
+        help=_("Print what would happen without making changes"),
+    )
+    sync_parser.add_argument(
+        "--venv-root",
+        metavar="PATH",
+        help=_("Override venv root detection"),
+    )
+
     # ── upgrade ───────────────────────────────────────────────────────────────
     upgrade_parser = subparsers.add_parser(
         "upgrade",
@@ -1233,7 +1316,6 @@ def create_parser():
 
     _cli_mod._CACHED_PARSER[_.current_lang] = parser
     return parser
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # MAIN
@@ -1319,9 +1401,6 @@ def main():
             os.environ["OMNIPKG_LANG"] = user_lang
 
         if command is None or "-h" in remaining_args or "--help" in remaining_args:
-            # Invalidate cached parser so it rebuilds with the correct language
-            _cli_mod._CACHED_PARSER = {}
-            _cli_mod._CACHED_8PKG_PARSER = None
             prog_name_lower = Path(sys.argv[0]).name.lower()
             parser = create_8pkg_parser() if "8pkg" in prog_name_lower else create_parser()
             parser.print_help()
@@ -1329,10 +1408,14 @@ def main():
 
         # ── Choose minimal vs full init ────────────────────────────────────────────
         use_minimal = False
-        if command in {"config", "python"}:
+        if command in {"config", "python", "doctor"}:
             use_minimal = True
         elif command == "swap":
             if len(remaining_args) > 1 and remaining_args[1].lower() == "python":
+                use_minimal = True
+        elif command == "daemon":
+            # daemon restart/stop must NEVER go through the daemon — always execv direct
+            if len(remaining_args) > 1 and remaining_args[1].lower() in ("restart", "stop", "kill"):
                 use_minimal = True
 
         # Use pre-built OmnipkgCore from daemon preload if available (full mode only)
@@ -1477,8 +1560,25 @@ def main():
             return 1
 
         elif args.command == "doctor":
-            return pkg_instance.doctor(dry_run=args.dry_run, force=args.force)
-
+            return pkg_instance.doctor(dry_run=args.dry_run, force=args.force, rebuild=args.rebuild)
+        elif args.command == "export":
+            from omnipkg.integration.reproducible import export_lock
+            written_path = export_lock(
+                output_path=Path(args.output) if args.output else None,
+                pythons=args.pythons,
+                venv_root=Path(args.venv_root) if args.venv_root else None,
+            )
+            safe_print(_("📦 Lock file: {}").format(written_path))
+        
+        elif args.command == "sync":
+            from omnipkg.integration.reproducible import sync_lock
+            sync_lock(
+                lock_path=Path(args.lock_file) if args.lock_file else None,
+                yes=args.yes,
+                pythons=args.pythons,
+                dry_run=args.dry_run,
+                venv_root=Path(args.venv_root) if args.venv_root else None,
+            )
         elif args.command == "heal":
             with temporary_install_strategy(pkg_instance, "latest-active"):
                 return pkg_instance.heal(dry_run=args.dry_run, force=args.force)

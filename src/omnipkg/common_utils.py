@@ -736,14 +736,9 @@ _DAEMON_WORKER_MODE: bool = os.environ.get("OMNIPKG_DAEMON_WORKER") == "1"
 
 
 def _worker_emit(obj: dict) -> None:
-    """Write one JSON line to worker stdout (the daemon channel).
-
-    Uses sys.stdout directly — the worker is spawned with text=True so this
-    is the correct transport.  The trailing newline is what _reader_thread
-    uses as a message boundary on the daemon side.
-    """
-    sys.stdout.write(json.dumps(obj, ensure_ascii=True) + "\n")
-    sys.stdout.flush()
+    """Write one JSON line to the real stdout pipe, bypassing StreamRedirector."""
+    msg = json.dumps(obj, ensure_ascii=True) + "\n"
+    os.write(1, msg.encode("utf-8"))
 
 
 def _worker_read_reply() -> dict:
@@ -853,6 +848,36 @@ def simulate_user_choice(choice, message):
     time.sleep(0.5)
     safe_print(_("💭 {}").format(message))
     return choice.lower()
+
+def _safe_resolve(path: Path) -> Path:
+    """
+    Resolve a path safely for omnipkg identity and path comparisons.
+
+    Uses resolve() when possible, falls back to absolute() if resolution fails.
+    Avoids inconsistent crashes on broken links / partial envs.
+    """
+    try:
+        return path.resolve()
+    except Exception:
+        return path.absolute()
+
+def _canonical_path_str(path: Path) -> str:
+    """
+    Produce a stable canonical string for identity-sensitive path hashing
+    and comparisons across platforms.
+
+    - resolves when possible
+    - normalizes separators
+    - lowercases on Windows for drive-letter / casing stability
+    - strips trailing slash
+    """
+    p = _safe_resolve(path)
+    s = str(p).replace("\\", "/").rstrip("/")
+
+    if os.name == "nt":
+        s = s.lower()
+
+    return s
 
 def _is_relative_to_win(path: Path, base: Path) -> bool:
     """Case-insensitive relative_to for Windows path safety."""

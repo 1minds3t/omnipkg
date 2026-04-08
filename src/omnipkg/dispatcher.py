@@ -219,7 +219,13 @@ def main():
             sys.exit(1)
 
     # Try daemon socket first (fast path)
-    if not is_swap_command:
+    is_daemon_lifecycle = (
+        len(argv_commands) >= 2
+        and argv_commands[0] == "daemon"
+        and argv_commands[1] in ("start", "stop", "restart")
+    )
+
+    if not is_swap_command and not is_daemon_lifecycle:
         try:
             import socket
             import tempfile
@@ -294,8 +300,35 @@ def main():
     else:
         os.execv(str(target_python), exec_args)
 
+def _collect_all_dispatcher_bin_dirs() -> list:
+    """
+    Return every bin/ directory that should receive the C dispatcher binary:
+      1. The native bin/ (next to sys.executable) — always included
+      2. Every adopted interpreter's bin/ found in the omnipkg registry
+
+    Used by _maybe_install_c_dispatcher() so that a single source change
+    propagates to ALL interpreters automatically, not just the active one.
+    Users never need to manually recompile or reinstall per-interpreter.
+    """
+    from pathlib import Path
+    native_bin = Path(sys.executable).parent
+    dirs = [native_bin]
+    try:
+        venv_root = Path(sys.prefix)
+        registry = venv_root / ".omnipkg" / "interpreters" / "registry.json"
+        if registry.exists():
+            data = json.loads(registry.read_text(encoding="utf-8"))
+            for py_exe in data.get("interpreters", {}).values():
+                adopted_bin = Path(py_exe).parent
+                if adopted_bin.resolve() != native_bin.resolve() and adopted_bin.exists():
+                    dirs.append(adopted_bin)
+    except Exception:
+        pass
+    return dirs
+
+
 def _maybe_install_c_dispatcher():
-    import sys, os, subprocess, shutil
+    import hashlib, subprocess, shutil
     from pathlib import Path
 
     debug = os.environ.get("OMNIPKG_DEBUG") == "1"
@@ -329,95 +362,228 @@ def _maybe_install_c_dispatcher():
     if debug:
         print(f"[C-INSTALL] found dispatcher.c at: {c_source}", file=sys.stderr)
 
-    gcc = shutil.which("gcc")
-    if not gcc:
+    compiler = None
+    compiler_args = []
+
+    if sys.platform == "win32":
+        # Try MSVC cl.exe first, then MinGW gcc
+        cl = shutil.which("cl")
+        if cl:
+            compiler = cl
+            compiler_args = ["/O2", "/Fe:{out}", "{src}", "ws2_32.lib"]
+        else:
+            gcc = shutil.which("gcc") or shutil.which("x86_64-w64-mingw32-gcc")
+            if gcc:
+                compiler = gcc
+                compiler_args = ["-O2", "-o", "{out}", "{src}", "-lws2_32"]
+    else:
+        gcc = shutil.which("gcc")
+        if gcc:
+            compiler = gcc
+            compiler_args = ["-O2", "-o", "{out}", "{src}", "-ldl"]
+
+    if not compiler:
         if debug:
-            print(f"[C-INSTALL] gcc not found in PATH — skipping", file=sys.stderr)
+            print(f"[C-INSTALL] no compiler found in PATH — skipping", file=sys.stderr)
         return
 
     if debug:
-        print(f"[C-INSTALL] gcc = {gcc}", file=sys.stderr)
+        print(f"[C-INSTALL] compiler = {compiler}", file=sys.stderr)
+
+    # ── Hash-based staleness check ────────────────────────────────────────────
+    # Store the MD5 of dispatcher.c inside the marker file instead of relying
+    # on mtime. This means:
+    #   - Any edit to dispatcher.c (even a blank line) triggers a recompile on
+    #     the very next 8pkg invocation — no pip install -e . needed.
+    #   - The marker being absent (e.g. after pip install -e . wipes it) also
+    #     triggers a recompile, as before.
+    #   - Adopted interpreter bin/ dirs are also kept in sync automatically.
+    try:
+        src_hash = hashlib.md5(c_source.read_bytes()).hexdigest()
+    except Exception:
+        src_hash = ""
 
     bin_dir = Path(sys.executable).parent
     marker = bin_dir / ".omnipkg_dispatch_compiled"
 
     if debug:
-        print(f"[C-INSTALL] bin_dir = {bin_dir}", file=sys.stderr)
-        print(f"[C-INSTALL] marker  = {marker} -> exists={marker.exists()}", file=sys.stderr)
+        print(f"[C-INSTALL] bin_dir    = {bin_dir}", file=sys.stderr)
+        print(f"[C-INSTALL] marker     = {marker} -> exists={marker.exists()}", file=sys.stderr)
         if marker.exists():
-            print(f"[C-INSTALL] marker mtime={marker.stat().st_mtime}  source mtime={c_source.stat().st_mtime}  up_to_date={marker.stat().st_mtime >= c_source.stat().st_mtime}", file=sys.stderr)
+            stored = marker.read_text(encoding="utf-8").strip()
+            print(f"[C-INSTALL] stored hash={stored}  current hash={src_hash}  match={stored == src_hash}", file=sys.stderr)
 
-    if marker.exists() and marker.stat().st_mtime >= c_source.stat().st_mtime:
-        if debug:
-            print(f"[C-INSTALL] binary is up-to-date — skipping recompile", file=sys.stderr)
-        return
+    if marker.exists():
+        try:
+            marker_content = marker.read_text(encoding="utf-8").strip()
+            # marker format: "<md5>:<abs/path/to/dispatcher.c>"
+            stored_hash = marker_content.split(":", 1)[0]
+        except Exception:
+            stored_hash = ""
+        if stored_hash == src_hash and src_hash:            # Native bin is up to date. Also push to any adopted bin dirs that
+            # are missing their marker or have a stale hash — this heals adopted
+            # interpreters that were added after the last compile.
+            for adopted_bin in _collect_all_dispatcher_bin_dirs()[1:]:  # skip native (index 0)
+                adopted_marker = adopted_bin / ".omnipkg_dispatch_compiled"
+                adopted_ok = False
+                if adopted_marker.exists():
+                    try:
+                        adopted_ok = adopted_marker.read_text(encoding="utf-8").strip() == src_hash
+                    except Exception:
+                        pass
+                if not adopted_ok:
+                    # Push native binary to this adopted bin/ without recompiling
+                    _push_binary_to_bin_dir(bin_dir, adopted_bin, src_hash, debug)
+            if debug:
+                print(f"[C-INSTALL] binary is up-to-date (hash match) — skipping recompile", file=sys.stderr)
+            return
 
+    # ── Compile ───────────────────────────────────────────────────────────────
     binary_tmp = bin_dir / ("_omnipkg_dispatch_tmp.exe" if sys.platform == "win32" else "_omnipkg_dispatch_tmp")
+    compiler_cmd = [compiler] + [
+        a.format(out=str(binary_tmp), src=str(c_source))
+        for a in compiler_args
+    ]
     if debug:
-        print(f"[C-INSTALL] compiling: gcc -O2 -o {binary_tmp} {c_source}", file=sys.stderr)
+        print(f"[C-INSTALL] compiling: {compiler_cmd}", file=sys.stderr)
 
     try:
-        r = subprocess.run(
-            ["gcc", "-O2", "-o", str(binary_tmp), str(c_source)] + (["-lws2_32"] if sys.platform == "win32" else ["-ldl"]),
-            capture_output=True, timeout=15
-        )
+        r = subprocess.run(compiler_cmd, capture_output=True, timeout=15)
         if debug:
-            print(f"[C-INSTALL] gcc returncode={r.returncode}", file=sys.stderr)
+            print(f"[C-INSTALL] compiler returncode={r.returncode}", file=sys.stderr)
             if r.stdout:
-                print(f"[C-INSTALL] gcc stdout: {r.stdout.decode(errors='replace')}", file=sys.stderr)
+                print(f"[C-INSTALL] compiler stdout: {r.stdout.decode(errors='replace')}", file=sys.stderr)
             if r.stderr:
-                print(f"[C-INSTALL] gcc stderr: {r.stderr.decode(errors='replace')}", file=sys.stderr)
+                print(f"[C-INSTALL] compiler stderr: {r.stderr.decode(errors='replace')}", file=sys.stderr)
 
         if r.returncode != 0:
             if debug:
                 print(f"[C-INSTALL] compile FAILED — staying on Python dispatcher", file=sys.stderr)
             return
 
-        replaced = []
-        for name in ("8pkg", "omnipkg", "OMNIPKG", "8PKG"):
-            target = bin_dir / name
-            if target.exists():
-                shutil.copy2(str(binary_tmp), str(target))
-                os.chmod(str(target), 0o755)
-                replaced.append(name)
+        # ── Install into native bin/ + all adopted interpreter bin/ dirs ──────
+        all_bin_dirs = _collect_all_dispatcher_bin_dirs()
+        all_replaced = []
+        for i, target_bin in enumerate(all_bin_dirs):
+            replaced = _install_binary_into_bin_dir(binary_tmp, target_bin, src_hash, debug, c_src=c_source, is_native=(i == 0))
+            all_replaced.extend(replaced)
 
-        # Create versioned shims 3.7-3.15
-        # Unix: hardlinks to C binary (free, instant)
-        # Windows: .bat wrappers injecting --python X.Y (tiny, triggers auto-adopt)
-        for minor in range(7, 16):
-            for prefix in ("8pkg", "omnipkg"):
-                if sys.platform == "win32":
-                    versioned = bin_dir / f"{prefix}3{minor}.bat"
-                    if not versioned.exists():
-                        try:
-                            bat_content = f'@echo off\r\n"{bin_dir}\\{prefix}.exe" --python 3.{minor} %*\r\n'
-                            versioned.write_text(bat_content)
-                            replaced.append(f"{prefix}3{minor}.bat")
-                        except Exception:
-                            pass
-                else:
-                    versioned = bin_dir / f"{prefix}3{minor}"
-                    if not versioned.exists() or versioned.stat().st_mtime < binary_tmp.stat().st_mtime:
-                        shutil.copy2(str(binary_tmp), str(versioned))
-                        os.chmod(str(versioned), 0o755)
-                        replaced.append(f"{prefix}3{minor}")
-
-        binary_tmp.unlink()
-        if replaced:
-            marker.touch()
+        binary_tmp.unlink(missing_ok=True)
 
         if debug:
-            print(f"[C-INSTALL] done. replaced={replaced}  marker touched={marker}", file=sys.stderr)
+            print(f"[C-INSTALL] done. replaced={all_replaced}", file=sys.stderr)
             print(f"[C-INSTALL] ⚡ NEXT invocation will use the C dispatcher — re-exec now to use it immediately", file=sys.stderr)
 
     except Exception as e:
         if debug:
             print(f"[C-INSTALL] EXCEPTION: {e}", file=sys.stderr)
-        if binary_tmp.exists():
+        try:
+            binary_tmp.unlink(missing_ok=True)
+        except Exception:
+            pass
+
+def _install_binary_into_bin_dir(binary_tmp, target_bin, src_hash: str, debug: bool, c_src=None, is_native: bool = False) -> list:
+    """
+    Copy the freshly compiled binary into target_bin, replacing all omnipkg
+    entry-point names and updating the hash marker.  Returns list of names replaced.
+
+    Versioned shims (8pkg37…8pkg315) are only written for the native bin dir.
+    Adopted interpreter bin dirs get only the plain 8pkg/omnipkg binaries.
+    """
+    import shutil
+    from pathlib import Path
+    replaced = []
+    target_bin = Path(target_bin)
+
+    for name in ("8pkg", "omnipkg", "OMNIPKG", "8PKG"):
+        target = target_bin / name
+        if target.exists():
             try:
-                binary_tmp.unlink()
+                shutil.copy2(str(binary_tmp), str(target))
+                os.chmod(str(target), 0o755)
+                replaced.append(str(target_bin / name))
+            except Exception as e:
+                if debug:
+                    print(f"[C-INSTALL] could not replace {target}: {e}", file=sys.stderr)
+
+    # Versioned shims 3.7-3.15 — native bin only.
+    # Adopted interpreter bin dirs are not the dispatch root.
+    # Versioned shims (8pkg39, 8pkg310 etc.) are intentionally left alone.
+    # - Non-adopted: pip's original Python entrypoint stays, intercepts the call,
+    #   triggers adoption, then heals itself after.
+    # - Adopted: that interpreter's own bin/ gets its own C binary after adoption.
+    # The C binary must never be copied here for non-adopted interpreters.
+
+    # Write "hash:abspath_to_dispatcher.c" into marker so:
+    #   - Python side: hash detects source changes
+    #   - C side: reads the path directly, no candidate guessing needed
+    if replaced and src_hash and c_src:
+        try:
+            (target_bin / ".omnipkg_dispatch_compiled").write_text(
+                f"{src_hash}:{c_src}", encoding="utf-8"
+            )
+            if debug:
+                print(f"[C-INSTALL] marker written ({src_hash[:8]}…:{c_src}) -> {target_bin}", file=sys.stderr)
+        except Exception as e:
+            if debug:
+                print(f"[C-INSTALL] could not write marker in {target_bin}: {e}", file=sys.stderr)
+
+    return replaced
+
+
+def _push_binary_to_bin_dir(native_bin, target_bin, src_hash: str, debug: bool) -> None:
+    """
+    Push the already-compiled binary from native_bin into target_bin without
+    recompiling.  Used to heal adopted interpreter bin/ dirs that were added
+    after the last compile, or whose marker got stale.
+    """
+    import shutil
+    from pathlib import Path
+    native_bin = Path(native_bin)
+    target_bin = Path(target_bin)
+
+    # Find the native binary (prefer "8pkg" as canonical name)
+    src_binary = None
+    for name in ("8pkg", "omnipkg"):
+        candidate = native_bin / name
+        if candidate.exists() and os.access(str(candidate), os.X_OK):
+            # Quick sanity: must be a real binary, not a Python script
+            try:
+                with open(candidate, "rb") as f:
+                    magic = f.read(4)
+                if magic[:4] == b"\x7fELF" or magic[:2] == b"MZ":  # ELF or PE
+                    src_binary = candidate
+                    break
             except Exception:
                 pass
+
+    if src_binary is None:
+        if debug:
+            print(f"[C-INSTALL] push: no compiled binary found in {native_bin} — skip", file=sys.stderr)
+        return
+
+    if debug:
+        print(f"[C-INSTALL] push: {src_binary} -> {target_bin}", file=sys.stderr)
+
+    replaced = []
+    for name in ("8pkg", "omnipkg", "OMNIPKG", "8PKG"):
+        target = target_bin / name
+        if target.exists():
+            try:
+                shutil.copy2(str(src_binary), str(target))
+                os.chmod(str(target), 0o755)
+                replaced.append(name)
+            except Exception as e:
+                if debug:
+                    print(f"[C-INSTALL] push: could not replace {target}: {e}", file=sys.stderr)
+
+    if replaced and src_hash:
+        try:
+            (target_bin / ".omnipkg_dispatch_compiled").write_text(src_hash, encoding="utf-8")
+            if debug:
+                print(f"[C-INSTALL] push: marker written -> {target_bin}", file=sys.stderr)
+        except Exception:
+            pass
 
 def determine_target_python() -> Path:
     """
@@ -1437,15 +1603,11 @@ def _ensure_native_shims() -> None:
         for minor in range(7, 16):
             for prefix, target in [("8pkg", main_shim), ("omnipkg", omni_shim)]:
                 versioned = bin_dir / f"{prefix}3{minor}"
-                if not versioned.exists() and target.exists():
+                if (not versioned.exists() and not versioned.is_symlink()) and target.exists():
                     try:
-                        os.link(str(target), str(versioned))
+                        versioned.symlink_to(target.name)
                     except Exception:
-                        try:
-                            import shutil
-                            shutil.copy2(str(target), str(versioned))
-                        except Exception:
-                            pass
+                        pass
         return  # already installed, nothing to do
 
     # Shim is missing — this is the native Python that adoption skipped.
@@ -1458,26 +1620,30 @@ def _ensure_native_shims() -> None:
     # Confirm this interpreter is actually registered (or is the primary).
     # If it's not registered at all we don't want to create phantom shims.
     registry_path = venv_root / ".omnipkg" / "interpreters" / "registry.json"
-    if registry_path.exists():
-        try:
-            with open(registry_path, "r") as f:
-                data = json.load(f)
-            interpreters = data.get("interpreters", {})
-            primary = data.get("primary_version", "")
-            # Accept if it's the primary OR explicitly registered
-            if version not in interpreters and version != primary:
-                if debug_mode:
-                    print(f"[DEBUG-DISPATCH] _ensure_native_shims: {version} not in registry, skipping", file=sys.stderr)
-                return
-        except Exception as e:
-            if debug_mode:
-                print(f"[DEBUG-DISPATCH] _ensure_native_shims: registry read error: {e}", file=sys.stderr)
-            return
-    else:
-        # No registry yet (pre-first-adopt). Don't create phantom shims.
-        if debug_mode:
-            print(f"[DEBUG-DISPATCH] _ensure_native_shims: no registry yet, skipping", file=sys.stderr)
-        return
+    # Native Python is always sys.executable — no registry needed to prove validity.
+    if debug_mode:
+        print(f"[DEBUG-DISPATCH] _ensure_native_shims: creating native shim unconditionally", file=sys.stderr)
+    # Also immediately create the full range of versioned shims so 8pkg310 etc exist.
+    # We do this here because the shim_path.exists() quick-exit branch won't run
+    # on this first call since we just created the shim above.
+    main_shim = bin_dir / "8pkg"
+    omni_shim = bin_dir / "omnipkg"
+    # Case-variant aliases for case-sensitive filesystems (Linux)
+    for alias, target in [("8PKG", main_shim), ("OMNIPKG", omni_shim)]:
+        p = bin_dir / alias
+        if (not p.exists() and not p.is_symlink()) and target.exists():
+            try:
+                p.symlink_to(target.name)
+            except Exception:
+                pass
+    for minor in range(7, 16):
+        for prefix, target in [("8pkg", main_shim), ("omnipkg", omni_shim)]:
+            versioned = bin_dir / f"{prefix}3{minor}"
+            if (not versioned.exists() and not versioned.is_symlink()) and target.exists():
+                try:
+                    versioned.symlink_to(target.name)
+                except Exception:
+                    pass
 
     # Call the canonical shim installer — handles Unix symlinks and Windows .bat
     interpreter_path = Path(sys.executable)

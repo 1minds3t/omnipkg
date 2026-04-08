@@ -842,8 +842,6 @@ class omnipkgMetadataGatherer:
 
             return final_dists
 
-    # Add this optimized method to omnipkgMetadataGatherer class
-
     def _discover_distributions_fast(
         self,
         targeted_packages: Optional[List[str]],
@@ -897,8 +895,12 @@ class omnipkgMetadataGatherer:
                         if _target_di:
                             try:
                                 dist = PathDistribution(_target_di)
-                                found_dists.append(dist)
-                                found_any = True
+                                if not dist.metadata.get("Name"):
+                                    self._scan_and_heal_distributions([bubble_dir])
+                                    dist = PathDistribution(_target_di)
+                                if dist.metadata.get("Name"):
+                                    found_dists.append(dist)
+                                    found_any = True
                                 if _dbg:
                                     print(f"[FAST-DISC] found {dist.name} {dist.version} in {bubble_dir}", flush=True)
                             except Exception as e:
@@ -912,8 +914,12 @@ class omnipkgMetadataGatherer:
                         if _dist_infos:
                             try:
                                 dist = PathDistribution(_dist_infos[0])
-                                found_dists.append(dist)
-                                found_any = True
+                                if not dist.metadata.get("Name"):
+                                    self._scan_and_heal_distributions([bubble_dir])
+                                    dist = PathDistribution(_dist_infos[0])
+                                if dist.metadata.get("Name"):
+                                    found_dists.append(dist)
+                                    found_any = True
                                 if _dbg:
                                     print(f"[FAST-DISC] found {dist.name} {dist.version} in {bubble_dir}", flush=True)
                             except Exception as e:
@@ -969,7 +975,10 @@ class omnipkgMetadataGatherer:
                 if _target_di:
                     try:
                         dist = PathDistribution(_target_di)
-                        if dist.version == version:
+                        if not dist.metadata.get("Name"):
+                            self._scan_and_heal_distributions([_target_di.parent])
+                            dist = PathDistribution(_target_di)  # retry after heal
+                        if dist.metadata.get("Name") and dist.version == version:
                             found_dists.append(dist)
                             if _dbg:
                                 print(f"[FAST-DISC] P1: ✅ found via known path", flush=True)
@@ -999,8 +1008,12 @@ class omnipkgMetadataGatherer:
                     if _dist_infos:
                         try:
                             dist = PathDistribution(_dist_infos[0])
-                            found_dists.append(dist)
-                            _bubble_found = True
+                            if not dist.metadata.get("Name"):
+                                self._scan_and_heal_distributions([_expected_bubble])
+                                dist = PathDistribution(_dist_infos[0])  # retry after heal
+                            if dist.metadata.get("Name"):
+                                found_dists.append(dist)
+                                _bubble_found = True
                             if _dbg:
                                 print(f"[FAST-DISC] P2: ✅ found via bubble", flush=True)
                             break

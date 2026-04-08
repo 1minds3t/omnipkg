@@ -46,7 +46,12 @@ def _install_dispatcher_binary(install_dir=None):
         )
         if result.returncode != 0:
             print(f"  [dispatcher] Compilation failed, using Python dispatcher:")
-            print(f"  {result.stderr.strip()}")
+            # Pass -v to gcc to see the full linker invocation
+            result = subprocess.run(
+                ["gcc", "-v", "-O2", "-o", str(binary_out), str(c_source)],
+                capture_output=False, # This will stream the output directly to the GHA console
+                text=True
+            )
             return
 
         # Overwrite the pip-generated wrapper scripts
@@ -106,16 +111,20 @@ else:
     # macOS: -march=native fails on Universal (dual-arch) builds
     # Windows: Uses MSVC flags (handled separately)
     
+    import platform
+    
     _c_args = ["-O3"]
     
-    # Only enable native optimization on Linux
+    # ⬇️ THIS IS THE FIX ⬇️
+    # Only enable native optimization on Linux.
+    # macOS universal builds will fail with -march=native.
     if platform.system() == "Linux":
         _c_args.append("-march=native")
 
     atomic_extension = Extension(
         name="omnipkg.isolation.omnipkg_atomic",
         sources=["src/omnipkg/isolation/atomic_ops.c"],
-        extra_compile_args=_c_args,
+        extra_compile_args=_c_args,  # <--- Use our new conditional args
         optional=True,
     )
 

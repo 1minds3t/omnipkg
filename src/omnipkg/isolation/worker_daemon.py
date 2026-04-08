@@ -4819,28 +4819,50 @@ class WorkerPoolDaemon:
             }
 
     def _handle_shutdown(self, signum, frame):
-        """CRITICAL FIX: Graceful shutdown with timeout."""
+        """Graceful shutdown with timeout. Windows + Linux compatible."""
         self.running = False
 
-        # Shutdown executor first
-        self.executor.shutdown(wait=False)
+        # Shutdown executor first (non-blocking)
+        try:
+            self.executor.shutdown(wait=False)
+        except Exception:
+            pass
 
-        deadline = time.time() + 5.0
+        # Collect all PIDs before we start killing
+        all_pids = []
 
+        # UV workers
+        for py_exe, worker in list(getattr(self, "uv_workers", {}).items()):
+            try:
+                if worker.process and worker.process.pid:
+                    all_pids.append(worker.process.pid)
+            except Exception:
+                pass
+
+        # Idle CLI workers
+        for py_exe, pool in list(getattr(self, "idle_pools", {}).items()):
+            while not pool.empty():
+                try:
+                    w = pool.get_nowait()
+                    if w.process and w.process.pid:
+                        all_pids.append(w.process.pid)
+                except Exception:
+                    pass
+
+        # Spec workers
         with self.pool_lock:
             workers_list = list(self.workers.values())
 
         for info in workers_list:
-            remaining = deadline - time.time()
-            if remaining <= 0:
+            try:
+                w = info.get("worker")
+                if w and w.process and w.process.pid:
+                    all_pids.append(w.process.pid)
                 info["worker"].force_shutdown()
-            else:
-                try:
-                    info["worker"].force_shutdown()
-                except Exception:
-                    pass
+            except Exception:
+                pass
 
-        # Wait up to 2s for graceful termination, then SIGKILL stragglers
+        # Wait up to 2s for graceful termination
         import time as _st
         deadline = _st.time() + 2.0
         remaining = list(all_pids)
@@ -4849,36 +4871,48 @@ class WorkerPoolDaemon:
             still_alive = []
             for pid in remaining:
                 try:
-                    os.kill(pid, 0)  # 0 = check existence only
-                    still_alive.append(pid)
-                except OSError:
-                    pass  # already dead
+                    if IS_WINDOWS:
+                        import ctypes
+                        handle = ctypes.windll.kernel32.OpenProcess(0x0400, False, pid)
+                        if handle:
+                            ctypes.windll.kernel32.CloseHandle(handle)
+                            still_alive.append(pid)
+                    else:
+                        os.kill(pid, 0)
+                        still_alive.append(pid)
+                except (OSError, Exception):
+                    pass
             remaining = still_alive
 
-        # SIGKILL anything still alive
+        # Force kill anything still alive
         for pid in remaining:
             try:
-                os.kill(pid, signal.SIGKILL)
-                self.log(f"  SIGKILL sent to straggler PID {pid}")
-            except OSError:
+                if IS_WINDOWS:
+                    import ctypes
+                    handle = ctypes.windll.kernel32.OpenProcess(1, False, pid)
+                    if handle:
+                        ctypes.windll.kernel32.TerminateProcess(handle, 1)
+                        ctypes.windll.kernel32.CloseHandle(handle)
+                else:
+                    os.kill(pid, signal.SIGKILL)
+                self.log(f"  Force-killed straggler PID {pid}")
+            except Exception:
                 pass
 
         # Cleanup socket and PID files
-        for path in (self.socket_path, PID_FILE):
+        for path in (getattr(self, "socket_path", None), PID_FILE):
+            if not path:
+                continue
             try:
                 os.unlink(path)
             except OSError:
                 pass
-
-        # Stop the FS watcher and release shared memory before exit
+        # Also clean connection announcement file
         try:
-            if self._fs_watcher is not None:
-                self._fs_watcher.stop()
-        except Exception:
+            conn_file = os.path.join(tempfile.gettempdir(), "omnipkg", "daemon_connection.txt")
+            os.unlink(conn_file)
+        except OSError:
             pass
-
-        self.log(f"Shutdown complete. Killed {len(all_pids)} worker(s).")
-        sys.exit(0)
 
     @classmethod
     def is_running(cls) -> bool:
@@ -6744,7 +6778,9 @@ def cli_start():
 
 
 def cli_stop():
-    """Stop the daemon."""
+    """Stop the daemon. Works even if daemon is unresponsive."""
+    import time as _st
+
     daemon_pid = None
     try:
         with open(PID_FILE, "r") as f:
@@ -6752,16 +6788,132 @@ def cli_stop():
     except Exception:
         pass
 
+    # Step 1: try graceful shutdown via client
     client = DaemonClient()
     result = client.shutdown()
     if result.get("success"):
         safe_print("✅ Daemon stopped")
-        try:
-            os.unlink(PID_FILE)
-        except:
-            pass
     else:
-        safe_print(_('❌ Failed to stop: {}').format(result.get('error', 'Unknown error')))
+        # Not running or unresponsive — that's OK, continue to cleanup
+        if WorkerPoolDaemon.is_running() or daemon_pid:
+            safe_print(_('⚠️  Daemon did not respond cleanly: {}').format(
+                result.get('error', 'Unknown error')))
+
+    # Step 2: wait briefly for graceful death
+    _deadline = _st.time() + 3.0
+    while _st.time() < _deadline:
+        if IS_WINDOWS:
+            if not os.path.exists(PID_FILE):
+                break
+        else:
+            if not os.path.exists(DEFAULT_SOCKET):
+                break
+        _st.sleep(0.05)
+
+    # Step 3: force kill by PID if still alive
+    if daemon_pid:
+        try:
+            if IS_WINDOWS:
+                import ctypes
+                handle = ctypes.windll.kernel32.OpenProcess(1, False, daemon_pid)
+                if handle:
+                    ctypes.windll.kernel32.TerminateProcess(handle, 1)
+                    ctypes.windll.kernel32.CloseHandle(handle)
+                    safe_print(f"   Force-killed daemon PID {daemon_pid}")
+            else:
+                os.kill(daemon_pid, 0)  # check if alive
+                os.kill(daemon_pid, signal.SIGKILL)
+                safe_print(f"   Force-killed daemon PID {daemon_pid}")
+        except OSError:
+            pass  # already dead
+
+    # Step 4: orphan sweep — kill surviving worker processes
+    _sweep_killed = 0
+    _omnipkg_markers = ["worker_daemon", "_idle.py", "omnipkg.isolation"]
+    try:
+        import psutil as _psu
+        for _proc in _psu.process_iter(["pid", "cmdline", "create_time"]):
+            try:
+                _cmd = " ".join(_proc.info["cmdline"] or [])
+                if not any(m in _cmd for m in _omnipkg_markers):
+                    continue
+                _pid = _proc.info["pid"]
+                if _pid == os.getpid():
+                    continue
+                if daemon_pid and _pid == daemon_pid:
+                    continue
+                # Skip freshly spawned workers (belong to a new daemon)
+                try:
+                    _age = _st.time() - _proc.info["create_time"]
+                    if _age < 10.0:
+                        continue
+                except Exception:
+                    pass
+                try:
+                    _proc.terminate()
+                    _sweep_killed += 1
+                except Exception:
+                    pass
+            except (_psu.NoSuchProcess, _psu.AccessDenied):
+                continue
+
+        if _sweep_killed:
+            _st.sleep(0.5)
+            # SIGKILL/TerminateProcess anything that survived SIGTERM
+            for _proc in _psu.process_iter(["pid", "cmdline"]):
+                try:
+                    _cmd = " ".join(_proc.info["cmdline"] or [])
+                    if not any(m in _cmd for m in _omnipkg_markers):
+                        continue
+                    _pid = _proc.info["pid"]
+                    if _pid == os.getpid():
+                        continue
+                    try:
+                        _proc.kill()  # SIGKILL on Linux, TerminateProcess on Windows
+                    except Exception:
+                        pass
+                except Exception:
+                    continue
+            safe_print(f"🧹 Orphan sweep: killed {_sweep_killed} surviving worker(s)")
+
+    except ImportError:
+        # psutil not available — platform fallback
+        if IS_WINDOWS:
+            for marker in _omnipkg_markers:
+                try:
+                    subprocess.run(
+                        ["taskkill", "/F", "/FI", f"COMMANDLINE eq *{marker}*"],
+                        capture_output=True, check=False
+                    )
+                except Exception:
+                    pass
+            safe_print("🧹 Orphan sweep complete (taskkill fallback)")
+        else:
+            try:
+                subprocess.run(
+                    ["pkill", "-TERM", "-f", "|".join(_omnipkg_markers)],
+                    capture_output=True, check=False
+                )
+                _st.sleep(0.5)
+                subprocess.run(
+                    ["pkill", "-KILL", "-f", "|".join(_omnipkg_markers)],
+                    capture_output=True, check=False
+                )
+                safe_print("🧹 Orphan sweep complete (pkill fallback)")
+            except Exception:
+                pass
+
+    # Step 5: clean up all socket/pid/connection files
+    _cleanup_files = [
+        DEFAULT_SOCKET,
+        PID_FILE,
+        os.path.join(tempfile.gettempdir(), "omnipkg", "daemon_connection.txt"),
+    ]
+    for f in _cleanup_files:
+        try:
+            os.unlink(f)
+        except Exception:
+            pass
 
 
 def cli_status():
