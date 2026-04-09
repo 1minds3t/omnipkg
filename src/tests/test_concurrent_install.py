@@ -69,8 +69,43 @@ def _run_info_python() -> str:
     return result.stdout or ""
 
 
+def _read_registry() -> dict:
+    """
+    Read the interpreter registry directly from disk — never relies on a
+    subprocess that might return empty output in CI / temp-script contexts.
+    Searches sys.prefix and CONDA_PREFIX for the registry.json.
+    """
+    candidates = []
+    # sys.prefix — works in hostedtoolcache and venv environments
+    candidates.append(
+        _os.path.join(sys.prefix, ".omnipkg", "interpreters", "registry.json")
+    )
+    # CONDA_PREFIX — works in conda/mamba envs
+    conda = _os.environ.get("CONDA_PREFIX")
+    if conda:
+        candidates.append(
+            _os.path.join(conda, ".omnipkg", "interpreters", "registry.json")
+        )
+    for path in candidates:
+        if _os.path.exists(path):
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                safe_print(f"[DEBUG-REGISTRY] Loaded registry from: {path}")
+                safe_print(f"[DEBUG-REGISTRY] interpreters: {list(data.get('interpreters', {}).keys())}")
+                return data
+            except Exception as e:
+                safe_print(f"[DEBUG-REGISTRY] Failed to read {path}: {e}")
+    safe_print(f"[DEBUG-REGISTRY] ❌ Registry not found. Tried: {candidates}")
+    return {}
+
+
 def verify_registry_contains(version: str) -> bool:
     try:
+        registry = _read_registry()
+        if version in registry.get("interpreters", {}):
+            return True
+        # fallback to subprocess output
         output = _run_info_python()
         for line in output.splitlines():
             if f"Python {version}:" in line:
@@ -81,13 +116,20 @@ def verify_registry_contains(version: str) -> bool:
 
 
 def get_interpreter_path(version: str) -> str:
+    registry = _read_registry()
+    interpreters = registry.get("interpreters", {})
+    if version in interpreters:
+        path = interpreters[version]
+        safe_print(f"[DEBUG-REGISTRY] Resolved {version} -> {path}")
+        return path
+    # fallback to subprocess output parsing
     try:
         output = _run_info_python()
     except Exception as e:
         raise RuntimeError(_('Failed to query omnipkg: {}').format(e)) from e
     for line in output.splitlines():
         if f"Python {version}:" in line:
-            parts = line.split(":", 1)
+            parts = line.split(": ", 1)
             if len(parts) == 2:
                 path_part = parts[1].strip().split()[0]
                 return path_part
@@ -386,15 +428,6 @@ def main():
             safe_print(f"❌ Failed to adopt Python {version}")
             sys.exit(1)
 
-    # Print resolved interpreter paths — catch any wrong resolution immediately
-    safe_print("\n🐍 Resolved interpreter paths:")
-    for version, _ in test_configs:
-        try:
-            path = get_interpreter_path(version)
-            safe_print(f"   Python {version} → {path}")
-        except Exception as e:
-            safe_print(f"   Python {version} → ❌ ERROR: {e}")
-
     # Resolve all interpreter paths AFTER adoption so daemon sees them all on start
     safe_print("\n🐍 Resolved interpreter paths:")
     interpreter_paths = []
@@ -406,6 +439,12 @@ def main():
         except Exception as e:
             safe_print(f"   Python {version} → ❌ ERROR: {e}")
             sys.exit(1)
+
+    # Start daemon BEFORE installs so FFI in-process path is live during install phase
+    if not ensure_daemon_running(interpreter_paths):
+        safe_print("❌ Failed to start daemon")
+        dump_daemon_log("DAEMON LOG ON STARTUP FAILURE")
+        sys.exit(1)
 
     # Phase 0: Install via versioned dispatcher (8pkg39, 8pkg310, etc.)
     # This is the key test — does 8pkg3X actually install into the RIGHT interpreter?
@@ -506,12 +545,7 @@ def main():
         safe_print(f"   {status} Python {r['version']} — {r['pkg']}  ({format_duration(r['elapsed_ms'])})")
     all_installed = all(r["ok"] for r in install_results)
     if not all_installed:
-        safe_print("\n⚠️  Some installs failed — continuing to daemon phase to capture behaviour")
-
-    if not ensure_daemon_running(interpreter_paths):
-        safe_print("❌ Failed to start daemon")
-        dump_daemon_log("DAEMON LOG ON STARTUP FAILURE")
-        sys.exit(1)
+        safe_print("\n⚠️  Some installs failed — continuing to warmup phase to capture behaviour")
 
     # Phase 2: Cold run (first call = daemon worker spawn + import)
     safe_print("\n🔥 Phase 2: Cold run — daemon worker spawn + first import (concurrent)")

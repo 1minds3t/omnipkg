@@ -1,65 +1,57 @@
 #include <Python.h>
 
-// --------------------------------------------------------
-// HARDWARE ATOMICS FOR PYTHON (HFT GRADE)
-// --------------------------------------------------------
+#ifdef _MSC_VER
+#include <intrin.h>
+#include <windows.h>
+#pragma intrinsic(_InterlockedCompareExchange64)
+#pragma intrinsic(_InterlockedExchange64)
 
-// 1. COMPARE AND SWAP (CAS)
-// Used for: Optimistic locking, updating state without mutex
 static PyObject* atomic_cas64(PyObject* self, PyObject* args) {
-    long long buffer_addr;  // Address of the shared memory (from Tensor.data_ptr())
-    long long expected;
-    long long desired;
-
-    if (!PyArg_ParseTuple(args, "LLL", &buffer_addr, &expected, &desired)) {
-        return NULL;
-    }
-
-    // Volatile pointer to ensure compiler doesn't cache the read
+    long long buffer_addr, expected, desired;
+    if (!PyArg_ParseTuple(args, "LLL", &buffer_addr, &expected, &desired)) return NULL;
     volatile long long* ptr = (volatile long long*)buffer_addr;
-    
-    // GCC BUILTIN: Generates 'lock cmpxchg' instruction
-    // Returns true if swap happened, false otherwise
-    int success = __sync_bool_compare_and_swap(ptr, expected, desired);
-
-    return PyBool_FromLong(success);
+    long long prev = _InterlockedCompareExchange64(ptr, desired, expected);
+    return PyBool_FromLong(prev == expected);
 }
-
-// 2. ATOMIC STORE (WRITE)
-// Used for: Ringing the Doorbell
 static PyObject* atomic_store64(PyObject* self, PyObject* args) {
-    long long buffer_addr;
-    long long value;
-
-    if (!PyArg_ParseTuple(args, "LL", &buffer_addr, &value)) {
-        return NULL;
-    }
-
+    long long buffer_addr, value;
+    if (!PyArg_ParseTuple(args, "LL", &buffer_addr, &value)) return NULL;
     volatile long long* ptr = (volatile long long*)buffer_addr;
-    
-    // ATOMIC STORE with Release Semantics (Ensures prior writes are visible)
-    // Generates 'mov' with memory barrier on x86
-    __atomic_store_n(ptr, value, __ATOMIC_RELEASE);
-
+    _InterlockedExchange64(ptr, value);
     Py_RETURN_NONE;
 }
-
-// 3. ATOMIC LOAD (READ)
-// Used for: Checking Stop Flags
 static PyObject* atomic_load64(PyObject* self, PyObject* args) {
     long long buffer_addr;
-
-    if (!PyArg_ParseTuple(args, "L", &buffer_addr)) {
-        return NULL;
-    }
-
+    if (!PyArg_ParseTuple(args, "L", &buffer_addr)) return NULL;
     volatile long long* ptr = (volatile long long*)buffer_addr;
-    
-    // ATOMIC LOAD with Acquire Semantics
-    long long val = __atomic_load_n(ptr, __ATOMIC_ACQUIRE);
-
+    long long val = _InterlockedExchangeAdd64((volatile long long*)ptr, 0);
     return PyLong_FromLongLong(val);
 }
+
+#else
+/* GCC/Clang path */
+static PyObject* atomic_cas64(PyObject* self, PyObject* args) {
+    long long buffer_addr, expected, desired;
+    if (!PyArg_ParseTuple(args, "LLL", &buffer_addr, &expected, &desired)) return NULL;
+    volatile long long* ptr = (volatile long long*)buffer_addr;
+    int success = __sync_bool_compare_and_swap(ptr, expected, desired);
+    return PyBool_FromLong(success);
+}
+static PyObject* atomic_store64(PyObject* self, PyObject* args) {
+    long long buffer_addr, value;
+    if (!PyArg_ParseTuple(args, "LL", &buffer_addr, &value)) return NULL;
+    volatile long long* ptr = (volatile long long*)buffer_addr;
+    __atomic_store_n(ptr, value, __ATOMIC_RELEASE);
+    Py_RETURN_NONE;
+}
+static PyObject* atomic_load64(PyObject* self, PyObject* args) {
+    long long buffer_addr;
+    if (!PyArg_ParseTuple(args, "L", &buffer_addr)) return NULL;
+    volatile long long* ptr = (volatile long long*)buffer_addr;
+    long long val = __atomic_load_n(ptr, __ATOMIC_ACQUIRE);
+    return PyLong_FromLongLong(val);
+}
+#endif
 
 static PyMethodDef AtomicMethods[] = {
     {"cas64", atomic_cas64, METH_VARARGS, "Atomic Compare-And-Swap (64-bit)"},
@@ -67,15 +59,9 @@ static PyMethodDef AtomicMethods[] = {
     {"load64", atomic_load64, METH_VARARGS, "Atomic Load (Acquire Semantics)"},
     {NULL, NULL, 0, NULL}
 };
-
 static struct PyModuleDef atomicmodule = {
-    PyModuleDef_HEAD_INIT,
-    "omnipkg_atomic",
-    "HFT Hardware Atomics",
-    -1,
-    AtomicMethods
+    PyModuleDef_HEAD_INIT, "omnipkg_atomic", "HFT Hardware Atomics", -1, AtomicMethods
 };
-
 PyMODINIT_FUNC PyInit_omnipkg_atomic(void) {
     return PyModule_Create(&atomicmodule);
 }

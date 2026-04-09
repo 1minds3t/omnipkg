@@ -6,7 +6,7 @@ backend-path = ["."]
 
 [project]
 name = "omnipkg"
-version = "2.5.0"
+version = "2.5.1"
 authors = [
   { name = "1minds3t", email = "1minds3t@proton.me" },
 ]
@@ -39,6 +39,7 @@ classifiers = [
 ]
 
 dependencies = [
+    "uv_ffi ; python_version >= '3.8' and python_version <= '3.14'",
     "requests>=2.20",
     "psutil>=5.9.0",
     "typer>=0.4.0",
@@ -137,8 +138,6 @@ dev = [
 [project.scripts]
 omnipkg = "omnipkg.dispatcher:main"
 8pkg = "omnipkg.dispatcher:main"
-OMNIPKG = "omnipkg.dispatcher:main"
-8PKG = "omnipkg.dispatcher:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
@@ -154,6 +153,7 @@ exclude = [
 omnipkg = [
     "locale/**/*.mo",
     "locale/**/*.pot",
+    "dispatcher.c",        # ← ADD THIS
 ]
 
 [tool.setuptools]

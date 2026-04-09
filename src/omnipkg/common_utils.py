@@ -454,7 +454,7 @@ def sync_context_to_runtime():
 
     try:
         config_manager = ConfigManager(suppress_init_messages=True)
-        current_executable = str(Path(sys.executable).resolve())
+        current_executable = str(Path(sys.executable))
 
         if config_manager.config.get("python_executable") == current_executable:
             return  # Context is already synchronized.
@@ -546,7 +546,8 @@ def ensure_script_is_running_on_version(required_version: str):
         safe_print(_("   ✅ Target interpreter found at: {}").format(target_exe_path))
         new_env = os.environ.copy()
         new_env["OMNIPKG_RELAUNCHED"] = "1"
-        os.execve(str(target_exe_path), [str(target_exe_path)] + sys.argv, new_env)
+        new_args = [str(target_exe_path), "-m", "omnipkg.cli"] + sys.argv[1:]
+        os.execve(str(target_exe_path), new_args, new_env)
     except Exception as e:
         safe_print("\n" + "-" * 80)
         safe_print(_("   ❌ FATAL ERROR during context relaunch."))
@@ -651,7 +652,7 @@ def ensure_python_or_relaunch(required_version: str):
     safe_print(_("   - Target Dimension:  Python {}").format(required_version))
     safe_print(_("   - Re-calibrating multiverse coordinates and relaunching..."))
     try:
-        from .core import OmnipkgCore
+        from .core import omnipkg as OmnipkgCore
 
         cm = ConfigManager(suppress_init_messages=True)
         pkg_instance = OmnipkgCore(config_manager=cm)
@@ -677,7 +678,8 @@ def ensure_python_or_relaunch(required_version: str):
                 )
         safe_print(_("   ✅ Target interpreter found at: {}").format(target_exe_path))
         new_env = os.environ.copy()
-        os.execve(str(target_exe_path), [str(target_exe_path)] + sys.argv, new_env)
+        new_args = [str(target_exe_path), "-m", "omnipkg.cli"] + sys.argv[1:]
+        os.execve(str(target_exe_path), new_args, new_env)
     except Exception as e:
         safe_print("\n" + "-" * 80)
         safe_print(_("   ❌ FATAL ERROR during dimension jump."))
@@ -689,43 +691,118 @@ def ensure_python_or_relaunch(required_version: str):
 
 def is_interactive_session():
     """
-    Reusable version of the detection logic you already have in _first_time_setup.
-    Returns False for: CI, Docker, piped input, explicitly non-interactive envs.
+    Returns True only for real interactive terminal sessions.
+    Returns False for: CI, Docker, piped input, explicitly non-interactive envs,
+    and daemon workers (where stdin is the socket, not a tty).
+
+    NOTE: Use safe_input() for prompts in daemon workers — it handles the
+    NEEDS_INPUT socket relay protocol so interactive prompts work transparently
+    even when this function returns False.
     """
     from omnipkg.i18n import _
-    # Check all the conditions you're already using
     is_docker = os.path.exists("/.dockerenv") or os.path.exists("/run/.containerenv")
-    no_tty = not sys.stdin.isatty()
+    _isatty_override = os.environ.get('_OMNIPKG_ISATTY')
+    if _isatty_override is not None:
+        no_tty = _isatty_override != '1'
+    else:
+        no_tty = not sys.stdin.isatty()
     forced_noninteractive = os.environ.get("OMNIPKG_NONINTERACTIVE")
     in_ci = os.environ.get("CI")
     web_mode = os.environ.get("OMNIPKG_WEB_MODE")
-    
-    # If ANY of these are true, it's non-interactive
+
     if in_ci or forced_noninteractive or no_tty or is_docker or web_mode:
         return False
-    
+
     return True
 
-def safe_input(prompt: str, default: str = "", auto_value: str = None):
+
+# ── Daemon stdin relay ────────────────────────────────────────────────────────
+# When the CLI runs inside a PersistentWorker the transport is plain
+# line-delimited text JSON — exactly what _reader_thread already consumes
+# from the worker's stdout, and what the daemon writes to worker.process.stdin.
+#
+# Protocol (all messages are single-line JSON + "\n"):
+#
+#   worker stdout  →  daemon stdout_queue  →  conn  →  C dispatcher
+#   {"status":"NEEDS_INPUT","prompt":"..."}
+#
+#   C dispatcher  →  conn  →  daemon  →  worker stdin
+#   {"type":"stdin_line","data":"<text user typed>"}
+#
+# _DAEMON_WORKER_MODE is True when the env var OMNIPKG_DAEMON_WORKER=1 is set.
+# _spawn_process() sets this in the worker's env so safe_input() activates the
+# relay path automatically, with zero changes needed in the CLI command code.
+_DAEMON_WORKER_MODE: bool = os.environ.get("OMNIPKG_DAEMON_WORKER") == "1"
+
+
+def _worker_emit(obj: dict) -> None:
+    """Write one JSON line to the real stdout pipe, bypassing StreamRedirector."""
+    msg = json.dumps(obj, ensure_ascii=True) + "\n"
+    os.write(1, msg.encode("utf-8"))
+
+
+def _worker_read_reply() -> dict:
+    """Read one JSON line from worker stdin (the daemon reply channel).
+
+    The daemon writes to worker.process.stdin (also text mode) after
+    receiving the stdin_line from the C dispatcher.
     """
-    Safe input wrapper that returns defaults in non-interactive environments.
-    Uses your existing detection logic.
-    
+    line = sys.stdin.readline()
+    if not line:
+        raise EOFError("daemon closed stdin")
+    return json.loads(line.strip())
+
+
+def safe_input(prompt: str, default: str = "", auto_value: str = None) -> str:
+    """
+    Safe input wrapper with three operating modes:
+
+    1. **Daemon worker** (OMNIPKG_DAEMON_WORKER=1 in env, set by _spawn_process):
+       Emits {"status":"NEEDS_INPUT","prompt":"..."} as a JSON line to stdout.
+       The daemon's _reader_thread picks it up, forwards it through the socket
+       to the C dispatcher, which prints the prompt on the real terminal,
+       calls fgets(), and sends {"type":"stdin_line","data":"..."} back.
+       The daemon writes that JSON line to worker.process.stdin.
+       safe_input() reads it with readline() and returns the data value.
+       The daemon stays healthy; no 30 s timeout, no execv fallback.
+
+    2. **Real interactive session** (stdin is a tty, no CI/Docker/etc.):
+       Calls input(prompt) normally — user types at their terminal.
+
+    3. **Truly non-interactive** (CI, Docker, piped input, web mode):
+       Returns auto_value (if given) or default, with an auto-select notice.
+
     Args:
-        prompt: The prompt to show users
-        default: Default value for non-interactive (if auto_value not specified)
-        auto_value: Specific value to use in non-interactive mode (overrides default)
+        prompt:     The prompt string shown to the user.
+        default:    Return value when non-interactive and auto_value is None.
+        auto_value: Specific return value for non-interactive mode.
     """
     from omnipkg.i18n import _
-    if not is_interactive_session():
+
+    # --- Mode 1: inside a PersistentWorker — relay via line-JSON ---
+    if _DAEMON_WORKER_MODE:
+        try:
+            _worker_emit({"status": "NEEDS_INPUT", "prompt": prompt})
+            msg = _worker_read_reply()
+            if msg.get("type") == "stdin_line":
+                return msg.get("data", default).strip()
+        except Exception:
+            pass  # relay failed — fall through to non-interactive default
         result = auto_value if auto_value is not None else default
-        safe_print(_('🤖 Auto-selecting: {}').format(result))
+        safe_print(_("🤖 Auto-selecting: {}").format(result))
         return result
-    
-    try:
-        return input(prompt).strip()
-    except (EOFError, KeyboardInterrupt):
-        return default
+
+    # --- Mode 2: real interactive session ---
+    if is_interactive_session():
+        try:
+            return input(prompt).strip()
+        except (EOFError, KeyboardInterrupt):
+            return default
+
+    # --- Mode 3: truly non-interactive ---
+    result = auto_value if auto_value is not None else default
+    safe_print(_("🤖 Auto-selecting: {}").format(result))
+    return result
 
 def run_interactive_command(command_list, input_data, check=True):
     """Helper to run a command that requires stdin input."""
@@ -771,6 +848,58 @@ def simulate_user_choice(choice, message):
     time.sleep(0.5)
     safe_print(_("💭 {}").format(message))
     return choice.lower()
+
+def _safe_resolve(path: Path) -> Path:
+    """
+    Resolve a path safely for omnipkg identity and path comparisons.
+
+    Uses resolve() when possible, falls back to absolute() if resolution fails.
+    Avoids inconsistent crashes on broken links / partial envs.
+    """
+    try:
+        return path.resolve()
+    except Exception:
+        return path.absolute()
+
+def _canonical_path_str(path: Path) -> str:
+    """
+    Produce a stable canonical string for identity-sensitive path hashing
+    and comparisons across platforms.
+
+    - resolves when possible
+    - normalizes separators
+    - lowercases on Windows for drive-letter / casing stability
+    - strips trailing slash
+    """
+    p = _safe_resolve(path)
+    s = str(p).replace("\\", "/").rstrip("/")
+
+    if os.name == "nt":
+        s = s.lower()
+
+    return s
+
+def _is_relative_to_win(path: Path, base: Path) -> bool:
+    """Case-insensitive relative_to for Windows path safety."""
+    try:
+        path.resolve().relative_to(base.resolve())
+        return True
+    except ValueError:
+        # Fallback: case-insensitive string comparison for Windows drive letter normalization
+        try:
+            str(path.resolve()).lower().startswith(str(base.resolve()).lower())
+            path.resolve().relative_to(Path(str(base.resolve()).lower()))
+        except ValueError:
+            pass
+        return str(path.resolve()).lower().startswith(str(base.resolve()).lower())
+
+def _relative_to_win(path: Path, base: Path) -> Path:
+    """Case-insensitive relative_to that works across Windows drive letter normalization."""
+    p = str(path.resolve()).lower()
+    b = str(base.resolve()).lower()
+    if p.startswith(b):
+        return Path(str(path.resolve())[len(str(base.resolve())):].lstrip('/\\'))
+    raise ValueError(f"{path} is not relative to {base}")
 
 class ConfigGuard:
     """

@@ -1,0 +1,4 @@
+[submodule "src/omnipkg/_vendor/uv"]
+	path = src/omnipkg/_vendor/uv
+	url = https://github.com/1minds3t/uv-ffi
+	branch = omnipkg-ffi-v0.10.8

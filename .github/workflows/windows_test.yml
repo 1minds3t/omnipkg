@@ -65,6 +65,7 @@ jobs:
           PYTHONUTF8: "1"
           PYTHONUNBUFFERED: "1"
           PYTHONIOENCODING: "utf-8"
+          OMNIPKG_DEBUG: "1"
 
       - name: Adopt Python 3.11
         run: omnipkg python adopt 3.11
@@ -73,6 +74,7 @@ jobs:
           PYTHONUTF8: "1"
           PYTHONUNBUFFERED: "1"
           PYTHONIOENCODING: "utf-8"
+          OMNIPKG_DEBUG: "1"
 
       - name: Trigger 3.11 KB first-use build via shim
         run: omnipkg311 status
@@ -81,6 +83,7 @@ jobs:
           PYTHONUTF8: "1"
           PYTHONUNBUFFERED: "1"
           PYTHONIOENCODING: "utf-8"
+          OMNIPKG_DEBUG: "1"
 
       - name: Install six==1.16.0 via 3.11 shim
         run: omnipkg311 install six==1.16.0
@@ -89,6 +92,7 @@ jobs:
           PYTHONUTF8: "1"
           PYTHONUNBUFFERED: "1"
           PYTHONIOENCODING: "utf-8"
+          OMNIPKG_DEBUG: "1"
 
       - name: Verify six is in the 3.11 knowledge base
         run: |
@@ -105,3 +109,4 @@ jobs:
           PYTHONUTF8: "1"
           PYTHONUNBUFFERED: "1"
           PYTHONIOENCODING: "utf-8"
+          OMNIPKG_DEBUG: "1"

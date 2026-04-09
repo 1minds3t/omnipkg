@@ -1003,6 +1003,56 @@ def is_package_corrupted(pkg_name, missing_module_name):
 
     return False
 
+_CF_MAPPING_CACHE = {}
+_CF_CACHE_LOADED = False
+
+def get_conda_forge_mapping(import_name):
+    """
+    Checks the conda-forge 'County Fair' mapping for import_name -> pypi_name.
+    Downloads, caches to disk, and loads into memory to maintain lightning speed.
+    """
+    global _CF_CACHE_LOADED, _CF_MAPPING_CACHE
+    import os, time, urllib.request, re
+    
+    # Return instantly if we already loaded it this session
+    if _CF_CACHE_LOADED:
+        return _CF_MAPPING_CACHE.get(import_name)
+
+    cache_dir = os.path.expanduser("~/.cache/omnipkg")
+    os.makedirs(cache_dir, exist_ok=True)
+    cache_path = os.path.join(cache_dir, "cf_name_mapping.yaml")
+    
+    # Download if missing or older than 7 days
+    if not os.path.exists(cache_path) or (time.time() - os.path.getmtime(cache_path) > 604800):
+        try:
+            url = "https://raw.githubusercontent.com/regro/cf-graph-countyfair/master/mappings/pypi/name_mapping.yaml"
+            req = urllib.request.Request(url, headers={"User-Agent": "omnipkg-dep-scanner/1.0"})
+            with urllib.request.urlopen(req, timeout=5) as resp:
+                with open(cache_path, "wb") as f:
+                    f.write(resp.read())
+        except Exception:
+            pass # Fail gracefully; we'll fallback to your existing logic
+
+    # Fast parsing without needing PyYAML installed
+    if os.path.exists(cache_path):
+        try:
+            with open(cache_path, "r", encoding="utf-8") as f:
+                content = f.read()
+                # The file is a list of items separated by "- "
+                blocks = content.split("\n-")
+                for block in blocks:
+                    imp_match = re.search(r"import_name:\s*([^\n]+)", block)
+                    pypi_match = re.search(r"pypi_name:\s*([^\n]+)", block)
+                    
+                    if imp_match and pypi_match:
+                        i_name = imp_match.group(1).strip().strip("'\"")
+                        p_name = pypi_match.group(1).strip().strip("'\"")
+                        _CF_MAPPING_CACHE[i_name] = p_name
+        except Exception:
+            pass
+            
+    _CF_CACHE_LOADED = True
+    return _CF_MAPPING_CACHE.get(import_name)
 
 def convert_module_to_package_name(module_name: str, error_message: str = None) -> str:
     """
@@ -1435,6 +1485,15 @@ def convert_module_to_package_name(module_name: str, error_message: str = None) 
             _("INFO: Applying namespace heuristic. Guessing package is '{}'").format(namespace_package_name)
         )
         return namespace_package_name
+
+    # Step 4.5: CONDA-FORGE COUNTY FAIR MAPPING
+    # Highly authoritative list of import names to PyPI packages.
+    base_module = module_name.split(".")[0] if "." in module_name else module_name
+    cf_mapping = get_conda_forge_mapping(module_name) or get_conda_forge_mapping(base_module)
+    
+    if cf_mapping:
+        safe_print(f"INFO: Conda-Forge mapping confirmed '{module_name}' → '{cf_mapping}'")
+        return cf_mapping
 
     # Step 5: PYPI LOOKUP
     # Ask PyPI if the module name (or namespace-guessed name) is a real package.
