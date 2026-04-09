@@ -7059,8 +7059,17 @@ class omnipkg:
         # SQLite initialization (runs if Redis disabled or failed)
         safe_print("✅ SQLite cache initialized.")
         try:
-            py_ver = self.config.get("python_version", "").replace(".", "")
-            suffix = f"-py{self.config.get('python_version', '')}" if py_ver else ""
+            _py_exe = self.config.get("python_executable", sys.executable)
+            _m = re.search(r"python(3\.\d+)", _py_exe)
+            if _m:
+                _py_ver_str = _m.group(1)
+            else:
+                try:
+                    _r = subprocess.run([_py_exe, "-c", "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')"], capture_output=True, text=True, timeout=2)
+                    _py_ver_str = _r.stdout.strip()
+                except Exception:
+                    _py_ver_str = f"{sys.version_info.major}.{sys.version_info.minor}"
+            suffix = f"-py{_py_ver_str}"
             sqlite_db_path = self.config_manager.config_dir / f"cache_{self.env_id}{suffix}.sqlite"
             self.cache_client = SQLiteCacheClient(db_path=sqlite_db_path)
             if not self.cache_client.ping():
