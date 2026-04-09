@@ -260,6 +260,12 @@ class SharedWatchFlag:
 #: of any FFI write, making rapid back-to-back swaps appear as stale cache hits.
 OUR_WRITE_GRACE_MS = 100   # 100ms — generously covers <10ms install + inotify lag
 
+# Minimum debounce for dist-info events. pip's uninstall→temp-write→rename
+# sequence spans ~100ms; firing at 5ms catches the temp file mid-op.
+# 150ms lets the full sequence settle before we parse the delta.
+_DIST_INFO_DEBOUNCE_S = 0.150   # 150ms — covers pip's full install sequence
+_OTHER_DEBOUNCE_S     = 0.250   # 250ms — noisy __pycache__ / .pth writes
+
 
 class SitePackagesEventHandler(FileSystemEventHandler):
     """
@@ -323,7 +329,11 @@ class SitePackagesEventHandler(FileSystemEventHandler):
     def _is_relevant(self, path: str) -> bool:
         """
         Trigger on depth-1 events inside site-packages (dist-info, .data, .pth, packages).
-        Ignore __pycache__ and nested writes inside already-installed packages.
+        Ignore:
+          - __pycache__ and nested writes inside already-installed packages
+          - ~ prefixed temp files (pip writes ~pkg-x.y.z.dist-info then renames)
+          - .omnipkg_versions/ subtree (our own bubble dir — never external)
+          - direct writes inside existing package dirs (depth > 1, non-dist-info)
         """
         try:
             p = Path(path).resolve()
@@ -331,8 +341,14 @@ class SitePackagesEventHandler(FileSystemEventHandler):
             parts = rel.parts
             if not parts:
                 return False
+            name = parts[0]
+            # Skip pip temp files (~rich-14.3.3.dist-info style)
+            if name.startswith("~"):
+                return False
+            # Skip our own bubble directory entirely
+            if name == ".omnipkg_versions":
+                return False
             if len(parts) == 1:
-                name = parts[0]
                 return (
                     name.endswith(".dist-info")
                     or name.endswith(".data")
@@ -376,8 +392,9 @@ class SitePackagesEventHandler(FileSystemEventHandler):
         from inotify can't each spawn their own timer.
         """
         is_di = self._is_dist_info(path)
-        # Tighter window for dist-info (actionable immediately), wider for noise
-        debounce_s = 0.005 if is_di else 0.05
+        # dist-info: wait for pip's full uninstall→temp→rename sequence to settle
+        # other:     wider window to absorb noisy __pycache__ / .pth bursts
+        debounce_s = _DIST_INFO_DEBOUNCE_S if is_di else _OTHER_DEBOUNCE_S
 
         with self._debounce_lock:
             # Accumulate .dist-info dirs only — they carry name+version for free
@@ -455,12 +472,16 @@ class SitePackagesEventHandler(FileSystemEventHandler):
     on_modified = _handle
 
     def on_moved(self, event):
-        # Moves happen when pip writes .tmp then renames — treat dest as created
+        # pip pattern: write ~pkg-x.y.z.dist-info (temp) → rename to pkg-x.y.z.dist-info
+        # We only care about the FINAL rename destination, not the temp src.
+        # _is_relevant() already filters ~ names so src fires are silently dropped.
         if self._is_our_write():
             return
         if self._is_relevant(event.dest_path):
             self._schedule_invalidation(event.dest_path, created=True)
-        if self._is_relevant(event.src_path):
+        # src: only fire deleted if it was a real dist-info (not a ~ temp rename)
+        src_name = Path(event.src_path).name
+        if not src_name.startswith("~") and self._is_relevant(event.src_path):
             self._schedule_invalidation(event.src_path, created=False)
 
 

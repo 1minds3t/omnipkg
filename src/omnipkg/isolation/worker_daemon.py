@@ -905,6 +905,19 @@ try:
             _wpos.close(_wp_dn)
         _UV_FFI_RUN = _uv_ffi_run
         globals()['_UV_FFI_RUN'] = _uv_ffi_run
+        # ── Populate Rust site-packages cache immediately after warm-up ──
+        # pip freeze only warms the Tokio runtime — it does NOT populate the
+        # cache. patch_cache returns False until the cache has been seeded.
+        # We call get_site_packages_cache() here to force the initial scan
+        # so patch_cache works correctly from the very first message.
+        try:
+            from omnipkg._vendor.uv_ffi import get_site_packages_cache as _gspc
+            _gspc()
+            sys.stderr.write('[WORKER-PRELOAD] ✅ site-packages cache populated' + chr(10))
+            sys.stderr.flush()
+        except Exception as _gsp_ex:
+            sys.stderr.write('[WORKER-PRELOAD] cache populate skipped: ' + str(_gsp_ex) + chr(10))
+            sys.stderr.flush()
         # ── FIX 1: wire FFI onto the pre-warmed core object so that
         # core._run_pip_install() can find it via getattr(self, '_uv_ffi_run', None)
         # instead of crashing with AttributeError, which kills the worker and
@@ -1144,9 +1157,12 @@ try:
                 _inst_t = [tuple(x) for x in _inst]
                 _rem_t  = [tuple(x) for x in _rem]
                 _patched = _pspc(_inst_t, _rem_t)
-                sys.stderr.write(f'[RUN-UV] patch_cache: patched={_patched} inst={_inst_t} rem={_rem_t}\\n')
-            except Exception as _pc_ex:
-                sys.stderr.write(f'[RUN-UV] patch_cache failed: {_pc_ex}\\n')
+                if _patched:
+                    sys.stderr.write(f'[RUN-UV] patch_cache: ✅ patched inst={_inst_t} rem={_rem_t}\\n')
+                else:
+                    # False = cache not yet populated (no run() call yet on this worker)
+                    # This is normal on a fresh worker — cache populates on first install
+                    sys.stderr.write(f'[RUN-UV] patch_cache: skipped (cache not yet populated) inst={_inst_t} rem={_rem_t}\\n')
             except Exception as _pc_ex:
                 sys.stderr.write(f'[RUN-UV] patch_cache failed: {_pc_ex}\\n')
             sys.stderr.flush()
@@ -2950,6 +2966,7 @@ class WorkerPoolDaemon:
         self.uv_workers: Dict[str, "PersistentWorker"] = {}
         self.uv_worker_locks: Dict[str, threading.Lock] = defaultdict(threading.Lock)
         self._uv_last_install_ts: Dict[str, float] = {}  # py_exe → monotonic time of last completed install
+        self._UV_WORKER_IDLE_TIMEOUT = 86400.0  # 1 day — lazy respawn ~130ms, fine for infrequent use
         # ────────────────────────────────────────────────────────────────────
 
         self.running = True
@@ -3148,6 +3165,19 @@ class WorkerPoolDaemon:
                             safe_print(f"   ⚠️ [DAEMON] Failed to spawn idle worker for {python_exe}: {e}", file=sys.stderr)
                             # Avoid tight loop on failure
                             time.sleep(1.0)
+            except Exception:
+                pass
+            # Reap UV workers idle longer than 1 day
+            try:
+                _now = time.monotonic()
+                for _py_exe in list(self.uv_workers.keys()):
+                    _last = self._uv_last_install_ts.get(_py_exe, 0.0)
+                    if _now - _last > self._UV_WORKER_IDLE_TIMEOUT:
+                        _w = self.uv_workers.pop(_py_exe, None)
+                        if _w is not None:
+                            try: _w.force_shutdown()
+                            except Exception: pass
+                        safe_print(f"[RUN-UV] reaped idle UV worker for {_py_exe} (idle >1d)", file=sys.stderr)
             except Exception:
                 pass
             time.sleep(0.5)
@@ -3640,30 +3670,8 @@ class WorkerPoolDaemon:
                     except Exception:
                         pass
 
-                # ── CLI workers (idle pool) — same patch_cache handler, just never got sent one ──
-                for py_exe, pool in list(self.idle_pools.items()):
-                    try:
-                        worker_sp = _resolve_target_paths(self.cm, py_exe).get("site_packages_path")
-                        if sp_path is not None and worker_sp != sp_path:
-                            continue
-                        # Snapshot pool contents non-destructively
-                        items = []
-                        while not pool.empty():
-                            try: items.append(pool.get_nowait())
-                            except: break
-                        for w in items:
-                            try: pool.put_nowait(w)
-                            except: pass
-                        for w in items:
-                            try:
-                                w.process.stdin.write(patch_msg)
-                                w.process.stdin.flush()
-                                forwarded += 1
-                            except Exception:
-                                pass
-                    except Exception:
-                        pass
-
+                # CLI workers (idle_pools) excluded from patch_cache.
+               # They have no uv_ffi — only UV workers need cache coherency.
                 if forwarded:
                     safe_print(
                         f"[FS-WATCHER] External change — patched {forwarded} UV worker(s) "
@@ -4150,6 +4158,15 @@ class WorkerPoolDaemon:
                         # Fire in a daemon thread so we don't hold the UV lock.
                         def _install_ffi_bg(py_exe=python_exe):
                             try:
+                                # Only install if genuinely missing — never reinstall a live .so
+                                # Reinstalling mid-flight corrupts memory-mapped .so in other workers
+                                try:
+                                    import omnipkg._vendor.uv_ffi as _chk
+                                    safe_print(f"[RUN-UV] uv_ffi already present — skipping auto-install",
+                                            file=sys.stderr)
+                                    return  # already installed, nothing to do
+                                except ImportError:
+                                    pass  # genuinely missing, proceed with install
                                 import subprocess as _isp, shutil as _ish
                                 _uv = _ish.which("uv") or "uv"
                                 _r = _isp.run(

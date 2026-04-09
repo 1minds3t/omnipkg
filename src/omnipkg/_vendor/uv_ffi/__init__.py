@@ -33,3 +33,6 @@ if _invalidate is not None:
 _patch = _try_import('patch_site_packages_cache')
 if _patch is not None:
     patch_site_packages_cache = _patch
+_gspc = _try_import('get_site_packages_cache')
+if _gspc is not None:
+    get_site_packages_cache = _gspc

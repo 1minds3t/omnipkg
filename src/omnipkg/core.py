@@ -15514,6 +15514,15 @@ print(json.dumps(results))
         if not hasattr(self, "_uv_exe_cached"):
             import shutil as _shutil_init
             _exe = self.config.get("uv_executable") or _shutil_init.which("uv") or ""
+            # Heal bare name (e.g. "uv") that fails os.path.exists() — resolve via PATH
+            if _exe and not os.path.isabs(_exe):
+                _exe = _shutil_init.which(_exe) or _exe
+            # If still not found, try to find uv bundled next to the python executable
+            if not _exe or not os.path.exists(_exe):
+                import sys as _sys
+                _bundled = os.path.join(os.path.dirname(_sys.executable), "uv")
+                if os.path.exists(_bundled):
+                    _exe = _bundled
             self._uv_exe_cached = _exe if (_exe and os.path.exists(_exe)) else ""
             import tempfile as _tf
             _default_cache = (
@@ -15593,7 +15602,24 @@ print(json.dumps(results))
             else:
                 safe_print(f"[UV-PATH] FFI skipped (unavailable or --target) — trying daemon", file=sys.stderr)
 
-            # ── PATH 2: daemon run_uv (~IPC overhead) ──────────────────
+            # ── TARGET BYPASS: subprocess uv only, never daemon for --target ──
+            # Daemon UV FFI worker state is tied to main site-packages and corrupts
+            # host env when processing --target installs. Subprocess uv is safe.
+            if "--target" in _uv_args:
+                safe_print(f"[UV-PATH] --target — subprocess uv (daemon bypass)", file=sys.stderr)
+                try:
+                    import subprocess as _sp
+                    _t0 = time.perf_counter()
+                    _sp_result = _sp.run([uv_exe] + _uv_args, capture_output=True, text=True, timeout=120)
+                    _sp_ms = (time.perf_counter() - _t0) * 1000
+                    safe_print(f"[UV-TIMING] subprocess-target: {_sp_ms:.2f}ms rc={_sp_result.returncode}", file=sys.stderr)
+                    if _sp_result.stdout: safe_print(_sp_result.stdout, end="")
+                    if _sp_result.stderr: safe_print(_sp_result.stderr, end="", file=sys.stderr)
+                    return _sp_result.returncode, {"stdout": _sp_result.stdout, "stderr": _sp_result.stderr}
+                except Exception as _sp_ex:
+                    safe_print(f"[UV-PATH] subprocess-target failed ({_sp_ex}) — falling through", file=sys.stderr)
+
+            # ── PATH 2: daemon run_uv (~IPC overhead) ──────────────
             _t0 = time.perf_counter()
             try:
                 from omnipkg.isolation.worker_daemon import DaemonClient
