@@ -6,7 +6,7 @@
 #
 aiohappyeyeballs==2.6.1
     # via aiohttp
-aiohttp==3.13.3 ; python_version >= "3.9"
+aiohttp==3.13.5 ; python_version >= "3.9"
     # via omnipkg (pyproject.toml)
 aiosignal==1.4.0
     # via aiohttp
@@ -108,7 +108,7 @@ pygments==2.19.2
     # via rich
 pyparsing==3.3.2
     # via pip-requirements-parser
-requests==2.32.5
+requests==2.33.1
     # via
     #   cachecontrol
     #   omnipkg (pyproject.toml)
@@ -137,6 +137,8 @@ urllib3==2.6.3 ; python_version >= "3.10"
     #   omnipkg (pyproject.toml)
     #   requests
 uv==0.10.11 ; python_version >= "3.8"
+    # via omnipkg (pyproject.toml)
+uv-ffi==0.10.8.post2 ; python_version >= "3.8" and python_version <= "3.14"
     # via omnipkg (pyproject.toml)
 werkzeug==3.1.6 ; python_version >= "3.9"
     # via
