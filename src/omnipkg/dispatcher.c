@@ -1209,21 +1209,33 @@ static int find_or_install_uv_ffi_so(
 #ifdef _WIN32
     if (!home) home = getenv("USERPROFILE");
 #endif
+    /* derive target interpreter prefix for ABI-correct .so lookup */
+    char _target_prefix[MAX_PATH] = {0};
+    {
+        char _tp_cmd[MAX_PATH * 2];
+        snprintf(_tp_cmd, sizeof(_tp_cmd),
+            ""%s" -c "import sys; print(sys.prefix)"", target_python);
+        FILE *_tp_fp = popen(_tp_cmd, "r");
+        if (_tp_fp) { fgets(_target_prefix, sizeof(_target_prefix), _tp_fp); pclose(_tp_fp); }
+        _target_prefix[strcspn(_target_prefix, "
+")] = 0;
+    }
+    const char *_search_root = _target_prefix[0] ? _target_prefix : venv_root;
     /* standard installed: uv_ffi/_native/ */
     snprintf(patterns[0], MAX_PATH,
-        "%s/lib/python3.*/site-packages/uv_ffi/_native/*.pyd", venv_root);
+        "%s/lib/python3.*/site-packages/uv_ffi/_native/*.pyd", _search_root);
     snprintf(patterns[1], MAX_PATH,
-        "%s/lib/python3.*/site-packages/uv_ffi/_native/*.so", venv_root);
+        "%s/lib/python3.*/site-packages/uv_ffi/_native/*.so", _search_root);
     /* flat install: uv_ffi/*.pyd / *.so */
     snprintf(patterns[2], MAX_PATH,
-        "%s/lib/python3.*/site-packages/uv_ffi/*.pyd", venv_root);
+        "%s/lib/python3.*/site-packages/uv_ffi/*.pyd", _search_root);
     snprintf(patterns[3], MAX_PATH,
-        "%s/lib/python3.*/site-packages/uv_ffi/*.so", venv_root);
+        "%s/lib/python3.*/site-packages/uv_ffi/*.so", _search_root);
     /* dev/vendor install: omnipkg/_vendor/uv_ffi/ */
     snprintf(patterns[4], MAX_PATH,
-        "%s/lib/python3.*/site-packages/omnipkg/_vendor/uv_ffi/*.pyd", venv_root);
+        "%s/lib/python3.*/site-packages/omnipkg/_vendor/uv_ffi/*.pyd", _search_root);
     snprintf(patterns[5], MAX_PATH,
-        "%s/lib/python3.*/site-packages/omnipkg/_vendor/uv_ffi/*.so", venv_root);
+        "%s/lib/python3.*/site-packages/omnipkg/_vendor/uv_ffi/*.so", _search_root);
     /* user local */
     snprintf(patterns[6], MAX_PATH,
         "%s/.local/lib/python3.*/site-packages/uv_ffi/_native/*.pyd",
