@@ -1038,12 +1038,7 @@ static void ffi_stamp_path(const char *python_exe, char *out, size_t n) {
     snprintf(out, n, "%s/omnipkg/ffi_ok/%lu.stamp", get_tmp_dir(), h);
 }
 
-static int ffi_stamp_exists(const char *python_exe) {
-    char stamp[MAX_PATH];
-    ffi_stamp_path(python_exe, stamp, sizeof(stamp));
-    struct stat st;
-    return stat(stamp, &st) == 0;
-}
+
 
 static void ffi_stamp_write(const char *python_exe) {
     char dir1[MAX_PATH], dir2[MAX_PATH];
@@ -1055,6 +1050,34 @@ static void ffi_stamp_write(const char *python_exe) {
     ffi_stamp_path(python_exe, stamp, sizeof(stamp));
     FILE *f = fopen(stamp, "w");
     if (f) { fputs(python_exe, f); fclose(f); }
+}
+
+static void ffi_stamp_write_so(const char *python_exe, const char *so_path) {
+    char dir1[MAX_PATH], dir2[MAX_PATH];
+    snprintf(dir1, sizeof(dir1), "%s/omnipkg", get_tmp_dir());
+    snprintf(dir2, sizeof(dir2), "%s/omnipkg/ffi_ok", get_tmp_dir());
+    mkdir_compat(dir1, 0755);
+    mkdir_compat(dir2, 0755);
+    char stamp[MAX_PATH];
+    ffi_stamp_path(python_exe, stamp, sizeof(stamp));
+    FILE *f = fopen(stamp, "w");
+    if (f) { fputs(so_path, f); fclose(f); }
+}
+
+static int ffi_stamp_exists(const char *python_exe) {
+    char stamp[MAX_PATH];
+    ffi_stamp_path(python_exe, stamp, sizeof(stamp));
+    struct stat st;
+    if (stat(stamp, &st) != 0) return 0;
+    /* read the .so path recorded in the stamp and verify it still exists */
+    FILE *f = fopen(stamp, "r");
+    if (!f) return 0;
+    char so_path[MAX_PATH] = {0};
+    fgets(so_path, sizeof(so_path), f);
+    fclose(f);
+    so_path[strcspn(so_path, "\n")] = 0;
+    if (so_path[0] == '/' && stat(so_path, &st) != 0) return 0;
+    return 1;
 }
 
 /*
@@ -1195,6 +1218,7 @@ static int find_or_install_uv_ffi_so(
                     so_path_out[so_path_n - 1] = '\0';
                     pclose(_pp);
                     if (debug) fprintf(stderr, "[C-DISPATCH] Found uv_ffi.so via Python: %s\n", so_path_out);
+                    ffi_stamp_write_so(target_python, so_path_out);
                     return 1;
                 }
             }
@@ -1250,6 +1274,7 @@ static int find_or_install_uv_ffi_so(
             so_path_out[so_path_n - 1] = '\0';
             globfree(&globbuf);
             if (debug) fprintf(stderr, "[C-DISPATCH] Found uv_ffi.so: %s\n", so_path_out);
+            ffi_stamp_write_so(target_python, so_path_out);
             return 1;
         }
         globfree(&globbuf);
@@ -1326,6 +1351,7 @@ static int find_or_install_uv_ffi_so(
             so_path_out[so_path_n - 1] = '\0';
             globfree(&globbuf);
             if (debug) fprintf(stderr, "[C-DISPATCH] uv_ffi.so post-install: %s\n", so_path_out);
+            ffi_stamp_write_so(target_python, so_path_out);
             return 1;
         }
         globfree(&globbuf);
