@@ -1736,6 +1736,10 @@ int main(int argc, char **argv) {
                 if (is_foreign) {
                     ensure_uv_ffi_for_python(target_python, venv_root,
                                              daemon_sock, debug);
+                    /* locate and stamp the .so so future calls skip install check */
+                    char _stamp_so[MAX_PATH];
+                    find_or_install_uv_ffi_so(venv_root, target_python,
+                                              _stamp_so, sizeof(_stamp_so));
                 }
             }
 

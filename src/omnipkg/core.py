@@ -6779,6 +6779,19 @@ class omnipkg:
                                     easy_pth.unlink()
                     except Exception:
                         pass
+                # === UV_FFI VERSION HEAL ===
+                uv_ffi_min = "0.10.8.post2"
+                uv_bin = str(Path(target_exe).parent / "uv")
+                chk = subprocess.run([uv_bin, "pip", "show", "--python", target_exe, "uv_ffi"], capture_output=True, text=True, timeout=15)
+                needs_upgrade = True
+                if chk.returncode == 0:
+                    for _line in chk.stdout.splitlines():
+                        if _line.startswith("Version:"):
+                            from packaging.version import Version
+                            if Version(_line.split(":",1)[1].strip()) >= Version(uv_ffi_min):
+                                needs_upgrade = False
+                if needs_upgrade:
+                    subprocess.run([uv_bin, "pip", "install", "--python", target_exe, f"uv_ffi>={uv_ffi_min}"], capture_output=True, text=True, timeout=30)
                 return (py_ver, result.returncode == 0)
 
             with concurrent.futures.ThreadPoolExecutor(max_workers=6) as executor:
