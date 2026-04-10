@@ -1150,7 +1150,7 @@ static int ensure_uv_ffi_for_python(
     }
 
     if (debug) fprintf(stderr, "[C-DISPATCH] uv_ffi installed for %s\n", target_python);
-    ffi_stamp_write(target_python);  /* fast path on all future calls */
+    /* stamp written by find_or_install_uv_ffi_so with verified .so path */
 
     /* Tell the daemon worker to reload its FFI handle for this interpreter.
      * Fire-and-forget via daemon_connect (handles tcp:// on Windows, unix:// on POSIX). */
