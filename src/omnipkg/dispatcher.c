@@ -1214,11 +1214,10 @@ static int find_or_install_uv_ffi_so(
     {
         char _tp_cmd[MAX_PATH * 2];
         snprintf(_tp_cmd, sizeof(_tp_cmd),
-            ""%s" -c "import sys; print(sys.prefix)"", target_python);
+            "\"%s\" -c \"import sys; print(sys.prefix)\"", target_python);
         FILE *_tp_fp = popen(_tp_cmd, "r");
         if (_tp_fp) { fgets(_target_prefix, sizeof(_target_prefix), _tp_fp); pclose(_tp_fp); }
-        _target_prefix[strcspn(_target_prefix, "
-")] = 0;
+        _target_prefix[strcspn(_target_prefix, "\n")] = 0;
     }
     const char *_search_root = _target_prefix[0] ? _target_prefix : venv_root;
     /* standard installed: uv_ffi/_native/ */
