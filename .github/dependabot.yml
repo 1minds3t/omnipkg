@@ -1,3 +1,14 @@
-ignore:
-  - dependency-name: "*"
-    update-types: ["version-update:semver-patch", "version-update:semver-minor", "version-update:semver-major"]
+version: 2
+updates:
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    ignore:
+      - dependency-name: "*"
+  - package-ecosystem: "pip"
+    directory: "/docker"
+    schedule:
+      interval: "monthly"
+    ignore:
+      - dependency-name: "*"

@@ -1038,12 +1038,7 @@ static void ffi_stamp_path(const char *python_exe, char *out, size_t n) {
     snprintf(out, n, "%s/omnipkg/ffi_ok/%lu.stamp", get_tmp_dir(), h);
 }
 
-static int ffi_stamp_exists(const char *python_exe) {
-    char stamp[MAX_PATH];
-    ffi_stamp_path(python_exe, stamp, sizeof(stamp));
-    struct stat st;
-    return stat(stamp, &st) == 0;
-}
+
 
 static void ffi_stamp_write(const char *python_exe) {
     char dir1[MAX_PATH], dir2[MAX_PATH];
@@ -1055,6 +1050,34 @@ static void ffi_stamp_write(const char *python_exe) {
     ffi_stamp_path(python_exe, stamp, sizeof(stamp));
     FILE *f = fopen(stamp, "w");
     if (f) { fputs(python_exe, f); fclose(f); }
+}
+
+static void ffi_stamp_write_so(const char *python_exe, const char *so_path) {
+    char dir1[MAX_PATH], dir2[MAX_PATH];
+    snprintf(dir1, sizeof(dir1), "%s/omnipkg", get_tmp_dir());
+    snprintf(dir2, sizeof(dir2), "%s/omnipkg/ffi_ok", get_tmp_dir());
+    mkdir_compat(dir1, 0755);
+    mkdir_compat(dir2, 0755);
+    char stamp[MAX_PATH];
+    ffi_stamp_path(python_exe, stamp, sizeof(stamp));
+    FILE *f = fopen(stamp, "w");
+    if (f) { fputs(so_path, f); fclose(f); }
+}
+
+static int ffi_stamp_exists(const char *python_exe) {
+    char stamp[MAX_PATH];
+    ffi_stamp_path(python_exe, stamp, sizeof(stamp));
+    struct stat st;
+    if (stat(stamp, &st) != 0) return 0;
+    /* read the .so path recorded in the stamp and verify it still exists */
+    FILE *f = fopen(stamp, "r");
+    if (!f) return 0;
+    char so_path[MAX_PATH] = {0};
+    fgets(so_path, sizeof(so_path), f);
+    fclose(f);
+    so_path[strcspn(so_path, "\n")] = 0;
+    if (so_path[0] == '/' && stat(so_path, &st) != 0) return 0;
+    return 1;
 }
 
 /*
@@ -1127,7 +1150,7 @@ static int ensure_uv_ffi_for_python(
     }
 
     if (debug) fprintf(stderr, "[C-DISPATCH] uv_ffi installed for %s\n", target_python);
-    ffi_stamp_write(target_python);  /* fast path on all future calls */
+    /* stamp written by find_or_install_uv_ffi_so with verified .so path */
 
     /* Tell the daemon worker to reload its FFI handle for this interpreter.
      * Fire-and-forget via daemon_connect (handles tcp:// on Windows, unix:// on POSIX). */
@@ -1195,6 +1218,7 @@ static int find_or_install_uv_ffi_so(
                     so_path_out[so_path_n - 1] = '\0';
                     pclose(_pp);
                     if (debug) fprintf(stderr, "[C-DISPATCH] Found uv_ffi.so via Python: %s\n", so_path_out);
+                    ffi_stamp_write_so(target_python, so_path_out);
                     return 1;
                 }
             }
@@ -1209,21 +1233,32 @@ static int find_or_install_uv_ffi_so(
 #ifdef _WIN32
     if (!home) home = getenv("USERPROFILE");
 #endif
+    /* derive target interpreter prefix for ABI-correct .so lookup */
+    char _target_prefix[MAX_PATH] = {0};
+    {
+        char _tp_cmd[MAX_PATH * 2];
+        snprintf(_tp_cmd, sizeof(_tp_cmd),
+            "\"%s\" -c \"import sys; print(sys.prefix)\"", target_python);
+        FILE *_tp_fp = popen(_tp_cmd, "r");
+        if (_tp_fp) { fgets(_target_prefix, sizeof(_target_prefix), _tp_fp); pclose(_tp_fp); }
+        _target_prefix[strcspn(_target_prefix, "\n")] = 0;
+    }
+    const char *_search_root = _target_prefix[0] ? _target_prefix : venv_root;
     /* standard installed: uv_ffi/_native/ */
     snprintf(patterns[0], MAX_PATH,
-        "%s/lib/python3.*/site-packages/uv_ffi/_native/*.pyd", venv_root);
+        "%s/lib/python3.*/site-packages/uv_ffi/_native/*.pyd", _search_root);
     snprintf(patterns[1], MAX_PATH,
-        "%s/lib/python3.*/site-packages/uv_ffi/_native/*.so", venv_root);
+        "%s/lib/python3.*/site-packages/uv_ffi/_native/*.so", _search_root);
     /* flat install: uv_ffi/*.pyd / *.so */
     snprintf(patterns[2], MAX_PATH,
-        "%s/lib/python3.*/site-packages/uv_ffi/*.pyd", venv_root);
+        "%s/lib/python3.*/site-packages/uv_ffi/*.pyd", _search_root);
     snprintf(patterns[3], MAX_PATH,
-        "%s/lib/python3.*/site-packages/uv_ffi/*.so", venv_root);
+        "%s/lib/python3.*/site-packages/uv_ffi/*.so", _search_root);
     /* dev/vendor install: omnipkg/_vendor/uv_ffi/ */
     snprintf(patterns[4], MAX_PATH,
-        "%s/lib/python3.*/site-packages/omnipkg/_vendor/uv_ffi/*.pyd", venv_root);
+        "%s/lib/python3.*/site-packages/omnipkg/_vendor/uv_ffi/*.pyd", _search_root);
     snprintf(patterns[5], MAX_PATH,
-        "%s/lib/python3.*/site-packages/omnipkg/_vendor/uv_ffi/*.so", venv_root);
+        "%s/lib/python3.*/site-packages/omnipkg/_vendor/uv_ffi/*.so", _search_root);
     /* user local */
     snprintf(patterns[6], MAX_PATH,
         "%s/.local/lib/python3.*/site-packages/uv_ffi/_native/*.pyd",
@@ -1239,6 +1274,7 @@ static int find_or_install_uv_ffi_so(
             so_path_out[so_path_n - 1] = '\0';
             globfree(&globbuf);
             if (debug) fprintf(stderr, "[C-DISPATCH] Found uv_ffi.so: %s\n", so_path_out);
+            ffi_stamp_write_so(target_python, so_path_out);
             return 1;
         }
         globfree(&globbuf);
@@ -1315,6 +1351,7 @@ static int find_or_install_uv_ffi_so(
             so_path_out[so_path_n - 1] = '\0';
             globfree(&globbuf);
             if (debug) fprintf(stderr, "[C-DISPATCH] uv_ffi.so post-install: %s\n", so_path_out);
+            ffi_stamp_write_so(target_python, so_path_out);
             return 1;
         }
         globfree(&globbuf);
@@ -1699,6 +1736,10 @@ int main(int argc, char **argv) {
                 if (is_foreign) {
                     ensure_uv_ffi_for_python(target_python, venv_root,
                                              daemon_sock, debug);
+                    /* locate and stamp the .so so future calls skip install check */
+                    char _stamp_so[MAX_PATH];
+                    find_or_install_uv_ffi_so(venv_root, target_python,
+                                              _stamp_so, sizeof(_stamp_so));
                 }
             }
 
