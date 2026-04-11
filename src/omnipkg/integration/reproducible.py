@@ -2041,9 +2041,17 @@ def sync_lock(
                     print(f"  Skipping Python {ver}.")
                     continue
 
-        # Skip if already matches lock
-        if _interp_matches_lock(py_path, active):
+        # === PER-PYTHON SHA SKIP (fast path — no subprocess) ===
+        _plat = meta.get("platform", platform.system())
+        _py_sha = _per_python_sha(ver, active, bubbles, _plat)
+        if _per_python_sha_check(lock_path, ver, _py_sha):
+            print(f"  ✅ Python {ver} already synced (SHA match) — skipping.")
+            continue
+
+        # Skip if already matches lock (slower live pip freeze check)
+        if _interp_matches_lock(py_path, active, bubbles):
             print(f"  ✅ Python {ver} already matches lock — skipping.")
+            _per_python_sha_write(lock_path, ver, _py_sha)  # cache for next run
             continue
 
         print(f"\n  🧹 Clearing site-packages: {sp_path}")
@@ -2101,6 +2109,7 @@ def sync_lock(
                     _run_cmd([f"8pkg{short}", "install", f"{pkg}=={bver}"], check=False)
 
         print(f"\n  ✅ Python {ver} synced.")
+        _per_python_sha_write(lock_path, ver, _py_sha)
 
     # Stop daemon only after all shim calls are done — keeping it alive during
     # the loop prevents execv fallback on adopt/bubble/doctor calls.
@@ -2122,26 +2131,69 @@ def sync_lock(
 
 # ── sync helpers ──────────────────────────────────────────────────────────────
 
-def _interp_matches_lock(py_path: Path, active: dict) -> bool:
-    """Returns True if the interpreter's installed packages match the lock active dict."""
+def _per_python_sha(ver: str, active: dict, bubbles: dict, plat: str) -> str:
+    """Compute a deterministic SHA for a single Python version's sync state."""
+    active_str = ",".join(f"{k}=={v}" for k, v in sorted(active.items()))
+    bubble_str = ";".join(
+        f"{k}:{','.join(sorted(vs))}" for k, vs in sorted(bubbles.items())
+    )
+    raw = f"{ver}|{plat}|{active_str}|{bubble_str}"
+    return hashlib.sha256(raw.encode()).hexdigest()[:16]
+
+def _per_python_sha_path(lock_path: Path, ver: str) -> Path:
+    """Sidecar file path: <lock_dir>/per_python/<lock_stem>/<ver>.sha"""
+    return lock_path.parent / "per_python" / lock_path.stem / f"{ver}.sha"
+
+def _per_python_sha_check(lock_path: Path, ver: str, sha: str) -> bool:
+    """Returns True if the stored SHA matches — safe to skip this Python."""
     try:
-        r = subprocess.run(
-            [str(py_path), "-m", "pip", "freeze"],
-            capture_output=True, text=True, timeout=30,
-        )
-        if r.returncode != 0:
+        p = _per_python_sha_path(lock_path, ver)
+        return p.exists() and p.read_text().strip() == sha
+    except Exception:
+        return False
+
+def _per_python_sha_write(lock_path: Path, ver: str, sha: str) -> None:
+    """Write SHA sidecar after a successful sync."""
+    try:
+        p = _per_python_sha_path(lock_path, ver)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(sha)
+    except Exception:
+        pass  # non-fatal — just means next run won't skip
+
+def _interp_matches_lock(py_path: Path, active: dict, bubbles: dict | None = None) -> bool:
+    """
+    FS-based check — no pip subprocess.
+    Scans dist-info for active packages and .omnipkg_versions/ for bubbles.
+    pip freeze is intentionally NOT used: it is blind to omnipkg bubble structure.
+    """
+    try:
+        sp = _site_packages_for(py_path)
+        if not sp or not sp.exists():
             return False
-        installed = {}
-        for line in r.stdout.splitlines():
-            if "==" in line:
-                k, v = line.split("==", 1)
-                installed[k.lower().replace("-", "_")] = v.strip()
-        _SKIP = {"omnipkg", "pip", "setuptools", "wheel", "pkg_resources"}
+
+        _SKIP = {"omnipkg", "pip", "setuptools", "wheel", "pkg-resources", "pkg_resources"}
+
+        # ── active packages: scan dist-info on fs ────────────────────────────
+        installed = _scan_active_from_fs(sp)
         for pkg, ver in active.items():
-            if pkg.lower().replace("-", "_") in _SKIP:
+            norm = re.sub(r"[-_.]+", "-", pkg).lower()
+            if norm in _SKIP:
                 continue
-            if installed.get(pkg.lower().replace("-", "_")) != ver:
+            if installed.get(norm) != ver:
                 return False
+
+        # ── bubbles: scan .omnipkg_versions/ on fs ───────────────────────────
+        if bubbles:
+            mv_base = sp / ".omnipkg_versions"
+            installed_bubbles = _scan_bubbles_from_fs(mv_base)
+            for pkg, versions in bubbles.items():
+                norm = re.sub(r"[-_.]+", "-", pkg).lower()
+                installed_vers = set(installed_bubbles.get(norm, []))
+                for bver in versions:
+                    if bver not in installed_vers:
+                        return False
+
         return True
     except Exception:
         return False
@@ -2216,6 +2268,13 @@ def _install_with_skip_fallback(py_path: Path, pkgs: list[str]) -> None:
     skipped: list[str] = []
 
     while remaining:
+        import glob as _glob, os as _os
+        _sp = Path(py_path).parent.parent / "lib"
+        _egg_paths = _glob.glob(str(_sp / "python*/site-packages/pip-*.egg"))
+        _env = _os.environ.copy()
+        if _egg_paths:
+            _existing = _env.get("PYTHONPATH", "")
+            _env["PYTHONPATH"] = _os.pathsep.join(_egg_paths + ([_existing] if _existing else []))
         cmd = [str(py_path), "-m", "pip", "install", "--no-deps", "--no-cache-dir"] + remaining
         print(f"  $ {' '.join(cmd[:4])} ... ({len(remaining)} packages)")
 
@@ -2225,7 +2284,7 @@ def _install_with_skip_fallback(py_path: Path, pkgs: list[str]) -> None:
             cmd,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            text=True, encoding="utf-8", errors="replace",
+            text=True, encoding="utf-8", errors="replace", env=_env,
         )
         assert proc.stdout is not None
         assert proc.stderr is not None
