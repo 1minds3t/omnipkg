@@ -15,6 +15,12 @@ def run(cmd: str) -> tuple:
 
 run_capture = run
 
+try:
+    from importlib.metadata import version as _meta_version
+    __version__ = _meta_version("uv_ffi")
+except Exception:
+    __version__ = "unknown"
+
 # ── Optional exports: present only if the .so was built with them ────────────
 # Imported lazily so that an older .so without these functions doesn't cause
 # an ImportError on the whole module and break FFI availability detection.
