@@ -497,10 +497,15 @@ def verify_bubble_with_smart_strategy(
         # dist-info present but no binary — fall through to normal verification
         # (pure-Python package whose dist-info happened to match the glob)
 
+    # Normalize name both ways — uv installs with underscores (cuda_core) but
+    # package_name may use hyphens (cuda-core). Discover everything in staging
+    # and filter after, rather than filtering by name upfront and missing it.
     all_dists = gatherer._discover_distributions(
-        targeted_packages=[f"{package_name}=={version}"],
+        targeted_packages=None,
         search_path_override=str(staging_path)
     )
+    # Filter to only packages that belong to this install (staging has exactly
+    # what uv put there — no need to be strict, just verify what's present)
     strategy = SmartVerificationStrategy(parent_omnipkg, gatherer)
     success, results = strategy.verify_packages_in_staging(
         staging_path,
