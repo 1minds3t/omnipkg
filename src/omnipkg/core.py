@@ -81,6 +81,17 @@ except ImportError:
 
 SUPPORTED_IMPLEMENTATIONS = {"cpython"}  # Future: add "pypy", "graalpy", etc.
 
+# ─────────────────────────────────────────────────────────────────────────────
+# DEBUG HELPER — use everywhere instead of bare print(..., file=sys.stderr)
+# Set OMNIPKG_DEBUG=1 in environment to enable.
+# ─────────────────────────────────────────────────────────────────────────────
+_DBG = os.environ.get("OMNIPKG_DEBUG", "0") == "1"
+
+def _dbg(msg: str):
+    """Lightweight debug printer; no-op unless OMNIPKG_DEBUG=1."""
+    if _DBG:
+        print(f"[DEBUG-CORE] {msg}", file=sys.stderr, flush=True)
+
 def _get_dynamic_omnipkg_version():
     """
     Gets the omnipkg version, prioritizing pyproject.toml in developer mode.
@@ -6652,8 +6663,12 @@ class omnipkg:
 
         # === CRITICAL SAFETY CHECK ===
         # ONLY the native interpreter can update itself
+        
         native_needs_sync = False
         native_was_synced = False
+        _sync_marker = native_exe.parent / f".omnipkg_synced_{master_version}"
+        if _sync_marker.exists():
+            return  # already synced this version, nothing to do
 
         if is_current_native:
             # We ARE the native interpreter - check if we need sync
@@ -6727,6 +6742,13 @@ class omnipkg:
                     native_was_synced = True
                     native_sync_duration = time.perf_counter() - native_sync_start
                     safe_print(f"   ⏱️  Native sync completed in {native_sync_duration:.2f}s")
+                    try:
+                        _sync_marker.touch()
+                        for _old in native_exe.parent.glob(".omnipkg_synced_*"):
+                            if _old != _sync_marker:
+                                _old.unlink(missing_ok=True)
+                    except Exception:
+                        pass
             finally:
                 try:
                     Path(sync_script_path).unlink()
@@ -6740,6 +6762,9 @@ class omnipkg:
             safe_print(_('🔄 Syncing {} to v{}...').format(versions_to_sync, master_version))
 
             def sync_interpreter(py_ver, target_exe):
+                _marker = Path(target_exe).parent / f".omnipkg_synced_{master_version}"
+                if _marker.exists():
+                    return (py_ver, True)
                 # Detect egg-based pip (e.g. pip 20.2.2 on Python 3.7)
                 # and inject it into PYTHONPATH so -m pip works in subprocess
                 import glob, os
@@ -6762,6 +6787,13 @@ class omnipkg:
                 result = subprocess.run(heal_cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=60, env=env)
                 if result.returncode == 0:
                     try:
+                        _marker.touch()
+                        for _old in Path(target_exe).parent.glob(".omnipkg_synced_*"):
+                            if _old != _marker:
+                                _old.unlink(missing_ok=True)
+                    except Exception:
+                        pass
+                    try:
                         sp_path = Path(target_exe).parent.parent / "lib"
                         import glob as _glob
                         for sp_dir in _glob.glob(str(sp_path / "python*/site-packages")):
@@ -6779,19 +6811,43 @@ class omnipkg:
                                     easy_pth.unlink()
                     except Exception:
                         pass
-                # === UV_FFI VERSION HEAL ===
-                uv_ffi_min = "0.10.8.post2"
-                uv_bin = str(Path(target_exe).parent / "uv")
-                chk = subprocess.run([uv_bin, "pip", "show", "--python", target_exe, "uv_ffi"], capture_output=True, text=True, timeout=15)
+                # Read uv_ffi min version from pyproject.toml once, in main process
+                _uv_ffi_min = "0.10.8.post2"  # fallback
+                try:
+                    import tomllib as _toml
+                except ImportError:
+                    try:
+                        import tomli as _toml
+                    except ImportError:
+                        _toml = None
+                if _toml is not None:
+                    try:
+                        _pyproject = Path(__file__).parent.parent.parent / "pyproject.toml"
+                        if _pyproject.exists():
+                            _data = _toml.loads(_pyproject.read_text())
+                            for _dep in _data.get("project", {}).get("dependencies", []):
+                                if "uv_ffi" in _dep:
+                                    import re as _re
+                                    _m = _re.search(r">=([0-9a-z.]+)", _dep)
+                                    if _m:
+                                        _uv_ffi_min = _m.group(1)
+                                    break
+                    except Exception:
+                        pass
+                chk = subprocess.run([target_exe, "-m", "pip", "show", "uv_ffi"], capture_output=True, text=True, timeout=15, env=env)
                 needs_upgrade = True
                 if chk.returncode == 0:
                     for _line in chk.stdout.splitlines():
                         if _line.startswith("Version:"):
                             from packaging.version import Version
-                            if Version(_line.split(":",1)[1].strip()) >= Version(uv_ffi_min):
+                            _installed = _line.split(":",1)[1].strip()
+                            _satisfies = Version(_installed) >= Version(_uv_ffi_min)
+                            if _satisfies:
                                 needs_upgrade = False
+                else:
+                    needs_upgrade = True
                 if needs_upgrade:
-                    subprocess.run([uv_bin, "pip", "install", "--python", target_exe, f"uv_ffi>={uv_ffi_min}"], capture_output=True, text=True, timeout=30)
+                    subprocess.run([target_exe, "-m", "pip", "install", "--upgrade", "--no-cache-dir", "-q", f"uv_ffi>={_uv_ffi_min}"], capture_output=True, text=True, timeout=60, env=env)
                 return (py_ver, result.returncode == 0)
 
             with concurrent.futures.ThreadPoolExecutor(max_workers=6) as executor:
@@ -7912,6 +7968,11 @@ class omnipkg:
             safe_print(
                 _('   -> 🔍 Found {} new/changed instance(s) that need to be registered.').format(len(instances_to_rebuild))
             )
+            if _DBG:
+                for _d in instances_to_rebuild:
+                    _p = os.path.realpath(str(getattr(_d, '_path', '')))
+                    safe_print(f"   -> [DBG] new instance: {_d.metadata.get('Name')}=={_d.version} path={_p}")
+
         if ghost_paths:
             safe_print(
                 _('   -> 👻 Found {} ghost instance(s) in the KB that no longer exist on disk.').format(len(ghost_paths))
@@ -7928,10 +7989,18 @@ class omnipkg:
             safe_print(f"   -> 🧠 Rebuilding KB for {len(instances_to_rebuild)} instance(s)...")
             gatherer.run(pre_discovered_distributions=instances_to_rebuild)
 
+        # Re-fetch index after gatherer.run() — it may have added new packages (e.g. numba-cuda)
+        index_key = f"{self.redis_env_prefix}index"
+        # smembers can miss members on large sets with hashtable encoding — use sscan
+        all_kb_packages = self.cache_client.smembers(index_key)
+
         if ghost_paths:
             keys_to_delete = [kb_path_map[path] for path in ghost_paths]
             if keys_to_delete:
                 safe_print(f"   -> 🗑️  Deleting {len(keys_to_delete)} ghost keys from the KB...")
+                if _DBG:
+                    for _gpath, _gkey in zip(ghost_paths, keys_to_delete):
+                        safe_print(f"   -> 🗑️  [DBG] {_gkey} (path: {_gpath})")
                 self.cache_client.delete(*keys_to_delete)
 
         if not instances_to_rebuild and not ghost_paths:
@@ -7947,14 +8016,22 @@ class omnipkg:
         # --- Repair active version mismatches (this logic stays the same) ---
         repairs_made = 0
         kb_active_versions = {}
-        index_key = f"{self.redis_env_prefix}index"
-        all_kb_packages = self.cache_client.smembers(index_key)
+        if _DBG:
+            safe_print(f"   -> [DBG] index_key={index_key!r} count={len(all_kb_packages)} sample={list(all_kb_packages)[:5]}")
+            numba_in_index = [k for k in all_kb_packages if 'numba' in k]
+            safe_print(f"   -> [DBG] numba entries in all_kb_packages: {numba_in_index}")
         for pkg_name in all_kb_packages:
             main_key = f"{self.redis_key_prefix}{pkg_name}"
             active_ver = self.cache_client.hget(main_key, "active_version")
+            if _DBG and 'numba' in pkg_name:
+                safe_print(f"   -> [DBG] KB LOOP: key={main_key!r} result={active_ver!r} prefix={self.redis_key_prefix!r}")
+            if _DBG and 'numba' in pkg_name:
+                safe_print(f"   -> [DBG] hget {main_key} active_version={active_ver!r}")
             if active_ver:
                 kb_active_versions[pkg_name] = active_ver
 
+        if _DBG:
+            safe_print(f"   -> [DBG] kb_active_versions after loop: { {k:v for k,v in kb_active_versions.items() if 'numba' in k} }")
         all_package_names = set(active_dists_on_disk.keys()) | set(kb_active_versions.keys())
 
         for pkg_name in sorted(list(all_package_names)):
@@ -7962,6 +8039,8 @@ class omnipkg:
             kb_version = kb_active_versions.get(pkg_name)
 
             if disk_version != kb_version:
+                if _DBG:
+                    safe_print(f"   -> [DBG] mismatch '{pkg_name}': disk={disk_version!r} kb={kb_version!r}")
                 if verbose:
                     safe_print(f"\n   - 💥 Inconsistency found for '{pkg_name}':")
                     safe_print(_('     - On Disk (Ground Truth): v{}').format(disk_version or 'Not Found'))
@@ -12430,6 +12509,25 @@ class omnipkg:
                                         item["version_staying_active"],
                                     )
                                 )
+                                # ── DEBUG: verify actual disk+cache state after bubble ──
+                                import subprocess as _dbg_sp
+                                _pkg = item["package"]
+                                _active_ver = item["version_staying_active"]
+                                _bubble_ver = item["version_to_bubble"]
+                                _sp_path = self.config.get("site_packages_path", "")
+                                _bubble_base = str(self.multiversion_base)
+                                _main_dist = os.path.join(_sp_path, f"{_pkg}-{_active_ver}.dist-info")
+                                _bubble_dist = os.path.join(_bubble_base, f"{_pkg}-{_bubble_ver}", f"{_pkg}-{_bubble_ver}.dist-info")
+                                _main_exists = os.path.exists(_main_dist)
+                                _bubble_exists = os.path.exists(_bubble_dist)
+                                _dbg(f"    [BUBBLE-DEBUG] main env:    {_pkg}=={_active_ver} dist-info exists={_main_exists} ({_main_dist})")
+                                _dbg(f"    [BUBBLE-DEBUG] bubble dir:  {_pkg}=={_bubble_ver} dist-info exists={_bubble_exists} ({_bubble_dist})")
+                                try:
+                                    from omnipkg._vendor.uv_ffi import get_site_packages_cache as _dbg_gspc
+                                    _cache_vers = [v for n,v in _dbg_gspc() if n.lower() == _pkg.lower()]
+                                    _dbg(f"    [BUBBLE-DEBUG] FFI cache:   {_pkg} versions={_cache_vers}")
+                                except Exception as _e:
+                                    _dbg(f"    [BUBBLE-DEBUG] FFI cache read failed: {_e}")
                             else:
                                 safe_print(
                                     "    ❌ Failed to bubble {} v{}".format(
@@ -15597,49 +15695,55 @@ print(json.dumps(results))
             if _py_exe and os.path.exists(_py_exe) and "--python" not in _uv_args:
                 _uv_args += ["--python", _py_exe]
             _uv_args += packages
-
-            print(f"[WALL-CORE] args-build+exists: {(time.perf_counter()-_t_wrapper_entry)*1000:.3f}ms", flush=True)
+            _dbg(f"[WALL-CORE] args-build+exists: {(time.perf_counter()-_t_wrapper_entry)*1000:.3f}ms")
             # ── PATH 1: FFI in-process ─────────────────────────────────
-            if self._uv_ffi_run is not None and "--target" not in _uv_args:
+            if self._uv_ffi_run is not None:
                 _ffi_cmd = " ".join(_uv_args)
                 import time as _t_imp
                 _t_pre_ffi = _t_imp.perf_counter()
                 safe_print(f"[UV-PATH] FFI in-process: uv {_ffi_cmd}", file=sys.stderr)
                 _t0 = _t_imp.perf_counter()
-                print(f"[WALL-CORE] pre-FFI overhead in wrapper: {(_t0-_t_pre_ffi)*1000:.3f}ms", flush=True)
+                _dbg(f"[WALL-CORE] pre-FFI overhead in wrapper: {(_t0-_t_pre_ffi)*1000:.3f}ms")
+                # ── DEBUG: snapshot site-packages before FFI call ──
+                _is_target_call = "--target" in _uv_args
+                _target_val = _uv_args[_uv_args.index("--target") + 1] if _is_target_call else None
+                try:
+                    from omnipkg._vendor.uv_ffi import get_site_packages_cache as _dbg_gspc
+                    _dbg_all_before = {n: v for n,v in _dbg_gspc()}
+                    _dbg_pkgs = [p.split("==")[0].split(">=")[0].split("<=")[0].strip().lower() for p in packages]
+                    _dbg_before_rel = {n: v for n,v in _dbg_all_before.items() if n.lower() in _dbg_pkgs}
+                    _dbg(f"[FFI-DEBUG] is_target={_is_target_call} target_dir={_target_val}")
+                    _dbg(f"[FFI-DEBUG] cache BEFORE (total={len(_dbg_all_before)}) relevant={_dbg_before_rel}")
+                except Exception as _dbg_e:
+                    _dbg(f"[FFI-DEBUG] cache read failed: {_dbg_e}")
                 try:
                     _ffi_rc, _ffi_installed, _ffi_removed = self._uv_ffi_run(_ffi_cmd)
                     _ffi_err = ""  # structured return — no stderr string
                     _ffi_ms = (time.perf_counter() - _t0) * 1000
+                    # ── DEBUG: snapshot after ──
+                    try:
+                        from omnipkg._vendor.uv_ffi import get_site_packages_cache as _dbg_gspc2
+                        _dbg_all_after = {n: v for n,v in _dbg_gspc2()}
+                        _dbg_after_rel = {n: v for n,v in _dbg_all_after.items() if n.lower() in _dbg_pkgs}
+                        _dbg_diff_added = {f"{n}=={v}" for n,v in _dbg_all_after.items()} - {f"{n}=={v}" for n,v in _dbg_all_before.items()}
+                        _dbg_diff_removed = {f"{n}=={v}" for n,v in _dbg_all_before.items()} - {f"{n}=={v}" for n,v in _dbg_all_after.items()}
+                        _dbg(f"[FFI-DEBUG] cache AFTER (total={len(_dbg_all_after)}) relevant={_dbg_after_rel}")
+                        if _is_target_call and _dbg_diff_added:
+                            _dbg(f"[FFI-DEBUG] ⚠️  TARGET INSTALL LEAKED INTO MAIN CACHE: {_dbg_diff_added}")
+                    except Exception as _dbg_e2:
+                        _dbg(f"[FFI-DEBUG] post-cache read failed: {_dbg_e2}")
                     # NOTE: stdout/stderr printing intentionally deferred to caller
                     # safe_print here costs 3-4ms over daemon socket — caller prints instead
-                    print(f"[UV-TIMING] FFI: {_ffi_ms:.2f}ms rc={_ffi_rc}", flush=True)
+                    _dbg(f"[UV-TIMING] FFI: {_ffi_ms:.2f}ms rc={_ffi_rc}")
                     _det = self._uv_failure_detector
                     if _ffi_rc == 0:
-                        return 0, {"stdout": "", "stderr": "", "ffi_installed": _ffi_installed, "ffi_removed": _ffi_removed, "from_ffi": True}
+                        return 0, {"stdout": "", "stderr": "", "ffi_installed": _ffi_installed, "ffi_removed": _ffi_removed, "from_ffi": True, "is_target": bool(target_directory)}
                     safe_print(f"   ⚠️  FFI failed (rc={_ffi_rc}) — trying daemon", file=sys.stderr)
                 except BaseException as _ffi_ex:
                     _ffi_ms = (time.perf_counter() - _t0) * 1000
                     safe_print(f"[UV-PATH] FFI error ({_ffi_ex}) after {_ffi_ms:.2f}ms — trying daemon", file=sys.stderr)
             else:
                 safe_print(f"[UV-PATH] FFI skipped (unavailable or --target) — trying daemon", file=sys.stderr)
-
-            # ── TARGET BYPASS: subprocess uv only, never daemon for --target ──
-            # Daemon UV FFI worker state is tied to main site-packages and corrupts
-            # host env when processing --target installs. Subprocess uv is safe.
-            if "--target" in _uv_args:
-                safe_print(f"[UV-PATH] --target — subprocess uv (daemon bypass)", file=sys.stderr)
-                try:
-                    import subprocess as _sp
-                    _t0 = time.perf_counter()
-                    _sp_result = _sp.run([uv_exe] + _uv_args, capture_output=True, text=True, timeout=120)
-                    _sp_ms = (time.perf_counter() - _t0) * 1000
-                    safe_print(f"[UV-TIMING] subprocess-target: {_sp_ms:.2f}ms rc={_sp_result.returncode}", file=sys.stderr)
-                    if _sp_result.stdout: safe_print(_sp_result.stdout, end="")
-                    if _sp_result.stderr: safe_print(_sp_result.stderr, end="", file=sys.stderr)
-                    return _sp_result.returncode, {"stdout": _sp_result.stdout, "stderr": _sp_result.stderr}
-                except Exception as _sp_ex:
-                    safe_print(f"[UV-PATH] subprocess-target failed ({_sp_ex}) — falling through", file=sys.stderr)
 
             # ── PATH 2: daemon run_uv (~IPC overhead) ──────────────
             _t0 = time.perf_counter()
@@ -17135,8 +17239,17 @@ print(json.dumps(results))
             try:
                 v_str = version(tool)
                 safe_print(_("🔒 {} v{} — jailed in main env (can't touch site-packages directly)").format(nickname, v_str))
-            except importlib.metadata.PackageNotFoundError:
-                safe_print(_("🔒 {} — not found in main env (good, one less troublemaker)").format(nickname))
+            except Exception as _outer_e:
+                try:
+                    import subprocess as _sp
+                    _r = _sp.run([tool, "--version"], capture_output=True, text=True, timeout=5)
+                    if _r.returncode == 0:
+                        _v = _r.stdout.strip().split()[-1]
+                        safe_print(_("🔒 {} v{} — jailed in main env (can't touch site-packages directly)").format(nickname, _v))
+                    else:
+                        safe_print(_("🔒 {} — not found in main env (good, one less troublemaker)").format(nickname))
+                except Exception as _e:
+                    safe_print(_("🔒 {} — not found in main env (good, one less troublemaker)").format(nickname))
         safe_print(_("\n🌍 Main Environment:"))
         site_packages = Path(self.config["site_packages_path"])
         active_packages_count = len(list(site_packages.glob("*.dist-info")))

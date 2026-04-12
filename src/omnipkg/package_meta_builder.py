@@ -2083,7 +2083,7 @@ class omnipkgMetadataGatherer:
                 pipe.hset(instance_key, mapping=flattened_data)
                 pipe.sadd(f"{main_key}:installed_versions", version_str)
                 pipe.sadd(f"{main_key}:{version_str}:instances", instance_hash)
-                pipe.sadd(index_key, package_name)
+                pipe.sadd(index_key, canonicalize_name(package_name))
                 pipe.hset(main_key, "name", package_name)
 
                 # vvvvvvvvv START OF NEW LOGIC vvvvvvvvv
