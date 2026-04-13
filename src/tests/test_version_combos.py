@@ -329,7 +329,7 @@ if __name__ == "__main__":
     run_combo_test()
 """
         try:
-            with open(temp_script_path, "w") as f:
+            with open(temp_script_path, "w", encoding="utf-8") as f:
                 f.write(temp_script_content)
 
             success, stdout, stderr = run_subprocess_with_output(
