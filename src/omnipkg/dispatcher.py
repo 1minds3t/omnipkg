@@ -547,13 +547,14 @@ def _install_binary_into_bin_dir(binary_tmp, target_bin, src_hash: str, debug: b
     replaced = []
     target_bin = Path(target_bin)
 
+    _exe = ".exe" if sys.platform == "win32" else ""
     for name in ("8pkg", "omnipkg", "OMNIPKG", "8PKG"):
-        target = target_bin / name
+        target = target_bin / (name + _exe)
         if target.exists():
             try:
                 shutil.copy2(str(binary_tmp), str(target))
                 os.chmod(str(target), 0o755)
-                replaced.append(str(target_bin / name))
+                replaced.append(str(target))
             except Exception as e:
                 if debug:
                     print(f"[C-INSTALL] could not replace {target}: {e}", file=sys.stderr)
