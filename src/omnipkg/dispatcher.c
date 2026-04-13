@@ -32,6 +32,7 @@
 #  include <process.h>
 #  include <sys/stat.h>
 #  include <stdio.h>   /* snprintf — must precede compat functions on MinGW */
+#  include <stdlib.h>  /* free/malloc — must precede win_globfree definition */
 
 /* ── Windows compat macros ── */
 #  undef MAX_PATH
