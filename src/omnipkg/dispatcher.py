@@ -548,8 +548,14 @@ def _install_binary_into_bin_dir(binary_tmp, target_bin, src_hash: str, debug: b
     target_bin = Path(target_bin)
 
     _exe = ".exe" if sys.platform == "win32" else ""
+    if debug:
+        print(f"[C-INSTALL] install: target_bin={target_bin} exists={target_bin.exists()}", file=sys.stderr)
+        print(f"[C-INSTALL] install: target_bin contents={list(target_bin.iterdir()) if target_bin.exists() else 'N/A'}", file=sys.stderr)
+        print(f"[C-INSTALL] install: binary_tmp={binary_tmp} exists={Path(binary_tmp).exists()}", file=sys.stderr)
     for name in ("8pkg", "omnipkg", "OMNIPKG", "8PKG"):
         target = target_bin / (name + _exe)
+        if debug:
+            print(f"[C-INSTALL] install: checking {target} exists={target.exists()}", file=sys.stderr)
         if target.exists():
             try:
                 shutil.copy2(str(binary_tmp), str(target))
