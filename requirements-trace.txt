@@ -106,7 +106,7 @@ py-serializable==2.1.0
     # via cyclonedx-python-lib
 pycparser==3.0
     # via cffi
-pygments==2.20.0
+pygments==2.20.0 ; python_version >= "3.9"
     # via
     #   omnipkg (pyproject.toml)
     #   rich
