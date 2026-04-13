@@ -2732,7 +2732,7 @@ class PersistentWorker:
         code: str,
         shm_in: Dict[str, Any],
         shm_out: Dict[str, Any],
-        timeout: float = 30.0,
+        timeout: float = 240.0,
     ) -> Dict[str, Any]:
         """Execute task with timeout."""
         with self.lock:
@@ -3766,24 +3766,18 @@ class WorkerPoolDaemon:
         try:
             pool = self.idle_pools.get(python_exe)
             if pool:
-                # Prefer warm workers — scan pool for one with _is_warm set
+                # Drain pool, prefer a warm worker, put the rest back
                 all_workers = []
-                warm_worker = None
                 while not pool.empty():
                     try:
-                        w = pool.get_nowait()
-                        if getattr(w, "_is_warm", False) and warm_worker is None:
-                            warm_worker = w
-                        else:
-                            all_workers.append(w)
+                        all_workers.append(pool.get_nowait())
                     except: break
-                # Put non-selected workers back
-                selected = warm_worker or (all_workers.pop(0) if all_workers else None)
+                # Sort: warm first
+                all_workers.sort(key=lambda w: 0 if getattr(w, "_is_warm", False) else 1)
+                selected = all_workers.pop(0) if all_workers else None
+                # Return unselected workers to pool
                 for w in all_workers:
                     try: pool.put_nowait(w)
-                    except: pass
-                if warm_worker:
-                    try: pool.put_nowait(warm_worker)  # temp
                     except: pass
                 worker = selected
                 if worker is None: raise queue.Empty()
@@ -3812,7 +3806,7 @@ class WorkerPoolDaemon:
         safe_print(f"[RUN-CLI] worker acquired in {(_t_got_worker-_t0)*1000:.2f}ms", file=sys.stderr)
 
         try:
-            safe_print(f"[RUN-CLI] sending req to worker", file=sys.stderr)
+            safe_print(f"[RUN-CLI] sending req to worker pid={worker.process.pid}", file=sys.stderr)
             worker.process.stdin.write(json.dumps(req) + "\n")
             worker.process.stdin.flush()
 
@@ -4006,10 +4000,13 @@ class WorkerPoolDaemon:
                         pass
                 if worker is not None:
                     worker.force_shutdown()
-            # Only replenish if pool is below configured target
+            # Only replenish if pool is STILL below configured target after recycling.
+            # Give recycled worker a moment to land in the queue before checking.
             _target = self.idle_config.get(python_exe, 0)
-            if self.idle_pools[python_exe].qsize() < _target:
-                self._replenish_idle_pool(python_exe)
+            if _target > 0:
+                time.sleep(0.02)  # let recycle put_nowait propagate
+                if self.idle_pools[python_exe].qsize() < _target:
+                    self._replenish_idle_pool(python_exe)
 
     def _run_uv(self, req: dict, conn: socket.socket):
         """
@@ -4317,7 +4314,7 @@ class WorkerPoolDaemon:
                     code,
                     shm_in,
                     shm_out,
-                    timeout=60.0,
+                    timeout=worker_info.get("task_timeout", int(os.environ.get("OMNIPKG_WORKER_TIMEOUT", 360))),
                 )
                 # ── IMMEDIATE EVICTION IF NESTED SWITCHING OCCURRED ────────
                 _has_tag = bool(worker_tag)
@@ -4359,7 +4356,7 @@ class WorkerPoolDaemon:
                             code,
                             shm_in,
                             shm_out,
-                            timeout=60.0,
+                            timeout=worker_info.get("task_timeout", int(os.environ.get("OMNIPKG_WORKER_TIMEOUT", 360))),
                         )
                         return result
                     except Exception as e:
@@ -4451,7 +4448,7 @@ class WorkerPoolDaemon:
                 code,
                 shm_in,
                 shm_out,
-                timeout=60.0,
+                timeout=worker_info.get("task_timeout", int(os.environ.get("OMNIPKG_WORKER_TIMEOUT", 360))),
             )
             return result
         except Exception as e:

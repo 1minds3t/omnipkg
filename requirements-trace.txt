@@ -106,8 +106,10 @@ py-serializable==2.1.0
     # via cyclonedx-python-lib
 pycparser==3.0
     # via cffi
-pygments==2.19.2
-    # via rich
+pygments==2.20.0
+    # via
+    #   omnipkg (pyproject.toml)
+    #   rich
 pyparsing==3.3.2
     # via pip-requirements-parser
 requests==2.33.1
