@@ -460,8 +460,47 @@ def _maybe_install_c_dispatcher():
     if debug:
         print(f"[C-INSTALL] compiling: {compiler_cmd}", file=sys.stderr)
 
+    # Build env with MSVC include/lib paths when cl.exe is the compiler.
+    # This reconstructs what vcvarsall.bat does, so the user doesn't need
+    # a Developer Command Prompt — cl.exe works from any shell.
+    compile_env = os.environ.copy()
+    if sys.platform == "win32" and "cl" in (compiler or "").lower():
+        try:
+            cl_path = Path(compiler)
+            # cl.exe lives at: .../MSVC/<ver>/bin/HostX64/x64/cl.exe
+            msvc_root = cl_path.parent.parent.parent.parent
+            msvc_include = str(msvc_root / "include")
+            msvc_lib     = str(msvc_root / "lib" / "x64")
+            sdk_includes, sdk_libs = [], []
+            sdk_base = Path(r"C:\Program Files (x86)\Windows Kits")
+            if not sdk_base.exists():
+                sdk_base = Path(r"C:\Program Files\Windows Kits")
+            if sdk_base.exists():
+                inc_base = sdk_base / "include"
+                lib_base = sdk_base / "lib"
+                sdk_versions = sorted(inc_base.iterdir(), reverse=True)
+                if sdk_versions:
+                    sdk_ver = sdk_versions[0]
+                    for sub in ("ucrt", "um", "shared"):
+                        p = sdk_ver / sub
+                        if p.exists():
+                            sdk_includes.append(str(p))
+                    lib_ver = lib_base / sdk_ver.name
+                    for sub in ("ucrt/x64", "um/x64"):
+                        p = lib_ver / sub.replace("/", os.sep)
+                        if p.exists():
+                            sdk_libs.append(str(p))
+            compile_env["INCLUDE"] = os.pathsep.join([msvc_include] + sdk_includes)
+            compile_env["LIB"]     = os.pathsep.join([msvc_lib] + sdk_libs)
+            if debug:
+                print(f"[C-INSTALL] MSVC INCLUDE={compile_env['INCLUDE']}", file=sys.stderr)
+                print(f"[C-INSTALL] MSVC LIB={compile_env['LIB']}", file=sys.stderr)
+        except Exception as e:
+            if debug:
+                print(f"[C-INSTALL] could not derive MSVC env: {e}", file=sys.stderr)
+
     try:
-        r = subprocess.run(compiler_cmd, capture_output=True, timeout=15)
+        r = subprocess.run(compiler_cmd, capture_output=True, timeout=15, env=compile_env)
         if debug:
             print(f"[C-INSTALL] compiler returncode={r.returncode}", file=sys.stderr)
             if r.stdout:
