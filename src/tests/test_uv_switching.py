@@ -30,9 +30,11 @@ except ImportError as e:
     sys.exit(1)
 
 # --- Test Configuration ---
-# Fallback version ONLY if uv is not installed at all.
-MAIN_UV_VERSION_FALLBACK = "0.9.5"  # A recent, known-good version
+MAIN_UV_VERSION_FALLBACK = "0.9.5"
 BUBBLE_VERSIONS_TO_TEST = ["0.4.30", "0.5.11"]
+
+# Platform-aware binary name
+UV_BIN_NAME = "uv.exe" if sys.platform == "win32" else "uv"
 
 
 def print_header(title):
@@ -42,20 +44,10 @@ def print_header(title):
 
 
 def parse_uv_version(version_output):
-    """
-    Parse uv version from output, handling different formats.
-    
-    Examples:
-    - "uv 0.4.30 (2024-11-04)" -> "0.4.30"
-    - "uv 0.5.11 (commit abc123)" -> "0.5.11"
-    - "0.10.2" -> "0.10.2"
-    """
-    # Split the output and look for version pattern (X.Y.Z)
     import re
     match = re.search(r'\b(\d+\.\d+\.\d+)\b', version_output)
     if match:
         return match.group(1)
-    # Fallback: return the whole thing
     return version_output.strip()
 
 
@@ -77,17 +69,28 @@ def run_command(command, check=True):
     )
 
 
-def setup_environment(omnipkg_core: OmnipkgCore):
+def find_uv_binary(bubble_path: Path) -> Path:
     """
-    (FLEXIBLE) Prepares the environment by detecting the existing `uv` version
-    or installing a safe fallback if it's missing.
+    Find the uv binary in a bubble's bin dir, handling Windows .exe extension.
+    Returns the Path if found, raises FileNotFoundError otherwise.
     """
-    print_header("STEP 1: Environment Setup & Cleanup")
+    bin_dir = bubble_path / "bin"
+    # Try exact platform name first, then case-insensitive glob as fallback
+    for candidate in [UV_BIN_NAME, "uv.EXE", "uv"]:
+        p = bin_dir / candidate
+        if p.exists():
+            return p
+    # Last resort: glob for anything named uv* in bin/
+    matches = list(bin_dir.glob("uv*"))
+    if matches:
+        return matches[0]
+    raise FileNotFoundError(f"No uv binary found in {bin_dir}")
 
-    # REMOVED: Cleanup of old demo bubbles
+
+def setup_environment(omnipkg_core: OmnipkgCore):
+    print_header("STEP 1: Environment Setup & Cleanup")
     safe_print("   ⚠️  Skipping cleanup - files will be preserved for inspection")
 
-    # --- THIS IS YOUR CORRECT, FLEXIBLE DETECTION LOGIC ---
     main_uv_version = None
     try:
         main_uv_version = get_version("uv")
@@ -100,7 +103,6 @@ def setup_environment(omnipkg_core: OmnipkgCore):
         )
         omnipkg_core.smart_install([f"uv=={MAIN_UV_VERSION_FALLBACK}"])
         main_uv_version = MAIN_UV_VERSION_FALLBACK
-    # --- END OF DETECTION LOGIC ---
 
     force_omnipkg_rescan(omnipkg_core, "uv")
     safe_print("✅ Environment prepared")
@@ -108,20 +110,14 @@ def setup_environment(omnipkg_core: OmnipkgCore):
 
 
 def create_test_bubbles(omnipkg_core: OmnipkgCore):
-    """
-    (CORRECTED) Create test bubbles for older UV versions using the
-    direct bubble creation method to bypass satisfaction checks.
-    """
     print_header("STEP 2: Creating Test Bubbles for Older Versions")
 
-    # Get the Python version string for the current context
     python_context_version = f"{sys.version_info.major}.{sys.version_info.minor}"
 
     for version in BUBBLE_VERSIONS_TO_TEST:
         bubble_name = f"uv-{version}"
         bubble_path = omnipkg_core.multiversion_base / bubble_name
 
-        # Only create if it doesn't already exist from a previous failed run
         if bubble_path.exists():
             safe_print(
                 f"   ✅ Bubble for uv=={version} already exists. Skipping creation."
@@ -130,15 +126,12 @@ def create_test_bubbles(omnipkg_core: OmnipkgCore):
 
         safe_print(f"   🫧 Force-creating bubble for uv=={version}...")
         try:
-            # --- THIS IS THE CRITICAL FIX ---
-            # Use the direct, forceful bubble creation method
             success = omnipkg_core.bubble_manager.create_isolated_bubble(
                 "uv", version, python_context_version=python_context_version
             )
 
             if success:
                 safe_print(_('   ✅ Bubble created: {}').format(bubble_name))
-                # Also ensure the KB knows about this new bubble
                 omnipkg_core.rebuild_package_kb([f"uv=={version}"])
             else:
                 safe_print(f"   ❌ Failed to create bubble for uv=={version}")
@@ -149,7 +142,6 @@ def create_test_bubbles(omnipkg_core: OmnipkgCore):
 
 
 def force_omnipkg_rescan(omnipkg_core, package_name):
-    """Tells omnipkg to forcibly rescan a specific package's metadata."""
     safe_print(f"   🧠 Forcing omnipkg KB rebuild for {package_name}...")
     try:
         omnipkg_core.rebuild_package_kb([package_name])
@@ -170,19 +162,21 @@ def inspect_bubble_structure(bubble_path):
     else:
         safe_print("   ⚠️  No dist-info found")
 
-    scripts_dir = bubble_path / "bin"
-    if scripts_dir.exists():
-        items = list(scripts_dir.iterdir())
+    bin_dir = bubble_path / "bin"
+    if bin_dir.exists():
+        items = list(bin_dir.iterdir())
         safe_print(f"   ✅ Found bin directory with {len(items)} items")
-        uv_bin = scripts_dir / "uv"
-        if uv_bin.exists():
-            safe_print(_('   ✅ Found uv binary: {}').format(uv_bin))
+        # Platform-aware binary check
+        try:
+            uv_bin = find_uv_binary(bubble_path)
+            safe_print(_('   ✅ Found uv binary: {}').format(uv_bin.name))
             if os.access(uv_bin, os.X_OK):
                 safe_print("   ✅ Binary is executable")
             else:
                 safe_print("   ⚠️  Binary is not executable")
-        else:
-            safe_print("   ⚠️  No uv binary in bin/")
+        except FileNotFoundError:
+            safe_print(f"   ⚠️  No uv binary found in bin/ (looked for {UV_BIN_NAME})")
+            safe_print(f"   📋 bin/ contents: {[x.name for x in items]}")
     else:
         safe_print("   ⚠️  No bin directory found")
 
@@ -200,14 +194,18 @@ def test_swapped_binary_execution(expected_version, config, omnipkg_core):
     safe_print("   🔧 Testing swapped binary execution via omnipkgLoader...")
 
     bubble_path = omnipkg_core.multiversion_base / f"uv-{expected_version}"
-    bubble_binary = bubble_path / "bin" / "uv"
+
+    # Platform-aware binary path
+    try:
+        bubble_binary = find_uv_binary(bubble_path)
+    except FileNotFoundError as e:
+        safe_print(f"   ❌ Cannot find bubble binary: {e}")
+        return False
 
     try:
         with omnipkgLoader(
             f"uv=={expected_version}", config=config, quiet=True, force_activation=True
         ):
-
-            # Debug: Show PATH and which binary is found
             path_entries = os.environ.get("PATH", "").split(os.pathsep)
             safe_print(_('   🔍 First 3 PATH entries: {}').format(path_entries[:3]))
             safe_print(_('   🔍 Which uv: {}').format(shutil.which('uv')))
@@ -244,7 +242,6 @@ def test_swapped_binary_execution(expected_version, config, omnipkg_core):
 
 
 def run_comprehensive_test():
-    """Main function to orchestrate the test with robust strategy and version handling."""
     print_header("🚨 OMNIPKG UV BINARY STRESS TEST (NO CLEANUP) 🚨")
 
     config_manager = None
@@ -275,14 +272,12 @@ def run_comprehensive_test():
         # Test Main Environment
         print_subheader(_('Testing Main Environment (uv=={})').format(main_uv_version_to_test))
         try:
-            # Use shutil.which to find uv in PATH (handles .exe on Windows)
             uv_binary_path = shutil.which("uv")
-            
+
             if not uv_binary_path:
-                # Fallback: try to construct path manually
                 python_exe = config_manager.config.get("python_executable", sys.executable)
                 scripts_dir = Path(python_exe).parent / ("Scripts" if sys.platform == "win32" else "bin")
-                uv_binary_path = scripts_dir / ("uv.exe" if sys.platform == "win32" else "uv")
+                uv_binary_path = scripts_dir / UV_BIN_NAME
                 if not uv_binary_path.exists():
                     raise FileNotFoundError(f"UV binary not found in {scripts_dir}")
 
@@ -331,7 +326,6 @@ def run_comprehensive_test():
         else:
             safe_print("\n🎉🎉🎉 ALL UV BINARY TESTS PASSED! 🎉🎉🎉")
 
-        # REMOVED: All cleanup code
         safe_print("\n📁 Bubble files preserved for inspection")
         safe_print(_('📍 Location: {}').format(omnipkg_core.multiversion_base))
 
@@ -342,7 +336,6 @@ def run_comprehensive_test():
         traceback.print_exc()
         return False
     finally:
-        # Only restore config, NO file cleanup
         if config_manager and original_strategy and original_strategy != "stable-main":
             safe_print(_('\n🔄 Restoring original install strategy: {}').format(original_strategy))
             config_manager.set("install_strategy", original_strategy)
