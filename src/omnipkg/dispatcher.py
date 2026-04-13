@@ -372,9 +372,9 @@ def _maybe_install_c_dispatcher():
             # vcvarsall not run — search common MSVC install paths directly
             import glob as _cgl
             _vs_patterns = [
-                r"C:\Program Files\Microsoft Visual Studio\*\*\VC\Tools\MSVC\*in\Hostx64d\cl.exe",
-                r"C:\Program Files (x86)\Microsoft Visual Studio\*\*\VC\Tools\MSVC\*in\Hostx64d\cl.exe",
-                r"C:\Program Files (x86)\Microsoft Visual Studio\*\*\VC\Tools\MSVC\*in\HostX86d\cl.exe",
+                "C:/Program Files/Microsoft Visual Studio/*/*/VC/Tools/MSVC/*/bin/Hostx64/x64/cl.exe",
+                "C:/Program Files (x86)/Microsoft Visual Studio/*/*/VC/Tools/MSVC/*/bin/Hostx64/x64/cl.exe",
+                "C:/Program Files (x86)/Microsoft Visual Studio/*/*/VC/Tools/MSVC/*/bin/HostX86/x64/cl.exe",
             ]
             for _pat in _vs_patterns:
                 _matches = _cgl.glob(_pat)
