@@ -472,9 +472,9 @@ def _maybe_install_c_dispatcher():
             msvc_include = str(msvc_root / "include")
             msvc_lib     = str(msvc_root / "lib" / "x64")
             sdk_includes, sdk_libs = [], []
-            sdk_base = Path(r"C:\Program Files (x86)\Windows Kits")
+            sdk_base = Path("C:/Program Files (x86)/Windows Kits/10")
             if not sdk_base.exists():
-                sdk_base = Path(r"C:\Program Files\Windows Kits")
+                sdk_base = Path("C:/Program Files/Windows Kits/10")
             if sdk_base.exists():
                 inc_base = sdk_base / "include"
                 lib_base = sdk_base / "lib"
