@@ -198,6 +198,10 @@ static void winsock_init(void) {
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#ifdef _WIN32
+#  define popen  _popen
+#  define pclose _pclose
+#endif
 #define MAX_PATH 4096
 #define MAX_VERSION 32
 #define MAX_JSON 65536   /* registry.json is tiny */
