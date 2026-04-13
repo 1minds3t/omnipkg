@@ -320,6 +320,12 @@ def _collect_all_dispatcher_bin_dirs() -> list:
             data = json.loads(registry.read_text(encoding="utf-8"))
             for py_exe in data.get("interpreters", {}).values():
                 adopted_bin = Path(py_exe).parent
+                # On Windows, managed interpreters have python.exe in root
+                # but shims live in Scripts/ — check both
+                if sys.platform == "win32":
+                    scripts_dir = adopted_bin / "Scripts"
+                    if scripts_dir.exists():
+                        adopted_bin = scripts_dir
                 if adopted_bin.resolve() != native_bin.resolve() and adopted_bin.exists():
                     dirs.append(adopted_bin)
     except Exception:
