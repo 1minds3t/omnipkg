@@ -6355,12 +6355,36 @@ class omnipkg:
             # === TIER 2: PATH-BASED SYNC CHECK (1-2ms) ===
             sync_needed = self._check_sync_status_ultra_fast(master_version_str)
 
-            if not sync_needed:
+            # Always collect ALL managed interpreters for uv_ffi check,
+            # even if omnipkg version is already current on all of them.
+            all_managed = []
+            try:
+                interp_dir = self.config_manager.venv_path / ".omnipkg" / "interpreters"
+                if interp_dir.exists():
+                    import glob as _iglob
+                    bin_sub = "Scripts" if platform.system() == "Windows" else "bin"
+                    for _idir in sorted(interp_dir.iterdir()):
+                        _bin = _idir / bin_sub
+                        if not _bin.exists():
+                            continue
+                        _py = next(
+                            (p for p in sorted(_bin.iterdir())
+                             if p.name.startswith("python3.") and p.suffix == "" and p.is_file()),
+                            None
+                        )
+                        if _py:
+                            import re as _re2
+                            _m = _re2.search(r"python(\d+\.\d+)", _py.name)
+                            if _m:
+                                all_managed.append((_m.group(1), str(_py)))
+            except Exception:
+                pass
+
+            if not sync_needed and not all_managed:
                 # Write cache for next time
                 self._write_heal_cache(
                     {"master_version": master_version_str, "timestamp": time.time()}
                 )
-
                 if "--verbose" in sys.argv or "-V" in sys.argv:
                     elapsed_ns = time.perf_counter_ns() - overall_start
                     elapsed_ms = elapsed_ns / 1_000_000
@@ -6368,6 +6392,12 @@ class omnipkg:
                         f"   ⚡ All interpreters in sync (checked in {elapsed_ms:.3f}ms, {elapsed_ns:,} ns)"
                     )
                 return
+
+            # Merge: sync_needed takes priority; add remaining from all_managed for uv_ffi-only check
+            sync_needed_exes = {exe for _, exe in sync_needed}
+            for ver, exe in all_managed:
+                if exe not in sync_needed_exes:
+                    sync_needed.append((ver, exe))
 
             # === TIER 3: HEALING REQUIRED (ONLY WHEN NECESSARY) ===
             # Extra safety: Warn on Windows
@@ -6667,10 +6697,15 @@ class omnipkg:
         native_needs_sync = False
         native_was_synced = False
         _sync_marker = native_exe.parent / f".omnipkg_synced_{master_version}"
-        if _sync_marker.exists():
-            return  # already synced this version, nothing to do
+        _native_already_synced = _sync_marker.exists()
+        if _native_already_synced and os.environ.get("OMNIPKG_DEBUG"):
+            safe_print(f"   [HEAL] Native marker exists for v{master_version}, skipping native sync only")
 
-        if is_current_native:
+        if _native_already_synced:
+            native_needs_sync = False
+            if os.environ.get("OMNIPKG_DEBUG"):
+                safe_print(f"   [HEAL] Native already at v{master_version}, skipping native sync")
+        elif is_current_native:
             # We ARE the native interpreter - check if we need sync
             try:
                 native_site_packages = site.getsitepackages()[0]
@@ -6763,8 +6798,11 @@ class omnipkg:
 
             def sync_interpreter(py_ver, target_exe):
                 _marker = Path(target_exe).parent / f".omnipkg_synced_{master_version}"
-                if _marker.exists():
-                    return (py_ver, True)
+                _already_synced = _marker.exists()
+                if _already_synced:
+                    # Still need to check uv_ffi even if omnipkg is already synced
+                    if os.environ.get("OMNIPKG_DEBUG"):
+                        safe_print(f"   [HEAL] {py_ver} omnipkg marker exists, checking uv_ffi only...")
                 # Detect egg-based pip (e.g. pip 20.2.2 on Python 3.7)
                 # and inject it into PYTHONPATH so -m pip works in subprocess
                 import glob, os
@@ -6811,6 +6849,25 @@ class omnipkg:
                                     easy_pth.unlink()
                     except Exception:
                         pass
+                # Clean up stale omnipkg dist-info dirs (leave only current version)
+                if result.returncode == 0:
+                    try:
+                        sp_path = Path(target_exe).parent.parent / "lib"
+                        import glob as _glob2
+                        for sp_dir in _glob2.glob(str(sp_path / "python*/site-packages")):
+                            sp_dir = Path(sp_dir)
+                            for di in sp_dir.glob("omnipkg-*.dist-info"):
+                                ver_in_name = di.name.replace("omnipkg-", "").replace(".dist-info", "")
+                                if ver_in_name != master_version:
+                                    import shutil as _shutil
+                                    _shutil.rmtree(str(di), ignore_errors=True)
+                    except Exception:
+                        pass
+                # uv_ffi check runs whether we just synced OR were already synced
+                if _already_synced or result.returncode == 0:
+                    pass  # fall through to uv_ffi check below
+                else:
+                    return (py_ver, False)
                 # Read uv_ffi min version from pyproject.toml once, in main process
                 _uv_ffi_min = "0.10.8.post2"  # fallback
                 try:
@@ -6848,7 +6905,7 @@ class omnipkg:
                     needs_upgrade = True
                 if needs_upgrade:
                     subprocess.run([target_exe, "-m", "pip", "install", "--upgrade", "--no-cache-dir", "-q", f"uv_ffi>={_uv_ffi_min}"], capture_output=True, text=True, timeout=60, env=env)
-                return (py_ver, result.returncode == 0)
+                return (py_ver, _already_synced or result.returncode == 0)
 
             with concurrent.futures.ThreadPoolExecutor(max_workers=6) as executor:
                 futures = [executor.submit(sync_interpreter, ver, exe) for ver, exe in sync_needed]
