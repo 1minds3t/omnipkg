@@ -6806,8 +6806,10 @@ class omnipkg:
                 # Detect egg-based pip (e.g. pip 20.2.2 on Python 3.7)
                 # and inject it into PYTHONPATH so -m pip works in subprocess
                 import glob, os
-                sp = Path(target_exe).parent.parent / "lib"
-                egg_paths = glob.glob(str(sp / "python*/site-packages/pip-*.egg"))
+                _interp_root = Path(target_exe).parent.parent
+                _lib_dir = _interp_root / "Lib" if (_interp_root / "Lib").exists() else _interp_root / "lib"
+                sp = _lib_dir
+                egg_paths = glob.glob(str(sp / "python*/site-packages/pip-*.egg")) or glob.glob(str(sp / "site-packages/pip-*.egg"))
                 env = os.environ.copy()
                 if egg_paths:
                     existing = env.get("PYTHONPATH", "")
@@ -6832,9 +6834,11 @@ class omnipkg:
                     except Exception:
                         pass
                     try:
-                        sp_path = Path(target_exe).parent.parent / "lib"
+                        _ir = Path(target_exe).parent.parent
+                        sp_path = _ir / "Lib" if (_ir / "Lib").exists() else _ir / "lib"
                         import glob as _glob
-                        for sp_dir in _glob.glob(str(sp_path / "python*/site-packages")):
+                        _sp_dirs = _glob.glob(str(sp_path / "python*/site-packages")) or _glob.glob(str(sp_path / "site-packages"))
+                        for sp_dir in _sp_dirs:
                             sp_dir = Path(sp_dir)
                             egg_link = sp_dir / "omnipkg.egg-link"
                             if egg_link.exists():
@@ -6852,9 +6856,11 @@ class omnipkg:
                 # Clean up stale omnipkg dist-info dirs (leave only current version)
                 if result.returncode == 0:
                     try:
-                        sp_path = Path(target_exe).parent.parent / "lib"
+                        _ir2 = Path(target_exe).parent.parent
+                        sp_path = _ir2 / "Lib" if (_ir2 / "Lib").exists() else _ir2 / "lib"
                         import glob as _glob2
-                        for sp_dir in _glob2.glob(str(sp_path / "python*/site-packages")):
+                        _sp_dirs2 = _glob2.glob(str(sp_path / "python*/site-packages")) or _glob2.glob(str(sp_path / "site-packages"))
+                        for sp_dir in _sp_dirs2:
                             sp_dir = Path(sp_dir)
                             for di in sp_dir.glob("omnipkg-*.dist-info"):
                                 ver_in_name = di.name.replace("omnipkg-", "").replace(".dist-info", "")

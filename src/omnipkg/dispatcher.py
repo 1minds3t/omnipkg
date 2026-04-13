@@ -366,8 +366,21 @@ def _maybe_install_c_dispatcher():
     compiler_args = []
 
     if sys.platform == "win32":
-        # Try MSVC cl.exe first, then MinGW gcc
+        # Try MSVC cl.exe first (in PATH or common VS install locations)
         cl = shutil.which("cl")
+        if not cl:
+            # vcvarsall not run — search common MSVC install paths directly
+            import glob as _cgl
+            _vs_patterns = [
+                r"C:\Program Files\Microsoft Visual Studio\*\*\VC\Tools\MSVC\*in\Hostx64d\cl.exe",
+                r"C:\Program Files (x86)\Microsoft Visual Studio\*\*\VC\Tools\MSVC\*in\Hostx64d\cl.exe",
+                r"C:\Program Files (x86)\Microsoft Visual Studio\*\*\VC\Tools\MSVC\*in\HostX86d\cl.exe",
+            ]
+            for _pat in _vs_patterns:
+                _matches = _cgl.glob(_pat)
+                if _matches:
+                    cl = _matches[0]
+                    break
         if cl:
             compiler = cl
             compiler_args = ["/O2", "/Fe:{out}", "{src}", "ws2_32.lib"]
