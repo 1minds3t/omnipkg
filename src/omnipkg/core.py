@@ -6301,13 +6301,17 @@ class omnipkg:
 
         # === SAFETY CHECK 1: Determine if we're the native interpreter ===
         if platform.system() == "Windows":
-            native_exe = self.config_manager.venv_path / "Scripts" / "python.exe"
+            native_exe_candidates = [
+                self.config_manager.venv_path / "python.exe",
+                self.config_manager.venv_path / "Scripts" / "python.exe",
+            ]
         else:
-            native_exe = self.config_manager.venv_path / "bin" / "python"
+            native_exe_candidates = [self.config_manager.venv_path / "bin" / "python"]
 
         current_exe = Path(sys.executable).resolve()
+        native_exe = native_exe_candidates[0]
         native_exe_resolved = native_exe.resolve()
-        is_native = current_exe == native_exe_resolved
+        is_native = any(current_exe == c.resolve() for c in native_exe_candidates)
 
         # Non-native interpreters should NEVER trigger syncs (prevents race conditions)
         if not is_native:
@@ -6321,12 +6325,7 @@ class omnipkg:
                 safe_print("   ℹ️  Sync disabled via OMNIPKG_DISABLE_SYNC")
             return
 
-        # Windows: Extra conservative - disable sync by default unless explicitly enabled
-        if platform.system() == "Windows":
-            if os.environ.get("OMNIPKG_ENABLE_SYNC") != "1":
-                if "--verbose" in sys.argv or "-V" in sys.argv:
-                    safe_print("   ℹ️  Windows sync disabled (set OMNIPKG_ENABLE_SYNC=1 to enable)")
-                return
+        # Windows sync enabled by default (path detection fixed)
 
         try:
             # === TIER 0: FILE-BASED CACHE CHECK (MICROSECONDS) ===
@@ -6401,11 +6400,7 @@ class omnipkg:
 
             # === TIER 3: HEALING REQUIRED (ONLY WHEN NECESSARY) ===
             # Extra safety: Warn on Windows
-            if platform.system() == "Windows":
-                safe_print(
-                    "   ⚠️  Sync needed on Windows - this may cause issues if other processes are active"
-                )
-                safe_print("   💡 Set OMNIPKG_DISABLE_SYNC=1 to disable auto-sync")
+
 
             self._perform_concurrent_healing(master_version_str, install_spec, sync_needed)
 
@@ -6607,8 +6602,10 @@ class omnipkg:
 
                 # If none of the expected patterns exist, sync is needed
                 # First, check for ANY installed omnipkg metadata. This is the ground truth.
+                # Also check __editable__.omnipkg-*.dist-info pattern (pip uses dot not triple-underscore)
+                _all_di = list(site_packages.glob("omnipkg-*.dist-info")) + list(site_packages.glob("__editable__.omnipkg-*.dist-info"))
                 conflicting_installs = [
-                    p for p in site_packages.glob("omnipkg-*.dist-info")
+                    p for p in _all_di
                     if p.name != expected_dist_info and p.name != expected_editable_dist_info
                 ]
 
