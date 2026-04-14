@@ -614,9 +614,10 @@ def _push_binary_to_bin_dir(native_bin, target_bin, src_hash: str, debug: bool) 
     target_bin = Path(target_bin)
 
     # Find the native binary (prefer "8pkg" as canonical name)
+    _exe = ".exe" if sys.platform == "win32" else ""
     src_binary = None
     for name in ("8pkg", "omnipkg"):
-        candidate = native_bin / name
+        candidate = native_bin / (name + _exe)
         if candidate.exists() and os.access(str(candidate), os.X_OK):
             # Quick sanity: must be a real binary, not a Python script
             try:
