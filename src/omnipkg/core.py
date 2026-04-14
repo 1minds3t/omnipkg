@@ -15227,12 +15227,18 @@ print(json.dumps(results))
 
         # Stage 1: Ancient setuptools
         safe_print(
-            "\n      - ⚙️ Stage 1: Installing ANCIENT build system (setuptools with Feature support)..."
+            "\n      - ⚙️ Stage 1: Installing ANCIENT build system (setuptools) into interpreter..."
         )
         build_system_fix = ["setuptools==40.8.0", "wheel"]
 
+        # Install ancient setuptools into the MAIN interpreter so sdist builds with
+        # --no-build-isolation can find it. --no-deps is critical to prevent
+        # the resolver from modifying other packages.
         return_code, _output = self._run_pip_install(
-            build_system_fix, force_reinstall=True, target_directory=None
+            build_system_fix,
+            force_reinstall=True,
+            target_directory=None,
+            extra_flags=["--no-deps"],
         )
 
         if return_code != 0:
@@ -15293,7 +15299,9 @@ print(json.dumps(results))
                     [str(temp_file)],
                     force_reinstall=True,
                     target_directory=target_directory_override,
-                    extra_flags=["--no-build-isolation", "--no-deps"],
+                    # CRITICAL FIX: --ignore-installed prevents uv/pip from uninstalling 
+                    # the modern versions from the main environment during a --target install.
+                    extra_flags=["--no-build-isolation", "--no-deps", "--ignore-installed"],
                 )
 
                 temp_file.unlink()
@@ -15369,7 +15377,7 @@ print(json.dumps(results))
             target_spec,
             force_reinstall=True,
             target_directory=target_directory_override,
-            extra_flags=["--no-build-isolation", "--no-deps"],
+            extra_flags=["--no-build-isolation", "--no-deps", "--ignore-installed"],
         )
 
         self._restore_modern_setuptools()
@@ -15382,9 +15390,14 @@ print(json.dumps(results))
         return True
 
     def _restore_modern_setuptools(self):
-        """Restore modern setuptools"""
         safe_print("      - 🔄 Restoring modern setuptools...")
-        self._run_pip_install(["setuptools>=65.5.1"], force_reinstall=True, target_directory=None)
+        # Always restore to the main interpreter, not the target, and use --no-deps.
+        self._run_pip_install(
+            ["setuptools>=65.5.1"],
+            force_reinstall=True,
+            target_directory=None,
+            extra_flags=["--no-deps"],
+        )
 
     def _get_historical_release_date(self, package_name, version):
         """Uses PyPI JSON API to get the release date for a specific version."""

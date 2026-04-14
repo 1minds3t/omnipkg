@@ -902,7 +902,8 @@ class omnipkgMetadataGatherer:
                                     found_dists.append(dist)
                                     found_any = True
                                 if _dbg:
-                                    print(f"[FAST-DISC] found {dist.name} {dist.version} in {bubble_dir}", flush=True)
+                                    _d_name = getattr(dist, "name", None) or dist.metadata.get("Name", "")
+                                    print(f"[FAST-DISC] found {_d_name} {dist.version} in {bubble_dir}", flush=True)
                             except Exception as e:
                                 if _dbg:
                                     print(f"[FAST-DISC] failed to load {bubble_dir}: {e}", flush=True)
@@ -921,7 +922,8 @@ class omnipkgMetadataGatherer:
                                     found_dists.append(dist)
                                     found_any = True
                                 if _dbg:
-                                    print(f"[FAST-DISC] found {dist.name} {dist.version} in {bubble_dir}", flush=True)
+                                    _d_name = getattr(dist, "name", None) or dist.metadata.get("Name", "")
+                                    print(f"[FAST-DISC] found {_d_name} {dist.version} in {bubble_dir}", flush=True)
                             except Exception as e:
                                 if _dbg:
                                     print(f"[FAST-DISC] failed to load {bubble_dir}: {e}", flush=True)
@@ -940,7 +942,8 @@ class omnipkgMetadataGatherer:
                                     found_dists.append(dist)
                                     found_any = True
                                     if _dbg:
-                                        print(f"[FAST-DISC] found {dist.name} {dist.version} in main env: {match}", flush=True)
+                                        _d_name = getattr(dist, "name", None) or dist.metadata.get("Name", "")
+                                        print(f"[FAST-DISC] found {_d_name} {dist.version} in main env: {match}", flush=True)
                                     break
                             except Exception as e:
                                 if _dbg:
