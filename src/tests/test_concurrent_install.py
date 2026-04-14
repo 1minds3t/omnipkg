@@ -222,6 +222,12 @@ def ensure_daemon_running(interpreter_paths: list) -> bool:
                     _daemon_elapsed = (time.perf_counter() - _daemon_start) * 1000
                     safe_print(f"   ✅ Daemon up after {format_duration(_daemon_elapsed)}")
                     _came_up = True
+                    # Close pipes so the launcher handle doesn't pin the process
+                    try:
+                        proc.stdout.close()
+                        proc.stderr.close()
+                    except Exception:
+                        pass
                     break
             if not _came_up:
                 safe_print("   ❌ Daemon never came up — killing launcher to unblock CI")
@@ -648,7 +654,9 @@ def main():
     total_time = (time.perf_counter() - start_time) * 1000
     safe_print(f"\n🎉 DONE  total={format_duration(total_time)}")
 
-    sys.exit(0)
+    # Use _exit to bypass atexit handlers and finalizers — daemon background
+    # threads (sockets/keepalives) would otherwise block sys.exit indefinitely.
+    _os._exit(0)
 
 
 if __name__ == "__main__":
