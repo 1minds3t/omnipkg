@@ -441,7 +441,7 @@ def _maybe_install_c_dispatcher():
         try:
             marker_content = marker.read_text(encoding="utf-8").strip()
             # marker format: "<md5>:<abs/path/to/dispatcher.c>"
-            stored_hash = marker_content.split(":", 1)[0]
+            stored_hash = marker_content.split(":", 1)[0].strip()
         except Exception:
             stored_hash = ""
         if stored_hash == src_hash and src_hash:            # Native bin is up to date. Also push to any adopted bin dirs that
