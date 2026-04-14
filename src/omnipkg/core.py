@@ -6515,11 +6515,13 @@ class omnipkg:
                     continue
 
                 # Derive site-packages from interpreter path
-                interpreter_root = exe_path_obj.parent.parent
-
+                # On Windows managed interpreters, python.exe is in root (not Scripts/)
                 if platform.system() == "Windows":
+                    _ep = exe_path_obj.parent
+                    interpreter_root = _ep.parent if _ep.name.lower() in ("bin", "scripts") else _ep
                     site_packages = interpreter_root / "Lib" / "site-packages"
                 else:
+                    interpreter_root = exe_path_obj.parent.parent
                     site_packages = interpreter_root / "lib" / f"python{py_ver}" / "site-packages"
 
                 # Verify site-packages exists
