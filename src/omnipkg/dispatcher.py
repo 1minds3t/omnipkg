@@ -435,7 +435,8 @@ def _maybe_install_c_dispatcher():
         print(f"[C-INSTALL] marker     = {marker} -> exists={marker.exists()}", file=sys.stderr)
         if marker.exists():
             stored = marker.read_text(encoding="utf-8").strip()
-            print(f"[C-INSTALL] stored hash={stored}  current hash={src_hash}  match={stored == src_hash}", file=sys.stderr)
+            stored_hash_dbg = stored.split(":", 1)[0].strip()
+            print(f"[C-INSTALL] stored hash={stored}  current hash={src_hash}  match={stored_hash_dbg == src_hash}", file=sys.stderr)
 
     if marker.exists():
         try:
