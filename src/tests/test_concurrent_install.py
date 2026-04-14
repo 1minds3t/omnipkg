@@ -190,16 +190,28 @@ def ensure_daemon_running(interpreter_paths: list) -> bool:
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
             )
-            # Give it a moment to detach then check if it came up
+            # Give it a moment to detach then check if it came up.
+            # On Windows the daemon start command may not self-detach cleanly,
+            # so we must kill the launcher proc on timeout or it orphans the CI job.
+            _came_up = False
             for i in range(60):
                 time.sleep(0.5)
+                # Reap launcher proc if it has already exited (normal detach path)
+                if proc.poll() is not None and i == 0:
+                    safe_print(f"   ℹ️  Launcher exited rc={proc.returncode} — daemon should be detached")
                 status = client.status()
                 if status.get("success"):
                     _daemon_elapsed = (time.perf_counter() - _daemon_start) * 1000
                     safe_print(f"   ✅ Daemon up after {format_duration(_daemon_elapsed)}")
+                    _came_up = True
                     break
-            else:
-                safe_print("   ❌ Daemon never came up")
+            if not _came_up:
+                safe_print("   ❌ Daemon never came up — killing launcher to unblock CI")
+                try:
+                    proc.kill()
+                    proc.wait(timeout=5)
+                except Exception:
+                    pass
                 dump_daemon_log("DAEMON LOG ON FAILURE", only_on_error=False)
                 return False
 
@@ -442,9 +454,9 @@ def main():
 
     # Start daemon BEFORE installs so FFI in-process path is live during install phase
     if not ensure_daemon_running(interpreter_paths):
-        safe_print("❌ Failed to start daemon")
+        safe_print("⚠️  Daemon failed to start — continuing to capture install/warmup behaviour")
+        safe_print("⚠️  Phases 0-4 will still run; worker_daemon calls may fail with their own errors")
         dump_daemon_log("DAEMON LOG ON STARTUP FAILURE")
-        sys.exit(1)
 
     # Phase 0: Install via versioned dispatcher (8pkg39, 8pkg310, etc.)
     # This is the key test — does 8pkg3X actually install into the RIGHT interpreter?
