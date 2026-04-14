@@ -423,6 +423,11 @@ def _maybe_install_c_dispatcher():
         src_hash = ""
 
     bin_dir = Path(sys.executable).parent
+    # On Windows, executables are in Scripts/ but python.exe is in the root
+    if sys.platform == "win32":
+        scripts_dir = bin_dir / "Scripts"
+        if scripts_dir.exists():
+            bin_dir = scripts_dir
     marker = bin_dir / ".omnipkg_dispatch_compiled"
 
     if debug:
