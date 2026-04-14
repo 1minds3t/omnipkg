@@ -1635,6 +1635,85 @@ def _is_plausible_python_version(version: str) -> bool:
 
 
 
+def _ensure_all_version_shims(bin_dir: Path, debug_mode: bool = False) -> None:
+    """
+    Eagerly create versioned shims for Python 3.7–3.15 in bin_dir.
+
+    On Unix: symlinks (8pkg39 -> 8pkg, omnipkg311 -> omnipkg, etc.)
+    On Windows: .bat wrappers with injected --python X.Y, because .bat files
+                cannot be launched by subprocess without cmd /c — they need
+                actual file content, not symlinks.
+
+    This runs at every dispatcher startup so shims exist for ALL versions
+    including ones not yet adopted (e.g. 3.13 before its interpreter is
+    downloaded). The dispatcher's --python routing + healing takes over
+    when the interpreter is actually missing.
+    """
+    # Case-variant aliases for case-sensitive filesystems (Linux)
+    if sys.platform != "win32":
+        main_shim = bin_dir / "8pkg"
+        omni_shim = bin_dir / "omnipkg"
+        for alias, target in [("8PKG", main_shim), ("OMNIPKG", omni_shim)]:
+            p = bin_dir / alias
+            if (not p.exists() and not p.is_symlink()) and target.exists():
+                try:
+                    p.symlink_to(target.name)
+                except Exception:
+                    pass
+
+    for minor in range(7, 16):
+        ver = f"3.{minor}"
+        flat = f"3{minor}"
+        for base_name in ("8pkg", "omnipkg"):
+            if sys.platform == "win32":
+                # Find the real executable to delegate to.
+                # IMPORTANT: only match the bare entry point (8pkg.exe / omnipkg.exe),
+                # never a versioned shim like 8pkg310.bat — those are outputs, not sources.
+                src_exe = None
+                for ext in (".exe", ".bat", ".cmd", ""):
+                    candidate = bin_dir / f"{base_name}{ext}"
+                    # Exclude versioned shims (names contain a digit after the base)
+                    name_stem = candidate.stem  # e.g. "8pkg310" or "8pkg"
+                    if name_stem != base_name:
+                        continue
+                    if candidate.exists():
+                        src_exe = candidate
+                        break
+                if src_exe is None:
+                    if debug_mode:
+                        print(f"[DEBUG-DISPATCH] ⚠️  No src_exe for {base_name} in {bin_dir} — skipping {base_name}{flat}.bat", file=sys.stderr)
+                    continue
+                bat_path = bin_dir / f"{base_name}{flat}.bat"
+                bat_content = f'@echo off\r\n"{src_exe}" --python {ver} %*\r\n'
+                # Idempotency: skip only if existing content is already correct.
+                if bat_path.exists():
+                    try:
+                        existing = bat_path.read_text(encoding="ascii")
+                        if existing == bat_content:
+                            continue  # already correct — truly idempotent
+                        # Content is stale (e.g. src_exe path changed) — rewrite below
+                        if debug_mode:
+                            print(f"[DEBUG-DISPATCH] 🔄 Stale .bat shim {bat_path.name} — rewriting", file=sys.stderr)
+                    except Exception:
+                        pass  # unreadable — fall through to overwrite
+                try:
+                    bat_path.write_text(bat_content, encoding="ascii")
+                    if debug_mode:
+                        print(f"[DEBUG-DISPATCH] ✅ Eager .bat shim: {bat_path.name}", file=sys.stderr)
+                except Exception as e:
+                    # Always surface write failures — silent skip here is the primary
+                    # reason shims appear to be created but are actually missing.
+                    print(f"[WARNING-DISPATCH] Could not write {bat_path.name}: {e}", file=sys.stderr)
+            else:
+                target = bin_dir / base_name
+                versioned = bin_dir / f"{base_name}{flat}"
+                if (not versioned.exists() and not versioned.is_symlink()) and target.exists():
+                    try:
+                        versioned.symlink_to(target.name)
+                    except Exception:
+                        pass
+
+
 def _ensure_native_shims() -> None:
     """
     Self-healing shim check for the native/primary Python.
@@ -1670,16 +1749,7 @@ def _ensure_native_shims() -> None:
 
     if shim_path.exists():
         # Still proactively create all versioned shims 3.7-3.15 if any are missing
-        main_shim = bin_dir / "8pkg"
-        omni_shim = bin_dir / "omnipkg"
-        for minor in range(7, 16):
-            for prefix, target in [("8pkg", main_shim), ("omnipkg", omni_shim)]:
-                versioned = bin_dir / f"{prefix}3{minor}"
-                if (not versioned.exists() and not versioned.is_symlink()) and target.exists():
-                    try:
-                        versioned.symlink_to(target.name)
-                    except Exception:
-                        pass
+        _ensure_all_version_shims(bin_dir, debug_mode)
         return  # already installed, nothing to do
 
     # Shim is missing — this is the native Python that adoption skipped.
@@ -1698,24 +1768,7 @@ def _ensure_native_shims() -> None:
     # Also immediately create the full range of versioned shims so 8pkg310 etc exist.
     # We do this here because the shim_path.exists() quick-exit branch won't run
     # on this first call since we just created the shim above.
-    main_shim = bin_dir / "8pkg"
-    omni_shim = bin_dir / "omnipkg"
-    # Case-variant aliases for case-sensitive filesystems (Linux)
-    for alias, target in [("8PKG", main_shim), ("OMNIPKG", omni_shim)]:
-        p = bin_dir / alias
-        if (not p.exists() and not p.is_symlink()) and target.exists():
-            try:
-                p.symlink_to(target.name)
-            except Exception:
-                pass
-    for minor in range(7, 16):
-        for prefix, target in [("8pkg", main_shim), ("omnipkg", omni_shim)]:
-            versioned = bin_dir / f"{prefix}3{minor}"
-            if (not versioned.exists() and not versioned.is_symlink()) and target.exists():
-                try:
-                    versioned.symlink_to(target.name)
-                except Exception:
-                    pass
+    _ensure_all_version_shims(bin_dir, debug_mode)
 
     # Call the canonical shim installer — handles Unix symlinks and Windows .bat
     interpreter_path = Path(sys.executable)
@@ -1769,6 +1822,9 @@ def install_versioned_entrypoints(
             src_bat = None
             for ext in (".exe", ".bat", ".cmd", ""):
                 candidate = bin_dir / f"{base_name}{ext}"
+                # Exclude versioned shims — only match the bare entry point.
+                if candidate.stem != base_name:
+                    continue
                 if candidate.exists():
                     src_bat = candidate
                     break
@@ -1781,16 +1837,23 @@ def install_versioned_entrypoints(
             _maj = flat[0]
             _min = flat[1:]
             _ver = f"{_maj}.{_min}"
+            bat_content = f'@echo off\r\n"{src_bat}" --python {_ver} %*\r\n'
+            # Idempotency: skip only if existing content is already correct.
+            if link_bat.exists():
+                try:
+                    existing = link_bat.read_text(encoding="ascii")
+                    if existing == bat_content:
+                        continue  # already correct
+                    if debug_mode:
+                        print(f"[DEBUG-DISPATCH] 🔄 Stale .bat shim {link_bat.name} — rewriting", file=sys.stderr)
+                except Exception:
+                    pass
             try:
-                # Inject --python X.Y as first arg so dispatcher version detection
-                # works even though sys.argv[0] will be "8pkg" not "8pkg310"
-                bat_content = f'@echo off\r\n"{src_bat}" --python {_ver} %*\r\n'
                 link_bat.write_text(bat_content, encoding="ascii")
                 if debug_mode:
                     print(f"[DEBUG-DISPATCH] ✅ Windows .bat shim: {link_bat} -> {src_bat.name} --python {_ver}", file=sys.stderr)
             except Exception as e:
-                if debug_mode:
-                    print(f"[DEBUG-DISPATCH] ⚠️  Could not create Windows shim {link_bat}: {e}", file=sys.stderr)
+                print(f"[WARNING-DISPATCH] Could not create Windows shim {link_bat.name}: {e}", file=sys.stderr)
         else:
             # Unix: relative symlink within same directory
             src = bin_dir / base_name

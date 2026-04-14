@@ -45,9 +45,9 @@ dependencies = [
     "typer>=0.4.0",
     "rich>=10.0.0",
 
-    # Pygments - ReDoS CVE in AdlLexer, fixed in 2.20.0 (2.19.x is last for py37/py38)
+    # Pygments - ReDoS CVE in AdlLexer fixed in 2.20.0; 2.18+ require >=3.9, so py37/py38 stuck at 2.17.2
     "pygments>=2.20.0 ; python_version >= '3.9'",
-    "pygments>=2.19.0,<2.20.0 ; python_version < '3.9'",
+    "pygments>=2.17.2,<2.18.0 ; python_version < '3.9'",  # 2.18+ requires Python >=3.9
 
     # werkzeug - pinned to last available per Python, CVEs unresolved due to Python constraints
     # TODO: werkzeug-lts needed for py37/py38 to backport CVE-2026-27199, CVE-2026-21860, CVE-2025-66221
