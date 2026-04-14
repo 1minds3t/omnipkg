@@ -324,8 +324,9 @@ def _collect_all_dispatcher_bin_dirs() -> list:
                 # but shims live in Scripts/ — check both
                 if sys.platform == "win32":
                     scripts_dir = adopted_bin / "Scripts"
-                    if scripts_dir.exists():
-                        adopted_bin = scripts_dir
+                    if not scripts_dir.exists():
+                        scripts_dir.mkdir(parents=True, exist_ok=True)
+                    adopted_bin = scripts_dir
                 if adopted_bin.resolve() != native_bin.resolve() and adopted_bin.exists():
                     dirs.append(adopted_bin)
     except Exception:
