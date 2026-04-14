@@ -708,39 +708,74 @@ def determine_target_python() -> Path:
 
     # ─────────────────────────────────────────────────────────────
     # Priority 3: Self-awareness — config next to THIS script/exe
-    #
-    # Skipped when:
-    #   - inside a swap shell (_OMNIPKG_SWAP_ACTIVE=1): self-awareness
-    #     would resolve to the host Python's config (wrong version)
-    #   - --python was in argv: already handled above (won't reach here)
     # ─────────────────────────────────────────────────────────────
     if not swap_active:
         script_path = Path(sys.argv[0]).resolve()
         script_dir = script_path.parent
 
-        # On Windows, 8pkg.exe lives in Scripts\ but the config is written
-        # one level up at the env root (debug\.omnipkg_config.json).
-        # Check both: Scripts\.omnipkg_config.json (Linux/managed interpreters)
-        # and Scripts\..\omnipkg_config.json (Windows conda/venv root).
         config_candidates = [script_dir / ".omnipkg_config.json"]
         if sys.platform == "win32":
             config_candidates.append(script_dir.parent / ".omnipkg_config.json")
 
         for config_path in config_candidates:
-            if config_path.exists():
-                try:
-                    with open(config_path, "r") as f:
-                        config = json.load(f)
-                    python_exe = config.get("python_executable")
-                    if python_exe:
-                        python_path = Path(python_exe)
-                        if python_path.exists():
-                            if debug_mode:
-                                print(f'[DEBUG-DISPATCH] ✅ Self-aware ({config_path}): {python_path}', file=sys.stderr)
-                            return python_path
-                except Exception as e:
+            if not config_path.exists():
+                continue
+
+            try:
+                with open(config_path, "r", encoding="utf-8") as f:
+                    config = json.load(f)
+
+                config_python = Path(config.get("python_executable", "")).resolve()
+                current_exe = Path(sys.executable).resolve()
+
+                # Strong check: both executable AND site_packages_path must match native
+                expected_site = str(find_absolute_venv_root() / "Lib" / "site-packages")
+                actual_site = config.get("site_packages_path", "")
+
+                is_correct = (config_python == current_exe) and (actual_site == expected_site)
+
+                if is_correct:
                     if debug_mode:
-                        print(f'[DEBUG-DISPATCH] Config read error ({config_path}): {e}', file=sys.stderr)
+                        print(f'[DEBUG-DISPATCH] ✅ Self-aware config is fully correct for native Python', file=sys.stderr)
+                    return current_exe
+
+                # Config is stale or incomplete → fix it
+                if debug_mode:
+                    print(f'[DEBUG-DISPATCH] ⚠️  Stale/incomplete self-aware config detected. Fixing...', file=sys.stderr)
+
+                # Fully rewrite the root config for native Python
+                try:
+                    venv_root = find_absolute_venv_root()
+                    root_config = venv_root / ".omnipkg_config.json"
+
+                    native_version = f"{sys.version_info.major}.{sys.version_info.minor}"
+                    site_packages = str(venv_root / "Lib" / "site-packages")
+
+                    config["python_executable"] = str(current_exe.resolve())
+                    config["python_version"] = native_version
+                    config["python_version_short"] = native_version
+                    config["site_packages_path"] = site_packages
+                    config["multiversion_base"] = str(Path(site_packages) / ".omnipkg_versions")
+                    config["_auto_generated_by"] = "dispatcher_full_native_fix"
+                    config["managed_by_omnipkg"] = True
+
+                    with open(root_config, "w", encoding="utf-8") as f:
+                        json.dump(config, f, indent=2)
+
+                    if debug_mode:
+                        print(f'[DEBUG-DISPATCH] ✅ Fully rewrote root config for native Python {native_version}', file=sys.stderr)
+                        print(f'[DEBUG-DISPATCH]    site_packages_path = {site_packages}', file=sys.stderr)
+
+                except Exception as fix_e:
+                    if debug_mode:
+                        print(f'[DEBUG-DISPATCH] Failed to rewrite config: {fix_e}', file=sys.stderr)
+
+                # After fixing, return the native Python
+                return current_exe
+
+            except Exception as e:
+                if debug_mode:
+                    print(f'[DEBUG-DISPATCH] Config read error ({config_path}): {e}', file=sys.stderr)
 
     # ─────────────────────────────────────────────────────────────
     # Priority 2: OMNIPKG_PYTHON — only inside an active swap shell.
@@ -763,6 +798,17 @@ def determine_target_python() -> Path:
                 print(f"[DEBUG-DISPATCH] ⚠️  OMNIPKG_PYTHON={claimed_version} present but _OMNIPKG_SWAP_ACTIVE not set — leaked, ignoring", file=sys.stderr)
 
     # ─────────────────────────────────────────────────────────────
+    # Extra safety: If we reached here and we are running the native
+    # venv Python (not inside .omnipkg/interpreters/), trust sys.executable
+    # instead of any potentially stale config.
+    # ─────────────────────────────────────────────────────────────
+    current = Path(sys.executable).resolve()
+    if ".omnipkg/interpreters" not in str(current).replace("\\", "/"):
+        if debug_mode:
+            print(f'[DEBUG-DISPATCH] ✅ Running native venv Python → returning {current}', file=sys.stderr)
+        return current
+    
+    # ─────────────────────────────────────────────────────────────
     # Fallback: whatever Python is running this script
     # ─────────────────────────────────────────────────────────────
     if debug_mode:
@@ -771,7 +817,6 @@ def determine_target_python() -> Path:
         print(f'[DEBUG-DISPATCH]    In CI this usually means adopt did not run or venv_root resolved wrong.', file=sys.stderr)
         print(f'[DEBUG-DISPATCH]    sys.executable: {sys.executable}', file=sys.stderr)
     return Path(sys.executable)
-
 
 def _shims_are_active_in_path(debug_mode: bool = False) -> bool:
     """
