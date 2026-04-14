@@ -896,7 +896,7 @@ class omnipkgMetadataGatherer:
                             try:
                                 dist = PathDistribution(_target_di)
                                 if not dist.metadata.get("Name"):
-                                    self._scan_and_heal_distributions([bubble_dir])
+                                    self.omnipkg_instance._scan_and_heal_distributions([bubble_dir])
                                     dist = PathDistribution(_target_di)
                                 if dist.metadata.get("Name"):
                                     found_dists.append(dist)
@@ -916,7 +916,7 @@ class omnipkgMetadataGatherer:
                             try:
                                 dist = PathDistribution(_dist_infos[0])
                                 if not dist.metadata.get("Name"):
-                                    self._scan_and_heal_distributions([bubble_dir])
+                                    self.omnipkg_instance._scan_and_heal_distributions([bubble_dir])
                                     dist = PathDistribution(_dist_infos[0])
                                 if dist.metadata.get("Name"):
                                     found_dists.append(dist)
@@ -979,7 +979,7 @@ class omnipkgMetadataGatherer:
                     try:
                         dist = PathDistribution(_target_di)
                         if not dist.metadata.get("Name"):
-                            self._scan_and_heal_distributions([_target_di.parent])
+                            self.omnipkg_instance._scan_and_heal_distributions([_target_di.parent])
                             dist = PathDistribution(_target_di)  # retry after heal
                         if dist.metadata.get("Name") and dist.version == version:
                             found_dists.append(dist)
@@ -1012,7 +1012,7 @@ class omnipkgMetadataGatherer:
                         try:
                             dist = PathDistribution(_dist_infos[0])
                             if not dist.metadata.get("Name"):
-                                self._scan_and_heal_distributions([_expected_bubble])
+                                self.omnipkg_instance._scan_and_heal_distributions([_expected_bubble])
                                 dist = PathDistribution(_dist_infos[0])  # retry after heal
                             if dist.metadata.get("Name"):
                                 found_dists.append(dist)
