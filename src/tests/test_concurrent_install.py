@@ -188,10 +188,9 @@ def ensure_daemon_running(interpreter_paths: list) -> bool:
             # rc=1 failures are visible rather than silently swallowed.
             _is_win = sys.platform == "win32"
             proc = subprocess.Popen(
-                "8pkg daemon start" if _is_win else ["8pkg", "daemon", "start"],
-                shell=_is_win,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
+                ["8pkg", "daemon", "start"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
             )
             # Poll until daemon answers, launcher exits with error, or we time out.
             _came_up = False
@@ -656,7 +655,7 @@ def main():
 
     # Use _exit to bypass atexit handlers and finalizers — daemon background
     # threads (sockets/keepalives) would otherwise block sys.exit indefinitely.
-    _os._exit(0)
+    sys.exit(0)
 
 
 if __name__ == "__main__":
