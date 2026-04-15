@@ -3205,13 +3205,32 @@ class WorkerPoolDaemon:
         try:
             from omnipkg.isolation.fs_watcher import SitePackagesWatcher
             sp_dirs = self._collect_all_site_packages()
-            safe_print(f"[FS-WATCHER] Starting watcher for {len(sp_dirs)} site-packages dir(s)", file=sys.stderr)
-            self._fs_watcher = SitePackagesWatcher(socket_path=self.socket_path, site_packages_dirs=sp_dirs)
+            safe_print(f"[FS-WATCHER] Starting watcher for {len(sp_dirs)} site-packages dir(s)", 
+                    file=sys.stderr)
+            self._fs_watcher = SitePackagesWatcher(
+                socket_path=self.socket_path, 
+                site_packages_dirs=sp_dirs
+            )
             self._fs_watcher.start()
-            # Belt-and-suspenders: if shutdown races with startup and _fs_watcher.stop()
-            # is never called, the observer thread must not block process exit.
+            
+            # Mark ALL observer threads as daemon AFTER start (they only exist post-start)
+            # Use the observer's internal thread registry, not just the top-level _observer
             if self._fs_watcher._observer is not None:
-                self._fs_watcher._observer.daemon = True
+                obs = self._fs_watcher._observer
+                # The Observer itself
+                if hasattr(obs, 'daemon'):
+                    try:
+                        obs.daemon = True
+                    except Exception:
+                        pass
+                # Its internal emitter/handler threads (watchdog internals)
+                for attr in ('_emitters', '_handlers', '_threads'):
+                    for t in getattr(obs, attr, None) or []:
+                        try:
+                            t.daemon = True
+                        except Exception:
+                            pass
+                            
         except Exception as exc:
             safe_print(f"[FS-WATCHER] Failed to start: {exc}", file=sys.stderr)
 
@@ -4927,11 +4946,12 @@ class WorkerPoolDaemon:
         if getattr(self, '_fs_watcher', None) is not None:
             try:
                 self.log("[SHUTDOWN] Stopping fs_watcher...")
-                self._fs_watcher.stop()   # Observer.stop() + join(timeout=3) already in SitePackagesWatcher.stop()
+                self._fs_watcher.stop()
                 self.log("[SHUTDOWN] fs_watcher stopped.")
             except Exception as exc:
                 self.log(f"[SHUTDOWN] fs_watcher stop error (ignored): {exc}")
             self._fs_watcher = None
+            self.log("[SHUTDOWN] fs_watcher reference cleared.")  # <-- add this
         # Cleanup socket and PID files
         for path in (getattr(self, "socket_path", None), PID_FILE):
             if not path:

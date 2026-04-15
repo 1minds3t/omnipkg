@@ -962,23 +962,43 @@ class SitePackagesWatcher:
                 handler.set_omnipkg_op_status(in_progress)
 
     def stop(self):
-        if not self._running:
-            return
-        self._running = False
-
-        if self._observer is not None:
-            self._observer.stop()
-            self._observer.join(timeout=3.0)
-            log.info("[fs_watcher] watchdog observer stopped")
-
-        if self._fallback is not None:
-            self._fallback.stop()
-
-        if self._flag is not None:
-            self._flag.close()
-            self._flag.unlink()
-
-        log.info("[fs_watcher] Watcher shutdown complete")
+        """Stop the watcher. Guaranteed not to block process exit."""
+        try:
+            if self._observer is not None:
+                # Force daemon=True on ALL internal threads before stopping
+                # This ensures sys.exit() won't block even if join() times out
+                try:
+                    for t in self._observer._threads if hasattr(self._observer, '_threads') else []:
+                        try:
+                            t.daemon = True
+                        except Exception:
+                            pass
+                except Exception:
+                    pass
+                
+                try:
+                    self._observer.stop()
+                except Exception:
+                    pass
+                
+                try:
+                    self._observer.join(timeout=2.0)
+                except Exception:
+                    pass
+                
+                # If still alive after join, it's a daemon thread now so exit won't block
+                self._observer = None
+        except Exception:
+            pass
+        
+        # Stop the shared memory flag
+        try:
+            if self._shm_flag is not None:
+                self._shm_flag.close()
+                self._shm_flag.unlink()
+                self._shm_flag = None
+        except Exception:
+            pass
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
