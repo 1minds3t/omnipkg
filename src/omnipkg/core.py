@@ -16223,7 +16223,7 @@ print(json.dumps(results))
             else:
                 safe_print(f"[UV-PATH] FFI skipped (unavailable) — trying daemon", file=sys.stderr)
 
-            # ── PATH 2: daemon run_uv (~IPC overhead) ──────────────
+            # ── PATH 2:  run_uv (~IPC overhead) ──────────────
             _t0 = time.perf_counter()
             try:
                 from omnipkg.isolation.worker_daemon import DaemonClient
