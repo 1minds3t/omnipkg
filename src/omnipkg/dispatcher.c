@@ -978,13 +978,21 @@ static void fallback_to_python_v(const char *self_dir, char **argv,
 
     /* Try the config first */
     if (!read_self_config(self_dir, py, sizeof(py)) || !file_exists(py)) {
-        /* Try common names in self_dir */
+        /* Try common names in self_dir, then parent (Scripts/ -> prefix/ on Windows). */
         const char *names[] = {"python3.11","python3.10","python3.9",
-                               "python3","python",NULL};
+                               "python3","python","python.exe",NULL};
         int found = 0;
         for (int i = 0; names[i]; i++) {
             snprintf(py, sizeof(py), "%s/%s", self_dir, names[i]);
             if (file_exists(py)) { found = 1; break; }
+        }
+        if (!found) {
+            char parent_dir[MAX_PATH];
+            dir_of(self_dir, parent_dir, sizeof(parent_dir));
+            for (int i = 0; names[i]; i++) {
+                snprintf(py, sizeof(py), "%s/%s", parent_dir, names[i]);
+                if (file_exists(py)) { found = 1; break; }
+            }
         }
         if (!found) {
             fprintf(stderr, "omnipkg: cannot find host Python for fallback\n");
@@ -1591,8 +1599,25 @@ int main(int argc, char **argv) {
     if (cli_version) {
         char venv_root[MAX_PATH];
         find_venv_root(self_real, venv_root, sizeof(venv_root));
-        if (venv_root[0] && registry_lookup(venv_root, cli_version,
-                                            target_python, sizeof(target_python))) {
+
+        /* Multi-candidate registry lookup: find_venv_root may miss on Windows
+         * (uses strrchr('/') only). Try venv_root, self_dir, self_dir parent. */
+        int reg_hit = 0;
+        if (venv_root[0])
+            reg_hit = registry_lookup(venv_root, cli_version,
+                                      target_python, sizeof(target_python));
+        if (!reg_hit)
+            reg_hit = registry_lookup(self_dir, cli_version,
+                                      target_python, sizeof(target_python));
+        if (!reg_hit) {
+            char parent_dir[MAX_PATH];
+            dir_of(self_dir, parent_dir, sizeof(parent_dir));
+            if (parent_dir[0])
+                reg_hit = registry_lookup(parent_dir, cli_version,
+                                          target_python, sizeof(target_python));
+        }
+
+        if (reg_hit) {
             if (!file_exists(target_python)) {
                 /* Not adopted yet → fallback to Python for auto-adopt */
                 if (debug) fprintf(stderr, "[C-DISPATCH] %s not found → auto-adopt fallback\n", target_python);
@@ -1602,28 +1627,30 @@ int main(int argc, char **argv) {
                 fprintf(stderr, "[C-DISPATCH] registry hit %s → %s\n",
                         cli_version, target_python);
         } else {
-            /* Registry miss — could be the native interpreter (not adopted, so not
-             * in registry.json).  Check if the self-aware config python matches the
-             * requested version before giving up and paying the Python fallback cost. */
+            /* Registry miss — check if self-aware config python matches.
+             * Handle Windows where basename may be "python.exe". */
             char self_py[MAX_PATH] = "";
             read_self_config(self_dir, self_py, sizeof(self_py));
             if (self_py[0] && file_exists(self_py)) {
-                /* Extract version from the path, e.g. ".../bin/python3.11" → "3.11" */
+                /* Extract version from path. Try both / and \\ separators. */
                 const char *base = strrchr(self_py, '/');
+                const char *base2 = strrchr(self_py, '\\');
+                if (base2 && (!base || base2 > base)) base = base2;
                 base = base ? base + 1 : self_py;
-                /* skip "python" prefix */
                 const char *ver_in_path = base;
                 if (strncmp(ver_in_path, "python", 6) == 0) ver_in_path += 6;
-                if (strncmp(ver_in_path, "3.", 2) == 0 &&
-                    strcmp(ver_in_path, cli_version) == 0) {
-                    /* Native interpreter matches — use it directly, no fallback needed */
+                char ver_buf[32] = "";
+                strncpy(ver_buf, ver_in_path, sizeof(ver_buf) - 1);
+                char *dot_exe = strstr(ver_buf, ".exe");
+                if (dot_exe) *dot_exe = '\0';
+                if (strncmp(ver_buf, "3.", 2) == 0 &&
+                    strcmp(ver_buf, cli_version) == 0) {
                     strncpy(target_python, self_py, sizeof(target_python) - 1);
                     target_python[sizeof(target_python) - 1] = '\0';
                     if (debug)
                         fprintf(stderr, "[C-DISPATCH] native match %s → %s\n",
                                 cli_version, target_python);
                 } else {
-                    /* Genuinely unknown version → Python fallback for auto-adopt */
                     if (debug) fprintf(stderr, "[C-DISPATCH] unknown version %s → fallback\n", cli_version);
                     fallback_to_python_v(self_dir, argv, cli_version);
                 }
