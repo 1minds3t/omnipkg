@@ -293,7 +293,7 @@ jobs:
       if: always()
       run: |
         8pkg daemon stop  || true
-        pkill -f "omnipkg" || true
+        pkill -f "_work/omnipkg/omnipkg/.venv" || true
 
   # ─────────────────────────────────────────────────────────────────────────────
   # 7. PYPI RELEASE GATE
