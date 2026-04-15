@@ -2055,7 +2055,16 @@ int main(int argc, char **argv) {
          * that contain the word python (e.g. "info python-dotenv"). */
         int info_python = (is_info && argc >= 3 &&
                            strcmp(argv[2], "python") == 0);
-        is_interactive_command = ((is_info && !info_python) || is_config);
+        int is_logs_follow = 0;
+        if (argc >= 3 && strcmp(argv[1], "daemon") == 0 && strcmp(argv[2], "logs") == 0) {
+            for (int _i = 3; _i < argc; _i++) {
+                if (strcmp(argv[_i], "-f") == 0 || strcmp(argv[_i], "--follow") == 0) {
+                    is_logs_follow = 1;
+                    break;
+                }
+            }
+        }
+        is_interactive_command = ((is_info && !info_python) || is_config || is_logs_follow);
     }
     if (!is_swap_python && !is_interactive_command) {
         try_daemon_cli(target_python, argc, argv, version_injected, forced_version);

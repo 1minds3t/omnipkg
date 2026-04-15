@@ -747,10 +747,26 @@ def _worker_read_reply() -> dict:
     The daemon writes to worker.process.stdin (also text mode) after
     receiving the stdin_line from the C dispatcher.
     """
-    line = sys.stdin.readline()
-    if not line:
+    import threading
+    result = [None]
+    exc = [None]
+
+    def _read():
+        try:
+            result[0] = sys.stdin.readline()
+        except Exception as e:
+            exc[0] = e
+
+    t = threading.Thread(target=_read, daemon=True)
+    t.start()
+    t.join(5.0)
+    if t.is_alive():
+        raise TimeoutError("no stdin reply within 5s")
+    if exc[0]:
+        raise exc[0]
+    if not result[0]:
         raise EOFError("daemon closed stdin")
-    return json.loads(line.strip())
+    return json.loads(result[0].strip())
 
 
 def safe_input(prompt: str, default: str = "", auto_value: str = None) -> str:

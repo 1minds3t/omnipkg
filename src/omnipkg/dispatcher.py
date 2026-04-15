@@ -225,7 +225,21 @@ def main():
         and argv_commands[1] in ("start", "stop", "restart")
     )
 
-    if not is_swap_command and not is_daemon_lifecycle:
+    is_info_command = (
+        len(argv_commands) >= 1
+        and argv_commands[0] == "info"
+        and not (len(argv_commands) >= 2 and argv_commands[1] == "python")
+    )
+    is_config_command = len(argv_commands) >= 1 and argv_commands[0] == "config"
+    is_logs_follow = (
+        len(argv_commands) >= 2
+        and argv_commands[0] == "daemon"
+        and argv_commands[1] == "logs"
+        and "-f" in sys.argv
+    )
+    is_interactive_command = is_info_command or is_config_command or is_logs_follow
+
+    if not is_swap_command and not is_daemon_lifecycle and not is_interactive_command:
         try:
             import socket
             import tempfile
@@ -240,6 +254,7 @@ def main():
                         host, port = conn_str[6:].split(":")
                         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                         sock.connect((host, int(port)))
+                        sock.settimeout(300)
                     else:
                         raise ValueError()
                 else:
@@ -248,6 +263,7 @@ def main():
                 if os.path.exists(sock_path):
                     sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
                     sock.connect(sock_path)
+                    sock.settimeout(300)
                 else:
                     raise ValueError()
                     
