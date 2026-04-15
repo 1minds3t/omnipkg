@@ -329,15 +329,35 @@ except ImportError as e:
 # 0. CONSTANTS & UTILITIES
 # ═══════════════════════════════════════════════════════════════
 
-# Use a system-agnostic temporary directory (e.g., /tmp on Linux, AppData\Local\Temp on Windows)
-# and create an 'omnipkg' subdirectory for cleanliness.
 OMNIPKG_TEMP_DIR = os.path.join(tempfile.gettempdir(), "omnipkg")
 
-# Define all temp files using the cross-platform path
-DEFAULT_SOCKET = os.path.join(OMNIPKG_TEMP_DIR, "omnipkg_daemon.sock")
-PID_FILE = os.path.join(OMNIPKG_TEMP_DIR, "omnipkg_daemon.pid")
-SHM_REGISTRY_FILE = os.path.join(OMNIPKG_TEMP_DIR, "omnipkg_shm_registry.json")
-DAEMON_LOG_FILE = os.path.join(OMNIPKG_TEMP_DIR, "omnipkg_daemon.log")
+def _get_venv_temp_dir() -> str:
+    """
+    Return a temp dir scoped to this exact (venv, project) pair.
+    Uses sys.prefix — always valid for venv/conda/miniforge/subprocess.
+    Adds project root so the same venv reused across repos stays isolated.
+    """
+    import hashlib
+    # sys.prefix is the canonical env root — reliable in all contexts
+    identity = sys.prefix
+    # Add project root if we can find it (prevents same venv across repos colliding)
+    try:
+        project_root = Path(__file__).resolve().parent.parent.parent
+        if (project_root / "pyproject.toml").exists():
+            identity = f"{sys.prefix}:{project_root}"
+    except Exception:
+        pass
+    venv_hash = hashlib.sha1(identity.encode()).hexdigest()[:10]
+    d = os.path.join(OMNIPKG_TEMP_DIR, venv_hash)
+    os.makedirs(d, exist_ok=True)
+    return d
+
+_VENV_TEMP_DIR = _get_venv_temp_dir()
+
+DEFAULT_SOCKET = os.path.join(_VENV_TEMP_DIR, "omnipkg_daemon.sock")
+PID_FILE = os.path.join(_VENV_TEMP_DIR, "omnipkg_daemon.pid")
+SHM_REGISTRY_FILE = os.path.join(_VENV_TEMP_DIR, "omnipkg_shm_registry.json")
+DAEMON_LOG_FILE = os.path.join(_VENV_TEMP_DIR, "omnipkg_daemon.log")
 
 # ═══════════════════════════════════════════════════════════════
 # STATE MONITOR (OPTIMISTIC CONCURRENCY CONTROL)
@@ -3085,9 +3105,6 @@ class WorkerPoolDaemon:
         # It is NOT executed by the initial parent process that the user runs.
         self._initialize_daemon_process()
         
-        # 🔥 Start the FS Watcher in the background before blocking on the server loop
-        threading.Thread(target=self._start_fs_watcher, name="omnipkg-fs-watcher-boot", daemon=True).start()
-        
         self._run_socket_server()  # This is a blocking call that starts the server loop.
 
     def _replenish_idle_pool(self, python_exe: str):
@@ -3510,17 +3527,16 @@ class WorkerPoolDaemon:
     # CLIENT-SIDE: How to connect to the daemon
     # ============================================================
 
+    # ============================================================
+    # CLIENT-SIDE UTILITIES: Static methods for external use
+    # ============================================================
+
+    @staticmethod
     def connect_to_daemon(socket_path=None, daemon_port=5678):
         """
         Client function to connect to daemon (works on both platforms)
-        
-        Args:
-            socket_path: Unix socket path (ignored on Windows)
-            daemon_port: TCP port for Windows (default 5678)
-        
-        Returns:
-            Connected socket
         """
+        # NO 'self' needed here! It's just a helper function.
         is_windows = sys.platform == 'win32'
         
         if is_windows:
@@ -3558,14 +3574,15 @@ class WorkerPoolDaemon:
     # ============================================================
     # DAEMON STATUS CHECK: Update to work on both platforms
     # ============================================================
-
+    @staticmethod
     def check_daemon_running(socket_path=None, daemon_port=5678):
         """
         Check if daemon is running by attempting connection
         Returns True if daemon responds, False otherwise
         """
         try:
-            sock = connect_to_daemon(socket_path, daemon_port)
+            # We call the other static method using the Class name.
+            sock = WorkerPoolDaemon.connect_to_daemon(socket_path, daemon_port)
             sock.close()
             return True
         except Exception:
@@ -5497,7 +5514,7 @@ class WorkerPool:
                 "dirty": dirty,
                 "created": time.time(),
                 "last_used": time.time(),
-                    "pinned": pin,
+                    "pinned": dirty,
             }
             self._workers[key] = entry
             return entry
@@ -6771,6 +6788,12 @@ class DaemonProxy:
             f"_mod = __import__('{package_name}')\n"
             f"sys.stdout.write(json.dumps({{'version': _ver, 'path': getattr(_mod, '__file__', '')}}) + '\\n')\n"
         )
+
+        # ADD THIS MISSING LINE!
+        # (The exact method might be execute_code, _execute_code, etc.)
+        res = self._execute_code(self.spec, code, {}, {})
+
+        # NOW the rest of your code will work because 'res' exists.
         if res.get("success") and res.get("stdout", "").strip():
             try:
                 _data = _json.loads(res["stdout"].strip().splitlines()[-1])
@@ -6788,6 +6811,7 @@ class DaemonProxy:
             })
         except Exception:
             pass
+        
     def get_version(self, package_name):
         import json as _json
         code = (

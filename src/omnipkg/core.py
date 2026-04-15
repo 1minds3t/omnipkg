@@ -2823,6 +2823,13 @@ class ConfigManager:
             safe_print(_("   💡 Future startups will be instant!"))
 
         # Initialize knowledge base
+        rebuild_cmd = [
+            str(final_config["python_executable"]),
+            "-m",
+            "omnipkg.cli",
+            "reset",
+            "-y",
+        ]
         is_windows = platform.system() == "Windows"
         creationflags = subprocess.CREATE_NO_WINDOW if is_windows else 0
         win_env = {**os.environ, "PYTHONIOENCODING": "utf-8", "PYTHONUTF8": "1"}
@@ -4240,6 +4247,9 @@ class BubbleIsolationManager:
         source_path: str,
         python_context_version: str,
     ) -> bool:
+        # --- ADD THIS LINE HERE ---
+        import site as site_module 
+        
         """
         Creates a bubble from an editable install by copying files from the live source.
         This preserves the current dev version WITH ALL DEPENDENCIES as a fallback.
@@ -4478,6 +4488,7 @@ class BubbleIsolationManager:
                     pass
 
     def _try_pypi_api(self, package_name: str, version: str) -> Optional[List[str]]:
+        import requests as http_requests
         try:
             pass
         except ImportError:
@@ -4490,11 +4501,11 @@ class BubbleIsolationManager:
                 "User-Agent": "omnipkg-package-manager/1.0",
                 "Accept": "application/json",
             }
-            response = requests.get(url, timeout=10, headers=headers)
+            response = http_requests.get(url, timeout=10, headers=headers)
             if response.status_code == 404:
                 if clean_version != version:
                     url = f"https://pypi.org/pypi/{package_name}/{version}/json"
-                    response = requests.get(url, timeout=10, headers=headers)
+                    response = http_requests.get(url, timeout=10, headers=headers)
             if response.status_code != 200:
                 return None
             if not response.text.strip():
@@ -4521,7 +4532,7 @@ class BubbleIsolationManager:
                     version_spec = match.group(2) or ""
                     dependencies.append(_("{}{}").format(dep_name, version_spec))
             return dependencies
-        except requests.exceptions.RequestException:
+        except http_requests.exceptions.RequestException:
             return None
         except Exception:
             return None
@@ -6814,11 +6825,15 @@ class omnipkg:
                     if p.name != expected_dist_info and p.name != expected_editable_dist_info
                 ]
 
-                # egg-link = legacy setuptools editable; always needs re-sync to modern format
                 has_egg_link = (site_packages / "omnipkg.egg-link").exists()
                 if has_egg_link:
-                    sync_needed.append((py_ver, str(exe_path)))
-                    continue
+                    _marker = Path(exe_path).parent / f".omnipkg_synced_{master_version}"
+                    if _marker.exists():
+                        # Already synced, egg-link is stale but harmless — skip
+                        pass
+                    else:
+                        sync_needed.append((py_ver, str(exe_path)))
+                        continue
 
                 # If we found an old/conflicting .dist-info directory, sync is ALWAYS needed.
                 # This is non-negotiable and overrides any .pth file check.
@@ -7005,8 +7020,31 @@ class omnipkg:
                 _already_synced = _marker.exists()
                 if _already_synced:
                     # Still need to check uv_ffi even if omnipkg is already synced
-                    if os.environ.get("OMNIPKG_DEBUG"):
-                        safe_print(f"   [HEAL] {py_ver} omnipkg marker exists, checking uv_ffi only...")
+                    if _already_synced:
+                    # Still need to check uv_ffi even if omnipkg is already synced
+                        if os.environ.get("OMNIPKG_DEBUG"):
+                            safe_print(f"   [HEAL] {py_ver} omnipkg marker exists, checking uv_ffi only...")
+                        # Clean up stale egg-link even if already synced (editable installs on old Python)
+                        try:
+                            _ir = Path(target_exe).parent.parent
+                            sp_path = _ir / "Lib" if (_ir / "Lib").exists() else _ir / "lib"
+                            import glob as _glob
+                            _sp_dirs = _glob.glob(str(sp_path / "python*/site-packages")) or _glob.glob(str(sp_path / "site-packages"))
+                            for sp_dir in _sp_dirs:
+                                sp_dir = Path(sp_dir)
+                                egg_link = sp_dir / "omnipkg.egg-link"
+                                if egg_link.exists():
+                                    egg_link.unlink()
+                                easy_pth = sp_dir / "easy-install.pth"
+                                if easy_pth.exists():
+                                    lines = easy_pth.read_text(encoding="utf-8").splitlines()
+                                    cleaned = [l for l in lines if "omnipkg" not in l]
+                                    if cleaned:
+                                        easy_pth.write_text("\n".join(cleaned) + "\n", encoding="utf-8")
+                                    else:
+                                        easy_pth.unlink()
+                        except Exception:
+                            pass
                 # Detect egg-based pip (e.g. pip 20.2.2 on Python 3.7)
                 # and inject it into PYTHONPATH so -m pip works in subprocess
                 import glob, os
@@ -16090,21 +16128,28 @@ print(json.dumps(results))
             # ── PATH 1: FFI in-process ─────────────────────────────────
             if self._uv_ffi_run is not None:
                 daemon_client = None
-                _ffi_installed, _ffi_removed = [], []  # Initialize for finally block
-                _op_marker = None                      # Initialize for finally block
+                _ffi_installed, _ffi_removed = [], []
+                _op_marker = None
+                # ✅ HOISTED: Define before the try so `finally` can always reference it safely
+                _is_target_call = "--target" in _uv_args
+                _target_val = _uv_args[_uv_args.index("--target") + 1] if _is_target_call else None
 
-                # 1. Signal the START of our operation (Marker File + IPC)
-                try:
-                    _sp_path = Path(self.config.get("site_packages_path"))
-                    _op_marker = _sp_path / ".omnipkg_op.lock"
-                    _op_marker.touch()
-                    
-                    from omnipkg.isolation.worker_daemon import DaemonClient
-                    daemon_client = DaemonClient(auto_start=False)
-                    daemon_client.start_omnipkg_op()
-                except Exception as e:
-                    _dbg(f"[FS-WATCHER-CLIENT] Failed to signal start_op: {e}")
-                    daemon_client = None
+                # Signal the START of our operation (Marker File + IPC)
+                # 🔥 BUBBLE FIX: Only signal the daemon if we're touching the MAIN env.
+                #    A bubble install goes to a temp --target dir; the watcher isn't
+                #    watching that dir, so lying to it causes spurious invalidations.
+                if not _is_target_call:
+                    try:
+                        _sp_path = Path(self.config.get("site_packages_path"))
+                        _op_marker = _sp_path / ".omnipkg_op.lock"
+                        _op_marker.touch()
+
+                        from omnipkg.isolation.worker_daemon import DaemonClient
+                        daemon_client = DaemonClient(auto_start=False)
+                        daemon_client.start_omnipkg_op()
+                    except Exception as e:
+                        _dbg(f"[FS-WATCHER-CLIENT] Failed to signal start_op: {e}")
+                        daemon_client = None
 
                 try:
                     from omnipkg.isolation.fs_watcher import FfiWriteGuard
@@ -16157,22 +16202,26 @@ print(json.dumps(results))
                         safe_print(f"[UV-PATH] FFI error ({_ffi_ex}) after {_ffi_ms:.2f}ms — trying daemon", file=sys.stderr)
                 
                 finally:
-                    if daemon_client:
-                        print(f" [CORE-SENDER] Sending to Daemon: INST={_ffi_installed}, REM={_ffi_removed}", file=sys.stderr)
+                    # 🔥 BUBBLE FIX: Only tell the daemon if we actually touched the MAIN env.
+                    #    If _is_target_call, this was a bubble — daemon knows nothing about it,
+                    #    and we don't want it to think the main site-packages changed.
+                    if not _is_target_call and daemon_client:
+                        _dbg(f"[CORE-SENDER] Sending to Daemon: INST={_ffi_installed}, REM={_ffi_removed}")
                         try:
                             daemon_client.end_omnipkg_op(installed=_ffi_installed, removed=_ffi_removed)
                         except Exception as e:
                             _dbg(f"[FS-WATCHER-CLIENT] Failed to signal end_op to daemon: {e}")
 
-                    # ✅ Delete AFTER IPC is sent — not before
+                    # Always clean up the lock file (it lives in main site-packages,
+                    # we touched it, we clean it — even if the bubble path somehow set it)
                     if _op_marker and _op_marker.exists():
                         try:
                             _op_marker.unlink()
                         except Exception as e:
-                            _dbg(f"[FS-WATCHER-CLIENT] Failed to signal end_op to daemon: {e}")
+                            _dbg(f"[FS-WATCHER-CLIENT] Failed to unlink op_marker: {e}")
 
             else:
-                safe_print(f"[UV-PATH] FFI skipped (unavailable or --target) — trying daemon", file=sys.stderr)
+                safe_print(f"[UV-PATH] FFI skipped (unavailable) — trying daemon", file=sys.stderr)
 
             # ── PATH 2: daemon run_uv (~IPC overhead) ──────────────
             _t0 = time.perf_counter()

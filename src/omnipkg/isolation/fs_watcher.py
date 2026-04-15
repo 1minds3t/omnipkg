@@ -307,39 +307,38 @@ class SitePackagesEventHandler(FileSystemEventHandler):
     # ── public methods for daemon control ──────────────────────────────────
 
     def start_omnipkg_op(self):
-        """Called by the daemon when a long Omnipkg FFI op begins."""
+        """Low-level setter — prefer start_omnipkg_op / end_omnipkg_op for daemon control."""
         with self._debounce_lock:
             self._omnipkg_op_in_progress = True
             self._pending_validation_events.clear()
-        log.info("[fs_watcher] Omnipkg operation START signal received (watchdog handler).")
+        # 🔥 REMOVED THE INFO LOG FROM HERE
 
     def end_omnipkg_op(self, installed: list, removed: list):
         """
-        Called by the daemon when the op ends with the official install/remove changelog.
-        Validates any FS events that fired during the op — events for packages NOT in
-        the official changelog are real external changes and trigger cache invalidation.
+        Validates any queued FS events against the official changelog.
+        Only processes events that happened in this handler's directory.
         """
-        log.info("[fs_watcher] Omnipkg operation END signal received (watchdog handler). "
-                 "inst=%s rem=%s", installed, removed)
-
         official = {pkg[0].lower() for pkg in installed} | {pkg[0].lower() for pkg in removed}
         culprit_count = 0
 
         with self._debounce_lock:
             pending = list(self._pending_validation_events)
             self._pending_validation_events.clear()
-            # Clear the in_progress flag AFTER capturing pending so _handle() can't
-            # race and add new events between our read and the flag clear.
             self._omnipkg_op_in_progress = False
+
+        # 🔥 SILENCE: If this specific handler saw no activity, 
+        # do not log anything and exit immediately.
+        if not pending:
+            return
 
         for created, path_str in pending:
             p = Path(path_str)
             stem = p.name[:-len(".dist-info")] if p.name.endswith(".dist-info") else p.name
             name = stem.rsplit("-", 1)[0] if "-" in stem else stem
+            
             if name.lower() not in official:
-                log.info("[fs_watcher] EXTERNAL CULPRIT during op: %s", name)
+                log.info("[fs_watcher] 🚨 EXTERNAL CULPRIT during op: %s", name)
                 culprit_count += 1
-                self._flag.mark_dirty()
                 try:
                     self._invalidate_fn(
                         site_packages_path=str(self._sp_path),
@@ -353,8 +352,8 @@ class SitePackagesEventHandler(FileSystemEventHandler):
             else:
                 log.debug("[fs_watcher] Verified change: %s was Omnipkg", name)
 
-        log.info("[fs_watcher] Op validated. %d queued events, %d external culprits.",
-                 len(pending), culprit_count)
+        log.info("[fs_watcher] Op validated in %s. %d events, %d culprits.",
+                 self._sp_path, len(pending), culprit_count)
 
     def set_omnipkg_op_status(self, in_progress: bool):
         """Low-level setter — prefer start_omnipkg_op / end_omnipkg_op for daemon control."""
@@ -491,9 +490,7 @@ class SitePackagesEventHandler(FileSystemEventHandler):
     def _do_patch(self):
         """
         Surgically patch the Rust SITE_PACKAGES_CACHE with the accumulated delta.
-        No full rescan — we know exactly what was installed and removed from the
-        .dist-info dir names the OS told us about.
-        Falls back to full invalidation only if we couldn't parse the delta.
+        Now logs exactly which files triggered the event and ignores noise.
         """
         with self._debounce_lock:
             created = set(self._pending_created)
@@ -501,6 +498,7 @@ class SitePackagesEventHandler(FileSystemEventHandler):
             self._pending_created.clear()
             self._pending_deleted.clear()
 
+        # 1. Identify actual package changes
         installed = []
         for p in created:
             parsed = self._parse_dist_info_name(p)
@@ -513,9 +511,21 @@ class SitePackagesEventHandler(FileSystemEventHandler):
             if parsed:
                 removed.append(parsed)
 
+        # 2. If no actual package delta, this is just FS noise (e.g. .lock files, __pycache__)
+        if not installed and not removed:
+            # Log the noise for debugging, but do NOT mark dirty and do NOT invalidate
+            all_changes = list(created | deleted)
+            if all_changes:
+                log.debug("[fs_watcher] Noise ignored in %s: %s", self._sp_path, all_changes[0].name)
+            return
+
+        # 3. This is a REAL external change. Log it and invalidate.
         log.info(
-            "[fs_watcher] External change in %s — installed=%s removed=%s",
-            self._sp_path, installed, removed,
+            "[fs_watcher] 🚨 EXTERNAL CHANGE in %s\n"
+            "   - Installed: %s\n"
+            "   - Removed:   %s\n"
+            "   - Triggered by: %s",
+            self._sp_path, installed, removed, list(created | deleted)[0].name
         )
 
         self._flag.mark_dirty()
@@ -534,22 +544,25 @@ class SitePackagesEventHandler(FileSystemEventHandler):
 
     def _handle(self, event):
         # 🔥 If a long Omnipkg install is happening, queue dist-info events for
-        # validation in end_omnipkg_op.  Only dist-info dirs carry package identity;
-        # everything else during our own op is noise we don't need to validate.
+        # validation in end_omnipkg_op.
         if self._omnipkg_op_in_progress:
             if self._is_dist_info(event.src_path):
                 created = event.event_type in ("created", "modified")
                 with self._debounce_lock:
                     self._pending_validation_events.append((created, event.src_path))
-                log.debug("[fs_watcher] Queued for validation: %s %s",
-                          event.event_type, event.src_path)
+                log.debug("[fs_watcher] [%s] Queued for validation: %s %s", 
+                          self._sp_path, event.event_type, event.src_path)
             return
 
         if self._is_our_write():
             return
         if not self._is_relevant(event.src_path):
             return
-        log.debug("[fs_watcher] event: %s %s", event.event_type, event.src_path)
+            
+        # Log exactly which path triggered the event so we can debug "Why is this firing?"
+        log.debug("[fs_watcher] [%s] event: %s %s", 
+                  self._sp_path, event.event_type, event.src_path)
+        
         created = event.event_type in ("created", "modified")
         self._schedule_invalidation(event.src_path, created=created)
 
@@ -876,8 +889,6 @@ class SitePackagesWatcher:
             return
         self._running = True
 
-        # Wire standard Python logging to sys.stderr, which the Daemon automatically 
-        # redirects into DAEMON_LOG_FILE on both Windows and Unix.
         if not log.handlers:
             handler = logging.StreamHandler(sys.stderr)
             handler.setFormatter(logging.Formatter(
@@ -887,8 +898,12 @@ class SitePackagesWatcher:
             log.addHandler(handler)
             log.setLevel(logging.DEBUG)
 
-        # Create the shared-memory flag (watcher owns it)
         self._flag = SharedWatchFlag.create()
+        
+        # 🔥 ADD IDENTITY: Tell us exactly which process is running the watcher
+        log.info("[fs_watcher] Watcher Process Identity: PID=%s, Python=%s", 
+                 os.getpid(), sys.executable)
+        
         log.info("[fs_watcher] Shared-memory flag created (name=%s)", SHM_FLAG_NAME)
 
         patch_fn = DaemonPatchSender(self._socket_path)
@@ -897,8 +912,7 @@ class SitePackagesWatcher:
             self._start_watchdog(patch_fn)
         else:
             if not _HAS_WATCHDOG:
-                log.warning("[fs_watcher] watchdog not installed — using mtime polling. "
-                            "Install watchdog for kernel-level FS events.")
+                log.warning("[fs_watcher] watchdog not installed — using mtime polling.")
             self._start_fallback(patch_fn)
 
     def _start_watchdog(self, invalidate_fn):

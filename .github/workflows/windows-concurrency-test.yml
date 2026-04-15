@@ -64,7 +64,13 @@ jobs:
       - name: Dump daemon log after demo run 1
         if: always()
         shell: pwsh
-        run: type "$env:TEMP\omnipkg\omnipkg_daemon.log"
+        run: |
+          $logFile = Get-ChildItem -Path "$env:TEMP\omnipkg" -Filter "omnipkg_daemon.log" -Recurse | Select-Object -First 1
+          if ($logFile) {
+              Get-Content $logFile.FullName
+          } else {
+              Write-Error "Could not find daemon log in $env:TEMP\omnipkg"
+          }
 
       - name: Run Demo Again (Verify Caching)
         shell: cmd
