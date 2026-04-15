@@ -189,33 +189,32 @@ def ensure_daemon_running(interpreter_paths: list) -> bool:
             _is_win = sys.platform == "win32"
             proc = subprocess.Popen(
                 ["8pkg", "daemon", "start"],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
             )
-            # Poll until daemon answers, launcher exits with error, or we time out.
+            # Poll until daemon answers or we time out.
+            # Do NOT bail on launcher rc — on Windows the launcher exits with
+            # rc=1 even when the daemon it spawned is still starting (detached).
+            # The only reliable signal is the socket answering.
+            _launcher_logged = False
             _came_up = False
             for i in range(60):
                 time.sleep(0.5)
                 rc = proc.poll()
-                if rc is not None and rc != 0:
-                    # Launcher exited non-zero — bail immediately, don't burn
-                    # the remaining 30s pretending the daemon might appear.
+                if rc is not None and not _launcher_logged:
+                    _launcher_logged = True
                     try:
                         _out = proc.stdout.read().decode("utf-8", errors="replace").strip()
                         _err = proc.stderr.read().decode("utf-8", errors="replace").strip()
                     except Exception:
                         _out = _err = ""
-                    safe_print(f"   ❌ Launcher exited rc={rc} — daemon start failed")
+                    safe_print(f"   ℹ️  Launcher exited rc={rc} — polling socket for daemon")
                     if _out:
                         for ln in _out.splitlines():
                             safe_print(f"   [launcher stdout] {ln}")
                     if _err:
                         for ln in _err.splitlines():
                             safe_print(f"   [launcher stderr] {ln}")
-                    dump_daemon_log("DAEMON LOG ON FAILURE", only_on_error=False)
-                    return False
-                if rc == 0 and i == 0:
-                    safe_print("   ℹ️  Launcher exited rc=0 — daemon detached")
                 status = client.status()
                 if status.get("success"):
                     _daemon_elapsed = (time.perf_counter() - _daemon_start) * 1000
