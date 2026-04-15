@@ -49,14 +49,6 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e .
 
-      - name: Configure omnipkg for non-interactive use
-        shell: pwsh
-        run: |
-          $configDir = "$HOME\.config\omnipkg"
-          New-Item -ItemType Directory -Force -Path $configDir | Out-Null
-          @{ interactive = $false; auto_confirm = $true } | ConvertTo-Json | Out-File -FilePath "$configDir\config.json" -Encoding utf8
-          Write-Host "✅ Omnipkg configured"
-
       - name: Run Demo (Option 8 - Quantum Multiverse)
         shell: cmd
         run: omnipkg demo 8 --non-interactive
