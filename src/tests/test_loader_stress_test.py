@@ -18,7 +18,7 @@ from omnipkg.i18n import _
 # Import the daemon client
 try:
     from omnipkg.loader import omnipkgLoader
-    from omnipkg.isolation.worker_daemon import DaemonClient
+    from omnipkg.isolation.worker_daemon import DaemonClient, WorkerPoolDaemon
 except ImportError:
     sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 """
@@ -91,53 +91,6 @@ def print_chaos_header():
 
 # Note: Local definitions of PersistentWorker, TrueSwitcher, and run_in_subprocess
 # have been removed in favor of the imported versions from omnipkg.isolation!
-
-
-
-# ═══════════════════════════════════════════════════════════
-# 🔧 CANONICAL DAEMON START HELPER
-# Never call WorkerPoolDaemon().start(daemonize=True) from inside a running
-# process — that forks and then sys.exit(0)s the parent, killing the test
-# runner. Always use this instead: subprocess + poll.
-# ═══════════════════════════════════════════════════════════
-def ensure_daemon_running(warmup_specs=None, timeout: float = 30.0) -> bool:
-    """
-    Start the daemon if it isn't already running, then poll until it answers.
-    Safe to call from any context — uses subprocess so the current process
-    is never forked/killed.  warmup_specs is accepted but ignored (the daemon
-    picks up its own config on start).
-    """
-    try:
-        from omnipkg.isolation.worker_daemon import DaemonClient
-        client = DaemonClient()
-        if client.status().get("success"):
-            return True
-
-        safe_print("   ⚙️  Starting daemon...")
-        proc = subprocess.Popen(
-            ["8pkg", "daemon", "start"],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
-        deadline = time.monotonic() + timeout
-        while time.monotonic() < deadline:
-            time.sleep(0.5)
-            rc = proc.poll()
-            if rc is not None and rc != 0:
-                safe_print(f"   ❌ Daemon launcher exited rc={rc}")
-                return False
-            if client.status().get("success"):
-                safe_print("   ✅ Daemon up")
-                return True
-        proc.kill()
-        safe_print(f"   ❌ Daemon never came up after {timeout:.0f}s")
-        return False
-    except ImportError:
-        safe_print("   ❌ Daemon modules missing.")
-        return False
-    except Exception as e:
-        safe_print(f"   ❌ ensure_daemon_running failed: {e}")
-        return False
 
 
 def chaos_test_1_version_tornado():
@@ -480,13 +433,14 @@ def chaos_test_2_dependency_inception():
         from omnipkg.isolation.worker_daemon import (
             DaemonClient,
             DaemonProxy,
+            WorkerPoolDaemon,
         )
 
         client = DaemonClient()
         if not client.status().get("success"):
             safe_print("   ⚙️  Starting Daemon...")
-            if not ensure_daemon_running():
-                return False
+            WorkerPoolDaemon().start(daemonize=True)
+            time.sleep(2)
     except ImportError:
         safe_print("   ❌ Daemon modules missing.")
         return False
@@ -591,7 +545,7 @@ def chaos_test_3_framework_battle_royale():
 
     # 1. Connect to Daemon and measure startup
     try:
-        from omnipkg.isolation.worker_daemon import DaemonClient
+        from omnipkg.isolation.worker_daemon import DaemonClient, WorkerPoolDaemon
         from concurrent.futures import as_completed
         import numpy as np
 
@@ -608,8 +562,8 @@ def chaos_test_3_framework_battle_royale():
                 "numpy==1.24.3",
                 "numpy==2.3.5",
             ]
-            if not ensure_daemon_running(warmup_specs=vip_specs):
-                return False
+            WorkerPoolDaemon(warmup_specs=vip_specs).start(daemonize=True)
+            time.sleep(3)
             daemon_start = time.perf_counter()
             client = DaemonClient()
             daemon_connect_time = (time.perf_counter() - daemon_start) * 1000
@@ -702,7 +656,7 @@ def chaos_test_3_framework_battle_royale():
 
     # 1. Connect to Daemon
     try:
-        from omnipkg.isolation.worker_daemon import DaemonClient
+        from omnipkg.isolation.worker_daemon import DaemonClient, WorkerPoolDaemon
 
         client = DaemonClient()
         if not client.status().get("success"):
@@ -714,8 +668,7 @@ def chaos_test_3_framework_battle_royale():
                 "numpy==1.24.3",
                 "numpy==2.3.5",
             ]
-            if not ensure_daemon_running(warmup_specs=vip_specs):
-                return False
+            WorkerPoolDaemon(warmup_specs=vip_specs).start(daemonize=True)
             time.sleep(3)  # Give TF time to boot (it's heavy)
 
     except ImportError:
@@ -941,7 +894,7 @@ def chaos_test_5_race_condition_roulette():
     safe_print("╚══════════════════════════════════════════════════════════════╝\n")
 
     import numpy as np
-    from omnipkg.isolation.worker_daemon import DaemonClient
+    from omnipkg.isolation.worker_daemon import DaemonClient, WorkerPoolDaemon
 
     results = {}
     versions = ["numpy==1.24.3", "numpy==1.26.4", "numpy==2.3.5"]
@@ -957,8 +910,9 @@ def chaos_test_5_race_condition_roulette():
     client = DaemonClient()
     if not client.status().get("success"):
         safe_print(" ❌ Daemon not running! Starting...")
-        if not ensure_daemon_running():
-            return False
+        WorkerPoolDaemon().start(daemonize=True)
+        time.sleep(2)
+ 
     warmup_data = np.random.rand(500, 500).astype(np.float64)  # same size as benchmark
     for spec in versions:
         t_start = time.perf_counter()
@@ -1420,8 +1374,12 @@ with omnipkgLoader("tensorflow==2.13.0"):
             stderr=subprocess.DEVNULL,
         )
         time.sleep(1)
-        if not ensure_daemon_running():
-            return False
+        subprocess.run(
+            ["8pkg", "daemon", "start"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+
         client = DaemonClient()
         for unused in range(10):
             time.sleep(0.5)
@@ -1484,8 +1442,12 @@ with omnipkgLoader("tensorflow==2.13.0"):
         ["8pkg", "daemon", "stop"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
     )
     time.sleep(1)
-    if not ensure_daemon_running():
-        return False
+    subprocess.run(
+        ["8pkg", "daemon", "start"],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    time.sleep(2)
     client = DaemonClient()  # Reconnect
 
     safe_print("   🐢 STEP 1: Sequential Spawn (One by one)...")
@@ -1513,8 +1475,12 @@ with omnipkgLoader("tensorflow==2.13.0"):
         ["8pkg", "daemon", "stop"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
     )
     time.sleep(1)
-    if not ensure_daemon_running():
-        return False
+    subprocess.run(
+        ["8pkg", "daemon", "start"],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    time.sleep(2)
     client = DaemonClient()  # Reconnect
 
     safe_print("   🚀 STEP 2: Concurrent Spawn (All at once)...")
@@ -1643,6 +1609,7 @@ def chaos_test_12_jax_vs_torch_mortal_kombat():
         from omnipkg.isolation.worker_daemon import (
             DaemonClient,
             DaemonProxy,
+            WorkerPoolDaemon,
         )
 
         client = DaemonClient()
@@ -1651,8 +1618,7 @@ def chaos_test_12_jax_vs_torch_mortal_kombat():
         status = client.status()
         if not status.get("success"):
             safe_print("   ⚠️  Daemon not found. Summoning Daemon...")
-            if not ensure_daemon_running():
-                return False
+            WorkerPoolDaemon().start(daemonize=True)
             time.sleep(1)  # Wait for socket
 
     except ImportError:
@@ -1818,9 +1784,12 @@ with omnipkgLoader("{config['lightning']}"):
         status = client.status()
         if not status.get("success"):
             safe_print("   ⚙️  Starting daemon...")
+            from omnipkg.isolation.worker_daemon import WorkerPoolDaemon
 
-            if not ensure_daemon_running():
-                return False
+            daemon = WorkerPoolDaemon()
+            daemon.start(daemonize=True)
+            time.sleep(1)
+
     except ImportError:
         safe_print("   ❌ Daemon not available, falling back to legacy workers")
         return chaos_test_13_pytorch_lightning_storm()
@@ -2053,13 +2022,13 @@ with omnipkgLoader("numpy==1.24.3"):
     safe_print("      🔥 Connecting to worker daemon...")
 
     try:
-        from omnipkg.isolation.worker_daemon import DaemonClient, DaemonProxy
+        from omnipkg.isolation.worker_daemon import DaemonClient, DaemonProxy, WorkerPoolDaemon
         
         client = DaemonClient()
         if not client.status().get("success"):
             safe_print("      ⚙️  Daemon not found, starting it...")
-            if not ensure_daemon_running():
-                return False
+            WorkerPoolDaemon().start(daemonize=True)
+            time.sleep(2)
     except ImportError:
         safe_print("      ❌ FATAL: Daemon components not found. Skipping test.")
         return
@@ -2353,14 +2322,16 @@ with omnipkgLoader("{spec}", quiet=True):
         from omnipkg.isolation.worker_daemon import (
             DaemonClient,
             DaemonProxy,
+            WorkerPoolDaemon,
         )
 
         # Ensure daemon is up
         client = DaemonClient()
         if not client.status().get("success"):
             safe_print("   ⚙️  Starting Daemon...")
-            if not ensure_daemon_running():
-                return False
+            WorkerPoolDaemon().start(daemonize=True)
+            time.sleep(2)
+
         start = time.perf_counter()
         success_count = 0
 
@@ -2607,7 +2578,7 @@ def chaos_test_17_triple_python_multiverse():
 
     # Initialize daemon
     try:
-        from omnipkg.isolation.worker_daemon import DaemonClient
+        from omnipkg.isolation.worker_daemon import DaemonClient, WorkerPoolDaemon
         import numpy as np
 
         client = DaemonClient()
@@ -3190,6 +3161,7 @@ def chaos_test_18_worker_pool_drag_race():
         from omnipkg.isolation.worker_daemon import (
             DaemonClient,
             DaemonProxy,
+            WorkerPoolDaemon,
         )
 
         client = DaemonClient()
@@ -3202,8 +3174,7 @@ def chaos_test_18_worker_pool_drag_race():
                 "numpy==1.24.3",
                 "numpy==1.26.4",
             ]
-            if not ensure_daemon_running(warmup_specs=vip_specs):
-                return False
+            WorkerPoolDaemon(warmup_specs=vip_specs).start(daemonize=True)
             time.sleep(2)  # Give it a moment to boot the fleet
     except ImportError:
         return False
@@ -3410,8 +3381,10 @@ def chaos_test_20_gpu_resident_pipeline():
         client = DaemonClient()
         if not client.status().get("success"):
             safe_print("   ⚙️  Starting daemon...")
-            if not ensure_daemon_running():
-                return False
+            subprocess.run(
+                [sys.executable, "-m", "omnipkg.isolation.worker_daemon", "start"]
+            )
+            time.sleep(2)
     except ImportError as e:
         safe_print(f"   ❌ Failed to import daemon client: {e}")
         return False
