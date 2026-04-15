@@ -49,6 +49,14 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e .
 
+      - name: Discover and Export Omnipkg ENV_ID
+        id: env_id_step
+        shell: pwsh
+        run: |
+          $envId = python -c "from omnipkg.config_manager import ConfigManager; cm = ConfigManager(suppress_init_messages=True); print(cm.env_id)"
+          echo "OMNIPKG_ENV_ID=$envId" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          Write-Host "Discovered Omnipkg ENV_ID: $envId"
+
       - name: Pre-start and deeply probe the Daemon
         shell: pwsh
         run: |
