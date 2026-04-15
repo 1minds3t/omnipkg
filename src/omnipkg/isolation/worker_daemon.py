@@ -3208,6 +3208,10 @@ class WorkerPoolDaemon:
             safe_print(f"[FS-WATCHER] Starting watcher for {len(sp_dirs)} site-packages dir(s)", file=sys.stderr)
             self._fs_watcher = SitePackagesWatcher(socket_path=self.socket_path, site_packages_dirs=sp_dirs)
             self._fs_watcher.start()
+            # Belt-and-suspenders: if shutdown races with startup and _fs_watcher.stop()
+            # is never called, the observer thread must not block process exit.
+            if self._fs_watcher._observer is not None:
+                self._fs_watcher._observer.daemon = True
         except Exception as exc:
             safe_print(f"[FS-WATCHER] Failed to start: {exc}", file=sys.stderr)
 
@@ -4917,7 +4921,17 @@ class WorkerPoolDaemon:
                 self.log(f"  Force-killed straggler PID {pid}")
             except Exception:
                 pass
-
+        # Stop fs_watcher BEFORE cleaning up socket/pid files
+        # The watchdog Observer thread is non-daemon and will block sys.exit forever
+        # if we don't explicitly stop it here.
+        if getattr(self, '_fs_watcher', None) is not None:
+            try:
+                self.log("[SHUTDOWN] Stopping fs_watcher...")
+                self._fs_watcher.stop()   # Observer.stop() + join(timeout=3) already in SitePackagesWatcher.stop()
+                self.log("[SHUTDOWN] fs_watcher stopped.")
+            except Exception as exc:
+                self.log(f"[SHUTDOWN] fs_watcher stop error (ignored): {exc}")
+            self._fs_watcher = None
         # Cleanup socket and PID files
         for path in (getattr(self, "socket_path", None), PID_FILE):
             if not path:
