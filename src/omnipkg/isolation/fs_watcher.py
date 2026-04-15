@@ -147,10 +147,20 @@ class SharedWatchFlag:
             old.unlink()
         except Exception:
             pass
-        shm = shared_memory.SharedMemory(create=True, size=SHM_FLAG_SIZE,
-                                         name=SHM_FLAG_NAME)
-        # Zero-init → version=0, dirty=0, watcher_pid=current PID
-        struct.pack_into(_FLAG_STRUCT, shm.buf, 0, 0, 0, os.getpid())
+            
+        try:
+            shm = shared_memory.SharedMemory(create=True, size=SHM_FLAG_SIZE,
+                                             name=SHM_FLAG_NAME)
+            # Zero-init → version=0, dirty=0, watcher_pid=current PID
+            struct.pack_into(_FLAG_STRUCT, shm.buf, 0, 0, 0, os.getpid())
+        except Exception:  # 🔥 Catch ALL errors here (WinError 183, OSError, etc.)
+            # WINDOWS FIX: If workers are still holding handles, unlink fails silently.
+            # We just attach to the existing block and reset it.
+            shm = shared_memory.SharedMemory(create=False, name=SHM_FLAG_NAME)
+            ver, _, _ = struct.unpack_from(_FLAG_STRUCT, shm.buf, 0)
+            # Reset dirty=0, update watcher_pid=current PID, keep existing version
+            struct.pack_into(_FLAG_STRUCT, shm.buf, 0, ver, 0, os.getpid())
+            
         return cls(shm)
 
     @classmethod
@@ -170,7 +180,7 @@ class SharedWatchFlag:
     # ── reads ────────────────────────────────────────────────────────────────
 
     def _read(self):
-        return struct.unpack(_FLAG_STRUCT, self._shm.buf)
+        return struct.unpack_from(_FLAG_STRUCT, self._shm.buf, 0)
 
     def is_dirty(self) -> bool:
         _, dirty, _ = self._read()
@@ -290,6 +300,70 @@ class SitePackagesEventHandler(FileSystemEventHandler):
         self._pending_created: Set[Path] = set()
         self._pending_deleted: Set[Path] = set()
 
+        # 🔥 NEW: State for validating events during long Omnipkg installs
+        self._omnipkg_op_in_progress: bool = False
+        self._pending_validation_events: List[tuple] = []  # (created: bool, path: str)
+
+    # ── public methods for daemon control ──────────────────────────────────
+
+    def start_omnipkg_op(self):
+        """Called by the daemon when a long Omnipkg FFI op begins."""
+        with self._debounce_lock:
+            self._omnipkg_op_in_progress = True
+            self._pending_validation_events.clear()
+        log.info("[fs_watcher] Omnipkg operation START signal received (watchdog handler).")
+
+    def end_omnipkg_op(self, installed: list, removed: list):
+        """
+        Called by the daemon when the op ends with the official install/remove changelog.
+        Validates any FS events that fired during the op — events for packages NOT in
+        the official changelog are real external changes and trigger cache invalidation.
+        """
+        log.info("[fs_watcher] Omnipkg operation END signal received (watchdog handler). "
+                 "inst=%s rem=%s", installed, removed)
+
+        official = {pkg[0].lower() for pkg in installed} | {pkg[0].lower() for pkg in removed}
+        culprit_count = 0
+
+        with self._debounce_lock:
+            pending = list(self._pending_validation_events)
+            self._pending_validation_events.clear()
+            # Clear the in_progress flag AFTER capturing pending so _handle() can't
+            # race and add new events between our read and the flag clear.
+            self._omnipkg_op_in_progress = False
+
+        for created, path_str in pending:
+            p = Path(path_str)
+            stem = p.name[:-len(".dist-info")] if p.name.endswith(".dist-info") else p.name
+            name = stem.rsplit("-", 1)[0] if "-" in stem else stem
+            if name.lower() not in official:
+                log.info("[fs_watcher] EXTERNAL CULPRIT during op: %s", name)
+                culprit_count += 1
+                self._flag.mark_dirty()
+                try:
+                    self._invalidate_fn(
+                        site_packages_path=str(self._sp_path),
+                        installed=[],
+                        removed=[],
+                    )
+                except Exception as exc:
+                    log.warning("[fs_watcher] culprit invalidation failed: %s", exc)
+                finally:
+                    self._flag.mark_clean()
+            else:
+                log.debug("[fs_watcher] Verified change: %s was Omnipkg", name)
+
+        log.info("[fs_watcher] Op validated. %d queued events, %d external culprits.",
+                 len(pending), culprit_count)
+
+    def set_omnipkg_op_status(self, in_progress: bool):
+        """Low-level setter — prefer start_omnipkg_op / end_omnipkg_op for daemon control."""
+        with self._debounce_lock:
+            self._omnipkg_op_in_progress = in_progress
+            if not in_progress:
+                self._pending_validation_events.clear()
+            log.debug("[fs_watcher] Omnipkg operation status -> in_progress=%s", in_progress)
+
     # ── internal helpers ─────────────────────────────────────────────────────
 
     def _is_our_write(self) -> bool:
@@ -301,7 +375,7 @@ class SitePackagesEventHandler(FileSystemEventHandler):
         This prevents a 100ms (OUR_WRITE_GRACE_MS) window from swallowing a
         real external change that follows immediately after our own install.
         """
-        ver, dirty, pid_slot = struct.unpack(_FLAG_STRUCT, self._flag._shm.buf)
+        ver, dirty, pid_slot = struct.unpack_from(_FLAG_STRUCT, self._flag._shm.buf, 0)
         if pid_slot >= 0:
             return False     # positive → real watcher PID, not our sentinel
         our_write_ms = -pid_slot
@@ -459,6 +533,18 @@ class SitePackagesEventHandler(FileSystemEventHandler):
     # ── watchdog callbacks ───────────────────────────────────────────────────
 
     def _handle(self, event):
+        # 🔥 If a long Omnipkg install is happening, queue dist-info events for
+        # validation in end_omnipkg_op.  Only dist-info dirs carry package identity;
+        # everything else during our own op is noise we don't need to validate.
+        if self._omnipkg_op_in_progress:
+            if self._is_dist_info(event.src_path):
+                created = event.event_type in ("created", "modified")
+                with self._debounce_lock:
+                    self._pending_validation_events.append((created, event.src_path))
+                log.debug("[fs_watcher] Queued for validation: %s %s",
+                          event.event_type, event.src_path)
+            return
+
         if self._is_our_write():
             return
         if not self._is_relevant(event.src_path):
@@ -505,8 +591,12 @@ class MtimeFallbackWatcher:
         self._invalidate   = invalidate_fn
         self._dirs         = [Path(d).resolve() for d in site_packages_dirs]
         self._mtimes: Dict[str, float] = {}
+        self._snapshot: Dict[str, Set[str]] = {} # Map of dir -> set of .dist-info names
         self._thread: Optional[threading.Thread] = None
         self._stop_event   = threading.Event()
+        self._omnipkg_op_in_progress = False
+        self._pending_validation_events = set()  # (is_created: bool, path: str)
+        self._last_op_end_time = 0.0             # Timestamp of last Omnipkg op
 
     def _current_mtime(self, path: Path) -> float:
         try:
@@ -515,9 +605,13 @@ class MtimeFallbackWatcher:
             return 0.0
 
     def start(self):
-        # Record baseline mtimes
+        # Record baseline mtimes and initial folder snapshot
         for d in self._dirs:
             self._mtimes[str(d)] = self._current_mtime(d)
+            self._snapshot[str(d)] = {
+                n for n in os.listdir(d) 
+                if n.endswith(".dist-info") or n.endswith(".data")
+            } if d.exists() else set()
 
         self._thread = threading.Thread(
             target=self._loop, name="omnipkg-mtime-watcher", daemon=True)
@@ -525,29 +619,137 @@ class MtimeFallbackWatcher:
         log.info("[fs_watcher] mtime fallback watcher started (install watchdog for inotify)")
 
     def _loop(self):
+        # 🔥 DIRECT DEBUG LOGGING TO A TOTALLY SEPARATE FILE
+        debug_file = os.path.join(__import__("tempfile").gettempdir(), "omnipkg_watcher_debug.txt")
+        with open(debug_file, "a", encoding="utf-8") as f:
+            f.write(f"\n--- Fallback Watcher Started. Watching {len(self._dirs)} dirs ---\n")
+            
+        loop_count = 0
         while not self._stop_event.wait(self.POLL_INTERVAL):
+            loop_count += 1
+            if loop_count % 10 == 0:  # Every 5 seconds, write a heartbeat so we know it's alive
+                try:
+                    with open(debug_file, "a", encoding="utf-8") as f:
+                        f.write(f"Heartbeat {loop_count}: still polling...\n")
+                except Exception: pass
+
             for d in self._dirs:
                 key = str(d)
                 new_mtime = self._current_mtime(d)
                 old_mtime = self._mtimes.get(key, 0.0)
                 if new_mtime > old_mtime:
                     self._mtimes[key] = new_mtime
+                    
+                    # Surgical check: What actually changed in site-packages?
+                    current_items = {
+                        n for n in os.listdir(d) 
+                        if n.endswith(".dist-info") or n.endswith(".data")
+                    } if d.exists() else set()
+                    old_items = self._snapshot.get(key, set())
+                    
+                    diff = (current_items - old_items) | (old_items - current_items)
+                    self._snapshot[key] = current_items # Update snapshot
+                    
+                    if not diff:
+                        # Windows noise (e.g. .omnipkg_versions changed, but Lib\site-packages mtime updated)
+                        continue
+
+                    # 🔥 ATOMIC HANDSHAKE: Check for the marker file on disk.
+                    # If the marker exists, it means an Omnipkg operation is in progress
+                    # even if the IPC 'START' signal hasn't arrived yet.
+                    # 🔥 SETTLE PERIOD: Ignore all changes for 1 second after an op ends.
+                    # This prevents "ghost" external changes caused by Windows I/O lag.
+                    # 🔥 LOCK-FILE PRIORITY: The marker file is the ultimate source of truth.
+                    # Even if the IPC 'end' signal arrived, if the lock file is still here,
+                    # Omnipkg is still touching the disk (bubbling/KB updates).
+                    marker_file = d / ".omnipkg_op.lock"
+                    if self._omnipkg_op_in_progress or marker_file.exists():
+                        for item in diff:
+                            self._pending_validation_events.add((item in current_items, str(d / item)))
+                        continue
+                        
                     # Check grace period via flag's our_write sentinel
-                    _, _, pid_slot = struct.unpack(_FLAG_STRUCT, self._flag._shm.buf)
+                    _, _, pid_slot = struct.unpack_from(_FLAG_STRUCT, self._flag._shm.buf, 0)
                     if pid_slot < 0:
                         our_write_ms = -pid_slot
                         now_ms = int(time.monotonic() * 1000)
                         if (now_ms - our_write_ms) < OUR_WRITE_GRACE_MS:
+                            with open(debug_file, "a", encoding="utf-8") as f:
+                                f.write(f"[{time.time()}] Ignored mtime change in {d} (was our own FFI write)\n")
                             continue   # our own FFI write, skip
-                    log.info("[fs_watcher] mtime change in %s — invalidating", d)
+                    
+                    for item in diff:
+                        msg = f"[{time.time()}] 🚨 EXTERNAL CHANGE: {item} in {d}\n"
+                        with open(debug_file, "a", encoding="utf-8") as f:
+                            f.write(msg)
+                        log.info(msg.strip())
+                        print(msg.strip(), file=sys.stderr)
+                    
                     self._flag.mark_dirty()
                     try:
-                        self._invalidate(str(d))
+                        self._invalidate(str(d), [], [])
+                        with open(debug_file, "a", encoding="utf-8") as f:
+                            f.write(f"[{time.time()}] Sent invalidation to daemon successfully.\n")
                     except Exception as exc:
-                        log.warning("[fs_watcher] invalidate raised: %s", exc)
+                        with open(debug_file, "a", encoding="utf-8") as f:
+                            f.write(f"[{time.time()}] Invalidation failed: {exc}\n")
                     finally:
                         self._flag.mark_clean()
 
+    def start_omnipkg_op(self):
+        log.info("[fs_watcher] Omnipkg operation START signal received. Entering collection mode.")
+        self._omnipkg_op_in_progress = True
+        self._pending_validation_events.clear()
+
+    def end_omnipkg_op(self, installed: list, removed: list):
+        # 🔥 TRUTH-TRACKING: Log exactly what the watcher received
+        log.info(f"[WATCHER-RECEIVER] Received end_op: INST={installed}, REM={removed}")
+
+        # NOTE: _omnipkg_op_in_progress is cleared LAST (after snapshot refresh)
+        # so the poll loop never wakes up to a cleared flag with a stale snapshot.
+
+        # 1. Log the official changelog provided by the FFI.
+        if installed or removed:
+            inst_str = ", ".join([f"{n}=={v}" for n, v in installed])
+            rem_str = ", ".join([f"{n}=={v}" for n, v in removed])
+            log.info(f"[fs_watcher] Omnipkg official changes: [INSTALLED: {inst_str or 'none'}] [REMOVED: {rem_str or 'none'}]")
+
+        official = {pkg[0].lower() for pkg in installed} | {pkg[0].lower() for pkg in removed}
+        culprit_count = 0
+        for created, path_str in self._pending_validation_events:
+            p = Path(path_str)
+            stem = p.name[:-11] if p.name.endswith(".dist-info") else p.name
+            name = stem.rsplit("-", 1)[0] if "-" in stem else stem
+            if name.lower() not in official:
+                log.info("[fs_watcher] EXTERNAL CULPRIT: %s changed during op", name)
+                culprit_count += 1
+                self._flag.mark_dirty()
+                try: self._invalidate(str(p.parent), [], [])
+                finally: self._flag.mark_clean()
+            else:
+                log.debug("[fs_watcher] Verified change: %s was Omnipkg", name)
+
+        log.info("[fs_watcher] Omnipkg op FINISHED. Validated %d events, found %d culprits.",
+                 len(self._pending_validation_events), culprit_count)
+        self._pending_validation_events.clear()
+        self._last_op_end_time = time.monotonic()
+
+        # 🔥 Update snapshot+mtime BEFORE clearing the in_progress flag.
+        # The poll loop checks `_omnipkg_op_in_progress` first; if we cleared it
+        # before refreshing the snapshot it would see the old dist-info set and
+        # immediately fire a spurious "EXTERNAL CHANGE" for our own install.
+        for d in self._dirs:
+            key = str(d)
+            if Path(d).exists():
+                self._snapshot[key] = {
+                    n for n in os.listdir(d)
+                    if n.endswith(".dist-info") or n.endswith(".data")
+                }
+                self._mtimes[key] = self._current_mtime(d)
+
+        # ✅ Clear flag LAST — poll loop is now safe to run with fresh snapshot.
+        self._omnipkg_op_in_progress = False
+        
     def stop(self):
         self._stop_event.set()
 
@@ -605,13 +807,32 @@ class DaemonPatchSender:
                 pass
 
     def _send_windows(self, payload: bytes):
+        debug_file = os.path.join(__import__("tempfile").gettempdir(), "omnipkg_watcher_debug.txt")
         try:
-            self._send_unix(payload)
-        except Exception:
+            # On Windows, socket_path is a file containing {"port": 12345}
+            with open(self._socket_path, "r") as f:
+                port = json.load(f).get("port")
+            
+            if not port:
+                with open(debug_file, "a", encoding="utf-8") as f: 
+                    f.write("Failed to read port from socket file.\n")
+                return
+
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
                 s.settimeout(1.0)
-                s.connect(("127.0.0.1", 51413))
+                s.connect(("127.0.0.1", port))
                 s.sendall(payload)
+                try:
+                    s.settimeout(0.5)
+                    hdr = s.recv(8)
+                    if hdr and len(hdr) == 8:
+                        s.recv(int.from_bytes(hdr, "big"))
+                except Exception as e:
+                    with open(debug_file, "a", encoding="utf-8") as f: 
+                        f.write(f"Socket recv timeout/error (safe to ignore): {e}\n")
+        except Exception as exc:
+            with open(debug_file, "a", encoding="utf-8") as f: 
+                f.write(f"Failed to connect to daemon port: {exc}\n")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -644,6 +865,7 @@ class SitePackagesWatcher:
                                  if Path(d).exists()]
         self._flag: Optional[SharedWatchFlag] = None
         self._observer        = None
+        self._handlers: List[SitePackagesEventHandler] = []  # populated by _start_watchdog
         self._fallback        = None
         self._running         = False
 
@@ -653,6 +875,17 @@ class SitePackagesWatcher:
         if self._running:
             return
         self._running = True
+
+        # Wire standard Python logging to sys.stderr, which the Daemon automatically 
+        # redirects into DAEMON_LOG_FILE on both Windows and Unix.
+        if not log.handlers:
+            handler = logging.StreamHandler(sys.stderr)
+            handler.setFormatter(logging.Formatter(
+                "%(asctime)s [fs_watcher] %(levelname)s %(message)s",
+                datefmt="%H:%M:%S",
+            ))
+            log.addHandler(handler)
+            log.setLevel(logging.DEBUG)
 
         # Create the shared-memory flag (watcher owns it)
         self._flag = SharedWatchFlag.create()
@@ -670,6 +903,7 @@ class SitePackagesWatcher:
 
     def _start_watchdog(self, invalidate_fn):
         self._observer = Observer()
+        self._handlers: List[SitePackagesEventHandler] = []  # cross-platform handler registry
         for sp_dir in self._dirs:
             handler = SitePackagesEventHandler(
                 watch_flag=self._flag,
@@ -677,6 +911,7 @@ class SitePackagesWatcher:
                 site_packages_path=sp_dir,
             )
             self._observer.schedule(handler, sp_dir, recursive=False)
+            self._handlers.append(handler)
             log.info("[fs_watcher] Watching: %s", sp_dir)
 
         self._observer.start()
@@ -703,7 +938,28 @@ class SitePackagesWatcher:
                 site_packages_path=sp_dir,
             )
             self._observer.schedule(handler, sp_dir, recursive=False)
+            self._handlers.append(handler)  # keep our registry in sync
             log.info("[fs_watcher] Dynamically added watch: %s", sp_dir)
+
+    def start_omnipkg_op(self):
+        """Broadcasts the start of a long Omnipkg FFI operation to all handlers."""
+        for handler in self._handlers:
+            handler.start_omnipkg_op()
+        if self._fallback:
+            self._fallback.start_omnipkg_op()
+
+    def end_omnipkg_op(self, installed: list, removed: list):
+        """Broadcasts the end of an op and the official changelog for validation."""
+        for handler in self._handlers:
+            handler.end_omnipkg_op(installed, removed)
+        if self._fallback:
+            self._fallback.end_omnipkg_op(installed, removed)
+
+    def set_omnipkg_op_status(self, in_progress: bool):
+        """Broadcasts the start/end of a long Omnipkg FFI operation to all handlers."""
+        for handler in self._handlers:
+            if hasattr(handler, 'set_omnipkg_op_status'):
+                handler.set_omnipkg_op_status(in_progress)
 
     def stop(self):
         if not self._running:
@@ -757,8 +1013,29 @@ class FfiWriteGuard:
         """
         Attach to the watcher's shared flag.
         Returns a no-op guard if the watcher isn't running.
-        Caches the result — safe to call once at worker startup.
+        Caches the result but re-validates on each call: on Windows the watcher
+        process can restart and create a new SHM block, leaving workers with a
+        handle to a dead block that silently reads zeros (dirty=0 forever).
         """
+        if cls._instance is not None and cls._instance._flag is not None:
+            # Probe the block — if the watcher restarted it will have written
+            # a fresh watcher_pid (positive, != our own PID).  A dead/stale
+            # block on Windows typically returns all-zeros or raises; either
+            # way we force a fresh attach so workers track the live block.
+            try:
+                ver, dirty, pid_slot = cls._instance._flag._read()
+                if pid_slot == 0:
+                    # All-zeros → block was unlinked and re-created; re-attach.
+                    cls._instance._flag.close()
+                    cls._instance = None
+            except Exception:
+                # Block handle is dead (OSError, struct.error, etc.) — re-attach.
+                try:
+                    cls._instance._flag.close()
+                except Exception:
+                    pass
+                cls._instance = None
+
         if cls._instance is None:
             flag = SharedWatchFlag.attach()
             cls._instance = cls(flag)

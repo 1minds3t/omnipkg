@@ -3084,6 +3084,10 @@ class WorkerPoolDaemon:
         # 2. A foreground process if daemonize=False.
         # It is NOT executed by the initial parent process that the user runs.
         self._initialize_daemon_process()
+        
+        # 🔥 Start the FS Watcher in the background before blocking on the server loop
+        threading.Thread(target=self._start_fs_watcher, name="omnipkg-fs-watcher-boot", daemon=True).start()
+        
         self._run_socket_server()  # This is a blocking call that starts the server loop.
 
     def _replenish_idle_pool(self, python_exe: str):
@@ -3640,10 +3644,7 @@ class WorkerPoolDaemon:
                 sp_path   = req.get("site_packages_path")
                 installed = req.get("installed", [])
                 removed   = req.get("removed",   [])
-                now = time.monotonic()
-                GRACE_SECS = 5.0
                 forwarded = 0
-                suppressed = 0
 
                 patch_msg = json.dumps({
                     "type":      "patch_cache",
@@ -3651,40 +3652,27 @@ class WorkerPoolDaemon:
                     "removed":   removed,
                 }) + "\n"
 
-                # ── UV workers (existing) ──
+                # Forward the patch to all relevant UV workers.
+                # The watcher is now the sole authority on suppression; the daemon is just a message bus.
                 for py_exe, uv_worker in list(self.uv_workers.items()):
                     try:
                         worker_sp = _resolve_target_paths(self.cm, py_exe).get("site_packages_path")
                         if sp_path is not None and worker_sp != sp_path:
                             continue
-                        lock = self.uv_worker_locks.get(py_exe)
-                        in_flight     = lock is not None and lock.locked()
-                        just_finished = (now - self._uv_last_install_ts.get(py_exe, 0.0)) < GRACE_SECS
-                        if in_flight or just_finished:
-                            suppressed += 1
-                            continue
                         uv_worker.process.stdin.write(patch_msg)
                         uv_worker.process.stdin.flush()
                         forwarded += 1
-                        self._uv_last_install_ts[py_exe] = time.monotonic()
                     except Exception:
                         pass
-
-                # CLI workers (idle_pools) excluded from patch_cache.
-               # They have no uv_ffi — only UV workers need cache coherency.
-                if forwarded:
+                
+                if forwarded > 0:
                     safe_print(
-                        f"[FS-WATCHER] External change — patched {forwarded} UV worker(s) "
+                        f"[DAEMON-PATCH] Forwarded patch from watcher to {forwarded} UV worker(s) "
                         f"inst={installed} rem={removed}",
                         file=sys.stderr,
                     )
-                elif suppressed:
-                    safe_print(
-                        f"[FS-WATCHER] Suppressed patch (our own install, {suppressed} worker(s))",
-                        file=sys.stderr,
-                    )
-                res = {"success": True, "forwarded": forwarded, "suppressed": suppressed}
-            # Keep old invalidate message type as fallback for any stragglers
+                res = {"success": True, "forwarded": forwarded}
+
             elif req["type"] == "invalidate_site_packages_cache":
                 sp_path = req.get("site_packages_path")
                 now = time.monotonic()
@@ -3705,6 +3693,23 @@ class WorkerPoolDaemon:
                     except Exception:
                         pass
                 res = {"success": True, "forwarded": forwarded}
+            elif req["type"] == "start_omnipkg_op":
+                safe_print("[DAEMON] Signal: Omnipkg op START", file=sys.stderr)
+                if hasattr(self, '_fs_watcher') and self._fs_watcher:
+                    self._fs_watcher.start_omnipkg_op()
+                res = {"success": True}
+            elif req["type"] == "end_omnipkg_op":
+                inst = req.get("installed", [])
+                rem = req.get("removed", [])
+                # 🔥 TRUTH-TRACKING: Log exactly what the daemon received
+                safe_print(f"[DAEMON-ROUTER] Received end_op: INST={inst}, REM={rem}", file=sys.stderr)
+                
+                if hasattr(self, '_fs_watcher') and self._fs_watcher:
+                    self._fs_watcher.end_omnipkg_op(
+                        installed=inst,
+                        removed=rem
+                    )
+                res = {"success": True}
             elif req["type"] == "get_site_packages_state":
                 state = {}
                 for py_exe, worker in list(self.uv_workers.items()):
@@ -5675,6 +5680,21 @@ class DaemonClient:
     def shutdown(self):
         return self._send({"type": "shutdown"})
 
+    def start_omnipkg_op(self):
+        """Signals the FS watcher that a long Omnipkg install is STARTING."""
+        return self._send({"type": "start_omnipkg_op"})
+
+    def end_omnipkg_op(self, installed: list, removed: list):
+        """
+        Signals the FS watcher that a long Omnipkg install has ENDED,
+        providing the official changelog from the FFI for validation.
+        """
+        return self._send({
+            "type": "end_omnipkg_op",
+            "installed": installed,
+            "removed": removed,
+        })
+    
     def _spawn_daemon(self):
 
         daemon_script = os.path.abspath(__file__)
@@ -6766,6 +6786,21 @@ class DaemonProxy:
             })
         except Exception:
             pass
+
+    def start_omnipkg_op(self):
+        """Signals the FS watcher that a long Omnipkg install is STARTING."""
+        return self._send({"type": "start_omnipkg_op"})
+
+    def end_omnipkg_op(self, installed: list, removed: list):
+        """
+        Signals the FS watcher that a long Omnipkg install has ENDED,
+        providing the official changelog from the FFI.
+        """
+        return self._send({
+            "type": "end_omnipkg_op",
+            "installed": installed,
+            "removed": removed,
+        })
 
 
 # ═══════════════════════════════════════════════════════════════

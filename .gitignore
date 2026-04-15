@@ -208,3 +208,4 @@ src/omnipkg/_vendor/wheels/
 *hunk_merger*.json
 .hunk_merger_state.json
 .gitattributes
+.omnipkg_baseline

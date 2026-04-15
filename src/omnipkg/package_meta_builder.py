@@ -8,9 +8,10 @@ try:
 except ImportError:
     pass
 """
-omnipkg_metadata_builder.py - v11 - The "Multi-Version Complete" Edition
+omnipkg_metadata_builder.py - v12 - The "Global Cache Ready" Edition
 A fully integrated, self-aware metadata gatherer with complete multi-version
-support for robust, side-by-side package management.
+support, global flat-cache deduplication, ABI-safe ref-counting, and
+pnpm-style symlink-cloaking metadata for robust side-by-side package management.
 import importlib
 """
 import concurrent.futures
@@ -911,22 +912,31 @@ class omnipkgMetadataGatherer:
                 # underscore variant bubble scan (existing)
                 for bubble_dir in multiversion_base.glob(f"{pkg_name.replace('-', '_')}-*"):
                     if bubble_dir.is_dir() and bubble_dir not in [d._path.parent for d in found_dists]:
-                        _dist_infos = list(bubble_dir.glob("*.dist-info"))
-                        if _dist_infos:
-                            try:
-                                dist = PathDistribution(_dist_infos[0])
-                                if not dist.metadata.get("Name"):
-                                    self.omnipkg_instance._scan_and_heal_distributions([bubble_dir])
-                                    dist = PathDistribution(_dist_infos[0])
-                                if dist.metadata.get("Name"):
-                                    found_dists.append(dist)
-                                    found_any = True
-                                if _dbg:
-                                    _d_name = getattr(dist, "name", None) or dist.metadata.get("Name", "")
-                                    print(f"[FAST-DISC] found {_d_name} {dist.version} in {bubble_dir}", flush=True)
-                            except Exception as e:
-                                if _dbg:
-                                    print(f"[FAST-DISC] failed to load {bubble_dir}: {e}", flush=True)
+                        _target_di = None
+                        _un = pkg_name.lower().replace('-', '_')
+                        for di in bubble_dir.glob("*.dist-info"):
+                            dn = di.name.lower()
+                            if dn.startswith(f"{canonical_name}-") or dn.startswith(f"{_un}-"):
+                                _target_di = di
+                                break
+                        if not _target_di:
+                            if _dbg:
+                                print(f"[FAST-DISC] skipping broken bubble {bubble_dir}: no self-dist-info found", flush=True)
+                            continue
+                        try:
+                            dist = PathDistribution(_target_di)
+                            if not dist.metadata.get("Name"):
+                                self.omnipkg_instance._scan_and_heal_distributions([bubble_dir])
+                                dist = PathDistribution(_target_di)
+                            if dist.metadata.get("Name"):
+                                found_dists.append(dist)
+                                found_any = True
+                            if _dbg:
+                                _d_name = getattr(dist, "name", None) or dist.metadata.get("Name", "")
+                                print(f"[FAST-DISC] found {_d_name} {dist.version} in {bubble_dir}", flush=True)
+                        except Exception as e:
+                            if _dbg:
+                                print(f"[FAST-DISC] failed to load {bubble_dir}: {e}", flush=True)
 
                 # ✅ NEW: fallback to main site-packages for directly-installed packages
                 if not found_any:
@@ -1919,7 +1929,28 @@ class omnipkgMetadataGatherer:
         and now includes the physical path of the package.
         """
         package_name = canonicalize_name(dist.metadata["Name"])
-        metadata = {k: v for k, v in dist.metadata.items()}
+        # Build metadata dict preserving ALL values for multi-valued headers.
+        # dist.metadata is an email.message.Message object — .items() yields one
+        # tuple per header line, so Requires-Dist, Classifier, Project-URL etc.
+        # each appear N times.  A plain dict comprehension silently keeps only the
+        # last value for each key; we collect into lists instead, then JSON-encode
+        # them so _flatten_dict stores a single serialised string per field.
+        _raw_meta: Dict[str, object] = {}
+        for k, v in dist.metadata.items():
+            if k in _raw_meta:
+                existing = _raw_meta[k]
+                if isinstance(existing, list):
+                    existing.append(v)
+                else:
+                    _raw_meta[k] = [existing, v]
+            else:
+                _raw_meta[k] = v
+        # Serialise any list values to JSON strings so downstream code (which
+        # already calls json.loads on known list fields) handles them uniformly.
+        metadata: Dict[str, object] = {
+            k: (json.dumps(v) if isinstance(v, list) else v)
+            for k, v in _raw_meta.items()
+        }
 
         # FIX: Always use dist._path for consistency with hash computation
         metadata["path"] = str(Path(dist._path).resolve())
@@ -1989,6 +2020,70 @@ class omnipkgMetadataGatherer:
         metadata["cli_analysis"] = self._analyze_cli(metadata.get("help_text", ""))
         metadata["security"] = self._get_security_info(package_name)
         metadata["health"] = self._perform_health_checks(dist, package_files)
+
+        # ── Binary / C-extension audit ────────────────────────────────────────
+        # Walk the dist RECORD to find native extension files.  We record their
+        # relative paths (stable across machines) as well as the platform tag
+        # parsed from the dist-info directory name so the display layer can warn
+        # that a package is non-portable / reload-dirty.
+        metadata.update(self._build_binary_info(dist))
+
+        # ── Classifiers (all of them, as a JSON list) ─────────────────────────
+        # The multi-value fix above already stores them as a JSON list under the
+        # "Classifier" key.  We also expose a deduplicated topic-only slice for
+        # easy grouping / MCP tooling without re-parsing.
+        try:
+            all_classifiers: List[str] = json.loads(metadata.get("Classifier") or "[]") \
+                if isinstance(metadata.get("Classifier"), str) else (metadata.get("Classifier") or [])
+            topic_classifiers = [c for c in all_classifiers if c.startswith("Topic ::")]
+            metadata["topic_classifiers"] = json.dumps(topic_classifiers)
+        except (json.JSONDecodeError, TypeError):
+            metadata["topic_classifiers"] = "[]"
+
+        # ── Project URLs (all, parsed into a dict) ────────────────────────────
+        # Extracts PyPI / GitHub / Homepage links so the display/MCP layer has
+        # them without re-parsing the raw "Label, URL" strings.
+        metadata.update(self._extract_project_urls(dist))
+
+        # ── Dependency-compatibility fingerprint ─────────────────────────────
+        # A stable SHA-256 over (name, version, sorted-deps, python_requires).
+        # Two instances with the same content_hash have identical files on disk
+        # and can be safely deduplicated / symlinked to a shared cache.
+        metadata["content_hash"] = self._compute_content_hash(dist)
+
+        # ── GLOBAL CACHE ENABLERS ────────────────────────────────────────────
+        # These fields drive the pnpm-style flat global cache:
+        #   record_hash        → byte-level identity key (catches glibc/ABI diffs)
+        #   wheel_abi_tag      → full wheel tag for cross-machine ABI safety
+        #   global_cache_key   → deterministic slot name in ~/.cache/omnipkg/store/
+        #   symlink_targets    → exact dirs/files to symlink into a bubble
+        #   resolved_bubble_deps → lock snapshot of what's installed with this pkg
+        #
+        # Ref-counting query pattern (SQLite):
+        #   SELECT COUNT(*) FROM hash_store
+        #   WHERE field='resolved_bubble_deps' AND value LIKE '%"markupsafe": "1.1.1"%'
+        #   → 0 means the slot is safe to evict from the global cache.
+
+        context_info = self._get_install_context(dist)
+
+        metadata["record_hash"] = self._get_exact_record_hash(dist)
+        metadata["wheel_abi_tag"] = self._get_wheel_abi_tag(dist)
+        metadata["global_cache_key"] = self._get_global_cache_key(dist)
+        metadata["symlink_targets"] = json.dumps(
+            self._get_top_level_symlink_targets(dist)
+        )
+        resolved_neighbors = self._get_resolved_bubble_neighbors(dist, context_info)
+        metadata["resolved_bubble_deps"] = json.dumps(resolved_neighbors)
+
+        # Convenience flag: is this slot safe to hard-deduplicate across machines?
+        # True only when the package is pure-python (record_hash stable across OS).
+        metadata["global_cache_portable"] = (
+            not metadata.get("has_c_extension", False)
+            and metadata.get("wheel_abi_tag", "any") in ("any", "none", "py3-none-any")
+        )
+
+        # ── END GLOBAL CACHE ENABLERS ────────────────────────────────────────
+
         checksum = self._generate_checksum(metadata)
         metadata["checksum"] = checksum
         return metadata
@@ -2386,6 +2481,170 @@ class omnipkgMetadataGatherer:
             candidates.extend(common_mappings[canonical])
         return candidates
 
+    def _build_binary_info(self, dist: importlib.metadata.Distribution) -> Dict:
+        """
+        Scans the dist RECORD for native extension files and parses the platform
+        tag from the dist-info directory name.
+
+        Returns a dict of fields ready to merge into the main metadata:
+          - has_c_extension  : bool  — True if any .so / .pyd / .dll is present
+          - binary_extensions: JSON  — list of relative paths to native files
+          - platform_tag     : str   — e.g. "linux_x86_64", "win_amd64", or "none"
+          - reload_safe      : bool  — False when has_c_extension is True (loader hint)
+        """
+        result: Dict[str, object] = {
+            "has_c_extension": False,
+            "binary_extensions": "[]",
+            "platform_tag": "none",
+            "reload_safe": True,
+        }
+        if not dist or not dist.files:
+            return result
+
+        _native_suffixes = (".so", ".pyd", ".dll")
+        native_files: List[str] = []
+        for file_path in dist.files:
+            fp_str = str(file_path)
+            if any(fp_str.endswith(sfx) for sfx in _native_suffixes):
+                native_files.append(fp_str)
+
+        result["has_c_extension"] = bool(native_files)
+        result["binary_extensions"] = json.dumps(native_files)
+        result["reload_safe"] = not bool(native_files)
+
+        # Parse platform tag from the dist-info dirname, e.g.:
+        #   numpy-1.26.4-cp311-cp311-linux_x86_64.dist-info  -> "linux_x86_64"
+        #   requests-2.31.0-py3-none-any.dist-info           -> "any"
+        #   numpy-1.26.4.dist-info                           -> "none"
+        try:
+            dist_info_name = Path(dist._path).name  # e.g. "numpy-1.26.4-cp311-cp311-linux_x86_64.dist-info"
+            stem = dist_info_name.replace(".dist-info", "")
+            parts = stem.split("-")
+            # Wheel tag layout: name-version-pythontag-abitag-platformtag  (5 parts)
+            # Pure-python wheel: name-version-py3-none-any                 (5 parts, last = "any")
+            # Editable / sdist install: name-version                       (2 parts)
+            if len(parts) >= 5:
+                result["platform_tag"] = parts[-1]
+            elif len(parts) == 4:
+                # Some non-standard layouts have 4 parts
+                result["platform_tag"] = parts[-1]
+            # else leave as "none" (source install, no wheel tag available)
+        except Exception:
+            pass
+
+        return result
+
+    def _extract_project_urls(self, dist: importlib.metadata.Distribution) -> Dict:
+        """
+        Parses all Project-URL metadata headers into a structured dict and
+        extracts the most useful individual links (PyPI, GitHub, Homepage).
+
+        The raw header format is "Label, URL" per line.  We store:
+          - project_urls   : JSON dict  {label: url, ...}  — all of them
+          - url_homepage   : str  — best guess at the homepage URL
+          - url_source     : str  — best guess at the source/repo URL (GitHub etc.)
+          - url_pypi       : str  — direct PyPI package page if found
+        """
+        result: Dict[str, object] = {
+            "project_urls": "{}",
+            "url_homepage": "",
+            "url_source": "",
+            "url_pypi": "",
+        }
+        try:
+            # Project-URL may have been collapsed into a JSON list by the multi-value fix
+            raw_urls = dist.metadata.get_all("Project-URL") or []
+            url_map: Dict[str, str] = {}
+            for entry in raw_urls:
+                if "," in entry:
+                    label, url = entry.split(",", 1)
+                    url_map[label.strip()] = url.strip()
+
+            result["project_urls"] = json.dumps(url_map)
+
+            # Homepage: prefer explicit "Homepage" label, fall back to "Home-page" header
+            homepage_candidates = ["Homepage", "Home", "Website", "home-page"]
+            for label in homepage_candidates:
+                if label in url_map:
+                    result["url_homepage"] = url_map[label]
+                    break
+            if not result["url_homepage"]:
+                result["url_homepage"] = dist.metadata.get("Home-page") or ""
+
+            # Source / repo URL — look for GitHub/GitLab/Bitbucket
+            source_candidates = ["Source", "Source Code", "Repository", "Code", "Github", "Gitlab"]
+            for label in source_candidates:
+                if label in url_map:
+                    result["url_source"] = url_map[label]
+                    break
+            if not result["url_source"]:
+                # Scan all values for a recognisable forge URL
+                for url in url_map.values():
+                    if any(host in url for host in ("github.com", "gitlab.com", "bitbucket.org")):
+                        result["url_source"] = url
+                        break
+
+            # PyPI URL — look for explicit label or construct from package name
+            pypi_candidates = ["PyPI", "PyPi", "Pypi", "Package Index"]
+            for label in pypi_candidates:
+                if label in url_map:
+                    result["url_pypi"] = url_map[label]
+                    break
+            if not result["url_pypi"]:
+                pkg_name = dist.metadata.get("Name") or ""
+                if pkg_name:
+                    result["url_pypi"] = f"https://pypi.org/project/{pkg_name}"
+
+        except Exception:
+            pass
+
+        return result
+
+    def _compute_content_hash(self, dist: importlib.metadata.Distribution) -> str:
+        """
+        Generates a stable content fingerprint for deduplication / symlink cache.
+
+        V2: Now incorporates the RECORD file hash so two builds of the same
+        package version compiled against different glibc/ABI targets produce
+        different content_hashes and are NOT mistakenly merged in the global cache.
+
+        The hash covers:
+          - canonical_name, version, sorted_deps, python_requires
+          - has_c_extension  (pure vs compiled copy divergence)
+          - record_hash      (byte-level identity — catches glibc/OS build diffs)
+          - wheel_abi_tag    (manylinux vs musllinux vs pure-python)
+
+        Two instances sharing the same content_hash are safe to deduplicate /
+        symlink in the global flat cache without risk of ABI corruption.
+        """
+        try:
+            name = canonicalize_name(dist.metadata.get("Name") or "")
+            version = dist.version or ""
+            python_requires = dist.metadata.get("Requires-Python") or ""
+            deps_sorted = sorted(dist.requires or [])
+            has_c_ext = any(
+                str(f).endswith((".so", ".pyd", ".dll"))
+                for f in (dist.files or [])
+            )
+            # Include byte-level identity fields from the new global cache helpers
+            record_hash = self._get_exact_record_hash(dist)
+            wheel_abi_tag = self._get_wheel_abi_tag(dist)
+            fingerprint = json.dumps(
+                {
+                    "name": name,
+                    "version": version,
+                    "python_requires": python_requires,
+                    "deps": deps_sorted,
+                    "has_c_ext": has_c_ext,
+                    "record_hash": record_hash,
+                    "wheel_abi_tag": wheel_abi_tag,
+                },
+                sort_keys=True,
+            )
+            return hashlib.sha256(fingerprint.encode()).hexdigest()
+        except Exception:
+            return ""
+
     def _check_binary_integrity(self, bin_path: str) -> Dict:
         if not os.path.exists(bin_path):
             return {"exists": False}
@@ -2413,16 +2672,22 @@ class omnipkgMetadataGatherer:
     def _find_package_files(self, dist: importlib.metadata.Distribution) -> Dict:
         """
         FIXED: Authoritatively finds files belonging to the specific distribution.
+        Also collects native extension files (.so / .pyd / .dll) for C-ext detection.
         """
-        files = {"binaries": []}
+        files = {"binaries": [], "native_extensions": []}
         if not dist or not dist.files:
             return files
+        _native_suffixes = (".so", ".pyd", ".dll")
         for file_path in dist.files:
             try:
                 abs_path = dist.locate_file(file_path)
                 if "bin" in file_path.parts or "Scripts" in file_path.parts:
                     if abs_path and abs_path.exists() and os.access(abs_path, os.X_OK):
                         files["binaries"].append(str(abs_path))
+                # Collect native extensions regardless of directory location
+                if any(str(file_path).endswith(sfx) for sfx in _native_suffixes):
+                    if abs_path and abs_path.exists():
+                        files["native_extensions"].append(str(abs_path))
             except (FileNotFoundError, NotADirectoryError):
                 continue
         return files
@@ -2473,7 +2738,153 @@ class omnipkgMetadataGatherer:
             "audit_status": "checked_in_bulk",
             "issues_found": len(vulnerabilities),
             "report": vulnerabilities,
+            # Structured CVE detail for display / MCP consumers — each entry has
+            # id, advisory, severity, and affected_versions where available.
+            "cve_detail": json.dumps([
+                {
+                    "id": v.get("CVE") or v.get("vulnerability_id") or v.get("id", "unknown"),
+                    "advisory": (v.get("advisory") or v.get("description") or "")[:300],
+                    "severity": v.get("severity") or v.get("cvss_v3") or "unknown",
+                    "affected_versions": v.get("affected_versions") or v.get("specs") or [],
+                }
+                for v in vulnerabilities
+                if isinstance(v, dict)
+            ]),
         }
+
+    # ── GLOBAL CACHE HELPERS ────────────────────────────────────────────────
+    # These four methods provide the data needed for a pnpm-style flat global
+    # cache with safe deduplication, ref-counting, and runtime cloaking.
+
+    def _get_exact_record_hash(self, dist: importlib.metadata.Distribution) -> str:
+        """
+        Hash the RECORD file contents (which itself contains SHA-256 of every
+        installed file) to produce a byte-level cache key.
+
+        Two identical package versions compiled on different OS/glibc versions
+        have the same Requires-Dist but different RECORD hashes — so they MUST
+        NOT share a global cache slot.  This hash is the tie-breaker.
+        """
+        try:
+            if hasattr(dist, "read_text"):
+                record = dist.read_text("RECORD")
+                if record:
+                    return hashlib.sha256(record.encode("utf-8")).hexdigest()
+        except Exception:
+            pass
+        return "unknown_record_hash"
+
+    def _get_top_level_symlink_targets(self, dist: importlib.metadata.Distribution) -> List[str]:
+        """
+        Returns the exact set of folder/file names that must be symlinked from
+        the global cache slot into a bubble so Python's import machinery can
+        find this package without any path renaming tricks.
+
+        Example result for ``rich``:
+            ["rich", "rich-13.4.2.dist-info"]
+
+        The symlinker iterates this list, creating one symlink per entry:
+            bubble/.omnipkg_versions/rich-13.4.2/<entry> -> global_cache/<entry>
+        """
+        paths: set = set()
+        try:
+            if dist.files:
+                for file_path in dist.files:
+                    top_part = file_path.parts[0] if file_path.parts else ""
+                    if top_part:
+                        paths.add(top_part)
+        except Exception:
+            pass
+        # Always include the dist-info dir itself so importlib.metadata can
+        # resolve the package from inside the bubble.
+        try:
+            paths.add(Path(dist._path).name)
+        except Exception:
+            pass
+        return sorted(paths)
+
+    def _get_wheel_abi_tag(self, dist: importlib.metadata.Distribution) -> str:
+        """
+        Reads the WHEEL file to extract the full wheel tag
+        (e.g. ``cp311-cp311-manylinux_2_17_x86_64``).
+
+        This tag, combined with ``record_hash``, is the compound key that
+        uniquely identifies a binary slot in the global cache and prevents
+        glibc/ABI mismatches when sharing cache entries across machines.
+        """
+        try:
+            if hasattr(dist, "read_text"):
+                wheel_data = dist.read_text("WHEEL")
+                if wheel_data:
+                    tags = []
+                    for line in wheel_data.splitlines():
+                        if line.startswith("Tag:"):
+                            tags.append(line.split(":", 1)[1].strip())
+                    if tags:
+                        # Return all tags joined — multi-tag wheels exist
+                        return "|".join(tags)
+        except Exception:
+            pass
+        return "any"
+
+    def _get_resolved_bubble_neighbors(
+        self, dist: importlib.metadata.Distribution, context_info: Dict
+    ) -> Dict[str, str]:
+        """
+        When this dist lives inside a bubble, scan its sibling dist-info
+        directories to build a ``{canonical_name: version}`` snapshot of
+        everything installed alongside it.
+
+        This is the runtime lock — it tells the loader exactly which version
+        of every dep is present in *this* bubble so it can cloak conflicts
+        against the main environment without guessing.
+
+        Used for:
+        - Global cache ref-counting  (query: "who depends on markupsafe==1.1.1?")
+        - Loader precision  (inject only the deps this bubble actually resolved)
+        - MCP tooling       (explain the exact isolation state of a bubble)
+        """
+        install_type = context_info.get("install_type")
+        if install_type not in ("bubble", "nested"):
+            return {}
+        resolved: Dict[str, str] = {}
+        try:
+            bubble_root = Path(dist._path).parent
+            for neighbor_di in bubble_root.glob("*.dist-info"):
+                if not neighbor_di.is_dir():
+                    continue
+                try:
+                    n_dist = PathDistribution(neighbor_di)
+                    n_name = n_dist.metadata.get("Name", "")
+                    if n_name:
+                        resolved[canonicalize_name(n_name)] = n_dist.version
+                except Exception:
+                    continue
+        except Exception:
+            pass
+        return resolved
+
+    def _get_global_cache_key(self, dist: importlib.metadata.Distribution) -> str:
+        """
+        Constructs the deterministic slot name for this package in the global cache.
+
+        Format: ``<canonical_name>-<version>-<record_hash[:16]>``
+
+        The record_hash prefix ensures that:
+        - Pure-python and compiled builds of the same version get different slots.
+        - Packages compiled against different glibc/ABI versions get different slots.
+        - Two truly identical installs (same bytes) map to the exact same slot and
+          can be ref-counted / deduplicated safely.
+        """
+        try:
+            name = canonicalize_name(dist.metadata.get("Name") or "unknown")
+            version = dist.version or "0"
+            rec_hash = self._get_exact_record_hash(dist)[:16]
+            return f"{name}-{version}-{rec_hash}"
+        except Exception:
+            return "unknown-cache-key"
+
+    # ── END GLOBAL CACHE HELPERS ────────────────────────────────────────────
 
     def _generate_checksum(self, metadata: Dict) -> str:
         core_data = {
