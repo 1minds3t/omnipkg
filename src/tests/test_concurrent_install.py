@@ -175,7 +175,7 @@ def ensure_daemon_running(interpreter_paths: list) -> bool:
     are adopted so the daemon registry sees them on startup.
     """
     try:
-        from omnipkg.isolation.worker_daemon import DaemonClient, DAEMON_LOG_FILE
+        from omnipkg.isolation.worker_daemon import DaemonClient, PID_FILE
         client = DaemonClient()
         status = client.status()
 
@@ -183,60 +183,40 @@ def ensure_daemon_running(interpreter_paths: list) -> bool:
             safe_print("   ✅ Daemon already running")
         else:
             safe_print("   🔄 Starting daemon (all pythons already adopted)...")
-            _daemon_start = time.perf_counter()
-            # On Windows .bat shims require shell=True; capture both streams so
-            # rc=1 failures are visible rather than silently swallowed.
-            _is_win = sys.platform == "win32"
             proc = subprocess.Popen(
                 ["8pkg", "daemon", "start"],
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
             )
-            # Poll until daemon answers, launcher exits with error, or we time out.
-            _came_up = False
-            for i in range(60):
-                time.sleep(0.5)
-                rc = proc.poll()
-                if rc is not None and rc != 0:
-                    # Launcher exited non-zero — bail immediately, don't burn
-                    # the remaining 30s pretending the daemon might appear.
-                    try:
-                        _out = proc.stdout.read().decode("utf-8", errors="replace").strip()
-                        _err = proc.stderr.read().decode("utf-8", errors="replace").strip()
-                    except Exception:
-                        _out = _err = ""
-                    safe_print(f"   ❌ Launcher exited rc={rc} — daemon start failed")
-                    if _out:
-                        for ln in _out.splitlines():
-                            safe_print(f"   [launcher stdout] {ln}")
-                    if _err:
-                        for ln in _err.splitlines():
-                            safe_print(f"   [launcher stderr] {ln}")
-                    dump_daemon_log("DAEMON LOG ON FAILURE", only_on_error=False)
-                    return False
-                if rc == 0 and i == 0:
-                    safe_print("   ℹ️  Launcher exited rc=0 — daemon detached")
-                status = client.status()
-                if status.get("success"):
-                    _daemon_elapsed = (time.perf_counter() - _daemon_start) * 1000
-                    safe_print(f"   ✅ Daemon up after {format_duration(_daemon_elapsed)}")
-                    _came_up = True
-                    # Close pipes so the launcher handle doesn't pin the process
-                    try:
-                        proc.stdout.close()
-                        proc.stderr.close()
-                    except Exception:
-                        pass
+            
+            # --- NEW ROBUST WAITING LOGIC ---
+            safe_print(f"   ⏳ Waiting for PID file at: {PID_FILE}")
+            deadline = time.monotonic() + 60.0  # Wait up to 60 seconds
+            pid_file_found = False
+            while time.monotonic() < deadline:
+                if os.path.exists(PID_FILE):
+                    safe_print("   ✅ PID file appeared.")
+                    pid_file_found = True
                     break
-            if not _came_up:
-                safe_print("   ❌ Daemon never came up — killing launcher to unblock CI")
-                try:
-                    proc.kill()
-                    proc.wait(timeout=5)
-                except Exception:
-                    pass
-                dump_daemon_log("DAEMON LOG ON FAILURE", only_on_error=False)
+                time.sleep(0.5)
+            
+            if not pid_file_found:
+                safe_print(f"   ❌ Timed out waiting for PID file after 60s.")
+                # It's still useful to dump the log if it exists
+                dump_daemon_log("DAEMON LOG ON PID TIMEOUT", only_on_error=False)
                 return False
+
+            # Give it a couple more seconds for the socket to bind after PID is written
+            time.sleep(2) 
+            
+            # Now verify connection
+            status = client.status()
+            if status.get("success"):
+                 safe_print("   ✅ Daemon confirmed responsive.")
+            else:
+                 safe_print("   ❌ Daemon started but is not responsive.")
+                 dump_daemon_log("DAEMON LOG ON FAILURE", only_on_error=False)
+                 return False
 
         return True
 
