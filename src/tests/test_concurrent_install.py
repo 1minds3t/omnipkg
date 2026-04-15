@@ -653,9 +653,30 @@ def main():
     total_time = (time.perf_counter() - start_time) * 1000
     safe_print(f"\n🎉 DONE  total={format_duration(total_time)}")
 
-    # Use _exit to bypass atexit handlers and finalizers — daemon background
-    # threads (sockets/keepalives) would otherwise block sys.exit indefinitely.
-    sys.exit(0)
+    # Always dump daemon log before shutdown — lets us see FS watcher state,
+    # thread activity, and any silent errors even on a fully successful run.
+    dump_daemon_log("FINAL DAEMON LOG (always)", only_on_error=False)
+
+    # Shutdown daemon before exit so CI runner doesn't wait for orphaned children
+    # (FS watcher watchdog threads, socket listeners, etc.)
+    try:
+        from omnipkg.isolation.worker_daemon import DaemonClient
+        safe_print("   🛑 Shutting down daemon...")
+        DaemonClient().shutdown()
+        time.sleep(2)  # give it a moment to actually die
+        safe_print("   ✅ Daemon shutdown sent")
+    except Exception as e:
+        safe_print(f"   ⚠️  Daemon shutdown failed: {e}")
+
+    # Dump again after shutdown so we can see if it actually stopped cleanly
+    # or if the FS watcher / socket threads are still logging after the signal.
+    dump_daemon_log("POST-SHUTDOWN DAEMON LOG (always)", only_on_error=False)
+
+    # os._exit bypasses atexit handlers and thread finalizers entirely.
+    # sys.exit(0) goes through Python teardown which can hang if any background
+    # thread (DaemonClient keepalive, watchdog observer, etc.) is still running.
+    import os
+    os._exit(0)
 
 
 if __name__ == "__main__":
