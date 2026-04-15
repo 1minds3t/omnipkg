@@ -113,27 +113,54 @@ jobs:
         shell: cmd
         run: omnipkg demo 8 --non-interactive
 
+      # --- UPDATED LOG DUMP STEP ---
       - name: Dump daemon log after demo run 1
         if: always()
         shell: pwsh
-        run: type "$env:TEMP\omnipkg\omnipkg_daemon.log"
+        run: |
+          $logPath = "$env:TEMP\omnipkg\${{ env.OMNIPKG_ENV_ID }}\omnipkg_daemon.log"
+          Write-Host "Searching for log at: $logPath"
+          if (Test-Path $logPath) {
+            Get-Content $logPath
+          } else {
+            Write-Host "❌ Log file not found. Listing temp directory contents:"
+            Get-ChildItem -Path "$env:TEMP\omnipkg" -Recurse
+          }
 
       - name: Run Demo Again (Verify Caching)
         shell: cmd
         run: omnipkg demo 8 --non-interactive
         continue-on-error: true
 
+      # --- UPDATED LOG DUMP STEP ---
       - name: Dump daemon log after demo run 2
         if: always()
         shell: pwsh
-        run: type "$env:TEMP\omnipkg\omnipkg_daemon.log"
+        run: |
+          $logPath = "$env:TEMP\omnipkg\${{ env.OMNIPKG_ENV_ID }}\omnipkg_daemon.log"
+          Write-Host "Searching for log at: $logPath"
+          if (Test-Path $logPath) {
+            Get-Content $logPath
+          } else {
+            Write-Host "❌ Log file not found. Listing temp directory contents:"
+            Get-ChildItem -Path "$env:TEMP\omnipkg" -Recurse
+          }
 
       - name: Run Demo Again (Verify Caching)
         shell: cmd
         run: omnipkg demo 8 --non-interactive
         continue-on-error: true
 
+      # --- UPDATED LOG DUMP STEP ---
       - name: Dump daemon log after demo run 3
         if: always()
         shell: pwsh
-        run: type "$env:TEMP\omnipkg\omnipkg_daemon.log"
+        run: |
+          $logPath = "$env:TEMP\omnipkg\${{ env.OMNIPKG_ENV_ID }}\omnipkg_daemon.log"
+          Write-Host "Searching for log at: $logPath"
+          if (Test-Path $logPath) {
+            Get-Content $logPath
+          } else {
+            Write-Host "❌ Log file not found. Listing temp directory contents:"
+            Get-ChildItem -Path "$env:TEMP\omnipkg" -Recurse
+          }
