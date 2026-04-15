@@ -1,7 +1,8 @@
 """
 Multiverse healing test — uses direct versioned binaries (8pkg39, 8pkg311, etc.)
-and reads interpreter paths from the omnipkg registry.
-No swap needed, works in CI across shells.
+No pre-flight registry check needed: the shim auto-adopts the interpreter and
+installs packages on first use. We only read the registry AFTER the shim has
+run (adoption guaranteed complete) to get the exe path for payload subprocesses.
 """
 import sys
 import os
@@ -19,86 +20,13 @@ from omnipkg.common_utils import safe_print
 from omnipkg.i18n import _
 
 
-# --- REGISTRY HELPERS ---
-
-def get_registry(venv_root: Path) -> dict:
-    """Read the omnipkg interpreter registry."""
-    registry_path = venv_root / ".omnipkg" / "interpreters" / "registry.json"
-    if not registry_path.exists():
-        raise RuntimeError(f"Registry not found: {registry_path}")
-    return json.loads(registry_path.read_text(encoding="utf-8"))
-
-
-def get_interpreter(venv_root: Path, version: str) -> Path:
-    """Get the python executable path for a given version from the registry."""
-    registry = get_registry(venv_root)
-    interpreters = registry.get("interpreters", {})
-    if version not in interpreters:
-        raise RuntimeError(
-            f"Python {version} not found in registry. "
-            f"Available: {list(interpreters.keys())}"
-        )
-    exe = Path(interpreters[version])
-    if not exe.exists():
-        raise RuntimeError(f"Interpreter path does not exist: {exe}")
-    return exe
-
-
-def get_versioned_bin(venv_root: Path, version: str, cmd: str) -> list:
-    """
-    Return a command prefix for a versioned omnipkg invocation.
-
-    Strategy (in order):
-      1. 8pkg.exe --python X.Y   — preferred; exe is directly executable,
-                                   no shell needed, works in subprocess.
-      2. cmd /c 8pkgXY.bat       — fallback for Windows when only .bat exists;
-                                   .bat files require cmd.exe to interpret them
-                                   and CANNOT be launched via CreateProcess directly.
-      3. 8pkgXY (no extension)   — Unix shim / symlink.
-
-    Returns a list so callers can do: run(get_versioned_bin(...) + ["install", ...])
-    """
-    ver_tag = version.replace(".", "")  # "3.9" -> "39"
-    is_windows = sys.platform == "win32"
-
-    for bin_dir in [venv_root / "Scripts", venv_root / "bin"]:
-        # --- Prefer the plain exe with --python flag (cross-platform, no shell needed) ---
-        exe = bin_dir / f"{cmd}.exe"
-        if exe.exists():
-            return [str(exe), "--python", version]
-
-        plain = bin_dir / cmd
-        if plain.exists() and not is_windows:
-            return [str(plain), "--python", version]
-
-        # --- .bat fallback: must be wrapped in cmd /c on Windows ---
-        for bat_suffix in [f"{cmd}{ver_tag}.bat", f"{cmd}{ver_tag}.cmd"]:
-            bat = bin_dir / bat_suffix
-            if bat.exists():
-                if is_windows:
-                    return ["cmd", "/c", str(bat)]
-                else:
-                    # Should not happen, but handle gracefully
-                    return [str(bat)]
-
-        # --- Unix shim with no extension ---
-        shim = bin_dir / f"{cmd}{ver_tag}"
-        if shim.exists():
-            return [str(shim)]
-
-    raise RuntimeError(
-        f"Could not find '{cmd}' binary for Python {version} in {venv_root}.\n"
-        f"  Looked for: {cmd}.exe, {cmd}, {cmd}{ver_tag}.bat, {cmd}{ver_tag}.cmd, {cmd}{ver_tag}\n"
-        f"  Under: {venv_root / 'Scripts'} and {venv_root / 'bin'}"
-    )
-
+# --- HELPERS ---
 
 def detect_venv_root() -> Path:
     """Detect the omnipkg venv root from env or config."""
     override = os.environ.get("OMNIPKG_VENV_ROOT")
     if override:
         return Path(override)
-    # Fall back to reading config next to this python
     try:
         from omnipkg.core import ConfigManager
         cm = ConfigManager(suppress_init_messages=True)
@@ -106,6 +34,69 @@ def detect_venv_root() -> Path:
     except Exception:
         pass
     raise RuntimeError("Could not determine OMNIPKG venv root. Set OMNIPKG_VENV_ROOT.")
+
+
+def get_versioned_bin(venv_root: Path, version: str, cmd: str) -> list:
+    """
+    Return a command prefix for a versioned omnipkg shim.
+    The shim handles auto-adopt + install — no registry pre-check needed.
+
+    Priority:
+      1. cmd.exe --python X.Y   (cross-platform, no shell)
+      2. cmd /c cmdXY.bat       (Windows .bat shim)
+      3. cmdXY                  (Unix symlink/shim)
+      4. cmd --python X.Y       (plain Unix binary with flag)
+    """
+    ver_tag = version.replace(".", "")
+    is_windows = sys.platform == "win32"
+
+    for bin_dir in [venv_root / "Scripts", venv_root / "bin"]:
+        # Plain .exe with --python flag — works everywhere without shell
+        exe = bin_dir / f"{cmd}.exe"
+        if exe.exists():
+            return [str(exe), "--python", version]
+
+        # Windows .bat shim — must go through cmd /c
+        for bat_suffix in [f"{cmd}{ver_tag}.bat", f"{cmd}{ver_tag}.cmd"]:
+            bat = bin_dir / bat_suffix
+            if bat.exists():
+                return (["cmd", "/c", str(bat)] if is_windows else [str(bat)])
+
+        # Unix versioned shim (symlink like 8pkg39)
+        shim = bin_dir / f"{cmd}{ver_tag}"
+        if shim.exists():
+            return [str(shim)]
+
+        # Plain Unix binary with --python flag
+        plain = bin_dir / cmd
+        if plain.exists() and not is_windows:
+            return [str(plain), "--python", version]
+
+    # Last resort: rely on PATH (CI often has 8pkg39 on PATH directly)
+    shim_name = f"{cmd}{ver_tag}"
+    safe_print(f"   [WARN] No shim found under {venv_root} — falling back to PATH: {shim_name}")
+    return [shim_name]
+
+
+def get_interpreter_after_adopt(venv_root: Path, version: str) -> Path:
+    """
+    Read the interpreter exe from the registry.
+    Only call this AFTER the versioned shim has already run (adoption complete).
+    """
+    registry_path = venv_root / ".omnipkg" / "interpreters" / "registry.json"
+    if not registry_path.exists():
+        raise RuntimeError(f"Registry not found at {registry_path}")
+    registry = json.loads(registry_path.read_text(encoding="utf-8"))
+    interpreters = registry.get("interpreters", {})
+    if version not in interpreters:
+        raise RuntimeError(
+            f"Python {version} still not in registry after adoption. "
+            f"Available: {list(interpreters.keys())}"
+        )
+    exe = Path(interpreters[version])
+    if not exe.exists():
+        raise RuntimeError(f"Interpreter path does not exist: {exe}")
+    return exe
 
 
 # --- SUBPROCESS HELPER ---
@@ -117,7 +108,6 @@ def run(cmd, description, check=True, env=None):
     _env = os.environ.copy()
     if env:
         _env.update(env)
-    # Prevent recursive heal loops in subprocesses
     _env["OMNIPKG_DISABLE_AUTO_ALIGN"] = "1"
     _env["OMNIPKG_SUBPROCESS_MODE"] = "1"
 
@@ -133,16 +123,12 @@ def run(cmd, description, check=True, env=None):
             env=_env,
         )
     except (OSError, FileNotFoundError) as exc:
-        # Happens when the executable itself can't be launched (e.g. .bat without cmd /c)
         safe_print(f"   [LAUNCH ERROR] Could not start process: {exc}")
         safe_print(f"   Attempted executable: {cmd[0]!r}")
-        safe_print(f"   Full command: {cmd}")
         if check:
             raise RuntimeError(
                 f"Failed to launch '{cmd[0]}': {exc}\n"
-                f"  Full command: {cmd}\n"
-                f"  Hint: on Windows, .bat files cannot be launched directly via "
-                f"subprocess — they must be wrapped with ['cmd', '/c', ...]"
+                f"  Hint: on Windows, .bat files must be wrapped with ['cmd', '/c', ...]"
             ) from exc
         return ""
 
@@ -155,20 +141,16 @@ def run(cmd, description, check=True, env=None):
     proc.stdout.close()
     rc = proc.wait()
     output = "".join(lines)
-
     safe_print(f"   exit code: {rc}")
 
     if check and rc != 0:
-        safe_print(f"\n   [FAILURE DETAILS] Command exited with code {rc}")
-        safe_print(f"   Executable : {cmd[0]!r}")
-        safe_print(f"   Full cmd   : {' '.join(str(c) for c in cmd)}")
+        safe_print(f"\n   [FAILURE DETAILS] rc={rc}")
+        safe_print(f"   Full cmd: {' '.join(str(c) for c in cmd)}")
         if output.strip():
-            safe_print("   --- captured output ---")
             for line in output.splitlines():
                 safe_print(f"   {line}")
-            safe_print("   --- end output ---")
         else:
-            safe_print("   (no output captured — process may have failed to start)")
+            safe_print("   (no output captured)")
         raise subprocess.CalledProcessError(rc, cmd, output=output)
 
     return output
@@ -206,18 +188,18 @@ def multiverse_analysis():
     venv_root = detect_venv_root()
     safe_print(f"[INFO] venv root: {venv_root}")
 
-    registry = get_registry(venv_root)
-    safe_print(f"[INFO] available interpreters: {list(registry['interpreters'].keys())}")
-
     # === STEP 1: Python 3.9 — legacy scipy/numpy ===
-    safe_print("\n[STEP 1] Python 3.9 — installing legacy packages...")
-
+    # The shim handles adopt + install automatically — no registry pre-check.
+    safe_print("\n[STEP 1] Python 3.9 — installing legacy packages via shim (auto-adopts)...")
     pkg39_cmd = get_versioned_bin(venv_root, "3.9", "8pkg")
-    py39      = get_interpreter(venv_root, "3.9")
     safe_print(f"[INFO] pkg39 cmd prefix: {pkg39_cmd}")
 
     run(pkg39_cmd + ["install", "numpy<2", "scipy"],
         "Installing numpy<2 + scipy into Python 3.9")
+
+    # Now adoption is complete — safe to read registry for the exe path
+    py39 = get_interpreter_after_adopt(venv_root, "3.9")
+    safe_print(f"[INFO] py39 exe: {py39}")
 
     safe_print("\n[STEP 1] Running legacy payload in Python 3.9...")
     result = subprocess.run(
@@ -237,14 +219,16 @@ def multiverse_analysis():
     safe_print(f"[OK] Legacy result: {legacy_data}")
 
     # === STEP 2: Python 3.11 — modern tensorflow ===
-    safe_print("\n[STEP 2] Python 3.11 — installing tensorflow...")
-
+    safe_print("\n[STEP 2] Python 3.11 — installing tensorflow via shim (auto-adopts)...")
     pkg311_cmd = get_versioned_bin(venv_root, "3.11", "8pkg")
-    py311      = get_interpreter(venv_root, "3.11")
     safe_print(f"[INFO] pkg311 cmd prefix: {pkg311_cmd}")
 
     run(pkg311_cmd + ["install", "tensorflow"],
         "Installing tensorflow into Python 3.11")
+
+    # Adoption complete — safe to read registry
+    py311 = get_interpreter_after_adopt(venv_root, "3.11")
+    safe_print(f"[INFO] py311 exe: {py311}")
 
     safe_print("\n[STEP 2] Running modern payload in Python 3.11...")
     result = subprocess.run(
