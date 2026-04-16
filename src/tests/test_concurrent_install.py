@@ -640,17 +640,22 @@ def main():
     # Shutdown daemon before exit so CI runner doesn't wait for orphaned children
     # (FS watcher watchdog threads, socket listeners, etc.)
     try:
-        from omnipkg.isolation.worker_daemon import DaemonClient
-        safe_print("   🛑 Shutting down daemon...")
-        DaemonClient().shutdown()
-        time.sleep(2)  # give it a moment to actually die
-        safe_print("   ✅ Daemon shutdown sent")
+        from omnipkg.isolation.worker_daemon import cli_stop
+        safe_print("\n==================================================")
+        safe_print("🛑 PERFORMING ROBUST DAEMON TEARDOWN")
+        safe_print("==================================================")
+        
+        # This does the graceful shutdown -> force kill -> orphan sweep -> file cleanup
+        cli_stop() 
+        
+        safe_print("✅ Teardown complete. No orphaned processes remaining.")
     except Exception as e:
-        safe_print(f"   ⚠️  Daemon shutdown failed: {e}")
+        safe_print(f"   ⚠️  Robust teardown failed: {e}")
 
-    # Dump again after shutdown so we can see if it actually stopped cleanly
-    # or if the FS watcher / socket threads are still logging after the signal.
+    # Now the POST-SHUTDOWN log dump will actually be accurate because the process is DEAD.
     dump_daemon_log("POST-SHUTDOWN DAEMON LOG (always)", only_on_error=False)
+
+    # Final exit
 
     # os._exit bypasses atexit handlers and thread finalizers entirely.
     # sys.exit(0) goes through Python teardown which can hang if any background
