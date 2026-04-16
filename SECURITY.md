@@ -223,3 +223,21 @@ For contributors and developers:
 ---
 
 Thank you for helping us keep omnipkg secure! 🔒
+---
+
+## Dependency Resolution & Transitive Pinning
+
+To proactively protect users from downstream vulnerabilities, Omnipkg explicitly pins certain packages in `pyproject.toml` and `requirements.txt` that would normally be treated as transitive dependencies.
+
+These are marked as explicit dependencies strictly to force the resolution graph to use CVE-patched versions.
+
+| Package | Constraint | Reason |
+|---|---|---|
+| `pygments` | `>=2.20.0` (Python ≥3.9) / `>=2.17.2,<2.18.0` (Python 3.7–3.8) | ReDoS vulnerability in SML lexer |
+| `authlib` | `>=1.6.9` (Python ≥3.9) | OIDC fail-open vulnerability |
+| `cryptography` | `>=46.0.7` (Python ≥3.9) | Multiple CVEs in older releases |
+| `aiohttp` | `>=3.11.14` (Python ≥3.9) | HTTP request smuggling vulnerability |
+
+Because Omnipkg supports legacy Python environments (3.7/3.8), version-split requirements enforce the maximum safe supported version for older interpreters. See the LTS section above for full legacy CVE status.
+
+**Note for audits:** While these appear as direct dependencies in the manifest, they function purely as secure transitive resolutions. Third-party licensing and notices are documented in `THIRD_PARTY_NOTICES.txt` and the `licenses/` directory.
