@@ -194,6 +194,7 @@ def ensure_daemon_running(interpreter_paths: list) -> bool:
             deadline = time.monotonic() + 60.0  # Wait up to 60 seconds
             pid_file_found = False
             while time.monotonic() < deadline:
+                import os
                 if os.path.exists(PID_FILE):
                     safe_print("   ✅ PID file appeared.")
                     pid_file_found = True
