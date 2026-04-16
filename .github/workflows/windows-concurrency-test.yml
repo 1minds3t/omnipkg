@@ -48,11 +48,11 @@ jobs:
       - name: Set Omnipkg Environment ID
         shell: pwsh
         run: |
-          # We set a fixed ID for this CI run. 
-          # This ensures logs, sockets, and config all use the same folder.
+          # We use a hardcoded ID. This is the ONLY way to ensure 
+          # no "Grounding" logs leak into the environment variable.
           echo "OMNIPKG_ENV_ID_OVERRIDE=ci-test" >> $env:GITHUB_ENV
           echo "OMNIPKG_ENV_ID=ci-test" >> $env:GITHUB_ENV
-          Write-Host "✅ Omnipkg environment locked to: ci-test"
+          Write-Host "✅ Environment locked to: ci-test"
 
       - name: Configure omnipkg for non-interactive use
         shell: pwsh
