@@ -116,8 +116,6 @@ site/
 src/tests/debug_test*.py
 *.zip
 
-# Auto-generated license files
-licenses/
 .gitship/
 
 # gitship diff exports (auto-added by gitship)
