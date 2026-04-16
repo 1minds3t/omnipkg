@@ -17,22 +17,22 @@ jobs:
   verify-piwheels:
     name: Verify ARM32 on piwheels
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      
+
       - name: Wait for piwheels (if triggered by release)
         if: github.event_name == 'release'
         run: |
           echo "⏳ Waiting 24 hours for piwheels to build ARM32 wheels..."
-          sleep 86400  # 24 hours
-      
+          sleep 86400
+
       - name: Get latest version
         id: version
         run: |
@@ -44,71 +44,88 @@ jobs:
           else
             VERSION=$(curl -s https://pypi.org/pypi/omnipkg/json | python3 -c "import sys, json; print(json.load(sys.stdin)['info']['version'])")
           fi
-          
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "Checking version: $VERSION"
-      
-      - name: Scrape piwheels data
+
+      - name: Scrape piwheels simple index
         id: scrape
         run: |
           VERSION="${{ steps.version.outputs.version }}"
-          
-          echo "🔍 Scraping piwheels for omnipkg $VERSION..."
-          
-          # Fetch the project page
-          RESPONSE=$(curl -s "https://www.piwheels.org/project/omnipkg/")
-          
-          # Check if version exists
-          if ! echo "$RESPONSE" | grep -q "$VERSION"; then
-            echo "❌ Version $VERSION not found on piwheels yet"
+          echo "🔍 Checking piwheels simple index for omnipkg $VERSION..."
+
+          # Use the simple index — same source pip uses, plain HTML, reliable
+          SIMPLE_HTML=$(curl -s "https://www.piwheels.org/simple/omnipkg/")
+
+          if [ -z "$SIMPLE_HTML" ]; then
+            echo "❌ Could not fetch piwheels simple index"
             echo "builds_found=false" >> $GITHUB_OUTPUT
             exit 0
           fi
-          
-          echo "✅ Version $VERSION found on piwheels"
-          
-          # Extract wheel filename (should be omnipkg-X.X.X-py3-none-any.whl)
-          WHEEL_FILE=$(echo "$RESPONSE" | grep -oP "omnipkg-${VERSION}-py3-none-any\.whl" | head -1)
-          
-          if [ -n "$WHEEL_FILE" ]; then
-            WHEEL_URL="https://www.piwheels.org/simple/omnipkg/${WHEEL_FILE}"
-            echo "✅ ARM32 wheel found: $WHEEL_URL"
-            echo "builds_found=true" >> $GITHUB_OUTPUT
-            echo "wheel_url=$WHEEL_URL" >> $GITHUB_OUTPUT
-            echo "wheel_file=$WHEEL_FILE" >> $GITHUB_OUTPUT
-            
-            # Extract supported Python versions from the releases table
-            PYTHON_VERSIONS=""
-            
-            # Check for Bullseye (Python 3.9)
-            if echo "$RESPONSE" | grep -A 10 "$VERSION" | grep -q "Bullseye Python 3.9"; then
-              PYTHON_VERSIONS="${PYTHON_VERSIONS}3.9, "
-            fi
-            
-            # Check for Bookworm (Python 3.11)
-            if echo "$RESPONSE" | grep -A 10 "$VERSION" | grep -q "Bookworm Python 3.11"; then
-              PYTHON_VERSIONS="${PYTHON_VERSIONS}3.11, "
-            fi
-            
-            # Check for Trixie (Python 3.13)
-            if echo "$RESPONSE" | grep -A 10 "$VERSION" | grep -q "Trixie Python 3.13"; then
-              PYTHON_VERSIONS="${PYTHON_VERSIONS}3.13, "
-            fi
-            
-            # Remove trailing comma and space
-            PYTHON_VERSIONS=$(echo "$PYTHON_VERSIONS" | sed 's/, $//')
-            
-            echo "python_versions=$PYTHON_VERSIONS" >> $GITHUB_OUTPUT
-            echo "🐍 Python versions: $PYTHON_VERSIONS"
-            
-            # Extract install command
-            INSTALL_CMD="pip3 install omnipkg==${VERSION}"
-            echo "install_command=$INSTALL_CMD" >> $GITHUB_OUTPUT
-          else
-            echo "❌ ARM32 wheel not found for version $VERSION"
+
+          # Extract all wheel filenames for this version from the simple index.
+          # piwheels wheels are tagged like:
+          #   omnipkg-2.5.0-cp311-cp311-linux_armv6l.whl
+          #   omnipkg-2.5.0-cp313-cp313-linux_armv7l.whl
+          #   omnipkg-2.5.0-py3-none-any.whl  (pure Python fallback, rare)
+          # We want any wheel matching the version, on any cpython, on any armv* arch.
+          WHEELS=$(echo "$SIMPLE_HTML" | grep -oP "omnipkg-${VERSION}-[^\"']+\.whl" | sort -u)
+
+          if [ -z "$WHEELS" ]; then
+            echo "❌ No wheels found for version $VERSION on piwheels"
             echo "builds_found=false" >> $GITHUB_OUTPUT
+            exit 0
           fi
-      
+
+          echo "Found wheels:"
+          echo "$WHEELS"
+          echo "builds_found=true" >> $GITHUB_OUTPUT
+
+          # --- Detect which Python versions have a successful build ---
+          # Map CPython ABI tags to Debian release / Python version labels.
+          # piwheels uses cp39 for Bullseye, cp311 for Bookworm, cp313 for Trixie.
+          HAS_39=false
+          HAS_311=false
+          HAS_313=false
+
+          echo "$WHEELS" | grep -q "cp39"  && HAS_39=true
+          echo "$WHEELS" | grep -q "cp311" && HAS_311=true
+          echo "$WHEELS" | grep -q "cp313" && HAS_313=true
+
+          # Build a human-readable list of confirmed Python versions
+          PYTHON_VERSIONS=""
+          $HAS_39  && PYTHON_VERSIONS="${PYTHON_VERSIONS}3.9 (Bullseye), "
+          $HAS_311 && PYTHON_VERSIONS="${PYTHON_VERSIONS}3.11 (Bookworm), "
+          $HAS_313 && PYTHON_VERSIONS="${PYTHON_VERSIONS}3.13 (Trixie), "
+          PYTHON_VERSIONS="${PYTHON_VERSIONS%, }"  # strip trailing ", "
+
+          echo "python_versions=$PYTHON_VERSIONS" >> $GITHUB_OUTPUT
+          echo "has_cp39=$HAS_39"   >> $GITHUB_OUTPUT
+          echo "has_cp311=$HAS_311" >> $GITHUB_OUTPUT
+          echo "has_cp313=$HAS_313" >> $GITHUB_OUTPUT
+          echo "🐍 Python versions with ARM32 wheels: $PYTHON_VERSIONS"
+
+          # Pick a representative wheel URL for the README badge
+          # Prefer armv7l > armv6l, prefer cp311 as most common Pi target
+          BEST_WHEEL=""
+          for ABI in cp311 cp313 cp39; do
+            CANDIDATE=$(echo "$WHEELS" | grep "${ABI}-${ABI}-linux_armv7l" | head -1)
+            if [ -z "$CANDIDATE" ]; then
+              CANDIDATE=$(echo "$WHEELS" | grep "${ABI}-${ABI}-linux_armv6l" | head -1)
+            fi
+            if [ -n "$CANDIDATE" ]; then
+              BEST_WHEEL="$CANDIDATE"
+              break
+            fi
+          done
+          # Fall back to whatever we found if the above loop found nothing
+          [ -z "$BEST_WHEEL" ] && BEST_WHEEL=$(echo "$WHEELS" | head -1)
+
+          WHEEL_URL="https://www.piwheels.org/simple/omnipkg/${BEST_WHEEL}"
+          echo "wheel_file=$BEST_WHEEL"   >> $GITHUB_OUTPUT
+          echo "wheel_url=$WHEEL_URL"     >> $GITHUB_OUTPUT
+          echo "install_command=pip3 install omnipkg==${VERSION}" >> $GITHUB_OUTPUT
+          echo "✅ Representative wheel: $WHEEL_URL"
+
       - name: Update README badges section
         if: steps.scrape.outputs.builds_found == 'true'
         run: |
@@ -116,69 +133,62 @@ jobs:
           PYTHON_VERS="${{ steps.scrape.outputs.python_versions }}"
           INSTALL_CMD="${{ steps.scrape.outputs.install_command }}"
           WHEEL_URL="${{ steps.scrape.outputs.wheel_url }}"
-          
-          # Create the auto-update block for README
+
           cat > .github/piwheels-stats.md <<'PIWHEELS_BLOCK'
           <!-- PIWHEELS_STATS_START -->
           ## 🥧 ARM32 Support (Raspberry Pi)
-          
+
           [![piwheels](https://img.shields.io/badge/piwheels-ARM32%20verified-97BF0D?logo=raspberrypi&logoColor=white)](https://www.piwheels.org/project/omnipkg/)
-          
+
           **Latest Version:** `VERSION_PLACEHOLDER` | **Python:** PYTHON_VERS_PLACEHOLDER | [View on piwheels](https://www.piwheels.org/project/omnipkg/)
-          
+
           ```bash
           # Install on Raspberry Pi (ARM32)
           INSTALL_CMD_PLACEHOLDER
           ```
-          
+
           **Verified Platforms:**
           - 🍓 Raspberry Pi (armv6/armv7) - Bullseye (Debian 11), Bookworm (Debian 12), Trixie (Debian 13)
           - 📦 Wheel: [`WHEEL_URL_PLACEHOLDER`](WHEEL_URL_PLACEHOLDER)
-          
+
           <!-- PIWHEELS_STATS_END -->
           PIWHEELS_BLOCK
-          
-          # Replace placeholders
-          sed -i "s|VERSION_PLACEHOLDER|${VERSION}|g" .github/piwheels-stats.md
+
+          sed -i "s|VERSION_PLACEHOLDER|${VERSION}|g"         .github/piwheels-stats.md
           sed -i "s|PYTHON_VERS_PLACEHOLDER|${PYTHON_VERS}|g" .github/piwheels-stats.md
           sed -i "s|INSTALL_CMD_PLACEHOLDER|${INSTALL_CMD}|g" .github/piwheels-stats.md
-          sed -i "s|WHEEL_URL_PLACEHOLDER|${WHEEL_URL}|g" .github/piwheels-stats.md
-          
-          # Update README.md if the markers exist
+          sed -i "s|WHEEL_URL_PLACEHOLDER|${WHEEL_URL}|g"     .github/piwheels-stats.md
+
           if grep -q "<!-- PIWHEELS_STATS_START -->" README.md; then
-            # Use perl for cross-platform in-place editing
             perl -i -p0e 's/<!-- PIWHEELS_STATS_START -->.*?<!-- PIWHEELS_STATS_END -->//gs' README.md
-            
-            # Insert new content after installation section
             sed -i '/#### 🥧 piwheels (for Raspberry Pi)/r .github/piwheels-stats.md' README.md
           fi
-      
+
       - name: Generate platform support matrix
         if: steps.scrape.outputs.builds_found == 'true'
         run: |
-          # This will be used to build the comprehensive platform table
           cat > .github/platform-matrix.json <<MATRIX_JSON
           {
             "arm32": {
               "verified": true,
               "version": "${{ steps.version.outputs.version }}",
               "python_versions": "${{ steps.scrape.outputs.python_versions }}",
+              "cp39_bullseye":  ${{ steps.scrape.outputs.has_cp39 }},
+              "cp311_bookworm": ${{ steps.scrape.outputs.has_cp311 }},
+              "cp313_trixie":   ${{ steps.scrape.outputs.has_cp313 }},
               "install_command": "${{ steps.scrape.outputs.install_command }}",
               "platforms": ["Raspberry Pi", "Raspbian Bullseye", "Raspbian Bookworm", "Raspbian Trixie"]
             }
           }
           MATRIX_JSON
-          
           echo "✅ Platform matrix generated"
-      
+
       - name: Commit changes
         if: steps.scrape.outputs.builds_found == 'true'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          
           git add README.md .github/piwheels-stats.md .github/platform-matrix.json || true
-          
           if ! git diff --staged --quiet; then
             git commit -m "Auto-update piwheels ARM32 stats for v${{ steps.version.outputs.version }} [skip ci]"
             git pull --rebase origin main
@@ -186,16 +196,22 @@ jobs:
           else
             echo "No changes to commit"
           fi
-      
+
       - name: Create verification summary
         if: steps.scrape.outputs.builds_found == 'true'
         run: |
+          HAS_39="${{ steps.scrape.outputs.has_cp39 }}"
+          HAS_311="${{ steps.scrape.outputs.has_cp311 }}"
+          HAS_313="${{ steps.scrape.outputs.has_cp313 }}"
+          tick() { [ "$1" == "true" ] && echo "✅" || echo "❌"; }
           {
-            echo "## ✅ ARM32 Support Verified"
+            echo "## ARM32 Wheel Check — v${{ steps.version.outputs.version }}"
             echo ""
-            echo "**Version:** \`${{ steps.version.outputs.version }}\`"
-            echo ""
-            echo "**Architecture:** ARM32 (armv6/armv7) - Raspberry Pi compatible"
+            echo "| Distro | Python | ARM32 wheel |"
+            echo "|--------|--------|-------------|"
+            echo "| Bullseye (Debian 11) | 3.9  | $(tick $HAS_39) |"
+            echo "| Bookworm (Debian 12) | 3.11 | $(tick $HAS_311) |"
+            echo "| Trixie  (Debian 13)  | 3.13 | $(tick $HAS_313) |"
             echo ""
             echo "**Python Versions:** ${{ steps.scrape.outputs.python_versions }}"
             echo ""
@@ -204,14 +220,11 @@ jobs:
             echo "${{ steps.scrape.outputs.install_command }}"
             echo "\`\`\`"
             echo ""
-            echo "**Wheel URL:** [${{ steps.scrape.outputs.wheel_file }}](${{ steps.scrape.outputs.wheel_url }})"
-            echo ""
-            echo "**Verified on:**"
-            echo "- 🍓 Bullseye (Debian 11) - Python 3.9"
-            echo "- 🍓 Bookworm (Debian 12) - Python 3.11"
-            echo "- 🍓 Trixie (Debian 13) - Python 3.13"
-            echo ""
-            echo "---"
-            echo ""
-            echo "This wheel is built and tested by [piwheels.org](https://www.piwheels.org/project/omnipkg/) on real Raspberry Pi hardware."
+            echo "**Representative wheel:** [${{ steps.scrape.outputs.wheel_file }}](${{ steps.scrape.outputs.wheel_url }})"
           } >> $GITHUB_STEP_SUMMARY
+
+      - name: Fail if NO wheels exist at all
+        if: steps.scrape.outputs.builds_found == 'false'
+        run: |
+          echo "❌ No ARM32 wheels found for omnipkg ${{ steps.version.outputs.version }} on piwheels"
+          exit 1
