@@ -23,12 +23,6 @@ jobs:
         with:
           ref: ${{ github.event.inputs.code_branch || github.ref }}
 
-      - name: Show branch info
-        shell: cmd
-        run: |
-          echo Workflow ref: ${{ github.ref }}
-          echo Code branch: ${{ github.event.inputs.code_branch || github.ref }}
-
       - name: Set up Python (3.11)
         uses: actions/setup-python@v5
         with:
@@ -49,6 +43,14 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e .
 
+      # --- CRITICAL: Discover the Env ID so we can track logs/pids accurately ---
+      - name: Discover Omnipkg ENV_ID
+        shell: pwsh
+        run: |
+          $envId = python -c "from omnipkg.config_manager import ConfigManager; cm = ConfigManager(suppress_init_messages=True); print(cm.env_id)"
+          echo "OMNIPKG_ENV_ID=$envId" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          Write-Host "✅ Discovered Omnipkg ENV_ID: $envId"
+
       - name: Configure omnipkg for non-interactive use
         shell: pwsh
         run: |
@@ -57,67 +59,60 @@ jobs:
           @{ interactive = $false; auto_confirm = $true } | ConvertTo-Json | Out-File -FilePath "$configDir\config.json" -Encoding utf8
           Write-Host "✅ Omnipkg configured"
 
-      - name: Run Demo (Option 8 - Quantum Multiverse)
+      # --- RUN 1 ---
+      - name: Run Demo 1 (Quantum Multiverse)
         shell: cmd
         run: omnipkg demo 8 --non-interactive
 
-      - name: Dump daemon log after demo run 1
+      - name: Dump daemon log after run 1
         if: always()
         shell: pwsh
         run: |
-          $logFile = Get-ChildItem -Path "$env:TEMP\omnipkg" -Filter "omnipkg_daemon.log" -Recurse | Select-Object -First 1
-          if ($logFile) {
-              Get-Content $logFile.FullName
-          } else {
-              Write-Error "Could not find daemon log in $env:TEMP\omnipkg"
-          }
-          
-      # --- ADD THIS TEARDOWN STEP ---
-      - name: Force Teardown After Run 2
-        if: always()
-        shell: pwsh
-        run: |
-          Write-Host "Forcefully terminating any lingering daemon processes..."
-          # Find the PID from the file and kill it. taskkill is robust.
-          $pidPath = "$env:TEMP\omnipkg\${{ env.OMNIPKG_ENV_ID }}\omnipkg_daemon.pid"
-          if (Test-Path $pidPath) {
-            $pid = Get-Content $pidPath
-            taskkill /F /PID $pid
-          }
-          Write-Host "Removing temp directory to ensure clean state for next run..."
-          Remove-Item -Path "$env:TEMP\omnipkg\${{ env.OMNIPKG_ENV_ID }}" -Recurse -Force -ErrorAction SilentlyContinue
+          Write-Host "📋 Fetching logs for ENV: ${{ env.OMNIPKG_ENV_ID }}"
+          python -c "from omnipkg.isolation.worker_daemon import cli_logs; cli_logs()"
 
-      - name: Run Demo Again (Verify Caching)
+      - name: Teardown after run 1
+        if: always()
+        shell: pwsh
+        run: |
+          Write-Host "🛑 Stopping daemon and cleaning sockets..."
+          python -c "from omnipkg.isolation.worker_daemon import cli_stop; cli_stop()"
+
+      # --- RUN 2 ---
+      - name: Run Demo 2 (Verify Caching)
         shell: cmd
         run: omnipkg demo 8 --non-interactive
         continue-on-error: true
 
-      - name: Dump daemon log after demo run 2
-        if: always()
-        shell: pwsh
-        run: type "$env:TEMP\omnipkg\omnipkg_daemon.log"
-
-      # --- ADD THIS TEARDOWN STEP ---
-      - name: Force Teardown After Run 2
+      - name: Dump daemon log after run 2
         if: always()
         shell: pwsh
         run: |
-          Write-Host "Forcefully terminating any lingering daemon processes..."
-          # Find the PID from the file and kill it. taskkill is robust.
-          $pidPath = "$env:TEMP\omnipkg\${{ env.OMNIPKG_ENV_ID }}\omnipkg_daemon.pid"
-          if (Test-Path $pidPath) {
-            $pid = Get-Content $pidPath
-            taskkill /F /PID $pid
-          }
-          Write-Host "Removing temp directory to ensure clean state for next run..."
-          Remove-Item -Path "$env:TEMP\omnipkg\${{ env.OMNIPKG_ENV_ID }}" -Recurse -Force -ErrorAction SilentlyContinue
+          Write-Host "📋 Fetching logs for ENV: ${{ env.OMNIPKG_ENV_ID }}"
+          python -c "from omnipkg.isolation.worker_daemon import cli_logs; cli_logs()"
 
-      - name: Run Demo Again (Verify Caching)
+      - name: Teardown after run 2
+        if: always()
+        shell: pwsh
+        run: |
+          Write-Host "🛑 Stopping daemon and cleaning sockets..."
+          python -c "from omnipkg.isolation.worker_daemon import cli_stop; cli_stop()"
+
+      # --- RUN 3 ---
+      - name: Run Demo 3 (Verify Caching)
         shell: cmd
         run: omnipkg demo 8 --non-interactive
         continue-on-error: true
 
-      - name: Dump daemon log after demo run 3
+      - name: Dump daemon log after run 3
         if: always()
         shell: pwsh
-        run: type "$env:TEMP\omnipkg\omnipkg_daemon.log"
+        run: |
+          Write-Host "📋 Fetching logs for ENV: ${{ env.OMNIPKG_ENV_ID }}"
+          python -c "from omnipkg.isolation.worker_daemon import cli_logs; cli_logs()"
+
+      - name: Final Teardown
+        if: always()
+        shell: pwsh
+        run: |
+          python -c "from omnipkg.isolation.worker_daemon import cli_stop; cli_stop()"
