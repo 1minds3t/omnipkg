@@ -44,13 +44,15 @@ jobs:
           pip install -e .
 
       # --- CRITICAL: Discover the Env ID so we can track logs/pids accurately ---
-      - name: Discover Omnipkg ENV_ID
+      # --- REPLACE THE DISCOVERY STEP WITH THIS ---
+      - name: Set Omnipkg Environment ID
         shell: pwsh
         run: |
-          # Import from omnipkg.core since ConfigManager is defined there
-          $envId = python -c "from omnipkg.core import ConfigManager; cm = ConfigManager(suppress_init_messages=True); print(cm.env_id)"
-          echo "OMNIPKG_ENV_ID=$envId" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-          Write-Host "✅ Discovered Omnipkg ENV_ID: $envId"
+          # We set a fixed ID for this CI run. 
+          # This ensures logs, sockets, and config all use the same folder.
+          echo "OMNIPKG_ENV_ID_OVERRIDE=ci-test" >> $env:GITHUB_ENV
+          echo "OMNIPKG_ENV_ID=ci-test" >> $env:GITHUB_ENV
+          Write-Host "✅ Omnipkg environment locked to: ci-test"
 
       - name: Configure omnipkg for non-interactive use
         shell: pwsh
