@@ -982,9 +982,16 @@ static void fallback_to_python_v(const char *self_dir, char **argv,
         if (file_exists(py)) { found = 1; break; }
     }
 
-    /* 2. CROSS-DRIVE FIX: If still not found, ask Windows where 'python' is */
+    /* 2. SYSTEM LOOKUP: Use OS-specific popen to find python */
     if (!found) {
-        FILE *fp = _popen("where python", "r");
+        FILE *fp = NULL;
+        
+        #ifdef _WIN32
+            fp = _popen("where python", "r");
+        #else
+            fp = popen("which python", "r");
+        #endif
+
         if (fp) {
             if (fgets(py, sizeof(py), fp)) {
                 // Remove newline characters
@@ -993,7 +1000,12 @@ static void fallback_to_python_v(const char *self_dir, char **argv,
                     found = 1;
                 }
             }
-            _pclose(fp);
+            
+            #ifdef _WIN32
+                _pclose(fp);
+            #else
+                pclose(fp);
+            #endif
         }
     }
 
@@ -1002,14 +1014,8 @@ static void fallback_to_python_v(const char *self_dir, char **argv,
         fprintf(stderr, "  Self Dir: %s\n", self_dir);
         exit(1);
     }
-        /* VERBOSE DIAGNOSTICS: Tell the user EXACTLY where we looked */
-        fprintf(stderr, "omnipkg: cannot find host Python for fallback\n");
-        fprintf(stderr, "  Checked directory: %s\n", self_dir);
-        fprintf(stderr, "  Tried common names in current and parent dirs\n");
-        exit(1);
-    }
 
-    /* Build new argv: python -m omnipkg.dispatcher <original args> */
+    /* ... (Rest of the execv logic remains the same) ... */
     int argc = 0;
     while (argv[argc]) argc++;
     char **new_argv = malloc((argc + 4) * sizeof(char *));
