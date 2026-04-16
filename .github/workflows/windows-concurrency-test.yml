@@ -71,6 +71,21 @@ jobs:
           } else {
               Write-Error "Could not find daemon log in $env:TEMP\omnipkg"
           }
+          
+      # --- ADD THIS TEARDOWN STEP ---
+      - name: Force Teardown After Run 2
+        if: always()
+        shell: pwsh
+        run: |
+          Write-Host "Forcefully terminating any lingering daemon processes..."
+          # Find the PID from the file and kill it. taskkill is robust.
+          $pidPath = "$env:TEMP\omnipkg\${{ env.OMNIPKG_ENV_ID }}\omnipkg_daemon.pid"
+          if (Test-Path $pidPath) {
+            $pid = Get-Content $pidPath
+            taskkill /F /PID $pid
+          }
+          Write-Host "Removing temp directory to ensure clean state for next run..."
+          Remove-Item -Path "$env:TEMP\omnipkg\${{ env.OMNIPKG_ENV_ID }}" -Recurse -Force -ErrorAction SilentlyContinue
 
       - name: Run Demo Again (Verify Caching)
         shell: cmd
@@ -81,6 +96,21 @@ jobs:
         if: always()
         shell: pwsh
         run: type "$env:TEMP\omnipkg\omnipkg_daemon.log"
+
+      # --- ADD THIS TEARDOWN STEP ---
+      - name: Force Teardown After Run 2
+        if: always()
+        shell: pwsh
+        run: |
+          Write-Host "Forcefully terminating any lingering daemon processes..."
+          # Find the PID from the file and kill it. taskkill is robust.
+          $pidPath = "$env:TEMP\omnipkg\${{ env.OMNIPKG_ENV_ID }}\omnipkg_daemon.pid"
+          if (Test-Path $pidPath) {
+            $pid = Get-Content $pidPath
+            taskkill /F /PID $pid
+          }
+          Write-Host "Removing temp directory to ensure clean state for next run..."
+          Remove-Item -Path "$env:TEMP\omnipkg\${{ env.OMNIPKG_ENV_ID }}" -Recurse -Force -ErrorAction SilentlyContinue
 
       - name: Run Demo Again (Verify Caching)
         shell: cmd
