@@ -93,8 +93,8 @@ Born from a real-world nightmare—a forced downgrade that wrecked a production 
 ---
 
 <!-- COMPARISON_STATS_START -->
-## ⚖️ Multi-Version Support
 
+## ⚖️ Multi-Version Support
 [![omnipkg](https://img.shields.io/badge/omnipkg-2509%20Wins-brightgreen?logo=python&logoColor=white)](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml) [![pip](https://img.shields.io/badge/pip-2512%20Failures-red?logo=pypi&logoColor=white)](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml) [![uv](https://img.shields.io/badge/uv-2512%20Failures-red?logo=python&logoColor=white)](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml)
 
 *Multi-version installation tests run every 3 hours. [Live results here.](https://github.com/1minds3t/omnipkg/actions/workflows/omnipkg_vs_the_world.yml)*
@@ -104,7 +104,6 @@ Born from a real-world nightmare—a forced downgrade that wrecked a production 
 <!-- COMPARISON_STATS_END -->
 
 ## 💡 Why This Matters
-
 **The Multi-Version Nightmare is Over**: Modern projects are messy. You need `tensorflow==2.10` for a legacy model but `tensorflow==2.15` for new training. A critical library requires `numpy==1.21` while your latest feature needs `numpy==2.0`. Traditional solutions like Docker or virtual environments force you into a painful choice: duplicate entire environments, endure slow context switching, or face crippling dependency conflicts.
 
 **The Multi-Interpreter Wall is Gone**: Legacy codebases often require older Python versions (e.g., Django on 3.8) while modern ML demands the latest (Python 3.11+). This forces developers to constantly manage and switch between separate, isolated environments, killing productivity.
@@ -122,14 +121,13 @@ This is the new reality: one environment, one script, everything **just works**.
 ---
 
 ## 🧠 Revolutionary Core Features
+
 ### 1. Multiverse Orchestration & Python Hot-Swapping [![<600ms 3 Py Interps 1 Script 1 Env](https://img.shields.io/badge/<600ms%203%20Py%20Interps%201%20Script%201%20Env-passing-success?logo=python&logoColor=white)](https://github.com/1minds3t/omnipkg/actions/workflows/multiverse_test.yml) [![🍎 macOS](https://img.shields.io/badge/macOS-2.3ms_hot_workers-success?logo=apple)](https://github.com/1minds3t/omnipkg/actions/workflows/mac-concurrent-test.yml)
 
 ## The "Quantum Multiverse Warp": 3 Pythons, 1 Script, Sub-3ms Execution
-
 Our "Quantum Multiverse Warp" demo, validated live in CI across multiple platforms, executes a single script across three different Python interpreters and three package versions **concurrently** in the same environment. The hot worker performance isn't just fast; it redefines what's possible for high-performance Python automation.
 
 ### Production Benchmark Results (macOS CI)
-
 | Task (Same Script, Same Environment) | Hot Worker Execution |
 | ------------------------------------ | :------------------: |
 | 🧵 **Thread 1:** Python 3.9 + Rich 13.4.2  | ✅ **2.2ms**   |
@@ -146,7 +144,6 @@ Our "Quantum Multiverse Warp" demo, validated live in CI across multiple platfor
 | 🍎 **macOS** | **2.3ms avg** (2.2-2.3ms range) | 2.14s | [View CI](https://github.com/1minds3t/omnipkg/actions/workflows/mac-concurrent-test.yml) |
 
 ### What This Actually Means
-
 **The numbers that matter** are the **hot worker benchmarks** (sub-5ms). This is the actual execution time for running code across three concurrent Python interpreters with three different package versions. The "Total w/ Setup" includes one-time initialization:
 - Worker pool spawning
 - Package installation (if not cached)
@@ -160,7 +157,6 @@ Our "Quantum Multiverse Warp" demo, validated live in CI across multiple platfor
 This isn't just a speedup; it's a paradigm shift. What traditionally takes minutes with Docker or complex venv scripting, `omnipkg` accomplishes in **milliseconds**. This isn't a simulation; it's a live, production-ready capability for high-performance Python automation.
 
 ### Benchmark Methodology
-
 Our production benchmark follows industry-standard practices:
 
 1. **📥 Setup Phase:** Verify Python interpreters are available and daemon is running (one-time cost)
@@ -226,7 +222,6 @@ T3       3.11         13.7.1     3.5ms           2.3ms
 ```
 
 ### Real-World Impact
-
 **For CI/CD Pipelines:**
 - **Before:** Sequential matrix testing across Python 3.9, 3.10, 3.11 = 3-5 minutes
 - **After:** Concurrent testing with omnipkg = **< 3 seconds** (including setup)
@@ -240,12 +235,116 @@ T3       3.11         13.7.1     3.5ms           2.3ms
 This is the new reality: one environment, one script, everything **just works** — and it's **blazing fast**.
 
 ---
-### 2. Intelligent Script Runner (`omnipkg run`) [![⚡ Auto-Healing: 12.94x Faster than UV](https://img.shields.io/badge/⚡_Auto--Healing-12.94x_Faster_than_UV-gold?logo=lightning&logoColor=white)](https://github.com/1minds3t/omnipkg/actions/workflows/old_rich_test.yml)
 
+## 🔄 Reproducible State Sync & Environment Reconstruction
+Omnipkg treats your environment as a **State Engine** — a deterministic, rebuildable artifact rather than a collection of installed files. Two commands drive this:
+
+---
+
+### `8pkg export` — Snapshot your environment
+
+```bash
+8pkg export
+```
+
+Scans all registered interpreters and writes two files:
+
+- **Local lock** — `<venv>/.omnipkg/omnipkg.lock` — full environment inventory including interpreter registry, active packages, and bubble state per Python version
+- **Canonical state** — `~/.config/omnipkg/locks/states/sha256_<hash>.toml` — a privacy-scrubbed, path-free cryptographic fingerprint of your environment (safe to commit or share)
+
+If the environment has changed since the last export, the SHA transitions automatically:
+
+```
+🔄 Environment changed — updating lock file
+   sha256:aaaaaa... → sha256:bbbbbb...
+```
+
+If nothing changed, it's a no-op.
+
+---
+
+### `8pkg sync` — Rebuild or verify from a lock file
+
+```bash
+8pkg sync
+```
+
+Runs an interactive flow. Auto-selects the most recent lock file for the current environment, shows a full sync plan across all registered interpreters, then computes a live SHA and compares it against the lock.
+
+**If the environment already matches:**
+```
+✅ Environment already matches lock file (sha256:bbbbbb...).
+
+   What would you like to do?
+   [1] Exit — nothing to do  (default)
+   [2] Rebuild anyway
+   [3] Sync from a different lock file
+   [4] Manage lock files (delete old ones)
+```
+
+**If the environment has drifted:**
+```
+⚠️  This will DESTROY and rebuild the listed python environments.
+Proceed? (y/N):
+```
+
+The destructive rebuild warning is explicit — sync is not a partial patch, it fully reconstructs all listed interpreter environments to match the lock exactly.
+
+---
+
+### Switching lock files (`--pick`)
+
+If you have multiple environments or historical snapshots:
+
+```bash
+8pkg sync --pick
+```
+
+Presents a numbered list of every lock file Omnipkg knows about, grouped by environment:
+
+```
+  ── my_env ──
+    1) <venv>/.omnipkg/omnipkg.lock
+       python: 3.11  9 interpreter(s)  918 active packages  ◀ most recent
+
+  ── ? ──
+    2) sha256_bbbbbb...toml   9 interpreters  918 pkgs  2026-04-16
+    3) sha256_aaaaaa...toml   9 interpreters  826 pkgs  2026-04-14
+
+  ── used by: other_env ──
+    4) sha256_cccccc...toml   3 interpreters  152 pkgs  2026-04-06
+```
+
+Select by number, or `[m]` to manage/delete old states.
+
+---
+
+### How the SHA split works
+
+| Layer | Location | Contains | Shareable? |
+|---|---|---|---|
+| Local lock | `<venv>/.omnipkg/omnipkg.lock` | Paths, env kind, distro, venv origin | No |
+| Canonical state | `~/.config/omnipkg/locks/states/` | Package hashes, ABI tags, arch, Python version | Yes — zero PII |
+
+The canonical SHA is deterministic: same packages + same arch + same Python patch version always produces the same hash, regardless of machine or user. Two machines can confirm environment parity by comparing SHAs without exchanging any local path data.
+
+---
+
+### CI/CD
+
+CI flags and `--yes` / `-y` are not yet implemented — `sync` is currently interactive only. For unattended use, pipe input directly:
+
+```bash
+echo "y" | 8pkg sync
+```
+
+Non-interactive flag support is planned for a future release.
+```
+
+### 2. Intelligent Script Runner (`omnipkg run`) [![⚡ Auto-Healing: 12.94x Faster than UV](https://img.shields.io/badge/⚡_Auto--Healing-12.94x_Faster_than_UV-gold?logo=lightning&logoColor=white)](https://github.com/1minds3t/omnipkg/actions/workflows/old_rich_test.yml)
 `omnipkg run` is an intelligent script and CLI executor that **automatically detects and fixes** dependency errors using bubble versions—without modifying your main environment.
 
 ## What is `omnipkg run`?
-
 Think of it as a "smart wrapper" around Python scripts and CLI commands that:
 1. **Tries to execute** your script or command
 2. **Detects errors** (ImportError, ModuleNotFoundError, version conflicts)
@@ -257,7 +356,6 @@ Think of it as a "smart wrapper" around Python scripts and CLI commands that:
 ## Two Modes of Operation
 
 ### Mode 1: Script Execution (`omnipkg run script.py`)
-
 Automatically heals Python scripts with dependency conflicts:
 
 ```bash
@@ -280,7 +378,6 @@ omnipkg Activation :  16.223ms (succeeds automatically)
 ```
 
 ### Mode 2: CLI Command Execution (`omnipkg run <command>`)
-
 Automatically heals broken command-line tools:
 
 ```bash
@@ -303,7 +400,6 @@ $ omnipkg run http --version
 ## How It Works
 
 ### Step 1: Detect the Error
-
 `omnipkg run` recognizes multiple error patterns:
 
 ```python
@@ -320,7 +416,6 @@ A module compiled using NumPy 1.x cannot run in NumPy 2.0
 ```
 
 ### Step 2: Build a Healing Plan
-
 Analyzes the error and identifies what's needed:
 
 ```bash
@@ -335,7 +430,6 @@ For CLI commands, it includes the owning package:
 ```
 
 ### Step 3: Find or Create Bubbles
-
 Checks if the needed version exists:
 
 ```bash
@@ -350,7 +444,6 @@ Checks if the needed version exists:
 ```
 
 ### Step 4: Execute with Bubbles
-
 Re-runs the script/command with the correct versions activated:
 
 ```bash
@@ -366,7 +459,6 @@ Re-runs the script/command with the correct versions activated:
 ```
 
 ### Step 5: Clean Restoration
-
 After execution, environment is restored to original state:
 
 ```bash
@@ -378,7 +470,6 @@ After execution, environment is restored to original state:
 ## Real-World Examples
 
 ### Example 1: Version Conflict Resolution
-
 **Scenario:** Script needs rich==13.4.2 but main environment has rich==13.7.1
 
 ```bash
@@ -404,7 +495,6 @@ $ python -c "import rich; print(rich.__version__)"
 ```
 
 ### Example 2: Broken CLI Tool
-
 **Scenario:** httpie broken by urllib3 downgrade to 1.25.11
 
 ```bash
@@ -444,7 +534,6 @@ $ python -c "import urllib3; print(urllib3.__version__)"
 ## Performance Benchmarks
 
 ### Script Healing (Demo 7)
-
 | Operation | Time | Status |
 |-----------|------|--------|
 | UV failed run | 210.007ms | ❌ Fails, no recovery |
@@ -454,7 +543,6 @@ $ python -c "import urllib3; print(urllib3.__version__)"
 | **Total recovery** | **~51ms** | **12.94x faster than UV** |
 
 ### CLI Healing (Demo 10)
-
 | Operation | Traditional | omnipkg run |
 |-----------|-------------|-------------|
 | Error detection | Manual (minutes) | Automatic (<1ms) |
@@ -466,7 +554,6 @@ $ python -c "import urllib3; print(urllib3.__version__)"
 ## Key Features
 
 ### 1. Zero Main Environment Impact
-
 **Traditional approach:**
 ```bash
 $ pip install old-package==1.0.0
@@ -482,7 +569,6 @@ $ omnipkg run script-needing-old-version.py
 ```
 
 ### 2. Intelligent Error Detection
-
 Recognizes and fixes:
 - `ModuleNotFoundError` → Installs missing package
 - `ImportError` → Fixes import conflicts
@@ -491,7 +577,6 @@ Recognizes and fixes:
 - CLI command failures → Heals dependencies automatically
 
 ### 3. Smart Dependency Resolution
-
 ```bash
 🔍 Analyzing script for additional dependencies...
    ✅ No additional dependencies needed
@@ -503,7 +588,6 @@ Recognizes and fixes:
 Automatically detects and includes all required dependencies, not just the primary package.
 
 ### 4. Bubble Reuse
-
 Once a bubble is created, it's instantly available:
 
 ```bash
@@ -519,7 +603,6 @@ Once a bubble is created, it's instantly available:
 ## Usage
 
 ### Basic Script Execution
-
 ```bash
 # Run a Python script with auto-healing
 omnipkg run script.py
@@ -529,7 +612,6 @@ omnipkg run script.py --arg1 value1 --arg2 value2
 ```
 
 ### CLI Command Execution
-
 ```bash
 # Run any CLI command with auto-healing
 omnipkg run http GET https://api.github.com
@@ -541,7 +623,6 @@ omnipkg run mypy myproject/
 ```
 
 ### With Verbose Output
-
 ```bash
 # See detailed healing process
 omnipkg run -v script.py
@@ -550,7 +631,6 @@ omnipkg run -v script.py
 ## When to Use `omnipkg run`
 
 ### ✅ Perfect For:
-
 - **Scripts with version conflicts:** Need old numpy but have new numpy installed
 - **Broken CLI tools:** Tool worked yesterday, broken after an upgrade today
 - **Testing different versions:** Try multiple library versions without changing environment
@@ -558,12 +638,10 @@ omnipkg run -v script.py
 - **Legacy code:** Run old code without downgrading your entire environment
 
 ### ⚠️ Not Needed For:
-
 - **Fresh scripts with satisfied dependencies:** Just use `python script.py`
 - **Well-maintained environments:** If everything works, no need to heal
 
 ## Performance Comparison
-
 ```
 Traditional Workflow (Broken Tool):
 1. Tool fails ........................... 0s
@@ -582,7 +660,6 @@ Speedup: 230,833x faster
 ```
 
 ## Try It Yourself
-
 ```bash
 # Install omnipkg
 uv pip install omnipkg
@@ -601,7 +678,6 @@ See for yourself how `omnipkg run` turns minutes of frustration into millisecond
 ---
 
 ## The Future: Package Manager Interception
-
 This healing capability is the foundation for our vision of **transparent package management**:
 
 ```bash
@@ -637,7 +713,6 @@ $ python my-script-using-new-version.py
 ---
 
 ## 🛑 The Hard Truth: Why You Need Daemons
-
 Traditional Python wisdom says you cannot switch frameworks like PyTorch or TensorFlow without restarting the interpreter. **This is true.** Their C++ backends (`_C` symbols) bind to memory and refuse to let go.
 
 **What happens if you try to force-switch PyTorch in-process?**
@@ -660,7 +735,6 @@ Instead of fighting the C++ backend, `omnipkg` accepts it. We spawn **persistent
 ---
 
 ## 🚀 The Impossible Made Real: Benchmark Results
-
 We ran `omnipkg demo` (Scenario 11: Chaos Theory) to prove capabilities that should be impossible.
 
 ### 1. Framework Battle Royale (Concurrent Execution)
@@ -739,7 +813,6 @@ client.execute_smart("torch==2.1.0", "import torch; print(torch.__version__)")
 ---
 
 ## 📊 Resource Efficiency
-
 You might think running multiple worker processes consumes massive RAM. **It doesn't.**
 `omnipkg` uses highly optimized stripping to keep workers lean.
 
@@ -773,7 +846,6 @@ Available Scenarios:
 ---
 
 ### 4. 🌍 Global Intelligence & AI-Driven Localization [![🤖 AI-Powered: 24 Languages](https://img.shields.io/badge/🤖_AI--Powered-24_Languages-brightgreen?logo=openai&logoColor=white)](https://github.com/1minds3t/omnipkg/actions/workflows/language_test.yml)
-
 `omnipkg` eliminates language barriers with advanced AI localization supporting 24+ languages, making package management accessible to developers worldwide in their native language.
 
 **Key Features**: Auto-detection from system locale, competitive AI translation models, context-aware technical term handling, and continuous self-improvement from user feedback.
@@ -794,7 +866,6 @@ Zero setup required—works in your language from first run with graceful fallba
 ---
 
 ### 5. Downgrade Protection & Conflict Resolution [![🔧 Simple UV Multi-Version Test](https://img.shields.io/badge/🔧_Simple_UV_Multi--Version_Test-passing-success)](https://github.com/1minds3t/omnipkg/actions/workflows/test_uv_install.yml)
-
 `omnipkg` automatically reorders installations and isolates conflicts, preventing environment-breaking downgrades.
 
 **Example: Conflicting `torch` versions:**
@@ -844,7 +915,6 @@ omnipkg info uv
 ---
 
 ### 7. Instant Environment Recovery
-
 [![🛡️ UV Revert Test](https://img.shields.io/badge/🛡️_UV_Revert_Test-passing-success)](https://github.com/1minds3t/omnipkg/actions/workflows/test_uv_revert.yml)
 
 
@@ -872,10 +942,20 @@ uv 0.8.11
 **UV is saved, along with any deps!**
 
 ---
+
 ## 🛠️ Get Started in 30 Seconds
 
 ### No Prerequisites Required!
 `omnipkg` works out of the box with **automatic SQLite fallback** when Redis isn't available. Redis is optional for enhanced performance.
+
+### ⚡ Native C-dispatcher
+
+Typing `8pkg` no longer spawns a Python process. A compiled C binary handles routing in under 1ms, compiling itself automatically on first run (MSVC on Windows, gcc/clang on Linux/macOS). For edge cases it can't handle natively, it hands off to the Python dispatcher transparently.
+
+Force Python dispatch if you need to debug:
+```bash
+OMNIPKG_FORCE_PYTHON_DISPATCH=1 8pkg install numpy
+```
 
 Ready to end dependency hell?
 ```bash
@@ -883,11 +963,13 @@ uv pip install omnipkg && omnipkg demo
 ```
 See the magic in under 30 seconds.
 
+
+
 ---
 
 <!-- PLATFORM_SUPPORT_START -->
-## 🌐 Verified Platform Support
 
+## 🌐 Verified Platform Support
 [![Platforms Verified](https://img.shields.io/badge/platforms-22%20verified-success?logo=linux&logoColor=white)](https://github.com/1minds3t/omnipkg/actions/workflows/cross-platform-build-verification.yml)
 
 **omnipkg** is a pure Python package (noarch) with **no C-extensions**, ensuring universal compatibility across all platforms and architectures.
@@ -982,7 +1064,6 @@ yay -S python-omnipkg
 ```
 
 ### 🐍 Python Version Support
-
 **Supported:** Python 3.7 - 3.15 (including beta/rc releases)
 
 **Architecture:** `noarch` (pure Python, no compiled extensions)
@@ -996,8 +1077,8 @@ This means omnipkg runs on **any** architecture where Python is available:
 <!-- PLATFORM_SUPPORT_END -->
 
 <!-- ARM64_STATUS_START -->
-### ✅ ARM64 Support Verified (QEMU)
 
+### ✅ ARM64 Support Verified (QEMU)
 [![ARM64 Verified](https://img.shields.io/badge/ARM64_(aarch64)-6/6%20Verified-success?logo=linux&logoColor=white)](https://github.com/1minds3t/omnipkg/actions/workflows/arm64-verification.yml)
 
 **`omnipkg` is fully verified on ARM64.** This was achieved without needing expensive native hardware by using a powerful QEMU emulation setup on a self-hosted x86_64 runner. This process proves that the package installs and functions correctly on the following ARM64 Linux distributions:
@@ -1210,11 +1291,9 @@ Current build status
 ---
 
 ### Installation Options
-
 **Available via UV, pip, conda-forge, Docker, brew, Github, and piwheels. Support for Linux, Windows, Mac, and Raspberry Pi.**
 
 #### ⚡ UV (Recommended)
-
 <a href="https://github.com/astral-sh/uv">
 <img src="https://img.shields.io/badge/uv-install-blueviolet?logo=uv&logoColor=white" alt="uv Install">
 </a>
@@ -1224,7 +1303,6 @@ uv pip install omnipkg
 ```
 
 #### 📦 PyPI
-
 <a href="https://pypi.org/project/omnipkg/">
 <img src="https://img.shields.io/pypi/v/omnipkg?color=blue&logo=pypi" alt="PyPI">
 </a>
@@ -1234,7 +1312,6 @@ pip install omnipkg
 ```
 
 #### 📦 Pixi (Recommended for Modern Workflows)
-
 <a href="https://pixi.sh">
 <img src="https://img.shields.io/badge/pixi-install-yellow?logo=pixi&logoColor=white" alt="Pixi Install">
 </a>
@@ -1248,7 +1325,6 @@ pixi global install omnipkg
 ```
 
 #### 🏠 Conda & prefix.dev
-
 <a href="https://anaconda.org/conda-forge/omnipkg">
 <img src="https://anaconda.org/conda-forge/omnipkg/badges/platforms.svg" alt="Platforms / Noarch">
 </a>
@@ -1281,7 +1357,6 @@ mamba install -c minds3t omnipkg
 ```
 
 #### 🐋 Docker (Multi-Registry)
-
 <a href="https://hub.docker.com/r/1minds3t/omnipkg">
 <img src="https://img.shields.io/docker/pulls/1minds3t/omnipkg?logo=docker" alt="Docker Pulls">
 </a>
@@ -1318,7 +1393,6 @@ docker pull ghcr.io/1minds3t/omnipkg:2.0.3
 - ✅ `linux/arm64` (aarch64)
 
 #### 🍺 Homebrew
-
 ```bash
 # Add the tap first
 brew tap 1minds3t/omnipkg
@@ -1329,8 +1403,8 @@ brew install omnipkg
 
 #### 🥧 piwheels (for Raspberry Pi)
 <!-- PIWHEELS_STATS_START -->
-## 🥧 ARM32 Support (Raspberry Pi)
 
+## 🥧 ARM32 Support (Raspberry Pi)
 [![piwheels](https://img.shields.io/badge/piwheels-ARM32%20verified-97BF0D?logo=raspberrypi&logoColor=white)](https://www.piwheels.org/project/omnipkg/)
 
 **Latest Version:** `2.0.8.1` | **Python:**  | [View on piwheels](https://www.piwheels.org/project/omnipkg/)
@@ -1361,7 +1435,6 @@ pip install --index-url=https://www.piwheels.org/simple/ omnipkg
 ```
 
 #### 🌱 GitHub
-
 ```bash
 # Clone the repo
 git clone https://github.com/1minds3t/omnipkg.git
@@ -1374,7 +1447,6 @@ pip install -e .
 ---
 
 ### Instant Demo
-
 ```bash
 omnipkg demo
 ```
@@ -1390,7 +1462,6 @@ Choose from:
 8. 🌠 Quantum Multiverse Warp (Concurrent Python Installations)
 
 ### Experience Python Hot-Swapping
-
 ```bash
 # Let omnipkg manage your native Python automatically
 omnipkg status
@@ -1408,7 +1479,6 @@ python --version  # Now Python 3.10.x
 ```
 
 ### Optional: Enhanced Performance with Redis
-
 For maximum performance, install Redis:
 
 **Linux (Ubuntu/Debian)**:
@@ -1445,7 +1515,6 @@ Verify Redis: `redis-cli ping` (should return `PONG`)
 Ensures your bubbles are 100% working and auto heals if they don't.
 
 ## 🌟 Coming Soon
-
 * **Time Machine Technology for Legacy Packages**: Install ancient packages with historically accurate build tools and dependencies that are 100% proven to work in any environment.
 
 ### 🚀 **C++/Rust Core for Extreme Performance**
@@ -1471,7 +1540,6 @@ Ensures your bubbles are 100% working and auto heals if they don't.
 ---
 
 ## 📚 Documentation
-
 Learn more about `omnipkg`'s capabilities:
 
 *   [**Getting Started**](docs/getting_started.md): Installation and setup.
@@ -1484,7 +1552,6 @@ Learn more about `omnipkg`'s capabilities:
 ---
 
 ## 📄 Licensing
-
 `omnipkg` uses a dual-license model designed for maximum adoption and sustainable growth:
 
 *   **AGPLv3**: For open-source and academic use ([View License](https://github.com/1minds3t/omnipkg/blob/main/LICENSE)).
@@ -1495,7 +1562,6 @@ Commercial inquiries: [omnipkg@proton.me](mailto:omnipkg@proton.me)
 ---
 
 ## 🤝 Contributing
-
 This project thrives on community collaboration. Contributions, bug reports, and feature requests are incredibly welcome. Join us in revolutionizing Python dependency management.
 
 **Translation Help**: Found translation bugs or missing languages? Submit pull requests with corrections or new translations—we welcome community contributions to make `omnipkg` accessible worldwide.
@@ -1503,7 +1569,6 @@ This project thrives on community collaboration. Contributions, bug reports, and
 [**→ Start Contributing**](https://github.com/1minds3t/omnipkg/issues)
 
 ## Dev Humor
-
 ```
  ________________________________________________________________
 /                                                                \
@@ -1525,4 +1590,3 @@ This project thrives on community collaboration. Contributions, bug reports, and
 
                 ~ omnipkg: The Multiverse Package Manager ~
 ```
-
