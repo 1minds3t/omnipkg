@@ -332,29 +332,23 @@ except ImportError as e:
 OMNIPKG_TEMP_DIR = os.path.join(tempfile.gettempdir(), "omnipkg")
 
 def _get_venv_temp_dir() -> str:
-    """
-    Return a temp dir scoped to the current virtual environment.
-    This exactly mirrors ConfigManager._get_env_id() so that the daemon
-    and the core Omnipkg application share the same namespace.
-    """
-    import hashlib
-    import platform
+    # 1. Check for the override first (Symmetry with ConfigManager)
+    override = os.environ.get("OMNIPKG_ENV_ID_OVERRIDE")
+    if override:
+        venv_hash = override
+    else:
+        # Fallback to the original hash logic
+        import hashlib
+        identity = sys.prefix
+        try:
+            project_root = Path(__file__).resolve().parent.parent.parent
+            if (project_root / "pyproject.toml").exists():
+                identity = f"{sys.prefix}:{project_root}"
+        except Exception:
+            pass
+        venv_hash = hashlib.sha1(identity.encode()).hexdigest()[:10]
     
-    # 1. Respect the override if set (used by ConfigManager)
-    env_id = os.environ.get("OMNIPKG_ENV_ID_OVERRIDE")
-    
-    # 2. Replicate _canonical_path_str from ConfigManager
-    if not env_id:
-        venv_path = Path(sys.prefix)
-        if platform.system() == "Windows":
-            canonical = str(venv_path.resolve()).lower()
-        else:
-            canonical = str(venv_path.resolve())
-            
-        env_id = hashlib.md5(canonical.encode()).hexdigest()[:8]
-
-    # Store daemon files cleanly in a shared env directory
-    d = os.path.join(OMNIPKG_TEMP_DIR, f"env_{env_id}")
+    d = os.path.join(OMNIPKG_TEMP_DIR, venv_hash)
     os.makedirs(d, exist_ok=True)
     return d
 

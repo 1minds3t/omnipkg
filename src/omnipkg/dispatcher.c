@@ -973,29 +973,35 @@ static void fallback_to_python_v(const char *self_dir, char **argv,
     char py[MAX_PATH];
     int found = 0;
 
-    /* 1. Try the config first */
-    if (read_self_config(self_dir, py, sizeof(py)) && file_exists(py)) {
-        found = 1;
-    } else {
-        /* 2. Try common names in both the current directory AND the parent directory */
-        const char *names[] = {"python3.11", "python3.10", "python3.9", 
-                               "python3", "python", "python.exe", NULL};
-        
-        /* We check the current dir (self_dir) and the parent dir (self_dir/..) */
-        const char *search_paths[] = {self_dir, NULL}; // We will handle parent manually for safety
-        
-        for (int i = 0; names[i]; i++) {
-            // Try current directory: .../Scripts/python.exe
-            snprintf(py, sizeof(py), "%s/%s", self_dir, names[i]);
-            if (file_exists(py)) { found = 1; break; }
-            
-            // Try parent directory: .../Scripts/../python.exe
-            snprintf(py, sizeof(py), "%s/../%s", self_dir, names[i]);
-            if (file_exists(py)) { found = 1; break; }
+    /* 1. Try local / parent search (works for venvs) */
+    const char *names[] = {"python3.11", "python3.10", "python3.9", "python3", "python", "python.exe", NULL};
+    for (int i = 0; names[i]; i++) {
+        snprintf(py, sizeof(py), "%s/%s", self_dir, names[i]);
+        if (file_exists(py)) { found = 1; break; }
+        snprintf(py, sizeof(py), "%s/../%s", self_dir, names[i]);
+        if (file_exists(py)) { found = 1; break; }
+    }
+
+    /* 2. CROSS-DRIVE FIX: If still not found, ask Windows where 'python' is */
+    if (!found) {
+        FILE *fp = _popen("where python", "r");
+        if (fp) {
+            if (fgets(py, sizeof(py), fp)) {
+                // Remove newline characters
+                py[strcspn(py, "\r\n")] = 0;
+                if (file_exists(py)) {
+                    found = 1;
+                }
+            }
+            _pclose(fp);
         }
     }
 
     if (!found) {
+        fprintf(stderr, "omnipkg: cannot find host Python for fallback\n");
+        fprintf(stderr, "  Self Dir: %s\n", self_dir);
+        exit(1);
+    }
         /* VERBOSE DIAGNOSTICS: Tell the user EXACTLY where we looked */
         fprintf(stderr, "omnipkg: cannot find host Python for fallback\n");
         fprintf(stderr, "  Checked directory: %s\n", self_dir);
