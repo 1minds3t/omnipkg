@@ -7,6 +7,243 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [2.6.0] — 2026-04-16
+
+The Reproducible State Engine & Native C-Dispatcher Update
+
+Welcome to Omnipkg 3.0! This release (258 commits) marks a fundamental architectural shift — replacing Python-based routing with a native C-dispatcher, introducing true reproducible environment lockfiles, upgrading the bubble isolation engine to Schema 2.0, and massively hardening Windows and macOS support.
+
+## ⚠️ Breaking Changes
+- **Manifest Schema 2.0** — Bubble manifests auto-migrate on first run. Downgrading to 2.5.x after upgrading is not recommended.
+- **Native C-Dispatcher** — Entry points (`8pkg`, `omnipkg`) are now compiled C binaries. Set `OMNIPKG_FORCE_PYTHON_DISPATCH=1` to bypass if needed.
+- **Daemon IPC Protocol** — Updated length-prefixed protocol and FS Watcher integration. Old daemon instances will not be compatible.
+
+## ✨ Major Features
+
+- Snapshot any multi-interpreter environment into a canonical TOML lockfile (`omnipkg.lock`).
+- Two-tier lock architecture: local context (paths, env origin) stays private; canonical State SHA (package hashes, ABI tags, arch) is zero-PII and safe to share.
+- SHA comparison detects environment drift before executing destructive rebuilds.
+- Interactive lock picker (`8pkg sync --pick`) lists all known states grouped by environment.
+- "Phase 0" metadata repair pass safely recovers corrupted or partially-broken environments before syncing.
+
+- Sub-2ms command routing — eliminates Python startup overhead on every CLI invocation.
+- Auto-compiles from bundled `dispatcher.c` on first run (Linux/macOS/Windows).
+- Auto-discovers MSVC (`cl.exe`) and reconstructs the build environment on Windows without requiring a Developer Command Prompt.
+- Eagerly creates versioned shims (`8pkg37`–`8pkg315`) at compile time on all platforms.
+- Graceful fallback to the Python dispatcher for complex edge cases (like auto-adopting a missing interpreter).
+
+- Bubble manifests upgraded to Schema 2.0 with `record_hash`, `wheel_abi_tag`, and `symlink_targets` for byte-level ABI-safe deduplication.
+- Non-destructive lazy migration — existing 1.0 manifests upgrade silently in the background.
+- **Bulletproof Target Installs:** Forced `--link-mode copy` globally for all target (bubble) installs. This prevents catastrophic environment corruption if the global `uv` cache is ever cleared, ensuring isolated bubbles remain completely independent on all OSes.
+- Force rebuild via `8pkg doctor --rebuild` or `8pkg reset -y`.
+
+- Cross-platform filesystem watcher (`inotify` / `FSEvents` / `ReadDirectoryChangesW`) monitors the environment for external changes.
+- If a rogue tool (`pip`, `conda`) modifies the environment, the daemon's in-memory cache is immediately marked dirty, triggering a safe rescan.
+- Operation lock (`.omnipkg_op.lock`) suppresses false positives during active, Omnipkg-managed installs.
+
+## 🪟 Windows Hardening
+- Fixed fatal hang in non-interactive execution — replaced blocking `stdin` reads with timeout-bounded threaded reads.
+- Fixed drive-letter colon splitting bug during hash comparisons.
+- Fixed `Scripts/` vs `bin/` path detection logic for managed interpreters.
+- Fixed `__editable__` dist-info detection during sync conflict resolution.
+
+## 🍎 macOS Hardening
+- Fixed `venv` escape bug where `resolve()` caused daemon workers to accidentally spawn under the global Apple Framework Python.
+- Restored `__PYVENV_LAUNCHER__` injections to maintain strict environment bounds.
+- Added `.dylib` fallbacks for `libpython` preloads.
+
+## 🌍 i18n (Internationalization)
+- **Hindi:** Translation coverage
+
+---
+
+**📝 Code Changes:**
+- UPDATE: build_hooks.py (23 lines changed)
+- UPDATE: setup.py (105 lines changed)
+- UPDATE: setup_atomic.py (12 lines changed)
+- UPDATE: src/omnipkg/_vendor/uv_ffi/__init__.py (44 lines changed)
+- UPDATE: src/omnipkg/cli.py (277 lines changed)
+- UPDATE: src/omnipkg/commands/run.py (59 lines changed)
+- UPDATE: src/omnipkg/common_utils.py (197 lines changed)
+- UPDATE: src/omnipkg/core.py (2663 lines changed)
+- NEW: src/omnipkg/dispatcher.c (2133 lines changed)
+- UPDATE: src/omnipkg/dispatcher.py (828 lines changed)
+- UPDATE: src/omnipkg/i18n.py (128 lines changed)
+- UPDATE: src/omnipkg/installation/verification_strategy.py (140 lines changed)
+- NEW: src/omnipkg/integration/reproducible.py (2444 lines changed)
+- UPDATE: src/omnipkg/isolation/fs_watcher.py (1171 lines changed)
+- UPDATE: src/omnipkg/isolation/resource_monitor.py (163 lines changed)
+- UPDATE: src/omnipkg/isolation/worker_daemon.py (1955 lines changed)
+- UPDATE: src/omnipkg/package_meta_builder.py (715 lines changed)
+- UPDATE: src/omnipkg/utils/flask_port_finder.py (78 lines changed)
+- UPDATE: tools/dispatcher_bin/_post_install.py (41 lines changed)
+- NEW: tools/dispatcher_bin/dispatcher.c (428 lines changed)
+
+**🧪 Tests:**
+- UPDATE: pytest.ini (5 lines)
+- UPDATE: src/tests/test_concurrent_install.py (138 lines)
+- UPDATE: src/tests/test_multiverse_healing.py (498 lines)
+- UPDATE: src/tests/test_old_flask.py (10 lines)
+- UPDATE: src/tests/test_rich_switching.py (43 lines)
+- UPDATE: src/tests/test_uv_switching.py (87 lines)
+- UPDATE: src/tests/test_version_combos.py (4 lines)
+- NEW: tests/
+- NEW: tests/debug_flask.py
+- UPDATE: tests/test_flask_port_finder.py (894 lines)
+- NEW: tests/test_verify_bubble_deps.py (193 lines)
+- NEW: tests/test_verify_bubble_deps2.py (127 lines)
+
+**📚 Documentation:**
+- README.md (182 lines)
+- THIRD_PARTY_NOTICES.txt (250 lines)
+- requirements-trace.txt (57 lines)
+- requirements.txt (134 lines)
+
+**⚙️ Configuration:**
+- .github/dependabot.yml (17 lines)
+- pyproject.toml (21 lines)
+
+**Additional Changes:**
+- docs: update readme and licenses file
+- Update 1 code files
+- Update 2 code files
+- Update tests
+- fix(fs-watcher): prevent watchdog threads from blocking process exit on Windows and daemon shutdown
+- fix(win): stabilize non-interactive execution and prevent CLI hangs
+- test(win): stop fs_watcher on daemon shutdown to prevent CI hang
+- test(win): debug windows hanging on concurrent install test
+- test(win): fix windows hanging on concurrent install test
+- feat(core): introduce global cache metadata and upgrade bubble manifests to schema 2.0
+- test(win): allow daemon spawned shell to exit on windows
+- test(win): debug test failure on windows
+- test(win): spawn daemon in concurrent install test safely on windows
+- fix(time-machine): isolate historical builds and fix py38 metadata access
+- fix(dispatcher): deterministic shim creation + reliable subprocess execution
+- fix(win): fix windows sync: native exe detection and stale dist-info check
+- fix: windows path logic for healing interpreters
+- fix(win): fix binary check for windows
+- fix(win): fix debug print for hash matching
+- fix: hash matching on windows
+- fix(win): marker detection
+- fix: windows shim detection
+- fix: debug windows shim logic
+- fix: fix windows shim detection
+- fix(win): add #include <stdlib.h> inside the _WIN32 block early
+- fix(win32): resolve POSIX popen/pclose compatibility in C-dispatcher
+- fix: fix heredoc escaping in dispatcher.c
+- feat(dispatcher): auto-reconstruct MSVC build environment for cl.exe
+- fix: correct corrupted MSVC glob paths in dispatcher
+- fix: Windows MSVC detection + managed interpreter Lib/ path
+- test: add utf8 to numpy combo test for windows
+- test: fix binary detection for windows on the uv test
+- test: fix logical bug where the test could ttest for the wrong version
+- chore: bump req.txts for Pygments
+- fix: allow lower Pygments for pythons 3.7-3.8, pending LTS patches
+- chore: bump req.txts
+- feat: uv_ffi version enforcement + worker daemon hardening
+- chore(deps): bump dependencies, lock ffi submodule, and expose uv_ffi version
+- feat: stabilize multi-env sync, bubble verification, and FFI cache observability
+- perf: Replace slow pip freeze with fast SHA caching and direct FS scanning
+- chore: bump aiohttp in toml
+- chore(deps): bump deps in req.txts
+- chore: tell dependabot to ignore dockerfiles
+- fix(cache): derive sqlite db suffix from python_executable path, not python_version config field
+- fix: harden uv daemon cache sync, target safety, and fs watcher stability
+- feat: add reproducible env state engine, lock sync, and self-healing rebuilds
+- fix(windows): normalize path case for relative_to comparisons
+- feat(daemon): add subprocess fallback for worker startup timeouts
+- fix: fix bootstrap logic and optimize concurrent test sequence
+- fix(windows): get python paths from registry vs info python command
+- fix(ffi): catch uv-ffi panics
+- fix: fixing dispatcher install for windows
+- fix: fix dispatcher for windows support
+- feat: add Windows support and POSIX abstractions to C dispatcher
+- fix(dispatcher): guard Unix-only headers behind #else block
+- feat(daemon): add support for pinned workers to survive eviction
+- feat: add conda-forge name mapping for robust PyPI package resolution
+- feat(dispatcher): embed C source and auto-install on first run
+- fix: Update 1 code files
+- perf(c++): improving c++ support cross platform
+- refactor(c++): making c++ supported cross-platform
+- fix(dispatcher): Update 1 code files
+- feat(dispatcher): adding support for python calls before adoption occurs
+- feat(dispatcher): adding auto adopt if missing for installs
+- fix(dispatcher): ensure system pythons aren't used for python existence validation
+- fix(dispatcher): improving zsh handling and adding validation and adoption of python if missing
+- fix(windows): restoring working windows daemon swap logic
+- fix: register adopted pythons consistently
+- fix: ensure reset-config deletes global as well
+- fix(mac): removing resolve from native python identification on rescans
+- fix(daemon): ensure venv python is used on mac
+- fix(daemon): use __PYVENV_LAUNCHER__ to correctly spawn macOS venv workers
+- chore(daemon): improve monitor python identification
+- fix(daemon): preserve venv paths by avoiding symlink resolution on macOS/Linux
+- fix(mac): stop resolving paths in sync context to runtime
+- fix: stop symlinking system pythons
+- fix(mac): removing resolve from venv path logic for mac
+- fix: reset configuration will also remove setup complete flag now
+- fix(mac): fixing resolved path display in info python for mac
+- fix: reset-config now deletes per-python config alongside legacy global conf
+- fix(mac): python path resolution logic fixed for mac
+- fix: prevent pip uninstall failure on macOS/Windows due to uppercase entrypoints
+- fix: heal missing 8pkg entrypoint after editable install
+- fix(config): reenable config writing
+- fix(mac): fix missing config logic
+- fix(mac): config resolution on mac with symlinks fixed
+- fix(mac): fixing flask port finder for mac to resolve paths
+- fix: flask port finder functional for windows and linux
+- fix(windows): debug windows flask port finder
+- fix(windows): flask port finder debugging on windows
+- fix(windows): fixing windows subprocess pipe issues for flask port finder
+- fix(windows): fixing encoding error on windows flask port finder
+- fix(windows): fixing windows specific bugs in the flask port finder
+- chore: remove excessive dehug prints on i18n
+- perf(windows): improve windows config detection logic
+- perf(conda): improve conda python version detection
+- fix(config): stale config detection logic
+- feat(hi): Complete Hindi translation from 15% to 94%
+- test: add contract tests for dispatcher, flask_port_finder, and omnipkg loader
+
+**New Features:**
+- feat: pin uv_ffi>=0.10.8.post2 and add version heal in concurrent sync
+- feat: bring over rewritten test_version_combos.py with C-extension ABI documentation
+- feat: bring over package_meta_builder O(1) lookup and improved stress test
+- feat: bring over resource_monitor interactive kill menu and package_index O(1) lookup
+- feat: bring over daemon worker safe_input relay and isatty override from developer-port
+- feat: pre-create .bat shims on Windows for all Python versions to enable auto-adopt
+- feat: bring over i18n caching and cli parser caching + daemon preload sentinels
+- feat: add uv_ffi as a dependency
+- feat: bring over new standalone modules, translations, and test files
+- feat: bring over dispatcher bin tools and uv_ffi build script
+- feat: bring over setup.py with versioned shim install and uv-ffi build hook
+- feat: C dispatcher creates versioned shims 3.7-3.15 on compile, Python fallback does same on first run
+
+**Bug Fixes:**
+- fix: restore loader.py to 7041a0de state
+- fix: parse Windows interpreter paths correctly in test_concurrent_install
+- fix: sterile verification subprocess, copy link-mode for --target installs
+- fix: skip pre-creating versioned shims on Windows, use lazy .bat creation after adoption
+- fix: use .exe extension for Windows C dispatcher binary
+- fix: skip -ldl on Windows, use ASCII codes for path separators in dispatcher.c
+- fix: add Windows POSIX compat shims to dispatcher.c (stat, dirname, basename, execv)
+- fix: add Windows realpath compat shim to dispatcher.c
+- fix: add --python to global_parser so it's consumed before command detection
+- fix: sentinel path fires for all unregistered versions not just minor mismatches
+- fix: remove shadowed _ import in main(), gate uv_ffi to py3.8-3.14
+- fix: language-keyed parser cache and recompile corrupted ko/de .mo files
+- fix: resolve_python_path returns sentinel path for unregistered versions to trigger auto-adopt
+- fix: add -ldl linker flag and daemon socket fast-path to dispatcher
+- fix: remove overly broad /omnipkg/ gitignore rule
+
+**Updates:**
+- Update cleanup command in demo-matrix-test.yml
+- Update dispatcher.py - fix native Python config handling
+- Update cross_interpreter_installs.yml
+- Update gitignore.
+- Update requirements-science.txt
+
+_86 files changed, 27512 insertions(+), 7636 deletions(-)_
+
 ## [2.5.0] — 2026-02-27
 
 Smart Worker Isolation, Active Memory Control, and Multi-Version ML/Science Docker Images
