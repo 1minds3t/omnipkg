@@ -2823,6 +2823,13 @@ class ConfigManager:
             safe_print(_("   💡 Future startups will be instant!"))
 
         # Initialize knowledge base
+        rebuild_cmd = [
+            str(final_config["python_executable"]),
+            "-m",
+            "omnipkg.cli",
+            "reset",
+            "-y",
+        ]
         is_windows = platform.system() == "Windows"
         creationflags = subprocess.CREATE_NO_WINDOW if is_windows else 0
         win_env = {**os.environ, "PYTHONIOENCODING": "utf-8", "PYTHONUTF8": "1"}
@@ -3386,6 +3393,15 @@ class InterpreterManager:
 
 class BubbleIsolationManager:
 
+    # Maps omnipkg versions to the manifest schema they introduced.
+    # When omnipkg version bumps, add an entry here.
+    OMNIPKG_VERSION_SCHEMA_MAP = {
+        "2.6.0": "2.0",
+        "2.5.0": "1.0",
+        # "2.7.0": "3.0",  # future
+    }
+    CURRENT_MANIFEST_SCHEMA = "2.0"
+
     def __init__(self, config: Dict, parent_omnipkg):
         self.config = config
         self.parent_omnipkg = parent_omnipkg
@@ -3397,6 +3413,156 @@ class BubbleIsolationManager:
         self._load_path_registry()
         import requests as http_requests
         self.http_session = http_requests.Session()
+
+        # Lazy one-shot manifest migration: runs once per omnipkg version,
+        # gated by a Redis flag so it's a single key lookup on every subsequent init.
+        self._maybe_migrate_manifests()
+
+    def _maybe_migrate_manifests(self):
+        """
+        Checks a Redis flag to see if manifests have already been migrated for
+        the current omnipkg version. If not, triggers migrate_manifests() once
+        and sets the flag so future inits are just a single Redis GET.
+        """
+        try:
+            current_version = _get_dynamic_omnipkg_version()
+            flag_key = (
+                f"{self.parent_omnipkg.redis_key_prefix}"
+                f"manifest_migration_done:schema_{self.CURRENT_MANIFEST_SCHEMA}"
+                f":omnipkg_{current_version}"
+            )
+
+            # Fast path: flag exists → already migrated, do nothing
+            if self.parent_omnipkg.cache_client and self.parent_omnipkg.cache_client.get(flag_key):
+                return
+
+            # Slow path: migration needed
+            safe_print(_(
+                "   🔄 omnipkg {ver}: checking bubble manifests for schema {schema} upgrade..."
+            ).format(ver=current_version, schema=self.CURRENT_MANIFEST_SCHEMA))
+
+            summary = self.migrate_manifests()
+
+            safe_print(_(
+                "   ✅ Manifest check complete: {scanned} scanned, {upgraded} upgraded, "
+                "{already_current} current, {failed} failed."
+            ).format(**summary))
+
+            # Set the flag so this never runs again for this version
+            if self.parent_omnipkg.cache_client:
+                self.parent_omnipkg.cache_client.set(flag_key, "true")
+
+        except Exception as e:
+            # Never block init — migration is best-effort
+            safe_print(_("   ⚠️  Manifest migration check failed (non-fatal): {}").format(e))
+
+    def migrate_manifests(self) -> dict:
+        """
+        Scans all bubble directories and upgrades any manifests that are behind
+        the current schema version. Safe to re-run; already-current manifests
+        are skipped without modification.
+
+        Returns a summary dict with counts for reporting.
+        """
+        CURRENT_SCHEMA = "2.0"
+        summary = {"scanned": 0, "upgraded": 0, "already_current": 0, "failed": 0}
+
+        if not self.multiversion_base.exists():
+            return summary
+
+        for bubble_path in self.multiversion_base.iterdir():
+            if not bubble_path.is_dir():
+                continue
+            manifest_path = bubble_path / ".omnipkg_manifest.json"
+            if not manifest_path.exists():
+                continue
+
+            summary["scanned"] += 1
+            try:
+                with open(manifest_path, "r") as f:
+                    manifest = json.load(f)
+
+                existing_schema = manifest.get("manifest_schema_version", "1.0")
+                if existing_schema == CURRENT_SCHEMA:
+                    summary["already_current"] += 1
+                    continue
+
+                safe_print(f"   - 🔄 Migrating manifest: {bubble_path.name} (schema {existing_schema} → {CURRENT_SCHEMA})")
+
+                # ── Schema 1.0 → 2.0 ─────────────────────────────────────────────
+                # 1.0 manifests lack: global_cache block, resolved_dependencies,
+                # manifest_schema_version field itself.
+                if existing_schema == "1.0":
+                    manifest.setdefault("manifest_schema_version", CURRENT_SCHEMA)
+                    manifest.setdefault("resolved_dependencies", {})
+
+                    # Attempt to enrich with live metadata from the gatherer
+                    if self.parent_omnipkg.cache_client:
+                        try:
+                            from .package_meta_builder import omnipkgMetadataGatherer
+                            from importlib.metadata import PathDistribution
+                            from packaging.utils import canonicalize_name
+
+                            primary_pkg = manifest.get("primary_package", "")
+                            python_ver = manifest.get("python_version", "3.11")
+
+                            gatherer = omnipkgMetadataGatherer(
+                                config=self.parent_omnipkg.config,
+                                env_id=self.parent_omnipkg.env_id,
+                                omnipkg_instance=self.parent_omnipkg,
+                                target_context_version=python_ver,
+                            )
+                            gatherer.cache_client = self.parent_omnipkg.cache_client
+
+                            canonical_pkg = canonicalize_name(primary_pkg)
+                            target_dist = None
+                            for dist_info in bubble_path.glob("*.dist-info"):
+                                dist = PathDistribution(dist_info)
+                                if canonicalize_name(dist.metadata.get("Name", "")) == canonical_pkg:
+                                    target_dist = dist
+                                    break
+
+                            if target_dist:
+                                enriched = gatherer._build_comprehensive_metadata(target_dist)
+                                manifest["global_cache"] = {
+                                    "record_hash": enriched.get("record_hash", ""),
+                                    "content_hash": enriched.get("content_hash", ""),
+                                    "global_cache_key": enriched.get("global_cache_key", f"{primary_pkg}-unknown"),
+                                    "global_cache_portable": enriched.get("global_cache_portable", False),
+                                    "has_c_extension": enriched.get("has_c_extension", False),
+                                    "reload_safe": enriched.get("reload_safe", True),
+                                    "platform_tag": enriched.get("platform_tag", "none"),
+                                    "wheel_abi_tag": enriched.get("wheel_abi_tag", "any"),
+                                    "symlink_targets": (
+                                        json.loads(enriched.get("symlink_targets", "[]"))
+                                        if isinstance(enriched.get("symlink_targets"), str)
+                                        else enriched.get("symlink_targets", [])
+                                    ),
+                                }
+                                deps_raw = enriched.get("resolved_bubble_deps", "{}")
+                                manifest["resolved_dependencies"] = (
+                                    json.loads(deps_raw) if isinstance(deps_raw, str) else deps_raw
+                                )
+                        except Exception as e:
+                            safe_print(f"     ⚠️  Could not enrich {bubble_path.name} during migration: {e}")
+                            # Still write the schema bump even without enrichment
+                            manifest["manifest_schema_version"] = CURRENT_SCHEMA
+
+                # ── Future schema bumps go here (2.0 → 3.0, etc.) ────────────────
+                # elif existing_schema == "2.0":
+                #     ...
+
+                manifest["manifest_schema_version"] = CURRENT_SCHEMA
+                with open(manifest_path, "w") as f:
+                    json.dump(manifest, f, indent=2)
+
+                summary["upgraded"] += 1
+
+            except Exception as e:
+                safe_print(f"   ❌ Failed to migrate manifest for {bubble_path.name}: {e}")
+                summary["failed"] += 1
+
+        return summary
 
     def _load_path_registry(self):
         """Load the file path registry from JSON."""
@@ -3752,15 +3918,43 @@ class BubbleIsolationManager:
                 shutil.move(str(staging_path), str(destination_path))
                 safe_print(_('   - ✅ Bubble created successfully at {}').format(destination_path))
                 _tp("iav: shutil_move", _ts)
-                # 3. CREATE MANIFEST - Use existing _analyze_installed_tree method
+
+                # --- 2.5. GRAB GLOBAL CACHE METADATA ---
+                enriched_meta = None
+                try:
+                    # Initialize Gatherer to read the final destination path
+                    gatherer = omnipkgMetadataGatherer(
+                        config=self.parent_omnipkg.config,
+                        env_id=self.parent_omnipkg.env_id,
+                        omnipkg_instance=self.parent_omnipkg,
+                        target_context_version=python_context_version,
+                    )
+                    
+                    # We find the specific distribution we just installed
+                    from importlib.metadata import PathDistribution
+                    target_dist = None
+                    canonical_pkg = canonicalize_name(package_name)
+                    
+                    for dist_info in destination_path.glob("*.dist-info"):
+                        dist = PathDistribution(dist_info)
+                        if canonicalize_name(dist.metadata.get("Name", "")) == canonical_pkg:
+                            target_dist = dist
+                            break
+                            
+                    if target_dist:
+                        # Call your existing workhorse to get the perfect dictionary
+                        enriched_meta = gatherer._build_comprehensive_metadata(target_dist)
+                except Exception as e:
+                    safe_print(f"    ⚠️ Warning: Failed to extract Global Cache metadata for manifest: {e}")
+
+                # 3. CREATE MANIFEST
                 safe_print(_('   - 📝 Creating bubble manifest...'))
-                # Use the existing method that already does this!
                 installed_tree = self._analyze_installed_tree(destination_path)
                 _ta = time.perf_counter()
-                # Build basic stats
+                
                 stats = {
-                    "total_files": sum(len(info.get("files", [])) for info in installed_tree.values()),
-                    "copied_files": sum(len(info.get("files", [])) for info in installed_tree.values()),
+                    "total_files": sum(len(info.get("files",[])) for info in installed_tree.values()),
+                    "copied_files": sum(len(info.get("files",[])) for info in installed_tree.values()),
                     "deduplicated_files": 0,
                     "c_extensions": [],
                     "binaries": [],
@@ -3770,16 +3964,17 @@ class BubbleIsolationManager:
                 # Call manifest creation with correct parameters
                 _tc = time.perf_counter()
                 self._create_bubble_manifest(
-                    destination_path, 
+                    destination_path,
                     installed_tree,
                     stats,
                     python_context_version,
-                    observed_dependencies
+                    observed_dependencies,
+                    enriched_meta=enriched_meta,   # ← the missing argument
                 )
+                _tp("iav: create_bubble_manifest", _tc)  # ← moved above return
 
                 return True
-                _tp("iav: create_bubble_manifest", _tc)
-
+            
             else:
                 safe_print(_('   - ❌ Verification failed, bubble not created'))
                 return False
@@ -4052,6 +4247,9 @@ class BubbleIsolationManager:
         source_path: str,
         python_context_version: str,
     ) -> bool:
+        # --- ADD THIS LINE HERE ---
+        import site as site_module 
+        
         """
         Creates a bubble from an editable install by copying files from the live source.
         This preserves the current dev version WITH ALL DEPENDENCIES as a fallback.
@@ -4290,6 +4488,7 @@ class BubbleIsolationManager:
                     pass
 
     def _try_pypi_api(self, package_name: str, version: str) -> Optional[List[str]]:
+        import requests as http_requests
         try:
             pass
         except ImportError:
@@ -4302,11 +4501,11 @@ class BubbleIsolationManager:
                 "User-Agent": "omnipkg-package-manager/1.0",
                 "Accept": "application/json",
             }
-            response = requests.get(url, timeout=10, headers=headers)
+            response = http_requests.get(url, timeout=10, headers=headers)
             if response.status_code == 404:
                 if clean_version != version:
                     url = f"https://pypi.org/pypi/{package_name}/{version}/json"
-                    response = requests.get(url, timeout=10, headers=headers)
+                    response = http_requests.get(url, timeout=10, headers=headers)
             if response.status_code != 200:
                 return None
             if not response.text.strip():
@@ -4333,7 +4532,7 @@ class BubbleIsolationManager:
                     version_spec = match.group(2) or ""
                     dependencies.append(_("{}{}").format(dep_name, version_spec))
             return dependencies
-        except requests.exceptions.RequestException:
+        except http_requests.exceptions.RequestException:
             return None
         except Exception:
             return None
@@ -5531,11 +5730,11 @@ class BubbleIsolationManager:
         stats: dict,
         python_context_version: str,
         observed_dependencies: Optional[Dict[str, str]] = None,
+        enriched_meta: Optional[Dict] = None, 
     ):
         """
         Creates a robust, dynamic manifest file and registers the bubble in Redis.
-        Now correctly stamps the manifest with the provided python_context_version, a
-        dynamic omnipkg version, and observed dependencies from the install.
+        Schema 2.0: Includes Global Cache metadata.
         """
         omnipkg_version = _get_dynamic_omnipkg_version()
 
@@ -5557,13 +5756,12 @@ class BubbleIsolationManager:
         size_mb = round(total_size / (1024 * 1024), 2)
 
         manifest_data = {
-            "manifest_schema_version": "1.2",  # Schema updated for dependencies
+            "manifest_schema_version": "2.0", 
             "created_at": datetime.now().isoformat(),
             "python_version": python_context_version,
             "omnipkg_version": omnipkg_version,
             "primary_package": primary_package_name,
             "packages": packages_metadata,
-            # NEW: Store the observed dependencies from the pip install
             "resolved_dependencies": observed_dependencies or {},
             "stats": {
                 "bubble_size_mb": size_mb,
@@ -5572,21 +5770,44 @@ class BubbleIsolationManager:
                 "copied_files": stats.get("copied_files", 0),
                 "deduplicated_files": stats.get("deduplicated_files", 0),
                 "deduplication_efficiency_percent": (
-                    round(
-                        stats.get("deduplicated_files", 0) / stats.get("total_files", 1) * 100,
-                        1,
-                    )
-                    if stats.get("total_files")
-                    else 0
+                    round(stats.get("deduplicated_files", 0) / stats.get("total_files", 1) * 100, 1)
+                    if stats.get("total_files") else 0
                 ),
                 "c_extensions_count": len(stats.get("c_extensions", [])),
                 "binaries_count": len(stats.get("binaries", [])),
             },
         }
 
+        if enriched_meta:
+            try:
+                manifest_data["global_cache"] = {
+                    "record_hash": enriched_meta.get("record_hash", ""),
+                    "content_hash": enriched_meta.get("content_hash", ""),
+                    "global_cache_key": enriched_meta.get("global_cache_key", f"{primary_package_name}-unknown"),
+                    "global_cache_portable": enriched_meta.get("global_cache_portable", False),
+                    "has_c_extension": enriched_meta.get("has_c_extension", False),
+                    "reload_safe": enriched_meta.get("reload_safe", True),
+                    "platform_tag": enriched_meta.get("platform_tag", "none"),
+                    "wheel_abi_tag": enriched_meta.get("wheel_abi_tag", "any"),
+                    "symlink_targets": json.loads(enriched_meta.get("symlink_targets", "[]")) if isinstance(enriched_meta.get("symlink_targets"), str) else enriched_meta.get("symlink_targets",[])
+                }
+                if enriched_meta.get("resolved_bubble_deps"):
+                    deps = enriched_meta.get("resolved_bubble_deps")
+                    manifest_data["resolved_dependencies"] = json.loads(deps) if isinstance(deps, str) else deps
+            except Exception as e:
+                safe_print(f"    ⚠️ Warning: Could not inject global cache metadata: {e}")
+
         manifest_path = bubble_path / ".omnipkg_manifest.json"
-        with open(manifest_path, "w") as f:
-            json.dump(manifest_data, f, indent=2)
+        
+        # --- ADDED EXPLICIT PATH PRINTING ---
+        print(f"   [MANIFEST] Writing schema 2.0 manifest to: {manifest_path}")
+        
+        try:
+            with open(manifest_path, "w") as f:
+                json.dump(manifest_data, f, indent=2)
+            print(f"   [MANIFEST] ✅ Successfully wrote {len(json.dumps(manifest_data))} bytes.")
+        except Exception as e:
+            print(f"   [MANIFEST] ❌ CRITICAL ERROR writing manifest: {e}")
 
         try:
             registry_key = f"{self.parent_omnipkg.redis_key_prefix}bubble_locations"
@@ -5600,21 +5821,16 @@ class BubbleIsolationManager:
                 "created_at": manifest_data["created_at"],
                 "size_mb": size_mb,
                 "package_count": len(installed_tree),
+                "global_cache_key": manifest_data.get("global_cache", {}).get("global_cache_key", "")
             }
 
             self.parent_omnipkg.cache_client.hset(
                 registry_key, bubble_id, json.dumps(redis_summary)
             )
-            safe_print(
-                _('    📝 Created manifest and registered bubble "{}" existence.').format(bubble_id)
-            )
+            safe_print(_('    📝 Registered bubble "{}" in Redis.'.format(bubble_id)))
         except Exception as e:
-            safe_print(
-                _("    ⚠️ Warning: Failed to register bubble existence in Redis: {}").format(e)
-            )
-
+            safe_print(_("    ⚠️ Warning: Failed to register bubble existence in Redis: {}").format(e))
             traceback.print_exc()
-            safe_print(_("    📝 Local manifest was still created at {}").format(manifest_path))
 
     def get_bubble_info(self, bubble_id: str) -> dict:
         """
@@ -6301,13 +6517,17 @@ class omnipkg:
 
         # === SAFETY CHECK 1: Determine if we're the native interpreter ===
         if platform.system() == "Windows":
-            native_exe = self.config_manager.venv_path / "Scripts" / "python.exe"
+            native_exe_candidates = [
+                self.config_manager.venv_path / "python.exe",
+                self.config_manager.venv_path / "Scripts" / "python.exe",
+            ]
         else:
-            native_exe = self.config_manager.venv_path / "bin" / "python"
+            native_exe_candidates = [self.config_manager.venv_path / "bin" / "python"]
 
         current_exe = Path(sys.executable).resolve()
+        native_exe = native_exe_candidates[0]
         native_exe_resolved = native_exe.resolve()
-        is_native = current_exe == native_exe_resolved
+        is_native = any(current_exe == c.resolve() for c in native_exe_candidates)
 
         # Non-native interpreters should NEVER trigger syncs (prevents race conditions)
         if not is_native:
@@ -6321,12 +6541,7 @@ class omnipkg:
                 safe_print("   ℹ️  Sync disabled via OMNIPKG_DISABLE_SYNC")
             return
 
-        # Windows: Extra conservative - disable sync by default unless explicitly enabled
-        if platform.system() == "Windows":
-            if os.environ.get("OMNIPKG_ENABLE_SYNC") != "1":
-                if "--verbose" in sys.argv or "-V" in sys.argv:
-                    safe_print("   ℹ️  Windows sync disabled (set OMNIPKG_ENABLE_SYNC=1 to enable)")
-                return
+        # Windows sync enabled by default (path detection fixed)
 
         try:
             # === TIER 0: FILE-BASED CACHE CHECK (MICROSECONDS) ===
@@ -6401,11 +6616,7 @@ class omnipkg:
 
             # === TIER 3: HEALING REQUIRED (ONLY WHEN NECESSARY) ===
             # Extra safety: Warn on Windows
-            if platform.system() == "Windows":
-                safe_print(
-                    "   ⚠️  Sync needed on Windows - this may cause issues if other processes are active"
-                )
-                safe_print("   💡 Set OMNIPKG_DISABLE_SYNC=1 to disable auto-sync")
+
 
             self._perform_concurrent_healing(master_version_str, install_spec, sync_needed)
 
@@ -6515,11 +6726,13 @@ class omnipkg:
                     continue
 
                 # Derive site-packages from interpreter path
-                interpreter_root = exe_path_obj.parent.parent
-
+                # On Windows managed interpreters, python.exe is in root (not Scripts/)
                 if platform.system() == "Windows":
+                    _ep = exe_path_obj.parent
+                    interpreter_root = _ep.parent if _ep.name.lower() in ("bin", "scripts") else _ep
                     site_packages = interpreter_root / "Lib" / "site-packages"
                 else:
+                    interpreter_root = exe_path_obj.parent.parent
                     site_packages = interpreter_root / "lib" / f"python{py_ver}" / "site-packages"
 
                 # Verify site-packages exists
@@ -6605,16 +6818,22 @@ class omnipkg:
 
                 # If none of the expected patterns exist, sync is needed
                 # First, check for ANY installed omnipkg metadata. This is the ground truth.
+                # Also check __editable__.omnipkg-*.dist-info pattern (pip uses dot not triple-underscore)
+                _all_di = list(site_packages.glob("omnipkg-*.dist-info")) + list(site_packages.glob("__editable__.omnipkg-*.dist-info"))
                 conflicting_installs = [
-                    p for p in site_packages.glob("omnipkg-*.dist-info")
+                    p for p in _all_di
                     if p.name != expected_dist_info and p.name != expected_editable_dist_info
                 ]
 
-                # egg-link = legacy setuptools editable; always needs re-sync to modern format
                 has_egg_link = (site_packages / "omnipkg.egg-link").exists()
                 if has_egg_link:
-                    sync_needed.append((py_ver, str(exe_path)))
-                    continue
+                    _marker = Path(exe_path).parent / f".omnipkg_synced_{master_version}"
+                    if _marker.exists():
+                        # Already synced, egg-link is stale but harmless — skip
+                        pass
+                    else:
+                        sync_needed.append((py_ver, str(exe_path)))
+                        continue
 
                 # If we found an old/conflicting .dist-info directory, sync is ALWAYS needed.
                 # This is non-negotiable and overrides any .pth file check.
@@ -6801,13 +7020,38 @@ class omnipkg:
                 _already_synced = _marker.exists()
                 if _already_synced:
                     # Still need to check uv_ffi even if omnipkg is already synced
-                    if os.environ.get("OMNIPKG_DEBUG"):
-                        safe_print(f"   [HEAL] {py_ver} omnipkg marker exists, checking uv_ffi only...")
+                    if _already_synced:
+                    # Still need to check uv_ffi even if omnipkg is already synced
+                        if os.environ.get("OMNIPKG_DEBUG"):
+                            safe_print(f"   [HEAL] {py_ver} omnipkg marker exists, checking uv_ffi only...")
+                        # Clean up stale egg-link even if already synced (editable installs on old Python)
+                        try:
+                            _ir = Path(target_exe).parent.parent
+                            sp_path = _ir / "Lib" if (_ir / "Lib").exists() else _ir / "lib"
+                            import glob as _glob
+                            _sp_dirs = _glob.glob(str(sp_path / "python*/site-packages")) or _glob.glob(str(sp_path / "site-packages"))
+                            for sp_dir in _sp_dirs:
+                                sp_dir = Path(sp_dir)
+                                egg_link = sp_dir / "omnipkg.egg-link"
+                                if egg_link.exists():
+                                    egg_link.unlink()
+                                easy_pth = sp_dir / "easy-install.pth"
+                                if easy_pth.exists():
+                                    lines = easy_pth.read_text(encoding="utf-8").splitlines()
+                                    cleaned = [l for l in lines if "omnipkg" not in l]
+                                    if cleaned:
+                                        easy_pth.write_text("\n".join(cleaned) + "\n", encoding="utf-8")
+                                    else:
+                                        easy_pth.unlink()
+                        except Exception:
+                            pass
                 # Detect egg-based pip (e.g. pip 20.2.2 on Python 3.7)
                 # and inject it into PYTHONPATH so -m pip works in subprocess
                 import glob, os
-                sp = Path(target_exe).parent.parent / "lib"
-                egg_paths = glob.glob(str(sp / "python*/site-packages/pip-*.egg"))
+                _interp_root = Path(target_exe).parent.parent
+                _lib_dir = _interp_root / "Lib" if (_interp_root / "Lib").exists() else _interp_root / "lib"
+                sp = _lib_dir
+                egg_paths = glob.glob(str(sp / "python*/site-packages/pip-*.egg")) or glob.glob(str(sp / "site-packages/pip-*.egg"))
                 env = os.environ.copy()
                 if egg_paths:
                     existing = env.get("PYTHONPATH", "")
@@ -6832,9 +7076,11 @@ class omnipkg:
                     except Exception:
                         pass
                     try:
-                        sp_path = Path(target_exe).parent.parent / "lib"
+                        _ir = Path(target_exe).parent.parent
+                        sp_path = _ir / "Lib" if (_ir / "Lib").exists() else _ir / "lib"
                         import glob as _glob
-                        for sp_dir in _glob.glob(str(sp_path / "python*/site-packages")):
+                        _sp_dirs = _glob.glob(str(sp_path / "python*/site-packages")) or _glob.glob(str(sp_path / "site-packages"))
+                        for sp_dir in _sp_dirs:
                             sp_dir = Path(sp_dir)
                             egg_link = sp_dir / "omnipkg.egg-link"
                             if egg_link.exists():
@@ -6852,9 +7098,11 @@ class omnipkg:
                 # Clean up stale omnipkg dist-info dirs (leave only current version)
                 if result.returncode == 0:
                     try:
-                        sp_path = Path(target_exe).parent.parent / "lib"
+                        _ir2 = Path(target_exe).parent.parent
+                        sp_path = _ir2 / "Lib" if (_ir2 / "Lib").exists() else _ir2 / "lib"
                         import glob as _glob2
-                        for sp_dir in _glob2.glob(str(sp_path / "python*/site-packages")):
+                        _sp_dirs2 = _glob2.glob(str(sp_path / "python*/site-packages")) or _glob2.glob(str(sp_path / "site-packages"))
+                        for sp_dir in _sp_dirs2:
                             sp_dir = Path(sp_dir)
                             for di in sp_dir.glob("omnipkg-*.dist-info"):
                                 ver_in_name = di.name.replace("omnipkg-", "").replace(".dist-info", "")
@@ -7202,6 +7450,8 @@ class omnipkg:
                 raise RuntimeError("SQLite connection failed.")
 
             self._cache_connection_status = "sqlite_ok"
+            safe_print(f"   📁 KB location: {sqlite_db_path}")
+            safe_print(f"   🔍 Inspect: sqlite3 \"{sqlite_db_path}\" \"SELECT key FROM hash_store LIMIT 20;\"")
             return True
 
         except Exception as e:
@@ -7409,6 +7659,18 @@ class omnipkg:
                 safe_print(_('   - ⚠️  Warning: Could not automatically clear first-use flag: {}').format(e))
 
         # 3. Return the original status of the rebuild operation.
+        # ── MANIFEST MIGRATION ────────────────────────────────────────────────
+        if rebuild_status == 0 and self.bubble_manager:
+            safe_print(_("\n📋 Migrating bubble manifests to current schema..."))
+            try:
+                migration_summary = self.bubble_manager.migrate_manifests()
+                safe_print(_(
+                    "   ✅ Manifests: {scanned} scanned, {upgraded} upgraded, "
+                    "{already_current} already current, {failed} failed."
+                ).format(**migration_summary))
+            except Exception as e:
+                safe_print(_("   ⚠️  Manifest migration encountered an error: {}").format(e))
+
         return rebuild_status
 
     def rebuild_knowledge_base(self, force: bool = False):
@@ -7924,6 +8186,41 @@ class omnipkg:
                         pass
         return valid_dists
 
+    def _fast_missing_metadata_check(self) -> bool:
+        """
+        O(n) scan for missing METADATA files across main env + all bubbles.
+        Pure is_dir/exists calls — no parsing, no pip, no Redis.
+        Only triggers _heal_broken_metadata if something is actually broken.
+        """
+        sp = Path(self.config["site_packages_path"])
+        broken = False
+
+        # Main env
+        for dist_info in sp.glob("*.dist-info"):
+            if not (dist_info / "METADATA").exists():
+                broken = True
+                break
+
+        # Bubbles
+        if not broken:
+            bubbles = sp / ".omnipkg_versions"
+            if bubbles.exists():
+                for bubble_dir in bubbles.iterdir():
+                    if not bubble_dir.is_dir() or bubble_dir.name.startswith('.'):
+                        continue
+                    for dist_info in bubble_dir.glob("*.dist-info"):
+                        if not (dist_info / "METADATA").exists():
+                            broken = True
+                            break
+                    if broken:
+                        break
+
+        if broken:
+            safe_print("⚠️  Missing METADATA detected — triggering auto-heal...")
+            self._heal_broken_metadata(auto=True)
+            return True
+        return False
+
     def _synchronize_knowledge_base_with_reality(
         self, verbose: bool = False
     ) -> List[importlib.metadata.Distribution]:
@@ -7948,7 +8245,13 @@ class omnipkg:
         self._cleanup_all_cloaks_globally()
         if self._check_and_run_pending_rebuild():
             pass
-
+                # ── Fast missing-METADATA scan (main env + bubbles) ──────────────
+        if self._fast_missing_metadata_check():
+            safe_print("   🔧 Auto-healed broken metadata, re-running discovery...")
+            # Force fresh discovery after healing
+            all_discovered_dists = gatherer._discover_distributions(
+                targeted_packages=None, verbose=False
+            )
         safe_print(_("🧠 Checking knowledge base synchronization..."))
 
         configured_python_exe = self.config.get("python_executable", sys.executable)
@@ -9873,7 +10176,7 @@ class omnipkg:
             ("path",          "📂 Path"),
             ("Platform",      "💻 Platform"),
             ("dependencies",  "🔗 Dependencies"),
-            ("Requires-Dist", "📋 Requires"),
+            ("Requires-Dist", "📋 Optional Extras"),
         ]
 
         for field_name, display_name in important_fields:
@@ -9887,12 +10190,28 @@ class omnipkg:
                 value = value.split("\n")[0] + "... (truncated)"
             elif field_name == "Description" and value and len(value) > 200:
                 value = value[:200].replace("\n", " ") + "... (truncated)"
-            elif field_name in ("dependencies", "Requires-Dist") and value:
+            elif field_name == "dependencies" and value:
                 try:
                     dep_list = json.loads(value)
-                    value = ", ".join(dep_list) if dep_list else "None"
+                    core_deps = [d for d in dep_list if "; extra ==" not in d]
+                    value = ", ".join(core_deps) if core_deps else "None"
                 except (json.JSONDecodeError, TypeError):
-                    pass
+                    core_deps = [d.strip() for d in value.split(",") if "; extra ==" not in d]
+                    value = ", ".join(core_deps) if core_deps else "None"
+            elif field_name == "Requires-Dist" and value:
+                try:
+                    dep_list = json.loads(value)
+                except (json.JSONDecodeError, TypeError):
+                    dep_list = [d.strip() for d in value.split(",")]
+                extras = [d for d in dep_list if "; extra ==" in d]
+                if not extras:
+                    # single string from DB — just show it as-is with a note
+                    value = f"{value}  (note: only last Requires-Dist entry stored — see dependencies above for full list)"
+                elif len(extras) <= 4:
+                    value = ", ".join(extras)
+                else:
+                    preview = ", ".join(extras[:4])
+                    value = f"{preview} ... (+{len(extras) - 4} more extras)"
 
             safe_print(_("{}: {}").format(display_name.ljust(18), value or "N/A"))
 
@@ -9928,7 +10247,26 @@ class omnipkg:
             show = force or not is_interactive_session()
             if not show:
                 try:
-                    show = safe_input(_("\n💡 {} more field(s) available. Show all? (y/N): ").format(len(extra)), default="n").lower() == "y"
+                    _kb_path = getattr(getattr(self, 'cache_client', None), 'db_path', None)
+                    if _kb_path:
+                        safe_print(_("\n💡 {} more field(s) available. Show all? (y/N): ").format(len(extra)))
+                        safe_print(_("   📁 KB: {}").format(_kb_path))
+                        import shutil
+                        _sqlite3_available = shutil.which("sqlite3") is not None
+                        if _sqlite3_available:
+                            safe_print(_("   🔍 sqlite3 \"{}\" \"SELECT field, value FROM hash_store WHERE key LIKE '%{}%' LIMIT 40;\"").format(
+                                _kb_path,
+                                (package_name or "").lower().replace("-", "_")
+                            ))
+                        else:
+                            _pkg_key = (package_name or "").lower().replace("-", "_")
+                            safe_print(_("   🔍 Pretty view (truncated):"))
+                            safe_print("   python3 -c \"import sqlite3; rows=sqlite3.connect('{}').execute(\\\"SELECT field, value FROM hash_store WHERE key LIKE '%{}%' LIMIT 60\\\").fetchall(); [print(f'  {{r[0]:<35}} {{str(r[1])[:120].strip()}}') for r in rows]\"".format(_kb_path, _pkg_key))
+                            safe_print(_("   📄 Full dump (all fields, no truncation):"))
+                            safe_print("   python3 -c \"import sqlite3; rows=sqlite3.connect('{}').execute(\\\"SELECT field, value FROM hash_store WHERE key LIKE '%{}%'\\\").fetchall(); [print(f'--- {{r[0]}} ---\\n{{r[1]}}\\n') for r in rows]\"".format(_kb_path, _pkg_key))
+                        show = safe_input("   > ").lower() == "y"
+                    else:
+                        show = safe_input(_("\n💡 {} more field(s) available. Show all? (y/N): ").format(len(extra)), default="n").lower() == "y"
                 except (EOFError, KeyboardInterrupt):
                     pass
             if show:
@@ -11645,6 +11983,7 @@ class omnipkg:
             preflight_start = time.perf_counter()
             configured_exe = self.config.get("python_executable", sys.executable)
             install_strategy = self.config.get("install_strategy", "stable-main")
+            safe_print(f"   🐍 preflight python: {configured_exe}")  # ← here, after assignment
 
             fully_resolved_specs = []
             needs_installation = []
@@ -11721,7 +12060,7 @@ class omnipkg:
                         fully_resolved_specs.append(resolved_spec)
                         continue
                     elif install_strategy == "stable-main":
-                        safe_print(_('   ✓ {} [satisfied: {} - bubble]').format(resolved_spec, duration_str))
+                        safe_print(_('   ✓ {} [satisfied: {} - bubble @ {}]').format(resolved_spec, duration_str, bubble_path))
                         fully_resolved_specs.append(resolved_spec)
                         continue
                     else:
@@ -13985,6 +14324,26 @@ class omnipkg:
                     found_installations.append(basic_info)
                     seen_versions.add(ver)
 
+        # Filesystem safety net — if Redis had no knowledge of this package at all,
+        # dist_map entries will never have made it into found_installations via the
+        # version_map path. Catch them here by path so nothing on disk is silently dropped.
+        seen_paths = {inst.get("path", "") for inst in found_installations}
+        for key, dist in dist_map.items():
+            dist_path = str(dist._path.resolve())
+            if dist_path not in seen_paths:
+                context_info = gatherer._get_install_context(dist)
+                basic_info = {
+                    "Name": dist.metadata.get("Name", c_name),
+                    "Version": dist.version,
+                    "path": dist_path,
+                    "install_type": context_info.get("install_type", "active"),
+                    "owner_package": context_info.get("owner_package"),
+                    "is_active": True,
+                    "redis_key": f"(not in KB: {key})",
+                }
+                found_installations.append(basic_info)
+                seen_versions.add(dist.version)
+
         # Deduplicate — filesystem scan + Redis can both find the same active install
         seen = set()
         deduped = []
@@ -15222,12 +15581,18 @@ print(json.dumps(results))
 
         # Stage 1: Ancient setuptools
         safe_print(
-            "\n      - ⚙️ Stage 1: Installing ANCIENT build system (setuptools with Feature support)..."
+            "\n      - ⚙️ Stage 1: Installing ANCIENT build system (setuptools) into interpreter..."
         )
         build_system_fix = ["setuptools==40.8.0", "wheel"]
 
+        # Install ancient setuptools into the MAIN interpreter so sdist builds with
+        # --no-build-isolation can find it. --no-deps is critical to prevent
+        # the resolver from modifying other packages.
         return_code, _output = self._run_pip_install(
-            build_system_fix, force_reinstall=True, target_directory=None
+            build_system_fix,
+            force_reinstall=True,
+            target_directory=None,
+            extra_flags=["--no-deps"],
         )
 
         if return_code != 0:
@@ -15288,7 +15653,9 @@ print(json.dumps(results))
                     [str(temp_file)],
                     force_reinstall=True,
                     target_directory=target_directory_override,
-                    extra_flags=["--no-build-isolation", "--no-deps"],
+                    # CRITICAL FIX: --ignore-installed prevents uv/pip from uninstalling 
+                    # the modern versions from the main environment during a --target install.
+                    extra_flags=["--no-build-isolation", "--no-deps", "--ignore-installed"],
                 )
 
                 temp_file.unlink()
@@ -15364,7 +15731,7 @@ print(json.dumps(results))
             target_spec,
             force_reinstall=True,
             target_directory=target_directory_override,
-            extra_flags=["--no-build-isolation", "--no-deps"],
+            extra_flags=["--no-build-isolation", "--no-deps", "--ignore-installed"],
         )
 
         self._restore_modern_setuptools()
@@ -15377,9 +15744,14 @@ print(json.dumps(results))
         return True
 
     def _restore_modern_setuptools(self):
-        """Restore modern setuptools"""
         safe_print("      - 🔄 Restoring modern setuptools...")
-        self._run_pip_install(["setuptools>=65.5.1"], force_reinstall=True, target_directory=None)
+        # Always restore to the main interpreter, not the target, and use --no-deps.
+        self._run_pip_install(
+            ["setuptools>=65.5.1"],
+            force_reinstall=True,
+            target_directory=None,
+            extra_flags=["--no-deps"],
+        )
 
     def _get_historical_release_date(self, package_name, version):
         """Uses PyPI JSON API to get the release date for a specific version."""
@@ -15755,54 +16127,103 @@ print(json.dumps(results))
             _dbg(f"[WALL-CORE] args-build+exists: {(time.perf_counter()-_t_wrapper_entry)*1000:.3f}ms")
             # ── PATH 1: FFI in-process ─────────────────────────────────
             if self._uv_ffi_run is not None:
-                _ffi_cmd = " ".join(_uv_args)
-                import time as _t_imp
-                _t_pre_ffi = _t_imp.perf_counter()
-                safe_print(f"[UV-PATH] FFI in-process: uv {_ffi_cmd}", file=sys.stderr)
-                _t0 = _t_imp.perf_counter()
-                _dbg(f"[WALL-CORE] pre-FFI overhead in wrapper: {(_t0-_t_pre_ffi)*1000:.3f}ms")
-                # ── DEBUG: snapshot site-packages before FFI call ──
+                daemon_client = None
+                _ffi_installed, _ffi_removed = [], []
+                _op_marker = None
+                # ✅ HOISTED: Define before the try so `finally` can always reference it safely
                 _is_target_call = "--target" in _uv_args
                 _target_val = _uv_args[_uv_args.index("--target") + 1] if _is_target_call else None
-                try:
-                    from omnipkg._vendor.uv_ffi import get_site_packages_cache as _dbg_gspc
-                    _dbg_all_before = {n: v for n,v in _dbg_gspc()}
-                    _dbg_pkgs = [p.split("==")[0].split(">=")[0].split("<=")[0].strip().lower() for p in packages]
-                    _dbg_before_rel = {n: v for n,v in _dbg_all_before.items() if n.lower() in _dbg_pkgs}
-                    _dbg(f"[FFI-DEBUG] is_target={_is_target_call} target_dir={_target_val}")
-                    _dbg(f"[FFI-DEBUG] cache BEFORE (total={len(_dbg_all_before)}) relevant={_dbg_before_rel}")
-                except Exception as _dbg_e:
-                    _dbg(f"[FFI-DEBUG] cache read failed: {_dbg_e}")
-                try:
-                    _ffi_rc, _ffi_installed, _ffi_removed = self._uv_ffi_run(_ffi_cmd)
-                    _ffi_err = ""  # structured return — no stderr string
-                    _ffi_ms = (time.perf_counter() - _t0) * 1000
-                    # ── DEBUG: snapshot after ──
-                    try:
-                        from omnipkg._vendor.uv_ffi import get_site_packages_cache as _dbg_gspc2
-                        _dbg_all_after = {n: v for n,v in _dbg_gspc2()}
-                        _dbg_after_rel = {n: v for n,v in _dbg_all_after.items() if n.lower() in _dbg_pkgs}
-                        _dbg_diff_added = {f"{n}=={v}" for n,v in _dbg_all_after.items()} - {f"{n}=={v}" for n,v in _dbg_all_before.items()}
-                        _dbg_diff_removed = {f"{n}=={v}" for n,v in _dbg_all_before.items()} - {f"{n}=={v}" for n,v in _dbg_all_after.items()}
-                        _dbg(f"[FFI-DEBUG] cache AFTER (total={len(_dbg_all_after)}) relevant={_dbg_after_rel}")
-                        if _is_target_call and _dbg_diff_added:
-                            _dbg(f"[FFI-DEBUG] ⚠️  TARGET INSTALL LEAKED INTO MAIN CACHE: {_dbg_diff_added}")
-                    except Exception as _dbg_e2:
-                        _dbg(f"[FFI-DEBUG] post-cache read failed: {_dbg_e2}")
-                    # NOTE: stdout/stderr printing intentionally deferred to caller
-                    # safe_print here costs 3-4ms over daemon socket — caller prints instead
-                    _dbg(f"[UV-TIMING] FFI: {_ffi_ms:.2f}ms rc={_ffi_rc}")
-                    _det = self._uv_failure_detector
-                    if _ffi_rc == 0:
-                        return 0, {"stdout": "", "stderr": "", "ffi_installed": _ffi_installed, "ffi_removed": _ffi_removed, "from_ffi": True, "is_target": bool(target_directory)}
-                    safe_print(f"   ⚠️  FFI failed (rc={_ffi_rc}) — trying daemon", file=sys.stderr)
-                except BaseException as _ffi_ex:
-                    _ffi_ms = (time.perf_counter() - _t0) * 1000
-                    safe_print(f"[UV-PATH] FFI error ({_ffi_ex}) after {_ffi_ms:.2f}ms — trying daemon", file=sys.stderr)
-            else:
-                safe_print(f"[UV-PATH] FFI skipped (unavailable or --target) — trying daemon", file=sys.stderr)
 
-            # ── PATH 2: daemon run_uv (~IPC overhead) ──────────────
+                # Signal the START of our operation (Marker File + IPC)
+                # 🔥 BUBBLE FIX: Only signal the daemon if we're touching the MAIN env.
+                #    A bubble install goes to a temp --target dir; the watcher isn't
+                #    watching that dir, so lying to it causes spurious invalidations.
+                if not _is_target_call:
+                    try:
+                        _sp_path = Path(self.config.get("site_packages_path"))
+                        _op_marker = _sp_path / ".omnipkg_op.lock"
+                        _op_marker.touch()
+
+                        from omnipkg.isolation.worker_daemon import DaemonClient
+                        daemon_client = DaemonClient(auto_start=False)
+                        daemon_client.start_omnipkg_op()
+                    except Exception as e:
+                        _dbg(f"[FS-WATCHER-CLIENT] Failed to signal start_op: {e}")
+                        daemon_client = None
+
+                try:
+                    from omnipkg.isolation.fs_watcher import FfiWriteGuard
+                    _watcher_guard = FfiWriteGuard.attach()
+
+                    _ffi_cmd = " ".join(_uv_args)
+                    import time as _t_imp
+                    _t_pre_ffi = _t_imp.perf_counter()
+                    safe_print(f"[UV-PATH] FFI in-process: uv {_ffi_cmd}", file=sys.stderr)
+                    _t0 = _t_imp.perf_counter()
+                    _dbg(f"[WALL-CORE] pre-FFI overhead in wrapper: {(_t0-_t_pre_ffi)*1000:.3f}ms")
+
+                    _is_target_call = "--target" in _uv_args
+                    _target_val = _uv_args[_uv_args.index("--target") + 1] if _is_target_call else None
+
+                    try:
+                        from omnipkg._vendor.uv_ffi import get_site_packages_cache as _dbg_gspc
+                        _dbg_all_before = {n: v for n,v in _dbg_gspc()}
+                        _dbg_pkgs = [p.split("==")[0].split(">=")[0].split("<=")[0].strip().lower() for p in packages]
+                        _dbg_before_rel = {n: v for n,v in _dbg_all_before.items() if n.lower() in _dbg_pkgs}
+                        _dbg(f"[FFI-DEBUG] is_target={_is_target_call} target_dir={_target_val}")
+                        _dbg(f"[FFI-DEBUG] cache BEFORE (total={len(_dbg_all_before)}) relevant={_dbg_before_rel}")
+                    except Exception as _dbg_e:
+                        _dbg(f"[FFI-DEBUG] cache read failed: {_dbg_e}")
+
+                    try:
+                        with _watcher_guard:
+                            _ffi_rc, _ffi_installed, _ffi_removed = self._uv_ffi_run(_ffi_cmd)
+                        
+                        _ffi_ms = (time.perf_counter() - _t0) * 1000
+                        _dbg(f"[UV-TIMING] FFI: {_ffi_ms:.2f}ms rc={_ffi_rc}")
+
+                        if _ffi_rc == 0:
+                            # Proactive patch
+                            if not _is_target_call and (_ffi_installed or _ffi_removed):
+                                try:
+                                    from omnipkg.isolation.fs_watcher import DaemonPatchSender
+                                    patch_sender = DaemonPatchSender(self.config.get_daemon_socket())
+                                    patch_sender(
+                                        site_packages_path=self.config.get("site_packages_path"),
+                                        installed=_ffi_installed, removed=_ffi_removed)
+                                except Exception: pass
+                            
+                            return 0, {"stdout": "", "stderr": "", "ffi_installed": _ffi_installed, "ffi_removed": _ffi_removed, "from_ffi": True, "is_target": bool(target_directory)}
+                        
+                        safe_print(f"   ⚠️  FFI failed (rc={_ffi_rc}) — trying daemon", file=sys.stderr)
+
+                    except BaseException as _ffi_ex:
+                        _ffi_ms = (time.perf_counter() - _t0) * 1000
+                        safe_print(f"[UV-PATH] FFI error ({_ffi_ex}) after {_ffi_ms:.2f}ms — trying daemon", file=sys.stderr)
+                
+                finally:
+                    # 🔥 BUBBLE FIX: Only tell the daemon if we actually touched the MAIN env.
+                    #    If _is_target_call, this was a bubble — daemon knows nothing about it,
+                    #    and we don't want it to think the main site-packages changed.
+                    if not _is_target_call and daemon_client:
+                        _dbg(f"[CORE-SENDER] Sending to Daemon: INST={_ffi_installed}, REM={_ffi_removed}")
+                        try:
+                            daemon_client.end_omnipkg_op(installed=_ffi_installed, removed=_ffi_removed)
+                        except Exception as e:
+                            _dbg(f"[FS-WATCHER-CLIENT] Failed to signal end_op to daemon: {e}")
+
+                    # Always clean up the lock file (it lives in main site-packages,
+                    # we touched it, we clean it — even if the bubble path somehow set it)
+                    if _op_marker and _op_marker.exists():
+                        try:
+                            _op_marker.unlink()
+                        except Exception as e:
+                            _dbg(f"[FS-WATCHER-CLIENT] Failed to unlink op_marker: {e}")
+
+            else:
+                safe_print(f"[UV-PATH] FFI skipped (unavailable) — trying daemon", file=sys.stderr)
+
+            # ── PATH 2:  run_uv (~IPC overhead) ──────────────
             _t0 = time.perf_counter()
             try:
                 from omnipkg.isolation.worker_daemon import DaemonClient
@@ -15844,18 +16265,26 @@ print(json.dumps(results))
             uv_cmd = [uv_exe] + _uv_args
             safe_print(f"[UV-PATH] subprocess: {' '.join(uv_cmd)}", file=sys.stderr)
             try:
-                uv_proc = subprocess.Popen(
-                    uv_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                    text=True, encoding="utf-8", errors="replace", bufsize=1,
-                )
-                uv_out, uv_err = [], []
-                for line in uv_proc.stdout:
-                    safe_print(line, end="")
-                    uv_out.append(line)
-                for line in uv_proc.stderr:
-                    safe_print(line, end="", file=sys.stderr)
-                    uv_err.append(line)
-                uv_proc.wait()
+                try:
+                    from omnipkg.isolation.fs_watcher import FfiWriteGuard
+                    _watcher_guard = FfiWriteGuard.attach()
+                except Exception:
+                    import contextlib
+                    _watcher_guard = contextlib.nullcontext()
+                    
+                with _watcher_guard:  # 🔥 SIGNAL THE WATCHER "THIS IS US"
+                    uv_proc = subprocess.Popen(
+                        uv_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                        text=True, encoding="utf-8", errors="replace", bufsize=1,
+                    )
+                    uv_out, uv_err = [], []
+                    for line in uv_proc.stdout:
+                        safe_print(line, end="")
+                        uv_out.append(line)
+                    for line in uv_proc.stderr:
+                        safe_print(line, end="", file=sys.stderr)
+                        uv_err.append(line)
+                    uv_proc.wait()
                 _sub_ms = (time.perf_counter() - _t0) * 1000
                 uv_stderr_str = "".join(uv_err)
                 safe_print(f"[UV-TIMING] subprocess: {_sub_ms:.2f}ms rc={uv_proc.returncode}", file=sys.stderr)
@@ -15888,29 +16317,37 @@ print(json.dumps(results))
             env.pop('PIP_PREFIX', None)
 
         try:
-            process = subprocess.Popen(
-                cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                bufsize=1,
-                universal_newlines=True,
-                env=env,
-            )
-
-            stdout_lines, stderr_lines = [], []
-
-            # Stream output live while capturing
-            for line in process.stdout:
-                safe_print(line, end="")
-                stdout_lines.append(line)
-            for line in process.stderr:
-                safe_print(line, end="", file=sys.stderr)
-                stderr_lines.append(line)
-
-            return_code = process.wait()
+            try:
+                from omnipkg.isolation.fs_watcher import FfiWriteGuard
+                _watcher_guard = FfiWriteGuard.attach()
+            except Exception:
+                import contextlib
+                _watcher_guard = contextlib.nullcontext()
+                
+            with _watcher_guard:  # 🔥 SIGNAL THE WATCHER "THIS IS US"
+                process = subprocess.Popen(
+                    cmd,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                    encoding="utf-8",
+                    errors="replace",
+                    bufsize=1,
+                    universal_newlines=True,
+                    env=env,
+                )
+    
+                stdout_lines, stderr_lines = [], []
+    
+                # Stream output live while capturing
+                for line in process.stdout:
+                    safe_print(line, end="")
+                    stdout_lines.append(line)
+                for line in process.stderr:
+                    safe_print(line, end="", file=sys.stderr)
+                    stderr_lines.append(line)
+    
+                return_code = process.wait()
 
             full_stdout = "".join(stdout_lines)
             full_stderr = "".join(stderr_lines)
@@ -16097,6 +16534,13 @@ print(json.dumps(results))
         if not packages:
             return 0
         try:
+            try:
+                from omnipkg.isolation.fs_watcher import FfiWriteGuard
+                _watcher_guard = FfiWriteGuard.attach()
+            except Exception:
+                import contextlib
+                _watcher_guard = contextlib.nullcontext()
+                
             cmd = [
                 self.config["python_executable"],
                 "-u",
@@ -16105,21 +16549,24 @@ print(json.dumps(results))
                 "uninstall",
                 "-y",
             ] + packages
-            process = subprocess.Popen(
-                cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                bufsize=1,
-                universal_newlines=True,
-            )
-            safe_print()
-            for line in iter(process.stdout.readline, ""):
-                safe_print(line, end="")
-            process.stdout.close()
-            return_code = process.wait()
+            
+            with _watcher_guard:  # 🔥 SIGNAL THE WATCHER "THIS IS US"
+                process = subprocess.Popen(
+                    cmd,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    text=True,
+                    encoding="utf-8",
+                    errors="replace",
+                    bufsize=1,
+                    universal_newlines=True,
+                )
+                safe_print()
+                for line in iter(process.stdout.readline, ""):
+                    safe_print(line, end="")
+                process.stdout.close()
+                return_code = process.wait()
+                
             return return_code
         except Exception as e:
             safe_print(_("    ❌ An unexpected error occurred during pip uninstall: {}").format(e))
@@ -17654,4 +18101,5 @@ class PyPIVersionCache:
 #   atexit.register(self.pypi_cache.flush)
 #
 # This ensures any dirty in-memory cache writes hit disk on clean exit
-# without blocking the hot path.
+# without blocking the hot path.# test
+# test

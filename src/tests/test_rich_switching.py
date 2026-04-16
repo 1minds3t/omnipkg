@@ -19,8 +19,8 @@ from omnipkg.isolation.worker_daemon import DaemonClient, DaemonProxy
 from omnipkg.core import ConfigManager, omnipkg as OmnipkgCore
 from omnipkg.i18n import _
 
-# Configuration
-DEFAULT_RICH_VERSION = "13.7.1"
+# Configuration - detected at runtime from main env
+DEFAULT_RICH_VERSION = None
 BUBBLE_VERSIONS_TO_TEST = ["13.5.3", "13.4.2"]
 
 def print_header(title):
@@ -36,15 +36,13 @@ def ensure_daemon_running():
 
     if not status.get("success"):
         safe_print("   🚀 Daemon not running. Starting it now...")
-        # Start daemon in background
         subprocess.Popen(
             [sys.executable, "-m", "omnipkg.isolation.worker_daemon", "start"],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
-            creationflags=0x00000008 if sys.platform == 'win32' else 0, # DETACHED
+            creationflags=0x00000008 if sys.platform == 'win32' else 0,
         )
-        
-        # Wait for readiness
+
         safe_print("   ⏳ Waiting for daemon...", end="", flush=True)
         for i in range(50):
             time.sleep(0.2)
@@ -53,7 +51,7 @@ def ensure_daemon_running():
                 safe_print(" ✅ Ready.")
                 return client
             if i % 5 == 0: safe_print(".", end="", flush=True)
-        
+
         raise RuntimeError("Daemon failed to start")
     else:
         safe_print("   ✅ Daemon is already running.")
@@ -62,21 +60,18 @@ def ensure_daemon_running():
 
 def fast_setup(omnipkg_core: OmnipkgCore):
     """
-    Checks for existing installations. Installs ONLY if missing.
+    Detects the actual main env rich version, then ensures bubbles exist.
     """
+    global DEFAULT_RICH_VERSION
+
     print_header("STEP 1: Fast Environment Check")
 
-    # 1. Check Main Environment
+    # 1. Read whatever rich version is actually in main env — don't fight it
     try:
-        current_main = version("rich")
-        if current_main == DEFAULT_RICH_VERSION:
-            safe_print(f"   ✅ Main Env: rich=={DEFAULT_RICH_VERSION} is already installed.")
-        else:
-            safe_print(f"   ⚠️  Main Env: Found v{current_main}, switching to v{DEFAULT_RICH_VERSION}...")
-            omnipkg_core.smart_install([f"rich=={DEFAULT_RICH_VERSION}"])
+        DEFAULT_RICH_VERSION = version("rich")
+        safe_print(f"   ✅ Main Env: rich=={DEFAULT_RICH_VERSION} (using as-is)")
     except PackageNotFoundError:
-        safe_print(f"   ❌ Main Env: rich missing. Installing v{DEFAULT_RICH_VERSION}...")
-        omnipkg_core.smart_install([f"rich=={DEFAULT_RICH_VERSION}"])
+        raise RuntimeError("rich is not installed in the main environment at all — cannot run test")
 
     # 2. Check Bubbles
     for v in BUBBLE_VERSIONS_TO_TEST:
@@ -92,18 +87,15 @@ def test_version_via_daemon(target_version: str, client: DaemonClient, is_bubble
     Verifies version using the Daemon.
     """
     spec = f"rich=={target_version}"
-    
+
     if is_bubble:
         safe_print(_('   ⚡ Verifying v{} via Daemon Worker...').format(target_version))
         proxy = DaemonProxy(client, spec)
     else:
-        # For main env testing via daemon, we just use 'rich' without version constraints
-        # or we rely on the daemon's default environment if no spec provided (but here we be explicit)
         safe_print(_('   🏠 Verifying v{} via Daemon (Main Env check)...').format(target_version))
         proxy = DaemonProxy(client, spec)
 
     code = "from importlib.metadata import version; import rich; print(f'VERSION={version(\"rich\")}|PATH={rich.__file__}')"
-
 
     start = time.perf_counter()
     result = proxy.execute(code)
@@ -111,18 +103,17 @@ def test_version_via_daemon(target_version: str, client: DaemonClient, is_bubble
 
     if result.get("success"):
         stdout = result.get("stdout", "").strip()
-        # Parse output "VERSION=x.y.z|PATH=..."
         try:
             parts = stdout.split("|")
             actual_version = parts[0].split("=")[1]
             actual_path = parts[1].split("=")[1]
-            
+
             safe_print(f"      - Version: {actual_version}")
             safe_print(f"      - Path:    {actual_path}")
             safe_print(f"      - Latency: {duration:.2f}ms")
 
             if actual_version != target_version:
-                safe_print(f"      ❌ MISMATCH! Expected {target_version}")
+                safe_print(f"      ❌ MISMATCH! Expected {target_version}, got {actual_version}")
                 return False
             return True
         except IndexError:
@@ -137,7 +128,7 @@ def run_fast_test():
         cm = ConfigManager(suppress_init_messages=True)
         core = OmnipkgCore(cm)
 
-        # 1. Fast Setup (Skipping installs if present)
+        # 1. Fast Setup
         fast_setup(core)
 
         # 2. Daemon Check
@@ -147,7 +138,7 @@ def run_fast_test():
         print_header("STEP 2: Daemon Verification")
         results = {}
 
-        # Test Main
+        # Test Main — use whatever version is actually there
         print(f"\n--- Testing Main Version ({DEFAULT_RICH_VERSION}) ---")
         results["Main"] = test_version_via_daemon(DEFAULT_RICH_VERSION, client, is_bubble=False)
 

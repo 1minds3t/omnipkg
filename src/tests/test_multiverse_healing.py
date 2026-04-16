@@ -1,345 +1,277 @@
-from omnipkg.common_utils import safe_print
-from omnipkg.common_utils import sync_context_to_runtime
+"""
+Multiverse healing test — uses direct versioned binaries (8pkg39, 8pkg311, etc.)
+No pre-flight registry check needed: the shim auto-adopts the interpreter and
+installs packages on first use. We only read the registry AFTER the shim has
+run (adoption guaranteed complete) to get the exe path for payload subprocesses.
+"""
 import sys
 import os
 import subprocess
 import json
-import re
-from pathlib import Path
 import time
 import traceback
-from omnipkg.i18n import _
-
-try:
-    pass
-except ImportError:
-    # Fallback if run in a weird context before omnipkg is in path
-    def safe_print(*args, **kwargs):
-        print(*args, **kwargs)
-
+from pathlib import Path
 
 # --- PROJECT PATH SETUP ---
 project_root = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(project_root))
 
+from omnipkg.common_utils import safe_print
+from omnipkg.i18n import _
 
-# This guard ensures the bootstrap logic ONLY runs for the main orchestrator process.
-# Any subprocesses spawned by this script (including self-invocations for payloads)
-# will inherit the 'OMNIPKG_MAIN_ORCHESTRATOR_PID' and skip this block.
-# --- NEW ROBUST BOOTSTRAP SECTION ---
-# This guard ensures the bootstrap logic ONLY runs for the main orchestrator process.
-if "OMNIPKG_MAIN_ORCHESTRATOR_PID" not in os.environ:
-    os.environ["OMNIPKG_MAIN_ORCHESTRATOR_PID"] = str(os.getpid())
 
-    print(
-        _('--- BOOTSTRAP: Main orchestrator process detected. Forcing Python 3.11 context. ---')
-    )
+# --- HELPERS ---
 
-    # Check if we are already running on Python 3.11
-    if sys.version_info[:2] != (3, 11):
-        print(
-            _('   - Current Python is {}.{}. Relaunching is required.').format(sys.version_info.major, sys.version_info.minor)
+def detect_venv_root() -> Path:
+    """Detect the omnipkg venv root from env or config."""
+    override = os.environ.get("OMNIPKG_VENV_ROOT")
+    if override:
+        return Path(override)
+    try:
+        from omnipkg.core import ConfigManager
+        cm = ConfigManager(suppress_init_messages=True)
+        return cm.venv_path
+    except Exception:
+        pass
+    raise RuntimeError("Could not determine OMNIPKG venv root. Set OMNIPKG_VENV_ROOT.")
+
+
+def get_versioned_bin(venv_root: Path, version: str, cmd: str) -> list:
+    """
+    Return a command prefix for a versioned omnipkg shim.
+    The shim handles auto-adopt + install — no registry pre-check needed.
+
+    Priority:
+      1. cmd.exe --python X.Y   (cross-platform, no shell)
+      2. cmd /c cmdXY.bat       (Windows .bat shim)
+      3. cmdXY                  (Unix symlink/shim)
+      4. cmd --python X.Y       (plain Unix binary with flag)
+    """
+    ver_tag = version.replace(".", "")
+    is_windows = sys.platform == "win32"
+
+    for bin_dir in [venv_root / "Scripts", venv_root / "bin"]:
+        # Plain .exe with --python flag — works everywhere without shell
+        exe = bin_dir / f"{cmd}.exe"
+        if exe.exists():
+            return [str(exe), "--python", version]
+
+        # Windows .bat shim — must go through cmd /c
+        for bat_suffix in [f"{cmd}{ver_tag}.bat", f"{cmd}{ver_tag}.cmd"]:
+            bat = bin_dir / bat_suffix
+            if bat.exists():
+                return (["cmd", "/c", str(bat)] if is_windows else [str(bat)])
+
+        # Unix versioned shim (symlink like 8pkg39)
+        shim = bin_dir / f"{cmd}{ver_tag}"
+        if shim.exists():
+            return [str(shim)]
+
+        # Plain Unix binary with --python flag
+        plain = bin_dir / cmd
+        if plain.exists() and not is_windows:
+            return [str(plain), "--python", version]
+
+    # Last resort: rely on PATH (CI often has 8pkg39 on PATH directly)
+    shim_name = f"{cmd}{ver_tag}"
+    safe_print(f"   [WARN] No shim found under {venv_root} — falling back to PATH: {shim_name}")
+    return [shim_name]
+
+
+def get_interpreter_after_adopt(venv_root: Path, version: str) -> Path:
+    """
+    Read the interpreter exe from the registry.
+    Only call this AFTER the versioned shim has already run (adoption complete).
+    """
+    registry_path = venv_root / ".omnipkg" / "interpreters" / "registry.json"
+    if not registry_path.exists():
+        raise RuntimeError(f"Registry not found at {registry_path}")
+    registry = json.loads(registry_path.read_text(encoding="utf-8"))
+    interpreters = registry.get("interpreters", {})
+    if version not in interpreters:
+        raise RuntimeError(
+            f"Python {version} still not in registry after adoption. "
+            f"Available: {list(interpreters.keys())}"
         )
-
-        # We cannot trust the omnipkg config. We must find 3.11 ourselves.
-        # This is a simplified, direct way to find the executable.
-        try:
-            from omnipkg.core import ConfigManager
-            from omnipkg.core import omnipkg as OmnipkgCore
-
-            cm = ConfigManager(suppress_init_messages=True)
-            omnipkg_instance = OmnipkgCore(config_manager=cm)
-            target_exe = omnipkg_instance.interpreter_manager.config_manager.get_interpreter_for_version(
-                "3.11"
-            )
-
-            if not target_exe or not target_exe.exists():
-                print(_('   - Python 3.11 not found, attempting to adopt it first...'))
-                if omnipkg_instance.adopt_interpreter("3.11") != 0:
-                    raise RuntimeError(
-                        "Failed to adopt Python 3.11 for the test orchestrator."
-                    )
-                target_exe = omnipkg_instance.interpreter_manager.config_manager.get_interpreter_for_version(
-                    "3.11"
-                )
-
-            if not target_exe or not target_exe.exists():
-                raise RuntimeError(
-                    "Could not find a managed Python 3.11 to run the test."
-                )
-
-            print(_('   - Found Python 3.11 at: {}').format(target_exe))
-            print(_('   - Relaunching orchestrator...'))
-
-            # Relaunch THIS script using the found 3.11 executable.
-            # This completely bypasses the user's current swapped context.
-            os.execve(str(target_exe), [str(target_exe)] + sys.argv, os.environ)
-
-        except Exception as e:
-            print(
-                _('FATAL BOOTSTRAP ERROR: Could not relaunch into Python 3.11. Error: {}').format(e)
-            )
-            sys.exit(1)
-
-    # If we reach here, we are guaranteed to be running under Python 3.11.
-    # Now, sync the omnipkg configuration to this reality.
-    print(_('--- BOOTSTRAP: Now running in Python 3.11. Aligning omnipkg context. ---'))
-    sync_context_to_runtime()
-
-# NOW we can import the rest after bootstrap
-try:
-    from omnipkg.core import ConfigManager, omnipkg as OmnipkgCore
-# --- START OF THE FIX ---
-except ImportError as e:
-    print(
-        f"FATAL: Could not import omnipkg modules after bootstrap. Is the project installed? Error: {e}"
-    )
-    sys.exit(1)
-# --- END OF THE FIX ---
+    exe = Path(interpreters[version])
+    if not exe.exists():
+        raise RuntimeError(f"Interpreter path does not exist: {exe}")
+    return exe
 
 
-# --- PAYLOAD FUNCTIONS (These run in separate processes) ---
+# --- SUBPROCESS HELPER ---
+
+def run(cmd, description, check=True, env=None):
+    """Run a command, stream output, return full output string."""
+    safe_print(f"\n>> {description}")
+    safe_print(f"   cmd: {' '.join(str(c) for c in cmd)}")
+    _env = os.environ.copy()
+    if env:
+        _env.update(env)
+    _env["OMNIPKG_DISABLE_AUTO_ALIGN"] = "1"
+    _env["OMNIPKG_SUBPROCESS_MODE"] = "1"
+
+    try:
+        proc = subprocess.Popen(
+            [str(c) for c in cmd],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            bufsize=1,
+            env=_env,
+        )
+    except (OSError, FileNotFoundError) as exc:
+        safe_print(f"   [LAUNCH ERROR] Could not start process: {exc}")
+        safe_print(f"   Attempted executable: {cmd[0]!r}")
+        if check:
+            raise RuntimeError(
+                f"Failed to launch '{cmd[0]}': {exc}\n"
+                f"  Hint: on Windows, .bat files must be wrapped with ['cmd', '/c', ...]"
+            ) from exc
+        return ""
+
+    lines = []
+    for line in iter(proc.stdout.readline, ""):
+        stripped = line.rstrip()
+        if stripped:
+            print(f" | {stripped}")
+        lines.append(line)
+    proc.stdout.close()
+    rc = proc.wait()
+    output = "".join(lines)
+    safe_print(f"   exit code: {rc}")
+
+    if check and rc != 0:
+        safe_print(f"\n   [FAILURE DETAILS] rc={rc}")
+        safe_print(f"   Full cmd: {' '.join(str(c) for c in cmd)}")
+        if output.strip():
+            for line in output.splitlines():
+                safe_print(f"   {line}")
+        else:
+            safe_print("   (no output captured)")
+        raise subprocess.CalledProcessError(rc, cmd, output=output)
+
+    return output
+
+
+# --- PAYLOAD FUNCTIONS (called via subprocess self-invocation) ---
+
 def run_legacy_payload():
-    """Simulates a legacy task requiring older numpy/scipy."""
     import scipy.signal
     import numpy
-
+    import scipy
     print(
-        f"--- Executing in Python {sys.version.split()[0]} with SciPy {scipy.__version__} & NumPy {numpy.__version__} ---",
+        f"--- Python {sys.version.split()[0]} | SciPy {scipy.__version__} | NumPy {numpy.__version__} ---",
         file=sys.stderr,
     )
     data = numpy.array([1, 2, 3, 4, 5])
-    analysis_result = {"result": int(scipy.signal.convolve(data, data).sum())}
-    print(json.dumps(analysis_result))
+    result = {"result": int(scipy.signal.convolve(data, data).sum())}
+    print(json.dumps(result))
 
 
-def run_modern_payload(legacy_data_json: str):
-    """Simulates a modern task requiring TensorFlow and its dependencies."""
+def run_modern_payload(legacy_json: str):
     import tensorflow as tf
-
     print(
-        f"--- Executing in Python {sys.version.split()[0]} with TensorFlow {tf.__version__} ---",
+        f"--- Python {sys.version.split()[0]} | TensorFlow {tf.__version__} ---",
         file=sys.stderr,
     )
-    input_data = json.loads(legacy_data_json)
-    legacy_value = input_data["result"]
-    # Simple logic: if the legacy result is what we expect (~225), predict SUCCESS
-    prediction = "SUCCESS" if legacy_value > 200 else "FAILURE"
-    final_result = {"prediction": prediction}
-    print(json.dumps(final_result))
+    legacy = json.loads(legacy_json)
+    prediction = "SUCCESS" if legacy["result"] > 200 else "FAILURE"
+    print(json.dumps({"prediction": prediction}))
 
 
-# --- ORCHESTRATOR HELPER FUNCTIONS ---
-def run_command_with_isolated_context(command, description, check=True):
-    """
-    Runs a command with isolated omnipkg context (no auto-alignment).
-    This prevents the parent script's context from interfering with subcommands.
-    """
-    safe_print(_('\n>> Executing: {}').format(description))
-    print(_(' Command: {}').format(' '.join(command)))
-    print(_(' --- Live Output ---'))
+# --- MAIN TEST ---
 
-    # Create a clean environment that prevents context auto-alignment
-    env = os.environ.copy()
-
-    # Remove any context forcing variables from parent process
-    env.pop("OMNIPKG_FORCE_CONTEXT", None)
-    env.pop("OMNIPKG_RELAUNCHED", None)
-
-    # Set flags to disable auto-alignment in subprocesses
-    env["OMNIPKG_DISABLE_AUTO_ALIGN"] = "1"
-    env["OMNIPKG_SUBPROCESS_MODE"] = "1"
-
-    process = subprocess.Popen(
-        command,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        bufsize=1,
-        universal_newlines=True,
-        env=env,
-    )
-    output_lines = []
-    for line in iter(process.stdout.readline, ""):
-        stripped_line = line.strip()
-        if stripped_line:
-            print(_(' | {}').format(stripped_line))
-        output_lines.append(line)
-    process.stdout.close()
-    return_code = process.wait()
-    print(" -------------------")
-    safe_print(f" [OK] Command finished with exit code: {return_code}")
-    full_output = "".join(output_lines)
-    if check and return_code != 0:
-        raise subprocess.CalledProcessError(return_code, command, output=full_output)
-    return full_output
-
-
-def get_interpreter_path(version: str) -> str:
-    """Asks omnipkg for the location of a specific Python interpreter."""
-    print(f"\n Finding interpreter path for Python {version}...")
-    output = run_command_with_isolated_context(
-        ["omnipkg", "info", "python"], "Querying interpreters"
-    )
-    for line in output.splitlines():
-        if re.search(f"Python {version}", line):
-            match = re.search(r":\s*(/\S+)", line)
-            if match:
-                path = match.group(1).strip()
-                safe_print(_(' [OK] Found at: {}').format(path))
-                return path
-    raise RuntimeError(_('Could not find managed Python {}.').format(version))
-
-
-def install_packages_with_omnipkg(packages: list, description: str):
-    """Uses omnipkg to install packages into the current context."""
-    safe_print(f"\n [TOOL] {description}")
-    run_command_with_isolated_context(
-        ["omnipkg", "install"] + packages, f"Installing {' '.join(packages)}"
-    )
-
-
-# --- MAIN ORCHESTRATOR ---
 def multiverse_analysis():
-    original_version = "3.11"
-    safe_print(
-        f"[START] Starting multiverse analysis from dimension: Python {original_version}"
+    venv_root = detect_venv_root()
+    safe_print(f"[INFO] venv root: {venv_root}")
+
+    # === STEP 1: Python 3.9 — legacy scipy/numpy ===
+    # The shim handles adopt + install automatically — no registry pre-check.
+    safe_print("\n[STEP 1] Python 3.9 — installing legacy packages via shim (auto-adopts)...")
+    pkg39_cmd = get_versioned_bin(venv_root, "3.9", "8pkg")
+    safe_print(f"[INFO] pkg39 cmd prefix: {pkg39_cmd}")
+
+    run(pkg39_cmd + ["install", "numpy<2", "scipy"],
+        "Installing numpy<2 + scipy into Python 3.9")
+
+    # Now adoption is complete — safe to read registry for the exe path
+    py39 = get_interpreter_after_adopt(venv_root, "3.9")
+    safe_print(f"[INFO] py39 exe: {py39}")
+
+    safe_print("\n[STEP 1] Running legacy payload in Python 3.9...")
+    result = subprocess.run(
+        [str(py39), __file__, "--run-legacy"],
+        capture_output=True, text=True, encoding="utf-8", errors="replace",
     )
+    if result.returncode != 0:
+        safe_print(f"[ERROR] Legacy payload failed (rc={result.returncode})")
+        safe_print(f"stderr: {result.stderr}")
+        raise RuntimeError("Legacy payload failed")
 
-    # === STEP 1: PYTHON 3.9 CONTEXT ===
-    safe_print("\n[STEP 1] MISSION STEP 1: Setting up Python 3.9 dimension...")
-
-    # First, ensure Python 3.9 is adopted by checking if it's available.
-    safe_print("\n [SETUP] Ensuring Python 3.9 is available...")
-    info_output = run_command_with_isolated_context(
-        ["omnipkg", "info", "python"], "Checking available Python versions"
-    )
-
-    if "Python 3.9" not in info_output:
-        safe_print("   - Python 3.9 not found. Adopting it now...")
-        run_command_with_isolated_context(
-            # Corrected command from "adopt python" to "python adopt"
-            ["omnipkg", "python", "adopt", "3.9"],
-            "Adopting Python 3.9",
-        )
-    else:
-        safe_print("   - Python 3.9 is already available.")
-
-    run_command_with_isolated_context(
-        ["omnipkg", "swap", "python", "3.9"], "Swapping to Python 3.9 context"
-    )
-    python_3_9_exe = get_interpreter_path("3.9")
-    install_packages_with_omnipkg(
-        ["numpy<2", "scipy"], "Installing legacy packages for Python 3.9"
-    )
-
-    safe_print("\n [TEST] Executing legacy payload in Python 3.9...")
-    result_3_9 = subprocess.run(
-        [python_3_9_exe, __file__, "--run-legacy"],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-
-    # Debug output to see what we actually got
-    print(_('DEBUG: Exit code: {}').format(result_3_9.returncode))
-    print(_("DEBUG: Stdout: '{}'").format(result_3_9.stdout))
-    print(_("DEBUG: Stderr: '{}'").format(result_3_9.stderr))
-
-    if result_3_9.returncode != 0:
-        safe_print(
-            f"[ERROR] Legacy payload failed with exit code {result_3_9.returncode}"
-        )
-        print(_('Stderr: {}').format(result_3_9.stderr))
-        raise RuntimeError("Legacy payload execution failed")
-
-    if not result_3_9.stdout.strip():
-        raise RuntimeError("Legacy payload produced no output")
-
-    # Try to extract JSON from the last line that looks like JSON
-    json_lines = [
-        line.strip()
-        for line in result_3_9.stdout.splitlines()
-        if line.strip().startswith("{")
-    ]
+    json_lines = [l.strip() for l in result.stdout.splitlines() if l.strip().startswith("{")]
     if not json_lines:
-        raise RuntimeError(
-            _('No JSON output found in legacy payload. Output was: {}').format(result_3_9.stdout)
-        )
+        raise RuntimeError(f"No JSON from legacy payload. stdout: {result.stdout!r}")
 
     legacy_data = json.loads(json_lines[-1])
-    safe_print(
-        f"[OK] Artifact retrieved from 3.9: Scipy analysis complete. Result: {legacy_data['result']}"
-    )
+    safe_print(f"[OK] Legacy result: {legacy_data}")
 
-    # === STEP 2: PYTHON 3.11 CONTEXT ===
-    safe_print("\n[STEP 2] MISSION STEP 2: Setting up Python 3.11 dimension...")
-    run_command_with_isolated_context(
-        ["omnipkg", "swap", "python", "3.11"], "Swapping back to Python 3.11 context"
-    )
-    install_packages_with_omnipkg(
-        ["tensorflow"], "Installing modern packages for Python 3.11"
-    )
+    # === STEP 2: Python 3.11 — modern tensorflow ===
+    safe_print("\n[STEP 2] Python 3.11 — installing tensorflow via shim (auto-adopts)...")
+    pkg311_cmd = get_versioned_bin(venv_root, "3.11", "8pkg")
+    safe_print(f"[INFO] pkg311 cmd prefix: {pkg311_cmd}")
 
-    safe_print(
-        "\n [TEST] Executing modern payload using 'omnipkg run' to trigger auto-healing..."
-    )
-    omnipkg_run_command = [
-        "omnipkg",
-        "run",
-        __file__,
-        "--run-modern",
-        json.dumps(legacy_data),
-    ]
-    modern_output = run_command_with_isolated_context(
-        omnipkg_run_command, "Executing modern payload with auto-healing enabled"
-    )
+    run(pkg311_cmd + ["install", "tensorflow"],
+        "Installing tensorflow into Python 3.11")
 
-    # The actual JSON result is the last line of the script's output that is a JSON object.
-    json_output = [
-        line for line in modern_output.splitlines() if line.strip().startswith("{")
-    ][-1]
-    final_prediction = json.loads(json_output)
-    safe_print(
-        _("[OK] Artifact processed by 3.11: TensorFlow prediction complete. Prediction: '{}'").format(final_prediction['prediction'])
-    )
+    # Adoption complete — safe to read registry
+    py311 = get_interpreter_after_adopt(venv_root, "3.11")
+    safe_print(f"[INFO] py311 exe: {py311}")
 
-    return final_prediction["prediction"] == "SUCCESS"
+    safe_print("\n[STEP 2] Running modern payload in Python 3.11...")
+    result = subprocess.run(
+        [str(py311), __file__, "--run-modern", json.dumps(legacy_data)],
+        capture_output=True, text=True, encoding="utf-8", errors="replace",
+    )
+    if result.returncode != 0:
+        safe_print(f"[ERROR] Modern payload failed (rc={result.returncode})")
+        safe_print(f"stderr: {result.stderr}")
+        raise RuntimeError("Modern payload failed")
+
+    json_lines = [l.strip() for l in result.stdout.splitlines() if l.strip().startswith("{")]
+    if not json_lines:
+        raise RuntimeError(f"No JSON from modern payload. stdout: {result.stdout!r}")
+
+    final = json.loads(json_lines[-1])
+    safe_print(f"[OK] Modern prediction: {final['prediction']}")
+    return final["prediction"] == "SUCCESS"
 
 
 if __name__ == "__main__":
-    # This logic allows the script to call itself to run the payloads.
     if "--run-legacy" in sys.argv:
         run_legacy_payload()
         sys.exit(0)
     elif "--run-modern" in sys.argv:
-        json_arg_index = sys.argv.index("--run-modern") + 1
-        run_modern_payload(sys.argv[json_arg_index])
+        idx = sys.argv.index("--run-modern") + 1
+        run_modern_payload(sys.argv[idx])
         sys.exit(0)
 
-    # Main orchestrator logic starts here when no flags are present...
-    safe_print("=" * 80 + "\n [START] OMNIPKG MULTIVERSE ANALYSIS TEST\n" + "=" * 80)
-    start_time = time.perf_counter()
+    safe_print("=" * 70)
+    safe_print(" OMNIPKG MULTIVERSE ANALYSIS TEST")
+    safe_print("=" * 70)
+    t0 = time.perf_counter()
     success = False
-
     try:
         success = multiverse_analysis()
     except Exception as e:
-        safe_print(_('\n[ERROR] An error occurred during the analysis: {}').format(e))
+        safe_print(f"\n[ERROR] {e}")
         traceback.print_exc()
 
-    end_time = time.perf_counter()
-    safe_print("\n" + "=" * 80 + "\n [SUMMARY] TEST SUMMARY\n" + "=" * 80)
+    safe_print("\n" + "=" * 70)
     if success:
-        safe_print(
-            "[SUCCESS] MULTIVERSE ANALYSIS COMPLETE! Context switching, package management, and auto-healing working perfectly!"
-        )
+        safe_print("[SUCCESS] Context switching, installs, and healing all working!")
     else:
-        safe_print(
-            "[FAILED] MULTIVERSE ANALYSIS FAILED! Check the output above for issues."
-        )
-    safe_print(
-        f"\n[PERFORMANCE] Total test runtime: {(end_time - start_time):.2f} seconds"
-    )
+        safe_print("[FAILED] Check output above.")
+    safe_print(f"[PERF] Total: {time.perf_counter() - t0:.2f}s")

@@ -225,7 +225,21 @@ def main():
         and argv_commands[1] in ("start", "stop", "restart")
     )
 
-    if not is_swap_command and not is_daemon_lifecycle:
+    is_info_command = (
+        len(argv_commands) >= 1
+        and argv_commands[0] == "info"
+        and not (len(argv_commands) >= 2 and argv_commands[1] == "python")
+    )
+    is_config_command = len(argv_commands) >= 1 and argv_commands[0] == "config"
+    is_logs_follow = (
+        len(argv_commands) >= 2
+        and argv_commands[0] == "daemon"
+        and argv_commands[1] == "logs"
+        and "-f" in sys.argv
+    )
+    is_interactive_command = is_info_command or is_config_command or is_logs_follow
+
+    if not is_swap_command and not is_daemon_lifecycle and not is_interactive_command:
         try:
             import socket
             import tempfile
@@ -240,6 +254,7 @@ def main():
                         host, port = conn_str[6:].split(":")
                         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                         sock.connect((host, int(port)))
+                        sock.settimeout(300)
                     else:
                         raise ValueError()
                 else:
@@ -248,6 +263,7 @@ def main():
                 if os.path.exists(sock_path):
                     sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
                     sock.connect(sock_path)
+                    sock.settimeout(300)
                 else:
                     raise ValueError()
                     
@@ -320,6 +336,13 @@ def _collect_all_dispatcher_bin_dirs() -> list:
             data = json.loads(registry.read_text(encoding="utf-8"))
             for py_exe in data.get("interpreters", {}).values():
                 adopted_bin = Path(py_exe).parent
+                # On Windows, managed interpreters have python.exe in root
+                # but shims live in Scripts/ — check both
+                if sys.platform == "win32":
+                    scripts_dir = adopted_bin / "Scripts"
+                    if not scripts_dir.exists():
+                        scripts_dir.mkdir(parents=True, exist_ok=True)
+                    adopted_bin = scripts_dir
                 if adopted_bin.resolve() != native_bin.resolve() and adopted_bin.exists():
                     dirs.append(adopted_bin)
     except Exception:
@@ -366,8 +389,21 @@ def _maybe_install_c_dispatcher():
     compiler_args = []
 
     if sys.platform == "win32":
-        # Try MSVC cl.exe first, then MinGW gcc
+        # Try MSVC cl.exe first (in PATH or common VS install locations)
         cl = shutil.which("cl")
+        if not cl:
+            # vcvarsall not run — search common MSVC install paths directly
+            import glob as _cgl
+            _vs_patterns = [
+                "C:/Program Files/Microsoft Visual Studio/*/*/VC/Tools/MSVC/*/bin/Hostx64/x64/cl.exe",
+                "C:/Program Files (x86)/Microsoft Visual Studio/*/*/VC/Tools/MSVC/*/bin/Hostx64/x64/cl.exe",
+                "C:/Program Files (x86)/Microsoft Visual Studio/*/*/VC/Tools/MSVC/*/bin/HostX86/x64/cl.exe",
+            ]
+            for _pat in _vs_patterns:
+                _matches = _cgl.glob(_pat)
+                if _matches:
+                    cl = _matches[0]
+                    break
         if cl:
             compiler = cl
             compiler_args = ["/O2", "/Fe:{out}", "{src}", "ws2_32.lib"]
@@ -404,6 +440,11 @@ def _maybe_install_c_dispatcher():
         src_hash = ""
 
     bin_dir = Path(sys.executable).parent
+    # On Windows, executables are in Scripts/ but python.exe is in the root
+    if sys.platform == "win32":
+        scripts_dir = bin_dir / "Scripts"
+        if scripts_dir.exists():
+            bin_dir = scripts_dir
     marker = bin_dir / ".omnipkg_dispatch_compiled"
 
     if debug:
@@ -411,13 +452,14 @@ def _maybe_install_c_dispatcher():
         print(f"[C-INSTALL] marker     = {marker} -> exists={marker.exists()}", file=sys.stderr)
         if marker.exists():
             stored = marker.read_text(encoding="utf-8").strip()
-            print(f"[C-INSTALL] stored hash={stored}  current hash={src_hash}  match={stored == src_hash}", file=sys.stderr)
+            stored_hash_dbg = stored.split(":", 1)[0].strip()
+            print(f"[C-INSTALL] stored hash={stored}  current hash={src_hash}  match={stored_hash_dbg == src_hash}", file=sys.stderr)
 
     if marker.exists():
         try:
             marker_content = marker.read_text(encoding="utf-8").strip()
             # marker format: "<md5>:<abs/path/to/dispatcher.c>"
-            stored_hash = marker_content.split(":", 1)[0]
+            stored_hash = marker_content.split(":", 1)[0].strip()
         except Exception:
             stored_hash = ""
         if stored_hash == src_hash and src_hash:            # Native bin is up to date. Also push to any adopted bin dirs that
@@ -447,8 +489,47 @@ def _maybe_install_c_dispatcher():
     if debug:
         print(f"[C-INSTALL] compiling: {compiler_cmd}", file=sys.stderr)
 
+    # Build env with MSVC include/lib paths when cl.exe is the compiler.
+    # This reconstructs what vcvarsall.bat does, so the user doesn't need
+    # a Developer Command Prompt — cl.exe works from any shell.
+    compile_env = os.environ.copy()
+    if sys.platform == "win32" and "cl" in (compiler or "").lower():
+        try:
+            cl_path = Path(compiler)
+            # cl.exe lives at: .../MSVC/<ver>/bin/HostX64/x64/cl.exe
+            msvc_root = cl_path.parent.parent.parent.parent
+            msvc_include = str(msvc_root / "include")
+            msvc_lib     = str(msvc_root / "lib" / "x64")
+            sdk_includes, sdk_libs = [], []
+            sdk_base = Path("C:/Program Files (x86)/Windows Kits/10")
+            if not sdk_base.exists():
+                sdk_base = Path("C:/Program Files/Windows Kits/10")
+            if sdk_base.exists():
+                inc_base = sdk_base / "include"
+                lib_base = sdk_base / "lib"
+                sdk_versions = sorted(inc_base.iterdir(), reverse=True)
+                if sdk_versions:
+                    sdk_ver = sdk_versions[0]
+                    for sub in ("ucrt", "um", "shared"):
+                        p = sdk_ver / sub
+                        if p.exists():
+                            sdk_includes.append(str(p))
+                    lib_ver = lib_base / sdk_ver.name
+                    for sub in ("ucrt/x64", "um/x64"):
+                        p = lib_ver / sub.replace("/", os.sep)
+                        if p.exists():
+                            sdk_libs.append(str(p))
+            compile_env["INCLUDE"] = os.pathsep.join([msvc_include] + sdk_includes)
+            compile_env["LIB"]     = os.pathsep.join([msvc_lib] + sdk_libs)
+            if debug:
+                print(f"[C-INSTALL] MSVC INCLUDE={compile_env['INCLUDE']}", file=sys.stderr)
+                print(f"[C-INSTALL] MSVC LIB={compile_env['LIB']}", file=sys.stderr)
+        except Exception as e:
+            if debug:
+                print(f"[C-INSTALL] could not derive MSVC env: {e}", file=sys.stderr)
+
     try:
-        r = subprocess.run(compiler_cmd, capture_output=True, timeout=15)
+        r = subprocess.run(compiler_cmd, capture_output=True, timeout=15, env=compile_env)
         if debug:
             print(f"[C-INSTALL] compiler returncode={r.returncode}", file=sys.stderr)
             if r.stdout:
@@ -495,13 +576,20 @@ def _install_binary_into_bin_dir(binary_tmp, target_bin, src_hash: str, debug: b
     replaced = []
     target_bin = Path(target_bin)
 
+    _exe = ".exe" if sys.platform == "win32" else ""
+    if debug:
+        print(f"[C-INSTALL] install: target_bin={target_bin} exists={target_bin.exists()}", file=sys.stderr)
+        print(f"[C-INSTALL] install: target_bin contents={list(target_bin.iterdir()) if target_bin.exists() else 'N/A'}", file=sys.stderr)
+        print(f"[C-INSTALL] install: binary_tmp={binary_tmp} exists={Path(binary_tmp).exists()}", file=sys.stderr)
     for name in ("8pkg", "omnipkg", "OMNIPKG", "8PKG"):
-        target = target_bin / name
+        target = target_bin / (name + _exe)
+        if debug:
+            print(f"[C-INSTALL] install: checking {target} exists={target.exists()}", file=sys.stderr)
         if target.exists():
             try:
                 shutil.copy2(str(binary_tmp), str(target))
                 os.chmod(str(target), 0o755)
-                replaced.append(str(target_bin / name))
+                replaced.append(str(target))
             except Exception as e:
                 if debug:
                     print(f"[C-INSTALL] could not replace {target}: {e}", file=sys.stderr)
@@ -543,9 +631,10 @@ def _push_binary_to_bin_dir(native_bin, target_bin, src_hash: str, debug: bool) 
     target_bin = Path(target_bin)
 
     # Find the native binary (prefer "8pkg" as canonical name)
+    _exe = ".exe" if sys.platform == "win32" else ""
     src_binary = None
     for name in ("8pkg", "omnipkg"):
-        candidate = native_bin / name
+        candidate = native_bin / (name + _exe)
         if candidate.exists() and os.access(str(candidate), os.X_OK):
             # Quick sanity: must be a real binary, not a Python script
             try:
@@ -636,39 +725,74 @@ def determine_target_python() -> Path:
 
     # ─────────────────────────────────────────────────────────────
     # Priority 3: Self-awareness — config next to THIS script/exe
-    #
-    # Skipped when:
-    #   - inside a swap shell (_OMNIPKG_SWAP_ACTIVE=1): self-awareness
-    #     would resolve to the host Python's config (wrong version)
-    #   - --python was in argv: already handled above (won't reach here)
     # ─────────────────────────────────────────────────────────────
     if not swap_active:
         script_path = Path(sys.argv[0]).resolve()
         script_dir = script_path.parent
 
-        # On Windows, 8pkg.exe lives in Scripts\ but the config is written
-        # one level up at the env root (debug\.omnipkg_config.json).
-        # Check both: Scripts\.omnipkg_config.json (Linux/managed interpreters)
-        # and Scripts\..\omnipkg_config.json (Windows conda/venv root).
         config_candidates = [script_dir / ".omnipkg_config.json"]
         if sys.platform == "win32":
             config_candidates.append(script_dir.parent / ".omnipkg_config.json")
 
         for config_path in config_candidates:
-            if config_path.exists():
-                try:
-                    with open(config_path, "r") as f:
-                        config = json.load(f)
-                    python_exe = config.get("python_executable")
-                    if python_exe:
-                        python_path = Path(python_exe)
-                        if python_path.exists():
-                            if debug_mode:
-                                print(f'[DEBUG-DISPATCH] ✅ Self-aware ({config_path}): {python_path}', file=sys.stderr)
-                            return python_path
-                except Exception as e:
+            if not config_path.exists():
+                continue
+
+            try:
+                with open(config_path, "r", encoding="utf-8") as f:
+                    config = json.load(f)
+
+                config_python = Path(config.get("python_executable", "")).resolve()
+                current_exe = Path(sys.executable).resolve()
+
+                # Strong check: both executable AND site_packages_path must match native
+                expected_site = str(find_absolute_venv_root() / "Lib" / "site-packages")
+                actual_site = config.get("site_packages_path", "")
+
+                is_correct = (config_python == current_exe) and (actual_site == expected_site)
+
+                if is_correct:
                     if debug_mode:
-                        print(f'[DEBUG-DISPATCH] Config read error ({config_path}): {e}', file=sys.stderr)
+                        print(f'[DEBUG-DISPATCH] ✅ Self-aware config is fully correct for native Python', file=sys.stderr)
+                    return current_exe
+
+                # Config is stale or incomplete → fix it
+                if debug_mode:
+                    print(f'[DEBUG-DISPATCH] ⚠️  Stale/incomplete self-aware config detected. Fixing...', file=sys.stderr)
+
+                # Fully rewrite the root config for native Python
+                try:
+                    venv_root = find_absolute_venv_root()
+                    root_config = venv_root / ".omnipkg_config.json"
+
+                    native_version = f"{sys.version_info.major}.{sys.version_info.minor}"
+                    site_packages = str(venv_root / "Lib" / "site-packages")
+
+                    config["python_executable"] = str(current_exe.resolve())
+                    config["python_version"] = native_version
+                    config["python_version_short"] = native_version
+                    config["site_packages_path"] = site_packages
+                    config["multiversion_base"] = str(Path(site_packages) / ".omnipkg_versions")
+                    config["_auto_generated_by"] = "dispatcher_full_native_fix"
+                    config["managed_by_omnipkg"] = True
+
+                    with open(root_config, "w", encoding="utf-8") as f:
+                        json.dump(config, f, indent=2)
+
+                    if debug_mode:
+                        print(f'[DEBUG-DISPATCH] ✅ Fully rewrote root config for native Python {native_version}', file=sys.stderr)
+                        print(f'[DEBUG-DISPATCH]    site_packages_path = {site_packages}', file=sys.stderr)
+
+                except Exception as fix_e:
+                    if debug_mode:
+                        print(f'[DEBUG-DISPATCH] Failed to rewrite config: {fix_e}', file=sys.stderr)
+
+                # After fixing, return the native Python
+                return current_exe
+
+            except Exception as e:
+                if debug_mode:
+                    print(f'[DEBUG-DISPATCH] Config read error ({config_path}): {e}', file=sys.stderr)
 
     # ─────────────────────────────────────────────────────────────
     # Priority 2: OMNIPKG_PYTHON — only inside an active swap shell.
@@ -691,6 +815,17 @@ def determine_target_python() -> Path:
                 print(f"[DEBUG-DISPATCH] ⚠️  OMNIPKG_PYTHON={claimed_version} present but _OMNIPKG_SWAP_ACTIVE not set — leaked, ignoring", file=sys.stderr)
 
     # ─────────────────────────────────────────────────────────────
+    # Extra safety: If we reached here and we are running the native
+    # venv Python (not inside .omnipkg/interpreters/), trust sys.executable
+    # instead of any potentially stale config.
+    # ─────────────────────────────────────────────────────────────
+    current = Path(sys.executable).resolve()
+    if ".omnipkg/interpreters" not in str(current).replace("\\", "/"):
+        if debug_mode:
+            print(f'[DEBUG-DISPATCH] ✅ Running native venv Python → returning {current}', file=sys.stderr)
+        return current
+    
+    # ─────────────────────────────────────────────────────────────
     # Fallback: whatever Python is running this script
     # ─────────────────────────────────────────────────────────────
     if debug_mode:
@@ -699,7 +834,6 @@ def determine_target_python() -> Path:
         print(f'[DEBUG-DISPATCH]    In CI this usually means adopt did not run or venv_root resolved wrong.', file=sys.stderr)
         print(f'[DEBUG-DISPATCH]    sys.executable: {sys.executable}', file=sys.stderr)
     return Path(sys.executable)
-
 
 def _shims_are_active_in_path(debug_mode: bool = False) -> bool:
     """
@@ -1563,6 +1697,85 @@ def _is_plausible_python_version(version: str) -> bool:
 
 
 
+def _ensure_all_version_shims(bin_dir: Path, debug_mode: bool = False) -> None:
+    """
+    Eagerly create versioned shims for Python 3.7–3.15 in bin_dir.
+
+    On Unix: symlinks (8pkg39 -> 8pkg, omnipkg311 -> omnipkg, etc.)
+    On Windows: .bat wrappers with injected --python X.Y, because .bat files
+                cannot be launched by subprocess without cmd /c — they need
+                actual file content, not symlinks.
+
+    This runs at every dispatcher startup so shims exist for ALL versions
+    including ones not yet adopted (e.g. 3.13 before its interpreter is
+    downloaded). The dispatcher's --python routing + healing takes over
+    when the interpreter is actually missing.
+    """
+    # Case-variant aliases for case-sensitive filesystems (Linux)
+    if sys.platform != "win32":
+        main_shim = bin_dir / "8pkg"
+        omni_shim = bin_dir / "omnipkg"
+        for alias, target in [("8PKG", main_shim), ("OMNIPKG", omni_shim)]:
+            p = bin_dir / alias
+            if (not p.exists() and not p.is_symlink()) and target.exists():
+                try:
+                    p.symlink_to(target.name)
+                except Exception:
+                    pass
+
+    for minor in range(7, 16):
+        ver = f"3.{minor}"
+        flat = f"3{minor}"
+        for base_name in ("8pkg", "omnipkg"):
+            if sys.platform == "win32":
+                # Find the real executable to delegate to.
+                # IMPORTANT: only match the bare entry point (8pkg.exe / omnipkg.exe),
+                # never a versioned shim like 8pkg310.bat — those are outputs, not sources.
+                src_exe = None
+                for ext in (".exe", ".bat", ".cmd", ""):
+                    candidate = bin_dir / f"{base_name}{ext}"
+                    # Exclude versioned shims (names contain a digit after the base)
+                    name_stem = candidate.stem  # e.g. "8pkg310" or "8pkg"
+                    if name_stem != base_name:
+                        continue
+                    if candidate.exists():
+                        src_exe = candidate
+                        break
+                if src_exe is None:
+                    if debug_mode:
+                        print(f"[DEBUG-DISPATCH] ⚠️  No src_exe for {base_name} in {bin_dir} — skipping {base_name}{flat}.bat", file=sys.stderr)
+                    continue
+                bat_path = bin_dir / f"{base_name}{flat}.bat"
+                bat_content = f'@echo off\r\n"{src_exe}" --python {ver} %*\r\n'
+                # Idempotency: skip only if existing content is already correct.
+                if bat_path.exists():
+                    try:
+                        existing = bat_path.read_text(encoding="ascii")
+                        if existing == bat_content:
+                            continue  # already correct — truly idempotent
+                        # Content is stale (e.g. src_exe path changed) — rewrite below
+                        if debug_mode:
+                            print(f"[DEBUG-DISPATCH] 🔄 Stale .bat shim {bat_path.name} — rewriting", file=sys.stderr)
+                    except Exception:
+                        pass  # unreadable — fall through to overwrite
+                try:
+                    bat_path.write_text(bat_content, encoding="ascii")
+                    if debug_mode:
+                        print(f"[DEBUG-DISPATCH] ✅ Eager .bat shim: {bat_path.name}", file=sys.stderr)
+                except Exception as e:
+                    # Always surface write failures — silent skip here is the primary
+                    # reason shims appear to be created but are actually missing.
+                    print(f"[WARNING-DISPATCH] Could not write {bat_path.name}: {e}", file=sys.stderr)
+            else:
+                target = bin_dir / base_name
+                versioned = bin_dir / f"{base_name}{flat}"
+                if (not versioned.exists() and not versioned.is_symlink()) and target.exists():
+                    try:
+                        versioned.symlink_to(target.name)
+                    except Exception:
+                        pass
+
+
 def _ensure_native_shims() -> None:
     """
     Self-healing shim check for the native/primary Python.
@@ -1598,16 +1811,7 @@ def _ensure_native_shims() -> None:
 
     if shim_path.exists():
         # Still proactively create all versioned shims 3.7-3.15 if any are missing
-        main_shim = bin_dir / "8pkg"
-        omni_shim = bin_dir / "omnipkg"
-        for minor in range(7, 16):
-            for prefix, target in [("8pkg", main_shim), ("omnipkg", omni_shim)]:
-                versioned = bin_dir / f"{prefix}3{minor}"
-                if (not versioned.exists() and not versioned.is_symlink()) and target.exists():
-                    try:
-                        versioned.symlink_to(target.name)
-                    except Exception:
-                        pass
+        _ensure_all_version_shims(bin_dir, debug_mode)
         return  # already installed, nothing to do
 
     # Shim is missing — this is the native Python that adoption skipped.
@@ -1626,24 +1830,7 @@ def _ensure_native_shims() -> None:
     # Also immediately create the full range of versioned shims so 8pkg310 etc exist.
     # We do this here because the shim_path.exists() quick-exit branch won't run
     # on this first call since we just created the shim above.
-    main_shim = bin_dir / "8pkg"
-    omni_shim = bin_dir / "omnipkg"
-    # Case-variant aliases for case-sensitive filesystems (Linux)
-    for alias, target in [("8PKG", main_shim), ("OMNIPKG", omni_shim)]:
-        p = bin_dir / alias
-        if (not p.exists() and not p.is_symlink()) and target.exists():
-            try:
-                p.symlink_to(target.name)
-            except Exception:
-                pass
-    for minor in range(7, 16):
-        for prefix, target in [("8pkg", main_shim), ("omnipkg", omni_shim)]:
-            versioned = bin_dir / f"{prefix}3{minor}"
-            if (not versioned.exists() and not versioned.is_symlink()) and target.exists():
-                try:
-                    versioned.symlink_to(target.name)
-                except Exception:
-                    pass
+    _ensure_all_version_shims(bin_dir, debug_mode)
 
     # Call the canonical shim installer — handles Unix symlinks and Windows .bat
     interpreter_path = Path(sys.executable)
@@ -1697,6 +1884,9 @@ def install_versioned_entrypoints(
             src_bat = None
             for ext in (".exe", ".bat", ".cmd", ""):
                 candidate = bin_dir / f"{base_name}{ext}"
+                # Exclude versioned shims — only match the bare entry point.
+                if candidate.stem != base_name:
+                    continue
                 if candidate.exists():
                     src_bat = candidate
                     break
@@ -1709,16 +1899,23 @@ def install_versioned_entrypoints(
             _maj = flat[0]
             _min = flat[1:]
             _ver = f"{_maj}.{_min}"
+            bat_content = f'@echo off\r\n"{src_bat}" --python {_ver} %*\r\n'
+            # Idempotency: skip only if existing content is already correct.
+            if link_bat.exists():
+                try:
+                    existing = link_bat.read_text(encoding="ascii")
+                    if existing == bat_content:
+                        continue  # already correct
+                    if debug_mode:
+                        print(f"[DEBUG-DISPATCH] 🔄 Stale .bat shim {link_bat.name} — rewriting", file=sys.stderr)
+                except Exception:
+                    pass
             try:
-                # Inject --python X.Y as first arg so dispatcher version detection
-                # works even though sys.argv[0] will be "8pkg" not "8pkg310"
-                bat_content = f'@echo off\r\n"{src_bat}" --python {_ver} %*\r\n'
                 link_bat.write_text(bat_content, encoding="ascii")
                 if debug_mode:
                     print(f"[DEBUG-DISPATCH] ✅ Windows .bat shim: {link_bat} -> {src_bat.name} --python {_ver}", file=sys.stderr)
             except Exception as e:
-                if debug_mode:
-                    print(f"[DEBUG-DISPATCH] ⚠️  Could not create Windows shim {link_bat}: {e}", file=sys.stderr)
+                print(f"[WARNING-DISPATCH] Could not create Windows shim {link_bat.name}: {e}", file=sys.stderr)
         else:
             # Unix: relative symlink within same directory
             src = bin_dir / base_name

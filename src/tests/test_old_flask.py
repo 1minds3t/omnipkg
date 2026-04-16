@@ -74,8 +74,9 @@ def run_command(command_list, check=True):
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         text=True,
+        encoding="utf-8",
+        errors="replace",
         bufsize=1,
-        universal_newlines=True,
     )
 
     for line in iter(process.stdout.readline, ""):
@@ -249,8 +250,11 @@ if __name__ == "__main__":
     test_versions(main_ver=sys.argv[1], bubble_ver=sys.argv[2])
 """
 
-    test_script_path = Path("/tmp/flask_version_test.py")
-    test_script_path.write_text(test_script_content)
+    import tempfile, os as _os
+    _fd, _tmp = tempfile.mkstemp(suffix="_flask_version_test.py")
+    _os.close(_fd)
+    test_script_path = Path(_tmp)
+    test_script_path.write_text(test_script_content, encoding="utf-8")
 
     safe_print(f"\n$ python {test_script_path}")
     run_command(

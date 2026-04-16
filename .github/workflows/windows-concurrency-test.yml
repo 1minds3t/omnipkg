@@ -23,12 +23,6 @@ jobs:
         with:
           ref: ${{ github.event.inputs.code_branch || github.ref }}
 
-      - name: Show branch info
-        shell: cmd
-        run: |
-          echo Workflow ref: ${{ github.ref }}
-          echo Code branch: ${{ github.event.inputs.code_branch || github.ref }}
-
       - name: Set up Python (3.11)
         uses: actions/setup-python@v5
         with:
@@ -49,130 +43,79 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e .
 
-      - name: Discover and Export Omnipkg ENV_ID
-        id: env_id_step
+      # --- CRITICAL: Discover the Env ID so we can track logs/pids accurately ---
+      # --- REPLACE THE DISCOVERY STEP WITH THIS ---
+      - name: Set Omnipkg Environment ID
         shell: pwsh
         run: |
-          $envId = python -c "from omnipkg.config_manager import ConfigManager; cm = ConfigManager(suppress_init_messages=True); print(cm.env_id)"
-          echo "OMNIPKG_ENV_ID=$envId" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-          Write-Host "Discovered Omnipkg ENV_ID: $envId"
+          # We use a hardcoded ID. This is the ONLY way to ensure 
+          # no "Grounding" logs leak into the environment variable.
+          echo "OMNIPKG_ENV_ID_OVERRIDE=ci-test" >> $env:GITHUB_ENV
+          echo "OMNIPKG_ENV_ID=ci-test" >> $env:GITHUB_ENV
+          Write-Host "✅ Environment locked to: ci-test"
 
-      - name: Pre-start and deeply probe the Daemon
+      - name: Configure omnipkg for non-interactive use
         shell: pwsh
         run: |
-          Write-Host "=================================================="
-          Write-Host "1. Spawning daemon and waiting for 'Ready' signal..."
-          Write-Host "=================================================="
-          
-          $tempDir = "$env:TEMP\omnipkg"
-          if (!(Test-Path $tempDir)) { New-Item -ItemType Directory -Path $tempDir -Force }
-          
-          $launcherLog = "$tempDir\daemon_launcher_stdout.log"
-          # Clear old logs if they exist
-          if (Test-Path $launcherLog) { Remove-Item $launcherLog }
+          $configDir = "$HOME\.config\omnipkg"
+          New-Item -ItemType Directory -Force -Path $configDir | Out-Null
+          @{ interactive = $false; auto_confirm = $true } | ConvertTo-Json | Out-File -FilePath "$configDir\config.json" -Encoding utf8
+          Write-Host "✅ Omnipkg configured"
 
-          # Launch the daemon in the background
-          Start-Process cmd -ArgumentList "/c set OMNIPKG_DEBUG=1 && 8pkg daemon start > $launcherLog 2>&1" -WindowStyle Hidden
-          
-          Write-Host "⏳ Daemon is initializing (Grounding config/KB)..."
-          Write-Host "I will poll the socket every 2 seconds. Timeout: 180s."
-          
-          $timeout = 180
-          $elapsed = 0
-          $daemonReady = $false
-
-          while ($elapsed -lt $timeout) {
-              # 1. Check if port 5678 is open
-              $socket = netstat -ano | findstr ":5678"
-              if ($socket) {
-                  Write-Host "`n✅ Socket 5678 detected! Daemon is alive."
-                  $daemonReady = $true
-                  break
-              }
-
-              # 2. Tail the launcher log so we can see the "Grounding" progress
-              if (Test-Path $launcherLog) {
-                  $lastLine = Get-Content $launcherLog -Tail 1
-                  if ($lastLine) {
-                      Write-Host "`r[Launcher]: $lastLine" -NoNewline
-                  }
-              }
-
-              Start-Sleep -Seconds 2
-              $elapsed += 2
-          }
-
-          if (-not $daemonReady) {
-              Write-Host "`n❌ TIMEOUT: Daemon failed to start within 180s."
-              Write-Host "--- FINAL LAUNCHER LOG ---"
-              if (Test-Path $launcherLog) { Get-Content $launcherLog }
-              exit 1
-          }
-
-          Write-Host "`n=================================================="
-          Write-Host "2. Final Verification"
-          Write-Host "=================================================="
-          python -c "
-          import json
-          try:
-              from omnipkg.isolation.worker_daemon import DaemonClient
-              print(f'✅ Connection Test: {json.dumps(DaemonClient().status())}')
-          except Exception as e:
-              print(f'❌ Connection Test Failed: {e}')
-          "
-
-      - name: Run Demo (Option 8 - Quantum Multiverse)
+      # --- RUN 1 ---
+      - name: Run Demo 1 (Quantum Multiverse)
         shell: cmd
         run: omnipkg demo 8 --non-interactive
 
-      # --- UPDATED LOG DUMP STEP ---
-      - name: Dump daemon log after demo run 1
+      - name: Dump daemon log after run 1
         if: always()
         shell: pwsh
         run: |
-          $logPath = "$env:TEMP\omnipkg\${{ env.OMNIPKG_ENV_ID }}\omnipkg_daemon.log"
-          Write-Host "Searching for log at: $logPath"
-          if (Test-Path $logPath) {
-            Get-Content $logPath
-          } else {
-            Write-Host "❌ Log file not found. Listing temp directory contents:"
-            Get-ChildItem -Path "$env:TEMP\omnipkg" -Recurse
-          }
+          Write-Host "📋 Fetching logs for ENV: ${{ env.OMNIPKG_ENV_ID }}"
+          python -c "from omnipkg.isolation.worker_daemon import cli_logs; cli_logs()"
 
-      - name: Run Demo Again (Verify Caching)
+      - name: Teardown after run 1
+        if: always()
+        shell: pwsh
+        run: |
+          Write-Host "🛑 Stopping daemon and cleaning sockets..."
+          python -c "from omnipkg.isolation.worker_daemon import cli_stop; cli_stop()"
+
+      # --- RUN 2 ---
+      - name: Run Demo 2 (Verify Caching)
         shell: cmd
         run: omnipkg demo 8 --non-interactive
         continue-on-error: true
 
-      # --- UPDATED LOG DUMP STEP ---
-      - name: Dump daemon log after demo run 2
+      - name: Dump daemon log after run 2
         if: always()
         shell: pwsh
         run: |
-          $logPath = "$env:TEMP\omnipkg\${{ env.OMNIPKG_ENV_ID }}\omnipkg_daemon.log"
-          Write-Host "Searching for log at: $logPath"
-          if (Test-Path $logPath) {
-            Get-Content $logPath
-          } else {
-            Write-Host "❌ Log file not found. Listing temp directory contents:"
-            Get-ChildItem -Path "$env:TEMP\omnipkg" -Recurse
-          }
+          Write-Host "📋 Fetching logs for ENV: ${{ env.OMNIPKG_ENV_ID }}"
+          python -c "from omnipkg.isolation.worker_daemon import cli_logs; cli_logs()"
 
-      - name: Run Demo Again (Verify Caching)
+      - name: Teardown after run 2
+        if: always()
+        shell: pwsh
+        run: |
+          Write-Host "🛑 Stopping daemon and cleaning sockets..."
+          python -c "from omnipkg.isolation.worker_daemon import cli_stop; cli_stop()"
+
+      # --- RUN 3 ---
+      - name: Run Demo 3 (Verify Caching)
         shell: cmd
         run: omnipkg demo 8 --non-interactive
         continue-on-error: true
 
-      # --- UPDATED LOG DUMP STEP ---
-      - name: Dump daemon log after demo run 3
+      - name: Dump daemon log after run 3
         if: always()
         shell: pwsh
         run: |
-          $logPath = "$env:TEMP\omnipkg\${{ env.OMNIPKG_ENV_ID }}\omnipkg_daemon.log"
-          Write-Host "Searching for log at: $logPath"
-          if (Test-Path $logPath) {
-            Get-Content $logPath
-          } else {
-            Write-Host "❌ Log file not found. Listing temp directory contents:"
-            Get-ChildItem -Path "$env:TEMP\omnipkg" -Recurse
-          }
+          Write-Host "📋 Fetching logs for ENV: ${{ env.OMNIPKG_ENV_ID }}"
+          python -c "from omnipkg.isolation.worker_daemon import cli_logs; cli_logs()"
+
+      - name: Final Teardown
+        if: always()
+        shell: pwsh
+        run: |
+          python -c "from omnipkg.isolation.worker_daemon import cli_stop; cli_stop()"

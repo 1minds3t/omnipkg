@@ -116,8 +116,6 @@ site/
 src/tests/debug_test*.py
 *.zip
 
-# Auto-generated license files
-licenses/
 .gitship/
 
 # gitship diff exports (auto-added by gitship)
@@ -207,3 +205,5 @@ src/omnipkg/_vendor/uv_ffi/__pycache__/
 src/omnipkg/_vendor/wheels/
 *hunk_merger*.json
 .hunk_merger_state.json
+.gitattributes
+.omnipkg_baseline

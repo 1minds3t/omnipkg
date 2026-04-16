@@ -32,6 +32,7 @@
 #  include <process.h>
 #  include <sys/stat.h>
 #  include <stdio.h>   /* snprintf — must precede compat functions on MinGW */
+#  include <stdlib.h>  /* free/malloc — must precede win_globfree definition */
 
 /* ── Windows compat macros ── */
 #  undef MAX_PATH
@@ -198,6 +199,10 @@ static void winsock_init(void) {
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#ifdef _WIN32
+#  define popen  _popen
+#  define pclose _pclose
+#endif
 #define MAX_PATH 4096
 #define MAX_VERSION 32
 #define MAX_JSON 65536   /* registry.json is tiny */
@@ -965,29 +970,52 @@ static int try_daemon_cli(const char *target_python, int argc, char **argv,
 
 static void fallback_to_python_v(const char *self_dir, char **argv,
                                   const char *inject_version) {
-    /*
-     * Find the Python that owns this venv/bin dir and re-exec
-     * the original dispatcher.py via  python -m omnipkg.dispatcher
-     */
     char py[MAX_PATH];
+    int found = 0;
 
-    /* Try the config first */
-    if (!read_self_config(self_dir, py, sizeof(py)) || !file_exists(py)) {
-        /* Try common names in self_dir */
-        const char *names[] = {"python3.11","python3.10","python3.9",
-                               "python3","python",NULL};
-        int found = 0;
-        for (int i = 0; names[i]; i++) {
-            snprintf(py, sizeof(py), "%s/%s", self_dir, names[i]);
-            if (file_exists(py)) { found = 1; break; }
-        }
-        if (!found) {
-            fprintf(stderr, "omnipkg: cannot find host Python for fallback\n");
-            exit(1);
+    /* 1. Try local / parent search (works for venvs) */
+    const char *names[] = {"python3.11", "python3.10", "python3.9", "python3", "python", "python.exe", NULL};
+    for (int i = 0; names[i]; i++) {
+        snprintf(py, sizeof(py), "%s/%s", self_dir, names[i]);
+        if (file_exists(py)) { found = 1; break; }
+        snprintf(py, sizeof(py), "%s/../%s", self_dir, names[i]);
+        if (file_exists(py)) { found = 1; break; }
+    }
+
+    /* 2. SYSTEM LOOKUP: Use OS-specific popen to find python */
+    if (!found) {
+        FILE *fp = NULL;
+        
+        #ifdef _WIN32
+            fp = _popen("where python", "r");
+        #else
+            fp = popen("which python", "r");
+        #endif
+
+        if (fp) {
+            if (fgets(py, sizeof(py), fp)) {
+                // Remove newline characters
+                py[strcspn(py, "\r\n")] = 0;
+                if (file_exists(py)) {
+                    found = 1;
+                }
+            }
+            
+            #ifdef _WIN32
+                _pclose(fp);
+            #else
+                pclose(fp);
+            #endif
         }
     }
 
-    /* Build new argv: python -m omnipkg.dispatcher <original args> */
+    if (!found) {
+        fprintf(stderr, "omnipkg: cannot find host Python for fallback\n");
+        fprintf(stderr, "  Self Dir: %s\n", self_dir);
+        exit(1);
+    }
+
+    /* ... (Rest of the execv logic remains the same) ... */
     int argc = 0;
     while (argv[argc]) argc++;
     char **new_argv = malloc((argc + 4) * sizeof(char *));
@@ -1002,6 +1030,7 @@ static void fallback_to_python_v(const char *self_dir, char **argv,
     for (int i = 1; i < argc; i++)
         new_argv[i + out - 1] = argv[i];
     new_argv[argc + out - 1] = NULL;
+
     execv(py, new_argv);
     perror("omnipkg: execv fallback failed");
     exit(1);
@@ -2050,7 +2079,16 @@ int main(int argc, char **argv) {
          * that contain the word python (e.g. "info python-dotenv"). */
         int info_python = (is_info && argc >= 3 &&
                            strcmp(argv[2], "python") == 0);
-        is_interactive_command = ((is_info && !info_python) || is_config);
+        int is_logs_follow = 0;
+        if (argc >= 3 && strcmp(argv[1], "daemon") == 0 && strcmp(argv[2], "logs") == 0) {
+            for (int _i = 3; _i < argc; _i++) {
+                if (strcmp(argv[_i], "-f") == 0 || strcmp(argv[_i], "--follow") == 0) {
+                    is_logs_follow = 1;
+                    break;
+                }
+            }
+        }
+        is_interactive_command = ((is_info && !info_python) || is_config || is_logs_follow);
     }
     if (!is_swap_python && !is_interactive_command) {
         try_daemon_cli(target_python, argc, argv, version_injected, forced_version);

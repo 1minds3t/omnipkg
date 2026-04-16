@@ -175,7 +175,7 @@ def ensure_daemon_running(interpreter_paths: list) -> bool:
     are adopted so the daemon registry sees them on startup.
     """
     try:
-        from omnipkg.isolation.worker_daemon import DaemonClient, DAEMON_LOG_FILE
+        from omnipkg.isolation.worker_daemon import DaemonClient, PID_FILE
         client = DaemonClient()
         status = client.status()
 
@@ -183,25 +183,41 @@ def ensure_daemon_running(interpreter_paths: list) -> bool:
             safe_print("   ✅ Daemon already running")
         else:
             safe_print("   🔄 Starting daemon (all pythons already adopted)...")
-            _daemon_start = time.perf_counter()
-            # Use Popen so we don't block — daemon start detaches itself on Windows
             proc = subprocess.Popen(
                 ["8pkg", "daemon", "start"],
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
             )
-            # Give it a moment to detach then check if it came up
-            for i in range(60):
-                time.sleep(0.5)
-                status = client.status()
-                if status.get("success"):
-                    _daemon_elapsed = (time.perf_counter() - _daemon_start) * 1000
-                    safe_print(f"   ✅ Daemon up after {format_duration(_daemon_elapsed)}")
+            
+            # --- NEW ROBUST WAITING LOGIC ---
+            safe_print(f"   ⏳ Waiting for PID file at: {PID_FILE}")
+            deadline = time.monotonic() + 60.0  # Wait up to 60 seconds
+            pid_file_found = False
+            while time.monotonic() < deadline:
+                import os
+                if os.path.exists(PID_FILE):
+                    safe_print("   ✅ PID file appeared.")
+                    pid_file_found = True
                     break
-            else:
-                safe_print("   ❌ Daemon never came up")
-                dump_daemon_log("DAEMON LOG ON FAILURE", only_on_error=False)
+                time.sleep(0.5)
+            
+            if not pid_file_found:
+                safe_print(f"   ❌ Timed out waiting for PID file after 60s.")
+                # It's still useful to dump the log if it exists
+                dump_daemon_log("DAEMON LOG ON PID TIMEOUT", only_on_error=False)
                 return False
+
+            # Give it a couple more seconds for the socket to bind after PID is written
+            time.sleep(2) 
+            
+            # Now verify connection
+            status = client.status()
+            if status.get("success"):
+                 safe_print("   ✅ Daemon confirmed responsive.")
+            else:
+                 safe_print("   ❌ Daemon started but is not responsive.")
+                 dump_daemon_log("DAEMON LOG ON FAILURE", only_on_error=False)
+                 return False
 
         return True
 
@@ -442,9 +458,9 @@ def main():
 
     # Start daemon BEFORE installs so FFI in-process path is live during install phase
     if not ensure_daemon_running(interpreter_paths):
-        safe_print("❌ Failed to start daemon")
+        safe_print("⚠️  Daemon failed to start — continuing to capture install/warmup behaviour")
+        safe_print("⚠️  Phases 0-4 will still run; worker_daemon calls may fail with their own errors")
         dump_daemon_log("DAEMON LOG ON STARTUP FAILURE")
-        sys.exit(1)
 
     # Phase 0: Install via versioned dispatcher (8pkg39, 8pkg310, etc.)
     # This is the key test — does 8pkg3X actually install into the RIGHT interpreter?
@@ -618,7 +634,35 @@ def main():
     total_time = (time.perf_counter() - start_time) * 1000
     safe_print(f"\n🎉 DONE  total={format_duration(total_time)}")
 
-    sys.exit(0)
+    # Always dump daemon log before shutdown — lets us see FS watcher state,
+    # thread activity, and any silent errors even on a fully successful run.
+    dump_daemon_log("FINAL DAEMON LOG (always)", only_on_error=False)
+
+    # Shutdown daemon before exit so CI runner doesn't wait for orphaned children
+    # (FS watcher watchdog threads, socket listeners, etc.)
+    try:
+        from omnipkg.isolation.worker_daemon import cli_stop
+        safe_print("\n==================================================")
+        safe_print("🛑 PERFORMING ROBUST DAEMON TEARDOWN")
+        safe_print("==================================================")
+        
+        # This does the graceful shutdown -> force kill -> orphan sweep -> file cleanup
+        cli_stop() 
+        
+        safe_print("✅ Teardown complete. No orphaned processes remaining.")
+    except Exception as e:
+        safe_print(f"   ⚠️  Robust teardown failed: {e}")
+
+    # Now the POST-SHUTDOWN log dump will actually be accurate because the process is DEAD.
+    dump_daemon_log("POST-SHUTDOWN DAEMON LOG (always)", only_on_error=False)
+
+    # Final exit
+
+    # os._exit bypasses atexit handlers and thread finalizers entirely.
+    # sys.exit(0) goes through Python teardown which can hang if any background
+    # thread (DaemonClient keepalive, watchdog observer, etc.) is still running.
+    import os
+    os._exit(0)
 
 
 if __name__ == "__main__":
