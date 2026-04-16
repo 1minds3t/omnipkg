@@ -47,7 +47,8 @@ jobs:
       - name: Discover Omnipkg ENV_ID
         shell: pwsh
         run: |
-          $envId = python -c "from omnipkg.config_manager import ConfigManager; cm = ConfigManager(suppress_init_messages=True); print(cm.env_id)"
+          # Import from omnipkg.core since ConfigManager is defined there
+          $envId = python -c "from omnipkg.core import ConfigManager; cm = ConfigManager(suppress_init_messages=True); print(cm.env_id)"
           echo "OMNIPKG_ENV_ID=$envId" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           Write-Host "✅ Discovered Omnipkg ENV_ID: $envId"
 
