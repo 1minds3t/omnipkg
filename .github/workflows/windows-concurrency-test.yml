@@ -57,6 +57,58 @@ jobs:
           @{ interactive = $false; auto_confirm = $true } | ConvertTo-Json | Out-File -FilePath "$configDir\config.json" -Encoding utf8
           Write-Host "✅ Omnipkg configured"
 
+      - name: Pre-start and deeply probe the Daemon
+        shell: pwsh
+        run: |
+          Write-Host "=================================================="
+          Write-Host "1. Spawning daemon in isolated background process..."
+          Write-Host "=================================================="
+          # We use -PassThru to ensure we trigger the process start effectively
+          $proc = Start-Process -FilePath "8pkg" -ArgumentList "daemon", "start" -WindowStyle Hidden -PassThru
+          
+          Write-Host "Waiting 12 seconds for daemon to fully initialize..."
+          Start-Sleep -Seconds 12
+          
+          Write-Host "`n=================================================="
+          Write-Host "2. Checking Network / Socket bindings (TCP 5678)..."
+          Write-Host "=================================================="
+          # This proves if the C/Rust layer actually opened the port
+          netstat -ano | findstr ":5678"
+          
+          Write-Host "`n=================================================="
+          Write-Host "3. Testing Python Connection & Registry Discovery..."
+          Write-Host "=================================================="
+          python -c "
+          import os, sys, json
+          try:
+              from omnipkg.isolation.worker_daemon import DaemonClient, DAEMON_LOG_FILE
+              client = DaemonClient()
+              status = client.status()
+              print(f'✅ DAEMON RESPONDED: {json.dumps(status, indent=2)}')
+              print(f'DAEMON_LOG_FILE CONSTANT: {DAEMON_LOG_FILE}')
+          except Exception as e:
+              print(f'❌ DAEMON CONNECTION FAILED: {e}')
+          "
+
+          Write-Host "`n=================================================="
+          Write-Host "4. Finding and Dumping ALL daemon logs in TEMP..."
+          Write-Host "=================================================="
+          # The logs wandering into subfolders is a major clue. This finds them all.
+          $logFiles = Get-ChildItem -Path "$env:TEMP\omnipkg" -Filter "omnipkg_daemon.log" -Recurse -ErrorAction SilentlyContinue
+          
+          if ($logFiles.Count -eq 0) {
+              Write-Host "❌ Could not find omnipkg_daemon.log anywhere in $env:TEMP\omnipkg"
+              Write-Host "Full directory structure of TEMP\omnipkg:"
+              Get-ChildItem -Path "$env:TEMP\omnipkg" -Recurse | Select-Object FullName
+          } else {
+              foreach ($file in $logFiles) {
+                  Write-Host "`n--- START OF LOG: $($file.FullName) ---"
+                  Get-Content $file.FullName
+                  Write-Host "--- END OF LOG ---"
+              }
+          }
+          Write-Host "`n✅ Pre-start diagnostics complete."
+
       - name: Run Demo (Option 8 - Quantum Multiverse)
         shell: cmd
         run: omnipkg demo 8 --non-interactive
