@@ -63,11 +63,11 @@ about:
   home: https://omnipkg.pages.dev/
   license_family: AGPL license_file: LICENSE summary: ‘The Ultimate Python Dependency Resolver. One environment. Infinite packages. Zero conflicts.’
 description: | OmniPkg is a distributed Python runtime hypervisor that enables concurrent, zero-copy multi-framework orchestration across multiple Python versions and toolchains.
-Platform Support:
+  Platform Support:
 	•	Linux: x86_64, aarch64/ARM64, ppc64le
 	•	macOS: x86_64 (Intel), arm64 (Apple Silicon)
 	•	Windows: x86_64, ARM64
-Key Features:
+  Key Features:
 	•	Reproducible State Engine with deterministic environment lockfiles (export/sync exact states)
 	•	Native C-Dispatcher: sub-millisecond command routing that bypasses Python startup overhead
 	•	Microsecond package activation via warm daemon workers (~50μs)
@@ -75,9 +75,9 @@ Key Features:
 	•	Support for Python 3.7 through 3.15 in a single environment (far beyond Conda’s typical 3.10–3.13/3.14 range)
 	•	Concurrent multi-version package and interpreter loading
 	•	True zero-copy tensor passing across different Python versions, PyTorch/CUDA versions, and frameworks — no JSON serialization or process boundaries required
-Perfect for scientific computing, large model serving, and heterogeneous Python/CUDA workflows where maximum flexibility and minimal latency matter.
+  Perfect for scientific computing, large model serving, and heterogeneous Python/CUDA workflows where maximum flexibility and minimal latency matter.
 doc_url: https://omnipkg.readthedocs.io/en/latest/ dev_url: https://github.com/1minds3t/omnipkg
-
+dev_url: https://github.com/1minds3t/omnipkg
 extra:
   recipe-maintainers:
     - 1minds3t
