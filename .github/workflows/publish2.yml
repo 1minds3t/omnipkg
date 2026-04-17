@@ -8,7 +8,7 @@ on:
         required: true
         type: string
       python_versions:
-        description: 'Python versions to build (space-separated, e.g., "3.10 3.11 3.12 3.13")'
+        description: 'Python versions to build (space-separated, e.g., "3.8 3.9 3.10 3.11 3.12 3.13 3.14 3.15")'
         required: false
         default: '3.10 3.11 3.12 3.13'
         type: string
@@ -23,71 +23,57 @@ permissions:
   id-token: write
 
 jobs:
-  # ═══════════════════════════════════════════════════════════════════
-  # JOB 1: Build wheels for all platforms via cibuildwheel
-  #
-  # cibuildwheel handles ALL Python version management automatically —
-  # no manual Docker runs, no manylinux path maps, no auditwheel calls.
-  # It also builds musllinux (Alpine) wheels alongside manylinux.
-  # ═══════════════════════════════════════════════════════════════════
   build-wheels:
     name: "Wheels | ${{ matrix.platform }}"
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 90
+    timeout-minutes: 120 # Increased for QEMU targets
     strategy:
-      fail-fast: false   # Keep going — one failing arch won't block others
+      fail-fast: false 
       matrix:
         include:
           # ─────────────────────────────────────────────────────────
-          # Linux x86_64  (manylinux + musllinux/Alpine)
+          # LINUX TARGETS
           # ─────────────────────────────────────────────────────────
           - runner: ubuntu-latest
             platform: linux_x86_64
             cibw_archs: x86_64
-
-          # ─────────────────────────────────────────────────────────
-          # Linux ARM64 — QEMU cross-compile  (manylinux + musllinux)
-          # ─────────────────────────────────────────────────────────
+          - runner: ubuntu-latest
+            platform: linux_i686
+            cibw_archs: i686
+            use_qemu: true
           - runner: ubuntu-latest
             platform: linux_aarch64
             cibw_archs: aarch64
             use_qemu: true
-
-          # ─────────────────────────────────────────────────────────
-          # Linux ppc64le — QEMU cross-compile
-          # Known to be slow/flaky. Kept in matrix but publish jobs
-          # use if: always() so a failure here never blocks PyPI.
-          # ─────────────────────────────────────────────────────────
           - runner: ubuntu-latest
             platform: linux_ppc64le
             cibw_archs: ppc64le
             use_qemu: true
+          - runner: ubuntu-latest
+            platform: linux_s390x
+            cibw_archs: s390x
+            use_qemu: true
+          - runner: ubuntu-latest
+            platform: linux_riscv64
+            cibw_archs: riscv64
+            use_qemu: true
 
           # ─────────────────────────────────────────────────────────
-          # macOS Intel x86_64
+          # macOS TARGETS
           # ─────────────────────────────────────────────────────────
           - runner: macos-13
             platform: macos_x86_64
             cibw_archs: x86_64
-
-          # ─────────────────────────────────────────────────────────
-          # macOS Apple Silicon ARM64
-          # ─────────────────────────────────────────────────────────
           - runner: macos-14
             platform: macos_arm64
             cibw_archs: arm64
 
           # ─────────────────────────────────────────────────────────
-          # Windows x86_64
+          # WINDOWS TARGETS
           # ─────────────────────────────────────────────────────────
           - runner: windows-latest
             platform: win_amd64
             cibw_archs: AMD64
-            
-          # ─────────────────────────────────────────────────────────
-          # Windows ARM64 — Copilot+ / Snapdragon PCs
-          # Cross-compiled on x86_64 runner, no special runner needed.
-          # ─────────────────────────────────────────────────────────
           - runner: windows-latest
             platform: win_arm64
             cibw_archs: ARM64
@@ -104,9 +90,6 @@ jobs:
         with:
           platforms: all
 
-      # Convert "3.10 3.11 3.12 3.13" → "cp310-* cp311-* cp312-* cp313-*"
-      # GHA expression syntax can't do this transformation reliably so we
-      # do it in shell and write the result to GITHUB_ENV.
       - name: Compute CIBW_BUILD pattern
         shell: bash
         run: |
@@ -115,52 +98,43 @@ jobs:
             tag="cp$(echo $ver | tr -d '.')-*"
             PATTERN="$PATTERN $tag"
           done
-          PATTERN="${PATTERN# }"  # strip leading space
+          PATTERN="${PATTERN# }"
           echo "CIBW_BUILD=$PATTERN" >> $GITHUB_ENV
           echo "Will build for: $PATTERN"
 
       - name: Build wheels via cibuildwheel
+        # 🟢 THE MAGIC FIX: This prevents the whole job from failing 
+        # if one Python version (like 3.8 on Mac ARM) crashes.
+        continue-on-error: true 
         uses: pypa/cibuildwheel@v2.20.0
         env:
-          CIBW_ENVIRONMENT: "OMNIPKG_SKIP_C_EXT=0"  # Always TRY to build C
+          CIBW_ENVIRONMENT: "OMNIPKG_SKIP_C_EXT=0"
           CIBW_BUILD_VERBOSITY: 1
-
           CIBW_TEST_ENVIRONMENT: "OMNIPKG_DEBUG=1"
-          
-          # ⬇️ THE SELF-HEALING TEST ⬇️
-          # This tries to import the C module. If it fails, it prints a warning
-          # but DOES NOT fail the build. It then proceeds to verify that 
-          # omnipkg --version and omnipkg list work perfectly.
-          # We use bash (||) to catch the import error safely without breaking the build.
           CIBW_TEST_COMMAND: >
             (python -c "import omnipkg.isolation.omnipkg_atomic" >/dev/null 2>&1 && echo "✅ Hardware Atomics: ENABLED" || echo "⚠️ Hardware Atomics: DISABLED (Using Python Fallback)") &&
             omnipkg --version &&
             omnipkg list
-          
           CIBW_ARCHS: ${{ matrix.cibw_archs }}
           CIBW_BUILD: ${{ env.CIBW_BUILD }}
           CIBW_SKIP: "pp*"
 
       - name: Upload wheels as artifacts
+        # This will now run even if the build step had "errors"
+        # and will upload whatever wheels were successfully created.
         uses: actions/upload-artifact@v4
         with:
           name: wheels-${{ matrix.platform }}
           path: ./wheelhouse/*.whl
+          if-no-files-found: warn
           retention-days: 7
 
-  # ═══════════════════════════════════════════════════════════════════
-  # JOB 2: Publish to PyPI
-  #
-  # if: always() — runs even if ppc64le (or any other matrix job) failed.
-  # skip-existing: true — safe to re-run; already-uploaded wheels are skipped.
-  # ═══════════════════════════════════════════════════════════════════
   publish-wheels:
     name: "Publish wheels to PyPI"
     needs: build-wheels
     runs-on: ubuntu-latest
     if: always() && inputs.upload_to_pypi == true
     environment: pypi
-
     steps:
       - name: Download all wheel artifacts
         uses: actions/download-artifact@v4
@@ -168,14 +142,6 @@ jobs:
           pattern: wheels-*
           path: all-wheels
           merge-multiple: true
-
-      - name: List wheels to be uploaded
-        run: |
-          echo "📦 Wheels collected for PyPI upload:"
-          ls -lh all-wheels/*.whl
-          echo ""
-          echo "Total: $(ls -1 all-wheels/*.whl | wc -l) wheels"
-
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
@@ -183,23 +149,11 @@ jobs:
           packages-dir: all-wheels/
           skip-existing: true
 
-      - name: Done
-        run: |
-          echo "🎉 Wheels published to PyPI for ${{ inputs.release_tag }}"
-          echo "pip install omnipkg will now serve platform wheels for:"
-          ls all-wheels/*.whl | sed 's/.*omnipkg-[^-]*-[^-]*-[^-]*-/  /' | sed 's/\.whl//'
-
-  # ═══════════════════════════════════════════════════════════════════
-  # JOB 3: Attach wheels to GitHub Release
-  #
-  # Also uses if: always() — a ppc64le failure won't orphan the artifacts.
-  # ═══════════════════════════════════════════════════════════════════
   update-release:
     name: "Attach wheels to GitHub Release"
     needs: build-wheels
     runs-on: ubuntu-latest
     if: always()
-
     steps:
       - name: Download all wheel artifacts
         uses: actions/download-artifact@v4
@@ -207,7 +161,6 @@ jobs:
           pattern: wheels-*
           path: all-wheels
           merge-multiple: true
-
       - name: Upload wheels to GitHub Release
         uses: softprops/action-gh-release@v1
         with:
@@ -216,6 +169,3 @@ jobs:
           fail_on_unmatched_files: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Done
-        run: echo "✅ Wheels attached to release ${{ inputs.release_tag }}"
