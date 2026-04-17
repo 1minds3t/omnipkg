@@ -61,7 +61,9 @@ test:
 
 about:
   home: https://omnipkg.pages.dev/
-  license_family: AGPL license_file: LICENSE summary: ‘The Ultimate Python Dependency Resolver. One environment. Infinite packages. Zero conflicts.’
+  license: AGPL-3.0-only
+  license_family: AGPL
+  license_file: LICENSE
 description: | OmniPkg is a distributed Python runtime hypervisor that enables concurrent, zero-copy multi-framework orchestration across multiple Python versions and toolchains.
   Platform Support:
 	•	Linux: x86_64, aarch64/ARM64, ppc64le
