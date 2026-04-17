@@ -93,7 +93,7 @@ jobs:
               owner: context.repo.owner,
               repo: context.repo.repo,
               workflow_id: workflow_id,
-              ref: ref
+              ref: 'main'   // ← always dispatch against main
             });
             
             console.log('Waiting for new build to appear...');
@@ -230,7 +230,7 @@ jobs:
               owner: context.repo.owner,
               repo: context.repo.repo,
               workflow_id: workflow_id,
-              ref: ref
+              ref: 'main'   // ← always dispatch against main
             });
 
             for (let i = 0; i < 24; i++) {
