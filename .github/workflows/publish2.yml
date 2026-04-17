@@ -48,16 +48,16 @@ jobs:
           - { platform: linux_aarch64, py_ver: "3.14", py_tag: "cp314", runner: ubuntu-latest, cibw_archs: aarch64, use_qemu: true }
           - { platform: linux_aarch64, py_ver: "3.15", py_tag: "cp315", runner: ubuntu-latest, cibw_archs: aarch64, use_qemu: true }
 
-          # --- LINUX ARMv7l ---
-          - { platform: linux_armv7l, py_ver: "3.7", py_tag: "cp37", runner: ubuntu-latest, cibw_archs: armv7l, use_qemu: true }
-          - { platform: linux_armv7l, py_ver: "3.8", py_tag: "cp38", runner: ubuntu-latest, cibw_archs: armv7l, use_qemu: true }
-          - { platform: linux_armv7l, py_ver: "3.9", py_tag: "cp39", runner: ubuntu-latest, cibw_archs: armv7l, use_qemu: true }
-          - { platform: linux_armv7l, py_ver: "3.10", py_tag: "cp310", runner: ubuntu-latest, cibw_archs: armv7l, use_qemu: true }
-          - { platform: linux_armv7l, py_ver: "3.11", py_tag: "cp311", runner: ubuntu-latest, cibw_archs: armv7l, use_qemu: true }
-          - { platform: linux_armv7l, py_ver: "3.12", py_tag: "cp312", runner: ubuntu-latest, cibw_archs: armv7l, use_qemu: true }
-          - { platform: linux_armv7l, py_ver: "3.13", py_tag: "cp313", runner: ubuntu-latest, cibw_archs: armv7l, use_qemu: true }
-          - { platform: linux_armv7l, py_ver: "3.14", py_tag: "cp314", runner: ubuntu-latest, cibw_archs: armv7l, use_qemu: true }
-          - { platform: linux_armv7l, py_ver: "3.15", py_tag: "cp315", runner: ubuntu-latest, cibw_archs: armv7l, use_qemu: true }
+          # --- LINUX ARMv7 ---
+          - { platform: linux_armv7, py_ver: "3.7", py_tag: "cp37", runner: ubuntu-latest, cibw_archs: armv7, use_qemu: true }
+          - { platform: linux_armv7, py_ver: "3.8", py_tag: "cp38", runner: ubuntu-latest, cibw_archs: armv7, use_qemu: true }
+          - { platform: linux_armv7, py_ver: "3.9", py_tag: "cp39", runner: ubuntu-latest, cibw_archs: armv7, use_qemu: true }
+          - { platform: linux_armv7, py_ver: "3.10", py_tag: "cp310", runner: ubuntu-latest, cibw_archs: armv7, use_qemu: true }
+          - { platform: linux_armv7, py_ver: "3.11", py_tag: "cp311", runner: ubuntu-latest, cibw_archs: armv7, use_qemu: true }
+          - { platform: linux_armv7, py_ver: "3.12", py_tag: "cp312", runner: ubuntu-latest, cibw_archs: armv7, use_qemu: true }
+          - { platform: linux_armv7, py_ver: "3.13", py_tag: "cp313", runner: ubuntu-latest, cibw_archs: armv7, use_qemu: true }
+          - { platform: linux_armv7, py_ver: "3.14", py_tag: "cp314", runner: ubuntu-latest, cibw_archs: armv7, use_qemu: true }
+          - { platform: linux_armv7, py_ver: "3.15", py_tag: "cp315", runner: ubuntu-latest, cibw_archs: armv7, use_qemu: true }
 
           # --- LINUX ppc64le ---
           - { platform: linux_ppc64le, py_ver: "3.7", py_tag: "cp37", runner: ubuntu-latest, cibw_archs: ppc64le, use_qemu: true }
@@ -173,6 +173,7 @@ jobs:
         uses: pypa/cibuildwheel@v2.20.0
         env:
           CIBW_ENVIRONMENT: "OMNIPKG_SKIP_C_EXT=0"
+          CIBW_PRERELEASE_PYTHONS: "1"
           CIBW_BUILD: ${{ matrix.py_tag }}-*
           CIBW_ARCHS: ${{ matrix.cibw_archs }}
           CIBW_SKIP: "pp*"
