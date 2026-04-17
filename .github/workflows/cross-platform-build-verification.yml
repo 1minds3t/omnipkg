@@ -150,7 +150,7 @@ jobs:
             
             # Install build dependencies based on distro
             if command -v apt-get > /dev/null 2>&1; then 
-              apt-get update && apt-get install -y python3 python3-pip python3-venv build-essential python3-dev gcc
+              apt-get update --fix-missing && apt-get install -y --fix-missing python3 python3-pip python3-venv build-essential python3-dev gcc
             elif command -v dnf > /dev/null 2>&1; then 
               # ROCKY/FEDORA FIX: Use UV's standalone Python instead of broken system Python
               dnf install -y curl gcc make
@@ -210,15 +210,17 @@ jobs:
           ref: ${{ inputs.target_ref || github.ref }}
       - name: Test
         run: |
-          docker run --rm -v $(pwd):/workspace ${{ matrix.distro }} /bin/bash -c "
-            cd /workspace
-            apt-get update && apt-get install -y python3 python3-pip python3-venv build-essential python3-dev gcc
-            python3 -m pip install --upgrade pip build || python3 -m pip install --break-system-packages pip build
-            python3 -m build
-            python3 -m pip install --break-system-packages dist/*.whl
-            omnipkg --version
-            omnipkg list
-          "
+          for attempt in 1 2 3; do
+            docker run --rm -v $(pwd):/workspace ${{ matrix.distro }} /bin/bash -c "
+              cd /workspace
+              apt-get update --fix-missing && apt-get install -y python3 python3-pip python3-venv build-essential python3-dev gcc
+              python3 -m pip install --upgrade pip build || python3 -m pip install --break-system-packages pip build
+              python3 -m build
+              python3 -m pip install --break-system-packages dist/*.whl
+              omnipkg --version
+              omnipkg list
+            " && break || { echo "Attempt $attempt failed, retrying..."; sleep 30; }
+          done
 
   linux-distros-docker-rhel:
     name: Docker - RHEL/Fedora
