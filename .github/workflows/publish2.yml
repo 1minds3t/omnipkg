@@ -1,4 +1,4 @@
-name: Build Platform-Specific Wheels for Existing Release
+name: Build Platform-Specific Wheels (Atomic Matrix)
 
 on:
   workflow_dispatch:
@@ -8,9 +8,9 @@ on:
         required: true
         type: string
       python_versions:
-        description: 'Python versions to build (space-separated, e.g., "3.8 3.9 3.10 3.11 3.12 3.13 3.14 3.15")'
+        description: 'Python versions (comma-separated, e.g., "3.8,3.9,3.10,3.11,3.12,3.13,3.14")'
         required: false
-        default: '3.10 3.11 3.12 3.13'
+        default: '3.7,3.8,3.9,3.10,3.11,3.12,3.13,3.14,3.15'
         type: string
       upload_to_pypi:
         description: 'Upload wheels to PyPI?'
@@ -24,59 +24,40 @@ permissions:
 
 jobs:
   build-wheels:
-    name: "Wheels | ${{ matrix.platform }}"
+    # We split the input string into a matrix
+    name: "Wheels | ${{ matrix.platform }} | Py${{ matrix.python }}"
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 120 # Increased for QEMU targets
+    timeout-minutes: 90
     strategy:
-      fail-fast: false 
+      fail-fast: false
       matrix:
+        # 1. Define all Platforms
+        platform: [
+          linux_x86_64, linux_i686, linux_aarch64, linux_ppc64le, linux_s390x, linux_riscv64,
+          macos_x86_64, macos_arm64,
+          win_amd64, win_arm64
+        ]
+        # 2. Define all Python versions
+        # We use a fixed list here because GHA matrixes cannot be 
+        # dynamically generated from a string input easily.
+        python: ["3.7", "3.8", "3.9", "3.10", "3.11", "3.12", "3.13", "3.14", "3.15"]
+        
+        # Map platforms to runners and archs
         include:
-          # ─────────────────────────────────────────────────────────
-          # LINUX TARGETS
-          # ─────────────────────────────────────────────────────────
-          - runner: ubuntu-latest
-            platform: linux_x86_64
-            cibw_archs: x86_64
-          - runner: ubuntu-latest
-            platform: linux_i686
-            cibw_archs: i686
-            use_qemu: true
-          - runner: ubuntu-latest
-            platform: linux_aarch64
-            cibw_archs: aarch64
-            use_qemu: true
-          - runner: ubuntu-latest
-            platform: linux_ppc64le
-            cibw_archs: ppc64le
-            use_qemu: true
-          - runner: ubuntu-latest
-            platform: linux_s390x
-            cibw_archs: s390x
-            use_qemu: true
-          - runner: ubuntu-latest
-            platform: linux_riscv64
-            cibw_archs: riscv64
-            use_qemu: true
+          - platform: linux_x86_64  { runner: ubuntu-latest, cibw_archs: x86_64, use_qemu: false }
+          - platform: linux_i686    { runner: ubuntu-latest, cibw_archs: i686, use_qemu: true }
+          - platform: linux_aarch64 { runner: ubuntu-latest, cibw_archs: aarch64, use_qemu: true }
+          - platform: linux_ppc64le { runner: ubuntu-latest, cibw_archs: ppc64le, use_qemu: true }
+          - platform: linux_s390x   { runner: ubuntu-latest, cibw_archs: s390x, use_qemu: true }
+          - platform: linux_riscv64 { runner: ubuntu-latest, cibw_archs: riscv64, use_qemu: true }
+          - platform: macos_x86_64  { runner: macos-13, cibw_archs: x86_64, use_qemu: false }
+          - platform: macos_arm64   { runner: macos-14, cibw_archs: arm64, use_qemu: false }
+          - platform: win_amd64     { runner: windows-latest, cibw_archs: AMD64, use_qemu: false }
+          - platform: win_arm64     { runner: windows-latest, cibw_archs: ARM64, use_qemu: false }
 
-          # ─────────────────────────────────────────────────────────
-          # macOS TARGETS
-          # ─────────────────────────────────────────────────────────
-          - runner: macos-13
-            platform: macos_x86_64
-            cibw_archs: x86_64
-          - runner: macos-14
-            platform: macos_arm64
-            cibw_archs: arm64
-
-          # ─────────────────────────────────────────────────────────
-          # WINDOWS TARGETS
-          # ─────────────────────────────────────────────────────────
-          - runner: windows-latest
-            platform: win_amd64
-            cibw_archs: AMD64
-          - runner: windows-latest
-            platform: win_arm64
-            cibw_archs: ARM64
+    # Overriding matrix since we used a custom mapping in 'include'
+    # We must define these specifically for the 'include' block to work
+    runs-on: ${{ matrix.runner }}
 
     steps:
       - name: Checkout at release tag
@@ -90,44 +71,31 @@ jobs:
         with:
           platforms: all
 
-      - name: Compute CIBW_BUILD pattern
-        shell: bash
-        run: |
-          PATTERN=""
-          for ver in ${{ inputs.python_versions }}; do
-            tag="cp$(echo $ver | tr -d '.')-*"
-            PATTERN="$PATTERN $tag"
-          done
-          PATTERN="${PATTERN# }"
-          echo "CIBW_BUILD=$PATTERN" >> $GITHUB_ENV
-          echo "Will build for: $PATTERN"
-
-      - name: Build wheels via cibuildwheel
-        # 🟢 THE MAGIC FIX: This prevents the whole job from failing 
-        # if one Python version (like 3.8 on Mac ARM) crashes.
-        continue-on-error: true 
+      - name: Build ONE specific wheel via cibuildwheel
         uses: pypa/cibuildwheel@v2.20.0
         env:
           CIBW_ENVIRONMENT: "OMNIPKG_SKIP_C_EXT=0"
           CIBW_BUILD_VERBOSITY: 1
-          CIBW_TEST_ENVIRONMENT: "OMNIPKG_DEBUG=1"
+          
+          # 🟢 THE FIX: Target exactly ONE python version
+          # Example: if matrix.python is "3.11", CIBW_BUILD becomes "cp311-*"
+          CIBW_BUILD: cp${{ replace(matrix.python, '.', '') }}-*
+          
           CIBW_TEST_COMMAND: >
             (python -c "import omnipkg.isolation.omnipkg_atomic" >/dev/null 2>&1 && echo "✅ Hardware Atomics: ENABLED" || echo "⚠️ Hardware Atomics: DISABLED (Using Python Fallback)") &&
             omnipkg --version &&
             omnipkg list
+          
           CIBW_ARCHS: ${{ matrix.cibw_archs }}
-          CIBW_BUILD: ${{ env.CIBW_BUILD }}
           CIBW_SKIP: "pp*"
 
-      - name: Upload wheels as artifacts
-        # This will now run even if the build step had "errors"
-        # and will upload whatever wheels were successfully created.
+      - name: Upload wheel as artifact
         uses: actions/upload-artifact@v4
         with:
-          name: wheels-${{ matrix.platform }}
+          # Unique name for every single combination
+          name: wheels-${{ matrix.platform }}-py${{ matrix.python }}
           path: ./wheelhouse/*.whl
           if-no-files-found: warn
-          retention-days: 7
 
   publish-wheels:
     name: "Publish wheels to PyPI"
