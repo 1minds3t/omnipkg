@@ -60,6 +60,7 @@ test:
 
 about:
   home: https://omnipkg.pages.dev/
+  license: AGPL-3.0-only
   license_family: AGPL
   license_file: LICENSE
   summary: 'The Ultimate Python Dependency Resolver. One environment. Infinite packages. Zero conflicts.'
