@@ -24,8 +24,6 @@ jobs:
         include:
           - runner: [self-hosted, linux, x64]
             label: "Linux x86_64 (self-hosted)"
-          - runner: [self-hosted, macos, x64]
-            label: "macOS x86_64 Intel (self-hosted)"
           - runner: ubuntu-latest
             label: "Ubuntu x86_64"
           - runner: windows-latest
