@@ -173,6 +173,7 @@ jobs:
         uses: pypa/cibuildwheel@v2.20.0
         env:
           CIBW_ENVIRONMENT: "OMNIPKG_SKIP_C_EXT=0"
+          CIBW_REPAIR_WHEEL_COMMAND_LINUX: "auditwheel repair -w {dest_dir} {wheel} || cp {wheel} {dest_dir}"
           CIBW_PRERELEASE_PYTHONS: "1"
           CIBW_BUILD: ${{ matrix.py_tag }}-*
           CIBW_ARCHS: ${{ matrix.cibw_archs }}
