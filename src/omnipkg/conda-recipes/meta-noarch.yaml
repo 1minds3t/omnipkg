@@ -25,7 +25,6 @@ build:
 
 requirements:
   build:
-    - {{ compiler('c') }}                    # Required for full native C-dispatcher (skipped in noarch via OMNIPKG_SKIP_C_EXT)
   host:
     - python {{ python_min }}
     - pip
@@ -43,7 +42,6 @@ requirements:
     - typing_extensions >=4.0.0         # [py<310]
     - authlib >=1.6.9
     - aiohttp >=3.13.5
-    - cryptography >=46.0.7
     - pip-audit >=2.0.0
     - urllib3 >=2.6.3
     - flask >=3.0.3
