@@ -170,7 +170,7 @@ jobs:
           platforms: all
 
       - name: Build ONE specific wheel via cibuildwheel
-        uses: pypa/cibuildwheel@v2.20.0
+        uses: pypa/cibuildwheel@v2.23.0
         env:
           CIBW_ENVIRONMENT: "OMNIPKG_SKIP_C_EXT=0"
           CIBW_REPAIR_WHEEL_COMMAND_LINUX: "auditwheel repair -w {dest_dir} {wheel} || cp {wheel} {dest_dir}"
