@@ -7,11 +7,6 @@ on:
         description: 'Release tag to build wheels for (e.g., v2.0.7)'
         required: true
         type: string
-      python_versions:
-        description: 'Python versions (comma-separated, e.g., "3.8,3.9,3.10,3.11,3.12,3.13,3.14")'
-        required: false
-        default: '3.7,3.8,3.9,3.10,3.11,3.12,3.13,3.14,3.15'
-        type: string
       upload_to_pypi:
         description: 'Upload wheels to PyPI?'
         required: false
@@ -24,40 +19,69 @@ permissions:
 
 jobs:
   build-wheels:
-    # We split the input string into a matrix
-    name: "Wheels | ${{ matrix.platform }} | Py${{ matrix.python }}"
+    # Updated to access the .ver property of the python object
+    name: "Wheels | ${{ matrix.platform }} | Py${{ matrix.python.ver }}"
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 90
     strategy:
       fail-fast: false
       matrix:
-        # 1. Define all Platforms
-        platform: [
-          linux_x86_64, linux_i686, linux_aarch64, linux_ppc64le, linux_s390x, linux_riscv64,
-          macos_x86_64, macos_arm64,
-          win_amd64, win_arm64
+        # 1. Define Python versions as objects to avoid using a 'replace' function
+        python: [
+          { ver: "3.7", tag: "cp37" },
+          { ver: "3.8", tag: "cp38" },
+          { ver: "3.9", tag: "cp39" },
+          { ver: "3.10", tag: "cp310" },
+          { ver: "3.11", tag: "cp311" },
+          { ver: "3.12", tag: "cp312" },
+          { ver: "3.13", tag: "cp313" },
+          { ver: "3.14", tag: "cp314" },
+          { ver: "3.15", tag: "cp315" }
         ]
-        # 2. Define all Python versions
-        # We use a fixed list here because GHA matrixes cannot be 
-        # dynamically generated from a string input easily.
-        python: ["3.7", "3.8", "3.9", "3.10", "3.11", "3.12", "3.13", "3.14", "3.15"]
-        
-        # Map platforms to runners and archs
         include:
-          - platform: linux_x86_64  { runner: ubuntu-latest, cibw_archs: x86_64, use_qemu: false }
-          - platform: linux_i686    { runner: ubuntu-latest, cibw_archs: i686, use_qemu: true }
-          - platform: linux_aarch64 { runner: ubuntu-latest, cibw_archs: aarch64, use_qemu: true }
-          - platform: linux_ppc64le { runner: ubuntu-latest, cibw_archs: ppc64le, use_qemu: true }
-          - platform: linux_s390x   { runner: ubuntu-latest, cibw_archs: s390x, use_qemu: true }
-          - platform: linux_riscv64 { runner: ubuntu-latest, cibw_archs: riscv64, use_qemu: true }
-          - platform: macos_x86_64  { runner: macos-13, cibw_archs: x86_64, use_qemu: false }
-          - platform: macos_arm64   { runner: macos-14, cibw_archs: arm64, use_qemu: false }
-          - platform: win_amd64     { runner: windows-latest, cibw_archs: AMD64, use_qemu: false }
-          - platform: win_arm64     { runner: windows-latest, cibw_archs: ARM64, use_qemu: false }
-
-    # Overriding matrix since we used a custom mapping in 'include'
-    # We must define these specifically for the 'include' block to work
-    runs-on: ${{ matrix.runner }}
+          # LINUX TARGETS
+          - platform: linux_x86_64
+            runner: ubuntu-latest
+            cibw_archs: x86_64
+            use_qemu: false
+          - platform: linux_i686
+            runner: ubuntu-latest
+            cibw_archs: i686
+            use_qemu: true
+          - platform: linux_aarch64
+            runner: ubuntu-latest
+            cibw_archs: aarch64
+            use_qemu: true
+          - platform: linux_ppc64le
+            runner: ubuntu-latest
+            cibw_archs: ppc64le
+            use_qemu: true
+          - platform: linux_s390x
+            runner: ubuntu-latest
+            cibw_archs: s390x
+            use_qemu: true
+          - platform: linux_riscv64
+            runner: ubuntu-latest
+            cibw_archs: riscv64
+            use_qemu: true
+          # macOS TARGETS
+          - platform: macos_x86_64
+            runner: macos-13
+            cibw_archs: x86_64
+            use_qemu: false
+          - platform: macos_arm64
+            runner: macos-14
+            cibw_archs: arm64
+            use_qemu: false
+          # WINDOWS TARGETS
+          - platform: win_amd64
+            runner: windows-latest
+            cibw_archs: AMD64
+            use_qemu: false
+          - platform: win_arm64
+            runner: windows-latest
+            cibw_archs: ARM64
+            use_qemu: false
 
     steps:
       - name: Checkout at release tag
@@ -76,24 +100,20 @@ jobs:
         env:
           CIBW_ENVIRONMENT: "OMNIPKG_SKIP_C_EXT=0"
           CIBW_BUILD_VERBOSITY: 1
-          
-          # 🟢 THE FIX: Target exactly ONE python version
-          # Example: if matrix.python is "3.11", CIBW_BUILD becomes "cp311-*"
-          CIBW_BUILD: cp${{ replace(matrix.python, '.', '') }}-*
-          
+          # 🟢 FIXED: Now using the pre-defined tag from the matrix
+          CIBW_BUILD: ${{ matrix.python.tag }}-*
           CIBW_TEST_COMMAND: >
             (python -c "import omnipkg.isolation.omnipkg_atomic" >/dev/null 2>&1 && echo "✅ Hardware Atomics: ENABLED" || echo "⚠️ Hardware Atomics: DISABLED (Using Python Fallback)") &&
             omnipkg --version &&
             omnipkg list
-          
           CIBW_ARCHS: ${{ matrix.cibw_archs }}
           CIBW_SKIP: "pp*"
 
       - name: Upload wheel as artifact
         uses: actions/upload-artifact@v4
         with:
-          # Unique name for every single combination
-          name: wheels-${{ matrix.platform }}-py${{ matrix.python }}
+          # Updated to use the .ver property
+          name: wheels-${{ matrix.platform }}-py${{ matrix.python.ver }}
           path: ./wheelhouse/*.whl
           if-no-files-found: warn
 
