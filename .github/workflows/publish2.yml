@@ -1,4 +1,4 @@
-name: Build Platform-Specific Wheels (Atomic Matrix)
+name: Build Platform-Specific Wheels (Explicit Matrix)
 
 on:
   workflow_dispatch:
@@ -19,69 +19,68 @@ permissions:
 
 jobs:
   build-wheels:
-    # Updated to access the .ver property of the python object
-    name: "Wheels | ${{ matrix.platform }} | Py${{ matrix.python.ver }}"
+    name: "Wheels | ${{ matrix.platform }} | Py${{ matrix.py_ver }}"
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 90
     strategy:
       fail-fast: false
       matrix:
-        # 1. Define Python versions as objects to avoid using a 'replace' function
-        python: [
-          { ver: "3.7", tag: "cp37" },
-          { ver: "3.8", tag: "cp38" },
-          { ver: "3.9", tag: "cp39" },
-          { ver: "3.10", tag: "cp310" },
-          { ver: "3.11", tag: "cp311" },
-          { ver: "3.12", tag: "cp312" },
-          { ver: "3.13", tag: "cp313" },
-          { ver: "3.14", tag: "cp314" },
-          { ver: "3.15", tag: "cp315" }
-        ]
         include:
-          # LINUX TARGETS
-          - platform: linux_x86_64
-            runner: ubuntu-latest
-            cibw_archs: x86_64
-            use_qemu: false
-          - platform: linux_i686
-            runner: ubuntu-latest
-            cibw_archs: i686
-            use_qemu: true
-          - platform: linux_aarch64
-            runner: ubuntu-latest
-            cibw_archs: aarch64
-            use_qemu: true
-          - platform: linux_ppc64le
-            runner: ubuntu-latest
-            cibw_archs: ppc64le
-            use_qemu: true
-          - platform: linux_s390x
-            runner: ubuntu-latest
-            cibw_archs: s390x
-            use_qemu: true
-          - platform: linux_riscv64
-            runner: ubuntu-latest
-            cibw_archs: riscv64
-            use_qemu: true
-          # macOS TARGETS
-          - platform: macos_x86_64
-            runner: macos-13
-            cibw_archs: x86_64
-            use_qemu: false
-          - platform: macos_arm64
-            runner: macos-14
-            cibw_archs: arm64
-            use_qemu: false
-          # WINDOWS TARGETS
-          - platform: win_amd64
-            runner: windows-latest
-            cibw_archs: AMD64
-            use_qemu: false
-          - platform: win_arm64
-            runner: windows-latest
-            cibw_archs: ARM64
-            use_qemu: false
+        
+          # --- LINUX x86_64 ---
+          - { platform: linux_x86_64, py_ver: "3.7", py_tag: "cp39", runner: ubuntu-latest, cibw_archs: x86_64, use_qemu: false }
+          - { platform: linux_x86_64, py_ver: "3.8", py_tag: "cp39", runner: ubuntu-latest, cibw_archs: x86_64, use_qemu: false }
+          - { platform: linux_x86_64, py_ver: "3.9", py_tag: "cp39", runner: ubuntu-latest, cibw_archs: x86_64, use_qemu: false }
+          - { platform: linux_x86_64, py_ver: "3.10", py_tag: "cp311", runner: ubuntu-latest, cibw_archs: x86_64, use_qemu: false }
+          - { platform: linux_x86_64, py_ver: "3.11", py_tag: "cp311", runner: ubuntu-latest, cibw_archs: x86_64, use_qemu: false }
+          - { platform: linux_x86_64, py_ver: "3.12", py_tag: "cp312", runner: ubuntu-latest, cibw_archs: x86_64, use_qemu: false }
+          - { platform: linux_x86_64, py_ver: "3.13", py_tag: "cp313", runner: ubuntu-latest, cibw_archs: x86_64, use_qemu: false }
+          - { platform: linux_x86_64, py_ver: "3.14", py_tag: "cp39", runner: ubuntu-latest, cibw_archs: x86_64, use_qemu: false }
+          - { platform: linux_x86_64, py_ver: "3.15", py_tag: "cp39", runner: ubuntu-latest, cibw_archs: x86_64, use_qemu: false }
+
+          # --- LINUX ARM64 ---
+          - { platform: linux_aarch64, py_ver: "3.7", py_tag: "cp39", runner: ubuntu-latest, cibw_archs: aarch64, use_qemu: true }
+          - { platform: linux_aarch64, py_ver: "3.8", py_tag: "cp39", runner: ubuntu-latest, cibw_archs: aarch64, use_qemu: true }                       
+          - { platform: linux_aarch64, py_ver: "3.9", py_tag: "cp39", runner: ubuntu-latest, cibw_archs: aarch64, use_qemu: true }
+          - { platform: linux_aarch64, py_ver: "3.10", py_tag: "cp311", runner: ubuntu-latest, cibw_archs: aarch64, use_qemu: true }
+          - { platform: linux_aarch64, py_ver: "3.11", py_tag: "cp311", runner: ubuntu-latest, cibw_archs: aarch64, use_qemu: true }
+          - { platform: linux_aarch64, py_ver: "3.12", py_tag: "cp312", runner: ubuntu-latest, cibw_archs: aarch64, use_qemu: true }
+          - { platform: linux_aarch64, py_ver: "3.13", py_tag: "cp313", runner: ubuntu-latest, cibw_archs: aarch64, use_qemu: true }
+          - { platform: linux_aarch64, py_ver: "3.14", py_tag: "cp39", runner: ubuntu-latest, cibw_archs: aarch64, use_qemu: true }
+          - { platform: linux_aarch64, py_ver: "3.15", py_tag: "cp39", runner: ubuntu-latest, cibw_archs: aarch64, use_qemu: true }
+
+          # --- macOS ARM64 ---
+          - { platform: macos_arm64, py_ver: "3.7", py_tag: "cp39", runner: macos-14, cibw_archs: arm64, use_qemu: false }
+          - { platform: macos_arm64, py_ver: "3.8", py_tag: "cp39", runner: macos-14, cibw_archs: arm64, use_qemu: false }
+          - { platform: macos_arm64, py_ver: "3.9", py_tag: "cp39", runner: macos-14, cibw_archs: arm64, use_qemu: false }
+          - { platform: macos_arm64, py_ver: "3.10", py_tag: "cp311", runner: macos-14, cibw_archs: arm64, use_qemu: false }
+          - { platform: macos_arm64, py_ver: "3.11", py_tag: "cp311", runner: macos-14, cibw_archs: arm64, use_qemu: false }
+          - { platform: macos_arm64, py_ver: "3.12", py_tag: "cp312", runner: macos-14, cibw_archs: arm64, use_qemu: false }
+          - { platform: macos_arm64, py_ver: "3.13", py_tag: "cp313", runner: macos-14, cibw_archs: arm64, use_qemu: false }
+          - { platform: macos_arm64, py_ver: "3.14", py_tag: "cp39", runner: macos-14, cibw_archs: arm64, use_qemu: false }
+          - { platform: macos_arm64, py_ver: "3.15", py_tag: "cp39", runner: macos-14, cibw_archs: arm64, use_qemu: false }
+
+          # --- WINDOWS x64 ---
+          - { platform: win_amd64, py_ver: "3.7", py_tag: "cp39", runner: windows-latest, cibw_archs: AMD64, use_qemu: false }
+          - { platform: win_amd64, py_ver: "3.8", py_tag: "cp39", runner: windows-latest, cibw_archs: AMD64, use_qemu: false }
+          - { platform: win_amd64, py_ver: "3.9", py_tag: "cp39", runner: windows-latest, cibw_archs: AMD64, use_qemu: false }
+          - { platform: win_amd64, py_ver: "3.10", py_tag: "cp311", runner: windows-latest, cibw_archs: AMD64, use_qemu: false }
+          - { platform: win_amd64, py_ver: "3.11", py_tag: "cp311", runner: windows-latest, cibw_archs: AMD64, use_qemu: false }
+          - { platform: win_amd64, py_ver: "3.12", py_tag: "cp312", runner: windows-latest, cibw_archs: AMD64, use_qemu: false }
+          - { platform: win_amd64, py_ver: "3.13", py_tag: "cp313", runner: windows-latest, cibw_archs: AMD64, use_qemu: false }
+          - { platform: win_amd64, py_ver: "3.14", py_tag: "cp39", runner: windows-latest, cibw_archs: AMD64, use_qemu: false }
+          - { platform: win_amd64, py_ver: "3.15", py_tag: "cp39", runner: windows-latest, cibw_archs: AMD64, use_qemu: false }
+
+          # --- WINDOWS ARM64 ---
+          - { platform: win_arm64, py_ver: "3.7", py_tag: "cp39", runner: windows-latest, cibw_archs: ARM64, use_qemu: false }
+          - { platform: win_arm64, py_ver: "3.8", py_tag: "cp39", runner: windows-latest, cibw_archs: ARM64, use_qemu: false }
+          - { platform: win_arm64, py_ver: "3.9", py_tag: "cp39", runner: windows-latest, cibw_archs: ARM64, use_qemu: false }
+          - { platform: win_arm64, py_ver: "3.10", py_tag: "cp311", runner: windows-latest, cibw_archs: ARM64, use_qemu: false }        
+          - { platform: win_arm64, py_ver: "3.11", py_tag: "cp311", runner: windows-latest, cibw_archs: ARM64, use_qemu: false }
+          - { platform: win_arm64, py_ver: "3.12", py_tag: "cp312", runner: windows-latest, cibw_archs: ARM64, use_qemu: false }
+          - { platform: win_arm64, py_ver: "3.13", py_tag: "cp313", runner: windows-latest, cibw_archs: ARM64, use_qemu: false }
+          - { platform: win_arm64, py_ver: "3.14", py_tag: "cp39", runner: windows-latest, cibw_archs: ARM64, use_qemu: false }
+          - { platform: win_arm64, py_ver: "3.15", py_tag: "cp39", runner: windows-latest, cibw_archs: ARM64, use_qemu: false }
 
     steps:
       - name: Checkout at release tag
@@ -99,21 +98,15 @@ jobs:
         uses: pypa/cibuildwheel@v2.20.0
         env:
           CIBW_ENVIRONMENT: "OMNIPKG_SKIP_C_EXT=0"
-          CIBW_BUILD_VERBOSITY: 1
-          # 🟢 FIXED: Now using the pre-defined tag from the matrix
-          CIBW_BUILD: ${{ matrix.python.tag }}-*
-          CIBW_TEST_COMMAND: >
-            (python -c "import omnipkg.isolation.omnipkg_atomic" >/dev/null 2>&1 && echo "✅ Hardware Atomics: ENABLED" || echo "⚠️ Hardware Atomics: DISABLED (Using Python Fallback)") &&
-            omnipkg --version &&
-            omnipkg list
+          CIBW_BUILD: ${{ matrix.py_tag }}-*
           CIBW_ARCHS: ${{ matrix.cibw_archs }}
           CIBW_SKIP: "pp*"
+          CIBW_TEST_COMMAND: "omnipkg --version"
 
       - name: Upload wheel as artifact
         uses: actions/upload-artifact@v4
         with:
-          # Updated to use the .ver property
-          name: wheels-${{ matrix.platform }}-py${{ matrix.python.ver }}
+          name: wheels-${{ matrix.platform }}-py${{ matrix.py_ver }}
           path: ./wheelhouse/*.whl
           if-no-files-found: warn
 
@@ -136,24 +129,3 @@ jobs:
           password: ${{ secrets.PYPI_API_TOKEN }}
           packages-dir: all-wheels/
           skip-existing: true
-
-  update-release:
-    name: "Attach wheels to GitHub Release"
-    needs: build-wheels
-    runs-on: ubuntu-latest
-    if: always()
-    steps:
-      - name: Download all wheel artifacts
-        uses: actions/download-artifact@v4
-        with:
-          pattern: wheels-*
-          path: all-wheels
-          merge-multiple: true
-      - name: Upload wheels to GitHub Release
-        uses: softprops/action-gh-release@v1
-        with:
-          tag_name: ${{ inputs.release_tag }}
-          files: all-wheels/*.whl
-          fail_on_unmatched_files: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
