@@ -43,9 +43,9 @@ requirements:
     - typing_extensions >=4.0.0  # [py<310]
     - authlib >=1.6.9
     - aiohttp >=3.13.5
-    - cryptography >=46.0.7
+    - cryptography >=46.0.7 # [not ppc64le]
     - pip-audit >=2.0.0
-    - uv >=0.9.6
+    - uv >=0.9.6  # [not ppc64le]
     - urllib3 >=2.6.3
     - flask >=3.0.3
     - flask-cors >=3.0   
