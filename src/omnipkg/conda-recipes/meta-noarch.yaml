@@ -24,7 +24,6 @@ build:
     - OMNIPKG = omnipkg.dispatcher:main
 
 requirements:
-  build:
   host:
     - python {{ python_min }}
     - pip
