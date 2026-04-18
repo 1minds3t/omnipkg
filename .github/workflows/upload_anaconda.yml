@@ -146,6 +146,7 @@ jobs:
           auto-update-conda: true
           python-version: ${{ matrix.python }}
           channels: conda-forge,defaults
+          remove-profiles: false
       - name: Install build tools
         shell: bash -el {0}
         run: conda install -y conda-build anaconda-client
