@@ -314,10 +314,10 @@ class Translator:
         # ── Slow path: first time seeing this lang — do the gettext work ──
         try:
             try:
-                localedir = str(resources.files("omnipkg") / "locale")
+                localedir = str(resources.files("omnipkg") / "locales")
             except AttributeError:
                 import pathlib
-                localedir = str(pathlib.Path(__file__).parent / "locale")
+                localedir = str(pathlib.Path(__file__).parent / "locales")
 
             langs_to_try = [effective]
             if "_" in effective:
