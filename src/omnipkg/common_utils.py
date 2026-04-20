@@ -773,6 +773,14 @@ def safe_input(prompt: str, default: str = "", auto_value: str = None) -> str:
     """
     Safe input wrapper with three operating modes:
 
+# --- GLOBAL INTERACTIVE MONKEYPATCH ---
+# If we are running as a daemon worker, we MUST hijack the built-in input()
+# otherwise the script will hang or crash when trying to read from the socket.
+import builtins
+if _DAEMON_WORKER_MODE:
+    builtins.input = safe_input
+
+
     1. **Daemon worker** (OMNIPKG_DAEMON_WORKER=1 in env, set by _spawn_process):
        Emits {"status":"NEEDS_INPUT","prompt":"..."} as a JSON line to stdout.
        The daemon's _reader_thread picks it up, forwards it through the socket
