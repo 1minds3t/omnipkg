@@ -3240,8 +3240,14 @@ def _run_script_logic(
         )
 
         try:
-            _stdout = sys.stdout if hasattr(sys.stdout, "fileno") and sys.stdout.fileno() >= 0 else None
-            _stderr = sys.stderr if hasattr(sys.stderr, "fileno") and sys.stderr.fileno() >= 0 else None
+            try:
+                _stdout = sys.stdout if hasattr(sys.stdout, "fileno") and sys.stdout.fileno() >= 0 else None
+            except Exception:
+                _stdout = None
+            try:
+                _stderr = sys.stderr if hasattr(sys.stderr, "fileno") and sys.stderr.fileno() >= 0 else None
+            except Exception:
+                _stderr = None
             direct_process = subprocess.Popen(
                 initial_cmd,
                 stdin=subprocess.DEVNULL if _is_noninteractive else sys.stdin,
