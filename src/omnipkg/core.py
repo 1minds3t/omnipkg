@@ -16123,7 +16123,29 @@ print(json.dumps(results))
             _py_exe = self.config.get("python_executable", "")
             if _py_exe and os.path.exists(_py_exe) and "--python" not in _uv_args:
                 _uv_args += ["--python", _py_exe]
-            _uv_args += packages
+            # uv cannot resolve PEP 440 local version identifiers (+cu118, +cpu, etc.)
+            # Strip local tag for uv paths only — pip fallback still gets original `packages`.
+            # When local tag matches the extra-index-url path, promote it to --index-url
+            # so uv fetches exclusively from that index and gets the correct cuda wheel.
+            import re as _re
+            _uv_packages = []
+            for _p in packages:
+                _m = _re.match(r'^(.+==[\d.]+)\+([A-Za-z0-9_.]+)$', _p)
+                if _m:
+                    _uv_packages.append(_m.group(1))
+                    _local_tag = _m.group(2)
+                    if "--extra-index-url" in _uv_args:
+                        _ei_idx = _uv_args.index("--extra-index-url")
+                        _ei_val = _uv_args[_ei_idx + 1]
+                        if _local_tag in _ei_val:
+                            _uv_args.pop(_ei_idx + 1)
+                            _uv_args.pop(_ei_idx)
+                            if "--index-url" not in _uv_args:
+                                _uv_args.insert(2, _ei_val)
+                                _uv_args.insert(2, "--index-url")
+                else:
+                    _uv_packages.append(_p)
+            _uv_args += _uv_packages
             _dbg(f"[WALL-CORE] args-build+exists: {(time.perf_counter()-_t_wrapper_entry)*1000:.3f}ms")
             # ── PATH 1: FFI in-process ─────────────────────────────────
             if self._uv_ffi_run is not None:
