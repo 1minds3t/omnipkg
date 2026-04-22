@@ -6439,11 +6439,14 @@ class omnipkg:
 
             if bubble_cloaks:
                 safe_print(_('      🔍 Found {} potential bubble cloaks').format(len(bubble_cloaks)))
+                try:
+                    from omnipkg.loader import omnipkgLoader
+                except Exception:
+                    omnipkgLoader = None
                 # (The logic for processing each bubble cloak is also correct and remains)
                 for cloak_path in bubble_cloaks:
-                    if str(cloak_path) in omnipkgLoader._active_cloaks:
+                    if omnipkgLoader is not None and str(cloak_path) in omnipkgLoader._active_cloaks:
                         continue
-
                     original_name = re.sub(r"\.\d+_\d+_omnipkg_cloaked.*$", "", cloak_path.name)
                     if original_name == cloak_path.name:
                         match = re.search(r"^(.+?)(?:\.\d+)?_\d+_omnipkg_cloaked", cloak_path.name)
@@ -8429,11 +8432,24 @@ class omnipkg:
             self._installed_packages_cache = None
 
         # Final verification: Check for any remaining ghost entries at the package level
+        def _raw_version(dist):
+            # dist.version normalizes away local tags (+cu118 etc) — read raw from metadata
+            raw = dist.metadata.get("Version") or dist.version
+            return raw
+
         disk_specs = {
-            f"{canonicalize_name(dist.metadata['Name'])}=={dist.version}"
+            f"{canonicalize_name(dist.metadata['Name'])}=={_raw_version(dist)}"
             for dist in all_discovered_dists
             if dist.metadata.get("Name")
         }
+        # Augment with bubble directory names — METADATA strips +cu118 local tags
+        # but the directory name preserves them (e.g. torch-2.0.1+cu118)
+        if self.multiversion_base.exists():
+            for _bd in self.multiversion_base.iterdir():
+                if _bd.is_dir():
+                    _m = re.match(r'^(.+?)-(\d.+)$', _bd.name)
+                    if _m:
+                        disk_specs.add(f"{canonicalize_name(_m.group(1))}=={_m.group(2)}")
         kb_specs = set()
         for pkg_name in all_kb_packages:
             versions = self.cache_client.smembers(
@@ -8577,7 +8593,7 @@ class omnipkg:
 
                 if is_compatible:
                     pkg_name = canonicalize_name(dist.metadata["Name"])
-                    version = dist.version
+                    version = getattr(dist, '_bubble_dir_version', dist.version)
                     path_str = str(dist._path)
 
                     unique_instance_identifier = f"{path_str}::{version}"
@@ -12914,8 +12930,11 @@ class omnipkg:
                                 _bubble_base = str(self.multiversion_base)
                                 _main_dist = os.path.join(_sp_path, f"{_pkg}-{_active_ver}.dist-info")
                                 _bubble_dist = os.path.join(_bubble_base, f"{_pkg}-{_bubble_ver}", f"{_pkg}-{_bubble_ver}.dist-info")
+                                _bubble_dist_base = os.path.join(_bubble_base, f"{_pkg}-{_bubble_ver}", f"{_pkg}-{_bubble_ver.split('+')[0]}.dist-info")
                                 _main_exists = os.path.exists(_main_dist)
-                                _bubble_exists = os.path.exists(_bubble_dist)
+                                _bubble_exists = os.path.exists(_bubble_dist) or os.path.exists(_bubble_dist_base)
+                                if not os.path.exists(_bubble_dist) and os.path.exists(_bubble_dist_base):
+                                    _bubble_dist = _bubble_dist_base
                                 _dbg(f"    [BUBBLE-DEBUG] main env:    {_pkg}=={_active_ver} dist-info exists={_main_exists} ({_main_dist})")
                                 _dbg(f"    [BUBBLE-DEBUG] bubble dir:  {_pkg}=={_bubble_ver} dist-info exists={_bubble_exists} ({_bubble_dist})")
                                 try:
@@ -14215,7 +14234,8 @@ class omnipkg:
             # Call the method on the gatherer instance
             instance_hash = gatherer._get_instance_hash(dist)
             # --- END OF FIX ---
-            instance_key = f"{self.redis_key_prefix.replace(':pkg:', ':inst:')}{c_name}:{dist.version}:{instance_hash}"
+            _inst_ver = getattr(dist, '_bubble_dir_version', dist.version)
+            instance_key = f"{self.redis_key_prefix.replace(':pkg:', ':inst:')}{c_name}:{_inst_ver}:{instance_hash}"
             keys_to_fetch.append(instance_key)
             dist_map[instance_key] = dist
 
@@ -14291,8 +14311,10 @@ class omnipkg:
                 # Ensure install_type is set correctly
                 if not redis_data.get("install_type"):
                     redis_data["install_type"] = itype
+                # Prefer bubble_version over METADATA Version (preserves +cu118 local tag)
+                if redis_data.get("bubble_version"):
+                    redis_data["Version"] = redis_data["bubble_version"]
                 found_installations.append(redis_data)
-                seen_versions.add(ver)
             else:
                 # Redis miss — try filesystem fallback for this version
                 dist = dist_map.get(key)
@@ -16182,25 +16204,39 @@ print(json.dumps(results))
                     _t_pre_ffi = _t_imp.perf_counter()
                     safe_print(f"[UV-PATH] FFI in-process: uv {_ffi_cmd}", file=sys.stderr)
                     _t0 = _t_imp.perf_counter()
-                    _dbg(f"[WALL-CORE] pre-FFI overhead in wrapper: {(_t0-_t_pre_ffi)*1000:.3f}ms")
 
-                    _is_target_call = "--target" in _uv_args
-                    _target_val = _uv_args[_uv_args.index("--target") + 1] if _is_target_call else None
-
+                    # ── START CAPTURE (fd-level, catches Rust writes) ──
+                    import os as _os, tempfile as _tf2
+                    _ffi_stderr = ""
                     try:
-                        from omnipkg._vendor.uv_ffi import get_site_packages_cache as _dbg_gspc
-                        _dbg_all_before = {n: v for n,v in _dbg_gspc()}
-                        _dbg_pkgs = [p.split("==")[0].split(">=")[0].split("<=")[0].strip().lower() for p in packages]
-                        _dbg_before_rel = {n: v for n,v in _dbg_all_before.items() if n.lower() in _dbg_pkgs}
-                        _dbg(f"[FFI-DEBUG] is_target={_is_target_call} target_dir={_target_val}")
-                        _dbg(f"[FFI-DEBUG] cache BEFORE (total={len(_dbg_all_before)}) relevant={_dbg_before_rel}")
-                    except Exception as _dbg_e:
-                        _dbg(f"[FFI-DEBUG] cache read failed: {_dbg_e}")
+                        _stderr_fd = sys.stderr.fileno()
+                    except Exception:
+                        _stderr_fd = None
+                    _old_stderr_fd = None
+                    _tmp_stderr_f = None
+                    if _stderr_fd is not None:
+                        try:
+                            _old_stderr_fd = _os.dup(_stderr_fd)
+                            _tmp_stderr_f = _tf2.TemporaryFile(mode='w+b')
+                            _os.dup2(_tmp_stderr_f.fileno(), _stderr_fd)
+                        except Exception:
+                            _old_stderr_fd = None
+                            _tmp_stderr_f = None
 
                     try:
                         with _watcher_guard:
-                            _ffi_rc, _ffi_installed, _ffi_removed = self._uv_ffi_run(_ffi_cmd)
-                        
+                            _ffi_rc, _ffi_installed, _ffi_removed, _ffi_err = self._uv_ffi_run(_ffi_cmd)
+                    finally:
+                        if _old_stderr_fd is not None:
+                            _os.dup2(_old_stderr_fd, _stderr_fd)
+                            _os.close(_old_stderr_fd)
+                        if _tmp_stderr_f is not None:
+                            _tmp_stderr_f.seek(0)
+                            _ffi_stderr = _tmp_stderr_f.read().decode('utf-8', errors='replace')
+                            _tmp_stderr_f.close()
+                            sys.stderr.write(_ffi_stderr)  # re-emit so it still shows
+
+                    try:
                         _ffi_ms = (time.perf_counter() - _t0) * 1000
                         _dbg(f"[UV-TIMING] FFI: {_ffi_ms:.2f}ms rc={_ffi_rc}")
 
@@ -16217,7 +16253,10 @@ print(json.dumps(results))
                             
                             return 0, {"stdout": "", "stderr": "", "ffi_installed": _ffi_installed, "ffi_removed": _ffi_removed, "from_ffi": True, "is_target": bool(target_directory)}
                         
-                        safe_print(f"   ⚠️  FFI failed (rc={_ffi_rc}) — trying daemon", file=sys.stderr)
+                        # NOW WE HAVE THE REAL REASON:
+                        # We combine the coarse label (_ffi_err) with the raw uv output (_ffi_stderr)
+                        detailed_error = f"{_ffi_err}\n{_ffi_stderr}".strip()
+                        safe_print(f"   ⚠️  FFI failed (rc={_ffi_rc}): {detailed_error} — trying daemon", file=sys.stderr)
 
                     except BaseException as _ffi_ex:
                         _ffi_ms = (time.perf_counter() - _t0) * 1000

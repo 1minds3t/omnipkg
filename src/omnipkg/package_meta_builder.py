@@ -900,6 +900,9 @@ class omnipkgMetadataGatherer:
                                     self.omnipkg_instance._scan_and_heal_distributions([bubble_dir])
                                     dist = PathDistribution(_target_di)
                                 if dist.metadata.get("Name"):
+                                    _bdir_ver = bubble_dir.name[len(canonical_name)+1:] if bubble_dir.name.startswith(f"{canonical_name}-") else None
+                                    if _bdir_ver and "+" in _bdir_ver and dist.version == _bdir_ver.split("+")[0]:
+                                        dist._bubble_dir_version = _bdir_ver
                                     found_dists.append(dist)
                                     found_any = True
                                 if _dbg:
@@ -908,6 +911,7 @@ class omnipkgMetadataGatherer:
                             except Exception as e:
                                 if _dbg:
                                     print(f"[FAST-DISC] failed to load {bubble_dir}: {e}", flush=True)
+
 
                 # underscore variant bubble scan (existing)
                 for bubble_dir in multiversion_base.glob(f"{pkg_name.replace('-', '_')}-*"):
@@ -991,7 +995,8 @@ class omnipkgMetadataGatherer:
                         if not dist.metadata.get("Name"):
                             self.omnipkg_instance._scan_and_heal_distributions([_target_di.parent])
                             dist = PathDistribution(_target_di)  # retry after heal
-                        if dist.metadata.get("Name") and dist.version == version:
+                        _base_ver = version.split("+")[0]
+                        if dist.metadata.get("Name") and (dist.version == version or dist.version == _base_ver):
                             found_dists.append(dist)
                             if _dbg:
                                 print(f"[FAST-DISC] P1: ✅ found via known path", flush=True)
@@ -1025,10 +1030,16 @@ class omnipkgMetadataGatherer:
                                 self.omnipkg_instance._scan_and_heal_distributions([_expected_bubble])
                                 dist = PathDistribution(_dist_infos[0])  # retry after heal
                             if dist.metadata.get("Name"):
+                                # Preserve local version tag from bubble dir name
+                                # e.g. torch-2.0.1+cu118 → version should be 2.0.1+cu118
+                                _dir_ver = _expected_bubble.name[len(pkg_name)+1:] if _expected_bubble.name.startswith(f"{pkg_name}-") else None
+                                if _dir_ver and "+" in _dir_ver and dist.version == _dir_ver.split("+")[0]:
+                                    dist._bubble_dir_version = _dir_ver
                                 found_dists.append(dist)
                                 _bubble_found = True
                             if _dbg:
-                                print(f"[FAST-DISC] P2: ✅ found via bubble", flush=True)
+                                _display_ver = getattr(dist, '_omnipkg_local_version', dist.version)
+                                print(f"[FAST-DISC] P2: ✅ found via bubble, version={_display_ver}", flush=True)
                             break
                         except Exception as e:
                             if _dbg:
@@ -1880,10 +1891,15 @@ class omnipkgMetadataGatherer:
 
             # Build the expected bubble name using the RAW package name (not canonicalized)
             expected_bubble_name = f"{pkg_name_raw}-{version}"
-
-            # Compare directly
-            if bubble_dir_name == expected_bubble_name:
-                return {"install_type": "bubble", "owner_package": None}
+            expected_bubble_name_base = f"{pkg_name_raw}-{version.split('+')[0]}"
+            is_own_bubble = (
+                bubble_dir_name == expected_bubble_name
+                or bubble_dir_name.startswith(f"{expected_bubble_name_base}+")
+            )
+            if is_own_bubble:
+                # Extract actual version from bubble dir name (preserves +cu118)
+                _dir_version = bubble_dir_name[len(pkg_name_raw)+1:]
+                return {"install_type": "bubble", "owner_package": None, "bubble_version": _dir_version}
             else:
                 return {"install_type": "nested", "owner_package": bubble_dir_name}
 
@@ -1909,6 +1925,19 @@ class omnipkgMetadataGatherer:
             raw_name = dist.metadata.get("Name")
             if not raw_name or not isinstance(raw_name, str):
                 return False  # Silently skip corrupted metadata
+
+            # Infer local version tag (+cu118 etc) from bubble dir name
+            if not hasattr(dist, '_bubble_dir_version'):
+                try:
+                    _mv_base = Path(self.config.get("multiversion_base"))
+                    _bdir = dist._path.relative_to(_mv_base).parts[0]
+                    _sep = _bdir.rfind('-')
+                    if _sep != -1:
+                        _bver = _bdir[_sep+1:]
+                        if '+' in _bver and dist.version == _bver.split('+')[0]:
+                            dist._bubble_dir_version = _bver
+                except Exception:
+                    pass
 
             # --- FIX: REMOVED THE LOGIC THAT SKIPPED VENDORED PACKAGES ---
             # All discovered and filtered packages should be processed.
@@ -2116,9 +2145,8 @@ class omnipkgMetadataGatherer:
         instance_hash = hashlib.sha256(path_str.encode()).hexdigest()[:12]
 
         pkg_name = canonicalize_name(dist.metadata["Name"])
-        version = dist.version
+        version = getattr(dist, '_bubble_dir_version', dist.version)
         prefix = self.redis_key_prefix.replace(":pkg:", ":inst:")  # Change namespace to 'inst'
-
         return f"{prefix}{pkg_name}:{version}:{instance_hash}"
 
     def _parse_metadata_file(self, metadata_content: str) -> Dict:
@@ -2158,7 +2186,7 @@ class omnipkgMetadataGatherer:
         try:
             metadata = self._build_comprehensive_metadata(dist)
             package_name = canonicalize_name(dist.metadata["Name"])
-            version_str = dist.version
+            version_str = getattr(dist, '_bubble_dir_version', dist.version)
 
             # Compute hash from resolved path
             instance_hash = self._get_instance_hash(dist)
@@ -2505,7 +2533,7 @@ class omnipkgMetadataGatherer:
         native_files: List[str] = []
         for file_path in dist.files:
             fp_str = str(file_path)
-            if any(fp_str.endswith(sfx) for sfx in _native_suffixes):
+            if any(sfx in fp_str for sfx in _native_suffixes):
                 native_files.append(fp_str)
 
         result["has_c_extension"] = bool(native_files)
@@ -2531,6 +2559,20 @@ class omnipkgMetadataGatherer:
             # else leave as "none" (source install, no wheel tag available)
         except Exception:
             pass
+        # Fallback: read WHEEL file directly if dist-info name has no tag
+        if result["platform_tag"] == "none":
+            try:
+                wheel_text = dist.read_text("WHEEL")
+                if wheel_text:
+                    for line in wheel_text.splitlines():
+                        if line.startswith("Tag:"):
+                            tag = line.split(":", 1)[1].strip()
+                            parts = tag.split("-")
+                            if len(parts) == 3:
+                                result["platform_tag"] = parts[-1]
+                                break
+            except Exception:
+                pass
 
         return result
 
@@ -2685,7 +2727,7 @@ class omnipkgMetadataGatherer:
                     if abs_path and abs_path.exists() and os.access(abs_path, os.X_OK):
                         files["binaries"].append(str(abs_path))
                 # Collect native extensions regardless of directory location
-                if any(str(file_path).endswith(sfx) for sfx in _native_suffixes):
+                if any(sfx in str(file_path) for sfx in _native_suffixes):
                     if abs_path and abs_path.exists():
                         files["native_extensions"].append(str(abs_path))
             except (FileNotFoundError, NotADirectoryError):
