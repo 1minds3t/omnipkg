@@ -7120,7 +7120,7 @@ class omnipkg:
                 else:
                     return (py_ver, False)
                 # Read uv_ffi min version from pyproject.toml once, in main process
-                _uv_ffi_min = "0.10.8.post2"  # fallback
+                _uv_ffi_min = "0.10.8.post7"  # fallback
                 try:
                     import tomllib as _toml
                 except ImportError:
