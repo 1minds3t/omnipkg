@@ -55,7 +55,7 @@ typer==0.24.1
 typing-extensions==4.15.0
 urllib3==2.6.3 ; python_version >= "3.10"
 uv==0.10.11 ; python_version >= "3.8"
-uv-ffi==0.10.8.post4 ; python_version >= "3.8" and python_version <= "3.14"
+uv-ffi==0.10.8.post7 ; python_version >= "3.8" and python_version <= "3.14"
 werkzeug==3.1.6 ; python_version >= "3.9"
 yarl==1.23.0
 
