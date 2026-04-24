@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [3.1.1] — 2026-04-24
+
+Filesystem Resilience & CI Hardening
+
+Bug Fixes
+	•	Fixed locale.getencoding() crash when building on manylinux/musllinux containers — added packaging>=21.3 to [build-system].requires so pip’s isolated build env always gets a modern packaging library regardless of what’s baked into the Docker image
+	•	Fixed filesystem watcher falsely flagging our own FFI installs as “External Culprits” due to PEP 503 name normalization mismatches (e.g. mkdocs-minify-plugin vs mkdocs_minify_plugin) — injected a regex normalizer so hyphens, underscores, and dots match uniformly
+	•	Replaced eval with ast.literal_eval (security hardening, caught by DeepSource)
+CI/CD
+	•	Pinned musllinux images to 2025.02.28-1 tag instead of latest for reproducible builds
+	•	Added retry logic for checkout and Python setup steps to improve flaky runner reliability
+	•	Added full backfill workflow — retroactively push wheels to GitHub Releases and regenerate the GitHub Pages wheel index, with dry-run support
+	•	Overhauled Pages deployment workflow — cleaner triggers, manual dispatch support
+	•	Docker CI now runs as root for both amd64 and arm64 test images
+	•	Updated uv-ffi submodule to v0.10.8.post11 (piwheels OOM fix for Python 3.13 aarch64)
+
+---
+
+**Bug Fixes:**
+- fix: add packaging>=21.3 to build-system requires to fix locale.getencoding() in manylinux/musllinux containers
+
+**Updates:**
+- Update publish2.yml
+- Update GitHub Actions workflow for Pages deployment
+
+_10 files changed, 772 insertions(+), 172 deletions(-)_
+
 ## [3.1.0] — 2026-04-24
 
 The Unified Daemon & IPC Synchronization Release
