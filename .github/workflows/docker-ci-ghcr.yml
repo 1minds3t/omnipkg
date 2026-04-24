@@ -124,11 +124,11 @@ jobs:
         run: |
           echo "Testing amd64 image..."
           docker pull 1minds3t/omnipkg:${{ steps.get_version.outputs.tag }}
-          docker run --rm --platform linux/amd64 1minds3t/omnipkg:${{ steps.get_version.outputs.tag }} omnipkg --version
-          docker run --rm --platform linux/amd64 1minds3t/omnipkg:${{ steps.get_version.outputs.tag }} uname -m
+          docker run --rm --user root --platform linux/amd64 1minds3t/omnipkg:${{ steps.get_version.outputs.tag }} omnipkg --version
+          docker run --rm --user root --platform linux/amd64 1minds3t/omnipkg:${{ steps.get_version.outputs.tag }} uname -m
       
       - name: Test image on arm64 (via QEMU)
         run: |
           echo "Testing arm64 image via QEMU..."
-          docker run --rm --platform linux/arm64 1minds3t/omnipkg:${{ steps.get_version.outputs.tag }} omnipkg --version
-          docker run --rm --platform linux/arm64 1minds3t/omnipkg:${{ steps.get_version.outputs.tag }} uname -m
+          docker run --rm --user root --platform linux/arm64 1minds3t/omnipkg:${{ steps.get_version.outputs.tag }} omnipkg --version
+          docker run --rm --user root --platform linux/arm64 1minds3t/omnipkg:${{ steps.get_version.outputs.tag }} uname -m
