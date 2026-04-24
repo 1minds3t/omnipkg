@@ -322,7 +322,8 @@ class SitePackagesEventHandler(FileSystemEventHandler):
         Validates any queued FS events against the official changelog.
         Only processes events that happened in this handler's directory.
         """
-        official = {pkg[0].lower() for pkg in installed} | {pkg[0].lower() for pkg in removed}
+        def _norm(n): return __import__("re").sub(r"[-_.]+", "-", n).lower()
+        official = {_norm(pkg[0]) for pkg in installed} | {_norm(pkg[0]) for pkg in removed}
         culprit_count = 0
 
         with self._debounce_lock:
@@ -340,7 +341,7 @@ class SitePackagesEventHandler(FileSystemEventHandler):
             stem = p.name[:-len(".dist-info")] if p.name.endswith(".dist-info") else p.name
             name = stem.rsplit("-", 1)[0] if "-" in stem else stem
             
-            if name.lower() not in official:
+            if _norm(name) not in official:
                 log.info("[fs_watcher] 🚨 EXTERNAL CULPRIT during op: %s", name)
                 culprit_count += 1
                 parsed = self._parse_dist_info_name(p)
@@ -812,7 +813,8 @@ class MtimeFallbackWatcher:
         log.debug("[fs_watcher] Omnipkg official changes: [INSTALLED: %s] [REMOVED: %s]",
                  inst_str or "none", rem_str or "none")
 
-        official = {pkg[0].lower() for pkg in installed} | {pkg[0].lower() for pkg in removed}
+        def _norm(n): return __import__("re").sub(r"[-_.]+", "-", n).lower()
+        official = {_norm(pkg[0]) for pkg in installed} | {_norm(pkg[0]) for pkg in removed}
 
         # Refresh snapshot post-op BEFORE clearing in_progress.
         # The poll loop checks _omnipkg_op_in_progress first — if we cleared it
@@ -849,7 +851,7 @@ class MtimeFallbackWatcher:
                 continue
             stem = p.name[:-len(".dist-info")] if p.name.endswith(".dist-info") else p.name
             name = stem.rsplit("-", 1)[0] if "-" in stem else stem
-            if name.lower() not in official:
+            if _norm(name) not in official:
                 log.info("[fs_watcher] 🚨 EXTERNAL CULPRIT during op: %s", name)
                 culprit_count += 1
                 parsed = SitePackagesEventHandler._parse_dist_info_name(p)
