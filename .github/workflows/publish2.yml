@@ -183,11 +183,11 @@ jobs:
           CIBW_MANYLINUX_ARMV7L_IMAGE:   "quay.io/pypa/manylinux_2_31_armv7l:latest"
           CIBW_MANYLINUX_PPC64LE_IMAGE:  "quay.io/pypa/manylinux_2_28_ppc64le:latest"
           CIBW_MANYLINUX_S390X_IMAGE:    "quay.io/pypa/manylinux_2_28_s390x:latest"
-          CIBW_MUSLLINUX_X86_64_IMAGE:   "quay.io/pypa/musllinux_1_2_x86_64:latest"
-          CIBW_MUSLLINUX_AARCH64_IMAGE:  "quay.io/pypa/musllinux_1_2_aarch64:latest"
-          CIBW_MUSLLINUX_ARMV7L_IMAGE:   "quay.io/pypa/musllinux_1_2_armv7l:latest"
-          CIBW_MUSLLINUX_PPC64LE_IMAGE:  "quay.io/pypa/musllinux_1_2_ppc64le:latest"
-          CIBW_MUSLLINUX_S390X_IMAGE:    "quay.io/pypa/musllinux_1_2_s390x:latest"
+          CIBW_MUSLLINUX_X86_64_IMAGE:   "quay.io/pypa/musllinux_1_2_x86_64:2025.02.28-1"
+          CIBW_MUSLLINUX_AARCH64_IMAGE:  "quay.io/pypa/musllinux_1_2_aarch64:2025.02.28-1"
+          CIBW_MUSLLINUX_ARMV7L_IMAGE:   "quay.io/pypa/musllinux_1_2_armv7l:2025.02.28-1"
+          CIBW_MUSLLINUX_PPC64LE_IMAGE:  "quay.io/pypa/musllinux_1_2_ppc64le:2025.02.28-1"
+          CIBW_MUSLLINUX_S390X_IMAGE:    "quay.io/pypa/musllinux_1_2_s390x:2025.02.28-1"
 
       # ── Attempt 2: pure Python fallback (SKIP_C_EXT=1) ───────────────────
       - name: Build wheel (attempt 2 — SKIP_C_EXT=1 fallback)
@@ -208,12 +208,11 @@ jobs:
           CIBW_MANYLINUX_ARMV7L_IMAGE:   "quay.io/pypa/manylinux_2_31_armv7l:latest"
           CIBW_MANYLINUX_PPC64LE_IMAGE:  "quay.io/pypa/manylinux_2_28_ppc64le:latest"
           CIBW_MANYLINUX_S390X_IMAGE:    "quay.io/pypa/manylinux_2_28_s390x:latest"
-          CIBW_MUSLLINUX_X86_64_IMAGE:   "quay.io/pypa/musllinux_1_2_x86_64:latest"
-          CIBW_MUSLLINUX_AARCH64_IMAGE:  "quay.io/pypa/musllinux_1_2_aarch64:latest"
-          CIBW_MUSLLINUX_ARMV7L_IMAGE:   "quay.io/pypa/musllinux_1_2_armv7l:latest"
-          CIBW_MUSLLINUX_PPC64LE_IMAGE:  "quay.io/pypa/musllinux_1_2_ppc64le:latest"
-          CIBW_MUSLLINUX_S390X_IMAGE:    "quay.io/pypa/musllinux_1_2_s390x:latest"
-
+          CIBW_MUSLLINUX_X86_64_IMAGE:   "quay.io/pypa/musllinux_1_2_x86_64:2025.02.28-1"
+          CIBW_MUSLLINUX_AARCH64_IMAGE:  "quay.io/pypa/musllinux_1_2_aarch64:2025.02.28-1"
+          CIBW_MUSLLINUX_ARMV7L_IMAGE:   "quay.io/pypa/musllinux_1_2_armv7l:2025.02.28-1"
+          CIBW_MUSLLINUX_PPC64LE_IMAGE:  "quay.io/pypa/musllinux_1_2_ppc64le:2025.02.28-1"
+          CIBW_MUSLLINUX_S390X_IMAGE:    "quay.io/pypa/musllinux_1_2_s390x:2025.02.28-1"
       - name: Report build result
         if: always()
         shell: bash
